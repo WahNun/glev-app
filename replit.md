@@ -1,8 +1,10 @@
-# GlucoJack
+# Glev
 
 ## Overview
 
-GlucoJack is a Type 1 Diabetes insulin tracking and decision-support web application. It provides ultra-fast glucose/insulin logging, batch import (paste/CSV), insulin recommendation engine, and pattern insights.
+Glev is a Type 1 Diabetes insulin decision-support system. The single active artifact is the **Dark Cockpit mockup** (`artifacts/mockup-sandbox`) — a fully interactive dark-mode prototype with desktop and mobile views. The backend API server (`artifacts/api-server`) handles data persistence and recommendation logic.
+
+The `artifacts/glucojack` React/Vite web app was removed — the canvas mockup is now the primary interface.
 
 ## Stack
 
@@ -10,7 +12,7 @@ GlucoJack is a Type 1 Diabetes insulin tracking and decision-support web applica
 - **Node.js version**: 24
 - **Package manager**: pnpm
 - **TypeScript version**: 5.9
-- **Frontend**: React + Vite + Tailwind CSS (artifacts/glucojack)
+- **Mockup**: React + Vite (artifacts/mockup-sandbox) — DarkCockpit with Desktop/Mobile toggle
 - **API framework**: Express 5
 - **Database**: PostgreSQL + Drizzle ORM
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
