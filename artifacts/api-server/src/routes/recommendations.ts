@@ -1,11 +1,11 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { desc } from "drizzle-orm";
 import { db, entriesTable } from "@workspace/db";
 import {
   GetRecommendationBody,
   GetRecommendationResponse,
 } from "@workspace/api-zod";
-import { generateRecommendation } from "../lib/recommendation";
+import { calculatePersonalBolus } from "../lib/recommendation";
 
 const router: IRouter = Router();
 
@@ -18,19 +18,26 @@ router.post("/recommendations", async (req, res): Promise<void> => {
 
   const { carbsGrams, glucoseBefore, mealType } = parsed.data;
 
-  const similarEntries = await db
+  // Pass ALL entries sorted newest-first so the engine can use RECENT/SIMILAR/GLOBAL groups
+  const allEntries = await db
     .select()
     .from(entriesTable)
-    .where(eq(entriesTable.mealType, mealType));
+    .orderBy(desc(entriesTable.timestamp));
 
-  const recommendation = generateRecommendation(
+  const recommendation = calculatePersonalBolus(
     carbsGrams,
     glucoseBefore,
     mealType,
-    similarEntries,
+    allEntries,
   );
 
-  res.json(GetRecommendationResponse.parse(recommendation));
+  // Return full result including extended fields (similarMealCount, recentCount, carbRatio)
+  res.json({
+    ...GetRecommendationResponse.parse(recommendation),
+    similarMealCount: recommendation.similarMealCount,
+    recentCount: recommendation.recentCount,
+    carbRatio: recommendation.carbRatio,
+  });
 });
 
 export default router;

@@ -3,6 +3,9 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { seedIfEmpty } from "./lib/seed";
+
+seedIfEmpty().catch((err) => logger.error({ err }, "Seed failed"));
 
 const app: Express = express();
 

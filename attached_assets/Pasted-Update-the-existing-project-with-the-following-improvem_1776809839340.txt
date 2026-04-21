@@ -1,0 +1,162 @@
+Update the existing project with the following improvements.
+
+--------------------------------------------------
+🧠 1. REPLACE RECOMMENDATION ENGINE (CRITICAL FIX)
+--------------------------------------------------
+
+The current insulin calculation is incorrect (likely using a fixed ratio like carbs/10).
+Replace it with a personalized, weighted engine based on historical data.
+
+Implement:
+
+FUNCTION: calculatePersonalBolus(input, history)
+
+Steps:
+
+1. Filter valid history entries:
+- Only include entries where:
+  - Evaluation == "GOOD" OR "SLIGHT_UNDERDOSE" OR "SLIGHT_OVERDOSE"
+- Exclude:
+  - Strong hypo (LOW / OVERDOSE)
+  - Strong spike (UNDERDOSE extreme cases)
+
+2. Compute ratio per entry:
+ratio = carbs / insulin
+
+3. Build 3 groups:
+
+A) RECENT (last 5–10 meals)
+B) SIMILAR meals:
+   - carbs within ±15g
+   - same meal type (Breakfast/Lunch/Dinner)
+   - same meal composition (FAST_CARBS, HIGH_FAT, etc.)
+
+C) GLOBAL (all valid history)
+
+4. Compute weighted ratio:
+
+final_ratio =
+0.6 * avg(RECENT) +
+0.3 * avg(SIMILAR) +
+0.1 * avg(GLOBAL)
+
+5. Base insulin:
+
+units = carbs / final_ratio
+
+6. Adjust for glucose before:
+
+IF glucose < 90 → units -= 0.5 to 1
+IF glucose > 140 → units += 0.5 to 1
+
+7. Adjust for meal composition:
+
+FAST_CARBS → +0.5 to 1 unit (earlier timing)
+HIGH_FAT → -0.5 unit + suggest split dose
+HIGH_PROTEIN → no change
+
+8. Return:
+
+{
+  suggested_units,
+  range (±10%),
+  timing,
+  confidence_score (based on number of similar records),
+  reasoning_text
+}
+
+--------------------------------------------------
+📊 2. USE USER DATA AS INITIAL DATASET (IMPORTANT)
+--------------------------------------------------
+
+Seed the system with the following dataset (use as initial history):
+
+[INSERT USER DATA STRUCTURE HERE – use the exact format already used in the app]
+
+IMPORTANT:
+- Mark these as historical entries
+- Ensure they are used immediately in the recommendation engine
+- Do not start with empty state
+
+--------------------------------------------------
+🧪 3. FIX CURRENT UI OUTPUT
+--------------------------------------------------
+
+Update the Decision Support screen:
+
+- Replace incorrect value (e.g. 7.5 units for 73g carbs)
+- Show realistic output based on personalized ratio (~2–3 units for this dataset)
+
+Also update:
+
+- Confidence = based on number of similar meals
+- Reasoning = must reference actual past meals
+
+Example:
+“Based on 4 similar balanced meals with ~70g carbs”
+
+--------------------------------------------------
+🧱 4. ADD TWO NEW FRAMES (VARIANTS)
+--------------------------------------------------
+
+Create 2 additional versions of the Decision Support screen:
+
+FRAME 1 → “Minimal Fast Mode”
+- ultra-reduced inputs
+- only glucose + carbs
+- instant recommendation
+
+FRAME 2 → “Advanced Mode”
+- includes:
+  - meal composition
+  - timing control
+  - manual overrides
+  - explanation expanded
+
+--------------------------------------------------
+🖱️ 5. MAKE ALL FRAMES CLICKABLE
+--------------------------------------------------
+
+IMPORTANT:
+
+- The original frame is already clickable
+- Make BOTH new frames fully interactive as well
+
+Requirements:
+
+- User can switch between:
+  - Original
+  - Minimal
+  - Advanced
+
+- Use tabs or toggle at top:
+  “Compare Modes”
+
+- Each frame must:
+  - respond to input changes
+  - recalculate recommendation live
+  - show updated output
+
+--------------------------------------------------
+🎯 6. UX IMPROVEMENTS
+--------------------------------------------------
+
+- Recommendation must update in real-time (no reload)
+- Inputs should feel instant (<100ms feedback)
+- Add subtle transitions between states
+
+--------------------------------------------------
+⚠️ 7. STRICT RULES
+--------------------------------------------------
+
+- DO NOT use fixed carb ratio (like 1:10)
+- MUST use historical data
+- MUST show reasoning tied to data
+- MUST adapt over time
+
+--------------------------------------------------
+FINAL GOAL
+
+Transform the system from a static calculator
+into a personalized, adaptive insulin decision engine
+based on real user data.
