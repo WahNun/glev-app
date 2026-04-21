@@ -433,7 +433,7 @@ function EntryLog() {
   const filters=["ALL","GOOD","UNDERDOSE","OVERDOSE"];
 
   useEffect(()=>{
-    apiFetch<Entry[]>("/entries").then(setEntries).catch(()=>{}).finally(()=>setLoading(false));
+    apiFetch<{entries:Entry[];total:number}>("/entries").then(d=>setEntries(d.entries||[])).catch(()=>{}).finally(()=>setLoading(false));
   },[]);
 
   if(loading) return <Spinner/>;
@@ -722,112 +722,192 @@ function VoicePage({ onLogged }: { onLogged?: ()=>void }) {
 
   function reset() { setStatus("idle"); setParsed(null); setTranscript(""); setSuggestion(null); setError(""); setSaved(false); }
 
+  const isRec = status === "recording";
   const statusLabel = { idle:"Tap to speak", recording:"Listening…", processing:"Processing…", preview:"Review entry" }[status];
-  const statusColor = { idle:"rgba(255,255,255,0.4)", recording:PINK, processing:ORANGE, preview:GREEN }[status];
+  const statusColor = { idle:"rgba(255,255,255,0.45)", recording:ACCENT, processing:ORANGE, preview:GREEN }[status];
 
   return (
-    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:32,paddingTop:24}}>
-      <div style={{textAlign:"center"}}>
-        <div style={{fontSize:11,color:"rgba(255,255,255,0.3)",letterSpacing:"0.1em",marginBottom:8}}>VOICE LOG</div>
-        <div style={{fontSize:16,fontWeight:600,color:statusColor,transition:"color 0.3s"}}>{statusLabel}</div>
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",paddingTop:16}}>
+      <style>{`
+        @keyframes arcRotate{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+        @keyframes vPulse{0%,100%{opacity:0.4;transform:scale(1)}50%{opacity:1;transform:scale(1.04)}}
+        @keyframes vFade{0%{opacity:0;transform:scale(0.94)}100%{opacity:1;transform:scale(1)}}
+      `}</style>
+
+      {/* Status header */}
+      <div style={{textAlign:"center",marginBottom:36}}>
+        <div style={{fontSize:10,letterSpacing:"0.2em",color:"rgba(255,255,255,0.22)",marginBottom:10,fontWeight:500}}>VOICE LOG</div>
+        <div style={{fontSize:17,fontWeight:600,letterSpacing:"-0.01em",color:statusColor,transition:"color 0.4s",minHeight:26}}>{statusLabel}</div>
       </div>
 
-      {/* Big record button */}
-      <div style={{position:"relative"}}>
-        {status==="recording"&&(
-          <>
-            <div style={{position:"absolute",inset:-16,borderRadius:99,background:`${PINK}15`,animation:"ripple 1.2s ease-out infinite"}}/>
-            <div style={{position:"absolute",inset:-8,borderRadius:99,background:`${PINK}20`,animation:"ripple 1.2s ease-out 0.3s infinite"}}/>
-          </>
-        )}
+      {/* ── The big button ─────────────────────────────── */}
+      <div style={{position:"relative",width:252,height:252,flexShrink:0}}>
+
+        {/* Outer ambient bloom when recording */}
+        {isRec&&<div style={{position:"absolute",inset:-28,borderRadius:"50%",background:`radial-gradient(circle,${ACCENT}18 0%,transparent 70%)`,animation:"vPulse 2s ease-in-out infinite",pointerEvents:"none"}}/>}
+
+        {/* SVG rings */}
+        <svg width="252" height="252" viewBox="0 0 252 252" style={{position:"absolute",inset:0,overflow:"visible"}}>
+          <defs>
+            <filter id="vglow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="4" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+            <path id="vArcTop" d="M 14,126 a 112,112 0 1,1 224,0 a 112,112 0 1,1 -224,0"/>
+          </defs>
+
+          {/* Outermost dashed ring */}
+          <circle cx="126" cy="126" r="122" fill="none"
+            stroke={isRec?"rgba(79,110,247,0.25)":"rgba(255,255,255,0.05)"}
+            strokeWidth="1" strokeDasharray="2 6" style={{transition:"stroke 0.5s"}}/>
+
+          {/* Second ring */}
+          <circle cx="126" cy="126" r="112" fill="none"
+            stroke={isRec?"rgba(79,110,247,0.55)":"rgba(255,255,255,0.07)"}
+            strokeWidth={isRec?1.5:1}
+            filter={isRec?"url(#vglow)":undefined}
+            style={{transition:"all 0.5s"}}/>
+
+          {/* Inner bright ring */}
+          <circle cx="126" cy="126" r="101" fill="none"
+            stroke={isRec?ACCENT:"rgba(255,255,255,0.1)"}
+            strokeWidth={isRec?2:1}
+            filter={isRec?"url(#vglow)":undefined}
+            style={{transition:"all 0.5s"}}/>
+
+          {/* Rotating arc text — recording only */}
+          {isRec&&(
+            <g style={{transformOrigin:"126px 126px",animation:"arcRotate 8s linear infinite"}}>
+              <text fill={`rgba(79,110,247,0.65)`} fontSize="8" letterSpacing="5.5" fontFamily="'Courier New',monospace" fontWeight="700">
+                <textPath href="#vArcTop">RECORDING · RECORDING · RECORDING ·&nbsp;&nbsp;</textPath>
+              </text>
+            </g>
+          )}
+        </svg>
+
+        {/* Metallic outer bezel */}
+        <div style={{
+          position:"absolute",inset:20,borderRadius:"50%",
+          background:`conic-gradient(from 200deg,rgba(255,255,255,0.07),rgba(255,255,255,0.02),rgba(255,255,255,0.07),rgba(255,255,255,0.01))`,
+          transition:"box-shadow 0.5s",
+          boxShadow: isRec
+            ? `0 0 0 1.5px ${ACCENT}99, 0 0 60px ${ACCENT}44, 0 0 120px ${ACCENT}18`
+            : `0 0 0 1px rgba(255,255,255,0.1)`,
+        }}/>
+
+        {/* The actual pressable button */}
         <button
           onClick={status==="idle"?startRecording:status==="recording"?stopRecording:reset}
           disabled={status==="processing"||saving}
           style={{
-            width:100,height:100,borderRadius:99,border:"none",cursor:"pointer",
-            background: status==="recording"?`linear-gradient(135deg,${PINK},#FF6B9D)`:status==="preview"?`${GREEN}22`:`linear-gradient(135deg,${ACCENT},#6B8BFF)`,
-            display:"flex",alignItems:"center",justifyContent:"center",fontSize:36,
-            boxShadow: status==="recording"?`0 0 40px ${PINK}66`:status==="idle"?`0 0 30px ${ACCENT}44`:"none",
-            transition:"all 0.2s", transform: status==="recording"?"scale(1.08)":"scale(1)",
+            position:"absolute",inset:26,borderRadius:"50%",border:"none",
+            cursor:status==="processing"||saving?"default":"pointer",
+            background:`radial-gradient(circle at 36% 32%, #1e1e2e 0%, #141420 45%, #09090B 100%)`,
+            boxShadow: isRec
+              ? `0 0 0 1px ${ACCENT}55, 0 0 50px ${ACCENT}44, 0 0 25px ${ACCENT}33, inset 0 0 40px rgba(79,110,247,0.12), inset 0 2px 0 rgba(255,255,255,0.07)`
+              : status==="preview"
+              ? `0 0 0 1px ${GREEN}44, 0 0 30px ${GREEN}22, inset 0 2px 0 rgba(255,255,255,0.06)`
+              : `0 0 0 1px rgba(255,255,255,0.08), 0 8px 40px rgba(0,0,0,0.7), inset 0 2px 0 rgba(255,255,255,0.06), inset 0 -2px 0 rgba(0,0,0,0.4)`,
+            display:"flex",alignItems:"center",justifyContent:"center",
+            transition:"box-shadow 0.5s, transform 0.2s",
+            transform:isRec?"scale(1.025)":"scale(1)",
+            outline:"none",
           }}
         >
-          {status==="recording"?"⏹":status==="preview"?"↺":"🎤"}
+          {/* Icon */}
+          <svg width="52" height="52" viewBox="0 0 24 24" fill="none" style={{transition:"all 0.3s"}}>
+            {status==="preview" ? (
+              <><path d="M1 4v6h6" stroke={GREEN} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/><path d="M3.51 15a9 9 0 1 0 .49-4.63" stroke={GREEN} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></>
+            ) : status==="processing" ? (
+              [0,60,120,180,240,300].map((deg,i)=>(
+                <circle key={i} cx={12+7.5*Math.cos(deg*Math.PI/180)} cy={12+7.5*Math.sin(deg*Math.PI/180)} r="1.6" fill={ACCENT} opacity={0.3+i*0.12}/>
+              ))
+            ) : (
+              <>
+                <rect x="9" y="2" width="6" height="11" rx="3" fill={isRec?ACCENT:"rgba(255,255,255,0.88)"}/>
+                <path d="M5 10a7 7 0 0 0 14 0" stroke={isRec?ACCENT:"rgba(255,255,255,0.88)"} strokeWidth="1.8" strokeLinecap="round" fill="none"/>
+                <line x1="12" y1="19" x2="12" y2="22" stroke={isRec?ACCENT:"rgba(255,255,255,0.88)"} strokeWidth="1.8" strokeLinecap="round"/>
+                <line x1="9" y1="22" x2="15" y2="22" stroke={isRec?ACCENT:"rgba(255,255,255,0.88)"} strokeWidth="1.8" strokeLinecap="round"/>
+              </>
+            )}
+          </svg>
         </button>
       </div>
-      <style>{`@keyframes ripple{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.8)}}`}</style>
 
-      {!voiceSupported&&<div style={{fontSize:12,color:ORANGE,textAlign:"center"}}>Voice input requires Chrome or Edge browser.</div>}
-      {error&&<div style={{fontSize:12,color:PINK}}>{error}</div>}
+      {/* Subline */}
+      <div style={{marginTop:22,height:18,textAlign:"center"}}>
+        {!voiceSupported
+          ? <div style={{fontSize:11,color:ORANGE,letterSpacing:"0.04em"}}>Requires Chrome or Edge</div>
+          : error
+          ? <div style={{fontSize:11,color:PINK}}>{error}</div>
+          : status==="idle"
+          ? <div style={{fontSize:11,color:"rgba(255,255,255,0.16)",letterSpacing:"0.08em"}}>Click to begin</div>
+          : null}
+      </div>
 
       {/* Transcript */}
       {transcript&&(
-        <div style={{width:"100%",maxWidth:560,padding:"12px 16px",background:"rgba(255,255,255,0.04)",borderRadius:12,fontSize:13,color:"rgba(255,255,255,0.6)",fontStyle:"italic",textAlign:"center"}}>
+        <div style={{marginTop:28,width:"100%",maxWidth:520,padding:"12px 18px",background:"rgba(255,255,255,0.04)",border:`1px solid rgba(255,255,255,0.07)`,borderRadius:12,fontSize:13,color:"rgba(255,255,255,0.55)",fontStyle:"italic",textAlign:"center",lineHeight:1.6,animation:"vFade 0.3s ease-out"}}>
           "{transcript}"
         </div>
       )}
 
-      {/* Preview Card */}
+      {/* Preview card */}
       {status==="preview"&&parsed&&(
-        <div style={{width:"100%",maxWidth:560,display:"flex",flexDirection:"column",gap:12}}>
+        <div style={{marginTop:24,width:"100%",maxWidth:520,display:"flex",flexDirection:"column",gap:12,animation:"vFade 0.35s ease-out"}}>
           <Card style={{padding:20}}>
             <div style={{fontSize:13,fontWeight:600,marginBottom:14,color:GREEN}}>Detected Entry</div>
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{display:"flex",flexDirection:"column",gap:0}}>
               {[
                 {label:"Glucose Before",value:parsed.glucoseBefore?`${parsed.glucoseBefore} mg/dL`:"—",color:parsed.glucoseBefore&&parsed.glucoseBefore>140?ORANGE:parsed.glucoseBefore&&parsed.glucoseBefore<80?PINK:"rgba(255,255,255,0.85)"},
                 {label:"Carbs",value:parsed.carbsGrams?`${parsed.carbsGrams}g`:"—",color:"rgba(255,255,255,0.85)"},
                 ...(parsed.fiberGrams!=null?[{label:"Fiber",value:`${parsed.fiberGrams}g`,color:GREEN}]:[]),
                 {label:"Insulin",value:parsed.insulinUnits?`${parsed.insulinUnits}u`:"—",color:"rgba(255,255,255,0.85)"},
-                {label:"Description",value:parsed.mealDescription||"—",color:"rgba(255,255,255,0.6)"},
+                {label:"Description",value:parsed.mealDescription||"—",color:"rgba(255,255,255,0.55)"},
               ].map(row=>(
-                <div key={row.label} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid rgba(255,255,255,0.05)`}}>
-                  <span style={{fontSize:12,color:"rgba(255,255,255,0.4)"}}>{row.label}</span>
+                <div key={row.label} style={{display:"flex",justifyContent:"space-between",padding:"9px 0",borderBottom:`1px solid rgba(255,255,255,0.04)`}}>
+                  <span style={{fontSize:12,color:"rgba(255,255,255,0.38)"}}>{row.label}</span>
                   <span style={{fontSize:13,fontWeight:600,color:row.color}}>{row.value}</span>
                 </div>
               ))}
             </div>
-
-            {/* Meal type override */}
             <div style={{marginTop:14}}>
-              <div style={{fontSize:9,color:"rgba(255,255,255,0.3)",marginBottom:8,letterSpacing:"0.08em"}}>MEAL TYPE</div>
+              <div style={{fontSize:9,color:"rgba(255,255,255,0.28)",marginBottom:8,letterSpacing:"0.1em"}}>MEAL TYPE</div>
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                 {(Object.keys(MEAL_LABELS) as MealTypeKey[]).map(t=>{
                   const [bg,color]=pillColors[t];
-                  return <button key={t} onClick={()=>setMealType(t)} style={{padding:"5px 12px",borderRadius:99,border:`1px solid ${mealType===t?color:"rgba(255,255,255,0.1)"}`,background:mealType===t?bg:"transparent",color:mealType===t?color:"rgba(255,255,255,0.45)",fontSize:10,fontWeight:600,cursor:"pointer"}}>{MEAL_LABELS[t]}</button>;
+                  return <button key={t} onClick={()=>setMealType(t)} style={{padding:"5px 12px",borderRadius:99,border:`1px solid ${mealType===t?color:"rgba(255,255,255,0.1)"}`,background:mealType===t?bg:"transparent",color:mealType===t?color:"rgba(255,255,255,0.4)",fontSize:10,fontWeight:600,cursor:"pointer"}}>{MEAL_LABELS[t]}</button>;
                 })}
               </div>
             </div>
           </Card>
 
-          {/* Suggestion */}
           {suggestion&&(
-            <Card style={{padding:"16px 20px"}}>
-              <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <Card style={{padding:"14px 18px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:14}}>
                 <div style={{flex:1}}>
-                  <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",letterSpacing:"0.08em"}}>SUGGESTED DOSE</div>
-                  <div style={{fontSize:28,fontWeight:800,color:ACCENT,letterSpacing:"-0.03em"}}>{suggestion.suggestedUnits.toFixed(1)}<span style={{fontSize:14,color:"rgba(255,255,255,0.35)",fontWeight:400}}>u</span></div>
+                  <div style={{fontSize:10,color:"rgba(255,255,255,0.35)",letterSpacing:"0.08em",marginBottom:2}}>SUGGESTED DOSE</div>
+                  <div style={{fontSize:30,fontWeight:800,color:ACCENT,letterSpacing:"-0.03em"}}>{suggestion.suggestedUnits.toFixed(1)}<span style={{fontSize:13,color:"rgba(255,255,255,0.3)",fontWeight:400}}> u</span></div>
                 </div>
-                <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",maxWidth:220,lineHeight:1.5}}>
-                  {suggestion.reasoning.split(".")[0]}.
-                </div>
+                <div style={{fontSize:11,color:"rgba(255,255,255,0.38)",maxWidth:200,lineHeight:1.55}}>{suggestion.reasoning.split(".")[0]}.</div>
               </div>
             </Card>
           )}
 
           <div style={{display:"flex",gap:10}}>
             {saved ? (
-              <div style={{flex:1,padding:"12px",background:`${GREEN}22`,borderRadius:10,textAlign:"center",fontSize:14,fontWeight:700,color:GREEN}}>✓ Saved</div>
+              <div style={{flex:1,padding:"13px",background:`${GREEN}18`,border:`1px solid ${GREEN}44`,borderRadius:10,textAlign:"center",fontSize:14,fontWeight:700,color:GREEN}}>✓ Saved</div>
             ) : (
               <>
-                <button onClick={reset} style={{flex:1,padding:"12px",background:"rgba(255,255,255,0.06)",border:"none",borderRadius:10,color:"rgba(255,255,255,0.7)",fontSize:13,fontWeight:600,cursor:"pointer"}}>Discard</button>
-                <button onClick={confirmEntry} disabled={saving} style={{flex:2,padding:"12px",background:`linear-gradient(135deg,${ACCENT},#6B8BFF)`,border:"none",borderRadius:10,color:"white",fontSize:14,fontWeight:700,cursor:"pointer",opacity:saving?0.6:1}}>
+                <button onClick={reset} style={{flex:1,padding:"13px",background:"rgba(255,255,255,0.05)",border:"none",borderRadius:10,color:"rgba(255,255,255,0.6)",fontSize:13,fontWeight:600,cursor:"pointer"}}>Discard</button>
+                <button onClick={confirmEntry} disabled={saving} style={{flex:2,padding:"13px",background:`linear-gradient(135deg,${ACCENT},#6B8BFF)`,border:"none",borderRadius:10,color:"white",fontSize:14,fontWeight:700,cursor:"pointer",opacity:saving?0.6:1}}>
                   {saving?"Saving…":"Confirm & Save"}
                 </button>
               </>
             )}
           </div>
-
-          <div style={{textAlign:"center",fontSize:11,color:"rgba(255,255,255,0.2)"}}>
-            Examples: "120 glucose 60 carbs 2 units chicken rice" · "pasta 80g carbs 8g fiber glucose 95"
+          <div style={{textAlign:"center",fontSize:11,color:"rgba(255,255,255,0.16)"}}>
+            e.g. "120 glucose 60 carbs 8g fiber 2 units pasta"
           </div>
         </div>
       )}
