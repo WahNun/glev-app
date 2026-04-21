@@ -258,6 +258,7 @@ function Dashboard() {
 function QuickLog() {
   const [glucose, setGlucose] = useState("");
   const [carbs, setCarbs] = useState("");
+  const [fiber, setFiber] = useState("");
   const [protein, setProtein] = useState("");
   const [fat, setFat] = useState("");
   const [desc, setDesc] = useState("");
@@ -281,8 +282,8 @@ function QuickLog() {
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:380,gap:16}}>
       <div style={{width:60,height:60,borderRadius:99,background:`${GREEN}22`,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{fontSize:28,color:GREEN}}>✓</span></div>
       <div style={{fontSize:18,fontWeight:700,color:GREEN}}>Entry logged</div>
-      <div style={{fontSize:13,color:"rgba(255,255,255,0.4)"}}>BG {glucose} · {carbs}g carbs · {MEAL_LABELS[mealType]} · {insulin}u</div>
-      <button onClick={()=>{setSubmitted(false);setGlucose("");setCarbs("");setProtein("");setFat("");setDesc("");setInsulin("");setOverridden(false);}} style={{marginTop:8,padding:"10px 24px",background:ACCENT,border:"none",borderRadius:10,color:"white",fontSize:13,fontWeight:600,cursor:"pointer"}}>Log Another</button>
+      <div style={{fontSize:13,color:"rgba(255,255,255,0.4)"}}>BG {glucose} · {carbs}g carbs{fiber?` · ${fiber}g fiber`:""} · {MEAL_LABELS[mealType]} · {insulin}u</div>
+      <button onClick={()=>{setSubmitted(false);setGlucose("");setCarbs("");setFiber("");setProtein("");setFat("");setDesc("");setInsulin("");setOverridden(false);}} style={{marginTop:8,padding:"10px 24px",background:ACCENT,border:"none",borderRadius:10,color:"white",fontSize:13,fontWeight:600,cursor:"pointer"}}>Log Another</button>
     </div>
   );
 
@@ -295,10 +296,22 @@ function QuickLog() {
             <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>GLUCOSE BEFORE (mg/dL)</div>
             <input value={glucose} onChange={e=>setGlucose(e.target.value)} placeholder="e.g. 115" type="number" style={inp} />
           </div>
-          <div>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>CARBS (g)</div>
-            <input value={carbs} onChange={e=>setCarbs(e.target.value)} placeholder="e.g. 60" type="number" style={inp} />
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>CARBS (g)</div>
+              <input value={carbs} onChange={e=>setCarbs(e.target.value)} placeholder="e.g. 60" type="number" style={inp} />
+            </div>
+            <div>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>FIBER (g) <span style={{opacity:0.5}}>opt.</span></div>
+              <input value={fiber} onChange={e=>setFiber(e.target.value)} placeholder="e.g. 8" type="number" style={inp} />
+            </div>
           </div>
+          {carbs && fiber && Number(carbs)>0 && Number(fiber)>0 && (
+            <div style={{padding:"8px 12px",background:`${GREEN}0D`,border:`1px solid ${GREEN}33`,borderRadius:8,fontSize:11,color:GREEN,display:"flex",alignItems:"center",gap:6}}>
+              <span style={{opacity:0.7}}>🌾</span>
+              <span><b>{carbs}g</b> carbs − <b>{fiber}g</b> fiber = <b style={{fontSize:13}}>{Math.max(0,Number(carbs)-Number(fiber))}g net carbs</b></span>
+            </div>
+          )}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
             <div>
               <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>PROTEIN (g)</div>
@@ -423,13 +436,14 @@ function Insights() {
 function Recommend() {
   const [glucose, setGlucose] = useState("");
   const [carbs, setCarbs] = useState("");
+  const [fiber, setFiber] = useState("");
   const [protein, setProtein] = useState("");
   const [fat, setFat] = useState("");
   const [desc, setDesc] = useState("");
   const [mealType, setMealType] = useState<MealTypeKey>("BALANCED");
   const [overridden, setOverridden] = useState(false);
   const [cl, setCl] = useState<ReturnType<typeof classifyMeal>|null>(null);
-  const [result, setResult] = useState<null|{units:number;ratio:number;confidence:string}>(null);
+  const [result, setResult] = useState<null|{units:number;ratio:number;confidence:string;netCarbs?:number}>(null);
 
   const inp: React.CSSProperties = { background:"rgba(255,255,255,0.05)", border:`1px solid rgba(255,255,255,0.1)`, borderRadius:10, padding:"9px 12px", color:"white", fontSize:14, fontWeight:600, width:"100%", boxSizing:"border-box", outline:"none", fontFamily:"inherit" };
 
@@ -442,14 +456,15 @@ function Recommend() {
   },[carbs,protein,fat,desc,overridden]);
 
   const calc=()=>{
-    const g=Number(glucose),c=Number(carbs);
+    const g=Number(glucose),c=Number(carbs),fi=Number(fiber)||0;
     if(!g||!c)return;
+    const netCarbs=Math.max(0,c-fi);
     const ratio=33;
-    let units=c/ratio;
+    let units=netCarbs/ratio;
     if(g>140)units+=0.5; if(g<90)units-=0.5;
     if(mealType==="FAST_CARBS")units+=0.5; if(mealType==="HIGH_FAT")units-=0.5;
     if(g<=180&&units>3)units=3;
-    setResult({units:Math.max(0.5,Math.round(units*2)/2),ratio,confidence:"HIGH"});
+    setResult({units:Math.max(0.5,Math.round(units*2)/2),ratio,confidence:"HIGH",netCarbs:fi>0?netCarbs:undefined});
   };
 
   return (
@@ -461,10 +476,22 @@ function Recommend() {
             <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>CURRENT GLUCOSE (mg/dL)</div>
             <input value={glucose} onChange={e=>setGlucose(e.target.value)} placeholder="e.g. 115" type="number" style={inp} />
           </div>
-          <div>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>PLANNED CARBS (g)</div>
-            <input value={carbs} onChange={e=>setCarbs(e.target.value)} placeholder="e.g. 60" type="number" style={inp} />
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>PLANNED CARBS (g)</div>
+              <input value={carbs} onChange={e=>setCarbs(e.target.value)} placeholder="e.g. 60" type="number" style={inp} />
+            </div>
+            <div>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>FIBER (g) <span style={{opacity:0.5}}>opt.</span></div>
+              <input value={fiber} onChange={e=>setFiber(e.target.value)} placeholder="e.g. 8" type="number" style={inp} />
+            </div>
           </div>
+          {carbs && fiber && Number(carbs)>0 && Number(fiber)>0 && (
+            <div style={{padding:"7px 11px",background:`${GREEN}0D`,border:`1px solid ${GREEN}33`,borderRadius:8,fontSize:11,color:GREEN,display:"flex",alignItems:"center",gap:6}}>
+              <span>🌾</span>
+              <span>Net carbs: <b style={{fontSize:13}}>{Math.max(0,Number(carbs)-Number(fiber))}g</b> ({carbs}g − {fiber}g fiber)</span>
+            </div>
+          )}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
             <div>
               <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>PROTEIN (g)</div>
@@ -503,6 +530,7 @@ function Recommend() {
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {[
                 { label: "Confidence", value: result.confidence, color: GREEN },
+                ...(result.netCarbs !== undefined ? [{ label: "Net carbs used", value: `${result.netCarbs}g`, color: GREEN }] : []),
                 { label: "Carb ratio", value: `1u per ${result.ratio}g`, color: ACCENT },
                 { label: "Timing", value: mealType === "HIGH_FAT" ? "Split dose" : "Before meal", color: "rgba(255,255,255,0.7)" },
               ].map((row) => (

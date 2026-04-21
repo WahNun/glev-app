@@ -8,6 +8,7 @@ export const entriesTable = pgTable("entries", {
   glucoseBefore: real("glucose_before").notNull(),
   glucoseAfter: real("glucose_after"),
   carbsGrams: real("carbs_grams").notNull(),
+  fiberGrams: real("fiber_grams"),
   insulinUnits: real("insulin_units").notNull(),
   mealType: text("meal_type").notNull(),
   mealDescription: text("meal_description"),

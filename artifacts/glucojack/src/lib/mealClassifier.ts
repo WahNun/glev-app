@@ -32,9 +32,13 @@ export function classifyMeal(
   protein: number,
   fat: number,
   description?: string,
+  fiber = 0,
 ): ClassificationResult {
-  // Caloric energy per macro (g × kcal/g)
-  const carbCals    = carbs * 4;
+  // Net carbs: fiber buffers absorption
+  const netCarbs = Math.max(0, carbs - fiber);
+
+  // Caloric energy per macro (g × kcal/g), using NET carbs for classification
+  const carbCals    = netCarbs * 4;
   const proteinCals = protein * 4;
   const fatCals     = fat * 9;
   const totalCals   = carbCals + proteinCals + fatCals;
@@ -43,8 +47,9 @@ export function classifyMeal(
   const fatPct     = totalCals > 0 ? (fatCals     / totalCals) * 100 : 0;
   const proteinPct = totalCals > 0 ? (proteinCals / totalCals) * 100 : 0;
 
-  // ─── Fast sugar keyword override ────────────────────────────────
-  if (description && description.trim().length > 0) {
+  // ─── Fast sugar keyword override ──────────────────────────────────
+  // High fiber (>10g) reduces fast-carbs sensitivity — only override if fiber is low
+  if (description && description.trim().length > 0 && fiber < 10) {
     const lc = description.toLowerCase();
     const matched = FAST_SUGAR_KEYWORDS.find((kw) => lc.includes(kw));
     if (matched) {
@@ -66,6 +71,32 @@ export function classifyMeal(
     };
   }
 
+  // ─── HIGH FIBER BIAS: fiber > 15g → always BALANCED (overrides FAST_CARBS) ─
+  if (fiber >= 15) {
+    const fiberBonus = `High fiber (${fiber}g) significantly slows carb absorption — classified as BALANCED regardless of carb content.`;
+    // Still check for high fat / high protein first
+    if (fat > 30 || fatPct > 40) {
+      const trigger = fat > 30 ? `fat ${fat}g > 30g` : `fat ${fatPct.toFixed(0)}% of cals > 40%`;
+      return {
+        mealType: "HIGH_FAT",
+        reasoning: `HIGH FAT — ${trigger}. ${fiberBonus} Split dose recommended.`,
+        fastSugarMatch: null, carbPct, fatPct, proteinPct,
+      };
+    }
+    if (protein > 40 && netCarbs < 40) {
+      return {
+        mealType: "HIGH_PROTEIN",
+        reasoning: `HIGH PROTEIN — ${protein}g protein with ${netCarbs}g net carbs. ${fiberBonus}`,
+        fastSugarMatch: null, carbPct, fatPct, proteinPct,
+      };
+    }
+    return {
+      mealType: "BALANCED",
+      reasoning: `BALANCED — ${fiberBonus} Net carbs: ${netCarbs}g (${carbs}g − ${fiber}g fiber). Standard bolus timing.`,
+      fastSugarMatch: null, carbPct, fatPct, proteinPct,
+    };
+  }
+
   // ─── HIGH FAT: fat > 30 g  OR  fat% > 40% ───────────────────────
   if (fat > 30 || fatPct > 40) {
     const trigger = fat > 30
@@ -74,36 +105,38 @@ export function classifyMeal(
     return {
       mealType: "HIGH_FAT",
       reasoning: `HIGH FAT — ${trigger}. Insulin absorption may be delayed; consider a split dose.`,
-      fastSugarMatch: null,
-      carbPct, fatPct, proteinPct,
+      fastSugarMatch: null, carbPct, fatPct, proteinPct,
     };
   }
 
-  // ─── FAST CARBS: carbs% > 60% AND fat < 20 g AND protein < 25 g ─
-  if (carbPct > 60 && fat < 20 && protein < 25) {
+  // ─── FAST CARBS: net carbs% > 60% AND fat < 20 g AND protein < 25 g
+  // Fiber 10–15g: raise the carb% threshold to 70% (reduced sensitivity)
+  const fastCarbThreshold = fiber >= 10 ? 70 : 60;
+  if (carbPct > fastCarbThreshold && fat < 20 && protein < 25) {
+    const fiberNote = fiber >= 10 ? ` Fiber (${fiber}g) partially buffers absorption.` : "";
     return {
-      mealType: "FAST_CARBS",
-      reasoning: `FAST CARBS — carbs ${carbPct.toFixed(0)}% of calories with low fat (${fat}g) and protein (${protein}g). Expect peak at 30–60 min.`,
-      fastSugarMatch: null,
-      carbPct, fatPct, proteinPct,
+      mealType: fiber >= 10 ? "BALANCED" : "FAST_CARBS",
+      reasoning: fiber >= 10
+        ? `BALANCED — net carbs ${carbPct.toFixed(0)}% but fiber ${fiber}g reduces spike speed.${fiberNote} Monitor at 60–90 min.`
+        : `FAST CARBS — net carbs ${carbPct.toFixed(0)}% of calories, low fat (${fat}g) and protein (${protein}g). Expect peak at 30–60 min.`,
+      fastSugarMatch: null, carbPct, fatPct, proteinPct,
     };
   }
 
-  // ─── HIGH PROTEIN: protein > 40 g AND carbs < 40 g ─────────────
-  if (protein > 40 && carbs < 40) {
+  // ─── HIGH PROTEIN: protein > 40 g AND net carbs < 40 g ──────────
+  if (protein > 40 && netCarbs < 40) {
     return {
       mealType: "HIGH_PROTEIN",
-      reasoning: `HIGH PROTEIN — protein ${protein}g with low carbs (${carbs}g). Glucose effect may be delayed 2–3 h.`,
-      fastSugarMatch: null,
-      carbPct, fatPct, proteinPct,
+      reasoning: `HIGH PROTEIN — protein ${protein}g with ${netCarbs}g net carbs. Glucose effect may be delayed 2–3 h.`,
+      fastSugarMatch: null, carbPct, fatPct, proteinPct,
     };
   }
 
   // ─── BALANCED ────────────────────────────────────────────────────
+  const fiberSuffix = fiber > 0 ? ` Net carbs: ${netCarbs}g (${carbs}g − ${fiber}g fiber).` : "";
   return {
     mealType: "BALANCED",
-    reasoning: `BALANCED — carbs ${carbPct.toFixed(0)}%, protein ${proteinPct.toFixed(0)}%, fat ${fatPct.toFixed(0)}% of calories. Standard pre-meal bolus.`,
-    fastSugarMatch: null,
-    carbPct, fatPct, proteinPct,
+    reasoning: `BALANCED — carbs ${carbPct.toFixed(0)}%, protein ${proteinPct.toFixed(0)}%, fat ${fatPct.toFixed(0)}% of calories.${fiberSuffix} Standard pre-meal bolus.`,
+    fastSugarMatch: null, carbPct, fatPct, proteinPct,
   };
 }

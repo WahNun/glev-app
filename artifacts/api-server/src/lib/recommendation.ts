@@ -68,26 +68,31 @@ export function calculatePersonalBolus(
   glucoseBefore: number,
   mealType: MealType,
   allEntries: Entry[], // newest first
+  fiberGrams = 0,
 ): RecommendationResult {
   const timing = TIMING_MAP[mealType];
+
+  // Net carbs = total carbs − fiber (fiber slows absorption, reduces effective load)
+  const netCarbs = Math.max(0, carbsGrams - fiberGrams);
 
   // Only stable, GOOD-evaluated meals feed into the ratio
   const stableEntries = allEntries.filter(isStable);
 
   if (stableEntries.length === 0) {
-    return fallbackRecommendation(carbsGrams, glucoseBefore, mealType, timing);
+    return fallbackRecommendation(netCarbs, carbsGrams, fiberGrams, glucoseBefore, mealType, timing);
   }
 
-  // Carbs-per-unit ratio: higher number = softer response (needs fewer units)
-  const withRatio = stableEntries.map((e) => ({
-    ...e,
-    ratio: e.carbsGrams / e.insulinUnits,
-  }));
+  // Carbs-per-unit ratio from history: use net carbs if available, else total carbs
+  const withRatio = stableEntries.map((e) => {
+    const entryNet = Math.max(0, e.carbsGrams - ((e as Entry & { fiberGrams?: number | null }).fiberGrams ?? 0));
+    const effectiveCarbs = entryNet > 0 ? entryNet : e.carbsGrams;
+    return { ...e, ratio: effectiveCarbs / e.insulinUnits };
+  });
 
   // A) RECENT — last 10 stable meals
   const recent = withRatio.slice(0, 10);
 
-  // B) SIMILAR — same meal type, carbs within ±20g
+  // B) SIMILAR — same meal type, net carbs within ±20g
   const similar = withRatio.filter(
     (e) => e.mealType === mealType && Math.abs(e.carbsGrams - carbsGrams) <= 20,
   );
@@ -106,11 +111,11 @@ export function calculatePersonalBolus(
       : 0.7 * recentAvg + 0.3 * globalAvg;
 
   if (weightedRatio <= 0) {
-    return fallbackRecommendation(carbsGrams, glucoseBefore, mealType, timing);
+    return fallbackRecommendation(netCarbs, carbsGrams, fiberGrams, glucoseBefore, mealType, timing);
   }
 
-  // Base insulin dose
-  let units = carbsGrams / weightedRatio;
+  // Base insulin dose — always uses net carbs
+  let units = netCarbs / weightedRatio;
 
   // Glucose correction (only applied when clearly outside range)
   let glucoseAdjustment = 0;
@@ -149,6 +154,8 @@ export function calculatePersonalBolus(
   const reasoning = buildReasoning(
     mealType,
     carbsGrams,
+    fiberGrams,
+    netCarbs,
     glucoseBefore,
     similar.length,
     recent.length,
@@ -175,20 +182,24 @@ export function calculatePersonalBolus(
 }
 
 function fallbackRecommendation(
+  netCarbs: number,
   carbsGrams: number,
+  fiberGrams: number,
   glucoseBefore: number,
   mealType: MealType,
   timing: TimingType,
 ): RecommendationResult {
-  // Conservative default for a user whose ratio is unknown
   const DEFAULT_RATIO = 35;
-  let units = carbsGrams / DEFAULT_RATIO;
+  let units = netCarbs / DEFAULT_RATIO;
   if (glucoseBefore > 140) units += 0.5;
   if (glucoseBefore < 90)  units -= 0.5;
 
-  // Safety cap applies to fallback too
   const capped = glucoseBefore <= SAFETY_CAP_GLUCOSE_THRESHOLD && units > SAFETY_CAP_UNITS;
   units = capped ? SAFETY_CAP_UNITS : Math.max(0.5, units);
+
+  const fiberNote = fiberGrams > 0
+    ? ` Net carbs: ${netCarbs}g (${carbsGrams}g − ${fiberGrams}g fiber).`
+    : "";
 
   return {
     recommendedUnits: r2(Math.round(units * 2) / 2),
@@ -196,7 +207,7 @@ function fallbackRecommendation(
     maxUnits: r2(units * 1.15),
     confidence: "LOW",
     timing,
-    reasoning: `No stable historical data available yet. Using conservative default of 1u per ${DEFAULT_RATIO}g. Log meals with after-meal readings to build your personal profile.`,
+    reasoning: `No stable historical data yet. Using 1u per ${DEFAULT_RATIO}g default.${fiberNote} Log meals with after-meal readings to build your profile.`,
     basedOnEntries: 0,
     similarMealCount: 0,
     recentCount: 0,
@@ -208,6 +219,8 @@ function fallbackRecommendation(
 function buildReasoning(
   mealType: MealType,
   carbsGrams: number,
+  fiberGrams: number,
+  netCarbs: number,
   glucoseBefore: number,
   similarCount: number,
   recentCount: number,
@@ -236,7 +249,11 @@ function buildReasoning(
     parts.push(`Limited stable data — ${stableCount} qualifying entries. Hypo and spike meals excluded.`);
   }
 
-  parts.push(`Your carb ratio from stable meals: 1u per ${carbRatio}g (60% recent · 30% similar · 10% all-time).`);
+  if (fiberGrams > 0) {
+    parts.push(`Net carbs: ${netCarbs}g (${carbsGrams}g total − ${fiberGrams}g fiber). Dose is based on net carbs — fiber slows absorption.`);
+  }
+
+  parts.push(`Personal carb ratio: 1u per ${carbRatio}g (60% recent · 30% similar · 10% all-time).`);
 
   if (glucoseAdj > 0) {
     parts.push(`+${glucoseAdj}u correction: starting glucose ${glucoseBefore} mg/dL is above target.`);

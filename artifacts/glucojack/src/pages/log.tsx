@@ -11,12 +11,13 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Droplet, Cookie, Zap, Clock, ArrowRight } from "lucide-react";
+import { Droplet, Cookie, Zap, Clock, ArrowRight, Wheat } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 const formSchema = z.object({
   glucoseBefore: z.coerce.number().min(20).max(600),
   carbsGrams: z.coerce.number().min(0).max(500),
+  fiberGrams: z.string().transform(val => val === "" ? null : Number(val)).nullable(),
   insulinUnits: z.coerce.number().min(0).max(100),
   mealType: z.enum([
     CreateEntryBodyMealType.FAST_CARBS,
@@ -39,6 +40,7 @@ export default function QuickLog() {
     defaultValues: {
       glucoseBefore: "" as any,
       carbsGrams: "" as any,
+      fiberGrams: null,
       insulinUnits: "" as any,
       mealType: CreateEntryBodyMealType.BALANCED,
       glucoseAfter: null,
@@ -48,7 +50,7 @@ export default function QuickLog() {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
-      await createEntry.mutateAsync({ data: values });
+      await createEntry.mutateAsync({ data: { ...values, fiberGrams: values.fiberGrams ?? undefined } as any });
       toast({
         title: "Entry Logged",
         description: "Your glucose and insulin data has been recorded.",
@@ -110,6 +112,31 @@ export default function QuickLog() {
                       <FormControl>
                         <Input type="number" inputMode="decimal" placeholder="e.g. 45" className="text-2xl font-mono h-14" {...field} />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="fiberGrams"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-2">
+                        <Wheat className="w-4 h-4 text-green-600" />
+                        Fiber (g) <span className="text-muted-foreground text-xs font-normal ml-1">optional</span>
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          inputMode="decimal"
+                          placeholder="e.g. 8"
+                          className="text-2xl font-mono h-14"
+                          value={field.value ?? ""}
+                          onChange={field.onChange}
+                        />
+                      </FormControl>
+                      <FormDescription>Reduces net carb load used for dosing</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

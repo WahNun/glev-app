@@ -11,6 +11,7 @@ type VoiceState = "idle" | "recording" | "processing" | "preview";
 interface ParsedEntry {
   meal: "Breakfast" | "Lunch" | "Dinner" | "Snack";
   carbs: number | null;
+  fiber: number | null;
   glucoseBefore: number | null;
   bolusUnits: number | null;
   foodDescription: string;
@@ -20,15 +21,17 @@ interface ParsedEntry {
 
 const EXAMPLE_PHRASES = [
   "Chicken rice 80 carbs 3 units glucose 120",
-  "Breakfast oatmeal 45g carbs insulin 2 units BG 95",
+  "Breakfast oatmeal 45g carbs 8g fiber insulin 2 units BG 95",
   "Dinner pasta 70 carbs 4.5 units 135 glucose",
-  "Lunch salad with 30 carbs 1.5 units 110",
+  "Lunch salad 30 carbs 12g fiber 1.5 units 110",
 ];
 
 function parseSpeechText(text: string): ParsedEntry {
   const lower = text.toLowerCase();
 
   const carbMatch = lower.match(/(\d+(?:\.\d+)?)\s*g?\s*carb/);
+  const fiberMatch = lower.match(/(\d+(?:\.\d+)?)\s*g?\s*fiber/) ||
+    lower.match(/fiber[^\d]*(\d+(?:\.\d+)?)/i);
   const glucoseMatch = lower.match(/(?:glucose|bg|blood\s*sugar)[^\d]*(\d+(?:\.\d+)?)/i) ||
     lower.match(/(\d{2,3})\s*(?:glucose|bg)/i);
   const insulinMatch = lower.match(/(\d+(?:\.\d+)?)\s*(?:units?|u)\b/i) ||
@@ -44,6 +47,8 @@ function parseSpeechText(text: string): ParsedEntry {
 
   const foodDesc = text
     .replace(/\d+(?:\.\d+)?\s*g?\s*carbs?/gi, "")
+    .replace(/\d+(?:\.\d+)?\s*g?\s*fiber/gi, "")
+    .replace(/fiber[^\d]*\d+(?:\.\d+)?/gi, "")
     .replace(/\d+(?:\.\d+)?\s*(?:units?|u)\b/gi, "")
     .replace(/(?:glucose|bg|blood sugar)[^\d]*\d+/gi, "")
     .replace(/\d+(?:\.\d+)?\s*g?\s*protein/gi, "")
@@ -54,6 +59,7 @@ function parseSpeechText(text: string): ParsedEntry {
   return {
     meal,
     carbs: carbMatch ? parseFloat(carbMatch[1]) : null,
+    fiber: fiberMatch ? parseFloat(fiberMatch[1]) : null,
     glucoseBefore: glucoseMatch ? parseFloat(glucoseMatch[1]) : null,
     bolusUnits: insulinMatch ? parseFloat(insulinMatch[1]) : null,
     foodDescription: foodDesc || "Meal",
@@ -284,6 +290,7 @@ export default function VoiceLog() {
             <FieldRow label="Meal" value={parsed.meal} />
             <FieldRow label="Glucose before" value={parsed.glucoseBefore} unit=" mg/dL" />
             <FieldRow label="Carbs" value={parsed.carbs} unit=" g" />
+            <FieldRow label="Fiber" value={parsed.fiber} unit=" g" />
             <FieldRow label="Protein" value={parsed.protein} unit=" g" />
             <FieldRow label="Fat" value={parsed.fat} unit=" g" />
             <FieldRow label="Insulin dose" value={parsed.bolusUnits} unit=" u" />
@@ -338,7 +345,7 @@ export default function VoiceLog() {
               </div>
             ))}
             <p className="text-xs text-muted-foreground pt-2 border-t border-border">
-              Glev detects: meal type, carbs, glucose, insulin units, protein, fat, and food description.
+              Glev detects: meal type, carbs, fiber, glucose, insulin units, protein, fat, and food description.
               Missing fields can be filled in manually after confirmation.
             </p>
           </CardContent>

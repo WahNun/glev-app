@@ -83,6 +83,7 @@ export const CreateEntryBody = zod.object({
   glucoseBefore: zod.number(),
   glucoseAfter: zod.number().nullish(),
   carbsGrams: zod.number(),
+  fiberGrams: zod.number().nullish(),
   insulinUnits: zod.number(),
   mealType: zod.enum(["FAST_CARBS", "HIGH_FAT", "HIGH_PROTEIN", "BALANCED"]),
   mealDescription: zod.string().nullish(),
@@ -106,6 +107,7 @@ export const GetEntryResponse = zod.object({
     .nullish()
     .describe("Blood glucose after meal (mg\/dL)"),
   carbsGrams: zod.number().describe("Carbohydrate intake in grams"),
+  fiberGrams: zod.number().nullish().describe("Dietary fiber in grams (reduces net carbs)"),
   insulinUnits: zod.number().describe("Bolus insulin units administered"),
   mealType: zod.enum(["FAST_CARBS", "HIGH_FAT", "HIGH_PROTEIN", "BALANCED"]),
   mealDescription: zod.string().nullish(),
@@ -284,6 +286,7 @@ export const GetGlucoseTrendResponse = zod.object({
  */
 export const GetRecommendationBody = zod.object({
   carbsGrams: zod.number(),
+  fiberGrams: zod.number().nullish(),
   glucoseBefore: zod.number(),
   mealType: zod.enum(["FAST_CARBS", "HIGH_FAT", "HIGH_PROTEIN", "BALANCED"]),
 });

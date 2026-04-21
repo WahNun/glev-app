@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider";
 import {
   Zap, Droplet, Cookie, ShieldCheck, AlertTriangle, Info,
-  ChevronRight, Clock, Layers, BookOpen, Gauge, ToggleLeft, Beef, FlameKindling,
+  ChevronRight, Clock, Layers, BookOpen, Gauge, ToggleLeft, Beef, FlameKindling, Wheat,
 } from "lucide-react";
 import { classifyMeal, type ClassificationResult, MEAL_LABELS } from "@/lib/mealClassifier";
 import { MacroClassifier } from "@/components/MacroClassifier";
@@ -34,20 +34,43 @@ const BASE_URL = import.meta.env.BASE_URL;
 async function fetchRecommendation(
   carbsGrams: number,
   glucoseBefore: number,
-  mealType: MealType
+  mealType: MealType,
+  fiberGrams = 0,
 ): Promise<RecommendationResult | null> {
   if (carbsGrams <= 0 || glucoseBefore <= 0) return null;
   try {
+    const body: Record<string, unknown> = { carbsGrams, glucoseBefore, mealType };
+    if (fiberGrams > 0) body.fiberGrams = fiberGrams;
     const res = await fetch(`${BASE_URL}api/recommendations`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ carbsGrams, glucoseBefore, mealType }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) return null;
     return await res.json();
   } catch {
     return null;
   }
+}
+
+function NetCarbsDisplay({ carbs, fiber }: { carbs: string; fiber: string }) {
+  const c = Number(carbs) || 0;
+  const f = Number(fiber) || 0;
+  if (c <= 0 || f <= 0) return null;
+  const net = Math.max(0, c - f);
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-50 border border-green-200 text-xs dark:bg-green-950/30 dark:border-green-800">
+      <Wheat className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
+      <span className="text-green-700 dark:text-green-400">
+        <span className="font-medium">{c}g carbs</span>
+        <span className="text-green-500 mx-1">−</span>
+        <span className="font-medium">{f}g fiber</span>
+        <span className="text-green-500 mx-1">=</span>
+        <span className="font-bold text-green-800 dark:text-green-300">{net}g net carbs</span>
+        <span className="ml-1 opacity-70">(dose uses net carbs)</span>
+      </span>
+    </div>
+  );
 }
 
 function useDebounce<T>(value: T, delay: number): T {
@@ -247,6 +270,7 @@ function MinimalMode() {
 function StandardMode() {
   const [glucose, setGlucose] = useState<string>("");
   const [carbs, setCarbs] = useState<string>("");
+  const [fiber, setFiber] = useState<string>("");
   const [protein, setProtein] = useState<string>("");
   const [fat, setFat] = useState<string>("");
   const [description, setDescription] = useState<string>("");
@@ -258,6 +282,7 @@ function StandardMode() {
 
   const dGlucose = useDebounce(glucose, 350);
   const dCarbs = useDebounce(carbs, 350);
+  const dFiber = useDebounce(fiber, 350);
   const dMealType = useDebounce(mealType, 100);
 
   // Recompute classification whenever macros or description change
@@ -265,21 +290,23 @@ function StandardMode() {
     const c = Number(carbs) || 0;
     const p = Number(protein) || 0;
     const f = Number(fat) || 0;
+    const fi = Number(fiber) || 0;
     if (c + p + f === 0 && !description) { setClassification(null); return; }
-    const result = classifyMeal(c, p, f, description);
+    const result = classifyMeal(c, p, f, description, fi);
     setClassification(result);
     if (!mealTypeOverridden) setMealType(result.mealType);
-  }, [carbs, protein, fat, description, mealTypeOverridden]);
+  }, [carbs, protein, fat, fiber, description, mealTypeOverridden]);
 
   useEffect(() => {
     const g = Number(dGlucose);
     const c = Number(dCarbs);
+    const fi = Number(dFiber) || 0;
     if (!g || !c || g < 20 || c < 5) { setResult(null); return; }
     setLoading(true);
-    fetchRecommendation(c, g, dMealType)
+    fetchRecommendation(c, g, dMealType, fi)
       .then((r) => { setResult(r); setLoading(false); })
       .catch(() => setLoading(false));
-  }, [dGlucose, dCarbs, dMealType]);
+  }, [dGlucose, dCarbs, dFiber, dMealType]);
 
   return (
     <div className="grid md:grid-cols-2 gap-6 items-start">
@@ -299,13 +326,24 @@ function StandardMode() {
               onChange={(e) => setGlucose(e.target.value)} className="text-xl font-mono h-12" />
           </div>
 
-          <div className="space-y-1.5">
-            <Label className="flex items-center gap-1.5 text-sm">
-              <Cookie className="w-3.5 h-3.5 text-orange-400" /> Carbs (g)
-            </Label>
-            <Input type="number" inputMode="decimal" placeholder="e.g. 60" value={carbs}
-              onChange={(e) => setCarbs(e.target.value)} className="text-xl font-mono h-12" />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1.5 text-sm">
+                <Cookie className="w-3.5 h-3.5 text-orange-400" /> Carbs (g)
+              </Label>
+              <Input type="number" inputMode="decimal" placeholder="e.g. 60" value={carbs}
+                onChange={(e) => setCarbs(e.target.value)} className="text-xl font-mono h-12" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1.5 text-sm">
+                <Wheat className="w-3.5 h-3.5 text-green-600" /> Fiber (g) <span className="text-muted-foreground text-xs ml-0.5">opt.</span>
+              </Label>
+              <Input type="number" inputMode="decimal" placeholder="e.g. 8" value={fiber}
+                onChange={(e) => setFiber(e.target.value)} className="text-xl font-mono h-12" />
+            </div>
           </div>
+
+          <NetCarbsDisplay carbs={carbs} fiber={fiber} />
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -362,13 +400,13 @@ function StandardMode() {
 function AdvancedMode() {
   const [glucose, setGlucose] = useState<string>("");
   const [carbs, setCarbs] = useState<string>("");
+  const [fiber, setFiber] = useState<string>("");
   const [protein, setProtein] = useState<string>("");
   const [fat, setFat] = useState<string>("");
   const [description, setDescription] = useState<string>("");
   const [mealType, setMealType] = useState<MealType>("BALANCED");
   const [mealTypeOverridden, setMealTypeOverridden] = useState(false);
   const [classification, setClassification] = useState<ClassificationResult | null>(null);
-  const [manualOverride, setManualOverride] = useState<number | null>(null);
   const [overrideSlider, setOverrideSlider] = useState<number[]>([0]);
   const [useOverride, setUseOverride] = useState(false);
   const [result, setResult] = useState<RecommendationResult | null>(null);
@@ -376,6 +414,7 @@ function AdvancedMode() {
 
   const dGlucose = useDebounce(glucose, 350);
   const dCarbs = useDebounce(carbs, 350);
+  const dFiber = useDebounce(fiber, 350);
   const dMealType = useDebounce(mealType, 100);
 
   // Recompute classification when macros / description change
@@ -383,25 +422,27 @@ function AdvancedMode() {
     const c = Number(carbs) || 0;
     const p = Number(protein) || 0;
     const f = Number(fat) || 0;
+    const fi = Number(fiber) || 0;
     if (c + p + f === 0 && !description) { setClassification(null); return; }
-    const cl = classifyMeal(c, p, f, description);
+    const cl = classifyMeal(c, p, f, description, fi);
     setClassification(cl);
     if (!mealTypeOverridden) setMealType(cl.mealType);
-  }, [carbs, protein, fat, description, mealTypeOverridden]);
+  }, [carbs, protein, fat, fiber, description, mealTypeOverridden]);
 
   useEffect(() => {
     const g = Number(dGlucose);
     const c = Number(dCarbs);
+    const fi = Number(dFiber) || 0;
     if (!g || !c || g < 20 || c < 5) { setResult(null); return; }
     setLoading(true);
-    fetchRecommendation(c, g, dMealType)
+    fetchRecommendation(c, g, dMealType, fi)
       .then((r) => {
         setResult(r);
         if (r) setOverrideSlider([r.recommendedUnits]);
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [dGlucose, dCarbs, dMealType]);
+  }, [dGlucose, dCarbs, dFiber, dMealType]);
 
   const displayUnits = useOverride && result ? overrideSlider[0] : result?.recommendedUnits ?? null;
   const glucoseBefore = Number(glucose);
@@ -427,11 +468,23 @@ function AdvancedMode() {
               <Input type="number" inputMode="decimal" placeholder="e.g. 115" value={glucose}
                 onChange={(e) => setGlucose(e.target.value)} className="text-lg font-mono h-10" />
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Carbs (g)</Label>
-              <Input type="number" inputMode="decimal" placeholder="e.g. 60" value={carbs}
-                onChange={(e) => setCarbs(e.target.value)} className="text-lg font-mono h-10" />
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Cookie className="w-3 h-3 text-orange-400" /> Carbs (g)
+                </Label>
+                <Input type="number" inputMode="decimal" placeholder="e.g. 60" value={carbs}
+                  onChange={(e) => setCarbs(e.target.value)} className="text-lg font-mono h-10" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Wheat className="w-3 h-3 text-green-600" /> Fiber (g) <span className="opacity-60">opt.</span>
+                </Label>
+                <Input type="number" inputMode="decimal" placeholder="e.g. 8" value={fiber}
+                  onChange={(e) => setFiber(e.target.value)} className="text-lg font-mono h-10" />
+              </div>
             </div>
+            <NetCarbsDisplay carbs={carbs} fiber={fiber} />
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground flex items-center gap-1">

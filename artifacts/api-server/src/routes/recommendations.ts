@@ -16,9 +16,8 @@ router.post("/recommendations", async (req, res): Promise<void> => {
     return;
   }
 
-  const { carbsGrams, glucoseBefore, mealType } = parsed.data;
+  const { carbsGrams, fiberGrams, glucoseBefore, mealType } = parsed.data;
 
-  // Pass ALL entries sorted newest-first so the engine can use RECENT/SIMILAR/GLOBAL groups
   const allEntries = await db
     .select()
     .from(entriesTable)
@@ -29,6 +28,7 @@ router.post("/recommendations", async (req, res): Promise<void> => {
     glucoseBefore,
     mealType,
     allEntries,
+    fiberGrams ?? 0,
   );
 
   // Return full result including extended fields not yet in Zod schema
