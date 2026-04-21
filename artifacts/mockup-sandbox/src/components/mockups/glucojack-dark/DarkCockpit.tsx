@@ -1,7 +1,80 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import React from "react";
 
-// ─── Logo C: Modern AI neural mark ───────────────────────────────────────────
+// ─── Constants ───────────────────────────────────────────────────
+const API = "/api";
+const ACCENT = "#4F6EF7";
+const PINK = "#FF2D78";
+const GREEN = "#22D3A0";
+const ORANGE = "#FF9500";
+const BG = "#09090B";
+const SURFACE = "#111117";
+const BORDER = "rgba(255,255,255,0.06)";
+
+// ─── Types ───────────────────────────────────────────────────────
+type MealTypeKey = "FAST_CARBS" | "HIGH_FAT" | "HIGH_PROTEIN" | "BALANCED";
+type Page = "dashboard" | "log" | "entries" | "insights" | "recommend" | "voice" | "import";
+
+interface Entry {
+  id: number;
+  timestamp: string;
+  glucoseBefore: number;
+  glucoseAfter: number | null;
+  carbsGrams: number;
+  fiberGrams: number | null;
+  insulinUnits: number;
+  mealType: MealTypeKey | null;
+  mealDescription: string | null;
+  evaluation: string | null;
+  delta: number | null;
+  timeDifferenceMinutes: number | null;
+}
+
+interface DashboardStats {
+  controlScore: number;
+  hypoRate: number;
+  spikeRate: number;
+  totalEntries: number;
+  goodRate: number;
+  avgGlucoseBefore: number | null;
+  recentEntries: Entry[];
+  evaluationBreakdown: { GOOD: number; OVERDOSE: number; UNDERDOSE: number; CHECK_CONTEXT: number };
+}
+
+interface TrendPoint {
+  timestamp: string;
+  glucoseBefore: number;
+  glucoseAfter: number | null;
+  evaluation: string | null;
+}
+
+interface MealPattern {
+  mealType: MealTypeKey;
+  count: number;
+  avgCarbsGrams: number;
+  avgInsulinUnits: number;
+  goodRate: number;
+  insulinToCarb: number;
+}
+
+interface Recommendation {
+  suggestedUnits: number;
+  reasoning: string;
+  confidence: string;
+  carbRatio: number | null;
+  similarMealCount: number;
+  cappedForSafety: boolean;
+}
+
+interface ParsedVoiceEntry {
+  glucoseBefore: number | null;
+  carbsGrams: number | null;
+  fiberGrams: number | null;
+  insulinUnits: number | null;
+  mealDescription: string | null;
+}
+
+// ─── Logo ────────────────────────────────────────────────────────
 const LOGO_NODES = [{cx:16,cy:7},{cx:25,cy:12},{cx:25,cy:20},{cx:18,cy:26},{cx:9,cy:22},{cx:7,cy:14},{cx:16,cy:16}];
 const LOGO_EDGES = [[0,1],[1,2],[2,3],[3,4],[4,5],[5,0],[0,6],[1,6],[2,6],[3,6]];
 function LogoCMark({ size = 32, style }: { size?: number; style?: React.CSSProperties }) {
@@ -19,39 +92,87 @@ function LogoCMark({ size = 32, style }: { size?: number; style?: React.CSSPrope
   );
 }
 
-type Page = "dashboard" | "log" | "entries" | "insights" | "recommend" | "import";
-type MealTypeKey = "FAST_CARBS" | "HIGH_FAT" | "HIGH_PROTEIN" | "BALANCED";
-
 // ─── Meal classifier ─────────────────────────────────────────────
 const FAST_SUGAR_KW = ["granola","juice","dessert","cake","candy","soda","syrup","white bread","donut","cookie","muffin","pancake","waffle","cereal","jam","honey","ice cream","gelato"];
 const MEAL_LABELS: Record<MealTypeKey,string> = { FAST_CARBS:"Fast Carbs", HIGH_FAT:"High Fat", HIGH_PROTEIN:"High Protein", BALANCED:"Balanced" };
 
 function classifyMeal(carbs:number, protein:number, fat:number, desc?:string) {
   const matched = desc ? FAST_SUGAR_KW.find(k=>desc.toLowerCase().includes(k)) : null;
-  if (matched) return { mealType:"FAST_CARBS" as MealTypeKey, reason:`Fast sugar detected ("${matched}") → FAST CARBS`, carbPct:0,fatPct:0,protPct:0,fastSugar:matched };
+  if (matched) return { mealType:"FAST_CARBS" as MealTypeKey, reason:`Fast sugar ("${matched}") → FAST CARBS`, carbPct:0,fatPct:0,protPct:0,fastSugar:matched };
   const cc=carbs*4,pc=protein*4,fc=fat*9,tot=cc+pc+fc;
   const carbPct=tot>0?(cc/tot)*100:0, fatPct=tot>0?(fc/tot)*100:0, protPct=tot>0?(pc/tot)*100:0;
-  if (fat>30||fatPct>40) return { mealType:"HIGH_FAT" as MealTypeKey, reason: fat>30?`Fat ${fat}g > 30g threshold`:`Fat ${fatPct.toFixed(0)}% of cals > 40%`, carbPct,fatPct,protPct,fastSugar:null };
-  if (carbPct>60&&fat<20&&protein<25) return { mealType:"FAST_CARBS" as MealTypeKey, reason:`Carbs ${carbPct.toFixed(0)}% of cals, fat ${fat}g, protein ${protein}g`, carbPct,fatPct,protPct,fastSugar:null };
-  if (protein>40&&carbs<40) return { mealType:"HIGH_PROTEIN" as MealTypeKey, reason:`Protein ${protein}g > 40g with carbs ${carbs}g < 40g`, carbPct,fatPct,protPct,fastSugar:null };
-  return { mealType:"BALANCED" as MealTypeKey, reason:`Mixed macros — carbs ${carbPct.toFixed(0)}%, protein ${protPct.toFixed(0)}%, fat ${fatPct.toFixed(0)}%`, carbPct,fatPct,protPct,fastSugar:null };
+  if (fat>30||fatPct>40) return { mealType:"HIGH_FAT" as MealTypeKey, reason: fat>30?`Fat ${fat}g > 30g`:`Fat ${fatPct.toFixed(0)}% > 40%`, carbPct,fatPct,protPct,fastSugar:null };
+  if (carbPct>60&&fat<20&&protein<25) return { mealType:"FAST_CARBS" as MealTypeKey, reason:`Carbs ${carbPct.toFixed(0)}% of cals`, carbPct,fatPct,protPct,fastSugar:null };
+  if (protein>40&&carbs<40) return { mealType:"HIGH_PROTEIN" as MealTypeKey, reason:`Protein ${protein}g > 40g`, carbPct,fatPct,protPct,fastSugar:null };
+  return { mealType:"BALANCED" as MealTypeKey, reason:`Mixed — carbs ${carbPct.toFixed(0)}%, protein ${protPct.toFixed(0)}%, fat ${fatPct.toFixed(0)}%`, carbPct,fatPct,protPct,fastSugar:null };
 }
 
-// ─── Inline classifier widget ─────────────────────────────────────
+// ─── Voice Parser ────────────────────────────────────────────────
+function parseVoiceInput(text: string): ParsedVoiceEntry {
+  const t = text.toLowerCase();
+  const num = (r: RegExp) => { const m = t.match(r); return m ? Number(m[1]) : null; };
+  const glucoseBefore =
+    num(/(\d{2,3})\s*(?:mg\/dl|glucose|blood sugar|bg)/) ??
+    num(/(?:glucose|bg|blood sugar)\s+(?:is\s+)?(\d{2,3})/) ??
+    num(/(\d{2,3})\s+mg/);
+  const carbsGrams =
+    num(/(\d+)\s*(?:g\s+)?(?:carbs?|carbohydrates?|kohlenhydrate)/) ??
+    num(/(?:carbs?|carbohydrates?)\s+(?:are\s+)?(\d+)/);
+  const fiberGrams =
+    num(/(\d+)\s*(?:g\s+)?(?:fiber|fibre|ballaststoffe)/) ??
+    num(/(?:fiber|fibre)\s+(\d+)/);
+  const insulinUnits =
+    num(/(\d+(?:\.\d+)?)\s*(?:units?|u\b|einheiten?)/) ??
+    num(/(?:insulin|units?)\s+(?:is\s+)?(\d+(?:\.\d+)?)/);
+  const cleaned = text
+    .replace(/\d+(?:\.\d+)?\s*(?:mg\/dl|mg|g|units?|u\b)/gi, "")
+    .replace(/\b(?:glucose|carbs?|fiber|insulin|blood sugar|bg)\b/gi, "")
+    .replace(/\s+/g, " ").trim();
+  return { glucoseBefore, carbsGrams, fiberGrams, insulinUnits, mealDescription: cleaned || null };
+}
+
+// ─── API helpers ─────────────────────────────────────────────────
+async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
+  const r = await fetch(`${API}${path}`, { headers: { "Content-Type": "application/json" }, ...opts });
+  if (!r.ok) throw new Error(`${r.status}`);
+  return r.json();
+}
+
+// ─── Shared components ───────────────────────────────────────────
+const pillColors: Record<MealTypeKey,[string,string]> = {
+  FAST_CARBS: ["rgba(255,149,0,0.18)","#FF9500"],
+  HIGH_FAT:   ["rgba(168,85,247,0.18)","#A855F7"],
+  HIGH_PROTEIN:["rgba(59,130,246,0.18)","#3B82F6"],
+  BALANCED:   ["rgba(34,211,160,0.18)","#22D3A0"],
+};
+
+function Card({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+  return <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 14, ...style }}>{children}</div>;
+}
+
+function StatCard({ label, value, unit, sub, color, bar }: { label:string; value:string; unit:string; sub:string; color:string; bar:number }) {
+  return (
+    <Card style={{ padding: "16px 18px" }}>
+      <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)", marginBottom:8, letterSpacing:"0.06em" }}>{label.toUpperCase()}</div>
+      <div style={{ display:"flex", alignItems:"flex-end", gap:4, marginBottom:10 }}>
+        <span style={{ fontSize:28, fontWeight:800, color, letterSpacing:"-0.03em" }}>{value}</span>
+        <span style={{ fontSize:12, color:"rgba(255,255,255,0.35)", paddingBottom:3 }}>{unit}</span>
+      </div>
+      <div style={{ height:3, background:"rgba(255,255,255,0.08)", borderRadius:99, overflow:"hidden" }}>
+        <div style={{ width:`${Math.min(bar,100)}%`, height:"100%", background:color, borderRadius:99 }}/>
+      </div>
+      <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", marginTop:6 }}>{sub}</div>
+    </Card>
+  );
+}
+
 function MacroWidget({ cl, active, overridden, onPick, onReset }: {
-  cl: ReturnType<typeof classifyMeal> | null;
-  active: MealTypeKey; overridden: boolean;
-  onPick: (t:MealTypeKey)=>void; onReset: ()=>void;
+  cl: ReturnType<typeof classifyMeal>|null; active:MealTypeKey; overridden:boolean;
+  onPick:(t:MealTypeKey)=>void; onReset:()=>void;
 }) {
   if (!cl) return null;
   const barColors: Record<MealTypeKey,string> = { FAST_CARBS:"#FF9500", HIGH_FAT:"#A855F7", HIGH_PROTEIN:"#3B82F6", BALANCED:"#22D3A0" };
-  const pillColors: Record<MealTypeKey,[string,string]> = {
-    FAST_CARBS: ["rgba(255,149,0,0.18)","#FF9500"],
-    HIGH_FAT:   ["rgba(168,85,247,0.18)","#A855F7"],
-    HIGH_PROTEIN:["rgba(59,130,246,0.18)","#3B82F6"],
-    BALANCED:   ["rgba(34,211,160,0.18)","#22D3A0"],
-  };
-  const [sugBg, sugColor] = pillColors[cl.mealType];
+  const [sugBg,sugColor] = pillColors[cl.mealType];
   return (
     <div style={{borderRadius:10,border:`1px solid rgba(255,255,255,0.08)`,background:"rgba(255,255,255,0.03)",padding:"12px 14px",display:"flex",flexDirection:"column",gap:10}}>
       <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
@@ -60,7 +181,7 @@ function MacroWidget({ cl, active, overridden, onPick, onReset }: {
           <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:4}}>
             <span style={{fontSize:9,color:"rgba(255,255,255,0.3)",letterSpacing:"0.1em"}}>{cl.fastSugar?"FAST SUGAR DETECTED":"AUTO-CLASSIFIED"}</span>
             <span style={{fontSize:11,fontWeight:700,padding:"2px 10px",borderRadius:99,background:sugBg,color:sugColor}}>{MEAL_LABELS[cl.mealType]}</span>
-            {overridden && <span style={{fontSize:9,padding:"2px 8px",borderRadius:99,background:"rgba(255,149,0,0.15)",color:"#FF9500",fontWeight:600}}>OVERRIDE</span>}
+            {overridden&&<span style={{fontSize:9,padding:"2px 8px",borderRadius:99,background:"rgba(255,149,0,0.15)",color:"#FF9500",fontWeight:600}}>OVERRIDE</span>}
           </div>
           <div style={{fontSize:10,color:"rgba(255,255,255,0.38)",lineHeight:1.55}}>{cl.reason}</div>
         </div>
@@ -68,14 +189,10 @@ function MacroWidget({ cl, active, overridden, onPick, onReset }: {
       {(cl.carbPct+cl.fatPct+cl.protPct)>0&&(
         <div style={{display:"flex",flexDirection:"column",gap:4}}>
           <div style={{height:4,borderRadius:99,overflow:"hidden",display:"flex",gap:1}}>
-            <div style={{width:`${cl.carbPct}%`,background:"#FF9500"}}/>
-            <div style={{width:`${cl.protPct}%`,background:"#3B82F6"}}/>
-            <div style={{width:`${cl.fatPct}%`,background:"#A855F7"}}/>
+            <div style={{width:`${cl.carbPct}%`,background:"#FF9500"}}/><div style={{width:`${cl.protPct}%`,background:"#3B82F6"}}/><div style={{width:`${cl.fatPct}%`,background:"#A855F7"}}/>
           </div>
           <div style={{display:"flex",gap:12,fontSize:9,color:"rgba(255,255,255,0.3)"}}>
-            <span>🟠 Carbs {cl.carbPct.toFixed(0)}%</span>
-            <span>🔵 Protein {cl.protPct.toFixed(0)}%</span>
-            <span>🟣 Fat {cl.fatPct.toFixed(0)}%</span>
+            <span>🟠 Carbs {cl.carbPct.toFixed(0)}%</span><span>🔵 Protein {cl.protPct.toFixed(0)}%</span><span>🟣 Fat {cl.fatPct.toFixed(0)}%</span>
           </div>
         </div>
       )}
@@ -84,368 +201,164 @@ function MacroWidget({ cl, active, overridden, onPick, onReset }: {
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {(Object.keys(MEAL_LABELS) as MealTypeKey[]).map(t=>{
             const [bg,color]=pillColors[t];
-            return (
-              <button key={t} onClick={()=>onPick(t)} style={{padding:"5px 12px",borderRadius:99,border:`1px solid ${active===t?color:"rgba(255,255,255,0.1)"}`,background:active===t?bg:"transparent",color:active===t?color:"rgba(255,255,255,0.45)",fontSize:10,fontWeight:600,cursor:"pointer"}}>
-                {MEAL_LABELS[t]}
-              </button>
-            );
+            return <button key={t} onClick={()=>onPick(t)} style={{padding:"5px 12px",borderRadius:99,border:`1px solid ${active===t?color:"rgba(255,255,255,0.1)"}`,background:active===t?bg:"transparent",color:active===t?color:"rgba(255,255,255,0.45)",fontSize:10,fontWeight:600,cursor:"pointer"}}>{MEAL_LABELS[t]}</button>;
           })}
         </div>
-        {overridden&&<button onClick={onReset} style={{marginTop:6,fontSize:9,color:"rgba(255,255,255,0.35)",background:"none",border:"none",cursor:"pointer",textDecoration:"underline"}}>Reset to auto-detect</button>}
+        {overridden&&<button onClick={onReset} style={{marginTop:6,fontSize:9,color:"rgba(255,255,255,0.35)",background:"none",border:"none",cursor:"pointer",textDecoration:"underline"}}>Reset to auto</button>}
       </div>
     </div>
   );
 }
 
-const ACCENT = "#4F6EF7";
-const PINK = "#FF2D78";
-const GREEN = "#22D3A0";
-const ORANGE = "#FF9500";
-const BG = "#09090B";
-const SURFACE = "#111117";
-const BORDER = "rgba(255,255,255,0.06)";
-
-const glucosePoints = [112, 128, 95, 185, 130, 105, 105, 138, 88, 210, 120, 92, 99, 125, 108, 140];
-const maxG = 220; const minG = 60; const W = 560; const H = 120;
-const toY = (g: number) => H - ((g - minG) / (maxG - minG)) * H;
-const toX = (i: number) => (i / (glucosePoints.length - 1)) * W;
-const pathD = glucosePoints.map((g, i) => `${i === 0 ? "M" : "L"} ${toX(i).toFixed(1)} ${toY(g).toFixed(1)}`).join(" ");
-const areaD = pathD + ` L ${W} ${H} L 0 ${H} Z`;
-
-const entries = [
-  { time: "Today 12:30", meal: "Quinoa bowl", type: "BALANCED", bg: 108, carbs: 55, insulin: 5.5, eval: "GOOD" },
-  { time: "Yesterday 19:15", meal: "Pizza night", type: "FAST_CARBS", bg: 88, carbs: 80, insulin: 5.0, eval: "UNDERDOSE" },
-  { time: "Yesterday 12:00", meal: "Avocado eggs", type: "HIGH_FAT", bg: 120, carbs: 25, insulin: 4.0, eval: "GOOD" },
-  { time: "Apr 19 19:00", meal: "Brown rice bowl", type: "BALANCED", bg: 105, carbs: 50, insulin: 5.5, eval: "GOOD" },
-  { time: "Apr 18 20:00", meal: "Grilled chicken", type: "HIGH_PROTEIN", bg: 130, carbs: 30, insulin: 6.0, eval: "OVERDOSE" },
-  { time: "Apr 17 08:30", meal: "Pancakes + syrup", type: "FAST_CARBS", bg: 95, carbs: 85, insulin: 4.5, eval: "UNDERDOSE" },
-  { time: "Apr 16 13:00", meal: "Salmon & rice", type: "BALANCED", bg: 115, carbs: 55, insulin: 3.5, eval: "GOOD" },
-];
-
-function evalStyle(e: string) {
-  if (e === "GOOD") return { color: GREEN, label: "GOOD" };
-  if (e === "UNDERDOSE") return { color: ORANGE, label: "LOW DOSE" };
-  if (e === "OVERDOSE") return { color: PINK, label: "OVERDOSE" };
-  return { color: "#8B8FA8", label: "CHECK" };
+function evalStyle(e: string|null) {
+  if (e==="GOOD") return { color:GREEN, label:"GOOD" };
+  if (e==="UNDERDOSE") return { color:ORANGE, label:"LOW DOSE" };
+  if (e==="OVERDOSE") return { color:PINK, label:"OVERDOSE" };
+  return { color:"#8B8FA8", label:"CHECK" };
 }
 
-function Card({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
-  return (
-    <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 14, ...style }}>
-      {children}
-    </div>
-  );
+function Spinner() {
+  return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:200,color:"rgba(255,255,255,0.2)",fontSize:13}}>Loading…</div>;
 }
 
-function StatCard({ label, value, unit, sub, color, bar }: { label: string; value: string; unit: string; sub: string; color: string; bar: number }) {
-  return (
-    <Card style={{ padding: "16px 18px" }}>
-      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 8, letterSpacing: "0.06em" }}>{label.toUpperCase()}</div>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 4, marginBottom: 10 }}>
-        <span style={{ fontSize: 28, fontWeight: 800, color, letterSpacing: "-0.03em" }}>{value}</span>
-        <span style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", paddingBottom: 3 }}>{unit}</span>
-      </div>
-      <div style={{ height: 3, background: "rgba(255,255,255,0.08)", borderRadius: 99, overflow: "hidden" }}>
-        <div style={{ width: `${bar}%`, height: "100%", background: color, borderRadius: 99 }} />
-      </div>
-      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginTop: 6 }}>{sub}</div>
-    </Card>
-  );
-}
+const inp: React.CSSProperties = { background:"rgba(255,255,255,0.05)", border:`1px solid rgba(255,255,255,0.1)`, borderRadius:10, padding:"9px 12px", color:"white", fontSize:14, fontWeight:600, width:"100%", boxSizing:"border-box", outline:"none", fontFamily:"inherit" };
 
-// ─── PAGES ───────────────────────────────────────────────────────
-
+// ─── DASHBOARD ───────────────────────────────────────────────────
 function Dashboard() {
+  const [stats, setStats] = useState<DashboardStats|null>(null);
+  const [trend, setTrend] = useState<TrendPoint[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      apiFetch<DashboardStats>("/insights/dashboard"),
+      apiFetch<{points:TrendPoint[]}>("/insights/glucose-trend"),
+    ]).then(([s, t]) => {
+      setStats(s);
+      setTrend(t.points.slice(0, 20).reverse());
+    }).catch(()=>{}).finally(()=>setLoading(false));
+  }, []);
+
+  if (loading) return <Spinner />;
+  if (!stats) return <div style={{color:"rgba(255,255,255,0.3)",padding:20}}>No data yet. Log your first meal to see stats.</div>;
+
+  const trendPts = trend.map(p=>p.glucoseBefore).filter(Boolean) as number[];
+  const maxG=220, minG=60, W=560, H=100;
+  const toY=(g:number)=>H-((g-minG)/(maxG-minG))*H;
+  const toX=(i:number)=>(i/(Math.max(trendPts.length-1,1)))*W;
+  const pathD=trendPts.map((g,i)=>`${i===0?"M":"L"} ${toX(i).toFixed(1)} ${toY(g).toFixed(1)}`).join(" ");
+  const areaD=pathD+` L ${W} ${H} L 0 ${H} Z`;
+  const eb = stats.evaluationBreakdown;
+  const total = stats.totalEntries || 1;
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10 }}>
-        <StatCard label="Control Score" value="75" unit="/100" sub="Last 8 entries" color={ACCENT} bar={75} />
-        <StatCard label="Time in Range" value="62.5" unit="%" sub="5 of 8 entries" color={GREEN} bar={62.5} />
-        <StatCard label="Spike Rate" value="25.0" unit="%" sub="Hyperglycemia" color={ORANGE} bar={25} />
-        <StatCard label="Hypo Rate" value="0.0" unit="%" sub="Hypoglycemia" color={PINK} bar={0} />
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+        <StatCard label="Control Score" value={stats.controlScore.toFixed(0)} unit="/100" sub={`${stats.totalEntries} entries`} color={ACCENT} bar={stats.controlScore}/>
+        <StatCard label="Good Rate" value={(stats.goodRate*100).toFixed(1)} unit="%" sub={`${eb.GOOD} good outcomes`} color={GREEN} bar={stats.goodRate*100}/>
+        <StatCard label="Spike Rate" value={stats.spikeRate.toFixed(1)} unit="%" sub="Hyperglycemia" color={ORANGE} bar={stats.spikeRate}/>
+        <StatCard label="Hypo Rate" value={stats.hypoRate.toFixed(1)} unit="%" sub="Hypoglycemia" color={PINK} bar={stats.hypoRate}/>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1.8fr 1fr", gap: 10 }}>
-        <Card style={{ padding: "18px 20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+      <div style={{display:"grid",gridTemplateColumns:"1.8fr 1fr",gap:10}}>
+        <Card style={{padding:"18px 20px"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>Glucose Trend</div>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>Pre-meal readings · 7 days</div>
+              <div style={{fontSize:13,fontWeight:600}}>Glucose Trend</div>
+              <div style={{fontSize:11,color:"rgba(255,255,255,0.35)"}}>Pre-meal readings · {trend.length} entries</div>
             </div>
-            <span style={{ fontSize: 11, padding: "4px 10px", background: `${ACCENT}22`, color: ACCENT, borderRadius: 99, fontWeight: 500 }}>7d</span>
+            <span style={{fontSize:11,padding:"4px 10px",background:`${ACCENT}22`,color:ACCENT,borderRadius:99,fontWeight:500}}>7d</span>
           </div>
-          <div style={{ position: "relative" }}>
-            <div style={{ position: "absolute", left: 0, right: 0, top: `${((maxG - 140) / (maxG - minG)) * 100}%`, height: `${((140 - 80) / (maxG - minG)) * 100}%`, background: `${GREEN}0A`, borderTop: `1px dashed ${GREEN}50`, borderBottom: `1px dashed ${GREEN}50` }} />
-            <svg width="100%" height={H + 10} viewBox={`0 0 ${W} ${H + 10}`} preserveAspectRatio="none" style={{ display: "block" }}>
-              <defs>
-                <linearGradient id="dg" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={ACCENT} stopOpacity="0.25" />
-                  <stop offset="100%" stopColor={ACCENT} stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              <path d={areaD} fill="url(#dg)" />
-              <path d={pathD} fill="none" stroke={ACCENT} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              {glucosePoints.map((g, i) => g > 180 ? <circle key={i} cx={toX(i)} cy={toY(g)} r={3.5} fill={ORANGE} /> : g < 70 ? <circle key={i} cx={toX(i)} cy={toY(g)} r={3.5} fill={PINK} /> : null)}
-            </svg>
-          </div>
+          {trendPts.length > 0 ? (
+            <div style={{position:"relative"}}>
+              <div style={{position:"absolute",left:0,right:0,top:`${((maxG-140)/(maxG-minG))*100}%`,height:`${((140-80)/(maxG-minG))*100}%`,background:`${GREEN}0A`,borderTop:`1px dashed ${GREEN}50`,borderBottom:`1px dashed ${GREEN}50`}}/>
+              <svg width="100%" height={H+10} viewBox={`0 0 ${W} ${H+10}`} preserveAspectRatio="none" style={{display:"block"}}>
+                <defs><linearGradient id="dg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={ACCENT} stopOpacity="0.25"/><stop offset="100%" stopColor={ACCENT} stopOpacity="0"/></linearGradient></defs>
+                <path d={areaD} fill="url(#dg)"/><path d={pathD} fill="none" stroke={ACCENT} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                {trendPts.map((g,i)=>g>180?<circle key={i} cx={toX(i)} cy={toY(g)} r={3.5} fill={ORANGE}/>:g<70?<circle key={i} cx={toX(i)} cy={toY(g)} r={3.5} fill={PINK}/>:null)}
+              </svg>
+            </div>
+          ) : <div style={{height:H,display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,0.2)",fontSize:12}}>No trend data yet</div>}
         </Card>
 
-        <Card style={{ padding: "18px 20px" }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Outcomes</div>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginBottom: 14 }}>Evaluation split</div>
-          {[
-            { label: "GOOD", count: 5, pct: 62.5, color: GREEN },
-            { label: "UNDERDOSE", count: 2, pct: 25, color: ORANGE },
-            { label: "OVERDOSE", count: 1, pct: 12.5, color: PINK },
-            { label: "CHECK", count: 0, pct: 0, color: "#4B5070" },
-          ].map((r) => (
-            <div key={r.label} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-              <div style={{ width: 7, height: 7, borderRadius: 99, background: r.color, flexShrink: 0 }} />
-              <div style={{ flex: 1 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.45)", letterSpacing: "0.06em" }}>{r.label}</span>
-                  <span style={{ fontSize: 10, color: r.color, fontWeight: 600 }}>{r.count}</span>
+        <Card style={{padding:"18px 20px"}}>
+          <div style={{fontSize:13,fontWeight:600,marginBottom:4}}>Outcomes</div>
+          <div style={{fontSize:11,color:"rgba(255,255,255,0.35)",marginBottom:14}}>Evaluation split</div>
+          {[{label:"GOOD",count:eb.GOOD,color:GREEN},{label:"UNDERDOSE",count:eb.UNDERDOSE,color:ORANGE},{label:"OVERDOSE",count:eb.OVERDOSE,color:PINK},{label:"CHECK",count:eb.CHECK_CONTEXT,color:"#4B5070"}].map(r=>(
+            <div key={r.label} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+              <div style={{width:7,height:7,borderRadius:99,background:r.color,flexShrink:0}}/>
+              <div style={{flex:1}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                  <span style={{fontSize:10,color:"rgba(255,255,255,0.45)",letterSpacing:"0.06em"}}>{r.label}</span>
+                  <span style={{fontSize:10,color:r.color,fontWeight:600}}>{r.count}</span>
                 </div>
-                <div style={{ height: 3, background: "rgba(255,255,255,0.07)", borderRadius: 99, overflow: "hidden" }}>
-                  <div style={{ width: `${r.pct}%`, height: "100%", background: r.color, borderRadius: 99 }} />
+                <div style={{height:3,background:"rgba(255,255,255,0.07)",borderRadius:99,overflow:"hidden"}}>
+                  <div style={{width:`${(r.count/total)*100}%`,height:"100%",background:r.color,borderRadius:99}}/>
                 </div>
               </div>
             </div>
           ))}
-          <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${BORDER}` }}>
-            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginBottom: 3 }}>AVG CARB RATIO</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: ACCENT }}>1u <span style={{ color: "rgba(255,255,255,0.25)", fontWeight: 400 }}>per</span> 33g</div>
-          </div>
+          {stats.avgGlucoseBefore && (
+            <div style={{marginTop:14,paddingTop:12,borderTop:`1px solid ${BORDER}`}}>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.3)",marginBottom:3}}>AVG GLUCOSE BEFORE</div>
+              <div style={{fontSize:18,fontWeight:700,color:ACCENT}}>{stats.avgGlucoseBefore.toFixed(0)} <span style={{fontSize:11,color:"rgba(255,255,255,0.3)",fontWeight:400}}>mg/dL</span></div>
+            </div>
+          )}
         </Card>
       </div>
 
       <Card>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 18px", borderBottom: `1px solid ${BORDER}` }}>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>Recent Entries</div>
-          <span style={{ fontSize: 11, color: ACCENT, cursor: "pointer" }}>View all →</span>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 18px",borderBottom:`1px solid ${BORDER}`}}>
+          <div style={{fontSize:13,fontWeight:600}}>Recent Entries</div>
+          <span style={{fontSize:11,color:ACCENT}}>{stats.totalEntries} total</span>
         </div>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ borderBottom: `1px solid rgba(255,255,255,0.04)` }}>
-              {["Time", "Meal", "BG Before", "Carbs", "Insulin", "Result"].map((h) => (
-                <th key={h} style={{ padding: "7px 18px", textAlign: "left", fontSize: 9, color: "rgba(255,255,255,0.3)", fontWeight: 500, letterSpacing: "0.08em" }}>{h.toUpperCase()}</th>
+        {stats.recentEntries.length === 0 ? (
+          <div style={{padding:24,textAlign:"center",color:"rgba(255,255,255,0.2)",fontSize:13}}>No entries yet</div>
+        ) : (
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead><tr style={{borderBottom:`1px solid rgba(255,255,255,0.04)`}}>
+              {["Time","Meal","BG Before","Carbs","Insulin","Result"].map(h=>(
+                <th key={h} style={{padding:"7px 18px",textAlign:"left",fontSize:9,color:"rgba(255,255,255,0.3)",fontWeight:500,letterSpacing:"0.08em"}}>{h.toUpperCase()}</th>
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {entries.slice(0, 4).map((e, i) => {
-              const ev = evalStyle(e.eval);
-              return (
-                <tr key={i} style={{ borderBottom: i < 3 ? `1px solid rgba(255,255,255,0.03)` : "none" }}>
-                  <td style={{ padding: "9px 18px", fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{e.time}</td>
-                  <td style={{ padding: "9px 18px", fontSize: 12, fontWeight: 500 }}>{e.meal}</td>
-                  <td style={{ padding: "9px 18px", fontSize: 12, fontWeight: 600, color: e.bg > 140 ? ORANGE : e.bg < 80 ? PINK : "rgba(255,255,255,0.85)" }}>{e.bg} <span style={{ fontSize: 10, fontWeight: 400, color: "rgba(255,255,255,0.3)" }}>mg/dL</span></td>
-                  <td style={{ padding: "9px 18px", fontSize: 12, color: "rgba(255,255,255,0.7)" }}>{e.carbs}g</td>
-                  <td style={{ padding: "9px 18px", fontSize: 12, color: "rgba(255,255,255,0.7)" }}>{e.insulin}u</td>
-                  <td style={{ padding: "9px 18px" }}>
-                    <span style={{ fontSize: 10, padding: "3px 9px", borderRadius: 99, fontWeight: 700, background: `${ev.color}18`, color: ev.color, letterSpacing: "0.06em" }}>{ev.label}</span>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+            </tr></thead>
+            <tbody>
+              {stats.recentEntries.slice(0,5).map((e,i)=>{
+                const ev=evalStyle(e.evaluation);
+                const ts=new Date(e.timestamp).toLocaleDateString(undefined,{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
+                return (
+                  <tr key={e.id} style={{borderBottom:i<4?`1px solid rgba(255,255,255,0.03)`:"none"}}>
+                    <td style={{padding:"9px 18px",fontSize:11,color:"rgba(255,255,255,0.4)"}}>{ts}</td>
+                    <td style={{padding:"9px 18px",fontSize:12,fontWeight:500}}>{e.mealDescription||e.mealType||"—"}</td>
+                    <td style={{padding:"9px 18px",fontSize:12,fontWeight:600,color:e.glucoseBefore>140?ORANGE:e.glucoseBefore<80?PINK:"rgba(255,255,255,0.85)"}}>{e.glucoseBefore} <span style={{fontSize:10,fontWeight:400,color:"rgba(255,255,255,0.3)"}}>mg/dL</span></td>
+                    <td style={{padding:"9px 18px",fontSize:12,color:"rgba(255,255,255,0.7)"}}>{e.carbsGrams}g</td>
+                    <td style={{padding:"9px 18px",fontSize:12,color:"rgba(255,255,255,0.7)"}}>{e.insulinUnits}u</td>
+                    <td style={{padding:"9px 18px"}}><span style={{fontSize:10,padding:"3px 9px",borderRadius:99,fontWeight:700,background:`${ev.color}18`,color:ev.color,letterSpacing:"0.06em"}}>{ev.label}</span></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </Card>
     </div>
   );
 }
 
-function QuickLog() {
-  const [glucose, setGlucose] = useState("");
-  const [carbs, setCarbs] = useState("");
-  const [fiber, setFiber] = useState("");
-  const [protein, setProtein] = useState("");
-  const [fat, setFat] = useState("");
-  const [desc, setDesc] = useState("");
-  const [insulin, setInsulin] = useState("");
-  const [mealType, setMealType] = useState<MealTypeKey>("BALANCED");
-  const [overridden, setOverridden] = useState(false);
-  const [cl, setCl] = useState<ReturnType<typeof classifyMeal>|null>(null);
-  const [submitted, setSubmitted] = useState(false);
-
-  useEffect(() => {
-    const c=Number(carbs)||0,p=Number(protein)||0,f=Number(fat)||0;
-    if(c+p+f===0&&!desc){setCl(null);return;}
-    const r=classifyMeal(c,p,f,desc);
-    setCl(r);
-    if(!overridden) setMealType(r.mealType);
-  },[carbs,protein,fat,desc,overridden]);
-
-  const inp: React.CSSProperties = { background:"rgba(255,255,255,0.05)", border:`1px solid rgba(255,255,255,0.1)`, borderRadius:10, padding:"9px 12px", color:"white", fontSize:14, fontWeight:600, width:"100%", boxSizing:"border-box", outline:"none", fontFamily:"inherit" };
-
-  if (submitted) return (
-    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:380,gap:16}}>
-      <div style={{width:60,height:60,borderRadius:99,background:`${GREEN}22`,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{fontSize:28,color:GREEN}}>✓</span></div>
-      <div style={{fontSize:18,fontWeight:700,color:GREEN}}>Entry logged</div>
-      <div style={{fontSize:13,color:"rgba(255,255,255,0.4)"}}>BG {glucose} · {carbs}g carbs{fiber?` · ${fiber}g fiber`:""} · {MEAL_LABELS[mealType]} · {insulin}u</div>
-      <button onClick={()=>{setSubmitted(false);setGlucose("");setCarbs("");setFiber("");setProtein("");setFat("");setDesc("");setInsulin("");setOverridden(false);}} style={{marginTop:8,padding:"10px 24px",background:ACCENT,border:"none",borderRadius:10,color:"white",fontSize:13,fontWeight:600,cursor:"pointer"}}>Log Another</button>
-    </div>
-  );
-
-  return (
-    <div style={{maxWidth:520}}>
-      <Card style={{padding:22}}>
-        <div style={{fontSize:15,fontWeight:700,marginBottom:18}}>Log a Meal</div>
-        <div style={{display:"flex",flexDirection:"column",gap:13}}>
-          <div>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>GLUCOSE BEFORE (mg/dL)</div>
-            <input value={glucose} onChange={e=>setGlucose(e.target.value)} placeholder="e.g. 115" type="number" style={inp} />
-          </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <div>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>CARBS (g)</div>
-              <input value={carbs} onChange={e=>setCarbs(e.target.value)} placeholder="e.g. 60" type="number" style={inp} />
-            </div>
-            <div>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>FIBER (g) <span style={{opacity:0.5}}>opt.</span></div>
-              <input value={fiber} onChange={e=>setFiber(e.target.value)} placeholder="e.g. 8" type="number" style={inp} />
-            </div>
-          </div>
-          {carbs && fiber && Number(carbs)>0 && Number(fiber)>0 && (
-            <div style={{padding:"8px 12px",background:`${GREEN}0D`,border:`1px solid ${GREEN}33`,borderRadius:8,fontSize:11,color:GREEN,display:"flex",alignItems:"center",gap:6}}>
-              <span style={{opacity:0.7}}>🌾</span>
-              <span><b>{carbs}g</b> carbs − <b>{fiber}g</b> fiber = <b style={{fontSize:13}}>{Math.max(0,Number(carbs)-Number(fiber))}g net carbs</b></span>
-            </div>
-          )}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <div>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>PROTEIN (g)</div>
-              <input value={protein} onChange={e=>setProtein(e.target.value)} placeholder="e.g. 30" type="number" style={inp} />
-            </div>
-            <div>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>FAT (g)</div>
-              <input value={fat} onChange={e=>setFat(e.target.value)} placeholder="e.g. 15" type="number" style={inp} />
-            </div>
-          </div>
-          <div>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>MEAL DESCRIPTION <span style={{opacity:0.5}}>(optional — detects fast sugars)</span></div>
-            <input value={desc} onChange={e=>setDesc(e.target.value)} placeholder="e.g. granola, juice, pizza…" style={{...inp,fontSize:12,fontWeight:400}} />
-          </div>
-          <MacroWidget cl={cl} active={mealType} overridden={overridden}
-            onPick={t=>{setMealType(t);setOverridden(t!==(cl?.mealType??"BALANCED"));}}
-            onReset={()=>{setOverridden(false);if(cl)setMealType(cl.mealType);}} />
-          <div>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>INSULIN (u)</div>
-            <input value={insulin} onChange={e=>setInsulin(e.target.value)} placeholder="e.g. 1.5" type="number" style={inp} />
-          </div>
-          <button onClick={()=>{if(glucose&&carbs&&insulin)setSubmitted(true);}} style={{marginTop:2,padding:"13px",background:`linear-gradient(135deg,${ACCENT},#6B8BFF)`,border:"none",borderRadius:10,color:"white",fontSize:14,fontWeight:700,cursor:"pointer",opacity:glucose&&carbs&&insulin?1:0.4}}>
-            Log Entry
-          </button>
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-function EntryLog() {
-  const [filter, setFilter] = useState("ALL");
-  const filters = ["ALL", "GOOD", "UNDERDOSE", "OVERDOSE"];
-  const filtered = filter === "ALL" ? entries : entries.filter((e) => e.eval === filter);
-  return (
-    <div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-        {filters.map((f) => {
-          const colors: Record<string, string> = { ALL: ACCENT, GOOD: GREEN, UNDERDOSE: ORANGE, OVERDOSE: PINK };
-          return (
-            <button key={f} onClick={() => setFilter(f)} style={{ padding: "6px 14px", borderRadius: 99, fontSize: 11, fontWeight: 600, border: `1px solid ${filter === f ? colors[f] : "rgba(255,255,255,0.1)"}`, background: filter === f ? `${colors[f]}18` : "transparent", color: filter === f ? colors[f] : "rgba(255,255,255,0.45)", cursor: "pointer", transition: "all 0.15s", letterSpacing: "0.04em" }}>
-              {f}
-            </button>
-          );
-        })}
-      </div>
-      <Card>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ borderBottom: `1px solid rgba(255,255,255,0.05)` }}>
-              {["Time", "Meal", "BG Before", "Carbs", "Insulin", "Result"].map((h) => (
-                <th key={h} style={{ padding: "10px 18px", textAlign: "left", fontSize: 9, color: "rgba(255,255,255,0.3)", fontWeight: 500, letterSpacing: "0.08em" }}>{h.toUpperCase()}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((e, i) => {
-              const ev = evalStyle(e.eval);
-              return (
-                <tr key={i} style={{ borderBottom: i < filtered.length - 1 ? `1px solid rgba(255,255,255,0.03)` : "none", cursor: "pointer" }}>
-                  <td style={{ padding: "11px 18px", fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{e.time}</td>
-                  <td style={{ padding: "11px 18px", fontSize: 12, fontWeight: 500 }}>{e.meal}</td>
-                  <td style={{ padding: "11px 18px", fontSize: 12, fontWeight: 600, color: e.bg > 140 ? ORANGE : e.bg < 80 ? PINK : "rgba(255,255,255,0.85)" }}>{e.bg} <span style={{ fontSize: 10, fontWeight: 400, color: "rgba(255,255,255,0.3)" }}>mg/dL</span></td>
-                  <td style={{ padding: "11px 18px", fontSize: 12, color: "rgba(255,255,255,0.7)" }}>{e.carbs}g</td>
-                  <td style={{ padding: "11px 18px", fontSize: 12, color: "rgba(255,255,255,0.7)" }}>{e.insulin}u</td>
-                  <td style={{ padding: "11px 18px" }}>
-                    <span style={{ fontSize: 10, padding: "3px 9px", borderRadius: 99, fontWeight: 700, background: `${ev.color}18`, color: ev.color, letterSpacing: "0.06em" }}>{ev.label}</span>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </Card>
-    </div>
-  );
-}
-
-function Insights() {
-  const meals = [
-    { type: "Balanced", avg_bg: 112, good: 71, insulin: 3.6, count: 7 },
-    { type: "Fast Carbs", avg_bg: 142, good: 33, insulin: 4.8, count: 6 },
-    { type: "High Fat", avg_bg: 108, good: 75, insulin: 2.1, count: 4 },
-    { type: "High Protein", avg_bg: 118, good: 50, insulin: 3.0, count: 2 },
-  ];
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 10 }}>
-        {meals.map((m) => (
-          <Card key={m.type} style={{ padding: "18px 20px" }}>
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>{m.type}</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {[
-                { label: "Avg BG Before", value: `${m.avg_bg} mg/dL`, color: m.avg_bg > 130 ? ORANGE : GREEN },
-                { label: "Good outcomes", value: `${m.good}%`, color: m.good > 60 ? GREEN : ORANGE },
-                { label: "Avg insulin", value: `${m.insulin}u`, color: "rgba(255,255,255,0.85)" },
-                { label: "Total entries", value: `${m.count}`, color: "rgba(255,255,255,0.6)" },
-              ].map((row) => (
-                <div key={row.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid rgba(255,255,255,0.04)` }}>
-                  <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{row.label}</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: row.color }}>{row.value}</span>
-                </div>
-              ))}
-            </div>
-            <div style={{ marginTop: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", letterSpacing: "0.06em" }}>SUCCESS RATE</span>
-                <span style={{ fontSize: 10, color: m.good > 60 ? GREEN : ORANGE, fontWeight: 700 }}>{m.good}%</span>
-              </div>
-              <div style={{ height: 4, background: "rgba(255,255,255,0.07)", borderRadius: 99, overflow: "hidden" }}>
-                <div style={{ width: `${m.good}%`, height: "100%", background: m.good > 60 ? GREEN : ORANGE, borderRadius: 99 }} />
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function Recommend() {
-  const [glucose, setGlucose] = useState("");
-  const [carbs, setCarbs] = useState("");
-  const [fiber, setFiber] = useState("");
-  const [protein, setProtein] = useState("");
-  const [fat, setFat] = useState("");
-  const [desc, setDesc] = useState("");
-  const [mealType, setMealType] = useState<MealTypeKey>("BALANCED");
-  const [overridden, setOverridden] = useState(false);
-  const [cl, setCl] = useState<ReturnType<typeof classifyMeal>|null>(null);
-  const [result, setResult] = useState<null|{units:number;ratio:number;confidence:string;netCarbs?:number}>(null);
-
-  const inp: React.CSSProperties = { background:"rgba(255,255,255,0.05)", border:`1px solid rgba(255,255,255,0.1)`, borderRadius:10, padding:"9px 12px", color:"white", fontSize:14, fontWeight:600, width:"100%", boxSizing:"border-box", outline:"none", fontFamily:"inherit" };
+// ─── QUICK LOG ───────────────────────────────────────────────────
+function QuickLog({ onLogged }: { onLogged?: ()=>void }) {
+  const [glucose,setGlucose]=useState("");
+  const [carbs,setCarbs]=useState("");
+  const [fiber,setFiber]=useState("");
+  const [protein,setProtein]=useState("");
+  const [fat,setFat]=useState("");
+  const [desc,setDesc]=useState("");
+  const [insulin,setInsulin]=useState("");
+  const [mealType,setMealType]=useState<MealTypeKey>("BALANCED");
+  const [overridden,setOverridden]=useState(false);
+  const [cl,setCl]=useState<ReturnType<typeof classifyMeal>|null>(null);
+  const [loading,setLoading]=useState(false);
+  const [done,setDone]=useState(false);
+  const [error,setError]=useState("");
 
   useEffect(()=>{
     const c=Number(carbs)||0,p=Number(protein)||0,f=Number(fat)||0;
@@ -455,99 +368,276 @@ function Recommend() {
     if(!overridden) setMealType(r.mealType);
   },[carbs,protein,fat,desc,overridden]);
 
-  const calc=()=>{
-    const g=Number(glucose),c=Number(carbs),fi=Number(fiber)||0;
-    if(!g||!c)return;
-    const netCarbs=Math.max(0,c-fi);
-    const ratio=33;
-    let units=netCarbs/ratio;
-    if(g>140)units+=0.5; if(g<90)units-=0.5;
-    if(mealType==="FAST_CARBS")units+=0.5; if(mealType==="HIGH_FAT")units-=0.5;
-    if(g<=180&&units>3)units=3;
-    setResult({units:Math.max(0.5,Math.round(units*2)/2),ratio,confidence:"HIGH",netCarbs:fi>0?netCarbs:undefined});
-  };
+  async function submit() {
+    if(!glucose||!carbs||!insulin){setError("Glucose, carbs and insulin are required.");return;}
+    setLoading(true); setError("");
+    try {
+      await apiFetch("/entries",{method:"POST",body:JSON.stringify({
+        glucoseBefore:Number(glucose),carbsGrams:Number(carbs),
+        fiberGrams:fiber?Number(fiber):undefined,
+        insulinUnits:Number(insulin),mealType,
+        mealDescription:desc||undefined,
+      })});
+      setDone(true);
+      onLogged?.();
+    } catch { setError("Failed to save. Check API."); }
+    finally { setLoading(false); }
+  }
+
+  if (done) return (
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:380,gap:16}}>
+      <div style={{width:60,height:60,borderRadius:99,background:`${GREEN}22`,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{fontSize:28,color:GREEN}}>✓</span></div>
+      <div style={{fontSize:18,fontWeight:700,color:GREEN}}>Entry saved</div>
+      <div style={{fontSize:12,color:"rgba(255,255,255,0.4)"}}>BG {glucose} · {carbs}g carbs{fiber?` · ${fiber}g fiber`:""} · {MEAL_LABELS[mealType]} · {insulin}u</div>
+      <button onClick={()=>{setDone(false);setGlucose("");setCarbs("");setFiber("");setProtein("");setFat("");setDesc("");setInsulin("");setOverridden(false);}} style={{marginTop:8,padding:"10px 24px",background:ACCENT,border:"none",borderRadius:10,color:"white",fontSize:13,fontWeight:600,cursor:"pointer"}}>Log Another</button>
+    </div>
+  );
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, alignItems: "start" }}>
-      <Card style={{ padding: 22 }}>
-        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 18 }}>Bolus Calculator</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>CURRENT GLUCOSE (mg/dL)</div>
-            <input value={glucose} onChange={e=>setGlucose(e.target.value)} placeholder="e.g. 115" type="number" style={inp} />
-          </div>
+    <div style={{maxWidth:520}}>
+      <Card style={{padding:22}}>
+        <div style={{fontSize:15,fontWeight:700,marginBottom:18}}>Log a Meal</div>
+        <div style={{display:"flex",flexDirection:"column",gap:13}}>
+          <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>GLUCOSE BEFORE (mg/dL)</div><input value={glucose} onChange={e=>setGlucose(e.target.value)} placeholder="e.g. 115" type="number" style={inp}/></div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <div>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>PLANNED CARBS (g)</div>
-              <input value={carbs} onChange={e=>setCarbs(e.target.value)} placeholder="e.g. 60" type="number" style={inp} />
-            </div>
-            <div>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>FIBER (g) <span style={{opacity:0.5}}>opt.</span></div>
-              <input value={fiber} onChange={e=>setFiber(e.target.value)} placeholder="e.g. 8" type="number" style={inp} />
-            </div>
+            <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>CARBS (g)</div><input value={carbs} onChange={e=>setCarbs(e.target.value)} placeholder="e.g. 60" type="number" style={inp}/></div>
+            <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>FIBER (g) <span style={{opacity:0.5}}>opt.</span></div><input value={fiber} onChange={e=>setFiber(e.target.value)} placeholder="e.g. 8" type="number" style={inp}/></div>
           </div>
-          {carbs && fiber && Number(carbs)>0 && Number(fiber)>0 && (
-            <div style={{padding:"7px 11px",background:`${GREEN}0D`,border:`1px solid ${GREEN}33`,borderRadius:8,fontSize:11,color:GREEN,display:"flex",alignItems:"center",gap:6}}>
-              <span>🌾</span>
-              <span>Net carbs: <b style={{fontSize:13}}>{Math.max(0,Number(carbs)-Number(fiber))}g</b> ({carbs}g − {fiber}g fiber)</span>
+          {carbs&&fiber&&Number(carbs)>0&&Number(fiber)>0&&(
+            <div style={{padding:"8px 12px",background:`${GREEN}0D`,border:`1px solid ${GREEN}33`,borderRadius:8,fontSize:11,color:GREEN,display:"flex",alignItems:"center",gap:6}}>
+              🌾 <span><b>{carbs}g</b> − <b>{fiber}g</b> fiber = <b style={{fontSize:13}}>{Math.max(0,Number(carbs)-Number(fiber))}g net carbs</b></span>
             </div>
           )}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <div>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>PROTEIN (g)</div>
-              <input value={protein} onChange={e=>setProtein(e.target.value)} placeholder="e.g. 30" type="number" style={inp} />
-            </div>
-            <div>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>FAT (g)</div>
-              <input value={fat} onChange={e=>setFat(e.target.value)} placeholder="e.g. 15" type="number" style={inp} />
-            </div>
+            <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>PROTEIN (g)</div><input value={protein} onChange={e=>setProtein(e.target.value)} placeholder="e.g. 30" type="number" style={inp}/></div>
+            <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>FAT (g)</div><input value={fat} onChange={e=>setFat(e.target.value)} placeholder="e.g. 15" type="number" style={inp}/></div>
           </div>
-          <div>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>DESCRIPTION <span style={{opacity:0.5}}>(fast sugar detect)</span></div>
-            <input value={desc} onChange={e=>setDesc(e.target.value)} placeholder="e.g. granola, juice…" style={{...inp,fontSize:12,fontWeight:400}} />
+          <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>MEAL DESCRIPTION</div><input value={desc} onChange={e=>setDesc(e.target.value)} placeholder="e.g. granola, pizza…" style={{...inp,fontSize:12,fontWeight:400}}/></div>
+          <MacroWidget cl={cl} active={mealType} overridden={overridden} onPick={t=>{setMealType(t);setOverridden(t!==(cl?.mealType??"BALANCED"));}} onReset={()=>{setOverridden(false);if(cl)setMealType(cl.mealType);}}/>
+          <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>INSULIN (u)</div><input value={insulin} onChange={e=>setInsulin(e.target.value)} placeholder="e.g. 1.5" type="number" style={inp}/></div>
+          {error&&<div style={{fontSize:11,color:PINK}}>{error}</div>}
+          <button onClick={submit} disabled={loading||!glucose||!carbs||!insulin} style={{marginTop:2,padding:"13px",background:`linear-gradient(135deg,${ACCENT},#6B8BFF)`,border:"none",borderRadius:10,color:"white",fontSize:14,fontWeight:700,cursor:"pointer",opacity:glucose&&carbs&&insulin&&!loading?1:0.4}}>
+            {loading?"Saving…":"Log Entry"}
+          </button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ─── ENTRY LOG ───────────────────────────────────────────────────
+function EntryLog() {
+  const [entries,setEntries]=useState<Entry[]>([]);
+  const [loading,setLoading]=useState(true);
+  const [filter,setFilter]=useState("ALL");
+  const filters=["ALL","GOOD","UNDERDOSE","OVERDOSE"];
+
+  useEffect(()=>{
+    apiFetch<Entry[]>("/entries").then(setEntries).catch(()=>{}).finally(()=>setLoading(false));
+  },[]);
+
+  if(loading) return <Spinner/>;
+  const filtered=filter==="ALL"?entries:entries.filter(e=>e.evaluation===filter);
+
+  return (
+    <div>
+      <div style={{display:"flex",gap:8,marginBottom:14}}>
+        {filters.map(f=>{
+          const colors: Record<string,string>={ALL:ACCENT,GOOD:GREEN,UNDERDOSE:ORANGE,OVERDOSE:PINK};
+          return <button key={f} onClick={()=>setFilter(f)} style={{padding:"6px 14px",borderRadius:99,fontSize:11,fontWeight:600,border:`1px solid ${filter===f?colors[f]:"rgba(255,255,255,0.1)"}`,background:filter===f?`${colors[f]}18`:"transparent",color:filter===f?colors[f]:"rgba(255,255,255,0.45)",cursor:"pointer",letterSpacing:"0.04em"}}>{f}</button>;
+        })}
+        <span style={{marginLeft:"auto",fontSize:11,color:"rgba(255,255,255,0.3)",alignSelf:"center"}}>{filtered.length} entries</span>
+      </div>
+      <Card>
+        {filtered.length===0?(
+          <div style={{padding:32,textAlign:"center",color:"rgba(255,255,255,0.2)",fontSize:13}}>No entries</div>
+        ):(
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead><tr style={{borderBottom:`1px solid rgba(255,255,255,0.05)`}}>
+              {["Time","Meal","BG Before","Carbs","Fiber","Insulin","Result"].map(h=>(
+                <th key={h} style={{padding:"10px 18px",textAlign:"left",fontSize:9,color:"rgba(255,255,255,0.3)",fontWeight:500,letterSpacing:"0.08em"}}>{h.toUpperCase()}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {filtered.map((e,i)=>{
+                const ev=evalStyle(e.evaluation);
+                const ts=new Date(e.timestamp).toLocaleDateString(undefined,{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
+                return (
+                  <tr key={e.id} style={{borderBottom:i<filtered.length-1?`1px solid rgba(255,255,255,0.03)`:"none"}}>
+                    <td style={{padding:"11px 18px",fontSize:11,color:"rgba(255,255,255,0.4)"}}>{ts}</td>
+                    <td style={{padding:"11px 18px",fontSize:12,fontWeight:500,maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.mealDescription||e.mealType||"—"}</td>
+                    <td style={{padding:"11px 18px",fontSize:12,fontWeight:600,color:e.glucoseBefore>140?ORANGE:e.glucoseBefore<80?PINK:"rgba(255,255,255,0.85)"}}>{e.glucoseBefore}</td>
+                    <td style={{padding:"11px 18px",fontSize:12,color:"rgba(255,255,255,0.7)"}}>{e.carbsGrams}g</td>
+                    <td style={{padding:"11px 18px",fontSize:12,color:"rgba(255,255,255,0.5)"}}>{e.fiberGrams!=null?`${e.fiberGrams}g`:"—"}</td>
+                    <td style={{padding:"11px 18px",fontSize:12,color:"rgba(255,255,255,0.7)"}}>{e.insulinUnits}u</td>
+                    <td style={{padding:"11px 18px"}}><span style={{fontSize:10,padding:"3px 9px",borderRadius:99,fontWeight:700,background:`${ev.color}18`,color:ev.color,letterSpacing:"0.06em"}}>{ev.label}</span></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// ─── INSIGHTS ────────────────────────────────────────────────────
+function Insights() {
+  const [patterns,setPatterns]=useState<MealPattern[]>([]);
+  const [loading,setLoading]=useState(true);
+
+  useEffect(()=>{
+    apiFetch<{patterns:MealPattern[]}>("/insights/patterns").then(d=>setPatterns(d.patterns)).catch(()=>{}).finally(()=>setLoading(false));
+  },[]);
+
+  if(loading) return <Spinner/>;
+
+  const mealTypeLabels: Record<MealTypeKey,string> = { FAST_CARBS:"Fast Carbs", HIGH_FAT:"High Fat", HIGH_PROTEIN:"High Protein", BALANCED:"Balanced" };
+  const mealColors: Record<MealTypeKey,string> = { FAST_CARBS:ORANGE, HIGH_FAT:"#A855F7", HIGH_PROTEIN:"#3B82F6", BALANCED:GREEN };
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>
+        {patterns.map(m=>(
+          <Card key={m.mealType} style={{padding:"18px 20px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+              <div style={{width:8,height:8,borderRadius:99,background:mealColors[m.mealType as MealTypeKey]||"#888",flexShrink:0}}/>
+              <div style={{fontSize:13,fontWeight:700}}>{mealTypeLabels[m.mealType as MealTypeKey]||m.mealType}</div>
+              <span style={{marginLeft:"auto",fontSize:10,color:"rgba(255,255,255,0.35)"}}>{m.count} entries</span>
+            </div>
+            {m.count===0?(
+              <div style={{fontSize:12,color:"rgba(255,255,255,0.2)",textAlign:"center",padding:"12px 0"}}>No data yet</div>
+            ):(
+              <>
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {[
+                    {label:"Avg Carbs",value:`${m.avgCarbsGrams.toFixed(0)}g`,color:"rgba(255,255,255,0.85)"},
+                    {label:"Avg Insulin",value:`${m.avgInsulinUnits.toFixed(1)}u`,color:"rgba(255,255,255,0.85)"},
+                    {label:"Good outcomes",value:`${(m.goodRate*100).toFixed(0)}%`,color:m.goodRate>0.6?GREEN:ORANGE},
+                    {label:"Insulin ratio",value:`1u / ${(1/(m.insulinToCarb/10)).toFixed(0)}g`,color:ACCENT},
+                  ].map(row=>(
+                    <div key={row.label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:`1px solid rgba(255,255,255,0.04)`}}>
+                      <span style={{fontSize:11,color:"rgba(255,255,255,0.4)"}}>{row.label}</span>
+                      <span style={{fontSize:13,fontWeight:700,color:row.color}}>{row.value}</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{marginTop:12}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                    <span style={{fontSize:10,color:"rgba(255,255,255,0.35)",letterSpacing:"0.06em"}}>SUCCESS RATE</span>
+                    <span style={{fontSize:10,color:m.goodRate>0.6?GREEN:ORANGE,fontWeight:700}}>{(m.goodRate*100).toFixed(0)}%</span>
+                  </div>
+                  <div style={{height:4,background:"rgba(255,255,255,0.07)",borderRadius:99,overflow:"hidden"}}>
+                    <div style={{width:`${m.goodRate*100}%`,height:"100%",background:m.goodRate>0.6?GREEN:ORANGE,borderRadius:99}}/>
+                  </div>
+                </div>
+              </>
+            )}
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── RECOMMEND ───────────────────────────────────────────────────
+function Recommend({ prefill }: { prefill?: Partial<ParsedVoiceEntry> }) {
+  const [glucose,setGlucose]=useState(prefill?.glucoseBefore?.toString()||"");
+  const [carbs,setCarbs]=useState(prefill?.carbsGrams?.toString()||"");
+  const [fiber,setFiber]=useState(prefill?.fiberGrams?.toString()||"");
+  const [protein,setProtein]=useState("");
+  const [fat,setFat]=useState("");
+  const [desc,setDesc]=useState(prefill?.mealDescription||"");
+  const [mealType,setMealType]=useState<MealTypeKey>("BALANCED");
+  const [overridden,setOverridden]=useState(false);
+  const [cl,setCl]=useState<ReturnType<typeof classifyMeal>|null>(null);
+  const [result,setResult]=useState<Recommendation|null>(null);
+  const [loading,setLoading]=useState(false);
+
+  useEffect(()=>{
+    const c=Number(carbs)||0,p=Number(protein)||0,f=Number(fat)||0;
+    if(c+p+f===0&&!desc){setCl(null);return;}
+    const r=classifyMeal(c,p,f,desc);
+    setCl(r);
+    if(!overridden) setMealType(r.mealType);
+  },[carbs,protein,fat,desc,overridden]);
+
+  async function calc() {
+    if(!glucose||!carbs) return;
+    setLoading(true);
+    try {
+      const r=await apiFetch<Recommendation>("/recommendations",{method:"POST",body:JSON.stringify({
+        glucoseBefore:Number(glucose),carbsGrams:Number(carbs),
+        fiberGrams:fiber?Number(fiber):undefined,mealType,
+      })});
+      setResult(r);
+    } catch { } finally { setLoading(false); }
+  }
+
+  const netCarbs = carbs&&fiber ? Math.max(0,Number(carbs)-Number(fiber)) : null;
+
+  return (
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,alignItems:"start"}}>
+      <Card style={{padding:22}}>
+        <div style={{fontSize:15,fontWeight:700,marginBottom:18}}>Bolus Calculator</div>
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>CURRENT GLUCOSE (mg/dL)</div><input value={glucose} onChange={e=>setGlucose(e.target.value)} placeholder="e.g. 115" type="number" style={inp}/></div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>PLANNED CARBS (g)</div><input value={carbs} onChange={e=>setCarbs(e.target.value)} placeholder="e.g. 60" type="number" style={inp}/></div>
+            <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>FIBER (g) <span style={{opacity:0.5}}>opt.</span></div><input value={fiber} onChange={e=>setFiber(e.target.value)} placeholder="e.g. 8" type="number" style={inp}/></div>
           </div>
-          <MacroWidget cl={cl} active={mealType} overridden={overridden}
-            onPick={t=>{setMealType(t);setOverridden(t!==(cl?.mealType??"BALANCED"));}}
-            onReset={()=>{setOverridden(false);if(cl)setMealType(cl.mealType);}} />
-          <button onClick={calc} style={{padding:"13px",background:`linear-gradient(135deg,${ACCENT},#6B8BFF)`,border:"none",borderRadius:10,color:"white",fontSize:14,fontWeight:700,cursor:"pointer",opacity:glucose&&carbs?1:0.4}}>
-            Calculate Bolus
+          {netCarbs!==null&&(
+            <div style={{padding:"7px 11px",background:`${GREEN}0D`,border:`1px solid ${GREEN}33`,borderRadius:8,fontSize:11,color:GREEN}}>
+              🌾 Net carbs: <b style={{fontSize:13}}>{netCarbs}g</b> ({carbs}g − {fiber}g fiber)
+            </div>
+          )}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>PROTEIN (g)</div><input value={protein} onChange={e=>setProtein(e.target.value)} placeholder="e.g. 30" type="number" style={inp}/></div>
+            <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>FAT (g)</div><input value={fat} onChange={e=>setFat(e.target.value)} placeholder="e.g. 15" type="number" style={inp}/></div>
+          </div>
+          <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>DESCRIPTION</div><input value={desc} onChange={e=>setDesc(e.target.value)} placeholder="e.g. granola, juice…" style={{...inp,fontSize:12,fontWeight:400}}/></div>
+          <MacroWidget cl={cl} active={mealType} overridden={overridden} onPick={t=>{setMealType(t);setOverridden(t!==(cl?.mealType??"BALANCED"));}} onReset={()=>{setOverridden(false);if(cl)setMealType(cl.mealType);}}/>
+          <button onClick={calc} disabled={loading||!glucose||!carbs} style={{padding:"13px",background:`linear-gradient(135deg,${ACCENT},#6B8BFF)`,border:"none",borderRadius:10,color:"white",fontSize:14,fontWeight:700,cursor:"pointer",opacity:glucose&&carbs&&!loading?1:0.4}}>
+            {loading?"Calculating…":"Calculate Bolus"}
           </button>
         </div>
       </Card>
 
-      <Card style={{ padding: 22 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 14 }}>Recommendation</div>
+      <Card style={{padding:22}}>
+        <div style={{fontSize:13,fontWeight:600,marginBottom:14}}>Recommendation</div>
         {result ? (
           <div>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "24px 0", background: `${ACCENT}0D`, borderRadius: 12, border: `1px solid ${ACCENT}22`, marginBottom: 16 }}>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 4 }}>SUGGESTED DOSE</div>
-              <div style={{ display: "flex", alignItems: "flex-end", gap: 6 }}>
-                <span style={{ fontSize: 56, fontWeight: 900, color: "white", letterSpacing: "-0.03em" }}>{result.units.toFixed(1)}</span>
-                <span style={{ fontSize: 22, color: "rgba(255,255,255,0.4)", paddingBottom: 6 }}>u</span>
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"24px 0",background:`${ACCENT}0D`,borderRadius:12,border:`1px solid ${ACCENT}22`,marginBottom:16}}>
+              <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginBottom:4}}>SUGGESTED DOSE</div>
+              <div style={{display:"flex",alignItems:"flex-end",gap:6}}>
+                <span style={{fontSize:56,fontWeight:900,color:"white",letterSpacing:"-0.03em"}}>{result.suggestedUnits.toFixed(1)}</span>
+                <span style={{fontSize:22,color:"rgba(255,255,255,0.4)",paddingBottom:6}}>u</span>
               </div>
-              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", fontFamily: "monospace" }}>Range {(result.units * 0.9).toFixed(1)} – {(result.units * 1.1).toFixed(1)} u</span>
+              <span style={{fontSize:11,color:"rgba(255,255,255,0.35)",fontFamily:"monospace"}}>Range {(result.suggestedUnits*0.9).toFixed(1)} – {(result.suggestedUnits*1.1).toFixed(1)} u</span>
+              {result.cappedForSafety&&<span style={{fontSize:10,color:ORANGE,marginTop:6}}>⚠ Capped for safety</span>}
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
               {[
-                { label: "Confidence", value: result.confidence, color: GREEN },
-                ...(result.netCarbs !== undefined ? [{ label: "Net carbs used", value: `${result.netCarbs}g`, color: GREEN }] : []),
-                { label: "Carb ratio", value: `1u per ${result.ratio}g`, color: ACCENT },
-                { label: "Timing", value: mealType === "HIGH_FAT" ? "Split dose" : "Before meal", color: "rgba(255,255,255,0.7)" },
-              ].map((row) => (
-                <div key={row.label} style={{ display: "flex", justifyContent: "space-between", padding: "10px 12px", background: "rgba(255,255,255,0.04)", borderRadius: 8, fontSize: 12 }}>
-                  <span style={{ color: "rgba(255,255,255,0.4)" }}>{row.label}</span>
-                  <span style={{ fontWeight: 700, color: row.color }}>{row.value}</span>
+                {label:"Confidence",value:result.confidence,color:result.confidence==="HIGH"?GREEN:ORANGE},
+                ...(result.carbRatio?[{label:"Carb ratio",value:`1u per ${result.carbRatio.toFixed(0)}g`,color:ACCENT}]:[]),
+                {label:"Similar meals",value:`${result.similarMealCount}`,color:"rgba(255,255,255,0.7)"},
+                {label:"Timing",value:mealType==="HIGH_FAT"?"Split dose":"Before meal",color:"rgba(255,255,255,0.7)"},
+              ].map(row=>(
+                <div key={row.label} style={{display:"flex",justifyContent:"space-between",padding:"10px 12px",background:"rgba(255,255,255,0.04)",borderRadius:8,fontSize:12}}>
+                  <span style={{color:"rgba(255,255,255,0.4)"}}>{row.label}</span>
+                  <span style={{fontWeight:700,color:row.color}}>{row.value}</span>
                 </div>
               ))}
             </div>
-            <div style={{ marginTop: 12, padding: "10px 14px", background: `${ACCENT}10`, borderRadius: 8, fontSize: 11, color: "rgba(255,255,255,0.5)", lineHeight: 1.6 }}>
-              Based on 8 similar balanced meals. Personal ratio 1u per {result.ratio}g (stable meals only — hypo/spike entries excluded).
+            <div style={{marginTop:12,padding:"10px 14px",background:`${ACCENT}10`,borderRadius:8,fontSize:11,color:"rgba(255,255,255,0.5)",lineHeight:1.6}}>
+              {result.reasoning}
             </div>
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 280, color: "rgba(255,255,255,0.2)" }}>
-            <div style={{ fontSize: 40, marginBottom: 10 }}>⚡</div>
-            <div style={{ fontSize: 13 }}>Enter parameters to calculate</div>
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:280,color:"rgba(255,255,255,0.2)"}}>
+            <div style={{fontSize:40,marginBottom:10}}>⚡</div>
+            <div style={{fontSize:13}}>Enter parameters to calculate</div>
           </div>
         )}
       </Card>
@@ -555,184 +645,444 @@ function Recommend() {
   );
 }
 
-// ─── MOBILE DASHBOARD ────────────────────────────────────────────
+// ─── VOICE LOG ───────────────────────────────────────────────────
+type VoiceState = "idle" | "recording" | "processing" | "preview";
 
-function MobileDashboard() {
-  const [mobilePage, setMobilePage] = useState<"dashboard"|"log"|"entries"|"recommend">("dashboard");
+function VoicePage({ onLogged }: { onLogged?: ()=>void }) {
+  const [status, setStatus] = useState<VoiceState>("idle");
+  const [transcript, setTranscript] = useState("");
+  const [parsed, setParsed] = useState<ParsedVoiceEntry|null>(null);
+  const [suggestion, setSuggestion] = useState<Recommendation|null>(null);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [mealType, setMealType] = useState<MealTypeKey>("BALANCED");
+  const recognitionRef = useRef<any>(null);
 
-  const mobileStatCards = [
-    { label: "Control Score", value: "75", unit: "/100", sub: "Last 8 entries", color: ACCENT, bar: 75 },
-    { label: "Time in Range", value: "62.5", unit: "%", sub: "5 of 8 entries", color: GREEN, bar: 62.5 },
-    { label: "Spike Rate", value: "25.0", unit: "%", sub: "Hyperglycemia", color: ORANGE, bar: 25 },
-    { label: "Hypo Rate", value: "0.0", unit: "%", sub: "Hypoglycemia", color: PINK, bar: 0 },
-  ];
+  const SR = typeof window !== "undefined" ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) : null;
+  const voiceSupported = !!SR;
 
-  const mobileNavItems = [
-    { id: "dashboard" as const, icon: "⊞", label: "Dashboard" },
-    { id: "entries" as const, icon: "≡", label: "Entries" },
-    { id: "recommend" as const, icon: "⟲", label: "Engine" },
-  ];
+  function startRecording() {
+    if (!SR) { setError("Web Speech API not supported in this browser. Use Chrome or Edge."); return; }
+    setError(""); setSaved(false);
+    const recognition = new SR();
+    recognition.lang = "en-US";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onstart = () => setStatus("recording");
+    recognition.onresult = async (e: any) => {
+      const text = e.results[0][0].transcript;
+      setTranscript(text);
+      setStatus("processing");
+      const p = parseVoiceInput(text);
+      setParsed(p);
+
+      // auto-classify
+      const cl = classifyMeal(p.carbsGrams||0, 0, 0, p.mealDescription||"");
+      setMealType(cl.mealType);
+
+      // fetch recommendation if we have enough data
+      if (p.glucoseBefore && p.carbsGrams) {
+        try {
+          const r = await apiFetch<Recommendation>("/recommendations", {
+            method:"POST", body:JSON.stringify({ glucoseBefore:p.glucoseBefore, carbsGrams:p.carbsGrams, fiberGrams:p.fiberGrams??undefined, mealType:cl.mealType })
+          });
+          setSuggestion(r);
+        } catch {}
+      }
+      setStatus("preview");
+    };
+    recognition.onerror = (e: any) => { setError(e.error); setStatus("idle"); };
+    recognition.onend = () => { if (status === "recording") setStatus("idle"); };
+    recognitionRef.current = recognition;
+    recognition.start();
+  }
+
+  function stopRecording() { recognitionRef.current?.stop(); }
+
+  async function confirmEntry() {
+    if (!parsed) return;
+    setSaving(true);
+    try {
+      await apiFetch("/entries", { method:"POST", body:JSON.stringify({
+        glucoseBefore: parsed.glucoseBefore,
+        carbsGrams: parsed.carbsGrams,
+        fiberGrams: parsed.fiberGrams??undefined,
+        insulinUnits: parsed.insulinUnits ?? suggestion?.suggestedUnits,
+        mealType,
+        mealDescription: parsed.mealDescription??undefined,
+      })});
+      setSaved(true);
+      onLogged?.();
+      setTimeout(()=>{ setStatus("idle"); setParsed(null); setTranscript(""); setSuggestion(null); setSaved(false); }, 2000);
+    } catch { setError("Failed to save entry."); }
+    finally { setSaving(false); }
+  }
+
+  function reset() { setStatus("idle"); setParsed(null); setTranscript(""); setSuggestion(null); setError(""); setSaved(false); }
+
+  const statusLabel = { idle:"Tap to speak", recording:"Listening…", processing:"Processing…", preview:"Review entry" }[status];
+  const statusColor = { idle:"rgba(255,255,255,0.4)", recording:PINK, processing:ORANGE, preview:GREEN }[status];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", width: "100%", height: "100%", background: BG, color: "white", fontFamily: "'Inter', system-ui, sans-serif", position: "relative", overflow: "hidden" }}>
-      {/* Mobile Header */}
-      <div style={{ padding: "16px 20px 12px", background: SURFACE, borderBottom: `1px solid ${BORDER}`, flexShrink: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <LogoCMark size={30} />
-            <div>
-              <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: "-0.02em" }}>Glev</div>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", marginTop: 1 }}>Smart insulin decisions</div>
-            </div>
-          </div>
-          <div style={{ fontSize: 11, padding: "5px 12px", borderRadius: 99, background: `${GREEN}18`, color: GREEN, fontWeight: 600 }}>Live</div>
-        </div>
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:32,paddingTop:24}}>
+      <div style={{textAlign:"center"}}>
+        <div style={{fontSize:11,color:"rgba(255,255,255,0.3)",letterSpacing:"0.1em",marginBottom:8}}>VOICE LOG</div>
+        <div style={{fontSize:16,fontWeight:600,color:statusColor,transition:"color 0.3s"}}>{statusLabel}</div>
       </div>
 
-      {/* Scrollable Content */}
-      <div style={{ flex: 1, overflow: "auto", padding: "16px 16px 90px" }}>
-        {mobilePage === "dashboard" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {/* Stat Cards — stacked */}
-            {mobileStatCards.map((sc) => (
-              <div key={sc.label} style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "16px 18px" }}>
-                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 6, letterSpacing: "0.08em" }}>{sc.label.toUpperCase()}</div>
-                <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 10 }}>
-                  <div style={{ display: "flex", alignItems: "flex-end", gap: 4 }}>
-                    <span style={{ fontSize: 34, fontWeight: 800, color: sc.color, letterSpacing: "-0.03em" }}>{sc.value}</span>
-                    <span style={{ fontSize: 13, color: "rgba(255,255,255,0.3)", paddingBottom: 4 }}>{sc.unit}</span>
-                  </div>
-                  <span style={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}>{sc.sub}</span>
-                </div>
-                <div style={{ height: 4, background: "rgba(255,255,255,0.07)", borderRadius: 99, overflow: "hidden" }}>
-                  <div style={{ width: `${sc.bar}%`, height: "100%", background: sc.color, borderRadius: 99 }} />
-                </div>
-              </div>
-            ))}
+      {/* Big record button */}
+      <div style={{position:"relative"}}>
+        {status==="recording"&&(
+          <>
+            <div style={{position:"absolute",inset:-16,borderRadius:99,background:`${PINK}15`,animation:"ripple 1.2s ease-out infinite"}}/>
+            <div style={{position:"absolute",inset:-8,borderRadius:99,background:`${PINK}20`,animation:"ripple 1.2s ease-out 0.3s infinite"}}/>
+          </>
+        )}
+        <button
+          onClick={status==="idle"?startRecording:status==="recording"?stopRecording:reset}
+          disabled={status==="processing"||saving}
+          style={{
+            width:100,height:100,borderRadius:99,border:"none",cursor:"pointer",
+            background: status==="recording"?`linear-gradient(135deg,${PINK},#FF6B9D)`:status==="preview"?`${GREEN}22`:`linear-gradient(135deg,${ACCENT},#6B8BFF)`,
+            display:"flex",alignItems:"center",justifyContent:"center",fontSize:36,
+            boxShadow: status==="recording"?`0 0 40px ${PINK}66`:status==="idle"?`0 0 30px ${ACCENT}44`:"none",
+            transition:"all 0.2s", transform: status==="recording"?"scale(1.08)":"scale(1)",
+          }}
+        >
+          {status==="recording"?"⏹":status==="preview"?"↺":"🎤"}
+        </button>
+      </div>
+      <style>{`@keyframes ripple{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.8)}}`}</style>
 
-            {/* Glucose Trend — full width */}
-            <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "16px 18px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>Glucose Trend</div>
-                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>Pre-meal · 7 days</div>
-                </div>
-                <span style={{ fontSize: 11, padding: "4px 10px", background: `${ACCENT}22`, color: ACCENT, borderRadius: 99 }}>7d</span>
-              </div>
-              <div style={{ position: "relative" }}>
-                <div style={{ position: "absolute", left: 0, right: 0, top: `${((maxG - 140) / (maxG - minG)) * 100}%`, height: `${((140 - 80) / (maxG - minG)) * 100}%`, background: `${GREEN}0A`, borderTop: `1px dashed ${GREEN}50`, borderBottom: `1px dashed ${GREEN}50` }} />
-                <svg width="100%" height={H + 10} viewBox={`0 0 ${W} ${H + 10}`} preserveAspectRatio="none" style={{ display: "block" }}>
-                  <defs>
-                    <linearGradient id="mdg" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={ACCENT} stopOpacity="0.25" />
-                      <stop offset="100%" stopColor={ACCENT} stopOpacity="0" />
-                    </linearGradient>
-                  </defs>
-                  <path d={areaD} fill="url(#mdg)" />
-                  <path d={pathD} fill="none" stroke={ACCENT} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                  {glucosePoints.map((g, i) => g > 180 ? <circle key={i} cx={toX(i)} cy={toY(g)} r={4} fill={ORANGE} /> : g < 70 ? <circle key={i} cx={toX(i)} cy={toY(g)} r={4} fill={PINK} /> : null)}
-                </svg>
-              </div>
-            </div>
+      {!voiceSupported&&<div style={{fontSize:12,color:ORANGE,textAlign:"center"}}>Voice input requires Chrome or Edge browser.</div>}
+      {error&&<div style={{fontSize:12,color:PINK}}>{error}</div>}
 
-            {/* Outcomes — stacked */}
-            <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "16px 18px" }}>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>Outcomes</div>
+      {/* Transcript */}
+      {transcript&&(
+        <div style={{width:"100%",maxWidth:560,padding:"12px 16px",background:"rgba(255,255,255,0.04)",borderRadius:12,fontSize:13,color:"rgba(255,255,255,0.6)",fontStyle:"italic",textAlign:"center"}}>
+          "{transcript}"
+        </div>
+      )}
+
+      {/* Preview Card */}
+      {status==="preview"&&parsed&&(
+        <div style={{width:"100%",maxWidth:560,display:"flex",flexDirection:"column",gap:12}}>
+          <Card style={{padding:20}}>
+            <div style={{fontSize:13,fontWeight:600,marginBottom:14,color:GREEN}}>Detected Entry</div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
               {[
-                { label: "GOOD", count: 5, pct: 62.5, color: GREEN },
-                { label: "UNDERDOSE", count: 2, pct: 25, color: ORANGE },
-                { label: "OVERDOSE", count: 1, pct: 12.5, color: PINK },
-                { label: "CHECK", count: 0, pct: 0, color: "#4B5070" },
-              ].map((r) => (
-                <div key={r.label} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: 99, background: r.color, flexShrink: 0 }} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                      <span style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", letterSpacing: "0.06em" }}>{r.label}</span>
-                      <span style={{ fontSize: 12, color: r.color, fontWeight: 700 }}>{r.count}</span>
-                    </div>
-                    <div style={{ height: 4, background: "rgba(255,255,255,0.07)", borderRadius: 99, overflow: "hidden" }}>
-                      <div style={{ width: `${r.pct}%`, height: "100%", background: r.color, borderRadius: 99 }} />
-                    </div>
-                  </div>
+                {label:"Glucose Before",value:parsed.glucoseBefore?`${parsed.glucoseBefore} mg/dL`:"—",color:parsed.glucoseBefore&&parsed.glucoseBefore>140?ORANGE:parsed.glucoseBefore&&parsed.glucoseBefore<80?PINK:"rgba(255,255,255,0.85)"},
+                {label:"Carbs",value:parsed.carbsGrams?`${parsed.carbsGrams}g`:"—",color:"rgba(255,255,255,0.85)"},
+                ...(parsed.fiberGrams!=null?[{label:"Fiber",value:`${parsed.fiberGrams}g`,color:GREEN}]:[]),
+                {label:"Insulin",value:parsed.insulinUnits?`${parsed.insulinUnits}u`:"—",color:"rgba(255,255,255,0.85)"},
+                {label:"Description",value:parsed.mealDescription||"—",color:"rgba(255,255,255,0.6)"},
+              ].map(row=>(
+                <div key={row.label} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid rgba(255,255,255,0.05)`}}>
+                  <span style={{fontSize:12,color:"rgba(255,255,255,0.4)"}}>{row.label}</span>
+                  <span style={{fontSize:13,fontWeight:600,color:row.color}}>{row.value}</span>
                 </div>
               ))}
             </div>
 
-            {/* Recent Entries — scrollable list */}
-            <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden" }}>
-              <div style={{ padding: "14px 18px 12px", borderBottom: `1px solid ${BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>Recent Entries</div>
-                <span style={{ fontSize: 11, color: ACCENT }}>View all →</span>
+            {/* Meal type override */}
+            <div style={{marginTop:14}}>
+              <div style={{fontSize:9,color:"rgba(255,255,255,0.3)",marginBottom:8,letterSpacing:"0.08em"}}>MEAL TYPE</div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {(Object.keys(MEAL_LABELS) as MealTypeKey[]).map(t=>{
+                  const [bg,color]=pillColors[t];
+                  return <button key={t} onClick={()=>setMealType(t)} style={{padding:"5px 12px",borderRadius:99,border:`1px solid ${mealType===t?color:"rgba(255,255,255,0.1)"}`,background:mealType===t?bg:"transparent",color:mealType===t?color:"rgba(255,255,255,0.45)",fontSize:10,fontWeight:600,cursor:"pointer"}}>{MEAL_LABELS[t]}</button>;
+                })}
               </div>
-              {entries.slice(0, 5).map((e, i) => {
-                const ev = evalStyle(e.eval);
-                return (
-                  <div key={i} style={{ padding: "14px 18px", borderBottom: i < 4 ? `1px solid rgba(255,255,255,0.04)` : "none", display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.meal}</div>
-                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>{e.time}</div>
-                    </div>
-                    <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: e.bg > 140 ? ORANGE : e.bg < 80 ? PINK : "rgba(255,255,255,0.8)", marginBottom: 3 }}>{e.bg} <span style={{ fontSize: 10, fontWeight: 400, color: "rgba(255,255,255,0.3)" }}>mg/dL</span></div>
-                      <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, fontWeight: 700, background: `${ev.color}18`, color: ev.color }}>{ev.label}</span>
-                    </div>
-                  </div>
-                );
-              })}
+            </div>
+          </Card>
+
+          {/* Suggestion */}
+          {suggestion&&(
+            <Card style={{padding:"16px 20px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:12}}>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",letterSpacing:"0.08em"}}>SUGGESTED DOSE</div>
+                  <div style={{fontSize:28,fontWeight:800,color:ACCENT,letterSpacing:"-0.03em"}}>{suggestion.suggestedUnits.toFixed(1)}<span style={{fontSize:14,color:"rgba(255,255,255,0.35)",fontWeight:400}}>u</span></div>
+                </div>
+                <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",maxWidth:220,lineHeight:1.5}}>
+                  {suggestion.reasoning.split(".")[0]}.
+                </div>
+              </div>
+            </Card>
+          )}
+
+          <div style={{display:"flex",gap:10}}>
+            {saved ? (
+              <div style={{flex:1,padding:"12px",background:`${GREEN}22`,borderRadius:10,textAlign:"center",fontSize:14,fontWeight:700,color:GREEN}}>✓ Saved</div>
+            ) : (
+              <>
+                <button onClick={reset} style={{flex:1,padding:"12px",background:"rgba(255,255,255,0.06)",border:"none",borderRadius:10,color:"rgba(255,255,255,0.7)",fontSize:13,fontWeight:600,cursor:"pointer"}}>Discard</button>
+                <button onClick={confirmEntry} disabled={saving} style={{flex:2,padding:"12px",background:`linear-gradient(135deg,${ACCENT},#6B8BFF)`,border:"none",borderRadius:10,color:"white",fontSize:14,fontWeight:700,cursor:"pointer",opacity:saving?0.6:1}}>
+                  {saving?"Saving…":"Confirm & Save"}
+                </button>
+              </>
+            )}
+          </div>
+
+          <div style={{textAlign:"center",fontSize:11,color:"rgba(255,255,255,0.2)"}}>
+            Examples: "120 glucose 60 carbs 2 units chicken rice" · "pasta 80g carbs 8g fiber glucose 95"
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── IMPORT ──────────────────────────────────────────────────────
+function ImportPage({ onLogged }: { onLogged?: ()=>void }) {
+  const [raw, setRaw] = useState("");
+  const [preview, setPreview] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{imported:number}|null>(null);
+  const [error, setError] = useState("");
+
+  const COLS = ["glucoseBefore","glucoseAfter","carbsGrams","fiberGrams","insulinUnits","mealType","mealDescription","timeDifferenceMinutes","notes","timestamp"];
+
+  function parseCSV() {
+    setError(""); setResult(null);
+    const lines = raw.trim().split("\n").filter(Boolean);
+    if (lines.length === 0) { setError("Paste some data first."); return; }
+
+    // Detect if first row is headers
+    const firstRow = lines[0].split(/[\t,]/);
+    const hasHeader = isNaN(Number(firstRow[0]));
+    const headers = hasHeader ? firstRow.map(h=>h.trim().toLowerCase().replace(/\s+/g,"")) : COLS;
+    const dataLines = hasHeader ? lines.slice(1) : lines;
+
+    const parsed = dataLines.map(line=>{
+      const vals = line.split(/[\t,]/);
+      const obj: any = {};
+      headers.forEach((h, i) => {
+        const v = vals[i]?.trim();
+        if (!v || v === "" || v === "null") return;
+        const numFields = ["glucosebefore","glucoseafter","carbsgrams","fibergrams","insulinunits","timedifferenceminutes"];
+        const key = COLS.find(c=>c.toLowerCase()===h)||h;
+        obj[key] = numFields.includes(h) ? Number(v) : v;
+      });
+      // Validate required fields
+      if (!obj.glucoseBefore||!obj.carbsGrams||!obj.insulinUnits) return null;
+      if (!obj.mealType||!["FAST_CARBS","HIGH_FAT","HIGH_PROTEIN","BALANCED"].includes(obj.mealType)) obj.mealType="BALANCED";
+      return obj;
+    }).filter(Boolean);
+
+    setPreview(parsed);
+  }
+
+  async function importEntries() {
+    if (preview.length === 0) { setError("Nothing to import."); return; }
+    setLoading(true); setError("");
+    try {
+      const r = await apiFetch<{imported:number}>("/entries/batch", { method:"POST", body:JSON.stringify({entries:preview}) });
+      setResult(r);
+      setRaw(""); setPreview([]);
+      onLogged?.();
+    } catch { setError("Import failed. Check data format."); }
+    finally { setLoading(false); }
+  }
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:800}}>
+      <Card style={{padding:22}}>
+        <div style={{fontSize:15,fontWeight:700,marginBottom:6}}>Import Data</div>
+        <div style={{fontSize:12,color:"rgba(255,255,255,0.35)",marginBottom:16}}>
+          Paste CSV or tab-separated data. Columns: <span style={{fontFamily:"monospace",fontSize:11,color:ACCENT}}>{COLS.slice(0,6).join(", ")}…</span>
+        </div>
+        <div style={{fontSize:10,color:"rgba(255,255,255,0.3)",marginBottom:8,letterSpacing:"0.08em"}}>REQUIRED: glucoseBefore, carbsGrams, insulinUnits</div>
+        <textarea
+          value={raw}
+          onChange={e=>setRaw(e.target.value)}
+          placeholder={"glucoseBefore\tcarbsGrams\tinsulinUnits\tmealType\n110\t60\t2\tBALANCED\n95\t45\t1.5\tFAST_CARBS"}
+          style={{...inp,height:140,fontFamily:"monospace",fontSize:12,fontWeight:400,resize:"vertical",lineHeight:1.6}}
+        />
+        <div style={{display:"flex",gap:10,marginTop:12}}>
+          <button onClick={parseCSV} style={{padding:"10px 22px",background:"rgba(255,255,255,0.08)",border:"none",borderRadius:10,color:"white",fontSize:13,fontWeight:600,cursor:"pointer"}}>Parse & Preview</button>
+          {preview.length>0&&(
+            <button onClick={importEntries} disabled={loading} style={{padding:"10px 22px",background:`linear-gradient(135deg,${ACCENT},#6B8BFF)`,border:"none",borderRadius:10,color:"white",fontSize:13,fontWeight:700,cursor:"pointer",opacity:loading?0.6:1}}>
+              {loading?`Importing…`:`Import ${preview.length} entries`}
+            </button>
+          )}
+        </div>
+        {error&&<div style={{marginTop:10,fontSize:12,color:PINK}}>{error}</div>}
+        {result&&<div style={{marginTop:10,fontSize:13,color:GREEN,fontWeight:600}}>✓ Imported {result.imported} entries successfully</div>}
+      </Card>
+
+      {preview.length>0&&(
+        <Card>
+          <div style={{padding:"12px 18px",borderBottom:`1px solid ${BORDER}`,fontSize:13,fontWeight:600}}>Preview — {preview.length} entries</div>
+          <table style={{width:"100%",borderCollapse:"collapse"}}>
+            <thead><tr style={{borderBottom:`1px solid rgba(255,255,255,0.05)`}}>
+              {["BG","Carbs","Fiber","Insulin","Type","Description"].map(h=>(
+                <th key={h} style={{padding:"8px 16px",textAlign:"left",fontSize:9,color:"rgba(255,255,255,0.3)",fontWeight:500,letterSpacing:"0.08em"}}>{h.toUpperCase()}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {preview.slice(0,8).map((e,i)=>(
+                <tr key={i} style={{borderBottom:i<Math.min(preview.length,8)-1?`1px solid rgba(255,255,255,0.03)`:"none"}}>
+                  <td style={{padding:"9px 16px",fontSize:12,fontWeight:600,color:e.glucoseBefore>140?ORANGE:e.glucoseBefore<80?PINK:"rgba(255,255,255,0.85)"}}>{e.glucoseBefore}</td>
+                  <td style={{padding:"9px 16px",fontSize:12,color:"rgba(255,255,255,0.7)"}}>{e.carbsGrams}g</td>
+                  <td style={{padding:"9px 16px",fontSize:12,color:"rgba(255,255,255,0.5)"}}>{e.fiberGrams!=null?`${e.fiberGrams}g`:"—"}</td>
+                  <td style={{padding:"9px 16px",fontSize:12,color:"rgba(255,255,255,0.7)"}}>{e.insulinUnits}u</td>
+                  <td style={{padding:"9px 16px"}}><span style={{fontSize:10,padding:"2px 8px",borderRadius:99,background:`${pillColors[e.mealType as MealTypeKey]?.[0]||"rgba(255,255,255,0.1)"}`,color:pillColors[e.mealType as MealTypeKey]?.[1]||"white",fontWeight:600}}>{e.mealType}</span></td>
+                  <td style={{padding:"9px 16px",fontSize:11,color:"rgba(255,255,255,0.4)",maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.mealDescription||"—"}</td>
+                </tr>
+              ))}
+              {preview.length>8&&<tr><td colSpan={6} style={{padding:"8px 16px",fontSize:11,color:"rgba(255,255,255,0.3)",textAlign:"center"}}>…and {preview.length-8} more</td></tr>}
+            </tbody>
+          </table>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ─── MOBILE DASHBOARD ────────────────────────────────────────────
+function MobileDashboard() {
+  const [mobilePage, setMobilePage] = useState<"dashboard"|"log"|"entries"|"recommend"|"voice">("dashboard");
+  const [stats, setStats] = useState<DashboardStats|null>(null);
+  const [trend, setTrend] = useState<TrendPoint[]>([]);
+
+  useEffect(()=>{
+    apiFetch<DashboardStats>("/insights/dashboard").then(s=>{setStats(s);}).catch(()=>{});
+    apiFetch<{points:TrendPoint[]}>("/insights/glucose-trend").then(d=>setTrend(d.points.slice(0,16).reverse())).catch(()=>{});
+  },[]);
+
+  const trendPts = trend.map(p=>p.glucoseBefore).filter(Boolean) as number[];
+  const maxG=220, minG=60, W=560, H=90;
+  const toY=(g:number)=>H-((g-minG)/(maxG-minG))*H;
+  const toX=(i:number)=>(i/(Math.max(trendPts.length-1,1)))*W;
+  const pathD=trendPts.map((g,i)=>`${i===0?"M":"L"} ${toX(i).toFixed(1)} ${toY(g).toFixed(1)}`).join(" ");
+  const areaD=pathD+` L ${W} ${H} L 0 ${H} Z`;
+
+  const mobileNavItems = [
+    { id:"dashboard" as const, icon:"⊞", label:"Dashboard" },
+    { id:"entries" as const, icon:"≡", label:"Entries" },
+    { id:"recommend" as const, icon:"⟲", label:"Engine" },
+  ];
+
+  const eb = stats?.evaluationBreakdown;
+  const total = stats?.totalEntries || 1;
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",width:"100%",height:"100%",background:BG,color:"white",fontFamily:"'Inter',system-ui,sans-serif",position:"relative",overflow:"hidden"}}>
+      <div style={{padding:"16px 20px 12px",background:SURFACE,borderBottom:`1px solid ${BORDER}`,flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <LogoCMark size={30}/>
+            <div>
+              <div style={{fontSize:17,fontWeight:800,letterSpacing:"-0.02em"}}>Glev</div>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.35)",marginTop:1}}>Smart insulin decisions</div>
             </div>
           </div>
-        )}
-        {mobilePage === "log" && (
-          <div style={{ padding: "8px 0" }}><QuickLog /></div>
-        )}
-        {mobilePage === "entries" && (
-          <div style={{ padding: "8px 0" }}><EntryLog /></div>
-        )}
-        {mobilePage === "recommend" && (
-          <div style={{ padding: "8px 0" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <Recommend />
-            </div>
-          </div>
-        )}
+          <div style={{fontSize:11,padding:"5px 12px",borderRadius:99,background:`${GREEN}18`,color:GREEN,fontWeight:600}}>Live</div>
+        </div>
       </div>
 
-      {/* Bottom Navigation Bar */}
-      <div style={{
-        position: "absolute", bottom: 0, left: 0, right: 0,
-        background: SURFACE, borderTop: `1px solid ${BORDER}`,
-        display: "flex", alignItems: "center", justifyContent: "space-around",
-        padding: "10px 24px 20px", zIndex: 10
-      }}>
-        {mobileNavItems.map((item) => (
-          <button key={item.id} onClick={() => setMobilePage(item.id)} style={{
-            display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-            background: "none", border: "none", cursor: "pointer",
-            color: mobilePage === item.id ? ACCENT : "rgba(255,255,255,0.3)",
-            padding: "4px 12px", borderRadius: 10, transition: "all 0.15s",
-            fontSize: 20,
-          }}>
+      <div style={{flex:1,overflow:"auto",padding:"16px 16px 90px"}}>
+        {mobilePage==="dashboard"&&(
+          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+            {stats?[
+              {label:"Control Score",value:stats.controlScore.toFixed(0),unit:"/100",color:ACCENT,bar:stats.controlScore,sub:`${stats.totalEntries} entries`},
+              {label:"Good Rate",value:(stats.goodRate*100).toFixed(1),unit:"%",color:GREEN,bar:stats.goodRate*100,sub:`${eb?.GOOD||0} good`},
+              {label:"Spike Rate",value:stats.spikeRate.toFixed(1),unit:"%",color:ORANGE,bar:stats.spikeRate,sub:"Hyperglycemia"},
+              {label:"Hypo Rate",value:stats.hypoRate.toFixed(1),unit:"%",color:PINK,bar:stats.hypoRate,sub:"Hypoglycemia"},
+            ].map(sc=>(
+              <div key={sc.label} style={{background:SURFACE,border:`1px solid ${BORDER}`,borderRadius:14,padding:"16px 18px"}}>
+                <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:6,letterSpacing:"0.08em"}}>{sc.label.toUpperCase()}</div>
+                <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",marginBottom:10}}>
+                  <div style={{display:"flex",alignItems:"flex-end",gap:4}}>
+                    <span style={{fontSize:34,fontWeight:800,color:sc.color,letterSpacing:"-0.03em"}}>{sc.value}</span>
+                    <span style={{fontSize:13,color:"rgba(255,255,255,0.3)",paddingBottom:4}}>{sc.unit}</span>
+                  </div>
+                  <span style={{fontSize:11,color:"rgba(255,255,255,0.3)"}}>{sc.sub}</span>
+                </div>
+                <div style={{height:4,background:"rgba(255,255,255,0.07)",borderRadius:99,overflow:"hidden"}}>
+                  <div style={{width:`${Math.min(sc.bar,100)}%`,height:"100%",background:sc.color,borderRadius:99}}/>
+                </div>
+              </div>
+            )):(
+              <div style={{height:200,display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,0.2)"}}>Loading…</div>
+            )}
+
+            {trendPts.length>0&&(
+              <div style={{background:SURFACE,border:`1px solid ${BORDER}`,borderRadius:14,padding:"16px 18px"}}>
+                <div style={{fontSize:14,fontWeight:600,marginBottom:14}}>Glucose Trend</div>
+                <svg width="100%" height={H+10} viewBox={`0 0 ${W} ${H+10}`} preserveAspectRatio="none" style={{display:"block"}}>
+                  <defs><linearGradient id="mdg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={ACCENT} stopOpacity="0.25"/><stop offset="100%" stopColor={ACCENT} stopOpacity="0"/></linearGradient></defs>
+                  <path d={areaD} fill="url(#mdg)"/><path d={pathD} fill="none" stroke={ACCENT} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  {trendPts.map((g,i)=>g>180?<circle key={i} cx={toX(i)} cy={toY(g)} r={4} fill={ORANGE}/>:g<70?<circle key={i} cx={toX(i)} cy={toY(g)} r={4} fill={PINK}/>:null)}
+                </svg>
+              </div>
+            )}
+
+            {eb&&(
+              <div style={{background:SURFACE,border:`1px solid ${BORDER}`,borderRadius:14,padding:"16px 18px"}}>
+                <div style={{fontSize:14,fontWeight:600,marginBottom:14}}>Outcomes</div>
+                {[{label:"GOOD",count:eb.GOOD,color:GREEN},{label:"UNDERDOSE",count:eb.UNDERDOSE,color:ORANGE},{label:"OVERDOSE",count:eb.OVERDOSE,color:PINK},{label:"CHECK",count:eb.CHECK_CONTEXT,color:"#4B5070"}].map(r=>(
+                  <div key={r.label} style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+                    <div style={{width:8,height:8,borderRadius:99,background:r.color,flexShrink:0}}/>
+                    <div style={{flex:1}}>
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                        <span style={{fontSize:11,color:"rgba(255,255,255,0.5)",letterSpacing:"0.06em"}}>{r.label}</span>
+                        <span style={{fontSize:12,color:r.color,fontWeight:700}}>{r.count}</span>
+                      </div>
+                      <div style={{height:4,background:"rgba(255,255,255,0.07)",borderRadius:99,overflow:"hidden"}}>
+                        <div style={{width:`${(r.count/total)*100}%`,height:"100%",background:r.color,borderRadius:99}}/>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {stats?.recentEntries&&stats.recentEntries.length>0&&(
+              <div style={{background:SURFACE,border:`1px solid ${BORDER}`,borderRadius:14,overflow:"hidden"}}>
+                <div style={{padding:"14px 18px 12px",borderBottom:`1px solid ${BORDER}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div style={{fontSize:14,fontWeight:600}}>Recent Entries</div>
+                  <span style={{fontSize:11,color:ACCENT}}>View all →</span>
+                </div>
+                {stats.recentEntries.slice(0,4).map((e,i)=>{
+                  const ev=evalStyle(e.evaluation);
+                  return (
+                    <div key={e.id} style={{padding:"14px 18px",borderBottom:i<3?`1px solid rgba(255,255,255,0.04)`:"none",display:"flex",alignItems:"center",gap:12}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:13,fontWeight:600,marginBottom:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.mealDescription||e.mealType||"Entry"}</div>
+                        <div style={{fontSize:11,color:"rgba(255,255,255,0.35)"}}>{new Date(e.timestamp).toLocaleDateString(undefined,{month:"short",day:"numeric"})}</div>
+                      </div>
+                      <div style={{textAlign:"right",flexShrink:0}}>
+                        <div style={{fontSize:13,fontWeight:700,color:e.glucoseBefore>140?ORANGE:e.glucoseBefore<80?PINK:"rgba(255,255,255,0.8)",marginBottom:3}}>{e.glucoseBefore} <span style={{fontSize:10,fontWeight:400,color:"rgba(255,255,255,0.3)"}}>mg/dL</span></div>
+                        <span style={{fontSize:10,padding:"2px 8px",borderRadius:99,fontWeight:700,background:`${ev.color}18`,color:ev.color}}>{ev.label}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+        {mobilePage==="log"&&<QuickLog onLogged={()=>setMobilePage("dashboard")}/>}
+        {mobilePage==="entries"&&<EntryLog/>}
+        {mobilePage==="recommend"&&<Recommend/>}
+        {mobilePage==="voice"&&<VoicePage onLogged={()=>setMobilePage("dashboard")}/>}
+      </div>
+
+      <div style={{position:"absolute",bottom:0,left:0,right:0,background:SURFACE,borderTop:`1px solid ${BORDER}`,display:"flex",alignItems:"center",justifyContent:"space-around",padding:"10px 24px 20px",zIndex:10}}>
+        {mobileNavItems.map(item=>(
+          <button key={item.id} onClick={()=>setMobilePage(item.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,background:"none",border:"none",cursor:"pointer",color:mobilePage===item.id?ACCENT:"rgba(255,255,255,0.3)",padding:"4px 12px",borderRadius:10,transition:"all 0.15s",fontSize:20}}>
             <span>{item.icon}</span>
-            <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.04em" }}>{item.label.toUpperCase()}</span>
+            <span style={{fontSize:9,fontWeight:600,letterSpacing:"0.04em"}}>{item.label.toUpperCase()}</span>
           </button>
         ))}
-
-        {/* Center Voice Button */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, marginTop: -20 }}>
-          <button onClick={() => setMobilePage("log")} style={{
-            width: 56, height: 56, borderRadius: 99,
-            background: `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
-            border: "none", cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 22, boxShadow: `0 0 20px ${ACCENT}55`,
-            animation: "micPulse 2.5s ease-in-out infinite",
-            transition: "transform 0.15s",
-          }}>
-            🎤
-          </button>
-          <span style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", fontWeight: 600, letterSpacing: "0.04em" }}>VOICE</span>
-          <style>{`@keyframes micPulse { 0%,100% { box-shadow: 0 0 20px ${ACCENT}55; } 50% { box-shadow: 0 0 32px ${ACCENT}88, 0 0 60px ${ACCENT}33; } }`}</style>
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,marginTop:-20}}>
+          <button onClick={()=>setMobilePage("voice")} style={{width:56,height:56,borderRadius:99,background:`linear-gradient(135deg,${ACCENT},#6B8BFF)`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,boxShadow:`0 0 ${mobilePage==="voice"?"32px":"20px"} ${ACCENT}${mobilePage==="voice"?"88":"55"}`,animation:"micPulse 2.5s ease-in-out infinite",transition:"transform 0.15s"}}>🎤</button>
+          <span style={{fontSize:9,color:mobilePage==="voice"?ACCENT:"rgba(255,255,255,0.3)",fontWeight:600,letterSpacing:"0.04em"}}>VOICE</span>
+          <style>{`@keyframes micPulse{0%,100%{box-shadow:0 0 20px ${ACCENT}55}50%{box-shadow:0 0 32px ${ACCENT}88,0 0 60px ${ACCENT}33}}`}</style>
         </div>
       </div>
     </div>
@@ -740,117 +1090,78 @@ function MobileDashboard() {
 }
 
 // ─── LAYOUT ──────────────────────────────────────────────────────
-
 const NAV: { id: Page; icon: string; label: string }[] = [
   { id: "dashboard", icon: "⊞", label: "Dashboard" },
-  { id: "log", icon: "✦", label: "Quick Log" },
-  { id: "entries", icon: "≡", label: "Entry Log" },
-  { id: "insights", icon: "◈", label: "Insights" },
+  { id: "log",       icon: "✦", label: "Quick Log" },
+  { id: "entries",   icon: "≡", label: "Entry Log" },
+  { id: "insights",  icon: "◈", label: "Insights" },
   { id: "recommend", icon: "⟲", label: "Glev Engine" },
-  { id: "import", icon: "⬆", label: "Import" },
+  { id: "voice",     icon: "🎤", label: "Voice Log" },
+  { id: "import",    icon: "⬆", label: "Import" },
 ];
 
-const PAGE_TITLES: Record<Page, string> = {
-  dashboard: "Dashboard",
-  log: "Quick Log",
-  entries: "Entry Log",
-  insights: "Insights",
-  recommend: "Glev Engine",
-  import: "Import Center",
+const PAGE_TITLES: Record<Page,string> = {
+  dashboard:"Dashboard", log:"Quick Log", entries:"Entry Log",
+  insights:"Insights", recommend:"Glev Engine", voice:"Voice Log", import:"Import Center",
 };
 
 export function DarkCockpit() {
   const [page, setPage] = useState<Page>("dashboard");
   const [view, setView] = useState<"desktop"|"mobile">("desktop");
+  const [refresh, setRefresh] = useState(0);
+
+  function onLogged() { setRefresh(r=>r+1); setPage("dashboard"); }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", background: BG, color: "white", fontFamily: "'Inter', system-ui, sans-serif" }}>
-      {/* View Toggle Bar */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "10px 0", background: "#0C0C10", borderBottom: `1px solid ${BORDER}`, gap: 0 }}>
-        <button onClick={() => setView("desktop")} style={{
-          padding: "6px 22px", borderRadius: "8px 0 0 8px",
-          background: view === "desktop" ? `${ACCENT}22` : "transparent",
-          border: `1px solid ${view === "desktop" ? ACCENT : "rgba(255,255,255,0.12)"}`,
-          color: view === "desktop" ? ACCENT : "rgba(255,255,255,0.4)",
-          fontSize: 12, fontWeight: 600, cursor: "pointer", letterSpacing: "0.04em",
-          borderRight: "none", transition: "all 0.15s",
-        }}>
-          🖥 Desktop
-        </button>
-        <button onClick={() => setView("mobile")} style={{
-          padding: "6px 22px", borderRadius: "0 8px 8px 0",
-          background: view === "mobile" ? `${ACCENT}22` : "transparent",
-          border: `1px solid ${view === "mobile" ? ACCENT : "rgba(255,255,255,0.12)"}`,
-          color: view === "mobile" ? ACCENT : "rgba(255,255,255,0.4)",
-          fontSize: 12, fontWeight: 600, cursor: "pointer", letterSpacing: "0.04em",
-          transition: "all 0.15s",
-        }}>
-          📱 Mobile
-        </button>
+    <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:BG,color:"white",fontFamily:"'Inter',system-ui,sans-serif"}}>
+      {/* View Toggle */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"10px 0",background:"#0C0C10",borderBottom:`1px solid ${BORDER}`,gap:0}}>
+        <button onClick={()=>setView("desktop")} style={{padding:"6px 22px",borderRadius:"8px 0 0 8px",background:view==="desktop"?`${ACCENT}22`:"transparent",border:`1px solid ${view==="desktop"?ACCENT:"rgba(255,255,255,0.12)"}`,color:view==="desktop"?ACCENT:"rgba(255,255,255,0.4)",fontSize:12,fontWeight:600,cursor:"pointer",letterSpacing:"0.04em",borderRight:"none",transition:"all 0.15s"}}>🖥 Desktop</button>
+        <button onClick={()=>setView("mobile")} style={{padding:"6px 22px",borderRadius:"0 8px 8px 0",background:view==="mobile"?`${ACCENT}22`:"transparent",border:`1px solid ${view==="mobile"?ACCENT:"rgba(255,255,255,0.12)"}`,color:view==="mobile"?ACCENT:"rgba(255,255,255,0.4)",fontSize:12,fontWeight:600,cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.15s"}}>📱 Mobile</button>
       </div>
 
-      {view === "desktop" ? (
-        <div style={{ display: "flex", flex: 1 }}>
+      {view==="desktop" ? (
+        <div style={{display:"flex",flex:1}}>
           {/* Sidebar */}
-          <div style={{ width: 56, background: SURFACE, borderRight: `1px solid ${BORDER}`, display: "flex", flexDirection: "column", padding: "20px 10px", gap: 4, flexShrink: 0 }}>
-            <LogoCMark size={36} style={{ marginBottom: 20, cursor: "pointer", flexShrink: 0 }} />
-            {NAV.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setPage(item.id)}
-                title={item.label}
-                style={{ width: 36, height: 36, borderRadius: 10, border: "none", background: page === item.id ? `${ACCENT}22` : "transparent", color: page === item.id ? ACCENT : "rgba(255,255,255,0.28)", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}
-              >
+          <div style={{width:56,background:SURFACE,borderRight:`1px solid ${BORDER}`,display:"flex",flexDirection:"column",padding:"20px 10px",gap:4,flexShrink:0}}>
+            <LogoCMark size={36} style={{marginBottom:20,cursor:"pointer",flexShrink:0}}/>
+            {NAV.map(item=>(
+              <button key={item.id} onClick={()=>setPage(item.id)} title={item.label} style={{width:36,height:36,borderRadius:10,border:"none",background:page===item.id?`${ACCENT}22`:"transparent",color:page===item.id?ACCENT:"rgba(255,255,255,0.28)",fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>
                 {item.icon}
               </button>
             ))}
           </div>
 
           {/* Main */}
-          <div style={{ flex: 1, padding: "24px 28px", overflow: "auto" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+          <div style={{flex:1,padding:"24px 28px",overflow:"auto"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
               <div>
-                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", letterSpacing: "0.12em", marginBottom: 3 }}>GLEV — SMART INSULIN DECISIONS</div>
-                <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0, letterSpacing: "-0.02em" }}>{PAGE_TITLES[page]}</h1>
+                <div style={{fontSize:10,color:"rgba(255,255,255,0.3)",letterSpacing:"0.12em",marginBottom:3}}>GLEV — SMART INSULIN DECISIONS</div>
+                <h1 style={{fontSize:20,fontWeight:700,margin:0,letterSpacing:"-0.02em"}}>{PAGE_TITLES[page]}</h1>
               </div>
-              {page !== "log" && page !== "recommend" && (
-                <button onClick={() => setPage("log")} style={{ fontSize: 12, fontWeight: 600, padding: "8px 16px", borderRadius: 20, background: `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`, border: "none", color: "white", cursor: "pointer", letterSpacing: "0.01em" }}>
-                  + Quick Log
+              {page!=="log"&&page!=="voice"&&page!=="recommend"&&(
+                <button onClick={()=>setPage("voice")} style={{fontSize:12,fontWeight:600,padding:"8px 16px",borderRadius:20,background:`linear-gradient(135deg,${ACCENT},#6B8BFF)`,border:"none",color:"white",cursor:"pointer",letterSpacing:"0.01em",display:"flex",alignItems:"center",gap:6}}>
+                  🎤 Voice Log
                 </button>
               )}
             </div>
 
-            {page === "dashboard" && <Dashboard />}
-            {page === "log" && <QuickLog />}
-            {page === "entries" && <EntryLog />}
-            {page === "insights" && <Insights />}
-            {page === "recommend" && <Recommend />}
-            {page === "import" && (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 400, gap: 16, color: "rgba(255,255,255,0.3)" }}>
-                <div style={{ fontSize: 48, opacity: 0.4 }}>⬆</div>
-                <div style={{ fontSize: 15, fontWeight: 600, color: "rgba(255,255,255,0.6)" }}>Import Center</div>
-                <div style={{ fontSize: 13 }}>Paste tab-separated data or upload a CSV file.</div>
-                <button style={{ padding: "10px 24px", background: ACCENT, border: "none", borderRadius: 10, color: "white", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Upload CSV</button>
-              </div>
-            )}
+            {page==="dashboard"&&<Dashboard key={`dash-${refresh}`}/>}
+            {page==="log"&&<QuickLog onLogged={onLogged}/>}
+            {page==="entries"&&<EntryLog key={`entries-${refresh}`}/>}
+            {page==="insights"&&<Insights key={`insights-${refresh}`}/>}
+            {page==="recommend"&&<Recommend/>}
+            {page==="voice"&&<VoicePage onLogged={onLogged}/>}
+            {page==="import"&&<ImportPage onLogged={onLogged}/>}
           </div>
         </div>
       ) : (
-        /* Mobile Frame */
-        <div style={{ flex: 1, display: "flex", alignItems: "flex-start", justifyContent: "center", background: "#050508", padding: "32px 24px 40px" }}>
-          <div style={{
-            width: 390, height: 844, borderRadius: 44,
-            overflow: "hidden", position: "relative",
-            boxShadow: `0 0 0 1px rgba(255,255,255,0.12), 0 32px 80px rgba(0,0,0,0.8), inset 0 0 0 1px rgba(255,255,255,0.06)`,
-            background: BG, flexShrink: 0,
-          }}>
-            {/* Notch */}
-            <div style={{ position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)", width: 120, height: 32, background: "#000", borderRadius: "0 0 18px 18px", zIndex: 20 }} />
-            {/* Status bar spacer */}
-            <div style={{ height: 44 }} />
-            {/* Content */}
-            <div style={{ height: 800, overflow: "hidden" }}>
-              <MobileDashboard />
+        <div style={{flex:1,display:"flex",alignItems:"flex-start",justifyContent:"center",background:"#050508",padding:"32px 24px 40px"}}>
+          <div style={{width:390,height:844,borderRadius:44,overflow:"hidden",position:"relative",boxShadow:`0 0 0 1px rgba(255,255,255,0.12),0 32px 80px rgba(0,0,0,0.8),inset 0 0 0 1px rgba(255,255,255,0.06)`,background:BG,flexShrink:0}}>
+            <div style={{position:"absolute",top:0,left:"50%",transform:"translateX(-50%)",width:120,height:32,background:"#000",borderRadius:"0 0 18px 18px",zIndex:20}}/>
+            <div style={{height:44}}/>
+            <div style={{height:800,overflow:"hidden"}}>
+              <MobileDashboard key={`mobile-${refresh}`}/>
             </div>
           </div>
         </div>
