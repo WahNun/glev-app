@@ -1,0 +1,202 @@
+Build a modern, production-ready web app for a Type 1 Diabetes insulin tracking and decision-support system.
+
+The app must be deployable on Vercel and structured for Git-based development.
+
+Stack requirements:
+- Next.js (App Router)
+- React
+- Tailwind CSS
+- Serverless API routes (Vercel)
+- Google Sheets as database (initially)
+
+Focus:
+- ultra-fast logging
+- batch import (copy/paste + CSV)
+- insulin recommendation engine
+- clean UX
+- simple, scalable architecture
+
+--------------------------------------------------
+🧠 CORE SYSTEM LOGIC
+--------------------------------------------------
+
+The system evaluates insulin effectiveness using:
+
+- Glucose before meal
+- Glucose after meal
+- Time difference
+- Carbohydrate intake
+- Insulin (bolus units)
+
+Derived metrics:
+- Delta
+- Duration
+- Speed (mg/dL per hour)
+
+Classification:
+- OVERDOSE
+- UNDERDOSE
+- GOOD
+- CHECK_CONTEXT
+
+Meal types:
+- FAST_CARBS
+- HIGH_FAT
+- HIGH_PROTEIN
+- BALANCED
+
+--------------------------------------------------
+🏗️ ARCHITECTURE
+--------------------------------------------------
+
+Use clean separation:
+
+1. UI (React + Tailwind)
+2. API Layer (Next.js API routes)
+3. Data Layer (Google Sheets API)
+
+Structure:
+
+/app
+  /dashboard
+  /log
+  /import
+  /insights
+  /recommendation
+
+/api
+  /log-meal
+  /import-batch
+  /upload-csv
+  /get-entries
+
+/lib
+  /calculation (delta, speed, evaluation)
+  /recommendation
+  /parser (CSV + paste parser)
+  /google-sheets
+
+--------------------------------------------------
+📥 INPUT SYSTEM (CRITICAL)
+--------------------------------------------------
+
+Support 3 input methods:
+
+1. QUICK ENTRY
+- minimal fields
+- <10 seconds
+- mobile-first
+
+2. COPY-PASTE IMPORT
+- user pastes tabular data
+- system parses automatically
+- handles tab-separated input
+
+3. CSV UPLOAD
+- drag & drop
+- supports comma or semicolon
+- preview + confirm import
+
+--------------------------------------------------
+🧠 IMPORT FLOW
+--------------------------------------------------
+
+1. User pastes or uploads
+2. System parses data
+3. Shows preview table
+4. User confirms
+5. Data sent to API
+6. Stored in RAW_IMPORT (Google Sheet)
+7. CLEAN_DATA auto-processed
+
+--------------------------------------------------
+📱 UI STRUCTURE
+--------------------------------------------------
+
+1. DASHBOARD
+- control score
+- hypo rate
+- spike rate
+- charts
+
+2. QUICK LOG
+- fast entry form
+
+3. IMPORT CENTER (important)
+- paste zone
+- CSV upload
+- import preview
+
+4. INSIGHTS
+- patterns by meal type
+- dinner vs lunch performance
+
+5. RECOMMENDATION ENGINE
+- carbs → insulin suggestion
+- timing (before / split)
+
+6. ENTRY DETAIL
+- full breakdown
+- delta / duration / speed
+- evaluation
+
+--------------------------------------------------
+🎨 DESIGN
+--------------------------------------------------
+
+Inspired by:
+- Linear.app
+- Apple Health
+- Superhuman
+
+Principles:
+- minimal
+- fast
+- clear
+
+Color system:
+- green = good
+- orange = warning
+- red = risk
+
+--------------------------------------------------
+⚡ UX REQUIREMENTS
+--------------------------------------------------
+
+- logging <10 seconds
+- import <30 seconds
+- immediate feedback
+- no clutter
+
+--------------------------------------------------
+🔌 API REQUIREMENTS
+--------------------------------------------------
+
+POST /api/log-meal
+POST /api/import-batch
+POST /api/upload-csv
+GET /api/entries
+
+Accept JSON input (for GPT integration)
+
+--------------------------------------------------
+📦 OUTPUT
+--------------------------------------------------
+
+Generate:
+
+- full app structure (Next.js)
+- all pages
+- API routes
+- component structure
+- sample data
+- import logic (CSV + paste)
+
+Do NOT overcomplicate.
+Keep it clean, fast, and scalable.
+
+--------------------------------------------------
+FINAL GOAL
+
+A high-performance personal control system for glucose and insulin,
+built for fast iteration and real daily use.

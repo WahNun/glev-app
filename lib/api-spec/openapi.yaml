@@ -3,13 +3,21 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: GlucoJack - Type 1 Diabetes insulin tracking and decision-support API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: entries
+    description: Glucose/insulin log entries
+  - name: insights
+    description: Analytics and patterns
+  - name: recommendations
+    description: Insulin recommendation engine
+  - name: import
+    description: Batch import operations
 paths:
   /healthz:
     get:
@@ -24,6 +32,170 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /entries:
+    get:
+      operationId: getEntries
+      tags: [entries]
+      summary: Get all log entries
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: mealType
+          in: query
+          schema:
+            type: string
+            enum: [FAST_CARBS, HIGH_FAT, HIGH_PROTEIN, BALANCED]
+      responses:
+        "200":
+          description: List of entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetEntriesResponse"
+    post:
+      operationId: createEntry
+      tags: [entries]
+      summary: Log a new glucose/insulin entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEntryBody"
+      responses:
+        "201":
+          description: Entry created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Entry"
+
+  /entries/{id}:
+    get:
+      operationId: getEntry
+      tags: [entries]
+      summary: Get a single entry by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Entry detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Entry"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteEntry
+      tags: [entries]
+      summary: Delete an entry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /entries/batch:
+    post:
+      operationId: importBatch
+      tags: [import]
+      summary: Import multiple entries in batch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportBatchBody"
+      responses:
+        "201":
+          description: Entries imported
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportBatchResponse"
+
+  /insights/dashboard:
+    get:
+      operationId: getDashboardStats
+      tags: [insights]
+      summary: Get dashboard summary statistics
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+  /insights/patterns:
+    get:
+      operationId: getMealPatterns
+      tags: [insights]
+      summary: Get patterns grouped by meal type
+      responses:
+        "200":
+          description: Meal patterns
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetMealPatternsResponse"
+
+  /insights/glucose-trend:
+    get:
+      operationId: getGlucoseTrend
+      tags: [insights]
+      summary: Get recent glucose readings for charting
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 7
+      responses:
+        "200":
+          description: Glucose trend data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetGlucoseTrendResponse"
+
+  /recommendations:
+    post:
+      operationId: getRecommendation
+      tags: [recommendations]
+      summary: Get insulin recommendation for a meal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecommendationRequest"
+      responses:
+        "200":
+          description: Insulin recommendation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Recommendation"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +206,288 @@ components:
       required:
         - status
 
+    GetEntriesResponse:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/Entry"
+        total:
+          type: integer
+      required:
+        - entries
+        - total
+
+    Entry:
+      type: object
+      properties:
+        id:
+          type: integer
+        timestamp:
+          type: string
+          format: date-time
+        glucoseBefore:
+          type: number
+          description: Blood glucose before meal (mg/dL)
+        glucoseAfter:
+          type: ["number", "null"]
+          description: Blood glucose after meal (mg/dL)
+        carbsGrams:
+          type: number
+          description: Carbohydrate intake in grams
+        insulinUnits:
+          type: number
+          description: Bolus insulin units administered
+        mealType:
+          type: string
+          enum: [FAST_CARBS, HIGH_FAT, HIGH_PROTEIN, BALANCED]
+        mealDescription:
+          type: ["string", "null"]
+        timeDifferenceMinutes:
+          type: ["number", "null"]
+          description: Minutes between before/after readings
+        delta:
+          type: ["number", "null"]
+          description: Glucose change (after - before)
+        speed:
+          type: ["number", "null"]
+          description: Rate of change (mg/dL per hour)
+        evaluation:
+          type: ["string", "null"]
+          enum: [GOOD, OVERDOSE, UNDERDOSE, CHECK_CONTEXT, null]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - timestamp
+        - glucoseBefore
+        - carbsGrams
+        - insulinUnits
+        - mealType
+        - createdAt
+
+    CreateEntryBody:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        glucoseBefore:
+          type: number
+        glucoseAfter:
+          type: ["number", "null"]
+        carbsGrams:
+          type: number
+        insulinUnits:
+          type: number
+        mealType:
+          type: string
+          enum: [FAST_CARBS, HIGH_FAT, HIGH_PROTEIN, BALANCED]
+        mealDescription:
+          type: ["string", "null"]
+        timeDifferenceMinutes:
+          type: ["number", "null"]
+        notes:
+          type: ["string", "null"]
+      required:
+        - glucoseBefore
+        - carbsGrams
+        - insulinUnits
+        - mealType
+
+    ImportBatchBody:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateEntryBody"
+      required:
+        - entries
+
+    ImportBatchResponse:
+      type: object
+      properties:
+        imported:
+          type: integer
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/Entry"
+      required:
+        - imported
+        - entries
+
+    DashboardStats:
+      type: object
+      properties:
+        controlScore:
+          type: number
+          description: Overall control score 0-100
+        hypoRate:
+          type: number
+          description: Percentage of entries with hypoglycemia risk
+        spikeRate:
+          type: number
+          description: Percentage of entries with hyperglycemia spike
+        totalEntries:
+          type: integer
+        goodRate:
+          type: number
+          description: Percentage of GOOD evaluations
+        avgGlucoseBefore:
+          type: ["number", "null"]
+        avgGlucoseAfter:
+          type: ["number", "null"]
+        avgCarbsGrams:
+          type: ["number", "null"]
+        avgInsulinUnits:
+          type: ["number", "null"]
+        recentEntries:
+          type: array
+          items:
+            $ref: "#/components/schemas/Entry"
+        evaluationBreakdown:
+          $ref: "#/components/schemas/EvaluationBreakdown"
+      required:
+        - controlScore
+        - hypoRate
+        - spikeRate
+        - totalEntries
+        - goodRate
+        - recentEntries
+        - evaluationBreakdown
+
+    EvaluationBreakdown:
+      type: object
+      properties:
+        GOOD:
+          type: integer
+        OVERDOSE:
+          type: integer
+        UNDERDOSE:
+          type: integer
+        CHECK_CONTEXT:
+          type: integer
+      required:
+        - GOOD
+        - OVERDOSE
+        - UNDERDOSE
+        - CHECK_CONTEXT
+
+    GetMealPatternsResponse:
+      type: object
+      properties:
+        patterns:
+          type: array
+          items:
+            $ref: "#/components/schemas/MealPattern"
+      required:
+        - patterns
+
+    MealPattern:
+      type: object
+      properties:
+        mealType:
+          type: string
+          enum: [FAST_CARBS, HIGH_FAT, HIGH_PROTEIN, BALANCED]
+        count:
+          type: integer
+        avgCarbsGrams:
+          type: number
+        avgInsulinUnits:
+          type: number
+        avgDelta:
+          type: ["number", "null"]
+        avgSpeed:
+          type: ["number", "null"]
+        goodRate:
+          type: number
+        insulinToCarb:
+          type: number
+          description: Average insulin units per 10g carbs
+      required:
+        - mealType
+        - count
+        - avgCarbsGrams
+        - avgInsulinUnits
+        - goodRate
+        - insulinToCarb
+
+    GetGlucoseTrendResponse:
+      type: object
+      properties:
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/GlucosePoint"
+      required:
+        - points
+
+    GlucosePoint:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        glucoseBefore:
+          type: number
+        glucoseAfter:
+          type: ["number", "null"]
+        evaluation:
+          type: ["string", "null"]
+          enum: [GOOD, OVERDOSE, UNDERDOSE, CHECK_CONTEXT, null]
+      required:
+        - timestamp
+        - glucoseBefore
+
+    RecommendationRequest:
+      type: object
+      properties:
+        carbsGrams:
+          type: number
+        glucoseBefore:
+          type: number
+        mealType:
+          type: string
+          enum: [FAST_CARBS, HIGH_FAT, HIGH_PROTEIN, BALANCED]
+      required:
+        - carbsGrams
+        - glucoseBefore
+        - mealType
+
+    Recommendation:
+      type: object
+      properties:
+        recommendedUnits:
+          type: number
+          description: Suggested bolus insulin units
+        minUnits:
+          type: number
+        maxUnits:
+          type: number
+        confidence:
+          type: string
+          enum: [HIGH, MEDIUM, LOW]
+          description: Based on how many similar entries exist
+        timing:
+          type: string
+          enum: [BEFORE_MEAL, SPLIT_DOSE, WITH_MEAL]
+        reasoning:
+          type: string
+          description: Human-readable explanation
+        basedOnEntries:
+          type: integer
+          description: Number of similar past entries used
+      required:
+        - recommendedUnits
+        - minUnits
+        - maxUnits
+        - confidence
+        - timing
+        - reasoning
+        - basedOnEntries
