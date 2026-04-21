@@ -1,10 +1,11 @@
 import React from "react";
 import { Link, useLocation } from "wouter";
-import { Activity, Plus, Upload, Lightbulb, Zap, List, Mic } from "lucide-react";
+import { Plus, Upload, Lightbulb, Zap, List, Mic, LayoutDashboard } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { GlevLogoMark } from "@/components/logo-mark";
 
 const NAV_ITEMS = [
-  { href: "/", label: "Dashboard", icon: Activity },
+  { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/log", label: "Quick Log", icon: Plus },
   { href: "/entries", label: "Entry Log", icon: List },
   { href: "/insights", label: "Insights", icon: Lightbulb },
@@ -21,13 +22,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Sidebar (Desktop) */}
       <aside className="hidden md:flex w-64 flex-col border-r border-border bg-card">
         <div className="p-6">
-          <Link href="/" className="flex items-center gap-2 font-bold text-xl tracking-tight text-foreground">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground">
-              <Activity className="w-5 h-5" />
-            </div>
+          <Link href="/" className="flex items-center gap-2.5 font-bold text-xl tracking-tight text-foreground">
+            <GlevLogoMark size={32} />
             <span>Glev</span>
           </Link>
-          <p className="text-[11px] text-muted-foreground mt-1 ml-10">Smart insulin decisions</p>
+          <p className="text-[11px] text-muted-foreground mt-1.5 ml-10">Smart insulin decisions</p>
         </div>
         <nav className="flex-1 px-4 space-y-1">
           {NAV_ITEMS.map((item) => {
@@ -54,11 +53,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Top Navbar (Mobile) */}
       <header className="md:hidden flex items-center justify-between p-4 border-b border-border bg-card">
-        <Link href="/" className="flex items-center gap-2 font-bold text-lg tracking-tight">
-          <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center text-primary-foreground">
-            <Activity className="w-4 h-4" />
-          </div>
-          Glev
+        <Link href="/" className="flex items-center gap-2.5 font-bold text-lg tracking-tight">
+          <GlevLogoMark size={28} />
+          <span>Glev</span>
         </Link>
         <p className="text-[11px] text-muted-foreground">Smart insulin decisions</p>
       </header>

@@ -1,4 +1,23 @@
 import { useState, useEffect } from "react";
+import React from "react";
+
+// ─── Logo C: Modern AI neural mark ───────────────────────────────────────────
+const LOGO_NODES = [{cx:16,cy:7},{cx:25,cy:12},{cx:25,cy:20},{cx:18,cy:26},{cx:9,cy:22},{cx:7,cy:14},{cx:16,cy:16}];
+const LOGO_EDGES = [[0,1],[1,2],[2,3],[3,4],[4,5],[5,0],[0,6],[1,6],[2,6],[3,6]];
+function LogoCMark({ size = 32, style }: { size?: number; style?: React.CSSProperties }) {
+  const b = "#4F6EF7";
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" style={style}>
+      <rect width="32" height="32" rx="9" fill="#0F0F14"/>
+      {LOGO_EDGES.map(([a,b2],i)=>(
+        <line key={i} x1={LOGO_NODES[a].cx} y1={LOGO_NODES[a].cy} x2={LOGO_NODES[b2].cx} y2={LOGO_NODES[b2].cy} stroke={b} strokeWidth="0.9" strokeOpacity="0.55"/>
+      ))}
+      {LOGO_NODES.map((n,i)=>(
+        <circle key={i} cx={n.cx} cy={n.cy} r={i===6?3.5:2} fill={i===6?b:`${b}40`} stroke={b} strokeWidth={i===6?0:0.8}/>
+      ))}
+    </svg>
+  );
+}
 
 type Page = "dashboard" | "log" | "entries" | "insights" | "recommend" | "import";
 type MealTypeKey = "FAST_CARBS" | "HIGH_FAT" | "HIGH_PROTEIN" | "BALANCED";
@@ -535,7 +554,7 @@ export function DarkCockpit() {
     <div style={{ display: "flex", minHeight: "100vh", background: BG, color: "white", fontFamily: "'Inter', system-ui, sans-serif" }}>
       {/* Sidebar */}
       <div style={{ width: 56, background: SURFACE, borderRight: `1px solid ${BORDER}`, display: "flex", flexDirection: "column", padding: "20px 10px", gap: 4, flexShrink: 0 }}>
-        <div style={{ width: 36, height: 36, borderRadius: 10, background: `linear-gradient(135deg, ${ACCENT}, ${PINK})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 900, marginBottom: 20, cursor: "pointer" }}>G</div>
+        <LogoCMark size={36} style={{ marginBottom: 20, cursor: "pointer", flexShrink: 0 }} />
         {NAV.map((item) => (
           <button
             key={item.id}

@@ -1,0 +1,133 @@
+--------------------------------------------------
+🌾 17. ADD FIBER TRACKING (IMPORTANT)
+--------------------------------------------------
+
+Extend the data model to include fiber.
+
+Update Entry type:
+
+Add:
+fiber?: number;
+
+--------------------------------------------------
+📊 DATA MODEL UPDATE
+--------------------------------------------------
+
+Each entry must now support:
+
+- carbs (total carbs)
+- fiber (grams)
+
+IMPORTANT:
+Fiber must be tracked separately from carbs.
+
+--------------------------------------------------
+🧠 CALCULATION UPDATE (NET CARBS)
+--------------------------------------------------
+
+Introduce:
+
+net_carbs = carbs - fiber
+
+Rules:
+- if fiber is missing → assume 0
+- net_carbs cannot be negative
+
+Use net_carbs for:
+- insulin recommendation
+- meal classification
+
+--------------------------------------------------
+🔥 RECOMMENDATION ENGINE UPDATE
+--------------------------------------------------
+
+Replace:
+
+units = carbs / ratio
+
+WITH:
+
+units = net_carbs / ratio
+
+Reason:
+Fiber slows glucose absorption and reduces effective carb load.
+
+--------------------------------------------------
+🧠 CLASSIFIER UPDATE
+--------------------------------------------------
+
+Update classification logic:
+
+If fiber > 10g:
+→ reduce likelihood of FAST_CARBS classification
+
+If fiber > 15g:
+→ bias toward BALANCED or HIGH_FAT
+
+Example:
+High carb + high fiber ≠ FAST_CARBS
+
+--------------------------------------------------
+📱 UI UPDATE (DECISION SCREEN)
+--------------------------------------------------
+
+Add input field:
+
+- Fiber (g)
+
+Display:
+
+Carbs: 80g  
+Fiber: 15g  
+Net Carbs: 65g  
+
+--------------------------------------------------
+🎤 VOICE INPUT UPDATE
+--------------------------------------------------
+
+Extend parser to detect fiber:
+
+Example input:
+"chia pudding with berries and nuts"
+
+Output:
+
+{
+  carbs: 60,
+  fiber: 12,
+  protein: 20,
+  fat: 25
+}
+
+If fiber not mentioned:
+→ estimate from known foods (optional future improvement)
+
+--------------------------------------------------
+📊 INSIGHTS UPDATE
+--------------------------------------------------
+
+Add:
+
+- Fiber impact analysis
+- Compare:
+  high fiber meals vs low fiber meals
+
+Example insight:
+
+"High fiber meals reduce spikes by 25%"
+
+--------------------------------------------------
+⚠️ RULES
+--------------------------------------------------
+
+- Always prioritize net carbs over total carbs
+- Never ignore fiber if provided
+- Fiber must influence:
+  - classification
+  - recommendation
+  - insights
+
+--------------------------------------------------
+FINAL GOAL
+
+Improve accuracy of insulin recommendations by accounting for digestion speed and carb absorption using fiber data.
