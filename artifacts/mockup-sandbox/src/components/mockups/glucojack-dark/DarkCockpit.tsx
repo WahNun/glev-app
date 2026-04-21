@@ -1191,8 +1191,9 @@ export function DarkCockpit() {
                 <h1 style={{fontSize:20,fontWeight:700,margin:0,letterSpacing:"-0.02em"}}>{PAGE_TITLES[page]}</h1>
               </div>
               {page!=="log"&&page!=="voice"&&page!=="recommend"&&(
-                <button onClick={()=>setPage("voice")} style={{fontSize:12,fontWeight:600,padding:"8px 16px",borderRadius:20,background:`linear-gradient(135deg,${ACCENT},#6B8BFF)`,border:"none",color:"white",cursor:"pointer",letterSpacing:"0.01em",display:"flex",alignItems:"center",gap:6}}>
-                  🎤 Voice Log
+                <button onClick={()=>setPage("voice")} style={{fontSize:12,fontWeight:500,padding:"7px 14px",borderRadius:10,background:"rgba(79,110,247,0.08)",border:`1px solid rgba(79,110,247,0.22)`,color:"rgba(120,145,255,0.9)",cursor:"pointer",letterSpacing:"0.01em",display:"flex",alignItems:"center",gap:7,transition:"all 0.15s"}}>
+                  <IconMic active={true}/>
+                  Voice Log
                 </button>
               )}
             </div>
