@@ -15,70 +15,91 @@ export interface RecommendationResult {
   similarMealCount: number;
   recentCount: number;
   carbRatio: number;
+  cappedForSafety: boolean;
 }
 
 const TIMING_MAP: Record<MealType, TimingType> = {
   FAST_CARBS: "BEFORE_MEAL",
-  HIGH_FAT: "SPLIT_DOSE",
+  HIGH_FAT:   "SPLIT_DOSE",
   HIGH_PROTEIN: "SPLIT_DOSE",
-  BALANCED: "BEFORE_MEAL",
+  BALANCED:   "BEFORE_MEAL",
 };
 
-const VALID_EVALUATIONS = new Set(["GOOD", "CHECK_CONTEXT"]);
+// Safety cap: never exceed this unless glucose is significantly elevated
+const SAFETY_CAP_UNITS = 3.0;
+const SAFETY_CAP_GLUCOSE_THRESHOLD = 180; // only bypass cap above this
+
+// Stability filter thresholds — only meals with a stable outcome are used for ratio
+const STABLE_GLUCOSE_AFTER_MIN = 80;
+const STABLE_GLUCOSE_AFTER_MAX = 175;
+const STABLE_DELTA_MAX = 55; // mg/dL rise cap
 
 function avg(arr: number[]): number {
   if (arr.length === 0) return 0;
   return arr.reduce((a, b) => a + b, 0) / arr.length;
 }
 
-function r2(n: number) {
+function r2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/**
+ * Determines whether an entry represents a STABLE meal outcome that can
+ * safely be used for ratio computation.
+ *
+ * Excludes:
+ *  - Any entry that resulted in hypoglycemia (glucoseAfter < 80)
+ *  - Any entry that resulted in an extreme spike (glucoseAfter > 175)
+ *  - Any entry where the delta was very large (> 55 mg/dL rise)
+ *  - Any entry where evaluation is not strictly GOOD
+ */
+function isStable(e: Entry): boolean {
+  if (e.evaluation !== "GOOD") return false;
+  if (e.glucoseAfter == null) return false;
+  if (e.glucoseAfter < STABLE_GLUCOSE_AFTER_MIN) return false; // hypo — dose was too high
+  if (e.glucoseAfter > STABLE_GLUCOSE_AFTER_MAX) return false; // extreme spike — dose was too low
+  if (e.delta != null && e.delta > STABLE_DELTA_MAX) return false; // steep rise even if still in range
+  if (e.insulinUnits <= 0 || e.carbsGrams <= 0) return false;
+  return true;
 }
 
 export function calculatePersonalBolus(
   carbsGrams: number,
   glucoseBefore: number,
   mealType: MealType,
-  allEntries: Entry[],
+  allEntries: Entry[], // newest first
 ): RecommendationResult {
   const timing = TIMING_MAP[mealType];
 
-  const validEntries = allEntries.filter(
-    (e) =>
-      e.evaluation != null &&
-      VALID_EVALUATIONS.has(e.evaluation) &&
-      e.insulinUnits > 0 &&
-      e.carbsGrams > 0,
-  );
+  // Only stable, GOOD-evaluated meals feed into the ratio
+  const stableEntries = allEntries.filter(isStable);
 
-  if (validEntries.length === 0) {
+  if (stableEntries.length === 0) {
     return fallbackRecommendation(carbsGrams, glucoseBefore, mealType, timing);
   }
 
-  // Compute carbs-per-unit ratio for each valid entry (higher = less aggressive)
-  const withRatio = validEntries.map((e) => ({
+  // Carbs-per-unit ratio: higher number = softer response (needs fewer units)
+  const withRatio = stableEntries.map((e) => ({
     ...e,
     ratio: e.carbsGrams / e.insulinUnits,
   }));
 
-  // A) RECENT — last 10 valid meals regardless of type
+  // A) RECENT — last 10 stable meals
   const recent = withRatio.slice(0, 10);
 
-  // B) SIMILAR — carbs within ±20g AND same meal type
+  // B) SIMILAR — same meal type, carbs within ±20g
   const similar = withRatio.filter(
-    (e) =>
-      e.mealType === mealType &&
-      Math.abs(e.carbsGrams - carbsGrams) <= 20,
+    (e) => e.mealType === mealType && Math.abs(e.carbsGrams - carbsGrams) <= 20,
   );
 
-  // C) GLOBAL — all valid
+  // C) GLOBAL — all stable
   const global = withRatio;
 
   const recentAvg = avg(recent.map((e) => e.ratio));
   const similarAvg = similar.length > 0 ? avg(similar.map((e) => e.ratio)) : recentAvg;
-  const globalAvg = avg(global.map((e) => e.ratio));
+  const globalAvg  = avg(global.map((e) => e.ratio));
 
-  // Weighted ratio: 60% recent, 30% similar, 10% global
+  // Weighted ratio: 60% recent · 30% similar · 10% global
   const weightedRatio =
     similar.length > 0
       ? 0.6 * recentAvg + 0.3 * similarAvg + 0.1 * globalAvg
@@ -91,12 +112,12 @@ export function calculatePersonalBolus(
   // Base insulin dose
   let units = carbsGrams / weightedRatio;
 
-  // Glucose correction
+  // Glucose correction (only applied when clearly outside range)
   let glucoseAdjustment = 0;
   if (glucoseBefore < 90) {
-    glucoseAdjustment = glucoseBefore < 70 ? -1.0 : -0.5;
+    glucoseAdjustment = glucoseBefore < 70 ? -0.5 : -0.5;
   } else if (glucoseBefore > 140) {
-    glucoseAdjustment = glucoseBefore > 180 ? 1.0 : 0.5;
+    glucoseAdjustment = glucoseBefore > 200 ? 1.0 : 0.5;
   }
   units += glucoseAdjustment;
 
@@ -109,8 +130,18 @@ export function calculatePersonalBolus(
   }
   units += mealAdjustment;
 
-  const totalUnits = Math.max(0.5, units);
-  const roundedUnits = r2(Math.round(totalUnits * 2) / 2); // round to nearest 0.5
+  units = Math.max(0.5, units);
+
+  // ─── SAFETY CAP ────────────────────────────────────────────────
+  // Never suggest more than 3 units unless glucose is significantly elevated.
+  // This prevents catastrophic overdose from data outliers or edge cases.
+  let cappedForSafety = false;
+  if (glucoseBefore <= SAFETY_CAP_GLUCOSE_THRESHOLD && units > SAFETY_CAP_UNITS) {
+    units = SAFETY_CAP_UNITS;
+    cappedForSafety = true;
+  }
+
+  const roundedUnits = r2(Math.round(units * 2) / 2); // nearest 0.5u
 
   const confidence: ConfidenceType =
     similar.length >= 5 ? "HIGH" : similar.length >= 2 ? "MEDIUM" : "LOW";
@@ -121,9 +152,11 @@ export function calculatePersonalBolus(
     glucoseBefore,
     similar.length,
     recent.length,
+    stableEntries.length,
     r2(weightedRatio),
     glucoseAdjustment,
     mealAdjustment,
+    cappedForSafety,
   );
 
   return {
@@ -133,10 +166,11 @@ export function calculatePersonalBolus(
     confidence,
     timing,
     reasoning,
-    basedOnEntries: validEntries.length,
+    basedOnEntries: stableEntries.length,
     similarMealCount: similar.length,
     recentCount: recent.length,
     carbRatio: r2(weightedRatio),
+    cappedForSafety,
   };
 }
 
@@ -146,23 +180,28 @@ function fallbackRecommendation(
   mealType: MealType,
   timing: TimingType,
 ): RecommendationResult {
-  const DEFAULT_RATIO = 15;
+  // Conservative default for a user whose ratio is unknown
+  const DEFAULT_RATIO = 35;
   let units = carbsGrams / DEFAULT_RATIO;
   if (glucoseBefore > 140) units += 0.5;
-  if (glucoseBefore < 90) units -= 0.5;
-  const totalUnits = Math.max(0.5, units);
+  if (glucoseBefore < 90)  units -= 0.5;
+
+  // Safety cap applies to fallback too
+  const capped = glucoseBefore <= SAFETY_CAP_GLUCOSE_THRESHOLD && units > SAFETY_CAP_UNITS;
+  units = capped ? SAFETY_CAP_UNITS : Math.max(0.5, units);
 
   return {
-    recommendedUnits: r2(Math.round(totalUnits * 2) / 2),
-    minUnits: Math.max(0.5, r2(totalUnits * 0.85)),
-    maxUnits: r2(totalUnits * 1.15),
+    recommendedUnits: r2(Math.round(units * 2) / 2),
+    minUnits: Math.max(0.5, r2(units * 0.85)),
+    maxUnits: r2(units * 1.15),
     confidence: "LOW",
     timing,
-    reasoning: `No historical data available. Using conservative default ratio of 1u per ${DEFAULT_RATIO}g carbs. Log meals with after-meal readings to unlock personalized recommendations.`,
+    reasoning: `No stable historical data available yet. Using conservative default of 1u per ${DEFAULT_RATIO}g. Log meals with after-meal readings to build your personal profile.`,
     basedOnEntries: 0,
     similarMealCount: 0,
     recentCount: 0,
     carbRatio: DEFAULT_RATIO,
+    cappedForSafety: capped,
   };
 }
 
@@ -172,45 +211,49 @@ function buildReasoning(
   glucoseBefore: number,
   similarCount: number,
   recentCount: number,
+  stableCount: number,
   carbRatio: number,
   glucoseAdj: number,
   mealAdj: number,
+  capped: boolean,
 ): string {
   const mealLabel: Record<MealType, string> = {
-    FAST_CARBS: "fast carb",
-    HIGH_FAT: "high fat",
-    HIGH_PROTEIN: "high protein",
-    BALANCED: "balanced",
+    FAST_CARBS: "fast carb", HIGH_FAT: "high fat",
+    HIGH_PROTEIN: "high protein", BALANCED: "balanced",
   };
 
-  let parts: string[] = [];
+  const parts: string[] = [];
 
   if (similarCount >= 2) {
     parts.push(
-      `Based on ${similarCount} similar ${mealLabel[mealType]} meals (~${carbsGrams}g carbs) and ${recentCount} recent entries.`,
+      `Based on ${similarCount} stable ${mealLabel[mealType]} meals (~${carbsGrams}g) from ${stableCount} total stable entries.`,
     );
   } else if (recentCount >= 2) {
     parts.push(
-      `Based on ${recentCount} recent meals (no close match for ${mealLabel[mealType]} at ${carbsGrams}g).`,
+      `Based on ${recentCount} recent stable meals (no close match for ${mealLabel[mealType]} at ${carbsGrams}g). ${stableCount} stable entries total.`,
     );
   } else {
-    parts.push(`Limited data — only ${recentCount} valid entries available.`);
+    parts.push(`Limited stable data — ${stableCount} qualifying entries. Hypo and spike meals excluded.`);
   }
 
-  parts.push(`Personal carb ratio: 1u per ${carbRatio}g (weighted: 60% recent, 30% similar, 10% all-time).`);
+  parts.push(`Your carb ratio from stable meals: 1u per ${carbRatio}g (60% recent · 30% similar · 10% all-time).`);
 
   if (glucoseAdj > 0) {
-    parts.push(`+${glucoseAdj}u added: starting glucose ${glucoseBefore} mg/dL is above target.`);
+    parts.push(`+${glucoseAdj}u correction: starting glucose ${glucoseBefore} mg/dL is above target.`);
   } else if (glucoseAdj < 0) {
-    parts.push(`${glucoseAdj}u removed: starting glucose ${glucoseBefore} mg/dL is below target — watch for hypo.`);
+    parts.push(`${glucoseAdj}u correction: starting glucose ${glucoseBefore} mg/dL is below target — monitor for hypo.`);
   }
 
   if (mealType === "FAST_CARBS") {
-    parts.push(`+0.5u added for fast carbs. Take 15 min before eating.`);
+    parts.push(`+0.5u for fast carbs. Take 15 min before eating.`);
   } else if (mealType === "HIGH_FAT") {
-    parts.push(`-0.5u removed for high fat content. Split dose: 60% now, 40% in 90 min.`);
+    parts.push(`−0.5u for high fat. Split dose: 60% now, 40% after 90 min.`);
   } else if (mealType === "HIGH_PROTEIN") {
-    parts.push(`No meal-type adjustment. Monitor at 2–3h mark for delayed protein effect.`);
+    parts.push(`No adjustment for high protein. Monitor at 2–3h for delayed effect.`);
+  }
+
+  if (capped) {
+    parts.push(`SAFETY CAP applied: dose capped at ${SAFETY_CAP_UNITS}u (glucose ≤ ${SAFETY_CAP_GLUCOSE_THRESHOLD} mg/dL). Override manually if needed.`);
   }
 
   return parts.join(" ");

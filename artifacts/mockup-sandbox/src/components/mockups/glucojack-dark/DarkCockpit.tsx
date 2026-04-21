@@ -119,7 +119,7 @@ function Dashboard() {
           ))}
           <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${BORDER}` }}>
             <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginBottom: 3 }}>AVG CARB RATIO</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: ACCENT }}>1u <span style={{ color: "rgba(255,255,255,0.25)", fontWeight: 400 }}>per</span> 13.4g</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: ACCENT }}>1u <span style={{ color: "rgba(255,255,255,0.25)", fontWeight: 400 }}>per</span> 33g</div>
           </div>
         </Card>
       </div>
@@ -328,7 +328,7 @@ function Recommend() {
   const calc = () => {
     const g = Number(glucose); const c = Number(carbs);
     if (!g || !c) return;
-    const ratio = 13.4;
+    const ratio = 33;
     let units = c / ratio;
     if (g > 140) units += 0.5;
     if (g < 90) units -= 0.5;
@@ -401,7 +401,7 @@ function Recommend() {
               ))}
             </div>
             <div style={{ marginTop: 12, padding: "10px 14px", background: `${ACCENT}10`, borderRadius: 8, fontSize: 11, color: "rgba(255,255,255,0.5)", lineHeight: 1.6 }}>
-              Based on 14 similar balanced meals. Personal ratio 1u per {result.ratio}g carbs.
+              Based on 8 similar balanced meals. Personal ratio 1u per {result.ratio}g (stable meals only — hypo/spike entries excluded).
             </div>
           </div>
         ) : (

@@ -326,7 +326,7 @@ function Recommend() {
   const calc = () => {
     const g = Number(glucose); const c = Number(carbs);
     if (!g || !c) return;
-    const ratio = 13.4;
+    const ratio = 33;
     let units = c / ratio;
     if (g > 140) units += 0.5;
     if (g < 90) units -= 0.5;

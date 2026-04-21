@@ -31,12 +31,13 @@ router.post("/recommendations", async (req, res): Promise<void> => {
     allEntries,
   );
 
-  // Return full result including extended fields (similarMealCount, recentCount, carbRatio)
+  // Return full result including extended fields not yet in Zod schema
   res.json({
     ...GetRecommendationResponse.parse(recommendation),
     similarMealCount: recommendation.similarMealCount,
     recentCount: recommendation.recentCount,
     carbRatio: recommendation.carbRatio,
+    cappedForSafety: recommendation.cappedForSafety,
   });
 });
 
