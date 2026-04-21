@@ -8,8 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider";
 import {
   Zap, Droplet, Cookie, ShieldCheck, AlertTriangle, Info,
-  ChevronRight, Clock, Layers, BookOpen, Gauge, ToggleLeft
+  ChevronRight, Clock, Layers, BookOpen, Gauge, ToggleLeft, Beef, FlameKindling,
 } from "lucide-react";
+import { classifyMeal, type ClassificationResult, MEAL_LABELS } from "@/lib/mealClassifier";
+import { MacroClassifier } from "@/components/MacroClassifier";
 
 type MealType = "FAST_CARBS" | "HIGH_FAT" | "HIGH_PROTEIN" | "BALANCED";
 type Mode = "minimal" | "standard" | "advanced";
@@ -245,13 +247,29 @@ function MinimalMode() {
 function StandardMode() {
   const [glucose, setGlucose] = useState<string>("");
   const [carbs, setCarbs] = useState<string>("");
+  const [protein, setProtein] = useState<string>("");
+  const [fat, setFat] = useState<string>("");
+  const [description, setDescription] = useState<string>("");
   const [mealType, setMealType] = useState<MealType>("BALANCED");
+  const [mealTypeOverridden, setMealTypeOverridden] = useState(false);
+  const [classification, setClassification] = useState<ClassificationResult | null>(null);
   const [result, setResult] = useState<RecommendationResult | null>(null);
   const [loading, setLoading] = useState(false);
 
   const dGlucose = useDebounce(glucose, 350);
   const dCarbs = useDebounce(carbs, 350);
   const dMealType = useDebounce(mealType, 100);
+
+  // Recompute classification whenever macros or description change
+  useEffect(() => {
+    const c = Number(carbs) || 0;
+    const p = Number(protein) || 0;
+    const f = Number(fat) || 0;
+    if (c + p + f === 0 && !description) { setClassification(null); return; }
+    const result = classifyMeal(c, p, f, description);
+    setClassification(result);
+    if (!mealTypeOverridden) setMealType(result.mealType);
+  }, [carbs, protein, fat, description, mealTypeOverridden]);
 
   useEffect(() => {
     const g = Number(dGlucose);
@@ -263,13 +281,6 @@ function StandardMode() {
       .catch(() => setLoading(false));
   }, [dGlucose, dCarbs, dMealType]);
 
-  const MEAL_LABELS: Record<MealType, string> = {
-    BALANCED: "Balanced",
-    FAST_CARBS: "Fast Carbs",
-    HIGH_FAT: "High Fat",
-    HIGH_PROTEIN: "High Protein",
-  };
-
   return (
     <div className="grid md:grid-cols-2 gap-6 items-start">
       <Card>
@@ -277,53 +288,60 @@ function StandardMode() {
           <CardTitle className="text-base flex items-center gap-2">
             <Layers className="w-4 h-4 text-primary" /> Bolus Parameters
           </CardTitle>
-          <p className="text-xs text-muted-foreground -mt-1">Live calculation — no submit needed.</p>
+          <p className="text-xs text-muted-foreground -mt-1">Enter macros — meal type is auto-detected.</p>
         </CardHeader>
-        <CardContent className="space-y-5">
+        <CardContent className="space-y-4">
           <div className="space-y-1.5">
             <Label className="flex items-center gap-1.5 text-sm">
               <Droplet className="w-3.5 h-3.5 text-primary" /> Current glucose (mg/dL)
             </Label>
-            <Input
-              type="number"
-              inputMode="decimal"
-              placeholder="e.g. 115"
-              value={glucose}
-              onChange={(e) => setGlucose(e.target.value)}
-              className="text-xl font-mono h-12"
-            />
+            <Input type="number" inputMode="decimal" placeholder="e.g. 115" value={glucose}
+              onChange={(e) => setGlucose(e.target.value)} className="text-xl font-mono h-12" />
           </div>
+
           <div className="space-y-1.5">
             <Label className="flex items-center gap-1.5 text-sm">
-              <Cookie className="w-3.5 h-3.5 text-orange-500" /> Planned carbs (g)
+              <Cookie className="w-3.5 h-3.5 text-orange-400" /> Carbs (g)
             </Label>
-            <Input
-              type="number"
-              inputMode="decimal"
-              placeholder="e.g. 60"
-              value={carbs}
-              onChange={(e) => setCarbs(e.target.value)}
-              className="text-xl font-mono h-12"
-            />
+            <Input type="number" inputMode="decimal" placeholder="e.g. 60" value={carbs}
+              onChange={(e) => setCarbs(e.target.value)} className="text-xl font-mono h-12" />
           </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1.5 text-sm">
+                <Beef className="w-3.5 h-3.5 text-blue-500" /> Protein (g)
+              </Label>
+              <Input type="number" inputMode="decimal" placeholder="e.g. 30" value={protein}
+                onChange={(e) => setProtein(e.target.value)} className="font-mono h-11" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1.5 text-sm">
+                <FlameKindling className="w-3.5 h-3.5 text-purple-500" /> Fat (g)
+              </Label>
+              <Input type="number" inputMode="decimal" placeholder="e.g. 15" value={fat}
+                onChange={(e) => setFat(e.target.value)} className="font-mono h-11" />
+            </div>
+          </div>
+
           <div className="space-y-1.5">
-            <Label className="text-sm">Meal composition</Label>
-            <Select value={mealType} onValueChange={(v) => setMealType(v as MealType)}>
-              <SelectTrigger className="h-12">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(Object.keys(MEAL_LABELS) as MealType[]).map((k) => (
-                  <SelectItem key={k} value={k}>{MEAL_LABELS[k]}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label className="text-sm text-muted-foreground">Meal description <span className="text-xs">(optional — detects fast sugars)</span></Label>
+            <Input placeholder="e.g. granola, pizza, juice…" value={description}
+              onChange={(e) => setDescription(e.target.value)} className="h-10 text-sm" />
           </div>
-          <div className="pt-2 border-t text-xs text-muted-foreground space-y-1">
+
+          <MacroClassifier
+            classification={classification}
+            activeMealType={mealType}
+            isOverridden={mealTypeOverridden}
+            onSelectType={(t) => { setMealType(t); setMealTypeOverridden(t !== (classification?.mealType ?? "BALANCED")); }}
+            onClearOverride={() => { setMealTypeOverridden(false); if (classification) setMealType(classification.mealType); }}
+          />
+
+          <div className="pt-1 border-t text-xs text-muted-foreground space-y-1">
             <p className="font-medium text-foreground">Adjustments applied</p>
             <p>• Glucose correction: BG &lt;90 reduces dose, BG &gt;140 increases</p>
-            <p>• Fast carbs: +0.5u, take 15 min before eating</p>
-            <p>• High fat: −0.5u, split dose recommended</p>
+            <p>• Fast carbs: +0.5u · High fat: −0.5u split dose</p>
           </div>
         </CardContent>
       </Card>
@@ -344,7 +362,12 @@ function StandardMode() {
 function AdvancedMode() {
   const [glucose, setGlucose] = useState<string>("");
   const [carbs, setCarbs] = useState<string>("");
+  const [protein, setProtein] = useState<string>("");
+  const [fat, setFat] = useState<string>("");
+  const [description, setDescription] = useState<string>("");
   const [mealType, setMealType] = useState<MealType>("BALANCED");
+  const [mealTypeOverridden, setMealTypeOverridden] = useState(false);
+  const [classification, setClassification] = useState<ClassificationResult | null>(null);
   const [manualOverride, setManualOverride] = useState<number | null>(null);
   const [overrideSlider, setOverrideSlider] = useState<number[]>([0]);
   const [useOverride, setUseOverride] = useState(false);
@@ -354,6 +377,17 @@ function AdvancedMode() {
   const dGlucose = useDebounce(glucose, 350);
   const dCarbs = useDebounce(carbs, 350);
   const dMealType = useDebounce(mealType, 100);
+
+  // Recompute classification when macros / description change
+  useEffect(() => {
+    const c = Number(carbs) || 0;
+    const p = Number(protein) || 0;
+    const f = Number(fat) || 0;
+    if (c + p + f === 0 && !description) { setClassification(null); return; }
+    const cl = classifyMeal(c, p, f, description);
+    setClassification(cl);
+    if (!mealTypeOverridden) setMealType(cl.mealType);
+  }, [carbs, protein, fat, description, mealTypeOverridden]);
 
   useEffect(() => {
     const g = Number(dGlucose);
@@ -387,43 +421,45 @@ function AdvancedMode() {
           <CardHeader>
             <CardTitle className="text-sm">Inputs</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3">
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Glucose (mg/dL)</Label>
-              <Input
-                type="number"
-                inputMode="decimal"
-                placeholder="e.g. 115"
-                value={glucose}
-                onChange={(e) => setGlucose(e.target.value)}
-                className="text-lg font-mono h-10"
-              />
+              <Input type="number" inputMode="decimal" placeholder="e.g. 115" value={glucose}
+                onChange={(e) => setGlucose(e.target.value)} className="text-lg font-mono h-10" />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Carbs (g)</Label>
-              <Input
-                type="number"
-                inputMode="decimal"
-                placeholder="e.g. 60"
-                value={carbs}
-                onChange={(e) => setCarbs(e.target.value)}
-                className="text-lg font-mono h-10"
-              />
+              <Input type="number" inputMode="decimal" placeholder="e.g. 60" value={carbs}
+                onChange={(e) => setCarbs(e.target.value)} className="text-lg font-mono h-10" />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Beef className="w-3 h-3 text-blue-500" /> Protein (g)
+                </Label>
+                <Input type="number" inputMode="decimal" placeholder="e.g. 30" value={protein}
+                  onChange={(e) => setProtein(e.target.value)} className="font-mono h-9 text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                  <FlameKindling className="w-3 h-3 text-purple-500" /> Fat (g)
+                </Label>
+                <Input type="number" inputMode="decimal" placeholder="e.g. 15" value={fat}
+                  onChange={(e) => setFat(e.target.value)} className="font-mono h-9 text-sm" />
+              </div>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Meal composition</Label>
-              <Select value={mealType} onValueChange={(v) => setMealType(v as MealType)}>
-                <SelectTrigger className="h-10 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="BALANCED">Balanced</SelectItem>
-                  <SelectItem value="FAST_CARBS">Fast Carbs</SelectItem>
-                  <SelectItem value="HIGH_FAT">High Fat</SelectItem>
-                  <SelectItem value="HIGH_PROTEIN">High Protein</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label className="text-xs text-muted-foreground">Description <span className="opacity-60">(fast sugar detect)</span></Label>
+              <Input placeholder="e.g. granola, juice…" value={description}
+                onChange={(e) => setDescription(e.target.value)} className="h-9 text-sm" />
             </div>
+            <MacroClassifier
+              classification={classification}
+              activeMealType={mealType}
+              isOverridden={mealTypeOverridden}
+              onSelectType={(t) => { setMealType(t); setMealTypeOverridden(t !== (classification?.mealType ?? "BALANCED")); }}
+              onClearOverride={() => { setMealTypeOverridden(false); if (classification) setMealType(classification.mealType); }}
+            />
           </CardContent>
         </Card>
 

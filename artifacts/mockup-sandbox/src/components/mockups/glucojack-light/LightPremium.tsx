@@ -1,6 +1,81 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 type Page = "dashboard" | "log" | "entries" | "insights" | "recommend" | "import";
+type MealTypeKey = "FAST_CARBS" | "HIGH_FAT" | "HIGH_PROTEIN" | "BALANCED";
+
+// ─── Meal classifier ─────────────────────────────────────────────
+const FAST_SUGAR_KW = ["granola","juice","dessert","cake","candy","soda","syrup","white bread","donut","cookie","muffin","pancake","waffle","cereal","jam","honey","ice cream","gelato"];
+const MEAL_LABELS: Record<MealTypeKey,string> = { FAST_CARBS:"Fast Carbs", HIGH_FAT:"High Fat", HIGH_PROTEIN:"High Protein", BALANCED:"Balanced" };
+
+function classifyMeal(carbs:number, protein:number, fat:number, desc?:string) {
+  const matched = desc ? FAST_SUGAR_KW.find(k=>desc.toLowerCase().includes(k)) : null;
+  if (matched) return { mealType:"FAST_CARBS" as MealTypeKey, reason:`Fast sugar detected ("${matched}") → FAST CARBS`, carbPct:0,fatPct:0,protPct:0,fastSugar:matched };
+  const cc=carbs*4,pc=protein*4,fc=fat*9,tot=cc+pc+fc;
+  const carbPct=tot>0?(cc/tot)*100:0, fatPct=tot>0?(fc/tot)*100:0, protPct=tot>0?(pc/tot)*100:0;
+  if (fat>30||fatPct>40) return { mealType:"HIGH_FAT" as MealTypeKey, reason: fat>30?`Fat ${fat}g > 30g threshold`:`Fat ${fatPct.toFixed(0)}% of cals > 40%`, carbPct,fatPct,protPct,fastSugar:null };
+  if (carbPct>60&&fat<20&&protein<25) return { mealType:"FAST_CARBS" as MealTypeKey, reason:`Carbs ${carbPct.toFixed(0)}% of cals, fat ${fat}g, protein ${protein}g`, carbPct,fatPct,protPct,fastSugar:null };
+  if (protein>40&&carbs<40) return { mealType:"HIGH_PROTEIN" as MealTypeKey, reason:`Protein ${protein}g > 40g with carbs ${carbs}g < 40g`, carbPct,fatPct,protPct,fastSugar:null };
+  return { mealType:"BALANCED" as MealTypeKey, reason:`Mixed macros — carbs ${carbPct.toFixed(0)}%, protein ${protPct.toFixed(0)}%, fat ${fatPct.toFixed(0)}%`, carbPct,fatPct,protPct,fastSugar:null };
+}
+
+// ─── Inline classifier widget (light style) ───────────────────────
+function MacroWidget({ cl, active, overridden, onPick, onReset }: {
+  cl: ReturnType<typeof classifyMeal>|null;
+  active: MealTypeKey; overridden: boolean;
+  onPick:(t:MealTypeKey)=>void; onReset:()=>void;
+}) {
+  if (!cl) return null;
+  const pillStyles: Record<MealTypeKey,[string,string,string]> = {
+    FAST_CARBS:   ["#FFF4E3","#C06000","#FFDEAA"],
+    HIGH_FAT:     ["#F5F0FF","#6B2D9A","#DDD0F0"],
+    HIGH_PROTEIN: ["#EBF3FF","#1A4CA0","#C5D9F8"],
+    BALANCED:     ["#E8FBF4","#0D6B4B","#AEECD8"],
+  };
+  const [sugBg, sugColor, sugBorder] = pillStyles[cl.mealType];
+  return (
+    <div style={{borderRadius:12,border:"1.5px solid rgba(0,0,0,0.07)",background:"#FAFAFA",padding:"12px 14px",display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
+        <span style={{fontSize:13,marginTop:1}}>{cl.fastSugar?"⚠️":"✦"}</span>
+        <div style={{flex:1}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:4}}>
+            <span style={{fontSize:9,color:"#8E8E93",letterSpacing:"0.1em",fontWeight:600}}>{cl.fastSugar?"FAST SUGAR DETECTED":"AUTO-CLASSIFIED"}</span>
+            <span style={{fontSize:11,fontWeight:700,padding:"2px 10px",borderRadius:99,background:sugBg,color:sugColor,border:`1px solid ${sugBorder}`}}>{MEAL_LABELS[cl.mealType]}</span>
+            {overridden&&<span style={{fontSize:9,padding:"2px 8px",borderRadius:99,background:"#FFF4E3",color:"#C06000",fontWeight:600,border:"1px solid #FFDEAA"}}>OVERRIDE</span>}
+          </div>
+          <div style={{fontSize:10,color:"#8E8E93",lineHeight:1.55}}>{cl.reason}</div>
+        </div>
+      </div>
+      {(cl.carbPct+cl.fatPct+cl.protPct)>0&&(
+        <div style={{display:"flex",flexDirection:"column",gap:4}}>
+          <div style={{height:6,borderRadius:99,overflow:"hidden",display:"flex",gap:1,background:"#F0F0F0"}}>
+            <div style={{width:`${cl.carbPct}%`,background:"#E88600",borderRadius:"99px 0 0 99px"}}/>
+            <div style={{width:`${cl.protPct}%`,background:"#3B82F6"}}/>
+            <div style={{width:`${cl.fatPct}%`,background:"#9333EA",borderRadius:"0 99px 99px 0"}}/>
+          </div>
+          <div style={{display:"flex",gap:12,fontSize:9,color:"#8E8E93"}}>
+            <span>🟠 Carbs {cl.carbPct.toFixed(0)}%</span>
+            <span>🔵 Protein {cl.protPct.toFixed(0)}%</span>
+            <span>🟣 Fat {cl.fatPct.toFixed(0)}%</span>
+          </div>
+        </div>
+      )}
+      <div>
+        <div style={{fontSize:9,color:"#8E8E93",marginBottom:6,letterSpacing:"0.08em",fontWeight:600}}>OVERRIDE TYPE</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {(Object.keys(MEAL_LABELS) as MealTypeKey[]).map(t=>{
+            const [bg,color,border]=pillStyles[t];
+            return (
+              <button key={t} onClick={()=>onPick(t)} style={{padding:"5px 12px",borderRadius:99,border:`1.5px solid ${active===t?border:"rgba(0,0,0,0.1)"}`,background:active===t?bg:"white",color:active===t?color:"#8E8E93",fontSize:10,fontWeight:600,cursor:"pointer",transition:"all 0.15s"}}>
+                {MEAL_LABELS[t]}
+              </button>
+            );
+          })}
+        </div>
+        {overridden&&<button onClick={onReset} style={{marginTop:6,fontSize:9,color:"#8E8E93",background:"none",border:"none",cursor:"pointer",textDecoration:"underline"}}>Reset to auto-detect</button>}
+      </div>
+    </div>
+  );
+}
 
 const BLUE = "#3B5BFF";
 const PINK = "#C8004A";
@@ -161,65 +236,69 @@ function Dashboard() {
 function QuickLog() {
   const [glucose, setGlucose] = useState("");
   const [carbs, setCarbs] = useState("");
+  const [protein, setProtein] = useState("");
+  const [fat, setFat] = useState("");
+  const [desc, setDesc] = useState("");
   const [insulin, setInsulin] = useState("");
-  const [mealType, setMealType] = useState("BALANCED");
+  const [mealType, setMealType] = useState<MealTypeKey>("BALANCED");
+  const [overridden, setOverridden] = useState(false);
+  const [cl, setCl] = useState<ReturnType<typeof classifyMeal>|null>(null);
   const [submitted, setSubmitted] = useState(false);
 
-  const inputStyle: React.CSSProperties = {
-    background: "#F2F2F7", border: `1px solid rgba(0,0,0,0.1)`, borderRadius: 12,
-    padding: "11px 14px", color: TEXT, fontSize: 15, fontWeight: 600,
-    width: "100%", boxSizing: "border-box", outline: "none", fontFamily: "inherit",
-  };
+  const inp: React.CSSProperties = { background:"#F2F2F7", border:"1px solid rgba(0,0,0,0.1)", borderRadius:12, padding:"10px 13px", color:TEXT, fontSize:14, fontWeight:600, width:"100%", boxSizing:"border-box", outline:"none", fontFamily:"inherit" };
 
-  if (submitted) {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 380, gap: 14 }}>
-        <div style={{ width: 64, height: 64, borderRadius: 99, background: "#E8FBF4", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <span style={{ fontSize: 30, color: GREEN }}>✓</span>
-        </div>
-        <div style={{ fontSize: 18, fontWeight: 700, color: GREEN }}>Entry logged</div>
-        <div style={{ fontSize: 13, color: MUTED }}>BG {glucose} mg/dL · {carbs}g carbs · {insulin}u</div>
-        <button onClick={() => { setSubmitted(false); setGlucose(""); setCarbs(""); setInsulin(""); }} style={{ marginTop: 8, padding: "10px 24px", background: BLUE, border: "none", borderRadius: 20, color: "white", fontSize: 13, fontWeight: 600, cursor: "pointer", boxShadow: `0 4px 14px ${BLUE}40` }}>
-          Log Another
-        </button>
-      </div>
-    );
-  }
+  useEffect(()=>{
+    const c=Number(carbs)||0,p=Number(protein)||0,f=Number(fat)||0;
+    if(c+p+f===0&&!desc){setCl(null);return;}
+    const r=classifyMeal(c,p,f,desc);
+    setCl(r);
+    if(!overridden) setMealType(r.mealType);
+  },[carbs,protein,fat,desc,overridden]);
+
+  if (submitted) return (
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:380,gap:14}}>
+      <div style={{width:64,height:64,borderRadius:99,background:"#E8FBF4",display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{fontSize:30,color:GREEN}}>✓</span></div>
+      <div style={{fontSize:18,fontWeight:700,color:GREEN}}>Entry logged</div>
+      <div style={{fontSize:13,color:MUTED}}>BG {glucose} · {carbs}g carbs · {MEAL_LABELS[mealType]} · {insulin}u</div>
+      <button onClick={()=>{setSubmitted(false);setGlucose("");setCarbs("");setProtein("");setFat("");setDesc("");setInsulin("");setOverridden(false);}} style={{marginTop:8,padding:"10px 24px",background:BLUE,border:"none",borderRadius:20,color:"white",fontSize:13,fontWeight:600,cursor:"pointer",boxShadow:`0 4px 14px ${BLUE}40`}}>Log Another</button>
+    </div>
+  );
 
   return (
-    <div style={{ maxWidth: 460 }}>
-      <Card style={{ padding: 26 }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: TEXT, marginBottom: 22 }}>Log a Meal</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style={{maxWidth:480}}>
+      <Card style={{padding:24}}>
+        <div style={{fontSize:16,fontWeight:700,color:TEXT,marginBottom:20}}>Log a Meal</div>
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
           <div>
-            <div style={{ fontSize: 12, color: MUTED, marginBottom: 6, fontWeight: 500 }}>Glucose before (mg/dL)</div>
-            <input value={glucose} onChange={(e) => setGlucose(e.target.value)} placeholder="e.g. 115" type="number" style={inputStyle} />
+            <div style={{fontSize:12,color:MUTED,marginBottom:5,fontWeight:500}}>Glucose before (mg/dL)</div>
+            <input value={glucose} onChange={e=>setGlucose(e.target.value)} placeholder="e.g. 115" type="number" style={inp} />
           </div>
           <div>
-            <div style={{ fontSize: 12, color: MUTED, marginBottom: 6, fontWeight: 500 }}>Planned carbs (g)</div>
-            <input value={carbs} onChange={(e) => setCarbs(e.target.value)} placeholder="e.g. 60" type="number" style={inputStyle} />
+            <div style={{fontSize:12,color:MUTED,marginBottom:5,fontWeight:500}}>Carbs (g)</div>
+            <input value={carbs} onChange={e=>setCarbs(e.target.value)} placeholder="e.g. 60" type="number" style={inp} />
           </div>
-          <div>
-            <div style={{ fontSize: 12, color: MUTED, marginBottom: 6, fontWeight: 500 }}>Insulin units</div>
-            <input value={insulin} onChange={(e) => setInsulin(e.target.value)} placeholder="e.g. 4.0" type="number" style={inputStyle} />
-          </div>
-          <div>
-            <div style={{ fontSize: 12, color: MUTED, marginBottom: 8, fontWeight: 500 }}>Meal composition</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              {["BALANCED", "FAST_CARBS", "HIGH_FAT", "HIGH_PROTEIN"].map((t) => {
-                const labels: Record<string, string> = { BALANCED: "Balanced", FAST_CARBS: "Fast Carbs", HIGH_FAT: "High Fat", HIGH_PROTEIN: "High Protein" };
-                return (
-                  <button key={t} onClick={() => setMealType(t)} style={{ padding: "10px", borderRadius: 10, border: `1.5px solid ${mealType === t ? BLUE : "rgba(0,0,0,0.1)"}`, background: mealType === t ? `${BLUE}10` : WHITE, color: mealType === t ? BLUE : MUTED, fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>
-                    {labels[t]}
-                  </button>
-                );
-              })}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div>
+              <div style={{fontSize:12,color:MUTED,marginBottom:5,fontWeight:500}}>Protein (g)</div>
+              <input value={protein} onChange={e=>setProtein(e.target.value)} placeholder="e.g. 30" type="number" style={inp} />
+            </div>
+            <div>
+              <div style={{fontSize:12,color:MUTED,marginBottom:5,fontWeight:500}}>Fat (g)</div>
+              <input value={fat} onChange={e=>setFat(e.target.value)} placeholder="e.g. 15" type="number" style={inp} />
             </div>
           </div>
-          <button
-            onClick={() => { if (glucose && carbs && insulin) setSubmitted(true); }}
-            style={{ marginTop: 4, padding: "14px", background: BLUE, border: "none", borderRadius: 14, color: "white", fontSize: 14, fontWeight: 600, cursor: "pointer", opacity: glucose && carbs && insulin ? 1 : 0.4, boxShadow: `0 4px 14px ${BLUE}35` }}
-          >
+          <div>
+            <div style={{fontSize:12,color:MUTED,marginBottom:5,fontWeight:500}}>Meal description <span style={{fontWeight:400,fontSize:11}}>(optional — detects fast sugars)</span></div>
+            <input value={desc} onChange={e=>setDesc(e.target.value)} placeholder="e.g. granola, juice, pizza…" style={{...inp,fontWeight:400,fontSize:12}} />
+          </div>
+          <MacroWidget cl={cl} active={mealType} overridden={overridden}
+            onPick={t=>{setMealType(t);setOverridden(t!==(cl?.mealType??"BALANCED"));}}
+            onReset={()=>{setOverridden(false);if(cl)setMealType(cl.mealType);}} />
+          <div>
+            <div style={{fontSize:12,color:MUTED,marginBottom:5,fontWeight:500}}>Insulin units</div>
+            <input value={insulin} onChange={e=>setInsulin(e.target.value)} placeholder="e.g. 1.5" type="number" style={inp} />
+          </div>
+          <button onClick={()=>{if(glucose&&carbs&&insulin)setSubmitted(true);}} style={{marginTop:2,padding:"13px",background:BLUE,border:"none",borderRadius:14,color:"white",fontSize:14,fontWeight:600,cursor:"pointer",opacity:glucose&&carbs&&insulin?1:0.4,boxShadow:`0 4px 14px ${BLUE}35`}}>
             Log Entry
           </button>
         </div>
@@ -320,54 +399,66 @@ function Insights() {
 function Recommend() {
   const [glucose, setGlucose] = useState("");
   const [carbs, setCarbs] = useState("");
-  const [mealType, setMealType] = useState("BALANCED");
-  const [result, setResult] = useState<null | { units: number; ratio: number }>(null);
+  const [protein, setProtein] = useState("");
+  const [fat, setFat] = useState("");
+  const [desc, setDesc] = useState("");
+  const [mealType, setMealType] = useState<MealTypeKey>("BALANCED");
+  const [overridden, setOverridden] = useState(false);
+  const [cl, setCl] = useState<ReturnType<typeof classifyMeal>|null>(null);
+  const [result, setResult] = useState<null|{units:number;ratio:number}>(null);
 
-  const calc = () => {
-    const g = Number(glucose); const c = Number(carbs);
-    if (!g || !c) return;
-    const ratio = 33;
-    let units = c / ratio;
-    if (g > 140) units += 0.5;
-    if (g < 90) units -= 0.5;
-    if (mealType === "FAST_CARBS") units += 0.5;
-    if (mealType === "HIGH_FAT") units -= 0.5;
-    setResult({ units: Math.max(0.5, Math.round(units * 2) / 2), ratio });
-  };
+  const inp: React.CSSProperties = { background:"#F2F2F7", border:"1px solid rgba(0,0,0,0.1)", borderRadius:12, padding:"10px 13px", color:TEXT, fontSize:14, fontWeight:600, width:"100%", boxSizing:"border-box", outline:"none", fontFamily:"inherit" };
 
-  const inputStyle: React.CSSProperties = {
-    background: "#F2F2F7", border: `1px solid rgba(0,0,0,0.1)`, borderRadius: 12,
-    padding: "11px 14px", color: TEXT, fontSize: 15, fontWeight: 600,
-    width: "100%", boxSizing: "border-box", outline: "none", fontFamily: "inherit",
+  useEffect(()=>{
+    const c=Number(carbs)||0,p=Number(protein)||0,f=Number(fat)||0;
+    if(c+p+f===0&&!desc){setCl(null);return;}
+    const r=classifyMeal(c,p,f,desc);
+    setCl(r);
+    if(!overridden) setMealType(r.mealType);
+  },[carbs,protein,fat,desc,overridden]);
+
+  const calc=()=>{
+    const g=Number(glucose),c=Number(carbs);
+    if(!g||!c)return;
+    const ratio=33;
+    let units=c/ratio;
+    if(g>140)units+=0.5; if(g<90)units-=0.5;
+    if(mealType==="FAST_CARBS")units+=0.5; if(mealType==="HIGH_FAT")units-=0.5;
+    if(g<=180&&units>3)units=3;
+    setResult({units:Math.max(0.5,Math.round(units*2)/2),ratio});
   };
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, alignItems: "start" }}>
-      <Card style={{ padding: 24 }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: TEXT, marginBottom: 20 }}>Bolus Calculator</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <Card style={{ padding: 22 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: TEXT, marginBottom: 18 }}>Bolus Calculator</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div>
-            <div style={{ fontSize: 12, color: MUTED, marginBottom: 6, fontWeight: 500 }}>Current glucose (mg/dL)</div>
-            <input value={glucose} onChange={(e) => setGlucose(e.target.value)} placeholder="e.g. 115" type="number" style={inputStyle} />
+            <div style={{fontSize:12,color:MUTED,marginBottom:5,fontWeight:500}}>Current glucose (mg/dL)</div>
+            <input value={glucose} onChange={e=>setGlucose(e.target.value)} placeholder="e.g. 115" type="number" style={inp} />
           </div>
           <div>
-            <div style={{ fontSize: 12, color: MUTED, marginBottom: 6, fontWeight: 500 }}>Planned carbs (g)</div>
-            <input value={carbs} onChange={(e) => setCarbs(e.target.value)} placeholder="e.g. 60" type="number" style={inputStyle} />
+            <div style={{fontSize:12,color:MUTED,marginBottom:5,fontWeight:500}}>Planned carbs (g)</div>
+            <input value={carbs} onChange={e=>setCarbs(e.target.value)} placeholder="e.g. 60" type="number" style={inp} />
           </div>
-          <div>
-            <div style={{ fontSize: 12, color: MUTED, marginBottom: 8, fontWeight: 500 }}>Meal composition</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              {["BALANCED", "FAST_CARBS", "HIGH_FAT", "HIGH_PROTEIN"].map((t) => {
-                const labels: Record<string, string> = { BALANCED: "Balanced", FAST_CARBS: "Fast Carbs", HIGH_FAT: "High Fat", HIGH_PROTEIN: "High Protein" };
-                return (
-                  <button key={t} onClick={() => setMealType(t)} style={{ padding: "9px", borderRadius: 10, border: `1.5px solid ${mealType === t ? BLUE : "rgba(0,0,0,0.08)"}`, background: mealType === t ? `${BLUE}10` : WHITE, color: mealType === t ? BLUE : MUTED, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
-                    {labels[t]}
-                  </button>
-                );
-              })}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div>
+              <div style={{fontSize:12,color:MUTED,marginBottom:5,fontWeight:500}}>Protein (g)</div>
+              <input value={protein} onChange={e=>setProtein(e.target.value)} placeholder="e.g. 30" type="number" style={inp} />
+            </div>
+            <div>
+              <div style={{fontSize:12,color:MUTED,marginBottom:5,fontWeight:500}}>Fat (g)</div>
+              <input value={fat} onChange={e=>setFat(e.target.value)} placeholder="e.g. 15" type="number" style={inp} />
             </div>
           </div>
-          <button onClick={calc} style={{ padding: "13px", background: BLUE, border: "none", borderRadius: 14, color: "white", fontSize: 14, fontWeight: 600, cursor: "pointer", opacity: glucose && carbs ? 1 : 0.4, boxShadow: `0 4px 12px ${BLUE}35` }}>
+          <div>
+            <div style={{fontSize:12,color:MUTED,marginBottom:5,fontWeight:500}}>Description <span style={{fontWeight:400,fontSize:11}}>(fast sugar detect)</span></div>
+            <input value={desc} onChange={e=>setDesc(e.target.value)} placeholder="e.g. granola, juice…" style={{...inp,fontWeight:400,fontSize:12}} />
+          </div>
+          <MacroWidget cl={cl} active={mealType} overridden={overridden}
+            onPick={t=>{setMealType(t);setOverridden(t!==(cl?.mealType??"BALANCED"));}}
+            onReset={()=>{setOverridden(false);if(cl)setMealType(cl.mealType);}} />
+          <button onClick={calc} style={{padding:"12px",background:BLUE,border:"none",borderRadius:14,color:"white",fontSize:14,fontWeight:600,cursor:"pointer",opacity:glucose&&carbs?1:0.4,boxShadow:`0 4px 12px ${BLUE}35`}}>
             Calculate Bolus
           </button>
         </div>
