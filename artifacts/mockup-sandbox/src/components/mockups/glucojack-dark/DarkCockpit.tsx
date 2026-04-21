@@ -1089,15 +1089,45 @@ function MobileDashboard() {
   );
 }
 
+// ─── Nav SVG Icons ────────────────────────────────────────────────
+function IconDashboard({ active }: { active: boolean }) {
+  const c = active ? ACCENT : "rgba(255,255,255,0.45)";
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>;
+}
+function IconPlus({ active }: { active: boolean }) {
+  const c = active ? ACCENT : "rgba(255,255,255,0.45)";
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2.2" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+}
+function IconList({ active }: { active: boolean }) {
+  const c = active ? ACCENT : "rgba(255,255,255,0.45)";
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1.2" fill={c} stroke="none"/><circle cx="3.5" cy="12" r="1.2" fill={c} stroke="none"/><circle cx="3.5" cy="18" r="1.2" fill={c} stroke="none"/></svg>;
+}
+function IconInsights({ active }: { active: boolean }) {
+  const c = active ? ACCENT : "rgba(255,255,255,0.45)";
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a7 7 0 0 1 4 12.8V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.2A7 7 0 0 1 12 2z"/><path d="M9 21h6"/><path d="M9 18h6"/></svg>;
+}
+function IconBolt({ active }: { active: boolean }) {
+  const c = active ? ACCENT : "rgba(255,255,255,0.45)";
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>;
+}
+function IconMic({ active }: { active: boolean }) {
+  const c = active ? ACCENT : "rgba(255,255,255,0.45)";
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="9" y1="22" x2="15" y2="22"/></svg>;
+}
+function IconUpload({ active }: { active: boolean }) {
+  const c = active ? ACCENT : "rgba(255,255,255,0.45)";
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
+}
+
 // ─── LAYOUT ──────────────────────────────────────────────────────
-const NAV: { id: Page; icon: string; label: string }[] = [
-  { id: "dashboard", icon: "⊞", label: "Dashboard" },
-  { id: "log",       icon: "✦", label: "Quick Log" },
-  { id: "entries",   icon: "≡", label: "Entry Log" },
-  { id: "insights",  icon: "◈", label: "Insights" },
-  { id: "recommend", icon: "⟲", label: "Glev Engine" },
-  { id: "voice",     icon: "🎤", label: "Voice Log" },
-  { id: "import",    icon: "⬆", label: "Import" },
+const NAV: { id: Page; label: string; Icon: React.ComponentType<{active:boolean}> }[] = [
+  { id: "dashboard", label: "Dashboard",  Icon: IconDashboard },
+  { id: "log",       label: "Quick Log",  Icon: IconPlus },
+  { id: "entries",   label: "Entry Log",  Icon: IconList },
+  { id: "insights",  label: "Insights",   Icon: IconInsights },
+  { id: "recommend", label: "Glev Engine",Icon: IconBolt },
+  { id: "voice",     label: "Voice Log",  Icon: IconMic },
+  { id: "import",    label: "Import Data",Icon: IconUpload },
 ];
 
 const PAGE_TITLES: Record<Page,string> = {
@@ -1121,15 +1151,36 @@ export function DarkCockpit() {
       </div>
 
       {view==="desktop" ? (
-        <div style={{display:"flex",flex:1}}>
+        <div style={{display:"flex",flex:1,overflow:"hidden"}}>
           {/* Sidebar */}
-          <div style={{width:56,background:SURFACE,borderRight:`1px solid ${BORDER}`,display:"flex",flexDirection:"column",padding:"20px 10px",gap:4,flexShrink:0}}>
-            <LogoCMark size={36} style={{marginBottom:20,cursor:"pointer",flexShrink:0}}/>
-            {NAV.map(item=>(
-              <button key={item.id} onClick={()=>setPage(item.id)} title={item.label} style={{width:36,height:36,borderRadius:10,border:"none",background:page===item.id?`${ACCENT}22`:"transparent",color:page===item.id?ACCENT:"rgba(255,255,255,0.28)",fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>
-                {item.icon}
-              </button>
-            ))}
+          <div style={{width:220,background:SURFACE,borderRight:`1px solid ${BORDER}`,display:"flex",flexDirection:"column",padding:"20px 12px",gap:2,flexShrink:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,padding:"4px 10px",marginBottom:18}}>
+              <LogoCMark size={32}/>
+              <div>
+                <div style={{fontSize:14,fontWeight:800,letterSpacing:"-0.02em"}}>Glev</div>
+                <div style={{fontSize:10,color:"rgba(255,255,255,0.3)",marginTop:1}}>Insulin decisions</div>
+              </div>
+            </div>
+            {NAV.map(({ id, label, Icon })=>{
+              const active = page === id;
+              return (
+                <button key={id} onClick={()=>setPage(id)} style={{
+                  display:"flex",alignItems:"center",gap:12,
+                  padding:"10px 12px",borderRadius:10,border:"none",
+                  background: active ? `rgba(79,110,247,0.12)` : "transparent",
+                  cursor:"pointer",width:"100%",textAlign:"left",
+                  transition:"background 0.15s",
+                }}>
+                  <Icon active={active}/>
+                  <span style={{
+                    fontSize:14,fontWeight: active ? 700 : 400,
+                    color: active ? "white" : "rgba(255,255,255,0.5)",
+                    letterSpacing:"-0.01em",
+                  }}>{label}</span>
+                  {active && <div style={{marginLeft:"auto",width:3,height:3,borderRadius:99,background:ACCENT}}/>}
+                </button>
+              );
+            })}
           </div>
 
           {/* Main */}
