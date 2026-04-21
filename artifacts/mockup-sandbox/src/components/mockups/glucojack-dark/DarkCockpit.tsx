@@ -515,7 +515,7 @@ const NAV: { id: Page; icon: string; label: string }[] = [
   { id: "log", icon: "✦", label: "Quick Log" },
   { id: "entries", icon: "≡", label: "Entry Log" },
   { id: "insights", icon: "◈", label: "Insights" },
-  { id: "recommend", icon: "⟲", label: "Recommend" },
+  { id: "recommend", icon: "⟲", label: "Glev Engine" },
   { id: "import", icon: "⬆", label: "Import" },
 ];
 
@@ -524,7 +524,7 @@ const PAGE_TITLES: Record<Page, string> = {
   log: "Quick Log",
   entries: "Entry Log",
   insights: "Insights",
-  recommend: "Decision Support",
+  recommend: "Glev Engine",
   import: "Import Center",
 };
 
@@ -552,7 +552,7 @@ export function DarkCockpit() {
       <div style={{ flex: 1, padding: "24px 28px", overflow: "auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           <div>
-            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", letterSpacing: "0.12em", marginBottom: 3 }}>GLUCOJACK</div>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", letterSpacing: "0.12em", marginBottom: 3 }}>GLEV — SMART INSULIN DECISIONS</div>
             <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0, letterSpacing: "-0.02em" }}>{PAGE_TITLES[page]}</h1>
           </div>
           {page !== "log" && page !== "recommend" && (

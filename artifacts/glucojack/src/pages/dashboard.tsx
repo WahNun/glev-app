@@ -8,11 +8,13 @@ import { Activity, Droplet, Zap, Target, Plus, AlertCircle, AlertTriangle, Check
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, ReferenceLine } from "recharts";
 import { format, parseISO } from "date-fns";
 
-const EVALUATION_COLORS = {
+const EVALUATION_COLORS: Record<string, string> = {
   GOOD: "hsl(var(--chart-1))",
+  SLIGHT_OVERDOSE: "hsl(var(--chart-4))",
   OVERDOSE: "hsl(var(--chart-2))",
+  SLIGHT_UNDERDOSE: "hsl(142 71% 45%)",
   UNDERDOSE: "hsl(var(--chart-3))",
-  CHECK_CONTEXT: "hsl(var(--chart-4))",
+  CHECK_CONTEXT: "hsl(var(--chart-5))",
 };
 
 export default function Dashboard() {

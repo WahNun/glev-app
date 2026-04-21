@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "wouter";
-import { Activity, Plus, Upload, Lightbulb, Zap, List } from "lucide-react";
+import { Activity, Plus, Upload, Lightbulb, Zap, List, Mic } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
@@ -8,7 +8,8 @@ const NAV_ITEMS = [
   { href: "/log", label: "Quick Log", icon: Plus },
   { href: "/entries", label: "Entry Log", icon: List },
   { href: "/insights", label: "Insights", icon: Lightbulb },
-  { href: "/recommend", label: "Decision Support", icon: Zap },
+  { href: "/recommend", label: "Glev Engine", icon: Zap },
+  { href: "/voice", label: "Voice Log", icon: Mic },
   { href: "/import", label: "Import Data", icon: Upload },
 ];
 
@@ -21,11 +22,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <aside className="hidden md:flex w-64 flex-col border-r border-border bg-card">
         <div className="p-6">
           <Link href="/" className="flex items-center gap-2 font-bold text-xl tracking-tight text-foreground">
-            <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center text-primary-foreground">
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground">
               <Activity className="w-5 h-5" />
             </div>
-            GlucoJack
+            <span>Glev</span>
           </Link>
+          <p className="text-[11px] text-muted-foreground mt-1 ml-10">Smart insulin decisions</p>
         </div>
         <nav className="flex-1 px-4 space-y-1">
           {NAV_ITEMS.map((item) => {
@@ -56,24 +58,35 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center text-primary-foreground">
             <Activity className="w-4 h-4" />
           </div>
-          GlucoJack
+          Glev
         </Link>
+        <p className="text-[11px] text-muted-foreground">Smart insulin decisions</p>
       </header>
-      
+
       {/* Bottom Nav (Mobile) */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 border-t border-border bg-card z-50 flex items-center justify-around p-2 pb-safe">
-        {NAV_ITEMS.map((item) => {
+        {NAV_ITEMS.filter(i => i.href !== "/import").map((item) => {
           const isActive = location === item.href;
           const Icon = item.icon;
+          if (item.href === "/voice") {
+            return (
+              <Link key={item.href} href={item.href} className="flex flex-col items-center justify-center -mt-6">
+                <div className={cn(
+                  "w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all",
+                  isActive ? "bg-primary scale-105" : "bg-primary"
+                )}>
+                  <Mic className="w-6 h-6 text-primary-foreground" />
+                </div>
+              </Link>
+            );
+          }
           return (
             <Link
               key={item.href}
               href={item.href}
               className={cn(
                 "flex flex-col items-center justify-center p-2 rounded-md text-[10px] font-medium transition-colors",
-                isActive
-                  ? "text-primary"
-                  : "text-muted-foreground"
+                isActive ? "text-primary" : "text-muted-foreground"
               )}
             >
               <Icon className="w-5 h-5 mb-1" />

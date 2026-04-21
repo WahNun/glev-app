@@ -12,6 +12,7 @@ import ImportData from "@/pages/import";
 import Insights from "@/pages/insights";
 import Recommend from "@/pages/recommend";
 import Entries from "@/pages/entries";
+import VoiceLog from "@/pages/voice";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -32,6 +33,7 @@ function Router() {
         <Route path="/insights" component={Insights} />
         <Route path="/recommend" component={Recommend} />
         <Route path="/entries" component={Entries} />
+        <Route path="/voice" component={VoiceLog} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

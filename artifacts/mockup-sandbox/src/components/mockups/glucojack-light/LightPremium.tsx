@@ -508,7 +508,7 @@ const NAV: { id: Page; icon: string; label: string }[] = [
   { id: "log", icon: "✦", label: "Quick Log" },
   { id: "entries", icon: "≡", label: "Entry Log" },
   { id: "insights", icon: "◈", label: "Insights" },
-  { id: "recommend", icon: "⟲", label: "Recommend" },
+  { id: "recommend", icon: "⟲", label: "Glev Engine" },
   { id: "import", icon: "⬆", label: "Import" },
 ];
 
@@ -517,7 +517,7 @@ const PAGE_TITLES: Record<Page, string> = {
   log: "Quick Log",
   entries: "Entry Log",
   insights: "Insights",
-  recommend: "Decision Support",
+  recommend: "Glev Engine",
   import: "Import Center",
 };
 
@@ -532,7 +532,7 @@ export function LightPremium() {
           <div style={{ width: 30, height: 30, borderRadius: 9, background: `linear-gradient(135deg, ${BLUE}, ${PINK})`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, cursor: "pointer" }}>
             <span style={{ color: "white", fontSize: 13, fontWeight: 800 }}>G</span>
           </div>
-          <span style={{ fontSize: 15, fontWeight: 700, color: TEXT, letterSpacing: "-0.02em" }}>GlucoJack</span>
+          <span style={{ fontSize: 15, fontWeight: 700, color: TEXT, letterSpacing: "-0.02em" }}>Glev</span>
         </div>
         {NAV.map((item) => (
           <button

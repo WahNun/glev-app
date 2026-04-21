@@ -10,11 +10,12 @@ export interface ClassificationResult {
 }
 
 const FAST_SUGAR_KEYWORDS = [
-  "granola", "juice", "dessert", "cake", "candy", "soda", "syrup",
+  "sugar", "granola", "juice", "dessert", "cake", "candy", "soda", "syrup",
   "white bread", "donut", "doughnut", "cookie", "muffin", "bagel",
   "pretzel", "pancake", "waffle", "cereal", "pop-tart", "poptart",
   "smoothie", "milkshake", "ice cream", "gelato", "sorbet", "jam",
-  "honey", "caramel", "chocolate milk",
+  "honey", "caramel", "chocolate milk", "banana", "cinnamon roll",
+  "energy drink", "sports drink", "lemonade", "sweet tea",
 ];
 
 const MEAL_LABELS: Record<MealType, string> = {

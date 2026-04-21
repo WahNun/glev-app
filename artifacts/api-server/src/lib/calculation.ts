@@ -1,4 +1,10 @@
-export type Evaluation = "GOOD" | "OVERDOSE" | "UNDERDOSE" | "CHECK_CONTEXT";
+export type Evaluation =
+  | "GOOD"
+  | "SLIGHT_UNDERDOSE"
+  | "UNDERDOSE"
+  | "SLIGHT_OVERDOSE"
+  | "OVERDOSE";
+
 export type MealType = "FAST_CARBS" | "HIGH_FAT" | "HIGH_PROTEIN" | "BALANCED";
 
 export interface GlucoseMetrics {
@@ -22,63 +28,38 @@ export function calculateMetrics(
   const hours = timeDifferenceMinutes / 60;
   const speed = delta / hours;
 
-  const evaluation = evaluateReading(
-    glucoseBefore,
-    glucoseAfter,
-    delta,
-    speed,
-    insulinUnits,
-    carbsGrams,
-  );
-
+  const evaluation = evaluateReading(glucoseBefore, glucoseAfter, delta, speed, insulinUnits, carbsGrams);
   return { delta, speed, evaluation };
 }
 
 function evaluateReading(
-  glucoseBefore: number,
+  _glucoseBefore: number,
   glucoseAfter: number,
   delta: number,
   speed: number,
-  insulinUnits: number,
-  carbsGrams: number,
+  _insulinUnits: number,
+  _carbsGrams: number,
 ): Evaluation {
-  const HYPO_THRESHOLD = 70;
-  const TARGET_LOW = 80;
-  const TARGET_HIGH = 140;
-  const SPIKE_THRESHOLD = 180;
+  if (glucoseAfter < 70) return "OVERDOSE";
 
-  if (glucoseAfter < HYPO_THRESHOLD) {
-    return "OVERDOSE";
+  if (speed < -60 || delta < -40) return "OVERDOSE";
+  if (speed < -30 || delta < -20) return "SLIGHT_OVERDOSE";
+
+  if (speed > 60 || delta > 60) return "UNDERDOSE";
+  if (speed > 30 || delta > 40) return "SLIGHT_UNDERDOSE";
+
+  if (glucoseAfter >= 80 && glucoseAfter <= 175 && delta >= -20 && delta <= 40) {
+    return "GOOD";
   }
 
-  if (glucoseAfter > SPIKE_THRESHOLD) {
-    return "UNDERDOSE";
-  }
+  if (glucoseAfter > 180) return "UNDERDOSE";
+  if (glucoseAfter > 140) return "SLIGHT_UNDERDOSE";
 
-  if (glucoseAfter >= TARGET_LOW && glucoseAfter <= TARGET_HIGH) {
-    if (delta >= -30 && delta <= 40) {
-      return "GOOD";
-    }
-  }
-
-  if (delta < -40 || speed < -60) {
-    return "OVERDOSE";
-  }
-
-  if (delta > 60 || speed > 80) {
-    return "UNDERDOSE";
-  }
-
-  return "CHECK_CONTEXT";
+  return "GOOD";
 }
 
-export function classifyMealType(
-  mealType: MealType,
-  carbsGrams: number,
-): MealType {
-  if (carbsGrams > 60) {
-    return "FAST_CARBS";
-  }
+export function classifyMealType(mealType: MealType, carbsGrams: number): MealType {
+  if (carbsGrams > 60) return "FAST_CARBS";
   return mealType;
 }
 
@@ -88,18 +69,14 @@ export function calculateControlScore(evaluations: (string | null)[]): number {
   return Math.round((good / evaluations.length) * 100);
 }
 
-export function calculateHypoRate(
-  glucoseAfters: (number | null)[],
-): number {
+export function calculateHypoRate(glucoseAfters: (number | null)[]): number {
   const withData = glucoseAfters.filter((g): g is number => g != null);
   if (withData.length === 0) return 0;
   const hypos = withData.filter((g) => g < 70).length;
   return Math.round((hypos / withData.length) * 100);
 }
 
-export function calculateSpikeRate(
-  glucoseAfters: (number | null)[],
-): number {
+export function calculateSpikeRate(glucoseAfters: (number | null)[]): number {
   const withData = glucoseAfters.filter((g): g is number => g != null);
   if (withData.length === 0) return 0;
   const spikes = withData.filter((g) => g > 180).length;

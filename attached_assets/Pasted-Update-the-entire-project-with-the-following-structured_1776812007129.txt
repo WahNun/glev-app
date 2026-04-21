@@ -1,0 +1,338 @@
+Update the entire project with the following structured changes.
+
+--------------------------------------------------
+🎯 1. FULL REBRAND TO "GLEV"
+--------------------------------------------------
+
+- Rename the app to: Glev
+- Rename the engine to: Glev Engine
+
+Update:
+- all UI titles
+- navigation labels
+- metadata
+
+Tagline:
+"Glev — Smart insulin decisions"
+
+--------------------------------------------------
+🎨 2. LOGO DESIGN (3 VARIANTS)
+--------------------------------------------------
+
+Create 3 logo concepts:
+
+A) Minimal Tech
+B) Health Precision
+C) Modern AI
+
+Show each in:
+- mobile header
+- dashboard top bar
+- splash screen
+
+--------------------------------------------------
+🧩 3. DATA MODEL (CORE SYSTEM)
+--------------------------------------------------
+
+Create file:
+/src/lib/types.ts
+
+export type MealType =
+  | "FAST_CARBS"
+  | "HIGH_FAT"
+  | "HIGH_PROTEIN"
+  | "BALANCED";
+
+export type Evaluation =
+  | "GOOD"
+  | "SLIGHT_UNDERDOSE"
+  | "UNDERDOSE"
+  | "SLIGHT_OVERDOSE"
+  | "OVERDOSE";
+
+export type Entry = {
+  id: string;
+
+  date: string;
+  meal: "Breakfast" | "Lunch" | "Dinner";
+
+  glucose_before: number;
+  glucose_after?: number;
+
+  carbs: number;
+  protein?: number;
+  fat?: number;
+
+  bolus_units: number;
+
+  meal_type: MealType;
+  meal_reason: string;
+
+  delta?: number;
+  duration_min?: number;
+  speed?: number;
+
+  evaluation: Evaluation;
+  confidence?: number;
+
+  notes?: string;
+};
+
+--------------------------------------------------
+🧠 4. CLASSIFIER
+--------------------------------------------------
+
+Create:
+/src/lib/classifier.ts
+
+Implement classifyMeal(input):
+
+Rules priority:
+
+1. FAST_CARBS override (keywords):
+   sugar, juice, banana, granola, dessert, cake, white bread, cinnamon roll
+
+2. HIGH_FAT:
+   fat > 30g OR fat% > 40%
+
+3. FAST_CARBS:
+   carbs% > 60% AND fat < 20 AND protein < 25
+
+4. HIGH_PROTEIN:
+   protein > 40 AND carbs < 40
+
+5. else → BALANCED
+
+Return:
+- type
+- reason
+
+--------------------------------------------------
+📊 5. CALCULATION ENGINE
+--------------------------------------------------
+
+Create:
+/src/lib/calculation.ts
+
+Functions:
+- calculateDelta
+- calculateDuration
+- calculateSpeed
+- evaluateEntry
+
+Rules:
+
+speed > 60 → UNDERDOSE  
+30–60 → SLIGHT_UNDERDOSE  
+-20 to 20 → GOOD  
+-30 to -60 → SLIGHT_OVERDOSE  
+< -60 → OVERDOSE  
+
+Override:
+glucose_after < 70 → OVERDOSE
+
+--------------------------------------------------
+🧠 6. RECOMMENDATION ENGINE (FIXED)
+--------------------------------------------------
+
+Update recommendation logic:
+
+NO fixed carb ratio allowed.
+
+Use history:
+
+1. Filter valid entries:
+- exclude OVERDOSE
+- exclude extreme spikes
+
+2. Build groups:
+- recent (last 5–10)
+- similar (same meal_type + ±20g carbs)
+- global
+
+3. Weighted ratio:
+
+final_ratio =
+0.6 recent +
+0.3 similar +
+0.1 global
+
+4. Base:
+units = carbs / final_ratio
+
+5. Adjust:
+
+glucose < 90 → -0.5  
+glucose > 140 → +0.5  
+
+HIGH_FAT → -0.5 + split  
+FAST_CARBS → +0.5  
+
+6. Safety:
+
+NEVER suggest >3 units unless glucose >180
+
+Return:
+- units
+- range
+- confidence
+- reasoning
+
+--------------------------------------------------
+🔗 7. LOGGING FLOW INTEGRATION
+--------------------------------------------------
+
+When creating an entry:
+
+1. classifyMeal()
+2. calculate delta, duration, speed
+3. evaluateEntry()
+
+Store FULL Entry object.
+
+Rules:
+- meal_type must always exist
+- user can override, but default is automatic
+
+--------------------------------------------------
+📊 8. GOOGLE SHEETS STRUCTURE
+--------------------------------------------------
+
+Columns:
+
+id
+date
+meal
+glucose_before
+glucose_after
+carbs
+protein
+fat
+bolus_units
+meal_type
+meal_reason
+delta
+duration
+speed
+evaluation
+confidence
+notes
+
+--------------------------------------------------
+📱 9. UI STRUCTURE + FRAMES
+--------------------------------------------------
+
+Add 3 Decision Screen variants:
+
+1. Original
+2. Minimal Mode
+3. Advanced Mode
+
+All must:
+- be clickable
+- recalculate instantly
+- reflect same logic
+
+Add toggle:
+"Compare Modes"
+
+Render:
+- mobile view (iPhone)
+- desktop comparison
+
+--------------------------------------------------
+🎤 10. VOICE INPUT FEATURE
+--------------------------------------------------
+
+Add navigation:
+
+Mobile:
+- center bottom button
+- circular
+- microphone icon
+
+States:
+Idle / Recording / Processing / Preview
+
+--------------------------------------------------
+🧠 11. VOICE FLOW
+--------------------------------------------------
+
+1. Tap
+2. Record
+3. Speech → text
+4. Parse → JSON
+5. Show preview
+6. Confirm → save
+
+--------------------------------------------------
+📱 12. VOICE SCREEN
+--------------------------------------------------
+
+Mobile:
+- large centered button
+- minimal UI
+
+Preview card:
+Meal
+Glucose
+Carbs
+Bolus
+
+Buttons:
+Confirm / Edit
+
+--------------------------------------------------
+🖥️ 13. DESKTOP VOICE
+--------------------------------------------------
+
+- separate tab
+- centered record UI
+
+--------------------------------------------------
+🧠 14. MOCK PARSER
+--------------------------------------------------
+
+Input:
+"chicken rice 80 carbs 3 units 120 glucose"
+
+Output JSON:
+{
+  meal: "Dinner",
+  carbs: 80,
+  glucose_before: 120,
+  bolus_units: 3,
+  food_description: "chicken rice"
+}
+
+--------------------------------------------------
+🎨 15. DESIGN SYSTEM
+--------------------------------------------------
+
+- minimal
+- fast
+- clean
+
+Colors:
+Green / Orange / Red
+
+--------------------------------------------------
+⚠️ 16. RULES
+--------------------------------------------------
+
+- no static ratio
+- must use history
+- must use classification
+- must show reasoning
+- must be fast
+
+--------------------------------------------------
+FINAL GOAL
+
+Transform Glev into a real adaptive system:
+
+- structured data
+- intelligent classification
+- personalized insulin recommendations
+- voice-driven logging
+- fast, clean UX
