@@ -1,8 +1,9 @@
 import React from "react";
 import { Link, useLocation } from "wouter";
-import { Plus, Upload, Lightbulb, Zap, List, Mic, LayoutDashboard } from "lucide-react";
+import { Plus, Upload, Lightbulb, Zap, List, Mic, LayoutDashboard, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GlevLogoMark } from "@/components/logo-mark";
+import { logout } from "@/lib/auth";
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -15,7 +16,12 @@ const NAV_ITEMS = [
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
+
+  function handleLogout() {
+    logout();
+    setLocation("/login");
+  }
 
   return (
     <div className="min-h-[100dvh] flex flex-col md:flex-row bg-background">
@@ -49,6 +55,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
+
+        {/* Logout — desktop sidebar */}
+        <div className="p-4 border-t border-border">
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-3 px-3 py-2 w-full rounded-md text-sm font-medium text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            Sign out
+          </button>
+        </div>
       </aside>
 
       {/* Top Navbar (Mobile) */}
@@ -57,7 +74,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <GlevLogoMark size={28} />
           <span>Glev</span>
         </Link>
-        <p className="text-[11px] text-muted-foreground">Smart insulin decisions</p>
+        <div className="flex items-center gap-2">
+          <p className="text-[11px] text-muted-foreground">Smart insulin decisions</p>
+          <button
+            onClick={handleLogout}
+            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Sign out"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
       </header>
 
       {/* Bottom Nav (Mobile) */}

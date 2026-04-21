@@ -555,6 +555,190 @@ function Recommend() {
   );
 }
 
+// ─── MOBILE DASHBOARD ────────────────────────────────────────────
+
+function MobileDashboard() {
+  const [mobilePage, setMobilePage] = useState<"dashboard"|"log"|"entries"|"recommend">("dashboard");
+
+  const mobileStatCards = [
+    { label: "Control Score", value: "75", unit: "/100", sub: "Last 8 entries", color: ACCENT, bar: 75 },
+    { label: "Time in Range", value: "62.5", unit: "%", sub: "5 of 8 entries", color: GREEN, bar: 62.5 },
+    { label: "Spike Rate", value: "25.0", unit: "%", sub: "Hyperglycemia", color: ORANGE, bar: 25 },
+    { label: "Hypo Rate", value: "0.0", unit: "%", sub: "Hypoglycemia", color: PINK, bar: 0 },
+  ];
+
+  const mobileNavItems = [
+    { id: "dashboard" as const, icon: "⊞", label: "Dashboard" },
+    { id: "entries" as const, icon: "≡", label: "Entries" },
+    { id: "recommend" as const, icon: "⟲", label: "Engine" },
+  ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", width: "100%", height: "100%", background: BG, color: "white", fontFamily: "'Inter', system-ui, sans-serif", position: "relative", overflow: "hidden" }}>
+      {/* Mobile Header */}
+      <div style={{ padding: "16px 20px 12px", background: SURFACE, borderBottom: `1px solid ${BORDER}`, flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <LogoCMark size={30} />
+            <div>
+              <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: "-0.02em" }}>Glev</div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", marginTop: 1 }}>Smart insulin decisions</div>
+            </div>
+          </div>
+          <div style={{ fontSize: 11, padding: "5px 12px", borderRadius: 99, background: `${GREEN}18`, color: GREEN, fontWeight: 600 }}>Live</div>
+        </div>
+      </div>
+
+      {/* Scrollable Content */}
+      <div style={{ flex: 1, overflow: "auto", padding: "16px 16px 90px" }}>
+        {mobilePage === "dashboard" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {/* Stat Cards — stacked */}
+            {mobileStatCards.map((sc) => (
+              <div key={sc.label} style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "16px 18px" }}>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 6, letterSpacing: "0.08em" }}>{sc.label.toUpperCase()}</div>
+                <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 10 }}>
+                  <div style={{ display: "flex", alignItems: "flex-end", gap: 4 }}>
+                    <span style={{ fontSize: 34, fontWeight: 800, color: sc.color, letterSpacing: "-0.03em" }}>{sc.value}</span>
+                    <span style={{ fontSize: 13, color: "rgba(255,255,255,0.3)", paddingBottom: 4 }}>{sc.unit}</span>
+                  </div>
+                  <span style={{ fontSize: 11, color: "rgba(255,255,255,0.3)" }}>{sc.sub}</span>
+                </div>
+                <div style={{ height: 4, background: "rgba(255,255,255,0.07)", borderRadius: 99, overflow: "hidden" }}>
+                  <div style={{ width: `${sc.bar}%`, height: "100%", background: sc.color, borderRadius: 99 }} />
+                </div>
+              </div>
+            ))}
+
+            {/* Glucose Trend — full width */}
+            <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "16px 18px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>Glucose Trend</div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>Pre-meal · 7 days</div>
+                </div>
+                <span style={{ fontSize: 11, padding: "4px 10px", background: `${ACCENT}22`, color: ACCENT, borderRadius: 99 }}>7d</span>
+              </div>
+              <div style={{ position: "relative" }}>
+                <div style={{ position: "absolute", left: 0, right: 0, top: `${((maxG - 140) / (maxG - minG)) * 100}%`, height: `${((140 - 80) / (maxG - minG)) * 100}%`, background: `${GREEN}0A`, borderTop: `1px dashed ${GREEN}50`, borderBottom: `1px dashed ${GREEN}50` }} />
+                <svg width="100%" height={H + 10} viewBox={`0 0 ${W} ${H + 10}`} preserveAspectRatio="none" style={{ display: "block" }}>
+                  <defs>
+                    <linearGradient id="mdg" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={ACCENT} stopOpacity="0.25" />
+                      <stop offset="100%" stopColor={ACCENT} stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
+                  <path d={areaD} fill="url(#mdg)" />
+                  <path d={pathD} fill="none" stroke={ACCENT} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                  {glucosePoints.map((g, i) => g > 180 ? <circle key={i} cx={toX(i)} cy={toY(g)} r={4} fill={ORANGE} /> : g < 70 ? <circle key={i} cx={toX(i)} cy={toY(g)} r={4} fill={PINK} /> : null)}
+                </svg>
+              </div>
+            </div>
+
+            {/* Outcomes — stacked */}
+            <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "16px 18px" }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>Outcomes</div>
+              {[
+                { label: "GOOD", count: 5, pct: 62.5, color: GREEN },
+                { label: "UNDERDOSE", count: 2, pct: 25, color: ORANGE },
+                { label: "OVERDOSE", count: 1, pct: 12.5, color: PINK },
+                { label: "CHECK", count: 0, pct: 0, color: "#4B5070" },
+              ].map((r) => (
+                <div key={r.label} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: 99, background: r.color, flexShrink: 0 }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                      <span style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", letterSpacing: "0.06em" }}>{r.label}</span>
+                      <span style={{ fontSize: 12, color: r.color, fontWeight: 700 }}>{r.count}</span>
+                    </div>
+                    <div style={{ height: 4, background: "rgba(255,255,255,0.07)", borderRadius: 99, overflow: "hidden" }}>
+                      <div style={{ width: `${r.pct}%`, height: "100%", background: r.color, borderRadius: 99 }} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Recent Entries — scrollable list */}
+            <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 14, overflow: "hidden" }}>
+              <div style={{ padding: "14px 18px 12px", borderBottom: `1px solid ${BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>Recent Entries</div>
+                <span style={{ fontSize: 11, color: ACCENT }}>View all →</span>
+              </div>
+              {entries.slice(0, 5).map((e, i) => {
+                const ev = evalStyle(e.eval);
+                return (
+                  <div key={i} style={{ padding: "14px 18px", borderBottom: i < 4 ? `1px solid rgba(255,255,255,0.04)` : "none", display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.meal}</div>
+                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>{e.time}</div>
+                    </div>
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: e.bg > 140 ? ORANGE : e.bg < 80 ? PINK : "rgba(255,255,255,0.8)", marginBottom: 3 }}>{e.bg} <span style={{ fontSize: 10, fontWeight: 400, color: "rgba(255,255,255,0.3)" }}>mg/dL</span></div>
+                      <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, fontWeight: 700, background: `${ev.color}18`, color: ev.color }}>{ev.label}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {mobilePage === "log" && (
+          <div style={{ padding: "8px 0" }}><QuickLog /></div>
+        )}
+        {mobilePage === "entries" && (
+          <div style={{ padding: "8px 0" }}><EntryLog /></div>
+        )}
+        {mobilePage === "recommend" && (
+          <div style={{ padding: "8px 0" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <Recommend />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Bottom Navigation Bar */}
+      <div style={{
+        position: "absolute", bottom: 0, left: 0, right: 0,
+        background: SURFACE, borderTop: `1px solid ${BORDER}`,
+        display: "flex", alignItems: "center", justifyContent: "space-around",
+        padding: "10px 24px 20px", zIndex: 10
+      }}>
+        {mobileNavItems.map((item) => (
+          <button key={item.id} onClick={() => setMobilePage(item.id)} style={{
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+            background: "none", border: "none", cursor: "pointer",
+            color: mobilePage === item.id ? ACCENT : "rgba(255,255,255,0.3)",
+            padding: "4px 12px", borderRadius: 10, transition: "all 0.15s",
+            fontSize: 20,
+          }}>
+            <span>{item.icon}</span>
+            <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.04em" }}>{item.label.toUpperCase()}</span>
+          </button>
+        ))}
+
+        {/* Center Voice Button */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, marginTop: -20 }}>
+          <button onClick={() => setMobilePage("log")} style={{
+            width: 56, height: 56, borderRadius: 99,
+            background: `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
+            border: "none", cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 22, boxShadow: `0 0 20px ${ACCENT}55`,
+            animation: "micPulse 2.5s ease-in-out infinite",
+            transition: "transform 0.15s",
+          }}>
+            🎤
+          </button>
+          <span style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", fontWeight: 600, letterSpacing: "0.04em" }}>VOICE</span>
+          <style>{`@keyframes micPulse { 0%,100% { box-shadow: 0 0 20px ${ACCENT}55; } 50% { box-shadow: 0 0 32px ${ACCENT}88, 0 0 60px ${ACCENT}33; } }`}</style>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── LAYOUT ──────────────────────────────────────────────────────
 
 const NAV: { id: Page; icon: string; label: string }[] = [
@@ -577,52 +761,100 @@ const PAGE_TITLES: Record<Page, string> = {
 
 export function DarkCockpit() {
   const [page, setPage] = useState<Page>("dashboard");
+  const [view, setView] = useState<"desktop"|"mobile">("desktop");
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: BG, color: "white", fontFamily: "'Inter', system-ui, sans-serif" }}>
-      {/* Sidebar */}
-      <div style={{ width: 56, background: SURFACE, borderRight: `1px solid ${BORDER}`, display: "flex", flexDirection: "column", padding: "20px 10px", gap: 4, flexShrink: 0 }}>
-        <LogoCMark size={36} style={{ marginBottom: 20, cursor: "pointer", flexShrink: 0 }} />
-        {NAV.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => setPage(item.id)}
-            title={item.label}
-            style={{ width: 36, height: 36, borderRadius: 10, border: "none", background: page === item.id ? `${ACCENT}22` : "transparent", color: page === item.id ? ACCENT : "rgba(255,255,255,0.28)", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}
-          >
-            {item.icon}
-          </button>
-        ))}
+    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", background: BG, color: "white", fontFamily: "'Inter', system-ui, sans-serif" }}>
+      {/* View Toggle Bar */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "10px 0", background: "#0C0C10", borderBottom: `1px solid ${BORDER}`, gap: 0 }}>
+        <button onClick={() => setView("desktop")} style={{
+          padding: "6px 22px", borderRadius: "8px 0 0 8px",
+          background: view === "desktop" ? `${ACCENT}22` : "transparent",
+          border: `1px solid ${view === "desktop" ? ACCENT : "rgba(255,255,255,0.12)"}`,
+          color: view === "desktop" ? ACCENT : "rgba(255,255,255,0.4)",
+          fontSize: 12, fontWeight: 600, cursor: "pointer", letterSpacing: "0.04em",
+          borderRight: "none", transition: "all 0.15s",
+        }}>
+          🖥 Desktop
+        </button>
+        <button onClick={() => setView("mobile")} style={{
+          padding: "6px 22px", borderRadius: "0 8px 8px 0",
+          background: view === "mobile" ? `${ACCENT}22` : "transparent",
+          border: `1px solid ${view === "mobile" ? ACCENT : "rgba(255,255,255,0.12)"}`,
+          color: view === "mobile" ? ACCENT : "rgba(255,255,255,0.4)",
+          fontSize: 12, fontWeight: 600, cursor: "pointer", letterSpacing: "0.04em",
+          transition: "all 0.15s",
+        }}>
+          📱 Mobile
+        </button>
       </div>
 
-      {/* Main */}
-      <div style={{ flex: 1, padding: "24px 28px", overflow: "auto" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-          <div>
-            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", letterSpacing: "0.12em", marginBottom: 3 }}>GLEV — SMART INSULIN DECISIONS</div>
-            <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0, letterSpacing: "-0.02em" }}>{PAGE_TITLES[page]}</h1>
+      {view === "desktop" ? (
+        <div style={{ display: "flex", flex: 1 }}>
+          {/* Sidebar */}
+          <div style={{ width: 56, background: SURFACE, borderRight: `1px solid ${BORDER}`, display: "flex", flexDirection: "column", padding: "20px 10px", gap: 4, flexShrink: 0 }}>
+            <LogoCMark size={36} style={{ marginBottom: 20, cursor: "pointer", flexShrink: 0 }} />
+            {NAV.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setPage(item.id)}
+                title={item.label}
+                style={{ width: 36, height: 36, borderRadius: 10, border: "none", background: page === item.id ? `${ACCENT}22` : "transparent", color: page === item.id ? ACCENT : "rgba(255,255,255,0.28)", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}
+              >
+                {item.icon}
+              </button>
+            ))}
           </div>
-          {page !== "log" && page !== "recommend" && (
-            <button onClick={() => setPage("log")} style={{ fontSize: 12, fontWeight: 600, padding: "8px 16px", borderRadius: 20, background: `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`, border: "none", color: "white", cursor: "pointer", letterSpacing: "0.01em" }}>
-              + Quick Log
-            </button>
-          )}
+
+          {/* Main */}
+          <div style={{ flex: 1, padding: "24px 28px", overflow: "auto" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+              <div>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", letterSpacing: "0.12em", marginBottom: 3 }}>GLEV — SMART INSULIN DECISIONS</div>
+                <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0, letterSpacing: "-0.02em" }}>{PAGE_TITLES[page]}</h1>
+              </div>
+              {page !== "log" && page !== "recommend" && (
+                <button onClick={() => setPage("log")} style={{ fontSize: 12, fontWeight: 600, padding: "8px 16px", borderRadius: 20, background: `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`, border: "none", color: "white", cursor: "pointer", letterSpacing: "0.01em" }}>
+                  + Quick Log
+                </button>
+              )}
+            </div>
+
+            {page === "dashboard" && <Dashboard />}
+            {page === "log" && <QuickLog />}
+            {page === "entries" && <EntryLog />}
+            {page === "insights" && <Insights />}
+            {page === "recommend" && <Recommend />}
+            {page === "import" && (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 400, gap: 16, color: "rgba(255,255,255,0.3)" }}>
+                <div style={{ fontSize: 48, opacity: 0.4 }}>⬆</div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: "rgba(255,255,255,0.6)" }}>Import Center</div>
+                <div style={{ fontSize: 13 }}>Paste tab-separated data or upload a CSV file.</div>
+                <button style={{ padding: "10px 24px", background: ACCENT, border: "none", borderRadius: 10, color: "white", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Upload CSV</button>
+              </div>
+            )}
+          </div>
         </div>
-
-        {page === "dashboard" && <Dashboard />}
-        {page === "log" && <QuickLog />}
-        {page === "entries" && <EntryLog />}
-        {page === "insights" && <Insights />}
-        {page === "recommend" && <Recommend />}
-        {page === "import" && (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 400, gap: 16, color: "rgba(255,255,255,0.3)" }}>
-            <div style={{ fontSize: 48, opacity: 0.4 }}>⬆</div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: "rgba(255,255,255,0.6)" }}>Import Center</div>
-            <div style={{ fontSize: 13 }}>Paste tab-separated data or upload a CSV file.</div>
-            <button style={{ padding: "10px 24px", background: ACCENT, border: "none", borderRadius: 10, color: "white", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Upload CSV</button>
+      ) : (
+        /* Mobile Frame */
+        <div style={{ flex: 1, display: "flex", alignItems: "flex-start", justifyContent: "center", background: "#050508", padding: "32px 24px 40px" }}>
+          <div style={{
+            width: 390, height: 844, borderRadius: 44,
+            overflow: "hidden", position: "relative",
+            boxShadow: `0 0 0 1px rgba(255,255,255,0.12), 0 32px 80px rgba(0,0,0,0.8), inset 0 0 0 1px rgba(255,255,255,0.06)`,
+            background: BG, flexShrink: 0,
+          }}>
+            {/* Notch */}
+            <div style={{ position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)", width: 120, height: 32, background: "#000", borderRadius: "0 0 18px 18px", zIndex: 20 }} />
+            {/* Status bar spacer */}
+            <div style={{ height: 44 }} />
+            {/* Content */}
+            <div style={{ height: 800, overflow: "hidden" }}>
+              <MobileDashboard />
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,0 +1,359 @@
+Update the project with the following changes.
+
+Do NOT remove any existing functionality.
+Extend and integrate cleanly.
+
+--------------------------------------------------
+🎯 1. REMOVE LIGHT VERSION
+--------------------------------------------------
+
+- Remove the light dashboard completely
+- Keep ONLY:
+
+"Variant A — Dark Cockpit (interactive)"
+
+This is now the single design system.
+
+--------------------------------------------------
+🎨 2. LOCK DESIGN SYSTEM
+--------------------------------------------------
+
+Use the dark cockpit style everywhere:
+
+- dark background
+- subtle glow
+- neon accents (blue / green / orange)
+- clean minimal cards
+- soft shadows
+
+Do NOT introduce light themes anymore.
+
+--------------------------------------------------
+📱 3. CREATE MOBILE FRAME (CRITICAL)
+--------------------------------------------------
+
+Create a fully responsive mobile version of the dashboard.
+
+Simulate:
+- iPhone viewport
+- vertical layout
+- thumb-friendly spacing
+
+--------------------------------------------------
+📐 MOBILE LAYOUT STRUCTURE
+--------------------------------------------------
+
+Top → Bottom:
+
+1. Header
+- "Glev"
+- small subtitle: "Smart insulin decisions"
+
+2. Control Cards (stacked vertically)
+- Control Score
+- Time in Range
+- Spike Rate
+- Hypo Rate
+
+3. Glucose Trend (full width)
+
+4. Outcomes (stacked)
+
+5. Recent Entries (scrollable list)
+
+--------------------------------------------------
+📊 4. MOBILE COMPONENT RULES
+--------------------------------------------------
+
+- cards full width
+- spacing increased
+- font slightly larger
+- tap targets big
+
+- no cramped layout
+- no desktop grid
+
+--------------------------------------------------
+🧠 5. KEEP INTERACTIVITY
+--------------------------------------------------
+
+IMPORTANT:
+
+The mobile frame must be:
+- fully interactive
+- same logic as desktop
+- live updates
+- no static mock
+
+--------------------------------------------------
+🖱️ 6. ADD VIEW SWITCH
+--------------------------------------------------
+
+Add toggle:
+
+[ Desktop ] [ Mobile ]
+
+Switch between:
+
+- Dark Cockpit Desktop
+- Dark Cockpit Mobile
+
+--------------------------------------------------
+🎤 7. PREPARE MOBILE NAVIGATION + VOICE BUTTON
+--------------------------------------------------
+
+Add bottom navigation bar (mobile only).
+
+Center position:
+→ circular voice button
+
+Design:
+- large primary button
+- microphone icon
+- subtle pulse animation
+
+(placeholder must exist even before full voice implementation)
+
+--------------------------------------------------
+🔐 8. PASSWORD PROTECTED ACCESS (MVP AUTH)
+--------------------------------------------------
+
+Create:
+
+/src/app/login/page.tsx
+
+Login screen:
+- centered layout
+- password input
+- submit button
+
+Style:
+- minimal
+- Apple Health style
+- calm UI
+
+--------------------------------------------------
+🧠 9. AUTH LOGIC
+--------------------------------------------------
+
+Use environment variable:
+
+NEXT_PUBLIC_APP_PASSWORD
+
+On login:
+- compare password
+- if correct:
+
+localStorage.setItem("glev_auth", "true")
+
+--------------------------------------------------
+🔄 10. SESSION HANDLING
+--------------------------------------------------
+
+Create:
+
+/src/lib/auth.ts
+
+Functions:
+- isAuthenticated()
+- login()
+- logout()
+
+--------------------------------------------------
+🚫 11. ROUTE PROTECTION
+--------------------------------------------------
+
+Protect routes:
+
+- /dashboard
+- /log
+- /import
+- /recommendation
+- /voice
+
+If not authenticated:
+→ redirect to /login
+
+--------------------------------------------------
+🔓 12. LOGOUT
+--------------------------------------------------
+
+Add logout button in header:
+
+- clears localStorage
+- redirects to /login
+
+--------------------------------------------------
+🎤 13. VOICE INPUT SYSTEM (CORE FEATURE)
+--------------------------------------------------
+
+Create route:
+
+/src/app/voice/page.tsx
+
+--------------------------------------------------
+📱 14. VOICE SCREEN UI
+--------------------------------------------------
+
+Layout:
+
+- large centered record button
+- status text:
+
+"Tap to speak"
+"Listening..."
+"Processing..."
+
+--------------------------------------------------
+🎬 15. VOICE STATES
+--------------------------------------------------
+
+1. Idle
+2. Recording
+3. Processing
+4. Preview
+
+--------------------------------------------------
+🧠 16. VOICE FLOW
+--------------------------------------------------
+
+1. User taps record
+2. Start speech recognition (Web Speech API)
+3. Convert speech → text
+4. Send text to parser
+5. Convert to structured JSON
+6. Show preview
+7. Confirm → save entry
+
+--------------------------------------------------
+🧪 17. MOCK PARSER (MVP)
+--------------------------------------------------
+
+Create:
+
+/src/lib/voiceParser.ts
+
+Function:
+
+parseVoiceInput(text)
+
+Example:
+
+Input:
+"chicken rice 80 carbs 3 units 120 glucose"
+
+Output:
+
+{
+  meal: "Dinner",
+  carbs: 80,
+  glucose_before: 120,
+  bolus_units: 3,
+  protein: null,
+  fat: null,
+  fiber: null,
+  food_description: "chicken rice"
+}
+
+--------------------------------------------------
+📊 18. PREVIEW CARD
+--------------------------------------------------
+
+After parsing, show:
+
+Meal  
+Glucose  
+Carbs  
+Fiber (if available)  
+Bolus  
+
+Buttons:
+[Confirm] [Edit]
+
+--------------------------------------------------
+🔗 19. DATA MODEL INTEGRATION
+--------------------------------------------------
+
+On confirm:
+
+1. classifyMeal()
+2. calculate:
+   - delta
+   - duration
+   - speed
+3. evaluateEntry()
+
+4. store full Entry object
+
+--------------------------------------------------
+🧠 20. RECOMMENDATION HOOK
+--------------------------------------------------
+
+After parsing (before confirm):
+
+Display:
+
+Suggested:
+X Units
+
+Reason:
+Based on similar meal patterns
+
+--------------------------------------------------
+🖥️ 21. DESKTOP VOICE VERSION
+--------------------------------------------------
+
+- Add "Voice" tab in navigation
+- centered UI
+- same logic as mobile
+
+--------------------------------------------------
+⚡ 22. PERFORMANCE
+--------------------------------------------------
+
+- instant feedback (<100ms)
+- no page reload
+- live UI updates
+
+--------------------------------------------------
+🧠 23. FUTURE READY STRUCTURE
+--------------------------------------------------
+
+Voice parser must be modular and replaceable with:
+
+- OpenAI API
+- Whisper
+- structured GPT output
+
+Auth must be replaceable with:
+- Supabase
+- Clerk
+
+--------------------------------------------------
+⚠️ 24. STRICT RULES
+--------------------------------------------------
+
+- do NOT redesign UI
+- do NOT add light theme
+- do NOT change color system
+- do NOT break existing logic
+
+Only:
+- unify UI
+- add mobile
+- add auth
+- add voice system
+
+--------------------------------------------------
+FINAL GOAL
+
+Glev becomes:
+
+- a dark cockpit system
+- fully responsive (desktop + mobile)
+- password-protected
+- voice-enabled
+- fast and interactive
+
+Focus:
+Speed, clarity, control.
