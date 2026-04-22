@@ -154,10 +154,10 @@ export default function LogPage() {
                   <button
                     onClick={saveEntry}
                     style={{
-                      width: "100%", padding: "12px", border: "none", borderRadius: 11, cursor: "pointer",
+                      width: "100%", padding: "12px", border: `1px solid ${GREEN}33`, borderRadius: 11, cursor: "pointer",
                       background: `${GREEN}22`, color: GREEN, fontSize: 14, fontWeight: 700,
-                      border: `1px solid ${GREEN}33` as any, transition: "all 0.15s",
-                    } as React.CSSProperties}
+                      transition: "all 0.15s",
+                    }}
                   >
                     ✓ Save Entry
                   </button>

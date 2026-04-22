@@ -79,12 +79,14 @@ export default function DashboardPage() {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
     if (!apiUrl) { setLoading(false); return; }
     Promise.all([
-      fetch(`${apiUrl}/api/insights/dashboard`).then(r => r.json()),
-      fetch(`${apiUrl}/api/insights/glucose-trend`).then(r => r.json()),
+      fetch(`${apiUrl}/api/insights/dashboard`).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
+      fetch(`${apiUrl}/api/insights/glucose-trend`).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
     ]).then(([s, t]) => {
-      setStats(s);
-      setTrend((t.points ?? []).slice(0, 20).reverse());
-    }).catch(() => {}).finally(() => setLoading(false));
+      if (s && typeof s.controlScore === "number") setStats(s as DashboardStats);
+      setTrend(Array.isArray((t as { points?: TrendPoint[] }).points) ? ((t as { points: TrendPoint[] }).points).slice(0, 20).reverse() : []);
+    }).catch(() => {
+      setStats(null);
+    }).finally(() => setLoading(false));
   }, []);
 
   const trendPts = trend.map(p => p.glucoseBefore).filter(Boolean) as number[];

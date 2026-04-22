@@ -53,9 +53,13 @@ export default function LoginPage() {
         await signIn(email, password);
         router.push("/dashboard");
       } else {
-        await signUp(email, password);
-        setSuccess("Account created! Check your email to confirm, then sign in.");
-        setTab("signin");
+        const { needsEmailConfirmation } = await signUp(email, password);
+        if (needsEmailConfirmation) {
+          setSuccess("Account created! Check your email to confirm, then sign in.");
+          setTab("signin");
+        } else {
+          router.push("/dashboard");
+        }
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Something went wrong");
