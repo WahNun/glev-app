@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 
+if (!process.env.OPENAI_API_KEY) {
+  console.warn("Missing OPENAI_API_KEY env variable");
+}
+
 const openai = new OpenAI({
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  apiKey:  process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY ?? "",
 });
 
 const SYSTEM_PROMPT = `You are a food quantity parser for a diabetes management app.
