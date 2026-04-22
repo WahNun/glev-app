@@ -1,0 +1,130 @@
+Finalize the project for Vercel deployment WITHOUT breaking the existing monorepo.
+
+--------------------------------------------------
+🎯 GOAL
+--------------------------------------------------
+
+- Keep monorepo intact
+- Ensure Vercel correctly detects Next.js inside /src
+- Remove all invalid Vercel config
+- Ensure clean standalone build inside /src
+
+--------------------------------------------------
+🧠 1. VERIFY NEXT.JS APP LOCATION
+--------------------------------------------------
+
+Ensure:
+
+- Next.js app is fully inside /src
+- /src contains:
+  - package.json (with "next")
+  - next.config.js (if exists)
+  - app/ or pages/
+
+--------------------------------------------------
+🧾 2. CLEAN VERCEL CONFIG
+--------------------------------------------------
+
+Check entire repo for:
+
+- vercel.json
+- package.json "vercel" config
+
+REMOVE any occurrence of:
+
+"rootDirectory"
+
+--------------------------------------------------
+🧠 3. CREATE CLEAN CONFIG INSIDE /src
+--------------------------------------------------
+
+Create file:
+
+/src/vercel.json
+
+Content:
+
+{
+  "framework": "nextjs"
+}
+
+Do NOT include:
+- installCommand
+- buildCommand
+- rootDirectory
+
+--------------------------------------------------
+🧠 4. ENSURE STANDALONE BUILD
+--------------------------------------------------
+
+Inside /src:
+
+Run:
+
+npm install
+npm run build
+
+Ensure:
+
+- Next.js builds successfully
+- no workspace dependencies required
+- no imports from outside /src
+
+--------------------------------------------------
+🧠 5. PACKAGE MANAGER SAFETY
+--------------------------------------------------
+
+Inside /src/package.json:
+
+Ensure scripts exist:
+
+"scripts": {
+  "dev": "next dev",
+  "build": "next build",
+  "start": "next start"
+}
+
+--------------------------------------------------
+🧠 6. REMOVE BUILD INTERFERENCE
+--------------------------------------------------
+
+Ensure these folders are NOT used during build:
+
+- artifacts/
+- mockup-sandbox/
+- scripts/
+
+Do NOT delete them, just ensure /src is isolated.
+
+--------------------------------------------------
+🧠 7. ENV COMPATIBILITY
+--------------------------------------------------
+
+Ensure all required env vars are referenced correctly:
+
+- process.env.NEXT_PUBLIC_*
+- process.env.SUPABASE_*
+- process.env.GOOGLE_*
+
+No hardcoded secrets.
+
+--------------------------------------------------
+🧠 8. FINAL STATE
+--------------------------------------------------
+
+Project structure:
+
+/root
+  /src   ← deploy target
+  /artifacts
+  /scripts
+  package.json (workspace, ignored by Vercel)
+
+--------------------------------------------------
+FINAL RESULT
+--------------------------------------------------
+
+- Monorepo remains intact
+- Vercel uses /src as root
+- Next.js is detected automatically
+- Build succeeds
