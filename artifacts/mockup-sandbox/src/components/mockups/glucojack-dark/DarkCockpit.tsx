@@ -13,7 +13,7 @@ const BORDER = "rgba(255,255,255,0.06)";
 
 // ─── Types ───────────────────────────────────────────────────────
 type MealTypeKey = "FAST_CARBS" | "HIGH_FAT" | "HIGH_PROTEIN" | "BALANCED";
-type Page = "dashboard" | "log" | "entries" | "insights" | "recommend" | "voice" | "import" | "profile";
+type Page = "dashboard" | "log" | "entries" | "insights" | "recommend" | "import" | "profile";
 
 interface Entry {
   id: number;
@@ -346,8 +346,10 @@ function Dashboard() {
   );
 }
 
-// ─── QUICK LOG ───────────────────────────────────────────────────
-function QuickLog({ onLogged }: { onLogged?: ()=>void }) {
+// ─── LOG PAGE (Voice + Manual, unified) ──────────────────────────
+type VoiceInputState = "idle"|"recording"|"processing";
+
+function LogPage({ onLogged }: { onLogged?: ()=>void }) {
   const [glucose,setGlucose]=useState("");
   const [carbs,setCarbs]=useState("");
   const [fiber,setFiber]=useState("");
@@ -361,6 +363,12 @@ function QuickLog({ onLogged }: { onLogged?: ()=>void }) {
   const [loading,setLoading]=useState(false);
   const [done,setDone]=useState(false);
   const [error,setError]=useState("");
+  const [voiceStatus,setVoiceStatus]=useState<VoiceInputState>("idle");
+  const [transcript,setTranscript]=useState("");
+  const recognitionRef=useRef<any>(null);
+
+  const SR=typeof window!=="undefined"?((window as any).SpeechRecognition||(window as any).webkitSpeechRecognition):null;
+  const voiceSupported=!!SR;
 
   useEffect(()=>{
     const c=Number(carbs)||0,p=Number(protein)||0,f=Number(fat)||0;
@@ -370,10 +378,41 @@ function QuickLog({ onLogged }: { onLogged?: ()=>void }) {
     if(!overridden) setMealType(r.mealType);
   },[carbs,protein,fat,desc,overridden]);
 
-  async function submit() {
+  function startRecording(){
+    if(!SR){setError("Requires Chrome or Edge.");return;}
+    setError("");
+    const recognition=new SR();
+    recognition.lang="en-US";
+    recognition.continuous=false;
+    recognition.interimResults=false;
+    recognition.onstart=()=>setVoiceStatus("recording");
+    recognition.onresult=(e:any)=>{
+      const text=e.results[0][0].transcript;
+      setTranscript(text);
+      setVoiceStatus("processing");
+      const p=parseVoiceInput(text);
+      if(p.glucoseBefore) setGlucose(String(p.glucoseBefore));
+      if(p.carbsGrams) setCarbs(String(p.carbsGrams));
+      if(p.fiberGrams!=null) setFiber(String(p.fiberGrams));
+      if(p.mealDescription) setDesc(p.mealDescription);
+      if(p.insulinUnits) setInsulin(String(p.insulinUnits));
+      const auto=classifyMeal(p.carbsGrams||0,0,0,p.mealDescription||"");
+      setMealType(auto.mealType);
+      setOverridden(false);
+      setTimeout(()=>setVoiceStatus("idle"),700);
+    };
+    recognition.onerror=(e:any)=>{setError(e.error==="not-allowed"?"Microphone access denied.":e.error);setVoiceStatus("idle");};
+    recognition.onend=()=>setVoiceStatus(s=>s==="recording"?"idle":s);
+    recognitionRef.current=recognition;
+    recognition.start();
+  }
+
+  function stopRecording(){recognitionRef.current?.stop();}
+
+  async function submit(){
     if(!glucose||!carbs||!insulin){setError("Glucose, carbs and insulin are required.");return;}
-    setLoading(true); setError("");
-    try {
+    setLoading(true);setError("");
+    try{
       await apiFetch("/entries",{method:"POST",body:JSON.stringify({
         glucoseBefore:Number(glucose),carbsGrams:Number(carbs),
         fiberGrams:fiber?Number(fiber):undefined,
@@ -382,23 +421,82 @@ function QuickLog({ onLogged }: { onLogged?: ()=>void }) {
       })});
       setDone(true);
       onLogged?.();
-    } catch { setError("Failed to save. Check API."); }
-    finally { setLoading(false); }
+    }catch{setError("Failed to save. Check API.");}
+    finally{setLoading(false);}
   }
 
-  if (done) return (
+  function resetForm(){setDone(false);setGlucose("");setCarbs("");setFiber("");setProtein("");setFat("");setDesc("");setInsulin("");setOverridden(false);setTranscript("");setVoiceStatus("idle");}
+
+  const isRec=voiceStatus==="recording";
+  const voiceColor={idle:"rgba(255,255,255,0.3)",recording:ACCENT,processing:ORANGE}[voiceStatus];
+  const voiceLabel={idle:voiceSupported?"Tap to speak":"Voice unavailable",recording:"Listening…",processing:"Filling form…"}[voiceStatus];
+
+  if(done) return (
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:380,gap:16}}>
       <div style={{width:60,height:60,borderRadius:99,background:`${GREEN}22`,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{fontSize:28,color:GREEN}}>✓</span></div>
       <div style={{fontSize:18,fontWeight:700,color:GREEN}}>Entry saved</div>
       <div style={{fontSize:12,color:"rgba(255,255,255,0.4)"}}>BG {glucose} · {carbs}g carbs{fiber?` · ${fiber}g fiber`:""} · {MEAL_LABELS[mealType]} · {insulin}u</div>
-      <button onClick={()=>{setDone(false);setGlucose("");setCarbs("");setFiber("");setProtein("");setFat("");setDesc("");setInsulin("");setOverridden(false);}} style={{marginTop:8,padding:"10px 24px",background:ACCENT,border:"none",borderRadius:10,color:"white",fontSize:13,fontWeight:600,cursor:"pointer"}}>Log Another</button>
+      <button onClick={resetForm} style={{marginTop:8,padding:"10px 24px",background:ACCENT,border:"none",borderRadius:10,color:"white",fontSize:13,fontWeight:600,cursor:"pointer"}}>Log Another</button>
     </div>
   );
 
   return (
-    <div style={{maxWidth:520}}>
+    <div style={{maxWidth:520,display:"flex",flexDirection:"column",gap:14}}>
+      <style>{`@keyframes vPulse{0%,100%{opacity:0.35;transform:scale(1)}50%{opacity:1;transform:scale(1.05)}}`}</style>
+
+      {/* ── Voice section ── */}
+      <Card style={{padding:"22px 22px 20px"}}>
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
+          {/* Big mic button */}
+          <div style={{position:"relative",width:104,height:104,flexShrink:0}}>
+            {isRec&&<div style={{position:"absolute",inset:-18,borderRadius:"50%",background:`radial-gradient(circle,${ACCENT}18 0%,transparent 70%)`,animation:"vPulse 2s ease-in-out infinite",pointerEvents:"none"}}/>}
+            <svg width="104" height="104" viewBox="0 0 104 104" style={{position:"absolute",inset:0,overflow:"visible"}}>
+              <circle cx="52" cy="52" r="48" fill="none" stroke={isRec?`${ACCENT}55`:"rgba(255,255,255,0.07)"} strokeWidth="1.5" style={{transition:"stroke 0.4s"}}/>
+              {isRec&&<circle cx="52" cy="52" r="41" fill="none" stroke={ACCENT} strokeWidth="1.5" opacity="0.6"/>}
+            </svg>
+            <button
+              onClick={voiceStatus==="idle"?startRecording:voiceStatus==="recording"?stopRecording:undefined}
+              disabled={voiceStatus==="processing"||!voiceSupported}
+              style={{
+                position:"absolute",inset:9,borderRadius:"50%",border:"none",
+                cursor:voiceStatus==="processing"||!voiceSupported?"default":"pointer",
+                background:`radial-gradient(circle at 36% 32%, #1e1e2e 0%, #141420 45%, #09090B 100%)`,
+                boxShadow:isRec
+                  ?`0 0 0 1px ${ACCENT}55,0 0 30px ${ACCENT}44,inset 0 0 20px rgba(79,110,247,0.12)`
+                  :`0 0 0 1px rgba(255,255,255,0.08),0 6px 24px rgba(0,0,0,0.6),inset 0 1px 0 rgba(255,255,255,0.06)`,
+                display:"flex",alignItems:"center",justifyContent:"center",
+                transition:"box-shadow 0.4s,transform 0.2s",
+                transform:isRec?"scale(1.04)":"scale(1)",outline:"none",
+              }}
+            >
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" style={{transition:"all 0.3s"}}>
+                {voiceStatus==="processing"
+                  ?[0,60,120,180,240,300].map((deg,i)=>(
+                      <circle key={i} cx={12+7.5*Math.cos(deg*Math.PI/180)} cy={12+7.5*Math.sin(deg*Math.PI/180)} r="1.6" fill={ACCENT} opacity={0.3+i*0.12}/>
+                    ))
+                  :<>
+                    <rect x="9" y="2" width="6" height="11" rx="3" fill={isRec?ACCENT:"rgba(255,255,255,0.88)"}/>
+                    <path d="M5 10a7 7 0 0 0 14 0" stroke={isRec?ACCENT:"rgba(255,255,255,0.88)"} strokeWidth="1.8" strokeLinecap="round" fill="none"/>
+                    <line x1="12" y1="19" x2="12" y2="22" stroke={isRec?ACCENT:"rgba(255,255,255,0.88)"} strokeWidth="1.8" strokeLinecap="round"/>
+                    <line x1="9" y1="22" x2="15" y2="22" stroke={isRec?ACCENT:"rgba(255,255,255,0.88)"} strokeWidth="1.8" strokeLinecap="round"/>
+                  </>
+                }
+              </svg>
+            </button>
+          </div>
+          {/* Status */}
+          <div style={{fontSize:11,fontWeight:600,letterSpacing:"0.12em",color:voiceColor,transition:"color 0.3s"}}>{voiceLabel}</div>
+          {/* Transcript */}
+          {transcript
+            ?<div style={{fontSize:12,color:"rgba(255,255,255,0.45)",fontStyle:"italic",textAlign:"center",lineHeight:1.5,padding:"8px 14px",background:"rgba(255,255,255,0.03)",borderRadius:8,border:`1px solid rgba(255,255,255,0.06)`,maxWidth:380}}>"{transcript}"</div>
+            :<div style={{fontSize:10,color:"rgba(255,255,255,0.15)",letterSpacing:"0.07em",textAlign:"center"}}>e.g. "120 glucose 60g carbs 8 fiber 2 units pasta"</div>
+          }
+        </div>
+      </Card>
+
+      {/* ── Manual form ── */}
       <Card style={{padding:22}}>
-        <div style={{fontSize:15,fontWeight:700,marginBottom:18}}>Log a Meal</div>
+        <div style={{fontSize:13,fontWeight:700,marginBottom:16,color:"rgba(255,255,255,0.6)",letterSpacing:"0.04em"}}>ENTRY DETAILS</div>
         <div style={{display:"flex",flexDirection:"column",gap:13}}>
           <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>GLUCOSE BEFORE (mg/dL)</div><input value={glucose} onChange={e=>setGlucose(e.target.value)} placeholder="e.g. 115" type="number" style={inp}/></div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -407,7 +505,8 @@ function QuickLog({ onLogged }: { onLogged?: ()=>void }) {
           </div>
           {carbs&&fiber&&Number(carbs)>0&&Number(fiber)>0&&(
             <div style={{padding:"8px 12px",background:`${GREEN}0D`,border:`1px solid ${GREEN}33`,borderRadius:8,fontSize:11,color:GREEN,display:"flex",alignItems:"center",gap:6}}>
-              <span style={{fontWeight:700,letterSpacing:"0.04em",marginRight:2}}>◈</span> <span><b>{carbs}g</b> − <b>{fiber}g</b> fiber = <b style={{fontSize:13}}>{Math.max(0,Number(carbs)-Number(fiber))}g net carbs</b></span>
+              <span style={{fontWeight:700,letterSpacing:"0.04em",marginRight:2}}>◈</span>
+              <span><b>{carbs}g</b> − <b>{fiber}g</b> fiber = <b style={{fontSize:13}}>{Math.max(0,Number(carbs)-Number(fiber))}g net carbs</b></span>
             </div>
           )}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -886,7 +985,7 @@ function Recommend({ prefill }: { prefill?: Partial<ParsedVoiceEntry> }) {
   );
 }
 
-// ─── VOICE LOG ───────────────────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 type VoiceState = "idle" | "recording" | "processing" | "preview";
 
 function VoicePage({ onLogged }: { onLogged?: ()=>void }) {
@@ -1384,7 +1483,7 @@ const STAT_INFO: Record<string,{headline:string;detail:string;formula:string}> =
 };
 
 function MobileDashboard({email,name:memberName,onSignOut}:{email?:string;name?:string;onSignOut?:()=>void}) {
-  const [mobilePage, setMobilePage] = useState<"dashboard"|"log"|"entries"|"recommend"|"voice"|"settings"|"insights">("dashboard");
+  const [mobilePage, setMobilePage] = useState<"dashboard"|"log"|"entries"|"recommend"|"settings"|"insights">("dashboard");
   const [stats, setStats] = useState<DashboardStats|null>(null);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [flippedStat,setFlippedStat]=useState<string|null>(null);
@@ -1552,11 +1651,10 @@ function MobileDashboard({email,name:memberName,onSignOut}:{email?:string;name?:
             )}
           </div>
         )}
-        {mobilePage==="log"&&<QuickLog onLogged={()=>setMobilePage("dashboard")}/>}
+        {mobilePage==="log"&&<LogPage onLogged={()=>setMobilePage("dashboard")}/>}
         {mobilePage==="entries"&&<MobileEntryLog/>}
         {mobilePage==="insights"&&<Insights/>}
         {mobilePage==="recommend"&&<Recommend/>}
-        {mobilePage==="voice"&&<VoicePage onLogged={()=>setMobilePage("dashboard")}/>}
         {mobilePage==="settings"&&<ProfilePage email={email} initialName={memberName} onSignOut={()=>{onSignOut?.();}}/>}
       </div>
 
@@ -1568,7 +1666,7 @@ function MobileDashboard({email,name:memberName,onSignOut}:{email?:string;name?:
           </button>
         ))}
         <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,marginTop:-20}}>
-          <button onClick={()=>setMobilePage("voice")} style={{width:56,height:56,borderRadius:99,background:`linear-gradient(135deg,${ACCENT},#6B8BFF)`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 0 ${mobilePage==="voice"?"32px":"20px"} ${ACCENT}${mobilePage==="voice"?"88":"55"}`,animation:"micPulse 2.5s ease-in-out infinite",transition:"transform 0.15s"}}>
+          <button onClick={()=>setMobilePage("log")} style={{width:56,height:56,borderRadius:99,background:`linear-gradient(135deg,${ACCENT},#6B8BFF)`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 0 ${mobilePage==="log"?"32px":"20px"} ${ACCENT}${mobilePage==="log"?"88":"55"}`,animation:"micPulse 2.5s ease-in-out infinite",transition:"transform 0.15s"}}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
               <rect x="9" y="2" width="6" height="11" rx="3" fill="rgba(255,255,255,0.95)"/>
               <path d="M5 10a7 7 0 0 0 14 0" stroke="rgba(255,255,255,0.95)" strokeWidth="1.8" strokeLinecap="round" fill="none"/>
@@ -1576,7 +1674,7 @@ function MobileDashboard({email,name:memberName,onSignOut}:{email?:string;name?:
               <line x1="9" y1="22" x2="15" y2="22" stroke="rgba(255,255,255,0.95)" strokeWidth="1.8" strokeLinecap="round"/>
             </svg>
           </button>
-          <span style={{fontSize:9,color:mobilePage==="voice"?ACCENT:"rgba(255,255,255,0.3)",fontWeight:600,letterSpacing:"0.04em"}}>VOICE</span>
+          <span style={{fontSize:9,color:mobilePage==="log"?ACCENT:"rgba(255,255,255,0.3)",fontWeight:600,letterSpacing:"0.04em"}}>LOG</span>
           <style>{`@keyframes micPulse{0%,100%{box-shadow:0 0 20px ${ACCENT}55}50%{box-shadow:0 0 32px ${ACCENT}88,0 0 60px ${ACCENT}33}}`}</style>
         </div>
       </div>
@@ -1622,17 +1720,16 @@ function IconProfile({ active }: { active: boolean }) {
 // ─── LAYOUT ──────────────────────────────────────────────────────
 const NAV: { id: Page; label: string; Icon: React.ComponentType<{active:boolean}> }[] = [
   { id: "dashboard", label: "Dashboard",  Icon: IconDashboard },
-  { id: "log",       label: "Quick Log",  Icon: IconPlus },
+  { id: "log",       label: "Log",        Icon: IconPlus },
   { id: "entries",   label: "Entry Log",  Icon: IconList },
   { id: "insights",  label: "Insights",   Icon: IconInsights },
   { id: "recommend", label: "Glev Engine",Icon: IconBolt },
-  { id: "voice",     label: "Voice Log",  Icon: IconMic },
   { id: "import",    label: "Import Data",Icon: IconUpload },
 ];
 
 const PAGE_TITLES: Record<Page,string> = {
-  dashboard:"Dashboard", log:"Quick Log", entries:"Entry Log",
-  insights:"Insights", recommend:"Glev Engine", voice:"Voice Log", import:"Import Center", profile:"My Profile",
+  dashboard:"Dashboard", log:"Log", entries:"Entry Log",
+  insights:"Insights", recommend:"Glev Engine", import:"Import Center", profile:"My Profile",
 };
 
 // ─── Profile Page ───────────────────────────────────────────────
@@ -1941,20 +2038,13 @@ export function DarkCockpit() {
                 <div style={{fontSize:10,color:"rgba(255,255,255,0.3)",letterSpacing:"0.12em",marginBottom:3}}>GLEV — SMART INSULIN DECISIONS</div>
                 <h1 style={{fontSize:20,fontWeight:700,margin:0,letterSpacing:"-0.02em"}}>{PAGE_TITLES[page]}</h1>
               </div>
-              {page!=="log"&&page!=="voice"&&page!=="recommend"&&(
-                <button onClick={()=>setPage("voice")} style={{fontSize:12,fontWeight:500,padding:"7px 14px",borderRadius:10,background:"rgba(79,110,247,0.08)",border:`1px solid rgba(79,110,247,0.22)`,color:"rgba(120,145,255,0.9)",cursor:"pointer",letterSpacing:"0.01em",display:"flex",alignItems:"center",gap:7,transition:"all 0.15s"}}>
-                  <IconMic active={true}/>
-                  Voice Log
-                </button>
-              )}
             </div>
 
             {page==="dashboard"&&<Dashboard key={`dash-${refresh}`}/>}
-            {page==="log"&&<QuickLog onLogged={onLogged}/>}
+            {page==="log"&&<LogPage onLogged={onLogged}/>}
             {page==="entries"&&<EntryLog key={`entries-${refresh}`}/>}
             {page==="insights"&&<Insights key={`insights-${refresh}`}/>}
             {page==="recommend"&&<Recommend/>}
-            {page==="voice"&&<VoicePage onLogged={onLogged}/>}
             {page==="import"&&<ImportPage onLogged={onLogged}/>}
             {page==="profile"&&<ProfilePage email={userEmail} initialName={userName} onSignOut={signOut}/>}
           </div>
