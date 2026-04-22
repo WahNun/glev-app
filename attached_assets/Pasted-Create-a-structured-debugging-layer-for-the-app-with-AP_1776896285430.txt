@@ -1,0 +1,144 @@
+Create a structured debugging layer for the app with API endpoints that expose runtime state.
+
+GOAL:
+Make it possible to inspect:
+- database state
+- authentication state
+- CSV import results
+- Glev engine calculations
+
+Do NOT add UI. Only API + logging.
+
+--------------------------------
+1. CREATE DEBUG UTILITY
+--------------------------------
+
+Create file: src/lib/debug.ts
+
+Implement:
+
+- in-memory store (object)
+- function logDebug(tag: string, payload: any)
+    → stores latest payload per tag
+    → also console.log with prefix [DEBUG]
+
+- function getDebug(tag: string)
+    → returns stored value or null
+
+Tags to support:
+- "state"
+- "auth"
+- "import"
+- "engine"
+
+--------------------------------
+2. CREATE API ROUTES
+--------------------------------
+
+Create the following files:
+
+src/app/api/debug/state/route.ts
+src/app/api/debug/auth/route.ts
+src/app/api/debug/import/route.ts
+src/app/api/debug/engine/route.ts
+src/app/api/debug/env/route.ts
+
+Each should:
+
+- import getDebug()
+- return JSON via NextResponse
+
+--------------------------------
+
+/api/debug/state
+Return:
+- total meals count
+- first 20 meals
+- last inserted meal
+- any DB error stored
+
+--------------------------------
+
+/api/debug/auth
+Return:
+- isAuthenticated (boolean)
+- userId
+- email
+(no tokens)
+
+--------------------------------
+
+/api/debug/import
+Return:
+- parsed rows
+- inserted rows
+- failed rows
+- last error
+
+--------------------------------
+
+/api/debug/engine
+Return:
+- input glucose
+- input carbs
+- matched meals
+- suggested insulin
+- confidence
+
+--------------------------------
+
+/api/debug/env
+Return:
+- hasSupabaseUrl (boolean)
+- hasAnonKey (boolean)
+- hasOpenAIKey (boolean)
+- nodeEnv
+
+--------------------------------
+3. INSTRUMENT CORE FLOWS
+--------------------------------
+
+Add logDebug() calls to:
+
+A) CSV Import
+- after parsing → log "import" with parsed count
+- after insert → log inserted / failed / error
+
+B) Glev Engine
+- before calculation → log input
+- after → log matches, dose, confidence
+
+C) Meal insert (DB write)
+- log inserted row + errors under "state"
+
+D) Auth (login / session check)
+- log under "auth"
+
+--------------------------------
+4. CLIENT DEBUG HOOK
+--------------------------------
+
+In Layout or root client component:
+
+Add useEffect:
+
+fetch('/api/debug/state')
+.then(r => r.json())
+.then(d => console.log('DEBUG STATE:', d))
+
+--------------------------------
+5. CONSTRAINTS
+--------------------------------
+
+- DO NOT expose secrets
+- DO NOT return tokens
+- DO NOT break existing app
+- DO NOT modify business logic
+
+--------------------------------
+6. OUTPUT
+--------------------------------
+
+After implementation:
+- confirm all endpoints return 200
+- do not auto-run server
