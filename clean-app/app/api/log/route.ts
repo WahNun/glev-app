@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
-import { syncEntryToSheets } from "@/lib/sheets";
-import type { LogEntry } from "@/lib/db";
+import { supabase } from "../../../lib/supabase";
+import { syncEntryToSheets } from "../../../lib/sheets";
+import type { LogEntry } from "../../../lib/db";
 
 export async function POST(req: NextRequest) {
   if (!supabase) {

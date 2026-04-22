@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { syncAllLogsToSheets } from "@/lib/sheets";
-import { fetchAllLogs } from "@/lib/db";
+import { syncAllLogsToSheets } from "../../../../lib/sheets";
+import { fetchAllLogs } from "../../../../lib/db";
 
 export async function POST() {
   try {
