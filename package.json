@@ -1,8 +1,5 @@
 {
-  "name": "glev-app",
-  "private": true,
   "scripts": {
-    "build": "npm --prefix src run build",
-    "start": "npm --prefix src run start"
+    "build": "npm run build --prefix src"
   }
 }
