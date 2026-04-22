@@ -1,5 +1,6 @@
 {
-  "rootDirectory": "src",
   "framework": "nextjs",
+  "buildCommand": "pnpm --filter @workspace/glev run build",
+  "outputDirectory": "src/.next",
   "installCommand": "pnpm install --no-frozen-lockfile"
 }
