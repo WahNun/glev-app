@@ -1,7 +1,4 @@
 {
-  "/_not-found/page": "app/_not-found/page.js",
-  "/api/log/route": "app/api/log/route.js",
-  "/api/parse-food/route": "app/api/parse-food/route.js",
-  "/api/sheets/sync/route": "app/api/sheets/sync/route.js",
-  "/page": "app/page.js"
+  "/page": "app/page.js",
+  "/login/page": "app/login/page.js"
 }

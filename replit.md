@@ -2,7 +2,7 @@
 
 ## Overview
 
-Glev is a Type 1 Diabetes insulin decision-support system. The single active artifact is the **Dark Cockpit mockup** (`artifacts/mockup-sandbox`) — a fully interactive dark-mode prototype with desktop and mobile views. The backend API server (`artifacts/api-server`) handles data persistence, recommendation logic, and member authentication.
+Glev is a Type 1 Diabetes insulin decision-support system. The **Next.js 15 app** (`src/`) is the primary production frontend, running on port 5000. The **Dark Cockpit mockup** (`artifacts/mockup-sandbox`) is the design reference prototype. The backend API server (`artifacts/api-server`) handles data persistence and recommendation logic.
 
 The `artifacts/glucojack` React/Vite web app was removed — the canvas mockup is now the primary interface.
 
@@ -75,13 +75,22 @@ The `ProfilePage` component now has two sub-tabs: **Overview** (existing setting
 
 ## Architecture
 
-### Frontend (artifacts/glucojack/)
-- `/` — Dashboard: control score, hypo/spike rate, glucose trend chart, evaluation breakdown
-- `/log` — Quick Log: fast entry form (<10 seconds)
-- `/entries` — Entry Log: filterable list with evaluation badges
-- `/insights` — Patterns by meal type (FAST_CARBS, HIGH_FAT, HIGH_PROTEIN, BALANCED)
-- `/recommend` — Decision Support: carb/glucose → insulin recommendation
-- `/import` — Import Center: paste zone + CSV upload with preview
+### Frontend (src/ — Next.js 15 App Router)
+- `/` — Redirects to `/dashboard`
+- `/login` — Email/password auth: Sign In + Create Account tabs; Supabase client auth + `glev-authed` cookie
+- `/dashboard` — Control score, spike/hypo rates, glucose trend sparkline, recent entries (fetches from Express API; graceful empty state)
+- `/log` — Meal text input → AI parse-food endpoint → save to EntriesContext
+- `/entries` — Local log of parsed meal entries (React state, session-only)
+- `/insights` — Coming soon placeholder
+
+**Auth**: Cookie-based (`glev-authed=1`); middleware at `src/middleware.ts` protects `/dashboard`, `/log`, `/entries`, `/insights`; Supabase client (`src/lib/supabase.ts`) for signIn/signUp/signOut.
+
+**Key source files**:
+- `src/lib/auth.ts` — signIn, signUp, signOut, getCurrentUser
+- `src/middleware.ts` — Next.js middleware (route protection)
+- `src/context/EntriesContext.tsx` — local entries state (React context)
+- `src/components/Layout.tsx` — sidebar (desktop) + bottom nav (mobile)
+- `src/app/api/parse-food/route.ts` — AI food parser (GPT via Replit AI Integrations)
 
 ### Backend (artifacts/api-server/)
 - `GET/POST /api/entries` — CRUD for glucose/insulin log entries
