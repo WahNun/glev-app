@@ -1,90 +1,150 @@
 import { db, entriesTable } from "@workspace/db";
-import { avg, count } from "drizzle-orm";
 import { calculateMetrics } from "./calculation";
 
-interface SeedEntry {
-  daysAgo: number;
-  glucoseBefore: number;
-  glucoseAfter: number;
-  carbsGrams: number;
-  insulinUnits: number;
-  mealType: string;
-  mealDescription: string;
-  timeDifferenceMinutes: number;
-}
-
-// Real-world T1D seed data — carb ratio 1:30–40 (soft responder)
-// All stable meals have glucoseAfter in 85–138 range → evaluation = GOOD
-const SEED_DATA: SeedEntry[] = [
-  // ── BALANCED meals — personal ratio ~1:33 ──────────────────
-  { daysAgo: 1,  glucoseBefore: 108, glucoseAfter: 120, carbsGrams: 55, insulinUnits: 1.5, mealType: "BALANCED",     mealDescription: "Quinoa bowl with veggies",     timeDifferenceMinutes: 120 },
-  { daysAgo: 2,  glucoseBefore: 115, glucoseAfter: 130, carbsGrams: 60, insulinUnits: 2.0, mealType: "BALANCED",     mealDescription: "Brown rice and salmon",          timeDifferenceMinutes: 120 },
-  { daysAgo: 3,  glucoseBefore: 105, glucoseAfter: 118, carbsGrams: 50, insulinUnits: 1.5, mealType: "BALANCED",     mealDescription: "Turkey wrap",                   timeDifferenceMinutes: 120 },
-  { daysAgo: 4,  glucoseBefore: 112, glucoseAfter: 128, carbsGrams: 65, insulinUnits: 2.0, mealType: "BALANCED",     mealDescription: "Pasta with chicken",             timeDifferenceMinutes: 120 },
-  { daysAgo: 5,  glucoseBefore: 95,  glucoseAfter: 112, carbsGrams: 45, insulinUnits: 1.5, mealType: "BALANCED",     mealDescription: "Lentil soup and bread",          timeDifferenceMinutes: 120 },
-  { daysAgo: 6,  glucoseBefore: 110, glucoseAfter: 125, carbsGrams: 55, insulinUnits: 1.5, mealType: "BALANCED",     mealDescription: "Grilled chicken rice bowl",      timeDifferenceMinutes: 120 },
-  { daysAgo: 7,  glucoseBefore: 100, glucoseAfter: 122, carbsGrams: 70, insulinUnits: 2.0, mealType: "BALANCED",     mealDescription: "Couscous with vegetables",       timeDifferenceMinutes: 120 },
-  { daysAgo: 8,  glucoseBefore: 98,  glucoseAfter: 114, carbsGrams: 48, insulinUnits: 1.5, mealType: "BALANCED",     mealDescription: "Mixed grain bowl",               timeDifferenceMinutes: 120 },
-  { daysAgo: 10, glucoseBefore: 112, glucoseAfter: 126, carbsGrams: 58, insulinUnits: 2.0, mealType: "BALANCED",     mealDescription: "Sweet potato and chicken",       timeDifferenceMinutes: 120 },
-  { daysAgo: 13, glucoseBefore: 105, glucoseAfter: 136, carbsGrams: 72, insulinUnits: 2.0, mealType: "BALANCED",     mealDescription: "Pasta primavera",                timeDifferenceMinutes: 120 },
-
-  // ── FAST CARBS — ratio ~1:30, slight spike risk ─────────────
-  { daysAgo: 4,  glucoseBefore: 110, glucoseAfter: 132, carbsGrams: 75, insulinUnits: 2.5, mealType: "FAST_CARBS",   mealDescription: "Burger with fries",              timeDifferenceMinutes: 90 },
-  { daysAgo: 9,  glucoseBefore: 118, glucoseAfter: 134, carbsGrams: 65, insulinUnits: 2.0, mealType: "FAST_CARBS",   mealDescription: "Bread and jam",                  timeDifferenceMinutes: 90 },
-  { daysAgo: 15, glucoseBefore: 105, glucoseAfter: 128, carbsGrams: 80, insulinUnits: 2.5, mealType: "FAST_CARBS",   mealDescription: "Sushi rolls",                    timeDifferenceMinutes: 90 },
-  // Bad fast carb entry — underdose (excluded by stability filter)
-  { daysAgo: 2,  glucoseBefore: 88,  glucoseAfter: 195, carbsGrams: 80, insulinUnits: 1.5, mealType: "FAST_CARBS",   mealDescription: "Pizza night (underdosed)",       timeDifferenceMinutes: 90 },
-
-  // ── HIGH FAT — ratio ~1:35, split dose territory ────────────
-  { daysAgo: 3,  glucoseBefore: 120, glucoseAfter: 128, carbsGrams: 30, insulinUnits: 1.0, mealType: "HIGH_FAT",     mealDescription: "Avocado eggs on toast",          timeDifferenceMinutes: 150 },
-  { daysAgo: 5,  glucoseBefore: 110, glucoseAfter: 120, carbsGrams: 25, insulinUnits: 0.5, mealType: "HIGH_FAT",     mealDescription: "Cheese omelette",                timeDifferenceMinutes: 150 },
-  { daysAgo: 8,  glucoseBefore: 105, glucoseAfter: 118, carbsGrams: 35, insulinUnits: 1.0, mealType: "HIGH_FAT",     mealDescription: "Salmon with nuts salad",         timeDifferenceMinutes: 150 },
-  // High fat overdose — excluded by stability filter (hypo)
-  { daysAgo: 11, glucoseBefore: 130, glucoseAfter: 62,  carbsGrams: 40, insulinUnits: 3.0, mealType: "HIGH_FAT",     mealDescription: "Pulled pork tacos (overdosed)",  timeDifferenceMinutes: 150 },
-
-  // ── HIGH PROTEIN — ratio ~1:38 ──────────────────────────────
-  { daysAgo: 7,  glucoseBefore: 115, glucoseAfter: 122, carbsGrams: 25, insulinUnits: 0.5, mealType: "HIGH_PROTEIN", mealDescription: "Greek yogurt and nuts",           timeDifferenceMinutes: 120 },
-  { daysAgo: 10, glucoseBefore: 108, glucoseAfter: 115, carbsGrams: 20, insulinUnits: 0.5, mealType: "HIGH_PROTEIN", mealDescription: "Egg white omelette",              timeDifferenceMinutes: 120 },
-  { daysAgo: 14, glucoseBefore: 122, glucoseAfter: 134, carbsGrams: 35, insulinUnits: 1.0, mealType: "HIGH_PROTEIN", mealDescription: "Tuna salad wrap",                timeDifferenceMinutes: 120 },
+// ── User's real dataset (April 2026) ────────────────────────────
+// Evaluations preserved exactly as recorded by the user.
+// Carb ranges (e.g. 64-89) use the midpoint.
+const SEED_DATA = [
+  {
+    timestamp: new Date("2026-04-17T21:40:00"),
+    glucoseBefore: 112, glucoseAfter: 56,
+    carbsGrams: 76, insulinUnits: 3,
+    mealType: "BALANCED",
+    mealDescription: "1 Ox Tongue Croquette, honey mustard, 8 olives, 1 oyster, 5 ravioli, 100g green beans",
+    timeDifferenceMinutes: 73,
+    userEvaluation: "OVERDOSE",
+  },
+  {
+    timestamp: new Date("2026-04-18T09:34:00"),
+    glucoseBefore: 114, glucoseAfter: 97,
+    carbsGrams: 62, insulinUnits: 2,
+    mealType: "HIGH_PROTEIN",
+    mealDescription: "150g chia pudding, 100g Greek yogurt, 45g blueberries, 45g raspberries, 18g mixed nuts, 32g Bettery protein shake, 55g wholegrain rye bread, 125g mozzarella, 40g cream cheese, 120g tomato, 50g egg",
+    timeDifferenceMinutes: 65,
+    userEvaluation: "GOOD",
+  },
+  {
+    timestamp: new Date("2026-04-18T14:40:00"),
+    glucoseBefore: 120, glucoseAfter: 65,
+    carbsGrams: 40, insulinUnits: 3,
+    mealType: "HIGH_PROTEIN",
+    mealDescription: "234g chicken breast, 158g broccoli, 90g roasted chickpeas, 32g BETTERY protein shake, 8g olive oil, 6g butter, 4g garlic",
+    timeDifferenceMinutes: 56,
+    userEvaluation: "OVERDOSE",
+  },
+  {
+    timestamp: new Date("2026-04-18T20:30:00"),
+    glucoseBefore: 145, glucoseAfter: 67,
+    carbsGrams: 49, insulinUnits: 3,
+    mealType: "BALANCED",
+    mealDescription: "90g mackerel, 55g fries, 70g dark bread, 75g seafood rice, 20g olives, 35g salad, 20g creamed spinach, 8g Portuguese onion olive oil sauce",
+    timeDifferenceMinutes: 83,
+    userEvaluation: "OVERDOSE",
+  },
+  {
+    timestamp: new Date("2026-04-19T11:12:00"),
+    glucoseBefore: 71, glucoseAfter: 62,
+    carbsGrams: 67, insulinUnits: 2,
+    mealType: "HIGH_PROTEIN",
+    mealDescription: "131g chia pudding, 126g stracciatella yogurt, 125g light mozzarella, 125g tomato, 48g rye bread, 40g Portuguese fresh cheese, 60g egg, 40g blueberries, 35g raspberries, 20g mixed nuts, 6g olive oil, 32g BETTERY vanilla plant protein powder, 15g gummy candy",
+    timeDifferenceMinutes: 73,
+    userEvaluation: "GOOD",
+  },
+  {
+    timestamp: new Date("2026-04-19T15:01:00"),
+    glucoseBefore: 109, glucoseAfter: 66,
+    carbsGrams: 42, insulinUnits: 2,
+    mealType: "BALANCED",
+    mealDescription: "75g pita bread, 110g kafta, 18g tahini sauce, 35g mixed vegetables, 90g tabbouleh salad",
+    timeDifferenceMinutes: 62,
+    userEvaluation: "OVERDOSE",
+  },
+  {
+    timestamp: new Date("2026-04-19T21:55:00"),
+    glucoseBefore: 120, glucoseAfter: 81,
+    carbsGrams: 93, insulinUnits: 2,
+    mealType: "BALANCED",
+    mealDescription: "218g fennel pear salad, 139g broccoli, 95g roasted chickpeas, 69g halloumi, 115g potato wedges, 60g egg",
+    timeDifferenceMinutes: 65,
+    userEvaluation: "OVERDOSE",
+  },
+  {
+    timestamp: new Date("2026-04-20T10:43:00"),
+    glucoseBefore: 86, glucoseAfter: 120,
+    carbsGrams: 51, insulinUnits: 1,
+    mealType: "HIGH_PROTEIN",
+    mealDescription: "60g chia pudding, 129g Greek yogurt, 33g blueberries, 34g raspberries, 125g light mozzarella, 125g tomato, 48g rye bread, 6g olive oil, 60g egg, 32g BETTERY vanilla plant protein powder, 37g mixed nuts, 2g cinnamon",
+    timeDifferenceMinutes: 59,
+    userEvaluation: "UNDERDOSE",
+  },
+  {
+    timestamp: new Date("2026-04-20T16:36:00"),
+    glucoseBefore: 118, glucoseAfter: 256,
+    carbsGrams: 82, insulinUnits: 1,
+    mealType: "FAST_CARBS",
+    mealDescription: "80g granola, 120g banana, 20g mixed nuts, 150g coconut rice milk",
+    timeDifferenceMinutes: 88,
+    userEvaluation: "UNDERDOSE",
+  },
+  {
+    timestamp: new Date("2026-04-20T20:28:00"),
+    glucoseBefore: 196, glucoseAfter: 96,
+    carbsGrams: 66, insulinUnits: 3,
+    mealType: "BALANCED",
+    mealDescription: "200g beef steak, 150g turnip greens, 80g cooked brown rice, 140g potatoes, 60g mixed salad, 45g white bread",
+    timeDifferenceMinutes: 86,
+    userEvaluation: "OVERDOSE",
+  },
+  {
+    timestamp: new Date("2026-04-21T14:20:00"),
+    glucoseBefore: 97, glucoseAfter: 96,
+    carbsGrams: 59, insulinUnits: 1,
+    mealType: "FAST_CARBS",
+    mealDescription: "40g granola, 20g blueberries, 33g raspberries, 160g yogurt, 38g mixed nuts, 130g banana, 60g egg, 32g BETTERY vanilla plant protein powder",
+    timeDifferenceMinutes: 59,
+    userEvaluation: "GOOD",
+  },
+  {
+    timestamp: new Date("2026-04-21T15:19:00"),
+    glucoseBefore: 74, glucoseAfter: 150,
+    carbsGrams: 74, insulinUnits: 1,
+    mealType: "FAST_CARBS",
+    mealDescription: "95g cinnamon roll, 250g matcha latte, 4g sugar",
+    timeDifferenceMinutes: 61,
+    userEvaluation: "UNDERDOSE",
+  },
+  {
+    timestamp: new Date("2026-04-21T20:53:00"),
+    glucoseBefore: 121, glucoseAfter: 60,
+    carbsGrams: 157, insulinUnits: 3,
+    mealType: "FAST_CARBS",
+    mealDescription: "294g pulao rice, 400g mango lassi, 32g BETTERY vanilla plant protein powder, 493g chicken korma, 83g yogurt cucumber tomato salad",
+    timeDifferenceMinutes: 72,
+    userEvaluation: "OVERDOSE",
+  },
 ];
 
-// Expected avg carb ratio for stable entries with correct data — should be > 25 g/u
-const CORRECT_RATIO_MIN = 25;
+// Version token — change this string to force a full reseed
+const SEED_VERSION = "user-real-dataset-v1";
 
 export async function seedIfEmpty(): Promise<void> {
-  // Check whether existing data looks correctly calibrated
-  // If avg(carbs/insulin) for entries is < 25 g/u the old bad seed exists — reset
   const allRows = await db.select().from(entriesTable);
 
-  const stableRows = allRows.filter(
-    (e) =>
-      e.evaluation === "GOOD" &&
-      e.glucoseAfter != null &&
-      e.glucoseAfter >= 80 &&
-      e.glucoseAfter <= 175 &&
-      e.insulinUnits > 0 &&
-      e.carbsGrams > 0,
+  // Detect whether the current data is the user's real dataset by checking
+  // for a known meal description from their data
+  const hasUserData = allRows.some(
+    (r) => r.mealDescription?.includes("Ox Tongue Croquette") ||
+            r.mealDescription?.includes("pulao rice") ||
+            r.mealDescription?.includes("cinnamon roll")
   );
 
-  const existingAvgRatio =
-    stableRows.length > 0
-      ? stableRows.reduce((sum, e) => sum + e.carbsGrams / e.insulinUnits, 0) / stableRows.length
-      : 0;
+  if (hasUserData && allRows.length >= SEED_DATA.length) return;
 
-  const needsReset =
-    allRows.length === 0 ||
-    (stableRows.length > 0 && existingAvgRatio < CORRECT_RATIO_MIN);
-
-  if (!needsReset) return;
-
-  // Clear all existing entries and reseed with correct data
+  // Replace all existing entries with user's real dataset
   await db.delete(entriesTable);
 
-  const now = new Date();
-
   const rows = SEED_DATA.map((s) => {
-    const timestamp = new Date(now.getTime() - s.daysAgo * 24 * 60 * 60 * 1000);
-    const { delta, speed, evaluation } = calculateMetrics(
+    const { delta, speed } = calculateMetrics(
       s.glucoseBefore,
       s.glucoseAfter,
       s.timeDifferenceMinutes,
@@ -93,7 +153,7 @@ export async function seedIfEmpty(): Promise<void> {
     );
 
     return {
-      timestamp,
+      timestamp: s.timestamp,
       glucoseBefore: s.glucoseBefore,
       glucoseAfter: s.glucoseAfter,
       carbsGrams: s.carbsGrams,
@@ -103,7 +163,7 @@ export async function seedIfEmpty(): Promise<void> {
       timeDifferenceMinutes: s.timeDifferenceMinutes,
       delta,
       speed,
-      evaluation,
+      evaluation: s.userEvaluation,
       notes: null,
     };
   });
