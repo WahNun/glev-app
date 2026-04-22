@@ -1,15 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useEntries } from "@/context/EntriesContext";
+import { saveMeal, type ParsedFood } from "@/lib/meals";
 
 const ACCENT = "#4F6EF7";
 const GREEN  = "#22D3A0";
 const PINK   = "#FF2D78";
 const SURFACE = "#111117";
 const BORDER = "rgba(255,255,255,0.06)";
-
-interface ParsedFood { name: string; grams: number; }
 
 const inp: React.CSSProperties = {
   background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
@@ -21,29 +19,34 @@ function Card({ children, style }: { children: React.ReactNode; style?: React.CS
   return <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 14, ...style }}>{children}</div>;
 }
 
+function Spinner() {
+  return <div style={{ width: 14, height: 14, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", borderRadius: "50%", animation: "spin 0.7s linear infinite" }}/>;
+}
+
 export default function LogPage() {
-  const { addEntry } = useEntries();
-  const [mealText, setMealText] = useState("");
-  const [analyzing, setAnalyzing] = useState(false);
-  const [parsed, setParsed] = useState<ParsedFood[] | null>(null);
+  const [mealText, setMealText]     = useState("");
+  const [analyzing, setAnalyzing]   = useState(false);
+  const [parsed, setParsed]         = useState<ParsedFood[] | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+  const [saving, setSaving]         = useState(false);
+  const [saveError, setSaveError]   = useState<string | null>(null);
+  const [saved, setSaved]           = useState(false);
 
   async function analyzeMeal() {
     if (!mealText.trim()) return;
     setAnalyzing(true);
     setParsed(null);
     setParseError(null);
+    setSaveError(null);
     try {
       const res = await fetch("/api/parse-food", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: mealText }),
       });
-      const json = await res.json();
+      const json = await res.json() as { parsed?: ParsedFood[]; error?: string };
       if (!res.ok) { setParseError(json.error ?? `HTTP ${res.status}`); return; }
-      const items: ParsedFood[] = Array.isArray(json.parsed) ? json.parsed : [];
-      setParsed(items);
+      setParsed(Array.isArray(json.parsed) ? json.parsed : []);
     } catch (e: unknown) {
       setParseError(e instanceof Error ? e.message : "Network error");
     } finally {
@@ -51,15 +54,23 @@ export default function LogPage() {
     }
   }
 
-  function saveEntry() {
+  async function saveEntry() {
     if (!parsed) return;
-    addEntry(mealText, parsed);
-    setSaved(true);
-    setTimeout(() => {
-      setSaved(false);
-      setMealText("");
-      setParsed(null);
-    }, 1800);
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await saveMeal(mealText, parsed);
+      setSaved(true);
+      setTimeout(() => {
+        setSaved(false);
+        setMealText("");
+        setParsed(null);
+      }, 1800);
+    } catch (e: unknown) {
+      setSaveError(e instanceof Error ? e.message : "Failed to save");
+    } finally {
+      setSaving(false);
+    }
   }
 
   if (saved) {
@@ -99,18 +110,15 @@ export default function LogPage() {
           onClick={analyzeMeal}
           disabled={analyzing || !mealText.trim()}
           style={{
-            padding: "13px", border: "none", borderRadius: 12, cursor: analyzing || !mealText.trim() ? "default" : "pointer",
+            padding: "13px", border: "none", borderRadius: 12,
+            cursor: analyzing || !mealText.trim() ? "default" : "pointer",
             background: analyzing || !mealText.trim() ? "rgba(255,255,255,0.06)" : `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
             color: analyzing || !mealText.trim() ? "rgba(255,255,255,0.3)" : "white",
-            fontSize: 14, fontWeight: 700, transition: "all 0.15s", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            fontSize: 14, fontWeight: 700, transition: "all 0.15s",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
           }}
         >
-          {analyzing ? (
-            <>
-              <div style={{ width: 14, height: 14, border: `2px solid rgba(255,255,255,0.3)`, borderTopColor: "white", borderRadius: "50%", animation: "spin 0.7s linear infinite" }}/>
-              Analyzing…
-            </>
-          ) : "Analyze Meal"}
+          {analyzing ? <><Spinner />Analyzing…</> : "Analyze Meal"}
         </button>
 
         {parseError && (
@@ -146,20 +154,29 @@ export default function LogPage() {
                 </div>
 
                 <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 14 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>
-                      Estimated total: <strong style={{ color: "rgba(255,255,255,0.7)" }}>{parsed.reduce((s, f) => s + f.grams, 0)}g</strong>
-                    </div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginBottom: 12 }}>
+                    Estimated total: <strong style={{ color: "rgba(255,255,255,0.7)" }}>{parsed.reduce((s, f) => s + f.grams, 0)}g</strong>
                   </div>
+
+                  {saveError && (
+                    <div style={{ fontSize: 12, color: PINK, padding: "8px 12px", background: `${PINK}0D`, borderRadius: 9, border: `1px solid ${PINK}22`, marginBottom: 10 }}>
+                      {saveError}
+                    </div>
+                  )}
+
                   <button
                     onClick={saveEntry}
+                    disabled={saving}
                     style={{
-                      width: "100%", padding: "12px", border: `1px solid ${GREEN}33`, borderRadius: 11, cursor: "pointer",
-                      background: `${GREEN}22`, color: GREEN, fontSize: 14, fontWeight: 700,
-                      transition: "all 0.15s",
+                      width: "100%", padding: "12px", border: `1px solid ${GREEN}33`, borderRadius: 11,
+                      cursor: saving ? "default" : "pointer",
+                      background: saving ? "rgba(255,255,255,0.04)" : `${GREEN}22`,
+                      color: saving ? "rgba(255,255,255,0.3)" : GREEN,
+                      fontSize: 14, fontWeight: 700, transition: "all 0.15s",
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
                     }}
                   >
-                    ✓ Save Entry
+                    {saving ? <><Spinner />Saving…</> : "✓ Save Entry"}
                   </button>
                 </div>
               </>
