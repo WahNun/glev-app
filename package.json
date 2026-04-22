@@ -1,19 +1,8 @@
 {
-  "name": "glev-root",
-  "version": "0.0.0",
-  "license": "MIT",
-  "scripts": {
-    "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
-    "dev": "pnpm --filter @workspace/glev run dev",
-    "build": "pnpm --filter @workspace/glev run build",
-    "start": "pnpm --filter @workspace/glev run start",
-    "typecheck:libs": "tsc --build",
-    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
-  },
+  "name": "glev-app",
   "private": true,
-  "packageManager": "pnpm@10.28.0",
-  "devDependencies": {
-    "typescript": "~5.9.2",
-    "prettier": "^3.8.1"
+  "scripts": {
+    "build": "npm --prefix src run build",
+    "start": "npm --prefix src run start"
   }
 }

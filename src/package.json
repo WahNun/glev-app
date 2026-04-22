@@ -1,12 +1,11 @@
 {
-  "name": "@workspace/glev",
+  "name": "glev-app",
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "rm -rf .next && next dev -p 3000",
+    "dev": "next dev",
     "build": "next build",
-    "start": "next start -p 3000",
-    "lint": "next lint"
+    "start": "next start"
   },
   "dependencies": {
     "@replit/connectors-sdk": "^0.4.0",
