@@ -1,0 +1,15 @@
+{
+  "/_not-found/page": "/_not-found",
+  "/api/log/route": "/api/log",
+  "/api/parse-food/route": "/api/parse-food",
+  "/api/sheets/sync/route": "/api/sheets/sync",
+  "/login/page": "/login",
+  "/page": "/",
+  "/(protected)/dashboard/page": "/dashboard",
+  "/(protected)/engine/page": "/engine",
+  "/(protected)/entries/page": "/entries",
+  "/(protected)/insights/page": "/insights",
+  "/(protected)/log/page": "/log",
+  "/(protected)/settings/page": "/settings",
+  "/(protected)/import/page": "/import"
+}

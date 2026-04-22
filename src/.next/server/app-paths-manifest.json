@@ -1,3 +1,15 @@
 {
-  "/login/page": "app/login/page.js"
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/log/route": "app/api/log/route.js",
+  "/api/parse-food/route": "app/api/parse-food/route.js",
+  "/api/sheets/sync/route": "app/api/sheets/sync/route.js",
+  "/login/page": "app/login/page.js",
+  "/page": "app/page.js",
+  "/(protected)/dashboard/page": "app/(protected)/dashboard/page.js",
+  "/(protected)/engine/page": "app/(protected)/engine/page.js",
+  "/(protected)/entries/page": "app/(protected)/entries/page.js",
+  "/(protected)/insights/page": "app/(protected)/insights/page.js",
+  "/(protected)/log/page": "app/(protected)/log/page.js",
+  "/(protected)/settings/page": "app/(protected)/settings/page.js",
+  "/(protected)/import/page": "app/(protected)/import/page.js"
 }

@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
@@ -21,6 +21,18 @@ function makeCookieStorage() {
   };
 }
 
-export const supabase = url && key
-  ? createClient(url, key, { auth: { persistSession: true, storage: makeCookieStorage() } })
-  : null;
+const g = globalThis as typeof globalThis & { _supabase?: SupabaseClient | null };
+
+if (!g._supabase) {
+  g._supabase = url && key
+    ? createClient(url, key, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          storage: makeCookieStorage(),
+        },
+      })
+    : null;
+}
+
+export const supabase = g._supabase ?? null;

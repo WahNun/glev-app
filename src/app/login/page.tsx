@@ -77,7 +77,7 @@ export default function LoginPage() {
     setLoading(true);
 
     if (tab === "signin") {
-      const { error: authError } = await supabase.auth.signInWithPassword({
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
@@ -88,7 +88,15 @@ export default function LoginPage() {
         return;
       }
 
-      router.push("/dashboard");
+      console.log("SESSION:", data?.session);
+
+      if (data?.session) {
+        router.refresh();
+        router.replace("/dashboard");
+      } else {
+        setError("Sign-in succeeded but no session was returned. Please try again.");
+        setLoading(false);
+      }
 
     } else {
       const { data, error: authError } = await supabase.auth.signUp({
@@ -110,7 +118,8 @@ export default function LoginPage() {
         return;
       }
 
-      router.push("/dashboard");
+      router.refresh();
+      router.replace("/dashboard");
     }
   }
 
