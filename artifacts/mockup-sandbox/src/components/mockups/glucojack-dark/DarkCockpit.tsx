@@ -353,8 +353,32 @@ function Dashboard({ onInsights }: { onInsights?: (stat: string) => void }) {
   );
 }
 
-// ─── LOG PAGE (Voice + Manual, unified) ──────────────────────────
+// ─── LOG PAGE (Voice + Smart Macros + CGM, unified) ───────────────
 type VoiceInputState = "idle"|"recording"|"processing";
+type MacroStatus = "idle"|"loading"|"done"|"error";
+interface FoodItem { name: string; portion: string; }
+interface MacroResult { resolvedName:string; grams:number; carbs:number; fiber:number; protein:number; fat:number; calories:number; source:string; }
+interface MacroResponse { items:MacroResult[]; totals:{carbs:number;fiber:number;protein:number;fat:number;calories:number;netCarbs:number}; hasEstimated:boolean; }
+
+function parseFoodItems(text: string): FoodItem[] {
+  const PORTIONS = ["handful","small","medium","large","tablespoon","tbsp","teaspoon","tsp","cup","slice","piece","bowl","portion","serving"];
+  const parts = text.split(/,\s*|\s+and\s+/i).map(p=>p.trim()).filter(Boolean);
+  const items: FoodItem[] = [];
+  for (const part of parts) {
+    const gMatch = part.match(/^(\d+(?:\.\d+)?)\s*(?:g|grams?|ml)\s+(?:of\s+)?(.+)$/i);
+    if (gMatch) { items.push({name:gMatch[2].trim(), portion:`${gMatch[1]}g`}); continue; }
+    let matched = false;
+    for (const p of PORTIONS) {
+      const re = new RegExp(`^(?:a\\s+|an?\\s+)?${p}\\s+(?:of\\s+)?(.+)$`,"i");
+      const m = part.match(re);
+      if (m) { items.push({name:m[1].trim(), portion:p}); matched=true; break; }
+    }
+    if (!matched && part.length>1 && !/^\d+$/.test(part)) {
+      items.push({name:part, portion:"100g"});
+    }
+  }
+  return items;
+}
 
 function LogPage({ onLogged }: { onLogged?: ()=>void }) {
   const [glucose,setGlucose]=useState("");
@@ -367,11 +391,15 @@ function LogPage({ onLogged }: { onLogged?: ()=>void }) {
   const [mealType,setMealType]=useState<MealTypeKey>("BALANCED");
   const [overridden,setOverridden]=useState(false);
   const [cl,setCl]=useState<ReturnType<typeof classifyMeal>|null>(null);
-  const [loading,setLoading]=useState(false);
+  const [saving,setSaving]=useState(false);
   const [done,setDone]=useState(false);
   const [error,setError]=useState("");
   const [voiceStatus,setVoiceStatus]=useState<VoiceInputState>("idle");
   const [transcript,setTranscript]=useState("");
+  const [macroStatus,setMacroStatus]=useState<MacroStatus>("idle");
+  const [macroData,setMacroData]=useState<MacroResponse|null>(null);
+  const [macroNote,setMacroNote]=useState("");
+  const [cgmLoading,setCgmLoading]=useState(false);
   const recognitionRef=useRef<any>(null);
 
   const SR=typeof window!=="undefined"?((window as any).SpeechRecognition||(window as any).webkitSpeechRecognition):null;
@@ -385,27 +413,59 @@ function LogPage({ onLogged }: { onLogged?: ()=>void }) {
     if(!overridden) setMealType(r.mealType);
   },[carbs,protein,fat,desc,overridden]);
 
+  async function fetchMacros(items: FoodItem[], fallbackDesc: string){
+    if(items.length===0) return;
+    setMacroStatus("loading");
+    setMacroNote("");
+    setMacroData(null);
+    try{
+      const data=await apiFetch<MacroResponse>("/food/macros",{method:"POST",body:JSON.stringify({foods:items})});
+      setMacroData(data);
+      setCarbs(String(data.totals.carbs));
+      setFiber(String(data.totals.fiber));
+      setProtein(String(data.totals.protein));
+      setFat(String(data.totals.fat));
+      if(!desc && fallbackDesc) setDesc(items.map(i=>i.name).join(", "));
+      if(data.hasEstimated) setMacroNote("Some items estimated — verify fields");
+      setMacroStatus("done");
+    }catch{
+      setMacroStatus("error");
+      setMacroNote("Food API unavailable — using estimated values");
+    }
+  }
+
+  async function pullCGM(){
+    setCgmLoading(true);setError("");
+    try{
+      const r=await apiFetch<{glucose:number}>("/cgm/latest");
+      setGlucose(String(r.glucose));
+    }catch{setError("CGM unavailable");}
+    finally{setCgmLoading(false);}
+  }
+
   function startRecording(){
     if(!SR){setError("Requires Chrome or Edge.");return;}
-    setError("");
+    setError("");setMacroData(null);setMacroStatus("idle");
     const recognition=new SR();
-    recognition.lang="en-US";
-    recognition.continuous=false;
-    recognition.interimResults=false;
+    recognition.lang="en-US";recognition.continuous=false;recognition.interimResults=false;
     recognition.onstart=()=>setVoiceStatus("recording");
     recognition.onresult=(e:any)=>{
       const text=e.results[0][0].transcript;
-      setTranscript(text);
-      setVoiceStatus("processing");
+      setTranscript(text);setVoiceStatus("processing");
       const p=parseVoiceInput(text);
       if(p.glucoseBefore) setGlucose(String(p.glucoseBefore));
-      if(p.carbsGrams) setCarbs(String(p.carbsGrams));
-      if(p.fiberGrams!=null) setFiber(String(p.fiberGrams));
-      if(p.mealDescription) setDesc(p.mealDescription);
       if(p.insulinUnits) setInsulin(String(p.insulinUnits));
+      const items=parseFoodItems(text);
+      if(items.length>0){
+        fetchMacros(items, text);
+        setDesc(items.map(i=>`${i.portion} ${i.name}`).join(", "));
+      } else {
+        if(p.carbsGrams) setCarbs(String(p.carbsGrams));
+        if(p.fiberGrams!=null) setFiber(String(p.fiberGrams));
+        if(p.mealDescription) setDesc(p.mealDescription);
+      }
       const auto=classifyMeal(p.carbsGrams||0,0,0,p.mealDescription||"");
-      setMealType(auto.mealType);
-      setOverridden(false);
+      setMealType(auto.mealType);setOverridden(false);
       setTimeout(()=>setVoiceStatus("idle"),700);
     };
     recognition.onerror=(e:any)=>{setError(e.error==="not-allowed"?"Microphone access denied.":e.error);setVoiceStatus("idle");};
@@ -416,9 +476,9 @@ function LogPage({ onLogged }: { onLogged?: ()=>void }) {
 
   function stopRecording(){recognitionRef.current?.stop();}
 
-  async function submit(){
+  async function confirmLog(){
     if(!glucose||!carbs||!insulin){setError("Glucose, carbs and insulin are required.");return;}
-    setLoading(true);setError("");
+    setSaving(true);setError("");
     try{
       await apiFetch("/entries",{method:"POST",body:JSON.stringify({
         glucoseBefore:Number(glucose),carbsGrams:Number(carbs),
@@ -426,106 +486,178 @@ function LogPage({ onLogged }: { onLogged?: ()=>void }) {
         insulinUnits:Number(insulin),mealType,
         mealDescription:desc||undefined,
       })});
-      setDone(true);
-      onLogged?.();
+      setDone(true);onLogged?.();
     }catch{setError("Failed to save. Check API.");}
-    finally{setLoading(false);}
+    finally{setSaving(false);}
   }
 
-  function resetForm(){setDone(false);setGlucose("");setCarbs("");setFiber("");setProtein("");setFat("");setDesc("");setInsulin("");setOverridden(false);setTranscript("");setVoiceStatus("idle");}
+  function resetForm(){setDone(false);setGlucose("");setCarbs("");setFiber("");setProtein("");setFat("");setDesc("");setInsulin("");setOverridden(false);setTranscript("");setVoiceStatus("idle");setMacroStatus("idle");setMacroData(null);setMacroNote("");}
 
   const isRec=voiceStatus==="recording";
   const voiceColor={idle:"rgba(255,255,255,0.3)",recording:ACCENT,processing:ORANGE}[voiceStatus];
-  const voiceLabel={idle:voiceSupported?"Tap to speak":"Voice unavailable",recording:"Listening…",processing:"Filling form…"}[voiceStatus];
+  const voiceLabel={idle:voiceSupported?"Tap to speak":"Voice unavailable",recording:"Listening…",processing:"Parsing…"}[voiceStatus];
+  const netCarbs=carbs&&fiber?Math.max(0,Number(carbs)-Number(fiber)):null;
 
   if(done) return (
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:380,gap:16}}>
       <div style={{width:60,height:60,borderRadius:99,background:`${GREEN}22`,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{fontSize:28,color:GREEN}}>✓</span></div>
-      <div style={{fontSize:18,fontWeight:700,color:GREEN}}>Entry saved</div>
+      <div style={{fontSize:18,fontWeight:700,color:GREEN}}>Entry confirmed</div>
       <div style={{fontSize:12,color:"rgba(255,255,255,0.4)"}}>BG {glucose} · {carbs}g carbs{fiber?` · ${fiber}g fiber`:""} · {MEAL_LABELS[mealType]} · {insulin}u</div>
       <button onClick={resetForm} style={{marginTop:8,padding:"10px 24px",background:ACCENT,border:"none",borderRadius:10,color:"white",fontSize:13,fontWeight:600,cursor:"pointer"}}>Log Another</button>
     </div>
   );
 
   return (
-    <div style={{maxWidth:520,display:"flex",flexDirection:"column",gap:14}}>
-      <style>{`@keyframes vPulse{0%,100%{opacity:0.35;transform:scale(1)}50%{opacity:1;transform:scale(1.05)}}`}</style>
+    <div style={{maxWidth:540,display:"flex",flexDirection:"column",gap:12}}>
+      <style>{`@keyframes vPulse{0%,100%{opacity:0.35;transform:scale(1)}50%{opacity:1;transform:scale(1.05)}} @keyframes spin{to{transform:rotate(360deg)}}`}</style>
 
-      {/* ── Voice section ── */}
-      <Card style={{padding:"22px 22px 20px"}}>
-        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
-          {/* Big mic button */}
-          <div style={{position:"relative",width:104,height:104,flexShrink:0}}>
-            {isRec&&<div style={{position:"absolute",inset:-18,borderRadius:"50%",background:`radial-gradient(circle,${ACCENT}18 0%,transparent 70%)`,animation:"vPulse 2s ease-in-out infinite",pointerEvents:"none"}}/>}
-            <svg width="104" height="104" viewBox="0 0 104 104" style={{position:"absolute",inset:0,overflow:"visible"}}>
-              <circle cx="52" cy="52" r="48" fill="none" stroke={isRec?`${ACCENT}55`:"rgba(255,255,255,0.07)"} strokeWidth="1.5" style={{transition:"stroke 0.4s"}}/>
-              {isRec&&<circle cx="52" cy="52" r="41" fill="none" stroke={ACCENT} strokeWidth="1.5" opacity="0.6"/>}
+      {/* ── 1. Voice Input ── */}
+      <Card style={{padding:"20px 22px 18px"}}>
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
+          <div style={{position:"relative",width:96,height:96,flexShrink:0}}>
+            {isRec&&<div style={{position:"absolute",inset:-16,borderRadius:"50%",background:`radial-gradient(circle,${ACCENT}18 0%,transparent 70%)`,animation:"vPulse 2s ease-in-out infinite",pointerEvents:"none"}}/>}
+            <svg width="96" height="96" viewBox="0 0 96 96" style={{position:"absolute",inset:0,overflow:"visible"}}>
+              <circle cx="48" cy="48" r="44" fill="none" stroke={isRec?`${ACCENT}55`:"rgba(255,255,255,0.07)"} strokeWidth="1.5" style={{transition:"stroke 0.4s"}}/>
+              {isRec&&<circle cx="48" cy="48" r="38" fill="none" stroke={ACCENT} strokeWidth="1.5" opacity="0.6"/>}
             </svg>
             <button
               onClick={voiceStatus==="idle"?startRecording:voiceStatus==="recording"?stopRecording:undefined}
               disabled={voiceStatus==="processing"||!voiceSupported}
-              style={{
-                position:"absolute",inset:9,borderRadius:"50%",border:"none",
-                cursor:voiceStatus==="processing"||!voiceSupported?"default":"pointer",
-                background:`radial-gradient(circle at 36% 32%, #1e1e2e 0%, #141420 45%, #09090B 100%)`,
-                boxShadow:isRec
-                  ?`0 0 0 1px ${ACCENT}55,0 0 30px ${ACCENT}44,inset 0 0 20px rgba(79,110,247,0.12)`
-                  :`0 0 0 1px rgba(255,255,255,0.08),0 6px 24px rgba(0,0,0,0.6),inset 0 1px 0 rgba(255,255,255,0.06)`,
-                display:"flex",alignItems:"center",justifyContent:"center",
-                transition:"box-shadow 0.4s,transform 0.2s",
-                transform:isRec?"scale(1.04)":"scale(1)",outline:"none",
-              }}
+              style={{position:"absolute",inset:8,borderRadius:"50%",border:"none",cursor:voiceStatus==="processing"||!voiceSupported?"default":"pointer",background:`radial-gradient(circle at 36% 32%,#1e1e2e 0%,#141420 45%,#09090B 100%)`,boxShadow:isRec?`0 0 0 1px ${ACCENT}55,0 0 30px ${ACCENT}44,inset 0 0 20px rgba(79,110,247,0.12)`:`0 0 0 1px rgba(255,255,255,0.08),0 6px 24px rgba(0,0,0,0.6),inset 0 1px 0 rgba(255,255,255,0.06)`,display:"flex",alignItems:"center",justifyContent:"center",transition:"box-shadow 0.4s,transform 0.2s",transform:isRec?"scale(1.04)":"scale(1)",outline:"none"}}
             >
-              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" style={{transition:"all 0.3s"}}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" style={{transition:"all 0.3s"}}>
                 {voiceStatus==="processing"
-                  ?[0,60,120,180,240,300].map((deg,i)=>(
-                      <circle key={i} cx={12+7.5*Math.cos(deg*Math.PI/180)} cy={12+7.5*Math.sin(deg*Math.PI/180)} r="1.6" fill={ACCENT} opacity={0.3+i*0.12}/>
-                    ))
-                  :<>
-                    <rect x="9" y="2" width="6" height="11" rx="3" fill={isRec?ACCENT:"rgba(255,255,255,0.88)"}/>
-                    <path d="M5 10a7 7 0 0 0 14 0" stroke={isRec?ACCENT:"rgba(255,255,255,0.88)"} strokeWidth="1.8" strokeLinecap="round" fill="none"/>
-                    <line x1="12" y1="19" x2="12" y2="22" stroke={isRec?ACCENT:"rgba(255,255,255,0.88)"} strokeWidth="1.8" strokeLinecap="round"/>
-                    <line x1="9" y1="22" x2="15" y2="22" stroke={isRec?ACCENT:"rgba(255,255,255,0.88)"} strokeWidth="1.8" strokeLinecap="round"/>
-                  </>
+                  ?[0,60,120,180,240,300].map((deg,i)=><circle key={i} cx={12+7.5*Math.cos(deg*Math.PI/180)} cy={12+7.5*Math.sin(deg*Math.PI/180)} r="1.6" fill={ACCENT} opacity={0.3+i*0.12}/>)
+                  :<><rect x="9" y="2" width="6" height="11" rx="3" fill={isRec?ACCENT:"rgba(255,255,255,0.88)"}/><path d="M5 10a7 7 0 0 0 14 0" stroke={isRec?ACCENT:"rgba(255,255,255,0.88)"} strokeWidth="1.8" strokeLinecap="round" fill="none"/><line x1="12" y1="19" x2="12" y2="22" stroke={isRec?ACCENT:"rgba(255,255,255,0.88)"} strokeWidth="1.8" strokeLinecap="round"/><line x1="9" y1="22" x2="15" y2="22" stroke={isRec?ACCENT:"rgba(255,255,255,0.88)"} strokeWidth="1.8" strokeLinecap="round"/></>
                 }
               </svg>
             </button>
           </div>
-          {/* Status */}
           <div style={{fontSize:11,fontWeight:600,letterSpacing:"0.12em",color:voiceColor,transition:"color 0.3s"}}>{voiceLabel}</div>
-          {/* Transcript */}
           {transcript
-            ?<div style={{fontSize:12,color:"rgba(255,255,255,0.45)",fontStyle:"italic",textAlign:"center",lineHeight:1.5,padding:"8px 14px",background:"rgba(255,255,255,0.03)",borderRadius:8,border:`1px solid rgba(255,255,255,0.06)`,maxWidth:380}}>"{transcript}"</div>
-            :<div style={{fontSize:10,color:"rgba(255,255,255,0.15)",letterSpacing:"0.07em",textAlign:"center"}}>e.g. "120 glucose 60g carbs 8 fiber 2 units pasta"</div>
+            ?<div style={{fontSize:12,color:"rgba(255,255,255,0.5)",fontStyle:"italic",textAlign:"center",lineHeight:1.5,padding:"7px 12px",background:"rgba(255,255,255,0.03)",borderRadius:8,border:`1px solid rgba(255,255,255,0.06)`,maxWidth:400}}>"{transcript}"</div>
+            :<div style={{fontSize:10,color:"rgba(255,255,255,0.15)",letterSpacing:"0.06em",textAlign:"center"}}>e.g. "handful blueberries, small banana, 200g yogurt"</div>
           }
         </div>
       </Card>
 
-      {/* ── Manual form ── */}
-      <Card style={{padding:22}}>
-        <div style={{fontSize:13,fontWeight:700,marginBottom:16,color:"rgba(255,255,255,0.6)",letterSpacing:"0.04em"}}>ENTRY DETAILS</div>
-        <div style={{display:"flex",flexDirection:"column",gap:13}}>
-          <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>GLUCOSE BEFORE (mg/dL)</div><input value={glucose} onChange={e=>setGlucose(e.target.value)} placeholder="e.g. 115" type="number" style={inp}/></div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>CARBS (g)</div><input value={carbs} onChange={e=>setCarbs(e.target.value)} placeholder="e.g. 60" type="number" style={inp}/></div>
-            <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>FIBER (g) <span style={{opacity:0.5}}>opt.</span></div><input value={fiber} onChange={e=>setFiber(e.target.value)} placeholder="e.g. 8" type="number" style={inp}/></div>
+      {/* ── 2. Macro calculation status ── */}
+      {macroStatus==="loading"&&(
+        <Card style={{padding:"14px 18px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:16,height:16,border:`2px solid ${ACCENT}44`,borderTopColor:ACCENT,borderRadius:"50%",animation:"spin 0.7s linear infinite",flexShrink:0}}/>
+            <span style={{fontSize:12,color:"rgba(255,255,255,0.5)"}}>Calculating macros via food database…</span>
           </div>
-          {carbs&&fiber&&Number(carbs)>0&&Number(fiber)>0&&(
-            <div style={{padding:"8px 12px",background:`${GREEN}0D`,border:`1px solid ${GREEN}33`,borderRadius:8,fontSize:11,color:GREEN,display:"flex",alignItems:"center",gap:6}}>
-              <span style={{fontWeight:700,letterSpacing:"0.04em",marginRight:2}}>◈</span>
-              <span><b>{carbs}g</b> − <b>{fiber}g</b> fiber = <b style={{fontSize:13}}>{Math.max(0,Number(carbs)-Number(fiber))}g net carbs</b></span>
+        </Card>
+      )}
+      {macroStatus==="done"&&macroData&&(
+        <Card style={{padding:"14px 18px",border:`1px solid ${GREEN}22`}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+            <div style={{fontSize:10,color:GREEN,fontWeight:700,letterSpacing:"0.08em"}}>◈ MACROS CALCULATED</div>
+            {macroNote&&<div style={{fontSize:9,color:ORANGE}}>{macroNote}</div>}
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:3}}>
+            {macroData.items.map((item,i)=>(
+              <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:"1px solid rgba(255,255,255,0.04)",gap:8}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <span style={{fontSize:11,color:"rgba(255,255,255,0.7)"}}>{item.resolvedName}</span>
+                  <span style={{fontSize:9,color:"rgba(255,255,255,0.25)",marginLeft:5}}>{item.grams}g</span>
+                  {item.source==="estimated"&&<span style={{fontSize:8,color:ORANGE,marginLeft:4}}>est.</span>}
+                </div>
+                <div style={{display:"flex",gap:8,flexShrink:0}}>
+                  <span style={{fontSize:10,color:ACCENT}}>{item.carbs}g C</span>
+                  <span style={{fontSize:10,color:GREEN}}>{item.protein}g P</span>
+                  <span style={{fontSize:10,color:"#A855F7"}}>{item.fat}g F</span>
+                </div>
+              </div>
+            ))}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:6}}>
+              <span style={{fontSize:10,color:"rgba(255,255,255,0.3)"}}>TOTAL · {macroData.totals.calories} kcal</span>
+              <div style={{display:"flex",gap:10}}>
+                <span style={{fontSize:11,fontWeight:700,color:ACCENT}}>{macroData.totals.carbs}g carbs</span>
+                <span style={{fontSize:11,color:GREEN}}>→ {macroData.totals.netCarbs}g net</span>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+      {macroStatus==="error"&&macroNote&&(
+        <div style={{fontSize:10,color:ORANGE,padding:"6px 12px",background:`${ORANGE}10`,borderRadius:8,border:`1px solid ${ORANGE}30`}}>{macroNote}</div>
+      )}
+
+      {/* ── 3. Entry details form ── */}
+      <Card style={{padding:20}}>
+        <div style={{fontSize:10,color:"rgba(255,255,255,0.35)",letterSpacing:"0.1em",marginBottom:14}}>ENTRY DETAILS — edit any field</div>
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+
+          {/* Glucose + CGM */}
+          <div>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>GLUCOSE BEFORE (mg/dL)</div>
+            <div style={{display:"flex",gap:8}}>
+              <input value={glucose} onChange={e=>setGlucose(e.target.value)} placeholder="e.g. 115" type="number" style={{...inp,flex:1}}/>
+              <button onClick={pullCGM} disabled={cgmLoading} title="Pull latest CGM reading" style={{padding:"0 12px",background:cgmLoading?"rgba(255,255,255,0.05)":`${ACCENT}18`,border:`1px solid ${ACCENT}44`,borderRadius:10,color:ACCENT,fontSize:10,fontWeight:700,cursor:"pointer",letterSpacing:"0.04em",flexShrink:0,display:"flex",alignItems:"center",gap:5,transition:"all 0.15s",whiteSpace:"nowrap"}}>
+                {cgmLoading
+                  ?<div style={{width:10,height:10,border:`1.5px solid ${ACCENT}44`,borderTopColor:ACCENT,borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/>
+                  :<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2.5" strokeLinecap="round"><path d="M5 12h14M15 6l6 6-6 6"/></svg>
+                }
+                CGM
+              </button>
+            </div>
+          </div>
+
+          {/* Carbs + Fiber */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>CARBS (g)</div>
+              <input value={carbs} onChange={e=>setCarbs(e.target.value)} placeholder="e.g. 60" type="number" style={inp}/>
+            </div>
+            <div>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>FIBER (g) <span style={{opacity:0.5}}>opt.</span></div>
+              <input value={fiber} onChange={e=>setFiber(e.target.value)} placeholder="e.g. 8" type="number" style={inp}/>
+            </div>
+          </div>
+          {netCarbs!==null&&netCarbs>=0&&(
+            <div style={{padding:"7px 12px",background:`${GREEN}0D`,border:`1px solid ${GREEN}33`,borderRadius:8,fontSize:11,color:GREEN,display:"flex",alignItems:"center",gap:6}}>
+              <span style={{fontWeight:700,marginRight:2}}>◈</span>
+              <span><b>{carbs}g</b> − <b>{fiber}g</b> fiber = <b style={{fontSize:13}}>{netCarbs}g net carbs</b></span>
             </div>
           )}
+
+          {/* Protein + Fat */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>PROTEIN (g)</div><input value={protein} onChange={e=>setProtein(e.target.value)} placeholder="e.g. 30" type="number" style={inp}/></div>
-            <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>FAT (g)</div><input value={fat} onChange={e=>setFat(e.target.value)} placeholder="e.g. 15" type="number" style={inp}/></div>
+            <div>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>PROTEIN (g)</div>
+              <input value={protein} onChange={e=>setProtein(e.target.value)} placeholder="e.g. 30" type="number" style={inp}/>
+            </div>
+            <div>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>FAT (g)</div>
+              <input value={fat} onChange={e=>setFat(e.target.value)} placeholder="e.g. 15" type="number" style={inp}/>
+            </div>
           </div>
-          <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>MEAL DESCRIPTION</div><input value={desc} onChange={e=>setDesc(e.target.value)} placeholder="e.g. granola, pizza…" style={{...inp,fontSize:12,fontWeight:400}}/></div>
+
+          {/* Description */}
+          <div>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>MEAL DESCRIPTION</div>
+            <input value={desc} onChange={e=>setDesc(e.target.value)} placeholder="e.g. granola, banana, yogurt…" style={{...inp,fontSize:12,fontWeight:400}}/>
+          </div>
+
           <MacroWidget cl={cl} active={mealType} overridden={overridden} onPick={t=>{setMealType(t);setOverridden(t!==(cl?.mealType??"BALANCED"));}} onReset={()=>{setOverridden(false);if(cl)setMealType(cl.mealType);}}/>
-          <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>INSULIN (u)</div><input value={insulin} onChange={e=>setInsulin(e.target.value)} placeholder="e.g. 1.5" type="number" style={inp}/></div>
+
+          {/* Insulin */}
+          <div>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>INSULIN (u)</div>
+            <input value={insulin} onChange={e=>setInsulin(e.target.value)} placeholder="e.g. 1.5" type="number" style={inp}/>
+          </div>
+
           {error&&<div style={{fontSize:11,color:PINK}}>{error}</div>}
-          <button onClick={submit} disabled={loading||!glucose||!carbs||!insulin} style={{marginTop:2,padding:"13px",background:`linear-gradient(135deg,${ACCENT},#6B8BFF)`,border:"none",borderRadius:10,color:"white",fontSize:14,fontWeight:700,cursor:"pointer",opacity:glucose&&carbs&&insulin&&!loading?1:0.4}}>
-            {loading?"Saving…":"Log Entry"}
+
+          {/* Confirm Log CTA */}
+          <button
+            onClick={confirmLog}
+            disabled={saving||!glucose||!carbs||!insulin}
+            style={{marginTop:4,padding:"14px",background:`linear-gradient(135deg,${ACCENT},#6B8BFF)`,border:"none",borderRadius:12,color:"white",fontSize:14,fontWeight:700,cursor:"pointer",opacity:glucose&&carbs&&insulin&&!saving?1:0.4,letterSpacing:"-0.01em",transition:"opacity 0.2s"}}
+          >
+            {saving?"Saving…":"✓ Confirm Log"}
           </button>
         </div>
       </Card>
@@ -1246,10 +1378,10 @@ function VoicePage({ onLogged }: { onLogged?: ()=>void }) {
               ))
             ) : (
               <>
-                <rect x="9" y="2" width="6" height="11" rx="3" fill={(status==="processing"||status==="preview")?"#C03535":"rgba(255,255,255,0.88)"}/>
-                <path d="M5 10a7 7 0 0 0 14 0" stroke={(status==="processing"||status==="preview")?"#C03535":"rgba(255,255,255,0.88)"} strokeWidth="1.8" strokeLinecap="round" fill="none"/>
-                <line x1="12" y1="19" x2="12" y2="22" stroke={(status==="processing"||status==="preview")?"#C03535":"rgba(255,255,255,0.88)"} strokeWidth="1.8" strokeLinecap="round"/>
-                <line x1="9" y1="22" x2="15" y2="22" stroke={(status==="processing"||status==="preview")?"#C03535":"rgba(255,255,255,0.88)"} strokeWidth="1.8" strokeLinecap="round"/>
+                <rect x="9" y="2" width="6" height="11" rx="3" fill={isRec?"#C03535":"rgba(255,255,255,0.88)"}/>
+                <path d="M5 10a7 7 0 0 0 14 0" stroke={isRec?"#C03535":"rgba(255,255,255,0.88)"} strokeWidth="1.8" strokeLinecap="round" fill="none"/>
+                <line x1="12" y1="19" x2="12" y2="22" stroke={isRec?"#C03535":"rgba(255,255,255,0.88)"} strokeWidth="1.8" strokeLinecap="round"/>
+                <line x1="9" y1="22" x2="15" y2="22" stroke={isRec?"#C03535":"rgba(255,255,255,0.88)"} strokeWidth="1.8" strokeLinecap="round"/>
               </>
             )}
           </svg>
@@ -1447,13 +1579,13 @@ function ImportPage({ onLogged }: { onLogged?: ()=>void }) {
 // ─── MOBILE DASHBOARD ────────────────────────────────────────────
 // ─── MOBILE ENTRY LOG ─────────────────────────────────────────────
 function MobileEntryLog() {
-  const [entries,setEntries]=useState<EntryRow[]>([]);
+  const [entries,setEntries]=useState<Entry[]>([]);
   const [loading,setLoading]=useState(true);
   const [expandedId,setExpandedId]=useState<number|null>(null);
   const [deleting,setDeleting]=useState<number|null>(null);
 
   useEffect(()=>{
-    apiFetch<{entries:EntryRow[],total:number}>("/entries?limit=60").then(d=>setEntries(d.entries)).catch(()=>{}).finally(()=>setLoading(false));
+    apiFetch<{entries:Entry[],total:number}>("/entries?limit=60").then(d=>setEntries(d.entries)).catch(()=>{}).finally(()=>setLoading(false));
   },[]);
 
   async function deleteEntry(id:number){
@@ -1472,7 +1604,7 @@ function MobileEntryLog() {
   return (
     <div style={{display:"flex",flexDirection:"column",gap:8}}>
       {entries.map(e=>{
-        const meta=e.mealType?MEAL_TYPE_META[e.mealType]:null;
+        const meta=e.mealType?MEAL_TYPE_META[e.mealType as MealTypeKey]:null;
         const ev=evalStyle(e.evaluation);
         const isExpanded=expandedId===e.id;
         const netCarbs=e.fiberGrams!=null?Math.max(0,e.carbsGrams-e.fiberGrams):null;

@@ -4,6 +4,8 @@ import entriesRouter from "./entries";
 import insightsRouter from "./insights";
 import recommendationsRouter from "./recommendations";
 import authRouter from "./auth";
+import cgmRouter from "./cgm";
+import foodRouter from "./food";
 
 const router: IRouter = Router();
 
@@ -12,5 +14,7 @@ router.use(authRouter);
 router.use(entriesRouter);
 router.use(insightsRouter);
 router.use(recommendationsRouter);
+router.use(cgmRouter);
+router.use(foodRouter);
 
 export default router;

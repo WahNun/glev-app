@@ -55,6 +55,8 @@ The `artifacts/glucojack` React/Vite web app was removed — the canvas mockup i
 - `GET /api/insights/patterns` — meal type performance patterns
 - `GET /api/insights/glucose-trend` — time-series glucose data
 - `POST /api/recommendations` — insulin recommendation engine
+- `GET /api/cgm/latest` — mock CGM reading (95–120 random); structured for Dexcom/Libre integration
+- `POST /api/food/macros` — USDA FoodData Central lookup; body `{foods:[{name,portion}]}`; returns per-item + aggregate carbs/fiber/protein/fat/netCarbs; falls back to category estimation on timeout
 
 ### Core Logic
 - `artifacts/api-server/src/lib/calculation.ts` — delta, speed, evaluation (GOOD/OVERDOSE/UNDERDOSE/CHECK_CONTEXT)

@@ -1,0 +1,260 @@
+Enhance the unified Log screen with AI-powered macro calculation using real food APIs and CGM integration.
+
+--------------------------------------------------
+🎤 1. VOICE → FOOD PARSING
+--------------------------------------------------
+
+After voice input:
+
+Convert speech into structured food list.
+
+Example:
+"handful of blueberries, small banana, 200g yogurt"
+
+→
+
+{
+  foods: [
+    { name: "blueberries", portion: "handful" },
+    { name: "banana", portion: "small" },
+    { name: "yogurt", portion: "200g" }
+  ]
+}
+
+--------------------------------------------------
+🧠 2. PORTION → GRAM MAPPING
+--------------------------------------------------
+
+Create portion mapping system:
+
+Examples:
+- handful blueberries → ~50g
+- small banana → ~100g
+- medium banana → ~120g
+- tablespoon → ~15g
+
+If exact grams provided → use directly
+
+--------------------------------------------------
+🌐 3. FOOD API INTEGRATION (CRITICAL)
+--------------------------------------------------
+
+Replace mock macro system with real API calls.
+
+Integrate ONE of the following (prefer USDA first):
+
+Option A (Preferred):
+- USDA FoodData Central API
+
+Option B:
+- Edamam Nutrition API
+
+Option C:
+- OpenFoodFacts API
+
+--------------------------------------------------
+🔑 API HANDLING
+--------------------------------------------------
+
+- Store API key in environment variables
+- Example:
+
+NEXT_PUBLIC_USDA_API_KEY
+
+--------------------------------------------------
+📊 4. MACRO FETCH LOGIC
+--------------------------------------------------
+
+For each food:
+
+1. Convert portion → grams
+2. Query API with:
+   - food name
+   - quantity in grams
+
+3. Extract:
+   - carbs
+   - fiber
+   - protein
+   - fat
+   - calories (optional)
+
+--------------------------------------------------
+➕ 5. AGGREGATE TOTALS
+--------------------------------------------------
+
+Sum all foods:
+
+total_carbs
+total_fiber
+total_protein
+total_fat
+
+Compute:
+
+net_carbs = carbs - fiber
+
+Rule:
+net_carbs cannot be negative
+
+--------------------------------------------------
+🧾 6. AUTO-FILL FORM
+--------------------------------------------------
+
+After macro calculation:
+
+Auto-populate fields:
+
+- carbs
+- fiber
+- protein
+- fat
+- description
+
+User must be able to edit all values manually.
+
+--------------------------------------------------
+📡 7. CGM DATA INTEGRATION
+--------------------------------------------------
+
+Add button next to "Glucose Before":
+
+[ Pull CGM Data ]
+
+On click:
+→ call API endpoint:
+
+/api/cgm/latest
+
+Return format:
+{
+  glucose: number
+}
+
+Auto-fill glucose_before field.
+
+--------------------------------------------------
+🧪 8. MOCK CGM API (MVP)
+--------------------------------------------------
+
+Create endpoint:
+
+/api/cgm/latest
+
+Return mock value (e.g. 95–120 random)
+
+Structure it so it can later integrate:
+- Dexcom API
+- Libre API
+
+--------------------------------------------------
+🎤 9. UI STRUCTURE (UNIFIED LOG)
+--------------------------------------------------
+
+Top → Bottom:
+
+1. Voice Input
+- large mic button
+- states:
+  Idle / Recording / Processing
+
+2. Parsed Text Preview
+
+3. Auto-filled Macro Section
+- carbs
+- fiber
+- protein
+- fat
+
+4. Manual Form Fields
+- glucose_before
+- carbs
+- fiber
+- protein
+- fat
+- description
+- insulin
+
+5. CGM Button
+
+6. Confirmation
+
+--------------------------------------------------
+🧠 10. CONFIRMATION STEP
+--------------------------------------------------
+
+Add button:
+
+[ Confirm Log ]
+
+Rules:
+- no auto-save
+- must confirm before storing
+
+--------------------------------------------------
+🔗 11. DATA MODEL INTEGRATION
+--------------------------------------------------
+
+On confirm:
+
+1. classifyMeal()
+2. calculate:
+   - delta
+   - duration
+   - speed
+3. evaluateEntry()
+
+Store full structured Entry object.
+
+--------------------------------------------------
+⚡ 12. PERFORMANCE
+--------------------------------------------------
+
+- API calls async
+- show loading state:
+  "Calculating macros..."
+
+- cache food results when possible
+
+--------------------------------------------------
+⚠️ 13. FALLBACK LOGIC
+--------------------------------------------------
+
+If API fails:
+
+- fallback to basic estimation
+- notify user:
+  "Using estimated values"
+
+--------------------------------------------------
+🧠 14. FUTURE READY
+--------------------------------------------------
+
+Structure food lookup so it can later:
+
+- learn from user corrections
+- cache frequent meals
+- improve estimation over time
+
+--------------------------------------------------
+⚠️ RULES
+--------------------------------------------------
+
+- macros MUST be auto-calculated
+- user can override everything
+- no direct save after voice
+- API integration must be modular
+
+--------------------------------------------------
+FINAL GOAL
+
+Create an intelligent logging system where:
+
+- user speaks food naturally
+- system converts to structured data
+- real nutrition data is fetched via API
+- macros are calculated automatically
+- glucose is pulled via CGM
+- user confirms final entry
+
+Minimal friction, real intelligence.
