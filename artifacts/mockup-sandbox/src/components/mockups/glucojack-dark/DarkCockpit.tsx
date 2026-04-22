@@ -152,7 +152,7 @@ function Card({ children, style }: { children: React.ReactNode; style?: React.CS
   return <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 14, ...style }}>{children}</div>;
 }
 
-function StatCard({ label, value, unit, sub, color, bar }: { label:string; value:string; unit:string; sub:string; color:string; bar:number }) {
+function StatCard({ label, value, unit, sub, color, bar, onLearnMore }: { label:string; value:string; unit:string; sub:string; color:string; bar:number; onLearnMore?:()=>void }) {
   return (
     <Card style={{ padding: "16px 18px" }}>
       <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)", marginBottom:8, letterSpacing:"0.06em" }}>{label.toUpperCase()}</div>
@@ -163,7 +163,14 @@ function StatCard({ label, value, unit, sub, color, bar }: { label:string; value
       <div style={{ height:3, background:"rgba(255,255,255,0.08)", borderRadius:99, overflow:"hidden" }}>
         <div style={{ width:`${Math.min(bar,100)}%`, height:"100%", background:color, borderRadius:99 }}/>
       </div>
-      <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", marginTop:6 }}>{sub}</div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:6 }}>
+        <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)" }}>{sub}</div>
+        {onLearnMore&&(
+          <button onClick={onLearnMore} style={{fontSize:9,color,fontWeight:700,background:"none",border:"none",cursor:"pointer",padding:0,letterSpacing:"0.05em",opacity:0.75,transition:"opacity 0.15s",display:"flex",alignItems:"center",gap:3}}>
+            <span style={{fontSize:9}}>◈</span> insights →
+          </button>
+        )}
+      </div>
     </Card>
   );
 }
@@ -226,7 +233,7 @@ function Spinner() {
 const inp: React.CSSProperties = { background:"rgba(255,255,255,0.05)", border:`1px solid rgba(255,255,255,0.1)`, borderRadius:10, padding:"9px 12px", color:"white", fontSize:14, fontWeight:600, width:"100%", boxSizing:"border-box", outline:"none", fontFamily:"inherit" };
 
 // ─── DASHBOARD ───────────────────────────────────────────────────
-function Dashboard() {
+function Dashboard({ onInsights }: { onInsights?: (stat: string) => void }) {
   const [stats, setStats] = useState<DashboardStats|null>(null);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [loading, setLoading] = useState(true);
@@ -256,10 +263,10 @@ function Dashboard() {
   return (
     <div style={{display:"flex",flexDirection:"column",gap:12}}>
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
-        <StatCard label="Control Score" value={stats.controlScore.toFixed(0)} unit="/100" sub={`${stats.totalEntries} entries`} color={ACCENT} bar={stats.controlScore}/>
-        <StatCard label="Good Rate" value={(stats.goodRate*100).toFixed(1)} unit="%" sub={`${eb.GOOD} good outcomes`} color={GREEN} bar={stats.goodRate*100}/>
-        <StatCard label="Spike Rate" value={stats.spikeRate.toFixed(1)} unit="%" sub="Hyperglycemia" color={ORANGE} bar={stats.spikeRate}/>
-        <StatCard label="Hypo Rate" value={stats.hypoRate.toFixed(1)} unit="%" sub="Hypoglycemia" color={PINK} bar={stats.hypoRate}/>
+        <StatCard label="Control Score" value={stats.controlScore.toFixed(0)} unit="/100" sub={`${stats.totalEntries} entries`} color={ACCENT} bar={stats.controlScore} onLearnMore={onInsights?()=>onInsights("Control Score"):undefined}/>
+        <StatCard label="Good Rate" value={(stats.goodRate*100).toFixed(1)} unit="%" sub={`${eb.GOOD} good outcomes`} color={GREEN} bar={stats.goodRate*100} onLearnMore={onInsights?()=>onInsights("Good Rate"):undefined}/>
+        <StatCard label="Spike Rate" value={stats.spikeRate.toFixed(1)} unit="%" sub="Hyperglycemia" color={ORANGE} bar={stats.spikeRate} onLearnMore={onInsights?()=>onInsights("Spike Rate"):undefined}/>
+        <StatCard label="Hypo Rate" value={stats.hypoRate.toFixed(1)} unit="%" sub="Hypoglycemia" color={PINK} bar={stats.hypoRate} onLearnMore={onInsights?()=>onInsights("Hypo Rate"):undefined}/>
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:"1.8fr 1fr",gap:10}}>
@@ -847,7 +854,59 @@ function InsightFlipCard({m,color,label}:{m:MealPattern;color:string;label:strin
   );
 }
 
-function Insights() {
+const STAT_COLORS: Record<string,string> = {
+  "Control Score": ACCENT,
+  "Good Rate": GREEN,
+  "Spike Rate": ORANGE,
+  "Hypo Rate": PINK,
+};
+
+function StatMetricFlipCard({ label, info, color, defaultFlipped }: {
+  label: string;
+  info: { headline: string; detail: string; formula: string };
+  color: string;
+  defaultFlipped?: boolean;
+}) {
+  const [flipped, setFlipped] = useState(defaultFlipped || false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(()=>{
+    if (defaultFlipped && ref.current) {
+      setTimeout(()=>ref.current?.scrollIntoView({ behavior:"smooth", block:"center" }), 120);
+    }
+  },[defaultFlipped]);
+
+  return (
+    <div
+      ref={ref}
+      onClick={()=>setFlipped(f=>!f)}
+      style={{perspective:"800px",cursor:"pointer",height:128,outline:defaultFlipped?`1px solid ${color}44`:"none",borderRadius:14,transition:"outline 0.3s"}}
+    >
+      <div style={{position:"relative",width:"100%",height:"100%",transformStyle:"preserve-3d",transition:"transform 0.52s cubic-bezier(0.4,0.2,0.2,1)",transform:flipped?"rotateY(180deg)":"rotateY(0deg)"}}>
+        {/* front */}
+        <div style={{position:"absolute",inset:0,backfaceVisibility:"hidden",background:SURFACE,border:`1px solid ${BORDER}`,borderRadius:14,padding:"14px 18px",boxSizing:"border-box",display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
+          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between"}}>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",letterSpacing:"0.08em"}}>{label.toUpperCase()}</div>
+            <span style={{fontSize:9,color:"rgba(255,255,255,0.22)"}}>↺ details</span>
+          </div>
+          <div style={{fontSize:12,color:"rgba(255,255,255,0.65)",fontStyle:"italic",lineHeight:1.4}}>{info.headline}</div>
+          <div style={{fontSize:9,color:color,fontFamily:"monospace",opacity:0.75}}>{info.formula}</div>
+        </div>
+        {/* back */}
+        <div style={{position:"absolute",inset:0,backfaceVisibility:"hidden",transform:"rotateY(180deg)",background:`linear-gradient(145deg,${color}14,${SURFACE} 65%)`,border:`1px solid ${color}33`,borderRadius:14,padding:"14px 18px",boxSizing:"border-box",display:"flex",flexDirection:"column",gap:7,justifyContent:"space-between"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div style={{fontSize:10,color,fontWeight:700,letterSpacing:"0.06em"}}>{label.toUpperCase()}</div>
+            <span style={{fontSize:9,color:"rgba(255,255,255,0.18)"}}>↺ back</span>
+          </div>
+          <div style={{fontSize:11,color:"rgba(255,255,255,0.65)",lineHeight:1.5}}>{info.detail}</div>
+          <div style={{fontSize:9,color:color,fontFamily:"monospace",opacity:0.8}}>{info.formula}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Insights({ focusedStat }: { focusedStat?: string | null }) {
   const [patterns,setPatterns]=useState<MealPattern[]>([]);
   const [loading,setLoading]=useState(true);
 
@@ -861,17 +920,39 @@ function Insights() {
   const mealColors: Record<MealTypeKey,string> = { FAST_CARBS:ORANGE, HIGH_FAT:"#A855F7", HIGH_PROTEIN:"#3B82F6", BALANCED:GREEN };
 
   return (
-    <div style={{display:"flex",flexDirection:"column",gap:12}}>
-      <div style={{fontSize:11,color:"rgba(255,255,255,0.25)",textAlign:"right",letterSpacing:"0.04em"}}>Tap a card to flip ↺</div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>
-        {patterns.map(m=>(
-          <InsightFlipCard
-            key={m.mealType}
-            m={m}
-            color={mealColors[m.mealType as MealTypeKey]||"#888"}
-            label={mealTypeLabels[m.mealType as MealTypeKey]||m.mealType}
-          />
-        ))}
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      {/* ── Performance Metrics section ── */}
+      <div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+          <div style={{fontSize:13,fontWeight:700,letterSpacing:"-0.01em"}}>Performance Metrics</div>
+          <div style={{fontSize:10,color:"rgba(255,255,255,0.25)",letterSpacing:"0.04em"}}>Tap a card to flip ↺</div>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {Object.entries(STAT_INFO).map(([label,info])=>(
+            <StatMetricFlipCard
+              key={label}
+              label={label}
+              info={info}
+              color={STAT_COLORS[label]||ACCENT}
+              defaultFlipped={focusedStat===label}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* ── Meal Type Insights section ── */}
+      <div>
+        <div style={{fontSize:13,fontWeight:700,letterSpacing:"-0.01em",marginBottom:8}}>Meal Type Patterns</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>
+          {patterns.map(m=>(
+            <InsightFlipCard
+              key={m.mealType}
+              m={m}
+              color={mealColors[m.mealType as MealTypeKey]||"#888"}
+              label={mealTypeLabels[m.mealType as MealTypeKey]||m.mealType}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -1487,6 +1568,7 @@ function MobileDashboard({email,name:memberName,onSignOut}:{email?:string;name?:
   const [stats, setStats] = useState<DashboardStats|null>(null);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [flippedStat,setFlippedStat]=useState<string|null>(null);
+  const [insightFocus,setInsightFocus]=useState<string|null>(null);
   const [expandedRecentId,setExpandedRecentId]=useState<number|null>(null);
 
   useEffect(()=>{
@@ -1564,14 +1646,22 @@ function MobileDashboard({email,name:memberName,onSignOut}:{email?:string;name?:
                       </div>
                     </div>
                     {/* back */}
-                    <div style={{position:"absolute",inset:0,backfaceVisibility:"hidden",transform:"rotateY(180deg)",background:`linear-gradient(145deg,${sc.color}12,${SURFACE} 65%)`,border:`1px solid ${sc.color}33`,borderRadius:14,padding:"14px 18px",boxSizing:"border-box",display:"flex",flexDirection:"column",gap:6,justifyContent:"space-between"}}>
+                    <div style={{position:"absolute",inset:0,backfaceVisibility:"hidden",transform:"rotateY(180deg)",background:`linear-gradient(145deg,${sc.color}12,${SURFACE} 65%)`,border:`1px solid ${sc.color}33`,borderRadius:14,padding:"14px 18px",boxSizing:"border-box",display:"flex",flexDirection:"column",gap:5,justifyContent:"space-between"}}>
                       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                         <div style={{fontSize:10,color:sc.color,fontWeight:700,letterSpacing:"0.06em"}}>{sc.label.toUpperCase()}</div>
                         <span style={{fontSize:9,color:"rgba(255,255,255,0.18)"}}>↺ back</span>
                       </div>
                       <div style={{fontSize:11,color:"rgba(255,255,255,0.6)",lineHeight:1.45,fontStyle:"italic"}}>{info.headline}</div>
                       <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",lineHeight:1.4}}>{info.detail.slice(0,90)}…</div>
-                      <div style={{fontSize:9,color:sc.color,opacity:0.8,fontFamily:"monospace"}}>{info.formula}</div>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                        <div style={{fontSize:9,color:sc.color,opacity:0.8,fontFamily:"monospace"}}>{info.formula}</div>
+                        <button
+                          onClick={(e)=>{e.stopPropagation();setInsightFocus(sc.label);setMobilePage("insights");}}
+                          style={{fontSize:9,color:sc.color,fontWeight:700,background:"none",border:`1px solid ${sc.color}44`,borderRadius:99,padding:"2px 8px",cursor:"pointer",display:"flex",alignItems:"center",gap:3,letterSpacing:"0.04em",flexShrink:0}}
+                        >
+                          <span>◈</span> full analysis →
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1653,14 +1743,14 @@ function MobileDashboard({email,name:memberName,onSignOut}:{email?:string;name?:
         )}
         {mobilePage==="log"&&<LogPage onLogged={()=>setMobilePage("dashboard")}/>}
         {mobilePage==="entries"&&<MobileEntryLog/>}
-        {mobilePage==="insights"&&<Insights/>}
+        {mobilePage==="insights"&&<Insights focusedStat={insightFocus}/>}
         {mobilePage==="recommend"&&<Recommend/>}
         {mobilePage==="settings"&&<ProfilePage email={email} initialName={memberName} onSignOut={()=>{onSignOut?.();}}/>}
       </div>
 
       <div style={{position:"absolute",bottom:0,left:0,right:0,background:SURFACE,borderTop:`1px solid ${BORDER}`,display:"flex",alignItems:"center",justifyContent:"space-around",padding:"10px 24px 20px",zIndex:10}}>
         {mobileNavItems.map(item=>(
-          <button key={item.id} onClick={()=>setMobilePage(item.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,background:"none",border:"none",cursor:"pointer",color:mobilePage===item.id?ACCENT:"rgba(255,255,255,0.3)",padding:"4px 12px",borderRadius:10,transition:"all 0.15s",fontSize:20}}>
+          <button key={item.id} onClick={()=>{setMobilePage(item.id);setInsightFocus(null);}} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,background:"none",border:"none",cursor:"pointer",color:mobilePage===item.id?ACCENT:"rgba(255,255,255,0.3)",padding:"4px 12px",borderRadius:10,transition:"all 0.15s",fontSize:20}}>
             <span>{item.icon}</span>
             <span style={{fontSize:9,fontWeight:600,letterSpacing:"0.04em"}}>{item.label.toUpperCase()}</span>
           </button>
@@ -1970,9 +2060,11 @@ export function DarkCockpit() {
   const [page, setPage] = useState<Page>("dashboard");
   const [view, setView] = useState<"desktop"|"mobile">("desktop");
   const [refresh, setRefresh] = useState(0);
+  const [insightFocus, setInsightFocus] = useState<string|null>(null);
 
   function onLogged() { setRefresh(r=>r+1); setPage("dashboard"); }
   function signOut() { setLoggedIn(false); setUserEmail(""); setUserName(""); setPage("dashboard"); }
+  function goInsights(stat: string) { setInsightFocus(stat); setPage("insights"); }
 
   return (
     <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:BG,color:"white",fontFamily:"'Inter',system-ui,sans-serif"}}>
@@ -1997,7 +2089,7 @@ export function DarkCockpit() {
             {NAV.map(({ id, label, Icon })=>{
               const active = page === id;
               return (
-                <button key={id} onClick={()=>setPage(id)} style={{
+                <button key={id} onClick={()=>{setPage(id);setInsightFocus(null);}} style={{
                   display:"flex",alignItems:"center",gap:12,
                   padding:"10px 12px",borderRadius:10,border:"none",
                   background: active ? `rgba(79,110,247,0.12)` : "transparent",
@@ -2040,10 +2132,10 @@ export function DarkCockpit() {
               </div>
             </div>
 
-            {page==="dashboard"&&<Dashboard key={`dash-${refresh}`}/>}
+            {page==="dashboard"&&<Dashboard key={`dash-${refresh}`} onInsights={goInsights}/>}
             {page==="log"&&<LogPage onLogged={onLogged}/>}
             {page==="entries"&&<EntryLog key={`entries-${refresh}`}/>}
-            {page==="insights"&&<Insights key={`insights-${refresh}`}/>}
+            {page==="insights"&&<Insights key={`insights-${refresh}`} focusedStat={insightFocus}/>}
             {page==="recommend"&&<Recommend/>}
             {page==="import"&&<ImportPage onLogged={onLogged}/>}
             {page==="profile"&&<ProfilePage email={userEmail} initialName={userName} onSignOut={signOut}/>}
