@@ -428,10 +428,18 @@ function QuickLog({ onLogged }: { onLogged?: ()=>void }) {
 }
 
 // ─── ENTRY LOG ───────────────────────────────────────────────────
+const MEAL_TYPE_META: Record<MealTypeKey,{label:string;color:string}> = {
+  FAST_CARBS: {label:"Fast Carbs", color:ORANGE},
+  HIGH_FAT:   {label:"High Fat",   color:"#A855F7"},
+  HIGH_PROTEIN:{label:"High Protein",color:"#3B82F6"},
+  BALANCED:   {label:"Balanced",   color:GREEN},
+};
+
 function EntryLog() {
   const [entries,setEntries]=useState<Entry[]>([]);
   const [loading,setLoading]=useState(true);
   const [filter,setFilter]=useState("ALL");
+  const [expandedId,setExpandedId]=useState<number|null>(null);
   const [openMenu,setOpenMenu]=useState<number|null>(null);
   const [deleting,setDeleting]=useState<number|null>(null);
   const filters=["ALL","GOOD","UNDERDOSE","OVERDOSE"];
@@ -442,7 +450,7 @@ function EntryLog() {
 
   useEffect(()=>{
     if(openMenu===null) return;
-    function onDown(e:MouseEvent){ if(!(e.target as HTMLElement).closest("[data-entry-menu]")) setOpenMenu(null); }
+    function onDown(ev:MouseEvent){ if(!(ev.target as HTMLElement).closest("[data-entry-menu]")) setOpenMenu(null); }
     document.addEventListener("mousedown",onDown);
     return ()=>document.removeEventListener("mousedown",onDown);
   },[openMenu]);
@@ -452,6 +460,7 @@ function EntryLog() {
     try{
       await apiFetch(`/entries/${id}`,{method:"DELETE"});
       setEntries(prev=>prev.filter(e=>e.id!==id));
+      if(expandedId===id) setExpandedId(null);
     }catch{}
     setDeleting(null);
     setOpenMenu(null);
@@ -459,6 +468,13 @@ function EntryLog() {
 
   if(loading) return <Spinner/>;
   const filtered=filter==="ALL"?entries:entries.filter(e=>e.evaluation===filter);
+
+  const Stat=({label,value,color}:{label:string;value:string;color?:string})=>(
+    <div style={{display:"flex",flexDirection:"column",gap:2,minWidth:72}}>
+      <span style={{fontSize:9,color:"rgba(255,255,255,0.3)",letterSpacing:"0.09em",fontWeight:500}}>{label}</span>
+      <span style={{fontSize:13,fontWeight:700,color:color||"rgba(255,255,255,0.85)"}}>{value}</span>
+    </div>
+  );
 
   return (
     <div>
@@ -483,50 +499,124 @@ function EntryLog() {
               {filtered.map((e,i)=>{
                 const ev=evalStyle(e.evaluation);
                 const ts=new Date(e.timestamp).toLocaleDateString(undefined,{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
-                const isOpen=openMenu===e.id;
+                const isMenuOpen=openMenu===e.id;
+                const isExpanded=expandedId===e.id;
+                const meta=e.mealType?MEAL_TYPE_META[e.mealType]:null;
+                const netCarbs=e.fiberGrams!=null?Math.max(0,e.carbsGrams-e.fiberGrams):null;
+                const icr=e.insulinUnits>0?(netCarbs??e.carbsGrams)/e.insulinUnits:null;
+                const hasNextRow=i<filtered.length-1;
+
                 return (
-                  <tr key={e.id} style={{borderBottom:i<filtered.length-1?`1px solid rgba(255,255,255,0.03)`:"none",opacity:deleting===e.id?0.4:1,transition:"opacity 0.2s"}}>
-                    <td style={{padding:"11px 18px",fontSize:11,color:"rgba(255,255,255,0.4)"}}>{ts}</td>
-                    <td style={{padding:"11px 18px",fontSize:12,fontWeight:500,maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.mealDescription||e.mealType||"—"}</td>
-                    <td style={{padding:"11px 18px",fontSize:12,fontWeight:600,color:e.glucoseBefore>140?ORANGE:e.glucoseBefore<80?PINK:"rgba(255,255,255,0.85)"}}>{e.glucoseBefore}</td>
-                    <td style={{padding:"11px 18px",fontSize:12,color:"rgba(255,255,255,0.7)"}}>{e.carbsGrams}g</td>
-                    <td style={{padding:"11px 18px",fontSize:12,color:"rgba(255,255,255,0.5)"}}>{e.fiberGrams!=null?`${e.fiberGrams}g`:"—"}</td>
-                    <td style={{padding:"11px 18px",fontSize:12,color:"rgba(255,255,255,0.7)"}}>{e.insulinUnits}u</td>
-                    <td style={{padding:"11px 18px"}}><span style={{fontSize:10,padding:"3px 9px",borderRadius:99,fontWeight:700,background:`${ev.color}18`,color:ev.color,letterSpacing:"0.06em"}}>{ev.label}</span></td>
-                    <td style={{padding:"11px 10px 11px 0",position:"relative",width:36}} data-entry-menu="">
-                      <button
-                        data-entry-menu=""
-                        onClick={()=>setOpenMenu(isOpen?null:e.id)}
-                        style={{width:28,height:28,borderRadius:7,border:"none",background:isOpen?"rgba(255,255,255,0.1)":"transparent",color:"rgba(255,255,255,0.35)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,lineHeight:1,transition:"all 0.15s"}}
-                        onMouseEnter={el=>(el.currentTarget.style.background="rgba(255,255,255,0.08)")}
-                        onMouseLeave={el=>(el.currentTarget.style.background=isOpen?"rgba(255,255,255,0.1)":"transparent")}
-                      >⋯</button>
-                      {isOpen&&(
-                        <div data-entry-menu="" style={{
-                          position:"absolute",right:0,top:"100%",zIndex:200,
-                          background:"#1A1A24",border:"1px solid rgba(255,255,255,0.1)",
-                          borderRadius:10,boxShadow:"0 8px 32px rgba(0,0,0,0.6)",
-                          minWidth:170,padding:"6px",
-                          marginTop:4,
-                        }}>
-                          <div style={{padding:"6px 10px 4px",fontSize:9,color:"rgba(255,255,255,0.25)",letterSpacing:"0.1em",fontWeight:600}}>
-                            ENTRY #{e.id}
+                  <React.Fragment key={e.id}>
+                    {/* ── Main row ── */}
+                    <tr
+                      style={{
+                        borderBottom:(!isExpanded&&hasNextRow)?`1px solid rgba(255,255,255,0.03)`:"none",
+                        opacity:deleting===e.id?0.4:1,
+                        transition:"opacity 0.2s",
+                        background:isExpanded?"rgba(79,110,247,0.05)":"transparent",
+                        cursor:"pointer",
+                      }}
+                    >
+                      {/* clickable cells: Time → Result */}
+                      {([
+                        <td key="ts" onClick={()=>setExpandedId(isExpanded?null:e.id)} style={{padding:"11px 18px",fontSize:11,color:"rgba(255,255,255,0.4)",userSelect:"none"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:6}}>
+                            <span style={{fontSize:10,color:"rgba(255,255,255,0.2)",transition:"transform 0.2s",display:"inline-block",transform:isExpanded?"rotate(90deg)":"rotate(0deg)"}}>›</span>
+                            {ts}
                           </div>
-                          <div style={{height:1,background:"rgba(255,255,255,0.07)",margin:"4px 0"}}/>
-                          <button
-                            data-entry-menu=""
-                            onClick={()=>deleteEntry(e.id)}
-                            disabled={deleting===e.id}
-                            style={{width:"100%",padding:"8px 10px",borderRadius:7,border:"none",background:"transparent",color:PINK,fontSize:12,fontWeight:600,cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:8,transition:"background 0.12s"}}
-                            onMouseEnter={el=>(el.currentTarget.style.background=`${PINK}15`)}
-                            onMouseLeave={el=>(el.currentTarget.style.background="transparent")}
-                          >
-                            <span style={{fontSize:14}}>🗑</span> Delete entry
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
+                        </td>,
+                        <td key="meal" onClick={()=>setExpandedId(isExpanded?null:e.id)} style={{padding:"11px 18px",userSelect:"none"}}>
+                          <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                            <span style={{fontSize:12,fontWeight:500,maxWidth:150,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"rgba(255,255,255,0.85)"}}>{e.mealDescription||"—"}</span>
+                            {meta&&<span style={{fontSize:9,padding:"1px 6px",borderRadius:99,fontWeight:700,background:`${meta.color}18`,color:meta.color,letterSpacing:"0.07em",width:"fit-content"}}>{meta.label.toUpperCase()}</span>}
+                          </div>
+                        </td>,
+                        <td key="bg" onClick={()=>setExpandedId(isExpanded?null:e.id)} style={{padding:"11px 18px",fontSize:12,fontWeight:600,color:e.glucoseBefore>140?ORANGE:e.glucoseBefore<80?PINK:"rgba(255,255,255,0.85)",userSelect:"none"}}>{e.glucoseBefore}</td>,
+                        <td key="carbs" onClick={()=>setExpandedId(isExpanded?null:e.id)} style={{padding:"11px 18px",fontSize:12,color:"rgba(255,255,255,0.7)",userSelect:"none"}}>{e.carbsGrams}g</td>,
+                        <td key="fiber" onClick={()=>setExpandedId(isExpanded?null:e.id)} style={{padding:"11px 18px",fontSize:12,color:"rgba(255,255,255,0.5)",userSelect:"none"}}>{e.fiberGrams!=null?`${e.fiberGrams}g`:"—"}</td>,
+                        <td key="ins" onClick={()=>setExpandedId(isExpanded?null:e.id)} style={{padding:"11px 18px",fontSize:12,color:"rgba(255,255,255,0.7)",userSelect:"none"}}>{e.insulinUnits}u</td>,
+                        <td key="res" onClick={()=>setExpandedId(isExpanded?null:e.id)} style={{padding:"11px 18px",userSelect:"none"}}>
+                          <span style={{fontSize:10,padding:"3px 9px",borderRadius:99,fontWeight:700,background:`${ev.color}18`,color:ev.color,letterSpacing:"0.06em"}}>{ev.label}</span>
+                        </td>,
+                      ])}
+                      {/* ⋯ menu — not part of the expand click area */}
+                      <td style={{padding:"11px 10px 11px 0",position:"relative",width:36}} data-entry-menu="">
+                        <button
+                          data-entry-menu=""
+                          onClick={ev=>{ev.stopPropagation();setOpenMenu(isMenuOpen?null:e.id);}}
+                          style={{width:28,height:28,borderRadius:7,border:"none",background:isMenuOpen?"rgba(255,255,255,0.1)":"transparent",color:"rgba(255,255,255,0.35)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,lineHeight:1,transition:"all 0.15s"}}
+                          onMouseEnter={el=>(el.currentTarget.style.background="rgba(255,255,255,0.08)")}
+                          onMouseLeave={el=>(el.currentTarget.style.background=isMenuOpen?"rgba(255,255,255,0.1)":"transparent")}
+                        >⋯</button>
+                        {isMenuOpen&&(
+                          <div data-entry-menu="" style={{position:"absolute",right:0,top:"100%",zIndex:200,background:"#1A1A24",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,boxShadow:"0 8px 32px rgba(0,0,0,0.6)",minWidth:170,padding:"6px",marginTop:4}}>
+                            <div style={{padding:"6px 10px 4px",fontSize:9,color:"rgba(255,255,255,0.25)",letterSpacing:"0.1em",fontWeight:600}}>ENTRY #{e.id}</div>
+                            <div style={{height:1,background:"rgba(255,255,255,0.07)",margin:"4px 0"}}/>
+                            <button
+                              data-entry-menu=""
+                              onClick={()=>deleteEntry(e.id)}
+                              disabled={deleting===e.id}
+                              style={{width:"100%",padding:"8px 10px",borderRadius:7,border:"none",background:"transparent",color:PINK,fontSize:12,fontWeight:600,cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:8,transition:"background 0.12s"}}
+                              onMouseEnter={el=>(el.currentTarget.style.background=`${PINK}15`)}
+                              onMouseLeave={el=>(el.currentTarget.style.background="transparent")}
+                            ><span style={{fontSize:14}}>🗑</span> Delete entry</button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+
+                    {/* ── Expansion rows ── */}
+                    {isExpanded&&(
+                      <>
+                        {/* Row 1 — Macros */}
+                        <tr style={{background:"rgba(79,110,247,0.03)"}}>
+                          <td colSpan={8} style={{padding:"0 18px 0 42px"}}>
+                            <div style={{borderLeft:`2px solid ${ACCENT}33`,paddingLeft:16,paddingTop:12,paddingBottom:10}}>
+                              <div style={{fontSize:9,color:"rgba(255,255,255,0.25)",letterSpacing:"0.1em",fontWeight:600,marginBottom:10}}>MACROS & DOSING</div>
+                              <div style={{display:"flex",gap:24,flexWrap:"wrap"}}>
+                                <Stat label="TOTAL CARBS" value={`${e.carbsGrams}g`}/>
+                                <Stat label="FIBER" value={e.fiberGrams!=null?`${e.fiberGrams}g`:"—"} color="rgba(255,255,255,0.5)"/>
+                                <Stat label="NET CARBS" value={netCarbs!=null?`${netCarbs.toFixed(0)}g`:"—"} color={GREEN}/>
+                                <Stat label="INSULIN DOSE" value={`${e.insulinUnits}u`} color={ACCENT}/>
+                                <Stat label="CARB RATIO" value={icr!=null?`1u / ${icr.toFixed(0)}g`:"—"} color="rgba(255,255,255,0.6)"/>
+                                {meta&&<Stat label="MEAL TYPE" value={meta.label} color={meta.color}/>}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                        {/* Row 2 — Glucose */}
+                        <tr style={{background:"rgba(79,110,247,0.03)"}}>
+                          <td colSpan={8} style={{padding:"0 18px 0 42px"}}>
+                            <div style={{borderLeft:`2px solid ${GREEN}33`,paddingLeft:16,paddingTop:10,paddingBottom:10}}>
+                              <div style={{fontSize:9,color:"rgba(255,255,255,0.25)",letterSpacing:"0.1em",fontWeight:600,marginBottom:10}}>GLUCOSE TRACKING</div>
+                              <div style={{display:"flex",gap:24,flexWrap:"wrap"}}>
+                                <Stat label="BG BEFORE" value={`${e.glucoseBefore} mg/dL`} color={e.glucoseBefore>140?ORANGE:e.glucoseBefore<80?PINK:GREEN}/>
+                                <Stat label="BG AFTER" value={e.glucoseAfter!=null?`${e.glucoseAfter} mg/dL`:"not recorded"} color={e.glucoseAfter!=null?(e.glucoseAfter>180?PINK:e.glucoseAfter<70?PINK:GREEN):"rgba(255,255,255,0.3)"}/>
+                                <Stat label="DELTA" value={e.delta!=null?`${e.delta>0?"+":""}${e.delta.toFixed(0)} mg/dL`:"—"} color={e.delta!=null?(Math.abs(e.delta)>60?PINK:Math.abs(e.delta)>30?ORANGE:GREEN):"rgba(255,255,255,0.3)"}/>
+                                <Stat label="TIME GAP" value={e.timeDifferenceMinutes!=null?`${e.timeDifferenceMinutes.toFixed(0)} min`:"—"} color="rgba(255,255,255,0.6)"/>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                        {/* Row 3 — Context */}
+                        <tr style={{background:"rgba(79,110,247,0.03)",borderBottom:hasNextRow?`1px solid rgba(255,255,255,0.06)`:"none"}}>
+                          <td colSpan={8} style={{padding:"0 18px 0 42px"}}>
+                            <div style={{borderLeft:`2px solid rgba(255,255,255,0.1)`,paddingLeft:16,paddingTop:10,paddingBottom:14}}>
+                              <div style={{fontSize:9,color:"rgba(255,255,255,0.25)",letterSpacing:"0.1em",fontWeight:600,marginBottom:8}}>MEAL CONTEXT</div>
+                              <div style={{fontSize:12,color:"rgba(255,255,255,0.55)",lineHeight:1.6,fontStyle:e.mealDescription?"normal":"italic"}}>
+                                {e.mealDescription||"No meal description recorded."}
+                              </div>
+                              <div style={{marginTop:8,display:"flex",gap:8,alignItems:"center"}}>
+                                {meta&&<span style={{fontSize:9,padding:"2px 8px",borderRadius:99,fontWeight:700,background:`${meta.color}18`,color:meta.color,letterSpacing:"0.07em"}}>{meta.label.toUpperCase()}</span>}
+                                <span style={{fontSize:9,color:"rgba(255,255,255,0.2)"}}>{new Date(e.timestamp).toLocaleDateString(undefined,{weekday:"long",year:"numeric",month:"long",day:"numeric",hour:"2-digit",minute:"2-digit"})}</span>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      </>
+                    )}
+                  </React.Fragment>
                 );
               })}
             </tbody>
