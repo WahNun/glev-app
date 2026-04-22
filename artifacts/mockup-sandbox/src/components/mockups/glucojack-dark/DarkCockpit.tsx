@@ -1979,13 +1979,38 @@ const PAGE_TITLES: Record<Page,string> = {
 };
 
 // ─── Profile Page ───────────────────────────────────────────────
+type SyncStatus = "idle"|"confirm"|"syncing"|"success"|"error";
+
 function ProfilePage({email,initialName,onSignOut}:{email?:string;initialName?:string;onSignOut:()=>void}) {
   const [name,setName]=useState(initialName||"Member");
   const [notif,setNotif]=useState(true);
   const [targetLow,setTargetLow]=useState("80");
   const [targetHigh,setTargetHigh]=useState("140");
   const [saved,setSaved]=useState(false);
+  const [profileTab,setProfileTab]=useState<"overview"|"settings">("overview");
+  const [syncStatus,setSyncStatus]=useState<SyncStatus>("idle");
+  const [syncError,setSyncError]=useState("");
+
   function save(){setSaved(true);setTimeout(()=>setSaved(false),2000);}
+
+  async function handleSendToPhysician(){
+    if(syncStatus==="confirm"){
+      setSyncStatus("syncing");
+      try{
+        const res=await fetch("/api/sheets/sync",{method:"POST"});
+        const data=await res.json() as {ok?:boolean;error?:string};
+        if(!res.ok) throw new Error(data.error||"Sync failed");
+        setSyncStatus("success");
+        setTimeout(()=>setSyncStatus("idle"),4000);
+      }catch(e:unknown){
+        setSyncError(e instanceof Error?e.message:"Sync failed. Please try again.");
+        setSyncStatus("error");
+      }
+    } else {
+      setSyncStatus("confirm");
+    }
+  }
+
   const Row=({label,children}:{label:string;children:React.ReactNode})=>(
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 0",borderBottom:`1px solid ${BORDER}`}}>
       <span style={{fontSize:13,color:"rgba(255,255,255,0.5)",fontWeight:500}}>{label}</span>
@@ -1993,10 +2018,18 @@ function ProfilePage({email,initialName,onSignOut}:{email?:string;initialName?:s
     </div>
   );
   const inputStyle:React.CSSProperties={width:80,background:"rgba(255,255,255,0.05)",border:`1px solid rgba(255,255,255,0.1)`,borderRadius:8,padding:"6px 10px",color:"white",fontSize:13,outline:"none",textAlign:"center"};
+
+  const tabStyle=(active:boolean):React.CSSProperties=>({
+    flex:1,padding:"8px 0",borderRadius:9,background:active?"rgba(79,110,247,0.15)":"transparent",
+    border:active?`1px solid rgba(79,110,247,0.3)`:`1px solid transparent`,
+    color:active?"white":"rgba(255,255,255,0.4)",
+    fontSize:13,fontWeight:active?700:500,cursor:"pointer",transition:"all 0.15s",
+  });
+
   return (
     <div style={{maxWidth:560}}>
       {/* Avatar card */}
-      <div style={{display:"flex",alignItems:"center",gap:18,padding:"24px",background:SURFACE,borderRadius:16,border:`1px solid ${BORDER}`,marginBottom:24}}>
+      <div style={{display:"flex",alignItems:"center",gap:18,padding:"24px",background:SURFACE,borderRadius:16,border:`1px solid ${BORDER}`,marginBottom:16}}>
         <div style={{width:60,height:60,borderRadius:18,background:`linear-gradient(135deg,${ACCENT},#7B93FF)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,fontWeight:700,flexShrink:0,boxShadow:`0 0 20px ${ACCENT}33`}}>
           {name.trim()[0]?.toUpperCase()||"M"}
         </div>
@@ -2010,38 +2043,129 @@ function ProfilePage({email,initialName,onSignOut}:{email?:string;initialName?:s
         </div>
       </div>
 
-      {/* Settings card */}
-      <div style={{background:SURFACE,borderRadius:16,border:`1px solid ${BORDER}`,padding:"0 20px",marginBottom:20}}>
-        <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.1em",color:"rgba(255,255,255,0.3)",padding:"16px 0 2px"}}>PROFILE</div>
-        <Row label="Display name">
-          <input value={name} onChange={e=>setName(e.target.value)} style={{...inputStyle,width:160,textAlign:"left"}}/>
-        </Row>
-        <Row label="Email">
-          <span style={{fontSize:13,color:"rgba(255,255,255,0.35)"}}>{email||"member@glev.app"}</span>
-        </Row>
-        <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.1em",color:"rgba(255,255,255,0.3)",padding:"18px 0 2px"}}>GLUCOSE TARGETS</div>
-        <Row label="Target range (mg/dL)">
-          <input value={targetLow} onChange={e=>setTargetLow(e.target.value)} style={inputStyle} placeholder="Low"/>
-          <span style={{fontSize:12,color:"rgba(255,255,255,0.3)"}}>—</span>
-          <input value={targetHigh} onChange={e=>setTargetHigh(e.target.value)} style={inputStyle} placeholder="High"/>
-        </Row>
-        <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.1em",color:"rgba(255,255,255,0.3)",padding:"18px 0 2px"}}>NOTIFICATIONS</div>
-        <Row label="Spike & hypo alerts">
-          <button onClick={()=>setNotif(v=>!v)} style={{width:44,height:24,borderRadius:99,background:notif?ACCENT:"rgba(255,255,255,0.1)",border:"none",cursor:"pointer",position:"relative",transition:"background 0.2s",flexShrink:0}}>
-            <div style={{position:"absolute",top:3,left:notif?22:3,width:18,height:18,borderRadius:"50%",background:"white",transition:"left 0.2s",boxShadow:"0 1px 4px rgba(0,0,0,0.4)"}}/>
-          </button>
-        </Row>
+      {/* Sub-tabs */}
+      <div style={{display:"flex",gap:6,padding:"4px",background:"rgba(255,255,255,0.03)",borderRadius:12,border:`1px solid ${BORDER}`,marginBottom:20}}>
+        <button style={tabStyle(profileTab==="overview")} onClick={()=>setProfileTab("overview")}>Overview</button>
+        <button style={tabStyle(profileTab==="settings")} onClick={()=>setProfileTab("settings")}>Settings</button>
       </div>
 
-      {/* Actions */}
-      <div style={{display:"flex",gap:10}}>
-        <button onClick={save} style={{flex:1,padding:"12px",borderRadius:11,background:saved?`${GREEN}22`:`linear-gradient(135deg,${ACCENT},#7B93FF)`,border:saved?`1px solid ${GREEN}44`:"none",color:saved?GREEN:"white",fontSize:13,fontWeight:700,cursor:"pointer",transition:"all 0.2s",boxShadow:saved?"none":`0 4px 16px ${ACCENT}33`}}>
-          {saved?"Saved ✓":"Save Changes"}
-        </button>
-        <button onClick={onSignOut} style={{padding:"12px 20px",borderRadius:11,background:"rgba(255,45,120,0.08)",border:"1px solid rgba(255,45,120,0.2)",color:PINK,fontSize:13,fontWeight:600,cursor:"pointer",transition:"all 0.15s"}}>
+      {profileTab==="overview" && <>
+        {/* Settings card */}
+        <div style={{background:SURFACE,borderRadius:16,border:`1px solid ${BORDER}`,padding:"0 20px",marginBottom:20}}>
+          <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.1em",color:"rgba(255,255,255,0.3)",padding:"16px 0 2px"}}>PROFILE</div>
+          <Row label="Display name">
+            <input value={name} onChange={e=>setName(e.target.value)} style={{...inputStyle,width:160,textAlign:"left"}}/>
+          </Row>
+          <Row label="Email">
+            <span style={{fontSize:13,color:"rgba(255,255,255,0.35)"}}>{email||"member@glev.app"}</span>
+          </Row>
+          <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.1em",color:"rgba(255,255,255,0.3)",padding:"18px 0 2px"}}>GLUCOSE TARGETS</div>
+          <Row label="Target range (mg/dL)">
+            <input value={targetLow} onChange={e=>setTargetLow(e.target.value)} style={inputStyle} placeholder="Low"/>
+            <span style={{fontSize:12,color:"rgba(255,255,255,0.3)"}}>—</span>
+            <input value={targetHigh} onChange={e=>setTargetHigh(e.target.value)} style={inputStyle} placeholder="High"/>
+          </Row>
+          <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.1em",color:"rgba(255,255,255,0.3)",padding:"18px 0 2px"}}>NOTIFICATIONS</div>
+          <Row label="Spike & hypo alerts">
+            <button onClick={()=>setNotif(v=>!v)} style={{width:44,height:24,borderRadius:99,background:notif?ACCENT:"rgba(255,255,255,0.1)",border:"none",cursor:"pointer",position:"relative",transition:"background 0.2s",flexShrink:0}}>
+              <div style={{position:"absolute",top:3,left:notif?22:3,width:18,height:18,borderRadius:"50%",background:"white",transition:"left 0.2s",boxShadow:"0 1px 4px rgba(0,0,0,0.4)"}}/>
+            </button>
+          </Row>
+        </div>
+        {/* Actions */}
+        <div style={{display:"flex",gap:10}}>
+          <button onClick={save} style={{flex:1,padding:"12px",borderRadius:11,background:saved?`${GREEN}22`:`linear-gradient(135deg,${ACCENT},#7B93FF)`,border:saved?`1px solid ${GREEN}44`:"none",color:saved?GREEN:"white",fontSize:13,fontWeight:700,cursor:"pointer",transition:"all 0.2s",boxShadow:saved?"none":`0 4px 16px ${ACCENT}33`}}>
+            {saved?"Saved ✓":"Save Changes"}
+          </button>
+          <button onClick={onSignOut} style={{padding:"12px 20px",borderRadius:11,background:"rgba(255,45,120,0.08)",border:"1px solid rgba(255,45,120,0.2)",color:PINK,fontSize:13,fontWeight:600,cursor:"pointer",transition:"all 0.15s"}}>
+            Sign Out
+          </button>
+        </div>
+      </>}
+
+      {profileTab==="settings" && <>
+        {/* Data & Sharing */}
+        <div style={{background:SURFACE,borderRadius:16,border:`1px solid ${BORDER}`,padding:"20px",marginBottom:20}}>
+          <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.1em",color:"rgba(255,255,255,0.3)",marginBottom:16}}>DATA & SHARING</div>
+
+          <div style={{marginBottom:20}}>
+            <div style={{fontSize:15,fontWeight:600,marginBottom:4}}>Send to my physician</div>
+            <div style={{fontSize:13,color:"rgba(255,255,255,0.4)",lineHeight:1.5}}>
+              Export all your logged data to a shared Google Sheet your doctor can access anytime.
+            </div>
+          </div>
+
+          {/* Status: idle or confirm */}
+          {(syncStatus==="idle"||syncStatus==="confirm") && (
+            <div>
+              {syncStatus==="confirm" && (
+                <div style={{padding:"14px 16px",borderRadius:11,background:"rgba(79,110,247,0.08)",border:`1px solid rgba(79,110,247,0.2)`,marginBottom:12}}>
+                  <div style={{fontSize:13,fontWeight:600,marginBottom:6,color:"rgba(255,255,255,0.9)"}}>Confirm data export</div>
+                  <div style={{fontSize:12,color:"rgba(255,255,255,0.5)",lineHeight:1.5}}>
+                    Your complete log history will be written to your physician's shared sheet. Continue?
+                  </div>
+                </div>
+              )}
+              <div style={{display:"flex",gap:10}}>
+                <button
+                  onClick={handleSendToPhysician}
+                  style={{flex:1,padding:"13px 20px",borderRadius:11,background:`linear-gradient(135deg,${ACCENT},#7B93FF)`,border:"none",color:"white",fontSize:14,fontWeight:700,cursor:"pointer",boxShadow:`0 4px 20px ${ACCENT}44`,display:"flex",alignItems:"center",justifyContent:"center",gap:8,transition:"opacity 0.15s"}}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.82a19.79 19.79 0 01-3.07-8.67A2 2 0 012 .84h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 8.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
+                  </svg>
+                  {syncStatus==="confirm"?"Yes, send it":"Send to my physician"}
+                </button>
+                {syncStatus==="confirm" && (
+                  <button onClick={()=>setSyncStatus("idle")} style={{padding:"13px 16px",borderRadius:11,background:"rgba(255,255,255,0.05)",border:`1px solid ${BORDER}`,color:"rgba(255,255,255,0.5)",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Status: syncing */}
+          {syncStatus==="syncing" && (
+            <div style={{display:"flex",alignItems:"center",gap:12,padding:"16px",borderRadius:11,background:"rgba(79,110,247,0.08)",border:`1px solid rgba(79,110,247,0.2)`}}>
+              <div style={{width:18,height:18,borderRadius:"50%",border:`2px solid ${ACCENT}`,borderTopColor:"transparent",animation:"spin 0.7s linear infinite",flexShrink:0}}/>
+              <span style={{fontSize:14,fontWeight:600,color:"rgba(255,255,255,0.8)"}}>Syncing data...</span>
+            </div>
+          )}
+
+          {/* Status: success */}
+          {syncStatus==="success" && (
+            <div style={{display:"flex",alignItems:"center",gap:12,padding:"16px",borderRadius:11,background:`rgba(34,211,160,0.08)`,border:`1px solid rgba(34,211,160,0.25)`}}>
+              <div style={{width:24,height:24,borderRadius:"50%",background:`rgba(34,211,160,0.15)`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+              </div>
+              <span style={{fontSize:14,fontWeight:600,color:GREEN}}>Your data has been updated successfully.</span>
+            </div>
+          )}
+
+          {/* Status: error */}
+          {syncStatus==="error" && (
+            <div>
+              <div style={{display:"flex",alignItems:"center",gap:12,padding:"16px",borderRadius:11,background:"rgba(255,45,120,0.08)",border:"1px solid rgba(255,45,120,0.2)",marginBottom:10}}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={PINK} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
+                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                <span style={{fontSize:13,color:"rgba(255,255,255,0.7)",flex:1}}>{syncError||"Sync failed. Please try again."}</span>
+              </div>
+              <button onClick={()=>{setSyncStatus("idle");setSyncError("");}} style={{width:"100%",padding:"12px",borderRadius:11,background:"rgba(255,255,255,0.05)",border:`1px solid ${BORDER}`,color:"rgba(255,255,255,0.6)",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                Try Again
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Sign out in settings tab too */}
+        <button onClick={onSignOut} style={{width:"100%",padding:"12px",borderRadius:11,background:"rgba(255,45,120,0.06)",border:"1px solid rgba(255,45,120,0.15)",color:PINK,fontSize:13,fontWeight:600,cursor:"pointer"}}>
           Sign Out
         </button>
-      </div>
+      </>}
     </div>
   );
 }

@@ -1,0 +1,316 @@
+Implement a production-ready data architecture using Supabase as the primary database and Google Sheets as a secondary sharing layer, including automatic sync and manual full export via Settings integrated inside the existing "My Profile" tab.
+
+--------------------------------------------------
+🎯 GOAL
+--------------------------------------------------
+
+Create a dual-layer system:
+
+1. Supabase → source of truth (primary database)
+2. Google Sheets → external sharing layer (for physician access)
+
+System must support:
+
+- automatic sync per entry
+- manual full export of all logs
+- user-controlled sharing via Settings inside "My Profile"
+
+--------------------------------------------------
+🧠 1. SUPABASE SETUP
+--------------------------------------------------
+
+Install:
+
+pnpm add @supabase/supabase-js
+
+Create:
+
+/src/lib/supabase.ts
+
+Initialize client using env:
+
+NEXT_PUBLIC_SUPABASE_URL  
+NEXT_PUBLIC_SUPABASE_ANON_KEY  
+
+--------------------------------------------------
+🧾 2. DATABASE SCHEMA
+--------------------------------------------------
+
+Create table: logs
+
+Columns:
+
+- id (uuid, primary key)
+- created_at (timestamp)
+- date (text)
+- meal (text)
+- glucose_before (number)
+- glucose_after (number, optional)
+- carbs (number)
+- fiber (number)
+- protein (number)
+- fat (number)
+- net_carbs (number)
+- bolus_units (number)
+- meal_type (text)
+- evaluation (text)
+- notes (text)
+
+--------------------------------------------------
+🧠 3. DATABASE LAYER
+--------------------------------------------------
+
+Create:
+
+/src/lib/db.ts
+
+Function:
+
+async function insertLog(entry)
+
+- Insert entry into Supabase "logs"
+- Return inserted row
+
+--------------------------------------------------
+📊 4. GOOGLE SHEETS SETUP
+--------------------------------------------------
+
+Install:
+
+pnpm add googleapis
+
+Create:
+
+/src/lib/sheets.ts
+
+Use Google Sheets API with service account.
+
+Env:
+
+GOOGLE_CLIENT_EMAIL  
+GOOGLE_PRIVATE_KEY  
+GOOGLE_SHEET_ID  
+
+--------------------------------------------------
+📄 5. GOOGLE SHEET STRUCTURE
+--------------------------------------------------
+
+Columns:
+
+Date  
+Meal  
+Glucose Before  
+Glucose After  
+Carbs  
+Fiber  
+Protein  
+Fat  
+Net Carbs  
+Bolus Units  
+Meal Type  
+Evaluation  
+Notes  
+
+--------------------------------------------------
+🔄 6. SINGLE ENTRY SYNC
+--------------------------------------------------
+
+Create:
+
+async function syncEntryToSheets(entry)
+
+- append row to sheet
+
+--------------------------------------------------
+🔄 7. FULL DATA SYNC
+--------------------------------------------------
+
+Create:
+
+async function syncAllLogsToSheets()
+
+Steps:
+
+1. Fetch all logs from Supabase:
+   SELECT * FROM logs ORDER BY created_at ASC
+
+2. Clear Google Sheet (keep header row)
+
+3. Batch insert all logs
+
+--------------------------------------------------
+📊 8. SHEETS HELPER
+--------------------------------------------------
+
+In sheets.ts:
+
+Create:
+
+async function overwriteSheetWithLogs(logs)
+
+- clear sheet except header
+- batch insert rows
+- avoid row-by-row calls
+
+--------------------------------------------------
+🔗 9. LOG FLOW INTEGRATION
+--------------------------------------------------
+
+On "Confirm Log":
+
+1. Save entry:
+   const saved = await insertLog(entry)
+
+2. Sync entry (non-blocking):
+   await syncEntryToSheets(saved)
+
+--------------------------------------------------
+⚡ 10. ERROR HANDLING
+--------------------------------------------------
+
+If Supabase fails:
+→ STOP and show error
+
+If Sheets fails:
+→ show warning:
+"Saved, but not synced to sheet"
+
+--------------------------------------------------
+📡 11. ASYNC STRATEGY
+--------------------------------------------------
+
+- Supabase = blocking
+- Sheets = non-blocking
+
+--------------------------------------------------
+🧠 12. MY PROFILE INTEGRATION (IMPORTANT CHANGE)
+--------------------------------------------------
+
+DO NOT create a separate Settings route.
+
+Instead:
+
+Use existing "My Profile" tab.
+
+Inside the Profile view:
+
+Add sub-tabs:
+
+- Overview (existing)
+- Settings (NEW)
+
+--------------------------------------------------
+🎛️ 13. SETTINGS TAB (INSIDE PROFILE)
+--------------------------------------------------
+
+Inside "My Profile" → "Settings" tab:
+
+Add section:
+
+"Data & Sharing"
+
+--------------------------------------------------
+🧾 14. PRIMARY ACTION BUTTON
+--------------------------------------------------
+
+Add button:
+
+"Send to my physician"
+
+(alt: "Send to my doc")
+
+Design:
+- prominent
+- primary CTA
+- visually distinct
+
+--------------------------------------------------
+🔘 15. BUTTON BEHAVIOR
+--------------------------------------------------
+
+On click:
+
+1. Show confirmation dialog:
+
+"Do you want to send your latest data to your physician?"
+
+2. If confirmed:
+
+- show loading:
+  "Syncing data..."
+
+3. Call:
+
+await syncAllLogsToSheets()
+
+4. Show success:
+
+"Your data has been updated successfully."
+
+--------------------------------------------------
+⚠️ 16. FULL SYNC ERROR HANDLING
+--------------------------------------------------
+
+If sync fails:
+
+- show:
+  "Sync failed. Please try again."
+
+- DO NOT affect Supabase data
+
+--------------------------------------------------
+⚡ 17. PERFORMANCE
+--------------------------------------------------
+
+- batch writes to Google Sheets
+- minimize API calls
+- handle large datasets
+
+--------------------------------------------------
+🔐 18. SECURITY
+--------------------------------------------------
+
+- Sheets logic must run server-side
+- never expose credentials
+- protect endpoints
+
+--------------------------------------------------
+📈 19. FUTURE READY DESIGN
+--------------------------------------------------
+
+Prepare for:
+
+- multi-user support
+- multiple sheets per user
+- physician invite system
+- scheduled sync
+- resync failed entries
+
+--------------------------------------------------
+🧠 20. UX PRINCIPLE
+--------------------------------------------------
+
+User control:
+
+- automatic sync = convenience
+- manual sync = authority
+
+--------------------------------------------------
+FINAL RESULT
+--------------------------------------------------
+
+User logs meal →
+
+Data saved in Supabase →
+
+Entry synced to Google Sheets →
+
+User opens "My Profile" →
+
+Clicks "Settings" tab →
+
+Clicks "Send to my physician" →
+
+Full dataset exported to Google Sheets →
+
+Doctor always sees latest data.

@@ -118,6 +118,12 @@ importers:
 
   artifacts/api-server:
     dependencies:
+      '@replit/connectors-sdk':
+        specifier: ^0.4.0
+        version: 0.4.0
+      '@supabase/supabase-js':
+        specifier: ^2.104.0
+        version: 2.104.0
       '@workspace/api-zod':
         specifier: workspace:*
         version: link:../../lib/api-zod
@@ -138,7 +144,7 @@ importers:
         version: 5.2.1
       openai:
         specifier: ^6.34.0
-        version: 6.34.0(zod@4.3.6)
+        version: 6.34.0(ws@8.20.0)(zod@4.3.6)
       pino:
         specifier: ^9
         version: 9.14.0
@@ -230,7 +236,7 @@ importers:
         version: 15.3.1(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       openai:
         specifier: ^6.34.0
-        version: 6.34.0(zod@4.3.6)
+        version: 6.34.0(ws@8.20.0)(zod@4.3.6)
       react:
         specifier: 19.1.0
         version: 19.1.0
@@ -534,6 +540,9 @@ packages:
   '@pinojs/redact@0.4.0':
     resolution: {integrity: sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg==}
 
+  '@replit/connectors-sdk@0.4.0':
+    resolution: {integrity: sha512-wRuktfdoBsM19NJUi24xzCkQ+idglmU4Cq2ZWvTAnNUVGdcMmn3rLN1F1/MNZCc2HdG+awcGa81XMLpZXZujUg==}
+
   '@scalar/helpers@0.2.18':
     resolution: {integrity: sha512-w1d4tpNEVZ293oB2BAgLrS0kVPUtG3eByNmOCJA5eK9vcT4D3cmsGtWjUaaqit0BQCsBFHK51rasGvSWnApYTw==}
     engines: {node: '>=20'}
@@ -579,6 +588,33 @@ packages:
   '@sindresorhus/merge-streams@4.0.0':
     resolution: {integrity: sha512-tlqY9xq5ukxTUZBmoOp+m61cqwQD5pHJtFY3Mn8CA8ps6yghLH/Hw8UPdqg4OLmFW3IFlcXnQNmo/dh8HzXYIQ==}
     engines: {node: '>=18'}
+
+  '@supabase/auth-js@2.104.0':
+    resolution: {integrity: sha512-Vs0ndL+s5an7rOmXtS/nbYnGXL8m+KXlCSrPIcw9bR96ma6qyLYILnE6syuM+rpDnf+Tg4PVNxNB2+oDwoy6mA==}
+    engines: {node: '>=20.0.0'}
+
+  '@supabase/functions-js@2.104.0':
+    resolution: {integrity: sha512-O8EyEz/RT1kfWhyJNpVc/VbLeBsohHGBVif/CI83zoMB+Iul/t/NIekH1/7RsH6kuO+b2D4wJhfiaW8Qr47sRg==}
+    engines: {node: '>=20.0.0'}
+
+  '@supabase/phoenix@0.4.0':
+    resolution: {integrity: sha512-RHSx8bHS02xwfHdAbX5Lpbo6PXbgyf7lTaXTlwtFDPwOIw64NnVRwFAXGojHhjtVYI+PEPNSWwkL90f4agN3bw==}
+
+  '@supabase/postgrest-js@2.104.0':
+    resolution: {integrity: sha512-ynylEq6wduQEycj6pL3P+/yIfDQ+CTnBC5I6p+PzcAO2ybj9coAITVtMfboi+g/dacgMslN5MH73rXsRMB29+Q==}
+    engines: {node: '>=20.0.0'}
+
+  '@supabase/realtime-js@2.104.0':
+    resolution: {integrity: sha512-9fUVDoTVAhn7a79+AmEx+asUlRtf2yBrji7TQckcKn/WK4hvAA9Lia9er+lnhuz3WNiF1x6kkA4x7bRCJrU+KA==}
+    engines: {node: '>=20.0.0'}
+
+  '@supabase/storage-js@2.104.0':
+    resolution: {integrity: sha512-s2NHtuAWb9nldJ/fS62WnJE6edvCWn31rrO+FJKlAohs99qdVgtLegUReTU2H9WnZiQlVqaBtu386wt6/6lrRw==}
+    engines: {node: '>=20.0.0'}
+
+  '@supabase/supabase-js@2.104.0':
+    resolution: {integrity: sha512-hILwhIjCB53G31jlHUe73NDEmrXudcjcYlVRuvNfEhzf0gyFQaFf7j6rd1UGmYZkFMOg//DFE8Iy9ZbNEgosVw==}
+    engines: {node: '>=20.0.0'}
 
   '@swc/counter@0.1.3':
     resolution: {integrity: sha512-e2BR4lsJkkRlKZ/qCHPw9ZaSxc0MVUd7gtbtaB7aMvHeJVYe8sOB8DBZkP2DtISHGSku9sCK6T6cnY0CtXrOCQ==}
@@ -648,6 +684,9 @@ packages:
 
   '@types/unist@3.0.3':
     resolution: {integrity: sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q==}
+
+  '@types/ws@8.18.1':
+    resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
 
   accepts@2.0.0:
     resolution: {integrity: sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng==}
@@ -1076,6 +1115,10 @@ packages:
   human-signals@8.0.1:
     resolution: {integrity: sha512-eKCa6bwnJhvxj14kZk5NCPc6Hb6BdsU9DZcOnmQKSnO1VKrfV0zCvtttPZUsBvjmNDn8rpcJfpwSYnHBjc95MQ==}
     engines: {node: '>=18.18.0'}
+
+  iceberg-js@0.8.1:
+    resolution: {integrity: sha512-1dhVQZXhcHje7798IVM+xoo/1ZdVfzOMIc8/rgVSijRK38EDqOJoGula9N/8ZI5RD8QTxNQtK/Gozpr+qUqRRA==}
+    engines: {node: '>=20.0.0'}
 
   iconv-lite@0.7.2:
     resolution: {integrity: sha512-im9DjEDQ55s9fL4EYzOAv0yMqmMBSZp6G0VvFyTMPKWxiSBHUj9NW/qqLmXUwXrrM7AvqSlTCfvqRb0cM8yYqw==}
@@ -1677,6 +1720,18 @@ packages:
   wrappy@1.0.2:
     resolution: {integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==}
 
+  ws@8.20.0:
+    resolution: {integrity: sha512-sAt8BhgNbzCtgGbt2OxmpuryO63ZoDk/sqaB/znQm94T4fCEsy/yV+7CdC1kJhOU9lboAEU7R3kquuycDoibVA==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
   xtend@4.0.2:
     resolution: {integrity: sha512-LKYU1iAXJXUgAXn9URjiu+MWhyUXHsvfp7mcuYm9dSUKK0/CjtrUwFAxD82/mCWbtLsGjFIad0wIsod4zrTAEQ==}
     engines: {node: '>=0.4'}
@@ -1969,6 +2024,8 @@ snapshots:
 
   '@pinojs/redact@0.4.0': {}
 
+  '@replit/connectors-sdk@0.4.0': {}
+
   '@scalar/helpers@0.2.18': {}
 
   '@scalar/json-magic@0.11.7':
@@ -2025,6 +2082,46 @@ snapshots:
   '@shikijs/vscode-textmate@10.0.2': {}
 
   '@sindresorhus/merge-streams@4.0.0': {}
+
+  '@supabase/auth-js@2.104.0':
+    dependencies:
+      tslib: 2.8.1
+
+  '@supabase/functions-js@2.104.0':
+    dependencies:
+      tslib: 2.8.1
+
+  '@supabase/phoenix@0.4.0': {}
+
+  '@supabase/postgrest-js@2.104.0':
+    dependencies:
+      tslib: 2.8.1
+
+  '@supabase/realtime-js@2.104.0':
+    dependencies:
+      '@supabase/phoenix': 0.4.0
+      '@types/ws': 8.18.1
+      tslib: 2.8.1
+      ws: 8.20.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
+  '@supabase/storage-js@2.104.0':
+    dependencies:
+      iceberg-js: 0.8.1
+      tslib: 2.8.1
+
+  '@supabase/supabase-js@2.104.0':
+    dependencies:
+      '@supabase/auth-js': 2.104.0
+      '@supabase/functions-js': 2.104.0
+      '@supabase/postgrest-js': 2.104.0
+      '@supabase/realtime-js': 2.104.0
+      '@supabase/storage-js': 2.104.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
 
   '@swc/counter@0.1.3': {}
 
@@ -2107,6 +2204,10 @@ snapshots:
       '@types/node': 25.3.5
 
   '@types/unist@3.0.3': {}
+
+  '@types/ws@8.18.1':
+    dependencies:
+      '@types/node': 25.3.5
 
   accepts@2.0.0:
     dependencies:
@@ -2475,6 +2576,8 @@ snapshots:
 
   human-signals@8.0.1: {}
 
+  iceberg-js@0.8.1: {}
+
   iconv-lite@0.7.2:
     dependencies:
       safer-buffer: 2.1.2
@@ -2621,8 +2724,9 @@ snapshots:
     dependencies:
       wrappy: 1.0.2
 
-  openai@6.34.0(zod@4.3.6):
+  openai@6.34.0(ws@8.20.0)(zod@4.3.6):
     optionalDependencies:
+      ws: 8.20.0
       zod: 4.3.6
 
   orval@8.5.3(prettier@3.8.1)(typescript@5.9.3):
@@ -3057,6 +3161,8 @@ snapshots:
       isexe: 2.0.0
 
   wrappy@1.0.2: {}
+
+  ws@8.20.0: {}
 
   xtend@4.0.2: {}
 

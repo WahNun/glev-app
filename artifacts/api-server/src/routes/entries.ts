@@ -11,6 +11,8 @@ import {
   ImportBatchBody,
 } from "@workspace/api-zod";
 import { calculateMetrics } from "../lib/calculation";
+import { insertLog } from "../lib/supabase";
+import { syncEntryToSheets } from "../lib/sheets";
 
 const router: IRouter = Router();
 
@@ -74,6 +76,25 @@ router.post("/entries", async (req, res): Promise<void> => {
   };
 
   const [entry] = await db.insert(entriesTable).values(insertData).returning();
+
+  const logForCloud = {
+    date: insertData.timestamp.toISOString().split("T")[0],
+    meal: insertData.mealDescription ?? "",
+    glucose_before: insertData.glucoseBefore,
+    glucose_after: insertData.glucoseAfter ?? null,
+    carbs: insertData.carbsGrams,
+    fiber: insertData.fiberGrams ?? null,
+    protein: null,
+    fat: null,
+    net_carbs: null,
+    bolus_units: insertData.insulinUnits,
+    meal_type: insertData.mealType,
+    evaluation: insertData.evaluation ?? null,
+    notes: insertData.notes ?? null,
+  };
+  insertLog(logForCloud).catch((e: Error) => console.warn("[supabase] sync skipped:", e.message));
+  syncEntryToSheets(entry as Record<string, unknown>).catch((e: Error) => console.warn("[sheets] entry sync skipped:", e.message));
+
   res.status(201).json(GetEntryResponse.parse(entry));
 });
 

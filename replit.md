@@ -23,11 +23,37 @@ The `artifacts/glucojack` React/Vite web app was removed — the canvas mockup i
 - **Production app**: Next.js 15 (`src/`) — deployed to Vercel via `rootDirectory: "src"` in `vercel.json`
 - **Mockup (dev only)**: React + Vite (`artifacts/mockup-sandbox`) — DarkCockpit with Desktop/Mobile toggle; NOT in workspace packages (excluded from Vercel build)
 - **API framework**: Express 5 (`artifacts/api-server`)
-- **Database**: PostgreSQL + Drizzle ORM
+- **Database (primary)**: PostgreSQL + Drizzle ORM (local/Replit)
+- **Database (cloud)**: Supabase — `artifacts/api-server/src/lib/supabase.ts` (fire-and-forget sync on every entry POST)
+- **Physician sharing**: Google Sheets via Replit Connectors SDK — `artifacts/api-server/src/lib/sheets.ts`
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle for Express), Next.js (for `src/`)
 - **Charts**: Recharts
+
+## Cloud Data Architecture
+
+Two-layer system:
+1. **Supabase** — cloud source of truth. Env vars: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (Express) / `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (Next.js)
+2. **Google Sheets** — physician sharing layer. Env var: `GOOGLE_SHEET_ID`
+
+Both are graceful: if env vars are not set, local DB still works and sync is skipped with a console warning.
+
+### API Endpoints
+- `POST /api/entries` — saves to PostgreSQL, then non-blocking fire-and-forget to Supabase + Sheets
+- `POST /api/sheets/sync` — full batch export (all PostgreSQL entries → Google Sheet, clears old data first)
+
+### Supabase Table: `logs`
+Columns: id, created_at, date, meal, glucose_before, glucose_after, carbs, fiber, protein, fat, net_carbs, bolus_units, meal_type, evaluation, notes
+
+### Google Sheet Columns
+Date, Meal, Glucose Before, Glucose After, Carbs, Fiber, Protein, Fat, Net Carbs, Bolus Units, Meal Type, Evaluation, Notes
+
+## Profile → Settings Tab
+
+The `ProfilePage` component now has two sub-tabs: **Overview** (existing settings) and **Settings** (new). Under Settings → "Data & Sharing":
+- "Send to my physician" button → triggers confirmation dialog → calls `POST /api/sheets/sync` → full data export
+- States: idle → confirm → syncing → success/error
 - **Routing**: Wouter (mockup), Next.js App Router (`src/`)
 - **AI**: OpenAI GPT-5 via Replit AI Integrations (`AI_INTEGRATIONS_OPENAI_BASE_URL`, `AI_INTEGRATIONS_OPENAI_API_KEY`)
 

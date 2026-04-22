@@ -7,6 +7,7 @@ import authRouter from "./auth";
 import cgmRouter from "./cgm";
 import foodRouter from "./food";
 import parseFoodRouter from "./parseFood";
+import sheetsRouter from "./sheets";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(recommendationsRouter);
 router.use(cgmRouter);
 router.use(foodRouter);
 router.use(parseFoodRouter);
+router.use(sheetsRouter);
 
 export default router;
