@@ -756,24 +756,25 @@ function VoicePage({ onLogged }: { onLogged?: ()=>void }) {
             <path id="vArcTop" d="M 14,126 a 112,112 0 1,1 224,0 a 112,112 0 1,1 -224,0"/>
           </defs>
 
-          {/* Outermost dashed ring */}
+          {/* Outermost dashed ring — recording only */}
           <circle cx="126" cy="126" r="122" fill="none"
-            stroke={isRec?"rgba(79,110,247,0.25)":"rgba(255,255,255,0.05)"}
-            strokeWidth="1" strokeDasharray="2 6" style={{transition:"stroke 0.5s"}}/>
+            stroke="rgba(79,110,247,0.25)"
+            strokeWidth="1" strokeDasharray="2 6"
+            style={{transition:"opacity 0.5s",opacity:isRec?1:0}}/>
 
-          {/* Second ring */}
+          {/* Second ring — recording only */}
           <circle cx="126" cy="126" r="112" fill="none"
-            stroke={isRec?"rgba(79,110,247,0.55)":"rgba(255,255,255,0.07)"}
-            strokeWidth={isRec?1.5:1}
-            filter={isRec?"url(#vglow)":undefined}
-            style={{transition:"all 0.5s"}}/>
+            stroke="rgba(79,110,247,0.55)"
+            strokeWidth="1.5"
+            filter="url(#vglow)"
+            style={{transition:"opacity 0.5s",opacity:isRec?1:0}}/>
 
-          {/* Inner bright ring */}
+          {/* Inner bright ring — recording only */}
           <circle cx="126" cy="126" r="101" fill="none"
-            stroke={isRec?ACCENT:"rgba(255,255,255,0.1)"}
-            strokeWidth={isRec?2:1}
-            filter={isRec?"url(#vglow)":undefined}
-            style={{transition:"all 0.5s"}}/>
+            stroke={ACCENT}
+            strokeWidth="2"
+            filter="url(#vglow)"
+            style={{transition:"opacity 0.5s",opacity:isRec?1:0}}/>
 
           {/* Rotating arc text — recording only */}
           {isRec&&(
