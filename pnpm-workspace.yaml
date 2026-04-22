@@ -37,6 +37,7 @@ minimumReleaseAgeExclude:
 packages:
   - src
   - artifacts/api-server
+  - artifacts/mockup-sandbox
   - lib/*
   - lib/integrations/*
   - scripts
