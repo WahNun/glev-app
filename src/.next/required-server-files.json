@@ -96,7 +96,7 @@
         "transform": "lodash/{{member}}"
       }
     },
-    "outputFileTracingRoot": "/home/runner/workspace",
+    "outputFileTracingRoot": "/home/runner/workspace/src",
     "experimental": {
       "nodeMiddleware": false,
       "cacheLife": {
@@ -279,11 +279,11 @@
     "bundlePagesRouterDependencies": false,
     "configFileName": "next.config.ts",
     "turbopack": {
-      "root": "/home/runner/workspace"
+      "root": "/home/runner/workspace/src"
     }
   },
   "appDir": "/home/runner/workspace/src",
-  "relativeAppDir": "src",
+  "relativeAppDir": "",
   "files": [
     ".next/routes-manifest.json",
     ".next/server/pages-manifest.json",

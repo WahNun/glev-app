@@ -1,0 +1,126 @@
+Fix the project structure so Vercel can correctly detect and deploy the Next.js app.
+
+--------------------------------------------------
+🎯 GOAL
+--------------------------------------------------
+
+Ensure:
+
+- Vercel detects Next.js automatically
+- package.json with "next" is at the correct level
+- no monorepo confusion
+- app builds and deploys successfully
+
+--------------------------------------------------
+🧠 PROBLEM
+--------------------------------------------------
+
+Current project is a pnpm workspace / monorepo.
+
+Vercel cannot find Next.js because:
+
+- package.json with "next" is not at root
+- build is trying to run across multiple packages
+
+--------------------------------------------------
+🚀 SOLUTION
+--------------------------------------------------
+
+Restructure project so the Next.js app is isolated and deployable.
+
+--------------------------------------------------
+1. IDENTIFY MAIN APP
+--------------------------------------------------
+
+Find the Next.js app folder:
+
+Likely:
+
+- src/
+OR
+- artifacts/mockup-sandbox (if used)
+OR
+- another app folder
+
+Find where:
+
+- package.json includes "next"
+- /app or /pages folder exists
+
+--------------------------------------------------
+2. MOVE NEXT APP TO ROOT
+--------------------------------------------------
+
+Move the actual Next.js app to project root:
+
+Root should contain:
+
+- package.json (with "next")
+- next.config.js
+- src/app/
+
+Remove unnecessary nesting.
+
+--------------------------------------------------
+3. REMOVE MONOREPO CONFIG
+--------------------------------------------------
+
+Delete:
+
+- pnpm-workspace.yaml
+- workspace references
+- multi-package build scripts
+
+--------------------------------------------------
+4. SIMPLIFY package.json
+--------------------------------------------------
+
+Ensure root package.json includes:
+
+"dependencies": {
+  "next": "...",
+  "react": "...",
+  "react-dom": "..."
+}
+
+Scripts:
+
+"scripts": {
+  "dev": "next dev",
+  "build": "next build",
+  "start": "next start"
+}
+
+--------------------------------------------------
+5. REMOVE ARTIFACTS FROM BUILD
+--------------------------------------------------
+
+Exclude:
+
+- artifacts/
+- mockup-sandbox/
+- scripts/
+
+They must not be part of build.
+
+--------------------------------------------------
+6. TEST LOCALLY
+--------------------------------------------------
+
+Run:
+
+pnpm install
+pnpm build
+
+Ensure:
+
+- Next.js builds successfully
+- no workspace errors
+
+--------------------------------------------------
+FINAL RESULT
+--------------------------------------------------
+
+- Clean Next.js project at root
+- Vercel auto-detects framework
+- Deployment succeeds

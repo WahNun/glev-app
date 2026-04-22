@@ -1,7 +1,7 @@
 {
   "/_not-found/page": "/_not-found",
-  "/api/log/route": "/api/log",
   "/api/parse-food/route": "/api/parse-food",
+  "/api/log/route": "/api/log",
   "/api/sheets/sync/route": "/api/sheets/sync",
   "/page": "/"
 }
