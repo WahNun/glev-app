@@ -802,11 +802,9 @@ function VoicePage({ onLogged }: { onLogged?: ()=>void }) {
           style={{
             position:"absolute",inset:26,borderRadius:"50%",border:"none",
             cursor:status==="processing"||saving?"default":"pointer",
-            background: isRec
-              ? `radial-gradient(circle at 50% 50%, #2e0b0b 0%, #1a0505 55%, #0e0202 100%)`
-              : `radial-gradient(circle at 36% 32%, #1e1e2e 0%, #141420 45%, #09090B 100%)`,
+            background:`radial-gradient(circle at 36% 32%, #1e1e2e 0%, #141420 45%, #09090B 100%)`,
             boxShadow: isRec
-              ? `0 0 0 1px rgba(200,40,40,0.5), 0 0 30px rgba(180,30,30,0.25), inset 0 0 24px rgba(140,20,20,0.15), inset 0 1px 0 rgba(255,100,100,0.06)`
+              ? `0 0 0 1px ${ACCENT}55, 0 0 50px ${ACCENT}44, 0 0 25px ${ACCENT}33, inset 0 0 40px rgba(79,110,247,0.12), inset 0 2px 0 rgba(255,255,255,0.07)`
               : status==="preview"
               ? `0 0 0 1px ${GREEN}44, 0 0 30px ${GREEN}22, inset 0 2px 0 rgba(255,255,255,0.06)`
               : `0 0 0 1px rgba(255,255,255,0.08), 0 8px 40px rgba(0,0,0,0.7), inset 0 2px 0 rgba(255,255,255,0.06), inset 0 -2px 0 rgba(0,0,0,0.4)`,
@@ -826,10 +824,10 @@ function VoicePage({ onLogged }: { onLogged?: ()=>void }) {
               ))
             ) : (
               <>
-                <rect x="9" y="2" width="6" height="11" rx="3" fill={isRec?"rgba(255,255,255,0.75)":"rgba(255,255,255,0.88)"}/>
-                <path d="M5 10a7 7 0 0 0 14 0" stroke={isRec?"rgba(255,255,255,0.75)":"rgba(255,255,255,0.88)"} strokeWidth="1.8" strokeLinecap="round" fill="none"/>
-                <line x1="12" y1="19" x2="12" y2="22" stroke={isRec?"rgba(255,255,255,0.75)":"rgba(255,255,255,0.88)"} strokeWidth="1.8" strokeLinecap="round"/>
-                <line x1="9" y1="22" x2="15" y2="22" stroke={isRec?"rgba(255,255,255,0.75)":"rgba(255,255,255,0.88)"} strokeWidth="1.8" strokeLinecap="round"/>
+                <rect x="9" y="2" width="6" height="11" rx="3" fill={(status==="processing"||status==="preview")?"#C03535":"rgba(255,255,255,0.88)"}/>
+                <path d="M5 10a7 7 0 0 0 14 0" stroke={(status==="processing"||status==="preview")?"#C03535":"rgba(255,255,255,0.88)"} strokeWidth="1.8" strokeLinecap="round" fill="none"/>
+                <line x1="12" y1="19" x2="12" y2="22" stroke={(status==="processing"||status==="preview")?"#C03535":"rgba(255,255,255,0.88)"} strokeWidth="1.8" strokeLinecap="round"/>
+                <line x1="9" y1="22" x2="15" y2="22" stroke={(status==="processing"||status==="preview")?"#C03535":"rgba(255,255,255,0.88)"} strokeWidth="1.8" strokeLinecap="round"/>
               </>
             )}
           </svg>
