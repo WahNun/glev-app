@@ -527,10 +527,10 @@ function EntryLog() {
                           </div>
                         </td>,
                         <td key="meal" onClick={()=>setExpandedId(isExpanded?null:e.id)} style={{padding:"11px 18px",userSelect:"none"}}>
-                          <div style={{display:"flex",flexDirection:"column",gap:3}}>
-                            <span style={{fontSize:12,fontWeight:500,maxWidth:150,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"rgba(255,255,255,0.85)"}}>{e.mealDescription||"—"}</span>
-                            {meta&&<span style={{fontSize:9,padding:"1px 6px",borderRadius:99,fontWeight:700,background:`${meta.color}18`,color:meta.color,letterSpacing:"0.07em",width:"fit-content"}}>{meta.label.toUpperCase()}</span>}
-                          </div>
+                          {meta
+                            ? <span style={{fontSize:10,padding:"2px 9px",borderRadius:99,fontWeight:700,background:`${meta.color}18`,color:meta.color,letterSpacing:"0.07em",whiteSpace:"nowrap"}}>{meta.label.toUpperCase()}</span>
+                            : <span style={{fontSize:12,color:"rgba(255,255,255,0.25)"}}>—</span>
+                          }
                         </td>,
                         <td key="bg" onClick={()=>setExpandedId(isExpanded?null:e.id)} style={{padding:"11px 18px",fontSize:12,fontWeight:600,color:e.glucoseBefore>140?ORANGE:e.glucoseBefore<80?PINK:"rgba(255,255,255,0.85)",userSelect:"none"}}>{e.glucoseBefore}</td>,
                         <td key="carbs" onClick={()=>setExpandedId(isExpanded?null:e.id)} style={{padding:"11px 18px",fontSize:12,color:"rgba(255,255,255,0.7)",userSelect:"none"}}>{e.carbsGrams}g</td>,
@@ -628,6 +628,126 @@ function EntryLog() {
 }
 
 // ─── INSIGHTS ────────────────────────────────────────────────────
+const MEAL_TYPE_INFO: Record<MealTypeKey,{headline:string;examples:string[];timing:string;note:string}> = {
+  FAST_CARBS: {
+    headline:"Simple sugars, high glycemic impact",
+    examples:["White rice","Fruit juice","White bread","Crackers","Sports drinks","Candy"],
+    timing:"Pre-bolus 10–15 min before eating — glucose rises quickly.",
+    note:"Absorption peaks within 30–45 min. Avoid stacking corrections.",
+  },
+  HIGH_FAT: {
+    headline:"Slow absorption, prolonged glucose rise",
+    examples:["Pizza","Pasta with cream","Cheese","Avocado","Nuts","Fried food"],
+    timing:"Consider split dose or extended bolus over 2–3 h.",
+    note:"Fat delays gastric emptying. The glucose peak may arrive 2–4 h post-meal.",
+  },
+  HIGH_PROTEIN: {
+    headline:"Moderate late glucose rise via gluconeogenesis",
+    examples:["Chicken / steak","Eggs","Protein shakes","Cottage cheese","Fish","Tofu"],
+    timing:"Standard timing; consider a small correction at ~2–3 h.",
+    note:"About 50–60% of excess protein converts to glucose slowly over several hours.",
+  },
+  BALANCED: {
+    headline:"Mixed macros, moderate glycemic index",
+    examples:["Salad with chicken","Stir-fry with brown rice","Oats with fruit","Lentils","Grain bowls"],
+    timing:"Standard bolus 0–10 min before. Monitor 90 min post-meal.",
+    note:"Predictable response. Good target for building reliable insulin ratios.",
+  },
+};
+
+function InsightFlipCard({m,color,label}:{m:MealPattern;color:string;label:string}) {
+  const [flipped,setFlipped]=useState(false);
+  const info=MEAL_TYPE_INFO[m.mealType as MealTypeKey];
+  const CARD_H=248;
+
+  return (
+    <div
+      onClick={()=>setFlipped(f=>!f)}
+      style={{perspective:"1000px",cursor:"pointer",height:CARD_H,position:"relative"}}
+      title={flipped?"Click to see stats":"Click to learn about this category"}
+    >
+      <div style={{
+        position:"relative",width:"100%",height:"100%",
+        transformStyle:"preserve-3d",
+        transition:"transform 0.52s cubic-bezier(0.4,0.2,0.2,1)",
+        transform:flipped?"rotateY(180deg)":"rotateY(0deg)",
+      }}>
+
+        {/* ── FRONT ── */}
+        <div style={{
+          position:"absolute",inset:0,backfaceVisibility:"hidden",
+          background:SURFACE,border:`1px solid ${BORDER}`,borderRadius:14,
+          padding:"18px 20px",boxSizing:"border-box",display:"flex",flexDirection:"column",
+        }}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+            <div style={{width:8,height:8,borderRadius:99,background:color,flexShrink:0}}/>
+            <div style={{fontSize:13,fontWeight:700}}>{label}</div>
+            <span style={{marginLeft:"auto",fontSize:10,color:"rgba(255,255,255,0.35)"}}>{m.count} entries</span>
+            <span style={{fontSize:10,color:"rgba(255,255,255,0.18)",marginLeft:4}}>↺</span>
+          </div>
+          {m.count===0?(
+            <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:"rgba(255,255,255,0.18)"}}>No data yet</div>
+          ):(
+            <>
+              <div style={{display:"flex",flexDirection:"column",gap:0,flex:1}}>
+                {[
+                  {label:"Avg Carbs",value:`${m.avgCarbsGrams.toFixed(0)}g`,color:"rgba(255,255,255,0.85)"},
+                  {label:"Avg Insulin",value:`${m.avgInsulinUnits.toFixed(1)}u`,color:"rgba(255,255,255,0.85)"},
+                  {label:"Good outcomes",value:`${(m.goodRate*100).toFixed(0)}%`,color:m.goodRate>0.6?GREEN:ORANGE},
+                  {label:"Insulin ratio",value:`1u / ${(1/(m.insulinToCarb/10)).toFixed(0)}g`,color:ACCENT},
+                ].map(row=>(
+                  <div key={row.label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:`1px solid rgba(255,255,255,0.04)`}}>
+                    <span style={{fontSize:11,color:"rgba(255,255,255,0.4)"}}>{row.label}</span>
+                    <span style={{fontSize:13,fontWeight:700,color:row.color}}>{row.value}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{marginTop:10}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                  <span style={{fontSize:10,color:"rgba(255,255,255,0.35)",letterSpacing:"0.06em"}}>SUCCESS RATE</span>
+                  <span style={{fontSize:10,color:m.goodRate>0.6?GREEN:ORANGE,fontWeight:700}}>{(m.goodRate*100).toFixed(0)}%</span>
+                </div>
+                <div style={{height:4,background:"rgba(255,255,255,0.07)",borderRadius:99,overflow:"hidden"}}>
+                  <div style={{width:`${m.goodRate*100}%`,height:"100%",background:m.goodRate>0.6?GREEN:ORANGE,borderRadius:99}}/>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* ── BACK ── */}
+        <div style={{
+          position:"absolute",inset:0,backfaceVisibility:"hidden",
+          transform:"rotateY(180deg)",
+          background:`linear-gradient(145deg,${color}14,${SURFACE} 60%)`,
+          border:`1px solid ${color}33`,borderRadius:14,
+          padding:"18px 20px",boxSizing:"border-box",display:"flex",flexDirection:"column",gap:10,
+        }}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
+            <div style={{width:8,height:8,borderRadius:99,background:color,flexShrink:0}}/>
+            <div style={{fontSize:13,fontWeight:700,color}}>{label}</div>
+            <span style={{marginLeft:"auto",fontSize:10,color:"rgba(255,255,255,0.18)"}}>↺ back</span>
+          </div>
+          <div style={{fontSize:11,color:"rgba(255,255,255,0.55)",lineHeight:1.5,fontStyle:"italic"}}>{info.headline}</div>
+          <div>
+            <div style={{fontSize:9,color:"rgba(255,255,255,0.25)",letterSpacing:"0.09em",fontWeight:600,marginBottom:5}}>COMMON FOODS</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+              {info.examples.map(ex=>(
+                <span key={ex} style={{fontSize:10,padding:"2px 8px",borderRadius:99,background:"rgba(255,255,255,0.06)",color:"rgba(255,255,255,0.6)",border:"1px solid rgba(255,255,255,0.08)"}}>{ex}</span>
+              ))}
+            </div>
+          </div>
+          <div style={{borderTop:`1px solid rgba(255,255,255,0.06)`,paddingTop:8,marginTop:"auto"}}>
+            <div style={{fontSize:10,color:color,fontWeight:600,marginBottom:3}}>⏱ {info.timing}</div>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.35)",lineHeight:1.5}}>{info.note}</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
 function Insights() {
   const [patterns,setPatterns]=useState<MealPattern[]>([]);
   const [loading,setLoading]=useState(true);
@@ -643,43 +763,15 @@ function Insights() {
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      <div style={{fontSize:11,color:"rgba(255,255,255,0.25)",textAlign:"right",letterSpacing:"0.04em"}}>Tap a card to flip ↺</div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>
         {patterns.map(m=>(
-          <Card key={m.mealType} style={{padding:"18px 20px"}}>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
-              <div style={{width:8,height:8,borderRadius:99,background:mealColors[m.mealType as MealTypeKey]||"#888",flexShrink:0}}/>
-              <div style={{fontSize:13,fontWeight:700}}>{mealTypeLabels[m.mealType as MealTypeKey]||m.mealType}</div>
-              <span style={{marginLeft:"auto",fontSize:10,color:"rgba(255,255,255,0.35)"}}>{m.count} entries</span>
-            </div>
-            {m.count===0?(
-              <div style={{fontSize:12,color:"rgba(255,255,255,0.2)",textAlign:"center",padding:"12px 0"}}>No data yet</div>
-            ):(
-              <>
-                <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                  {[
-                    {label:"Avg Carbs",value:`${m.avgCarbsGrams.toFixed(0)}g`,color:"rgba(255,255,255,0.85)"},
-                    {label:"Avg Insulin",value:`${m.avgInsulinUnits.toFixed(1)}u`,color:"rgba(255,255,255,0.85)"},
-                    {label:"Good outcomes",value:`${(m.goodRate*100).toFixed(0)}%`,color:m.goodRate>0.6?GREEN:ORANGE},
-                    {label:"Insulin ratio",value:`1u / ${(1/(m.insulinToCarb/10)).toFixed(0)}g`,color:ACCENT},
-                  ].map(row=>(
-                    <div key={row.label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:`1px solid rgba(255,255,255,0.04)`}}>
-                      <span style={{fontSize:11,color:"rgba(255,255,255,0.4)"}}>{row.label}</span>
-                      <span style={{fontSize:13,fontWeight:700,color:row.color}}>{row.value}</span>
-                    </div>
-                  ))}
-                </div>
-                <div style={{marginTop:12}}>
-                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
-                    <span style={{fontSize:10,color:"rgba(255,255,255,0.35)",letterSpacing:"0.06em"}}>SUCCESS RATE</span>
-                    <span style={{fontSize:10,color:m.goodRate>0.6?GREEN:ORANGE,fontWeight:700}}>{(m.goodRate*100).toFixed(0)}%</span>
-                  </div>
-                  <div style={{height:4,background:"rgba(255,255,255,0.07)",borderRadius:99,overflow:"hidden"}}>
-                    <div style={{width:`${m.goodRate*100}%`,height:"100%",background:m.goodRate>0.6?GREEN:ORANGE,borderRadius:99}}/>
-                  </div>
-                </div>
-              </>
-            )}
-          </Card>
+          <InsightFlipCard
+            key={m.mealType}
+            m={m}
+            color={mealColors[m.mealType as MealTypeKey]||"#888"}
+            label={mealTypeLabels[m.mealType as MealTypeKey]||m.mealType}
+          />
         ))}
       </div>
     </div>
