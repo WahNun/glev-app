@@ -400,8 +400,6 @@ function LogPage({ onLogged }: { onLogged?: ()=>void }) {
   const [macroData,setMacroData]=useState<MacroResponse|null>(null);
   const [macroNote,setMacroNote]=useState("");
   const [cgmLoading,setCgmLoading]=useState(false);
-  const [ingredients,setIngredients]=useState<FoodItem[]>([{name:"",portion:""}]);
-  const [macroResults,setMacroResults]=useState<MacroResult[]>([]);
   const recognitionRef=useRef<any>(null);
 
   const SR=typeof window!=="undefined"?((window as any).SpeechRecognition||(window as any).webkitSpeechRecognition):null;
@@ -415,25 +413,17 @@ function LogPage({ onLogged }: { onLogged?: ()=>void }) {
     if(!overridden) setMealType(r.mealType);
   },[carbs,protein,fat,desc,overridden]);
 
-  function addIngredient(){ setIngredients(prev=>[...prev,{name:"",portion:""}]); }
-  function removeIngredient(idx:number){ setIngredients(prev=>prev.filter((_,i)=>i!==idx)); setMacroResults([]); setMacroStatus("idle"); }
-  function updateIngredient(idx:number, field:"name"|"portion", val:string){
-    setIngredients(prev=>prev.map((item,i)=>i===idx?{...item,[field]:val}:item));
-    setMacroResults([]); setMacroStatus("idle");
-  }
-
-  async function fetchMacros(items?: FoodItem[]){
-    const target=(items??ingredients).filter(i=>i.name.trim());
-    if(target.length===0) return;
-    setMacroStatus("loading"); setMacroNote(""); setMacroData(null); setMacroResults([]);
+  async function fetchMacros(items: FoodItem[], fallbackDesc: string){
+    if(items.length===0) return;
+    setMacroStatus("loading");setMacroNote("");setMacroData(null);
     try{
-      const data=await apiFetch<MacroResponse>("/food/macros",{method:"POST",body:JSON.stringify({foods:target})});
-      setMacroData(data); setMacroResults(data.items);
+      const data=await apiFetch<MacroResponse>("/food/macros",{method:"POST",body:JSON.stringify({foods:items})});
+      setMacroData(data);
       setCarbs(String(data.totals.carbs));
       setFiber(String(data.totals.fiber));
       setProtein(String(data.totals.protein));
       setFat(String(data.totals.fat));
-      if(!desc) setDesc(target.map(i=>i.name).join(", "));
+      if(!desc&&fallbackDesc) setDesc(items.map(i=>i.name).join(", "));
       if(data.hasEstimated) setMacroNote("Some items estimated — verify fields");
       setMacroStatus("done");
     }catch{
@@ -465,8 +455,8 @@ function LogPage({ onLogged }: { onLogged?: ()=>void }) {
       if(p.insulinUnits) setInsulin(String(p.insulinUnits));
       const items=parseFoodItems(text);
       if(items.length>0){
-        setIngredients(items);
-        fetchMacros(items);
+        fetchMacros(items,text);
+        setDesc(items.map(i=>`${i.portion} ${i.name}`).join(", "));
       } else {
         if(p.carbsGrams) setCarbs(String(p.carbsGrams));
         if(p.fiberGrams!=null) setFiber(String(p.fiberGrams));
@@ -499,17 +489,12 @@ function LogPage({ onLogged }: { onLogged?: ()=>void }) {
     finally{setSaving(false);}
   }
 
-  function resetForm(){
-    setDone(false);setGlucose("");setCarbs("");setFiber("");setProtein("");setFat("");setDesc("");setInsulin("");
-    setOverridden(false);setTranscript("");setVoiceStatus("idle");setMacroStatus("idle");setMacroData(null);
-    setMacroNote("");setIngredients([{name:"",portion:""}]);setMacroResults([]);
-  }
+  function resetForm(){setDone(false);setGlucose("");setCarbs("");setFiber("");setProtein("");setFat("");setDesc("");setInsulin("");setOverridden(false);setTranscript("");setVoiceStatus("idle");setMacroStatus("idle");setMacroData(null);setMacroNote("");}
 
   const isRec=voiceStatus==="recording";
   const voiceColor={idle:"rgba(255,255,255,0.3)",recording:ACCENT,processing:ORANGE}[voiceStatus];
   const voiceLabel={idle:voiceSupported?"Tap to speak":"Voice unavailable",recording:"Listening…",processing:"Parsing…"}[voiceStatus];
   const netCarbs=carbs&&fiber?Math.max(0,Number(carbs)-Number(fiber)):null;
-  const hasValidIngredients=ingredients.some(i=>i.name.trim().length>0);
 
   if(done) return (
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:380,gap:16}}>
@@ -525,20 +510,20 @@ function LogPage({ onLogged }: { onLogged?: ()=>void }) {
       <style>{`@keyframes vPulse{0%,100%{opacity:0.35;transform:scale(1)}50%{opacity:1;transform:scale(1.05)}} @keyframes spin{to{transform:rotate(360deg)}}`}</style>
 
       {/* ── 1. Voice Input ── */}
-      <Card style={{padding:"18px 22px 16px"}}>
+      <Card style={{padding:"20px 22px 18px"}}>
         <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
-          <div style={{position:"relative",width:88,height:88,flexShrink:0}}>
-            {isRec&&<div style={{position:"absolute",inset:-14,borderRadius:"50%",background:`radial-gradient(circle,${ACCENT}18 0%,transparent 70%)`,animation:"vPulse 2s ease-in-out infinite",pointerEvents:"none"}}/>}
-            <svg width="88" height="88" viewBox="0 0 88 88" style={{position:"absolute",inset:0,overflow:"visible"}}>
-              <circle cx="44" cy="44" r="40" fill="none" stroke={isRec?`${ACCENT}55`:"rgba(255,255,255,0.07)"} strokeWidth="1.5" style={{transition:"stroke 0.4s"}}/>
-              {isRec&&<circle cx="44" cy="44" r="35" fill="none" stroke={ACCENT} strokeWidth="1.5" opacity="0.6"/>}
+          <div style={{position:"relative",width:96,height:96,flexShrink:0}}>
+            {isRec&&<div style={{position:"absolute",inset:-16,borderRadius:"50%",background:`radial-gradient(circle,${ACCENT}18 0%,transparent 70%)`,animation:"vPulse 2s ease-in-out infinite",pointerEvents:"none"}}/>}
+            <svg width="96" height="96" viewBox="0 0 96 96" style={{position:"absolute",inset:0,overflow:"visible"}}>
+              <circle cx="48" cy="48" r="44" fill="none" stroke={isRec?`${ACCENT}55`:"rgba(255,255,255,0.07)"} strokeWidth="1.5" style={{transition:"stroke 0.4s"}}/>
+              {isRec&&<circle cx="48" cy="48" r="38" fill="none" stroke={ACCENT} strokeWidth="1.5" opacity="0.6"/>}
             </svg>
             <button
               onClick={voiceStatus==="idle"?startRecording:voiceStatus==="recording"?stopRecording:undefined}
               disabled={voiceStatus==="processing"||!voiceSupported}
-              style={{position:"absolute",inset:7,borderRadius:"50%",border:"none",cursor:voiceStatus==="processing"||!voiceSupported?"default":"pointer",background:`radial-gradient(circle at 36% 32%,#1e1e2e 0%,#141420 45%,#09090B 100%)`,boxShadow:isRec?`0 0 0 1px ${ACCENT}55,0 0 28px ${ACCENT}44,inset 0 0 18px rgba(79,110,247,0.12)`:`0 0 0 1px rgba(255,255,255,0.08),0 6px 22px rgba(0,0,0,0.6),inset 0 1px 0 rgba(255,255,255,0.06)`,display:"flex",alignItems:"center",justifyContent:"center",transition:"box-shadow 0.4s,transform 0.2s",transform:isRec?"scale(1.04)":"scale(1)",outline:"none"}}
+              style={{position:"absolute",inset:8,borderRadius:"50%",border:"none",cursor:voiceStatus==="processing"||!voiceSupported?"default":"pointer",background:`radial-gradient(circle at 36% 32%,#1e1e2e 0%,#141420 45%,#09090B 100%)`,boxShadow:isRec?`0 0 0 1px ${ACCENT}55,0 0 30px ${ACCENT}44,inset 0 0 20px rgba(79,110,247,0.12)`:`0 0 0 1px rgba(255,255,255,0.08),0 6px 24px rgba(0,0,0,0.6),inset 0 1px 0 rgba(255,255,255,0.06)`,display:"flex",alignItems:"center",justifyContent:"center",transition:"box-shadow 0.4s,transform 0.2s",transform:isRec?"scale(1.04)":"scale(1)",outline:"none"}}
             >
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" style={{transition:"all 0.3s"}}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" style={{transition:"all 0.3s"}}>
                 {voiceStatus==="processing"
                   ?[0,60,120,180,240,300].map((deg,i)=><circle key={i} cx={12+7.5*Math.cos(deg*Math.PI/180)} cy={12+7.5*Math.sin(deg*Math.PI/180)} r="1.6" fill={ACCENT} opacity={0.3+i*0.12}/>)
                   :<><rect x="9" y="2" width="6" height="11" rx="3" fill={isRec?ACCENT:"rgba(255,255,255,0.88)"}/><path d="M5 10a7 7 0 0 0 14 0" stroke={isRec?ACCENT:"rgba(255,255,255,0.88)"} strokeWidth="1.8" strokeLinecap="round" fill="none"/><line x1="12" y1="19" x2="12" y2="22" stroke={isRec?ACCENT:"rgba(255,255,255,0.88)"} strokeWidth="1.8" strokeLinecap="round"/><line x1="9" y1="22" x2="15" y2="22" stroke={isRec?ACCENT:"rgba(255,255,255,0.88)"} strokeWidth="1.8" strokeLinecap="round"/></>
@@ -548,98 +533,60 @@ function LogPage({ onLogged }: { onLogged?: ()=>void }) {
           </div>
           <div style={{fontSize:11,fontWeight:600,letterSpacing:"0.12em",color:voiceColor,transition:"color 0.3s"}}>{voiceLabel}</div>
           {transcript
-            ?<div style={{fontSize:12,color:"rgba(255,255,255,0.5)",fontStyle:"italic",textAlign:"center",lineHeight:1.5,padding:"6px 12px",background:"rgba(255,255,255,0.03)",borderRadius:8,border:`1px solid rgba(255,255,255,0.06)`,maxWidth:400}}>"{transcript}"</div>
-            :<div style={{fontSize:10,color:"rgba(255,255,255,0.14)",letterSpacing:"0.06em",textAlign:"center"}}>e.g. "handful blueberries, small banana, 200g yogurt"</div>
+            ?<div style={{fontSize:12,color:"rgba(255,255,255,0.5)",fontStyle:"italic",textAlign:"center",lineHeight:1.5,padding:"7px 12px",background:"rgba(255,255,255,0.03)",borderRadius:8,border:`1px solid rgba(255,255,255,0.06)`,maxWidth:400}}>"{transcript}"</div>
+            :<div style={{fontSize:10,color:"rgba(255,255,255,0.15)",letterSpacing:"0.06em",textAlign:"center"}}>e.g. "handful blueberries, small banana, 200g yogurt"</div>
           }
         </div>
       </Card>
 
-      {/* ── 2. Ingredients list ── */}
-      <Card style={{padding:"16px 18px 18px"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-          <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",fontWeight:700,letterSpacing:"0.1em"}}>INGREDIENTS</div>
-          <button onClick={addIngredient} style={{display:"flex",alignItems:"center",gap:4,padding:"4px 10px",background:`${ACCENT}18`,border:`1px solid ${ACCENT}44`,borderRadius:7,color:ACCENT,fontSize:10,fontWeight:700,cursor:"pointer",letterSpacing:"0.04em"}}>
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Add
-          </button>
-        </div>
-
-        <div style={{display:"flex",flexDirection:"column",gap:6}}>
-          {ingredients.map((ing,idx)=>{
-            const result=macroResults[idx];
-            return (
-              <div key={idx}>
-                {/* Input row */}
-                <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                  <input
-                    value={ing.name} onChange={e=>updateIngredient(idx,"name",e.target.value)}
-                    placeholder="Food name…"
-                    style={{...inp,flex:2,fontSize:12,padding:"8px 10px"}}
-                  />
-                  <input
-                    value={ing.portion} onChange={e=>updateIngredient(idx,"portion",e.target.value)}
-                    placeholder="Amount…"
-                    style={{...inp,flex:1,fontSize:12,padding:"8px 10px"}}
-                  />
-                  <button
-                    onClick={()=>removeIngredient(idx)}
-                    disabled={ingredients.length===1}
-                    style={{width:28,height:28,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(255,45,120,0.08)",border:"1px solid rgba(255,45,120,0.2)",borderRadius:7,cursor:ingredients.length===1?"default":"pointer",opacity:ingredients.length===1?0.3:1,transition:"opacity 0.15s"}}
-                  >
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={PINK} strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                  </button>
+      {/* ── 2. Macro calculation status ── */}
+      {macroStatus==="loading"&&(
+        <Card style={{padding:"14px 18px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:16,height:16,border:`2px solid ${ACCENT}44`,borderTopColor:ACCENT,borderRadius:"50%",animation:"spin 0.7s linear infinite",flexShrink:0}}/>
+            <span style={{fontSize:12,color:"rgba(255,255,255,0.5)"}}>Calculating macros via food database…</span>
+          </div>
+        </Card>
+      )}
+      {macroStatus==="done"&&macroData&&(
+        <Card style={{padding:"14px 18px",border:`1px solid ${GREEN}22`}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+            <div style={{fontSize:10,color:GREEN,fontWeight:700,letterSpacing:"0.08em"}}>◈ MACROS CALCULATED</div>
+            {macroNote&&<div style={{fontSize:9,color:ORANGE}}>{macroNote}</div>}
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:3}}>
+            {macroData.items.map((item,i)=>(
+              <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:"1px solid rgba(255,255,255,0.04)",gap:8}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <span style={{fontSize:11,color:"rgba(255,255,255,0.7)"}}>{item.resolvedName}</span>
+                  <span style={{fontSize:9,color:"rgba(255,255,255,0.25)",marginLeft:5}}>{item.grams}g</span>
+                  {item.source==="estimated"&&<span style={{fontSize:8,color:ORANGE,marginLeft:4}}>est.</span>}
                 </div>
-                {/* Inline result row */}
-                {result&&(
-                  <div style={{display:"flex",alignItems:"center",gap:8,padding:"4px 6px 2px",marginTop:2}}>
-                    <span style={{fontSize:9,color:"rgba(255,255,255,0.3)",flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{result.resolvedName} · {result.grams}g{result.source==="estimated"?" (est.)":""}</span>
-                    <span style={{fontSize:9,color:ACCENT,flexShrink:0}}>{result.carbs}g C</span>
-                    <span style={{fontSize:9,color:GREEN,flexShrink:0}}>{result.protein}g P</span>
-                    <span style={{fontSize:9,color:"#A855F7",flexShrink:0}}>{result.fat}g F</span>
-                  </div>
-                )}
+                <div style={{display:"flex",gap:8,flexShrink:0}}>
+                  <span style={{fontSize:10,color:ACCENT}}>{item.carbs}g C</span>
+                  <span style={{fontSize:10,color:GREEN}}>{item.protein}g P</span>
+                  <span style={{fontSize:10,color:"#A855F7"}}>{item.fat}g F</span>
+                </div>
               </div>
-            );
-          })}
-        </div>
-
-        {/* Calculate button + totals */}
-        <div style={{marginTop:12,display:"flex",flexDirection:"column",gap:8}}>
-          <button
-            onClick={()=>fetchMacros()}
-            disabled={macroStatus==="loading"||!hasValidIngredients}
-            style={{width:"100%",padding:"10px",background:macroStatus==="done"?`${GREEN}18`:`${ACCENT}18`,border:`1px solid ${macroStatus==="done"?GREEN+44:ACCENT+"44"}`,borderRadius:9,color:macroStatus==="done"?GREEN:ACCENT,fontSize:11,fontWeight:700,cursor:macroStatus==="loading"||!hasValidIngredients?"default":"pointer",letterSpacing:"0.04em",display:"flex",alignItems:"center",justifyContent:"center",gap:7,transition:"all 0.2s",opacity:hasValidIngredients?1:0.4}}
-          >
-            {macroStatus==="loading"
-              ?<><div style={{width:12,height:12,border:`2px solid ${ACCENT}44`,borderTopColor:ACCENT,borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/> Calculating macros…</>
-              :macroStatus==="done"
-              ?<>◈ Recalculate</>
-              :<><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2.2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> Calculate Macros</>
-            }
-          </button>
-
-          {macroStatus==="done"&&macroData&&(
-            <div style={{padding:"8px 12px",background:`${GREEN}0A`,border:`1px solid ${GREEN}22`,borderRadius:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span style={{fontSize:10,color:"rgba(255,255,255,0.3)"}}>{macroData.totals.calories} kcal total</span>
-              <div style={{display:"flex",gap:10,alignItems:"center"}}>
-                {macroNote&&<span style={{fontSize:9,color:ORANGE}}>{macroNote}</span>}
+            ))}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:6}}>
+              <span style={{fontSize:10,color:"rgba(255,255,255,0.3)"}}>TOTAL · {macroData.totals.calories} kcal</span>
+              <div style={{display:"flex",gap:10}}>
                 <span style={{fontSize:11,fontWeight:700,color:ACCENT}}>{macroData.totals.carbs}g carbs</span>
                 <span style={{fontSize:11,color:GREEN}}>→ {macroData.totals.netCarbs}g net</span>
               </div>
             </div>
-          )}
-          {macroStatus==="error"&&(
-            <div style={{fontSize:10,color:ORANGE,padding:"6px 10px",background:`${ORANGE}0D`,borderRadius:7,border:`1px solid ${ORANGE}2A`}}>{macroNote||"Food API unavailable"}</div>
-          )}
-        </div>
-      </Card>
+          </div>
+        </Card>
+      )}
+      {macroStatus==="error"&&macroNote&&(
+        <div style={{fontSize:10,color:ORANGE,padding:"6px 12px",background:`${ORANGE}10`,borderRadius:8,border:`1px solid ${ORANGE}30`}}>{macroNote}</div>
+      )}
 
       {/* ── 3. Entry details form ── */}
       <Card style={{padding:20}}>
         <div style={{fontSize:10,color:"rgba(255,255,255,0.35)",letterSpacing:"0.1em",marginBottom:14}}>ENTRY DETAILS — edit any field</div>
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
-
-          {/* Glucose + CGM */}
           <div>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>GLUCOSE BEFORE (mg/dL)</div>
             <div style={{display:"flex",gap:8}}>
@@ -650,17 +597,9 @@ function LogPage({ onLogged }: { onLogged?: ()=>void }) {
               </button>
             </div>
           </div>
-
-          {/* Carbs + Fiber */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <div>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>CARBS (g)</div>
-              <input value={carbs} onChange={e=>setCarbs(e.target.value)} placeholder="e.g. 60" type="number" style={inp}/>
-            </div>
-            <div>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>FIBER (g) <span style={{opacity:0.5}}>opt.</span></div>
-              <input value={fiber} onChange={e=>setFiber(e.target.value)} placeholder="e.g. 8" type="number" style={inp}/>
-            </div>
+            <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>CARBS (g)</div><input value={carbs} onChange={e=>setCarbs(e.target.value)} placeholder="e.g. 60" type="number" style={inp}/></div>
+            <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>FIBER (g) <span style={{opacity:0.5}}>opt.</span></div><input value={fiber} onChange={e=>setFiber(e.target.value)} placeholder="e.g. 8" type="number" style={inp}/></div>
           </div>
           {netCarbs!==null&&netCarbs>=0&&(
             <div style={{padding:"7px 12px",background:`${GREEN}0D`,border:`1px solid ${GREEN}33`,borderRadius:8,fontSize:11,color:GREEN,display:"flex",alignItems:"center",gap:6}}>
@@ -668,40 +607,15 @@ function LogPage({ onLogged }: { onLogged?: ()=>void }) {
               <span><b>{carbs}g</b> − <b>{fiber}g</b> fiber = <b style={{fontSize:13}}>{netCarbs}g net carbs</b></span>
             </div>
           )}
-
-          {/* Protein + Fat */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <div>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>PROTEIN (g)</div>
-              <input value={protein} onChange={e=>setProtein(e.target.value)} placeholder="e.g. 30" type="number" style={inp}/>
-            </div>
-            <div>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>FAT (g)</div>
-              <input value={fat} onChange={e=>setFat(e.target.value)} placeholder="e.g. 15" type="number" style={inp}/>
-            </div>
+            <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>PROTEIN (g)</div><input value={protein} onChange={e=>setProtein(e.target.value)} placeholder="e.g. 30" type="number" style={inp}/></div>
+            <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>FAT (g)</div><input value={fat} onChange={e=>setFat(e.target.value)} placeholder="e.g. 15" type="number" style={inp}/></div>
           </div>
-
-          {/* Description */}
-          <div>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>MEAL DESCRIPTION</div>
-            <input value={desc} onChange={e=>setDesc(e.target.value)} placeholder="e.g. granola, banana, yogurt…" style={{...inp,fontSize:12,fontWeight:400}}/>
-          </div>
-
+          <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>MEAL DESCRIPTION</div><input value={desc} onChange={e=>setDesc(e.target.value)} placeholder="e.g. granola, banana, yogurt…" style={{...inp,fontSize:12,fontWeight:400}}/></div>
           <MacroWidget cl={cl} active={mealType} overridden={overridden} onPick={t=>{setMealType(t);setOverridden(t!==(cl?.mealType??"BALANCED"));}} onReset={()=>{setOverridden(false);if(cl)setMealType(cl.mealType);}}/>
-
-          {/* Insulin */}
-          <div>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>INSULIN (u)</div>
-            <input value={insulin} onChange={e=>setInsulin(e.target.value)} placeholder="e.g. 1.5" type="number" style={inp}/>
-          </div>
-
+          <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>INSULIN (u)</div><input value={insulin} onChange={e=>setInsulin(e.target.value)} placeholder="e.g. 1.5" type="number" style={inp}/></div>
           {error&&<div style={{fontSize:11,color:PINK}}>{error}</div>}
-
-          <button
-            onClick={confirmLog}
-            disabled={saving||!glucose||!carbs||!insulin}
-            style={{marginTop:4,padding:"14px",background:`linear-gradient(135deg,${ACCENT},#6B8BFF)`,border:"none",borderRadius:12,color:"white",fontSize:14,fontWeight:700,cursor:"pointer",opacity:glucose&&carbs&&insulin&&!saving?1:0.4,letterSpacing:"-0.01em",transition:"opacity 0.2s"}}
-          >
+          <button onClick={confirmLog} disabled={saving||!glucose||!carbs||!insulin} style={{marginTop:4,padding:"14px",background:`linear-gradient(135deg,${ACCENT},#6B8BFF)`,border:"none",borderRadius:12,color:"white",fontSize:14,fontWeight:700,cursor:"pointer",opacity:glucose&&carbs&&insulin&&!saving?1:0.4,letterSpacing:"-0.01em",transition:"opacity 0.2s"}}>
             {saving?"Saving…":"✓ Confirm Log"}
           </button>
         </div>
