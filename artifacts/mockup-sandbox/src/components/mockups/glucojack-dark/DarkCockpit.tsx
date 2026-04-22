@@ -13,7 +13,7 @@ const BORDER = "rgba(255,255,255,0.06)";
 
 // ─── Types ───────────────────────────────────────────────────────
 type MealTypeKey = "FAST_CARBS" | "HIGH_FAT" | "HIGH_PROTEIN" | "BALANCED";
-type Page = "dashboard" | "log" | "entries" | "insights" | "recommend" | "voice" | "import";
+type Page = "dashboard" | "log" | "entries" | "insights" | "recommend" | "voice" | "import" | "profile";
 
 interface Entry {
   id: number;
@@ -1024,8 +1024,8 @@ function ImportPage({ onLogged }: { onLogged?: ()=>void }) {
 }
 
 // ─── MOBILE DASHBOARD ────────────────────────────────────────────
-function MobileDashboard() {
-  const [mobilePage, setMobilePage] = useState<"dashboard"|"log"|"entries"|"recommend"|"voice">("dashboard");
+function MobileDashboard({email,onSignOut}:{email?:string;onSignOut?:()=>void}) {
+  const [mobilePage, setMobilePage] = useState<"dashboard"|"log"|"entries"|"recommend"|"voice"|"settings">("dashboard");
   const [stats, setStats] = useState<DashboardStats|null>(null);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
 
@@ -1052,7 +1052,10 @@ function MobileDashboard() {
 
   return (
     <div style={{display:"flex",flexDirection:"column",width:"100%",height:"100%",background:BG,color:"white",fontFamily:"'Inter',system-ui,sans-serif",position:"relative",overflow:"hidden"}}>
-      <div style={{padding:"16px 20px 12px",background:SURFACE,borderBottom:`1px solid ${BORDER}`,flexShrink:0}}>
+      <div
+        onClick={()=>setMobilePage(p=>p==="settings"?"dashboard":"settings")}
+        style={{padding:"16px 20px 12px",background:mobilePage==="settings"?`rgba(79,110,247,0.08)`:SURFACE,borderBottom:`1px solid ${mobilePage==="settings"?`rgba(79,110,247,0.25)`:BORDER}`,flexShrink:0,cursor:"pointer",transition:"background 0.2s,border-color 0.2s"}}
+      >
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <LogoCMark size={30}/>
@@ -1061,7 +1064,10 @@ function MobileDashboard() {
               <div style={{fontSize:10,color:"rgba(255,255,255,0.35)",marginTop:1}}>Smart insulin decisions</div>
             </div>
           </div>
-          <div style={{fontSize:11,padding:"5px 12px",borderRadius:99,background:`${GREEN}18`,color:GREEN,fontWeight:600}}>Live</div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div style={{fontSize:11,padding:"5px 12px",borderRadius:99,background:`${GREEN}18`,color:GREEN,fontWeight:600}}>Live</div>
+            <IconProfile active={mobilePage==="settings"}/>
+          </div>
         </div>
       </div>
 
@@ -1151,6 +1157,7 @@ function MobileDashboard() {
         {mobilePage==="entries"&&<EntryLog/>}
         {mobilePage==="recommend"&&<Recommend/>}
         {mobilePage==="voice"&&<VoicePage onLogged={()=>setMobilePage("dashboard")}/>}
+        {mobilePage==="settings"&&<ProfilePage email={email} onSignOut={()=>{onSignOut?.();}}/>}
       </div>
 
       <div style={{position:"absolute",bottom:0,left:0,right:0,background:SURFACE,borderTop:`1px solid ${BORDER}`,display:"flex",alignItems:"center",justifyContent:"space-around",padding:"10px 24px 20px",zIndex:10}}>
@@ -1207,6 +1214,11 @@ function IconUpload({ active }: { active: boolean }) {
   return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
 }
 
+function IconProfile({ active }: { active: boolean }) {
+  const c = active ? ACCENT : "rgba(255,255,255,0.45)";
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>;
+}
+
 // ─── LAYOUT ──────────────────────────────────────────────────────
 const NAV: { id: Page; label: string; Icon: React.ComponentType<{active:boolean}> }[] = [
   { id: "dashboard", label: "Dashboard",  Icon: IconDashboard },
@@ -1220,11 +1232,79 @@ const NAV: { id: Page; label: string; Icon: React.ComponentType<{active:boolean}
 
 const PAGE_TITLES: Record<Page,string> = {
   dashboard:"Dashboard", log:"Quick Log", entries:"Entry Log",
-  insights:"Insights", recommend:"Glev Engine", voice:"Voice Log", import:"Import Center",
+  insights:"Insights", recommend:"Glev Engine", voice:"Voice Log", import:"Import Center", profile:"My Profile",
 };
 
+// ─── Profile Page ───────────────────────────────────────────────
+function ProfilePage({email,onSignOut}:{email?:string;onSignOut:()=>void}) {
+  const [name,setName]=useState("Member");
+  const [notif,setNotif]=useState(true);
+  const [targetLow,setTargetLow]=useState("80");
+  const [targetHigh,setTargetHigh]=useState("140");
+  const [saved,setSaved]=useState(false);
+  function save(){setSaved(true);setTimeout(()=>setSaved(false),2000);}
+  const Row=({label,children}:{label:string;children:React.ReactNode})=>(
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 0",borderBottom:`1px solid ${BORDER}`}}>
+      <span style={{fontSize:13,color:"rgba(255,255,255,0.5)",fontWeight:500}}>{label}</span>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>{children}</div>
+    </div>
+  );
+  const inputStyle:React.CSSProperties={width:80,background:"rgba(255,255,255,0.05)",border:`1px solid rgba(255,255,255,0.1)`,borderRadius:8,padding:"6px 10px",color:"white",fontSize:13,outline:"none",textAlign:"center"};
+  return (
+    <div style={{maxWidth:560}}>
+      {/* Avatar card */}
+      <div style={{display:"flex",alignItems:"center",gap:18,padding:"24px",background:SURFACE,borderRadius:16,border:`1px solid ${BORDER}`,marginBottom:24}}>
+        <div style={{width:60,height:60,borderRadius:18,background:`linear-gradient(135deg,${ACCENT},#7B93FF)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,fontWeight:700,flexShrink:0,boxShadow:`0 0 20px ${ACCENT}33`}}>
+          {name.trim()[0]?.toUpperCase()||"M"}
+        </div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:17,fontWeight:700,marginBottom:3,letterSpacing:"-0.01em"}}>{name||"Member"}</div>
+          <div style={{fontSize:12,color:"rgba(255,255,255,0.4)"}}>{email||"member@glev.app"}</div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(79,110,247,0.1)",border:"1px solid rgba(79,110,247,0.25)",borderRadius:99,padding:"4px 12px",flexShrink:0}}>
+          <div style={{width:5,height:5,borderRadius:"50%",background:ACCENT}}/>
+          <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.12em",color:ACCENT}}>MEMBER</span>
+        </div>
+      </div>
+
+      {/* Settings card */}
+      <div style={{background:SURFACE,borderRadius:16,border:`1px solid ${BORDER}`,padding:"0 20px",marginBottom:20}}>
+        <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.1em",color:"rgba(255,255,255,0.3)",padding:"16px 0 2px"}}>PROFILE</div>
+        <Row label="Display name">
+          <input value={name} onChange={e=>setName(e.target.value)} style={{...inputStyle,width:160,textAlign:"left"}}/>
+        </Row>
+        <Row label="Email">
+          <span style={{fontSize:13,color:"rgba(255,255,255,0.35)"}}>{email||"member@glev.app"}</span>
+        </Row>
+        <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.1em",color:"rgba(255,255,255,0.3)",padding:"18px 0 2px"}}>GLUCOSE TARGETS</div>
+        <Row label="Target range (mg/dL)">
+          <input value={targetLow} onChange={e=>setTargetLow(e.target.value)} style={inputStyle} placeholder="Low"/>
+          <span style={{fontSize:12,color:"rgba(255,255,255,0.3)"}}>—</span>
+          <input value={targetHigh} onChange={e=>setTargetHigh(e.target.value)} style={inputStyle} placeholder="High"/>
+        </Row>
+        <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.1em",color:"rgba(255,255,255,0.3)",padding:"18px 0 2px"}}>NOTIFICATIONS</div>
+        <Row label="Spike & hypo alerts">
+          <button onClick={()=>setNotif(v=>!v)} style={{width:44,height:24,borderRadius:99,background:notif?ACCENT:"rgba(255,255,255,0.1)",border:"none",cursor:"pointer",position:"relative",transition:"background 0.2s",flexShrink:0}}>
+            <div style={{position:"absolute",top:3,left:notif?22:3,width:18,height:18,borderRadius:"50%",background:"white",transition:"left 0.2s",boxShadow:"0 1px 4px rgba(0,0,0,0.4)"}}/>
+          </button>
+        </Row>
+      </div>
+
+      {/* Actions */}
+      <div style={{display:"flex",gap:10}}>
+        <button onClick={save} style={{flex:1,padding:"12px",borderRadius:11,background:saved?`${GREEN}22`:`linear-gradient(135deg,${ACCENT},#7B93FF)`,border:saved?`1px solid ${GREEN}44`:"none",color:saved?GREEN:"white",fontSize:13,fontWeight:700,cursor:"pointer",transition:"all 0.2s",boxShadow:saved?"none":`0 4px 16px ${ACCENT}33`}}>
+          {saved?"Saved ✓":"Save Changes"}
+        </button>
+        <button onClick={onSignOut} style={{padding:"12px 20px",borderRadius:11,background:"rgba(255,45,120,0.08)",border:"1px solid rgba(255,45,120,0.2)",color:PINK,fontSize:13,fontWeight:600,cursor:"pointer",transition:"all 0.15s"}}>
+          Sign Out
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Login Gate ─────────────────────────────────────────────────
-function LoginGate({onEnter}:{onEnter:()=>void}) {
+function LoginGate({onEnter}:{onEnter:(email:string)=>void}) {
   const [email,setEmail]=useState("");
   const [pass,setPass]=useState("");
   const [err,setErr]=useState("");
@@ -1236,7 +1316,7 @@ function LoginGate({onEnter}:{onEnter:()=>void}) {
     e.preventDefault();
     if(!email.trim()||!pass.trim()){setErr("Please enter your credentials.");return;}
     setLoading(true);
-    setTimeout(()=>{ setLoading(false); onEnter(); },900);
+    setTimeout(()=>{ setLoading(false); onEnter(email); },900);
   }
 
   return (
@@ -1338,15 +1418,17 @@ function LoginGate({onEnter}:{onEnter:()=>void}) {
 
 export function DarkCockpit() {
   const [loggedIn,setLoggedIn]=useState(false);
+  const [userEmail,setUserEmail]=useState("");
   const [page, setPage] = useState<Page>("dashboard");
   const [view, setView] = useState<"desktop"|"mobile">("desktop");
   const [refresh, setRefresh] = useState(0);
 
   function onLogged() { setRefresh(r=>r+1); setPage("dashboard"); }
+  function signOut() { setLoggedIn(false); setUserEmail(""); setPage("dashboard"); }
 
   return (
     <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:BG,color:"white",fontFamily:"'Inter',system-ui,sans-serif"}}>
-      {!loggedIn&&<LoginGate onEnter={()=>setLoggedIn(true)}/>}
+      {!loggedIn&&<LoginGate onEnter={(e)=>{setUserEmail(e);setLoggedIn(true);}}/>}
       {/* View Toggle */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"10px 0",background:"#0C0C10",borderBottom:`1px solid ${BORDER}`,gap:0}}>
         <button onClick={()=>setView("desktop")} style={{padding:"6px 22px",borderRadius:"8px 0 0 8px",background:view==="desktop"?`${ACCENT}22`:"transparent",border:`1px solid ${view==="desktop"?ACCENT:"rgba(255,255,255,0.12)"}`,color:view==="desktop"?ACCENT:"rgba(255,255,255,0.4)",fontSize:12,fontWeight:600,cursor:"pointer",letterSpacing:"0.04em",borderRight:"none",transition:"all 0.15s"}}>🖥 Desktop</button>
@@ -1384,6 +1466,21 @@ export function DarkCockpit() {
                 </button>
               );
             })}
+            {/* Profile pinned at bottom */}
+            <div style={{marginTop:"auto",paddingTop:12,borderTop:`1px solid ${BORDER}`}}>
+              {(()=>{const active=page==="profile";return(
+                <button onClick={()=>setPage("profile")} style={{
+                  display:"flex",alignItems:"center",gap:12,
+                  padding:"10px 12px",borderRadius:10,border:"none",
+                  background: active?`rgba(79,110,247,0.12)`:"transparent",
+                  cursor:"pointer",width:"100%",textAlign:"left",transition:"background 0.15s",
+                }}>
+                  <IconProfile active={active}/>
+                  <span style={{fontSize:14,fontWeight:active?700:400,color:active?"white":"rgba(255,255,255,0.5)",letterSpacing:"-0.01em"}}>My Profile</span>
+                  {active&&<div style={{marginLeft:"auto",width:3,height:3,borderRadius:99,background:ACCENT}}/>}
+                </button>
+              );})()}
+            </div>
           </div>
 
           {/* Main */}
@@ -1408,6 +1505,7 @@ export function DarkCockpit() {
             {page==="recommend"&&<Recommend/>}
             {page==="voice"&&<VoicePage onLogged={onLogged}/>}
             {page==="import"&&<ImportPage onLogged={onLogged}/>}
+            {page==="profile"&&<ProfilePage email={userEmail} onSignOut={signOut}/>}
           </div>
         </div>
       ) : (
@@ -1416,7 +1514,7 @@ export function DarkCockpit() {
             <div style={{position:"absolute",top:0,left:"50%",transform:"translateX(-50%)",width:120,height:32,background:"#000",borderRadius:"0 0 18px 18px",zIndex:20}}/>
             <div style={{height:44}}/>
             <div style={{height:800,overflow:"hidden"}}>
-              <MobileDashboard key={`mobile-${refresh}`}/>
+              <MobileDashboard key={`mobile-${refresh}`} email={userEmail} onSignOut={signOut}/>
             </div>
           </div>
         </div>
