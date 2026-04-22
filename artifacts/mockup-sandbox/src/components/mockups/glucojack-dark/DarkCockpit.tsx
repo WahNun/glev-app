@@ -1304,7 +1304,7 @@ function ProfilePage({email,initialName,onSignOut}:{email?:string;initialName?:s
 }
 
 // ─── Login Gate ─────────────────────────────────────────────────
-function LoginGate({onEnter}:{onEnter:(email:string,name?:string)=>void}) {
+function LoginGate({onEnter,contained}:{onEnter:(email:string,name?:string)=>void;contained?:boolean}) {
   const [mode,setMode]=useState<"signup"|"login">("signup");
   const [name,setName]=useState("");
   const [email,setEmail]=useState("");
@@ -1362,16 +1362,17 @@ function LoginGate({onEnter}:{onEnter:(email:string,name?:string)=>void}) {
 
   return (
     <div style={{
-      position:"fixed",inset:0,zIndex:9999,
+      position:contained?"absolute":"fixed",inset:0,zIndex:9999,
       background:"rgba(9,9,11,0.92)",
       backdropFilter:"blur(18px)",
       display:"flex",alignItems:"center",justifyContent:"center",
       opacity:visible?1:0,transition:"opacity 0.35s ease",
+      overflowY:contained?"auto":"visible",
     }}>
       <div style={{position:"absolute",width:520,height:520,borderRadius:"50%",background:`radial-gradient(circle,${ACCENT}12 0%,transparent 70%)`,pointerEvents:"none",top:"50%",left:"50%",transform:"translate(-50%,-50%)"}}/>
 
       <form onSubmit={submit} style={{
-        position:"relative",width:400,
+        position:"relative",width:contained?340:400,
         background:"#111117",
         border:"1px solid rgba(79,110,247,0.18)",
         borderRadius:22,
@@ -1478,7 +1479,6 @@ export function DarkCockpit() {
 
   return (
     <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:BG,color:"white",fontFamily:"'Inter',system-ui,sans-serif"}}>
-      {!loggedIn&&<LoginGate onEnter={(e,n)=>{setUserEmail(e);setUserName(n||"");setLoggedIn(true);}}/>}
       {/* View Toggle */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"10px 0",background:"#0C0C10",borderBottom:`1px solid ${BORDER}`,gap:0}}>
         <button onClick={()=>setView("desktop")} style={{padding:"6px 22px",borderRadius:"8px 0 0 8px",background:view==="desktop"?`${ACCENT}22`:"transparent",border:`1px solid ${view==="desktop"?ACCENT:"rgba(255,255,255,0.12)"}`,color:view==="desktop"?ACCENT:"rgba(255,255,255,0.4)",fontSize:12,fontWeight:600,cursor:"pointer",letterSpacing:"0.04em",borderRight:"none",transition:"all 0.15s"}}>🖥 Desktop</button>
@@ -1486,7 +1486,8 @@ export function DarkCockpit() {
       </div>
 
       {view==="desktop" ? (
-        <div style={{display:"flex",flex:1,overflow:"hidden"}}>
+        <div style={{display:"flex",flex:1,overflow:"hidden",position:"relative"}}>
+          {!loggedIn&&<LoginGate onEnter={(e,n)=>{setUserEmail(e);setUserName(n||"");setLoggedIn(true);}}/>}
           {/* Sidebar */}
           <div style={{width:220,background:SURFACE,borderRight:`1px solid ${BORDER}`,display:"flex",flexDirection:"column",padding:"20px 12px",gap:2,flexShrink:0}}>
             <div style={{display:"flex",alignItems:"center",gap:10,padding:"4px 10px",marginBottom:18}}>
@@ -1562,6 +1563,7 @@ export function DarkCockpit() {
         <div style={{flex:1,display:"flex",alignItems:"flex-start",justifyContent:"center",background:"#050508",padding:"32px 24px 40px"}}>
           <div style={{width:390,height:844,borderRadius:44,overflow:"hidden",position:"relative",boxShadow:`0 0 0 1px rgba(255,255,255,0.12),0 32px 80px rgba(0,0,0,0.8),inset 0 0 0 1px rgba(255,255,255,0.06)`,background:BG,flexShrink:0}}>
             <div style={{position:"absolute",top:0,left:"50%",transform:"translateX(-50%)",width:120,height:32,background:"#000",borderRadius:"0 0 18px 18px",zIndex:20}}/>
+            {!loggedIn&&<LoginGate contained onEnter={(e,n)=>{setUserEmail(e);setUserName(n||"");setLoggedIn(true);}}/>}
             <div style={{height:44}}/>
             <div style={{height:800,overflow:"hidden"}}>
               <MobileDashboard key={`mobile-${refresh}`} email={userEmail} name={userName} onSignOut={signOut}/>
