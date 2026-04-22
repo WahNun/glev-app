@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { fetchMeals, type Meal } from "@/lib/meals";
+import { logDebug } from "@/lib/debug";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
@@ -86,6 +87,7 @@ export default function EnginePage() {
       const rec = runGlevEngine(meals, g, c);
       setResult(rec);
       setRunning(false);
+      logDebug("ENGINE", { input: { glucose: g, carbs: c }, matchedMeals: rec.similarMeals.map(m => ({ id: m.id, carbs: m.carbs_grams, glucose: m.glucose_before, insulin: m.insulin_units })), suggestedDose: rec.dose, confidence: rec.confidence });
     }, 600);
   }
 

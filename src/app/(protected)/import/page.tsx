@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { saveMeal, classifyMeal, computeEvaluation } from "@/lib/meals";
+import { logDebug } from "@/lib/debug";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
@@ -94,6 +95,7 @@ export default function ImportPage() {
     setErrors(errs);
     setDone(true);
     setImporting(false);
+    logDebug("IMPORT", { parsed: rows.length, inserted: count, failed: errs.length, error: errs[0] ?? null });
   }
 
   const inp: React.CSSProperties = { background:"#0D0D12", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 14px", color:"#fff", fontSize:14, outline:"none", width:"100%" };

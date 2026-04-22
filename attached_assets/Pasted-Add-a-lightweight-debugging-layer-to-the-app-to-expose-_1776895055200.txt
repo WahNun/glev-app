@@ -1,0 +1,193 @@
+Add a lightweight debugging layer to the app to expose internal state for troubleshooting.
+
+Do NOT modify core product logic.
+Do NOT refactor unrelated code.
+Only add observability.
+
+---
+
+GOAL
+
+Expose the following in a safe, structured way:
+
+1. Database state (meals table)
+2. Supabase connection status
+3. Auth session status
+4. Environment configuration
+5. CSV import behavior (last run)
+6. Glev Engine inputs/outputs (last run)
+
+All debug data must be accessible via API routes and console logs.
+
+---
+
+SECTION 1 — DEBUG API ROUTES
+
+Create the following endpoints:
+
+---
+
+1. /api/debug/state
+
+Return:
+
+- first 20 rows from meals table
+- total count of meals
+- last inserted row
+- any DB errors
+
+Response shape:
+
+{
+  ok: boolean,
+  meals: [],
+  count: number,
+  last: {},
+  error: string | null
+}
+
+---
+
+2. /api/debug/auth
+
+Return:
+
+- current session (if exists)
+- user id
+- isAuthenticated boolean
+
+---
+
+3. /api/debug/env
+
+Return:
+
+- hasSupabaseUrl (boolean)
+- hasAnonKey (boolean)
+- nodeEnv
+- runtime (server/client)
+
+DO NOT expose actual keys.
+
+---
+
+4. /api/debug/import
+
+Track last CSV import:
+
+Store in memory or simple variable:
+
+- rows parsed
+- rows inserted
+- rows failed
+- last error
+
+Return:
+
+{
+  lastImport: {
+    parsed: number,
+    inserted: number,
+    failed: number,
+    error: string | null
+  }
+}
+
+---
+
+5. /api/debug/engine
+
+Track last Glev Engine execution:
+
+Return:
+
+{
+  input: {
+    glucose: number,
+    carbs: number
+  },
+  matchedMeals: [],
+  suggestedDose: number,
+  confidence: string
+}
+
+---
+
+SECTION 2 — GLOBAL DEBUG LOGGER
+
+Create a utility:
+
+lib/debug.ts
+
+Export:
+
+logDebug(tag, payload)
+
+Behavior:
+- logs to console
+- stores last value in memory (per tag)
+
+Example:
+
+logDebug("IMPORT", {...})
+logDebug("ENGINE", {...})
+
+---
+
+SECTION 3 — INSTRUMENT KEY FLOWS
+
+Add logging to:
+
+1. CSV import
+→ log parsed rows, errors
+
+2. Glev Engine
+→ log inputs, matched meals, output
+
+3. Auth login
+→ log session result
+
+4. Meal insert
+→ log inserted row
+
+---
+
+SECTION 4 — CLIENT DEBUG PANEL (TEMP)
+
+Add a simple client-side debug hook:
+
+- on app load
+- fetch /api/debug/state
+- console.log response
+
+Do NOT render UI, only log.
+
+---
+
+SECTION 5 — SAFETY
+
+- Do NOT expose secrets
+- Do NOT expose full auth tokens
+- Only booleans for env validation
+
+---
+
+SECTION 6 — VALIDATION
+
+After implementation:
+
+- /api/debug/state returns meals
+- /api/debug/auth returns session
+- /api/debug/env shows config status
+- /api/debug/import updates after CSV import
+- /api/debug/engine updates after engine run
+
+---
+
+OUTPUT
+
+Return:
+
+- list of created endpoints
+- confirmation each endpoint works
+- example responses for each

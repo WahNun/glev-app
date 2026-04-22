@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { signOut } from "@/lib/auth";
 
 const ACCENT  = "#4F6EF7";
@@ -35,6 +36,10 @@ const NAV = [
 export default function Layout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router   = useRouter();
+
+  useEffect(() => {
+    fetch("/api/debug/state").then(r => r.json()).then(d => console.log("[DEBUG:STATE]", d)).catch(() => {});
+  }, []);
 
   async function handleSignOut() {
     await signOut();

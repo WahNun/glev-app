@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { logDebug } from "./debug";
 
 export interface ParsedFood {
   name: string;
@@ -75,6 +76,7 @@ export async function saveMeal(input: SaveMealInput): Promise<Meal> {
     .single();
 
   if (error) throw new Error(error.message);
+  logDebug("MEAL_INSERT", { id: data.id, carbs: input.carbsGrams, insulin: input.insulinUnits, glucose: input.glucoseBefore, mealType: input.mealType, evaluation: input.evaluation });
   return data as Meal;
 }
 
