@@ -6,6 +6,7 @@ import recommendationsRouter from "./recommendations";
 import authRouter from "./auth";
 import cgmRouter from "./cgm";
 import foodRouter from "./food";
+import parseFoodRouter from "./parseFood";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(insightsRouter);
 router.use(recommendationsRouter);
 router.use(cgmRouter);
 router.use(foodRouter);
+router.use(parseFoodRouter);
 
 export default router;

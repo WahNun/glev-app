@@ -400,6 +400,10 @@ function LogPage({ onLogged }: { onLogged?: ()=>void }) {
   const [macroData,setMacroData]=useState<MacroResponse|null>(null);
   const [macroNote,setMacroNote]=useState("");
   const [cgmLoading,setCgmLoading]=useState(false);
+  const [pfLoading,setPfLoading]=useState(false);
+  const [pfRaw,setPfRaw]=useState<string|null>(null);
+  const [pfParsed,setPfParsed]=useState<{name:string;grams:number}[]|null>(null);
+  const [pfError,setPfError]=useState<string|null>(null);
   const recognitionRef=useRef<any>(null);
 
   const SR=typeof window!=="undefined"?((window as any).SpeechRecognition||(window as any).webkitSpeechRecognition):null;
@@ -429,6 +433,23 @@ function LogPage({ onLogged }: { onLogged?: ()=>void }) {
     }catch{
       setMacroStatus("error");
       setMacroNote("Food API unavailable — using estimated values");
+    }
+  }
+
+  async function testFoodParser(customText?: string){
+    const text = customText ?? "small banana and handful blueberries";
+    setPfLoading(true); setPfRaw(null); setPfParsed(null); setPfError(null);
+    try{
+      const res = await apiFetch<{raw:string;parsed:{name:string;grams:number}[]}>("/parse-food",{
+        method:"POST",
+        body:JSON.stringify({text}),
+      });
+      setPfRaw(res.raw);
+      setPfParsed(res.parsed);
+    }catch(e:any){
+      setPfError(e?.message ?? "Request failed");
+    }finally{
+      setPfLoading(false);
     }
   }
 
@@ -539,7 +560,51 @@ function LogPage({ onLogged }: { onLogged?: ()=>void }) {
         </div>
       </Card>
 
-      {/* ── 2. Macro calculation status ── */}
+      {/* ── 2. AI Food Parser test panel ── */}
+      <Card style={{padding:"14px 18px",border:`1px solid rgba(79,110,247,0.15)`}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:pfRaw||pfError?10:0}}>
+          <div style={{display:"flex",flexDirection:"column",gap:2}}>
+            <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.08em",color:"rgba(255,255,255,0.4)"}}>AI FOOD PARSER <span style={{fontSize:8,color:ACCENT,fontWeight:400,letterSpacing:"0.04em"}}>GPT-powered · test</span></div>
+            {!pfRaw&&!pfError&&<div style={{fontSize:10,color:"rgba(255,255,255,0.2)"}}>Sends "small banana and handful blueberries"</div>}
+          </div>
+          <button
+            onClick={()=>testFoodParser()}
+            disabled={pfLoading}
+            style={{padding:"6px 14px",background:pfLoading?"rgba(255,255,255,0.04)":`${ACCENT}22`,border:`1px solid ${ACCENT}44`,borderRadius:8,color:pfLoading?"rgba(255,255,255,0.3)":ACCENT,fontSize:11,fontWeight:700,cursor:pfLoading?"default":"pointer",letterSpacing:"0.04em",display:"flex",alignItems:"center",gap:6,flexShrink:0,whiteSpace:"nowrap"}}
+          >
+            {pfLoading
+              ?<><div style={{width:10,height:10,border:`1.5px solid ${ACCENT}44`,borderTopColor:ACCENT,borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/>Parsing…</>
+              :<>Test Food Parser</>
+            }
+          </button>
+        </div>
+
+        {pfError&&(
+          <div style={{fontSize:11,color:PINK,padding:"8px 10px",background:`${PINK}0D`,borderRadius:8,border:`1px solid ${PINK}22`}}>{pfError}</div>
+        )}
+
+        {pfRaw&&(
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{padding:"8px 10px",background:"rgba(255,255,255,0.03)",borderRadius:8,border:"1px solid rgba(255,255,255,0.06)"}}>
+              <div style={{fontSize:9,color:"rgba(255,255,255,0.25)",letterSpacing:"0.06em",marginBottom:4}}>RAW RESPONSE</div>
+              <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",fontFamily:"monospace",wordBreak:"break-all",lineHeight:1.5}}>{pfRaw}</div>
+            </div>
+            {pfParsed&&pfParsed.length>0&&(
+              <div style={{padding:"8px 10px",background:`${GREEN}08`,borderRadius:8,border:`1px solid ${GREEN}22`}}>
+                <div style={{fontSize:9,color:GREEN,letterSpacing:"0.06em",fontWeight:700,marginBottom:6}}>PARSED FOODS</div>
+                {pfParsed.map((item,i)=>(
+                  <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"3px 0",borderBottom:i<pfParsed.length-1?"1px solid rgba(255,255,255,0.04)":"none"}}>
+                    <span style={{fontSize:12,color:"rgba(255,255,255,0.75)"}}>{item.name}</span>
+                    <span style={{fontSize:12,fontWeight:700,color:ACCENT}}>{item.grams}g</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
+
+      {/* ── 3. Macro calculation status ── */}
       {macroStatus==="loading"&&(
         <Card style={{padding:"14px 18px"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>

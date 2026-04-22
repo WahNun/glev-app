@@ -1,0 +1,115 @@
+Implement and verify the OpenAI food parser API integration.
+
+--------------------------------------------------
+🎯 GOAL
+--------------------------------------------------
+
+Connect the existing API route:
+
+/api/parse-food
+
+to the frontend and display the result directly in the UI for testing.
+
+--------------------------------------------------
+🧠 FRONTEND TEST INTEGRATION
+--------------------------------------------------
+
+Modify the main page:
+
+/src/app/page.tsx
+
+--------------------------------------------------
+✏️ IMPLEMENT THIS
+--------------------------------------------------
+
+1. Ensure the page is a client component:
+
+Add at top:
+"use client";
+
+2. Add state:
+
+- rawResponse (string)
+- parsedFoods (array)
+- loading (boolean)
+- error (string)
+
+3. Add test button:
+
+Button text:
+"Test Food Parser"
+
+4. On click:
+
+- set loading = true
+- call:
+
+fetch("/api/parse-food", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    text: "small banana and handful blueberries"
+  })
+})
+
+5. Handle response:
+
+- display raw response
+- parse JSON safely
+- display parsed foods
+
+--------------------------------------------------
+📊 UI OUTPUT
+--------------------------------------------------
+
+Show:
+
+1. Loading state:
+"Parsing..."
+
+2. Raw API response
+
+3. Parsed result:
+
+banana – 100g  
+blueberries – 50g
+
+4. Error message if parsing fails
+
+--------------------------------------------------
+🧠 SAFE JSON PARSE
+--------------------------------------------------
+
+Wrap JSON.parse in try/catch:
+
+If parsing fails:
+- show error in UI
+
+--------------------------------------------------
+🎨 UI STYLE
+--------------------------------------------------
+
+- minimal card
+- dark cockpit style
+- centered layout
+- clean spacing
+
+--------------------------------------------------
+⚠️ IMPORTANT RULES
+--------------------------------------------------
+
+- Do NOT modify API route logic
+- Do NOT store anything yet
+- This is only for testing
+
+--------------------------------------------------
+FINAL RESULT
+--------------------------------------------------
+
+User clicks button → sees:
+
+- API working
+- GPT response
+- parsed food items
+
+No console needed.

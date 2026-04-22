@@ -1,0 +1,67 @@
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+export async function POST(req: Request) {
+  try {
+    const { text } = await req.json();
+
+    const completion = await client.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: `
+You are a food parser.
+
+Return ONLY valid JSON.
+
+Format:
+{
+  "foods": [
+    { "name": string, "grams": number }
+  ]
+}
+
+Rules:
+- Estimate grams if needed
+- No explanations
+- No extra text
+- Only JSON output
+
+Examples:
+- "small banana" → 100g
+- "handful blueberries" → 50g
+- "200g yogurt" → 200g
+          `,
+        },
+        {
+          role: "user",
+          content: text,
+        },
+      ],
+    });
+
+    const output = completion.choices[0].message.content;
+
+    return new Response(
+      JSON.stringify({ result: output }),
+      {
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+
+  } catch (err) {
+    console.error("ERROR:", err);
+
+    return new Response(
+      JSON.stringify({ error: "Parsing failed" }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+  }
+}
