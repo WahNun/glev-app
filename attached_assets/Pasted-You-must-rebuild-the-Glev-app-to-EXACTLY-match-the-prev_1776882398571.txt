@@ -1,0 +1,87 @@
+You must rebuild the Glev app to EXACTLY match the previously designed mockup.
+
+--------------------------------------------------
+CRITICAL INSTRUCTION
+--------------------------------------------------
+
+The existing UI mockups (Dashboard, Log Meal, Entries, Insights, Login) are the SINGLE source of truth.
+
+DO NOT simplify.
+DO NOT redesign.
+DO NOT omit features.
+
+Recreate the app exactly as shown in the mockup screens.
+
+--------------------------------------------------
+FEATURE REQUIREMENTS (MANDATORY)
+--------------------------------------------------
+
+1. DASHBOARD
+- Control score
+- Good rate / Spike rate / Hypo rate cards
+- Glucose trend chart
+- Recent entries table
+- Outcomes breakdown
+
+2. LOG MEAL SCREEN
+- Full rich input UI (NOT minimal)
+- Text input
+- GPT food parser integration
+- Parsed foods preview (with grams)
+- Voice input (microphone button)
+- Manual edit of parsed foods
+
+3. VOICE INPUT
+- Add microphone button
+- Use Web Speech API OR placeholder recording UI
+- Convert speech → text → pass into parser
+
+4. PARSER
+- Must call existing /api/parse-food route
+- Display structured output:
+  - food name
+  - grams
+
+5. ENTRIES PAGE
+- Full table of stored meals
+- Show:
+  - time
+  - carbs
+  - insulin
+  - result (GOOD / OVERDOSE / UNDERDOSE)
+
+6. INSIGHTS PAGE
+- Must NOT say "Coming soon"
+- Implement at least:
+  - averages
+  - simple stats
+  - basic charts
+
+--------------------------------------------------
+DATA LAYER
+--------------------------------------------------
+
+Use Supabase as the ONLY source of truth.
+
+Load meals from database and populate:
+- Dashboard
+- Entries
+- Insights
+
+--------------------------------------------------
+UI / DESIGN
+--------------------------------------------------
+
+- Match dark UI exactly (from mockups)
+- Same layout, spacing, typography, colors
+- Same cards, same structure
+- Responsive (desktop + mobile)
+
+--------------------------------------------------
+IMPORTANT
+
+Do NOT build a minimal version.
+Do NOT leave placeholders.
+Do NOT remove features.
+
+This must feel like a complete product, not a prototype.
