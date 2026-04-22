@@ -1458,11 +1458,7 @@ function LoginGate({onEnter}:{onEnter:(email:string,name?:string)=>void}) {
         </button>
 
         <div style={{marginTop:16,fontSize:11,color:"rgba(255,255,255,0.2)",textAlign:"center"}}>
-          {mode==="signup"?"Already a member? ":""} 
-          {mode==="signup"
-            ?<button type="button" onClick={()=>switchMode("login")} style={{background:"none",border:"none",color:`${ACCENT}cc`,fontSize:11,cursor:"pointer",textDecoration:"underline",padding:0}}>Sign in instead</button>
-            :<button type="button" onClick={()=>switchMode("signup")} style={{background:"none",border:"none",color:`${ACCENT}cc`,fontSize:11,cursor:"pointer",textDecoration:"underline",padding:0}}>Create an account</button>
-          }
+          Access restricted to registered members
         </div>
       </form>
     </div>
