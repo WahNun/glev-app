@@ -20,22 +20,31 @@ The `artifacts/glucojack` React/Vite web app was removed — the canvas mockup i
 - **Node.js version**: 24
 - **Package manager**: pnpm
 - **TypeScript version**: 5.9
-- **Mockup**: React + Vite (artifacts/mockup-sandbox) — DarkCockpit with Desktop/Mobile toggle
-- **API framework**: Express 5
+- **Production app**: Next.js 15 (`src/`) — deployed to Vercel via `rootDirectory: "src"` in `vercel.json`
+- **Mockup (dev only)**: React + Vite (`artifacts/mockup-sandbox`) — DarkCockpit with Desktop/Mobile toggle; NOT in workspace packages (excluded from Vercel build)
+- **API framework**: Express 5 (`artifacts/api-server`)
 - **Database**: PostgreSQL + Drizzle ORM
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
-- **Build**: esbuild (CJS bundle)
+- **Build**: esbuild (CJS bundle for Express), Next.js (for `src/`)
 - **Charts**: Recharts
-- **Routing**: Wouter
+- **Routing**: Wouter (mockup), Next.js App Router (`src/`)
+- **AI**: OpenAI GPT-5 via Replit AI Integrations (`AI_INTEGRATIONS_OPENAI_BASE_URL`, `AI_INTEGRATIONS_OPENAI_API_KEY`)
 
 ## Key Commands
 
+- `pnpm run build` — builds only `@workspace/glev` (Next.js, Vercel-safe)
 - `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- `pnpm --filter @workspace/api-server run dev` — run API server locally
+- `pnpm --filter @workspace/api-server run dev` — run Express API server locally
+
+## Vercel Deployment
+
+- `vercel.json` sets `rootDirectory: "src"` — Vercel builds only the Next.js app
+- `pnpm-workspace.yaml` excludes `artifacts/mockup-sandbox` (it needs `PORT` env var, not available on Vercel)
+- `artifacts/api-server` stays in workspace for local Replit dev
+- Environment vars needed on Vercel: `AI_INTEGRATIONS_OPENAI_BASE_URL`, `AI_INTEGRATIONS_OPENAI_API_KEY`
 
 ## Architecture
 
