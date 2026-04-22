@@ -1161,7 +1161,14 @@ function MobileDashboard() {
           </button>
         ))}
         <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,marginTop:-20}}>
-          <button onClick={()=>setMobilePage("voice")} style={{width:56,height:56,borderRadius:99,background:`linear-gradient(135deg,${ACCENT},#6B8BFF)`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,boxShadow:`0 0 ${mobilePage==="voice"?"32px":"20px"} ${ACCENT}${mobilePage==="voice"?"88":"55"}`,animation:"micPulse 2.5s ease-in-out infinite",transition:"transform 0.15s"}}>🎤</button>
+          <button onClick={()=>setMobilePage("voice")} style={{width:56,height:56,borderRadius:99,background:`linear-gradient(135deg,${ACCENT},#6B8BFF)`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 0 ${mobilePage==="voice"?"32px":"20px"} ${ACCENT}${mobilePage==="voice"?"88":"55"}`,animation:"micPulse 2.5s ease-in-out infinite",transition:"transform 0.15s"}}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <rect x="9" y="2" width="6" height="11" rx="3" fill="rgba(255,255,255,0.95)"/>
+              <path d="M5 10a7 7 0 0 0 14 0" stroke="rgba(255,255,255,0.95)" strokeWidth="1.8" strokeLinecap="round" fill="none"/>
+              <line x1="12" y1="19" x2="12" y2="22" stroke="rgba(255,255,255,0.95)" strokeWidth="1.8" strokeLinecap="round"/>
+              <line x1="9" y1="22" x2="15" y2="22" stroke="rgba(255,255,255,0.95)" strokeWidth="1.8" strokeLinecap="round"/>
+            </svg>
+          </button>
           <span style={{fontSize:9,color:mobilePage==="voice"?ACCENT:"rgba(255,255,255,0.3)",fontWeight:600,letterSpacing:"0.04em"}}>VOICE</span>
           <style>{`@keyframes micPulse{0%,100%{box-shadow:0 0 20px ${ACCENT}55}50%{box-shadow:0 0 32px ${ACCENT}88,0 0 60px ${ACCENT}33}}`}</style>
         </div>
