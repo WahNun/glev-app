@@ -1,28 +1,21 @@
 {
   "name": "glev-app",
-  "version": "1.0.0",
   "private": true,
+  "version": "1.0.0",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "start": "next start"
   },
   "dependencies": {
-    "@replit/connectors-sdk": "^0.4.0",
-    "@supabase/supabase-js": "^2.104.0",
+    "@supabase/supabase-js": "^2.0.0",
+    "googleapis": "^140.0.0",
     "next": "15.3.1",
-    "openai": "^6.34.0",
-    "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "openai": "^4.0.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
   },
   "devDependencies": {
-    "@types/node": "^25.3.3",
-    "@types/react": "^19.2.0",
-    "@types/react-dom": "^19.2.0",
-    "typescript": "~5.9.2"
-  },
-  "engines": {
-    "node": "24.x"
+    "@types/react": "19.2.14"
   }
 }
