@@ -8,6 +8,7 @@ import cgmRouter from "./cgm";
 import foodRouter from "./food";
 import parseFoodRouter from "./parseFood";
 import sheetsRouter from "./sheets";
+import logRouter from "./log";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(cgmRouter);
 router.use(foodRouter);
 router.use(parseFoodRouter);
 router.use(sheetsRouter);
+router.use(logRouter);
 
 export default router;

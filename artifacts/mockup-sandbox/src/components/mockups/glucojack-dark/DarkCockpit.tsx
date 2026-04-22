@@ -400,6 +400,7 @@ function LogPage({ onLogged }: { onLogged?: ()=>void }) {
   const [macroData,setMacroData]=useState<MacroResponse|null>(null);
   const [macroNote,setMacroNote]=useState("");
   const [cgmLoading,setCgmLoading]=useState(false);
+  const [cgmStatus]=useState<"connected"|"disconnected">(()=>Math.random()<0.7?"connected":"disconnected");
   const [pfLoading,setPfLoading]=useState(false);
   const [pfRaw,setPfRaw]=useState<string|null>(null);
   const [pfParsed,setPfParsed]=useState<{name:string;grams:number}[]|null>(null);
@@ -455,11 +456,13 @@ function LogPage({ onLogged }: { onLogged?: ()=>void }) {
 
   async function pullCGM(){
     setCgmLoading(true);setError("");
-    try{
-      const r=await apiFetch<{glucose:number}>("/cgm/latest");
-      setGlucose(String(r.glucose));
-    }catch{setError("CGM unavailable");}
-    finally{setCgmLoading(false);}
+    await new Promise(r=>setTimeout(r,500+Math.random()*900));
+    if(cgmStatus==="connected"){
+      setGlucose(String(Math.round(80+Math.random()*80)));
+    }else{
+      setError("Unable to fetch CGM data — device not connected");
+    }
+    setCgmLoading(false);
   }
 
   function startRecording(){
@@ -499,11 +502,16 @@ function LogPage({ onLogged }: { onLogged?: ()=>void }) {
     if(!glucose||!carbs||!insulin){setError("Glucose, carbs and insulin are required.");return;}
     setSaving(true);setError("");
     try{
-      await apiFetch("/entries",{method:"POST",body:JSON.stringify({
+      const now=new Date();
+      await apiFetch("/log",{method:"POST",body:JSON.stringify({
         glucoseBefore:Number(glucose),carbsGrams:Number(carbs),
         fiberGrams:fiber?Number(fiber):undefined,
         insulinUnits:Number(insulin),mealType,
         mealDescription:desc||undefined,
+        created_at:now.toISOString(),
+        date:now.toISOString().split("T")[0],
+        time:now.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit",hour12:false}),
+        timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,
       })});
       setDone(true);onLogged?.();
     }catch{setError("Failed to save. Check API.");}
@@ -528,7 +536,7 @@ function LogPage({ onLogged }: { onLogged?: ()=>void }) {
 
   return (
     <div style={{maxWidth:540,display:"flex",flexDirection:"column",gap:12}}>
-      <style>{`@keyframes vPulse{0%,100%{opacity:0.35;transform:scale(1)}50%{opacity:1;transform:scale(1.05)}} @keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      <style>{`@keyframes vPulse{0%,100%{opacity:0.35;transform:scale(1)}50%{opacity:1;transform:scale(1.05)}} @keyframes spin{to{transform:rotate(360deg)}} @keyframes cgmPulse{0%,100%{opacity:0.65;box-shadow:0 0 3px #22D3A055}50%{opacity:1;box-shadow:0 0 9px #22D3A0aa}}`}</style>
 
       {/* ── 1. Voice Input ── */}
       <Card style={{padding:"20px 22px 18px"}}>
@@ -657,6 +665,7 @@ function LogPage({ onLogged }: { onLogged?: ()=>void }) {
             <div style={{display:"flex",gap:8}}>
               <input value={glucose} onChange={e=>setGlucose(e.target.value)} placeholder="e.g. 115" type="number" style={{...inp,flex:1}}/>
               <button onClick={pullCGM} disabled={cgmLoading} style={{padding:"0 12px",background:cgmLoading?"rgba(255,255,255,0.05)":`${ACCENT}18`,border:`1px solid ${ACCENT}44`,borderRadius:10,color:ACCENT,fontSize:10,fontWeight:700,cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>
+                <div style={{width:8,height:8,borderRadius:"50%",background:cgmStatus==="connected"?GREEN:PINK,boxShadow:cgmStatus==="connected"?`0 0 5px ${GREEN}88`:`0 0 5px ${PINK}88`,animation:cgmStatus==="connected"&&!cgmLoading?"cgmPulse 2s ease-in-out infinite":"none",flexShrink:0}}/>
                 {cgmLoading?<div style={{width:10,height:10,border:`1.5px solid ${ACCENT}44`,borderTopColor:ACCENT,borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/>:<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2.5" strokeLinecap="round"><path d="M5 12h14M15 6l6 6-6 6"/></svg>}
                 CGM
               </button>

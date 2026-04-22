@@ -1,0 +1,277 @@
+Fix the data architecture to ensure Supabase is the single source of truth, remove any local database dependency, implement automatic time awareness, and add a CGM connection status indicator (mocked).
+
+--------------------------------------------------
+🎯 GOAL
+--------------------------------------------------
+
+Ensure:
+
+- Supabase is the ONLY database
+- No local DB usage
+- Google Sheets remains secondary sync layer
+- Every log entry includes accurate time + timezone
+- Add a visual CGM/BGM connection indicator (mocked)
+
+--------------------------------------------------
+🚨 1. REMOVE LOCAL DATABASE
+--------------------------------------------------
+
+Remove all usage of:
+
+- local PostgreSQL
+- SQLite
+- file storage
+- in-memory persistence
+
+System must rely ONLY on Supabase.
+
+--------------------------------------------------
+🧠 2. SUPABASE AS SOURCE OF TRUTH
+--------------------------------------------------
+
+Flow:
+
+User logs entry →
+POST /api/log →
+Insert into Supabase →
+Return success
+
+--------------------------------------------------
+🧾 3. SERVER-SIDE LOG ENDPOINT
+--------------------------------------------------
+
+Create:
+
+/src/app/api/log/route.ts
+
+POST:
+
+- validate input
+- ensure timestamp
+- insert into Supabase
+- return row
+
+--------------------------------------------------
+🔐 4. KEY SECURITY
+--------------------------------------------------
+
+- SUPABASE_SERVICE_ROLE_KEY → server only
+- NEXT_PUBLIC_SUPABASE_ANON_KEY → frontend
+
+Never expose service role key.
+
+--------------------------------------------------
+🧠 5. FRONTEND FLOW
+--------------------------------------------------
+
+On Confirm:
+
+fetch("/api/log", { method: "POST", body: JSON.stringify(entry) })
+
+--------------------------------------------------
+🕒 6. TIME AWARENESS
+--------------------------------------------------
+
+Frontend generates:
+
+const now = new Date()
+
+Attach:
+
+- created_at (ISO)
+- date (local)
+- time (local)
+- timezone
+
+--------------------------------------------------
+🧾 7. DATABASE SCHEMA UPDATE
+--------------------------------------------------
+
+Ensure fields:
+
+- created_at (timestamp)
+- date (text)
+- time (text)
+- timezone (text)
+
+--------------------------------------------------
+📊 8. GOOGLE SHEETS SYNC
+--------------------------------------------------
+
+- syncEntryToSheets(entry) (non-blocking)
+- /api/sheets/sync (full overwrite)
+
+--------------------------------------------------
+⚡ 9. ERROR HANDLING
+--------------------------------------------------
+
+- Supabase fail → STOP
+- Sheets fail → continue
+
+--------------------------------------------------
+📡 10. FINAL DATA FLOW
+--------------------------------------------------
+
+User → time attached → API → Supabase → async Sheets sync
+
+--------------------------------------------------
+🔐 11. SECURITY
+--------------------------------------------------
+
+- all writes via API
+- no secrets in frontend
+
+--------------------------------------------------
+🧹 12. CLEANUP
+--------------------------------------------------
+
+Remove all legacy DB logic.
+
+--------------------------------------------------
+🧠 13. CGM CONNECTION INDICATOR (NEW FEATURE)
+--------------------------------------------------
+
+Add visual status indicator next to:
+
+"Pull CGM Data" button
+
+--------------------------------------------------
+🎯 GOAL OF INDICATOR
+--------------------------------------------------
+
+User should immediately see:
+
+- if CGM/BGM data connection is active
+- without opening settings or logs
+
+--------------------------------------------------
+🎨 14. UI DESIGN
+--------------------------------------------------
+
+Place:
+
+→ small circular LED-style indicator
+→ directly next to "Pull CGM Data" button
+
+Style:
+
+- size: 8–12px
+- shape: circle
+- subtle glow effect
+
+Colors:
+
+🟢 Green → connected  
+🔴 Red → disconnected  
+
+Optional:
+
+- soft pulsing animation when active
+
+--------------------------------------------------
+🧠 15. MOCK CONNECTION LOGIC (IMPORTANT)
+--------------------------------------------------
+
+DO NOT connect to real API yet.
+
+Instead:
+
+Create state:
+
+cgmStatus = "connected" | "disconnected"
+
+--------------------------------------------------
+🎛️ 16. SIMULATED BEHAVIOR
+--------------------------------------------------
+
+On app load:
+
+Randomly assign:
+
+- 70% → connected
+- 30% → disconnected
+
+OR:
+
+Toggle every few seconds for demo:
+
+setInterval(() => {
+  toggle status
+}, 10–20 seconds)
+
+--------------------------------------------------
+🔄 17. INTERACTION WITH BUTTON
+--------------------------------------------------
+
+When user clicks:
+
+"Pull CGM Data"
+
+Simulate:
+
+1. loading state
+2. short delay (500–1500ms)
+3. update UI
+
+If status = connected:
+
+→ show mock glucose value
+→ auto-fill glucose field
+
+If status = disconnected:
+
+→ show message:
+"Unable to fetch CGM data"
+
+--------------------------------------------------
+📊 18. MOCK DATA RESPONSE
+--------------------------------------------------
+
+When connected:
+
+Return example:
+
+{
+  glucose: random between 80–160
+  timestamp: now
+}
+
+--------------------------------------------------
+🧠 19. FUTURE READY DESIGN
+--------------------------------------------------
+
+Structure so it can later:
+
+- connect to Abbott API (Libre)
+- connect to Dexcom API
+- handle authentication
+- manage tokens
+
+--------------------------------------------------
+⚠️ 20. UX PRINCIPLE
+--------------------------------------------------
+
+Indicator must be:
+
+- always visible
+- instantly understandable
+- minimal but informative
+
+--------------------------------------------------
+FINAL RESULT
+--------------------------------------------------
+
+User sees:
+
+[Pull CGM Data] ●
+
+● = green → data available  
+● = red → no connection  
+
+User clicks button →
+
+System simulates CGM fetch →
+
+Field is auto-filled or error shown
+
+System is ready for real API integration later.

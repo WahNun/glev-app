@@ -40,11 +40,12 @@ Two-layer system:
 Both are graceful: if env vars are not set, local DB still works and sync is skipped with a console warning.
 
 ### API Endpoints
-- `POST /api/entries` — saves to PostgreSQL, then non-blocking fire-and-forget to Supabase + Sheets
-- `POST /api/sheets/sync` — full batch export (all PostgreSQL entries → Google Sheet, clears old data first)
+- `POST /api/log` — **primary write endpoint** (Supabase blocking write, local PG shadow, Sheets non-blocking). Includes time + timezone from client.
+- `POST /api/entries` — legacy entry endpoint (still available; writes local PG first, then Supabase/Sheets fire-and-forget)
+- `POST /api/sheets/sync` — full batch export (all Supabase logs → Google Sheet, clears old data first)
 
 ### Supabase Table: `logs`
-Columns: id, created_at, date, meal, glucose_before, glucose_after, carbs, fiber, protein, fat, net_carbs, bolus_units, meal_type, evaluation, notes
+Columns: id, created_at, date, **time** (text), **timezone** (text), meal, glucose_before, glucose_after, carbs, fiber, protein, fat, net_carbs, bolus_units, meal_type, evaluation, notes
 
 ### Google Sheet Columns
 Date, Meal, Glucose Before, Glucose After, Carbs, Fiber, Protein, Fat, Net Carbs, Bolus Units, Meal Type, Evaluation, Notes

@@ -2,6 +2,8 @@ import { supabase } from "./supabase";
 
 export interface LogEntry {
   date: string;
+  time?: string | null;
+  timezone?: string | null;
   meal: string;
   glucose_before: number;
   glucose_after?: number | null;

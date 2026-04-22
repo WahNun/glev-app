@@ -7,6 +7,8 @@ export const supabase = url && key ? createClient(url, key) : null;
 
 export interface LogEntry {
   date: string;
+  time?: string | null;
+  timezone?: string | null;
   meal: string;
   glucose_before: number;
   glucose_after?: number | null;
