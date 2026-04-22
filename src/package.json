@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "rm -rf .next && next dev --port 3000",
+    "dev": "node scripts/redirect-5000.mjs & rm -rf .next && next dev --port 3000",
     "build": "next build",
     "start": "next start --port 3000",
     "typecheck": "tsc --noEmit"
