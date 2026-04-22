@@ -1,0 +1,112 @@
+Fix the runtime error and ensure the app can start properly in both development and production.
+
+--------------------------------
+GOAL
+--------------------------------
+
+The app builds successfully but fails to start due to:
+
+ERR_PNPM_NO_SCRIPT_OR_SERVER  
+Missing script start or file server.js
+
+You must fix the project configuration so that:
+
+- pnpm build works (already does)
+- pnpm start works
+- pnpm dev works in Replit preview
+
+--------------------------------
+TASKS
+--------------------------------
+
+1. UPDATE package.json SCRIPTS
+
+Ensure the scripts section EXACTLY contains:
+
+"scripts": {
+  "dev": "next dev",
+  "build": "next build",
+  "start": "next start"
+}
+
+If scripts already exist, overwrite them cleanly (no duplicates, no legacy scripts).
+
+--------------------------------
+2. ENSURE NEXT.JS IS PROPERLY INSTALLED
+
+Check dependencies and ensure these exist:
+
+"dependencies": {
+  "next": "latest",
+  "react": "latest",
+  "react-dom": "latest"
+}
+
+If missing → install them using pnpm.
+
+--------------------------------
+3. FIX PROJECT ROOT STRUCTURE
+
+Ensure Next.js is running from the correct root:
+
+- The Next app must be inside /src OR root (consistent with build)
+- next.config.js must be at the correct level
+- package.json must match the same root where Next runs
+
+If multiple workspaces exist:
+→ ensure the correct app is being built and started
+
+--------------------------------
+4. ADD NEXT CONFIG (IF MISSING)
+
+Create or update next.config.js:
+
+module.exports = {
+  output: "standalone"
+}
+
+--------------------------------
+5. VERIFY BUILD + START
+
+Run internally:
+
+- pnpm build
+- pnpm start
+
+Confirm:
+- No runtime errors
+- App serves correctly
+
+--------------------------------
+6. REPLIT COMPATIBILITY
+
+Ensure dev mode works for preview:
+
+pnpm dev
+
+The preview must:
+- start automatically
+- show the app without crashing
+- not require manual server fixes
+
+--------------------------------
+7. CLEAN ENVIRONMENT
+
+Before final verification:
+
+- delete .next
+- ensure clean build
+- reinstall dependencies if needed
+
+--------------------------------
+FINAL RESULT
+--------------------------------
+
+The app must:
+
+- build cleanly
+- start with pnpm start
+- run in Replit preview with pnpm dev
+- have no missing script errors
+
+Do not explain — just fix everything and confirm working state.
