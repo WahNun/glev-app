@@ -694,7 +694,7 @@ function VoicePage({ onLogged }: { onLogged?: ()=>void }) {
       setStatus("preview");
     };
     recognition.onerror = (e: any) => { setError(e.error); setStatus("idle"); };
-    recognition.onend = () => { if (status === "recording") setStatus("idle"); };
+    recognition.onend = () => setStatus(s => s === "recording" ? "idle" : s);
     recognitionRef.current = recognition;
     recognition.start();
   }
