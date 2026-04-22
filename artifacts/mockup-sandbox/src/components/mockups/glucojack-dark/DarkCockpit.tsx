@@ -194,7 +194,7 @@ function MacroWidget({ cl, active, overridden, onPick, onReset }: {
             <div style={{width:`${cl.carbPct}%`,background:"#FF9500"}}/><div style={{width:`${cl.protPct}%`,background:"#3B82F6"}}/><div style={{width:`${cl.fatPct}%`,background:"#A855F7"}}/>
           </div>
           <div style={{display:"flex",gap:12,fontSize:9,color:"rgba(255,255,255,0.3)"}}>
-            <span>🟠 Carbs {cl.carbPct.toFixed(0)}%</span><span>🔵 Protein {cl.protPct.toFixed(0)}%</span><span>🟣 Fat {cl.fatPct.toFixed(0)}%</span>
+            <span><span style={{display:"inline-block",width:6,height:6,borderRadius:99,background:"#FF9500",verticalAlign:"middle",marginRight:3}}/> Carbs {cl.carbPct.toFixed(0)}%</span><span><span style={{display:"inline-block",width:6,height:6,borderRadius:99,background:"#3B82F6",verticalAlign:"middle",marginRight:3}}/> Protein {cl.protPct.toFixed(0)}%</span><span><span style={{display:"inline-block",width:6,height:6,borderRadius:99,background:"#A855F7",verticalAlign:"middle",marginRight:3}}/> Fat {cl.fatPct.toFixed(0)}%</span>
           </div>
         </div>
       )}
@@ -407,7 +407,7 @@ function QuickLog({ onLogged }: { onLogged?: ()=>void }) {
           </div>
           {carbs&&fiber&&Number(carbs)>0&&Number(fiber)>0&&(
             <div style={{padding:"8px 12px",background:`${GREEN}0D`,border:`1px solid ${GREEN}33`,borderRadius:8,fontSize:11,color:GREEN,display:"flex",alignItems:"center",gap:6}}>
-              🌾 <span><b>{carbs}g</b> − <b>{fiber}g</b> fiber = <b style={{fontSize:13}}>{Math.max(0,Number(carbs)-Number(fiber))}g net carbs</b></span>
+              <span style={{fontWeight:700,letterSpacing:"0.04em",marginRight:2}}>◈</span> <span><b>{carbs}g</b> − <b>{fiber}g</b> fiber = <b style={{fontSize:13}}>{Math.max(0,Number(carbs)-Number(fiber))}g net carbs</b></span>
             </div>
           )}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -560,7 +560,7 @@ function EntryLog() {
                               style={{width:"100%",padding:"8px 10px",borderRadius:7,border:"none",background:"transparent",color:PINK,fontSize:12,fontWeight:600,cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:8,transition:"background 0.12s"}}
                               onMouseEnter={el=>(el.currentTarget.style.background=`${PINK}15`)}
                               onMouseLeave={el=>(el.currentTarget.style.background="transparent")}
-                            ><span style={{fontSize:14}}>🗑</span> Delete entry</button>
+                            ><span style={{fontSize:13,fontWeight:300,letterSpacing:"-0.02em"}}>⊗</span> Delete entry</button>
                           </div>
                         )}
                       </td>
@@ -738,7 +738,7 @@ function InsightFlipCard({m,color,label}:{m:MealPattern;color:string;label:strin
             </div>
           </div>
           <div style={{borderTop:`1px solid rgba(255,255,255,0.06)`,paddingTop:8,marginTop:"auto"}}>
-            <div style={{fontSize:10,color:color,fontWeight:600,marginBottom:3}}>⏱ {info.timing}</div>
+            <div style={{fontSize:10,color:color,fontWeight:600,marginBottom:3}}>▸ {info.timing}</div>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.35)",lineHeight:1.5}}>{info.note}</div>
           </div>
         </div>
@@ -826,7 +826,7 @@ function Recommend({ prefill }: { prefill?: Partial<ParsedVoiceEntry> }) {
           </div>
           {netCarbs!==null&&(
             <div style={{padding:"7px 11px",background:`${GREEN}0D`,border:`1px solid ${GREEN}33`,borderRadius:8,fontSize:11,color:GREEN}}>
-              🌾 Net carbs: <b style={{fontSize:13}}>{netCarbs}g</b> ({carbs}g − {fiber}g fiber)
+              <span style={{fontWeight:700,letterSpacing:"0.04em",marginRight:2}}>◈</span> Net carbs: <b style={{fontSize:13}}>{netCarbs}g</b> ({carbs}g − {fiber}g fiber)
             </div>
           )}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -873,7 +873,11 @@ function Recommend({ prefill }: { prefill?: Partial<ParsedVoiceEntry> }) {
           </div>
         ) : (
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:280,color:"rgba(255,255,255,0.2)"}}>
-            <div style={{fontSize:40,marginBottom:10}}>⚡</div>
+            <div style={{marginBottom:14,opacity:0.35}}>
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M13 2L4.09 12.96A1 1 0 005 14.5h6.5L11 22l8.91-10.96A1 1 0 0019 9.5h-6.5L13 2z" fill="#4F6EF7" stroke="#4F6EF7" strokeWidth="1" strokeLinejoin="round"/>
+              </svg>
+            </div>
             <div style={{fontSize:13}}>Enter parameters to calculate</div>
           </div>
         )}
@@ -1718,8 +1722,8 @@ export function DarkCockpit() {
     <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:BG,color:"white",fontFamily:"'Inter',system-ui,sans-serif"}}>
       {/* View Toggle */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"10px 0",background:"#0C0C10",borderBottom:`1px solid ${BORDER}`,gap:0}}>
-        <button onClick={()=>setView("desktop")} style={{padding:"6px 22px",borderRadius:"8px 0 0 8px",background:view==="desktop"?`${ACCENT}22`:"transparent",border:`1px solid ${view==="desktop"?ACCENT:"rgba(255,255,255,0.12)"}`,color:view==="desktop"?ACCENT:"rgba(255,255,255,0.4)",fontSize:12,fontWeight:600,cursor:"pointer",letterSpacing:"0.04em",borderRight:"none",transition:"all 0.15s"}}>🖥 Desktop</button>
-        <button onClick={()=>setView("mobile")} style={{padding:"6px 22px",borderRadius:"0 8px 8px 0",background:view==="mobile"?`${ACCENT}22`:"transparent",border:`1px solid ${view==="mobile"?ACCENT:"rgba(255,255,255,0.12)"}`,color:view==="mobile"?ACCENT:"rgba(255,255,255,0.4)",fontSize:12,fontWeight:600,cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.15s"}}>📱 Mobile</button>
+        <button onClick={()=>setView("desktop")} style={{padding:"6px 22px",borderRadius:"8px 0 0 8px",background:view==="desktop"?`${ACCENT}22`:"transparent",border:`1px solid ${view==="desktop"?ACCENT:"rgba(255,255,255,0.12)"}`,color:view==="desktop"?ACCENT:"rgba(255,255,255,0.4)",fontSize:12,fontWeight:600,cursor:"pointer",letterSpacing:"0.04em",borderRight:"none",transition:"all 0.15s"}}>▭ Desktop</button>
+        <button onClick={()=>setView("mobile")} style={{padding:"6px 22px",borderRadius:"0 8px 8px 0",background:view==="mobile"?`${ACCENT}22`:"transparent",border:`1px solid ${view==="mobile"?ACCENT:"rgba(255,255,255,0.12)"}`,color:view==="mobile"?ACCENT:"rgba(255,255,255,0.4)",fontSize:12,fontWeight:600,cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.15s"}}>▯ Mobile</button>
       </div>
 
       {view==="desktop" ? (
