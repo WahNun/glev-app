@@ -1,0 +1,163 @@
+Build a complete functional Next.js app based on the existing Glev design mockups.
+
+--------------------------------------------------
+🎯 GOAL
+--------------------------------------------------
+
+Turn the design into a real product with:
+
+- Authentication (Supabase)
+- Dashboard
+- Meal logging (AI parser)
+- Entry history
+- Responsive layout (desktop + mobile)
+
+--------------------------------------------------
+🧠 APP STRUCTURE
+--------------------------------------------------
+
+Create the following pages:
+
+/login
+/dashboard
+/log
+/entries
+
+--------------------------------------------------
+🧠 AUTH (SUPABASE)
+--------------------------------------------------
+
+1. Use Supabase auth (email + password)
+
+2. Create:
+
+/lib/auth.ts
+
+- signIn(email, password)
+- signUp(email, password)
+- getCurrentUser()
+
+3. On app load:
+- if NOT logged in → redirect to /login
+- if logged in → go to /dashboard
+
+--------------------------------------------------
+🧠 LOGIN PAGE
+--------------------------------------------------
+
+Recreate the existing login UI:
+
+- Tabs: "Create Account" / "Sign In"
+- Email + password inputs
+- Submit button
+
+Functionality:
+
+- Sign in → Supabase
+- Sign up → Supabase
+
+--------------------------------------------------
+🧠 LAYOUT
+--------------------------------------------------
+
+Create reusable layout:
+
+/components/Layout.tsx
+
+Desktop:
+- Sidebar (Dashboard, Log, Entries, Insights placeholder)
+
+Mobile:
+- Bottom navigation
+
+--------------------------------------------------
+🧠 LOG PAGE (CORE FEATURE)
+--------------------------------------------------
+
+Move parser into /log
+
+Add:
+
+- Textarea (user input)
+- Button: "Analyze Meal"
+- Call /api/parse-food
+- Show parsed result
+
+--------------------------------------------------
+🧠 STATE
+--------------------------------------------------
+
+Use React state:
+
+- current parsed result
+- entries array
+
+--------------------------------------------------
+🧠 ENTRY STORAGE (TEMP)
+--------------------------------------------------
+
+Store entries in local state for now:
+
+{
+  id,
+  text,
+  foods,
+  createdAt
+}
+
+--------------------------------------------------
+🧠 ENTRIES PAGE
+--------------------------------------------------
+
+Display list of entries:
+
+- meal text
+- parsed foods
+- timestamp
+
+--------------------------------------------------
+🧠 DASHBOARD PAGE
+--------------------------------------------------
+
+Recreate UI:
+
+- Control score
+- Good rate
+- Spike rate
+- Hypo rate
+- Chart (mock data for now)
+
+--------------------------------------------------
+🧠 RESPONSIVENESS
+--------------------------------------------------
+
+- Desktop: sidebar layout
+- Mobile: stacked layout + bottom nav
+
+--------------------------------------------------
+🧠 STYLE
+--------------------------------------------------
+
+- Dark UI
+- Match existing Glev design
+- Use cards, spacing, glow effects
+
+--------------------------------------------------
+🧠 ROUTING
+--------------------------------------------------
+
+Use Next.js App Router
+
+- protect routes with auth
+- redirect logic
+
+--------------------------------------------------
+FINAL RESULT
+--------------------------------------------------
+
+- Real login system
+- Real navigation
+- Parser integrated
+- Entry tracking
+- Dashboard UI working
+- Mobile + desktop usable
