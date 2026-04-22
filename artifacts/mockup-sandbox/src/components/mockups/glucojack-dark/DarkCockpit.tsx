@@ -1265,10 +1265,130 @@ function ImportPage({ onLogged }: { onLogged?: ()=>void }) {
 }
 
 // ─── MOBILE DASHBOARD ────────────────────────────────────────────
+// ─── MOBILE ENTRY LOG ─────────────────────────────────────────────
+function MobileEntryLog() {
+  const [entries,setEntries]=useState<EntryRow[]>([]);
+  const [loading,setLoading]=useState(true);
+  const [expandedId,setExpandedId]=useState<number|null>(null);
+  const [deleting,setDeleting]=useState<number|null>(null);
+
+  useEffect(()=>{
+    apiFetch<{entries:EntryRow[],total:number}>("/entries?limit=60").then(d=>setEntries(d.entries)).catch(()=>{}).finally(()=>setLoading(false));
+  },[]);
+
+  async function deleteEntry(id:number){
+    setDeleting(id);
+    try{
+      await apiFetch(`/entries/${id}`,{method:"DELETE"});
+      setEntries(prev=>prev.filter(e=>e.id!==id));
+      setExpandedId(null);
+    }catch{}
+    setDeleting(null);
+  }
+
+  if(loading) return <Spinner/>;
+  if(!entries.length) return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:180,color:"rgba(255,255,255,0.2)",fontSize:13}}>No entries yet</div>;
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+      {entries.map(e=>{
+        const meta=e.mealType?MEAL_TYPE_META[e.mealType]:null;
+        const ev=evalStyle(e.evaluation);
+        const isExpanded=expandedId===e.id;
+        const netCarbs=e.fiberGrams!=null?Math.max(0,e.carbsGrams-e.fiberGrams):null;
+        const icr=e.insulinUnits>0?((netCarbs??e.carbsGrams)/e.insulinUnits):null;
+        const ts=new Date(e.timestamp).toLocaleDateString(undefined,{month:"short",day:"numeric"});
+        return (
+          <div key={e.id} style={{background:SURFACE,border:`1px solid ${isExpanded?ACCENT+"33":BORDER}`,borderRadius:14,overflow:"hidden",transition:"border-color 0.2s"}}>
+            {/* collapsed header */}
+            <div onClick={()=>setExpandedId(isExpanded?null:e.id)} style={{padding:"13px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer"}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:5}}>
+                  {meta&&<span style={{fontSize:9,padding:"2px 8px",borderRadius:99,fontWeight:700,background:`${meta.color}18`,color:meta.color,letterSpacing:"0.07em",flexShrink:0}}>{meta.label.toUpperCase()}</span>}
+                  <span style={{fontSize:10,color:"rgba(255,255,255,0.28)"}}>{ts}</span>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <span style={{fontSize:15,fontWeight:700,color:e.glucoseBefore>140?ORANGE:e.glucoseBefore<80?PINK:"rgba(255,255,255,0.9)"}}>{e.glucoseBefore}<span style={{fontSize:9,fontWeight:400,color:"rgba(255,255,255,0.3)",marginLeft:2}}>mg/dL</span></span>
+                  <span style={{fontSize:11,color:"rgba(255,255,255,0.4)"}}>{e.carbsGrams}g</span>
+                  <span style={{fontSize:11,color:"rgba(255,255,255,0.4)"}}>{e.insulinUnits}u</span>
+                </div>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                <span style={{fontSize:10,padding:"3px 9px",borderRadius:99,fontWeight:700,background:`${ev.color}18`,color:ev.color}}>{ev.label}</span>
+                <span style={{fontSize:13,color:"rgba(255,255,255,0.18)",display:"inline-block",transition:"transform 0.2s",transform:isExpanded?"rotate(90deg)":"rotate(0deg)"}}>›</span>
+              </div>
+            </div>
+            {/* expanded details */}
+            {isExpanded&&(
+              <div style={{borderTop:`1px solid ${ACCENT}1A`,padding:"14px 16px",display:"flex",flexDirection:"column",gap:12}}>
+                <div>
+                  <div style={{fontSize:9,color:"rgba(255,255,255,0.25)",letterSpacing:"0.1em",fontWeight:600,marginBottom:6}}>MEAL</div>
+                  <div style={{fontSize:13,color:"rgba(255,255,255,0.7)",lineHeight:1.55,fontStyle:e.mealDescription?"normal":"italic"}}>{e.mealDescription||"No description recorded."}</div>
+                </div>
+                <div>
+                  <div style={{fontSize:9,color:"rgba(255,255,255,0.25)",letterSpacing:"0.1em",fontWeight:600,marginBottom:8}}>MACROS & DOSING</div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:7}}>
+                    {[
+                      {l:"CARBS",v:`${e.carbsGrams}g`},
+                      {l:"FIBER",v:e.fiberGrams!=null?`${e.fiberGrams}g`:"—"},
+                      {l:"NET CARBS",v:netCarbs!=null?`${netCarbs}g`:"—"},
+                      {l:"INSULIN",v:`${e.insulinUnits}u`,c:ACCENT},
+                      {l:"RATIO",v:icr!=null?`1u/${icr.toFixed(0)}g`:"—",c:ACCENT},
+                      {l:"CATEGORY",v:meta?.label||"—"},
+                    ].map(s=>(
+                      <div key={s.l} style={{background:"rgba(255,255,255,0.03)",borderRadius:9,padding:"8px 10px"}}>
+                        <div style={{fontSize:8,color:"rgba(255,255,255,0.28)",letterSpacing:"0.08em",marginBottom:3}}>{s.l}</div>
+                        <div style={{fontSize:13,fontWeight:700,color:s.c||"rgba(255,255,255,0.8)"}}>{s.v}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div style={{fontSize:9,color:"rgba(255,255,255,0.25)",letterSpacing:"0.1em",fontWeight:600,marginBottom:8}}>GLUCOSE</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
+                    {[
+                      {l:"BG BEFORE",v:`${e.glucoseBefore}`,u:"mg/dL",c:e.glucoseBefore>140?ORANGE:e.glucoseBefore<80?PINK:GREEN},
+                      {l:"BG AFTER",v:e.glucoseAfter!=null?`${e.glucoseAfter}`:"—",u:e.glucoseAfter!=null?"mg/dL":"",c:e.glucoseAfter!=null?(e.glucoseAfter>180?PINK:e.glucoseAfter<70?PINK:GREEN):"rgba(255,255,255,0.3)"},
+                      {l:"DELTA",v:e.delta!=null?`${e.delta>0?"+":""}${e.delta.toFixed(0)}`:"—",u:e.delta!=null?"mg/dL":"",c:e.delta!=null?(Math.abs(e.delta)>60?PINK:Math.abs(e.delta)>30?ORANGE:GREEN):"rgba(255,255,255,0.3)"},
+                      {l:"TIME GAP",v:e.timeDifferenceMinutes!=null?`${e.timeDifferenceMinutes.toFixed(0)}`:"—",u:e.timeDifferenceMinutes!=null?"min":"",c:"rgba(255,255,255,0.7)"},
+                    ].map(s=>(
+                      <div key={s.l} style={{background:"rgba(255,255,255,0.03)",borderRadius:9,padding:"9px 10px"}}>
+                        <div style={{fontSize:8,color:"rgba(255,255,255,0.28)",letterSpacing:"0.08em",marginBottom:3}}>{s.l}</div>
+                        <div style={{fontSize:16,fontWeight:700,color:s.c}}>{s.v}<span style={{fontSize:9,fontWeight:400,color:"rgba(255,255,255,0.3)",marginLeft:2}}>{s.u}</span></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <button
+                  onClick={ev2=>{ev2.stopPropagation();deleteEntry(e.id);}}
+                  disabled={deleting===e.id}
+                  style={{width:"100%",padding:"10px",borderRadius:10,border:`1px solid ${PINK}22`,background:`${PINK}0A`,color:PINK,fontSize:12,fontWeight:600,cursor:"pointer",transition:"background 0.15s",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}
+                >
+                  <span style={{fontSize:13}}>⊗</span>{deleting===e.id?"Deleting…":"Delete entry"}
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── MOBILE DASHBOARD STAT CARD INFO ──────────────────────────────
+const STAT_INFO: Record<string,{headline:string;detail:string;formula:string}> = {
+  "Control Score":{headline:"Composite insulin control metric",detail:"Rewards GOOD outcomes and penalises OVERDOSE / UNDERDOSE equally. Ranges 0–100 — higher means more consistent glycemic control across all entries.",formula:"(GOOD − 0.5 × spike − 0.5 × hypo) / total × 100"},
+  "Good Rate":{headline:"Post-meal BG in target range",detail:"Share of entries where blood glucose outcome was flagged GOOD. Aim for above 60% to establish a reliable dosing baseline.",formula:"GOOD entries ÷ total entries"},
+  "Spike Rate":{headline:"Post-meal glucose too high",detail:"Entries where blood sugar spiked above the upper target. Often signals insufficient insulin dose or too-late injection timing.",formula:"OVERDOSE entries ÷ total entries"},
+  "Hypo Rate":{headline:"Post-meal glucose too low",detail:"Entries where blood sugar dropped below the lower target. May indicate excess insulin, incorrect meal estimation, or poor meal timing.",formula:"UNDERDOSE entries ÷ total entries"},
+};
+
 function MobileDashboard({email,name:memberName,onSignOut}:{email?:string;name?:string;onSignOut?:()=>void}) {
-  const [mobilePage, setMobilePage] = useState<"dashboard"|"log"|"entries"|"recommend"|"voice"|"settings">("dashboard");
+  const [mobilePage, setMobilePage] = useState<"dashboard"|"log"|"entries"|"recommend"|"voice"|"settings"|"insights">("dashboard");
   const [stats, setStats] = useState<DashboardStats|null>(null);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
+  const [flippedStat,setFlippedStat]=useState<string|null>(null);
+  const [expandedRecentId,setExpandedRecentId]=useState<number|null>(null);
 
   useEffect(()=>{
     apiFetch<DashboardStats>("/insights/dashboard").then(s=>{setStats(s);}).catch(()=>{});
@@ -1285,6 +1405,7 @@ function MobileDashboard({email,name:memberName,onSignOut}:{email?:string;name?:
   const mobileNavItems = [
     { id:"dashboard" as const, icon:"⊞", label:"Dashboard" },
     { id:"entries" as const, icon:"≡", label:"Entries" },
+    { id:"insights" as const, icon:"◈", label:"Insights" },
     { id:"recommend" as const, icon:"⟲", label:"Engine" },
   ];
 
@@ -1320,21 +1441,43 @@ function MobileDashboard({email,name:memberName,onSignOut}:{email?:string;name?:
               {label:"Good Rate",value:(stats.goodRate*100).toFixed(1),unit:"%",color:GREEN,bar:stats.goodRate*100,sub:`${eb?.GOOD||0} good`},
               {label:"Spike Rate",value:stats.spikeRate.toFixed(1),unit:"%",color:ORANGE,bar:stats.spikeRate,sub:"Hyperglycemia"},
               {label:"Hypo Rate",value:stats.hypoRate.toFixed(1),unit:"%",color:PINK,bar:stats.hypoRate,sub:"Hypoglycemia"},
-            ].map(sc=>(
-              <div key={sc.label} style={{background:SURFACE,border:`1px solid ${BORDER}`,borderRadius:14,padding:"16px 18px"}}>
-                <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:6,letterSpacing:"0.08em"}}>{sc.label.toUpperCase()}</div>
-                <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",marginBottom:10}}>
-                  <div style={{display:"flex",alignItems:"flex-end",gap:4}}>
-                    <span style={{fontSize:34,fontWeight:800,color:sc.color,letterSpacing:"-0.03em"}}>{sc.value}</span>
-                    <span style={{fontSize:13,color:"rgba(255,255,255,0.3)",paddingBottom:4}}>{sc.unit}</span>
+            ].map(sc=>{
+              const info=STAT_INFO[sc.label];
+              const isFlipped=flippedStat===sc.label;
+              return (
+                <div key={sc.label} onClick={()=>setFlippedStat(f=>f===sc.label?null:sc.label)} style={{perspective:"800px",cursor:"pointer",height:116}}>
+                  <div style={{position:"relative",width:"100%",height:"100%",transformStyle:"preserve-3d",transition:"transform 0.5s cubic-bezier(0.4,0.2,0.2,1)",transform:isFlipped?"rotateY(180deg)":"rotateY(0deg)"}}>
+                    {/* front */}
+                    <div style={{position:"absolute",inset:0,backfaceVisibility:"hidden",background:SURFACE,border:`1px solid ${BORDER}`,borderRadius:14,padding:"14px 18px",boxSizing:"border-box",display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
+                      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between"}}>
+                        <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",letterSpacing:"0.08em"}}>{sc.label.toUpperCase()}</div>
+                        <span style={{fontSize:9,color:"rgba(255,255,255,0.18)"}}>↺</span>
+                      </div>
+                      <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between"}}>
+                        <div style={{display:"flex",alignItems:"flex-end",gap:4}}>
+                          <span style={{fontSize:32,fontWeight:800,color:sc.color,letterSpacing:"-0.03em"}}>{sc.value}</span>
+                          <span style={{fontSize:13,color:"rgba(255,255,255,0.3)",paddingBottom:3}}>{sc.unit}</span>
+                        </div>
+                        <span style={{fontSize:11,color:"rgba(255,255,255,0.3)"}}>{sc.sub}</span>
+                      </div>
+                      <div style={{height:4,background:"rgba(255,255,255,0.07)",borderRadius:99,overflow:"hidden"}}>
+                        <div style={{width:`${Math.min(sc.bar,100)}%`,height:"100%",background:sc.color,borderRadius:99}}/>
+                      </div>
+                    </div>
+                    {/* back */}
+                    <div style={{position:"absolute",inset:0,backfaceVisibility:"hidden",transform:"rotateY(180deg)",background:`linear-gradient(145deg,${sc.color}12,${SURFACE} 65%)`,border:`1px solid ${sc.color}33`,borderRadius:14,padding:"14px 18px",boxSizing:"border-box",display:"flex",flexDirection:"column",gap:6,justifyContent:"space-between"}}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                        <div style={{fontSize:10,color:sc.color,fontWeight:700,letterSpacing:"0.06em"}}>{sc.label.toUpperCase()}</div>
+                        <span style={{fontSize:9,color:"rgba(255,255,255,0.18)"}}>↺ back</span>
+                      </div>
+                      <div style={{fontSize:11,color:"rgba(255,255,255,0.6)",lineHeight:1.45,fontStyle:"italic"}}>{info.headline}</div>
+                      <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",lineHeight:1.4}}>{info.detail.slice(0,90)}…</div>
+                      <div style={{fontSize:9,color:sc.color,opacity:0.8,fontFamily:"monospace"}}>{info.formula}</div>
+                    </div>
                   </div>
-                  <span style={{fontSize:11,color:"rgba(255,255,255,0.3)"}}>{sc.sub}</span>
                 </div>
-                <div style={{height:4,background:"rgba(255,255,255,0.07)",borderRadius:99,overflow:"hidden"}}>
-                  <div style={{width:`${Math.min(sc.bar,100)}%`,height:"100%",background:sc.color,borderRadius:99}}/>
-                </div>
-              </div>
-            )):(
+              );
+            }):(
               <div style={{height:200,display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,0.2)"}}>Loading…</div>
             )}
 
@@ -1377,16 +1520,31 @@ function MobileDashboard({email,name:memberName,onSignOut}:{email?:string;name?:
                 </div>
                 {stats.recentEntries.slice(0,4).map((e,i)=>{
                   const ev=evalStyle(e.evaluation);
+                  const meta=e.mealType?MEAL_TYPE_META[e.mealType as MealTypeKey]:null;
+                  const isExp=expandedRecentId===e.id;
                   return (
-                    <div key={e.id} style={{padding:"14px 18px",borderBottom:i<3?`1px solid rgba(255,255,255,0.04)`:"none",display:"flex",alignItems:"center",gap:12}}>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:13,fontWeight:600,marginBottom:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.mealDescription||e.mealType||"Entry"}</div>
-                        <div style={{fontSize:11,color:"rgba(255,255,255,0.35)"}}>{new Date(e.timestamp).toLocaleDateString(undefined,{month:"short",day:"numeric"})}</div>
+                    <div key={e.id} style={{borderBottom:i<3?`1px solid rgba(255,255,255,0.04)`:"none"}}>
+                      <div onClick={()=>setExpandedRecentId(isExp?null:e.id)} style={{padding:"13px 18px",display:"flex",alignItems:"center",gap:12,cursor:"pointer"}}>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:5}}>
+                            {meta&&<span style={{fontSize:9,padding:"2px 8px",borderRadius:99,fontWeight:700,background:`${meta.color}18`,color:meta.color,letterSpacing:"0.07em",flexShrink:0}}>{meta.label.toUpperCase()}</span>}
+                            <span style={{fontSize:10,color:"rgba(255,255,255,0.3)"}}>{new Date(e.timestamp).toLocaleDateString(undefined,{month:"short",day:"numeric"})}</span>
+                          </div>
+                          <div style={{display:"flex",alignItems:"center",gap:6}}>
+                            <span style={{fontSize:13,fontWeight:700,color:e.glucoseBefore>140?ORANGE:e.glucoseBefore<80?PINK:"rgba(255,255,255,0.85)"}}>{e.glucoseBefore}</span>
+                            <span style={{fontSize:10,color:"rgba(255,255,255,0.3)"}}>mg/dL</span>
+                          </div>
+                        </div>
+                        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                          <span style={{fontSize:10,padding:"2px 8px",borderRadius:99,fontWeight:700,background:`${ev.color}18`,color:ev.color}}>{ev.label}</span>
+                          <span style={{fontSize:12,color:"rgba(255,255,255,0.18)",display:"inline-block",transition:"transform 0.2s",transform:isExp?"rotate(90deg)":"rotate(0deg)"}}>›</span>
+                        </div>
                       </div>
-                      <div style={{textAlign:"right",flexShrink:0}}>
-                        <div style={{fontSize:13,fontWeight:700,color:e.glucoseBefore>140?ORANGE:e.glucoseBefore<80?PINK:"rgba(255,255,255,0.8)",marginBottom:3}}>{e.glucoseBefore} <span style={{fontSize:10,fontWeight:400,color:"rgba(255,255,255,0.3)"}}>mg/dL</span></div>
-                        <span style={{fontSize:10,padding:"2px 8px",borderRadius:99,fontWeight:700,background:`${ev.color}18`,color:ev.color}}>{ev.label}</span>
-                      </div>
+                      {isExp&&(
+                        <div style={{padding:"0 18px 13px",fontSize:12,color:"rgba(255,255,255,0.55)",lineHeight:1.55,fontStyle:e.mealDescription?"normal":"italic",borderTop:`1px solid rgba(255,255,255,0.04)`}}>
+                          <div style={{paddingTop:10}}>{e.mealDescription||"No description recorded."}</div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1395,7 +1553,8 @@ function MobileDashboard({email,name:memberName,onSignOut}:{email?:string;name?:
           </div>
         )}
         {mobilePage==="log"&&<QuickLog onLogged={()=>setMobilePage("dashboard")}/>}
-        {mobilePage==="entries"&&<EntryLog/>}
+        {mobilePage==="entries"&&<MobileEntryLog/>}
+        {mobilePage==="insights"&&<Insights/>}
         {mobilePage==="recommend"&&<Recommend/>}
         {mobilePage==="voice"&&<VoicePage onLogged={()=>setMobilePage("dashboard")}/>}
         {mobilePage==="settings"&&<ProfilePage email={email} initialName={memberName} onSignOut={()=>{onSignOut?.();}}/>}
