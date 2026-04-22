@@ -1024,7 +1024,7 @@ function ImportPage({ onLogged }: { onLogged?: ()=>void }) {
 }
 
 // ─── MOBILE DASHBOARD ────────────────────────────────────────────
-function MobileDashboard({email,onSignOut}:{email?:string;onSignOut?:()=>void}) {
+function MobileDashboard({email,name:memberName,onSignOut}:{email?:string;name?:string;onSignOut?:()=>void}) {
   const [mobilePage, setMobilePage] = useState<"dashboard"|"log"|"entries"|"recommend"|"voice"|"settings">("dashboard");
   const [stats, setStats] = useState<DashboardStats|null>(null);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
@@ -1157,7 +1157,7 @@ function MobileDashboard({email,onSignOut}:{email?:string;onSignOut?:()=>void}) 
         {mobilePage==="entries"&&<EntryLog/>}
         {mobilePage==="recommend"&&<Recommend/>}
         {mobilePage==="voice"&&<VoicePage onLogged={()=>setMobilePage("dashboard")}/>}
-        {mobilePage==="settings"&&<ProfilePage email={email} onSignOut={()=>{onSignOut?.();}}/>}
+        {mobilePage==="settings"&&<ProfilePage email={email} initialName={memberName} onSignOut={()=>{onSignOut?.();}}/>}
       </div>
 
       <div style={{position:"absolute",bottom:0,left:0,right:0,background:SURFACE,borderTop:`1px solid ${BORDER}`,display:"flex",alignItems:"center",justifyContent:"space-around",padding:"10px 24px 20px",zIndex:10}}>
@@ -1236,8 +1236,8 @@ const PAGE_TITLES: Record<Page,string> = {
 };
 
 // ─── Profile Page ───────────────────────────────────────────────
-function ProfilePage({email,onSignOut}:{email?:string;onSignOut:()=>void}) {
-  const [name,setName]=useState("Member");
+function ProfilePage({email,initialName,onSignOut}:{email?:string;initialName?:string;onSignOut:()=>void}) {
+  const [name,setName]=useState(initialName||"Member");
   const [notif,setNotif]=useState(true);
   const [targetLow,setTargetLow]=useState("80");
   const [targetHigh,setTargetHigh]=useState("140");
@@ -1304,20 +1304,61 @@ function ProfilePage({email,onSignOut}:{email?:string;onSignOut:()=>void}) {
 }
 
 // ─── Login Gate ─────────────────────────────────────────────────
-function LoginGate({onEnter}:{onEnter:(email:string)=>void}) {
+function LoginGate({onEnter}:{onEnter:(email:string,name?:string)=>void}) {
+  const [mode,setMode]=useState<"signup"|"login">("signup");
+  const [name,setName]=useState("");
   const [email,setEmail]=useState("");
   const [pass,setPass]=useState("");
+  const [confirm,setConfirm]=useState("");
   const [err,setErr]=useState("");
   const [loading,setLoading]=useState(false);
   const [visible,setVisible]=useState(false);
   useEffect(()=>{const t=setTimeout(()=>setVisible(true),40);return()=>clearTimeout(t);},[]);
 
-  function submit(e:React.FormEvent){
+  function switchMode(m:"signup"|"login"){setMode(m);setErr("");setPass("");setConfirm("");}
+
+  async function submit(e:React.FormEvent){
     e.preventDefault();
-    if(!email.trim()||!pass.trim()){setErr("Please enter your credentials.");return;}
+    setErr("");
+    if(!email.trim()){setErr("Email is required.");return;}
+    if(!pass){setErr("Password is required.");return;}
+    if(mode==="signup"){
+      if(pass.length<6){setErr("Password must be at least 6 characters.");return;}
+      if(pass!==confirm){setErr("Passwords do not match.");return;}
+    }
     setLoading(true);
-    setTimeout(()=>{ setLoading(false); onEnter(email); },900);
+    try{
+      const endpoint=mode==="signup"?"/api/auth/signup":"/api/auth/login";
+      const body:Record<string,string>={email:email.trim(),password:pass};
+      if(mode==="signup"&&name.trim()) body.name=name.trim();
+      const res=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      const data=await res.json();
+      if(!res.ok){
+        if(res.status===409){
+          setErr("This email is already registered.");
+          // offer switch to login after a moment
+          setTimeout(()=>setErr("Email already registered — switch to Sign In below."),0);
+        } else {
+          setErr(data.error||"Something went wrong.");
+        }
+        setLoading(false);
+        return;
+      }
+      onEnter(data.member.email, data.member.name||undefined);
+    }catch{
+      setErr("Network error. Please try again.");
+      setLoading(false);
+    }
   }
+
+  const inputStyle=(hasErr:boolean):React.CSSProperties=>({
+    width:"100%",boxSizing:"border-box",
+    background:"rgba(255,255,255,0.04)",
+    border:`1px solid ${hasErr?"rgba(255,45,120,0.5)":"rgba(255,255,255,0.1)"}`,
+    borderRadius:10,padding:"11px 14px",
+    color:"white",fontSize:14,outline:"none",
+    marginBottom:14,transition:"border-color 0.2s",
+  });
 
   return (
     <div style={{
@@ -1327,85 +1368,101 @@ function LoginGate({onEnter}:{onEnter:(email:string)=>void}) {
       display:"flex",alignItems:"center",justifyContent:"center",
       opacity:visible?1:0,transition:"opacity 0.35s ease",
     }}>
-      {/* Ambient glow */}
-      <div style={{position:"absolute",width:480,height:480,borderRadius:"50%",background:`radial-gradient(circle,${ACCENT}14 0%,transparent 70%)`,pointerEvents:"none",top:"50%",left:"50%",transform:"translate(-50%,-50%)"}}/>
+      <div style={{position:"absolute",width:520,height:520,borderRadius:"50%",background:`radial-gradient(circle,${ACCENT}12 0%,transparent 70%)`,pointerEvents:"none",top:"50%",left:"50%",transform:"translate(-50%,-50%)"}}/>
 
       <form onSubmit={submit} style={{
-        position:"relative",width:380,
+        position:"relative",width:400,
         background:"#111117",
         border:"1px solid rgba(79,110,247,0.18)",
-        borderRadius:20,
-        padding:"40px 36px 36px",
-        boxShadow:`0 0 0 1px rgba(255,255,255,0.04), 0 32px 80px rgba(0,0,0,0.8), 0 0 60px ${ACCENT}10`,
-        display:"flex",flexDirection:"column",gap:0,
+        borderRadius:22,
+        padding:"36px 36px 32px",
+        boxShadow:`0 0 0 1px rgba(255,255,255,0.04), 0 32px 80px rgba(0,0,0,0.85), 0 0 60px ${ACCENT}10`,
+        display:"flex",flexDirection:"column",
       }}>
         {/* Logo */}
-        <div style={{display:"flex",flexDirection:"column",alignItems:"center",marginBottom:32}}>
-          <div style={{marginBottom:14,boxShadow:`0 0 28px ${ACCENT}44`,borderRadius:14}}>
-            <LogoCMark size={56}/>
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",marginBottom:24}}>
+          <div style={{marginBottom:12,boxShadow:`0 0 28px ${ACCENT}44`,borderRadius:14}}>
+            <LogoCMark size={52}/>
           </div>
-          <div style={{fontSize:22,fontWeight:700,letterSpacing:"-0.02em",color:"white",marginBottom:6}}>Glev</div>
+          <div style={{fontSize:20,fontWeight:700,letterSpacing:"-0.02em",color:"white",marginBottom:6}}>Glev</div>
           <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(79,110,247,0.1)",border:"1px solid rgba(79,110,247,0.25)",borderRadius:99,padding:"3px 12px"}}>
             <div style={{width:5,height:5,borderRadius:"50%",background:ACCENT}}/>
             <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.12em",color:ACCENT}}>MEMBERS ONLY</span>
           </div>
         </div>
 
-        <div style={{fontSize:14,fontWeight:500,color:"rgba(255,255,255,0.45)",textAlign:"center",marginBottom:28,lineHeight:1.5}}>
-          Sign in to access your insulin<br/>decision dashboard
+        {/* Mode toggle tabs */}
+        <div style={{display:"flex",background:"rgba(255,255,255,0.04)",borderRadius:10,padding:3,marginBottom:24,gap:3}}>
+          {(["signup","login"] as const).map(m=>(
+            <button key={m} type="button" onClick={()=>switchMode(m)} style={{
+              flex:1,padding:"8px",borderRadius:8,border:"none",cursor:"pointer",fontSize:13,fontWeight:600,
+              background:mode===m?ACCENT:"transparent",
+              color:mode===m?"white":"rgba(255,255,255,0.4)",
+              transition:"all 0.18s",letterSpacing:"0.01em",
+            }}>
+              {m==="signup"?"Create Account":"Sign In"}
+            </button>
+          ))}
         </div>
+
+        {/* Name — signup only */}
+        {mode==="signup"&&(
+          <>
+            <label style={{fontSize:11,fontWeight:600,letterSpacing:"0.08em",color:"rgba(255,255,255,0.35)",marginBottom:6}}>NAME (optional)</label>
+            <input type="text" value={name} onChange={e=>{setName(e.target.value);setErr("");}} placeholder="Your name" autoFocus style={inputStyle(false)}
+              onFocus={e=>(e.target.style.borderColor=`${ACCENT}88`)}
+              onBlur={e=>(e.target.style.borderColor="rgba(255,255,255,0.1)")}/>
+          </>
+        )}
 
         {/* Email */}
         <label style={{fontSize:11,fontWeight:600,letterSpacing:"0.08em",color:"rgba(255,255,255,0.35)",marginBottom:6}}>EMAIL</label>
-        <input
-          type="email" value={email} onChange={e=>{setEmail(e.target.value);setErr("");}}
-          placeholder="you@example.com"
-          autoFocus
-          style={{
-            width:"100%",boxSizing:"border-box",
-            background:"rgba(255,255,255,0.04)",
-            border:`1px solid ${err&&!email?"rgba(255,45,120,0.5)":"rgba(255,255,255,0.1)"}`,
-            borderRadius:10,padding:"11px 14px",
-            color:"white",fontSize:14,outline:"none",
-            marginBottom:16,transition:"border-color 0.2s",
-          }}
+        <input type="email" value={email} onChange={e=>{setEmail(e.target.value);setErr("");}} placeholder="you@example.com"
+          autoFocus={mode==="login"}
+          style={inputStyle(!!err&&!email)}
           onFocus={e=>(e.target.style.borderColor=`${ACCENT}88`)}
-          onBlur={e=>(e.target.style.borderColor=err&&!email?"rgba(255,45,120,0.5)":"rgba(255,255,255,0.1)")}
-        />
+          onBlur={e=>(e.target.style.borderColor=err&&!email?"rgba(255,45,120,0.5)":"rgba(255,255,255,0.1)")}/>
 
         {/* Password */}
-        <label style={{fontSize:11,fontWeight:600,letterSpacing:"0.08em",color:"rgba(255,255,255,0.35)",marginBottom:6}}>PASSWORD</label>
-        <input
-          type="password" value={pass} onChange={e=>{setPass(e.target.value);setErr("");}}
-          placeholder="••••••••"
-          style={{
-            width:"100%",boxSizing:"border-box",
-            background:"rgba(255,255,255,0.04)",
-            border:`1px solid ${err&&!pass?"rgba(255,45,120,0.5)":"rgba(255,255,255,0.1)"}`,
-            borderRadius:10,padding:"11px 14px",
-            color:"white",fontSize:14,outline:"none",
-            marginBottom:err?8:24,transition:"border-color 0.2s",
-          }}
+        <label style={{fontSize:11,fontWeight:600,letterSpacing:"0.08em",color:"rgba(255,255,255,0.35)",marginBottom:6}}>PASSWORD{mode==="signup"&&<span style={{color:"rgba(255,255,255,0.2)",fontWeight:400}}> (min 6 chars)</span>}</label>
+        <input type="password" value={pass} onChange={e=>{setPass(e.target.value);setErr("");}} placeholder="••••••••"
+          style={inputStyle(!!err&&!pass)}
           onFocus={e=>(e.target.style.borderColor=`${ACCENT}88`)}
-          onBlur={e=>(e.target.style.borderColor=err&&!pass?"rgba(255,45,120,0.5)":"rgba(255,255,255,0.1)")}
-        />
+          onBlur={e=>(e.target.style.borderColor=err&&!pass?"rgba(255,45,120,0.5)":"rgba(255,255,255,0.1)")}/>
 
-        {err&&<div style={{fontSize:12,color:PINK,marginBottom:16,textAlign:"center"}}>{err}</div>}
+        {/* Confirm — signup only */}
+        {mode==="signup"&&(
+          <>
+            <label style={{fontSize:11,fontWeight:600,letterSpacing:"0.08em",color:"rgba(255,255,255,0.35)",marginBottom:6}}>CONFIRM PASSWORD</label>
+            <input type="password" value={confirm} onChange={e=>{setConfirm(e.target.value);setErr("");}} placeholder="••••••••"
+              style={{...inputStyle(!!err&&pass!==confirm&&!!confirm),marginBottom:err?8:20}}
+              onFocus={e=>(e.target.style.borderColor=`${ACCENT}88`)}
+              onBlur={e=>(e.target.style.borderColor="rgba(255,255,255,0.1)")}/>
+          </>
+        )}
 
-        {/* Submit */}
+        {!mode&&<div style={{height:8}}/>}
+        {mode==="login"&&<div style={{height:6}}/>}
+
+        {err&&<div style={{fontSize:12,color:PINK,marginBottom:14,textAlign:"center",lineHeight:1.4}}>{err}</div>}
+
         <button type="submit" disabled={loading} style={{
           width:"100%",padding:"13px",borderRadius:11,
-          background:loading?`rgba(79,110,247,0.5)`:`linear-gradient(135deg,${ACCENT},#7B93FF)`,
+          background:loading?`rgba(79,110,247,0.45)`:`linear-gradient(135deg,${ACCENT},#7B93FF)`,
           border:"none",color:"white",fontSize:14,fontWeight:700,
           cursor:loading?"default":"pointer",letterSpacing:"0.02em",
           boxShadow:loading?"none":`0 4px 20px ${ACCENT}44`,
           transition:"all 0.2s",
         }}>
-          {loading?"Signing in…":"Sign In"}
+          {loading?(mode==="signup"?"Creating account…":"Signing in…"):(mode==="signup"?"Create Account":"Sign In")}
         </button>
 
-        <div style={{marginTop:20,fontSize:11,color:"rgba(255,255,255,0.2)",textAlign:"center"}}>
-          Access restricted to registered members
+        <div style={{marginTop:16,fontSize:11,color:"rgba(255,255,255,0.2)",textAlign:"center"}}>
+          {mode==="signup"?"Already a member? ":""} 
+          {mode==="signup"
+            ?<button type="button" onClick={()=>switchMode("login")} style={{background:"none",border:"none",color:`${ACCENT}cc`,fontSize:11,cursor:"pointer",textDecoration:"underline",padding:0}}>Sign in instead</button>
+            :<button type="button" onClick={()=>switchMode("signup")} style={{background:"none",border:"none",color:`${ACCENT}cc`,fontSize:11,cursor:"pointer",textDecoration:"underline",padding:0}}>Create an account</button>
+          }
         </div>
       </form>
     </div>
@@ -1415,16 +1472,17 @@ function LoginGate({onEnter}:{onEnter:(email:string)=>void}) {
 export function DarkCockpit() {
   const [loggedIn,setLoggedIn]=useState(false);
   const [userEmail,setUserEmail]=useState("");
+  const [userName,setUserName]=useState("");
   const [page, setPage] = useState<Page>("dashboard");
   const [view, setView] = useState<"desktop"|"mobile">("desktop");
   const [refresh, setRefresh] = useState(0);
 
   function onLogged() { setRefresh(r=>r+1); setPage("dashboard"); }
-  function signOut() { setLoggedIn(false); setUserEmail(""); setPage("dashboard"); }
+  function signOut() { setLoggedIn(false); setUserEmail(""); setUserName(""); setPage("dashboard"); }
 
   return (
     <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:BG,color:"white",fontFamily:"'Inter',system-ui,sans-serif"}}>
-      {!loggedIn&&<LoginGate onEnter={(e)=>{setUserEmail(e);setLoggedIn(true);}}/>}
+      {!loggedIn&&<LoginGate onEnter={(e,n)=>{setUserEmail(e);setUserName(n||"");setLoggedIn(true);}}/>}
       {/* View Toggle */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"10px 0",background:"#0C0C10",borderBottom:`1px solid ${BORDER}`,gap:0}}>
         <button onClick={()=>setView("desktop")} style={{padding:"6px 22px",borderRadius:"8px 0 0 8px",background:view==="desktop"?`${ACCENT}22`:"transparent",border:`1px solid ${view==="desktop"?ACCENT:"rgba(255,255,255,0.12)"}`,color:view==="desktop"?ACCENT:"rgba(255,255,255,0.4)",fontSize:12,fontWeight:600,cursor:"pointer",letterSpacing:"0.04em",borderRight:"none",transition:"all 0.15s"}}>🖥 Desktop</button>
@@ -1501,7 +1559,7 @@ export function DarkCockpit() {
             {page==="recommend"&&<Recommend/>}
             {page==="voice"&&<VoicePage onLogged={onLogged}/>}
             {page==="import"&&<ImportPage onLogged={onLogged}/>}
-            {page==="profile"&&<ProfilePage email={userEmail} onSignOut={signOut}/>}
+            {page==="profile"&&<ProfilePage email={userEmail} initialName={userName} onSignOut={signOut}/>}
           </div>
         </div>
       ) : (
@@ -1510,7 +1568,7 @@ export function DarkCockpit() {
             <div style={{position:"absolute",top:0,left:"50%",transform:"translateX(-50%)",width:120,height:32,background:"#000",borderRadius:"0 0 18px 18px",zIndex:20}}/>
             <div style={{height:44}}/>
             <div style={{height:800,overflow:"hidden"}}>
-              <MobileDashboard key={`mobile-${refresh}`} email={userEmail} onSignOut={signOut}/>
+              <MobileDashboard key={`mobile-${refresh}`} email={userEmail} name={userName} onSignOut={signOut}/>
             </div>
           </div>
         </div>

@@ -2,9 +2,17 @@
 
 ## Overview
 
-Glev is a Type 1 Diabetes insulin decision-support system. The single active artifact is the **Dark Cockpit mockup** (`artifacts/mockup-sandbox`) — a fully interactive dark-mode prototype with desktop and mobile views. The backend API server (`artifacts/api-server`) handles data persistence and recommendation logic.
+Glev is a Type 1 Diabetes insulin decision-support system. The single active artifact is the **Dark Cockpit mockup** (`artifacts/mockup-sandbox`) — a fully interactive dark-mode prototype with desktop and mobile views. The backend API server (`artifacts/api-server`) handles data persistence, recommendation logic, and member authentication.
 
 The `artifacts/glucojack` React/Vite web app was removed — the canvas mockup is now the primary interface.
+
+## Authentication
+
+- `members` table: id, name, email, password_hash, created_at
+- Passwords hashed with `pbkdf2Sync` (SHA-512, 100k iterations, salt "glev-members-v1")
+- `POST /api/auth/signup` — creates account, returns `{ok, member}`; 409 if email taken
+- `POST /api/auth/login` — verifies credentials, returns `{ok, member}`; 401 on failure
+- `LoginGate` frontend: tab-based toggle between "Create Account" and "Sign In" modes; real API calls; name from signup flows into `ProfilePage` avatar
 
 ## Stack
 
