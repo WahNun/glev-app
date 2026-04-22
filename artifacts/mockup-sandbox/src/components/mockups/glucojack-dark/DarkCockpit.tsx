@@ -432,11 +432,30 @@ function EntryLog() {
   const [entries,setEntries]=useState<Entry[]>([]);
   const [loading,setLoading]=useState(true);
   const [filter,setFilter]=useState("ALL");
+  const [openMenu,setOpenMenu]=useState<number|null>(null);
+  const [deleting,setDeleting]=useState<number|null>(null);
   const filters=["ALL","GOOD","UNDERDOSE","OVERDOSE"];
 
   useEffect(()=>{
     apiFetch<{entries:Entry[];total:number}>("/entries").then(d=>setEntries(d.entries||[])).catch(()=>{}).finally(()=>setLoading(false));
   },[]);
+
+  useEffect(()=>{
+    if(openMenu===null) return;
+    function onDown(e:MouseEvent){ if(!(e.target as HTMLElement).closest("[data-entry-menu]")) setOpenMenu(null); }
+    document.addEventListener("mousedown",onDown);
+    return ()=>document.removeEventListener("mousedown",onDown);
+  },[openMenu]);
+
+  async function deleteEntry(id:number){
+    setDeleting(id);
+    try{
+      await apiFetch(`/entries/${id}`,{method:"DELETE"});
+      setEntries(prev=>prev.filter(e=>e.id!==id));
+    }catch{}
+    setDeleting(null);
+    setOpenMenu(null);
+  }
 
   if(loading) return <Spinner/>;
   const filtered=filter==="ALL"?entries:entries.filter(e=>e.evaluation===filter);
@@ -456,16 +475,17 @@ function EntryLog() {
         ):(
           <table style={{width:"100%",borderCollapse:"collapse"}}>
             <thead><tr style={{borderBottom:`1px solid rgba(255,255,255,0.05)`}}>
-              {["Time","Meal","BG Before","Carbs","Fiber","Insulin","Result"].map(h=>(
-                <th key={h} style={{padding:"10px 18px",textAlign:"left",fontSize:9,color:"rgba(255,255,255,0.3)",fontWeight:500,letterSpacing:"0.08em"}}>{h.toUpperCase()}</th>
+              {["Time","Meal","BG Before","Carbs","Fiber","Insulin","Result",""].map((h,i)=>(
+                <th key={i} style={{padding:"10px 18px",textAlign:"left",fontSize:9,color:"rgba(255,255,255,0.3)",fontWeight:500,letterSpacing:"0.08em",width:h===""?"36px":undefined}}>{h.toUpperCase()}</th>
               ))}
             </tr></thead>
             <tbody>
               {filtered.map((e,i)=>{
                 const ev=evalStyle(e.evaluation);
                 const ts=new Date(e.timestamp).toLocaleDateString(undefined,{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
+                const isOpen=openMenu===e.id;
                 return (
-                  <tr key={e.id} style={{borderBottom:i<filtered.length-1?`1px solid rgba(255,255,255,0.03)`:"none"}}>
+                  <tr key={e.id} style={{borderBottom:i<filtered.length-1?`1px solid rgba(255,255,255,0.03)`:"none",opacity:deleting===e.id?0.4:1,transition:"opacity 0.2s"}}>
                     <td style={{padding:"11px 18px",fontSize:11,color:"rgba(255,255,255,0.4)"}}>{ts}</td>
                     <td style={{padding:"11px 18px",fontSize:12,fontWeight:500,maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{e.mealDescription||e.mealType||"—"}</td>
                     <td style={{padding:"11px 18px",fontSize:12,fontWeight:600,color:e.glucoseBefore>140?ORANGE:e.glucoseBefore<80?PINK:"rgba(255,255,255,0.85)"}}>{e.glucoseBefore}</td>
@@ -473,6 +493,39 @@ function EntryLog() {
                     <td style={{padding:"11px 18px",fontSize:12,color:"rgba(255,255,255,0.5)"}}>{e.fiberGrams!=null?`${e.fiberGrams}g`:"—"}</td>
                     <td style={{padding:"11px 18px",fontSize:12,color:"rgba(255,255,255,0.7)"}}>{e.insulinUnits}u</td>
                     <td style={{padding:"11px 18px"}}><span style={{fontSize:10,padding:"3px 9px",borderRadius:99,fontWeight:700,background:`${ev.color}18`,color:ev.color,letterSpacing:"0.06em"}}>{ev.label}</span></td>
+                    <td style={{padding:"11px 10px 11px 0",position:"relative",width:36}} data-entry-menu="">
+                      <button
+                        data-entry-menu=""
+                        onClick={()=>setOpenMenu(isOpen?null:e.id)}
+                        style={{width:28,height:28,borderRadius:7,border:"none",background:isOpen?"rgba(255,255,255,0.1)":"transparent",color:"rgba(255,255,255,0.35)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,lineHeight:1,transition:"all 0.15s"}}
+                        onMouseEnter={el=>(el.currentTarget.style.background="rgba(255,255,255,0.08)")}
+                        onMouseLeave={el=>(el.currentTarget.style.background=isOpen?"rgba(255,255,255,0.1)":"transparent")}
+                      >⋯</button>
+                      {isOpen&&(
+                        <div data-entry-menu="" style={{
+                          position:"absolute",right:0,top:"100%",zIndex:200,
+                          background:"#1A1A24",border:"1px solid rgba(255,255,255,0.1)",
+                          borderRadius:10,boxShadow:"0 8px 32px rgba(0,0,0,0.6)",
+                          minWidth:170,padding:"6px",
+                          marginTop:4,
+                        }}>
+                          <div style={{padding:"6px 10px 4px",fontSize:9,color:"rgba(255,255,255,0.25)",letterSpacing:"0.1em",fontWeight:600}}>
+                            ENTRY #{e.id}
+                          </div>
+                          <div style={{height:1,background:"rgba(255,255,255,0.07)",margin:"4px 0"}}/>
+                          <button
+                            data-entry-menu=""
+                            onClick={()=>deleteEntry(e.id)}
+                            disabled={deleting===e.id}
+                            style={{width:"100%",padding:"8px 10px",borderRadius:7,border:"none",background:"transparent",color:PINK,fontSize:12,fontWeight:600,cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:8,transition:"background 0.12s"}}
+                            onMouseEnter={el=>(el.currentTarget.style.background=`${PINK}15`)}
+                            onMouseLeave={el=>(el.currentTarget.style.background="transparent")}
+                          >
+                            <span style={{fontSize:14}}>🗑</span> Delete entry
+                          </button>
+                        </div>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
