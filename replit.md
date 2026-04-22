@@ -2,17 +2,7 @@
 
 ## Overview
 
-Glev is a Type 1 Diabetes insulin decision-support system. The **Next.js 15 app** (`src/`) is the primary production frontend, running on port 5000. The **Dark Cockpit mockup** (`artifacts/mockup-sandbox`) is the design reference prototype. The backend API server (`artifacts/api-server`) handles data persistence and recommendation logic.
-
-The `artifacts/glucojack` React/Vite web app was removed — the canvas mockup is now the primary interface.
-
-## Authentication
-
-- `members` table: id, name, email, password_hash, created_at
-- Passwords hashed with `pbkdf2Sync` (SHA-512, 100k iterations, salt "glev-members-v1")
-- `POST /api/auth/signup` — creates account, returns `{ok, member}`; 409 if email taken
-- `POST /api/auth/login` — verifies credentials, returns `{ok, member}`; 401 on failure
-- `LoginGate` frontend: tab-based toggle between "Create Account" and "Sign In" modes; real API calls; name from signup flows into `ProfilePage` avatar
+Glev is a Type 1 Diabetes insulin decision-support system. The **Next.js 15 App Router** (`src/`) is the primary production frontend running on port 5000. Authentication and data storage are handled by **Supabase**.
 
 ## Stack
 
@@ -20,103 +10,116 @@ The `artifacts/glucojack` React/Vite web app was removed — the canvas mockup i
 - **Node.js version**: 24
 - **Package manager**: pnpm
 - **TypeScript version**: 5.9
-- **Production app**: Next.js 15 (`src/`) — deployed to Vercel via `rootDirectory: "src"` in `vercel.json`
-- **Mockup (dev only)**: React + Vite (`artifacts/mockup-sandbox`) — DarkCockpit with Desktop/Mobile toggle; NOT in workspace packages (excluded from Vercel build)
-- **API framework**: Express 5 (`artifacts/api-server`)
-- **Database (primary)**: PostgreSQL + Drizzle ORM (local/Replit)
-- **Database (cloud)**: Supabase — `artifacts/api-server/src/lib/supabase.ts` (fire-and-forget sync on every entry POST)
-- **Physician sharing**: Google Sheets via Replit Connectors SDK — `artifacts/api-server/src/lib/sheets.ts`
-- **Validation**: Zod (`zod/v4`), `drizzle-zod`
-- **API codegen**: Orval (from OpenAPI spec)
-- **Build**: esbuild (CJS bundle for Express), Next.js (for `src/`)
-- **Charts**: Recharts
-
-## Cloud Data Architecture
-
-Two-layer system:
-1. **Supabase** — cloud source of truth. Env vars: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (Express) / `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (Next.js)
-2. **Google Sheets** — physician sharing layer. Env var: `GOOGLE_SHEET_ID`
-
-Both are graceful: if env vars are not set, local DB still works and sync is skipped with a console warning.
-
-### API Endpoints
-- `POST /api/log` — **primary write endpoint** (Supabase blocking write, local PG shadow, Sheets non-blocking). Includes time + timezone from client.
-- `POST /api/entries` — legacy entry endpoint (still available; writes local PG first, then Supabase/Sheets fire-and-forget)
-- `POST /api/sheets/sync` — full batch export (all Supabase logs → Google Sheet, clears old data first)
-
-### Supabase Table: `logs`
-Columns: id, created_at, date, **time** (text), **timezone** (text), meal, glucose_before, glucose_after, carbs, fiber, protein, fat, net_carbs, bolus_units, meal_type, evaluation, notes
-
-### Google Sheet Columns
-Date, Meal, Glucose Before, Glucose After, Carbs, Fiber, Protein, Fat, Net Carbs, Bolus Units, Meal Type, Evaluation, Notes
-
-## Profile → Settings Tab
-
-The `ProfilePage` component now has two sub-tabs: **Overview** (existing settings) and **Settings** (new). Under Settings → "Data & Sharing":
-- "Send to my physician" button → triggers confirmation dialog → calls `POST /api/sheets/sync` → full data export
-- States: idle → confirm → syncing → success/error
-- **Routing**: Wouter (mockup), Next.js App Router (`src/`)
+- **Production frontend**: Next.js 15 App Router (`src/`) — port 5000
+- **Database + Auth**: Supabase (PostgreSQL + Auth)
 - **AI**: OpenAI GPT-5 via Replit AI Integrations (`AI_INTEGRATIONS_OPENAI_BASE_URL`, `AI_INTEGRATIONS_OPENAI_API_KEY`)
+- **API server (dev support)**: Express 5 (`artifacts/api-server`)
+- **Design sandbox**: React + Vite (`artifacts/mockup-sandbox`)
 
-## Key Commands
+## Authentication
 
-- `pnpm run build` — builds only `@workspace/glev` (Next.js, Vercel-safe)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- `pnpm --filter @workspace/api-server run dev` — run Express API server locally
+- Supabase Auth (email + password)
+- Client: `src/lib/supabase.ts` using `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- Session stored in Supabase cookies; `src/middleware.ts` protects all `/(protected)` routes
+- `src/lib/auth.ts` — `signIn`, `signUp`, `signOut`, `getCurrentUser`
 
-## Vercel Deployment
+## Database: Supabase `meals` Table
 
-- `vercel.json` sets `rootDirectory: "src"` — Vercel builds only the Next.js app
-- `pnpm-workspace.yaml` excludes `artifacts/mockup-sandbox` (it needs `PORT` env var, not available on Vercel)
-- `artifacts/api-server` stays in workspace for local Replit dev
-- Environment vars needed on Vercel: `AI_INTEGRATIONS_OPENAI_BASE_URL`, `AI_INTEGRATIONS_OPENAI_API_KEY`
+Required columns:
+```sql
+id           uuid DEFAULT gen_random_uuid() PRIMARY KEY
+user_id      uuid REFERENCES auth.users(id)
+input_text   text
+parsed_json  jsonb  -- array of {name, grams, carbs, protein, fat, fiber}
+glucose_before integer
+glucose_after  integer        -- NEW: add if missing
+carbs_grams  integer
+insulin_units decimal(5,2)
+meal_type    text             -- NEW: FAST_CARBS | HIGH_PROTEIN | HIGH_FAT | BALANCED
+evaluation   text             -- GOOD | LOW | HIGH | SPIKE
+created_at   timestamptz DEFAULT now()
+```
 
-## Architecture
+**Migration SQL** (run once in Supabase SQL editor):
+```sql
+ALTER TABLE meals ADD COLUMN IF NOT EXISTS glucose_after INTEGER;
+ALTER TABLE meals ADD COLUMN IF NOT EXISTS meal_type TEXT;
+```
 
-### Frontend (src/ — Next.js 15 App Router)
-- `/` — Redirects to `/dashboard`
-- `/login` — Email/password auth: Sign In + Create Account tabs; Supabase client auth + `glev-authed` cookie
-- `/dashboard` — Control score, spike/hypo rates, glucose trend sparkline, recent entries (fetches from Express API; graceful empty state)
-- `/log` — Meal text input → AI parse-food endpoint → save to EntriesContext
-- `/entries` — Local log of parsed meal entries (React state, session-only)
-- `/insights` — Coming soon placeholder
+(glucose_before, carbs_grams, insulin_units, evaluation were added in an earlier migration)
 
-**Auth**: Cookie-based (`glev-authed=1`); middleware at `src/middleware.ts` protects `/dashboard`, `/log`, `/entries`, `/insights`; Supabase client (`src/lib/supabase.ts`) for signIn/signUp/signOut.
+## Frontend Routes
 
-**Key source files**:
+All protected routes live under `src/app/(protected)/` and require Supabase auth.
+
+| Route | Page |
+|-------|------|
+| `/dashboard` | Dashboard — flip cards, glucose trend, outcome chart, recent entries, seed data trigger |
+| `/log` | Voice-first meal logging — mic button, dual panel (raw + parsed), macros, insulin preview |
+| `/entries` | Entries table — expandable rows with full food breakdown |
+| `/insights` | Deep analytics — performance tiles, meal type analysis, time-of-day, pattern detection |
+| `/engine` | Glev Engine — AI insulin recommendation from historical data |
+| `/import` | Import Center — CSV paste, preview, bulk import |
+| `/settings` | Account / Settings — profile overview, glucose targets, ICR, notification toggles |
+
+## Key Source Files
+
+- `src/lib/meals.ts` — Meal interface, ParsedFood, saveMeal, fetchMeals, seedMealsIfEmpty, classifyMeal, computeEvaluation
+- `src/lib/supabase.ts` — Supabase browser client
 - `src/lib/auth.ts` — signIn, signUp, signOut, getCurrentUser
-- `src/middleware.ts` — Next.js middleware (route protection)
-- `src/context/EntriesContext.tsx` — local entries state (React context)
-- `src/components/Layout.tsx` — sidebar (desktop) + bottom nav (mobile)
-- `src/app/api/parse-food/route.ts` — AI food parser (GPT via Replit AI Integrations)
+- `src/middleware.ts` — Next.js route protection
+- `src/components/Layout.tsx` — Sidebar nav (desktop) + bottom nav + FAB (mobile)
+- `src/app/api/parse-food/route.ts` — AI meal parser (returns full macros per food)
+- `src/app/(protected)/layout.tsx` — Protected layout wrapper
 
-### Backend (artifacts/api-server/)
-- `GET/POST /api/entries` — CRUD for glucose/insulin log entries
-- `POST /api/entries/batch` — batch import
-- `GET /api/entries/:id`, `DELETE /api/entries/:id` — single entry ops
-- `GET /api/insights/dashboard` — control score, stats, recent entries
-- `GET /api/insights/patterns` — meal type performance patterns
-- `GET /api/insights/glucose-trend` — time-series glucose data
-- `POST /api/recommendations` — insulin recommendation engine
-- `GET /api/cgm/latest` — mock CGM reading (95–120 random); structured for Dexcom/Libre integration
-- `POST /api/food/macros` — USDA FoodData Central lookup; body `{foods:[{name,portion}]}`; returns per-item + aggregate carbs/fiber/protein/fat/netCarbs; falls back to category estimation on timeout
+## Core Logic
 
-### Core Logic
-- `artifacts/api-server/src/lib/calculation.ts` — delta, speed, evaluation (GOOD/OVERDOSE/UNDERDOSE/CHECK_CONTEXT)
-- `artifacts/api-server/src/lib/recommendation.ts` — insulin recommendation engine
+### Meal Classification (`classifyMeal`)
+- `FAST_CARBS`: carbs ≥ 45g
+- `HIGH_PROTEIN`: protein ≥ 25g and dominant
+- `HIGH_FAT`: fat ≥ 20g and dominant
+- `BALANCED`: otherwise
 
-### Database Schema (lib/db/src/schema/)
-- `entries` table: timestamp, glucoseBefore, glucoseAfter, carbsGrams, insulinUnits, mealType, delta, speed, evaluation, notes
+### Dose Evaluation (`computeEvaluation`)
+- ICR formula: `estimated = carbs/15 + max(0, (glucose-110)/50)`
+- `GOOD`: ratio within 0.65–1.35
+- `HIGH`: ratio > 1.35 (overdose)
+- `LOW`: ratio < 0.65 (underdose)
 
-### API Contract
-- `lib/api-spec/openapi.yaml` — single source of truth
-- Generated React Query hooks: `lib/api-client-react/src/generated/api.ts`
-- Generated Zod schemas: `lib/api-zod/src/generated/api.ts`
+### Glev Engine (`engine/page.tsx`)
+- Finds historical meals with ±12g carbs + ±35 mg/dL glucose similarity
+- 3+ GOOD matches → HIGH confidence (historical average)
+- 1–2 matches → MEDIUM confidence (blended)
+- 0 matches → LOW confidence (ICR formula only)
 
-## Meal Types
-- FAST_CARBS, HIGH_FAT, HIGH_PROTEIN, BALANCED
+### Seed Data (`seedMealsIfEmpty`)
+- Called on dashboard load; inserts 31 realistic T1D meals if user has 0 entries
+- Covers breakfast/lunch/dinner, varied meal types, realistic glucose/insulin values
 
-## Evaluation Classifications
-- GOOD, OVERDOSE, UNDERDOSE, CHECK_CONTEXT
+## Design Tokens
+
+```
+Background:  #09090B
+Surface:     #111117
+Accent:      #4F6EF7
+Green:       #22D3A0
+Pink:        #FF2D78
+Orange:      #FF9500
+Border:      rgba(255,255,255,0.08)
+```
+
+## Dev Commands
+
+```bash
+pnpm --filter @workspace/glev run dev          # Start Next.js app (port 5000, clears .next cache)
+pnpm --filter @workspace/glev exec tsc --noEmit  # TypeScript check
+pnpm --filter @workspace/api-server run dev    # Start Express API server
+```
+
+## Notes
+
+- `dev` script runs `rm -rf .next && next dev --port 5000` to prevent stale cache crashes
+- Voice input uses Web Speech API with `window as unknown as Record<string, unknown>` cast
+- Settings (ICR, glucose targets, notifications) persist in `localStorage` under `glev_settings`
+- ParsedFood now includes `carbs, protein, fat, fiber` macros (updated in v3)
+- Backward-compatible evaluation display: handles both old values (OVERDOSE/UNDERDOSE) and new (HIGH/LOW)

@@ -1,0 +1,342 @@
+You are rebuilding the Glev app to EXACTLY match the previously defined high-fidelity mockup.
+
+This is NOT an incremental update. This is a full reconstruction of the product experience.
+
+--------------------------------
+GLOBAL PRODUCT
+--------------------------------
+
+Name: Glev  
+Tagline: Smart Insulin Decisions
+
+Core idea:
+A data-driven insulin decision system based on historical outcomes.
+
+--------------------------------
+DATABASE (SUPABASE)
+--------------------------------
+
+Ensure meals table includes:
+
+- id (uuid)
+- user_id
+- input_text
+- parsed_json
+- glucose_before (int)
+- glucose_after (int)
+- carbs_grams (int)
+- insulin_units (float)
+- meal_type (text: FAST_CARBS | HIGH_PROTEIN | HIGH_FAT | BALANCED)
+- evaluation (GOOD | LOW | HIGH | SPIKE)
+- created_at
+
+--------------------------------
+SEED DATA (MANDATORY)
+--------------------------------
+
+If the database is empty, automatically insert the provided historical dataset.
+
+This must be visible immediately in:
+- Entries
+- Dashboard
+- Insights
+
+--------------------------------
+1. LOG SCREEN (CORE UX – MOST IMPORTANT)
+--------------------------------
+
+VOICE-FIRST DESIGN
+
+Top section:
+
+- Large centered microphone button
+- Animated (glow + pulse when recording)
+- Label: "Tap to speak"
+
+Behavior:
+
+- On click → start voice recording
+- Convert speech to text
+- AUTOMATICALLY trigger AI parsing (no manual step required)
+
+--------------------------------
+AI PARSER SYSTEM
+--------------------------------
+
+Display 2 panels:
+
+LEFT:
+- Raw user input (speech or text)
+
+RIGHT:
+- AI parsed result (foods + macros)
+
+User can:
+- edit items
+- adjust grams
+- remove/add foods
+- re-run parsing
+
+--------------------------------
+AUTO POPULATION
+--------------------------------
+
+After confirming AI result:
+
+Populate form fields automatically:
+
+- carbs
+- protein
+- fat
+- fiber
+
+--------------------------------
+ENTRY FORM
+--------------------------------
+
+Fields:
+
+- glucose_before
+- button: "Pull CGM Data"
+- carbs
+- protein
+- fat
+- fiber
+- insulin_units
+
+--------------------------------
+MEAL CLASSIFICATION (AUTO)
+--------------------------------
+
+Calculate and assign:
+
+- FAST_CARBS
+- HIGH_PROTEIN
+- HIGH_FAT
+- BALANCED
+
+Based on macro ratios.
+
+Show as badge.
+
+--------------------------------
+INSULIN PREVIEW
+--------------------------------
+
+Display:
+
+- suggested insulin dose (based on ICR)
+- live evaluation preview (GOOD / OVERDOSE / UNDERDOSE)
+
+--------------------------------
+SAVE FLOW
+--------------------------------
+
+IMPORTANT:
+
+DO NOT auto-save.
+
+User must press:
+
+"Confirm Log"
+
+--------------------------------
+2. ENTRIES SCREEN
+--------------------------------
+
+Table with:
+
+- time
+- meal
+- glucose_before
+- carbs
+- insulin
+- result
+
+Badges:
+
+- GOOD (green)
+- OVERDOSE (red)
+- LOW DOSE (orange)
+
+--------------------------------
+EXPANDABLE ENTRY
+--------------------------------
+
+On click:
+
+Show:
+
+- full food breakdown
+- glucose delta
+- classification
+- timing
+- evaluation
+
+--------------------------------
+3. DASHBOARD
+--------------------------------
+
+Top cards:
+
+- Control Score
+- Good Rate
+- Spike Rate
+- Hypo Rate
+
+--------------------------------
+CARD INTERACTION (CRITICAL)
+--------------------------------
+
+Cards must be CLICKABLE.
+
+On click:
+
+→ flip animation
+
+Backside shows:
+
+- explanation
+- formula
+- interpretation
+
+--------------------------------
+CHARTS
+--------------------------------
+
+- glucose trend chart
+- outcome distribution chart
+
+--------------------------------
+RECENT ENTRIES
+--------------------------------
+
+- expandable list
+- matches Entries screen
+
+--------------------------------
+4. INSIGHTS (NO PLACEHOLDERS!)
+--------------------------------
+
+Must include:
+
+--------------------------------
+PERFORMANCE CARDS
+--------------------------------
+
+Each card contains:
+
+- metric
+- explanation
+- formula
+
+--------------------------------
+MEAL TYPE ANALYSIS
+--------------------------------
+
+For each type:
+
+- avg carbs
+- avg insulin
+- success rate
+
+--------------------------------
+PATTERN DETECTION
+--------------------------------
+
+- overdosing trends
+- underdosing trends
+- time-of-day effects
+
+--------------------------------
+5. GLEV ENGINE (CORE FEATURE)
+--------------------------------
+
+Inputs:
+
+- current glucose
+- planned carbs
+- protein
+- fat
+- description
+
+--------------------------------
+OUTPUT
+--------------------------------
+
+- recommended insulin dose
+- confidence level
+- reasoning
+
+--------------------------------
+MODEL LOGIC (IMPORTANT)
+--------------------------------
+
+Use historical data:
+
+- find similar meals (±10g carbs)
+- find similar glucose ranges
+- analyze outcomes
+
+Compute:
+
+- average insulin for GOOD outcomes
+- penalize overdoses
+
+Return optimized recommendation.
+
+--------------------------------
+6. IMPORT CENTER
+--------------------------------
+
+- paste CSV
+- preview parsed data
+- confirm import
+
+--------------------------------
+7. MEMBER AREA
+--------------------------------
+
+Tabs:
+
+- Overview
+- Settings
+
+Settings include:
+
+- glucose range
+- notifications
+
+--------------------------------
+8. MOBILE VERSION
+--------------------------------
+
+- bottom navigation
+- floating microphone button
+- same logic as desktop
+
+--------------------------------
+NON-NEGOTIABLE RULES
+--------------------------------
+
+- NO "coming soon"
+- NO placeholders
+- EVERYTHING must work
+- UI must match mockup structure
+- voice → parse → edit → confirm → save (full flow)
+
+--------------------------------
+FINAL VALIDATION
+--------------------------------
+
+Ensure:
+
+- login works
+- entries persist
+- dashboard shows real data
+- insights are populated
+- glev engine produces recommendations
+
+--------------------------------
+
+This is a FULL rebuild. Do not simplify anything.

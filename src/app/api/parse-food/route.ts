@@ -6,12 +6,15 @@ const openai = new OpenAI({
   apiKey:  process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
 });
 
-const SYSTEM_PROMPT = `You are a food quantity parser for a diabetes management app.
-Given a free-form text description of food, extract each food item and its quantity in grams.
-Use typical serving sizes when quantity is vague (e.g. "a banana" = 120g, "handful of nuts" = 28g).
+const SYSTEM_PROMPT = `You are a nutrition parser for a Type 1 Diabetes management app.
+Given a free-form description of food, extract each item with its weight and macro nutrients.
+Use typical serving sizes when vague (e.g. "a banana" = 120g, "handful of nuts" = 28g).
 Return ONLY valid JSON — no markdown, no explanation, no code block.
-The JSON must be an array of objects: [{"name": string, "grams": number}, ...]
-Round grams to the nearest whole number.`;
+The JSON must be an array of objects with these exact keys:
+[{"name": string, "grams": number, "carbs": number, "protein": number, "fat": number, "fiber": number}]
+- grams: total weight of that food item
+- carbs/protein/fat/fiber: grams of that macro in this serving
+Round all values to nearest whole number.`;
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));

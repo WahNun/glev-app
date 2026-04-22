@@ -1,280 +1,296 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { fetchMeals, type Meal } from "@/lib/meals";
 import { useRouter } from "next/navigation";
+import { fetchMeals, seedMealsIfEmpty, type Meal } from "@/lib/meals";
 
-const ACCENT  = "#4F6EF7";
-const GREEN   = "#22D3A0";
-const PINK    = "#FF2D78";
-const ORANGE  = "#FF9500";
-const SURFACE = "#111117";
-const BORDER  = "rgba(255,255,255,0.06)";
+const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
+const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
 
-function Card({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
-  return <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 14, ...style }}>{children}</div>;
+const EVAL_COLORS: Record<string, string> = { GOOD:GREEN, LOW:ORANGE, HIGH:PINK, SPIKE:"#FF9F0A", OVERDOSE:PINK, UNDERDOSE:ORANGE, CHECK_CONTEXT:ORANGE };
+const EVAL_LABELS: Record<string, string> = { GOOD:"Good", LOW:"Under Dose", HIGH:"Over Dose", SPIKE:"Spike", OVERDOSE:"Over Dose", UNDERDOSE:"Under Dose", CHECK_CONTEXT:"Review" };
+
+function evalColor(ev: string | null) { return EVAL_COLORS[ev ?? ""] || "rgba(255,255,255,0.3)"; }
+function evalLabel(ev: string | null) { return EVAL_LABELS[ev ?? ""] || ev || "—"; }
+
+interface CardDef {
+  key: string; label: string; color: string;
+  getValue: (meals: Meal[]) => string;
+  sub: string;
+  formula: string; explanation: string; interpretation: string;
 }
 
-function StatCard({ label, value, unit, sub, color, bar }: {
-  label: string; value: string; unit: string; sub: string; color: string; bar: number;
-}) {
+const CARDS: CardDef[] = [
+  {
+    key: "control", label: "Control Score", color: ACCENT,
+    getValue: (meals) => {
+      if (!meals.length) return "—";
+      const good=meals.filter(m=>m.evaluation==="GOOD").length;
+      const total=meals.length;
+      const score=Math.round((good/total)*70 + (1-(meals.filter(m=>m.evaluation==="SPIKE"||m.evaluation==="HIGH").length/total))*30);
+      return score.toString();
+    },
+    sub: "out of 100",
+    formula: "Score = (Good% × 70) + (Non-extreme% × 30)",
+    explanation: "Control Score measures overall insulin decision quality. It rewards correct dosing and penalizes overdoses and spikes.",
+    interpretation: "80+ = Excellent, 60–79 = Good, 40–59 = Fair, <40 = Needs attention",
+  },
+  {
+    key: "good", label: "Good Rate", color: GREEN,
+    getValue: (meals) => {
+      if (!meals.length) return "—";
+      return Math.round(meals.filter(m=>m.evaluation==="GOOD").length / meals.length * 100) + "%";
+    },
+    sub: "of logged meals",
+    formula: "Good Rate = (GOOD outcomes / Total meals) × 100",
+    explanation: "The percentage of meals where your insulin dose was in the optimal range — neither too high nor too low.",
+    interpretation: "Target >70%. Each GOOD outcome means your dose was within ±35% of the ICR-calculated ideal.",
+  },
+  {
+    key: "spike", label: "Spike Rate", color: ORANGE,
+    getValue: (meals) => {
+      if (!meals.length) return "—";
+      return Math.round(meals.filter(m=>m.evaluation==="SPIKE"||m.evaluation==="LOW"||m.evaluation==="UNDERDOSE").length / meals.length * 100) + "%";
+    },
+    sub: "under-dosed meals",
+    formula: "Spike Rate = (LOW outcomes / Total) × 100",
+    explanation: "Meals where insulin was insufficient. Under-dosing leads to glucose spikes, which increase HbA1c long-term.",
+    interpretation: "Target <15%. Consistent under-dosing suggests your ICR or correction factor needs adjustment.",
+  },
+  {
+    key: "hypo", label: "Hypo Risk", color: PINK,
+    getValue: (meals) => {
+      if (!meals.length) return "—";
+      return Math.round(meals.filter(m=>m.evaluation==="HIGH"||m.evaluation==="OVERDOSE").length / meals.length * 100) + "%";
+    },
+    sub: "over-dosed meals",
+    formula: "Hypo Risk = (HIGH outcomes / Total) × 100",
+    explanation: "Meals where insulin exceeded requirements. Over-dosing risks hypoglycemia, which can be dangerous.",
+    interpretation: "Target <10%. If rising, reduce correction factor or ICR temporarily.",
+  },
+];
+
+function FlipCard({ card, meals }: { card: CardDef; meals: Meal[] }) {
+  const [flipped, setFlipped] = useState(false);
+  const val = card.getValue(meals);
   return (
-    <Card style={{ padding: "16px 18px" }}>
-      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 8, letterSpacing: "0.06em" }}>{label.toUpperCase()}</div>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 4, marginBottom: 10 }}>
-        <span style={{ fontSize: 26, fontWeight: 800, color, letterSpacing: "-0.03em" }}>{value}</span>
-        <span style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", paddingBottom: 3 }}>{unit}</span>
+    <div onClick={() => setFlipped(f => !f)} style={{ position:"relative", cursor:"pointer", height:160, perspective:1000 }}>
+      <div style={{ position:"absolute", inset:0, transformStyle:"preserve-3d", transition:"transform 0.5s cubic-bezier(0.4,0,0.2,1)", transform:flipped ? "rotateY(180deg)" : "rotateY(0deg)" }}>
+        {/* Front */}
+        <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"24px 20px", display:"flex", flexDirection:"column", justifyContent:"space-between" }}>
+          <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", letterSpacing:"0.06em", textTransform:"uppercase" }}>{card.label}</div>
+          <div>
+            <div style={{ fontSize:44, fontWeight:900, letterSpacing:"-0.04em", color:card.color, lineHeight:1 }}>{val}</div>
+            <div style={{ fontSize:12, color:"rgba(255,255,255,0.3)", marginTop:4 }}>{card.sub}</div>
+          </div>
+          <div style={{ fontSize:10, color:"rgba(255,255,255,0.15)", letterSpacing:"0.05em" }}>TAP FOR FORMULA →</div>
+        </div>
+        {/* Back */}
+        <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", transform:"rotateY(180deg)", background:`${card.color}0A`, border:`1px solid ${card.color}25`, borderRadius:16, padding:"16px 18px", overflow:"hidden" }}>
+          <div style={{ fontSize:11, color:card.color, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:8 }}>Formula</div>
+          <div style={{ fontSize:10, color:"rgba(255,255,255,0.55)", marginBottom:10, fontFamily:"monospace", background:"rgba(0,0,0,0.3)", padding:"6px 8px", borderRadius:6 }}>{card.formula}</div>
+          <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)", lineHeight:1.5, marginBottom:8 }}>{card.explanation}</div>
+          <div style={{ fontSize:10, color:card.color, opacity:0.7, lineHeight:1.5 }}>{card.interpretation}</div>
+        </div>
       </div>
-      <div style={{ height: 3, background: "rgba(255,255,255,0.08)", borderRadius: 99, overflow: "hidden" }}>
-        <div style={{ width: `${Math.min(bar, 100)}%`, height: "100%", background: color, borderRadius: 99 }}/>
-      </div>
-      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginTop: 6 }}>{sub}</div>
-    </Card>
+    </div>
   );
 }
 
-function SkeletonCard() {
+function TrendChart({ meals }: { meals: Meal[] }) {
+  const DAYS = 14;
+  const now = Date.now();
+  const buckets: Record<string, number[]> = {};
+  for (let i = 0; i < DAYS; i++) {
+    const d = new Date(now - (DAYS-1-i) * 86400000);
+    buckets[d.toDateString()] = [];
+  }
+  meals.forEach(m => {
+    const d = new Date(m.created_at).toDateString();
+    if (d in buckets && m.glucose_before) buckets[d].push(m.glucose_before);
+  });
+  const points = Object.values(buckets).map(arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : null);
+  const filled: number[] = [];
+  let last = 110;
+  points.forEach(v => { if (v !== null) last = v; filled.push(last); });
+
+  const W=480, H=90, pad=20;
+  const mn=70, mx=230;
+  const toY=(v:number) => H - ((v-mn)/(mx-mn))*(H-pad)-pad/2;
+  const toX=(i:number) => (i/(DAYS-1))*(W-2*pad)+pad;
+  const path = filled.map((v,i) => `${i===0?"M":"L"}${toX(i)},${toY(v)}`).join(" ");
+  const area = path + ` L${toX(DAYS-1)},${H} L${toX(0)},${H} Z`;
+
+  const dateLabels = Object.keys(buckets);
+  const showIdx = [0, Math.floor(DAYS/4), Math.floor(DAYS/2), Math.floor(3*DAYS/4), DAYS-1];
+
   return (
-    <Card style={{ padding: "16px 18px" }}>
-      <div style={{ height: 10, background: "rgba(255,255,255,0.06)", borderRadius: 6, width: "60%", marginBottom: 12 }}/>
-      <div style={{ height: 26, background: "rgba(255,255,255,0.06)", borderRadius: 6, width: "40%", marginBottom: 10 }}/>
-      <div style={{ height: 3, background: "rgba(255,255,255,0.06)", borderRadius: 99 }}/>
-    </Card>
+    <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"20px 24px" }}>
+      <div style={{ fontSize:13, fontWeight:600, marginBottom:4 }}>Glucose Trend</div>
+      <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginBottom:14 }}>Average glucose before meals — last 14 days</div>
+      <svg viewBox={`0 0 ${W} ${H+8}`} style={{ width:"100%", overflow:"visible" }}>
+        {[80,110,140,180].map(v => (
+          <g key={v}>
+            <line x1={pad} y1={toY(v)} x2={W-pad} y2={toY(v)} stroke="rgba(255,255,255,0.05)" strokeDasharray="4"/>
+            <text x={pad-4} y={toY(v)+4} textAnchor="end" fontSize="8" fill="rgba(255,255,255,0.2)">{v}</text>
+          </g>
+        ))}
+        <defs>
+          <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={ACCENT} stopOpacity="0.25"/>
+            <stop offset="100%" stopColor={ACCENT} stopOpacity="0"/>
+          </linearGradient>
+        </defs>
+        <path d={area} fill="url(#trendGrad)"/>
+        <path d={path} fill="none" stroke={ACCENT} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        {filled.map((v,i) => points[i] !== null ? (
+          <circle key={i} cx={toX(i)} cy={toY(v)} r="3" fill={ACCENT} stroke={SURFACE} strokeWidth="1.5"/>
+        ) : null)}
+        {showIdx.map(i => (
+          <text key={i} x={toX(i)} y={H+20} textAnchor="middle" fontSize="8" fill="rgba(255,255,255,0.2)">
+            {new Date(dateLabels[i]).toLocaleDateString("en",{month:"short",day:"numeric"})}
+          </text>
+        ))}
+      </svg>
+    </div>
   );
 }
 
-function evalStyle(e: string | null) {
-  if (e === "GOOD")      return { color: GREEN,  label: "GOOD" };
-  if (e === "UNDERDOSE") return { color: ORANGE, label: "LOW DOSE" };
-  if (e === "OVERDOSE")  return { color: PINK,   label: "OVERDOSE" };
-  return { color: "#8B8FA8", label: "CHECK" };
-}
-
-function fmtDate(s: string) {
-  return new Date(s).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-}
-
-function computeStats(meals: Meal[]) {
-  const withEval  = meals.filter(m => m.evaluation);
-  const total     = withEval.length;
-  const good      = withEval.filter(m => m.evaluation === "GOOD").length;
-  const overdose  = withEval.filter(m => m.evaluation === "OVERDOSE").length;
-  const underdose = withEval.filter(m => m.evaluation === "UNDERDOSE").length;
-  const check     = withEval.filter(m => !["GOOD","OVERDOSE","UNDERDOSE"].includes(m.evaluation!)).length;
-  const goodRate  = total > 0 ? good / total : 0;
-  const spikeRate = total > 0 ? (overdose / total) * 100 : 0;
-  const hypoRate  = total > 0 ? (underdose / total) * 100 : 0;
-  const controlScore = goodRate * 100;
-  const glucoseReadings = meals.filter(m => m.glucose_before).map(m => m.glucose_before as number);
-  const avgGlucose = glucoseReadings.length > 0
-    ? glucoseReadings.reduce((s, g) => s + g, 0) / glucoseReadings.length
-    : null;
-  return { controlScore, goodRate, spikeRate, hypoRate, total, good, overdose, underdose, check, avgGlucose };
+function OutcomeChart({ meals }: { meals: Meal[] }) {
+  const groups: Record<string, { color:string; label:string; count:number }> = {
+    GOOD:     { color:GREEN,  label:"Good",       count:0 },
+    LOW:      { color:ORANGE, label:"Under Dose",  count:0 },
+    HIGH:     { color:PINK,   label:"Over Dose",   count:0 },
+    SPIKE:    { color:"#FF9F0A", label:"Spike",    count:0 },
+  };
+  meals.forEach(m => {
+    const ev = m.evaluation || "";
+    if (ev === "OVERDOSE" || ev === "HIGH") groups.HIGH.count++;
+    else if (ev === "UNDERDOSE" || ev === "LOW") groups.LOW.count++;
+    else if (ev === "SPIKE") groups.SPIKE.count++;
+    else if (ev === "GOOD") groups.GOOD.count++;
+  });
+  const total = meals.length || 1;
+  return (
+    <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"20px 24px" }}>
+      <div style={{ fontSize:13, fontWeight:600, marginBottom:4 }}>Outcome Distribution</div>
+      <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginBottom:18 }}>All-time breakdown</div>
+      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+        {Object.values(groups).map(g => {
+          const pct = Math.round((g.count/total)*100);
+          return (
+            <div key={g.label}>
+              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                <span style={{ fontSize:12, color:"rgba(255,255,255,0.5)" }}>{g.label}</span>
+                <span style={{ fontSize:12, fontWeight:600, color:g.color }}>{g.count} <span style={{ color:"rgba(255,255,255,0.3)", fontWeight:400 }}>({pct}%)</span></span>
+              </div>
+              <div style={{ height:6, borderRadius:99, background:"rgba(255,255,255,0.06)", overflow:"hidden" }}>
+                <div style={{ height:"100%", width:`${pct}%`, background:g.color, borderRadius:99, transition:"width 0.8s ease" }}/>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 export default function DashboardPage() {
-  const router  = useRouter();
-  const [meals, setMeals]   = useState<Meal[]>([]);
+  const router = useRouter();
+  const [meals, setMeals]     = useState<Meal[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError]   = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchMeals()
-      .then(setMeals)
-      .catch(e => setError(e instanceof Error ? e.message : "Failed to load"))
-      .finally(() => setLoading(false));
+    (async () => {
+      try {
+        await seedMealsIfEmpty();
+        const data = await fetchMeals();
+        setMeals(data);
+      } catch (e) { console.error(e); }
+      finally { setLoading(false); }
+    })();
   }, []);
 
-  const trendMeals = [...meals].filter(m => m.glucose_before).reverse().slice(-20);
-  const trendPts   = trendMeals.map(m => m.glucose_before as number);
-  const maxG = 220, minG = 60, W = 560, H = 90;
-  const toY  = (g: number) => H - ((g - minG) / (maxG - minG)) * H;
-  const toX  = (i: number) => (i / Math.max(trendPts.length - 1, 1)) * W;
-  const pathD = trendPts.map((g, i) => `${i === 0 ? "M" : "L"} ${toX(i).toFixed(1)} ${toY(g).toFixed(1)}`).join(" ");
-  const areaD = trendPts.length > 0 ? pathD + ` L ${W} ${H} L 0 ${H} Z` : "";
+  const recent = meals.slice(0, 6);
 
-  const stats     = computeStats(meals);
-  const recent    = meals.slice(0, 5);
-  const hasData   = meals.length > 0;
+  if (loading) return (
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"60vh", gap:12, color:"rgba(255,255,255,0.3)" }}>
+      <div style={{ width:20, height:20, border:`2px solid ${ACCENT}`, borderTopColor:"transparent", borderRadius:99, animation:"spin 0.8s linear infinite" }}/>
+      Loading dashboard…
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  );
 
   return (
-    <div style={{ maxWidth: 960, margin: "0 auto" }}>
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", marginBottom: 4 }}>Dashboard</h1>
-        <p style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>Your insulin control overview</p>
+    <div style={{ maxWidth:1000, margin:"0 auto" }}>
+      <div style={{ marginBottom:28, display:"flex", justifyContent:"space-between", alignItems:"flex-end", flexWrap:"wrap", gap:12 }}>
+        <div>
+          <h1 style={{ fontSize:24, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>Dashboard</h1>
+          <p style={{ color:"rgba(255,255,255,0.35)", fontSize:14 }}>
+            {meals.length} meals logged. Click any card to see formula.
+          </p>
+        </div>
+        <button onClick={() => router.push("/log")} style={{ padding:"10px 20px", borderRadius:10, border:"none", background:ACCENT, color:"#fff", cursor:"pointer", fontSize:14, fontWeight:600, boxShadow:`0 4px 20px ${ACCENT}40` }}>
+          + Log Meal
+        </button>
       </div>
 
-      {loading ? (
-        <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 12 }}>
-            {[0,1,2,3].map(i => <SkeletonCard key={i}/>)}
-          </div>
-          <Card style={{ padding: 24, marginBottom: 12 }}>
-            <div style={{ height: H, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.15)", fontSize: 12 }}>Loading…</div>
-          </Card>
-        </>
-      ) : error ? (
-        <Card style={{ padding: "40px 32px", textAlign: "center" }}>
-          <div style={{ fontSize: 28, color: PINK, marginBottom: 12 }}>⚠</div>
-          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>Could not load data</div>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)" }}>{error}</div>
-        </Card>
-      ) : !hasData ? (
-        <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 12 }}>
-            <StatCard label="Control Score" value="—" unit="/100" sub="No data yet"       color={ACCENT}  bar={0}/>
-            <StatCard label="Good Rate"     value="—" unit="%"    sub="Log meals to start" color={GREEN}   bar={0}/>
-            <StatCard label="Spike Rate"    value="—" unit="%"    sub="Hyperglycemia"      color={ORANGE}  bar={0}/>
-            <StatCard label="Hypo Rate"     value="—" unit="%"    sub="Hypoglycemia"       color={PINK}    bar={0}/>
-          </div>
-          <Card style={{ padding: "60px 40px", textAlign: "center" }}>
-            <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.3 }}>◈</div>
-            <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 10 }}>No entries yet</div>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.35)", marginBottom: 24, lineHeight: 1.6 }}>
-              Log your first meal to see your glucose control stats here.
-            </div>
-            <button onClick={() => router.push("/log")} style={{
-              padding: "11px 24px", background: `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
-              border: "none", borderRadius: 10, color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer",
-            }}>
-              Log a Meal
-            </button>
-          </Card>
-        </>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {/* FLIP CARDS */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:22 }}>
+        {CARDS.map(c => <FlipCard key={c.key} card={c} meals={meals}/>)}
+      </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10 }}>
-            <StatCard label="Control Score" value={stats.controlScore.toFixed(0)} unit="/100" sub={`${meals.length} entries`}         color={ACCENT}  bar={stats.controlScore}/>
-            <StatCard label="Good Rate"     value={(stats.goodRate*100).toFixed(1)} unit="%"  sub={`${stats.good} good outcomes`}      color={GREEN}   bar={stats.goodRate*100}/>
-            <StatCard label="Spike Rate"    value={stats.spikeRate.toFixed(1)}     unit="%"  sub="Possible overdose"                  color={ORANGE}  bar={stats.spikeRate}/>
-            <StatCard label="Hypo Rate"     value={stats.hypoRate.toFixed(1)}      unit="%"  sub="Possible underdose"                 color={PINK}    bar={stats.hypoRate}/>
-          </div>
+      {/* CHARTS */}
+      <div style={{ display:"grid", gridTemplateColumns:"3fr 2fr", gap:14, marginBottom:22 }}>
+        <TrendChart meals={meals}/>
+        <OutcomeChart meals={meals}/>
+      </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1.8fr 1fr", gap: 10 }}>
-            <Card style={{ padding: "18px 20px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>Glucose Trend</div>
-                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)" }}>Pre-meal readings · {trendPts.length} entries</div>
-                </div>
-                <span style={{ fontSize: 11, padding: "4px 10px", background: `${ACCENT}22`, color: ACCENT, borderRadius: 99, fontWeight: 500 }}>7d</span>
-              </div>
-              {trendPts.length > 1 ? (
-                <div style={{ position: "relative" }}>
-                  <div style={{
-                    position: "absolute", left: 0, right: 0,
-                    top: `${((maxG - 140) / (maxG - minG)) * 100}%`,
-                    height: `${((140 - 80) / (maxG - minG)) * 100}%`,
-                    background: `${GREEN}08`, borderTop: `1px dashed ${GREEN}40`, borderBottom: `1px dashed ${GREEN}40`,
-                  }}/>
-                  <svg width="100%" height={H + 8} viewBox={`0 0 ${W} ${H + 8}`} preserveAspectRatio="none" style={{ display: "block" }}>
-                    <defs>
-                      <linearGradient id="dg" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%"   stopColor={ACCENT} stopOpacity="0.2"/>
-                        <stop offset="100%" stopColor={ACCENT} stopOpacity="0"/>
-                      </linearGradient>
-                    </defs>
-                    <path d={areaD} fill="url(#dg)"/>
-                    <path d={pathD} fill="none" stroke={ACCENT} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    {trendPts.map((g, i) =>
-                      g > 180 ? <circle key={i} cx={toX(i)} cy={toY(g)} r={3.5} fill={ORANGE}/> :
-                      g < 70  ? <circle key={i} cx={toX(i)} cy={toY(g)} r={3.5} fill={PINK}/> : null
-                    )}
-                  </svg>
-                </div>
-              ) : (
-                <div style={{ height: H, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.2)", fontSize: 12 }}>
-                  Log meals with blood glucose readings to see trend
-                </div>
-              )}
-            </Card>
-
-            <Card style={{ padding: "18px 20px" }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Outcomes</div>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginBottom: 16 }}>Evaluation split</div>
-              {[
-                { label: "GOOD",      count: stats.good,      color: GREEN  },
-                { label: "UNDERDOSE", count: stats.underdose, color: ORANGE },
-                { label: "OVERDOSE",  count: stats.overdose,  color: PINK   },
-                { label: "CHECK",     count: stats.check,     color: "#4B5070" },
-              ].map(r => (
-                <div key={r.label} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                  <div style={{ width: 7, height: 7, borderRadius: 99, background: r.color, flexShrink: 0 }}/>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                      <span style={{ fontSize: 10, color: "rgba(255,255,255,0.45)", letterSpacing: "0.06em" }}>{r.label}</span>
-                      <span style={{ fontSize: 10, color: r.color, fontWeight: 600 }}>{r.count}</span>
-                    </div>
-                    <div style={{ height: 3, background: "rgba(255,255,255,0.07)", borderRadius: 99, overflow: "hidden" }}>
-                      <div style={{ width: `${stats.total > 0 ? (r.count / stats.total) * 100 : 0}%`, height: "100%", background: r.color, borderRadius: 99 }}/>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {stats.avgGlucose && (
-                <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${BORDER}` }}>
-                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", marginBottom: 3 }}>AVG GLUCOSE BEFORE</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: ACCENT }}>
-                    {stats.avgGlucose.toFixed(0)}
-                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", fontWeight: 400, marginLeft: 4 }}>mg/dL</span>
-                  </div>
-                </div>
-              )}
-            </Card>
-          </div>
-
-          <Card>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 18px", borderBottom: `1px solid ${BORDER}` }}>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>Recent Entries</div>
-              <button onClick={() => router.push("/entries")} style={{ fontSize: 11, color: ACCENT, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-                View all →
-              </button>
-            </div>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                    {["Time","Meal","BG Before","Carbs","Insulin","Result"].map(h => (
-                      <th key={h} style={{ padding: "7px 16px", textAlign: "left", fontSize: 9, color: "rgba(255,255,255,0.3)", fontWeight: 500, letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
-                        {h.toUpperCase()}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {recent.map((meal, i) => {
-                    const ev = evalStyle(meal.evaluation);
-                    return (
-                      <tr key={meal.id} style={{ borderBottom: i < recent.length - 1 ? "1px solid rgba(255,255,255,0.03)" : "none" }}>
-                        <td style={{ padding: "9px 16px", fontSize: 11, color: "rgba(255,255,255,0.4)", whiteSpace: "nowrap" }}>{fmtDate(meal.created_at)}</td>
-                        <td style={{ padding: "9px 16px", fontSize: 12, fontWeight: 500, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={meal.input_text}>{meal.input_text}</td>
-                        <td style={{ padding: "9px 16px", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap",
-                          color: !meal.glucose_before ? "rgba(255,255,255,0.25)" : meal.glucose_before > 180 ? ORANGE : meal.glucose_before < 70 ? PINK : "rgba(255,255,255,0.85)"
-                        }}>
-                          {meal.glucose_before ? `${meal.glucose_before}` : "—"}<span style={{ fontSize: 10, fontWeight: 400, color: "rgba(255,255,255,0.3)" }}>{meal.glucose_before ? " mg/dL" : ""}</span>
-                        </td>
-                        <td style={{ padding: "9px 16px", fontSize: 12, color: "rgba(255,255,255,0.7)", whiteSpace: "nowrap" }}>
-                          {meal.carbs_grams ? `${meal.carbs_grams}g` : "—"}
-                        </td>
-                        <td style={{ padding: "9px 16px", fontSize: 12, color: "rgba(255,255,255,0.7)", whiteSpace: "nowrap" }}>
-                          {meal.insulin_units ? `${meal.insulin_units}u` : "—"}
-                        </td>
-                        <td style={{ padding: "9px 16px" }}>
-                          <span style={{ fontSize: 10, padding: "3px 9px", borderRadius: 99, fontWeight: 700, background: `${ev.color}18`, color: ev.color, letterSpacing: "0.06em", whiteSpace: "nowrap" }}>
-                            {ev.label}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-
+      {/* RECENT ENTRIES */}
+      <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, overflow:"hidden" }}>
+        <div style={{ padding:"18px 24px", display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom:`1px solid ${BORDER}` }}>
+          <div style={{ fontSize:14, fontWeight:600 }}>Recent Entries</div>
+          <button onClick={() => router.push("/entries")} style={{ fontSize:12, color:ACCENT, background:"transparent", border:"none", cursor:"pointer" }}>View all →</button>
         </div>
-      )}
+        {recent.length === 0 ? (
+          <div style={{ padding:"32px", textAlign:"center", color:"rgba(255,255,255,0.2)", fontSize:14 }}>No entries yet. Log your first meal.</div>
+        ) : (
+          <div>
+            {recent.map(m => {
+              const isOpen = expanded === m.id;
+              const ev = m.evaluation;
+              const time = new Date(m.created_at).toLocaleString("en", { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" });
+              return (
+                <div key={m.id} style={{ borderBottom:`1px solid ${BORDER}` }}>
+                  <div onClick={() => setExpanded(isOpen ? null : m.id)} style={{ padding:"14px 24px", cursor:"pointer", display:"grid", gridTemplateColumns:"1fr auto auto auto auto", gap:16, alignItems:"center" }}>
+                    <div>
+                      <div style={{ fontSize:13, fontWeight:500, marginBottom:2 }}>{m.input_text.length > 45 ? m.input_text.slice(0,45)+"…" : m.input_text}</div>
+                      <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>{time}</div>
+                    </div>
+                    <div style={{ fontSize:13, textAlign:"right" }}><span style={{ color:"rgba(255,255,255,0.35)", fontSize:11 }}>BG </span>{m.glucose_before ?? "—"}</div>
+                    <div style={{ fontSize:13, textAlign:"right" }}><span style={{ color:"rgba(255,255,255,0.35)", fontSize:11 }}>Carbs </span>{m.carbs_grams ?? "—"}g</div>
+                    <div style={{ fontSize:13, textAlign:"right" }}><span style={{ color:"rgba(255,255,255,0.35)", fontSize:11 }}>Insulin </span>{m.insulin_units ?? "—"}u</div>
+                    <span style={{ padding:"3px 10px", borderRadius:99, fontSize:11, fontWeight:700, background:`${evalColor(ev)}18`, color:evalColor(ev), border:`1px solid ${evalColor(ev)}30`, whiteSpace:"nowrap" }}>
+                      {evalLabel(ev)}
+                    </span>
+                  </div>
+                  {isOpen && (
+                    <div style={{ padding:"0 24px 16px", display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))", gap:10 }}>
+                      {Array.isArray(m.parsed_json) && m.parsed_json.map((f, i) => (
+                        <div key={i} style={{ background:"rgba(255,255,255,0.03)", borderRadius:10, padding:"10px 12px" }}>
+                          <div style={{ fontSize:12, fontWeight:600, marginBottom:4 }}>{f.name}</div>
+                          <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)" }}>{f.grams}g · {f.carbs ?? "?"}c · {f.protein ?? "?"}p · {f.fat ?? "?"}f</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
