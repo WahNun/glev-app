@@ -13,7 +13,7 @@ const TYPE_COLORS: Record<string, string> = { FAST_CARBS:ORANGE, HIGH_PROTEIN:AC
 function evC(ev: string|null) { return EVAL_COLORS[ev||""] || "rgba(255,255,255,0.3)"; }
 function evL(ev: string|null) { return EVAL_LABELS[ev||""] || ev || "—"; }
 
-const FILTERS = ["All","GOOD","LOW","HIGH","SPIKE"];
+const FILTERS = ["All","GOOD","UNDERDOSE","OVERDOSE","SPIKE"];
 
 export default function EntriesPage() {
   const [meals, setMeals]     = useState<Meal[]>([]);
@@ -28,8 +28,8 @@ export default function EntriesPage() {
 
   const filtered = meals.filter(m => {
     const matchEval = filter === "All" || m.evaluation === filter
-      || (filter==="HIGH" && (m.evaluation==="OVERDOSE"||m.evaluation==="HIGH"))
-      || (filter==="LOW"  && (m.evaluation==="UNDERDOSE"||m.evaluation==="LOW"));
+      || (filter==="OVERDOSE" && (m.evaluation==="OVERDOSE"||m.evaluation==="HIGH"))
+      || (filter==="UNDERDOSE"  && (m.evaluation==="UNDERDOSE"||m.evaluation==="LOW"));
     const matchSearch = !search || m.input_text.toLowerCase().includes(search.toLowerCase());
     return matchEval && matchSearch;
   });

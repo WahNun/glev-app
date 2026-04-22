@@ -8,6 +8,16 @@ const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
 
 interface ParsedRow { date: string; meal: string; glucose: string; carbs: string; insulin: string; evaluation: string; }
 
+function parseRange(val: string): string {
+  const cleaned = val.replace(/[a-zA-Z]/g, "").trim();
+  const rangeMatch = cleaned.match(/^(\d+(?:\.\d+)?)\s*[-–—]\s*(\d+(?:\.\d+)?)$/);
+  if (rangeMatch) {
+    const avg = (parseFloat(rangeMatch[1]) + parseFloat(rangeMatch[2])) / 2;
+    return Math.round(avg).toString();
+  }
+  return cleaned;
+}
+
 function parseCSV(text: string): ParsedRow[] {
   const lines = text.trim().split("\n").filter(l => l.trim());
   if (lines.length < 2) return [];
@@ -26,9 +36,9 @@ function parseCSV(text: string): ParsedRow[] {
     return {
       date:       cells[colMap.date  ?? 0] ?? "",
       meal:       cells[colMap.meal  ?? 1] ?? "",
-      glucose:    cells[colMap.glucose ?? 2] ?? "",
-      carbs:      cells[colMap.carbs  ?? 3] ?? "",
-      insulin:    cells[colMap.insulin ?? 4] ?? "",
+      glucose:    parseRange(cells[colMap.glucose ?? 2] ?? ""),
+      carbs:      parseRange(cells[colMap.carbs  ?? 3] ?? ""),
+      insulin:    parseRange(cells[colMap.insulin ?? 4] ?? ""),
       evaluation: cells[colMap.evaluation ?? 5] ?? "",
     };
   }).filter(r => r.meal || r.carbs);

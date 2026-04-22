@@ -1,0 +1,280 @@
+You are rebuilding a production-grade Next.js (App Router) application called "Glev – Smart Insulin Decisions".
+
+This is a strict reconstruction of an existing mockup. Do not simplify. Do not skip features.
+
+Goal:
+Fix all broken functionality, restore missing logic, align UI/UX with the mockup, and ensure the app works end-to-end in both Replit preview and browser.
+
+---
+
+SECTION 1 — DATABASE (SUPABASE)
+
+Ensure the meals table has the following columns:
+
+- id (uuid or serial)
+- glucose_before (integer)
+- glucose_after (integer)
+- carbs (integer)
+- protein (integer)
+- fat (integer)
+- fiber (integer)
+- insulin_units (float)
+- meal_description (text)
+- meal_type (text)
+- created_at (timestamp default now())
+
+Run idempotent migration logic:
+
+ALTER TABLE meals ADD COLUMN IF NOT EXISTS glucose_after INTEGER;
+ALTER TABLE meals ADD COLUMN IF NOT EXISTS protein INTEGER;
+ALTER TABLE meals ADD COLUMN IF NOT EXISTS fat INTEGER;
+ALTER TABLE meals ADD COLUMN IF NOT EXISTS fiber INTEGER;
+ALTER TABLE meals ADD COLUMN IF NOT EXISTS meal_type TEXT;
+ALTER TABLE meals ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT now();
+
+---
+
+SECTION 2 — SEED DATA (MANDATORY)
+
+If meals table is empty:
+
+Insert the provided historical dataset.
+
+For each row:
+- store glucose_before and glucose_after
+- store carbs
+- estimate protein, fat, fiber if missing
+- store insulin_units
+- store full meal_description
+- derive meal_type
+
+Meal classification rules:
+- FAST_CARBS: high carbs, low fat/protein
+- HIGH_PROTEIN: protein dominant
+- HIGH_FAT: fat dominant
+- BALANCED: mixed macros
+
+Seeding must run automatically on first app load or via server init.
+
+---
+
+SECTION 3 — CSV IMPORT (FIX BROKEN LOGIC)
+
+Implement a robust CSV importer:
+
+Requirements:
+- auto-detect columns (date, meal, glucose_before, glucose_after, carbs, insulin)
+- support ranges like "64-89g" → convert to average
+- ignore unknown columns safely
+- preview parsed data before insert
+- insert batch into Supabase
+- show per-row error feedback
+- fail gracefully if columns missing
+
+---
+
+SECTION 4 — AUTH (SUPABASE FIX)
+
+Problem: preview app stuck on login
+
+Fix:
+
+- enable persistSession: true
+- store session in localStorage
+- on app load:
+    if no session → create temporary session (anonymous fallback)
+
+Ensure:
+- login works in browser
+- login works in Replit preview
+- no redirect loops
+
+---
+
+SECTION 5 — LOG MEAL (PRIMARY INTERFACE)
+
+Rebuild exactly as follows:
+
+VOICE INPUT:
+- large central microphone button (not small icon)
+- visually dominant element
+
+FLOW:
+1. user taps mic
+2. speech is transcribed
+3. text sent to AI parser automatically
+
+AI PARSER:
+- returns structured object:
+  { carbs, protein, fat, fiber, meal_description }
+
+DUAL VIEW:
+- left: editable input fields
+- right: AI parsed output preview
+
+User can:
+- modify parsed values
+- confirm
+
+Only after confirmation:
+→ populate form fields
+
+---
+
+SECTION 6 — AUTO INSULIN SUGGESTION
+
+Live calculation based on:
+- carbs
+- glucose_before
+- historical meal data
+
+Update in real time while user edits fields.
+
+---
+
+SECTION 7 — CGM INTEGRATION (SIMULATED)
+
+Add button:
+
+"Pull CGM Data"
+
+Behavior:
+- fills glucose_before automatically
+- simulate value if no real integration
+
+---
+
+SECTION 8 — GLEV ENGINE (CORE FEATURE)
+
+Inputs:
+- current glucose
+- planned carbs
+
+Logic:
+1. find similar meals:
+   ±12g carbs
+   ±35 mg/dL glucose
+
+2. compute:
+   - average insulin
+   - outcome quality
+
+3. output:
+   - recommended insulin dose
+   - confidence level (HIGH / MEDIUM / LOW)
+
+4. display:
+   - reference meals used
+
+---
+
+SECTION 9 — DASHBOARD
+
+Include:
+
+Metrics:
+- Control Score
+- Good Rate
+- Spike Rate
+- Hypo Rate
+
+Each card:
+- clickable
+- flips on click
+
+Backside shows:
+- formula
+- explanation
+- interpretation
+
+Additional:
+- glucose trend chart (SVG)
+- outcome distribution bars
+
+Recent entries:
+- expandable rows
+- show macros, delta, meal type
+
+---
+
+SECTION 10 — ENTRIES PAGE
+
+- filter by:
+  GOOD
+  UNDERDOSE
+  OVERDOSE
+
+- expandable rows with full breakdown
+
+---
+
+SECTION 11 — INSIGHTS PAGE
+
+Include:
+
+Performance metrics:
+- Control Score
+- Good Rate
+- Spike Rate
+- Hypo Rate
+
+Meal type analysis:
+- FAST_CARBS
+- HIGH_PROTEIN
+- HIGH_FAT
+- BALANCED
+
+Pattern detection:
+- underdosing trends
+- overdosing trends
+- stable control windows
+
+---
+
+SECTION 12 — UI SYSTEM
+
+Requirements:
+- dark theme
+- purple accent
+- smooth transitions
+- responsive (mobile + desktop)
+
+Mic button:
+- large
+- centered
+- glowing animation
+
+---
+
+SECTION 13 — NEXT.JS CONFIG
+
+Ensure:
+
+package.json scripts:
+"dev": "next dev --port 3000"
+"build": "next build"
+"start": "next start --port 3000"
+
+Remove:
+- standalone output in dev
+
+Ensure dev server runs cleanly without port conflicts.
+
+---
+
+SECTION 14 — FINAL VALIDATION
+
+App must:
+
+- start without errors
+- load in preview
+- allow login
+- display seeded data
+- import CSV correctly
+- support voice input parsing
+- calculate insulin suggestions
+- run Glev Engine logic
+- render dashboard + insights correctly
+
+Do not skip any section.
+Implement completely.
