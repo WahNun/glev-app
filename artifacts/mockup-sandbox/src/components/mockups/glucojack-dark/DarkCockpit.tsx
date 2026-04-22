@@ -1341,12 +1341,8 @@ function LoginGate({onEnter}:{onEnter:(email:string)=>void}) {
       }}>
         {/* Logo */}
         <div style={{display:"flex",flexDirection:"column",alignItems:"center",marginBottom:32}}>
-          <div style={{width:48,height:48,borderRadius:14,background:`linear-gradient(135deg,${ACCENT},#7B93FF)`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:14,boxShadow:`0 0 24px ${ACCENT}44`}}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="4" fill="white" opacity="0.9"/>
-              <circle cx="12" cy="12" r="8" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="3 3" opacity="0.5"/>
-              <circle cx="12" cy="12" r="11" fill="none" stroke="white" strokeWidth="1" opacity="0.2"/>
-            </svg>
+          <div style={{marginBottom:14,boxShadow:`0 0 28px ${ACCENT}44`,borderRadius:14}}>
+            <LogoCMark size={56}/>
           </div>
           <div style={{fontSize:22,fontWeight:700,letterSpacing:"-0.02em",color:"white",marginBottom:6}}>Glev</div>
           <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(79,110,247,0.1)",border:"1px solid rgba(79,110,247,0.25)",borderRadius:99,padding:"3px 12px"}}>
