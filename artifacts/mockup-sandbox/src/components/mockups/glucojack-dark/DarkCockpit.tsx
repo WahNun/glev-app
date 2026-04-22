@@ -1373,7 +1373,7 @@ function MobileDashboard({email,name:memberName,onSignOut}:{email?:string;name?:
               <div style={{background:SURFACE,border:`1px solid ${BORDER}`,borderRadius:14,overflow:"hidden"}}>
                 <div style={{padding:"14px 18px 12px",borderBottom:`1px solid ${BORDER}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div style={{fontSize:14,fontWeight:600}}>Recent Entries</div>
-                  <span style={{fontSize:11,color:ACCENT}}>View all →</span>
+                  <span onClick={()=>setMobilePage("entries")} style={{fontSize:11,color:ACCENT,cursor:"pointer"}}>View all →</span>
                 </div>
                 {stats.recentEntries.slice(0,4).map((e,i)=>{
                   const ev=evalStyle(e.evaluation);
