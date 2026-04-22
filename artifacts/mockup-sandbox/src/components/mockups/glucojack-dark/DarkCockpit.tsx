@@ -58,7 +58,9 @@ interface MealPattern {
 }
 
 interface Recommendation {
-  suggestedUnits: number;
+  recommendedUnits: number;
+  minUnits: number;
+  maxUnits: number;
   reasoning: string;
   confidence: string;
   carbRatio: number | null;
@@ -611,10 +613,10 @@ function Recommend({ prefill }: { prefill?: Partial<ParsedVoiceEntry> }) {
             <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"24px 0",background:`${ACCENT}0D`,borderRadius:12,border:`1px solid ${ACCENT}22`,marginBottom:16}}>
               <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginBottom:4}}>SUGGESTED DOSE</div>
               <div style={{display:"flex",alignItems:"flex-end",gap:6}}>
-                <span style={{fontSize:56,fontWeight:900,color:"white",letterSpacing:"-0.03em"}}>{result.suggestedUnits.toFixed(1)}</span>
+                <span style={{fontSize:56,fontWeight:900,color:"white",letterSpacing:"-0.03em"}}>{result.recommendedUnits.toFixed(1)}</span>
                 <span style={{fontSize:22,color:"rgba(255,255,255,0.4)",paddingBottom:6}}>u</span>
               </div>
-              <span style={{fontSize:11,color:"rgba(255,255,255,0.35)",fontFamily:"monospace"}}>Range {(result.suggestedUnits*0.9).toFixed(1)} – {(result.suggestedUnits*1.1).toFixed(1)} u</span>
+              <span style={{fontSize:11,color:"rgba(255,255,255,0.35)",fontFamily:"monospace"}}>Range {result.minUnits.toFixed(1)} – {result.maxUnits.toFixed(1)} u</span>
               {result.cappedForSafety&&<span style={{fontSize:10,color:ORANGE,marginTop:6}}>⚠ Capped for safety</span>}
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:8}}>
@@ -709,7 +711,7 @@ function VoicePage({ onLogged }: { onLogged?: ()=>void }) {
         glucoseBefore: parsed.glucoseBefore,
         carbsGrams: parsed.carbsGrams,
         fiberGrams: parsed.fiberGrams??undefined,
-        insulinUnits: parsed.insulinUnits ?? suggestion?.suggestedUnits,
+        insulinUnits: parsed.insulinUnits ?? suggestion?.recommendedUnits,
         mealType,
         mealDescription: parsed.mealDescription??undefined,
       })});
@@ -888,7 +890,7 @@ function VoicePage({ onLogged }: { onLogged?: ()=>void }) {
               <div style={{display:"flex",alignItems:"center",gap:14}}>
                 <div style={{flex:1}}>
                   <div style={{fontSize:10,color:"rgba(255,255,255,0.35)",letterSpacing:"0.08em",marginBottom:2}}>SUGGESTED DOSE</div>
-                  <div style={{fontSize:30,fontWeight:800,color:ACCENT,letterSpacing:"-0.03em"}}>{suggestion.suggestedUnits.toFixed(1)}<span style={{fontSize:13,color:"rgba(255,255,255,0.3)",fontWeight:400}}> u</span></div>
+                  <div style={{fontSize:30,fontWeight:800,color:ACCENT,letterSpacing:"-0.03em"}}>{suggestion.recommendedUnits.toFixed(1)}<span style={{fontSize:13,color:"rgba(255,255,255,0.3)",fontWeight:400}}> u</span></div>
                 </div>
                 <div style={{fontSize:11,color:"rgba(255,255,255,0.38)",maxWidth:200,lineHeight:1.55}}>{suggestion.reasoning.split(".")[0]}.</div>
               </div>
