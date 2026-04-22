@@ -29,6 +29,9 @@ export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const isAuthed = getSessionFromCookies(req);
 
+  if (pathname === "/") {
+    return NextResponse.redirect(new URL(isAuthed ? "/dashboard" : "/login", req.url));
+  }
   if (PROTECTED.some(p => pathname === p || pathname.startsWith(p + "/")) && !isAuthed) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
@@ -39,5 +42,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/log/:path*", "/entries/:path*", "/insights/:path*", "/login"],
+  matcher: ["/", "/dashboard/:path*", "/log/:path*", "/entries/:path*", "/insights/:path*", "/login"],
 };
