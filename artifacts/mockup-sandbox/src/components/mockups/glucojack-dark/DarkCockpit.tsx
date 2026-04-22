@@ -1223,7 +1223,121 @@ const PAGE_TITLES: Record<Page,string> = {
   insights:"Insights", recommend:"Glev Engine", voice:"Voice Log", import:"Import Center",
 };
 
+// ─── Login Gate ─────────────────────────────────────────────────
+function LoginGate({onEnter}:{onEnter:()=>void}) {
+  const [email,setEmail]=useState("");
+  const [pass,setPass]=useState("");
+  const [err,setErr]=useState("");
+  const [loading,setLoading]=useState(false);
+  const [visible,setVisible]=useState(false);
+  useEffect(()=>{const t=setTimeout(()=>setVisible(true),40);return()=>clearTimeout(t);},[]);
+
+  function submit(e:React.FormEvent){
+    e.preventDefault();
+    if(!email.trim()||!pass.trim()){setErr("Please enter your credentials.");return;}
+    setLoading(true);
+    setTimeout(()=>{ setLoading(false); onEnter(); },900);
+  }
+
+  return (
+    <div style={{
+      position:"fixed",inset:0,zIndex:9999,
+      background:"rgba(9,9,11,0.92)",
+      backdropFilter:"blur(18px)",
+      display:"flex",alignItems:"center",justifyContent:"center",
+      opacity:visible?1:0,transition:"opacity 0.35s ease",
+    }}>
+      {/* Ambient glow */}
+      <div style={{position:"absolute",width:480,height:480,borderRadius:"50%",background:`radial-gradient(circle,${ACCENT}14 0%,transparent 70%)`,pointerEvents:"none",top:"50%",left:"50%",transform:"translate(-50%,-50%)"}}/>
+
+      <form onSubmit={submit} style={{
+        position:"relative",width:380,
+        background:"#111117",
+        border:"1px solid rgba(79,110,247,0.18)",
+        borderRadius:20,
+        padding:"40px 36px 36px",
+        boxShadow:`0 0 0 1px rgba(255,255,255,0.04), 0 32px 80px rgba(0,0,0,0.8), 0 0 60px ${ACCENT}10`,
+        display:"flex",flexDirection:"column",gap:0,
+      }}>
+        {/* Logo */}
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",marginBottom:32}}>
+          <div style={{width:48,height:48,borderRadius:14,background:`linear-gradient(135deg,${ACCENT},#7B93FF)`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:14,boxShadow:`0 0 24px ${ACCENT}44`}}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="4" fill="white" opacity="0.9"/>
+              <circle cx="12" cy="12" r="8" fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="3 3" opacity="0.5"/>
+              <circle cx="12" cy="12" r="11" fill="none" stroke="white" strokeWidth="1" opacity="0.2"/>
+            </svg>
+          </div>
+          <div style={{fontSize:22,fontWeight:700,letterSpacing:"-0.02em",color:"white",marginBottom:6}}>Glev</div>
+          <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(79,110,247,0.1)",border:"1px solid rgba(79,110,247,0.25)",borderRadius:99,padding:"3px 12px"}}>
+            <div style={{width:5,height:5,borderRadius:"50%",background:ACCENT}}/>
+            <span style={{fontSize:10,fontWeight:700,letterSpacing:"0.12em",color:ACCENT}}>MEMBERS ONLY</span>
+          </div>
+        </div>
+
+        <div style={{fontSize:14,fontWeight:500,color:"rgba(255,255,255,0.45)",textAlign:"center",marginBottom:28,lineHeight:1.5}}>
+          Sign in to access your insulin<br/>decision dashboard
+        </div>
+
+        {/* Email */}
+        <label style={{fontSize:11,fontWeight:600,letterSpacing:"0.08em",color:"rgba(255,255,255,0.35)",marginBottom:6}}>EMAIL</label>
+        <input
+          type="email" value={email} onChange={e=>{setEmail(e.target.value);setErr("");}}
+          placeholder="you@example.com"
+          autoFocus
+          style={{
+            width:"100%",boxSizing:"border-box",
+            background:"rgba(255,255,255,0.04)",
+            border:`1px solid ${err&&!email?"rgba(255,45,120,0.5)":"rgba(255,255,255,0.1)"}`,
+            borderRadius:10,padding:"11px 14px",
+            color:"white",fontSize:14,outline:"none",
+            marginBottom:16,transition:"border-color 0.2s",
+          }}
+          onFocus={e=>(e.target.style.borderColor=`${ACCENT}88`)}
+          onBlur={e=>(e.target.style.borderColor=err&&!email?"rgba(255,45,120,0.5)":"rgba(255,255,255,0.1)")}
+        />
+
+        {/* Password */}
+        <label style={{fontSize:11,fontWeight:600,letterSpacing:"0.08em",color:"rgba(255,255,255,0.35)",marginBottom:6}}>PASSWORD</label>
+        <input
+          type="password" value={pass} onChange={e=>{setPass(e.target.value);setErr("");}}
+          placeholder="••••••••"
+          style={{
+            width:"100%",boxSizing:"border-box",
+            background:"rgba(255,255,255,0.04)",
+            border:`1px solid ${err&&!pass?"rgba(255,45,120,0.5)":"rgba(255,255,255,0.1)"}`,
+            borderRadius:10,padding:"11px 14px",
+            color:"white",fontSize:14,outline:"none",
+            marginBottom:err?8:24,transition:"border-color 0.2s",
+          }}
+          onFocus={e=>(e.target.style.borderColor=`${ACCENT}88`)}
+          onBlur={e=>(e.target.style.borderColor=err&&!pass?"rgba(255,45,120,0.5)":"rgba(255,255,255,0.1)")}
+        />
+
+        {err&&<div style={{fontSize:12,color:PINK,marginBottom:16,textAlign:"center"}}>{err}</div>}
+
+        {/* Submit */}
+        <button type="submit" disabled={loading} style={{
+          width:"100%",padding:"13px",borderRadius:11,
+          background:loading?`rgba(79,110,247,0.5)`:`linear-gradient(135deg,${ACCENT},#7B93FF)`,
+          border:"none",color:"white",fontSize:14,fontWeight:700,
+          cursor:loading?"default":"pointer",letterSpacing:"0.02em",
+          boxShadow:loading?"none":`0 4px 20px ${ACCENT}44`,
+          transition:"all 0.2s",
+        }}>
+          {loading?"Signing in…":"Sign In"}
+        </button>
+
+        <div style={{marginTop:20,fontSize:11,color:"rgba(255,255,255,0.2)",textAlign:"center"}}>
+          Access restricted to registered members
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export function DarkCockpit() {
+  const [loggedIn,setLoggedIn]=useState(false);
   const [page, setPage] = useState<Page>("dashboard");
   const [view, setView] = useState<"desktop"|"mobile">("desktop");
   const [refresh, setRefresh] = useState(0);
@@ -1232,6 +1346,7 @@ export function DarkCockpit() {
 
   return (
     <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:BG,color:"white",fontFamily:"'Inter',system-ui,sans-serif"}}>
+      {!loggedIn&&<LoginGate onEnter={()=>setLoggedIn(true)}/>}
       {/* View Toggle */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"10px 0",background:"#0C0C10",borderBottom:`1px solid ${BORDER}`,gap:0}}>
         <button onClick={()=>setView("desktop")} style={{padding:"6px 22px",borderRadius:"8px 0 0 8px",background:view==="desktop"?`${ACCENT}22`:"transparent",border:`1px solid ${view==="desktop"?ACCENT:"rgba(255,255,255,0.12)"}`,color:view==="desktop"?ACCENT:"rgba(255,255,255,0.4)",fontSize:12,fontWeight:600,cursor:"pointer",letterSpacing:"0.04em",borderRight:"none",transition:"all 0.15s"}}>🖥 Desktop</button>
