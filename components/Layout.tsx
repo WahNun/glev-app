@@ -22,10 +22,10 @@ const NAV = [
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1.5" fill={a ? ACCENT : "rgba(255,255,255,0.4)"}/><circle cx="4" cy="12" r="1.5" fill={a ? ACCENT : "rgba(255,255,255,0.4)"}/><circle cx="4" cy="18" r="1.5" fill={a ? ACCENT : "rgba(255,255,255,0.4)"}/></svg>
   )},
   { label: "Insights", path: "/insights", icon: (a: boolean) => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a7 7 0 0 1 4 12.8V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.2A7 7 0 0 1 12 2z"/><path d="M9 21h6"/><path d="M9 18h6"/></svg>
   )},
   { label: "Glev Engine", path: "/engine", icon: (a: boolean) => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+    <GlevLogo size={20} color={a ? ACCENT : "rgba(255,255,255,0.55)"} bg="transparent"/>
   )},
   { label: "Import", path: "/import", icon: (a: boolean) => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -146,7 +146,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         justifyContent: "space-around", alignItems: "center",
         padding: "10px 24px max(20px, env(safe-area-inset-bottom))", zIndex: 100,
       }}>
-        {[NAV[0], NAV[2], NAV[3], NAV[4]].map(({ label, path, icon }) => {
+        {[NAV[0], NAV[3], NAV[2], NAV[4]].map(({ label, path, icon }) => {
           const active = pathname.startsWith(path);
           return (
             <button key={path} onClick={() => router.push(path)} style={{
