@@ -34,6 +34,13 @@ export default function LogPage() {
   const [pfParsed, setPfParsed]   = useState<ParsedFood[] | null>(null);
   const [pfError, setPfError]     = useState<string | null>(null);
 
+  // GPT reasoning chat panel
+  type ChatMsg = { role: "user" | "assistant" | "system"; content: string };
+  const [chatMsgs, setChatMsgs]   = useState<ChatMsg[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatBusy, setChatBusy]   = useState(false);
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
+
   const mediaRecRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
@@ -147,6 +154,52 @@ export default function LogPage() {
     } finally { setPfLoading(false); }
   }
 
+  // Auto-scroll the chat panel as new messages arrive
+  useEffect(() => {
+    const el = chatScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [chatMsgs, chatBusy]);
+
+  async function sendChat(prefill?: string) {
+    const text = (prefill ?? chatInput).trim();
+    if (!text || chatBusy) return;
+    const next: ChatMsg[] = [...chatMsgs, { role: "user", content: text }];
+    setChatMsgs(next);
+    setChatInput("");
+    setChatBusy(true);
+    try {
+      const res = await fetch("/api/chat-macros", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: next,
+          description: desc || transcript || "",
+          macros: { carbs: totalCarbs, protein: totalProtein, fat: totalFat, fiber: totalFiber },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Chat failed");
+      setChatMsgs(c => [...c, { role: "assistant", content: data.reply || "(no reply)" }]);
+      if (data.macros) {
+        if (data.macros.carbs   != null) setCarbs(String(data.macros.carbs));
+        if (data.macros.protein != null) setProtein(String(data.macros.protein));
+        if (data.macros.fat     != null) setFat(String(data.macros.fat));
+        if (data.macros.fiber   != null) setFiber(String(data.macros.fiber));
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Chat failed";
+      setChatMsgs(c => [...c, { role: "assistant", content: `⚠ ${msg}` }]);
+    } finally { setChatBusy(false); }
+  }
+
+  // Seed the chat with an opening reasoning message after first parse
+  useEffect(() => {
+    if (chatMsgs.length === 0 && (transcript || desc) && (totalCarbs || totalProtein || totalFat)) {
+      sendChat(`Briefly explain how you arrived at these macros for: "${desc || transcript}". Mention portion-size assumptions and any approximations.`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transcript]);
+
   async function pullCgm() {
     setCgmLoading(true); setError("");
     await new Promise(r => setTimeout(r, 500 + Math.random() * 700));
@@ -197,17 +250,26 @@ export default function LogPage() {
   const voiceLabel = recording ? "Listening…" : parsing ? "Parsing…" : speechAvail ? "Tap to speak" : "Voice unavailable";
 
   return (
-    <div style={{ maxWidth:560, margin:"0 auto", display:"flex", flexDirection:"column", gap:14 }}>
+    <div style={{ maxWidth:1280, marginRight:"auto", display:"flex", flexDirection:"column", gap:14 }}>
       <style>{`
         @keyframes vPulse { 0%,100%{opacity:0.35;transform:scale(1)} 50%{opacity:1;transform:scale(1.05)} }
         @keyframes spin   { to { transform: rotate(360deg) } }
         .mic-btn:hover:not(:disabled) { transform: scale(1.04); }
+        .log-grid { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 18px; align-items: start; }
+        @media (max-width: 900px) {
+          .log-grid { grid-template-columns: 1fr; }
+          .log-grid .chat-col { position: static !important; max-height: 480px; }
+        }
+        .log-grid .chat-col { position: sticky; top: 16px; }
       `}</style>
 
       <div style={{ marginBottom:6 }}>
         <div style={{ fontSize:10, color:"rgba(255,255,255,0.35)", letterSpacing:"0.14em", marginBottom:6 }}>GLEV — SMART INSULIN DECISIONS</div>
         <h1 style={{ fontSize:28, fontWeight:800, letterSpacing:"-0.03em", margin:0 }}>Log</h1>
       </div>
+
+      <div className="log-grid">
+        <div style={{ display:"flex", flexDirection:"column", gap:14, minWidth:0 }}>
 
       {/* 1. Voice mic card */}
       <div style={{ ...card, padding:"24px 22px 22px" }}>
@@ -362,6 +424,88 @@ export default function LogPage() {
           </button>
         </div>
       </div>
+
+        </div>{/* /left col */}
+
+        {/* RIGHT COL: GPT reasoning chat */}
+        <div className="chat-col" style={{ ...card, padding:0, display:"flex", flexDirection:"column", height:"calc(100vh - 140px)", maxHeight:760, minHeight:420, overflow:"hidden" }}>
+          <div style={{ padding:"14px 18px", borderBottom:`1px solid ${BORDER}`, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <div>
+              <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.1em", color:"#fff", textTransform:"uppercase" }}>GPT Reasoning</div>
+              <div style={{ fontSize:10, color:"rgba(255,255,255,0.35)", marginTop:2 }}>See why these macros were chosen — or correct them</div>
+            </div>
+            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+              <div style={{ width:8, height:8, borderRadius:99, background: chatBusy ? ORANGE : GREEN, boxShadow:`0 0 6px ${chatBusy ? ORANGE : GREEN}88` }}/>
+              <span style={{ fontSize:9, color:"rgba(255,255,255,0.4)", letterSpacing:"0.08em", fontWeight:700 }}>{chatBusy ? "THINKING" : "READY"}</span>
+            </div>
+          </div>
+
+          <div ref={chatScrollRef} style={{ flex:1, overflowY:"auto", padding:"14px 18px", display:"flex", flexDirection:"column", gap:10 }}>
+            {chatMsgs.length === 0 && !chatBusy && (
+              <div style={{ color:"rgba(255,255,255,0.35)", fontSize:12, textAlign:"center", padding:"24px 8px", lineHeight:1.6 }}>
+                Once you log a meal (voice or text), GPT will explain how it
+                broke down the macros here. You can ask follow-ups or push
+                back — corrections you confirm are applied to the form on
+                the left.
+              </div>
+            )}
+            {chatMsgs.map((m, i) => {
+              const isUser = m.role === "user";
+              return (
+                <div key={i} style={{ display:"flex", justifyContent: isUser ? "flex-end" : "flex-start" }}>
+                  <div style={{
+                    maxWidth:"88%",
+                    background: isUser ? `${ACCENT}22` : "rgba(255,255,255,0.05)",
+                    border: `1px solid ${isUser ? ACCENT+"40" : "rgba(255,255,255,0.07)"}`,
+                    borderRadius: 12,
+                    padding: "9px 12px",
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                    color: "rgba(255,255,255,0.9)",
+                    whiteSpace: "pre-wrap",
+                  }}>
+                    <div style={{ fontSize:9, fontWeight:700, letterSpacing:"0.08em", textTransform:"uppercase", color: isUser ? ACCENT : GREEN, marginBottom:4 }}>
+                      {isUser ? "You" : "GPT"}
+                    </div>
+                    {m.content}
+                  </div>
+                </div>
+              );
+            })}
+            {chatBusy && (
+              <div style={{ display:"flex", justifyContent:"flex-start" }}>
+                <div style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:12, padding:"9px 12px", fontSize:12, color:"rgba(255,255,255,0.5)", display:"flex", alignItems:"center", gap:8 }}>
+                  <div style={{ width:10, height:10, border:`1.5px solid ${ACCENT}44`, borderTopColor:ACCENT, borderRadius:"50%", animation:"spin 0.7s linear infinite" }}/>
+                  Thinking…
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div style={{ padding:"10px 12px", borderTop:`1px solid ${BORDER}`, display:"flex", gap:8 }}>
+            <input
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); } }}
+              placeholder="Ask or correct… e.g. 'the banana was bigger'"
+              style={{ ...inp, flex:1, fontSize:13 }}
+              disabled={chatBusy}
+            />
+            <button
+              onClick={() => sendChat()}
+              disabled={chatBusy || !chatInput.trim()}
+              style={{
+                padding:"0 16px", borderRadius:10, border:"none",
+                background: chatBusy || !chatInput.trim() ? "rgba(255,255,255,0.05)" : `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
+                color: chatBusy || !chatInput.trim() ? "rgba(255,255,255,0.3)" : "#fff",
+                cursor: chatBusy || !chatInput.trim() ? "default" : "pointer",
+                fontSize:13, fontWeight:700, letterSpacing:"-0.01em", whiteSpace:"nowrap",
+              }}
+            >Send</button>
+          </div>
+        </div>
+
+      </div>{/* /grid */}
     </div>
   );
 }
