@@ -1,0 +1,21 @@
+{
+  "name": "glev-cgm-server",
+  "version": "1.0.0",
+  "description": "Multi-user LibreLinkUp proxy with Supabase JWT auth",
+  "private": true,
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "axios": "^1.7.0",
+    "dotenv": "^16.4.0",
+    "express": "^4.19.0"
+  }
+}

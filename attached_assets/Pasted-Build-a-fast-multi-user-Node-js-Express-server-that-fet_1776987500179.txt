@@ -1,0 +1,68 @@
+Build a fast, multi-user Node.js (Express) server that fetches glucose readings from the LibreLinkUp API on behalf of authenticated Supabase users.
+Environment variables:
+
+SUPABASE_URL
+SUPABASE_SERVICE_ROLE_KEY (server-side only, bypasses RLS)
+SUPABASE_ANON_KEY (for JWT verification)
+ENCRYPTION_KEY (32-byte hex, for AES-256-GCM of LLU passwords)
+
+Create .env.example with all four.
+Authentication model:
+
+Every request to /cgm/* must include Authorization: Bearer <supabase_jwt>.
+Verify the JWT with @supabase/supabase-js (pass the user's token, then call supabase.auth.getUser()). Reject with 401 if invalid.
+The authenticated user's id is used to look up their row in the cgm_credentials table.
+
+Database table (assume it exists): public.cgm_credentials
+Columns: user_id uuid PK, llu_email text, llu_password_encrypted text, llu_region text default 'eu', cached_token text, cached_token_expires timestamptz, cached_patient_id text, cached_account_id_hash text, updated_at timestamptz.
+Password encryption:
+
+Store LLU password as AES-256-GCM ciphertext, format iv:authTag:ciphertext (all hex). Key is ENCRYPTION_KEY from env.
+Provide helpers encrypt(plain) and decrypt(cipher).
+
+LibreLinkUp API (base URL https://api-{region}.libreview.io):
+Required headers on every LLU request:
+Content-Type: application/json
+product: llu.android
+version: 4.12.0
+Accept-Encoding: gzip
+After login, additionally:
+Authorization: Bearer <llu_token>
+Account-Id: <sha256-hex of llu_user.id>
+Flow per Glev-user:
+
+Load row from cgm_credentials. If cached_token still valid (> 60s before cached_token_expires), reuse it. Else:
+POST /llu/auth/login with { email, password }. If data.redirect === true, retry with data.region. If ToU required, POST /auth/continue/tou. On success, persist cached_token, cached_token_expires, cached_account_id_hash back to Supabase.
+Fast path: GET /llu/connections already returns glucoseMeasurement on the first patient entry — no extra call needed. Cache patientId to cached_patient_id.
+History path: GET /llu/connections/{patientId}/graph — only when explicitly requested.
+On 401 from LLU: invalidate cached token, re-login once, retry.
+
+Performance requirements:
+
+Single persistent axios instance with Keep-Alive agents (http.Agent, https.Agent with keepAlive: true).
+Request timeout: 3000 ms, one automatic retry on timeout/network error.
+Two-layer cache: in-memory Map<userId, {token, expires, patientId, accountIdHash}> as L1, Supabase as L2. Writes go to both.
+Target latency on /cgm/latest with warm cache: < 400 ms (L1 hit, single LLU GET, one Supabase JWT verification).
+
+Express routes (all under /cgm, all JWT-protected):
+
+POST /cgm/credentials — body: { email, password, region }. Encrypts password and upserts row for the authed user. Returns { ok: true }.
+DELETE /cgm/credentials — deletes the row and clears L1 cache entry for this user.
+GET /cgm/latest — returns { current: { value, unit, timestamp, trend } }. Uses fast path (/llu/connections only).
+GET /cgm/history — returns { current, history: [...] }. Uses /graph.
+GET /health — public, returns { ok: true }.
+
+Trend mapping: TrendArrow 1→fallingQuickly, 2→falling, 3→stable, 4→rising, 5→risingQuickly.
+Error responses: JSON { error: "..." } with correct HTTP status (400 bad input, 401 auth, 404 no credentials, 502 LLU upstream error, 504 timeout). Never crash.
+Logging: one line per request with userId, route, duration, status. No payload logging (PHI).
+Deliverables:
+
+package.json with deps: express, axios, @supabase/supabase-js, dotenv.
+server.js — Express bootstrap + routes.
+llu.js — LibreLinkUp client + caching.
+supabase.js — Supabase admin client + JWT verification helper.
+crypto.js — encrypt/decrypt helpers.
+.env.example.
+README with: required env vars, Supabase table creation SQL (as a comment block), example curl calls for each endpoint.
+
+Code style: async/await, no callbacks, small focused modules.
