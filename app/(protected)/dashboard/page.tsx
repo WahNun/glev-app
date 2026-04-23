@@ -293,7 +293,7 @@ export default function DashboardPage() {
                     const bg = m.glucose_before;
                     const bgC = bg == null ? "rgba(255,255,255,0.3)" : (bg > 140 ? ORANGE : bg < 80 ? PINK : GREEN);
                     return (
-                  <div onClick={() => setExpanded(isOpen ? null : m.id)} style={{ padding:"14px 24px", cursor:"pointer", display:"grid", gridTemplateColumns:"130px 160px 1fr 1fr 1fr 110px", gap:24, alignItems:"center" }}>
+                  <div className="glev-entry-row" onClick={() => setExpanded(isOpen ? null : m.id)} style={{ padding:"14px 24px", cursor:"pointer", display:"grid", gridTemplateColumns:"130px 160px 1fr 1fr 1fr 110px", gap:24, alignItems:"center" }}>
                     {/* Col 1: Time */}
                     <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)" }}>{time}</div>
                     {/* Col 2: Category chip (replaces meal text) */}
@@ -309,24 +309,29 @@ export default function DashboardPage() {
                         <span style={{ fontSize:11, color:"rgba(255,255,255,0.25)" }}>—</span>
                       )}
                     </div>
-                    {/* Col 3: BG */}
-                    <div style={{ minWidth:0 }}>
+                    {/* Col 3: BG (desktop only) */}
+                    <div className="glev-entry-hide-mobile" style={{ minWidth:0 }}>
                       <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>BG</div>
                       <div style={{ fontSize:14, fontWeight:700, color:bgC, letterSpacing:"-0.01em" }}>{bg ?? "—"}<span style={{ fontSize:10, color:"rgba(255,255,255,0.35)", fontWeight:500, marginLeft:3 }}>mg/dL</span></div>
                     </div>
-                    {/* Col 4: Carbs */}
-                    <div style={{ minWidth:0 }}>
+                    {/* Col 4: Carbs (desktop only) */}
+                    <div className="glev-entry-hide-mobile" style={{ minWidth:0 }}>
                       <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>Carbs</div>
                       <div style={{ fontSize:14, fontWeight:700, color: m.carbs_grams ? ORANGE : "rgba(255,255,255,0.3)", letterSpacing:"-0.01em" }}>{m.carbs_grams ?? "—"}<span style={{ fontSize:10, color:"rgba(255,255,255,0.35)", fontWeight:500, marginLeft:1 }}>g</span></div>
                     </div>
-                    {/* Col 5: Insulin */}
-                    <div style={{ minWidth:0 }}>
+                    {/* Col 5: Insulin (desktop only) */}
+                    <div className="glev-entry-hide-mobile" style={{ minWidth:0 }}>
                       <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>Insulin</div>
                       <div style={{ fontSize:14, fontWeight:700, color: m.insulin_units ? ACCENT : "rgba(255,255,255,0.3)", letterSpacing:"-0.01em" }}>{m.insulin_units ?? "—"}<span style={{ fontSize:10, color:"rgba(255,255,255,0.35)", fontWeight:500, marginLeft:1 }}>u</span></div>
                     </div>
-                    {/* Col 6: Eval chip */}
-                    <span style={{ padding:"5px 12px", borderRadius:99, fontSize:10, fontWeight:700, background:`${evalColor(ev)}18`, color:evalColor(ev), border:`1px solid ${evalColor(ev)}30`, whiteSpace:"nowrap", letterSpacing:"0.05em", textTransform:"uppercase" }}>
+                    {/* Col 6: Eval chip (desktop only) */}
+                    <span className="glev-entry-hide-mobile" style={{ padding:"5px 12px", borderRadius:99, fontSize:10, fontWeight:700, background:`${evalColor(ev)}18`, color:evalColor(ev), border:`1px solid ${evalColor(ev)}30`, whiteSpace:"nowrap", letterSpacing:"0.05em", textTransform:"uppercase" }}>
                       {evalLabel(ev)}
+                    </span>
+                    {/* MOBILE ONLY: Bolus (insulin) pill on the right */}
+                    <span className="glev-entry-bolus" style={{ alignItems:"baseline", gap:3, padding:"5px 10px", borderRadius:99, background: m.insulin_units ? `${ACCENT}18` : "rgba(255,255,255,0.05)", border:`1px solid ${m.insulin_units ? `${ACCENT}30` : "rgba(255,255,255,0.08)"}`, whiteSpace:"nowrap" }}>
+                      <span style={{ fontSize:13, fontWeight:700, color: m.insulin_units ? ACCENT : "rgba(255,255,255,0.3)", letterSpacing:"-0.01em" }}>{m.insulin_units ?? "—"}</span>
+                      <span style={{ fontSize:10, color: m.insulin_units ? `${ACCENT}cc` : "rgba(255,255,255,0.3)", fontWeight:600 }}>u</span>
                     </span>
                   </div>
                     );

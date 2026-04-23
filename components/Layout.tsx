@@ -55,7 +55,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           .glev-mobile-fab  { display: flex !important; }
           .glev-mobile-head { display: flex !important; }
           .glev-main        { padding: 72px 16px 110px !important; }
+          .glev-entry-row   { grid-template-columns: 1fr auto auto !important; gap: 10px !important; padding: 14px 16px !important; }
+          .glev-entry-hide-mobile { display: none !important; }
+          .glev-entry-bolus { display: flex !important; }
         }
+        .glev-entry-bolus { display: none; }
         .nav-btn { transition: background 0.15s, color 0.15s; }
         .nav-btn:hover { background: rgba(79,110,247,0.08) !important; }
         @keyframes glevMicPulse {
