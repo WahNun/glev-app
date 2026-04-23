@@ -15,17 +15,14 @@ const NAV = [
   { label: "Dashboard", path: "/dashboard", icon: (a: boolean) => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
   )},
-  { label: "Log Meal", path: "/log", icon: (a: boolean) => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+  { label: "Glev Engine", path: "/log", icon: (a: boolean) => (
+    <GlevLogo size={20} color={a ? ACCENT : "rgba(255,255,255,0.55)"} bg="transparent"/>
   )},
   { label: "Entry Log", path: "/entries", icon: (a: boolean) => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1.5" fill={a ? ACCENT : "rgba(255,255,255,0.4)"}/><circle cx="4" cy="12" r="1.5" fill={a ? ACCENT : "rgba(255,255,255,0.4)"}/><circle cx="4" cy="18" r="1.5" fill={a ? ACCENT : "rgba(255,255,255,0.4)"}/></svg>
   )},
   { label: "Insights", path: "/insights", icon: (a: boolean) => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a7 7 0 0 1 4 12.8V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.2A7 7 0 0 1 12 2z"/><path d="M9 21h6"/><path d="M9 18h6"/></svg>
-  )},
-  { label: "Glev Engine", path: "/engine", icon: (a: boolean) => (
-    <GlevLogo size={20} color={a ? ACCENT : "rgba(255,255,255,0.55)"} bg="transparent"/>
   )},
   { label: "Import", path: "/import", icon: (a: boolean) => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -176,7 +173,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <line x1="9" y1="22" x2="15" y2="22" stroke="rgba(255,255,255,0.95)" strokeWidth="1.8" strokeLinecap="round"/>
             </svg>
           </button>
-          <span style={{ fontSize: 9, color: pathname.startsWith("/log") ? ACCENT : "rgba(255,255,255,0.3)", fontWeight: 600, letterSpacing: "0.04em" }}>LOG</span>
+          <span style={{ fontSize: 9, color: pathname.startsWith("/log") ? ACCENT : "rgba(255,255,255,0.3)", fontWeight: 600, letterSpacing: "0.04em" }}>GLEV</span>
         </div>
       </nav>
     </div>

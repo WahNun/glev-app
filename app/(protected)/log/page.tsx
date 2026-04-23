@@ -2,13 +2,52 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { saveMeal, classifyMeal, computeEvaluation, computeCalories, type ParsedFood } from "@/lib/meals";
+import { saveMeal, classifyMeal, computeEvaluation, computeCalories, fetchMeals, type ParsedFood, type Meal } from "@/lib/meals";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
 
 const TYPE_COLORS: Record<string, string> = { FAST_CARBS: ORANGE, HIGH_PROTEIN: ACCENT, HIGH_FAT: "#A855F7", BALANCED: GREEN };
 const TYPE_LABELS: Record<string, string> = { FAST_CARBS: "Fast Carbs", HIGH_PROTEIN: "High Protein", HIGH_FAT: "High Fat", BALANCED: "Balanced" };
+const CONF_COLOR: Record<string, string> = { HIGH: GREEN, MEDIUM: ORANGE, LOW: PINK };
+
+interface Recommendation {
+  dose: number;
+  confidence: "HIGH" | "MEDIUM" | "LOW";
+  source: string;
+  reasoning: string;
+  carbDose: number;
+  correctionDose: number;
+  similarMeals: Meal[];
+}
+
+function runGlevEngine(meals: Meal[], currentGlucose: number, carbs: number): Recommendation {
+  const icr = 15, cf = 50, target = 110;
+  const carbDose = carbs / icr;
+  const correctionDose = Math.max(0, (currentGlucose - target) / cf);
+  const formulaDose = Math.round((carbDose + correctionDose) * 10) / 10;
+  const similar = meals.filter(m =>
+    m.carbs_grams !== null && Math.abs((m.carbs_grams || 0) - carbs) <= 12 &&
+    m.glucose_before !== null && Math.abs((m.glucose_before || 0) - currentGlucose) <= 35 &&
+    m.evaluation === "GOOD" && m.insulin_units
+  );
+  if (similar.length >= 3) {
+    const avg = Math.round(similar.reduce((s, m) => s + (m.insulin_units || 0), 0) / similar.length * 10) / 10;
+    return { dose: avg, confidence: "HIGH", source: "historical",
+      reasoning: `Based on ${similar.length} similar past meals with GOOD outcomes (±12g carbs, ±35 mg/dL glucose). Historical average insulin: ${avg}u.`,
+      carbDose: Math.round(carbDose * 10) / 10, correctionDose: Math.round(correctionDose * 10) / 10, similarMeals: similar.slice(0, 5) };
+  }
+  if (similar.length >= 1) {
+    const histAvg = similar.reduce((s, m) => s + (m.insulin_units || 0), 0) / similar.length;
+    const blended = Math.round(((histAvg + formulaDose) / 2) * 10) / 10;
+    return { dose: blended, confidence: "MEDIUM", source: "blended",
+      reasoning: `Blended from ${similar.length} similar meal(s) + ICR formula. Limited historical data — log more meals for higher confidence.`,
+      carbDose: Math.round(carbDose * 10) / 10, correctionDose: Math.round(correctionDose * 10) / 10, similarMeals: similar };
+  }
+  return { dose: formulaDose, confidence: "LOW", source: "formula",
+    reasoning: `No similar historical meals found. Using standard ICR formula: ${carbs}g ÷ ${icr} + ${Math.round(correctionDose * 10) / 10}u correction.`,
+    carbDose: Math.round(carbDose * 10) / 10, correctionDose: Math.round(correctionDose * 10) / 10, similarMeals: [] };
+}
 
 export default function LogPage() {
   const router = useRouter();
@@ -32,6 +71,13 @@ export default function LogPage() {
   const [speechAvail, setSpeechAvail] = useState(true);
   const [cgmLoading, setCgmLoading] = useState(false);
 
+  // Glev Engine recommendation
+  const [meals, setMeals] = useState<Meal[]>([]);
+  const [rec, setRec]     = useState<Recommendation | null>(null);
+  const [recLoading, setRecLoading] = useState(false);
+
+  useEffect(() => { fetchMeals().then(setMeals).catch(console.error); }, []);
+
   // GPT reasoning chat panel
   type ChatMsg = { role: "user" | "assistant" | "system"; content: string };
   const [chatMsgs, setChatMsgs]   = useState<ChatMsg[]>([]);
@@ -53,6 +99,7 @@ export default function LogPage() {
     setGlucose(""); setCarbs(""); setFiber(""); setProtein(""); setFat(""); setDesc(""); setInsulin("");
     setSaving(false); setError(""); setSuccess(false);
     setChatMsgs([]); setChatInput(""); setPipeStatus("idle");
+    setRec(null); setRecLoading(false);
     try { mediaRecRef.current?.stop(); } catch {}
   }
 
@@ -118,6 +165,19 @@ export default function LogPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Transcription failed.");
     } finally { setParsing(false); setPipeStatus("idle"); }
+  }
+
+  function runRecommendation() {
+    const g = num(glucose) ?? 110;
+    const c = num(carbs);
+    if (!c) { setError("Carbs are required to get a recommendation."); return; }
+    setError(""); setRecLoading(true);
+    setTimeout(() => {
+      const r = runGlevEngine(meals, g, c);
+      setRec(r);
+      if (!insulin) setInsulin(String(r.dose));
+      setRecLoading(false);
+    }, 350);
   }
 
   async function autoFill(text: string) {
@@ -265,7 +325,7 @@ export default function LogPage() {
 
       <div style={{ marginBottom:6 }}>
         <div style={{ fontSize:10, color:"rgba(255,255,255,0.35)", letterSpacing:"0.14em", marginBottom:6 }}>GLEV — SMART INSULIN DECISIONS</div>
-        <h1 style={{ fontSize:28, fontWeight:800, letterSpacing:"-0.03em", margin:0 }}>Log</h1>
+        <h1 style={{ fontSize:28, fontWeight:800, letterSpacing:"-0.03em", margin:0 }}>Glev Engine</h1>
       </div>
 
       <div className="log-grid">
@@ -390,8 +450,117 @@ export default function LogPage() {
               );
             })()}
           </div>
+          {/* GET RECOMMENDATION button */}
+          <button
+            onClick={runRecommendation}
+            disabled={!num(carbs) || recLoading}
+            style={{
+              padding:"14px", borderRadius:12, border:"none",
+              background: num(carbs) ? `linear-gradient(135deg, ${ACCENT}, #6B8BFF)` : "rgba(255,255,255,0.05)",
+              color: num(carbs) ? "#fff" : "rgba(255,255,255,0.25)",
+              fontSize:14, fontWeight:700, letterSpacing:"-0.01em",
+              cursor: num(carbs) && !recLoading ? "pointer" : "not-allowed",
+              boxShadow: num(carbs) ? `0 4px 20px ${ACCENT}40` : "none",
+              transition:"all 0.2s",
+            }}
+          >
+            {recLoading ? "Analyzing history…" : rec ? "↻ Re-run Recommendation" : "Get Recommendation"}
+          </button>
+
+          {/* Recommendation result card (Glev Engine style) */}
+          {rec && (() => {
+            const gNum = num(glucose) ?? 110;
+            const cNum = num(carbs) ?? 0;
+            const conf = CONF_COLOR[rec.confidence];
+            return (
+              <div style={{ display:"flex", flexDirection:"column", gap:14, marginTop:4 }}>
+                {/* Input summary */}
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  <div style={{ background:"#0D0D12", border:`1px solid ${BORDER}`, borderRadius:12, padding:"12px 16px" }}>
+                    <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase", marginBottom:4 }}>Input Glucose</div>
+                    <div style={{ display:"flex", alignItems:"baseline", gap:5 }}>
+                      <span style={{ fontSize:24, fontWeight:800, color:"#60A5FA", letterSpacing:"-0.02em" }}>{gNum}</span>
+                      <span style={{ fontSize:11, color:"rgba(255,255,255,0.35)" }}>mg/dL</span>
+                    </div>
+                    <div style={{ fontSize:10, color:"rgba(255,255,255,0.25)", marginTop:2 }}>{gNum > 140 ? "elevated" : gNum < 80 ? "low" : "in target"}</div>
+                  </div>
+                  <div style={{ background:"#0D0D12", border:`1px solid ${BORDER}`, borderRadius:12, padding:"12px 16px" }}>
+                    <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase", marginBottom:4 }}>Input Carbs</div>
+                    <div style={{ display:"flex", alignItems:"baseline", gap:5 }}>
+                      <span style={{ fontSize:24, fontWeight:800, color:ORANGE, letterSpacing:"-0.02em" }}>{cNum}</span>
+                      <span style={{ fontSize:11, color:"rgba(255,255,255,0.35)" }}>g</span>
+                    </div>
+                    <div style={{ fontSize:10, color:"rgba(255,255,255,0.25)", marginTop:2 }}>{cNum >= 60 ? "high-carb meal" : cNum >= 30 ? "moderate" : "light"}</div>
+                  </div>
+                </div>
+
+                {/* Main result */}
+                <div style={{ background:"#0D0D12", border:`1px solid ${conf}30`, borderRadius:14, padding:"22px 22px" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:12 }}>
+                    <div>
+                      <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:6 }}>Recommended Dose</div>
+                      <div style={{ fontSize:48, fontWeight:900, letterSpacing:"-0.04em", lineHeight:1, color:"#fff" }}>
+                        {rec.dose}<span style={{ fontSize:16, fontWeight:400, color:"rgba(255,255,255,0.4)", marginLeft:5 }}>units</span>
+                      </div>
+                    </div>
+                    <div style={{ textAlign:"right" }}>
+                      <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginBottom:6 }}>Confidence</div>
+                      <span style={{ padding:"6px 16px", borderRadius:99, fontSize:12, fontWeight:700, background:`${conf}18`, color:conf, border:`1px solid ${conf}40` }}>{rec.confidence}</span>
+                      <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", marginTop:5 }}>{rec.source === "historical" ? "Historical data" : rec.source === "blended" ? "Blended model" : "ICR formula"}</div>
+                    </div>
+                  </div>
+                  <div style={{ marginTop:16, padding:"12px 14px", background:"rgba(0,0,0,0.3)", borderRadius:10 }}>
+                    <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", marginBottom:4, letterSpacing:"0.05em", textTransform:"uppercase" }}>Reasoning</div>
+                    <div style={{ fontSize:12, color:"rgba(255,255,255,0.65)", lineHeight:1.6 }}>{rec.reasoning}</div>
+                  </div>
+                  <div style={{ marginTop:12, display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+                    {[
+                      { label:"Carb Dose", val:`${rec.carbDose}u`, sub:`${cNum}g ÷ 15 ICR`, color:ORANGE },
+                      { label:"Correction", val:`+${rec.correctionDose}u`, sub:`(BG - 110) ÷ 50`, color:ACCENT },
+                      { label:"Total", val:`${rec.dose}u`, sub:"recommended", color:GREEN },
+                    ].map(d => (
+                      <div key={d.label} style={{ background:"rgba(255,255,255,0.03)", borderRadius:10, padding:"10px 12px", textAlign:"center" }}>
+                        <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", marginBottom:3 }}>{d.label}</div>
+                        <div style={{ fontSize:18, fontWeight:800, color:d.color }}>{d.val}</div>
+                        <div style={{ fontSize:9, color:"rgba(255,255,255,0.2)", marginTop:1 }}>{d.sub}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Reference meals */}
+                {rec.similarMeals.length > 0 && (
+                  <div style={{ background:"#0D0D12", border:`1px solid ${BORDER}`, borderRadius:14, overflow:"hidden" }}>
+                    <div style={{ padding:"12px 16px", borderBottom:`1px solid ${BORDER}` }}>
+                      <div style={{ fontSize:12, fontWeight:600 }}>Reference Meals ({rec.similarMeals.length})</div>
+                      <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", marginTop:2 }}>Historical meals used in this recommendation</div>
+                    </div>
+                    {rec.similarMeals.map(m => {
+                      const date = new Date(m.created_at).toLocaleDateString("en", { month:"short", day:"numeric" });
+                      return (
+                        <div key={m.id} style={{ padding:"10px 16px", borderBottom:`1px solid ${BORDER}`, display:"grid", gridTemplateColumns:"1fr 50px 50px 60px 70px", gap:10, alignItems:"center", fontSize:11 }}>
+                          <div style={{ color:"rgba(255,255,255,0.65)" }}>{m.input_text.length > 38 ? m.input_text.slice(0, 38) + "…" : m.input_text}</div>
+                          <div style={{ color:"rgba(255,255,255,0.35)", textAlign:"right" }}>{m.glucose_before}</div>
+                          <div style={{ color:"rgba(255,255,255,0.35)", textAlign:"right" }}>{m.carbs_grams}g</div>
+                          <div style={{ textAlign:"right" }}>{m.insulin_units}u</div>
+                          <div style={{ textAlign:"right" }}><span style={{ padding:"2px 7px", borderRadius:99, fontSize:9, fontWeight:700, background:`${GREEN}18`, color:GREEN, border:`1px solid ${GREEN}30` }}>{date}</span></div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div style={{ padding:"12px 14px", background:"rgba(255,255,255,0.03)", borderRadius:10, border:`1px solid ${BORDER}` }}>
+                  <div style={{ fontSize:10, color:"rgba(255,255,255,0.25)", lineHeight:1.6 }}>
+                    <strong style={{ color:"rgba(255,255,255,0.4)" }}>Important:</strong> Glev Engine provides decision support only. Always consult your endocrinologist before adjusting insulin doses. This tool is not a medical device.
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           <div>
-            <label style={labelStyle}>Insulin (u)</label>
+            <label style={labelStyle}>Insulin (u){rec && <span style={{ marginLeft:8, fontSize:10, color:GREEN, fontWeight:700, letterSpacing:"0.04em" }}>· auto-filled from recommendation</span>}</label>
             <input value={insulin} onChange={e => setInsulin(e.target.value)} placeholder="e.g. 1.5" type="number" step="0.5" style={inp}/>
           </div>
 
