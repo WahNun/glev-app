@@ -1,0 +1,406 @@
+You are working on the Glev Next.js app.
+
+GOAL:
+Implement a full insulin decision system consisting of:
+- Time-based outcome evaluation (pending → provisional → final)
+- Adaptive carb ratio learning
+- Real-time insulin recommendation engine
+- Pattern detection + adaptive adjustment engine
+- Clean mobile Insights UX
+
+---
+
+# PART 1 — OUTCOME ENGINE
+
+## RULE
+
+Outcome must NOT be calculated immediately.
+
+---
+
+## REQUIRED DATA (FINAL)
+
+- bgBefore
+- bg1h
+- bg2h
+
+---
+
+## INTERMEDIATE STATE
+
+After 1h:
+
+→ compute provisional outcome
+
+States:
+- "pending"
+- "provisional"
+- "final"
+
+---
+
+## LABELS
+
+- pending → "Awaiting glucose data"
+- provisional → "Preliminary result (updates after 2h)"
+- final → actual outcome
+
+---
+
+## METRICS
+
+- delta1 = bg1h - bgBefore
+- delta2 = bg2h - bgBefore
+- speed1 = delta1 / 60min
+- speed2 = delta2 / 120min
+
+---
+
+## PROVISIONAL LOGIC
+
+Based on:
+
+- delta1
+- speed1
+
+---
+
+## FINAL LOGIC
+
+Based on:
+
+- delta1
+- delta2
+- speed1
+- speed2
+- spike pattern
+
+---
+
+# PART 2 — ENTRY LIFECYCLE
+
+Store:
+
+- createdAt
+- bgBefore
+- bg1h
+- bg2h
+- outcomeState
+- outcome
+
+---
+
+# PART 3 — TIMER SYSTEM
+
+NO frontend timers.
+
+Use timestamps:
+
+- +1h → fetch bg1h
+- +2h → fetch bg2h
+
+---
+
+# PART 4 — CGM
+
+getLatestCGM()
+
+- auto fetch at 1h / 2h
+- manual override allowed
+
+---
+
+# PART 5 — RECALCULATION
+
+- bg1h → provisional
+- bg2h → final
+
+---
+
+# PART 6 — ADAPTIVE CARB RATIO ENGINE
+
+## CORE
+
+effectiveCarbRatio = carbs / insulin
+
+---
+
+## FILTER
+
+Only use:
+
+- outcomeState === "final"
+- carbs > 0
+- insulin > 0
+
+---
+
+## WEIGHTING
+
+- GOOD → 1.0
+- SPIKE → 0.7
+- UNDERDOSE → 0.3
+- OVERDOSE → 0.3
+
+---
+
+## OUTPUT
+
+adaptiveICR = {
+  global,
+  morning?,
+  afternoon?,
+  evening?
+}
+
+---
+
+# PART 7 — INSULIN RECOMMENDATION ENGINE
+
+## INPUT
+
+- carbs
+- currentBG
+- targetBG (100)
+- adaptiveICR
+- correctionFactor
+
+---
+
+## CALCULATION
+
+carbDose = carbs / adaptiveICR  
+correctionDose = (currentBG - targetBG) / correctionFactor  
+totalDose = carbDose + correctionDose  
+
+---
+
+## SAFETY
+
+- carbs = 0 allowed
+- BG < 80 → block
+- round units
+
+---
+
+## OUTPUT
+
+{
+  recommendedUnits,
+  breakdown,
+  reasoning,
+  confidence
+}
+
+---
+
+# PART 8 — PATTERN DETECTION ENGINE (NEW CORE)
+
+## GOAL
+
+Detect recurring dosing mistakes across recent meals.
+
+---
+
+## WINDOW
+
+Use rolling window:
+
+- last 10–20 meals
+- only outcomeState === "final"
+
+---
+
+## ANALYSIS
+
+Count:
+
+- GOOD
+- UNDERDOSE
+- OVERDOSE
+- SPIKE
+
+---
+
+## THRESHOLDS
+
+IF:
+
+- >50% OVERDOSE → pattern = "overdosing"
+- >50% UNDERDOSE → pattern = "underdosing"
+
+---
+
+## OUTPUT
+
+pattern = {
+  type: "overdosing" | "underdosing" | "balanced",
+  confidence: low | medium | high,
+  sampleSize: number
+}
+
+---
+
+## UI
+
+Display:
+
+- "Frequent Over-dosing"
+- "Consistent Under-dosing"
+
++ short explanation
+
+---
+
+# PART 9 — ADJUSTMENT ENGINE (AUTO-LEARNING)
+
+## GOAL
+
+Adapt ICR + correctionFactor gradually based on patterns.
+
+---
+
+## RULE
+
+NEVER adjust on single meal.
+
+ONLY adjust when:
+
+- pattern confidence = medium or high
+- sampleSize >= 5
+
+---
+
+## ADJUSTMENT LOGIC
+
+### IF overdosing
+
+→ insulin too strong
+
+- increase ICR (less insulin per carb)
+- increase correctionFactor
+
+---
+
+### IF underdosing
+
+→ insulin too weak
+
+- decrease ICR
+- decrease correctionFactor
+
+---
+
+## ADJUSTMENT STEP
+
+- max change per update: ±5%
+- smooth incremental updates
+
+---
+
+## EXAMPLE
+
+ICR:
+1:10 → 1:10.5 → 1:11
+
+---
+
+## STORAGE
+
+Store:
+
+adaptiveSettings = {
+  icr,
+  correctionFactor,
+  lastUpdated,
+  adjustmentHistory[]
+}
+
+---
+
+## UX RULE
+
+DO NOT silently change.
+
+Always show:
+
+"Based on recent meals, your carb ratio was adjusted from 1:10 → 1:11"
+
+---
+
+## MODE
+
+Start in:
+
+→ suggestion mode (user confirms)
+
+Later optional:
+
+→ auto-adjust mode
+
+---
+
+# PART 10 — INSIGHTS MOBILE UX FIX
+
+## MOBILE
+
+Top:
+
+2-column grid:
+- Total Meals
+- Avg Carbs
+- Last 7 Days
+- Avg Glucose
+
+---
+
+Rest:
+
+→ single column
+
+---
+
+## RULES
+
+- no horizontal scroll
+- no cut cards
+- full width
+
+---
+
+# PART 11 — CARD PRIORITY
+
+1. KPIs
+2. Glucose trend
+3. Performance
+4. Meal type
+5. Time of day
+6. Pattern detection
+
+---
+
+# PART 12 — DESIGN
+
+- keep color system
+- no new colors
+- consistent dark UI
+
+---
+
+# SUCCESS
+
+✓ Pending / Provisional / Final states  
+✓ Real-time evolving outcome  
+✓ Adaptive ICR working  
+✓ Recommendation engine working  
+✓ Pattern detection working  
+✓ Adjustment engine working  
+✓ Safe medical UX  
+✓ Clean mobile UI  
+
+---
+
+# OUTPUT
+
+- working system
+- describe changes

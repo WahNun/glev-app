@@ -1,8 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { fetchMeals, type Meal } from "@/lib/meals";
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
+import { computeAdaptiveICR } from "@/lib/engine/adaptiveICR";
+import { detectPattern, type Pattern } from "@/lib/engine/patterns";
+import { suggestAdjustment, type AdaptiveSettings, type AdjustmentSuggestion } from "@/lib/engine/adjustment";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
@@ -113,15 +116,32 @@ export default function InsightsPage() {
 
   const card: React.CSSProperties = { background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"20px 24px" };
 
+  // Adaptive engine derivations (plain — these run after early returns)
+  const adaptiveICR = computeAdaptiveICR(meals);
+  const enginePattern = detectPattern(meals);
+  const settings: AdaptiveSettings = {
+    icr: adaptiveICR.global ? Math.round(adaptiveICR.global * 10) / 10 : 15,
+    correctionFactor: 50,
+    lastUpdated: null,
+    adjustmentHistory: [],
+  };
+  const suggestion: AdjustmentSuggestion = suggestAdjustment(settings, enginePattern);
+
   return (
     <div style={{ maxWidth:960, margin:"0 auto" }}>
+      <style>{`
+        @media (max-width: 720px) {
+          .glev-grid-4 { grid-template-columns: repeat(2, 1fr) !important; }
+          .glev-grid-3 { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
       <div style={{ marginBottom:28 }}>
         <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>Performance Metrics</h1>
         <p style={{ color:"rgba(255,255,255,0.35)", fontSize:13 }}>Tap a card to flip · {total} meals analyzed</p>
       </div>
 
       {/* OVERVIEW */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:20 }}>
+      <div className="glev-grid-4" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:20 }}>
         {[
           { label:"Total Meals", val:total.toString(), sub:"all time", color:ACCENT },
           { label:"Avg Carbs / Meal", val:`${avgCarbs}g`, sub:"per meal", color:ORANGE },
@@ -143,8 +163,39 @@ export default function InsightsPage() {
         <TrendSparkline meals={meals}/>
       </div>
 
+      {/* ADAPTIVE ENGINE — patterns + suggestion */}
+      <div style={{ ...card, marginBottom:20 }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+          <div>
+            <div style={{ fontSize:14, fontWeight:700 }}>Adaptive Engine</div>
+            <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", marginTop:2 }}>
+              {enginePattern.label} · {enginePattern.sampleSize} final meals · confidence {enginePattern.confidence}
+            </div>
+          </div>
+          <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)" }}>
+            ICR (learned): <span style={{ color:adaptiveICR.global ? GREEN : "rgba(255,255,255,0.5)", fontWeight:700 }}>
+              {adaptiveICR.global ? `1:${(Math.round(adaptiveICR.global*10)/10)}` : "–"}
+            </span>
+          </div>
+        </div>
+        <div style={{ fontSize:13, color:"rgba(255,255,255,0.7)", lineHeight:1.5 }}>
+          {enginePattern.explanation}
+        </div>
+        {(suggestion.hasSuggestion || enginePattern.type === "spiking" || enginePattern.type === "overdosing" || enginePattern.type === "underdosing") && (
+          <div style={{ marginTop:14, padding:"12px 14px", borderRadius:10, background:"rgba(79,110,247,0.08)", border:`1px solid ${ACCENT}33` }}>
+            <div style={{ fontSize:12, fontWeight:700, color:ACCENT, letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:6 }}>
+              {suggestion.hasSuggestion ? "Suggested adjustment" : "Advisory"}
+            </div>
+            <div style={{ fontSize:13, color:"rgba(255,255,255,0.85)", lineHeight:1.5 }}>{suggestion.message}</div>
+            <div style={{ fontSize:11, color:"rgba(255,255,255,0.45)", marginTop:8 }}>
+              Suggestions are advisory only. Confirm any changes with your clinician before adopting.
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* PERFORMANCE TILES */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14, marginBottom:20 }}>
+      <div className="glev-grid-3" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14, marginBottom:20 }}>
         {[
           { label:"Good Rate", val:`${goodRate}%`, sub:`${good} of ${total} meals`, color:GREEN, formula:"GOOD / Total × 100", explain:"Percentage of meals where insulin dose was optimal (within ±35% of ICR estimate)." },
           { label:"Avg Glucose Before", val:`${avgGlucose}`, sub:"mg/dL pre-meal average", color:ACCENT, formula:"Sum of glucose_before / meal count", explain:"Lower avg pre-meal glucose reflects better fasting control between meals." },
