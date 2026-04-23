@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { signOut } from "@/lib/auth";
+import GlevLogo from "@/components/GlevLogo";
 
 const ACCENT  = "#4F6EF7";
 const GREEN   = "#22D3A0";
@@ -78,9 +79,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         alignItems: "center", justifyContent: "space-between", cursor: "pointer",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 30, height: 30, borderRadius: 9, background: `${ACCENT}20`, border: `1px solid ${ACCENT}40`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2.5" strokeLinecap="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-          </div>
+          <GlevLogo size={30} />
           <div>
             <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: "-0.02em", color: "#fff" }}>Glev</div>
             <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", marginTop: 1 }}>Smart insulin decisions</div>
@@ -101,12 +100,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         overflowY: "auto",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 10px", marginBottom: 28 }}>
-          <div style={{
-            width: 32, height: 32, borderRadius: 9, background: `${ACCENT}20`,
-            border: `1px solid ${ACCENT}40`, display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2.5" strokeLinecap="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-          </div>
+          <GlevLogo size={32} />
           <div>
             <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: "-0.03em", color: "#fff" }}>Glev</div>
             <div style={{ fontSize: 9, color: "rgba(255,255,255,0.25)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Smart Insulin</div>
