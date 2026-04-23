@@ -208,6 +208,35 @@ function buildHistoricalRows(userId: string) {
   }));
 }
 
+// Required columns that must never be stripped on fallback.
+const REQUIRED_COLS = new Set(["user_id", "input_text", "created_at"]);
+
+// Try a bulk insert; on a "missing column" schema-cache error, parse the
+// missing column name from the error, drop it from every row, and retry.
+// Loops until either insert succeeds, no more optional columns can be dropped,
+// or we hit a non-schema error.
+async function insertMealsWithFallback(rows: Record<string, unknown>[]): Promise<{ error: { message: string } | null; dropped: string[] }> {
+  if (!supabase) return { error: { message: "Supabase not configured" }, dropped: [] };
+  let current = rows;
+  const dropped: string[] = [];
+  for (let i = 0; i < 12; i++) {
+    const { error } = await supabase.from("meals").insert(current);
+    if (!error) return { error: null, dropped };
+    const msg = error.message || "";
+    const m = msg.match(/Could not find the '([^']+)' column/);
+    if (!m) return { error: { message: msg }, dropped };
+    const col = m[1];
+    if (REQUIRED_COLS.has(col)) return { error: { message: msg }, dropped };
+    current = current.map((r) => {
+      const copy = { ...r };
+      delete copy[col];
+      return copy;
+    });
+    dropped.push(col);
+  }
+  return { error: { message: "insertMealsWithFallback: too many missing columns" }, dropped };
+}
+
 // Wipes the current user's meals and re-inserts the historical seed entries.
 // Used by the "Reload historical entries" action in Settings.
 export async function reloadHistoricalEntries(): Promise<{ inserted: number }> {
@@ -217,9 +246,9 @@ export async function reloadHistoricalEntries(): Promise<{ inserted: number }> {
   const { error: delErr } = await supabase.from("meals").delete().eq("user_id", user.id);
   if (delErr) throw new Error(delErr.message);
   const rows = buildHistoricalRows(user.id);
-  const { error: insErr } = await supabase.from("meals").insert(rows);
-  if (insErr) throw new Error(insErr.message);
-  logDebug("HISTORICAL_RELOAD", { inserted: rows.length });
+  const { error, dropped } = await insertMealsWithFallback(rows);
+  if (error) throw new Error(error.message);
+  logDebug("HISTORICAL_RELOAD", { inserted: rows.length, dropped });
   return { inserted: rows.length };
 }
 
@@ -235,8 +264,10 @@ export async function seedMealsIfEmpty(): Promise<void> {
 
   if ((count ?? 0) > 0) return;
 
-  const { error } = await supabase.from("meals").insert(buildHistoricalRows(user.id));
+  const rows = buildHistoricalRows(user.id);
+  const { error, dropped } = await insertMealsWithFallback(rows);
   if (error) logDebug("SEED_ERROR", { message: error.message });
+  else logDebug("SEED_OK", { inserted: rows.length, dropped });
 }
 
 // Legacy generic seed retained for reference; no longer used.
