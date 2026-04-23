@@ -1,20 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const PROTECTED = ["/dashboard", "/log", "/entries", "/insights"];
+const MAX_CHUNKS = 16;
+
+function readSessionRaw(req: NextRequest, cookieName: string): string | null {
+  const single = req.cookies.get(cookieName)?.value;
+  if (single) return single;
+  const parts: string[] = [];
+  for (let i = 0; i < MAX_CHUNKS; i++) {
+    const piece = req.cookies.get(`${cookieName}.${i}`)?.value;
+    if (!piece) break;
+    parts.push(piece);
+  }
+  return parts.length ? parts.join("") : null;
+}
 
 function getSessionFromCookies(req: NextRequest): boolean {
-  const cookies = req.cookies.getAll();
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
   const projectRef = supabaseUrl.replace(/^https?:\/\//, "").split(".")[0];
-  const sessionCookieName = projectRef ? `sb-${projectRef}-auth-token` : null;
-  const sessionCookie = sessionCookieName
-    ? cookies.find(c => c.name === encodeURIComponent(sessionCookieName))
-    : cookies.find(c => c.name.includes("auth-token") && c.name.startsWith("sb-"));
+  if (!projectRef) return false;
+  const cookieName = `sb-${projectRef}-auth-token`;
 
-  if (!sessionCookie?.value) return false;
+  const raw = readSessionRaw(req, cookieName);
+  if (!raw) return false;
 
   try {
-    const raw = decodeURIComponent(sessionCookie.value);
     const parsed = JSON.parse(raw);
     const session = Array.isArray(parsed) ? parsed[0] : parsed;
     if (!session?.access_token) return false;
