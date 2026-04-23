@@ -132,6 +132,66 @@ export default function ImportPage() {
   const [imported, setImported]   = useState(0);
   const [errors, setErrors]   = useState<string[]>([]);
   const [done, setDone]       = useState(false);
+  const [sheetsRunning, setSheetsRunning] = useState(false);
+  const [sheetsResult, setSheetsResult]   = useState<{ read?: number; inserted?: number; errors?: string[]; error?: string } | null>(null);
+
+  async function handleSheetsImport() {
+    setSheetsRunning(true);
+    setSheetsResult(null);
+    try {
+      const res = await fetch("/api/import/sheets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setSheetsResult({ error: data.error || `HTTP ${res.status}` });
+        setSheetsRunning(false);
+        return;
+      }
+      const sheetRows = (data.rows || []) as Array<{
+        inputText: string; carbs: number; protein: number; fat: number; fiber: number;
+        calories: number | null; glucoseBefore: number | null; glucoseAfter: number | null;
+        insulin: number | null; evaluation: string; mealType: string; createdAt: string | null;
+      }>;
+      let inserted = 0;
+      const errs: string[] = [];
+      for (const r of sheetRows) {
+        try {
+          const cals = r.calories ?? computeCalories(r.carbs, r.protein, r.fat);
+          const ev = r.evaluation && ["GOOD","LOW","HIGH","SPIKE","OVERDOSE","UNDERDOSE"].includes(r.evaluation)
+            ? r.evaluation
+            : (r.insulin ? computeEvaluation(r.carbs, r.insulin, r.glucoseBefore) : "GOOD");
+          const mt = r.mealType && r.mealType !== "BALANCED" ? r.mealType : classifyMeal(r.carbs, r.protein, r.fat);
+          await saveMeal({
+            inputText: r.inputText,
+            parsedJson: [],
+            glucoseBefore: r.glucoseBefore,
+            glucoseAfter: r.glucoseAfter,
+            carbsGrams: r.carbs,
+            proteinGrams: r.protein,
+            fatGrams: r.fat,
+            fiberGrams: r.fiber,
+            calories: cals,
+            insulinUnits: r.insulin,
+            mealType: mt,
+            evaluation: ev,
+            createdAt: r.createdAt,
+          });
+          inserted++;
+        } catch (e) {
+          errs.push(`Row "${r.inputText}": ${e instanceof Error ? e.message : "failed"}`);
+        }
+      }
+      setSheetsResult({ read: sheetRows.length, inserted, errors: errs });
+      logDebug("SHEETS_IMPORT", { read: sheetRows.length, inserted, failed: errs.length });
+    } catch (e) {
+      setSheetsResult({ error: e instanceof Error ? e.message : "Failed" });
+    } finally {
+      setSheetsRunning(false);
+    }
+  }
 
   function handleParse() {
     const result = parseCSV(csv);
@@ -204,6 +264,45 @@ export default function ImportPage() {
       <div style={{ marginBottom:28 }}>
         <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>Import Center</h1>
         <p style={{ color:"rgba(255,255,255,0.35)", fontSize:14 }}>Import historical meal data from CSV. Headers are mapped automatically and dates are preserved.</p>
+      </div>
+
+      {/* GOOGLE SHEETS IMPORT */}
+      <div style={{ ...card, marginBottom:20, borderColor:`${GREEN}25` }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10, gap:12, flexWrap:"wrap" }}>
+          <div>
+            <div style={{ fontSize:13, fontWeight:600, color:GREEN }}>Import from Google Sheets</div>
+            <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginTop:2 }}>
+              Pull your historical log from the configured Google Spreadsheet.
+            </div>
+          </div>
+          <button
+            onClick={handleSheetsImport}
+            disabled={sheetsRunning}
+            style={{
+              padding:"10px 18px", borderRadius:10, border:"none",
+              cursor: sheetsRunning ? "wait" : "pointer",
+              background:`linear-gradient(135deg, ${GREEN}, #1BAD80)`, color:"#fff",
+              fontSize:13, fontWeight:700, boxShadow:`0 4px 16px ${GREEN}40`,
+              opacity: sheetsRunning ? 0.7 : 1,
+            }}
+          >
+            {sheetsRunning ? "Importing from Sheets…" : "Import from Sheets"}
+          </button>
+        </div>
+        {sheetsResult && (
+          <div style={{ marginTop:10, fontSize:12, color: sheetsResult.error ? PINK : "rgba(255,255,255,0.55)" }}>
+            {sheetsResult.error
+              ? `Error: ${sheetsResult.error}`
+              : `Read ${sheetsResult.read} rows · Inserted ${sheetsResult.inserted}${sheetsResult.errors && sheetsResult.errors.length ? ` · ${sheetsResult.errors.length} errors` : ""}`}
+            {sheetsResult.errors && sheetsResult.errors.length > 0 && (
+              <div style={{ marginTop:8, maxHeight:120, overflowY:"auto" }}>
+                {sheetsResult.errors.slice(0,5).map((e, i) => (
+                  <div key={i} style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginBottom:2 }}>• {e}</div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div style={{ ...card, marginBottom:20, borderColor:`${ACCENT}25` }}>
