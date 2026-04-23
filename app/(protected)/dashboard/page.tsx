@@ -352,6 +352,13 @@ export default function DashboardPage() {
                     );
                     return (
                       <div style={{ padding:"0 24px 16px", display:"flex", flexDirection:"column", gap:10 }}>
+                        {/* Row -1 — Outcome evaluation */}
+                        <div style={{ display:"flex", alignItems:"center", gap:10, paddingTop:4 }}>
+                          <span style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.1em", fontWeight:700, textTransform:"uppercase" }}>Outcome</span>
+                          <span style={{ padding:"4px 12px", borderRadius:99, fontSize:11, fontWeight:700, background:`${evalColor(ev)}18`, color:evalColor(ev), border:`1px solid ${evalColor(ev)}30`, whiteSpace:"nowrap", letterSpacing:"0.05em", textTransform:"uppercase" }}>
+                            {evalLabel(ev)}
+                          </span>
+                        </div>
                         {/* Row 0 — Meal description (food + grams) */}
                         {m.input_text && (
                           <div style={{ borderLeft:`2px solid rgba(255,255,255,0.15)`, paddingLeft:14, paddingTop:10 }}>
