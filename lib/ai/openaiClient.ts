@@ -3,22 +3,44 @@ import OpenAI from "openai";
 let cached: OpenAI | null = null;
 
 /**
- * Returns a configured OpenAI client that uses the Replit AI Integrations
- * proxy. Throws a clear error when the required env vars are not set so we
- * never silently fall back to a stale `OPENAI_API_KEY` (which produces
- * confusing 401 "Incorrect API key provided" errors in deployments).
+ * Returns a configured OpenAI client.
+ *
+ * Resolution order (first match wins):
+ *   1. Replit AI Integrations proxy
+ *      - AI_INTEGRATIONS_OPENAI_BASE_URL
+ *      - AI_INTEGRATIONS_OPENAI_API_KEY
+ *   2. Standard OpenAI direct
+ *      - OPENAI_BASE_URL  (defaults to https://api.openai.com/v1)
+ *      - OPENAI_API_KEY
+ *
+ * Throws a clear error when no key is found in either form so we never
+ * silently produce confusing 401s.
  */
 export function getOpenAIClient(): OpenAI {
-  const baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
-  const apiKey  = process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
-  if (!baseURL || !apiKey) {
+  const integrationKey  = process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+  const integrationBase = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+
+  const fallbackKey  = process.env.OPENAI_API_KEY;
+  const fallbackBase = process.env.OPENAI_BASE_URL || "https://api.openai.com/v1";
+
+  let apiKey: string | undefined;
+  let baseURL: string | undefined;
+
+  if (integrationKey && integrationBase) {
+    apiKey = integrationKey;
+    baseURL = integrationBase;
+  } else if (fallbackKey) {
+    apiKey = fallbackKey;
+    baseURL = fallbackBase;
+  }
+
+  if (!apiKey || !baseURL) {
     throw new Error(
-      "AI service is not configured for this environment. " +
-      "The Replit AI Integration env vars (AI_INTEGRATIONS_OPENAI_BASE_URL / " +
-      "AI_INTEGRATIONS_OPENAI_API_KEY) are missing — re-run the integration " +
-      "setup and redeploy."
+      "Missing OpenAI API key. Set AI_INTEGRATIONS_OPENAI_API_KEY " +
+      "(with AI_INTEGRATIONS_OPENAI_BASE_URL) or OPENAI_API_KEY in this environment."
     );
   }
+
   if (!cached) cached = new OpenAI({ baseURL, apiKey });
   return cached;
 }
