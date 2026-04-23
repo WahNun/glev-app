@@ -17,6 +17,11 @@ export interface Meal {
   parsed_json: ParsedFood[];
   glucose_before: number | null;
   glucose_after: number | null;
+  bg_1h: number | null;
+  bg_1h_at: string | null;
+  bg_2h: number | null;
+  bg_2h_at: string | null;
+  outcome_state: "pending" | "provisional" | "final" | null;
   carbs_grams: number | null;
   protein_grams: number | null;
   fat_grams: number | null;
@@ -118,8 +123,25 @@ export async function deleteMeal(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
-const FULL_COLS = "id, user_id, input_text, parsed_json, glucose_before, glucose_after, carbs_grams, protein_grams, fat_grams, fiber_grams, calories, insulin_units, meal_type, evaluation, created_at";
+const FULL_COLS = "id, user_id, input_text, parsed_json, glucose_before, glucose_after, bg_1h, bg_1h_at, bg_2h, bg_2h_at, outcome_state, carbs_grams, protein_grams, fat_grams, fiber_grams, calories, insulin_units, meal_type, evaluation, created_at";
+const MID_COLS  = "id, user_id, input_text, parsed_json, glucose_before, glucose_after, carbs_grams, protein_grams, fat_grams, fiber_grams, calories, insulin_units, meal_type, evaluation, created_at";
 const CORE_COLS = "id, user_id, input_text, parsed_json, glucose_before, carbs_grams, insulin_units, meal_type, evaluation, created_at";
+
+export async function updateMealReadings(id: string, readings: { bg1h?: number | null; bg2h?: number | null }): Promise<void> {
+  if (!supabase) throw new Error("Supabase is not configured");
+  const now = new Date().toISOString();
+  const patch: Record<string, unknown> = {};
+  if (readings.bg1h !== undefined) { patch.bg_1h = readings.bg1h; patch.bg_1h_at = readings.bg1h != null ? now : null; }
+  if (readings.bg2h !== undefined) { patch.bg_2h = readings.bg2h; patch.bg_2h_at = readings.bg2h != null ? now : null; }
+  if (!Object.keys(patch).length) return;
+  const { error } = await supabase.from("meals").update(patch).eq("id", id);
+  if (error) {
+    if (error.message?.toLowerCase().includes("column") && (error.message.includes("bg_1h") || error.message.includes("bg_2h") || error.message.includes("outcome_state"))) {
+      throw new Error("Add the bg_1h / bg_2h / outcome_state columns to your meals table first (see Settings → schema migration).");
+    }
+    throw new Error(error.message);
+  }
+}
 
 export async function fetchMeals(): Promise<Meal[]> {
   if (!supabase) throw new Error("Supabase is not configured");
@@ -129,21 +151,38 @@ export async function fetchMeals(): Promise<Meal[]> {
     .select(FULL_COLS)
     .order("created_at", { ascending: false });
 
-  if (error && error.message?.toLowerCase().includes("does not exist")) {
-    const retry = await supabase
+  // Fall back when the new bg_1h/bg_2h/outcome_state columns are missing.
+  // Supabase / PostgREST returns several phrasings for missing columns —
+  // accept all of the common ones plus error code 42703 (undefined_column).
+  const isMissingCol = (e: { message?: string; code?: string } | null) =>
+    !!e && (e.code === "42703"
+      || /does not exist/i.test(e.message ?? "")
+      || /could not find (the )?column/i.test(e.message ?? "")
+      || /column .* does not exist/i.test(e.message ?? ""));
+  if (isMissingCol(error)) {
+    const mid = await supabase
       .from("meals")
-      .select(CORE_COLS)
+      .select(MID_COLS)
       .order("created_at", { ascending: false });
-    if (retry.error) throw new Error(retry.error.message);
-    data = (retry.data ?? []).map((r: Record<string, unknown>) => ({
-      ...r,
-      glucose_after: null,
-      protein_grams: null,
-      fat_grams: null,
-      fiber_grams: null,
-      calories: null,
-    })) as unknown as typeof data;
-    error = null;
+    if (mid.error && mid.error.message?.toLowerCase().includes("does not exist")) {
+      const core = await supabase
+        .from("meals")
+        .select(CORE_COLS)
+        .order("created_at", { ascending: false });
+      if (core.error) throw new Error(core.error.message);
+      data = (core.data ?? []).map((r: Record<string, unknown>) => ({
+        ...r, glucose_after: null, protein_grams: null, fat_grams: null, fiber_grams: null, calories: null,
+        bg_1h: null, bg_1h_at: null, bg_2h: null, bg_2h_at: null, outcome_state: null,
+      })) as unknown as typeof data;
+      error = null;
+    } else if (mid.error) {
+      throw new Error(mid.error.message);
+    } else {
+      data = (mid.data ?? []).map((r: Record<string, unknown>) => ({
+        ...r, bg_1h: null, bg_1h_at: null, bg_2h: null, bg_2h_at: null, outcome_state: null,
+      })) as unknown as typeof data;
+      error = null;
+    }
   }
 
   if (error) throw new Error(error.message);

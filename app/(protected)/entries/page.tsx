@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { fetchMeals, deleteMeal, seedMealsIfEmpty, type Meal } from "@/lib/meals";
+import { fetchMeals, deleteMeal, updateMealReadings, seedMealsIfEmpty, type Meal } from "@/lib/meals";
 import { TYPE_COLORS, TYPE_LABELS, TYPE_SHORT, TYPE_EXPLAIN, getEvalColor, getEvalLabel, getEvalExplain } from "@/lib/mealTypes";
+import { lifecycleFor, STATE_LABELS, type OutcomeState } from "@/lib/engine/lifecycle";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
@@ -183,6 +184,11 @@ export default function EntriesPage() {
                 {/* Expanded body */}
                 {isOpen && (
                   <div style={{ padding:"4px 16px 16px", borderTop:`1px solid rgba(255,255,255,0.04)`, display:"flex", flexDirection:"column", gap:14 }}>
+                    {/* LIFECYCLE — pending / provisional / final */}
+                    <LifecycleBlock
+                      meal={m}
+                      onUpdated={(patch) => setMeals(ms => ms.map(x => x.id === m.id ? { ...x, ...patch } : x))}
+                    />
                     {/* OUTCOME — highlighted card */}
                     {ev && (
                       <div style={{ marginTop:14, background:`${evColor}10`, border:`1px solid ${evColor}40`, borderRadius:12, padding:"12px 14px", display:"flex", flexDirection:"column", gap:8 }}>
@@ -269,6 +275,111 @@ function Stat({ label, val, color }: { label: string; val: string; color?: strin
     <div style={{ display:"flex", justifyContent:"space-between" }}>
       <span style={{ fontSize:12, color:"rgba(255,255,255,0.35)" }}>{label}</span>
       <span style={{ fontSize:12, fontWeight:500, color:color||"rgba(255,255,255,0.75)" }}>{val}</span>
+    </div>
+  );
+}
+
+function stateColor(s: OutcomeState) {
+  if (s === "pending")     return "#A78BFA";
+  if (s === "provisional") return ORANGE;
+  return GREEN;
+}
+
+function LifecycleBlock({ meal, onUpdated }: { meal: Meal; onUpdated: (patch: Partial<Meal>) => void }) {
+  const lc = lifecycleFor(meal);
+  const c = stateColor(lc.state);
+  const [bg1h, setBg1h] = useState<string>(meal.bg_1h?.toString() ?? "");
+  const [bg2h, setBg2h] = useState<string>(meal.bg_2h?.toString() ?? "");
+  const [busy, setBusy] = useState(false);
+  const [err,  setErr]  = useState<string | null>(null);
+
+  // Show 1h input from 30 min onwards (so user can record an early reading);
+  // show 2h input from 90 min onwards.
+  const show1h = lc.ageMinutes >= 30;
+  const show2h = lc.ageMinutes >= 90;
+
+  async function save(field: "bg1h" | "bg2h") {
+    const raw = (field === "bg1h" ? bg1h : bg2h).trim();
+    const n = raw === "" ? null : Number(raw);
+    if (n != null && (!Number.isFinite(n) || n < 30 || n > 600)) {
+      setErr("Enter a glucose value between 30 and 600 mg/dL.");
+      return;
+    }
+    setBusy(true); setErr(null);
+    try {
+      await updateMealReadings(meal.id, { [field]: n } as { bg1h?: number | null; bg2h?: number | null });
+      const now = new Date().toISOString();
+      onUpdated(field === "bg1h"
+        ? { bg_1h: n, bg_1h_at: n != null ? now : null }
+        : { bg_2h: n, bg_2h_at: n != null ? now : null });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not save reading.");
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div style={{ marginTop:14, background:`${c}10`, border:`1px solid ${c}40`, borderRadius:12, padding:"12px 14px", display:"flex", flexDirection:"column", gap:10 }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
+        <div style={{ fontSize:9, color:"rgba(255,255,255,0.5)", letterSpacing:"0.1em", fontWeight:700 }}>OUTCOME STATE</div>
+        <span style={{ padding:"6px 14px", borderRadius:99, fontSize:11, fontWeight:700, background:c, color:"#0A0A0F", letterSpacing:"0.04em", textTransform:"uppercase" }}>
+          {STATE_LABELS[lc.state]}
+        </span>
+      </div>
+      <div style={{ fontSize:12, color:"rgba(255,255,255,0.65)", lineHeight:1.5 }}>{lc.reasoning}</div>
+      {(lc.delta1 != null || lc.delta2 != null) && (
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8, marginTop:2 }}>
+          <div style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${BORDER}`, borderRadius:8, padding:"8px 10px" }}>
+            <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)", letterSpacing:"0.08em", fontWeight:600 }}>Δ 1H</div>
+            <div style={{ fontSize:13, fontWeight:700, color: lc.delta1 != null ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.3)" }}>
+              {lc.delta1 != null ? `${lc.delta1 > 0 ? "+" : ""}${lc.delta1} mg/dL` : "—"}
+              {lc.speed1 != null && <span style={{ fontSize:10, color:"rgba(255,255,255,0.4)", marginLeft:6 }}>({lc.speed1.toFixed(2)}/min)</span>}
+            </div>
+          </div>
+          <div style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${BORDER}`, borderRadius:8, padding:"8px 10px" }}>
+            <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)", letterSpacing:"0.08em", fontWeight:600 }}>Δ 2H</div>
+            <div style={{ fontSize:13, fontWeight:700, color: lc.delta2 != null ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.3)" }}>
+              {lc.delta2 != null ? `${lc.delta2 > 0 ? "+" : ""}${lc.delta2} mg/dL` : "—"}
+              {lc.speed2 != null && <span style={{ fontSize:10, color:"rgba(255,255,255,0.4)", marginLeft:6 }}>({lc.speed2.toFixed(2)}/min)</span>}
+            </div>
+          </div>
+        </div>
+      )}
+      {(show1h || show2h) && (
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8, marginTop:4 }}>
+          {show1h && (
+            <ReadingInput label="1h reading" value={bg1h} onChange={setBg1h} onSave={() => save("bg1h")} busy={busy} placeholder={meal.bg_1h?.toString() ?? "mg/dL"} />
+          )}
+          {show2h && (
+            <ReadingInput label="2h reading" value={bg2h} onChange={setBg2h} onSave={() => save("bg2h")} busy={busy} placeholder={meal.bg_2h?.toString() ?? "mg/dL"} />
+          )}
+        </div>
+      )}
+      {err && <div style={{ fontSize:11, color:PINK }}>{err}</div>}
+    </div>
+  );
+}
+
+function ReadingInput({ label, value, onChange, onSave, busy, placeholder }: {
+  label: string; value: string; onChange: (v: string) => void; onSave: () => void; busy: boolean; placeholder: string;
+}) {
+  return (
+    <div style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${BORDER}`, borderRadius:8, padding:"8px 10px", display:"flex", flexDirection:"column", gap:6 }}>
+      <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)", letterSpacing:"0.08em", fontWeight:600 }}>{label.toUpperCase()}</div>
+      <div style={{ display:"flex", gap:6 }}>
+        <input
+          type="number" inputMode="numeric" min={30} max={600}
+          value={value} placeholder={placeholder}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onSave(); } }}
+          style={{ flex:1, minWidth:0, padding:"6px 8px", borderRadius:6, border:`1px solid ${BORDER}`, background:"rgba(0,0,0,0.3)", color:"rgba(255,255,255,0.9)", fontSize:13, fontWeight:600 }}
+        />
+        <button
+          onClick={onSave} disabled={busy}
+          style={{ padding:"6px 10px", borderRadius:6, border:`1px solid ${ACCENT}40`, background:`${ACCENT}18`, color:ACCENT, fontSize:11, fontWeight:700, cursor: busy ? "wait" : "pointer" }}
+        >
+          {busy ? "…" : "Save"}
+        </button>
+      </div>
     </div>
   );
 }
