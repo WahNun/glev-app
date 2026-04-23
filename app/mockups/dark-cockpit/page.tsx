@@ -136,33 +136,64 @@ function parseVoiceInput(text: string): ParsedVoiceEntry {
 }
 
 // ─── API helpers ─────────────────────────────────────────────────
+// Real historical entries from the user's tracking sheet (Apr 17–22, 2026),
+// newest first. Used by the mockup so the dashboard reflects actual data.
+const MOCKUP_ENTRIES: Entry[] = [
+  { id: 15, timestamp: "2026-04-22T18:10:00Z", glucoseBefore: 91,  glucoseAfter: 162, carbsGrams: 68,  fiberGrams: null, insulinUnits: 1, mealType: null, mealDescription: "95g döner bread, 120g veal döner meat, 60g mixed salad, 20g tzatziki, 20g cocktail sauce, 15g feta cheese, 250ml ayran", evaluation: "UNDERDOSE", delta: 71, timeDifferenceMinutes: 62 },
+  { id: 14, timestamp: "2026-04-22T11:23:00Z", glucoseBefore: 127, glucoseAfter: 162, carbsGrams: 61,  fiberGrams: null, insulinUnits: 1, mealType: null, mealDescription: "1 McRoyal Bacon burger, 4 chicken delights, 10g BBQ sauce, 15g fries, 330ml cola zero", evaluation: "UNDERDOSE", delta: 35, timeDifferenceMinutes: 58 },
+  { id: 13, timestamp: "2026-04-21T20:53:00Z", glucoseBefore: 121, glucoseAfter: 60,  carbsGrams: 157, fiberGrams: null, insulinUnits: 3, mealType: null, mealDescription: "294g pulao rice, 400g mango lassi, 32g BETTERY vanilla plant protein powder, 493g chicken korma, 83g yogurt cucumber tomato salad", evaluation: "OVERDOSE", delta: -61, timeDifferenceMinutes: 72 },
+  { id: 12, timestamp: "2026-04-21T15:19:00Z", glucoseBefore: 74,  glucoseAfter: 150, carbsGrams: 74,  fiberGrams: null, insulinUnits: 1, mealType: null, mealDescription: "95g cinnamon roll, 250g matcha latte, 4g sugar", evaluation: "UNDERDOSE", delta: 76, timeDifferenceMinutes: 61 },
+  { id: 11, timestamp: "2026-04-21T14:20:00Z", glucoseBefore: 97,  glucoseAfter: 96,  carbsGrams: 59,  fiberGrams: null, insulinUnits: 1, mealType: null, mealDescription: "40g granola, 20g blueberries, 33g raspberries, 160g yogurt, 38g mixed nuts, 130g banana, 60g egg, 32g BETTERY vanilla plant protein powder", evaluation: "GOOD", delta: -1, timeDifferenceMinutes: 59 },
+  { id: 10, timestamp: "2026-04-20T20:28:00Z", glucoseBefore: 196, glucoseAfter: 96,  carbsGrams: 66,  fiberGrams: null, insulinUnits: 3, mealType: null, mealDescription: "200g beef steak, 150g turnip greens, 80g cooked brown rice, 140g potatoes, 60g mixed salad, 45g white bread", evaluation: "OVERDOSE", delta: -100, timeDifferenceMinutes: 86 },
+  { id: 9,  timestamp: "2026-04-20T16:36:00Z", glucoseBefore: 118, glucoseAfter: 256, carbsGrams: 82,  fiberGrams: null, insulinUnits: 1, mealType: null, mealDescription: "80g granola, 120g banana, 20g mixed nuts, 150g coconut rice milk", evaluation: "UNDERDOSE", delta: 138, timeDifferenceMinutes: 88 },
+  { id: 8,  timestamp: "2026-04-20T10:43:00Z", glucoseBefore: 86,  glucoseAfter: 120, carbsGrams: 51,  fiberGrams: null, insulinUnits: 1, mealType: null, mealDescription: "60g chia pudding, 129g Greek yogurt, 33g blueberries, 34g raspberries, 125g light mozzarella, 125g tomato, 48g rye bread, 6g olive oil, 60g egg, 32g BETTERY vanilla plant protein powder, 37g mixed nuts, 2g cinnamon", evaluation: "UNDERDOSE", delta: 34, timeDifferenceMinutes: 59 },
+  { id: 7,  timestamp: "2026-04-19T21:55:00Z", glucoseBefore: 120, glucoseAfter: 81,  carbsGrams: 93,  fiberGrams: null, insulinUnits: 2, mealType: null, mealDescription: "218g fennel pear salad, 139g broccoli, 95g roasted chickpeas, 69g halloumi, 115g potato wedges, 60g egg", evaluation: "OVERDOSE", delta: -39, timeDifferenceMinutes: 65 },
+  { id: 6,  timestamp: "2026-04-19T15:01:00Z", glucoseBefore: 109, glucoseAfter: 66,  carbsGrams: 42,  fiberGrams: null, insulinUnits: 2, mealType: null, mealDescription: "75g pita bread, 110g kafta, 18g tahini sauce, 35g mixed vegetables, 90g tabbouleh salad", evaluation: "OVERDOSE", delta: -43, timeDifferenceMinutes: 62 },
+  { id: 5,  timestamp: "2026-04-19T11:12:00Z", glucoseBefore: 71,  glucoseAfter: 62,  carbsGrams: 67,  fiberGrams: null, insulinUnits: 2, mealType: null, mealDescription: "131g chia pudding, 126g stracciatella yogurt, 125g light mozzarella, 125g tomato, 48g rye bread, 40g Portuguese fresh cheese, 60g egg, 40g blueberries, 35g raspberries, 20g mixed nuts, 6g olive oil, 32g BETTERY vanilla plant protein powder, 15g gummy candy", evaluation: "GOOD", delta: -9, timeDifferenceMinutes: 73 },
+  { id: 4,  timestamp: "2026-04-18T20:30:00Z", glucoseBefore: 145, glucoseAfter: 67,  carbsGrams: 50,  fiberGrams: null, insulinUnits: 3, mealType: null, mealDescription: "90g mackerel, 55g fries, 70g dark bread, 75g seafood rice, 20g olives, 35g salad, 20g creamed spinach, 8g Portuguese onion olive oil sauce", evaluation: "OVERDOSE", delta: -78, timeDifferenceMinutes: 83 },
+  { id: 3,  timestamp: "2026-04-18T14:40:00Z", glucoseBefore: 120, glucoseAfter: 65,  carbsGrams: 40,  fiberGrams: null, insulinUnits: 3, mealType: null, mealDescription: "234g chicken breast, 158g broccoli, 90g roasted chickpeas, 32g BETTERY protein shake, 8g olive oil, 6g butter, 4g garlic", evaluation: "OVERDOSE", delta: -55, timeDifferenceMinutes: 56 },
+  { id: 2,  timestamp: "2026-04-18T09:34:00Z", glucoseBefore: 114, glucoseAfter: 97,  carbsGrams: 62,  fiberGrams: null, insulinUnits: 2, mealType: null, mealDescription: "150g chia pudding, 100g Greek yogurt, 45g blueberries, 45g raspberries, 18g mixed nuts, 32g Bettery protein shake, 55g wholegrain rye bread, 125g mozzarella, 40g cream cheese, 120g tomato, 50g egg", evaluation: "GOOD", delta: -17, timeDifferenceMinutes: 65 },
+  { id: 1,  timestamp: "2026-04-17T21:40:00Z", glucoseBefore: 112, glucoseAfter: 56,  carbsGrams: 76,  fiberGrams: null, insulinUnits: 3, mealType: null, mealDescription: "1 Ox Tongue Croquette, honey mustard, 8 olives, 1 oyster, 5 ravioli, 100g green beans", evaluation: "OVERDOSE", delta: -56, timeDifferenceMinutes: 73 },
+];
+
 async function apiFetch<T>(path: string, _opts?: RequestInit): Promise<T> {
-  // MOCKUP STUB — returns fixture data matching the design screenshot, so
-  // the dark cockpit can be displayed standalone for design comparison.
+  // MOCKUP STUB — returns fixture data computed from the user's real tracking
+  // sheet so the dark cockpit can be displayed standalone for design comparison.
   await new Promise(r => setTimeout(r, 50));
   if (path.startsWith("/insights/dashboard")) {
+    const total = MOCKUP_ENTRIES.length;
+    const eb = { GOOD: 0, OVERDOSE: 0, UNDERDOSE: 0, CHECK_CONTEXT: 0 };
+    let bgSum = 0, bgCount = 0, hypo = 0, spike = 0;
+    for (const e of MOCKUP_ENTRIES) {
+      if (e.evaluation && e.evaluation in eb) eb[e.evaluation as keyof typeof eb]++;
+      if (e.glucoseBefore != null) { bgSum += e.glucoseBefore; bgCount++; }
+      if (e.glucoseAfter != null && e.glucoseAfter < 70) hypo++;
+      if (e.glucoseAfter != null && e.glucoseAfter > 180) spike++;
+    }
+    const goodRate = eb.GOOD / total;
+    const hypoRate = (hypo / total) * 100;
+    const spikeRate = (spike / total) * 100;
+    // Control score: blends good-outcome rate with penalties for hypos and spikes.
+    const controlScore = Math.max(0, Math.min(100, Math.round(
+      goodRate * 100 + (100 - hypoRate) * 0.2 - spikeRate * 0.3
+    )));
     return {
-      controlScore: 23,
-      hypoRate: 46.0,
-      spikeRate: 8.0,
-      totalEntries: 13,
-      goodRate: 0.231,
-      avgGlucoseBefore: 114,
-      evaluationBreakdown: { GOOD: 3, OVERDOSE: 7, UNDERDOSE: 3, CHECK_CONTEXT: 0 },
-      recentEntries: [
-        { id: 1, timestamp: "2026-04-21T21:53:00Z", glucoseBefore: 121, glucoseAfter: null, carbsGrams: 157, fiberGrams: null, insulinUnits: 3, mealType: null, mealDescription: "294g pulao rice, 400g mango lassi, 32g Bettery vanilla plant protein powder, 493g chicken korma, 83g yogurt cucumber tomato salad", evaluation: "OVERDOSE", delta: null, timeDifferenceMinutes: null },
-        { id: 2, timestamp: "2026-04-21T16:19:00Z", glucoseBefore: 74,  glucoseAfter: null, carbsGrams: 74,  fiberGrams: null, insulinUnits: 1, mealType: null, mealDescription: "95g cinnamon roll, 250g matcha latte, 4g sugar", evaluation: "UNDERDOSE", delta: null, timeDifferenceMinutes: null },
-        { id: 3, timestamp: "2026-04-21T15:20:00Z", glucoseBefore: 97,  glucoseAfter: null, carbsGrams: 59,  fiberGrams: null, insulinUnits: 1, mealType: null, mealDescription: "40g granola, 20g blueberries, 33g raspberries, 160g yogurt, 38g mixed nuts, 130g banana, 60g egg, 32g Bettery vanilla plant protein powder", evaluation: "GOOD", delta: null, timeDifferenceMinutes: null },
-        { id: 4, timestamp: "2026-04-20T21:28:00Z", glucoseBefore: 196, glucoseAfter: null, carbsGrams: 66,  fiberGrams: null, insulinUnits: 3, mealType: null, mealDescription: "200g beef steak, 150g turnip greens, 80g cooked brown rice, 140g potatoes, 60g mixed salad, 45g white bread", evaluation: "OVERDOSE", delta: null, timeDifferenceMinutes: null },
-        { id: 5, timestamp: "2026-04-20T13:05:00Z", glucoseBefore: 132, glucoseAfter: null, carbsGrams: 88,  fiberGrams: null, insulinUnits: 2, mealType: null, mealDescription: "Pasta arrabbiata with parmesan, side salad", evaluation: "OVERDOSE", delta: null, timeDifferenceMinutes: null },
-      ],
+      controlScore,
+      hypoRate,
+      spikeRate,
+      totalEntries: total,
+      goodRate,
+      avgGlucoseBefore: bgCount ? bgSum / bgCount : null,
+      evaluationBreakdown: eb,
+      recentEntries: MOCKUP_ENTRIES,
     } as unknown as T;
   }
   if (path.startsWith("/insights/glucose-trend")) {
-    const series = [105, 98, 112, 121, 88, 95, 130, 118, 102, 125, 138, 196, 142, 110, 108, 100, 92, 115, 121, 97];
-    return { points: series.map((g, i) => ({
-      timestamp: new Date(Date.now() - (series.length - i) * 3600_000).toISOString(),
-      glucoseBefore: g, glucoseAfter: null, evaluation: null,
+    return { points: MOCKUP_ENTRIES.map(e => ({
+      timestamp: e.timestamp,
+      glucoseBefore: e.glucoseBefore,
+      glucoseAfter: e.glucoseAfter,
+      evaluation: e.evaluation,
     })) } as unknown as T;
   }
   if (path.startsWith("/insights/meal-patterns") || path.startsWith("/insights/patterns")) return { patterns: [] } as unknown as T;
