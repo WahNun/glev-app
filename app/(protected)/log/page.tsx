@@ -11,6 +11,7 @@ export default function LogPage() {
   const router = useRouter();
   const [recording, setRecording] = useState(false);
   const [parsing, setParsing]     = useState(false);
+  const [pipeStatus, setPipeStatus] = useState<"idle" | "transcribing" | "parsing">("idle");
   const [transcript, setTranscript] = useState("");
 
   // Entry-details fields (mockup 1:1)
@@ -106,7 +107,7 @@ export default function LogPage() {
   }
 
   async function transcribeAndParse(blob: Blob, ext = "webm") {
-    setParsing(true); setError("");
+    setParsing(true); setError(""); setPipeStatus("transcribing");
     try {
       const fd = new FormData();
       fd.append("audio", blob, `voice.${ext}`);
@@ -115,10 +116,11 @@ export default function LogPage() {
       if (!tRes.ok || !tData.text) throw new Error(tData.error || "Empty transcript");
       const text = tData.text as string;
       setTranscript(text);
+      setPipeStatus("parsing");
       await autoFill(text);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Transcription failed.");
-    } finally { setParsing(false); }
+    } finally { setParsing(false); setPipeStatus("idle"); }
   }
 
   async function autoFill(text: string) {
@@ -247,7 +249,8 @@ export default function LogPage() {
     </div>
   );
 
-  const voiceLabel = recording ? "Listening…" : parsing ? "Parsing…" : speechAvail ? "Tap to speak" : "Voice unavailable";
+  const voiceLabel = recording ? "Listening…" : speechAvail ? "Tap to speak" : "Voice unavailable";
+  const pipeLabel  = pipeStatus === "transcribing" ? "Transcribing audio…" : pipeStatus === "parsing" ? "Parsing nutrition…" : null;
 
   return (
     <div style={{ maxWidth:1280, marginRight:"auto", display:"flex", flexDirection:"column", gap:14 }}>
@@ -300,7 +303,7 @@ export default function LogPage() {
               </svg>
             </button>
           </div>
-          <div style={{ fontSize:11, fontWeight:600, letterSpacing:"0.12em", color: recording ? ACCENT : parsing ? ORANGE : "rgba(255,255,255,0.45)" }}>
+          <div style={{ fontSize:11, fontWeight:600, letterSpacing:"0.12em", color: recording ? ACCENT : "rgba(255,255,255,0.45)" }}>
             {voiceLabel}
           </div>
           {transcript ? (
@@ -323,14 +326,19 @@ export default function LogPage() {
             <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.08em", color:"rgba(255,255,255,0.45)" }}>
               AI FOOD PARSER <span style={{ fontSize:8, color:ACCENT, fontWeight:500, marginLeft:4 }}>GPT-powered · test</span>
             </div>
-            {!pfRaw && !pfError && (
+            {pipeLabel ? (
+              <div style={{ fontSize:11, color:ORANGE, display:"flex", alignItems:"center", gap:6, fontWeight:600 }}>
+                <div style={{ width:10, height:10, border:`1.5px solid ${ORANGE}44`, borderTopColor:ORANGE, borderRadius:"50%", animation:"spin 0.7s linear infinite" }}/>
+                {pipeLabel}
+              </div>
+            ) : !pfRaw && !pfError && (
               <div style={{ fontSize:10, color:"rgba(255,255,255,0.22)" }}>Sends "small banana and handful blueberries"</div>
             )}
           </div>
           <button
             onClick={testFoodParser}
-            disabled={pfLoading}
-            style={{ padding:"6px 14px", borderRadius:8, border:`1px solid ${ACCENT}44`, background:pfLoading ? "rgba(255,255,255,0.04)" : `${ACCENT}22`, color: pfLoading ? "rgba(255,255,255,0.3)" : ACCENT, fontSize:11, fontWeight:700, letterSpacing:"0.04em", cursor: pfLoading ? "default" : "pointer", display:"flex", alignItems:"center", gap:6, whiteSpace:"nowrap", flexShrink:0 }}
+            disabled={pfLoading || parsing}
+            style={{ padding:"6px 14px", borderRadius:8, border:`1px solid ${ACCENT}44`, background:(pfLoading || parsing) ? "rgba(255,255,255,0.04)" : `${ACCENT}22`, color: (pfLoading || parsing) ? "rgba(255,255,255,0.3)" : ACCENT, fontSize:11, fontWeight:700, letterSpacing:"0.04em", cursor: (pfLoading || parsing) ? "default" : "pointer", display:"flex", alignItems:"center", gap:6, whiteSpace:"nowrap", flexShrink:0 }}
           >
             {pfLoading ? <><div style={{ width:10, height:10, border:`1.5px solid ${ACCENT}44`, borderTopColor:ACCENT, borderRadius:"50%", animation:"spin 0.7s linear infinite" }}/>Parsing…</> : "Test Food Parser"}
           </button>
