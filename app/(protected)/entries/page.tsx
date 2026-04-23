@@ -69,6 +69,13 @@ export default function EntriesPage() {
 
   return (
     <div style={{ maxWidth:960, margin:"0 auto" }}>
+      <style>{`
+        .entry-header { grid-template-columns: minmax(0,1.4fr) minmax(0,0.8fr) minmax(0,1.1fr) auto auto; }
+        @media (max-width: 640px) {
+          .entry-header { grid-template-columns: minmax(0,1.5fr) minmax(0,0.7fr) auto auto; gap: 10px; padding: 12px 14px !important; }
+          .entry-cat-cell { display: none !important; }
+        }
+      `}</style>
       <div style={{ marginBottom:24 }}>
         <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>Entries</h1>
         <p style={{ color:"rgba(255,255,255,0.35)", fontSize:14 }}>{filtered.length} of {meals.length} logged meals. Click a row to expand.</p>
@@ -118,10 +125,13 @@ export default function EntriesPage() {
               </div>
             );
 
+            const catColor = m.meal_type ? (TYPE_COLORS[m.meal_type] || GREEN) : null;
+            const catLabel = m.meal_type ? m.meal_type.replace("_"," ").toLowerCase() : null;
+
             return (
-              <div key={m.id} style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, overflow:"hidden" }}>
+              <div key={m.id} className="entry-row" style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, overflow:"hidden" }}>
                 {/* Collapsed header */}
-                <div onClick={() => setExpanded(isOpen ? null : m.id)} style={{ padding:"14px 16px", cursor:"pointer", display:"grid", gridTemplateColumns:"minmax(0,1.4fr) minmax(0,0.9fr) minmax(0,1.1fr) auto auto", gap:14, alignItems:"center" }}>
+                <div onClick={() => setExpanded(isOpen ? null : m.id)} className="entry-header" style={{ padding:"14px 16px", cursor:"pointer", display:"grid", gap:14, alignItems:"center" }}>
                   {/* Col 1: date + BG + insulin */}
                   <div style={{ minWidth:0 }}>
                     <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginBottom:4 }}>{dateStr}</div>
@@ -137,12 +147,15 @@ export default function EntriesPage() {
                       {m.carbs_grams ? `${m.carbs_grams}g` : "—"}
                     </div>
                   </div>
-                  {/* Col 3: classification */}
-                  <div style={{ minWidth:0 }}>
-                    <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>CATEGORY</div>
-                    <div style={{ fontSize:13, fontWeight:600, color:m.meal_type ? (TYPE_COLORS[m.meal_type] || "rgba(255,255,255,0.85)") : "rgba(255,255,255,0.3)", letterSpacing:"-0.01em", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                      {m.meal_type ? m.meal_type.replace("_"," ").toLowerCase() : "—"}
-                    </div>
+                  {/* Col 3: classification chip — desktop only (hidden on mobile via CSS) */}
+                  <div className="entry-cat-cell" style={{ minWidth:0, display:"flex", justifyContent:"center" }}>
+                    {catLabel && catColor ? (
+                      <span style={{ padding:"5px 12px", borderRadius:99, fontSize:10, fontWeight:700, background:`${catColor}18`, color:catColor, border:`1px solid ${catColor}30`, whiteSpace:"nowrap", letterSpacing:"0.05em", textTransform:"uppercase" }}>
+                        {catLabel}
+                      </span>
+                    ) : (
+                      <span style={{ fontSize:11, color:"rgba(255,255,255,0.25)" }}>—</span>
+                    )}
                   </div>
                   {/* Col 4: evaluation badge */}
                   <span style={{ padding:"5px 12px", borderRadius:99, fontSize:10, fontWeight:700, background:`${evColor}18`, color:evColor, border:`1px solid ${evColor}30`, whiteSpace:"nowrap", letterSpacing:"0.05em", textTransform:"uppercase" }}>
@@ -157,10 +170,20 @@ export default function EntriesPage() {
                 {/* Expanded body */}
                 {isOpen && (
                   <div style={{ padding:"4px 16px 16px", borderTop:`1px solid rgba(255,255,255,0.04)`, display:"flex", flexDirection:"column", gap:14 }}>
+                    {/* CLASSIFICATION — highlighted chip card */}
+                    {catLabel && catColor && (
+                      <div style={{ marginTop:14, background:`${catColor}10`, border:`1px solid ${catColor}40`, borderRadius:12, padding:"12px 14px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
+                        <div style={{ fontSize:9, color:"rgba(255,255,255,0.5)", letterSpacing:"0.1em", fontWeight:700 }}>MEAL CLASSIFICATION</div>
+                        <span style={{ padding:"6px 14px", borderRadius:99, fontSize:11, fontWeight:700, background:catColor, color:"#0A0A0F", whiteSpace:"nowrap", letterSpacing:"0.04em", textTransform:"uppercase" }}>
+                          {catLabel}
+                        </span>
+                      </div>
+                    )}
+
                     {/* MEAL */}
                     {m.input_text && (
                       <div>
-                        <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.1em", fontWeight:700, margin:"12px 0 6px" }}>MEAL</div>
+                        <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.1em", fontWeight:700, margin:"4px 0 6px" }}>MEAL</div>
                         <div style={{ fontSize:13, color:"rgba(255,255,255,0.75)", lineHeight:1.55 }}>{m.input_text}</div>
                       </div>
                     )}
