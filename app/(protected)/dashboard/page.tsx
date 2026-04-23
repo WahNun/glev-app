@@ -328,10 +328,9 @@ export default function DashboardPage() {
                     <span className="glev-entry-hide-mobile" style={{ padding:"5px 12px", borderRadius:99, fontSize:10, fontWeight:700, background:`${evalColor(ev)}18`, color:evalColor(ev), border:`1px solid ${evalColor(ev)}30`, whiteSpace:"nowrap", letterSpacing:"0.05em", textTransform:"uppercase" }}>
                       {evalLabel(ev)}
                     </span>
-                    {/* MOBILE ONLY: Bolus (insulin) pill on the right */}
-                    <span className="glev-entry-bolus" style={{ alignItems:"baseline", gap:3, padding:"5px 10px", borderRadius:99, background: m.insulin_units ? `${ACCENT}18` : "rgba(255,255,255,0.05)", border:`1px solid ${m.insulin_units ? `${ACCENT}30` : "rgba(255,255,255,0.08)"}`, whiteSpace:"nowrap" }}>
-                      <span style={{ fontSize:13, fontWeight:700, color: m.insulin_units ? ACCENT : "rgba(255,255,255,0.3)", letterSpacing:"-0.01em" }}>{m.insulin_units ?? "—"}</span>
-                      <span style={{ fontSize:10, color: m.insulin_units ? `${ACCENT}cc` : "rgba(255,255,255,0.3)", fontWeight:600 }}>u</span>
+                    {/* MOBILE ONLY: Bolus (insulin) chip on the right */}
+                    <span className="glev-entry-bolus" style={{ alignItems:"center", padding:"4px 12px", borderRadius:99, fontSize:11, fontWeight:700, background: m.insulin_units ? `${ACCENT}18` : "rgba(255,255,255,0.05)", color: m.insulin_units ? ACCENT : "rgba(255,255,255,0.3)", border:`1px solid ${m.insulin_units ? `${ACCENT}30` : "rgba(255,255,255,0.08)"}`, whiteSpace:"nowrap", letterSpacing:"0.04em" }}>
+                      {m.insulin_units != null ? `${m.insulin_units}u` : "—"}
                     </span>
                   </div>
                     );
