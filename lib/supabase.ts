@@ -14,12 +14,16 @@ function readCookie(name: string): string | null {
 
 function writeCookie(name: string, value: string) {
   if (typeof document === "undefined") return;
-  document.cookie = `${name}=${encodeURIComponent(value)};path=/;max-age=604800;SameSite=Lax`;
+  const secure = typeof location !== "undefined" && location.protocol === "https:";
+  const flags = secure ? "SameSite=None;Secure" : "SameSite=Lax";
+  document.cookie = `${name}=${encodeURIComponent(value)};path=/;max-age=604800;${flags}`;
 }
 
 function deleteCookie(name: string) {
   if (typeof document === "undefined") return;
-  document.cookie = `${name}=;path=/;max-age=0;SameSite=Lax`;
+  const secure = typeof location !== "undefined" && location.protocol === "https:";
+  const flags = secure ? "SameSite=None;Secure" : "SameSite=Lax";
+  document.cookie = `${name}=;path=/;max-age=0;${flags}`;
 }
 
 function makeCookieStorage() {
