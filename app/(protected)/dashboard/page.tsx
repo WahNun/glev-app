@@ -238,7 +238,7 @@ export default function DashboardPage() {
   const cards = buildCards(meals);
 
   return (
-    <div style={{ maxWidth:1000, margin:"0 auto" }}>
+    <div style={{ maxWidth:1480, margin:"0 auto", width:"100%" }}>
       <style>{`
         .glev-dash-head    { display: flex; }
         .glev-dash-grid    { grid-template-columns: repeat(4,1fr) !important; }

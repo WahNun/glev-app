@@ -146,7 +146,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         justifyContent: "space-around", alignItems: "center",
         padding: "10px 24px max(20px, env(safe-area-inset-bottom))", zIndex: 100,
       }}>
-        {[NAV[0], NAV[3], NAV[2], NAV[4]].map(({ label, path, icon }) => {
+        {[NAV[0], NAV[2], NAV[4], NAV[3]].map(({ label, path, icon }) => {
           const active = pathname.startsWith(path);
           return (
             <button key={path} onClick={() => router.push(path)} style={{

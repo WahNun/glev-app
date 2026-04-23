@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { fetchMeals, type Meal } from "@/lib/meals";
+import { fetchMeals, classifyMeal, type Meal } from "@/lib/meals";
 import { logDebug } from "@/lib/debug";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
@@ -71,9 +71,21 @@ export default function EnginePage() {
   const [carbs, setCarbs]     = useState("");
   const [protein, setProtein] = useState("");
   const [fat, setFat]         = useState("");
+  const [fiber, setFiber]     = useState("");
   const [desc, setDesc]       = useState("");
   const [result, setResult]   = useState<Recommendation|null>(null);
   const [running, setRunning] = useState(false);
+  const [cgmPulling, setCgmPulling] = useState(false);
+
+  function handlePullCgm() {
+    setCgmPulling(true);
+    setTimeout(() => {
+      const reading = Math.round(85 + Math.random() * 70);
+      setGlucose(String(reading));
+      setCgmPulling(false);
+      logDebug("ENGINE.CGM_PULL", { reading });
+    }, 700);
+  }
 
   useEffect(() => {
     fetchMeals().then(setMeals).catch(console.error).finally(() => setLoading(false));
@@ -111,7 +123,22 @@ export default function EnginePage() {
           <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>Current Conditions</div>
           <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
             <div>
-              <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>Glucose Before (mg/dL)</label>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)" }}>Glucose Before (mg/dL)</label>
+                <button onClick={handlePullCgm} disabled={cgmPulling} style={{
+                  display:"flex", alignItems:"center", gap:6,
+                  padding:"4px 10px", borderRadius:99, border:`1px solid ${ACCENT}40`,
+                  background:`${ACCENT}15`, color:ACCENT, fontSize:11, fontWeight:600,
+                  cursor: cgmPulling ? "wait" : "pointer",
+                }}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                  {cgmPulling ? "Pulling…" : "Pull CGM"}
+                </button>
+              </div>
               <input style={inp} type="number" placeholder="e.g. 115" value={glucose} onChange={e => setGlucose(e.target.value)}/>
             </div>
             <div>
@@ -124,7 +151,7 @@ export default function EnginePage() {
         <div style={card}>
           <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>Meal Details (optional)</div>
           <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
               <div>
                 <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>Protein (g)</label>
                 <input style={inp} type="number" placeholder="0" value={protein} onChange={e => setProtein(e.target.value)}/>
@@ -132,6 +159,10 @@ export default function EnginePage() {
               <div>
                 <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>Fat (g)</label>
                 <input style={inp} type="number" placeholder="0" value={fat} onChange={e => setFat(e.target.value)}/>
+              </div>
+              <div>
+                <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>Fiber (g)</label>
+                <input style={inp} type="number" placeholder="0" value={fiber} onChange={e => setFiber(e.target.value)}/>
               </div>
             </div>
             <div>
@@ -141,6 +172,56 @@ export default function EnginePage() {
           </div>
         </div>
       </div>
+
+      {(() => {
+        const gNum = parseFloat(glucose), cNum = parseFloat(carbs), pNum = parseFloat(protein), fNum = parseFloat(fat), fbNum = parseFloat(fiber);
+        const allFilled = [gNum, cNum, pNum, fNum, fbNum].every(v => !isNaN(v) && v >= 0) && cNum > 0;
+        if (!allFilled) return null;
+        const TYPE_COLORS: Record<string,string> = { FAST_CARBS:ORANGE, HIGH_PROTEIN:"#3B82F6", HIGH_FAT:"#A855F7", BALANCED:GREEN };
+        const TYPE_LABELS: Record<string,string> = { FAST_CARBS:"Fast carbs", HIGH_PROTEIN:"High protein", HIGH_FAT:"High fat", BALANCED:"Balanced" };
+        const TYPE_DESC: Record<string,string> = {
+          FAST_CARBS: "High glycemic load — expect a sharp glucose rise. Consider pre-bolusing 15–20 min before eating.",
+          HIGH_PROTEIN: "Protein-dominant — slower digestion, lower spike risk. Watch for delayed glucose rise.",
+          HIGH_FAT: "Fat-dominant — significantly delayed absorption. Split-bolus or extended-bolus often appropriate.",
+          BALANCED: "Macros are well-balanced — predictable absorption curve. Standard ICR usually works.",
+        };
+        const cls = classifyMeal(cNum, pNum, fNum);
+        const color = TYPE_COLORS[cls] || ACCENT;
+        return (
+          <div style={{
+            background:`linear-gradient(135deg, ${color}10, ${color}04)`,
+            border:`1px solid ${color}35`, borderRadius:16,
+            padding:"18px 22px", marginBottom:20,
+            display:"flex", gap:18, alignItems:"flex-start",
+          }}>
+            <div style={{
+              width:42, height:42, borderRadius:12, flexShrink:0,
+              background:`${color}20`, border:`1px solid ${color}40`,
+              display:"flex", alignItems:"center", justifyContent:"center",
+            }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2v6"/><path d="M5 8h14"/><path d="M5 8l2 13h10l2-13"/>
+              </svg>
+            </div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:6 }}>
+                <span style={{ fontSize:10, color:"rgba(255,255,255,0.4)", letterSpacing:"0.08em", textTransform:"uppercase", fontWeight:600 }}>Meal Classification</span>
+                <span style={{ padding:"4px 12px", borderRadius:99, fontSize:11, fontWeight:700, background:`${color}25`, color, border:`1px solid ${color}45`, letterSpacing:"0.04em", textTransform:"uppercase" }}>
+                  {TYPE_LABELS[cls]}
+                </span>
+              </div>
+              <div style={{ fontSize:13, color:"rgba(255,255,255,0.7)", lineHeight:1.55 }}>{TYPE_DESC[cls]}</div>
+              <div style={{ marginTop:10, display:"flex", gap:14, flexWrap:"wrap", fontSize:11, color:"rgba(255,255,255,0.4)" }}>
+                <span>Carbs <strong style={{ color:"rgba(255,255,255,0.75)" }}>{cNum}g</strong></span>
+                <span>Protein <strong style={{ color:"rgba(255,255,255,0.75)" }}>{pNum}g</strong></span>
+                <span>Fat <strong style={{ color:"rgba(255,255,255,0.75)" }}>{fNum}g</strong></span>
+                <span>Fiber <strong style={{ color:"rgba(255,255,255,0.75)" }}>{fbNum}g</strong></span>
+                <span>Net carbs <strong style={{ color:"rgba(255,255,255,0.75)" }}>{Math.max(0, cNum - fbNum)}g</strong></span>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       <button onClick={handleRun} disabled={!carbs || running || loading} style={{
         width:"100%", padding:"16px", borderRadius:14, border:"none",
