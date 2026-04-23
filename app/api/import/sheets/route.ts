@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readAllFromSheet, type SheetRow } from "@/lib/sheets";
+import { enrichMacrosBatch } from "@/lib/macroEnrich";
 
 export const dynamic = "force-dynamic";
 
@@ -141,7 +142,30 @@ export async function POST(req: NextRequest) {
       };
     });
 
-    return NextResponse.json({ read: rows.length, rows: mapped });
+    // Enrich rows that have a meal description but are missing macros (no
+    // protein AND no fat AND no fiber from the source sheet). Uses OpenAI to
+    // estimate from the ingredient list given the known carb total.
+    const needsEnrichment = (m: MappedSheetMeal) =>
+      !!m.inputText &&
+      m.inputText !== "Imported from Google Sheets" &&
+      m.protein === 0 && m.fat === 0 && m.fiber === 0;
+
+    let enrichedCount = 0;
+    if (mapped.some(needsEnrichment)) {
+      const estimates = await enrichMacrosBatch(mapped, needsEnrichment, 4);
+      for (const [idx, est] of estimates) {
+        mapped[idx] = {
+          ...mapped[idx],
+          protein: est.protein,
+          fat: est.fat,
+          fiber: est.fiber,
+          calories: mapped[idx].calories ?? est.calories,
+        };
+        enrichedCount++;
+      }
+    }
+
+    return NextResponse.json({ read: rows.length, enriched: enrichedCount, rows: mapped });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Sheets import failed";
     return NextResponse.json({ error: msg }, { status: 500 });
