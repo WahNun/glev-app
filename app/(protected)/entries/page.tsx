@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { fetchMeals, type Meal } from "@/lib/meals";
+import { fetchMeals, deleteMeal, type Meal } from "@/lib/meals";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
@@ -21,10 +21,26 @@ export default function EntriesPage() {
   const [filter, setFilter]   = useState("All");
   const [search, setSearch]   = useState("");
   const [expanded, setExpanded] = useState<string|null>(null);
+  const [deleting, setDeleting] = useState<string|null>(null);
 
   useEffect(() => {
     fetchMeals().then(setMeals).catch(console.error).finally(() => setLoading(false));
   }, []);
+
+  async function handleDelete(id: string) {
+    if (!confirm("Delete this entry? This cannot be undone.")) return;
+    setDeleting(id);
+    try {
+      await deleteMeal(id);
+      setMeals(ms => ms.filter(m => m.id !== id));
+      setExpanded(null);
+    } catch (e) {
+      console.error(e);
+      alert("Could not delete entry.");
+    } finally {
+      setDeleting(null);
+    }
+  }
 
   const filtered = meals.filter(m => {
     const matchEval = filter === "All" || m.evaluation === filter
@@ -66,116 +82,102 @@ export default function EntriesPage() {
         <input style={{ ...inp, flex:1, minWidth:200 }} placeholder="Search meals…" value={search} onChange={e => setSearch(e.target.value)}/>
       </div>
 
-      {/* TABLE */}
-      <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, overflow:"hidden" }}>
-        {/* Header */}
-        <div style={{ display:"grid", gridTemplateColumns:"2fr 70px 70px 70px 100px 16px", gap:12, padding:"12px 20px", borderBottom:`1px solid ${BORDER}`, color:"rgba(255,255,255,0.3)", fontSize:11, letterSpacing:"0.07em", textTransform:"uppercase" }}>
-          <span>Meal</span><span style={{textAlign:"right"}}>Glucose</span><span style={{textAlign:"right"}}>Carbs</span><span style={{textAlign:"right"}}>Insulin</span><span style={{textAlign:"center"}}>Result</span><span/>
-        </div>
-
-        {filtered.length === 0 ? (
-          <div style={{ padding:"48px", textAlign:"center", color:"rgba(255,255,255,0.2)", fontSize:14 }}>No entries match this filter.</div>
-        ) : (
-          filtered.map(m => {
+      {/* CARD STACK */}
+      {filtered.length === 0 ? (
+        <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"48px", textAlign:"center", color:"rgba(255,255,255,0.2)", fontSize:14 }}>No entries match this filter.</div>
+      ) : (
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {filtered.map(m => {
             const isOpen = expanded === m.id;
             const ev = m.evaluation;
             const date = new Date(m.created_at);
-            const dateStr = date.toLocaleDateString("en", { month:"short", day:"numeric" });
-            const timeStr = date.toLocaleTimeString("en", { hour:"numeric", minute:"2-digit" });
+            const dateStr = date.toLocaleDateString("en", { month:"short", day:"numeric" }).replace(/^(\w+) (\d+)$/, "$2. $1.");
             const totalProt = m.protein_grams ?? (Array.isArray(m.parsed_json) ? m.parsed_json.reduce((s,f)=>s+(f.protein||0),0) : 0);
             const totalFat  = m.fat_grams ?? (Array.isArray(m.parsed_json) ? m.parsed_json.reduce((s,f)=>s+(f.fat||0),0) : 0);
             const totalFiber = m.fiber_grams ?? (Array.isArray(m.parsed_json) ? m.parsed_json.reduce((s,f)=>s+(f.fiber||0),0) : 0);
-            const cals = m.calories ?? Math.round((m.carbs_grams||0)*4 + totalProt*4 + totalFat*9);
+            const carbs = m.carbs_grams ?? 0;
+            const netCarbs = Math.max(0, carbs - totalFiber);
+            const icr = m.insulin_units && m.insulin_units > 0 ? netCarbs / m.insulin_units : null;
             const glucDelta = (m.glucose_after && m.glucose_before) ? m.glucose_after - m.glucose_before : null;
+            const bgC = m.glucose_before ? (m.glucose_before > 140 ? ORANGE : m.glucose_before < 80 ? PINK : GREEN) : "rgba(255,255,255,0.7)";
+            const afterC = m.glucose_after ? (m.glucose_after > 180 || m.glucose_after < 70 ? PINK : GREEN) : "rgba(255,255,255,0.3)";
+            const deltaC = glucDelta !== null ? (Math.abs(glucDelta) < 50 ? GREEN : glucDelta > 0 ? ORANGE : PINK) : "rgba(255,255,255,0.3)";
+            const evColor = evC(ev);
+
+            const MiniCard = ({ l, v, c }: { l: string; v: string; c?: string }) => (
+              <div style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
+                <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{l}</div>
+                <div style={{ fontSize:14, fontWeight:700, color:c || "rgba(255,255,255,0.9)", letterSpacing:"-0.01em" }}>{v}</div>
+              </div>
+            );
+
             return (
-              <div key={m.id} style={{ borderBottom:`1px solid ${BORDER}` }}>
-                {/* Row */}
-                <div onClick={() => setExpanded(isOpen ? null : m.id)} style={{ display:"grid", gridTemplateColumns:"2fr 70px 70px 70px 100px 16px", gap:12, padding:"14px 20px", cursor:"pointer", alignItems:"center", transition:"background 0.1s" }}
-                  onMouseEnter={e => (e.currentTarget.style.background="rgba(255,255,255,0.02)")}
-                  onMouseLeave={e => (e.currentTarget.style.background="transparent")}>
-                  <div>
-                    <div style={{ fontSize:13, fontWeight:500, marginBottom:2 }}>{m.input_text.length>50 ? m.input_text.slice(0,50)+"…" : m.input_text}</div>
-                    <div style={{ fontSize:11, color:"rgba(255,255,255,0.28)" }}>{dateStr} · {timeStr}</div>
+              <div key={m.id} style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, overflow:"hidden" }}>
+                {/* Collapsed header */}
+                <div onClick={() => setExpanded(isOpen ? null : m.id)} style={{ padding:"14px 16px", cursor:"pointer", display:"flex", alignItems:"center", gap:10 }}>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginBottom:4 }}>{dateStr}</div>
+                    <div style={{ display:"flex", alignItems:"baseline", gap:10, flexWrap:"wrap" }}>
+                      <span style={{ fontSize:18, fontWeight:800, color:bgC, letterSpacing:"-0.02em" }}>{m.glucose_before ?? "—"}<span style={{ fontSize:11, color:"rgba(255,255,255,0.4)", fontWeight:500, marginLeft:3 }}>mg/dL</span></span>
+                      <span style={{ fontSize:12, color:"rgba(255,255,255,0.55)" }}>{m.carbs_grams ? `${m.carbs_grams}g` : "—"}</span>
+                      <span style={{ fontSize:12, color:"rgba(255,255,255,0.55)" }}>{m.insulin_units ? `${m.insulin_units}u` : "—"}</span>
+                    </div>
                   </div>
-                  <div style={{ fontSize:13, textAlign:"right" }}>{m.glucose_before ?? "—"}</div>
-                  <div style={{ fontSize:13, textAlign:"right" }}>{m.carbs_grams ? `${m.carbs_grams}g` : "—"}</div>
-                  <div style={{ fontSize:13, textAlign:"right" }}>{m.insulin_units ? `${m.insulin_units}u` : "—"}</div>
-                  <div style={{ textAlign:"center" }}>
-                    <span style={{ padding:"3px 10px", borderRadius:99, fontSize:11, fontWeight:700, background:`${evC(ev)}15`, color:evC(ev), border:`1px solid ${evC(ev)}30`, whiteSpace:"nowrap" }}>
-                      {evL(ev)}
-                    </span>
-                  </div>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="2" strokeLinecap="round" style={{ transform:isOpen?"rotate(180deg)":"rotate(0deg)", transition:"transform 0.2s" }}>
-                    <polyline points="6 9 12 15 18 9"/>
+                  <span style={{ padding:"5px 12px", borderRadius:99, fontSize:10, fontWeight:700, background:`${evColor}18`, color:evColor, border:`1px solid ${evColor}30`, whiteSpace:"nowrap", letterSpacing:"0.05em", textTransform:"uppercase" }}>
+                    {evL(ev)}
+                  </span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="2.5" strokeLinecap="round" style={{ transform:isOpen?"rotate(90deg)":"rotate(0deg)", transition:"transform 0.2s", flexShrink:0 }}>
+                    <polyline points="9 6 15 12 9 18"/>
                   </svg>
                 </div>
 
-                {/* Expanded panel — 3 stacked rows */}
-                {isOpen && (() => {
-                  const carbs = m.carbs_grams ?? 0;
-                  const netCarbs = Math.max(0, carbs - totalFiber);
-                  const icr = m.insulin_units && m.insulin_units > 0 ? netCarbs / m.insulin_units : null;
-                  const Cell = ({ l, v, c }: { l: string; v: string; c?: string }) => (
-                    <div style={{ display:"inline-flex", flexDirection:"column", minWidth:90 }}>
-                      <span style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.06em", textTransform:"uppercase" }}>{l}</span>
-                      <span style={{ fontSize:13, fontWeight:600, color:c || "rgba(255,255,255,0.85)" }}>{v}</span>
-                    </div>
-                  );
-                  return (
-                    <div style={{ padding:"0 20px 20px", background:"rgba(255,255,255,0.01)", display:"flex", flexDirection:"column", gap:12 }}>
-                      {/* Row 1 — Macros & Dosing */}
-                      <div style={{ borderLeft:`2px solid ${ACCENT}55`, paddingLeft:14, paddingTop:12 }}>
-                        <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8 }}>MACROS &amp; DOSING</div>
-                        <div style={{ display:"flex", gap:18, flexWrap:"wrap" }}>
-                          <Cell l="Carbs"      v={`${carbs}g`}     c={ORANGE}/>
-                          <Cell l="Fiber"      v={`${totalFiber}g`}/>
-                          <Cell l="Net carbs"  v={`${netCarbs}g`}  c={GREEN}/>
-                          <Cell l="Protein"    v={`${totalProt}g`} c="#3B82F6"/>
-                          <Cell l="Fat"        v={`${totalFat}g`}  c="#A855F7"/>
-                          <Cell l="Calories"   v={`${cals} kcal`}  c="#A78BFA"/>
-                          <Cell l="Insulin"    v={`${m.insulin_units ?? 0}u`} c={ACCENT}/>
-                          <Cell l="Carb ratio" v={icr ? `1u / ${icr.toFixed(0)}g` : "—"}/>
-                        </div>
+                {/* Expanded body */}
+                {isOpen && (
+                  <div style={{ padding:"4px 16px 16px", borderTop:`1px solid rgba(255,255,255,0.04)`, display:"flex", flexDirection:"column", gap:14 }}>
+                    {/* MEAL */}
+                    {m.input_text && (
+                      <div>
+                        <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.1em", fontWeight:700, margin:"12px 0 6px" }}>MEAL</div>
+                        <div style={{ fontSize:13, color:"rgba(255,255,255,0.75)", lineHeight:1.55 }}>{m.input_text}</div>
                       </div>
-                      {/* Row 2 — Glucose */}
-                      <div style={{ borderLeft:`2px solid ${GREEN}55`, paddingLeft:14 }}>
-                        <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8 }}>GLUCOSE TRACKING</div>
-                        <div style={{ display:"flex", gap:18, flexWrap:"wrap" }}>
-                          <Cell l="Before" v={m.glucose_before ? `${m.glucose_before} mg/dL` : "—"} c={m.glucose_before ? (m.glucose_before>140?ORANGE:m.glucose_before<80?PINK:GREEN) : undefined}/>
-                          <Cell l="After"  v={m.glucose_after  ? `${m.glucose_after} mg/dL`  : "not recorded"} c={m.glucose_after ? (m.glucose_after>180||m.glucose_after<70?PINK:GREEN) : "rgba(255,255,255,0.3)"}/>
-                          <Cell l="Delta"  v={glucDelta !== null ? `${glucDelta > 0 ? "+" : ""}${glucDelta} mg/dL` : "—"} c={glucDelta !== null ? (Math.abs(glucDelta) < 50 ? GREEN : glucDelta > 0 ? ORANGE : PINK) : undefined}/>
-                          <Cell l="Time"   v={`${dateStr} · ${timeStr}`}/>
-                        </div>
-                      </div>
-                      {/* Row 3 — Meal Context */}
-                      <div style={{ borderLeft:`2px solid rgba(255,255,255,0.15)`, paddingLeft:14, paddingBottom:6 }}>
-                        <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8 }}>MEAL CONTEXT</div>
-                        <div style={{ fontSize:13, color:"rgba(255,255,255,0.75)", lineHeight:1.55, marginBottom:8 }}>
-                          {m.input_text || "No meal description recorded."}
-                        </div>
-                        {Array.isArray(m.parsed_json) && m.parsed_json.length > 0 && (
-                          <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:8 }}>
-                            {m.parsed_json.map((f,i) => (
-                              <span key={i} style={{ fontSize:11, padding:"3px 8px", borderRadius:6, background:"rgba(255,255,255,0.04)", color:"rgba(255,255,255,0.6)" }}>
-                                {f.name} <span style={{ color:"rgba(255,255,255,0.35)" }}>({f.grams}g)</span>
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        {m.meal_type && (
-                          <span style={{ padding:"3px 10px", borderRadius:99, fontSize:11, fontWeight:700, background:`${TYPE_COLORS[m.meal_type]||GREEN}18`, color:TYPE_COLORS[m.meal_type]||GREEN, border:`1px solid ${TYPE_COLORS[m.meal_type]||GREEN}30`, letterSpacing:"0.06em" }}>
-                            {m.meal_type.replace("_"," ")}
-                          </span>
-                        )}
+                    )}
+
+                    {/* MACROS & DOSING — 3-col grid of mini-cards */}
+                    <div>
+                      <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8 }}>MACROS &amp; DOSING</div>
+                      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
+                        <MiniCard l="CARBS" v={`${carbs}g`} c={ORANGE}/>
+                        <MiniCard l="FIBER" v={totalFiber > 0 ? `${totalFiber}g` : "—"}/>
+                        <MiniCard l="NET CARBS" v={netCarbs > 0 ? `${netCarbs}g` : "—"} c={GREEN}/>
+                        <MiniCard l="INSULIN" v={`${m.insulin_units ?? 0}u`} c={ACCENT}/>
+                        <MiniCard l="RATIO" v={icr ? `1u/${icr.toFixed(0)}g` : "—"} c={ACCENT}/>
+                        <MiniCard l="CATEGORY" v={m.meal_type ? m.meal_type.replace("_"," ").toLowerCase() : "—"} c={m.meal_type ? (TYPE_COLORS[m.meal_type] || GREEN) : undefined}/>
                       </div>
                     </div>
-                  );
-                })()}
+
+                    {/* GLUCOSE — 2-col grid of mini-cards */}
+                    <div>
+                      <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8 }}>GLUCOSE</div>
+                      <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8 }}>
+                        <MiniCard l="BG BEFORE" v={m.glucose_before ? `${m.glucose_before} mg/dL` : "—"} c={bgC}/>
+                        <MiniCard l="BG AFTER" v={m.glucose_after ? `${m.glucose_after} mg/dL` : "—"} c={afterC}/>
+                        <MiniCard l="DELTA" v={glucDelta !== null ? `${glucDelta > 0 ? "+" : ""}${glucDelta} mg/dL` : "—"} c={deltaC}/>
+                        <MiniCard l="TIME GAP" v="—"/>
+                      </div>
+                    </div>
+
+                    {/* DELETE */}
+                    <button onClick={() => handleDelete(m.id)} disabled={deleting === m.id} style={{ marginTop:4, padding:"12px", borderRadius:10, border:`1px solid ${PINK}40`, background:`${PINK}08`, color:PINK, fontSize:13, fontWeight:600, cursor:deleting === m.id ? "wait" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, letterSpacing:"0.02em" }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+                      {deleting === m.id ? "Deleting…" : "Delete entry"}
+                    </button>
+                  </div>
+                )}
               </div>
             );
-          })
-        )}
-      </div>
+          })}
+        </div>
+      )}
     </div>
   );
 }
