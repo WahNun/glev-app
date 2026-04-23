@@ -1,0 +1,172 @@
+You are working on the Glev Next.js app.
+
+GOAL:
+Enhance the Engine with automatic CGM integration + instant recommendation UX.
+
+---
+
+## PART 1 — CGM AUTO-PULL (CRITICAL)
+
+### TARGET BEHAVIOR
+
+After user finishes "Tap to Speak":
+
+1. Parsing starts
+2. IN PARALLEL:
+   → Fetch latest CGM glucose value
+3. When both complete:
+   → Auto-populate "Glucose Before"
+
+---
+
+### IMPLEMENTATION
+
+#### 1. CREATE CGM FETCH FUNCTION
+
+Create a reusable async function:
+
+getLatestCGM()
+
+Returns:
+{
+  value: number,
+  timestamp: string (ISO),
+  formattedTime: string (e.g. "6:10 PM")
+}
+
+---
+
+#### 2. TRIGGER AUTOMATICALLY
+
+Hook into the same place where parsing starts:
+
+- DO NOT wait for user action
+- Fire CGM fetch in parallel with AI parsing
+
+---
+
+#### 3. AUTO-POPULATE FIELD
+
+When CGM result arrives:
+
+- Fill "Glucose Before" input
+- Store timestamp in state
+
+---
+
+#### 4. LABEL UPDATE (IMPORTANT UX DETAIL)
+
+Update field label:
+
+OLD:
+Glucose Before (mg/dL)
+
+NEW:
+Glucose Before (mg/dL)
+→ small secondary label next to it:
+
+"Last reading: 6:10 PM"
+
+Style:
+- small text
+- muted color (gray / low contrast)
+- inline with label, not below
+
+---
+
+## PART 2 — CGM BUTTON (REFRESH UX)
+
+### CURRENT:
+Button shows connection status (green/red)
+
+### UPDATE:
+
+1. KEEP connection status colors
+2. REPLACE arrow icon with:
+
+→ circular refresh icon (rotating arrows)
+
+---
+
+### INTERACTION
+
+On click:
+
+- Trigger getLatestCGM()
+- Update:
+  → glucose value
+  → timestamp label
+
+---
+
+### LOADING STATE
+
+While fetching:
+
+- show subtle spinner INSIDE button
+- disable multiple clicks
+
+---
+
+## PART 3 — ENGINE FLOW INTEGRATION
+
+### IMPORTANT:
+
+CGM must NOT block parsing or recommendation.
+
+Flow:
+
+Tap to Speak →
+    → start parsing
+    → start CGM fetch
+    → both run independently
+
+UI updates as data arrives.
+
+---
+
+## PART 4 — KEEP EXISTING BEHAVIOR
+
+DO NOT BREAK:
+
+- existing CGM connection indicator (green/red)
+- current button styling
+- parsing flow
+- recommendation system
+
+---
+
+## PART 5 — EDGE CASES
+
+- If CGM fails:
+    → keep field editable manually
+    → show fallback label:
+      "No recent data"
+
+- If user edits glucose manually:
+    → DO NOT override unless refresh clicked
+
+---
+
+## PART 6 — SUCCESS CRITERIA
+
+✓ Glucose auto-fills after voice input  
+✓ Timestamp shown cleanly next to label  
+✓ Refresh button updates value instantly  
+✓ No UI blocking  
+✓ Works even without carbs  
+✓ Fully integrated into fast UX  
+
+---
+
+## OUTPUT
+
+- Implement cleanly
+- Reuse existing components where possible
+- No hacks
+- Confirm:
+
+✓ CGM auto-fetch works  
+✓ Label shows time  
+✓ Refresh button works  
+✓ UX feels instant  

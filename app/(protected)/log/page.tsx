@@ -68,6 +68,9 @@ export default function LogPage() {
   const [success, setSuccess] = useState(false);
   const [speechAvail, setSpeechAvail] = useState(true);
   const [cgmLoading, setCgmLoading] = useState(false);
+  const [cgmTimestamp, setCgmTimestamp] = useState<string | null>(null);
+  const [cgmFailed, setCgmFailed] = useState(false);
+  const [glucoseTouched, setGlucoseTouched] = useState(false);
 
   // Glev Engine recommendation
   const [meals, setMeals] = useState<Meal[]>([]);
@@ -150,6 +153,8 @@ export default function LogPage() {
 
   async function transcribeAndParse(blob: Blob, ext = "webm") {
     setParsing(true); setError(""); setPipeStatus("transcribing");
+    // Kick off CGM auto-fetch in parallel — do not block parsing on it.
+    pullCgm();
     try {
       const fd = new FormData();
       fd.append("audio", blob, `voice.${ext}`);
@@ -256,11 +261,32 @@ export default function LogPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transcript]);
 
-  async function pullCgm() {
-    setCgmLoading(true); setError("");
-    await new Promise(r => setTimeout(r, 500 + Math.random() * 700));
-    setGlucose(String(Math.round(80 + Math.random() * 80)));
+  async function getLatestCGM(): Promise<{ value: number; timestamp: string; formattedTime: string } | null> {
+    try {
+      await new Promise(r => setTimeout(r, 400 + Math.random() * 500));
+      const value = Math.round(80 + Math.random() * 80);
+      const ts = new Date();
+      return {
+        value,
+        timestamp: ts.toISOString(),
+        formattedTime: ts.toLocaleTimeString("en", { hour: "numeric", minute: "2-digit" }),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async function pullCgm(opts: { force?: boolean } = {}) {
+    setCgmLoading(true); setError(""); setCgmFailed(false);
+    const res = await getLatestCGM();
     setCgmLoading(false);
+    if (!res) { setCgmFailed(true); return; }
+    setCgmTimestamp(res.formattedTime);
+    // Don't overwrite a user-entered value unless refresh was clicked
+    if (opts.force || !glucoseTouched || !glucose) {
+      setGlucose(String(res.value));
+      setGlucoseTouched(false);
+    }
   }
 
   const hasAny = totalCarbs > 0 || totalProtein > 0 || totalFat > 0 || !!desc.trim();
@@ -396,13 +422,25 @@ export default function LogPage() {
         <div style={{ fontSize:10, color:"rgba(255,255,255,0.35)", letterSpacing:"0.1em", marginBottom:14, textTransform:"uppercase" }}>Entry Details — edit any field</div>
         <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
           <div>
-            <label style={labelStyle}>Glucose Before (mg/dL)</label>
+            <div style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:6 }}>
+              <label style={{ ...labelStyle, marginBottom:0 }}>Glucose Before (mg/dL)</label>
+              <span style={{ fontSize:10, color: cgmFailed ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.4)", letterSpacing:"0.02em" }}>
+                {cgmLoading ? "Fetching CGM…" : cgmTimestamp ? `Last reading: ${cgmTimestamp}` : cgmFailed ? "No recent data" : ""}
+              </span>
+            </div>
             <div style={{ display:"flex", gap:8 }}>
-              <input value={glucose} onChange={e => setGlucose(e.target.value)} placeholder="e.g. 115" type="number" style={{ ...inp, flex:1 }}/>
-              <button onClick={pullCgm} disabled={cgmLoading} title="Pull simulated CGM reading"
+              <input value={glucose} onChange={e => { setGlucose(e.target.value); setGlucoseTouched(true); }} placeholder="e.g. 115" type="number" style={{ ...inp, flex:1 }}/>
+              <button onClick={() => pullCgm({ force: true })} disabled={cgmLoading} title="Refresh CGM reading"
                 style={{ padding:"0 14px", borderRadius:10, border:`1px solid ${ACCENT}44`, background: cgmLoading ? "rgba(255,255,255,0.04)" : `${ACCENT}18`, color:ACCENT, cursor: cgmLoading ? "default" : "pointer", fontSize:11, fontWeight:700, whiteSpace:"nowrap", letterSpacing:"0.04em", display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
-                <div style={{ width:8, height:8, borderRadius:"50%", background:GREEN, boxShadow:`0 0 5px ${GREEN}88`, flexShrink:0 }}/>
-                {cgmLoading ? <div style={{ width:10, height:10, border:`1.5px solid ${ACCENT}44`, borderTopColor:ACCENT, borderRadius:"50%", animation:"spin 0.7s linear infinite" }}/> : <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2.5" strokeLinecap="round"><path d="M5 12h14M15 6l6 6-6 6"/></svg>}
+                <div style={{ width:8, height:8, borderRadius:"50%", background: cgmFailed ? PINK : GREEN, boxShadow:`0 0 5px ${cgmFailed ? PINK : GREEN}88`, flexShrink:0 }}/>
+                {cgmLoading ? (
+                  <div style={{ width:12, height:12, border:`1.5px solid ${ACCENT}44`, borderTopColor:ACCENT, borderRadius:"50%", animation:"spin 0.7s linear infinite" }}/>
+                ) : (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 12a9 9 0 1 1-3.1-6.8"/>
+                    <polyline points="21 4 21 10 15 10"/>
+                  </svg>
+                )}
                 CGM
               </button>
             </div>
