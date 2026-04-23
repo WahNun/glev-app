@@ -15,20 +15,17 @@ const NAV = [
   { label: "Dashboard", path: "/dashboard", icon: (a: boolean) => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
   )},
-  { label: "Glev Engine", path: "/log", icon: (a: boolean) => (
-    <GlevLogo size={20} color={a ? ACCENT : "rgba(255,255,255,0.55)"} bg="transparent"/>
-  )},
   { label: "Entry Log", path: "/entries", icon: (a: boolean) => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1.5" fill={a ? ACCENT : "rgba(255,255,255,0.4)"}/><circle cx="4" cy="12" r="1.5" fill={a ? ACCENT : "rgba(255,255,255,0.4)"}/><circle cx="4" cy="18" r="1.5" fill={a ? ACCENT : "rgba(255,255,255,0.4)"}/></svg>
+  )},
+  { label: "Glev Engine", path: "/log", icon: (a: boolean) => (
+    <GlevLogo size={20} color={a ? ACCENT : "rgba(255,255,255,0.55)"} bg="transparent"/>
   )},
   { label: "Insights", path: "/insights", icon: (a: boolean) => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a7 7 0 0 1 4 12.8V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.2A7 7 0 0 1 12 2z"/><path d="M9 21h6"/><path d="M9 18h6"/></svg>
   )},
-  { label: "Import", path: "/import", icon: (a: boolean) => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-  )},
-  { label: "Account", path: "/settings", icon: (a: boolean) => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+  { label: "Settings", path: "/settings", icon: (a: boolean) => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
   )},
 ];
 
@@ -141,40 +138,43 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         position: "fixed", bottom: 0, left: 0, right: 0,
         background: SURFACE, borderTop: `1px solid ${BORDER}`,
         justifyContent: "space-around", alignItems: "center",
-        padding: "10px 24px max(20px, env(safe-area-inset-bottom))", zIndex: 100,
+        padding: "10px 18px max(18px, env(safe-area-inset-bottom))", zIndex: 100,
       }}>
-        {[NAV[0], NAV[2], NAV[4], NAV[3]].map(({ label, path, icon }) => {
+        {NAV.map(({ label, path, icon }) => {
           const active = pathname.startsWith(path);
+          const isCenter = path === "/log";
+          if (isCenter) {
+            return (
+              <div key={path} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, marginTop: -20 }}>
+                <button onClick={() => router.push(path)} style={{
+                  width: 56, height: 56, borderRadius: 99,
+                  background: active
+                    ? `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`
+                    : `radial-gradient(circle at 36% 32%, #1e1e2e 0%, #141420 45%, #09090B 100%)`,
+                  border: active ? "none" : `1px solid rgba(255,255,255,0.1)`,
+                  cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  boxShadow: active ? `0 6px 20px ${ACCENT}55` : "0 4px 16px rgba(0,0,0,0.5)",
+                  transition: "all 0.2s",
+                }}>
+                  <GlevLogo size={26} color={active ? "#fff" : ACCENT} bg="transparent"/>
+                </button>
+                <span style={{ fontSize: 9, color: active ? ACCENT : "rgba(255,255,255,0.3)", fontWeight: 600, letterSpacing: "0.04em" }}>GLEV</span>
+              </div>
+            );
+          }
           return (
             <button key={path} onClick={() => router.push(path)} style={{
               display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-              padding: "4px 8px", border: "none", background: "transparent", cursor: "pointer",
+              padding: "4px 6px", border: "none", background: "transparent", cursor: "pointer",
               color: active ? ACCENT : "rgba(255,255,255,0.3)",
               fontSize: 9, fontWeight: 600, letterSpacing: "0.04em",
             }}>
               {icon(active)}
-              <span>{(label === "Glev Engine" ? "Engine" : label).toUpperCase()}</span>
+              <span>{label.toUpperCase()}</span>
             </button>
           );
         })}
-        {/* Floating LOG mic — overlaps the right side of the nav bar */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, marginTop: -20 }}>
-          <button onClick={() => router.push("/log")} style={{
-            width: 56, height: 56, borderRadius: 99,
-            background: `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
-            border: "none", cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            animation: "glevMicPulse 2.5s ease-in-out infinite",
-          }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-              <rect x="9" y="2" width="6" height="11" rx="3" fill="rgba(255,255,255,0.95)"/>
-              <path d="M5 10a7 7 0 0 0 14 0" stroke="rgba(255,255,255,0.95)" strokeWidth="1.8" strokeLinecap="round" fill="none"/>
-              <line x1="12" y1="19" x2="12" y2="22" stroke="rgba(255,255,255,0.95)" strokeWidth="1.8" strokeLinecap="round"/>
-              <line x1="9" y1="22" x2="15" y2="22" stroke="rgba(255,255,255,0.95)" strokeWidth="1.8" strokeLinecap="round"/>
-            </svg>
-          </button>
-          <span style={{ fontSize: 9, color: pathname.startsWith("/log") ? ACCENT : "rgba(255,255,255,0.3)", fontWeight: 600, letterSpacing: "0.04em" }}>GLEV</span>
-        </div>
       </nav>
     </div>
   );

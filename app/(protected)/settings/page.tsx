@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { reloadHistoricalEntries } from "@/lib/meals";
+import ImportPanel from "@/components/ImportPanel";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
@@ -29,7 +30,7 @@ function saveSettings(s: Settings) {
 }
 
 export default function SettingsPage() {
-  const [tab, setTab]         = useState<"overview"|"settings">("overview");
+  const [tab, setTab]         = useState<"overview"|"settings"|"import">("overview");
   const [email, setEmail]     = useState("");
   const [createdAt, setCreatedAt] = useState("");
   const [settings, setSettings]   = useState<Settings>(DEFAULTS);
@@ -88,7 +89,7 @@ export default function SettingsPage() {
 
       {/* TABS */}
       <div style={{ display:"flex", gap:4, marginBottom:24, background:"rgba(255,255,255,0.04)", borderRadius:12, padding:4, width:"fit-content" }}>
-        {(["overview","settings"] as const).map(t => (
+        {(["overview","settings","import"] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} style={{
             padding:"8px 20px", borderRadius:9, border:"none", cursor:"pointer",
             background:tab===t?SURFACE:"transparent",
@@ -252,6 +253,10 @@ export default function SettingsPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {tab === "import" && (
+        <ImportPanel embedded />
       )}
     </div>
   );
