@@ -1,0 +1,148 @@
+Refactor Entry List UI (mobile + desktop) with consistent hierarchy and classification styling.
+
+--------------------------------
+GOAL
+--------------------------------
+
+Improve clarity while preserving the existing visual design system for meal classification.
+
+--------------------------------
+CRITICAL DESIGN RULES
+--------------------------------
+
+1. Outcome is ALWAYS the primary signal
+2. Meal classification is secondary
+3. All colors must use existing palette (NO new colors)
+4. Changes must apply globally (mobile + desktop)
+
+--------------------------------
+STEP 1 — COLOR SYSTEM (IMPORTANT)
+--------------------------------
+
+Define or enforce design tokens:
+
+OUTCOME (unchanged):
+- good → green
+- underdose → orange
+- overdose → pink/red
+- spike → existing
+
+MEAL CLASSIFICATION:
+
+Keep existing colors BUT enforce:
+
+- fast carbs → orange
+- balanced → green/teal
+- high protein → blue
+- high fat → PURPLE (STRICT RULE)
+
+IMPORTANT:
+- High Fat MUST stay purple (as in current screenshot)
+- Do NOT use red/orange for fat anymore
+- Avoid collision with outcome colors
+
+--------------------------------
+STEP 2 — COLLAPSED ENTRY ROW
+--------------------------------
+
+1. KEEP:
+- timestamp
+- insulin units
+- outcome chip (primary)
+
+2. REMOVE:
+- full meal classification chip
+
+3. ADD:
+- subtle meal classification indicator:
+  - small dot OR short label (FC, HP, HF, B)
+
+4. STYLE:
+- use SAME color tokens as expanded view
+- BUT:
+  - reduced opacity OR muted style
+  - must not compete visually with outcome
+
+--------------------------------
+STEP 3 — EXPANDED VIEW (KEEP STYLE)
+--------------------------------
+
+KEEP the current design pattern:
+
+- colored container (tinted background)
+- full color chip on the right
+
+This pattern is correct and should NOT be redesigned.
+
+--------------------------------
+STEP 4 — REPOSITION MEAL CLASSIFICATION
+--------------------------------
+
+1. REMOVE classification from top header area
+
+2. KEEP the dedicated section:
+
+"MEAL CLASSIFICATION"
+
+3. Ensure it appears:
+- BELOW main entry header
+- ABOVE meal description OR where it currently fits best structurally
+
+--------------------------------
+STEP 5 — ADD EXPLANATION TEXT
+--------------------------------
+
+Inside "MEAL CLASSIFICATION" section:
+
+Add short explanation (1–2 lines max)
+
+Examples:
+
+Fast Carbs  
+High glycemic load, low fiber → fast absorption
+
+High Protein  
+High protein ratio slows glucose absorption
+
+Balanced  
+Even macro distribution → stable glucose response
+
+High Fat  
+High fat delays glucose spike
+
+--------------------------------
+STEP 6 — GLOBAL CONSISTENCY
+--------------------------------
+
+Search entire codebase:
+
+- all classification chips
+- all badges
+- all color assignments
+
+Refactor ALL to use shared tokens.
+
+NO hardcoded colors allowed.
+
+--------------------------------
+STEP 7 — VALIDATION
+--------------------------------
+
+Check:
+
+- no duplicate color meanings
+- high fat is ALWAYS purple
+- outcome colors remain dominant
+- mobile + desktop identical logic
+- collapsed view clean and scannable
+- expanded view rich and informative
+
+--------------------------------
+SUCCESS CRITERIA
+--------------------------------
+
+- No visual conflict between outcome and meal type
+- High Fat consistently purple everywhere
+- Clean collapsed rows
+- Expanded view matches current strong design
+- No new colors introduced

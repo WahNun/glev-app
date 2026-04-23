@@ -2,13 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { fetchMeals, deleteMeal, seedMealsIfEmpty, type Meal } from "@/lib/meals";
+import { TYPE_COLORS, TYPE_LABELS, TYPE_SHORT, TYPE_EXPLAIN } from "@/lib/mealTypes";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
 
 const EVAL_COLORS: Record<string, string> = { GOOD:GREEN, LOW:ORANGE, HIGH:PINK, SPIKE:"#FF9F0A", OVERDOSE:PINK, UNDERDOSE:ORANGE, CHECK_CONTEXT:ORANGE };
 const EVAL_LABELS: Record<string, string> = { GOOD:"Good", LOW:"Under Dose", HIGH:"Over Dose", SPIKE:"Spike", OVERDOSE:"Over Dose", UNDERDOSE:"Under Dose", CHECK_CONTEXT:"Review" };
-const TYPE_COLORS: Record<string, string> = { FAST_CARBS:ORANGE, HIGH_PROTEIN:ACCENT, HIGH_FAT:"#FF6B6B", BALANCED:GREEN };
 
 function evC(ev: string|null) { return EVAL_COLORS[ev||""] || "rgba(255,255,255,0.3)"; }
 function evL(ev: string|null) { return EVAL_LABELS[ev||""] || ev || "—"; }
@@ -126,7 +126,9 @@ export default function EntriesPage() {
             );
 
             const catColor = m.meal_type ? (TYPE_COLORS[m.meal_type] || GREEN) : null;
-            const catLabel = m.meal_type ? m.meal_type.replace("_"," ").toLowerCase() : null;
+            const catLabel = m.meal_type ? (TYPE_LABELS[m.meal_type] || m.meal_type.replace("_"," ")) : null;
+            const catShort = m.meal_type ? (TYPE_SHORT[m.meal_type] || m.meal_type.slice(0,2)) : null;
+            const catExplain = m.meal_type ? (TYPE_EXPLAIN[m.meal_type] || "") : "";
 
             return (
               <div key={m.id} className="entry-row" style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, overflow:"hidden" }}>
@@ -147,12 +149,13 @@ export default function EntriesPage() {
                       {m.carbs_grams ? `${m.carbs_grams}g` : "—"}
                     </div>
                   </div>
-                  {/* Col 3: classification chip — desktop only (hidden on mobile via CSS) */}
-                  <div className="entry-cat-cell" style={{ minWidth:0, display:"flex", justifyContent:"center" }}>
-                    {catLabel && catColor ? (
-                      <span style={{ padding:"5px 12px", borderRadius:99, fontSize:10, fontWeight:700, background:`${catColor}18`, color:catColor, border:`1px solid ${catColor}30`, whiteSpace:"nowrap", letterSpacing:"0.05em", textTransform:"uppercase" }}>
-                        {catLabel}
-                      </span>
+                  {/* Col 3: subtle classification indicator (dot + short code) */}
+                  <div className="entry-cat-cell" style={{ minWidth:0, display:"flex", justifyContent:"center", alignItems:"center", gap:6 }}>
+                    {catColor && catShort ? (
+                      <>
+                        <span style={{ width:6, height:6, borderRadius:99, background:catColor, opacity:0.7 }} />
+                        <span title={catLabel || ""} style={{ fontSize:10, fontWeight:600, color:`${catColor}b3`, letterSpacing:"0.06em" }}>{catShort}</span>
+                      </>
                     ) : (
                       <span style={{ fontSize:11, color:"rgba(255,255,255,0.25)" }}>—</span>
                     )}
@@ -170,13 +173,18 @@ export default function EntriesPage() {
                 {/* Expanded body */}
                 {isOpen && (
                   <div style={{ padding:"4px 16px 16px", borderTop:`1px solid rgba(255,255,255,0.04)`, display:"flex", flexDirection:"column", gap:14 }}>
-                    {/* CLASSIFICATION — highlighted chip card */}
+                    {/* CLASSIFICATION — highlighted card with explanation */}
                     {catLabel && catColor && (
-                      <div style={{ marginTop:14, background:`${catColor}10`, border:`1px solid ${catColor}40`, borderRadius:12, padding:"12px 14px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
-                        <div style={{ fontSize:9, color:"rgba(255,255,255,0.5)", letterSpacing:"0.1em", fontWeight:700 }}>MEAL CLASSIFICATION</div>
-                        <span style={{ padding:"6px 14px", borderRadius:99, fontSize:11, fontWeight:700, background:catColor, color:"#0A0A0F", whiteSpace:"nowrap", letterSpacing:"0.04em", textTransform:"uppercase" }}>
-                          {catLabel}
-                        </span>
+                      <div style={{ marginTop:14, background:`${catColor}10`, border:`1px solid ${catColor}40`, borderRadius:12, padding:"12px 14px", display:"flex", flexDirection:"column", gap:8 }}>
+                        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
+                          <div style={{ fontSize:9, color:"rgba(255,255,255,0.5)", letterSpacing:"0.1em", fontWeight:700 }}>MEAL CLASSIFICATION</div>
+                          <span style={{ padding:"6px 14px", borderRadius:99, fontSize:11, fontWeight:700, background:catColor, color:"#0A0A0F", whiteSpace:"nowrap", letterSpacing:"0.04em", textTransform:"uppercase" }}>
+                            {catLabel}
+                          </span>
+                        </div>
+                        {catExplain && (
+                          <div style={{ fontSize:12, color:"rgba(255,255,255,0.6)", lineHeight:1.5 }}>{catExplain}</div>
+                        )}
                       </div>
                     )}
 

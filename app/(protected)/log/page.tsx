@@ -3,12 +3,10 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { saveMeal, classifyMeal, computeEvaluation, computeCalories, fetchMeals, type ParsedFood, type Meal } from "@/lib/meals";
+import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
-
-const TYPE_COLORS: Record<string, string> = { FAST_CARBS: ORANGE, HIGH_PROTEIN: ACCENT, HIGH_FAT: "#A855F7", BALANCED: GREEN };
-const TYPE_LABELS: Record<string, string> = { FAST_CARBS: "Fast Carbs", HIGH_PROTEIN: "High Protein", HIGH_FAT: "High Fat", BALANCED: "Balanced" };
 const CONF_COLOR: Record<string, string> = { HIGH: GREEN, MEDIUM: ORANGE, LOW: PINK };
 
 interface Recommendation {

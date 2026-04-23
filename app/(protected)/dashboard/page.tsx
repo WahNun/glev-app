@@ -3,12 +3,10 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { fetchMeals, seedMealsIfEmpty, type Meal } from "@/lib/meals";
+import { TYPE_COLORS, TYPE_LABELS, TYPE_SHORT, TYPE_EXPLAIN } from "@/lib/mealTypes";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
-
-const TYPE_COLORS: Record<string, string> = { FAST_CARBS:ORANGE, HIGH_PROTEIN:"#3B82F6", HIGH_FAT:"#A855F7", BALANCED:GREEN };
-const TYPE_LABELS: Record<string, string> = { FAST_CARBS:"Fast carbs", HIGH_PROTEIN:"High protein", HIGH_FAT:"High fat", BALANCED:"Balanced" };
 
 const EVAL_COLORS: Record<string, string> = { GOOD:GREEN, LOW:ORANGE, HIGH:PINK, SPIKE:"#FF9F0A", OVERDOSE:PINK, UNDERDOSE:ORANGE, CHECK_CONTEXT:ORANGE };
 const EVAL_LABELS: Record<string, string> = { GOOD:"Good", LOW:"Under Dose", HIGH:"Over Dose", SPIKE:"Spike", OVERDOSE:"Over Dose", UNDERDOSE:"Under Dose", CHECK_CONTEXT:"Review" };
@@ -293,17 +291,20 @@ export default function DashboardPage() {
                     const bg = m.glucose_before;
                     const bgC = bg == null ? "rgba(255,255,255,0.3)" : (bg > 140 ? ORANGE : bg < 80 ? PINK : GREEN);
                     return (
-                  <div className="glev-entry-row" onClick={() => setExpanded(isOpen ? null : m.id)} style={{ padding:"14px 24px", cursor:"pointer", display:"grid", gridTemplateColumns:"130px 160px 1fr 1fr 1fr 110px", gap:24, alignItems:"center" }}>
+                  <div className="glev-entry-row" onClick={() => setExpanded(isOpen ? null : m.id)} style={{ padding:"14px 24px", cursor:"pointer", display:"grid", gridTemplateColumns:"130px 70px 1fr 1fr 1fr 110px", gap:24, alignItems:"center" }}>
                     {/* Col 1: Time */}
                     <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)" }}>{time}</div>
-                    {/* Col 2: Category chip (replaces meal text) */}
-                    <div style={{ minWidth:0, display:"flex", justifyContent:"flex-start" }}>
+                    {/* Col 2: Subtle classification indicator (dot + short code) */}
+                    <div style={{ minWidth:0, display:"flex", alignItems:"center", gap:6 }}>
                       {m.meal_type ? (() => {
                         const c = TYPE_COLORS[m.meal_type] || "rgba(255,255,255,0.5)";
                         return (
-                          <span style={{ padding:"4px 12px", borderRadius:99, fontSize:11, fontWeight:700, background:`${c}18`, color:c, border:`1px solid ${c}30`, whiteSpace:"nowrap", letterSpacing:"0.04em", textTransform:"uppercase" }}>
-                            {TYPE_LABELS[m.meal_type] || m.meal_type.replace("_"," ").toLowerCase()}
-                          </span>
+                          <>
+                            <span style={{ width:6, height:6, borderRadius:99, background:c, opacity:0.7 }} />
+                            <span title={TYPE_LABELS[m.meal_type]} style={{ fontSize:10, fontWeight:600, color:`${c}b3`, letterSpacing:"0.06em" }}>
+                              {TYPE_SHORT[m.meal_type] || m.meal_type.slice(0,2)}
+                            </span>
+                          </>
                         );
                       })() : (
                         <span style={{ fontSize:11, color:"rgba(255,255,255,0.25)" }}>—</span>
@@ -359,6 +360,21 @@ export default function DashboardPage() {
                             {evalLabel(ev)}
                           </span>
                         </div>
+                        {/* Row 0a — Meal classification with explanation */}
+                        {m.meal_type && (() => {
+                          const c = TYPE_COLORS[m.meal_type] || "rgba(255,255,255,0.5)";
+                          return (
+                            <div style={{ background:`${c}12`, border:`1px solid ${c}30`, borderRadius:10, padding:"10px 14px" }}>
+                              <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.1em", fontWeight:700, marginBottom:6 }}>MEAL CLASSIFICATION</div>
+                              <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+                                <span style={{ padding:"4px 12px", borderRadius:99, fontSize:11, fontWeight:700, background:`${c}22`, color:c, border:`1px solid ${c}40`, whiteSpace:"nowrap", letterSpacing:"0.04em" }}>
+                                  {TYPE_LABELS[m.meal_type]}
+                                </span>
+                                <span style={{ fontSize:12, color:"rgba(255,255,255,0.6)", lineHeight:1.5 }}>{TYPE_EXPLAIN[m.meal_type]}</span>
+                              </div>
+                            </div>
+                          );
+                        })()}
                         {/* Row 0 — Meal description (food + grams) */}
                         {m.input_text && (
                           <div style={{ borderLeft:`2px solid rgba(255,255,255,0.15)`, paddingLeft:14, paddingTop:10 }}>

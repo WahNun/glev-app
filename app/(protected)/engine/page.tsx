@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { fetchMeals, classifyMeal, type Meal } from "@/lib/meals";
+import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
 import { logDebug } from "@/lib/debug";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
@@ -177,8 +178,6 @@ export default function EnginePage() {
         const gNum = parseFloat(glucose), cNum = parseFloat(carbs), pNum = parseFloat(protein), fNum = parseFloat(fat), fbNum = parseFloat(fiber);
         const allFilled = [gNum, cNum, pNum, fNum, fbNum].every(v => !isNaN(v) && v >= 0) && cNum > 0;
         if (!allFilled) return null;
-        const TYPE_COLORS: Record<string,string> = { FAST_CARBS:ORANGE, HIGH_PROTEIN:"#3B82F6", HIGH_FAT:"#A855F7", BALANCED:GREEN };
-        const TYPE_LABELS: Record<string,string> = { FAST_CARBS:"Fast carbs", HIGH_PROTEIN:"High protein", HIGH_FAT:"High fat", BALANCED:"Balanced" };
         const TYPE_DESC: Record<string,string> = {
           FAST_CARBS: "High glycemic load — expect a sharp glucose rise. Consider pre-bolusing 15–20 min before eating.",
           HIGH_PROTEIN: "Protein-dominant — slower digestion, lower spike risk. Watch for delayed glucose rise.",
@@ -186,7 +185,7 @@ export default function EnginePage() {
           BALANCED: "Macros are well-balanced — predictable absorption curve. Standard ICR usually works.",
         };
         const cls = classifyMeal(cNum, pNum, fNum);
-        const color = TYPE_COLORS[cls] || ACCENT;
+        const color = TYPE_COLORS[cls as string] || ACCENT;
         return (
           <div style={{
             background:`linear-gradient(135deg, ${color}10, ${color}04)`,
