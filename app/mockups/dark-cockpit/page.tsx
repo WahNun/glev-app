@@ -466,8 +466,10 @@ function Dashboard({ onInsights }: { onInsights?: (stat: string) => void }) {
                                 <div><span style={{color:"rgba(255,255,255,0.35)",marginRight:6}}>Net carbs</span><b style={{color:GREEN}}>{netCarbs!=null?`${netCarbs.toFixed(0)}g`:"—"}</b></div>
                                 <div><span style={{color:"rgba(255,255,255,0.35)",marginRight:6}}>Protein</span><b style={{color:"#3B82F6"}}>{e.proteinGrams!=null?`${e.proteinGrams}g`:"—"}</b></div>
                                 <div><span style={{color:"rgba(255,255,255,0.35)",marginRight:6}}>Fat</span><b style={{color:"#A855F7"}}>{e.fatGrams!=null?`${e.fatGrams}g`:"—"}</b></div>
+                                <div><span style={{color:"rgba(255,255,255,0.35)",marginRight:6}}>Calories</span><b style={{color:"#A78BFA"}}>{Math.round((e.carbsGrams||0)*4 + (e.proteinGrams||0)*4 + (e.fatGrams||0)*9) + " kcal"}</b></div>
                                 <div><span style={{color:"rgba(255,255,255,0.35)",marginRight:6}}>Insulin</span><b style={{color:ACCENT}}>{e.insulinUnits}u</b></div>
                                 <div><span style={{color:"rgba(255,255,255,0.35)",marginRight:6}}>Carb ratio</span><b>{icr!=null?`1u / ${icr.toFixed(0)}g`:"—"}</b></div>
+                                {meta&&<div><span style={{color:"rgba(255,255,255,0.35)",marginRight:6}}>Type</span><b style={{color:meta.color}}>{meta.label}</b></div>}
                               </div>
                             </div>
                             <div>
@@ -478,11 +480,6 @@ function Dashboard({ onInsights }: { onInsights?: (stat: string) => void }) {
                                 <div><span style={{color:"rgba(255,255,255,0.35)",marginRight:6}}>Delta</span><b style={{color:e.delta!=null?(Math.abs(e.delta)>60?PINK:Math.abs(e.delta)>30?ORANGE:GREEN):"rgba(255,255,255,0.3)"}}>{e.delta!=null?`${e.delta>0?"+":""}${e.delta.toFixed(0)} mg/dL`:"—"}</b></div>
                                 <div><span style={{color:"rgba(255,255,255,0.35)",marginRight:6}}>Time gap</span><b>{e.timeDifferenceMinutes!=null?`${e.timeDifferenceMinutes.toFixed(0)} min`:"—"}</b></div>
                               </div>
-                            </div>
-                            <div>
-                              <div style={{fontSize:9,color:"rgba(255,255,255,0.25)",letterSpacing:"0.1em",fontWeight:600,marginBottom:8}}>MEAL CONTEXT</div>
-                              <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",lineHeight:1.5,fontStyle:e.mealDescription?"normal":"italic"}}>{e.mealDescription||"No meal description recorded."}</div>
-                              {meta&&<div style={{marginTop:8}}><span style={{fontSize:9,padding:"2px 8px",borderRadius:99,fontWeight:700,background:`${meta.color}18`,color:meta.color,letterSpacing:"0.07em"}}>{meta.label.toUpperCase()}</span></div>}
                             </div>
                           </div>
                         </td>
@@ -997,6 +994,7 @@ function EntryLog() {
                                 <Stat label="NET CARBS" value={netCarbs!=null?`${netCarbs.toFixed(0)}g`:"—"} color={GREEN}/>
                                 <Stat label="PROTEIN" value={e.proteinGrams!=null?`${e.proteinGrams}g`:"—"} color="#3B82F6"/>
                                 <Stat label="FAT" value={e.fatGrams!=null?`${e.fatGrams}g`:"—"} color="#A855F7"/>
+                                <Stat label="CALORIES" value={Math.round((e.carbsGrams||0)*4 + (e.proteinGrams||0)*4 + (e.fatGrams||0)*9) + " kcal"} color="#A78BFA"/>
                                 <Stat label="INSULIN DOSE" value={`${e.insulinUnits}u`} color={ACCENT}/>
                                 <Stat label="CARB RATIO" value={icr!=null?`1u / ${icr.toFixed(0)}g`:"—"} color="rgba(255,255,255,0.6)"/>
                                 {meta&&<Stat label="MEAL TYPE" value={meta.label} color={meta.color}/>}
@@ -2042,11 +2040,40 @@ function MobileDashboard({email,name:memberName,onSignOut}:{email?:string;name?:
                           <span style={{fontSize:12,color:"rgba(255,255,255,0.18)",display:"inline-block",transition:"transform 0.2s",transform:isExp?"rotate(90deg)":"rotate(0deg)"}}>›</span>
                         </div>
                       </div>
-                      {isExp&&(
-                        <div style={{padding:"0 18px 13px",fontSize:12,color:"rgba(255,255,255,0.55)",lineHeight:1.55,fontStyle:e.mealDescription?"normal":"italic",borderTop:`1px solid rgba(255,255,255,0.04)`}}>
-                          <div style={{paddingTop:10}}>{e.mealDescription||"No description recorded."}</div>
-                        </div>
-                      )}
+                      {isExp&&(()=>{
+                        const netCarbs=e.fiberGrams!=null?Math.max(0,e.carbsGrams-e.fiberGrams):null;
+                        const icr=e.insulinUnits>0?(netCarbs??e.carbsGrams)/e.insulinUnits:null;
+                        const Cell=({l,v,c}:{l:string;v:string;c?:string})=>(
+                          <div style={{display:"flex",justifyContent:"space-between",fontSize:11,padding:"3px 0"}}>
+                            <span style={{color:"rgba(255,255,255,0.4)"}}>{l}</span>
+                            <span style={{fontWeight:600,color:c||"rgba(255,255,255,0.85)"}}>{v}</span>
+                          </div>
+                        );
+                        return (
+                          <div style={{padding:"10px 18px 14px",borderTop:`1px solid rgba(255,255,255,0.04)`,display:"flex",flexDirection:"column",gap:10}}>
+                            {/* Row 1 — Macros & Dosing */}
+                            <div style={{borderLeft:`2px solid ${ACCENT}55`,paddingLeft:10}}>
+                              <div style={{fontSize:9,color:"rgba(255,255,255,0.3)",letterSpacing:"0.1em",fontWeight:700,marginBottom:4}}>MACROS & DOSING</div>
+                              <Cell l="Carbs" v={`${e.carbsGrams}g`} c={ORANGE}/>
+                              <Cell l="Fiber" v={e.fiberGrams!=null?`${e.fiberGrams}g`:"—"}/>
+                              <Cell l="Net carbs" v={netCarbs!=null?`${netCarbs.toFixed(0)}g`:"—"} c={GREEN}/>
+                              <Cell l="Protein" v={e.proteinGrams!=null?`${e.proteinGrams}g`:"—"} c="#3B82F6"/>
+                              <Cell l="Fat" v={e.fatGrams!=null?`${e.fatGrams}g`:"—"} c="#A855F7"/>
+                              <Cell l="Calories" v={Math.round((e.carbsGrams||0)*4 + (e.proteinGrams||0)*4 + (e.fatGrams||0)*9) + " kcal"} c="#A78BFA"/>
+                              <Cell l="Insulin" v={`${e.insulinUnits}u`} c={ACCENT}/>
+                              <Cell l="Carb ratio" v={icr!=null?`1u / ${icr.toFixed(0)}g`:"—"}/>
+                            </div>
+                            {/* Row 2 — Glucose */}
+                            <div style={{borderLeft:`2px solid ${GREEN}55`,paddingLeft:10}}>
+                              <div style={{fontSize:9,color:"rgba(255,255,255,0.3)",letterSpacing:"0.1em",fontWeight:700,marginBottom:4}}>GLUCOSE</div>
+                              <Cell l="Before" v={`${e.glucoseBefore} mg/dL`} c={e.glucoseBefore>140?ORANGE:e.glucoseBefore<80?PINK:GREEN}/>
+                              <Cell l="After" v={e.glucoseAfter!=null?`${e.glucoseAfter} mg/dL`:"not recorded"} c={e.glucoseAfter!=null?(e.glucoseAfter>180||e.glucoseAfter<70?PINK:GREEN):"rgba(255,255,255,0.3)"}/>
+                              <Cell l="Delta" v={e.delta!=null?`${e.delta>0?"+":""}${e.delta.toFixed(0)} mg/dL`:"—"} c={e.delta!=null?(Math.abs(e.delta)>60?PINK:Math.abs(e.delta)>30?ORANGE:GREEN):"rgba(255,255,255,0.3)"}/>
+                              <Cell l="Time gap" v={e.timeDifferenceMinutes!=null?`${e.timeDifferenceMinutes.toFixed(0)} min`:"—"}/>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })}

@@ -7,19 +7,10 @@ import { saveMeal, classifyMeal, computeEvaluation, computeCalories, type Parsed
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)", BG="#09090B";
 
-type SpeechRec = {
-  continuous: boolean; interimResults: boolean; lang: string;
-  start(): void; stop(): void;
-  onresult: ((e: SpeechEvent) => void) | null;
-  onerror:  ((e: {error: string}) => void) | null;
-  onend:    (() => void) | null;
-};
-type SpeechEvent = { results: Record<number, Record<number, {transcript: string}> & {isFinal: boolean}> };
-
-function getSR(): (new () => SpeechRec) | null {
-  if (typeof window === "undefined") return null;
-  const w = window as unknown as Record<string, unknown>;
-  return (w["SpeechRecognition"] ?? w["webkitSpeechRecognition"]) as (new () => SpeechRec) | null;
+interface ChatMessage {
+  role: "user" | "assistant" | "system";
+  text: string;
+  meta?: { mealType?: string | null; calories?: number; carbs?: number; protein?: number; fat?: number; fiber?: number };
 }
 
 const EVAL_COLORS: Record<string, string> = { GOOD: GREEN, LOW: ORANGE, HIGH: PINK, SPIKE: "#FF9F0A" };
@@ -46,10 +37,16 @@ export default function LogPage() {
   const [mFat, setMFat]           = useState("");
   const [mFiber, setMFiber]       = useState("");
   const [mCalories, setMCalories] = useState("");
-  const recRef = useRef<SpeechRec | null>(null);
-  const finalRef = useRef("");
+  const [chat, setChat]           = useState<ChatMessage[]>([]);
+  const [aiMealType, setAiMealType] = useState<string | null>(null);
+  const mediaRecRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
-  useEffect(() => { if (!getSR()) setSpeechAvail(false); }, []);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const ok = !!(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === "function" && typeof MediaRecorder !== "undefined");
+    if (!ok) setSpeechAvail(false);
+  }, []);
 
   const mNum = (v: string): number | null => {
     if (!v.trim()) return null;
@@ -76,37 +73,64 @@ export default function LogPage() {
   suggested = Math.round(suggested * 10) / 10;
   const evalPreview = insulinNum ? computeEvaluation(totalCarbs, insulinNum, glucoseNum) : null;
 
-  function startRecording() {
-    const SR = getSR();
-    if (!SR) return;
-    finalRef.current = "";
-    const rec = new SR();
-    rec.continuous = true; rec.interimResults = true; rec.lang = "en-US";
-    rec.onresult = (e: SpeechEvent) => {
-      let interim = "";
-      const keys = Object.keys(e.results);
-      for (const k of keys) {
-        const r = e.results[parseInt(k)];
-        if (r.isFinal) finalRef.current += r[0].transcript + " ";
-        else interim = r[0].transcript;
-      }
-      setRawText((finalRef.current + interim).trim());
-    };
-    rec.onend = () => {
-      setRecording(false);
-      const t = finalRef.current.trim();
-      if (t) autoParseFood(t);
-    };
-    rec.onerror = () => setRecording(false);
-    rec.start();
-    recRef.current = rec;
-    setRecording(true); setPulse(true); setRawText(""); setFoods([]); setError("");
+  async function startRecording() {
+    setError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const preferred = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/mpeg"]
+        .find(t => MediaRecorder.isTypeSupported(t));
+      const rec = new MediaRecorder(stream, preferred ? { mimeType: preferred } : undefined);
+      rec.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      rec.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        setPulse(false);
+        // Use whatever container the browser actually produced — Safari/iOS will give mp4.
+        const actualType = rec.mimeType || preferred || "audio/webm";
+        const blob = new Blob(audioChunksRef.current, { type: actualType });
+        if (blob.size === 0) return;
+        const ext = actualType.includes("mp4")  ? "m4a"
+                 : actualType.includes("mpeg") ? "mp3"
+                 : actualType.includes("ogg")  ? "ogg"
+                 : "webm";
+        await transcribeAndParse(blob, ext);
+      };
+      rec.start();
+      mediaRecRef.current = rec;
+      setRecording(true); setPulse(true); setRawText(""); setFoods([]); setChat([]); setAiMealType(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not access microphone.");
+      setRecording(false); setPulse(false);
+    }
   }
 
-  function stopRecording() { recRef.current?.stop(); setRecording(false); setPulse(false); }
+  function stopRecording() {
+    mediaRecRef.current?.stop();
+    setRecording(false);
+  }
+
+  async function transcribeAndParse(blob: Blob, ext = "webm") {
+    setParsing(true); setError("");
+    setChat(c => [...c, { role: "system", text: "Transcribing audio with Whisper…" }]);
+    try {
+      const fd = new FormData();
+      fd.append("audio", blob, `voice.${ext}`);
+      const tRes = await fetch("/api/transcribe", { method: "POST", body: fd });
+      const tData = await tRes.json();
+      if (!tRes.ok || !tData.text) throw new Error(tData.error || "Empty transcript");
+      const transcript = tData.text as string;
+      setRawText(transcript);
+      setChat(c => [...c.slice(0, -1), { role: "user", text: transcript }]);
+      await autoParseFood(transcript);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Transcription failed.");
+      setChat(c => [...c.slice(0, -1)]);
+    } finally { setParsing(false); }
+  }
 
   async function autoParseFood(text: string) {
     setParsing(true); setError("");
+    setChat(c => [...c, { role: "system", text: "Parsing nutrition with GPT…" }]);
     try {
       const res  = await fetch("/api/parse-food", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ text }) });
       const data = await res.json();
@@ -116,8 +140,22 @@ export default function LogPage() {
           carbs: f.carbs || 0, protein: f.protein || 0, fat: f.fat || 0, fiber: f.fiber || 0,
         })));
       }
-    } catch { setError("Parse failed. Try again."); }
-    finally { setParsing(false); }
+      const t = data.totals || {};
+      const summary = data.summary || `Parsed ${data.parsed?.length ?? 0} item(s) from your description.`;
+      const ingredientList = (data.parsed || []).map((f: Partial<ParsedFood>) => `${f.name} (${f.grams}g)`).join(", ");
+      setAiMealType(data.mealType || null);
+      setChat(c => [...c.slice(0, -1), {
+        role: "assistant",
+        text: `${summary}${ingredientList ? `\n\nIngredients: ${ingredientList}` : ""}`,
+        meta: {
+          mealType: data.mealType ?? null,
+          calories: t.calories, carbs: t.carbs, protein: t.protein, fat: t.fat, fiber: t.fiber,
+        },
+      }]);
+    } catch {
+      setError("Parse failed. Try again.");
+      setChat(c => [...c.slice(0, -1)]);
+    } finally { setParsing(false); }
   }
 
   function updateFood(i: number, field: keyof ParsedFood, val: string) {
@@ -215,6 +253,57 @@ export default function LogPage() {
           {!speechAvail && <div style={{ fontSize:12, color:ORANGE, marginTop:4 }}>Voice input not supported in this browser</div>}
         </div>
       </div>
+
+      {/* AI CONVERSATION */}
+      {chat.length > 0 && (
+        <div style={{ ...card, marginBottom:20 }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+            <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", textTransform:"uppercase" }}>AI Conversation</div>
+            <div style={{ fontSize:10, color:"rgba(255,255,255,0.25)" }}>Whisper + GPT</div>
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:10, maxHeight:340, overflowY:"auto" }}>
+            {chat.map((msg, i) => {
+              const isUser = msg.role === "user";
+              const isSys  = msg.role === "system";
+              return (
+                <div key={i} style={{ display:"flex", justifyContent: isUser ? "flex-end" : "flex-start" }}>
+                  <div style={{
+                    maxWidth:"85%",
+                    background: isUser ? `${ACCENT}22` : isSys ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.06)",
+                    border: `1px solid ${isUser ? ACCENT+"40" : "rgba(255,255,255,0.06)"}`,
+                    color: isSys ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.9)",
+                    fontStyle: isSys ? "italic" : "normal",
+                    borderRadius: 12,
+                    padding: "10px 14px",
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                    whiteSpace: "pre-wrap",
+                  }}>
+                    <div style={{ fontSize:9, fontWeight:700, letterSpacing:"0.08em", textTransform:"uppercase", color: isUser ? ACCENT : isSys ? "rgba(255,255,255,0.3)" : GREEN, marginBottom:4 }}>
+                      {isUser ? "You" : isSys ? "System" : "GPT"}
+                    </div>
+                    {msg.text}
+                    {msg.meta && (msg.meta.calories != null || msg.meta.carbs != null) && (
+                      <div style={{ marginTop:8, paddingTop:8, borderTop:"1px solid rgba(255,255,255,0.08)", display:"flex", gap:10, flexWrap:"wrap", fontSize:11 }}>
+                        {msg.meta.carbs    != null && <span><span style={{ color:"rgba(255,255,255,0.4)" }}>Carbs</span> <b style={{ color:ORANGE }}>{msg.meta.carbs}g</b></span>}
+                        {msg.meta.protein  != null && <span><span style={{ color:"rgba(255,255,255,0.4)" }}>Protein</span> <b style={{ color:"#3B82F6" }}>{msg.meta.protein}g</b></span>}
+                        {msg.meta.fat      != null && <span><span style={{ color:"rgba(255,255,255,0.4)" }}>Fat</span> <b style={{ color:"#A855F7" }}>{msg.meta.fat}g</b></span>}
+                        {msg.meta.fiber    != null && <span><span style={{ color:"rgba(255,255,255,0.4)" }}>Fiber</span> <b style={{ color:GREEN }}>{msg.meta.fiber}g</b></span>}
+                        {msg.meta.calories != null && <span><span style={{ color:"rgba(255,255,255,0.4)" }}>Cals</span> <b style={{ color:"#A78BFA" }}>{msg.meta.calories}</b></span>}
+                        {msg.meta.mealType && (
+                          <span style={{ padding:"1px 8px", borderRadius:99, fontSize:10, fontWeight:700, background:`${TYPE_COLORS[msg.meta.mealType]||GREEN}22`, color:TYPE_COLORS[msg.meta.mealType]||GREEN, letterSpacing:"0.06em" }}>
+                            {TYPE_LABELS[msg.meta.mealType] || msg.meta.mealType}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* DUAL PANELS */}
       {(rawText || hasAny) && (

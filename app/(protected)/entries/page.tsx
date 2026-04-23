@@ -110,53 +110,67 @@ export default function EntriesPage() {
                   </svg>
                 </div>
 
-                {/* Expanded panel */}
-                {isOpen && (
-                  <div style={{ padding:"0 20px 20px", background:"rgba(255,255,255,0.01)" }}>
-                    <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:10, marginBottom:16 }}>
-                      {/* Food breakdown */}
-                      <div style={{ background:"rgba(0,0,0,0.2)", borderRadius:12, padding:"14px 16px" }}>
-                        <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase", marginBottom:10 }}>Food Breakdown</div>
-                        {Array.isArray(m.parsed_json) && m.parsed_json.length > 0 ? m.parsed_json.map((f,i) => (
-                          <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"5px 0", borderBottom:`1px solid rgba(255,255,255,0.04)` }}>
-                            <span style={{ fontSize:12 }}>{f.name}</span>
-                            <span style={{ fontSize:11, color:"rgba(255,255,255,0.35)" }}>{f.grams}g · {f.carbs ?? 0}c</span>
-                          </div>
-                        )) : <div style={{ fontSize:12, color:"rgba(255,255,255,0.2)" }}>No food data</div>}
-                      </div>
-
-                      {/* Stats */}
-                      <div style={{ background:"rgba(0,0,0,0.2)", borderRadius:12, padding:"14px 16px" }}>
-                        <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase", marginBottom:10 }}>Glucose & Timing</div>
-                        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                          <Stat label="Before" val={m.glucose_before ? `${m.glucose_before} mg/dL` : "—"}/>
-                          <Stat label="After"  val={m.glucose_after  ? `${m.glucose_after} mg/dL`  : "—"}/>
-                          <Stat label="Delta"  val={glucDelta !== null ? `${glucDelta > 0 ? "+" : ""}${glucDelta} mg/dL` : "—"} color={glucDelta !== null ? (Math.abs(glucDelta) < 50 ? GREEN : glucDelta > 0 ? ORANGE : PINK) : undefined}/>
-                          <Stat label="Time"   val={timeStr}/>
+                {/* Expanded panel — 3 stacked rows */}
+                {isOpen && (() => {
+                  const carbs = m.carbs_grams ?? 0;
+                  const netCarbs = Math.max(0, carbs - totalFiber);
+                  const icr = m.insulin_units && m.insulin_units > 0 ? netCarbs / m.insulin_units : null;
+                  const Cell = ({ l, v, c }: { l: string; v: string; c?: string }) => (
+                    <div style={{ display:"inline-flex", flexDirection:"column", minWidth:90 }}>
+                      <span style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.06em", textTransform:"uppercase" }}>{l}</span>
+                      <span style={{ fontSize:13, fontWeight:600, color:c || "rgba(255,255,255,0.85)" }}>{v}</span>
+                    </div>
+                  );
+                  return (
+                    <div style={{ padding:"0 20px 20px", background:"rgba(255,255,255,0.01)", display:"flex", flexDirection:"column", gap:12 }}>
+                      {/* Row 1 — Macros & Dosing */}
+                      <div style={{ borderLeft:`2px solid ${ACCENT}55`, paddingLeft:14, paddingTop:12 }}>
+                        <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8 }}>MACROS &amp; DOSING</div>
+                        <div style={{ display:"flex", gap:18, flexWrap:"wrap" }}>
+                          <Cell l="Carbs"      v={`${carbs}g`}     c={ORANGE}/>
+                          <Cell l="Fiber"      v={`${totalFiber}g`}/>
+                          <Cell l="Net carbs"  v={`${netCarbs}g`}  c={GREEN}/>
+                          <Cell l="Protein"    v={`${totalProt}g`} c="#3B82F6"/>
+                          <Cell l="Fat"        v={`${totalFat}g`}  c="#A855F7"/>
+                          <Cell l="Calories"   v={`${cals} kcal`}  c="#A78BFA"/>
+                          <Cell l="Insulin"    v={`${m.insulin_units ?? 0}u`} c={ACCENT}/>
+                          <Cell l="Carb ratio" v={icr ? `1u / ${icr.toFixed(0)}g` : "—"}/>
                         </div>
                       </div>
-
-                      {/* Macros & Classification */}
-                      <div style={{ background:"rgba(0,0,0,0.2)", borderRadius:12, padding:"14px 16px" }}>
-                        <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase", marginBottom:10 }}>Macros & Class.</div>
-                        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                          <Stat label="Carbs"    val={`${m.carbs_grams ?? 0}g`}/>
-                          <Stat label="Protein"  val={`${totalProt}g`}/>
-                          <Stat label="Fat"      val={`${totalFat}g`}/>
-                          <Stat label="Fiber"    val={`${totalFiber}g`}/>
-                          <Stat label="Calories" val={`${cals} kcal`}/>
-                          {m.meal_type && (
-                            <div style={{ marginTop:4 }}>
-                              <span style={{ padding:"3px 10px", borderRadius:99, fontSize:11, fontWeight:700, background:`${TYPE_COLORS[m.meal_type]||GREEN}18`, color:TYPE_COLORS[m.meal_type]||GREEN, border:`1px solid ${TYPE_COLORS[m.meal_type]||GREEN}30` }}>
-                                {m.meal_type.replace("_"," ")}
+                      {/* Row 2 — Glucose */}
+                      <div style={{ borderLeft:`2px solid ${GREEN}55`, paddingLeft:14 }}>
+                        <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8 }}>GLUCOSE TRACKING</div>
+                        <div style={{ display:"flex", gap:18, flexWrap:"wrap" }}>
+                          <Cell l="Before" v={m.glucose_before ? `${m.glucose_before} mg/dL` : "—"} c={m.glucose_before ? (m.glucose_before>140?ORANGE:m.glucose_before<80?PINK:GREEN) : undefined}/>
+                          <Cell l="After"  v={m.glucose_after  ? `${m.glucose_after} mg/dL`  : "not recorded"} c={m.glucose_after ? (m.glucose_after>180||m.glucose_after<70?PINK:GREEN) : "rgba(255,255,255,0.3)"}/>
+                          <Cell l="Delta"  v={glucDelta !== null ? `${glucDelta > 0 ? "+" : ""}${glucDelta} mg/dL` : "—"} c={glucDelta !== null ? (Math.abs(glucDelta) < 50 ? GREEN : glucDelta > 0 ? ORANGE : PINK) : undefined}/>
+                          <Cell l="Time"   v={`${dateStr} · ${timeStr}`}/>
+                        </div>
+                      </div>
+                      {/* Row 3 — Meal Context */}
+                      <div style={{ borderLeft:`2px solid rgba(255,255,255,0.15)`, paddingLeft:14, paddingBottom:6 }}>
+                        <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8 }}>MEAL CONTEXT</div>
+                        <div style={{ fontSize:13, color:"rgba(255,255,255,0.75)", lineHeight:1.55, marginBottom:8 }}>
+                          {m.input_text || "No meal description recorded."}
+                        </div>
+                        {Array.isArray(m.parsed_json) && m.parsed_json.length > 0 && (
+                          <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:8 }}>
+                            {m.parsed_json.map((f,i) => (
+                              <span key={i} style={{ fontSize:11, padding:"3px 8px", borderRadius:6, background:"rgba(255,255,255,0.04)", color:"rgba(255,255,255,0.6)" }}>
+                                {f.name} <span style={{ color:"rgba(255,255,255,0.35)" }}>({f.grams}g)</span>
                               </span>
-                            </div>
-                          )}
-                        </div>
+                            ))}
+                          </div>
+                        )}
+                        {m.meal_type && (
+                          <span style={{ padding:"3px 10px", borderRadius:99, fontSize:11, fontWeight:700, background:`${TYPE_COLORS[m.meal_type]||GREEN}18`, color:TYPE_COLORS[m.meal_type]||GREEN, border:`1px solid ${TYPE_COLORS[m.meal_type]||GREEN}30`, letterSpacing:"0.06em" }}>
+                            {m.meal_type.replace("_"," ")}
+                          </span>
+                        )}
                       </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             );
           })
