@@ -121,18 +121,34 @@ export default function EntriesPage() {
             return (
               <div key={m.id} style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, overflow:"hidden" }}>
                 {/* Collapsed header */}
-                <div onClick={() => setExpanded(isOpen ? null : m.id)} style={{ padding:"14px 16px", cursor:"pointer", display:"flex", alignItems:"center", gap:10 }}>
-                  <div style={{ flex:1, minWidth:0 }}>
+                <div onClick={() => setExpanded(isOpen ? null : m.id)} style={{ padding:"14px 16px", cursor:"pointer", display:"grid", gridTemplateColumns:"minmax(0,1.4fr) minmax(0,0.9fr) minmax(0,1.1fr) auto auto", gap:14, alignItems:"center" }}>
+                  {/* Col 1: date + BG + insulin */}
+                  <div style={{ minWidth:0 }}>
                     <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginBottom:4 }}>{dateStr}</div>
                     <div style={{ display:"flex", alignItems:"baseline", gap:10, flexWrap:"wrap" }}>
                       <span style={{ fontSize:18, fontWeight:800, color:bgC, letterSpacing:"-0.02em" }}>{m.glucose_before ?? "—"}<span style={{ fontSize:11, color:"rgba(255,255,255,0.4)", fontWeight:500, marginLeft:3 }}>mg/dL</span></span>
-                      <span style={{ fontSize:12, color:"rgba(255,255,255,0.55)" }}>{m.carbs_grams ? `${m.carbs_grams}g` : "—"}</span>
                       <span style={{ fontSize:12, color:"rgba(255,255,255,0.55)" }}>{m.insulin_units ? `${m.insulin_units}u` : "—"}</span>
                     </div>
                   </div>
+                  {/* Col 2: carbs */}
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>CARBS</div>
+                    <div style={{ fontSize:14, fontWeight:700, color:m.carbs_grams ? ORANGE : "rgba(255,255,255,0.3)", letterSpacing:"-0.01em" }}>
+                      {m.carbs_grams ? `${m.carbs_grams}g` : "—"}
+                    </div>
+                  </div>
+                  {/* Col 3: classification */}
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>CATEGORY</div>
+                    <div style={{ fontSize:13, fontWeight:600, color:m.meal_type ? (TYPE_COLORS[m.meal_type] || "rgba(255,255,255,0.85)") : "rgba(255,255,255,0.3)", letterSpacing:"-0.01em", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                      {m.meal_type ? m.meal_type.replace("_"," ").toLowerCase() : "—"}
+                    </div>
+                  </div>
+                  {/* Col 4: evaluation badge */}
                   <span style={{ padding:"5px 12px", borderRadius:99, fontSize:10, fontWeight:700, background:`${evColor}18`, color:evColor, border:`1px solid ${evColor}30`, whiteSpace:"nowrap", letterSpacing:"0.05em", textTransform:"uppercase" }}>
                     {evL(ev)}
                   </span>
+                  {/* Col 5: chevron */}
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="2.5" strokeLinecap="round" style={{ transform:isOpen?"rotate(90deg)":"rotate(0deg)", transition:"transform 0.2s", flexShrink:0 }}>
                     <polyline points="9 6 15 12 9 18"/>
                   </svg>
