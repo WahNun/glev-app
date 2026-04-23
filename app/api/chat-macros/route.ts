@@ -1,10 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import OpenAI from "openai";
-
-const openai = new OpenAI({
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  apiKey:  process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-});
+import { getOpenAIClient } from "@/lib/ai/openaiClient";
 
 const SYSTEM_PROMPT = `You are a friendly, concise nutrition assistant inside a Type 1 Diabetes
 insulin-decision app. The user has just logged a meal. Your job is to:
@@ -47,6 +42,10 @@ export async function POST(req: NextRequest) {
   fat:     ${body.macros?.fat     ?? 0}g
   fiber:   ${body.macros?.fiber   ?? 0}g`,
   };
+
+  let openai;
+  try { openai = getOpenAIClient(); }
+  catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : "AI not configured" }, { status: 503 }); }
 
   try {
     const completion = await openai.chat.completions.create({

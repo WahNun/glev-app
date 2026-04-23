@@ -1,13 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import OpenAI from "openai";
+import { getOpenAIClient } from "@/lib/ai/openaiClient";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-const openai = new OpenAI({
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  apiKey:  process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-});
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,6 +11,9 @@ export async function POST(req: NextRequest) {
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "audio file is required" }, { status: 400 });
     }
+    let openai;
+    try { openai = getOpenAIClient(); }
+    catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : "AI not configured" }, { status: 503 }); }
     const transcription = await openai.audio.transcriptions.create({
       file,
       model: "gpt-4o-mini-transcribe",

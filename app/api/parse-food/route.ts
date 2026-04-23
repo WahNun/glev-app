@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import OpenAI from "openai";
+import { getOpenAIClient } from "@/lib/ai/openaiClient";
 import { SYSTEM_PROMPT } from "@/lib/ai/systemPrompt";
-
-const openai = new OpenAI({
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  apiKey:  process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-});
 
 const TIMEOUT_MS = 8000;
 
@@ -16,6 +11,10 @@ export async function POST(req: NextRequest) {
   if (!text || typeof text !== "string") {
     return NextResponse.json({ error: "text is required" }, { status: 400 });
   }
+
+  let openai;
+  try { openai = getOpenAIClient(); }
+  catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : "AI not configured" }, { status: 503 }); }
 
   try {
     const completion = await openai.chat.completions.create({

@@ -127,20 +127,58 @@ const FULL_COLS = "id, user_id, input_text, parsed_json, glucose_before, glucose
 const MID_COLS  = "id, user_id, input_text, parsed_json, glucose_before, glucose_after, carbs_grams, protein_grams, fat_grams, fiber_grams, calories, insulin_units, meal_type, evaluation, created_at";
 const CORE_COLS = "id, user_id, input_text, parsed_json, glucose_before, carbs_grams, insulin_units, meal_type, evaluation, created_at";
 
-export async function updateMealReadings(id: string, readings: { bg1h?: number | null; bg2h?: number | null }): Promise<void> {
+export interface UpdateReadingsResult {
+  applied: string[];
+  warnings: string[];
+}
+
+export async function updateMealReadings(
+  id: string,
+  readings: { bg1h?: number | null; bg2h?: number | null }
+): Promise<UpdateReadingsResult> {
   if (!supabase) throw new Error("Supabase is not configured");
   const now = new Date().toISOString();
+  const applied: string[] = [];
+  const warnings: string[] = [];
+
   const patch: Record<string, unknown> = {};
   if (readings.bg1h !== undefined) { patch.bg_1h = readings.bg1h; patch.bg_1h_at = readings.bg1h != null ? now : null; }
   if (readings.bg2h !== undefined) { patch.bg_2h = readings.bg2h; patch.bg_2h_at = readings.bg2h != null ? now : null; }
-  if (!Object.keys(patch).length) return;
+  if (!Object.keys(patch).length) return { applied, warnings };
+
+  const isMissingCol = (msg?: string, code?: string) =>
+    code === "42703" ||
+    (!!msg && /(column|could not find).*(bg_1h|bg_2h|bg_1h_at|bg_2h_at|outcome_state)/i.test(msg));
+
+  // Try the modern path first.
   const { error } = await supabase.from("meals").update(patch).eq("id", id);
-  if (error) {
-    if (error.message?.toLowerCase().includes("column") && (error.message.includes("bg_1h") || error.message.includes("bg_2h") || error.message.includes("outcome_state"))) {
-      throw new Error("Add the bg_1h / bg_2h / outcome_state columns to your meals table first (see Settings → schema migration).");
-    }
-    throw new Error(error.message);
+  if (!error) {
+    if (readings.bg1h !== undefined) applied.push("bg_1h");
+    if (readings.bg2h !== undefined) applied.push("bg_2h");
+    return { applied, warnings };
   }
+
+  if (!isMissingCol(error.message, error.code)) throw new Error(error.message);
+
+  // Legacy fallback: store the 2h reading in glucose_after; warn that the 1h
+  // reading needs the schema migration to persist.
+  const legacyPatch: Record<string, unknown> = {};
+  if (readings.bg2h !== undefined) legacyPatch.glucose_after = readings.bg2h;
+  if (Object.keys(legacyPatch).length) {
+    const { error: e2 } = await supabase.from("meals").update(legacyPatch).eq("id", id);
+    if (e2) throw new Error(e2.message);
+    applied.push("glucose_after");
+  }
+  if (readings.bg1h !== undefined) {
+    warnings.push(
+      "1h reading not saved — your meals table is missing the bg_1h column. " +
+      "Run the schema migration (see Settings) to enable persistent 1h readings."
+    );
+  }
+  if (readings.bg2h !== undefined) {
+    warnings.push("2h reading saved to legacy glucose_after column (schema migration recommended).");
+  }
+  return { applied, warnings };
 }
 
 export async function fetchMeals(): Promise<Meal[]> {

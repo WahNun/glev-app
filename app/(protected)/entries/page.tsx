@@ -296,6 +296,7 @@ function LifecycleBlock({ meal, onUpdated }: { meal: Meal; onUpdated: (patch: Pa
   const [bg2h, setBg2h] = useState<string>(meal.bg_2h?.toString() ?? "");
   const [busy, setBusy] = useState(false);
   const [err,  setErr]  = useState<string | null>(null);
+  const [warn, setWarn] = useState<string | null>(null);
 
   // Show 1h input from 30 min onwards (so user can record an early reading);
   // show 2h input from 90 min onwards.
@@ -309,13 +310,25 @@ function LifecycleBlock({ meal, onUpdated }: { meal: Meal; onUpdated: (patch: Pa
       setErr("Enter a glucose value between 30 and 600 mg/dL.");
       return;
     }
-    setBusy(true); setErr(null);
+    setBusy(true); setErr(null); setWarn(null);
     try {
-      await updateMealReadings(meal.id, { [field]: n } as { bg1h?: number | null; bg2h?: number | null });
+      const result = await updateMealReadings(meal.id, { [field]: n } as { bg1h?: number | null; bg2h?: number | null });
       const now = new Date().toISOString();
-      onUpdated(field === "bg1h"
-        ? { bg_1h: n, bg_1h_at: n != null ? now : null }
-        : { bg_2h: n, bg_2h_at: n != null ? now : null });
+      // Optimistic local update — applies even when the column fell back to
+      // glucose_after, so the UI reflects the new value immediately.
+      if (field === "bg1h") {
+        // Only persist locally if the new column was actually written.
+        if (result.applied.includes("bg_1h")) {
+          onUpdated({ bg_1h: n, bg_1h_at: n != null ? now : null });
+        }
+      } else {
+        onUpdated(
+          result.applied.includes("bg_2h")
+            ? { bg_2h: n, bg_2h_at: n != null ? now : null }
+            : { bg_2h: n, bg_2h_at: n != null ? now : null, glucose_after: n }
+        );
+      }
+      if (result.warnings.length) setWarn(result.warnings.join(" "));
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not save reading.");
     } finally { setBusy(false); }
@@ -358,7 +371,8 @@ function LifecycleBlock({ meal, onUpdated }: { meal: Meal; onUpdated: (patch: Pa
           )}
         </div>
       )}
-      {err && <div style={{ fontSize:11, color:PINK }}>{err}</div>}
+      {err  && <div style={{ fontSize:11, color:PINK }}>{err}</div>}
+      {warn && <div style={{ fontSize:11, color:ORANGE }}>{warn}</div>}
     </div>
   );
 }

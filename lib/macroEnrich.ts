@@ -1,9 +1,4 @@
-import OpenAI from "openai";
-
-const openai = new OpenAI({
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  apiKey:  process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-});
+import { getOpenAIClient } from "@/lib/ai/openaiClient";
 
 export interface MacroEstimate {
   protein: number;
@@ -30,6 +25,9 @@ export async function enrichMealMacros(
   knownCarbsGrams: number,
 ): Promise<MacroEstimate | null> {
   if (!description?.trim()) return null;
+
+  let openai;
+  try { openai = getOpenAIClient(); } catch { return null; }
 
   try {
     const completion = await openai.chat.completions.create({
