@@ -2503,7 +2503,7 @@ function LoginGate({onEnter,contained}:{onEnter:(email:string,name?:string)=>voi
   );
 }
 
-export function DarkCockpit() {
+function DarkCockpit() {
   // MOCKUP: skip auth gate so the design renders standalone for comparison.
   const [loggedIn,setLoggedIn]=useState(true);
   const [userEmail,setUserEmail]=useState("demo@glev.app");

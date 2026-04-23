@@ -1,0 +1,61 @@
+Hier der Master-Prompt für Replit AI — paste-ready:
+=== BEGIN PROMPT ===
+You are working in the Glev Next.js repl. The last push to main (commit 3714a80) broke Vercel Production with this error:
+app/mockups/dark-cockpit/page.tsx
+Type error: Page "app/mockups/dark-cockpit/page.tsx" does not match the required types of a Next.js Page.
+  "DarkCockpit" is not a valid Page export field.
+Root cause: a Next.js App Router page.tsx must have a default export. Any other named export (except metadata, generateMetadata, dynamic, revalidate, fetchCache, runtime, preferredRegion, maxDuration, viewport) is rejected at build time.
+Your tasks
+1. Inspect the offending file
+Print the top 20 lines and every line that starts with export in app/mockups/dark-cockpit/page.tsx. Report what you find.
+2. Scan the whole app/mockups tree for the same pattern
+Run the equivalent of:
+bashgrep -nE "^export (const|function|class) [A-Z]" app/mockups/**/*.tsx
+For every page.tsx inside app/mockups/**, verify there is exactly one export default and no other named export const|function|class (metadata-style exports are fine).
+3. Fix each broken mockup page
+For every offending file (including dark-cockpit/page.tsx), apply the minimal edit that keeps the mockup working:
+
+If the file has export function Foo() { … } or export const Foo = () => { … } and no export default, convert it to export default function Foo() (or append export default Foo; at the very bottom and drop export from the declaration).
+If the file already has a export default AND a stray named export like export function DarkCockpit, just delete the export keyword from the named one so it becomes a local declaration.
+Do not change the component's rendering logic, JSX, styles, or imports.
+
+4. Verify both mobile and desktop views are on the latest state
+The app ships two layouts that share the same routes:
+
+Desktop/large viewport layout — the standard pages under app/(protected)/**.
+Mobile layout — anything inside components/mobile/**, app/(mobile)/**, or conditional renders gated on useMediaQuery/useIsMobile hooks.
+
+Do this:
+a. Run git status — there must be no uncommitted changes before we push.
+b. Run git log --name-only -10 | head -100 and confirm the last 10 commits include updates to both desktop pages (app/(protected)/log/page.tsx, app/(protected)/insights/page.tsx, app/(protected)/engine/page.tsx, app/(protected)/dashboard/page.tsx, app/(protected)/import/page.tsx) AND any mobile components that exist in the repo.
+c. Run:
+bashgrep -rln "useIsMobile\|useMediaQuery\|isMobile" app components | head -40
+and confirm that every file listed there is in the current working tree (not stashed, not ignored, not in a deleted state). If any are in a stale state, restore them from the latest commit.
+d. If you see any .tsx file under components/mobile/ or app/(mobile)/ that has uncommitted modifications or is untracked, report it back before committing — we want the truly latest state, not a half-merged view.
+5. Build locally inside the repl
+bashnpm run build
+If the build is still red, report the first error only and stop. Do not attempt to force the commit through.
+6. Commit + push
+When the build is green:
+bashgit add -A
+git diff --stat --cached
+git commit -m "fix(mockups): default-export page components; sync mobile+desktop layouts"
+git push origin HEAD
+Then run git log -3 --oneline and report the three top commits.
+7. Report back
+
+Which files you modified and what exactly changed.
+Whether the build passed.
+The new commit SHA.
+That both mobile and desktop view files are current (listed by path).
+The Vercel deploy URL or confirmation that the push triggered the auto-deploy.
+
+Hard rules
+
+Do not modify anything outside the mockup files unless step 4 reveals stale mobile/desktop files that need to be restored from the latest commit — and even then, do not rewrite their content, only re-stage them.
+Do not upgrade Next.js or any dependency. The CVE warning is out of scope.
+Do not switch package managers. npm only.
+Do not force-push.
+Do not amend previous commits.
+
+=== END PROMPT ===
