@@ -50,6 +50,11 @@ export default function InsightsPage() {
   const icr7 = meals.slice(0,7).filter(m=>m.carbs_grams&&m.insulin_units).map(m=>(m.carbs_grams||0)/(m.insulin_units||1));
   const estICR     = icr7.length ? Math.round(icr7.reduce((a,b)=>a+b,0)/icr7.length) : 15;
 
+  const getMealProtein = (m: Meal) => m.protein_grams ?? (Array.isArray(m.parsed_json) ? m.parsed_json.reduce((s,f)=>s+(f.protein||0),0) : 0);
+  const getMealFat = (m: Meal) => m.fat_grams ?? (Array.isArray(m.parsed_json) ? m.parsed_json.reduce((s,f)=>s+(f.fat||0),0) : 0);
+  const getMealCals = (m: Meal) => m.calories ?? Math.round((m.carbs_grams||0)*4 + getMealProtein(m)*4 + getMealFat(m)*9);
+  const avgCals = Math.round(meals.reduce((s,m)=>s+getMealCals(m),0) / Math.max(total,1));
+
   // Meal type breakdown
   const types: Record<string, {count:number; totalCarbs:number; totalInsulin:number; good:number}> = {
     FAST_CARBS:   {count:0,totalCarbs:0,totalInsulin:0,good:0},
@@ -117,7 +122,7 @@ export default function InsightsPage() {
           { label:"Est. Carb Ratio", val:`1:${estICR}`, sub:"units per grams carbs", color:ORANGE, formula:"Carbs / Insulin (last 7 meals)", explain:"Your empirical ICR from recent logging. Compare to your prescribed ratio." },
           { label:"Avg Carbs/Meal", val:`${avgCarbs}g`, sub:"per logged meal", color:"#A78BFA", formula:"Sum carbs_grams / meal count", explain:"Your average carbohydrate intake per meal. High values increase dosing complexity." },
           { label:"Avg Insulin/Meal", val:`${avgInsulin}u`, sub:"rapid insulin units", color:"#60A5FA", formula:"Sum insulin_units / meal count", explain:"Average insulin per meal. Track this against carbs to validate your ratio." },
-          { label:"Under-dose Rate", val:`${Math.round(low/total*100)}%`, sub:`${low} of ${total} meals`, color:ORANGE, formula:"LOW / Total × 100", explain:"Under-dosing leads to post-meal glucose spikes. Target under 15%." },
+          { label:"Avg Calories", val:`${avgCals}`, sub:"kcal per meal", color:"#F472B6", formula:"(Carbs×4 + Protein×4 + Fat×9) / meals", explain:"Average caloric intake per meal based on macronutrient breakdown." },
         ].map((t,i) => (
           <div key={i} style={card}>
             <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase", marginBottom:10 }}>{t.label}</div>

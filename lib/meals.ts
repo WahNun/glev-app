@@ -18,10 +18,18 @@ export interface Meal {
   glucose_before: number | null;
   glucose_after: number | null;
   carbs_grams: number | null;
+  protein_grams: number | null;
+  fat_grams: number | null;
+  fiber_grams: number | null;
+  calories: number | null;
   insulin_units: number | null;
   meal_type: string | null;
   evaluation: string | null;
   created_at: string;
+}
+
+export function computeCalories(carbs: number, protein: number, fat: number): number {
+  return Math.round(carbs * 4 + protein * 4 + fat * 9);
 }
 
 export interface SaveMealInput {
@@ -30,6 +38,10 @@ export interface SaveMealInput {
   glucoseBefore: number | null;
   glucoseAfter: number | null;
   carbsGrams: number;
+  proteinGrams: number;
+  fatGrams: number;
+  fiberGrams: number;
+  calories: number;
   insulinUnits: number | null;
   mealType: string | null;
   evaluation: string | null;
@@ -59,24 +71,42 @@ export async function saveMeal(input: SaveMealInput): Promise<Meal> {
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) throw new Error("Not authenticated");
 
+  const row: Record<string, unknown> = {
+    user_id:        user.id,
+    input_text:     input.inputText,
+    parsed_json:    input.parsedJson,
+    glucose_before: input.glucoseBefore,
+    glucose_after:  input.glucoseAfter,
+    carbs_grams:    input.carbsGrams,
+    protein_grams:  input.proteinGrams ?? null,
+    fat_grams:      input.fatGrams ?? null,
+    fiber_grams:    input.fiberGrams ?? null,
+    calories:       input.calories ?? null,
+    insulin_units:  input.insulinUnits,
+    meal_type:      input.mealType,
+    evaluation:     input.evaluation,
+  };
+
   const { data, error } = await supabase
     .from("meals")
-    .insert({
-      user_id:       user.id,
-      input_text:    input.inputText,
-      parsed_json:   input.parsedJson,
-      glucose_before: input.glucoseBefore,
-      glucose_after:  input.glucoseAfter,
-      carbs_grams:   input.carbsGrams,
-      insulin_units: input.insulinUnits,
-      meal_type:     input.mealType,
-      evaluation:    input.evaluation,
-    })
+    .insert(row)
     .select()
     .single();
 
-  if (error) throw new Error(error.message);
-  logDebug("MEAL_INSERT", { id: data.id, carbs: input.carbsGrams, insulin: input.insulinUnits, glucose: input.glucoseBefore, mealType: input.mealType, evaluation: input.evaluation });
+  if (error) {
+    if (error.message?.includes("column") && (error.message?.includes("protein_grams") || error.message?.includes("fat_grams") || error.message?.includes("fiber_grams") || error.message?.includes("calories"))) {
+      delete row.protein_grams;
+      delete row.fat_grams;
+      delete row.fiber_grams;
+      delete row.calories;
+      const { data: d2, error: e2 } = await supabase.from("meals").insert(row).select().single();
+      if (e2) throw new Error(e2.message);
+      logDebug("MEAL_INSERT", { id: d2.id, carbs: input.carbsGrams, protein: input.proteinGrams, fat: input.fatGrams, fiber: input.fiberGrams, calories: input.calories, insulin: input.insulinUnits, glucose: input.glucoseBefore, mealType: input.mealType, evaluation: input.evaluation, note: "macro columns missing in DB" });
+      return d2 as Meal;
+    }
+    throw new Error(error.message);
+  }
+  logDebug("MEAL_INSERT", { id: data.id, carbs: input.carbsGrams, protein: input.proteinGrams, fat: input.fatGrams, fiber: input.fiberGrams, calories: input.calories, insulin: input.insulinUnits, glucose: input.glucoseBefore, mealType: input.mealType, evaluation: input.evaluation });
   return data as Meal;
 }
 
@@ -90,7 +120,7 @@ export async function fetchMeals(): Promise<Meal[]> {
   if (!supabase) throw new Error("Supabase is not configured");
   const { data, error } = await supabase
     .from("meals")
-    .select("id, user_id, input_text, parsed_json, glucose_before, glucose_after, carbs_grams, insulin_units, meal_type, evaluation, created_at")
+    .select("id, user_id, input_text, parsed_json, glucose_before, glucose_after, carbs_grams, protein_grams, fat_grams, fiber_grams, calories, insulin_units, meal_type, evaluation, created_at")
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []) as Meal[];

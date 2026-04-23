@@ -1,0 +1,153 @@
+You are a senior product engineer.
+
+Your task is to FIX the application end-to-end so it matches the intended product behavior and UI mockups.
+
+You must NOT stop after one fix.
+You must iterate until ALL core features are working.
+
+--------------------------------
+PHASE 1 — DATA PIPELINE (CRITICAL)
+--------------------------------
+
+1. Fix CSV import:
+
+- Identify why import fails (parsing / mapping / DB insert)
+- Ensure imported rows are stored in database correctly
+- Log:
+  - parsed rows
+  - inserted rows
+  - failed rows
+
+2. Fix historical data visibility:
+
+- Ensure Entries page loads ALL existing meals from database
+- Verify:
+  - correct table queried
+  - correct user filtering (if auth exists)
+  - data is returned and rendered
+
+3. Validate:
+
+- After import → entries MUST appear immediately
+- /api/debug/state must show real data
+
+--------------------------------
+PHASE 2 — ENTRY INPUT SYSTEM
+--------------------------------
+
+Update Log Meal form to include ALL macro fields:
+
+Required fields:
+
+- carbs (g)
+- protein (g)
+- fat (g)
+- fiber (g)
+- calories (kcal)
+
+Requirements:
+
+- numeric inputs
+- optional but stored if present
+- properly saved to DB
+
+--------------------------------
+PHASE 3 — UI MATCH MOCKUP
+--------------------------------
+
+You will be provided with a mockup image.
+
+Your job:
+
+- Compare current UI vs mockup
+- Refactor components to visually match:
+
+Focus areas:
+
+1. Log Meal:
+   - button style
+   - spacing
+   - layout hierarchy
+
+2. Glev Engine:
+   - structure
+   - typography
+   - card layout
+   - input/output alignment
+
+Rules:
+
+- DO NOT approximate
+- MATCH structure closely
+- prioritize layout over colors
+
+--------------------------------
+PHASE 4 — INSIGHTS PAGE
+--------------------------------
+
+Implement basic Insights cards:
+
+Minimum:
+
+- total meals count
+- average carbs
+- average glucose (if available)
+- last 7 days summary
+
+Cards must:
+
+- render dynamically
+- use real data
+- not be empty placeholders
+
+--------------------------------
+PHASE 5 — ENGINE VISUAL FIX
+--------------------------------
+
+Glev Engine must:
+
+- visually match mockup
+- clearly show:
+  - input glucose
+  - carbs
+  - suggested dose
+  - confidence
+
+If backend exists:
+→ wire real data
+
+If not:
+→ create placeholder logic but correct UI
+
+--------------------------------
+PHASE 6 — FINAL VALIDATION LOOP
+--------------------------------
+
+You must run this loop:
+
+1. Run app
+2. Test:
+   - import
+   - entries
+   - log meal
+   - insights
+3. Fix issues
+4. Repeat until:
+
+SUCCESS CONDITIONS:
+
+- CSV import works
+- entries show real data
+- log meal saves correctly
+- insights show real values
+- UI matches mockup structure
+
+--------------------------------
+OUTPUT
+--------------------------------
+
+Return:
+
+- list of fixes per phase
+- what was broken
+- how it was fixed

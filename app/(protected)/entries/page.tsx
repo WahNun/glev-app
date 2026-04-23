@@ -82,8 +82,10 @@ export default function EntriesPage() {
             const date = new Date(m.created_at);
             const dateStr = date.toLocaleDateString("en", { month:"short", day:"numeric" });
             const timeStr = date.toLocaleTimeString("en", { hour:"numeric", minute:"2-digit" });
-            const totalProt = Array.isArray(m.parsed_json) ? m.parsed_json.reduce((s,f)=>s+(f.protein||0),0) : 0;
-            const totalFat  = Array.isArray(m.parsed_json) ? m.parsed_json.reduce((s,f)=>s+(f.fat||0),0) : 0;
+            const totalProt = m.protein_grams ?? (Array.isArray(m.parsed_json) ? m.parsed_json.reduce((s,f)=>s+(f.protein||0),0) : 0);
+            const totalFat  = m.fat_grams ?? (Array.isArray(m.parsed_json) ? m.parsed_json.reduce((s,f)=>s+(f.fat||0),0) : 0);
+            const totalFiber = m.fiber_grams ?? (Array.isArray(m.parsed_json) ? m.parsed_json.reduce((s,f)=>s+(f.fiber||0),0) : 0);
+            const cals = m.calories ?? Math.round((m.carbs_grams||0)*4 + totalProt*4 + totalFat*9);
             const glucDelta = (m.glucose_after && m.glucose_before) ? m.glucose_after - m.glucose_before : null;
             return (
               <div key={m.id} style={{ borderBottom:`1px solid ${BORDER}` }}>
@@ -141,6 +143,8 @@ export default function EntriesPage() {
                           <Stat label="Carbs"    val={`${m.carbs_grams ?? 0}g`}/>
                           <Stat label="Protein"  val={`${totalProt}g`}/>
                           <Stat label="Fat"      val={`${totalFat}g`}/>
+                          <Stat label="Fiber"    val={`${totalFiber}g`}/>
+                          <Stat label="Calories" val={`${cals} kcal`}/>
                           {m.meal_type && (
                             <div style={{ marginTop:4 }}>
                               <span style={{ padding:"3px 10px", borderRadius:99, fontSize:11, fontWeight:700, background:`${TYPE_COLORS[m.meal_type]||GREEN}18`, color:TYPE_COLORS[m.meal_type]||GREEN, border:`1px solid ${TYPE_COLORS[m.meal_type]||GREEN}30` }}>

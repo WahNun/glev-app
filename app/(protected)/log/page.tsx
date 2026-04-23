@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { saveMeal, classifyMeal, computeEvaluation, type ParsedFood } from "@/lib/meals";
+import { saveMeal, classifyMeal, computeEvaluation, computeCalories, type ParsedFood } from "@/lib/meals";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)", BG="#09090B";
@@ -49,6 +49,7 @@ export default function LogPage() {
   const totalProtein = foods.reduce((s, f) => s + (f.protein || 0), 0);
   const totalFat     = foods.reduce((s, f) => s + (f.fat     || 0), 0);
   const totalFiber   = foods.reduce((s, f) => s + (f.fiber   || 0), 0);
+  const totalCalories = computeCalories(totalCarbs, totalProtein, totalFat);
   const mealType   = foods.length ? classifyMeal(totalCarbs, totalProtein, totalFat) : null;
   const glucoseNum = parseFloat(glucoseBefore) || null;
   const insulinNum = parseFloat(insulinUnits)  || null;
@@ -116,7 +117,12 @@ export default function LogPage() {
         inputText: rawText || foods.map(f => f.name).join(", "),
         parsedJson: foods,
         glucoseBefore: glucoseNum, glucoseAfter: null,
-        carbsGrams: totalCarbs, insulinUnits: insulinNum,
+        carbsGrams: totalCarbs,
+        proteinGrams: totalProtein,
+        fatGrams: totalFat,
+        fiberGrams: totalFiber,
+        calories: totalCalories,
+        insulinUnits: insulinNum,
         mealType: classifyMeal(totalCarbs, totalProtein, totalFat),
         evaluation: ev,
       });
@@ -250,13 +256,14 @@ export default function LogPage() {
           <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:14 }}>Macro Summary</div>
           <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
             {[
-              { label:"Carbs",   val:totalCarbs,   color:ORANGE },
-              { label:"Protein", val:totalProtein, color:ACCENT },
-              { label:"Fat",     val:totalFat,     color:PINK },
-              { label:"Fiber",   val:totalFiber,   color:GREEN },
-            ].map(({ label, val, color }) => (
+              { label:"Carbs",    val:totalCarbs,    unit:"g", color:ORANGE },
+              { label:"Protein",  val:totalProtein,  unit:"g", color:ACCENT },
+              { label:"Fat",      val:totalFat,      unit:"g", color:PINK },
+              { label:"Fiber",    val:totalFiber,    unit:"g", color:GREEN },
+              { label:"Calories", val:totalCalories, unit:"kcal", color:"#A78BFA" },
+            ].map(({ label, val, unit, color }) => (
               <div key={label} style={{ flex:1, minWidth:80, background:`${color}10`, border:`1px solid ${color}25`, borderRadius:12, padding:"12px 16px", textAlign:"center" }}>
-                <div style={{ fontSize:22, fontWeight:800, color }}>{val}<span style={{ fontSize:12, fontWeight:400, marginLeft:2, color:"rgba(255,255,255,0.4)" }}>g</span></div>
+                <div style={{ fontSize:22, fontWeight:800, color }}>{val}<span style={{ fontSize:12, fontWeight:400, marginLeft:2, color:"rgba(255,255,255,0.4)" }}>{unit}</span></div>
                 <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginTop:2 }}>{label}</div>
               </div>
             ))}
