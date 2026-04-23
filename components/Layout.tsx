@@ -147,11 +147,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             return (
               <div key={path} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
                 <button onClick={() => router.push(path)} style={{
-                  padding: 0, border: "none", background: "transparent", cursor: "pointer",
+                  width: 30, height: 30, borderRadius: 99,
+                  background: active
+                    ? `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`
+                    : `radial-gradient(circle at 36% 32%, #1e1e2e 0%, #141420 45%, #09090B 100%)`,
+                  border: active ? "none" : `1px solid rgba(255,255,255,0.12)`,
+                  cursor: "pointer", padding: 0,
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  height: 18,
+                  boxShadow: active ? `0 2px 10px ${ACCENT}55` : "0 2px 6px rgba(0,0,0,0.4)",
+                  transition: "all 0.2s",
                 }}>
-                  <GlevLogo size={20} color={active ? ACCENT : "rgba(255,255,255,0.55)"} bg="transparent"/>
+                  <GlevLogo size={18} color={active ? "#fff" : ACCENT} bg="transparent"/>
                 </button>
                 <span style={{ fontSize: 9, color: active ? ACCENT : "rgba(255,255,255,0.3)", fontWeight: 600, letterSpacing: "0.04em" }}>GLEV</span>
               </div>
