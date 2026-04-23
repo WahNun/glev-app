@@ -150,6 +150,79 @@ export async function fetchMeals(): Promise<Meal[]> {
   return (data ?? []) as Meal[];
 }
 
+// Splits a meal description like "95g döner bread, 120g veal döner meat" into
+// ParsedFood items. Macros per item are unknown for historical entries, so we
+// only fill name + grams. Dashboards fall back to total grams from the meal row.
+function descToParsedJson(desc: string): ParsedFood[] {
+  return desc
+    .split(/,\s*/)
+    .map((part) => {
+      const m = part.trim().match(/^(\d+(?:\.\d+)?)\s*(?:g|ml)\s+(.+)$/i);
+      if (!m) return null;
+      return { name: m[2].trim(), grams: parseFloat(m[1]), carbs: 0, protein: 0, fat: 0, fiber: 0 };
+    })
+    .filter((x): x is ParsedFood => x !== null);
+}
+
+// Real historical entries from the user's tracking sheet (Apr 17–22, 2026),
+// matching the mockup so production reflects actual data on first sign-in.
+const HISTORICAL_SEEDS: ReadonlyArray<{
+  input_text: string;
+  glucose_before: number; glucose_after: number;
+  carbs_grams: number; protein_grams: number; fat_grams: number; fiber_grams: number;
+  insulin_units: number; evaluation: string; created_at: string;
+}> = [
+  { input_text: "95g döner bread, 120g veal döner meat, 60g mixed salad, 20g tzatziki, 20g cocktail sauce, 15g feta cheese, 250ml ayran", glucose_before: 91, glucose_after: 162, carbs_grams: 68, protein_grams: 47, fat_grams: 30, fiber_grams: 4, insulin_units: 1, evaluation: "UNDERDOSE", created_at: "2026-04-22T18:10:00Z" },
+  { input_text: "1 McRoyal Bacon burger, 4 chicken delights, 10g BBQ sauce, 15g fries, 330ml cola zero", glucose_before: 127, glucose_after: 162, carbs_grams: 61, protein_grams: 40, fat_grams: 45, fiber_grams: 4, insulin_units: 1, evaluation: "UNDERDOSE", created_at: "2026-04-22T11:23:00Z" },
+  { input_text: "294g pulao rice, 400g mango lassi, 32g BETTERY vanilla plant protein powder, 493g chicken korma, 83g yogurt cucumber tomato salad", glucose_before: 121, glucose_after: 60, carbs_grams: 157, protein_grams: 103, fat_grams: 60, fiber_grams: 13, insulin_units: 3, evaluation: "OVERDOSE", created_at: "2026-04-21T20:53:00Z" },
+  { input_text: "95g cinnamon roll, 250g matcha latte, 4g sugar", glucose_before: 74, glucose_after: 150, carbs_grams: 74, protein_grams: 12, fat_grams: 19, fiber_grams: 2, insulin_units: 1, evaluation: "UNDERDOSE", created_at: "2026-04-21T15:19:00Z" },
+  { input_text: "40g granola, 20g blueberries, 33g raspberries, 160g yogurt, 38g mixed nuts, 130g banana, 60g egg, 32g BETTERY vanilla plant protein powder", glucose_before: 97, glucose_after: 96, carbs_grams: 59, protein_grams: 53, fat_grams: 40, fiber_grams: 13, insulin_units: 1, evaluation: "GOOD", created_at: "2026-04-21T14:20:00Z" },
+  { input_text: "200g beef steak, 150g turnip greens, 80g cooked brown rice, 140g potatoes, 60g mixed salad, 45g white bread", glucose_before: 196, glucose_after: 96, carbs_grams: 66, protein_grams: 64, fat_grams: 33, fiber_grams: 11, insulin_units: 3, evaluation: "OVERDOSE", created_at: "2026-04-20T20:28:00Z" },
+  { input_text: "80g granola, 120g banana, 20g mixed nuts, 150g coconut rice milk", glucose_before: 118, glucose_after: 256, carbs_grams: 82, protein_grams: 14, fat_grams: 24, fiber_grams: 10, insulin_units: 1, evaluation: "UNDERDOSE", created_at: "2026-04-20T16:36:00Z" },
+  { input_text: "60g chia pudding, 129g Greek yogurt, 33g blueberries, 34g raspberries, 125g light mozzarella, 125g tomato, 48g rye bread, 6g olive oil, 60g egg, 32g BETTERY vanilla plant protein powder, 37g mixed nuts, 2g cinnamon", glucose_before: 86, glucose_after: 120, carbs_grams: 51, protein_grams: 90, fat_grams: 55, fiber_grams: 18, insulin_units: 1, evaluation: "UNDERDOSE", created_at: "2026-04-20T10:43:00Z" },
+  { input_text: "218g fennel pear salad, 139g broccoli, 95g roasted chickpeas, 69g halloumi, 115g potato wedges, 60g egg", glucose_before: 120, glucose_after: 81, carbs_grams: 93, protein_grams: 51, fat_grams: 39, fiber_grams: 25, insulin_units: 2, evaluation: "OVERDOSE", created_at: "2026-04-19T21:55:00Z" },
+  { input_text: "75g pita bread, 110g kafta, 18g tahini sauce, 35g mixed vegetables, 90g tabbouleh salad", glucose_before: 109, glucose_after: 66, carbs_grams: 42, protein_grams: 33, fat_grams: 37, fiber_grams: 9, insulin_units: 2, evaluation: "OVERDOSE", created_at: "2026-04-19T15:01:00Z" },
+  { input_text: "131g chia pudding, 126g stracciatella yogurt, 125g light mozzarella, 125g tomato, 48g rye bread, 40g Portuguese fresh cheese, 60g egg, 40g blueberries, 35g raspberries, 20g mixed nuts, 6g olive oil, 32g BETTERY vanilla plant protein powder, 15g gummy candy", glucose_before: 71, glucose_after: 62, carbs_grams: 67, protein_grams: 93, fat_grams: 62, fiber_grams: 21, insulin_units: 2, evaluation: "GOOD", created_at: "2026-04-19T11:12:00Z" },
+  { input_text: "90g mackerel, 55g fries, 70g dark bread, 75g seafood rice, 20g olives, 35g salad, 20g creamed spinach, 8g Portuguese onion olive oil sauce", glucose_before: 145, glucose_after: 67, carbs_grams: 50, protein_grams: 31, fat_grams: 34, fiber_grams: 8, insulin_units: 3, evaluation: "OVERDOSE", created_at: "2026-04-18T20:30:00Z" },
+  { input_text: "234g chicken breast, 158g broccoli, 90g roasted chickpeas, 32g BETTERY protein shake, 8g olive oil, 6g butter, 4g garlic", glucose_before: 120, glucose_after: 65, carbs_grams: 40, protein_grams: 119, fat_grams: 29, fiber_grams: 17, insulin_units: 3, evaluation: "OVERDOSE", created_at: "2026-04-18T14:40:00Z" },
+  { input_text: "150g chia pudding, 100g Greek yogurt, 45g blueberries, 45g raspberries, 18g mixed nuts, 32g Bettery protein shake, 55g wholegrain rye bread, 125g mozzarella, 40g cream cheese, 120g tomato, 50g egg", glucose_before: 114, glucose_after: 97, carbs_grams: 62, protein_grams: 87, fat_grams: 73, fiber_grams: 24, insulin_units: 2, evaluation: "GOOD", created_at: "2026-04-18T09:34:00Z" },
+  { input_text: "1 Ox Tongue Croquette, honey mustard, 8 olives, 1 oyster, 5 ravioli, 100g green beans", glucose_before: 112, glucose_after: 56, carbs_grams: 76, protein_grams: 25, fat_grams: 14, fiber_grams: 6, insulin_units: 3, evaluation: "OVERDOSE", created_at: "2026-04-17T21:40:00Z" },
+];
+
+function buildHistoricalRows(userId: string) {
+  return HISTORICAL_SEEDS.map((s) => ({
+    user_id: userId,
+    input_text: s.input_text,
+    parsed_json: descToParsedJson(s.input_text),
+    glucose_before: s.glucose_before,
+    glucose_after: s.glucose_after,
+    carbs_grams: s.carbs_grams,
+    protein_grams: s.protein_grams,
+    fat_grams: s.fat_grams,
+    fiber_grams: s.fiber_grams,
+    calories: computeCalories(s.carbs_grams, s.protein_grams, s.fat_grams),
+    insulin_units: s.insulin_units,
+    meal_type: classifyMeal(s.carbs_grams, s.protein_grams, s.fat_grams),
+    evaluation: s.evaluation,
+    created_at: s.created_at,
+  }));
+}
+
+// Wipes the current user's meals and re-inserts the historical seed entries.
+// Used by the "Reload historical entries" action in Settings.
+export async function reloadHistoricalEntries(): Promise<{ inserted: number }> {
+  if (!supabase) throw new Error("Supabase not configured");
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not signed in");
+  const { error: delErr } = await supabase.from("meals").delete().eq("user_id", user.id);
+  if (delErr) throw new Error(delErr.message);
+  const rows = buildHistoricalRows(user.id);
+  const { error: insErr } = await supabase.from("meals").insert(rows);
+  if (insErr) throw new Error(insErr.message);
+  logDebug("HISTORICAL_RELOAD", { inserted: rows.length });
+  return { inserted: rows.length };
+}
+
 export async function seedMealsIfEmpty(): Promise<void> {
   if (!supabase) return;
   const { data: { user } } = await supabase.auth.getUser();
@@ -162,10 +235,15 @@ export async function seedMealsIfEmpty(): Promise<void> {
 
   if ((count ?? 0) > 0) return;
 
+  const { error } = await supabase.from("meals").insert(buildHistoricalRows(user.id));
+  if (error) logDebug("SEED_ERROR", { message: error.message });
+}
+
+// Legacy generic seed retained for reference; no longer used.
+function _legacySeeds_unused() {
   const now = Date.now();
   const d = 86400000;
-
-  const seeds = [
+  const _seeds = [
     { input_text: "Oatmeal with banana and honey", parsed_json: [{name:"Oatmeal",grams:80,carbs:54,protein:5,fat:3,fiber:8},{name:"Banana",grams:120,carbs:27,protein:1,fat:0,fiber:3},{name:"Honey",grams:15,carbs:13,protein:0,fat:0,fiber:0}], glucose_before:98, glucose_after:148, carbs_grams:94, insulin_units:6.5, meal_type:"FAST_CARBS", evaluation:"GOOD", created_at: new Date(now - 29*d).toISOString() },
     { input_text: "Scrambled eggs with whole wheat toast", parsed_json: [{name:"Scrambled eggs",grams:150,carbs:2,protein:18,fat:14,fiber:0},{name:"Whole wheat toast",grams:60,carbs:28,protein:5,fat:2,fiber:4}], glucose_before:112, glucose_after:138, carbs_grams:30, insulin_units:2.0, meal_type:"HIGH_PROTEIN", evaluation:"GOOD", created_at: new Date(now - 28*d + 3*3600000).toISOString() },
     { input_text: "Pancakes with maple syrup", parsed_json: [{name:"Pancakes",grams:200,carbs:70,protein:8,fat:10,fiber:2},{name:"Maple syrup",grams:30,carbs:22,protein:0,fat:0,fiber:0}], glucose_before:105, glucose_after:205, carbs_grams:92, insulin_units:4.0, meal_type:"FAST_CARBS", evaluation:"LOW", created_at: new Date(now - 27*d).toISOString() },
@@ -199,8 +277,6 @@ export async function seedMealsIfEmpty(): Promise<void> {
     { input_text: "Oatmeal with blueberries and walnuts", parsed_json: [{name:"Steel cut oats",grams:80,carbs:50,protein:6,fat:4,fiber:8},{name:"Blueberries",grams:100,carbs:14,protein:1,fat:0,fiber:4},{name:"Walnuts",grams:30,carbs:2,protein:4,fat:18,fiber:2}], glucose_before:96, glucose_after:142, carbs_grams:66, insulin_units:4.5, meal_type:"FAST_CARBS", evaluation:"GOOD", created_at: new Date(now - 2*d).toISOString() },
     { input_text: "Grilled salmon with quinoa and roasted broccoli", parsed_json: [{name:"Grilled salmon",grams:200,carbs:0,protein:40,fat:18,fiber:0},{name:"Quinoa",grams:120,carbs:24,protein:5,fat:2,fiber:3},{name:"Roasted broccoli",grams:150,carbs:11,protein:4,fat:4,fiber:5}], glucose_before:108, glucose_after:130, carbs_grams:35, insulin_units:2.5, meal_type:"HIGH_PROTEIN", evaluation:"GOOD", created_at: new Date(now - 1*d + 6*3600000).toISOString() },
   ];
-
-  await supabase.from("meals").insert(
-    seeds.map(s => ({ ...s, user_id: user.id }))
-  );
+  return _seeds;
 }
+void _legacySeeds_unused;

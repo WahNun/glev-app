@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { reloadHistoricalEntries } from "@/lib/meals";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
@@ -34,6 +35,8 @@ export default function SettingsPage() {
   const [settings, setSettings]   = useState<Settings>(DEFAULTS);
   const [saved, setSaved]     = useState(false);
   const [mealCount, setMealCount] = useState<number>(0);
+  const [reloading, setReloading] = useState(false);
+  const [reloadMsg, setReloadMsg] = useState<string>("");
 
   useEffect(() => {
     setSettings(loadSettings());
@@ -50,6 +53,23 @@ export default function SettingsPage() {
     saveSettings(settings);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  }
+
+  async function handleReloadHistorical() {
+    if (!confirm("This will replace ALL your meal entries with the historical sample data (Apr 17–22, 2026). Continue?")) return;
+    setReloading(true);
+    setReloadMsg("");
+    try {
+      const { inserted } = await reloadHistoricalEntries();
+      setReloadMsg(`Loaded ${inserted} historical entries`);
+      const { count } = await supabase!.from("meals").select("id", { count:"exact", head:true });
+      setMealCount(count || 0);
+    } catch (e) {
+      setReloadMsg(`Error: ${e instanceof Error ? e.message : "failed"}`);
+    } finally {
+      setReloading(false);
+      setTimeout(() => setReloadMsg(""), 4000);
+    }
   }
 
   function upd<K extends keyof Settings>(key: K, val: Settings[K]) {
@@ -128,6 +148,25 @@ export default function SettingsPage() {
             <button onClick={() => setTab("settings")} style={{ marginTop:14, padding:"9px 18px", borderRadius:9, border:`1px solid ${BORDER}`, background:"transparent", color:"rgba(255,255,255,0.45)", fontSize:13, cursor:"pointer" }}>
               Edit Settings →
             </button>
+          </div>
+
+          {/* Historical Data */}
+          <div style={card}>
+            <div style={{ fontSize:13, fontWeight:600, marginBottom:6 }}>Historical Data</div>
+            <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", marginBottom:14, lineHeight:1.5 }}>
+              Replace your meal log with the 15 historical entries from the tracking sheet (Apr 17–22, 2026). Useful for resetting the app to a known demo state.
+            </div>
+            <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+              <button onClick={handleReloadHistorical} disabled={reloading} style={{
+                padding:"10px 18px", borderRadius:10, border:`1px solid ${ACCENT}40`, cursor: reloading ? "wait" : "pointer",
+                background:`${ACCENT}15`, color:ACCENT, fontSize:13, fontWeight:600, opacity: reloading ? 0.6 : 1,
+              }}>
+                {reloading ? "Loading…" : "Reload historical entries"}
+              </button>
+              {reloadMsg && (
+                <span style={{ fontSize:12, color: reloadMsg.startsWith("Error") ? PINK : GREEN }}>{reloadMsg}</span>
+              )}
+            </div>
           </div>
         </div>
       )}
