@@ -84,6 +84,11 @@ export default function LogPage() {
   const [chatMsgs, setChatMsgs]   = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [macroUpdatedAt, setMacroUpdatedAt] = useState<number | null>(null);
+  useEffect(() => {
+    if (!macroUpdatedAt) return;
+    const t = setTimeout(() => setMacroUpdatedAt(null), 6000);
+    return () => clearTimeout(t);
+  }, [macroUpdatedAt]);
   const [chatBusy, setChatBusy]   = useState(false);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
 
