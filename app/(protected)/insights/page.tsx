@@ -32,7 +32,7 @@ export default function InsightsPage() {
   const total = meals.length;
   if (total === 0) return (
     <div style={{ maxWidth:900, margin:"0 auto" }}>
-      <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:8 }}>Insights</h1>
+      <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:8 }}>Performance Metrics</h1>
       <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"48px", textAlign:"center", color:"rgba(255,255,255,0.25)", fontSize:14 }}>Log at least 5 meals to see insights.</div>
     </div>
   );
@@ -117,8 +117,8 @@ export default function InsightsPage() {
   return (
     <div style={{ maxWidth:960, margin:"0 auto" }}>
       <div style={{ marginBottom:28 }}>
-        <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>Insights</h1>
-        <p style={{ color:"rgba(255,255,255,0.35)", fontSize:14 }}>Deep analysis of your {total} logged meals.</p>
+        <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>Performance Metrics</h1>
+        <p style={{ color:"rgba(255,255,255,0.35)", fontSize:13 }}>Tap a card to flip · {total} meals analyzed</p>
       </div>
 
       {/* OVERVIEW */}

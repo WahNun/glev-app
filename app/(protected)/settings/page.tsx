@@ -106,11 +106,14 @@ export default function SettingsPage() {
           <div style={card}>
             <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>Profile</div>
             <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:20 }}>
-              <div style={{ width:56, height:56, borderRadius:99, background:`${ACCENT}20`, border:`2px solid ${ACCENT}40`, display:"flex", alignItems:"center", justifyContent:"center" }}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+              <div style={{ width:56, height:56, borderRadius:99, background:`linear-gradient(135deg,${ACCENT},#6B8BFF)`, border:`2px solid ${ACCENT}66`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, fontWeight:800, color:"#fff", letterSpacing:"-0.02em", textTransform:"uppercase" }}>
+                {(email.split("@")[0] || "U").charAt(0)}
               </div>
-              <div>
-                <div style={{ fontSize:16, fontWeight:700 }}>{email.split("@")[0] || "User"}</div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:2 }}>
+                  <div style={{ fontSize:16, fontWeight:700 }}>{email.split("@")[0] || "User"}</div>
+                  <span style={{ fontSize:9, fontWeight:700, padding:"2px 8px", borderRadius:99, background:`${ACCENT}20`, color:ACCENT, letterSpacing:"0.08em" }}>MEMBER</span>
+                </div>
                 <div style={{ fontSize:13, color:"rgba(255,255,255,0.4)" }}>{email}</div>
               </div>
             </div>
@@ -135,8 +138,6 @@ export default function SettingsPage() {
               {[
                 { label:"Insulin-to-Carb Ratio", val:`1:${settings.icr}`, sub:"grams per unit", color:ACCENT },
                 { label:"Correction Factor", val:`1:${settings.cf}`, sub:"mg/dL per unit", color:"#A78BFA" },
-                { label:"Target Glucose Min", val:`${settings.targetMin} mg/dL`, sub:"lower bound", color:GREEN },
-                { label:"Target Glucose Max", val:`${settings.targetMax} mg/dL`, sub:"upper bound", color:PINK },
               ].map(s => (
                 <div key={s.label} style={{ background:`${s.color}08`, border:`1px solid ${s.color}20`, borderRadius:12, padding:"14px 16px" }}>
                   <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginBottom:4 }}>{s.label}</div>
@@ -144,6 +145,16 @@ export default function SettingsPage() {
                   <div style={{ fontSize:11, color:"rgba(255,255,255,0.25)", marginTop:2 }}>{s.sub}</div>
                 </div>
               ))}
+              <div style={{ gridColumn:"1 / -1", background:`${GREEN}08`, border:`1px solid ${GREEN}20`, borderRadius:12, padding:"14px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
+                <div>
+                  <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginBottom:4 }}>Target range</div>
+                  <div style={{ fontSize:11, color:"rgba(255,255,255,0.25)" }}>safe glucose window</div>
+                </div>
+                <div style={{ fontSize:20, fontWeight:800, color:GREEN, letterSpacing:"-0.02em" }}>
+                  {settings.targetMin} <span style={{ color:"rgba(255,255,255,0.3)" }}>—</span> {settings.targetMax}
+                  <span style={{ fontSize:11, color:"rgba(255,255,255,0.3)", fontWeight:500, marginLeft:6 }}>mg/dL</span>
+                </div>
+              </div>
             </div>
             <button onClick={() => setTab("settings")} style={{ marginTop:14, padding:"9px 18px", borderRadius:9, border:`1px solid ${BORDER}`, background:"transparent", color:"rgba(255,255,255,0.45)", fontSize:13, cursor:"pointer" }}>
               Edit Settings →

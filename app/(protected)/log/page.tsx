@@ -310,7 +310,7 @@ export default function LogPage() {
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:20 }}>
           {/* LEFT: Raw text */}
           <div style={card}>
-            <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:12 }}>Raw Input</div>
+            <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:12 }}>AI Food Parser</div>
             <textarea
               value={rawText}
               onChange={e => setRawText(e.target.value)}
@@ -318,8 +318,8 @@ export default function LogPage() {
               placeholder="What did you eat?"
             />
             <button onClick={() => autoParseFood(rawText)} disabled={!rawText.trim() || parsing}
-              style={{ marginTop:10, padding:"8px 16px", borderRadius:8, border:`1px solid ${ACCENT}40`, background:`${ACCENT}10`, color:ACCENT, cursor:"pointer", fontSize:13, fontWeight:500 }}>
-              {parsing ? "Parsing…" : "Re-Parse"}
+              style={{ marginTop:10, padding:"8px 16px", borderRadius:8, border:`1px solid ${ACCENT}40`, background:`${ACCENT}10`, color:ACCENT, cursor:"pointer", fontSize:13, fontWeight:600, letterSpacing:"0.02em" }}>
+              {parsing ? "Parsing…" : "Test Food Parser"}
             </button>
           </div>
 
@@ -452,8 +452,9 @@ export default function LogPage() {
             <label style={{ fontSize:13, color:"rgba(255,255,255,0.5)", display:"block", marginBottom:8 }}>Glucose Before (mg/dL)</label>
             <div style={{ display:"flex", gap:8 }}>
               <input style={{ ...inp, flex:1 }} type="number" placeholder="e.g. 115" value={glucoseBefore} onChange={e => setGlucose(e.target.value)}/>
-              <button onClick={() => { const sim = Math.round(80 + Math.random() * 70); setGlucose(sim.toString()); }} style={{ padding:"10px 12px", borderRadius:10, border:`1px solid ${BORDER}`, background:"transparent", color:"rgba(255,255,255,0.4)", cursor:"pointer", fontSize:12, whiteSpace:"nowrap" }} title="Pull CGM Data (simulated)">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+              <button onClick={() => { const sim = Math.round(80 + Math.random() * 70); setGlucose(sim.toString()); }} style={{ padding:"10px 14px", borderRadius:10, border:`1px solid ${ACCENT}40`, background:`${ACCENT}10`, color:ACCENT, cursor:"pointer", fontSize:12, fontWeight:600, whiteSpace:"nowrap", letterSpacing:"0.04em", display:"flex", alignItems:"center", gap:5 }} title="Pull simulated CGM reading">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                +CGM
               </button>
             </div>
           </div>
