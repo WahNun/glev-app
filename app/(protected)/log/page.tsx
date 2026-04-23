@@ -170,16 +170,28 @@ export default function LogPage() {
     } finally { setParsing(false); setPipeStatus("idle"); }
   }
 
-  function runRecommendation() {
+  // Silent background compute — always kept fresh so the user just
+  // "reveals" the recommendation. No network call, purely local.
+  const precomputedRecRef = useRef<Recommendation | null>(null);
+  useEffect(() => {
     const g = num(glucose) ?? 110;
     const c = num(carbs) ?? 0;
+    const t = setTimeout(() => {
+      try {
+        precomputedRecRef.current = runGlevEngine(meals, g, c);
+      } catch { /* ignore */ }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [glucose, carbs, protein, fat, fiber, insulin, meals]);
+
+  function runRecommendation() {
     setError(""); setRecLoading(true);
     setTimeout(() => {
-      const r = runGlevEngine(meals, g, c);
+      const r = precomputedRecRef.current ?? runGlevEngine(meals, num(glucose) ?? 110, num(carbs) ?? 0);
       setRec(r);
       if (!insulin) setInsulin(String(r.dose));
       setRecLoading(false);
-    }, 200);
+    }, 120);
   }
 
   async function autoFill(text: string) {

@@ -1,0 +1,451 @@
+You are working on the Glev Next.js app.
+
+GOAL:
+
+Transform the app into a fast, deterministic, production-ready metabolic engine.
+
+This includes:
+
+- AI parsing optimization
+
+- deterministic evaluation logic
+
+- improved UI clarity
+
+- CGM integration
+
+- instant recommendation UX
+
+---
+
+# PART 1 — CORE ARCHITECTURE (CRITICAL)
+
+STRICT SEPARATION:
+
+AI (GPT) = INPUT ONLY  
+
+APP LOGIC = DECISION MAKING  
+
+DO NOT allow GPT to:
+
+- evaluate insulin correctness
+
+- determine outcome (overdose/underdose/etc.)
+
+- generate recommendations
+
+---
+
+# PART 2 — GPT PARSING SYSTEM (FAST + CONTROLLED)
+
+## 2.1 SYSTEM PROMPT
+
+Create file:
+
+/lib/ai/systemPrompt.ts
+
+Content:
+
+export const SYSTEM_PROMPT = `
+
+You are a metabolic analysis engine.
+
+Task:
+
+- Estimate macros from meal description
+
+- Classify meal:
+
+fast_carbs | high_protein | high_fat | balanced
+
+Rules:
+
+- Be realistic, not perfect
+
+- Fiber reduces net carbs
+
+- Fat delays glucose response
+
+- Protein has moderate effect
+
+Return STRICT JSON ONLY.
+
+No explanation.
+
+No reasoning.
+
+Format:
+
+{
+
+  "carbs": number,
+
+  "protein": number,
+
+  "fat": number,
+
+  "fiber": number,
+
+  "calories": number,
+
+  "classification": "fast_carbs" | "high_protein" | "high_fat" | "balanced"
+
+}
+
+`
+
+---
+
+## 2.2 OPENAI CALL
+
+Use:
+
+messages = [
+
+  { role: "system", content: SYSTEM_PROMPT },
+
+  { role: "user", content: mealInput }
+
+]
+
+SET:
+
+- temperature: 0.2
+
+- low max_tokens
+
+- JSON only
+
+---
+
+## 2.3 PERFORMANCE RULES
+
+- no long prompts
+
+- no explanations
+
+- no reasoning output
+
+- minimal token usage
+
+TARGET:
+
+< 3 seconds response
+
+---
+
+# PART 3 — DETERMINISTIC ENGINE (CRITICAL)
+
+Create:
+
+/lib/engine/evaluation.ts
+
+Function:
+
+evaluateEntry(entry)
+
+INPUT:
+
+{
+
+  carbs,
+
+  protein,
+
+  fat,
+
+  fiber,
+
+  insulin,
+
+  bgBefore,
+
+  bgAfter
+
+}
+
+---
+
+## LOGIC
+
+1. netCarbs = carbs - fiber
+
+2. delta = bgAfter - bgBefore
+
+---
+
+## OUTCOME RULES
+
+IF delta > +30 → UNDERDOSE  
+
+IF delta < -30 → OVERDOSE  
+
+IF -20 ≤ delta ≤ +20 → GOOD  
+
+IF rapid spike → SPIKE
+
+---
+
+## ADJUST BY CLASSIFICATION
+
+fast_carbs → faster spike  
+
+high_fat → delayed effect  
+
+high_protein → moderate  
+
+---
+
+## RETURN
+
+{
+
+  outcome,
+
+  reasoning (short),
+
+  confidence
+
+}
+
+---
+
+## IMPORTANT
+
+Outcome MUST NOT come from GPT.
+
+---
+
+# PART 4 — RECOMMENDATION ENGINE (LEVEL 2 UX)
+
+## BEHAVIOR
+
+After parsing:
+
+- automatically compute recommendation
+
+- store result in state
+
+Button "Get Recommendation":
+
+→ only reveals precomputed result  
+
+→ NO API call on click
+
+---
+
+## ALWAYS ALLOW
+
+Recommendation must work even if:
+
+carbs = 0
+
+REMOVE any blocking validation
+
+---
+
+## AUTO-RECOMPUTE
+
+On change of:
+
+- carbs
+
+- protein
+
+- fat
+
+- insulin
+
+→ recompute (debounced 300ms)
+
+---
+
+# PART 5 — CGM AUTO INTEGRATION
+
+## AFTER VOICE INPUT
+
+Run in parallel:
+
+- parsing
+
+- CGM fetch
+
+- recommendation precompute
+
+---
+
+## AUTO POPULATE
+
+Fill:
+
+Glucose Before
+
+---
+
+## LABEL
+
+Display:
+
+Glucose Before (mg/dL)
+
+Last reading: HH:MM
+
+(small, muted)
+
+---
+
+## BUTTON
+
+- keep connection color
+
+- replace icon with refresh icon
+
+On click:
+
+→ refetch CGM data
+
+---
+
+# PART 6 — UI / UX IMPROVEMENTS
+
+## 6.1 OUTCOME HIGHLIGHT
+
+Outcome must match Meal Classification style:
+
+- full-width container
+
+- same color system
+
+- chip + explanation text
+
+---
+
+## COLOR RULES
+
+- Overdose → red
+
+- Underdose → orange
+
+- Good → green
+
+- Spike → yellow
+
+---
+
+## TEXT EXAMPLES
+
+Overdose:
+
+"Insulin exceeded glucose needs → drop detected"
+
+Underdose:
+
+"Insulin insufficient → glucose rise observed"
+
+---
+
+## 6.2 REMOVE DUPLICATION
+
+### COLLAPSED VIEW
+
+Keep summary row
+
+### EXPANDED VIEW
+
+ONLY SHOW:
+
+→ Date/time
+
+REMOVE:
+
+- BG
+
+- carbs
+
+- insulin
+
+- classification
+
+- outcome (top row)
+
+---
+
+## NEW ORDER
+
+1. Date
+
+2. Outcome block
+
+3. Classification block
+
+4. Meal
+
+5. Macros
+
+6. Glucose
+
+---
+
+## APPLY TO
+
+- Dashboard
+
+- Entry Log
+
+- Mobile + Desktop
+
+---
+
+# PART 7 — PARSING SPEED FIX (CRITICAL)
+
+Ensure:
+
+- minimal prompt
+
+- strict JSON output
+
+- fast model (e.g. gpt-4o-mini)
+
+NO verbose responses
+
+---
+
+# PART 8 — DO NOT BREAK
+
+- existing UI
+
+- classification colors
+
+- CGM logic
+
+- parsing flow
+
+---
+
+# SUCCESS CRITERIA
+
+✓ GPT only parses  
+
+✓ Outcome deterministic  
+
+✓ Recommendation instant  
+
+✓ CGM auto-filled  
+
+✓ UI clean (no duplication)  
+
+✓ Outcome visually highlighted  
+
+✓ Parsing < 3 seconds  
+
+---
+
+# OUTPUT
+
+- clean implementation
+
+- modular structure
+
+- reusable logic
+
+- confirm all criteria met
