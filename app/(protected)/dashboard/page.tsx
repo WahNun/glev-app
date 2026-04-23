@@ -289,7 +289,11 @@ export default function DashboardPage() {
               const time = new Date(m.created_at).toLocaleString("en", { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" });
               return (
                 <div key={m.id} style={{ borderBottom:`1px solid ${BORDER}` }}>
-                  <div onClick={() => setExpanded(isOpen ? null : m.id)} style={{ padding:"14px 24px", cursor:"pointer", display:"grid", gridTemplateColumns:"minmax(0,140px) minmax(0,1fr) auto auto auto auto", gap:18, alignItems:"center" }}>
+                  {(() => {
+                    const bg = m.glucose_before;
+                    const bgC = bg == null ? "rgba(255,255,255,0.3)" : (bg > 140 ? ORANGE : bg < 80 ? PINK : GREEN);
+                    return (
+                  <div onClick={() => setExpanded(isOpen ? null : m.id)} style={{ padding:"14px 24px", cursor:"pointer", display:"grid", gridTemplateColumns:"minmax(0,130px) minmax(0,160px) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) auto", gap:24, alignItems:"center" }}>
                     {/* Col 1: Time */}
                     <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)" }}>{time}</div>
                     {/* Col 2: Category chip (replaces meal text) */}
@@ -305,13 +309,28 @@ export default function DashboardPage() {
                         <span style={{ fontSize:11, color:"rgba(255,255,255,0.25)" }}>—</span>
                       )}
                     </div>
-                    <div style={{ fontSize:13, textAlign:"right" }}><span style={{ color:"rgba(255,255,255,0.35)", fontSize:11 }}>BG </span>{m.glucose_before ?? "—"}</div>
-                    <div style={{ fontSize:13, textAlign:"right" }}><span style={{ color:"rgba(255,255,255,0.35)", fontSize:11 }}>Carbs </span>{m.carbs_grams ?? "—"}g</div>
-                    <div style={{ fontSize:13, textAlign:"right" }}><span style={{ color:"rgba(255,255,255,0.35)", fontSize:11 }}>Insulin </span>{m.insulin_units ?? "—"}u</div>
-                    <span style={{ padding:"3px 10px", borderRadius:99, fontSize:11, fontWeight:700, background:`${evalColor(ev)}18`, color:evalColor(ev), border:`1px solid ${evalColor(ev)}30`, whiteSpace:"nowrap" }}>
+                    {/* Col 3: BG */}
+                    <div style={{ minWidth:0 }}>
+                      <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>BG</div>
+                      <div style={{ fontSize:14, fontWeight:700, color:bgC, letterSpacing:"-0.01em" }}>{bg ?? "—"}<span style={{ fontSize:10, color:"rgba(255,255,255,0.35)", fontWeight:500, marginLeft:3 }}>mg/dL</span></div>
+                    </div>
+                    {/* Col 4: Carbs */}
+                    <div style={{ minWidth:0 }}>
+                      <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>Carbs</div>
+                      <div style={{ fontSize:14, fontWeight:700, color: m.carbs_grams ? ORANGE : "rgba(255,255,255,0.3)", letterSpacing:"-0.01em" }}>{m.carbs_grams ?? "—"}<span style={{ fontSize:10, color:"rgba(255,255,255,0.35)", fontWeight:500, marginLeft:1 }}>g</span></div>
+                    </div>
+                    {/* Col 5: Insulin */}
+                    <div style={{ minWidth:0 }}>
+                      <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>Insulin</div>
+                      <div style={{ fontSize:14, fontWeight:700, color: m.insulin_units ? ACCENT : "rgba(255,255,255,0.3)", letterSpacing:"-0.01em" }}>{m.insulin_units ?? "—"}<span style={{ fontSize:10, color:"rgba(255,255,255,0.35)", fontWeight:500, marginLeft:1 }}>u</span></div>
+                    </div>
+                    {/* Col 6: Eval chip */}
+                    <span style={{ padding:"5px 12px", borderRadius:99, fontSize:10, fontWeight:700, background:`${evalColor(ev)}18`, color:evalColor(ev), border:`1px solid ${evalColor(ev)}30`, whiteSpace:"nowrap", letterSpacing:"0.05em", textTransform:"uppercase" }}>
                       {evalLabel(ev)}
                     </span>
                   </div>
+                    );
+                  })()}
                   {isOpen && (() => {
                     const protein = m.protein_grams ?? (Array.isArray(m.parsed_json) ? m.parsed_json.reduce((s,f)=>s+(f.protein||0),0) : 0);
                     const fat     = m.fat_grams     ?? (Array.isArray(m.parsed_json) ? m.parsed_json.reduce((s,f)=>s+(f.fat||0),0) : 0);

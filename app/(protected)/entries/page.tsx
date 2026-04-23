@@ -137,7 +137,7 @@ export default function EntriesPage() {
                     <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginBottom:4 }}>{dateStr}</div>
                     <div style={{ display:"flex", alignItems:"baseline", gap:10, flexWrap:"wrap" }}>
                       <span style={{ fontSize:18, fontWeight:800, color:bgC, letterSpacing:"-0.02em" }}>{m.glucose_before ?? "—"}<span style={{ fontSize:11, color:"rgba(255,255,255,0.4)", fontWeight:500, marginLeft:3 }}>mg/dL</span></span>
-                      <span style={{ fontSize:12, color:"rgba(255,255,255,0.55)" }}>{m.insulin_units ? `${m.insulin_units}u` : "—"}</span>
+                      <span style={{ fontSize:12, fontWeight:700, color: m.insulin_units ? ACCENT : "rgba(255,255,255,0.3)" }}>{m.insulin_units ? `${m.insulin_units}u` : "—"}</span>
                     </div>
                   </div>
                   {/* Col 2: carbs */}
