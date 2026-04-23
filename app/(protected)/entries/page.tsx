@@ -68,9 +68,11 @@ export default function EntriesPage() {
   return (
     <div style={{ maxWidth:960, margin:"0 auto" }}>
       <style>{`
-        .entry-header { grid-template-columns: minmax(0,1.4fr) minmax(0,0.8fr) minmax(0,1.1fr) auto auto; }
+        .entry-header { grid-template-columns: minmax(0,1.4fr) minmax(0,1fr) 90px 110px 16px; }
+        .entry-col-center { text-align: center; }
+        .entry-col-right  { display: flex; justify-content: flex-end; align-items: center; }
         @media (max-width: 640px) {
-          .entry-header { grid-template-columns: minmax(0,1.5fr) minmax(0,0.7fr) auto auto; gap: 10px; padding: 12px 14px !important; }
+          .entry-header { grid-template-columns: minmax(0,1.6fr) minmax(0,0.9fr) 96px 14px !important; gap: 10px; padding: 12px 14px !important; }
           .entry-cat-cell { display: none !important; }
         }
       `}</style>
@@ -133,38 +135,40 @@ export default function EntriesPage() {
                 {/* Header — collapsed shows summary; expanded shows only date + time */}
                 {!isOpen ? (
                   <div onClick={() => setExpanded(m.id)} className="entry-header" style={{ padding:"14px 16px", cursor:"pointer", display:"grid", gap:14, alignItems:"center" }}>
-                    {/* Col 1: date + BG + insulin */}
+                    {/* Col 1: date + BG + insulin (left-aligned) */}
                     <div style={{ minWidth:0 }}>
                       <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginBottom:4 }}>{dateStr}</div>
-                      <div style={{ display:"flex", alignItems:"baseline", gap:10, flexWrap:"wrap" }}>
+                      <div style={{ display:"flex", alignItems:"baseline", gap:10, whiteSpace:"nowrap" }}>
                         <span style={{ fontSize:18, fontWeight:800, color:bgC, letterSpacing:"-0.02em" }}>{m.glucose_before ?? "—"}<span style={{ fontSize:11, color:"rgba(255,255,255,0.4)", fontWeight:500, marginLeft:3 }}>mg/dL</span></span>
                         <span style={{ fontSize:12, fontWeight:700, color: m.insulin_units ? ACCENT : "rgba(255,255,255,0.3)" }}>{m.insulin_units ? `${m.insulin_units}u` : "—"}</span>
                       </div>
                     </div>
-                    {/* Col 2: carbs */}
-                    <div style={{ minWidth:0 }}>
+                    {/* Col 2: carbs (centered) */}
+                    <div className="entry-col-center" style={{ minWidth:0 }}>
                       <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>CARBS</div>
                       <div style={{ fontSize:14, fontWeight:700, color:m.carbs_grams ? ORANGE : "rgba(255,255,255,0.3)", letterSpacing:"-0.01em" }}>
                         {m.carbs_grams ? `${m.carbs_grams}g` : "—"}
                       </div>
                     </div>
-                    {/* Col 3: subtle classification indicator (dot + short code) */}
+                    {/* Col 3: classification (fixed-width, centered) */}
                     <div className="entry-cat-cell" style={{ minWidth:0, display:"flex", justifyContent:"center", alignItems:"center", gap:6 }}>
                       {catColor && catShort ? (
                         <>
-                          <span style={{ width:6, height:6, borderRadius:99, background:catColor, opacity:0.7 }} />
+                          <span style={{ width:6, height:6, borderRadius:99, background:catColor, opacity:0.7, flexShrink:0 }} />
                           <span title={catLabel || ""} style={{ fontSize:10, fontWeight:600, color:`${catColor}b3`, letterSpacing:"0.06em" }}>{catShort}</span>
                         </>
                       ) : (
                         <span style={{ fontSize:11, color:"rgba(255,255,255,0.25)" }}>—</span>
                       )}
                     </div>
-                    {/* Col 4: evaluation badge */}
-                    <span style={{ padding:"5px 12px", borderRadius:99, fontSize:10, fontWeight:700, background:`${evColor}18`, color:evColor, border:`1px solid ${evColor}30`, whiteSpace:"nowrap", letterSpacing:"0.05em", textTransform:"uppercase" }}>
-                      {evL(ev)}
-                    </span>
+                    {/* Col 4: evaluation badge (fixed 110px, right-aligned pill) */}
+                    <div className="entry-col-right">
+                      <span style={{ padding:"5px 10px", borderRadius:99, fontSize:10, fontWeight:700, background:`${evColor}18`, color:evColor, border:`1px solid ${evColor}30`, whiteSpace:"nowrap", letterSpacing:"0.05em", textTransform:"uppercase" }}>
+                        {evL(ev)}
+                      </span>
+                    </div>
                     {/* Col 5: chevron */}
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="2.5" strokeLinecap="round" style={{ transform:"rotate(0deg)", transition:"transform 0.2s", flexShrink:0 }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="2.5" strokeLinecap="round" style={{ transition:"transform 0.2s", flexShrink:0 }}>
                       <polyline points="9 6 15 12 9 18"/>
                     </svg>
                   </div>
