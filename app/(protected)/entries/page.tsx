@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { fetchMeals, deleteMeal, type Meal } from "@/lib/meals";
+import { fetchMeals, deleteMeal, seedMealsIfEmpty, type Meal } from "@/lib/meals";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
@@ -24,7 +24,14 @@ export default function EntriesPage() {
   const [deleting, setDeleting] = useState<string|null>(null);
 
   useEffect(() => {
-    fetchMeals().then(setMeals).catch(console.error).finally(() => setLoading(false));
+    (async () => {
+      try {
+        await seedMealsIfEmpty();
+        const data = await fetchMeals();
+        setMeals(data);
+      } catch (e) { console.error(e); }
+      finally { setLoading(false); }
+    })();
   }, []);
 
   async function handleDelete(id: string) {
