@@ -289,12 +289,21 @@ export default function DashboardPage() {
               const time = new Date(m.created_at).toLocaleString("en", { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" });
               return (
                 <div key={m.id} style={{ borderBottom:`1px solid ${BORDER}` }}>
-                  <div onClick={() => setExpanded(isOpen ? null : m.id)} style={{ padding:"14px 24px", cursor:"pointer", display:"grid", gridTemplateColumns:"1fr auto auto auto auto", gap:16, alignItems:"center" }}>
-                    <div>
-                      <div style={{ fontSize:13, fontWeight:600, marginBottom:2, color: m.meal_type ? (TYPE_COLORS[m.meal_type] || "rgba(255,255,255,0.85)") : "rgba(255,255,255,0.5)", letterSpacing:"-0.01em" }}>
-                        {m.meal_type ? (TYPE_LABELS[m.meal_type] || m.meal_type.replace("_"," ").toLowerCase()) : "Uncategorized"}
-                      </div>
-                      <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>{time}</div>
+                  <div onClick={() => setExpanded(isOpen ? null : m.id)} style={{ padding:"14px 24px", cursor:"pointer", display:"grid", gridTemplateColumns:"minmax(0,140px) minmax(0,1fr) auto auto auto auto", gap:18, alignItems:"center" }}>
+                    {/* Col 1: Time */}
+                    <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)" }}>{time}</div>
+                    {/* Col 2: Category chip (replaces meal text) */}
+                    <div style={{ minWidth:0, display:"flex", justifyContent:"flex-start" }}>
+                      {m.meal_type ? (() => {
+                        const c = TYPE_COLORS[m.meal_type] || "rgba(255,255,255,0.5)";
+                        return (
+                          <span style={{ padding:"4px 12px", borderRadius:99, fontSize:11, fontWeight:700, background:`${c}18`, color:c, border:`1px solid ${c}30`, whiteSpace:"nowrap", letterSpacing:"0.04em", textTransform:"uppercase" }}>
+                            {TYPE_LABELS[m.meal_type] || m.meal_type.replace("_"," ").toLowerCase()}
+                          </span>
+                        );
+                      })() : (
+                        <span style={{ fontSize:11, color:"rgba(255,255,255,0.25)" }}>—</span>
+                      )}
                     </div>
                     <div style={{ fontSize:13, textAlign:"right" }}><span style={{ color:"rgba(255,255,255,0.35)", fontSize:11 }}>BG </span>{m.glucose_before ?? "—"}</div>
                     <div style={{ fontSize:13, textAlign:"right" }}><span style={{ color:"rgba(255,255,255,0.35)", fontSize:11 }}>Carbs </span>{m.carbs_grams ?? "—"}g</div>
