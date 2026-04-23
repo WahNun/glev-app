@@ -116,12 +116,34 @@ export async function deleteMeal(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+const FULL_COLS = "id, user_id, input_text, parsed_json, glucose_before, glucose_after, carbs_grams, protein_grams, fat_grams, fiber_grams, calories, insulin_units, meal_type, evaluation, created_at";
+const CORE_COLS = "id, user_id, input_text, parsed_json, glucose_before, carbs_grams, insulin_units, meal_type, evaluation, created_at";
+
 export async function fetchMeals(): Promise<Meal[]> {
   if (!supabase) throw new Error("Supabase is not configured");
-  const { data, error } = await supabase
+
+  let { data, error } = await supabase
     .from("meals")
-    .select("id, user_id, input_text, parsed_json, glucose_before, glucose_after, carbs_grams, protein_grams, fat_grams, fiber_grams, calories, insulin_units, meal_type, evaluation, created_at")
+    .select(FULL_COLS)
     .order("created_at", { ascending: false });
+
+  if (error && error.message?.toLowerCase().includes("does not exist")) {
+    const retry = await supabase
+      .from("meals")
+      .select(CORE_COLS)
+      .order("created_at", { ascending: false });
+    if (retry.error) throw new Error(retry.error.message);
+    data = (retry.data ?? []).map((r: Record<string, unknown>) => ({
+      ...r,
+      glucose_after: null,
+      protein_grams: null,
+      fat_grams: null,
+      fiber_grams: null,
+      calories: null,
+    })) as unknown as typeof data;
+    error = null;
+  }
+
   if (error) throw new Error(error.message);
   return (data ?? []) as Meal[];
 }
