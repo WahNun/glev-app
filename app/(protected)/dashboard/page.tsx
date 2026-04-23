@@ -293,7 +293,7 @@ export default function DashboardPage() {
                     const bg = m.glucose_before;
                     const bgC = bg == null ? "rgba(255,255,255,0.3)" : (bg > 140 ? ORANGE : bg < 80 ? PINK : GREEN);
                     return (
-                  <div onClick={() => setExpanded(isOpen ? null : m.id)} style={{ padding:"14px 24px", cursor:"pointer", display:"grid", gridTemplateColumns:"minmax(0,130px) minmax(0,160px) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) auto", gap:24, alignItems:"center" }}>
+                  <div onClick={() => setExpanded(isOpen ? null : m.id)} style={{ padding:"14px 24px", cursor:"pointer", display:"grid", gridTemplateColumns:"130px 160px 1fr 1fr 1fr 110px", gap:24, alignItems:"center" }}>
                     {/* Col 1: Time */}
                     <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)" }}>{time}</div>
                     {/* Col 2: Category chip (replaces meal text) */}
