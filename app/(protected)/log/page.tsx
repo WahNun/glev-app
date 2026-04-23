@@ -83,6 +83,7 @@ export default function LogPage() {
   type ChatMsg = { role: "user" | "assistant" | "system"; content: string };
   const [chatMsgs, setChatMsgs]   = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState("");
+  const [macroUpdatedAt, setMacroUpdatedAt] = useState<number | null>(null);
   const [chatBusy, setChatBusy]   = useState(false);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -253,11 +254,17 @@ export default function LogPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Chat failed");
       setChatMsgs(c => [...c, { role: "assistant", content: data.reply || "(no reply)" }]);
-      if (data.macros) {
-        if (data.macros.carbs   != null) setCarbs(String(data.macros.carbs));
-        if (data.macros.protein != null) setProtein(String(data.macros.protein));
-        if (data.macros.fat     != null) setFat(String(data.macros.fat));
-        if (data.macros.fiber   != null) setFiber(String(data.macros.fiber));
+      // Overwrite ALL macro fields atomically whenever a valid macros object
+      // arrives — never partial, never first-only. Server validation already
+      // guarantees carbs/protein/fat are finite numbers when `data.macros` is
+      // non-null, so we treat each response as the new source of truth.
+      if (data.macros && typeof data.macros === "object") {
+        const m = data.macros as { carbs: number; protein: number; fat: number; fiber?: number; calories?: number };
+        setCarbs(String(m.carbs));
+        setProtein(String(m.protein));
+        setFat(String(m.fat));
+        setFiber(String(m.fiber ?? 0));
+        setMacroUpdatedAt(Date.now());
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Chat failed";
@@ -457,6 +464,12 @@ export default function LogPage() {
               </button>
             </div>
           </div>
+          {macroUpdatedAt && Date.now() - macroUpdatedAt < 6000 && (
+            <div style={{ fontSize:10, color:GREEN, letterSpacing:"0.06em", fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>
+              <span style={{ width:6, height:6, borderRadius:99, background:GREEN, boxShadow:`0 0 6px ${GREEN}88` }}/>
+              UPDATED FROM LATEST CORRECTION
+            </div>
+          )}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
             <div>
               <label style={labelStyle}>Carbs (g)</label>

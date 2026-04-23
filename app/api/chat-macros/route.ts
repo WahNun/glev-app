@@ -6,20 +6,31 @@ insulin-decision app. The user has just logged a meal. Your job is to:
 
 1. Briefly explain WHY the macros were calculated the way they were (cite typical
    USDA / food-label values per 100g, portion-size assumptions, and any approximations).
-2. Answer follow-up questions and accept corrections like "that banana was bigger"
-   or "I had no fiber".
-3. When the user gives a correction, propose updated macros.
+2. Accept corrections like "that banana was bigger" or "I had no fiber".
+3. Accept brand-new meal descriptions in chat ("einhundert Gramm Hühnerfleisch")
+   and treat them as the new authoritative meal — recompute macros from scratch.
 
 Always be conversational and short — 2-4 sentences max per reply unless asked.
 Do NOT lecture about insulin dosing — that is handled elsewhere in the app.
 
 Return ONLY valid JSON (no markdown, no code block) of this shape:
 {
-  "reply":  string,                                     // your chat response
-  "macros": { "carbs": number, "protein": number,       // OPTIONAL — only when
-              "fat":   number, "fiber":   number }      // a correction was applied
+  "reply":  string,
+  "macros": { "carbs": number, "protein": number,
+              "fat":   number, "fiber":   number,
+              "calories": number }
 }
-If no macro change is warranted, OMIT the "macros" key entirely.`;
+
+CRITICAL macro rules:
+- ALWAYS include the "macros" key whenever your reply discusses food, portions,
+  or any nutritional content — even if the user just confirmed or rephrased the
+  same meal. The UI uses this object to keep its fields in sync, and a missing
+  "macros" key leaves stale numbers on screen.
+- "carbs", "protein", "fat" are REQUIRED numeric grams (use 0, never null).
+- "fiber" and "calories" are required numeric values; estimate them from the
+  food described.
+- Only OMIT the "macros" key for pure meta questions ("why?", "explain") that
+  don't change the underlying food. When in doubt, INCLUDE the macros.`;
 
 interface ChatMessage { role: "user" | "assistant" | "system"; content: string }
 
@@ -58,13 +69,28 @@ export async function POST(req: NextRequest) {
     });
     const raw = completion.choices[0]?.message?.content ?? "";
     const cleaned = raw.replace(/```json\s*|\s*```/g, "").trim();
-    let parsed: { reply?: string; macros?: { carbs?: number; protein?: number; fat?: number; fiber?: number } } = {};
+    let parsed: { reply?: string; macros?: { carbs?: number; protein?: number; fat?: number; fiber?: number; calories?: number } } = {};
     try { parsed = JSON.parse(cleaned); }
     catch { parsed = { reply: cleaned || "Sorry — I couldn't form a response." }; }
 
+    // A response is "valid" only when carbs, protein and fat are all finite
+    // numbers. We forward null for any malformed payload so the client can
+    // safely ignore stale/garbage updates.
+    const m = parsed.macros;
+    const isNum = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x);
+    const validMacros = m && isNum(m.carbs) && isNum(m.protein) && isNum(m.fat)
+      ? {
+          carbs:    Math.max(0, Math.round(m.carbs)),
+          protein:  Math.max(0, Math.round(m.protein)),
+          fat:      Math.max(0, Math.round(m.fat)),
+          fiber:    isNum(m.fiber)    ? Math.max(0, Math.round(m.fiber))    : 0,
+          calories: isNum(m.calories) ? Math.max(0, Math.round(m.calories)) : 0,
+        }
+      : null;
+
     return NextResponse.json({
       reply:  parsed.reply  ?? "",
-      macros: parsed.macros ?? null,
+      macros: validMacros,
       raw,
     });
   } catch (err: unknown) {

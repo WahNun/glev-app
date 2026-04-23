@@ -1,0 +1,125 @@
+You are working on the Glev Next.js app.
+
+GOAL:
+Fix the macro auto-population so that the UI ALWAYS reflects the latest valid GPT response — not the first one.
+
+---
+
+# PROBLEM
+
+Current behavior:
+- User speaks → GPT returns response → fields get populated
+- User corrects input → GPT returns NEW response
+- UI still shows OLD macros (stale state)
+
+Root issue:
+→ State is updated only on first response
+→ Subsequent responses are ignored or not triggering UI updates
+
+---
+
+# REQUIRED FIX
+
+## 1. ALWAYS USE LATEST VALID RESPONSE
+
+Implement logic:
+
+- Every GPT response must be evaluated
+- If response contains VALID macro JSON → overwrite previous values
+- Never lock UI to first response
+
+---
+
+## 2. DEFINE VALID RESPONSE
+
+A response is valid if:
+
+- carbs !== null
+- protein !== null
+- fat !== null
+
+(optional but preferred:)
+- calories present
+
+---
+
+## 3. STATE MANAGEMENT FIX
+
+In the component handling GPT responses:
+
+Replace logic like:
+→ setState only once
+
+WITH:
+
+→ setState on EVERY valid response
+
+Pseudo:
+
+onGPTResponse(response) {
+  if (isValid(response)) {
+    setMacros(response.macros)   // overwrite previous
+    setLastValidResponse(response)
+  }
+}
+
+---
+
+## 4. HANDLE MULTI-TURN CHAT
+
+When user sends follow-up corrections:
+
+- GPT returns new structured output
+- MUST replace previous macros completely
+- No merge, no partial updates
+
+---
+
+## 5. IGNORE INVALID RESPONSES
+
+If GPT returns:
+
+- explanation only
+- incomplete JSON
+- unclear output
+
+→ DO NOT update fields
+
+---
+
+## 6. FORCE RE-RENDER
+
+Ensure UI updates even if structure is similar:
+
+- use timestamp or version key:
+
+setMacros({
+  ...response.macros,
+  _version: Date.now()
+})
+
+---
+
+## 7. OPTIONAL (UX BOOST)
+
+Show small indicator:
+
+"Updated from latest correction"
+
+---
+
+# SUCCESS CRITERIA
+
+✓ First response populates fields  
+✓ Follow-up correction updates fields  
+✓ Latest valid response ALWAYS wins  
+✓ No stale values  
+✓ No UI lock  
+
+---
+
+# OUTPUT
+
+- updated state logic
+- fixed macro sync behavior
+- confirm working multi-turn updates
