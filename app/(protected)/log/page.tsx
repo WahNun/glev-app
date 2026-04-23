@@ -7,6 +7,9 @@ import { saveMeal, classifyMeal, computeEvaluation, computeCalories, type Parsed
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
 
+const TYPE_COLORS: Record<string, string> = { FAST_CARBS: ORANGE, HIGH_PROTEIN: ACCENT, HIGH_FAT: "#A855F7", BALANCED: GREEN };
+const TYPE_LABELS: Record<string, string> = { FAST_CARBS: "Fast Carbs", HIGH_PROTEIN: "High Protein", HIGH_FAT: "High Fat", BALANCED: "Balanced" };
+
 export default function LogPage() {
   const router = useRouter();
   const [recording, setRecording] = useState(false);
@@ -29,12 +32,6 @@ export default function LogPage() {
   const [speechAvail, setSpeechAvail] = useState(true);
   const [cgmLoading, setCgmLoading] = useState(false);
 
-  // Food parser test panel (mockup)
-  const [pfLoading, setPfLoading] = useState(false);
-  const [pfRaw, setPfRaw]         = useState<string | null>(null);
-  const [pfParsed, setPfParsed]   = useState<ParsedFood[] | null>(null);
-  const [pfError, setPfError]     = useState<string | null>(null);
-
   // GPT reasoning chat panel
   type ChatMsg = { role: "user" | "assistant" | "system"; content: string };
   const [chatMsgs, setChatMsgs]   = useState<ChatMsg[]>([]);
@@ -55,7 +52,7 @@ export default function LogPage() {
     setRecording(false); setParsing(false); setTranscript("");
     setGlucose(""); setCarbs(""); setFiber(""); setProtein(""); setFat(""); setDesc(""); setInsulin("");
     setSaving(false); setError(""); setSuccess(false);
-    setPfLoading(false); setPfRaw(null); setPfParsed(null); setPfError(null);
+    setChatMsgs([]); setChatInput(""); setPipeStatus("idle");
     try { mediaRecRef.current?.stop(); } catch {}
   }
 
@@ -124,6 +121,8 @@ export default function LogPage() {
   }
 
   async function autoFill(text: string) {
+    // Show the user message in the chat ("you said …") so the chat reads as a conversation
+    setChatMsgs(c => [...c, { role: "user", content: text }]);
     try {
       const res  = await fetch("/api/parse-food", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ text }) });
       const data = await res.json();
@@ -136,24 +135,22 @@ export default function LogPage() {
         const names = (data.parsed || []).map((f: Partial<ParsedFood>) => f.name).filter(Boolean).join(", ");
         if (names) setDesc(names);
       }
-    } catch { /* keep transcript even if parse fails */ }
-  }
 
-  async function testFoodParser() {
-    const text = "small banana and handful blueberries";
-    setPfLoading(true); setPfRaw(null); setPfParsed(null); setPfError(null);
-    try {
-      const res  = await fetch("/api/parse-food", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ text }) });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Request failed");
-      setPfRaw(text);
-      setPfParsed((data.parsed || []).map((f: Partial<ParsedFood>) => ({
-        name: f.name || "", grams: f.grams || 0,
-        carbs: f.carbs || 0, protein: f.protein || 0, fat: f.fat || 0, fiber: f.fiber || 0,
-      })));
-    } catch (e) {
-      setPfError(e instanceof Error ? e.message : "Request failed");
-    } finally { setPfLoading(false); }
+      // Compose a reasoning bubble with the parsed items, totals, and meal classification.
+      const items: Partial<ParsedFood>[] = data.parsed || [];
+      const tCarbs = t.carbs ?? 0, tProt = t.protein ?? 0, tFat = t.fat ?? 0, tFiber = t.fiber ?? 0;
+      const cType = data.mealType ?? classifyMeal(tCarbs, tProt, tFat);
+      const parts: string[] = [];
+      if (data.summary) parts.push(data.summary);
+      if (items.length) {
+        parts.push("Breakdown:\n" + items.map(it => `• ${it.name} (${it.grams}g) — ${it.carbs ?? 0}g C / ${it.protein ?? 0}g P / ${it.fat ?? 0}g F`).join("\n"));
+      }
+      parts.push(`Totals: ${tCarbs}g carbs, ${tProt}g protein, ${tFat}g fat, ${tFiber}g fiber.`);
+      parts.push(`Meal classification: ${TYPE_LABELS[cType] || cType} — based on the macro mix above (using the same rule the rest of the app uses).`);
+      setChatMsgs(c => [...c, { role: "assistant", content: parts.join("\n\n") }]);
+    } catch {
+      setChatMsgs(c => [...c, { role: "assistant", content: "⚠ Parsing failed — you can still fill the form manually, or ask me below." }]);
+    }
   }
 
   // Auto-scroll the chat panel as new messages arrive
@@ -319,42 +316,20 @@ export default function LogPage() {
         </div>
       </div>
 
-      {/* 2. AI Food Parser test panel */}
-      <div style={{ ...card, padding:"14px 18px", border:`1px solid rgba(79,110,247,0.18)` }}>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
-          <div style={{ display:"flex", flexDirection:"column", gap:2, minWidth:0 }}>
-            <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.08em", color:"rgba(255,255,255,0.45)" }}>
-              AI FOOD PARSER <span style={{ fontSize:8, color:ACCENT, fontWeight:500, marginLeft:4 }}>GPT-powered · test</span>
-            </div>
-            {pipeLabel ? (
-              <div style={{ fontSize:11, color:ORANGE, display:"flex", alignItems:"center", gap:6, fontWeight:600 }}>
-                <div style={{ width:10, height:10, border:`1.5px solid ${ORANGE}44`, borderTopColor:ORANGE, borderRadius:"50%", animation:"spin 0.7s linear infinite" }}/>
-                {pipeLabel}
-              </div>
-            ) : !pfRaw && !pfError && (
-              <div style={{ fontSize:10, color:"rgba(255,255,255,0.22)" }}>Sends "small banana and handful blueberries"</div>
-            )}
-          </div>
-          <button
-            onClick={testFoodParser}
-            disabled={pfLoading || parsing}
-            style={{ padding:"6px 14px", borderRadius:8, border:`1px solid ${ACCENT}44`, background:(pfLoading || parsing) ? "rgba(255,255,255,0.04)" : `${ACCENT}22`, color: (pfLoading || parsing) ? "rgba(255,255,255,0.3)" : ACCENT, fontSize:11, fontWeight:700, letterSpacing:"0.04em", cursor: (pfLoading || parsing) ? "default" : "pointer", display:"flex", alignItems:"center", gap:6, whiteSpace:"nowrap", flexShrink:0 }}
-          >
-            {pfLoading ? <><div style={{ width:10, height:10, border:`1.5px solid ${ACCENT}44`, borderTopColor:ACCENT, borderRadius:"50%", animation:"spin 0.7s linear infinite" }}/>Parsing…</> : "Test Food Parser"}
-          </button>
+      {/* 2. AI Food Parser status strip */}
+      <div style={{ ...card, padding:"12px 18px", border:`1px solid rgba(79,110,247,0.18)`, display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
+        <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.08em", color:"rgba(255,255,255,0.45)" }}>
+          AI FOOD PARSER <span style={{ fontSize:8, color:ACCENT, fontWeight:500, marginLeft:4 }}>GPT-powered</span>
         </div>
-        {pfError && (
-          <div style={{ marginTop:10, fontSize:11, color:PINK, padding:"8px 10px", background:`${PINK}10`, borderRadius:8, border:`1px solid ${PINK}25` }}>{pfError}</div>
-        )}
-        {pfRaw && pfParsed && pfParsed.length > 0 && (
-          <div style={{ marginTop:10, padding:"8px 10px", background:`${GREEN}08`, borderRadius:8, border:`1px solid ${GREEN}22` }}>
-            <div style={{ fontSize:9, color:GREEN, letterSpacing:"0.06em", fontWeight:700, marginBottom:6 }}>PARSED FOODS</div>
-            {pfParsed.map((item, i) => (
-              <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"3px 0", borderBottom: i < pfParsed.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none" }}>
-                <span style={{ fontSize:12, color:"rgba(255,255,255,0.75)" }}>{item.name}</span>
-                <span style={{ fontSize:12, fontWeight:700, color:ACCENT }}>{item.grams}g</span>
-              </div>
-            ))}
+        {pipeLabel ? (
+          <div style={{ fontSize:11, color:ORANGE, display:"flex", alignItems:"center", gap:6, fontWeight:700, letterSpacing:"0.04em" }}>
+            <div style={{ width:10, height:10, border:`1.5px solid ${ORANGE}44`, borderTopColor:ORANGE, borderRadius:"50%", animation:"spin 0.7s linear infinite" }}/>
+            {pipeLabel}
+          </div>
+        ) : (
+          <div style={{ fontSize:11, color:GREEN, display:"flex", alignItems:"center", gap:6, fontWeight:700, letterSpacing:"0.04em" }}>
+            <div style={{ width:8, height:8, borderRadius:99, background:GREEN, boxShadow:`0 0 6px ${GREEN}88` }}/>
+            READY
           </div>
         )}
       </div>
@@ -398,6 +373,22 @@ export default function LogPage() {
           <div>
             <label style={labelStyle}>Meal Description</label>
             <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="e.g. granola, banana, yogurt…" style={{ ...inp, fontSize:13 }}/>
+          </div>
+          <div>
+            <label style={labelStyle}>Meal Classification</label>
+            {(() => {
+              const hasMacros = totalCarbs > 0 || totalProtein > 0 || totalFat > 0;
+              const t = hasMacros ? classifyMeal(totalCarbs, totalProtein, totalFat) : null;
+              const color = t ? (TYPE_COLORS[t] || ACCENT) : "rgba(255,255,255,0.3)";
+              const label = t ? (TYPE_LABELS[t] || t) : "Auto from macros";
+              return (
+                <div style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 12px", borderRadius:10, background:t ? `${color}14` : "rgba(255,255,255,0.03)", border:`1px solid ${t ? `${color}55` : "rgba(255,255,255,0.08)"}` }}>
+                  <div style={{ width:8, height:8, borderRadius:99, background:color, boxShadow:t ? `0 0 6px ${color}88` : "none" }}/>
+                  <span style={{ fontSize:13, fontWeight:700, color:t ? color : "rgba(255,255,255,0.4)", letterSpacing:"-0.01em" }}>{label}</span>
+                  {t && <span style={{ marginLeft:"auto", fontSize:10, color:"rgba(255,255,255,0.35)", letterSpacing:"0.04em" }}>auto</span>}
+                </div>
+              );
+            })()}
           </div>
           <div>
             <label style={labelStyle}>Insulin (u)</label>
