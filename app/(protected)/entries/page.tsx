@@ -154,8 +154,11 @@ export default function EntriesPage() {
                       <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8 }}>MACROS &amp; DOSING</div>
                       <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
                         <MiniCard l="CARBS" v={`${carbs}g`} c={ORANGE}/>
+                        <MiniCard l="PROTEIN" v={totalProt > 0 ? `${totalProt}g` : "—"} c="#3B82F6"/>
+                        <MiniCard l="FAT" v={totalFat > 0 ? `${totalFat}g` : "—"} c="#A855F7"/>
                         <MiniCard l="FIBER" v={totalFiber > 0 ? `${totalFiber}g` : "—"}/>
                         <MiniCard l="NET CARBS" v={netCarbs > 0 ? `${netCarbs}g` : "—"} c={GREEN}/>
+                        <MiniCard l="CALORIES" v={(() => { const cals = m.calories ?? Math.round(carbs*4 + totalProt*4 + totalFat*9); return cals > 0 ? `${cals} kcal` : "—"; })()} c="#A78BFA"/>
                         <MiniCard l="INSULIN" v={`${m.insulin_units ?? 0}u`} c={ACCENT}/>
                         <MiniCard l="RATIO" v={icr ? `1u/${icr.toFixed(0)}g` : "—"} c={ACCENT}/>
                         <MiniCard l="CATEGORY" v={m.meal_type ? m.meal_type.replace("_"," ").toLowerCase() : "—"} c={m.meal_type ? (TYPE_COLORS[m.meal_type] || GREEN) : undefined}/>

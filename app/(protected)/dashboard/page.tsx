@@ -7,6 +7,9 @@ import { fetchMeals, seedMealsIfEmpty, type Meal } from "@/lib/meals";
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
 
+const TYPE_COLORS: Record<string, string> = { FAST_CARBS:ORANGE, HIGH_PROTEIN:"#3B82F6", HIGH_FAT:"#A855F7", BALANCED:GREEN };
+const TYPE_LABELS: Record<string, string> = { FAST_CARBS:"Fast carbs", HIGH_PROTEIN:"High protein", HIGH_FAT:"High fat", BALANCED:"Balanced" };
+
 const EVAL_COLORS: Record<string, string> = { GOOD:GREEN, LOW:ORANGE, HIGH:PINK, SPIKE:"#FF9F0A", OVERDOSE:PINK, UNDERDOSE:ORANGE, CHECK_CONTEXT:ORANGE };
 const EVAL_LABELS: Record<string, string> = { GOOD:"Good", LOW:"Under Dose", HIGH:"Over Dose", SPIKE:"Spike", OVERDOSE:"Over Dose", UNDERDOSE:"Under Dose", CHECK_CONTEXT:"Review" };
 
@@ -288,7 +291,9 @@ export default function DashboardPage() {
                 <div key={m.id} style={{ borderBottom:`1px solid ${BORDER}` }}>
                   <div onClick={() => setExpanded(isOpen ? null : m.id)} style={{ padding:"14px 24px", cursor:"pointer", display:"grid", gridTemplateColumns:"1fr auto auto auto auto", gap:16, alignItems:"center" }}>
                     <div>
-                      <div style={{ fontSize:13, fontWeight:500, marginBottom:2 }}>{m.input_text.length > 45 ? m.input_text.slice(0,45)+"…" : m.input_text}</div>
+                      <div style={{ fontSize:13, fontWeight:600, marginBottom:2, color: m.meal_type ? (TYPE_COLORS[m.meal_type] || "rgba(255,255,255,0.85)") : "rgba(255,255,255,0.5)", letterSpacing:"-0.01em" }}>
+                        {m.meal_type ? (TYPE_LABELS[m.meal_type] || m.meal_type.replace("_"," ").toLowerCase()) : "Uncategorized"}
+                      </div>
                       <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>{time}</div>
                     </div>
                     <div style={{ fontSize:13, textAlign:"right" }}><span style={{ color:"rgba(255,255,255,0.35)", fontSize:11 }}>BG </span>{m.glucose_before ?? "—"}</div>
@@ -315,6 +320,13 @@ export default function DashboardPage() {
                     );
                     return (
                       <div style={{ padding:"0 24px 16px", display:"flex", flexDirection:"column", gap:10 }}>
+                        {/* Row 0 — Meal description (food + grams) */}
+                        {m.input_text && (
+                          <div style={{ borderLeft:`2px solid rgba(255,255,255,0.15)`, paddingLeft:14, paddingTop:10 }}>
+                            <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.1em", fontWeight:700, marginBottom:6 }}>MEAL</div>
+                            <div style={{ fontSize:13, color:"rgba(255,255,255,0.8)", lineHeight:1.55 }}>{m.input_text}</div>
+                          </div>
+                        )}
                         {/* Row 1 — Macros & Dosing */}
                         <div style={{ borderLeft:`2px solid ${ACCENT}55`, paddingLeft:14, paddingTop:10 }}>
                           <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8 }}>MACROS &amp; DOSING</div>
