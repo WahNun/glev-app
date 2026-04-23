@@ -167,15 +167,14 @@ export default function LogPage() {
 
   function runRecommendation() {
     const g = num(glucose) ?? 110;
-    const c = num(carbs);
-    if (!c) { setError("Carbs are required to get a recommendation."); return; }
+    const c = num(carbs) ?? 0;
     setError(""); setRecLoading(true);
     setTimeout(() => {
       const r = runGlevEngine(meals, g, c);
       setRec(r);
       if (!insulin) setInsulin(String(r.dose));
       setRecLoading(false);
-    }, 350);
+    }, 200);
   }
 
   async function autoFill(text: string) {
@@ -451,14 +450,15 @@ export default function LogPage() {
           {/* GET RECOMMENDATION button */}
           <button
             onClick={runRecommendation}
-            disabled={!num(carbs) || recLoading}
+            disabled={recLoading}
             style={{
               padding:"14px", borderRadius:12, border:"none",
-              background: num(carbs) ? `linear-gradient(135deg, ${ACCENT}, #6B8BFF)` : "rgba(255,255,255,0.05)",
-              color: num(carbs) ? "#fff" : "rgba(255,255,255,0.25)",
+              background: `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
+              color: "#fff",
               fontSize:14, fontWeight:700, letterSpacing:"-0.01em",
-              cursor: num(carbs) && !recLoading ? "pointer" : "not-allowed",
-              boxShadow: num(carbs) ? `0 4px 20px ${ACCENT}40` : "none",
+              cursor: recLoading ? "default" : "pointer",
+              boxShadow: `0 4px 20px ${ACCENT}40`,
+              opacity: recLoading ? 0.7 : 1,
               transition:"all 0.2s",
             }}
           >

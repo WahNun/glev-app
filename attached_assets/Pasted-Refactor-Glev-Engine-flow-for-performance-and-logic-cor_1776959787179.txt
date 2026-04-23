@@ -1,0 +1,130 @@
+Refactor Glev Engine flow for performance and logic correctness.
+
+--------------------------------
+GOAL
+--------------------------------
+
+1. Remove blocking conditions for recommendations
+2. Reduce parsing latency to <3 seconds
+3. Improve UX responsiveness
+
+--------------------------------
+STEP 1 — REMOVE CARB DEPENDENCY BLOCK
+--------------------------------
+
+Locate logic that disables "Get Recommendation" button.
+
+Current behavior:
+- button only enabled if carbs > 0
+
+Fix:
+
+- Enable button ALWAYS after AI parsing completes
+- Allow recommendation with:
+  - carbs = 0
+  - missing macros (fallback allowed)
+
+Implementation rule:
+
+Recommendation must depend on:
+- parsed input (text)
+- available macros (even partial)
+
+NOT on carbs specifically.
+
+--------------------------------
+STEP 2 — OPTIMIZE AI PARSING PERFORMANCE
+--------------------------------
+
+Current issue:
+- parsing takes ~20 seconds
+
+Fix:
+
+1. Ensure only ONE AI call is made for:
+   - parsing
+   - macro estimation
+   - classification
+
+2. Reduce prompt size:
+   - remove unnecessary context
+   - keep only:
+     - input text
+     - required output format
+
+3. Use fastest available model (low latency)
+   - avoid heavy reasoning models
+   - prioritize speed over deep analysis
+
+4. Add timeout handling:
+   - max 5 seconds
+   - fallback to partial result if needed
+
+--------------------------------
+STEP 3 — PARALLELIZE WHERE POSSIBLE
+--------------------------------
+
+If current flow is sequential:
+
+Speak → Parse → Classify → Fill → Recommend
+
+Refactor to:
+
+Speak → Parse (single step returns ALL fields)
+
+Return:
+- macros
+- classification
+- optional explanation
+
+--------------------------------
+STEP 4 — UI RESPONSIVENESS
+--------------------------------
+
+1. Immediately show:
+- loading state AFTER speech input
+
+2. When response arrives:
+- populate fields instantly
+- enable "Get Recommendation" immediately
+
+3. Do NOT wait for any secondary processing
+
+--------------------------------
+STEP 5 — FAILSAFE HANDLING
+--------------------------------
+
+If parsing incomplete:
+
+- still allow recommendation
+- fallback:
+  - missing macros = 0
+  - classification = "unknown"
+
+--------------------------------
+STEP 6 — VALIDATION
+--------------------------------
+
+Test scenarios:
+
+1. Meal with carbs
+→ works
+
+2. Meal with zero carbs (e.g. butter, meat)
+→ recommendation still works
+
+3. Partial parsing result
+→ still usable
+
+4. Speed:
+→ response under 3 seconds
+
+--------------------------------
+SUCCESS CRITERIA
+--------------------------------
+
+- "Get Recommendation" always clickable after parsing
+- Parsing <3 seconds
+- No dependency on carbs
+- No unnecessary AI calls
+- Smooth UX (no blocking delays)

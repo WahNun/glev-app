@@ -6,30 +6,22 @@ const openai = new OpenAI({
   apiKey:  process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
 });
 
-const SYSTEM_PROMPT = `You are a nutrition parser for a Type 1 Diabetes management app.
-Given a free-form description of food, extract each item with its weight and macro nutrients.
-Use typical serving sizes when vague (e.g. "a banana" = 120g, "handful of nuts" = 28g).
-Cross-check values against standard USDA / food-label values per 100g for each ingredient.
-Also classify the WHOLE meal into exactly one of these 4 categories:
-  - FAST_CARBS    — simple sugars dominate (white rice, bread, juice, candy, pastries)
-  - HIGH_FAT      — fat is the largest energy source (pizza, fried food, cheese-heavy, nuts)
-  - HIGH_PROTEIN  — protein is the dominant macro by grams (steak, chicken, eggs, shakes)
-  - BALANCED      — none of the above; reasonable mix of carbs/protein/fat
-Classification rule of thumb:
-  - if (sugars / total_carbs > 0.6 && fiber < 5g)            => FAST_CARBS
-  - else if (fat_kcal / total_kcal > 0.45)                    => HIGH_FAT
-  - else if (protein_grams > carb_grams && protein_grams > 25) => HIGH_PROTEIN
-  - else                                                       => BALANCED
-
-Return ONLY valid JSON — no markdown, no explanation, no code block.
-Schema:
+const SYSTEM_PROMPT = `Nutrition parser for a Type 1 Diabetes app. Given a free-form food description, return ONLY JSON matching this schema:
 {
-  "items":   [{"name": string, "grams": number, "carbs": number, "protein": number, "fat": number, "fiber": number}],
-  "totals":  {"carbs": number, "protein": number, "fat": number, "fiber": number, "calories": number},
-  "mealType": "FAST_CARBS" | "HIGH_FAT" | "HIGH_PROTEIN" | "BALANCED",
-  "summary": string  // 1-2 sentence plain-English breakdown for a chat bubble
+  "items":   [{"name":string,"grams":number,"carbs":number,"protein":number,"fat":number,"fiber":number}],
+  "totals":  {"carbs":number,"protein":number,"fat":number,"fiber":number,"calories":number},
+  "mealType": "FAST_CARBS"|"HIGH_FAT"|"HIGH_PROTEIN"|"BALANCED",
+  "summary": string
 }
-Round all gram/calorie values to nearest whole number. Calories use 4/4/9 kcal per g (carb/protein/fat).`;
+Use typical serving sizes when vague (banana=120g, handful of nuts=28g). Values per USDA per 100g.
+Classify whole meal:
+  FAST_CARBS    → simple sugars dominate (sugars/carbs>0.6 && fiber<5g): bread, rice, juice, candy
+  HIGH_FAT      → fat_kcal/total_kcal>0.45: pizza, fried, cheese-heavy, nuts, butter, oil
+  HIGH_PROTEIN  → protein>carbs && protein>25g: steak, chicken, eggs, shakes
+  BALANCED      → otherwise
+Round all numbers to whole integers. Calories = carbs*4+protein*4+fat*9. No markdown, no code fence.`;
+
+const TIMEOUT_MS = 8000;
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
@@ -41,12 +33,14 @@ export async function POST(req: NextRequest) {
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-5",
+      model: "gpt-4o-mini",
+      response_format: { type: "json_object" },
+      temperature: 0.1,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user",   content: text },
       ],
-    });
+    }, { timeout: TIMEOUT_MS });
 
     const raw = completion.choices[0]?.message?.content ?? "";
     const cleaned = raw.replace(/```json\s*|\s*```/g, "").trim();
