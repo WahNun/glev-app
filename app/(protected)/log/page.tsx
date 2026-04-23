@@ -5,43 +5,37 @@ import { useRouter } from "next/navigation";
 import { saveMeal, classifyMeal, computeEvaluation, computeCalories, type ParsedFood } from "@/lib/meals";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
-const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)", BG="#09090B";
-
-interface ChatMessage {
-  role: "user" | "assistant" | "system";
-  text: string;
-  meta?: { mealType?: string | null; calories?: number; carbs?: number; protein?: number; fat?: number; fiber?: number };
-}
-
-const EVAL_COLORS: Record<string, string> = { GOOD: GREEN, LOW: ORANGE, HIGH: PINK, SPIKE: "#FF9F0A" };
-const EVAL_LABELS: Record<string, string> = { GOOD: "Good Dose", LOW: "Under Dose", HIGH: "Over Dose", SPIKE: "Spike" };
-const TYPE_COLORS: Record<string, string> = { FAST_CARBS: ORANGE, HIGH_PROTEIN: ACCENT, HIGH_FAT: "#FF6B6B", BALANCED: GREEN };
-const TYPE_LABELS: Record<string, string> = { FAST_CARBS: "Fast Carbs", HIGH_PROTEIN: "High Protein", HIGH_FAT: "High Fat", BALANCED: "Balanced" };
+const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
 
 export default function LogPage() {
   const router = useRouter();
   const [recording, setRecording] = useState(false);
-  const [rawText, setRawText]     = useState("");
-  const [foods, setFoods]         = useState<ParsedFood[]>([]);
   const [parsing, setParsing]     = useState(false);
-  const [glucoseBefore, setGlucose] = useState("");
-  const [insulinUnits, setInsulin]  = useState("");
-  const [saving, setSaving]       = useState(false);
-  const [error, setError]         = useState("");
-  const [success, setSuccess]     = useState(false);
+  const [transcript, setTranscript] = useState("");
+
+  // Entry-details fields (mockup 1:1)
+  const [glucose, setGlucose]   = useState("");
+  const [carbs, setCarbs]       = useState("");
+  const [fiber, setFiber]       = useState("");
+  const [protein, setProtein]   = useState("");
+  const [fat, setFat]           = useState("");
+  const [desc, setDesc]         = useState("");
+  const [insulin, setInsulin]   = useState("");
+
+  const [saving, setSaving]   = useState(false);
+  const [error, setError]     = useState("");
+  const [success, setSuccess] = useState(false);
   const [speechAvail, setSpeechAvail] = useState(true);
-  const [pulse, setPulse]         = useState(false);
-  const [manualMode, setManualMode] = useState(false);
-  const [mCarbs, setMCarbs]       = useState("");
-  const [mProtein, setMProtein]   = useState("");
-  const [mFat, setMFat]           = useState("");
-  const [mFiber, setMFiber]       = useState("");
-  const [mCalories, setMCalories] = useState("");
-  const [chat, setChat]           = useState<ChatMessage[]>([]);
-  const [aiMealType, setAiMealType] = useState<string | null>(null);
+  const [cgmLoading, setCgmLoading] = useState(false);
+
+  // Food parser test panel (mockup)
+  const [pfLoading, setPfLoading] = useState(false);
+  const [pfRaw, setPfRaw]         = useState<string | null>(null);
+  const [pfParsed, setPfParsed]   = useState<ParsedFood[] | null>(null);
+  const [pfError, setPfError]     = useState<string | null>(null);
+
   const mediaRecRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const caloriesUserEditedRef = useRef(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -49,65 +43,26 @@ export default function LogPage() {
     if (!ok) setSpeechAvail(false);
   }, []);
 
-  // Auto-populate the manual Calories field from carbs/protein/fat as the user types
-  // them in. Stays out of the way once the user manually edits the calories field.
-  useEffect(() => {
-    if (caloriesUserEditedRef.current) return;
-    const c = parseFloat(mCarbs)   || 0;
-    const p = parseFloat(mProtein) || 0;
-    const f = parseFloat(mFat)     || 0;
-    if (c === 0 && p === 0 && f === 0) {
-      if (mCalories !== "") setMCalories("");
-      return;
-    }
-    const cals = computeCalories(c, p, f);
-    const next = String(cals);
-    if (mCalories !== next) setMCalories(next);
-  }, [mCarbs, mProtein, mFat, mCalories]);
-
   function resetForm() {
-    setRecording(false);
-    setRawText("");
-    setFoods([]);
-    setParsing(false);
-    setGlucose("");
-    setInsulin("");
-    setSaving(false);
-    setError("");
-    setSuccess(false);
-    setPulse(false);
-    setManualMode(false);
-    setMCarbs(""); setMProtein(""); setMFat(""); setMFiber(""); setMCalories("");
-    setChat([]);
-    setAiMealType(null);
-    caloriesUserEditedRef.current = false;
+    setRecording(false); setParsing(false); setTranscript("");
+    setGlucose(""); setCarbs(""); setFiber(""); setProtein(""); setFat(""); setDesc(""); setInsulin("");
+    setSaving(false); setError(""); setSuccess(false);
+    setPfLoading(false); setPfRaw(null); setPfParsed(null); setPfError(null);
     try { mediaRecRef.current?.stop(); } catch {}
   }
 
-  const mNum = (v: string): number | null => {
+  const num = (v: string): number | null => {
     if (!v.trim()) return null;
     const n = parseFloat(v);
     return isNaN(n) ? null : n;
   };
 
-  const parsedCarbs   = foods.reduce((s, f) => s + (f.carbs   || 0), 0);
-  const parsedProtein = foods.reduce((s, f) => s + (f.protein || 0), 0);
-  const parsedFat     = foods.reduce((s, f) => s + (f.fat     || 0), 0);
-  const parsedFiber   = foods.reduce((s, f) => s + (f.fiber   || 0), 0);
-
-  const totalCarbs   = mNum(mCarbs)   ?? parsedCarbs;
-  const totalProtein = mNum(mProtein) ?? parsedProtein;
-  const totalFat     = mNum(mFat)     ?? parsedFat;
-  const totalFiber   = mNum(mFiber)   ?? parsedFiber;
-  const totalCalories = mNum(mCalories) ?? computeCalories(totalCarbs, totalProtein, totalFat);
-  const hasAny = foods.length > 0 || totalCarbs > 0 || totalProtein > 0 || totalFat > 0;
-  const mealType   = hasAny ? classifyMeal(totalCarbs, totalProtein, totalFat) : null;
-  const glucoseNum = parseFloat(glucoseBefore) || null;
-  const insulinNum = parseFloat(insulinUnits)  || null;
-  let suggested = totalCarbs / 15;
-  if (glucoseNum && glucoseNum > 110) suggested += (glucoseNum - 110) / 50;
-  suggested = Math.round(suggested * 10) / 10;
-  const evalPreview = insulinNum ? computeEvaluation(totalCarbs, insulinNum, glucoseNum) : null;
+  const totalCarbs   = num(carbs)   ?? 0;
+  const totalProtein = num(protein) ?? 0;
+  const totalFat     = num(fat)     ?? 0;
+  const totalFiber   = num(fiber)   ?? 0;
+  const glucoseNum   = num(glucose);
+  const insulinNum   = num(insulin);
 
   async function startRecording() {
     setError("");
@@ -120,8 +75,6 @@ export default function LogPage() {
       rec.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
       rec.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
-        setPulse(false);
-        // Use whatever container the browser actually produced — Safari/iOS will give mp4.
         const actualType = rec.mimeType || preferred || "audio/webm";
         const blob = new Blob(audioChunksRef.current, { type: actualType });
         if (blob.size === 0) return;
@@ -133,10 +86,10 @@ export default function LogPage() {
       };
       rec.start();
       mediaRecRef.current = rec;
-      setRecording(true); setPulse(true); setRawText(""); setFoods([]); setChat([]); setAiMealType(null);
+      setRecording(true); setTranscript("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not access microphone.");
-      setRecording(false); setPulse(false);
+      setRecording(false);
     }
   }
 
@@ -147,73 +100,76 @@ export default function LogPage() {
 
   async function transcribeAndParse(blob: Blob, ext = "webm") {
     setParsing(true); setError("");
-    setChat(c => [...c, { role: "system", text: "Transcribing audio with Whisper…" }]);
     try {
       const fd = new FormData();
       fd.append("audio", blob, `voice.${ext}`);
       const tRes = await fetch("/api/transcribe", { method: "POST", body: fd });
       const tData = await tRes.json();
       if (!tRes.ok || !tData.text) throw new Error(tData.error || "Empty transcript");
-      const transcript = tData.text as string;
-      setRawText(transcript);
-      setChat(c => [...c.slice(0, -1), { role: "user", text: transcript }]);
-      await autoParseFood(transcript);
+      const text = tData.text as string;
+      setTranscript(text);
+      await autoFill(text);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Transcription failed.");
-      setChat(c => [...c.slice(0, -1)]);
     } finally { setParsing(false); }
   }
 
-  async function autoParseFood(text: string) {
-    setParsing(true); setError("");
-    setChat(c => [...c, { role: "system", text: "Parsing nutrition with GPT…" }]);
+  async function autoFill(text: string) {
     try {
       const res  = await fetch("/api/parse-food", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ text }) });
       const data = await res.json();
-      if (Array.isArray(data.parsed)) {
-        setFoods(data.parsed.map((f: Partial<ParsedFood>) => ({
-          name: f.name || "", grams: f.grams || 0,
-          carbs: f.carbs || 0, protein: f.protein || 0, fat: f.fat || 0, fiber: f.fiber || 0,
-        })));
-      }
       const t = data.totals || {};
-      const summary = data.summary || `Parsed ${data.parsed?.length ?? 0} item(s) from your description.`;
-      const ingredientList = (data.parsed || []).map((f: Partial<ParsedFood>) => `${f.name} (${f.grams}g)`).join(", ");
-      setAiMealType(data.mealType || null);
-      setChat(c => [...c.slice(0, -1), {
-        role: "assistant",
-        text: `${summary}${ingredientList ? `\n\nIngredients: ${ingredientList}` : ""}`,
-        meta: {
-          mealType: data.mealType ?? null,
-          calories: t.calories, carbs: t.carbs, protein: t.protein, fat: t.fat, fiber: t.fiber,
-        },
-      }]);
-    } catch {
-      setError("Parse failed. Try again.");
-      setChat(c => [...c.slice(0, -1)]);
-    } finally { setParsing(false); }
+      if (t.carbs   != null && !carbs)   setCarbs(String(t.carbs));
+      if (t.fiber   != null && !fiber)   setFiber(String(t.fiber));
+      if (t.protein != null && !protein) setProtein(String(t.protein));
+      if (t.fat     != null && !fat)     setFat(String(t.fat));
+      if (!desc) {
+        const names = (data.parsed || []).map((f: Partial<ParsedFood>) => f.name).filter(Boolean).join(", ");
+        if (names) setDesc(names);
+      }
+    } catch { /* keep transcript even if parse fails */ }
   }
 
-  function updateFood(i: number, field: keyof ParsedFood, val: string) {
-    setFoods(prev => prev.map((f, idx) => idx === i ? { ...f, [field]: field === "name" ? val : (parseFloat(val) || 0) } : f));
+  async function testFoodParser() {
+    const text = "small banana and handful blueberries";
+    setPfLoading(true); setPfRaw(null); setPfParsed(null); setPfError(null);
+    try {
+      const res  = await fetch("/api/parse-food", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ text }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Request failed");
+      setPfRaw(text);
+      setPfParsed((data.parsed || []).map((f: Partial<ParsedFood>) => ({
+        name: f.name || "", grams: f.grams || 0,
+        carbs: f.carbs || 0, protein: f.protein || 0, fat: f.fat || 0, fiber: f.fiber || 0,
+      })));
+    } catch (e) {
+      setPfError(e instanceof Error ? e.message : "Request failed");
+    } finally { setPfLoading(false); }
   }
-  function removeFood(i: number) { setFoods(prev => prev.filter((_, idx) => idx !== i)); }
-  function addFood() { setFoods(prev => [...prev, { name: "New item", grams: 100, carbs: 0, protein: 0, fat: 0, fiber: 0 }]); }
+
+  async function pullCgm() {
+    setCgmLoading(true); setError("");
+    await new Promise(r => setTimeout(r, 500 + Math.random() * 700));
+    setGlucose(String(Math.round(80 + Math.random() * 80)));
+    setCgmLoading(false);
+  }
+
+  const hasAny = totalCarbs > 0 || totalProtein > 0 || totalFat > 0 || !!desc.trim();
 
   async function handleConfirm() {
-    if (!hasAny) { setError("Add a food item or enter macros manually."); return; }
+    if (!glucoseNum || !totalCarbs || !insulinNum) { setError("Glucose, carbs and insulin are required."); return; }
     setSaving(true); setError("");
     try {
-      const ev = insulinNum ? computeEvaluation(totalCarbs, insulinNum, glucoseNum) : "GOOD";
+      const ev = computeEvaluation(totalCarbs, insulinNum, glucoseNum);
       await saveMeal({
-        inputText: rawText || foods.map(f => f.name).join(", ") || "Manual entry",
-        parsedJson: foods,
+        inputText: desc || transcript || "Manual entry",
+        parsedJson: [],
         glucoseBefore: glucoseNum, glucoseAfter: null,
         carbsGrams: totalCarbs,
         proteinGrams: totalProtein,
         fatGrams: totalFat,
         fiberGrams: totalFiber,
-        calories: totalCalories,
+        calories: computeCalories(totalCarbs, totalProtein, totalFat),
         insulinUnits: insulinNum,
         mealType: classifyMeal(totalCarbs, totalProtein, totalFat),
         evaluation: ev,
@@ -225,7 +181,8 @@ export default function LogPage() {
   }
 
   const card: React.CSSProperties = { background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 16, padding: "20px 24px" };
-  const inp: React.CSSProperties  = { background: "#0D0D12", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", color: "#fff", fontSize: 14, width: "100%", outline: "none" };
+  const inp: React.CSSProperties  = { background: "#0D0D12", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 14px", color: "#fff", fontSize: 14, width: "100%", outline: "none", boxSizing: "border-box" };
+  const labelStyle: React.CSSProperties = { fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 6, letterSpacing: "0.08em", textTransform: "uppercase", display: "block" };
 
   if (success) return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"60vh", gap:16 }}>
@@ -237,332 +194,174 @@ export default function LogPage() {
     </div>
   );
 
+  const voiceLabel = recording ? "Listening…" : parsing ? "Parsing…" : speechAvail ? "Tap to speak" : "Voice unavailable";
+
   return (
-    <div style={{ maxWidth:860, margin:"0 auto" }}>
+    <div style={{ maxWidth:560, margin:"0 auto", display:"flex", flexDirection:"column", gap:14 }}>
       <style>{`
-        @keyframes pulse-ring { 0%,100%{transform:scale(1);opacity:0.6} 50%{transform:scale(1.18);opacity:0} }
-        @keyframes pulse-dot  { 0%,100%{transform:scale(1)} 50%{transform:scale(0.92)} }
-        .mic-btn:hover { transform: scale(1.04) !important; }
-        .food-row-inp { background:#0D0D12 !important; border:1px solid ${BORDER} !important; border-radius:8px !important; padding:6px 8px !important; color:#fff !important; font-size:13px !important; outline:none !important; }
-        .food-row-inp:focus { border-color:${ACCENT}60 !important; }
+        @keyframes vPulse { 0%,100%{opacity:0.35;transform:scale(1)} 50%{opacity:1;transform:scale(1.05)} }
+        @keyframes spin   { to { transform: rotate(360deg) } }
+        .mic-btn:hover:not(:disabled) { transform: scale(1.04); }
       `}</style>
 
-      <div style={{ marginBottom:28 }}>
-        <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>Log Meal</h1>
-        <p style={{ color:"rgba(255,255,255,0.35)", fontSize:14 }}>Voice-first insulin logging. Speak your meal, confirm the dose.</p>
+      <div style={{ marginBottom:6 }}>
+        <div style={{ fontSize:10, color:"rgba(255,255,255,0.35)", letterSpacing:"0.14em", marginBottom:6 }}>GLEV — SMART INSULIN DECISIONS</div>
+        <h1 style={{ fontSize:28, fontWeight:800, letterSpacing:"-0.03em", margin:0 }}>Log</h1>
       </div>
 
-      {/* MIC SECTION */}
-      <div style={{ ...card, marginBottom:20, textAlign:"center", padding:"40px 24px" }}>
-        <div style={{ position:"relative", display:"inline-flex", flexDirection:"column", alignItems:"center", gap:16 }}>
-          {recording && (
-            <div style={{ position:"absolute", inset:-20, borderRadius:99, border:`2px solid ${ACCENT}`, animation:"pulse-ring 1.4s ease-in-out infinite", pointerEvents:"none" }}/>
-          )}
-          <button
-            className="mic-btn"
-            onClick={recording ? stopRecording : startRecording}
-            style={{
-              width:100, height:100, borderRadius:99, border:"none", cursor:"pointer",
-              background: recording ? `linear-gradient(135deg, ${PINK}, #FF6B6B)` : `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
-              boxShadow: recording ? `0 0 40px ${PINK}60` : `0 4px 30px ${ACCENT}50`,
-              display:"flex", alignItems:"center", justifyContent:"center",
-              animation: recording ? "pulse-dot 1.2s ease-in-out infinite" : "none",
-              transition:"all 0.2s",
-            }}
-          >
-            <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
-              {recording ? (
-                <rect x="6" y="6" width="12" height="12" rx="2" fill="white" stroke="none"/>
-              ) : (
-                <>
-                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                  <line x1="12" y1="19" x2="12" y2="23"/>
-                  <line x1="8" y1="23" x2="16" y2="23"/>
-                </>
-              )}
-            </svg>
-          </button>
-          <div style={{ color:"rgba(255,255,255,0.55)", fontSize:14, fontWeight:500 }}>
-            {recording ? "Recording… tap to stop" : parsing ? "Parsing…" : "Tap to speak"}
-          </div>
-          {!speechAvail && <div style={{ fontSize:12, color:ORANGE, marginTop:4 }}>Voice input not supported in this browser</div>}
-        </div>
-      </div>
-
-      {/* AI CONVERSATION */}
-      {chat.length > 0 && (
-        <div style={{ ...card, marginBottom:20 }}>
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
-            <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", textTransform:"uppercase" }}>AI Conversation</div>
-            <div style={{ fontSize:10, color:"rgba(255,255,255,0.25)" }}>Whisper + GPT</div>
-          </div>
-          <div style={{ display:"flex", flexDirection:"column", gap:10, maxHeight:340, overflowY:"auto" }}>
-            {chat.map((msg, i) => {
-              const isUser = msg.role === "user";
-              const isSys  = msg.role === "system";
-              return (
-                <div key={i} style={{ display:"flex", justifyContent: isUser ? "flex-end" : "flex-start" }}>
-                  <div style={{
-                    maxWidth:"85%",
-                    background: isUser ? `${ACCENT}22` : isSys ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.06)",
-                    border: `1px solid ${isUser ? ACCENT+"40" : "rgba(255,255,255,0.06)"}`,
-                    color: isSys ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.9)",
-                    fontStyle: isSys ? "italic" : "normal",
-                    borderRadius: 12,
-                    padding: "10px 14px",
-                    fontSize: 13,
-                    lineHeight: 1.5,
-                    whiteSpace: "pre-wrap",
-                  }}>
-                    <div style={{ fontSize:9, fontWeight:700, letterSpacing:"0.08em", textTransform:"uppercase", color: isUser ? ACCENT : isSys ? "rgba(255,255,255,0.3)" : GREEN, marginBottom:4 }}>
-                      {isUser ? "You" : isSys ? "System" : "GPT"}
-                    </div>
-                    {msg.text}
-                    {msg.meta && (msg.meta.calories != null || msg.meta.carbs != null) && (
-                      <div style={{ marginTop:8, paddingTop:8, borderTop:"1px solid rgba(255,255,255,0.08)", display:"flex", gap:10, flexWrap:"wrap", fontSize:11 }}>
-                        {msg.meta.carbs    != null && <span><span style={{ color:"rgba(255,255,255,0.4)" }}>Carbs</span> <b style={{ color:ORANGE }}>{msg.meta.carbs}g</b></span>}
-                        {msg.meta.protein  != null && <span><span style={{ color:"rgba(255,255,255,0.4)" }}>Protein</span> <b style={{ color:"#3B82F6" }}>{msg.meta.protein}g</b></span>}
-                        {msg.meta.fat      != null && <span><span style={{ color:"rgba(255,255,255,0.4)" }}>Fat</span> <b style={{ color:"#A855F7" }}>{msg.meta.fat}g</b></span>}
-                        {msg.meta.fiber    != null && <span><span style={{ color:"rgba(255,255,255,0.4)" }}>Fiber</span> <b style={{ color:GREEN }}>{msg.meta.fiber}g</b></span>}
-                        {msg.meta.calories != null && <span><span style={{ color:"rgba(255,255,255,0.4)" }}>Cals</span> <b style={{ color:"#A78BFA" }}>{msg.meta.calories}</b></span>}
-                        {msg.meta.mealType && (
-                          <span style={{ padding:"1px 8px", borderRadius:99, fontSize:10, fontWeight:700, background:`${TYPE_COLORS[msg.meta.mealType]||GREEN}22`, color:TYPE_COLORS[msg.meta.mealType]||GREEN, letterSpacing:"0.06em" }}>
-                            {TYPE_LABELS[msg.meta.mealType] || msg.meta.mealType}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* DUAL PANELS */}
-      {(rawText || hasAny) && (
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:20 }}>
-          {/* LEFT: Raw text */}
-          <div style={card}>
-            <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:12 }}>AI Food Parser</div>
-            <textarea
-              value={rawText}
-              onChange={e => setRawText(e.target.value)}
-              style={{ ...inp, height:120, resize:"vertical", fontFamily:"inherit" }}
-              placeholder="What did you eat?"
-            />
-            <button onClick={() => autoParseFood(rawText)} disabled={!rawText.trim() || parsing}
-              style={{ marginTop:10, padding:"8px 16px", borderRadius:8, border:`1px solid ${ACCENT}40`, background:`${ACCENT}10`, color:ACCENT, cursor:"pointer", fontSize:13, fontWeight:600, letterSpacing:"0.02em" }}>
-              {parsing ? "Parsing…" : "Test Food Parser"}
+      {/* 1. Voice mic card */}
+      <div style={{ ...card, padding:"24px 22px 22px" }}>
+        <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:12 }}>
+          <div style={{ position:"relative", width:96, height:96 }}>
+            {recording && <div style={{ position:"absolute", inset:-16, borderRadius:"50%", background:`radial-gradient(circle,${ACCENT}24 0%,transparent 70%)`, animation:"vPulse 2s ease-in-out infinite", pointerEvents:"none" }}/>}
+            <button
+              className="mic-btn"
+              onClick={recording ? stopRecording : startRecording}
+              disabled={parsing || !speechAvail}
+              style={{
+                position:"absolute", inset:0, borderRadius:"50%",
+                border: recording ? `1px solid ${ACCENT}88` : `1px solid rgba(255,255,255,0.08)`,
+                cursor: parsing || !speechAvail ? "default" : "pointer",
+                background: `radial-gradient(circle at 36% 32%, #1e1e2e 0%, #141420 45%, #09090B 100%)`,
+                boxShadow: recording
+                  ? `0 0 0 1px ${ACCENT}55, 0 0 30px ${ACCENT}55, inset 0 0 20px rgba(79,110,247,0.15)`
+                  : `0 6px 24px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06)`,
+                display:"flex", alignItems:"center", justifyContent:"center",
+                transition:"all 0.2s",
+              }}
+            >
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke={recording ? ACCENT : "rgba(255,255,255,0.85)"} strokeWidth="2" strokeLinecap="round">
+                <rect x="9" y="2" width="6" height="11" rx="3" fill={recording ? ACCENT : "rgba(255,255,255,0.85)"} stroke="none"/>
+                <path d="M5 10a7 7 0 0 0 14 0"/>
+                <line x1="12" y1="19" x2="12" y2="22"/>
+                <line x1="9"  y1="22" x2="15" y2="22"/>
+              </svg>
             </button>
           </div>
-
-          {/* RIGHT: Parsed result */}
-          <div style={card}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
-              <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", textTransform:"uppercase" }}>Parsed Result</div>
-              <button onClick={addFood} style={{ padding:"4px 10px", borderRadius:7, border:`1px solid ${BORDER}`, background:"transparent", color:"rgba(255,255,255,0.5)", fontSize:12, cursor:"pointer" }}>+ Add</button>
+          <div style={{ fontSize:11, fontWeight:600, letterSpacing:"0.12em", color: recording ? ACCENT : parsing ? ORANGE : "rgba(255,255,255,0.45)" }}>
+            {voiceLabel}
+          </div>
+          {transcript ? (
+            <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)", fontStyle:"italic", textAlign:"center", lineHeight:1.5, padding:"7px 12px", background:"rgba(255,255,255,0.03)", borderRadius:8, border:"1px solid rgba(255,255,255,0.06)", maxWidth:400 }}>
+              "{transcript}"
             </div>
-            {parsing ? (
-              <div style={{ textAlign:"center", padding:"30px 0", color:"rgba(255,255,255,0.3)", fontSize:13 }}>Analyzing meal…</div>
-            ) : foods.length === 0 ? (
-              <div style={{ textAlign:"center", padding:"30px 0", color:"rgba(255,255,255,0.2)", fontSize:13 }}>Speak your meal to see breakdown</div>
-            ) : (
-              <div style={{ display:"flex", flexDirection:"column", gap:8, maxHeight:220, overflowY:"auto" }}>
-                {foods.map((f, i) => (
-                  <div key={i} style={{ background:BG, borderRadius:10, padding:"10px 12px", display:"grid", gridTemplateColumns:"1fr auto", gap:8, alignItems:"start" }}>
-                    <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                      <input className="food-row-inp" value={f.name} onChange={e => updateFood(i, "name", e.target.value)} style={{ width:"100%" }}/>
-                      <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:4 }}>
-                        {(["grams","carbs","protein","fat","fiber"] as const).map(field => (
-                          <div key={field} style={{ display:"flex", flexDirection:"column", gap:2 }}>
-                            <div style={{ fontSize:9, color:"rgba(255,255,255,0.25)", textAlign:"center", letterSpacing:"0.05em" }}>{field === "grams" ? "g" : field.slice(0,3)}</div>
-                            <input className="food-row-inp" type="number" value={f[field]} onChange={e => updateFood(i, field, e.target.value)} style={{ textAlign:"center", width:"100%", padding:"4px" }}/>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <button onClick={() => removeFood(i)} style={{ padding:"4px 8px", borderRadius:6, border:"none", background:"transparent", color:"rgba(255,255,255,0.2)", cursor:"pointer", fontSize:16 }}>×</button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* MACRO SUMMARY */}
-      {hasAny && (
-        <div style={{ ...card, marginBottom:20 }}>
-          <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:14 }}>Macro Summary</div>
-          <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
-            {[
-              { label:"Carbs",    val:totalCarbs,    unit:"g", color:ORANGE },
-              { label:"Protein",  val:totalProtein,  unit:"g", color:ACCENT },
-              { label:"Fat",      val:totalFat,      unit:"g", color:PINK },
-              { label:"Fiber",    val:totalFiber,    unit:"g", color:GREEN },
-              { label:"Calories", val:totalCalories, unit:"kcal", color:"#A78BFA" },
-            ].map(({ label, val, unit, color }) => (
-              <div key={label} style={{ flex:1, minWidth:80, background:`${color}10`, border:`1px solid ${color}25`, borderRadius:12, padding:"12px 16px", textAlign:"center" }}>
-                <div style={{ fontSize:22, fontWeight:800, color }}>{val}<span style={{ fontSize:12, fontWeight:400, marginLeft:2, color:"rgba(255,255,255,0.4)" }}>{unit}</span></div>
-                <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginTop:2 }}>{label}</div>
-              </div>
-            ))}
-          </div>
-          {mealType && (
-            <div style={{ marginTop:14, display:"flex", alignItems:"center", gap:8 }}>
-              <span style={{ fontSize:12, color:"rgba(255,255,255,0.35)" }}>Classification:</span>
-              <span style={{ padding:"4px 12px", borderRadius:99, fontSize:12, fontWeight:700, background:`${TYPE_COLORS[mealType] || GREEN}20`, color:TYPE_COLORS[mealType] || GREEN, border:`1px solid ${TYPE_COLORS[mealType] || GREEN}40`, letterSpacing:"0.05em" }}>
-                {TYPE_LABELS[mealType] || mealType}
-              </span>
+          ) : (
+            <div style={{ fontSize:10, color:"rgba(255,255,255,0.22)", letterSpacing:"0.06em", textAlign:"center" }}>
+              e.g. "handful blueberries, small banana, 200g yogurt"
             </div>
           )}
+          {!speechAvail && <div style={{ fontSize:11, color:ORANGE }}>Voice input not supported in this browser</div>}
         </div>
-      )}
+      </div>
 
-      {/* MANUAL MACROS */}
-      <div style={{ ...card, marginBottom:20 }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-          <div>
-            <div style={{ fontSize:13, fontWeight:600 }}>Manual Macros</div>
-            <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:2 }}>Override or enter macros directly without parsing.</div>
+      {/* 2. AI Food Parser test panel */}
+      <div style={{ ...card, padding:"14px 18px", border:`1px solid rgba(79,110,247,0.18)` }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
+          <div style={{ display:"flex", flexDirection:"column", gap:2, minWidth:0 }}>
+            <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.08em", color:"rgba(255,255,255,0.45)" }}>
+              AI FOOD PARSER <span style={{ fontSize:8, color:ACCENT, fontWeight:500, marginLeft:4 }}>GPT-powered · test</span>
+            </div>
+            {!pfRaw && !pfError && (
+              <div style={{ fontSize:10, color:"rgba(255,255,255,0.22)" }}>Sends "small banana and handful blueberries"</div>
+            )}
           </div>
           <button
-            onClick={() => setManualMode(m => !m)}
-            style={{
-              padding:"6px 14px", borderRadius:99, fontSize:12, fontWeight:600, cursor:"pointer",
-              border:`1px solid ${manualMode ? ACCENT : BORDER}`,
-              background: manualMode ? `${ACCENT}22` : "transparent",
-              color: manualMode ? ACCENT : "rgba(255,255,255,0.5)",
-            }}>
-            {manualMode ? "Manual: ON" : "Enter manually"}
+            onClick={testFoodParser}
+            disabled={pfLoading}
+            style={{ padding:"6px 14px", borderRadius:8, border:`1px solid ${ACCENT}44`, background:pfLoading ? "rgba(255,255,255,0.04)" : `${ACCENT}22`, color: pfLoading ? "rgba(255,255,255,0.3)" : ACCENT, fontSize:11, fontWeight:700, letterSpacing:"0.04em", cursor: pfLoading ? "default" : "pointer", display:"flex", alignItems:"center", gap:6, whiteSpace:"nowrap", flexShrink:0 }}
+          >
+            {pfLoading ? <><div style={{ width:10, height:10, border:`1.5px solid ${ACCENT}44`, borderTopColor:ACCENT, borderRadius:"50%", animation:"spin 0.7s linear infinite" }}/>Parsing…</> : "Test Food Parser"}
           </button>
         </div>
-        {manualMode && (
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:10 }}>
-            {[
-              { label:"Carbs (g)",    val:mCarbs,    set:setMCarbs,    color:ORANGE },
-              { label:"Protein (g)",  val:mProtein,  set:setMProtein,  color:ACCENT },
-              { label:"Fat (g)",      val:mFat,      set:setMFat,      color:PINK },
-              { label:"Fiber (g)",    val:mFiber,    set:setMFiber,    color:GREEN },
-              { label:"Calories",     val:mCalories, set:setMCalories, color:"#A78BFA", isCalories:true },
-            ].map(f => (
-              <div key={f.label}>
-                <label style={{ fontSize:11, color:"rgba(255,255,255,0.4)", display:"flex", alignItems:"center", gap:6, marginBottom:6 }}>
-                  {f.label}
-                  {f.isCalories && !caloriesUserEditedRef.current && (parseFloat(mCarbs)||parseFloat(mProtein)||parseFloat(mFat)) > 0 && (
-                    <span style={{ fontSize:9, color:"#A78BFA", padding:"1px 6px", borderRadius:99, background:"rgba(167,139,250,0.12)", border:"1px solid rgba(167,139,250,0.3)", letterSpacing:"0.04em", fontWeight:600 }}>AUTO</span>
-                  )}
-                </label>
-                <input
-                  style={{ ...inp, borderColor:f.val ? `${f.color}50` : BORDER }}
-                  type="number"
-                  step="0.1"
-                  placeholder="0"
-                  value={f.val}
-                  onChange={e => {
-                    if (f.isCalories) caloriesUserEditedRef.current = true;
-                    f.set(e.target.value);
-                  }}
-                />
+        {pfError && (
+          <div style={{ marginTop:10, fontSize:11, color:PINK, padding:"8px 10px", background:`${PINK}10`, borderRadius:8, border:`1px solid ${PINK}25` }}>{pfError}</div>
+        )}
+        {pfRaw && pfParsed && pfParsed.length > 0 && (
+          <div style={{ marginTop:10, padding:"8px 10px", background:`${GREEN}08`, borderRadius:8, border:`1px solid ${GREEN}22` }}>
+            <div style={{ fontSize:9, color:GREEN, letterSpacing:"0.06em", fontWeight:700, marginBottom:6 }}>PARSED FOODS</div>
+            {pfParsed.map((item, i) => (
+              <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"3px 0", borderBottom: i < pfParsed.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none" }}>
+                <span style={{ fontSize:12, color:"rgba(255,255,255,0.75)" }}>{item.name}</span>
+                <span style={{ fontSize:12, fontWeight:700, color:ACCENT }}>{item.grams}g</span>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* ENTRY FORM */}
-      <div style={{ ...card, marginBottom:20 }}>
-        <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:16 }}>Entry Details</div>
-        {!rawText && !foods.length && (
-          <div style={{ marginBottom:16 }}>
-            <label style={{ fontSize:13, color:"rgba(255,255,255,0.5)", display:"block", marginBottom:8 }}>Or type your meal manually</label>
-            <div style={{ display:"flex", gap:8 }}>
-              <input
-                style={{ ...inp, flex:1 }}
-                placeholder="e.g. oatmeal with banana and honey"
-                value={rawText}
-                onChange={e => setRawText(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && autoParseFood(rawText)}
-              />
-              <button onClick={() => autoParseFood(rawText)} style={{ padding:"10px 16px", borderRadius:10, border:"none", background:ACCENT, color:"#fff", cursor:"pointer", fontSize:13, fontWeight:600 }}>Parse</button>
-            </div>
-          </div>
-        )}
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+      {/* 3. Entry details */}
+      <div style={{ ...card, padding:20 }}>
+        <div style={{ fontSize:10, color:"rgba(255,255,255,0.35)", letterSpacing:"0.1em", marginBottom:14, textTransform:"uppercase" }}>Entry Details — edit any field</div>
+        <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
           <div>
-            <label style={{ fontSize:13, color:"rgba(255,255,255,0.5)", display:"block", marginBottom:8 }}>Glucose Before (mg/dL)</label>
+            <label style={labelStyle}>Glucose Before (mg/dL)</label>
             <div style={{ display:"flex", gap:8 }}>
-              <input style={{ ...inp, flex:1 }} type="number" placeholder="e.g. 115" value={glucoseBefore} onChange={e => setGlucose(e.target.value)}/>
-              <button onClick={() => { const sim = Math.round(80 + Math.random() * 70); setGlucose(sim.toString()); }} style={{ padding:"10px 14px", borderRadius:10, border:`1px solid ${ACCENT}40`, background:`${ACCENT}10`, color:ACCENT, cursor:"pointer", fontSize:12, fontWeight:600, whiteSpace:"nowrap", letterSpacing:"0.04em", display:"flex", alignItems:"center", gap:5 }} title="Pull simulated CGM reading">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-                +CGM
+              <input value={glucose} onChange={e => setGlucose(e.target.value)} placeholder="e.g. 115" type="number" style={{ ...inp, flex:1 }}/>
+              <button onClick={pullCgm} disabled={cgmLoading} title="Pull simulated CGM reading"
+                style={{ padding:"0 14px", borderRadius:10, border:`1px solid ${ACCENT}44`, background: cgmLoading ? "rgba(255,255,255,0.04)" : `${ACCENT}18`, color:ACCENT, cursor: cgmLoading ? "default" : "pointer", fontSize:11, fontWeight:700, whiteSpace:"nowrap", letterSpacing:"0.04em", display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
+                <div style={{ width:8, height:8, borderRadius:"50%", background:GREEN, boxShadow:`0 0 5px ${GREEN}88`, flexShrink:0 }}/>
+                {cgmLoading ? <div style={{ width:10, height:10, border:`1.5px solid ${ACCENT}44`, borderTopColor:ACCENT, borderRadius:"50%", animation:"spin 0.7s linear infinite" }}/> : <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2.5" strokeLinecap="round"><path d="M5 12h14M15 6l6 6-6 6"/></svg>}
+                CGM
               </button>
             </div>
           </div>
-          <div>
-            <label style={{ fontSize:13, color:"rgba(255,255,255,0.5)", display:"block", marginBottom:8 }}>Insulin Units</label>
-            <input style={inp} type="number" step="0.5" placeholder={`Suggested: ${suggested}u`} value={insulinUnits} onChange={e => setInsulin(e.target.value)}/>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+            <div>
+              <label style={labelStyle}>Carbs (g)</label>
+              <input value={carbs} onChange={e => setCarbs(e.target.value)} placeholder="e.g. 60" type="number" style={inp}/>
+            </div>
+            <div>
+              <label style={labelStyle}>Fiber (g) <span style={{ opacity:0.5, textTransform:"none", fontSize:9 }}>opt.</span></label>
+              <input value={fiber} onChange={e => setFiber(e.target.value)} placeholder="e.g. 8" type="number" style={inp}/>
+            </div>
           </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+            <div>
+              <label style={labelStyle}>Protein (g)</label>
+              <input value={protein} onChange={e => setProtein(e.target.value)} placeholder="e.g. 30" type="number" style={inp}/>
+            </div>
+            <div>
+              <label style={labelStyle}>Fat (g)</label>
+              <input value={fat} onChange={e => setFat(e.target.value)} placeholder="e.g. 15" type="number" style={inp}/>
+            </div>
+          </div>
+          <div>
+            <label style={labelStyle}>Meal Description</label>
+            <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="e.g. granola, banana, yogurt…" style={{ ...inp, fontSize:13 }}/>
+          </div>
+          <div>
+            <label style={labelStyle}>Insulin (u)</label>
+            <input value={insulin} onChange={e => setInsulin(e.target.value)} placeholder="e.g. 1.5" type="number" step="0.5" style={inp}/>
+          </div>
+
+          {error && <div style={{ fontSize:12, color:PINK, padding:"8px 12px", background:`${PINK}10`, borderRadius:8, border:`1px solid ${PINK}25` }}>{error}</div>}
+
+          <button onClick={handleConfirm} disabled={saving || !glucose || !carbs || !insulin}
+            style={{ marginTop:4, padding:"14px", borderRadius:12, border:"none",
+              background:`linear-gradient(135deg, ${ACCENT}, #6B8BFF)`, color:"#fff",
+              fontSize:14, fontWeight:700, letterSpacing:"-0.01em",
+              cursor: (saving || !glucose || !carbs || !insulin) ? "default" : "pointer",
+              opacity: (glucose && carbs && insulin && !saving) ? 1 : 0.4,
+              transition:"opacity 0.2s",
+            }}>
+            {saving ? "Saving…" : "✓ Confirm Log"}
+          </button>
+
+          <button
+            onClick={() => {
+              if (saving) return;
+              const dirty = hasAny || transcript.trim() || glucose || insulin;
+              if (dirty && !window.confirm("Discard this entry? All inputs will be cleared.")) return;
+              resetForm();
+            }}
+            disabled={saving}
+            style={{ padding:"12px", borderRadius:12, border:`1px solid rgba(255,255,255,0.08)`, background:"transparent",
+              color: saving ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.55)", fontSize:13, fontWeight:600,
+              cursor: saving ? "not-allowed" : "pointer", transition:"all 0.2s" }}>
+            Cancel
+          </button>
         </div>
       </div>
-
-      {/* INSULIN PREVIEW */}
-      {(hasAny || glucoseBefore) && (
-        <div style={{ ...card, marginBottom:20, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:16 }}>
-          <div>
-            <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginBottom:4 }}>Suggested Insulin</div>
-            <div style={{ fontSize:28, fontWeight:800, letterSpacing:"-0.03em" }}>
-              {suggested}<span style={{ fontSize:16, fontWeight:400, marginLeft:4, color:"rgba(255,255,255,0.4)" }}>units</span>
-            </div>
-            <div style={{ fontSize:12, color:"rgba(255,255,255,0.3)", marginTop:2 }}>
-              {totalCarbs}g ÷ 15 ICR{glucoseNum && glucoseNum > 110 ? ` + ${Math.round((glucoseNum-110)/50*10)/10}u correction` : ""}
-            </div>
-          </div>
-          {evalPreview && (
-            <div style={{ textAlign:"center" }}>
-              <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginBottom:6 }}>Dose Preview</div>
-              <span style={{ padding:"8px 20px", borderRadius:99, fontSize:14, fontWeight:700, background:`${EVAL_COLORS[evalPreview] || GREEN}18`, color:EVAL_COLORS[evalPreview] || GREEN, border:`1px solid ${EVAL_COLORS[evalPreview] || GREEN}40`, letterSpacing:"0.06em" }}>
-                {EVAL_LABELS[evalPreview] || evalPreview}
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {error && <div style={{ padding:"12px 16px", borderRadius:10, background:`${PINK}10`, border:`1px solid ${PINK}30`, color:PINK, fontSize:14, marginBottom:16 }}>{error}</div>}
-
-      <button onClick={handleConfirm} disabled={saving || !hasAny} style={{
-        width:"100%", padding:"16px", borderRadius:14, border:"none", cursor: (!hasAny || saving) ? "not-allowed" : "pointer",
-        background: hasAny ? `linear-gradient(135deg, ${ACCENT}, #6B8BFF)` : "rgba(255,255,255,0.05)",
-        color: hasAny ? "#fff" : "rgba(255,255,255,0.2)",
-        fontSize:16, fontWeight:700, letterSpacing:"-0.01em",
-        boxShadow: hasAny ? `0 4px 24px ${ACCENT}40` : "none",
-        transition:"all 0.2s",
-      }}>
-        {saving ? "Saving…" : "Confirm Log"}
-      </button>
-
-      <button
-        onClick={() => {
-          if (saving) return;
-          const dirty = hasAny || rawText.trim() || glucoseBefore || insulinUnits || chat.length > 0;
-          if (dirty && !window.confirm("Discard this entry? All inputs and parsed items will be cleared.")) return;
-          resetForm();
-        }}
-        disabled={saving}
-        style={{
-          width:"100%", padding:"14px", marginTop:10, borderRadius:14,
-          border:`1px solid rgba(255,255,255,0.08)`, background:"transparent",
-          color: saving ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.55)",
-          fontSize:14, fontWeight:600, letterSpacing:"-0.01em",
-          cursor: saving ? "not-allowed" : "pointer", transition:"all 0.2s",
-        }}
-      >
-        Cancel
-      </button>
     </div>
   );
 }
