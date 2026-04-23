@@ -197,7 +197,8 @@ async function apiFetch<T>(path: string, _opts?: RequestInit): Promise<T> {
     })) } as unknown as T;
   }
   if (path.startsWith("/insights/meal-patterns") || path.startsWith("/insights/patterns")) return { patterns: [] } as unknown as T;
-  if (path.startsWith("/log") || path.startsWith("/entries")) return { entries: [] } as unknown as T;
+  if (path.startsWith("/entries")) return { entries: MOCKUP_ENTRIES, total: MOCKUP_ENTRIES.length } as unknown as T;
+  if (path.startsWith("/log")) return { entries: MOCKUP_ENTRIES } as unknown as T;
   if (path.startsWith("/recommendations")) return { recommendedUnits: 0, minUnits: 0, maxUnits: 0, reasoning: "Mockup mode — no live recommendations.", confidence: "LOW", carbRatio: null, similarMealCount: 0, cappedForSafety: false } as unknown as T;
   if (path.startsWith("/food/macros") || path.startsWith("/parse-food")) return { items: [], carbsGrams: 0, proteinGrams: 0, fatGrams: 0, fiberGrams: 0, calories: 0 } as unknown as T;
   // Unknown path — return empty object instead of throwing, so clicks around the
@@ -302,6 +303,7 @@ function Dashboard({ onInsights }: { onInsights?: (stat: string) => void }) {
   const [stats, setStats] = useState<DashboardStats|null>(null);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<number|null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -399,15 +401,67 @@ function Dashboard({ onInsights }: { onInsights?: (stat: string) => void }) {
               {stats.recentEntries.slice(0,5).map((e,i)=>{
                 const ev=evalStyle(e.evaluation);
                 const ts=new Date(e.timestamp).toLocaleDateString(undefined,{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
+                const isExpanded=expandedId===e.id;
+                const isLast=i===Math.min(4,stats.recentEntries.length-1);
+                const netCarbs=e.fiberGrams!=null?Math.max(0,e.carbsGrams-e.fiberGrams):null;
+                const icr=e.insulinUnits>0?(netCarbs??e.carbsGrams)/e.insulinUnits:null;
+                const meta=e.mealType?MEAL_TYPE_META[e.mealType]:null;
+                const toggle=()=>setExpandedId(isExpanded?null:e.id);
                 return (
-                  <tr key={e.id} style={{borderBottom:i<4?`1px solid rgba(255,255,255,0.03)`:"none"}}>
-                    <td style={{padding:"9px 18px",fontSize:11,color:"rgba(255,255,255,0.4)"}}>{ts}</td>
-                    <td style={{padding:"9px 18px",fontSize:12,fontWeight:500}}>{e.mealDescription||e.mealType||"—"}</td>
-                    <td style={{padding:"9px 18px",fontSize:12,fontWeight:600,color:e.glucoseBefore>140?ORANGE:e.glucoseBefore<80?PINK:"rgba(255,255,255,0.85)"}}>{e.glucoseBefore} <span style={{fontSize:10,fontWeight:400,color:"rgba(255,255,255,0.3)"}}>mg/dL</span></td>
-                    <td style={{padding:"9px 18px",fontSize:12,color:"rgba(255,255,255,0.7)"}}>{e.carbsGrams}g</td>
-                    <td style={{padding:"9px 18px",fontSize:12,color:"rgba(255,255,255,0.7)"}}>{e.insulinUnits}u</td>
-                    <td style={{padding:"9px 18px"}}><span style={{fontSize:10,padding:"3px 9px",borderRadius:99,fontWeight:700,background:`${ev.color}18`,color:ev.color,letterSpacing:"0.06em"}}>{ev.label}</span></td>
-                  </tr>
+                  <React.Fragment key={e.id}>
+                    <tr
+                      onClick={toggle}
+                      style={{
+                        borderBottom:(!isExpanded&&!isLast)?`1px solid rgba(255,255,255,0.03)`:"none",
+                        background:isExpanded?"rgba(79,110,247,0.05)":"transparent",
+                        cursor:"pointer",
+                      }}
+                    >
+                      <td style={{padding:"9px 18px",fontSize:11,color:"rgba(255,255,255,0.4)",userSelect:"none"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:6}}>
+                          <span style={{fontSize:10,color:"rgba(255,255,255,0.25)",transition:"transform 0.2s",display:"inline-block",transform:isExpanded?"rotate(90deg)":"rotate(0deg)"}}>›</span>
+                          {ts}
+                        </div>
+                      </td>
+                      <td style={{padding:"9px 18px",fontSize:12,fontWeight:500}}>{e.mealDescription||e.mealType||"—"}</td>
+                      <td style={{padding:"9px 18px",fontSize:12,fontWeight:600,color:e.glucoseBefore>140?ORANGE:e.glucoseBefore<80?PINK:"rgba(255,255,255,0.85)"}}>{e.glucoseBefore} <span style={{fontSize:10,fontWeight:400,color:"rgba(255,255,255,0.3)"}}>mg/dL</span></td>
+                      <td style={{padding:"9px 18px",fontSize:12,color:"rgba(255,255,255,0.7)"}}>{e.carbsGrams}g</td>
+                      <td style={{padding:"9px 18px",fontSize:12,color:"rgba(255,255,255,0.7)"}}>{e.insulinUnits}u</td>
+                      <td style={{padding:"9px 18px"}}><span style={{fontSize:10,padding:"3px 9px",borderRadius:99,fontWeight:700,background:`${ev.color}18`,color:ev.color,letterSpacing:"0.06em"}}>{ev.label}</span></td>
+                    </tr>
+                    {isExpanded&&(
+                      <tr style={{background:"rgba(79,110,247,0.03)",borderBottom:!isLast?`1px solid rgba(255,255,255,0.06)`:"none"}}>
+                        <td colSpan={6} style={{padding:"0 18px 0 42px"}}>
+                          <div style={{borderLeft:`2px solid ${ACCENT}33`,paddingLeft:16,paddingTop:12,paddingBottom:14,display:"flex",flexDirection:"column",gap:12}}>
+                            <div>
+                              <div style={{fontSize:9,color:"rgba(255,255,255,0.25)",letterSpacing:"0.1em",fontWeight:600,marginBottom:8}}>MACROS &amp; DOSING</div>
+                              <div style={{display:"flex",gap:24,flexWrap:"wrap",fontSize:12}}>
+                                <div><span style={{color:"rgba(255,255,255,0.35)",marginRight:6}}>Carbs</span><b>{e.carbsGrams}g</b></div>
+                                <div><span style={{color:"rgba(255,255,255,0.35)",marginRight:6}}>Fiber</span><b>{e.fiberGrams!=null?`${e.fiberGrams}g`:"—"}</b></div>
+                                <div><span style={{color:"rgba(255,255,255,0.35)",marginRight:6}}>Net carbs</span><b style={{color:GREEN}}>{netCarbs!=null?`${netCarbs.toFixed(0)}g`:"—"}</b></div>
+                                <div><span style={{color:"rgba(255,255,255,0.35)",marginRight:6}}>Insulin</span><b style={{color:ACCENT}}>{e.insulinUnits}u</b></div>
+                                <div><span style={{color:"rgba(255,255,255,0.35)",marginRight:6}}>Carb ratio</span><b>{icr!=null?`1u / ${icr.toFixed(0)}g`:"—"}</b></div>
+                              </div>
+                            </div>
+                            <div>
+                              <div style={{fontSize:9,color:"rgba(255,255,255,0.25)",letterSpacing:"0.1em",fontWeight:600,marginBottom:8}}>GLUCOSE</div>
+                              <div style={{display:"flex",gap:24,flexWrap:"wrap",fontSize:12}}>
+                                <div><span style={{color:"rgba(255,255,255,0.35)",marginRight:6}}>Before</span><b style={{color:e.glucoseBefore>140?ORANGE:e.glucoseBefore<80?PINK:GREEN}}>{e.glucoseBefore} mg/dL</b></div>
+                                <div><span style={{color:"rgba(255,255,255,0.35)",marginRight:6}}>After</span><b style={{color:e.glucoseAfter!=null?(e.glucoseAfter>180||e.glucoseAfter<70?PINK:GREEN):"rgba(255,255,255,0.3)"}}>{e.glucoseAfter!=null?`${e.glucoseAfter} mg/dL`:"not recorded"}</b></div>
+                                <div><span style={{color:"rgba(255,255,255,0.35)",marginRight:6}}>Delta</span><b style={{color:e.delta!=null?(Math.abs(e.delta)>60?PINK:Math.abs(e.delta)>30?ORANGE:GREEN):"rgba(255,255,255,0.3)"}}>{e.delta!=null?`${e.delta>0?"+":""}${e.delta.toFixed(0)} mg/dL`:"—"}</b></div>
+                                <div><span style={{color:"rgba(255,255,255,0.35)",marginRight:6}}>Time gap</span><b>{e.timeDifferenceMinutes!=null?`${e.timeDifferenceMinutes.toFixed(0)} min`:"—"}</b></div>
+                              </div>
+                            </div>
+                            <div>
+                              <div style={{fontSize:9,color:"rgba(255,255,255,0.25)",letterSpacing:"0.1em",fontWeight:600,marginBottom:8}}>MEAL CONTEXT</div>
+                              <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",lineHeight:1.5,fontStyle:e.mealDescription?"normal":"italic"}}>{e.mealDescription||"No meal description recorded."}</div>
+                              {meta&&<div style={{marginTop:8}}><span style={{fontSize:9,padding:"2px 8px",borderRadius:99,fontWeight:700,background:`${meta.color}18`,color:meta.color,letterSpacing:"0.07em"}}>{meta.label.toUpperCase()}</span></div>}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 );
               })}
             </tbody>
