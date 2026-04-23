@@ -1,0 +1,226 @@
+You are working on the Glev Next.js app.
+
+GOAL:
+Improve Entry UI clarity, remove redundancy, and elevate Outcome to the same visual importance as Meal Classification.
+
+---
+
+## PART 1 — OUTCOME = SAME VISUAL WEIGHT AS MEAL CLASSIFICATION
+
+### CURRENT PROBLEM
+- Outcome (Overdose / Underdose etc.) is only a small chip
+- Meal Classification is strongly highlighted
+→ imbalance
+
+---
+
+### TARGET
+
+Outcome should be displayed EXACTLY like Meal Classification:
+
+Structure:
+
+[ OUTCOME SECTION ]
+
+- full-width highlighted container (same style as classification)
+- colored background (based on outcome type)
+- chip inside (Overdose / Underdose / Good / Spike)
+- short explanation (1–2 lines)
+
+---
+
+### COLOR SYSTEM
+
+Reuse existing palette:
+
+- Overdose → red/pink
+- Underdose → orange
+- Good → green
+- Spike → yellow
+
+Match:
+- chip color = strong
+- container = same color but soft background (like classification)
+
+---
+
+### TEXT (IMPORTANT)
+
+Add short explanation under chip:
+
+Examples:
+
+Overdose:
+"Insulin exceeded glucose requirements → glucose dropped significantly"
+
+Underdose:
+"Insulin insufficient → glucose increased after meal"
+
+Good:
+"Insulin matched carbohydrate load effectively"
+
+Spike:
+"Rapid glucose increase detected post meal"
+
+---
+
+## PART 2 — REMOVE DUPLICATION IN EXPANDED VIEW
+
+### CURRENT PROBLEM
+
+Top row shows:
+BG / carbs / insulin / classification / outcome
+
+Expanded view shows SAME data again → redundant
+
+---
+
+### NEW LOGIC
+
+#### COLLAPSED VIEW:
+Keep current row (summary view)
+
+#### EXPANDED VIEW:
+
+TOP ROW SIMPLIFIED:
+
+ONLY SHOW:
+→ Date + time
+
+REMOVE:
+- BG
+- carbs
+- insulin
+- classification
+- outcome
+
+---
+
+### WHY
+
+Expanded view already shows:
+
+- Outcome block
+- Classification block
+- Full macros
+- Glucose section
+
+→ summary row becomes noise
+
+---
+
+## PART 3 — ORDER IN EXPANDED VIEW
+
+NEW ORDER:
+
+1. DATE (top)
+2. OUTCOME BLOCK (highlighted)
+3. MEAL CLASSIFICATION BLOCK
+4. MEAL DESCRIPTION
+5. MACROS & DOSING
+6. GLUCOSE
+7. DELETE BUTTON
+
+---
+
+## PART 4 — APPLY EVERYWHERE
+
+Apply same logic to:
+
+- Dashboard expanded entries
+- Entry Log expanded entries
+- Mobile + Desktop
+
+Consistency is critical.
+
+---
+
+## PART 5 — ENGINE PERFORMANCE (CRITICAL)
+
+### CURRENT ISSUE
+Parsing takes ~20 seconds → unacceptable
+
+---
+
+### TARGET
+< 3 seconds total
+
+---
+
+### ACTIONS
+
+#### 1. MINIMIZE PROMPT SIZE
+
+- remove verbose instructions
+- enforce strict JSON response
+- no explanations in response
+
+---
+
+#### 2. USE LOW LATENCY MODEL
+
+Switch to:
+
+→ gpt-4o-mini (or fastest available structured model)
+
+---
+
+#### 3. LIMIT OUTPUT
+
+Return ONLY:
+
+{
+  carbs,
+  protein,
+  fat,
+  fiber,
+  calories,
+  classification,
+  confidence
+}
+
+---
+
+#### 4. TIMEOUT CONTROL
+
+If request > 5s:
+→ fallback to partial estimation
+
+---
+
+#### 5. PARALLELIZE
+
+Run in parallel:
+
+- parsing
+- CGM fetch
+- recommendation precompute
+
+---
+
+## PART 6 — DO NOT BREAK
+
+- existing styling system
+- classification colors
+- recommendation system
+- CGM integration
+
+---
+
+## SUCCESS CRITERIA
+
+✓ Outcome visually equals classification  
+✓ No duplicated data in expanded view  
+✓ Cleaner, calmer UI  
+✓ Faster parsing (<3s)  
+✓ Works mobile + desktop  
+✓ Consistent color system  
+
+---
+
+## OUTPUT
+
+- implement cleanly
+- reuse components
+- no hacks
+- confirm all criteria met

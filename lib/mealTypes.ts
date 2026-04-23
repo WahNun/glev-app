@@ -49,3 +49,44 @@ export function getTypeShort(t?: string | null) {
 export function getTypeExplain(t?: string | null) {
   return t ? TYPE_EXPLAIN[t] || "" : "";
 }
+
+export const EVAL_COLORS: Record<string, string> = {
+  GOOD: PALETTE.GREEN,
+  LOW: PALETTE.ORANGE,
+  HIGH: "#FF2D78",
+  SPIKE: "#FFD60A",
+  OVERDOSE: "#FF2D78",
+  UNDERDOSE: PALETTE.ORANGE,
+  CHECK_CONTEXT: PALETTE.ORANGE,
+};
+
+export const EVAL_LABELS: Record<string, string> = {
+  GOOD: "Good",
+  LOW: "Under Dose",
+  HIGH: "Over Dose",
+  SPIKE: "Spike",
+  OVERDOSE: "Over Dose",
+  UNDERDOSE: "Under Dose",
+  CHECK_CONTEXT: "Review",
+};
+
+export const EVAL_EXPLAIN: Record<string, string> = {
+  GOOD: "Insulin matched carbohydrate load effectively.",
+  HIGH: "Insulin exceeded glucose requirements → glucose dropped significantly.",
+  OVERDOSE: "Insulin exceeded glucose requirements → glucose dropped significantly.",
+  LOW: "Insulin insufficient → glucose increased after meal.",
+  UNDERDOSE: "Insulin insufficient → glucose increased after meal.",
+  SPIKE: "Rapid glucose increase detected post meal.",
+  CHECK_CONTEXT: "Outcome unclear — review context before adjusting.",
+};
+
+export function getEvalColor(ev?: string | null) {
+  return ev ? EVAL_COLORS[ev] || "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.3)";
+}
+export function getEvalLabel(ev?: string | null) {
+  if (!ev) return "—";
+  return EVAL_LABELS[ev] || ev;
+}
+export function getEvalExplain(ev?: string | null) {
+  return ev ? EVAL_EXPLAIN[ev] || "" : "";
+}

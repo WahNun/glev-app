@@ -2,16 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { fetchMeals, deleteMeal, seedMealsIfEmpty, type Meal } from "@/lib/meals";
-import { TYPE_COLORS, TYPE_LABELS, TYPE_SHORT, TYPE_EXPLAIN } from "@/lib/mealTypes";
+import { TYPE_COLORS, TYPE_LABELS, TYPE_SHORT, TYPE_EXPLAIN, getEvalColor, getEvalLabel, getEvalExplain } from "@/lib/mealTypes";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
 
-const EVAL_COLORS: Record<string, string> = { GOOD:GREEN, LOW:ORANGE, HIGH:PINK, SPIKE:"#FF9F0A", OVERDOSE:PINK, UNDERDOSE:ORANGE, CHECK_CONTEXT:ORANGE };
-const EVAL_LABELS: Record<string, string> = { GOOD:"Good", LOW:"Under Dose", HIGH:"Over Dose", SPIKE:"Spike", OVERDOSE:"Over Dose", UNDERDOSE:"Under Dose", CHECK_CONTEXT:"Review" };
-
-function evC(ev: string|null) { return EVAL_COLORS[ev||""] || "rgba(255,255,255,0.3)"; }
-function evL(ev: string|null) { return EVAL_LABELS[ev||""] || ev || "—"; }
+function evC(ev: string|null) { return getEvalColor(ev); }
+function evL(ev: string|null) { return getEvalLabel(ev); }
 
 const FILTERS = ["All","GOOD","UNDERDOSE","OVERDOSE","SPIKE"];
 
@@ -132,50 +129,78 @@ export default function EntriesPage() {
 
             return (
               <div key={m.id} className="entry-row" style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, overflow:"hidden" }}>
-                {/* Collapsed header */}
-                <div onClick={() => setExpanded(isOpen ? null : m.id)} className="entry-header" style={{ padding:"14px 16px", cursor:"pointer", display:"grid", gap:14, alignItems:"center" }}>
-                  {/* Col 1: date + BG + insulin */}
-                  <div style={{ minWidth:0 }}>
-                    <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginBottom:4 }}>{dateStr}</div>
-                    <div style={{ display:"flex", alignItems:"baseline", gap:10, flexWrap:"wrap" }}>
-                      <span style={{ fontSize:18, fontWeight:800, color:bgC, letterSpacing:"-0.02em" }}>{m.glucose_before ?? "—"}<span style={{ fontSize:11, color:"rgba(255,255,255,0.4)", fontWeight:500, marginLeft:3 }}>mg/dL</span></span>
-                      <span style={{ fontSize:12, fontWeight:700, color: m.insulin_units ? ACCENT : "rgba(255,255,255,0.3)" }}>{m.insulin_units ? `${m.insulin_units}u` : "—"}</span>
+                {/* Header — collapsed shows summary; expanded shows only date + time */}
+                {!isOpen ? (
+                  <div onClick={() => setExpanded(m.id)} className="entry-header" style={{ padding:"14px 16px", cursor:"pointer", display:"grid", gap:14, alignItems:"center" }}>
+                    {/* Col 1: date + BG + insulin */}
+                    <div style={{ minWidth:0 }}>
+                      <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginBottom:4 }}>{dateStr}</div>
+                      <div style={{ display:"flex", alignItems:"baseline", gap:10, flexWrap:"wrap" }}>
+                        <span style={{ fontSize:18, fontWeight:800, color:bgC, letterSpacing:"-0.02em" }}>{m.glucose_before ?? "—"}<span style={{ fontSize:11, color:"rgba(255,255,255,0.4)", fontWeight:500, marginLeft:3 }}>mg/dL</span></span>
+                        <span style={{ fontSize:12, fontWeight:700, color: m.insulin_units ? ACCENT : "rgba(255,255,255,0.3)" }}>{m.insulin_units ? `${m.insulin_units}u` : "—"}</span>
+                      </div>
                     </div>
-                  </div>
-                  {/* Col 2: carbs */}
-                  <div style={{ minWidth:0 }}>
-                    <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>CARBS</div>
-                    <div style={{ fontSize:14, fontWeight:700, color:m.carbs_grams ? ORANGE : "rgba(255,255,255,0.3)", letterSpacing:"-0.01em" }}>
-                      {m.carbs_grams ? `${m.carbs_grams}g` : "—"}
+                    {/* Col 2: carbs */}
+                    <div style={{ minWidth:0 }}>
+                      <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>CARBS</div>
+                      <div style={{ fontSize:14, fontWeight:700, color:m.carbs_grams ? ORANGE : "rgba(255,255,255,0.3)", letterSpacing:"-0.01em" }}>
+                        {m.carbs_grams ? `${m.carbs_grams}g` : "—"}
+                      </div>
                     </div>
+                    {/* Col 3: subtle classification indicator (dot + short code) */}
+                    <div className="entry-cat-cell" style={{ minWidth:0, display:"flex", justifyContent:"center", alignItems:"center", gap:6 }}>
+                      {catColor && catShort ? (
+                        <>
+                          <span style={{ width:6, height:6, borderRadius:99, background:catColor, opacity:0.7 }} />
+                          <span title={catLabel || ""} style={{ fontSize:10, fontWeight:600, color:`${catColor}b3`, letterSpacing:"0.06em" }}>{catShort}</span>
+                        </>
+                      ) : (
+                        <span style={{ fontSize:11, color:"rgba(255,255,255,0.25)" }}>—</span>
+                      )}
+                    </div>
+                    {/* Col 4: evaluation badge */}
+                    <span style={{ padding:"5px 12px", borderRadius:99, fontSize:10, fontWeight:700, background:`${evColor}18`, color:evColor, border:`1px solid ${evColor}30`, whiteSpace:"nowrap", letterSpacing:"0.05em", textTransform:"uppercase" }}>
+                      {evL(ev)}
+                    </span>
+                    {/* Col 5: chevron */}
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="2.5" strokeLinecap="round" style={{ transform:"rotate(0deg)", transition:"transform 0.2s", flexShrink:0 }}>
+                      <polyline points="9 6 15 12 9 18"/>
+                    </svg>
                   </div>
-                  {/* Col 3: subtle classification indicator (dot + short code) */}
-                  <div className="entry-cat-cell" style={{ minWidth:0, display:"flex", justifyContent:"center", alignItems:"center", gap:6 }}>
-                    {catColor && catShort ? (
-                      <>
-                        <span style={{ width:6, height:6, borderRadius:99, background:catColor, opacity:0.7 }} />
-                        <span title={catLabel || ""} style={{ fontSize:10, fontWeight:600, color:`${catColor}b3`, letterSpacing:"0.06em" }}>{catShort}</span>
-                      </>
-                    ) : (
-                      <span style={{ fontSize:11, color:"rgba(255,255,255,0.25)" }}>—</span>
-                    )}
+                ) : (
+                  <div onClick={() => setExpanded(null)} style={{ padding:"14px 16px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between", gap:14 }}>
+                    <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)", letterSpacing:"0.02em" }}>
+                      {dateStr}
+                      <span style={{ color:"rgba(255,255,255,0.25)", margin:"0 8px" }}>·</span>
+                      {date.toLocaleTimeString("en", { hour:"numeric", minute:"2-digit" })}
+                    </div>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2.5" strokeLinecap="round" style={{ transform:"rotate(90deg)", transition:"transform 0.2s", flexShrink:0 }}>
+                      <polyline points="9 6 15 12 9 18"/>
+                    </svg>
                   </div>
-                  {/* Col 4: evaluation badge */}
-                  <span style={{ padding:"5px 12px", borderRadius:99, fontSize:10, fontWeight:700, background:`${evColor}18`, color:evColor, border:`1px solid ${evColor}30`, whiteSpace:"nowrap", letterSpacing:"0.05em", textTransform:"uppercase" }}>
-                    {evL(ev)}
-                  </span>
-                  {/* Col 5: chevron */}
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="2.5" strokeLinecap="round" style={{ transform:isOpen?"rotate(90deg)":"rotate(0deg)", transition:"transform 0.2s", flexShrink:0 }}>
-                    <polyline points="9 6 15 12 9 18"/>
-                  </svg>
-                </div>
+                )}
 
                 {/* Expanded body */}
                 {isOpen && (
                   <div style={{ padding:"4px 16px 16px", borderTop:`1px solid rgba(255,255,255,0.04)`, display:"flex", flexDirection:"column", gap:14 }}>
+                    {/* OUTCOME — highlighted card */}
+                    {ev && (
+                      <div style={{ marginTop:14, background:`${evColor}10`, border:`1px solid ${evColor}40`, borderRadius:12, padding:"12px 14px", display:"flex", flexDirection:"column", gap:8 }}>
+                        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
+                          <div style={{ fontSize:9, color:"rgba(255,255,255,0.5)", letterSpacing:"0.1em", fontWeight:700 }}>OUTCOME</div>
+                          <span style={{ padding:"6px 14px", borderRadius:99, fontSize:11, fontWeight:700, background:evColor, color:"#0A0A0F", whiteSpace:"nowrap", letterSpacing:"0.04em", textTransform:"uppercase" }}>
+                            {evL(ev)}
+                          </span>
+                        </div>
+                        {getEvalExplain(ev) && (
+                          <div style={{ fontSize:12, color:"rgba(255,255,255,0.6)", lineHeight:1.5 }}>{getEvalExplain(ev)}</div>
+                        )}
+                      </div>
+                    )}
+
                     {/* CLASSIFICATION — highlighted card with explanation */}
                     {catLabel && catColor && (
-                      <div style={{ marginTop:14, background:`${catColor}10`, border:`1px solid ${catColor}40`, borderRadius:12, padding:"12px 14px", display:"flex", flexDirection:"column", gap:8 }}>
+                      <div style={{ background:`${catColor}10`, border:`1px solid ${catColor}40`, borderRadius:12, padding:"12px 14px", display:"flex", flexDirection:"column", gap:8 }}>
                         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
                           <div style={{ fontSize:9, color:"rgba(255,255,255,0.5)", letterSpacing:"0.1em", fontWeight:700 }}>MEAL CLASSIFICATION</div>
                           <span style={{ padding:"6px 14px", borderRadius:99, fontSize:11, fontWeight:700, background:catColor, color:"#0A0A0F", whiteSpace:"nowrap", letterSpacing:"0.04em", textTransform:"uppercase" }}>

@@ -3,16 +3,13 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { fetchMeals, seedMealsIfEmpty, type Meal } from "@/lib/meals";
-import { TYPE_COLORS, TYPE_LABELS, TYPE_SHORT, TYPE_EXPLAIN } from "@/lib/mealTypes";
+import { TYPE_COLORS, TYPE_LABELS, TYPE_SHORT, TYPE_EXPLAIN, getEvalColor, getEvalLabel, getEvalExplain } from "@/lib/mealTypes";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
 
-const EVAL_COLORS: Record<string, string> = { GOOD:GREEN, LOW:ORANGE, HIGH:PINK, SPIKE:"#FF9F0A", OVERDOSE:PINK, UNDERDOSE:ORANGE, CHECK_CONTEXT:ORANGE };
-const EVAL_LABELS: Record<string, string> = { GOOD:"Good", LOW:"Under Dose", HIGH:"Over Dose", SPIKE:"Spike", OVERDOSE:"Over Dose", UNDERDOSE:"Under Dose", CHECK_CONTEXT:"Review" };
-
-function evalColor(ev: string | null) { return EVAL_COLORS[ev ?? ""] || "rgba(255,255,255,0.3)"; }
-function evalLabel(ev: string | null) { return EVAL_LABELS[ev ?? ""] || ev || "—"; }
+function evalColor(ev: string | null) { return getEvalColor(ev); }
+function evalLabel(ev: string | null) { return getEvalLabel(ev); }
 
 interface CardData {
   key: string; label: string; color: string;
@@ -287,11 +284,18 @@ export default function DashboardPage() {
               const time = new Date(m.created_at).toLocaleString("en", { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" });
               return (
                 <div key={m.id} style={{ borderBottom:`1px solid ${BORDER}` }}>
-                  {(() => {
+                  {isOpen ? (
+                    <div onClick={() => setExpanded(null)} style={{ padding:"14px 24px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between", gap:16 }}>
+                      <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)", letterSpacing:"0.02em" }}>{time}</div>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2.5" strokeLinecap="round" style={{ transform:"rotate(90deg)", flexShrink:0 }}>
+                        <polyline points="9 6 15 12 9 18"/>
+                      </svg>
+                    </div>
+                  ) : (() => {
                     const bg = m.glucose_before;
                     const bgC = bg == null ? "rgba(255,255,255,0.3)" : (bg > 140 ? ORANGE : bg < 80 ? PINK : GREEN);
                     return (
-                  <div className="glev-entry-row" onClick={() => setExpanded(isOpen ? null : m.id)} style={{ padding:"14px 24px", cursor:"pointer", display:"grid", gridTemplateColumns:"130px 70px 1fr 1fr 1fr 110px", gap:24, alignItems:"center" }}>
+                  <div className="glev-entry-row" onClick={() => setExpanded(m.id)} style={{ padding:"14px 24px", cursor:"pointer", display:"grid", gridTemplateColumns:"130px 70px 1fr 1fr 1fr 110px", gap:24, alignItems:"center" }}>
                     {/* Col 1: Time */}
                     <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)" }}>{time}</div>
                     {/* Col 2: Subtle classification indicator (dot + short code) */}
@@ -353,25 +357,35 @@ export default function DashboardPage() {
                     );
                     return (
                       <div style={{ padding:"0 24px 16px", display:"flex", flexDirection:"column", gap:10 }}>
-                        {/* Row -1 — Outcome evaluation */}
-                        <div style={{ display:"flex", alignItems:"center", gap:10, paddingTop:4 }}>
-                          <span style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.1em", fontWeight:700, textTransform:"uppercase" }}>Outcome</span>
-                          <span style={{ padding:"4px 12px", borderRadius:99, fontSize:11, fontWeight:700, background:`${evalColor(ev)}18`, color:evalColor(ev), border:`1px solid ${evalColor(ev)}30`, whiteSpace:"nowrap", letterSpacing:"0.05em", textTransform:"uppercase" }}>
-                            {evalLabel(ev)}
-                          </span>
-                        </div>
-                        {/* Row 0a — Meal classification with explanation */}
+                        {/* Outcome — highlighted block, same weight as classification */}
+                        {ev && (() => {
+                          const c = evalColor(ev);
+                          return (
+                            <div style={{ marginTop:4, background:`${c}12`, border:`1px solid ${c}40`, borderRadius:10, padding:"10px 14px" }}>
+                              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, marginBottom: getEvalExplain(ev) ? 6 : 0 }}>
+                                <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.1em", fontWeight:700 }}>OUTCOME</div>
+                                <span style={{ padding:"4px 12px", borderRadius:99, fontSize:11, fontWeight:700, background:`${c}22`, color:c, border:`1px solid ${c}40`, whiteSpace:"nowrap", letterSpacing:"0.04em", textTransform:"uppercase" }}>
+                                  {evalLabel(ev)}
+                                </span>
+                              </div>
+                              {getEvalExplain(ev) && (
+                                <div style={{ fontSize:12, color:"rgba(255,255,255,0.6)", lineHeight:1.5 }}>{getEvalExplain(ev)}</div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                        {/* Meal classification — highlighted block */}
                         {m.meal_type && (() => {
                           const c = TYPE_COLORS[m.meal_type] || "rgba(255,255,255,0.5)";
                           return (
                             <div style={{ background:`${c}12`, border:`1px solid ${c}30`, borderRadius:10, padding:"10px 14px" }}>
-                              <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.1em", fontWeight:700, marginBottom:6 }}>MEAL CLASSIFICATION</div>
-                              <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+                              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, marginBottom:6 }}>
+                                <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.1em", fontWeight:700 }}>MEAL CLASSIFICATION</div>
                                 <span style={{ padding:"4px 12px", borderRadius:99, fontSize:11, fontWeight:700, background:`${c}22`, color:c, border:`1px solid ${c}40`, whiteSpace:"nowrap", letterSpacing:"0.04em" }}>
                                   {TYPE_LABELS[m.meal_type]}
                                 </span>
-                                <span style={{ fontSize:12, color:"rgba(255,255,255,0.6)", lineHeight:1.5 }}>{TYPE_EXPLAIN[m.meal_type]}</span>
                               </div>
+                              <span style={{ fontSize:12, color:"rgba(255,255,255,0.6)", lineHeight:1.5 }}>{TYPE_EXPLAIN[m.meal_type]}</span>
                             </div>
                           );
                         })()}
