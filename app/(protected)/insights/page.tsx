@@ -37,6 +37,13 @@ export default function InsightsPage() {
     </div>
   );
 
+  const now = Date.now();
+  const oneWeekMs = 7 * 86400000;
+  const last7 = meals.filter(m => now - new Date(m.created_at).getTime() <= oneWeekMs);
+  const last7Good = last7.filter(m => EVAL_NORM(m.evaluation) === "GOOD").length;
+  const last7Carbs = Math.round(last7.reduce((s,m) => s + (m.carbs_grams || 0), 0));
+  const last7Insulin = Math.round(last7.reduce((s,m) => s + (m.insulin_units || 0), 0) * 10) / 10;
+
   const normed = meals.map(m => ({ ...m, ev: EVAL_NORM(m.evaluation) }));
   const good   = normed.filter(m => m.ev==="GOOD").length;
   const low    = normed.filter(m => m.ev==="LOW").length;
@@ -112,6 +119,29 @@ export default function InsightsPage() {
       <div style={{ marginBottom:28 }}>
         <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>Insights</h1>
         <p style={{ color:"rgba(255,255,255,0.35)", fontSize:14 }}>Deep analysis of your {total} logged meals.</p>
+      </div>
+
+      {/* OVERVIEW */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:20 }}>
+        {[
+          { label:"Total Meals", val:total.toString(), sub:"all time", color:ACCENT },
+          { label:"Avg Carbs / Meal", val:`${avgCarbs}g`, sub:"per meal", color:ORANGE },
+          { label:"Last 7 Days", val:last7.length.toString(), sub:`${last7Good} good · ${last7Carbs}g carbs · ${last7Insulin}u insulin`, color:GREEN },
+          { label:"Avg Glucose", val:avgGlucose.toString(), sub:"mg/dL pre-meal", color:"#60A5FA" },
+        ].map(t => (
+          <div key={t.label} style={card}>
+            <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase", marginBottom:8 }}>{t.label}</div>
+            <div style={{ fontSize:30, fontWeight:800, letterSpacing:"-0.03em", color:t.color, lineHeight:1 }}>{t.val}</div>
+            <div style={{ fontSize:11, color:"rgba(255,255,255,0.32)", marginTop:6 }}>{t.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* GLUCOSE TREND */}
+      <div style={{ ...card, marginBottom:20 }}>
+        <div style={{ fontSize:14, fontWeight:600, marginBottom:4 }}>Glucose Trend</div>
+        <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginBottom:14 }}>Average pre-meal glucose over the last 14 days</div>
+        <TrendSparkline meals={meals}/>
       </div>
 
       {/* PERFORMANCE TILES */}
@@ -214,5 +244,59 @@ function StatRow({ label, val, color }: { label:string; val:string; color?:strin
       <span style={{ fontSize:12, color:"rgba(255,255,255,0.35)" }}>{label}</span>
       <span style={{ fontSize:12, fontWeight:600, color:color||"rgba(255,255,255,0.7)" }}>{val}</span>
     </div>
+  );
+}
+
+function TrendSparkline({ meals }: { meals: Meal[] }) {
+  const DAYS = 14;
+  const now = Date.now();
+  const buckets: Record<string, number[]> = {};
+  for (let i = 0; i < DAYS; i++) {
+    const d = new Date(now - (DAYS-1-i) * 86400000);
+    buckets[d.toDateString()] = [];
+  }
+  meals.forEach(m => {
+    const d = new Date(m.created_at).toDateString();
+    if (d in buckets && m.glucose_before) buckets[d].push(m.glucose_before);
+  });
+  const raw = Object.values(buckets).map(arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : null);
+  const filled: number[] = [];
+  let last = 110;
+  raw.forEach(v => { if (v !== null) last = v; filled.push(last); });
+
+  const W = 600, H = 120, pad = 24;
+  const mn = 70, mx = 230;
+  const toY = (v: number) => H - ((v - mn) / (mx - mn)) * (H - pad) - pad/2;
+  const toX = (i: number) => (i / (DAYS - 1)) * (W - 2*pad) + pad;
+  const path = filled.map((v,i) => `${i===0?"M":"L"}${toX(i)},${toY(v)}`).join(" ");
+  const area = path + ` L${toX(DAYS-1)},${H} L${toX(0)},${H} Z`;
+  const labels = Object.keys(buckets);
+  const showIdx = [0, Math.floor(DAYS/4), Math.floor(DAYS/2), Math.floor(3*DAYS/4), DAYS-1];
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H+10}`} style={{ width:"100%", overflow:"visible" }}>
+      {[80,110,140,180].map(v => (
+        <g key={v}>
+          <line x1={pad} y1={toY(v)} x2={W-pad} y2={toY(v)} stroke="rgba(255,255,255,0.05)" strokeDasharray="4"/>
+          <text x={pad-4} y={toY(v)+4} textAnchor="end" fontSize="9" fill="rgba(255,255,255,0.2)">{v}</text>
+        </g>
+      ))}
+      <defs>
+        <linearGradient id="insTrendGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#4F6EF7" stopOpacity="0.28"/>
+          <stop offset="100%" stopColor="#4F6EF7" stopOpacity="0"/>
+        </linearGradient>
+      </defs>
+      <path d={area} fill="url(#insTrendGrad)"/>
+      <path d={path} fill="none" stroke="#4F6EF7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      {filled.map((v,i) => raw[i] !== null ? (
+        <circle key={i} cx={toX(i)} cy={toY(v)} r="3" fill="#4F6EF7" stroke="#111117" strokeWidth="1.5"/>
+      ) : null)}
+      {showIdx.map(i => (
+        <text key={i} x={toX(i)} y={H+22} textAnchor="middle" fontSize="9" fill="rgba(255,255,255,0.25)">
+          {new Date(labels[i]).toLocaleDateString("en",{month:"short",day:"numeric"})}
+        </text>
+      ))}
+    </svg>
   );
 }

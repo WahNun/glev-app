@@ -1,48 +1,127 @@
 "use client";
 
 import { useState } from "react";
-import { saveMeal, classifyMeal, computeEvaluation } from "@/lib/meals";
+import { saveMeal, classifyMeal, computeEvaluation, computeCalories } from "@/lib/meals";
 import { logDebug } from "@/lib/debug";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
 
-interface ParsedRow { date: string; meal: string; glucose: string; carbs: string; insulin: string; evaluation: string; }
+interface ParsedRow {
+  date: string;
+  meal: string;
+  glucose: string;
+  carbs: string;
+  insulin: string;
+  evaluation: string;
+  protein: string;
+  fat: string;
+  fiber: string;
+  calories: string;
+}
 
-function parseRange(val: string): string {
-  const cleaned = val.replace(/[a-zA-Z]/g, "").trim();
+function parseNumberLike(val: string): string {
+  if (!val) return "";
+  const cleaned = val.replace(/[^0-9.\-–—\s]/g, "").trim();
   const rangeMatch = cleaned.match(/^(\d+(?:\.\d+)?)\s*[-–—]\s*(\d+(?:\.\d+)?)$/);
   if (rangeMatch) {
     const avg = (parseFloat(rangeMatch[1]) + parseFloat(rangeMatch[2])) / 2;
-    return Math.round(avg).toString();
+    return Math.round(avg * 10) / 10 + "";
   }
-  return cleaned;
+  const n = parseFloat(cleaned);
+  return isNaN(n) ? "" : cleaned;
+}
+
+function splitCSVLine(line: string): string[] {
+  const cells: string[] = [];
+  let cur = "";
+  let inQuote = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuote) {
+      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+      else if (ch === '"') { inQuote = false; }
+      else cur += ch;
+    } else {
+      if (ch === '"') inQuote = true;
+      else if (ch === ",") { cells.push(cur); cur = ""; }
+      else cur += ch;
+    }
+  }
+  cells.push(cur);
+  return cells.map(c => c.trim());
+}
+
+function normalizeHeader(h: string): string {
+  return h.toLowerCase().replace(/[^a-z0-9_]/g, "");
+}
+
+function mapHeader(h: string): keyof ParsedRow | null {
+  if (/^(carbs?|carbohydrates?|carbs_grams|carbgrams|netcarbs)$/.test(h)) return "carbs";
+  if (/^(protein|proteins|proteingrams|protein_g)$/.test(h)) return "protein";
+  if (/^(fat|fats|fatgrams|fat_g)$/.test(h)) return "fat";
+  if (/^(fiber|fibre|fibergrams|fiber_g)$/.test(h)) return "fiber";
+  if (/^(calories|kcal|cals|energy)$/.test(h)) return "calories";
+  if (/^(insulin|dose|bolus|units|insulinunits|bolusunits)$/.test(h)) return "insulin";
+  if (/^(glucose|bg|sugar|bloodglucose|glucosebefore|bg_before)$/.test(h)) return "glucose";
+  if (/^(evaluation|eval|result|outcome|dose_quality)$/.test(h)) return "evaluation";
+  if (/^(date|datetime|timestamp|createdat|logdate|when)$/.test(h)) return "date";
+  if (/^(meal|food|description|input|item|name|notes)$/.test(h)) return "meal";
+  if (h.includes("carb")) return "carbs";
+  if (h.includes("protein")) return "protein";
+  if (h.includes("fat")) return "fat";
+  if (h.includes("fiber") || h.includes("fibre")) return "fiber";
+  if (h.includes("calor") || h.includes("kcal")) return "calories";
+  if (h.includes("insulin") || h.includes("dose") || h.includes("bolus")) return "insulin";
+  if (h.includes("glucose") || h.includes("sugar") || h === "bg") return "glucose";
+  if (h.includes("eval") || h.includes("result")) return "evaluation";
+  if (h.includes("date") || h.includes("time")) return "date";
+  if (h.includes("meal") || h.includes("food") || h.includes("desc")) return "meal";
+  return null;
 }
 
 function parseCSV(text: string): ParsedRow[] {
-  const lines = text.trim().split("\n").filter(l => l.trim());
+  const lines = text.trim().split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) return [];
-  const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/[^a-z_]/g, ""));
-  const colMap: Record<string, number> = {};
+  const headers = splitCSVLine(lines[0]).map(normalizeHeader);
+
+  const colMap: Partial<Record<keyof ParsedRow, number>> = {};
   headers.forEach((h, i) => {
-    if (h.includes("date")||h.includes("time")) colMap.date  = i;
-    if (h.includes("meal")||h.includes("food")||h.includes("desc")) colMap.meal  = i;
-    if (h.includes("glucose")||h.includes("bg")||h.includes("sugar")) colMap.glucose = i;
-    if (h.includes("carb")) colMap.carbs = i;
-    if (h.includes("insulin")||h.includes("dose")) colMap.insulin = i;
-    if (h.includes("eval")||h.includes("result")) colMap.evaluation = i;
+    const field = mapHeader(h);
+    if (field && colMap[field] === undefined) colMap[field] = i;
   });
+
   return lines.slice(1).map(line => {
-    const cells = line.split(",").map(c => c.trim().replace(/^["']|["']$/g,""));
+    const cells = splitCSVLine(line);
+    const get = (k: keyof ParsedRow) => {
+      const idx = colMap[k];
+      return idx !== undefined ? (cells[idx] ?? "") : "";
+    };
     return {
-      date:       cells[colMap.date  ?? 0] ?? "",
-      meal:       cells[colMap.meal  ?? 1] ?? "",
-      glucose:    parseRange(cells[colMap.glucose ?? 2] ?? ""),
-      carbs:      parseRange(cells[colMap.carbs  ?? 3] ?? ""),
-      insulin:    parseRange(cells[colMap.insulin ?? 4] ?? ""),
-      evaluation: cells[colMap.evaluation ?? 5] ?? "",
+      date:       get("date"),
+      meal:       get("meal"),
+      glucose:    parseNumberLike(get("glucose")),
+      carbs:      parseNumberLike(get("carbs")),
+      insulin:    parseNumberLike(get("insulin")),
+      evaluation: get("evaluation"),
+      protein:    parseNumberLike(get("protein")),
+      fat:        parseNumberLike(get("fat")),
+      fiber:      parseNumberLike(get("fiber")),
+      calories:   parseNumberLike(get("calories")),
     };
   }).filter(r => r.meal || r.carbs);
+}
+
+function toISO(dateStr: string): string | undefined {
+  if (!dateStr) return undefined;
+  const s = dateStr.trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    const iso = s.length === 10 ? `${s}T12:00:00Z` : s;
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? undefined : d.toISOString();
+  }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? undefined : d.toISOString();
 }
 
 export default function ImportPage() {
@@ -70,29 +149,39 @@ export default function ImportPage() {
     const errs: string[] = [];
     for (const row of rows) {
       try {
-        const carbs   = parseInt(row.carbs)   || 0;
+        const carbs   = parseFloat(row.carbs)   || 0;
         const insulin = parseFloat(row.insulin) || null;
-        const glucose = parseInt(row.glucose) || null;
+        const glucose = parseInt(row.glucose)   || null;
+        const protein = parseFloat(row.protein) || 0;
+        const fat     = parseFloat(row.fat)     || 0;
+        const fiber   = parseFloat(row.fiber)   || 0;
+        const calories = row.calories
+          ? parseFloat(row.calories)
+          : computeCalories(carbs, protein, fat);
         const ev = row.evaluation
-          ? (["GOOD","LOW","HIGH","SPIKE","OVERDOSE","UNDERDOSE"].includes(row.evaluation.toUpperCase()) ? row.evaluation.toUpperCase() : computeEvaluation(carbs, insulin||0, glucose))
+          ? (["GOOD","LOW","HIGH","SPIKE","OVERDOSE","UNDERDOSE"].includes(row.evaluation.toUpperCase())
+             ? row.evaluation.toUpperCase()
+             : computeEvaluation(carbs, insulin||0, glucose))
           : (insulin ? computeEvaluation(carbs, insulin, glucose) : "GOOD");
+        const createdAt = toISO(row.date);
         await saveMeal({
           inputText: row.meal || "Imported meal",
           parsedJson: [],
           glucoseBefore: glucose,
           glucoseAfter: null,
           carbsGrams: carbs,
-          proteinGrams: 0,
-          fatGrams: 0,
-          fiberGrams: 0,
-          calories: carbs * 4,
+          proteinGrams: protein,
+          fatGrams: fat,
+          fiberGrams: fiber,
+          calories,
           insulinUnits: insulin,
-          mealType: classifyMeal(carbs, 0, 0),
+          mealType: classifyMeal(carbs, protein, fat),
           evaluation: ev,
+          createdAt: createdAt ?? null,
         });
         count++;
       } catch (e) {
-        errs.push(`Row "${row.meal}": ${e instanceof Error ? e.message : "failed"}`);
+        errs.push(`Row "${row.meal || row.date || "?"}": ${e instanceof Error ? e.message : "failed"}`);
       }
     }
     setImported(count);
@@ -105,28 +194,26 @@ export default function ImportPage() {
   const inp: React.CSSProperties = { background:"#0D0D12", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 14px", color:"#fff", fontSize:14, outline:"none", width:"100%" };
   const card: React.CSSProperties = { background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"20px 24px" };
 
-  const SAMPLE = `date,meal,glucose_before,carbs,insulin,evaluation
-2024-03-01,Oatmeal with banana,98,74,5.0,GOOD
-2024-03-01,Turkey sandwich,112,53,3.5,GOOD
-2024-03-02,Pancakes,105,92,4.0,LOW`;
+  const SAMPLE = `date,meal,glucose,carbs,protein,fat,fiber,calories,insulin,evaluation
+2024-03-01,Oatmeal with banana,98,74,8,3,8,380,5.0,GOOD
+2024-03-01,Turkey sandwich,112,53,25,9,4,390,3.5,GOOD
+2024-03-02,Pancakes,105,92,12,10,2,510,4.0,LOW`;
 
   return (
     <div style={{ maxWidth:800, margin:"0 auto" }}>
       <div style={{ marginBottom:28 }}>
         <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>Import Center</h1>
-        <p style={{ color:"rgba(255,255,255,0.35)", fontSize:14 }}>Import historical meal data from CSV. Maps common column names automatically.</p>
+        <p style={{ color:"rgba(255,255,255,0.35)", fontSize:14 }}>Import historical meal data from CSV. Headers are mapped automatically and dates are preserved.</p>
       </div>
 
-      {/* INSTRUCTIONS */}
       <div style={{ ...card, marginBottom:20, borderColor:`${ACCENT}25` }}>
         <div style={{ fontSize:13, fontWeight:600, color:ACCENT, marginBottom:10 }}>Expected CSV Format</div>
         <pre style={{ fontFamily:"monospace", fontSize:11, color:"rgba(255,255,255,0.5)", background:"rgba(0,0,0,0.3)", padding:"12px 14px", borderRadius:8, overflowX:"auto", lineHeight:1.6, margin:0 }}>{SAMPLE}</pre>
         <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:10, lineHeight:1.6 }}>
-          Column names are detected automatically. Supported: <code style={{color:"rgba(255,255,255,0.5)"}}>date</code>, <code style={{color:"rgba(255,255,255,0.5)"}}>meal/food/description</code>, <code style={{color:"rgba(255,255,255,0.5)"}}>glucose/bg</code>, <code style={{color:"rgba(255,255,255,0.5)"}}>carbs</code>, <code style={{color:"rgba(255,255,255,0.5)"}}>insulin/dose</code>, <code style={{color:"rgba(255,255,255,0.5)"}}>evaluation/result</code>
+          Columns auto-detected. Supported: date, meal/food/description, glucose/bg, carbs, protein, fat, fiber, calories, insulin/dose, evaluation/result.
         </div>
       </div>
 
-      {/* CSV INPUT */}
       <div style={{ ...card, marginBottom:20 }}>
         <div style={{ fontSize:13, fontWeight:600, marginBottom:12 }}>Paste CSV Data</div>
         <textarea
@@ -149,13 +236,12 @@ export default function ImportPage() {
         </div>
       </div>
 
-      {/* PREVIEW TABLE */}
       {parsed && rows.length > 0 && (
         <div style={{ ...card, marginBottom:20 }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
             <div>
               <div style={{ fontSize:13, fontWeight:600 }}>Preview — {rows.length} rows detected</div>
-              <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:2 }}>Review before importing</div>
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:2 }}>Dates are preserved on import.</div>
             </div>
             {!done && (
               <button onClick={handleImport} disabled={importing} style={{
@@ -171,7 +257,7 @@ export default function ImportPage() {
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead>
                 <tr style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase" }}>
-                  {["Date","Meal","Glucose","Carbs","Insulin","Eval"].map(h => (
+                  {["Date","Meal","Gluc","Carbs","Prot","Fat","Fib","Cal","Ins","Eval"].map(h => (
                     <th key={h} style={{ padding:"8px 10px", textAlign:"left", borderBottom:`1px solid ${BORDER}`, fontWeight:400 }}>{h}</th>
                   ))}
                 </tr>
@@ -180,9 +266,13 @@ export default function ImportPage() {
                 {rows.slice(0,10).map((r,i) => (
                   <tr key={i} style={{ fontSize:12, borderBottom:`1px solid rgba(255,255,255,0.03)` }}>
                     <td style={{ padding:"9px 10px", color:"rgba(255,255,255,0.4)" }}>{r.date||"—"}</td>
-                    <td style={{ padding:"9px 10px" }}>{r.meal.length>35?r.meal.slice(0,35)+"…":r.meal||"—"}</td>
+                    <td style={{ padding:"9px 10px" }}>{r.meal.length>28?r.meal.slice(0,28)+"…":r.meal||"—"}</td>
                     <td style={{ padding:"9px 10px", color:"rgba(255,255,255,0.5)" }}>{r.glucose||"—"}</td>
                     <td style={{ padding:"9px 10px", color:"rgba(255,255,255,0.5)" }}>{r.carbs?`${r.carbs}g`:"—"}</td>
+                    <td style={{ padding:"9px 10px", color:"rgba(255,255,255,0.5)" }}>{r.protein?`${r.protein}g`:"—"}</td>
+                    <td style={{ padding:"9px 10px", color:"rgba(255,255,255,0.5)" }}>{r.fat?`${r.fat}g`:"—"}</td>
+                    <td style={{ padding:"9px 10px", color:"rgba(255,255,255,0.5)" }}>{r.fiber?`${r.fiber}g`:"—"}</td>
+                    <td style={{ padding:"9px 10px", color:"rgba(255,255,255,0.5)" }}>{r.calories?`${r.calories}`:"—"}</td>
                     <td style={{ padding:"9px 10px", color:"rgba(255,255,255,0.5)" }}>{r.insulin?`${r.insulin}u`:"—"}</td>
                     <td style={{ padding:"9px 10px" }}>{r.evaluation||"auto"}</td>
                   </tr>
@@ -200,7 +290,6 @@ export default function ImportPage() {
         </div>
       )}
 
-      {/* RESULT */}
       {done && (
         <div style={{ padding:"20px 24px", borderRadius:14, background:`${GREEN}10`, border:`1px solid ${GREEN}30` }}>
           <div style={{ fontSize:16, fontWeight:700, color:GREEN, marginBottom:4 }}>

@@ -40,17 +40,35 @@ export default function LogPage() {
   const [success, setSuccess]     = useState(false);
   const [speechAvail, setSpeechAvail] = useState(true);
   const [pulse, setPulse]         = useState(false);
+  const [manualMode, setManualMode] = useState(false);
+  const [mCarbs, setMCarbs]       = useState("");
+  const [mProtein, setMProtein]   = useState("");
+  const [mFat, setMFat]           = useState("");
+  const [mFiber, setMFiber]       = useState("");
+  const [mCalories, setMCalories] = useState("");
   const recRef = useRef<SpeechRec | null>(null);
   const finalRef = useRef("");
 
   useEffect(() => { if (!getSR()) setSpeechAvail(false); }, []);
 
-  const totalCarbs   = foods.reduce((s, f) => s + (f.carbs   || 0), 0);
-  const totalProtein = foods.reduce((s, f) => s + (f.protein || 0), 0);
-  const totalFat     = foods.reduce((s, f) => s + (f.fat     || 0), 0);
-  const totalFiber   = foods.reduce((s, f) => s + (f.fiber   || 0), 0);
-  const totalCalories = computeCalories(totalCarbs, totalProtein, totalFat);
-  const mealType   = foods.length ? classifyMeal(totalCarbs, totalProtein, totalFat) : null;
+  const mNum = (v: string): number | null => {
+    if (!v.trim()) return null;
+    const n = parseFloat(v);
+    return isNaN(n) ? null : n;
+  };
+
+  const parsedCarbs   = foods.reduce((s, f) => s + (f.carbs   || 0), 0);
+  const parsedProtein = foods.reduce((s, f) => s + (f.protein || 0), 0);
+  const parsedFat     = foods.reduce((s, f) => s + (f.fat     || 0), 0);
+  const parsedFiber   = foods.reduce((s, f) => s + (f.fiber   || 0), 0);
+
+  const totalCarbs   = mNum(mCarbs)   ?? parsedCarbs;
+  const totalProtein = mNum(mProtein) ?? parsedProtein;
+  const totalFat     = mNum(mFat)     ?? parsedFat;
+  const totalFiber   = mNum(mFiber)   ?? parsedFiber;
+  const totalCalories = mNum(mCalories) ?? computeCalories(totalCarbs, totalProtein, totalFat);
+  const hasAny = foods.length > 0 || totalCarbs > 0 || totalProtein > 0 || totalFat > 0;
+  const mealType   = hasAny ? classifyMeal(totalCarbs, totalProtein, totalFat) : null;
   const glucoseNum = parseFloat(glucoseBefore) || null;
   const insulinNum = parseFloat(insulinUnits)  || null;
   let suggested = totalCarbs / 15;
@@ -109,12 +127,12 @@ export default function LogPage() {
   function addFood() { setFoods(prev => [...prev, { name: "New item", grams: 100, carbs: 0, protein: 0, fat: 0, fiber: 0 }]); }
 
   async function handleConfirm() {
-    if (!foods.length) { setError("Add at least one food item."); return; }
+    if (!hasAny) { setError("Add a food item or enter macros manually."); return; }
     setSaving(true); setError("");
     try {
       const ev = insulinNum ? computeEvaluation(totalCarbs, insulinNum, glucoseNum) : "GOOD";
       await saveMeal({
-        inputText: rawText || foods.map(f => f.name).join(", "),
+        inputText: rawText || foods.map(f => f.name).join(", ") || "Manual entry",
         parsedJson: foods,
         glucoseBefore: glucoseNum, glucoseAfter: null,
         carbsGrams: totalCarbs,
@@ -199,7 +217,7 @@ export default function LogPage() {
       </div>
 
       {/* DUAL PANELS */}
-      {(rawText || foods.length > 0) && (
+      {(rawText || hasAny) && (
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:20 }}>
           {/* LEFT: Raw text */}
           <div style={card}>
@@ -251,7 +269,7 @@ export default function LogPage() {
       )}
 
       {/* MACRO SUMMARY */}
-      {foods.length > 0 && (
+      {hasAny && (
         <div style={{ ...card, marginBottom:20 }}>
           <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:14 }}>Macro Summary</div>
           <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
@@ -278,6 +296,49 @@ export default function LogPage() {
           )}
         </div>
       )}
+
+      {/* MANUAL MACROS */}
+      <div style={{ ...card, marginBottom:20 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+          <div>
+            <div style={{ fontSize:13, fontWeight:600 }}>Manual Macros</div>
+            <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:2 }}>Override or enter macros directly without parsing.</div>
+          </div>
+          <button
+            onClick={() => setManualMode(m => !m)}
+            style={{
+              padding:"6px 14px", borderRadius:99, fontSize:12, fontWeight:600, cursor:"pointer",
+              border:`1px solid ${manualMode ? ACCENT : BORDER}`,
+              background: manualMode ? `${ACCENT}22` : "transparent",
+              color: manualMode ? ACCENT : "rgba(255,255,255,0.5)",
+            }}>
+            {manualMode ? "Manual: ON" : "Enter manually"}
+          </button>
+        </div>
+        {manualMode && (
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:10 }}>
+            {[
+              { label:"Carbs (g)",    val:mCarbs,    set:setMCarbs,    color:ORANGE },
+              { label:"Protein (g)",  val:mProtein,  set:setMProtein,  color:ACCENT },
+              { label:"Fat (g)",      val:mFat,      set:setMFat,      color:PINK },
+              { label:"Fiber (g)",    val:mFiber,    set:setMFiber,    color:GREEN },
+              { label:"Calories",     val:mCalories, set:setMCalories, color:"#A78BFA" },
+            ].map(f => (
+              <div key={f.label}>
+                <label style={{ fontSize:11, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>{f.label}</label>
+                <input
+                  style={{ ...inp, borderColor:f.val ? `${f.color}50` : BORDER }}
+                  type="number"
+                  step="0.1"
+                  placeholder="0"
+                  value={f.val}
+                  onChange={e => f.set(e.target.value)}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* ENTRY FORM */}
       <div style={{ ...card, marginBottom:20 }}>
@@ -315,7 +376,7 @@ export default function LogPage() {
       </div>
 
       {/* INSULIN PREVIEW */}
-      {(foods.length > 0 || glucoseBefore) && (
+      {(hasAny || glucoseBefore) && (
         <div style={{ ...card, marginBottom:20, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:16 }}>
           <div>
             <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginBottom:4 }}>Suggested Insulin</div>
@@ -339,12 +400,12 @@ export default function LogPage() {
 
       {error && <div style={{ padding:"12px 16px", borderRadius:10, background:`${PINK}10`, border:`1px solid ${PINK}30`, color:PINK, fontSize:14, marginBottom:16 }}>{error}</div>}
 
-      <button onClick={handleConfirm} disabled={saving || !foods.length} style={{
-        width:"100%", padding:"16px", borderRadius:14, border:"none", cursor: (!foods.length || saving) ? "not-allowed" : "pointer",
-        background: foods.length ? `linear-gradient(135deg, ${ACCENT}, #6B8BFF)` : "rgba(255,255,255,0.05)",
-        color: foods.length ? "#fff" : "rgba(255,255,255,0.2)",
+      <button onClick={handleConfirm} disabled={saving || !hasAny} style={{
+        width:"100%", padding:"16px", borderRadius:14, border:"none", cursor: (!hasAny || saving) ? "not-allowed" : "pointer",
+        background: hasAny ? `linear-gradient(135deg, ${ACCENT}, #6B8BFF)` : "rgba(255,255,255,0.05)",
+        color: hasAny ? "#fff" : "rgba(255,255,255,0.2)",
         fontSize:16, fontWeight:700, letterSpacing:"-0.01em",
-        boxShadow: foods.length ? `0 4px 24px ${ACCENT}40` : "none",
+        boxShadow: hasAny ? `0 4px 24px ${ACCENT}40` : "none",
         transition:"all 0.2s",
       }}>
         {saving ? "Saving…" : "Confirm Log"}

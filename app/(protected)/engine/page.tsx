@@ -155,6 +155,30 @@ export default function EnginePage() {
 
       {result && (
         <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+          {/* INPUT SUMMARY */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, padding:"16px 20px" }}>
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase", marginBottom:6 }}>Input Glucose</div>
+              <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
+                <span style={{ fontSize:28, fontWeight:800, color:"#60A5FA", letterSpacing:"-0.02em" }}>{parseFloat(glucose)||110}</span>
+                <span style={{ fontSize:12, color:"rgba(255,255,255,0.35)" }}>mg/dL</span>
+              </div>
+              <div style={{ fontSize:10, color:"rgba(255,255,255,0.25)", marginTop:4 }}>
+                {(parseFloat(glucose)||110) > 140 ? "elevated" : (parseFloat(glucose)||110) < 80 ? "low" : "in target"}
+              </div>
+            </div>
+            <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, padding:"16px 20px" }}>
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase", marginBottom:6 }}>Input Carbs</div>
+              <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
+                <span style={{ fontSize:28, fontWeight:800, color:ORANGE, letterSpacing:"-0.02em" }}>{parseFloat(carbs)||0}</span>
+                <span style={{ fontSize:12, color:"rgba(255,255,255,0.35)" }}>g</span>
+              </div>
+              <div style={{ fontSize:10, color:"rgba(255,255,255,0.25)", marginTop:4 }}>
+                {(parseFloat(carbs)||0) >= 60 ? "high-carb meal" : (parseFloat(carbs)||0) >= 30 ? "moderate" : "light"}
+              </div>
+            </div>
+          </div>
+
           {/* MAIN RESULT */}
           <div style={{ background:SURFACE, border:`1px solid ${CONF_COLOR[result.confidence]}30`, borderRadius:16, padding:"28px 28px" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:16 }}>

@@ -45,6 +45,7 @@ export interface SaveMealInput {
   insulinUnits: number | null;
   mealType: string | null;
   evaluation: string | null;
+  createdAt?: string | null;
 }
 
 export function classifyMeal(carbs: number, protein: number, fat: number): string {
@@ -86,6 +87,7 @@ export async function saveMeal(input: SaveMealInput): Promise<Meal> {
     meal_type:      input.mealType,
     evaluation:     input.evaluation,
   };
+  if (input.createdAt) row.created_at = input.createdAt;
 
   const { data, error } = await supabase
     .from("meals")
