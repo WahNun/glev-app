@@ -196,7 +196,30 @@ async function apiFetch<T>(path: string, _opts?: RequestInit): Promise<T> {
       evaluation: e.evaluation,
     })) } as unknown as T;
   }
-  if (path.startsWith("/insights/meal-patterns") || path.startsWith("/insights/patterns")) return { patterns: [] } as unknown as T;
+  if (path.startsWith("/insights/meal-patterns") || path.startsWith("/insights/patterns")) {
+    const groups: Record<string, Entry[]> = {};
+    for (const e of MOCKUP_ENTRIES) {
+      const k = e.mealType || "BALANCED";
+      (groups[k] ||= []).push(e);
+    }
+    const patterns = Object.entries(groups).map(([mealType, list]) => {
+      const count = list.length;
+      const avgCarbsGrams = list.reduce((s,e)=>s+e.carbsGrams,0)/count;
+      const avgInsulinUnits = list.reduce((s,e)=>s+e.insulinUnits,0)/count;
+      const good = list.filter(e=>e.evaluation==="GOOD").length;
+      const totalCarbs = list.reduce((s,e)=>s+e.carbsGrams,0);
+      const totalIns = list.reduce((s,e)=>s+e.insulinUnits,0);
+      return {
+        mealType,
+        count,
+        avgCarbsGrams,
+        avgInsulinUnits,
+        goodRate: good / count,
+        insulinToCarb: totalIns>0 ? totalCarbs/totalIns : 0,
+      };
+    });
+    return { patterns } as unknown as T;
+  }
   if (path.startsWith("/entries")) return { entries: MOCKUP_ENTRIES, total: MOCKUP_ENTRIES.length } as unknown as T;
   if (path.startsWith("/log")) return { entries: MOCKUP_ENTRIES } as unknown as T;
   if (path.startsWith("/recommendations")) return { recommendedUnits: 0, minUnits: 0, maxUnits: 0, reasoning: "Mockup mode — no live recommendations.", confidence: "LOW", carbRatio: null, similarMealCount: 0, cappedForSafety: false } as unknown as T;
