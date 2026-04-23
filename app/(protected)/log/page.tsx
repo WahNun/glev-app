@@ -41,12 +41,48 @@ export default function LogPage() {
   const [aiMealType, setAiMealType] = useState<string | null>(null);
   const mediaRecRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const caloriesUserEditedRef = useRef(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const ok = !!(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === "function" && typeof MediaRecorder !== "undefined");
     if (!ok) setSpeechAvail(false);
   }, []);
+
+  // Auto-populate the manual Calories field from carbs/protein/fat as the user types
+  // them in. Stays out of the way once the user manually edits the calories field.
+  useEffect(() => {
+    if (caloriesUserEditedRef.current) return;
+    const c = parseFloat(mCarbs)   || 0;
+    const p = parseFloat(mProtein) || 0;
+    const f = parseFloat(mFat)     || 0;
+    if (c === 0 && p === 0 && f === 0) {
+      if (mCalories !== "") setMCalories("");
+      return;
+    }
+    const cals = computeCalories(c, p, f);
+    const next = String(cals);
+    if (mCalories !== next) setMCalories(next);
+  }, [mCarbs, mProtein, mFat, mCalories]);
+
+  function resetForm() {
+    setRecording(false);
+    setRawText("");
+    setFoods([]);
+    setParsing(false);
+    setGlucose("");
+    setInsulin("");
+    setSaving(false);
+    setError("");
+    setSuccess(false);
+    setPulse(false);
+    setManualMode(false);
+    setMCarbs(""); setMProtein(""); setMFat(""); setMFiber(""); setMCalories("");
+    setChat([]);
+    setAiMealType(null);
+    caloriesUserEditedRef.current = false;
+    try { mediaRecRef.current?.stop(); } catch {}
+  }
 
   const mNum = (v: string): number | null => {
     if (!v.trim()) return null;
@@ -411,17 +447,25 @@ export default function LogPage() {
               { label:"Protein (g)",  val:mProtein,  set:setMProtein,  color:ACCENT },
               { label:"Fat (g)",      val:mFat,      set:setMFat,      color:PINK },
               { label:"Fiber (g)",    val:mFiber,    set:setMFiber,    color:GREEN },
-              { label:"Calories",     val:mCalories, set:setMCalories, color:"#A78BFA" },
+              { label:"Calories",     val:mCalories, set:setMCalories, color:"#A78BFA", isCalories:true },
             ].map(f => (
               <div key={f.label}>
-                <label style={{ fontSize:11, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>{f.label}</label>
+                <label style={{ fontSize:11, color:"rgba(255,255,255,0.4)", display:"flex", alignItems:"center", gap:6, marginBottom:6 }}>
+                  {f.label}
+                  {f.isCalories && !caloriesUserEditedRef.current && (parseFloat(mCarbs)||parseFloat(mProtein)||parseFloat(mFat)) > 0 && (
+                    <span style={{ fontSize:9, color:"#A78BFA", padding:"1px 6px", borderRadius:99, background:"rgba(167,139,250,0.12)", border:"1px solid rgba(167,139,250,0.3)", letterSpacing:"0.04em", fontWeight:600 }}>AUTO</span>
+                  )}
+                </label>
                 <input
                   style={{ ...inp, borderColor:f.val ? `${f.color}50` : BORDER }}
                   type="number"
                   step="0.1"
                   placeholder="0"
                   value={f.val}
-                  onChange={e => f.set(e.target.value)}
+                  onChange={e => {
+                    if (f.isCalories) caloriesUserEditedRef.current = true;
+                    f.set(e.target.value);
+                  }}
                 />
               </div>
             ))}
@@ -499,6 +543,25 @@ export default function LogPage() {
         transition:"all 0.2s",
       }}>
         {saving ? "Saving…" : "Confirm Log"}
+      </button>
+
+      <button
+        onClick={() => {
+          if (saving) return;
+          const dirty = hasAny || rawText.trim() || glucoseBefore || insulinUnits || chat.length > 0;
+          if (dirty && !window.confirm("Discard this entry? All inputs and parsed items will be cleared.")) return;
+          resetForm();
+        }}
+        disabled={saving}
+        style={{
+          width:"100%", padding:"14px", marginTop:10, borderRadius:14,
+          border:`1px solid rgba(255,255,255,0.08)`, background:"transparent",
+          color: saving ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.55)",
+          fontSize:14, fontWeight:600, letterSpacing:"-0.01em",
+          cursor: saving ? "not-allowed" : "pointer", transition:"all 0.2s",
+        }}
+      >
+        Cancel
       </button>
     </div>
   );
