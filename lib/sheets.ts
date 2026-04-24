@@ -1,9 +1,9 @@
 "use server";
 
-import { ReplitConnectors } from "@replit/connectors-sdk";
+import { google, sheets_v4 } from "googleapis";
 import type { LogEntry } from "./db";
 
-const SHEET_ID = process.env.GOOGLE_SHEET_ID ?? "";
+const SHEET_ID = process.env.GOOGLE_SHEET_ID ?? process.env.GOOGLE_SHEETS_SPREADSHEET_ID ?? "";
 
 const HEADERS = [
   "Date", "Meal", "Glucose Before", "Glucose After",
@@ -29,58 +29,71 @@ function entryToRow(e: LogEntry): string[] {
   ];
 }
 
-async function proxy(path: string, options: RequestInit): Promise<void> {
-  const connectors = new ReplitConnectors();
-  const res = await connectors.proxy("google-sheet", path, options as any);
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Sheets API ${res.status}: ${body}`);
+let cachedClient: sheets_v4.Sheets | null = null;
+
+function getServiceAccountCreds() {
+  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ?? "";
+  const rawKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY ?? "";
+  if (!email || !rawKey) {
+    throw new Error(
+      "Google Sheets is not configured. Set GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY (and GOOGLE_SHEET_ID).",
+    );
   }
+  // Vercel/.env stores newlines as literal "\n"; restore them for the JWT signer.
+  const privateKey = rawKey.replace(/\\n/g, "\n");
+  return { email, privateKey };
 }
 
-async function proxyJson<T>(path: string, options: RequestInit): Promise<T> {
-  const connectors = new ReplitConnectors();
-  const res = await connectors.proxy("google-sheet", path, options as any);
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Sheets API ${res.status}: ${body}`);
-  }
-  return (await res.json()) as T;
+function sheetsClient(): sheets_v4.Sheets {
+  if (cachedClient) return cachedClient;
+  const { email, privateKey } = getServiceAccountCreds();
+  const auth = new google.auth.JWT({
+    email,
+    key: privateKey,
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+  });
+  cachedClient = google.sheets({ version: "v4", auth });
+  return cachedClient;
 }
 
 export async function syncEntryToSheets(entry: LogEntry): Promise<void> {
   if (!SHEET_ID) return;
-  await proxy(
-    `/v4/spreadsheets/${SHEET_ID}/values/A1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
-    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ values: [entryToRow(entry)] }) },
-  );
+  const sheets = sheetsClient();
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID,
+    range: "A1",
+    valueInputOption: "USER_ENTERED",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: { values: [entryToRow(entry)] },
+  });
 }
 
 export async function syncAllLogsToSheets(entries: LogEntry[]): Promise<{ count: number }> {
   if (!SHEET_ID) throw new Error("GOOGLE_SHEET_ID is not configured");
+  const sheets = sheetsClient();
 
-  await proxy(
-    `/v4/spreadsheets/${SHEET_ID}/values/A1?valueInputOption=USER_ENTERED`,
-    { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ values: [HEADERS] }) },
-  );
+  // Write header row.
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID,
+    range: "A1",
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: [HEADERS] },
+  });
 
-  await proxy(
-    `/v4/spreadsheets/${SHEET_ID}/values:batchClear`,
-    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ranges: ["A2:M10000"] }) },
-  );
+  // Clear old data rows.
+  await sheets.spreadsheets.values.batchClear({
+    spreadsheetId: SHEET_ID,
+    requestBody: { ranges: ["A2:M10000"] },
+  });
 
   if (entries.length > 0) {
-    await proxy(
-      `/v4/spreadsheets/${SHEET_ID}/values:batchUpdate`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          valueInputOption: "USER_ENTERED",
-          data: [{ range: "A2", values: entries.map(entryToRow) }],
-        }),
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: SHEET_ID,
+      requestBody: {
+        valueInputOption: "USER_ENTERED",
+        data: [{ range: "A2", values: entries.map(entryToRow) }],
       },
-    );
+    });
   }
   return { count: entries.length };
 }
@@ -105,11 +118,11 @@ export async function readAllFromSheet(opts?: {
   if (!id) throw new Error("No spreadsheet id provided and GOOGLE_SHEET_ID is not set");
 
   const range = opts?.range ?? "A1:Z100000";
-  const a1 = opts?.sheetName ? `${encodeURIComponent(opts.sheetName)}!${encodeURIComponent(range)}` : encodeURIComponent(range);
-  const path = `/v4/spreadsheets/${id}/values/${a1}`;
+  const a1 = opts?.sheetName ? `${opts.sheetName}!${range}` : range;
+  const sheets = sheetsClient();
 
-  const json = await proxyJson<{ values?: string[][] }>(path, { method: "GET" });
-  const values = json.values ?? [];
+  const res = await sheets.spreadsheets.values.get({ spreadsheetId: id, range: a1 });
+  const values = res.data.values ?? [];
   if (values.length < 2) return [];
 
   const headers = values[0].map((h) => (h ?? "").toString().trim());

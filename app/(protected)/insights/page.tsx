@@ -156,8 +156,8 @@ export default function InsightsPage() {
         ))}
       </div>
 
-      {/* GLUCOSE TREND */}
-      <div style={{ ...card, marginBottom:20 }}>
+      {/* GLUCOSE TREND — enlarged chart area */}
+      <div className="glev-chart-card" style={{ ...card, marginBottom:20, padding:"22px 26px" }}>
         <div style={{ fontSize:14, fontWeight:600, marginBottom:4 }}>Glucose Trend</div>
         <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginBottom:14 }}>Average pre-meal glucose over the last 14 days</div>
         <TrendSparkline meals={meals}/>
@@ -194,7 +194,7 @@ export default function InsightsPage() {
         )}
       </div>
 
-      {/* PERFORMANCE TILES */}
+      {/* PERFORMANCE TILES — flip cards (front: stat; back: formula + explain) */}
       <div className="glev-grid-3" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14, marginBottom:20 }}>
         {[
           { label:"Good Rate", val:`${goodRate}%`, sub:`${good} of ${total} meals`, color:GREEN, formula:"GOOD / Total × 100", explain:"Percentage of meals where insulin dose was optimal (within ±35% of ICR estimate)." },
@@ -204,18 +204,12 @@ export default function InsightsPage() {
           { label:"Avg Insulin/Meal", val:`${avgInsulin}u`, sub:"rapid insulin units", color:"#60A5FA", formula:"Sum insulin_units / meal count", explain:"Average insulin per meal. Track this against carbs to validate your ratio." },
           { label:"Avg Calories", val:`${avgCals}`, sub:"kcal per meal", color:"#F472B6", formula:"(Carbs×4 + Protein×4 + Fat×9) / meals", explain:"Average caloric intake per meal based on macronutrient breakdown." },
         ].map((t,i) => (
-          <div key={i} style={card}>
-            <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase", marginBottom:10 }}>{t.label}</div>
-            <div style={{ fontSize:30, fontWeight:800, letterSpacing:"-0.03em", color:t.color, marginBottom:2 }}>{t.val}</div>
-            <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginBottom:10 }}>{t.sub}</div>
-            <div style={{ fontSize:10, color:"rgba(255,255,255,0.2)", fontFamily:"monospace", background:"rgba(0,0,0,0.3)", padding:"5px 8px", borderRadius:6, marginBottom:6 }}>{t.formula}</div>
-            <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", lineHeight:1.5 }}>{t.explain}</div>
-          </div>
+          <InsightFlipTile key={i} tile={t}/>
         ))}
       </div>
 
       {/* MEAL TYPE ANALYSIS */}
-      <div style={{ ...card, marginBottom:20 }}>
+      <div className="glev-chart-card" style={{ ...card, marginBottom:20, padding:"22px 26px" }}>
         <div style={{ fontSize:14, fontWeight:600, marginBottom:4 }}>Meal Type Analysis</div>
         <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginBottom:18 }}>Performance broken down by macronutrient profile</div>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:12 }}>
@@ -244,7 +238,7 @@ export default function InsightsPage() {
       </div>
 
       {/* TIME OF DAY */}
-      <div style={{ ...card, marginBottom:20 }}>
+      <div className="glev-chart-card" style={{ ...card, marginBottom:20, padding:"22px 26px" }}>
         <div style={{ fontSize:14, fontWeight:600, marginBottom:4 }}>Time-of-Day Analysis</div>
         <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginBottom:18 }}>When are your best and worst dosing outcomes?</div>
         <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
@@ -267,7 +261,7 @@ export default function InsightsPage() {
       </div>
 
       {/* PATTERN DETECTION */}
-      <div style={card}>
+      <div className="glev-chart-card" style={{ ...card, padding:"22px 26px" }}>
         <div style={{ fontSize:14, fontWeight:600, marginBottom:4 }}>Pattern Detection</div>
         <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginBottom:18 }}>AI-driven trend detection from your dosing history</div>
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
@@ -282,6 +276,47 @@ export default function InsightsPage() {
               </div>
             </div>
           ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type InsightTile = { label:string; val:string; sub:string; color:string; formula:string; explain:string };
+
+function InsightFlipTile({ tile }: { tile: InsightTile }) {
+  const [flipped, setFlipped] = useState(false);
+  return (
+    <div
+      onClick={() => setFlipped(f => !f)}
+      style={{ position:"relative", cursor:"pointer", height:148, perspective:1000 }}
+    >
+      <div
+        style={{
+          position:"absolute", inset:0, transformStyle:"preserve-3d",
+          transition:"transform 0.5s cubic-bezier(0.4,0,0.2,1)",
+          transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
+        }}
+      >
+        {/* FRONT */}
+        <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, padding:"16px 20px", boxSizing:"border-box", display:"flex", flexDirection:"column", justifyContent:"space-between" }}>
+          <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between" }}>
+            <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase", fontWeight:600 }}>{tile.label}</div>
+            <span style={{ fontSize:9, color:"rgba(255,255,255,0.18)" }}>↺</span>
+          </div>
+          <div>
+            <div style={{ fontSize:32, fontWeight:800, letterSpacing:"-0.03em", color:tile.color, lineHeight:1 }}>{tile.val}</div>
+            <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:6 }}>{tile.sub}</div>
+          </div>
+        </div>
+        {/* BACK */}
+        <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", transform:"rotateY(180deg)", background:`linear-gradient(145deg, ${tile.color}12, ${SURFACE} 65%)`, border:`1px solid ${tile.color}33`, borderRadius:14, padding:"14px 18px", boxSizing:"border-box", overflow:"hidden", display:"flex", flexDirection:"column", gap:8 }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <div style={{ fontSize:10, color:tile.color, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>{tile.label}</div>
+            <span style={{ fontSize:9, color:"rgba(255,255,255,0.18)" }}>↺ back</span>
+          </div>
+          <div style={{ fontSize:10, color:"rgba(255,255,255,0.6)", fontFamily:"monospace", background:"rgba(0,0,0,0.3)", padding:"6px 8px", borderRadius:6 }}>{tile.formula}</div>
+          <div style={{ fontSize:11, color:"rgba(255,255,255,0.55)", lineHeight:1.45 }}>{tile.explain}</div>
         </div>
       </div>
     </div>

@@ -291,7 +291,6 @@ function LifecycleBlock({ meal, onUpdated }: { meal: Meal; onUpdated: (patch: Pa
   const [bg2h, setBg2h] = useState<string>(meal.bg_2h?.toString() ?? "");
   const [busy, setBusy] = useState(false);
   const [err,  setErr]  = useState<string | null>(null);
-  const [warn, setWarn] = useState<string | null>(null);
 
   // Show 1h input from 30 min onwards (so user can record an early reading);
   // show 2h input from 90 min onwards.
@@ -305,7 +304,7 @@ function LifecycleBlock({ meal, onUpdated }: { meal: Meal; onUpdated: (patch: Pa
       setErr("Enter a glucose value between 30 and 600 mg/dL.");
       return;
     }
-    setBusy(true); setErr(null); setWarn(null);
+    setBusy(true); setErr(null);
     try {
       const result = await updateMealReadings(meal.id, { [field]: n } as { bg1h?: number | null; bg2h?: number | null });
       const now = new Date().toISOString();
@@ -323,7 +322,6 @@ function LifecycleBlock({ meal, onUpdated }: { meal: Meal; onUpdated: (patch: Pa
             : { bg_2h: n, bg_2h_at: n != null ? now : null, glucose_after: n }
         );
       }
-      if (result.warnings.length) setWarn(result.warnings.join(" "));
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Could not save reading.");
     } finally { setBusy(false); }
@@ -366,8 +364,7 @@ function LifecycleBlock({ meal, onUpdated }: { meal: Meal; onUpdated: (patch: Pa
           )}
         </div>
       )}
-      {err  && <div style={{ fontSize:11, color:PINK }}>{err}</div>}
-      {warn && <div style={{ fontSize:11, color:ORANGE }}>{warn}</div>}
+      {err && <div style={{ fontSize:11, color:PINK }}>{err}</div>}
     </div>
   );
 }

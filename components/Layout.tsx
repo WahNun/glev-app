@@ -1,9 +1,10 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { signOut } from "@/lib/auth";
 import GlevLogo from "@/components/GlevLogo";
+import AboutGlevModal from "@/components/AboutGlevModal";
 
 const ACCENT  = "#4F6EF7";
 const GREEN   = "#22D3A0";
@@ -32,6 +33,7 @@ const NAV = [
 export default function Layout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router   = useRouter();
+  const [aboutOpen, setAboutOpen] = useState(false);
 
   useEffect(() => {
     fetch("/api/debug/state").then(r => r.json()).then(d => console.log("[DEBUG:STATE]", d)).catch(() => {});
@@ -68,28 +70,46 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         }
       `}</style>
 
-      {/* MOBILE HEADER */}
-      <header className="glev-mobile-head" onClick={() => router.push("/settings")} style={{
+      {/* MOBILE HEADER — solid surface bg always; logo opens About modal, account icon opens Settings */}
+      <header className="glev-mobile-head" style={{
         position: "fixed", top: 0, left: 0, right: 0, zIndex: 99,
         padding: "14px 18px 12px",
-        background: pathname.startsWith("/settings") ? "rgba(79,110,247,0.08)" : SURFACE,
-        borderBottom: `1px solid ${pathname.startsWith("/settings") ? "rgba(79,110,247,0.25)" : BORDER}`,
-        alignItems: "center", justifyContent: "space-between", cursor: "pointer",
+        background: SURFACE,
+        borderBottom: `1px solid ${BORDER}`,
+        alignItems: "center", justifyContent: "space-between",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div
+          onClick={() => setAboutOpen(true)}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setAboutOpen(true); } }}
+          role="button"
+          tabIndex={0}
+          aria-label="Open about Glev"
+          style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", flex: 1, minWidth: 0 }}
+        >
           <GlevLogo size={30} />
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: "-0.02em", color: "#fff" }}>Glev</div>
             <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", marginTop: 1 }}>Smart insulin decisions</div>
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ fontSize: 11, padding: "5px 12px", borderRadius: 99, background: `${GREEN}18`, color: GREEN, fontWeight: 600 }}>Live</div>
-          <div style={{ width: 32, height: 32, borderRadius: 99, background: pathname.startsWith("/settings") ? `${ACCENT}25` : "rgba(255,255,255,0.05)", border: `1px solid ${pathname.startsWith("/settings") ? ACCENT : "rgba(255,255,255,0.1)"}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <button
+            onClick={() => router.push("/settings")}
+            aria-label="Open settings"
+            style={{
+              width: 32, height: 32, borderRadius: 99, padding: 0,
+              background: pathname.startsWith("/settings") ? `${ACCENT}25` : "rgba(255,255,255,0.05)",
+              border: `1px solid ${pathname.startsWith("/settings") ? ACCENT : "rgba(255,255,255,0.1)"}`,
+              display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+            }}
+          >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={pathname.startsWith("/settings") ? ACCENT : "rgba(255,255,255,0.6)"} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-          </div>
+          </button>
         </div>
       </header>
+
+      <AboutGlevModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
 
       <aside className="glev-sidebar" style={{
         width: 224, flexShrink: 0, background: SURFACE,

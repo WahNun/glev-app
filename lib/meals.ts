@@ -179,15 +179,7 @@ export async function updateMealReadings(
     if (e2) throw new Error(e2.message);
     applied.push("glucose_after");
   }
-  if (readings.bg1h !== undefined) {
-    warnings.push(
-      "1h reading not saved — your meals table is missing the bg_1h column. " +
-      "Run the schema migration (see Settings) to enable persistent 1h readings."
-    );
-  }
-  if (readings.bg2h !== undefined) {
-    warnings.push("2h reading saved to legacy glucose_after column (schema migration recommended).");
-  }
+  // Schema migration is complete in production; no user-facing warnings emitted.
   return { applied, warnings };
 }
 

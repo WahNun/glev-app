@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import CgmFetchButton, { type CgmFetchResult } from "@/components/CgmFetchButton";
 
 const ACCENT = "#4F6EF7";
 const GREEN = "#22D3A0";
@@ -24,57 +25,63 @@ export default function CurrentDayGlucoseCard() {
   const [s, setS] = useState<State>({ kind: "loading" });
   const [flipped, setFlipped] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/cgm/history", { cache: "no-store" });
-        if (res.status === 401 || res.status === 404 || res.status === 412) {
-          if (!cancelled) setS({ kind: "no-cgm" });
-          return;
-        }
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({} as { error?: string }));
-          const msg = (body && typeof body.error === "string" ? body.error : "") || `HTTP ${res.status}`;
-          // Common upstream "not configured" signals → treat as no-cgm rather than error.
-          const m = msg.toLowerCase();
-          if (
-            res.status === 502 ||
-            m.includes("no patients") ||
-            m.includes("not connected") ||
-            m.includes("credential") ||
-            m.includes("not linked") ||
-            m.includes("no cgm")
-          ) {
-            if (!cancelled) setS({ kind: "no-cgm" });
-            return;
-          }
-          if (!cancelled) setS({ kind: "error", msg });
-          return;
-        }
-        const data = (await res.json()) as { current: Reading | null; history: Reading[] };
-        const today0 = new Date();
-        today0.setHours(0, 0, 0, 0);
-        const todayStart = today0.getTime();
-        const now = Date.now();
-
-        const all = (data.history || [])
-          .filter((r) => r.value != null && r.timestamp)
-          .map((r) => ({ t: parseLluTs(r.timestamp!), v: r.value! }))
-          .filter((r) => r.t >= todayStart && r.t <= now)
-          .sort((a, b) => a.t - b.t);
-
-        const cur = data.current && data.current.value != null && data.current.timestamp
-          ? { v: data.current.value, t: parseLluTs(data.current.timestamp) }
-          : (all.length ? { v: all[all.length - 1].v, t: all[all.length - 1].t } : null);
-
-        if (!cancelled) setS({ kind: "ok", readings: all, current: cur });
-      } catch (e) {
-        if (!cancelled) setS({ kind: "error", msg: e instanceof Error ? e.message : "fetch failed" });
+  const loadHistory = useCallback(async (signal?: { cancelled: boolean }) => {
+    try {
+      const res = await fetch("/api/cgm/history", { cache: "no-store" });
+      if (res.status === 401 || res.status === 404 || res.status === 412) {
+        if (!signal?.cancelled) setS({ kind: "no-cgm" });
+        return;
       }
-    })();
-    return () => { cancelled = true; };
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({} as { error?: string }));
+        const msg = (body && typeof body.error === "string" ? body.error : "") || `HTTP ${res.status}`;
+        const m = msg.toLowerCase();
+        if (
+          res.status === 502 ||
+          m.includes("no patients") ||
+          m.includes("not connected") ||
+          m.includes("credential") ||
+          m.includes("not linked") ||
+          m.includes("no cgm")
+        ) {
+          if (!signal?.cancelled) setS({ kind: "no-cgm" });
+          return;
+        }
+        if (!signal?.cancelled) setS({ kind: "error", msg });
+        return;
+      }
+      const data = (await res.json()) as { current: Reading | null; history: Reading[] };
+      const today0 = new Date();
+      today0.setHours(0, 0, 0, 0);
+      const todayStart = today0.getTime();
+      const now = Date.now();
+
+      const all = (data.history || [])
+        .filter((r) => r.value != null && r.timestamp)
+        .map((r) => ({ t: parseLluTs(r.timestamp!), v: r.value! }))
+        .filter((r) => r.t >= todayStart && r.t <= now)
+        .sort((a, b) => a.t - b.t);
+
+      const cur = data.current && data.current.value != null && data.current.timestamp
+        ? { v: data.current.value, t: parseLluTs(data.current.timestamp) }
+        : (all.length ? { v: all[all.length - 1].v, t: all[all.length - 1].t } : null);
+
+      if (!signal?.cancelled) setS({ kind: "ok", readings: all, current: cur });
+    } catch (e) {
+      if (!signal?.cancelled) setS({ kind: "error", msg: e instanceof Error ? e.message : "fetch failed" });
+    }
   }, []);
+
+  useEffect(() => {
+    const signal = { cancelled: false };
+    loadHistory(signal);
+    return () => { signal.cancelled = true; };
+  }, [loadHistory]);
+
+  // Refresh full daily history after the user pulls a new latest reading.
+  const onCgmRefresh = useCallback((r: CgmFetchResult) => {
+    if (r.ok) loadHistory();
+  }, [loadHistory]);
 
   return (
     <div
@@ -121,6 +128,8 @@ export default function CurrentDayGlucoseCard() {
               : `CGM error: ${s.msg}`}
             current={s.kind === "ok" ? s.current : null}
             flippable={s.kind === "ok"}
+            onCgmRefresh={onCgmRefresh}
+            showRefresh={s.kind === "ok" || s.kind === "error"}
           />
           {s.kind === "ok" && s.readings.length > 0 ? (
             <DayChart readings={s.readings} />
@@ -156,13 +165,27 @@ export default function CurrentDayGlucoseCard() {
   );
 }
 
-function Header({ title, sub, current, flippable }: { title: string; sub: string; current: { v: number; t: number } | null; flippable: boolean }) {
+function Header({
+  title, sub, current, flippable, onCgmRefresh, showRefresh,
+}: {
+  title: string;
+  sub: string;
+  current: { v: number; t: number } | null;
+  flippable: boolean;
+  onCgmRefresh?: (r: CgmFetchResult) => void;
+  showRefresh?: boolean;
+}) {
   const c = current ? colorFor(current.v) : "rgba(255,255,255,0.5)";
   return (
     <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "-0.01em" }}>{title}</div>
         <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>{sub}</div>
+        {showRefresh && onCgmRefresh && (
+          <div style={{ marginTop: 8 }}>
+            <CgmFetchButton size="sm" label="Refresh" onResult={onCgmRefresh} />
+          </div>
+        )}
       </div>
       <div style={{ display: "flex", alignItems: "flex-end", gap: 8, flexShrink: 0 }}>
         {current && (

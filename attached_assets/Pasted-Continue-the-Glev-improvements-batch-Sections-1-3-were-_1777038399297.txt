@@ -1,0 +1,85 @@
+Continue the Glev improvements batch. Sections 1-3 were completed in commit 14b3e02. Now execute sections 4-8.
+
+===========================================
+SECTION 4 — 1H AND 2H READINGS: INDEPENDENT SAVES
+===========================================
+
+Schema migration is now complete in Supabase (bg_1h, bg_1h_at, bg_2h, bg_2h_at, outcome_state columns exist).
+
+4.1 — Remove the "1h reading not saved — your meals table is missing the bg_1h column" error banner in the expanded meal view.
+4.2 — Remove the "2h reading saved to legacy glucose_after column (schema migration recommended)" warning. Use bg_2h directly now.
+4.3 — The Save button next to "1H READING" saves to bg_1h + bg_1h_at (timestamp = now) independently of 2h. Same for 2H → bg_2h + bg_2h_at.
+4.4 — Allow either-or-both-or-neither. No coupled validation.
+4.5 — Evaluation/outcome_state must handle partial data: compute from whichever delta is available. Never block on missing readings.
+
+===========================================
+SECTION 5 — MOBILE UX FIXES
+===========================================
+
+5.1 — app/layout.tsx viewport metadata:
+  export const viewport: Viewport = { width: 'device-width', initialScale: 1, maximumScale: 1, userScalable: false };
+
+5.2 — Remove vertical scrollbar on mobile. Global CSS:
+  html, body { scrollbar-width: none; }
+  html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
+
+5.3 — Mobile header stays opaque. Find the header component — remove any scroll-based backdrop-filter / opacity / transparency logic. Use a solid background color at all scroll positions.
+
+5.4 — Account icon (top-right) → links to /account or /settings. Audit current onClick, fix if broken.
+
+5.5 — Tapping the header bar OR Glev logo → opens an "About Glev" modal. Content: app name "Glev", version (read from package.json), brief description ("Smart insulin decisions for Type 1 diabetes"), user email (from session), "Sign out" link. Style: clean card, matches macOS "About This Mac" vibe.
+
+===========================================
+SECTION 6 — GOOGLE SHEETS IMPORT (Service Account replacement)
+===========================================
+
+Current error: "Replit identity token not found" — the import relies on Replit auth which doesn't work on Vercel.
+
+6.1 — Replace with google-auth-library JWT flow using a Google Service Account:
+  const auth = new google.auth.JWT({
+    email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+    key: (process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+  });
+  const sheets = google.sheets({ version: 'v4', auth });
+
+6.2 — Required env vars (report these clearly at the end):
+  - GOOGLE_SERVICE_ACCOUNT_EMAIL
+  - GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
+  - GOOGLE_SHEETS_SPREADSHEET_ID
+
+6.3 — Spreadsheet ID should be configurable (env var or Settings page field). For now env var is fine.
+
+6.4 — Install googleapis if not already: npm install googleapis
+
+===========================================
+SECTION 7 — INSIGHTS CARDS FLIP + CHART ENLARGEMENT
+===========================================
+
+7.1 — Every card in the Insights section becomes tap-to-flip. Use the existing flip pattern from dashboard cards that already flip. Back-side content per card:
+  - Glucose trend: daily avg, time-in-range %, highest/lowest + times
+  - Control score: what drives the score (macro balance, timing, prediction accuracy, etc.)
+  - Any other stat card: underlying formula + "what's good" guidance
+
+7.2 — All chart cards (dashboard + insights) — enlarge the chart area INSIDE each card. Reduce internal padding, let the chart take more visual weight. Outer card dimensions unchanged. Must stay visually pleasant (chart doesn't touch card edges).
+
+7.3 — Mobile chart cards specifically: increase card height moderately (~25-30%) to give charts more vertical breathing room.
+
+===========================================
+SECTION 8 — GLUCOSE CARDS: CGM FETCH BUTTON
+===========================================
+
+8.1 — Extract CGM fetch button as shared component (if not already). Find the existing implementation in the log entry screen.
+8.2 — Add it to every dashboard/insights card that displays a current glucose value. Tap → re-fetches /api/cgm/latest → updates the card's displayed value + timestamp.
+
+===========================================
+BUILD + SHIP
+===========================================
+
+STEP 1 — npm run build (must pass)
+STEP 2 — git add -A && git commit -m "sections 4-8: independent bg readings, mobile UX polish, google sheets service account, insights flip + chart enlargement, CGM button ubiquitous"
+STEP 3 — Push via the Replit Git pane in the sidebar.
+STEP 4 — Report:
+  - Build status + commit SHA
+  - For Section 6: exact env var names Lucas must set in Vercel
+  - For Section 7.1: list of cards that got flip-back content + one-line summary each
