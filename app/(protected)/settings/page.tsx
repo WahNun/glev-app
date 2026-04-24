@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { reloadHistoricalEntries } from "@/lib/meals";
 import ImportPanel from "@/components/ImportPanel";
+import CgmSettingsCard from "@/components/CgmSettingsCard";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
@@ -30,7 +31,7 @@ function saveSettings(s: Settings) {
 }
 
 export default function SettingsPage() {
-  const [tab, setTab]         = useState<"overview"|"settings"|"import">("overview");
+  const [tab, setTab]         = useState<"overview"|"settings"|"cgm"|"import">("overview");
   const [email, setEmail]     = useState("");
   const [createdAt, setCreatedAt] = useState("");
   const [settings, setSettings]   = useState<Settings>(DEFAULTS);
@@ -89,14 +90,14 @@ export default function SettingsPage() {
 
       {/* TABS */}
       <div style={{ display:"flex", gap:4, marginBottom:24, background:"rgba(255,255,255,0.04)", borderRadius:12, padding:4, width:"fit-content" }}>
-        {(["overview","settings","import"] as const).map(t => (
+        {(["overview","settings","cgm","import"] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} style={{
             padding:"8px 20px", borderRadius:9, border:"none", cursor:"pointer",
             background:tab===t?SURFACE:"transparent",
             color:tab===t?"#fff":"rgba(255,255,255,0.4)",
             fontSize:13, fontWeight:tab===t?600:400,
             boxShadow:tab===t?"0 1px 4px rgba(0,0,0,0.4)":"none",
-            textTransform:"capitalize",
+            textTransform: t === "cgm" ? "uppercase" : "capitalize",
           }}>{t}</button>
         ))}
       </div>
@@ -253,6 +254,10 @@ export default function SettingsPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {tab === "cgm" && (
+        <CgmSettingsCard />
       )}
 
       {tab === "import" && (

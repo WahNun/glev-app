@@ -1,0 +1,79 @@
+Task: Build a CGM Settings tab in the Settings page so users can enter their LibreLinkUp credentials through a proper UI.
+Context
+Currently, CGM credentials can only be stored by manually calling POST /api/cgm/credentials from the browser console. Future users won't know how to do that. Build a first-class Settings UI.
+The CGM backend is already fully built:
+
+POST /api/cgm/credentials → body { email, password, region } (region: "eu" or "us", default "eu"). Encrypts with AES-256-GCM and stores in cgm_credentials table.
+DELETE /api/cgm/credentials → removes the row + clears L1 cache.
+GET /api/cgm/latest → returns { value, trend, timestamp } or 404 if no credentials.
+All three use _helpers.ts:authenticate(req) (cookie session first, Bearer fallback).
+
+Do NOT modify the API routes. Only build the UI and wire to existing endpoints.
+Requirements
+1. Settings page structure
+Find the existing Settings page (likely app/(protected)/settings/page.tsx — search if unclear). If Settings is currently a single-page with sections, add a new "CGM" section. If it's tabbed, add a new "CGM" tab. Use whichever pattern is already in place; don't refactor the Settings architecture.
+2. CGM section content
+(a) Connection status card at the top:
+
+Call a new lightweight endpoint GET /api/cgm/status (create it — see below) that returns { connected: boolean, email: string | null, region: string | null, lastReading: { value: number, trend: string, timestamp: string } | null }. Do NOT return the decrypted password; only the email.
+If connected: true: show a green check, the connected email, region, and the most recent reading if available (e.g. "Letzter Wert: 124 mg/dL, stable, vor 3 Minuten"). Include two buttons:
+
+"Verbindung testen" → calls GET /api/cgm/latest. On success, show the value inline. On error, show the error message in red.
+"Verbindung trennen" → confirmation dialog → DELETE /api/cgm/credentials → refresh status.
+
+
+If connected: false: show a neutral "Nicht verbunden" state and reveal the credentials form below.
+
+(b) Credentials form (shown when not connected, or revealed via "Zugangsdaten ändern" when connected):
+Fields:
+
+CGM-Typ (dropdown) — options: "LibreLinkUp" (default, selected, only functional option). Add disabled placeholder entries for "Dexcom (coming soon)" and "Nightscout (coming soon)" so the UI is obviously extensible. Only LibreLinkUp triggers the form below.
+LibreLinkUp E-Mail (text input, type=email, required)
+LibreLinkUp Passwort (password input, required, autocomplete="current-password")
+Region (dropdown: "EU" default, "US")
+Speichern & verbinden button — POST /api/cgm/credentials with { email, password, region: region.toLowerCase() }. On success: refresh status, collapse form. On error: show error below the button.
+
+While submitting, disable the button and show a spinner or "Verbinde…" label.
+(c) Onboarding help text — above the form, a small collapsible "Was ist LibreLinkUp?" / "Was brauche ich?" block (German) explaining:
+
+LibreLinkUp ist die Follower-App von Abbott. Glev nutzt sie, um deine Glukosewerte anzuzeigen.
+Voraussetzung: Du hast die LibreLink-App mit deinem Sensor eingerichtet UND in der LibreLink-App eine Verbindung zu einem LibreLinkUp-Konto geteilt (Einstellungen → Konten → LibreLinkUp → Follower hinzufügen).
+In dieses Formular gibst du die E-Mail und das Passwort des LibreLinkUp-Follower-Kontos ein (nicht deines Haupt-LibreLink-Kontos).
+Hinweis zur Sicherheit: Das Passwort wird serverseitig mit AES-256-GCM verschlüsselt gespeichert.
+
+Use <details><summary>…</summary> or an existing collapsible component for this.
+3. New endpoint: GET /api/cgm/status
+Create app/api/cgm/status/route.ts:
+tsexport const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+Logic:
+
+authenticate(req) → 401 if no user.
+Query cgm_credentials for the user's row via the admin (service-role) client. Select email, region, cached_token_expires (do NOT select the ciphertext or password).
+If no row → return { connected: false, email: null, region: null, lastReading: null }.
+If row exists: optionally try to read the most recent cached reading. The simplest approach: do NOT trigger a live LLU fetch in this endpoint (that's what /latest is for — we don't want the Settings page to hammer LLU on every open). Just return { connected: true, email, region, lastReading: null }. The UI's "Verbindung testen" button is where live fetches happen.
+
+4. UX polish
+
+Use whatever design tokens / card components the rest of the Settings page uses. Don't introduce a new visual language.
+All copy in German (the rest of the app is German).
+Form validation: email must be valid format, password min length 1, region must be in the allowed list.
+After a successful save, show a brief success toast (if a toast system exists) or inline "Verbunden als <email>" confirmation.
+
+5. Build + deploy
+Run in order:
+bashnpm run build
+Fix any type errors. Then:
+bashgit add -A
+git commit -m "feat(settings): add CGM Settings tab with LibreLinkUp credential UI"
+git push origin main
+Deliverables
+Report back:
+
+Commit SHA of the push.
+List of all modified/created files.
+Any decisions you made where the spec was ambiguous (e.g. which file holds the Settings page, whether you added a tabbed vs. single-page layout).
+Confirmation that npm run build succeeded before the push.
+Any follow-up the user should do manually (e.g. test with his own LLU credentials on production).
+
+Do not skip the build step. Do not git commit --amend. Do not use --no-verify. If the build fails, fix it and commit again.
