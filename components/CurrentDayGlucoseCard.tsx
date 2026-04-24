@@ -252,8 +252,11 @@ function DayChart({ readings }: { readings: Array<{ t: number; v: number }> }) {
   const toX = (t: number) => padL + ((t - dayStart) / (dayEnd - dayStart)) * (W - padL - padR);
   const toY = (v: number) => padT + (1 - (v - yMin) / (yMax - yMin)) * (H - padT - padB);
 
-  // Hide hour labels on narrow viewports to avoid overlap.
-  const hourTicks = W < 380 ? [0, 6, 12, 18] : [0, 3, 6, 9, 12, 15, 18, 21];
+  // Vertical grid: a line every 30 minutes (48 per day). Hour-aligned
+  // lines are drawn slightly stronger so the eye still picks out hours.
+  const halfHourTicks = Array.from({ length: 49 }, (_, i) => i); // 0..48 → 0:00..24:00
+  // Hour labels are sparser to avoid overlap, esp. on narrow phones.
+  const hourLabels = W < 380 ? [0, 6, 12, 18] : [0, 3, 6, 9, 12, 15, 18, 21];
   const yTicks = [70, 110, 180, 250];
 
   const path = readings.map((r, i) => `${i === 0 ? "M" : "L"}${toX(r.t).toFixed(1)},${toY(r.v).toFixed(1)}`).join(" ");
@@ -278,6 +281,20 @@ function DayChart({ readings }: { readings: Array<{ t: number; v: number }> }) {
             height={toY(RANGE_LOW) - toY(RANGE_HIGH)}
             fill={GREEN} fillOpacity="0.06"
           />
+          {/* X 30-min grid (subtle) + hour grid (slightly stronger) */}
+          {halfHourTicks.map((i) => {
+            const t = dayStart + i * 30 * 60 * 1000;
+            const x = toX(t);
+            const isHour = i % 2 === 0;
+            return (
+              <line
+                key={i}
+                x1={x} y1={padT} x2={x} y2={H - padB}
+                stroke={isHour ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.03)"}
+                strokeWidth="1"
+              />
+            );
+          })}
           {/* Y grid */}
           {yTicks.map((v) => (
             <g key={v}>
@@ -285,8 +302,8 @@ function DayChart({ readings }: { readings: Array<{ t: number; v: number }> }) {
               <text x={padL - 5} y={toY(v) + 3} textAnchor="end" fontSize="10" fill="rgba(255,255,255,0.25)">{v}</text>
             </g>
           ))}
-          {/* X hour ticks */}
-          {hourTicks.map((h) => {
+          {/* X hour labels */}
+          {hourLabels.map((h) => {
             const t = dayStart + h * 3600 * 1000;
             return (
               <text key={h} x={toX(t)} y={H - 6} textAnchor="middle" fontSize="10" fill="rgba(255,255,255,0.25)">
