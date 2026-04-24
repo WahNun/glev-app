@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import CgmFetchButton, { type CgmFetchResult } from "@/components/CgmFetchButton";
 
 const ACCENT = "#4F6EF7";
@@ -21,8 +21,12 @@ type State =
   | { kind: "error"; msg: string }
   | { kind: "ok"; readings: Array<{ t: number; v: number }>; current: { v: number; t: number } | null };
 
+// The chart fills the remaining space inside the card via the DayChart's
+// own ResizeObserver, so the card height directly controls how much room
+// the trace gets. Numbers chosen to give a generous chart area on both
+// viewports without crowding the dashboard grid.
 const CARD_STYLE_TAG = `
-  .glev-today-card { height: 220px; }
+  .glev-today-card { height: 320px; }
   @media (max-width: 768px) {
     .glev-today-card { height: 300px; }
   }
@@ -212,68 +216,93 @@ function Header({
 }
 
 function DayChart({ readings }: { readings: Array<{ t: number; v: number }> }) {
-  // Wider-than-tall but with enough vertical room that the trace stays
-  // readable when the SVG scales to a narrow phone width.
-  const W = 720;
-  const H = 240;
-  const padL = 30;
+  // Measure the container so the SVG always renders in true pixel space
+  // (no aspect-ratio squash). This makes the chart fill its slot on both
+  // narrow phones and wide desktop cards without distortion.
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState<{ w: number; h: number }>({ w: 720, h: 240 });
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([entry]) => {
+      const r = entry.contentRect;
+      if (r.width > 0 && r.height > 0) {
+        setSize({ w: Math.round(r.width), h: Math.round(r.height) });
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const W = size.w;
+  const H = size.h;
+  const padL = 32;
   const padR = 12;
-  const padT = 14;
-  const padB = 28;
+  const padT = 12;
+  const padB = 24;
 
   const today0 = new Date();
   today0.setHours(0, 0, 0, 0);
   const dayStart = today0.getTime();
   const dayEnd = dayStart + 24 * 3600 * 1000;
-  const xMin = dayStart;
-  const xMax = dayEnd;
 
   const yMin = 40;
   const yMax = 300;
-  const toX = (t: number) => padL + ((t - xMin) / (xMax - xMin)) * (W - padL - padR);
+  const toX = (t: number) => padL + ((t - dayStart) / (dayEnd - dayStart)) * (W - padL - padR);
   const toY = (v: number) => padT + (1 - (v - yMin) / (yMax - yMin)) * (H - padT - padB);
+
+  // Hide hour labels on narrow viewports to avoid overlap.
+  const hourTicks = W < 380 ? [0, 6, 12, 18] : [0, 3, 6, 9, 12, 15, 18, 21];
+  const yTicks = [70, 110, 180, 250];
 
   const path = readings.map((r, i) => `${i === 0 ? "M" : "L"}${toX(r.t).toFixed(1)},${toY(r.v).toFixed(1)}`).join(" ");
   const last = readings[readings.length - 1];
-  const lastX = toX(last.t);
-  const lastY = toY(last.v);
-  const lastC = colorFor(last.v);
-
-  const hourTicks = [0, 3, 6, 9, 12, 15, 18, 21];
-  const yTicks = [70, 110, 180, 250];
+  const lastX = last ? toX(last.t) : 0;
+  const lastY = last ? toY(last.v) : 0;
+  const lastC = last ? colorFor(last.v) : ACCENT;
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", overflow: "visible", flex: 1 }}>
-      {/* In-range band */}
-      <rect
-        x={padL} y={toY(RANGE_HIGH)}
-        width={W - padL - padR}
-        height={toY(RANGE_LOW) - toY(RANGE_HIGH)}
-        fill={GREEN} fillOpacity="0.06"
-      />
-      {/* Y grid */}
-      {yTicks.map((v) => (
-        <g key={v}>
-          <line x1={padL} y1={toY(v)} x2={W - padR} y2={toY(v)} stroke="rgba(255,255,255,0.05)" strokeDasharray="3 4" />
-          <text x={padL - 5} y={toY(v) + 3} textAnchor="end" fontSize="9" fill="rgba(255,255,255,0.25)">{v}</text>
-        </g>
-      ))}
-      {/* X hour ticks */}
-      {hourTicks.map((h) => {
-        const t = dayStart + h * 3600 * 1000;
-        return (
-          <text key={h} x={toX(t)} y={H - 4} textAnchor="middle" fontSize="9" fill="rgba(255,255,255,0.25)">
-            {h.toString().padStart(2, "0")}
-          </text>
-        );
-      })}
-      {/* Now indicator */}
-      <line x1={toX(Date.now())} y1={padT} x2={toX(Date.now())} y2={H - padB} stroke={ACCENT} strokeOpacity="0.25" strokeDasharray="2 3" />
-      {/* Line */}
-      <path d={path} fill="none" stroke={ACCENT} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      {/* Last point */}
-      <circle cx={lastX} cy={lastY} r="3.5" fill={lastC} stroke={SURFACE} strokeWidth="1.5" />
-    </svg>
+    <div ref={containerRef} style={{ flex: 1, minHeight: 0, position: "relative" }}>
+      {W > 0 && H > 0 && (
+        <svg
+          width={W}
+          height={H}
+          viewBox={`0 0 ${W} ${H}`}
+          style={{ display: "block", position: "absolute", inset: 0 }}
+        >
+          {/* In-range band */}
+          <rect
+            x={padL} y={toY(RANGE_HIGH)}
+            width={W - padL - padR}
+            height={toY(RANGE_LOW) - toY(RANGE_HIGH)}
+            fill={GREEN} fillOpacity="0.06"
+          />
+          {/* Y grid */}
+          {yTicks.map((v) => (
+            <g key={v}>
+              <line x1={padL} y1={toY(v)} x2={W - padR} y2={toY(v)} stroke="rgba(255,255,255,0.05)" strokeDasharray="3 4" />
+              <text x={padL - 5} y={toY(v) + 3} textAnchor="end" fontSize="10" fill="rgba(255,255,255,0.25)">{v}</text>
+            </g>
+          ))}
+          {/* X hour ticks */}
+          {hourTicks.map((h) => {
+            const t = dayStart + h * 3600 * 1000;
+            return (
+              <text key={h} x={toX(t)} y={H - 6} textAnchor="middle" fontSize="10" fill="rgba(255,255,255,0.25)">
+                {h.toString().padStart(2, "0")}
+              </text>
+            );
+          })}
+          {/* Now indicator */}
+          <line x1={toX(Date.now())} y1={padT} x2={toX(Date.now())} y2={H - padB} stroke={ACCENT} strokeOpacity="0.25" strokeDasharray="2 3" />
+          {/* Line */}
+          <path d={path} fill="none" stroke={ACCENT} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          {/* Last point */}
+          {last && <circle cx={lastX} cy={lastY} r="4" fill={lastC} stroke={SURFACE} strokeWidth="1.5" />}
+        </svg>
+      )}
+    </div>
   );
 }
 
