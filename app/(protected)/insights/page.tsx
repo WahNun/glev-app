@@ -408,6 +408,11 @@ function FlipCard({
           padding,
           boxSizing:"border-box",
           position:"relative",
+          // Lay out children in a column so a child can use `flex:1` to
+          // soak up any extra height when the back face is taller than
+          // the front (e.g. the chart card with long copy on the back).
+          display:"flex",
+          flexDirection:"column",
         }}>
           <span style={{ position:"absolute", top:10, right:14, fontSize:10, color:"rgba(255,255,255,0.18)" }}>↺</span>
           {children}
@@ -608,7 +613,7 @@ function TrendSparkline({ meals }: { meals: Meal[] }) {
         // interacting with the crosshair.
         e.stopPropagation();
       }}
-      style={{ position: "relative", width: "100%", height: 290, touchAction: "pan-y" }}
+      style={{ position: "relative", width: "100%", flex: 1, minHeight: 240, touchAction: "pan-y" }}
       {...handlers}
     >
       {W > 0 && H > 0 && (
