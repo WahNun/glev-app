@@ -49,6 +49,7 @@ export default function CgmFetchButton({
   // didn't change. The dot only turns red when we *actually* failed to
   // contact the CGM (network drop, 4xx/5xx response, missing credentials).
   const [errMsg, setErrMsg] = useState<string | null>(null);
+  const [lastTimestamp, setLastTimestamp] = useState<string | null>(null);
 
   async function run(e: React.MouseEvent) {
     e.stopPropagation();
@@ -148,6 +149,22 @@ export default function CgmFetchButton({
           {errMsg}
         </div>
       )}
+        {!hasErr && lastTimestamp && (
+          <div
+            style={{
+              fontSize: small ? 9 : 10,
+              color: "#6B7280",
+              marginTop: 3,
+              letterSpacing: "0.02em",
+            }}
+          >
+            {"Letzter Wert: "}
+            {new Date(lastTimestamp).toLocaleTimeString("de-DE", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </div>
+        )}
     </div>
   );
 }
