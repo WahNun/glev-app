@@ -15,10 +15,18 @@ export async function POST(req: NextRequest) {
     } catch {
       return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
     }
+    console.log('[cgm/credentials POST] body keys:', Object.keys(body || {}));
     await setCredentials(user.id, body || {});
     return NextResponse.json({ ok: true });
-  } catch (e) {
-    return errResponse(e);
+  } catch (e: unknown) {
+    const err = e as { message?: string; stack?: string; name?: string };
+    console.error('[cgm/credentials POST] error:', e);
+    return NextResponse.json({
+      error: 'internal',
+      message: err?.message || String(e),
+      stack: err?.stack?.split('\n').slice(0, 5).join(' | '),
+      name: err?.name,
+    }, { status: 500 });
   }
 }
 
