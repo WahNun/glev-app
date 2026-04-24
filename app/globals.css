@@ -1,5 +1,19 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { background: #09090B; color: #fff; font-family: var(--font-inter), 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+html, body {
+  background: #09090B;
+  color: #fff;
+  font-family: var(--font-inter), 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  /* iOS Safari ignores `user-scalable=no` in the viewport meta — combine
+     with PreventZoom.tsx (touchend / gesturestart listeners) for a full
+     zoom block. `manipulation` here disables double-tap-to-zoom while
+     still allowing taps and scrolling. */
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* iOS auto-zooms any focused input whose font-size is below 16px. Setting
+   the floor here avoids that visual jump on every form field. */
+input, textarea, select { font-size: 16px; }
 
 /* Hide scrollbars across the app while preserving scroll behaviour. */
 html, body { scrollbar-width: none; -ms-overflow-style: none; }

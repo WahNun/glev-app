@@ -11,7 +11,17 @@ export async function signIn(email: string, password: string) {
 
 export async function signUp(email: string, password: string): Promise<{ needsEmailConfirmation: boolean }> {
   if (!supabase) throw new Error("Supabase is not configured — set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY");
-  const { data, error } = await supabase.auth.signUp({ email, password });
+  // Tell Supabase where to send the confirmation-email link. Must point at
+  // our /auth/callback route (which exchanges the code for a session) and
+  // must also be whitelisted in Supabase Dashboard → Authentication →
+  // URL Configuration → Redirect URLs.
+  const emailRedirectTo =
+    typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined;
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: emailRedirectTo ? { emailRedirectTo } : undefined,
+  });
   if (error) throw error;
   const needsEmailConfirmation = !data.session;
   return { needsEmailConfirmation };

@@ -1,0 +1,120 @@
+Fix three issues on glev.app.
+
+===========================================
+ISSUE 1 — MOBILE ZOOM STILL WORKS DESPITE META TAG
+===========================================
+
+iOS Safari (since iOS 10) ignores `user-scalable=no` and `maximum-scale` in meta viewport. We need a JavaScript + CSS combo.
+
+1.1 — In app/layout.tsx, keep the viewport metadata but ALSO add body-level touch-action CSS in globals.css:
+    html, body {
+      touch-action: manipulation; /* blocks double-tap zoom */
+      -webkit-text-size-adjust: 100%;
+    }
+
+1.2 — Add a client-side gesture prevention hook. Create components/PreventZoom.tsx (client component):
+
+"use client";
+import { useEffect } from 'react';
+export function PreventZoom() {
+  useEffect(() => {
+    const prevent = (e: Event) => e.preventDefault();
+    document.addEventListener('gesturestart', prevent);
+    document.addEventListener('gesturechange', prevent);
+    document.addEventListener('gestureend', prevent);
+    let lastTouchEnd = 0;
+    const onTouchEnd = (e: TouchEvent) => {
+      const now = Date.now();
+      if (now - lastTouchEnd <= 300) e.preventDefault();
+      lastTouchEnd = now;
+    };
+    document.addEventListener('touchend', onTouchEnd, { passive: false });
+    return () => {
+      document.removeEventListener('gesturestart', prevent);
+      document.removeEventListener('gesturechange', prevent);
+      document.removeEventListener('gestureend', prevent);
+      document.removeEventListener('touchend', onTouchEnd);
+    };
+  }, []);
+  return null;
+}
+
+1.3 — Mount <PreventZoom /> once in app/layout.tsx (inside the <body>), so it's active on every page.
+
+1.4 — Inputs on mobile: ensure all <input> fields use font-size: 16px minimum (iOS auto-zooms on focus if font < 16px). Add to globals.css:
+    input, textarea, select { font-size: 16px; }
+
+===========================================
+ISSUE 2 — EMAIL CONFIRMATION REDIRECT BROKEN
+===========================================
+
+When user signs up, Supabase sends a confirmation email. Clicking the link lands on an error page ("Seite nicht erreichbar"). Account gets confirmed but UX is broken.
+
+2.1 — Create the missing auth callback handler. New file: app/auth/callback/route.ts
+
+import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
+
+export async function GET(req: NextRequest) {
+  const { searchParams, origin } = new URL(req.url);
+  const code = searchParams.get('code');
+  const next = searchParams.get('next') ?? '/dashboard';
+
+  if (code) {
+    const cookieStore = await cookies();
+    const supabase = createServerClient(
+      process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll: () => cookieStore.getAll().map(c => ({ name: c.name, value: c.value })),
+          setAll: (toSet) => toSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options)),
+        },
+      }
+    );
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (!error) {
+      return NextResponse.redirect(`${origin}${next}`);
+    }
+  }
+
+  return NextResponse.redirect(`${origin}/auth/auth-error`);
+}
+
+2.2 — Create a simple error page at app/auth/auth-error/page.tsx — just a client component that says "Couldn't verify your account. Please try again or contact support." with a link back to /login.
+
+2.3 — IMPORTANT — Supabase Dashboard configuration (Lucas must do this manually in Supabase):
+    - Authentication → URL Configuration
+    - Site URL: https://glev.app
+    - Redirect URLs: add https://glev.app/auth/callback
+    Please remind Lucas of this step in your final report.
+
+2.4 — In the sign-up call on the frontend (find supabase.auth.signUp or similar), ensure emailRedirectTo is set:
+    const { data, error } = await supabase.auth.signUp({
+      email, password,
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback` }
+    });
+
+===========================================
+ISSUE 3 — DATA LEAK FIX (critical — do after Lucas confirms the diagnostic SQL results)
+===========================================
+
+HOLD on this one — Lucas needs to run a diagnostic SQL first to determine whether this is:
+(a) RLS missing on meals table → add RLS + policy
+(b) RLS present but backend using service-role and skipping user_id filter → fix backend route
+(c) Frontend query missing user_id filter → fix frontend
+
+DO NOT PROCEED with this section until Lucas confirms which case we're in.
+
+===========================================
+BUILD + SHIP
+===========================================
+
+STEP 1 — npm run build
+STEP 2 — git add -A && git commit -m "fix: mobile zoom prevention + email confirmation callback handler"
+STEP 3 — Push via Git pane (or shell now that auth is set up).
+STEP 4 — Report:
+  - Build + push status + commit SHA
+  - Reminder that Lucas must configure Supabase Auth → URL Configuration (Site URL + Redirect URLs)
+  - That Issue 3 is on hold pending diagnostic
