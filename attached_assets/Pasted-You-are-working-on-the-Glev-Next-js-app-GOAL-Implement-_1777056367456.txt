@@ -1,0 +1,152 @@
+You are working on the Glev Next.js app.
+
+GOAL:
+Implement a robust Safety Layer for AI-generated macros and insulin recommendations.
+
+This system must prevent dangerous dosing caused by incorrect AI parsing.
+
+---
+
+# PART 1 — SAFETY CLASSIFICATION SYSTEM
+
+Create a safety classification:
+
+SAFE  
+UNCERTAIN  
+UNSAFE  
+
+---
+
+# PART 2 — CONFIDENCE SCORE (MANDATORY)
+
+Modify AI response format to include:
+
+{
+  carbs: number,
+  protein: number,
+  fat: number,
+  fiber?: number,
+  calories?: number,
+  confidence: number (0–1),
+  reasoning?: string
+}
+
+---
+
+# PART 3 — RANGE VALIDATION
+
+Create validation rules:
+
+IF carbs > 150 → flag  
+IF carbs < 5 AND meal contains carbs → flag  
+IF protein > 150 → flag  
+IF fat > 150 → flag  
+
+IF insulin recommendation > safe threshold → flag  
+
+---
+
+# PART 4 — HISTORICAL CONSISTENCY CHECK
+
+Compare against past meals:
+
+- Similar meal → expected carb range
+- If deviation > 2x → flag
+
+Example:
+"User normally eats 40–60g → AI suggests 120g → suspicious"
+
+---
+
+# PART 5 — SAFETY DECISION LOGIC
+
+Implement:
+
+IF confidence >= 0.85 AND no flags:
+→ SAFE
+
+IF confidence between 0.6–0.85 OR minor flags:
+→ UNCERTAIN
+
+IF confidence < 0.6 OR major flags:
+→ UNSAFE
+
+---
+
+# PART 6 — UI BEHAVIOR
+
+## SAFE
+- Auto-populate macros
+- Allow recommendation immediately
+
+## UNCERTAIN
+- Show warning:
+  "This estimate may be inaccurate"
+- Highlight fields
+- Require user confirmation before recommendation
+
+## UNSAFE
+- BLOCK recommendation
+- Show:
+  "We could not reliably estimate this meal. Please adjust values manually."
+- Do NOT auto-populate insulin
+
+---
+
+# PART 7 — DOUBLE CONFIRMATION FLOW
+
+If flagged:
+
+User must confirm:
+
+- carbs
+- insulin
+
+Add confirm button:
+"Use these values anyway"
+
+---
+
+# PART 8 — FORCE RE-RENDER FIX
+
+Ensure latest valid response overwrites previous ones:
+
+setMacros({
+  ...newMacros,
+  version: Date.now()
+})
+
+---
+
+# PART 9 — OPTIONAL UX IMPROVEMENTS
+
+- Add confidence indicator (color-coded)
+- Tooltip:
+  "Based on similar meals and AI estimation"
+
+---
+
+# PART 10 — FAILSAFE RULE
+
+If system is unsure:
+
+→ NEVER suggest insulin automatically
+
+---
+
+# PART 11 — SUCCESS CRITERIA
+
+✓ No unsafe insulin recommendations  
+✓ GPT hallucinations caught  
+✓ User always has final control  
+✓ Latest response always wins  
+✓ System adapts over time  
+
+---
+
+# OUTPUT
+
+- Safety logic implemented
+- UI updated
+- Macros + insulin protected by validation
+- Confirm system integrated

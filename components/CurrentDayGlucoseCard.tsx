@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import CgmFetchButton, { type CgmFetchResult } from "@/components/CgmFetchButton";
+import { useCrosshair, CrosshairOverlay, CrosshairTooltip, type CrosshairPoint } from "@/components/ChartCrosshair";
 
 const ACCENT = "#4F6EF7";
 const GREEN = "#22D3A0";
@@ -265,14 +266,41 @@ function DayChart({ readings }: { readings: Array<{ t: number; v: number }> }) {
   const lastY = last ? toY(last.v) : 0;
   const lastC = last ? colorFor(last.v) : ACCENT;
 
+  // Crosshair-snappable points (pixel space).
+  const crosshairPoints = useMemo<CrosshairPoint[]>(() => {
+    if (W <= 0 || H <= 0) return [];
+    return readings.map((r) => {
+      const fmtTime = new Date(r.t).toLocaleTimeString("en", { hour: "2-digit", minute: "2-digit", hour12: false });
+      return {
+        x: toX(r.t),
+        y: toY(r.v),
+        color: colorFor(r.v),
+        tooltip: [fmtTime, `${Math.round(r.v)} mg/dL`],
+      };
+    });
+    // toX/toY depend on W/H/dayStart; readings + W + H is sufficient
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readings, W, H]);
+
+  const { active, handlers } = useCrosshair(crosshairPoints);
+
   return (
-    <div ref={containerRef} style={{ flex: 1, minHeight: 0, position: "relative" }}>
+    <div
+      ref={containerRef}
+      onClick={(e) => {
+        // Stop the parent card from flipping while the user is interacting
+        // with the crosshair.
+        e.stopPropagation();
+      }}
+      style={{ flex: 1, minHeight: 0, position: "relative", touchAction: "pan-y" }}
+      {...handlers}
+    >
       {W > 0 && H > 0 && (
         <svg
           width={W}
           height={H}
           viewBox={`0 0 ${W} ${H}`}
-          style={{ display: "block", position: "absolute", inset: 0 }}
+          style={{ display: "block", position: "absolute", inset: 0, pointerEvents: "none" }}
         >
           {/* In-range band */}
           <rect
@@ -317,8 +345,17 @@ function DayChart({ readings }: { readings: Array<{ t: number; v: number }> }) {
           <path d={path} fill="none" stroke={ACCENT} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           {/* Last point */}
           {last && <circle cx={lastX} cy={lastY} r="4" fill={lastC} stroke={SURFACE} strokeWidth="1.5" />}
+          {/* Crosshair */}
+          <CrosshairOverlay
+            active={active}
+            top={padT}
+            bottom={H - padB}
+            left={padL}
+            right={W - padR}
+          />
         </svg>
       )}
+      <CrosshairTooltip active={active} containerWidth={W} containerHeight={H} />
     </div>
   );
 }
