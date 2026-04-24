@@ -330,14 +330,22 @@ export default function DashboardPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
-    (async () => {
+    let cancelled = false;
+    async function load(initial: boolean) {
       try {
-        await seedMealsIfEmpty();
+        if (initial) await seedMealsIfEmpty();
         const data = await fetchMeals();
-        setMeals(data);
+        if (!cancelled) setMeals(data);
       } catch (e) { console.error(e); }
-      finally { setLoading(false); }
-    })();
+      finally { if (!cancelled && initial) setLoading(false); }
+    }
+    load(true);
+    function onUpdated() { load(false); }
+    window.addEventListener("glev:meals-updated", onUpdated);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("glev:meals-updated", onUpdated);
+    };
   }, []);
 
   const recent = meals.slice(0, 6);

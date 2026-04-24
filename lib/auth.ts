@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { resetAutoFillForSignOut } from "./postMealCgmAutoFill";
 
 export async function signIn(email: string, password: string) {
   if (!supabase) throw new Error("Supabase is not configured — set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY");
@@ -19,6 +20,9 @@ export async function signUp(email: string, password: string): Promise<{ needsEm
 export async function signOut() {
   if (!supabase) return;
   await supabase.auth.signOut();
+  // Drop in-tab CGM autofill timers + cached user-id so a different account
+  // signing in next does not inherit the previous user's scheduled fills.
+  try { resetAutoFillForSignOut(); } catch { /* non-fatal */ }
 }
 
 export async function getCurrentUser() {

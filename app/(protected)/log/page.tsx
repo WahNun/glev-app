@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { saveMeal, classifyMeal, computeEvaluation, computeCalories, fetchMeals, type ParsedFood, type Meal } from "@/lib/meals";
+import { scheduleAutoFillForMeal } from "@/lib/postMealCgmAutoFill";
 import { supabase } from "@/lib/supabase";
 
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
@@ -414,7 +415,8 @@ export default function LogPage() {
     setSaving(true); setError("");
     try {
       const ev = computeEvaluation(totalCarbs, insulinNum, glucoseNum);
-      await saveMeal({
+      const mealTimeIso = mealTime ? new Date(mealTime).toISOString() : new Date().toISOString();
+      const saved = await saveMeal({
         inputText: desc || transcript || "Manual entry",
         parsedJson: [],
         glucoseBefore: glucoseNum, glucoseAfter: null,
@@ -426,8 +428,15 @@ export default function LogPage() {
         insulinUnits: insulinNum,
         mealType: classifyMeal(totalCarbs, totalProtein, totalFat),
         evaluation: ev,
-        mealTime: mealTime ? new Date(mealTime).toISOString() : new Date().toISOString(),
+        mealTime: mealTimeIso,
       });
+      // Auto-fill bg_1h / bg_2h from CGM history at meal_time + 1h / +2h.
+      // Schedules in-tab timers + persists so a reload / new tab can rehydrate;
+      // the layout-level provider also reconciles past-due slots on focus.
+      try { scheduleAutoFillForMeal(saved.id, mealTimeIso); } catch { /* non-fatal */ }
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("glev:meal-saved", { detail: { id: saved.id, mealTime: mealTimeIso } }));
+      }
       setSuccess(true);
       setHasActiveMeal(false);
       setTimeout(() => router.push("/dashboard"), 1200);

@@ -8,6 +8,7 @@ import {
   computeCalories,
   type Meal,
 } from "@/lib/meals";
+import { scheduleAutoFillForMeal } from "@/lib/postMealCgmAutoFill";
 import { supabase } from "@/lib/supabase";
 
 const ACCENT = "#4F6EF7";
@@ -206,6 +207,14 @@ export default function ManualEntryModal({
         // Reflect the *actually persisted* fields on the local Meal so the UI
         // never shows an extra reading the database rejected.
         Object.assign(meal, persisted);
+      }
+
+      // Auto-fill any missing 1h / 2h slot from CGM history. Past-due slots
+      // (e.g. when user logs a meal that already happened > 1h ago without
+      // a 1h reading) are picked up by the layout-level reconciliation.
+      try { scheduleAutoFillForMeal(meal.id, mealIso); } catch { /* non-fatal */ }
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("glev:meal-saved", { detail: { id: meal.id, mealTime: mealIso } }));
       }
 
       onCreated(meal);
