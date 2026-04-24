@@ -62,11 +62,15 @@ async function authedClient(req: NextRequest): Promise<AuthOk | AuthErr> {
   return { user: null, sb: null, error: "no session cookie and no bearer token" };
 }
 
-/** Postgres-side "table does not exist" detection. */
+/** "Table does not exist" detection across both Postgres and PostgREST. */
 function isMissingTable(err: { code?: string; message?: string } | null | undefined): boolean {
   if (!err) return false;
-  if (err.code === "42P01") return true;
-  return typeof err.message === "string" && /does not exist/i.test(err.message);
+  // 42P01 = Postgres "undefined_table"; PGRST205 = PostgREST "table not
+  // found in schema cache" (this is what Supabase actually returns when
+  // the table genuinely isn't created yet).
+  if (err.code === "42P01" || err.code === "PGRST205") return true;
+  return typeof err.message === "string" &&
+    (/does not exist/i.test(err.message) || /could not find the table/i.test(err.message));
 }
 
 export async function GET(req: NextRequest) {

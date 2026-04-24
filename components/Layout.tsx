@@ -56,7 +56,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           .glev-mobile-nav  { display: flex !important; }
           .glev-mobile-fab  { display: flex !important; }
           .glev-mobile-head { display: flex !important; }
-          .glev-main        { padding: 72px 16px 110px !important; }
+          .glev-main        { padding: calc(env(safe-area-inset-top) + 76px) 16px calc(env(safe-area-inset-bottom) + 110px) !important; }
           .glev-entry-row   { grid-template-columns: 1fr auto auto !important; gap: 10px !important; padding: 14px 16px !important; }
           .glev-entry-hide-mobile { display: none !important; }
           .glev-entry-bolus { display: flex !important; }
@@ -73,7 +73,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* MOBILE HEADER — solid surface bg always; logo opens About modal, account icon opens Settings */}
       <header className="glev-mobile-head" style={{
         position: "fixed", top: 0, left: 0, right: 0, zIndex: 99,
-        padding: "14px 18px 12px",
+        // iOS notch / Dynamic Island: push content below the status bar by
+        // honouring safe-area-inset-top, with a sensible fallback for
+        // browsers that don't expose it (e.g. desktop dev tools).
+        padding: "calc(env(safe-area-inset-top) + 10px) max(18px, env(safe-area-inset-right)) 12px max(18px, env(safe-area-inset-left))",
         background: SURFACE,
         borderBottom: `1px solid ${BORDER}`,
         alignItems: "center", justifyContent: "space-between",
