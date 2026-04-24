@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "qhNCb1Yna2H8zPDnPRUPS"
+uri = "file://exports/glev-logo-2000.png"
+type = "image"
+title = "Glev logo (2000×2000 PNG)"
