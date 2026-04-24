@@ -6,3 +6,9 @@ id = "qhNCb1Yna2H8zPDnPRUPS"
 uri = "file://exports/glev-logo-2000.png"
 type = "image"
 title = "Glev logo (2000×2000 PNG)"
+
+[[outputs]]
+id = "h7XfZt2b8KEV4so0TxSX2"
+uri = "file://exports/glev-logo-glucose-2000.png"
+type = "image"
+title = "Glev logo — glucose molecule variant (2000×2000 PNG)"
