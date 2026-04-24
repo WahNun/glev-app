@@ -161,7 +161,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <nav className="glev-mobile-nav" style={{
         position: "fixed", bottom: 0, left: 0, right: 0,
         background: SURFACE, borderTop: `1px solid ${BORDER}`,
-        justifyContent: "space-around", alignItems: "center",
+        // alignItems:"flex-end" anchors every nav item by its bottom edge so
+        // all labels sit on a single baseline. Without this, the taller Glev
+        // button (30px circle vs the smaller line icons) was being centered
+        // and pushed its "GLEV" label visibly lower than the others.
+        justifyContent: "space-around", alignItems: "flex-end",
         padding: "10px 18px max(18px, env(safe-area-inset-bottom))", zIndex: 100,
       }}>
         {NAV.map(({ label, path, icon }) => {
