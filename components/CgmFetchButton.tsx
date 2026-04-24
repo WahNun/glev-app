@@ -22,11 +22,12 @@ export async function fetchLatestCgm(): Promise<CgmFetchResult> {
          "Could not load CGM reading.");
       return { ok: false, status: res.status, message: msg };
     }
-    const data = (await res.json()) as { value?: number | null; timestamp?: string | null };
-    if (typeof data.value !== "number") {
-      return { ok: false, status: 502, message: "CGM returned no recent reading." };
-    }
-    return { ok: true, value: data.value, timestamp: data.timestamp ?? null };
+    const data = (await res.json()) as { current?: { value?: number; unit?: string; timestamp?: string | null; trend?: number } | null };
+        const val = data?.current?.value;
+        if (typeof val !== "number") {
+          return { ok: false, status: 502, message: "CGM returned no recent reading." };
+        }
+        return { ok: true, value: val, timestamp: data.current?.timestamp ?? null };
   } catch (e) {
     return { ok: false, status: 0, message: e instanceof Error ? e.message : "Could not load CGM reading." };
   }
