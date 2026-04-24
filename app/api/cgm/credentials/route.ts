@@ -9,13 +9,7 @@ export const dynamic = "force-dynamic";
 function adminClient() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-  // Diagnostic: log presence + length only (NEVER the value).
-    "[cgm/credentials] admin key present:",
-    !!serviceKey,
-    "len:",
-    serviceKey.length
-  );
-  if (!url || !serviceKey) {
+    if (!url || !serviceKey) {
     throw new Error("missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env var");
   }
   return createClient(url, serviceKey, {
