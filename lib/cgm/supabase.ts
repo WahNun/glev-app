@@ -32,7 +32,7 @@ export function adminClient(): SupabaseClient {
  * Verify the Authorization header (`Bearer <jwt>`). Returns { userId } on
  * success, or throws an Error with .status = 401 on failure.
  */
-export async function verifyJwt(authHeader: string | null | undefined): Promise<{ userId: string }> {
+export async function verifyJwt(authHeader: string | null | undefined): Promise<{ userId: string; email: string | null }> {
   const m = /^Bearer\s+(.+)$/i.exec(authHeader || "");
   if (!m) {
     const e: Error & { status?: number } = new Error("missing bearer token");
@@ -50,5 +50,5 @@ export async function verifyJwt(authHeader: string | null | undefined): Promise<
     e.status = 401;
     throw e;
   }
-  return { userId: data.user.id };
+  return { userId: data.user.id, email: data.user.email ?? null };
 }
