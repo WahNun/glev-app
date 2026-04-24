@@ -1,0 +1,50 @@
+We're still getting RLS violation on POST /api/cgm/credentials after the last fix. Need to audit the actual code + verify the service role key is correct.
+
+STEP 1 — Print the CURRENT contents of these files (do NOT modify anything yet):
+cat app/api/cgm/credentials/route.ts
+echo "=============="
+cat app/api/cgm/_helpers.ts
+echo "=============="
+cat lib/cgm/supabase.ts
+
+STEP 2 — Also add this one-time diagnostic to app/api/whoami/route.ts (right before the final return in the success path, add these fields to `info`):
+
+// Diagnostic: verify service role key characteristics
+const srKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+info.serviceKeyPrefix = srKey.slice(0, 10);
+info.serviceKeyLength = srKey.length;
+// For legacy JWT keys, decode the payload to check the role
+if (srKey.startsWith('eyJ')) {
+  try {
+    const parts = srKey.split('.');
+    if (parts.length === 3) {
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+      info.serviceKeyRole = payload.role;
+      info.serviceKeyRef = payload.ref;
+    }
+  } catch (e: any) {
+    info.serviceKeyDecodeError = e?.message;
+  }
+}
+
+// Actually test if the admin client can bypass RLS by doing a count that RLS would block for anon
+try {
+  const { createClient } = await import('@supabase/supabase-js');
+  const admin = createClient(supabaseUrl, srKey);
+  const { count, error: countErr } = await admin.from('cgm_credentials').select('*', { count: 'exact', head: true });
+  info.adminRlsTest = { count, error: countErr?.message || null };
+} catch (e: any) {
+  info.adminRlsTest = { exception: e?.message };
+}
+
+STEP 3 — npm run build
+
+STEP 4 — git add -A && git commit -m "debug: audit cgm credentials route + verify service role key"
+
+STEP 5 — PUSH via the Replit Git sidebar (shell push times out). Verify with: git log --oneline origin/main..HEAD (must be empty after push).
+
+STEP 6 — Report:
+- npm run build result
+- Push confirmation (git log --oneline origin/main..HEAD output should be empty)
+- Commit SHA
+- The cat outputs from STEP 1 verbatim

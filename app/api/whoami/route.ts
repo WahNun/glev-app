@@ -73,6 +73,38 @@ export async function GET(req: NextRequest) {
       .select('*', { count: 'exact', head: true });
     info.totalCredentialRows = count;
 
+    // Diagnostic: verify service role key characteristics
+    const srKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    info.serviceKeyPrefix = srKey.slice(0, 10);
+    info.serviceKeyLength = srKey.length;
+    // For legacy JWT keys, decode the payload to check the role
+    if (srKey.startsWith('eyJ')) {
+      try {
+        const parts = srKey.split('.');
+        if (parts.length === 3) {
+          const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+          info.serviceKeyRole = payload.role;
+          info.serviceKeyRef = payload.ref;
+        }
+      } catch (e: unknown) {
+        const err = e as { message?: string };
+        info.serviceKeyDecodeError = err?.message;
+      }
+    }
+
+    // Actually test if the admin client can bypass RLS by doing a count that RLS would block for anon
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const admin = createClient(supabaseUrl, srKey);
+      const { count: rlsCount, error: countErr } = await admin
+        .from('cgm_credentials')
+        .select('*', { count: 'exact', head: true });
+      info.adminRlsTest = { count: rlsCount, error: countErr?.message || null };
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      info.adminRlsTest = { exception: err?.message };
+    }
+
     return NextResponse.json(info, { status: 200 });
   } catch (e: unknown) {
     const err = e as { message?: string; stack?: string };
