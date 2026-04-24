@@ -1,0 +1,94 @@
+Multiple UI/UX improvements to the Glev web app. Please execute sequentially and report after each part.
+
+===========================================
+PART A — DASHBOARD (HOME SCREEN)
+===========================================
+
+A1. LAYOUT: On mobile view, the dashboard currently allows horizontal scrolling — cards slide left/right unintentionally. Lock horizontal overflow so only vertical scroll is possible.
+    - Add `overflow-x: hidden` to the dashboard container (or `touch-action: pan-y` if there's a gesture handler interfering)
+    - Verify on mobile viewport (≤640px): dragging horizontally must NOT move cards
+
+A2. NEW CHART — "Current-day glucose chart" placed at the TOP of the mobile dashboard, above the Control Score card.
+    - Data source: the user's glucose readings from today (00:00 until now)
+    - Use the existing CGM data pipeline (query cgm history for today's window via /api/cgm/history or similar — extend the endpoint's window to 24h if needed)
+    - Style: line chart, time on X axis (00:00 → now), glucose mg/dL on Y axis, match the visual style of the existing glucose trend chart below
+    - This chart should also be tap-to-flip (like the other cards) with contextual info on the back (daily average, time-in-range %, highest/lowest value + times)
+
+A3. EXISTING GLUCOSE TREND CARD:
+    - Make it DOUBLE the current height (roughly equal to 2 stacked dashboard cards)
+    - Move it logically (but A2 is now the one at the top; the existing trend stays lower — just bigger)
+    - Tap-to-flip: on tap, card rotates and reveals more context (daily breakdown, time-in-range per weekday, trend direction over last 7 days — whatever rich context makes sense)
+    - When the card is enlarged (2-card height or larger), surface additional info directly on the front: e.g. day-of-week labels, time-of-day markers, or high/low annotations
+
+A4. MEAL ENTRY CARDS (collapsed view in dashboard meal list):
+    - Current layout: 3 columns (Date | Classification abbr | Insulin U) — visually unbalanced, everything crammed to the edges, middle empty
+    - NEW layout: 4 columns distributed evenly across the row:
+        1. Date + Time (combined)
+        2. Meal classification (FC / Balanced / etc.)
+        3. Carbs (g) — NEW column
+        4. Insulin (U)
+    - Use flex/grid with equal spacing so all 4 columns fill the row evenly (no cramming at either edge)
+
+===========================================
+PART D — VISUAL CONSISTENCY (DO WITH A4)
+===========================================
+
+D1. The collapsed meal entry cards on the DASHBOARD must visually MATCH the collapsed cards in the ENTRY LOG view (same component, same styling). If there are two separate components today, unify them — extract a shared <MealEntryCardCollapsed /> component and use it in both places.
+
+===========================================
+PART B — INSIGHTS SCREEN
+===========================================
+
+B1. Enlarge the glucose trend chart on the Insights screen. Make it noticeably bigger than it currently is (e.g. at least 1.5× the current height). Since this is the primary content of the insights screen, it should command the visual hierarchy.
+
+===========================================
+PART C — PWA / FAVICON / HOME SCREEN ICON
+===========================================
+
+C1. When a user adds glev.app to their iOS Home Screen from Safari ("Add to Home Screen"), the icon currently shows a plain "G" letter instead of the Glev logo. Fix this.
+
+Steps:
+  - Check /public for existing Glev logo assets. If a logo PNG exists (glev-logo.png or similar), use it. If not, flag this so the user can upload an icon.
+  - Generate/place the following icon files in /public:
+    - favicon.ico (32x32)
+    - apple-touch-icon.png (180x180) — REQUIRED for iOS home screen
+    - icon-192.png (192x192)
+    - icon-512.png (512x512)
+  - Add a site.webmanifest (or public/manifest.json) with:
+    {
+      "name": "Glev",
+      "short_name": "Glev",
+      "icons": [
+        { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+        { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+      ],
+      "theme_color": "#000000",
+      "background_color": "#000000",
+      "display": "standalone",
+      "start_url": "/"
+    }
+  - In app/layout.tsx (root layout), add to the metadata export:
+    export const metadata: Metadata = {
+      title: "Glev",
+      icons: {
+        icon: "/favicon.ico",
+        apple: "/apple-touch-icon.png",
+      },
+      manifest: "/site.webmanifest",
+    };
+  - If no logo asset exists in /public, report this clearly and list which icon sizes are needed so the user can provide them.
+
+===========================================
+BUILD + SHIP
+===========================================
+
+STEP 1 — npm run build (must pass)
+STEP 2 — git add -A && git commit -m "dashboard/insights: enlarge charts, add current-day chart, unify meal cards, fix mobile scroll, add PWA icons"
+STEP 3 — Push via the Replit Git pane in the sidebar (shell push times out). Verify: git log --oneline origin/main..HEAD must be empty after push.
+STEP 4 — Report:
+  - Build status
+  - Push confirmation
+  - Commit SHA
+  - List of modified files
+  - For Part C: whether existing logo assets were found or if Lucas needs to upload them
+  - For Part A3: describe what contextual info you chose to show on the flip-back and on the enlarged front view

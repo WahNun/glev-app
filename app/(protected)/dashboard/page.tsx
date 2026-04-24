@@ -3,7 +3,9 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { fetchMeals, seedMealsIfEmpty, type Meal } from "@/lib/meals";
-import { TYPE_COLORS, TYPE_LABELS, TYPE_SHORT, TYPE_EXPLAIN, getEvalColor, getEvalLabel, getEvalExplain } from "@/lib/mealTypes";
+import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, getEvalExplain } from "@/lib/mealTypes";
+import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
+import CurrentDayGlucoseCard from "@/components/CurrentDayGlucoseCard";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
@@ -107,6 +109,7 @@ function FlipCard({ card }: { card: CardData }) {
 
 function TrendChart({ meals }: { meals: Meal[] }) {
   const DAYS = 14;
+  const [flipped, setFlipped] = useState(false);
   const now = Date.now();
   const buckets: Record<string, number[]> = {};
   for (let i = 0; i < DAYS; i++) {
@@ -117,49 +120,153 @@ function TrendChart({ meals }: { meals: Meal[] }) {
     const d = new Date(m.created_at).toDateString();
     if (d in buckets && m.glucose_before) buckets[d].push(m.glucose_before);
   });
+  const dateLabels = Object.keys(buckets);
   const points = Object.values(buckets).map(arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : null);
   const filled: number[] = [];
   let last = 110;
   points.forEach(v => { if (v !== null) last = v; filled.push(last); });
 
-  const W=480, H=90, pad=20;
-  const mn=70, mx=230;
-  const toY=(v:number) => H - ((v-mn)/(mx-mn))*(H-pad)-pad/2;
-  const toX=(i:number) => (i/(DAYS-1))*(W-2*pad)+pad;
-  const path = filled.map((v,i) => `${i===0?"M":"L"}${toX(i)},${toY(v)}`).join(" ");
-  const area = path + ` L${toX(DAYS-1)},${H} L${toX(0)},${H} Z`;
+  const W = 720, H = 220, padL = 32, padR = 14, padT = 14, padB = 32;
+  const mn = 60, mx = 240;
+  const toY = (v: number) => padT + (1 - (v - mn) / (mx - mn)) * (H - padT - padB);
+  const toX = (i: number) => padL + (i / (DAYS - 1)) * (W - padL - padR);
+  const path = filled.map((v, i) => `${i === 0 ? "M" : "L"}${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(" ");
+  const area = path + ` L${toX(DAYS - 1).toFixed(1)},${H - padB} L${toX(0).toFixed(1)},${H - padB} Z`;
 
-  const dateLabels = Object.keys(buckets);
-  const showIdx = [0, Math.floor(DAYS/4), Math.floor(DAYS/2), Math.floor(3*DAYS/4), DAYS-1];
+  // Front: highest/lowest annotation (only on real data points)
+  type Pt = { i: number; v: number };
+  const realPts: Pt[] = [];
+  points.forEach((v, i) => { if (v != null) realPts.push({ i, v }); });
+  const hiPt: Pt | null = realPts.length ? realPts.reduce((a, b) => (b.v > a.v ? b : a)) : null;
+  const loPt: Pt | null = realPts.length ? realPts.reduce((a, b) => (b.v < a.v ? b : a)) : null;
 
+  // Back: weekday averages + 7-day trend slope
+  const weekdayBuckets: number[][] = Array.from({ length: 7 }, () => []);
+  const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  meals.forEach(m => {
+    if (!m.glucose_before) return;
+    const ts = new Date(m.created_at);
+    if (now - ts.getTime() > 30 * 86400000) return;
+    weekdayBuckets[ts.getDay()].push(m.glucose_before);
+  });
+  const weekdayAvgs = weekdayBuckets.map(arr => (arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null));
+  const real = points.map((v, i) => ({ i, v })).filter((p): p is { i: number; v: number } => p.v != null);
+  const last7 = real.slice(-7);
+  let slope = 0;
+  if (last7.length >= 2) {
+    const xs = last7.map(p => p.i);
+    const ys = last7.map(p => p.v);
+    const xm = xs.reduce((a, b) => a + b, 0) / xs.length;
+    const ym = ys.reduce((a, b) => a + b, 0) / ys.length;
+    let num = 0, den = 0;
+    for (let k = 0; k < xs.length; k++) { num += (xs[k] - xm) * (ys[k] - ym); den += (xs[k] - xm) ** 2; }
+    slope = den ? num / den : 0;
+  }
+  const recentAvg = last7.length ? Math.round(last7.reduce((s, p) => s + p.v, 0) / last7.length) : null;
+  const overallAvg = real.length ? Math.round(real.reduce((s, p) => s + p.v, 0) / real.length) : null;
+  const inRange = real.filter(p => p.v >= 80 && p.v <= 180).length;
+  const tirPct = real.length ? Math.round((inRange / real.length) * 100) : 0;
+
+  const HEIGHT = 360;
   return (
-    <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"20px 24px" }}>
-      <div style={{ fontSize:13, fontWeight:600, marginBottom:4 }}>Glucose Trend</div>
-      <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginBottom:14 }}>Average glucose before meals — last 14 days</div>
-      <svg viewBox={`0 0 ${W} ${H+8}`} style={{ width:"100%", overflow:"visible" }}>
-        {[80,110,140,180].map(v => (
-          <g key={v}>
-            <line x1={pad} y1={toY(v)} x2={W-pad} y2={toY(v)} stroke="rgba(255,255,255,0.05)" strokeDasharray="4"/>
-            <text x={pad-4} y={toY(v)+4} textAnchor="end" fontSize="8" fill="rgba(255,255,255,0.2)">{v}</text>
-          </g>
-        ))}
-        <defs>
-          <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={ACCENT} stopOpacity="0.25"/>
-            <stop offset="100%" stopColor={ACCENT} stopOpacity="0"/>
-          </linearGradient>
-        </defs>
-        <path d={area} fill="url(#trendGrad)"/>
-        <path d={path} fill="none" stroke={ACCENT} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-        {filled.map((v,i) => points[i] !== null ? (
-          <circle key={i} cx={toX(i)} cy={toY(v)} r="3" fill={ACCENT} stroke={SURFACE} strokeWidth="1.5"/>
-        ) : null)}
-        {showIdx.map(i => (
-          <text key={i} x={toX(i)} y={H+20} textAnchor="middle" fontSize="8" fill="rgba(255,255,255,0.2)">
-            {new Date(dateLabels[i]).toLocaleDateString("en",{month:"short",day:"numeric"})}
-          </text>
-        ))}
-      </svg>
+    <div onClick={() => setFlipped(f => !f)} style={{ position:"relative", height:HEIGHT, perspective:1200, cursor:"pointer" }}>
+      <div style={{ position:"absolute", inset:0, transformStyle:"preserve-3d", transition:"transform 0.55s cubic-bezier(0.4,0,0.2,1)", transform:flipped ? "rotateY(180deg)" : "rotateY(0deg)" }}>
+        {/* FRONT */}
+        <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"20px 24px", boxSizing:"border-box", display:"flex", flexDirection:"column", overflow:"hidden" }}>
+          <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:6 }}>
+            <div>
+              <div style={{ fontSize:13, fontWeight:700 }}>Glucose Trend</div>
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:2 }}>Avg pre-meal glucose · last 14 days</div>
+            </div>
+            <div style={{ display:"flex", alignItems:"flex-end", gap:8 }}>
+              {recentAvg && (
+                <div style={{ textAlign:"right" }}>
+                  <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600 }}>7-DAY AVG</div>
+                  <div style={{ fontSize:24, fontWeight:800, color:recentAvg>140?ORANGE:recentAvg<80?PINK:GREEN, letterSpacing:"-0.03em", lineHeight:1 }}>{recentAvg}</div>
+                </div>
+              )}
+              <span style={{ fontSize:9, color:"rgba(255,255,255,0.2)", marginLeft:4 }}>↺</span>
+            </div>
+          </div>
+          <svg viewBox={`0 0 ${W} ${H}`} style={{ width:"100%", flex:1, overflow:"visible" }}>
+            {/* In-range band */}
+            <rect x={padL} y={toY(180)} width={W-padL-padR} height={toY(80)-toY(180)} fill={GREEN} fillOpacity="0.05"/>
+            {[80, 110, 140, 180, 220].map(v => (
+              <g key={v}>
+                <line x1={padL} y1={toY(v)} x2={W-padR} y2={toY(v)} stroke="rgba(255,255,255,0.05)" strokeDasharray="3 4"/>
+                <text x={padL-5} y={toY(v)+4} textAnchor="end" fontSize="9" fill="rgba(255,255,255,0.25)">{v}</text>
+              </g>
+            ))}
+            <defs>
+              <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={ACCENT} stopOpacity="0.28"/>
+                <stop offset="100%" stopColor={ACCENT} stopOpacity="0"/>
+              </linearGradient>
+            </defs>
+            <path d={area} fill="url(#trendGrad)"/>
+            <path d={path} fill="none" stroke={ACCENT} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            {filled.map((v, i) => points[i] !== null ? (
+              <circle key={i} cx={toX(i)} cy={toY(v)} r="3" fill={ACCENT} stroke={SURFACE} strokeWidth="1.5"/>
+            ) : null)}
+            {hiPt && (
+              <g>
+                <circle cx={toX(hiPt.i)} cy={toY(hiPt.v)} r="5" fill="none" stroke={ORANGE} strokeWidth="1.5"/>
+                <text x={toX(hiPt.i)} y={toY(hiPt.v)-9} textAnchor="middle" fontSize="9" fill={ORANGE} fontWeight="700">↑ {Math.round(hiPt.v)}</text>
+              </g>
+            )}
+            {loPt && (
+              <g>
+                <circle cx={toX(loPt.i)} cy={toY(loPt.v)} r="5" fill="none" stroke={PINK} strokeWidth="1.5"/>
+                <text x={toX(loPt.i)} y={toY(loPt.v)+16} textAnchor="middle" fontSize="9" fill={PINK} fontWeight="700">↓ {Math.round(loPt.v)}</text>
+              </g>
+            )}
+            {/* X labels: every other day */}
+            {dateLabels.map((d, i) => (i % 2 === 0 || i === DAYS - 1) ? (
+              <text key={i} x={toX(i)} y={H-12} textAnchor="middle" fontSize="9" fill="rgba(255,255,255,0.28)">
+                {new Date(d).toLocaleDateString("en", { month:"short", day:"numeric" })}
+              </text>
+            ) : null)}
+          </svg>
+        </div>
+        {/* BACK */}
+        <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", transform:"rotateY(180deg)", background:`linear-gradient(145deg, ${ACCENT}10, ${SURFACE} 65%)`, border:`1px solid ${ACCENT}33`, borderRadius:16, padding:"20px 24px", boxSizing:"border-box", display:"flex", flexDirection:"column", gap:14, overflow:"hidden" }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <div style={{ fontSize:11, color:ACCENT, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>Trend Breakdown</div>
+            <span style={{ fontSize:9, color:"rgba(255,255,255,0.2)" }}>↺ back</span>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10 }}>
+            {[
+              { l:"Overall avg", v: overallAvg ? `${overallAvg} mg/dL` : "—", c: overallAvg ? (overallAvg>140?ORANGE:overallAvg<80?PINK:GREEN) : undefined },
+              { l:"7-day avg", v: recentAvg ? `${recentAvg} mg/dL` : "—", c: recentAvg ? (recentAvg>140?ORANGE:recentAvg<80?PINK:GREEN) : undefined },
+              { l:"Time in range (80–180)", v: real.length ? `${tirPct}%` : "—", c: tirPct>=70?GREEN:tirPct>=50?ORANGE:PINK },
+              { l:"Highest", v: hiPt ? `${Math.round(hiPt.v)} mg/dL` : "—", c: ORANGE },
+              { l:"Lowest", v: loPt ? `${Math.round(loPt.v)} mg/dL` : "—", c: PINK },
+              { l:"7-day slope", v: last7.length>=2 ? `${slope>0?"+":""}${slope.toFixed(1)}/day` : "—", c: Math.abs(slope)<2 ? GREEN : slope>0 ? ORANGE : ACCENT },
+            ].map(s => (
+              <div key={s.l} style={{ background:"rgba(255,255,255,0.025)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
+                <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)", letterSpacing:"0.07em", fontWeight:600, marginBottom:4, textTransform:"uppercase" }}>{s.l}</div>
+                <div style={{ fontSize:14, fontWeight:700, color:s.c || "rgba(255,255,255,0.9)", letterSpacing:"-0.01em" }}>{s.v}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ flex:1, display:"flex", flexDirection:"column" }}>
+            <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)", letterSpacing:"0.07em", fontWeight:600, marginBottom:8, textTransform:"uppercase" }}>By weekday (last 30 days)</div>
+            <div style={{ display:"flex", gap:6, flex:1, alignItems:"flex-end" }}>
+              {weekdayAvgs.map((v, i) => {
+                const h = v == null ? 8 : Math.max(8, Math.min(100, ((v - 60) / (240 - 60)) * 100));
+                const c = v == null ? "rgba(255,255,255,0.1)" : v > 140 ? ORANGE : v < 80 ? PINK : GREEN;
+                return (
+                  <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4, height:"100%", justifyContent:"flex-end" }}>
+                    <div style={{ fontSize:10, fontWeight:700, color: v == null ? "rgba(255,255,255,0.25)" : c }}>{v ?? "—"}</div>
+                    <div style={{ width:"100%", maxWidth:32, height:`${h}%`, background:c, opacity: v == null ? 0.4 : 0.85, borderRadius:6, transition:"height 0.4s ease" }}/>
+                    <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>{weekdayLabels[i]}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -233,17 +340,27 @@ export default function DashboardPage() {
   const cards = buildCards(meals);
 
   return (
-    <div style={{ maxWidth:1480, margin:"0 auto", width:"100%" }}>
+    <div style={{ maxWidth:1480, margin:"0 auto", width:"100%", overflowX:"hidden", boxSizing:"border-box" }}>
       <style>{`
+        html, body { overflow-x: hidden; }
         .glev-dash-head    { display: flex; }
         .glev-dash-grid    { grid-template-columns: repeat(4,1fr) !important; }
         .glev-dash-charts  { grid-template-columns: 3fr 2fr !important; }
+        .glev-today-wrap   { display: block; margin-bottom: 22px; }
+        .glev-today-wrap-mobile { display: none; }
         @media (max-width: 768px) {
           .glev-dash-head   { display: none !important; }
           .glev-dash-grid   { grid-template-columns: 1fr !important; gap: 12px !important; }
           .glev-dash-charts { grid-template-columns: 1fr !important; }
+          .glev-today-wrap  { display: none !important; }
+          .glev-today-wrap-mobile { display: block !important; margin-bottom: 14px; }
         }
       `}</style>
+
+      {/* MOBILE: today's glucose first */}
+      <div className="glev-today-wrap-mobile">
+        <CurrentDayGlucoseCard/>
+      </div>
 
       <div className="glev-dash-head" style={{ marginBottom:28, justifyContent:"space-between", alignItems:"flex-end", flexWrap:"wrap", gap:12 }}>
         <div>
@@ -281,7 +398,7 @@ export default function DashboardPage() {
             {recent.map(m => {
               const isOpen = expanded === m.id;
               const ev = m.evaluation;
-              const time = new Date(m.created_at).toLocaleString("en", { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" });
+              const time = new Date(m.meal_time ?? m.created_at).toLocaleString("en", { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" });
               return (
                 <div key={m.id} style={{ borderBottom:`1px solid ${BORDER}` }}>
                   {isOpen ? (
@@ -291,55 +408,9 @@ export default function DashboardPage() {
                         <polyline points="9 6 15 12 9 18"/>
                       </svg>
                     </div>
-                  ) : (() => {
-                    const bg = m.glucose_before;
-                    const bgC = bg == null ? "rgba(255,255,255,0.3)" : (bg > 140 ? ORANGE : bg < 80 ? PINK : GREEN);
-                    return (
-                  <div className="glev-entry-row" onClick={() => setExpanded(m.id)} style={{ padding:"14px 24px", cursor:"pointer", display:"grid", gridTemplateColumns:"130px 70px 1fr 1fr 1fr 110px", gap:24, alignItems:"center" }}>
-                    {/* Col 1: Time */}
-                    <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)" }}>{time}</div>
-                    {/* Col 2: Subtle classification indicator (dot + short code) */}
-                    <div style={{ minWidth:0, display:"flex", alignItems:"center", gap:6 }}>
-                      {m.meal_type ? (() => {
-                        const c = TYPE_COLORS[m.meal_type] || "rgba(255,255,255,0.5)";
-                        return (
-                          <>
-                            <span style={{ width:6, height:6, borderRadius:99, background:c, opacity:0.7 }} />
-                            <span title={TYPE_LABELS[m.meal_type]} style={{ fontSize:10, fontWeight:600, color:`${c}b3`, letterSpacing:"0.06em" }}>
-                              {TYPE_SHORT[m.meal_type] || m.meal_type.slice(0,2)}
-                            </span>
-                          </>
-                        );
-                      })() : (
-                        <span style={{ fontSize:11, color:"rgba(255,255,255,0.25)" }}>—</span>
-                      )}
-                    </div>
-                    {/* Col 3: BG (desktop only) */}
-                    <div className="glev-entry-hide-mobile" style={{ minWidth:0 }}>
-                      <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>BG</div>
-                      <div style={{ fontSize:14, fontWeight:700, color:bgC, letterSpacing:"-0.01em" }}>{bg ?? "—"}<span style={{ fontSize:10, color:"rgba(255,255,255,0.35)", fontWeight:500, marginLeft:3 }}>mg/dL</span></div>
-                    </div>
-                    {/* Col 4: Carbs (desktop only) */}
-                    <div className="glev-entry-hide-mobile" style={{ minWidth:0 }}>
-                      <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>Carbs</div>
-                      <div style={{ fontSize:14, fontWeight:700, color: m.carbs_grams ? ORANGE : "rgba(255,255,255,0.3)", letterSpacing:"-0.01em" }}>{m.carbs_grams ?? "—"}<span style={{ fontSize:10, color:"rgba(255,255,255,0.35)", fontWeight:500, marginLeft:1 }}>g</span></div>
-                    </div>
-                    {/* Col 5: Insulin (desktop only) */}
-                    <div className="glev-entry-hide-mobile" style={{ minWidth:0 }}>
-                      <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>Insulin</div>
-                      <div style={{ fontSize:14, fontWeight:700, color: m.insulin_units ? ACCENT : "rgba(255,255,255,0.3)", letterSpacing:"-0.01em" }}>{m.insulin_units ?? "—"}<span style={{ fontSize:10, color:"rgba(255,255,255,0.35)", fontWeight:500, marginLeft:1 }}>u</span></div>
-                    </div>
-                    {/* Col 6: Eval chip (desktop only) */}
-                    <span className="glev-entry-hide-mobile" style={{ padding:"5px 12px", borderRadius:99, fontSize:10, fontWeight:700, background:`${evalColor(ev)}18`, color:evalColor(ev), border:`1px solid ${evalColor(ev)}30`, whiteSpace:"nowrap", letterSpacing:"0.05em", textTransform:"uppercase" }}>
-                      {evalLabel(ev)}
-                    </span>
-                    {/* MOBILE ONLY: Bolus (insulin) chip on the right */}
-                    <span className="glev-entry-bolus" style={{ alignItems:"center", padding:"4px 12px", borderRadius:99, fontSize:11, fontWeight:700, background: m.insulin_units ? `${ACCENT}18` : "rgba(255,255,255,0.05)", color: m.insulin_units ? ACCENT : "rgba(255,255,255,0.3)", border:`1px solid ${m.insulin_units ? `${ACCENT}30` : "rgba(255,255,255,0.08)"}`, whiteSpace:"nowrap", letterSpacing:"0.04em" }}>
-                      {m.insulin_units != null ? `${m.insulin_units}u` : "—"}
-                    </span>
-                  </div>
-                    );
-                  })()}
+                  ) : (
+                    <MealEntryCardCollapsed meal={m} onClick={() => setExpanded(m.id)}/>
+                  )}
                   {isOpen && (() => {
                     const protein = m.protein_grams ?? (Array.isArray(m.parsed_json) ? m.parsed_json.reduce((s,f)=>s+(f.protein||0),0) : 0);
                     const fat     = m.fat_grams     ?? (Array.isArray(m.parsed_json) ? m.parsed_json.reduce((s,f)=>s+(f.fat||0),0) : 0);

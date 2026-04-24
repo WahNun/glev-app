@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { fetchMeals, deleteMeal, updateMealReadings, seedMealsIfEmpty, type Meal } from "@/lib/meals";
-import { TYPE_COLORS, TYPE_LABELS, TYPE_SHORT, TYPE_EXPLAIN, getEvalColor, getEvalLabel, getEvalExplain } from "@/lib/mealTypes";
+import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, getEvalExplain } from "@/lib/mealTypes";
 import { lifecycleFor, STATE_LABELS, type OutcomeState } from "@/lib/engine/lifecycle";
+import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
@@ -67,15 +68,7 @@ export default function EntriesPage() {
 
   return (
     <div style={{ maxWidth:960, margin:"0 auto" }}>
-      <style>{`
-        .entry-header { grid-template-columns: minmax(0,1.4fr) minmax(0,1fr) 90px 110px 16px; }
-        .entry-col-center { text-align: center; }
-        .entry-col-right  { display: flex; justify-content: flex-end; align-items: center; }
-        @media (max-width: 640px) {
-          .entry-header { grid-template-columns: minmax(0,1.6fr) minmax(0,0.9fr) 96px 14px !important; gap: 10px; padding: 12px 14px !important; }
-          .entry-cat-cell { display: none !important; }
-        }
-      `}</style>
+      <style>{``}</style>
       <div style={{ marginBottom:24 }}>
         <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>Entry Log</h1>
         <p style={{ color:"rgba(255,255,255,0.35)", fontSize:14 }}>{filtered.length} of {meals.length} logged meals. Click a row to expand.</p>
@@ -127,51 +120,13 @@ export default function EntriesPage() {
 
             const catColor = m.meal_type ? (TYPE_COLORS[m.meal_type] || GREEN) : null;
             const catLabel = m.meal_type ? (TYPE_LABELS[m.meal_type] || m.meal_type.replace("_"," ")) : null;
-            const catShort = m.meal_type ? (TYPE_SHORT[m.meal_type] || m.meal_type.slice(0,2)) : null;
             const catExplain = m.meal_type ? (TYPE_EXPLAIN[m.meal_type] || "") : "";
 
             return (
               <div key={m.id} className="entry-row" style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, overflow:"hidden" }}>
                 {/* Header — collapsed shows summary; expanded shows only date + time */}
                 {!isOpen ? (
-                  <div onClick={() => setExpanded(m.id)} className="entry-header" style={{ padding:"14px 16px", cursor:"pointer", display:"grid", gap:14, alignItems:"center" }}>
-                    {/* Col 1: date + BG + insulin (left-aligned) */}
-                    <div style={{ minWidth:0 }}>
-                      <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginBottom:4 }}>{dateStr}</div>
-                      <div style={{ display:"flex", alignItems:"baseline", gap:10, whiteSpace:"nowrap" }}>
-                        <span style={{ fontSize:18, fontWeight:800, color:bgC, letterSpacing:"-0.02em" }}>{m.glucose_before ?? "—"}<span style={{ fontSize:11, color:"rgba(255,255,255,0.4)", fontWeight:500, marginLeft:3 }}>mg/dL</span></span>
-                        <span style={{ fontSize:12, fontWeight:700, color: m.insulin_units ? ACCENT : "rgba(255,255,255,0.3)" }}>{m.insulin_units ? `${m.insulin_units}u` : "—"}</span>
-                      </div>
-                    </div>
-                    {/* Col 2: carbs (centered) */}
-                    <div className="entry-col-center" style={{ minWidth:0 }}>
-                      <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>CARBS</div>
-                      <div style={{ fontSize:14, fontWeight:700, color:m.carbs_grams ? ORANGE : "rgba(255,255,255,0.3)", letterSpacing:"-0.01em" }}>
-                        {m.carbs_grams ? `${m.carbs_grams}g` : "—"}
-                      </div>
-                    </div>
-                    {/* Col 3: classification (fixed-width, centered) */}
-                    <div className="entry-cat-cell" style={{ minWidth:0, display:"flex", justifyContent:"center", alignItems:"center", gap:6 }}>
-                      {catColor && catShort ? (
-                        <>
-                          <span style={{ width:6, height:6, borderRadius:99, background:catColor, opacity:0.7, flexShrink:0 }} />
-                          <span title={catLabel || ""} style={{ fontSize:10, fontWeight:600, color:`${catColor}b3`, letterSpacing:"0.06em" }}>{catShort}</span>
-                        </>
-                      ) : (
-                        <span style={{ fontSize:11, color:"rgba(255,255,255,0.25)" }}>—</span>
-                      )}
-                    </div>
-                    {/* Col 4: evaluation badge (fixed 110px, right-aligned pill) */}
-                    <div className="entry-col-right">
-                      <span style={{ padding:"5px 10px", borderRadius:99, fontSize:10, fontWeight:700, background:`${evColor}18`, color:evColor, border:`1px solid ${evColor}30`, whiteSpace:"nowrap", letterSpacing:"0.05em", textTransform:"uppercase" }}>
-                        {evL(ev)}
-                      </span>
-                    </div>
-                    {/* Col 5: chevron */}
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="2.5" strokeLinecap="round" style={{ transition:"transform 0.2s", flexShrink:0 }}>
-                      <polyline points="9 6 15 12 9 18"/>
-                    </svg>
-                  </div>
+                  <MealEntryCardCollapsed meal={m} onClick={() => setExpanded(m.id)}/>
                 ) : (
                   <div onClick={() => setExpanded(null)} style={{ padding:"14px 16px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between", gap:14 }}>
                     <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)", letterSpacing:"0.02em" }}>
