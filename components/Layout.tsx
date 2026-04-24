@@ -161,45 +161,48 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <nav className="glev-mobile-nav" style={{
         position: "fixed", bottom: 0, left: 0, right: 0,
         background: SURFACE, borderTop: `1px solid ${BORDER}`,
-        // alignItems:"flex-end" anchors every nav item by its bottom edge so
-        // all labels sit on a single baseline. Without this, the taller Glev
-        // button (30px circle vs the smaller line icons) was being centered
-        // and pushed its "GLEV" label visibly lower than the others.
-        justifyContent: "space-around", alignItems: "flex-end",
+        justifyContent: "space-around", alignItems: "stretch",
         padding: "10px 18px max(18px, env(safe-area-inset-bottom))", zIndex: 100,
       }}>
         {NAV.map(({ label, path, icon }) => {
           const active = pathname.startsWith(path);
           const isCenter = path === "/log";
-          if (isCenter) {
-            return (
-              <div key={path} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                <button onClick={() => router.push(path)} style={{
+          // Every item is the same fixed-height button with content packed
+          // toward the bottom (justifyContent: flex-end). That guarantees
+          // the labels sit on a single baseline regardless of icon size, so
+          // the larger Glev circle simply rises higher above the line.
+          return (
+            <button
+              key={path}
+              onClick={() => router.push(path)}
+              style={{
+                display: "flex", flexDirection: "column",
+                alignItems: "center", justifyContent: "flex-end",
+                gap: 4, padding: 0, height: 44,
+                border: "none", background: "transparent", cursor: "pointer",
+                color: active ? ACCENT : "rgba(255,255,255,0.3)",
+                fontSize: 9, fontWeight: 600, letterSpacing: "0.04em",
+              }}
+            >
+              {isCenter ? (
+                <span style={{
                   width: 30, height: 30, borderRadius: 99,
                   background: active
                     ? `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`
                     : `radial-gradient(circle at 36% 32%, #1e1e2e 0%, #141420 45%, #09090B 100%)`,
                   border: active ? "none" : `1px solid rgba(255,255,255,0.12)`,
-                  cursor: "pointer", padding: 0,
                   display: "flex", alignItems: "center", justifyContent: "center",
                   boxShadow: active ? `0 2px 10px ${ACCENT}55` : "0 2px 6px rgba(0,0,0,0.4)",
                   transition: "all 0.2s",
                 }}>
                   <GlevLogo size={18} color={active ? "#fff" : ACCENT} bg="transparent"/>
-                </button>
-                <span style={{ fontSize: 9, color: active ? ACCENT : "rgba(255,255,255,0.3)", fontWeight: 600, letterSpacing: "0.04em" }}>GLEV</span>
-              </div>
-            );
-          }
-          return (
-            <button key={path} onClick={() => router.push(path)} style={{
-              display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-              padding: "4px 6px", border: "none", background: "transparent", cursor: "pointer",
-              color: active ? ACCENT : "rgba(255,255,255,0.3)",
-              fontSize: 9, fontWeight: 600, letterSpacing: "0.04em",
-            }}>
-              {icon(active)}
-              <span>{label.toUpperCase()}</span>
+                </span>
+              ) : (
+                <span style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 22 }}>
+                  {icon(active)}
+                </span>
+              )}
+              <span style={{ lineHeight: 1 }}>{isCenter ? "GLEV" : label.toUpperCase()}</span>
             </button>
           );
         })}
