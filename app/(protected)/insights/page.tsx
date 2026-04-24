@@ -149,13 +149,16 @@ export default function InsightsPage() {
         <p style={{ color:"rgba(255,255,255,0.35)", fontSize:13 }}>Tap any card to flip · {total} meals analyzed</p>
       </div>
 
-      {/* OVERVIEW — flip tiles */}
-      <div className="glev-grid-4" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:20 }}>
+      {/* OVERVIEW — flip tiles. gridAutoRows:1fr forces every row in the 2x2
+          mobile layout (and the single row at desktop) to share the height of
+          the tallest cell, so all four top cards line up exactly. Front+back
+          text is kept compact enough to fit the same box on both faces. */}
+      <div className="glev-grid-4" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:20, gridAutoRows:"1fr" }}>
         {[
-          { label:"Total Meals",       val:total.toString(),          sub:"all time",                                                              color:ACCENT,    formula:"count(meals)",                       explain:"The total number of meals you've logged in Glev. More data = more accurate insights and stronger pattern detection." },
-          { label:"Avg Carbs / Meal",  val:`${avgCarbs}g`,            sub:"per meal",                                                              color:ORANGE,    formula:"Sum(carbs_grams) / meal count",      explain:"Average carbohydrate intake per logged meal. Higher values mean larger insulin doses and more sensitivity to ICR accuracy." },
-          { label:"Last 7 Days",       val:last7.length.toString(),    sub:`${last7Good} good · ${last7Carbs}g carbs · ${last7Insulin}u insulin`, color:GREEN,     formula:"count(meals where created_at ≥ now-7d)", explain:"Meals logged in the past week. Aim for consistent daily logging — the engine's recent-window stats depend on it." },
-          { label:"Avg Glucose",       val:avgGlucose.toString(),      sub:"mg/dL pre-meal",                                                       color:"#60A5FA", formula:"Sum(glucose_before) / count(non-null)", explain:"Your average pre-meal glucose. Lower values reflect better fasting and between-meal control." },
+          { label:"Total Meals",       val:total.toString(),          sub:"all time",          color:ACCENT,    formula:"count(meals)",                          explain:"Every meal you've logged. More data sharpens insights." },
+          { label:"Avg Carbs / Meal",  val:`${avgCarbs}g`,            sub:"per meal",          color:ORANGE,    formula:"Σ carbs_grams / meals",                 explain:"Average carbs per meal. Higher values demand sharper ICR accuracy." },
+          { label:"Last 7 Days",       val:last7.length.toString(),   sub:"meals this week",   color:GREEN,     formula:"count(meals in last 7 days)",           explain:`${last7Good} good · ${last7Carbs}g carbs · ${last7Insulin}u insulin this week.` },
+          { label:"Avg Glucose",       val:avgGlucose.toString(),     sub:"mg/dL pre-meal",    color:"#60A5FA", formula:"Σ glucose_before / count(non-null)",    explain:"Average pre-meal glucose. Lower = better fasting control." },
         ].map((t,i) => <InsightFlipTile key={i} tile={t}/>)}
       </div>
 
@@ -444,10 +447,10 @@ type InsightTile = { label:string; val:string; sub:string; color:string; formula
 
 function InsightFlipTile({ tile }: { tile: InsightTile }) {
   const [flipped, setFlipped] = useState(false);
-  // Both faces are stacked in the same CSS-grid cell so the tile's height
-  // is automatically max(front, back). This prevents the back-side text
-  // from overflowing on narrow mobile columns. minHeight matches the
-  // previous fixed height so single-line tiles still feel substantial.
+  // The tile fills its grid cell entirely (height:100%) so the parent
+  // gridAutoRows:1fr can equalise heights across the whole 2x2 mobile
+  // layout — every tile renders as the exact same box. minHeight is a
+  // floor for cases where a row only contains short tiles.
   return (
     <div
       onClick={() => setFlipped(f => !f)}
@@ -455,11 +458,12 @@ function InsightFlipTile({ tile }: { tile: InsightTile }) {
       tabIndex={0}
       aria-pressed={flipped}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setFlipped(f => !f); } }}
-      style={{ position:"relative", cursor:"pointer", perspective:1000, minHeight:148 }}
+      style={{ position:"relative", cursor:"pointer", perspective:1000, minHeight:148, height:"100%" }}
     >
       <div
         style={{
           display:"grid",
+          height:"100%",
           minHeight:"inherit",
           transformStyle:"preserve-3d",
           transition:"transform 0.5s cubic-bezier(0.4,0,0.2,1)",
