@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { fetchMeals, deleteMeal, updateMealReadings, seedMealsIfEmpty, type Meal } from "@/lib/meals";
+import { fetchMeals, deleteMeal, updateMealReadings, type Meal } from "@/lib/meals";
 import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, getEvalExplain } from "@/lib/mealTypes";
 import { lifecycleFor, STATE_LABELS, type OutcomeState } from "@/lib/engine/lifecycle";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
@@ -28,7 +28,6 @@ export default function EntriesPage() {
     let cancelled = false;
     async function load(initial: boolean) {
       try {
-        if (initial) await seedMealsIfEmpty();
         const data = await fetchMeals();
         if (!cancelled) setMeals(data);
       } catch (e) { console.error(e); }

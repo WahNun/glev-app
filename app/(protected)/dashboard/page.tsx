@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { fetchMeals, seedMealsIfEmpty, type Meal } from "@/lib/meals";
+import { fetchMeals, type Meal } from "@/lib/meals";
 import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, getEvalExplain } from "@/lib/mealTypes";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
 import CurrentDayGlucoseCard from "@/components/CurrentDayGlucoseCard";
@@ -276,7 +276,6 @@ export default function DashboardPage() {
     let cancelled = false;
     async function load(initial: boolean) {
       try {
-        if (initial) await seedMealsIfEmpty();
         const data = await fetchMeals();
         if (!cancelled) setMeals(data);
       } catch (e) { console.error(e); }

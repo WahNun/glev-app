@@ -331,23 +331,12 @@ export async function reloadHistoricalEntries(): Promise<{ inserted: number }> {
   return { inserted: rows.length };
 }
 
-export async function seedMealsIfEmpty(): Promise<void> {
-  if (!supabase) return;
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-
-  const { count } = await supabase
-    .from("meals")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", user.id);
-
-  if ((count ?? 0) > 0) return;
-
-  const rows = buildHistoricalRows(user.id);
-  const { error, dropped } = await insertMealsWithFallback(rows);
-  if (error) logDebug("SEED_ERROR", { message: error.message });
-  else logDebug("SEED_OK", { inserted: rows.length, dropped });
-}
+// NOTE: seedMealsIfEmpty() was removed on 2026-04-24. It was previously
+// invoked from Dashboard and Entries on first load and would auto-insert
+// HISTORICAL_SEEDS (the developer's personal meal log) into every new
+// user's account. The historical reload remains available as a manual
+// opt-in via reloadHistoricalEntries() (Settings → Reload historical
+// entries) for the developer's own account.
 
 // Legacy generic seed retained for reference; no longer used.
 function _legacySeeds_unused() {
