@@ -10,6 +10,7 @@
   "dependencies": {
     "@replit/connectors-sdk": "^0.4.0",
     "@supabase/supabase-js": "^2.104.0",
+    "axios": "^1.15.2",
     "next": "^16.2.4",
     "openai": "^6.34.0",
     "react": "19.1.0",

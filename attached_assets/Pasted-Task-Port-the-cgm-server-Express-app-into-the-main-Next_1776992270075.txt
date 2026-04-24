@@ -1,0 +1,66 @@
+Task: Port the cgm-server/ Express app into the main Next.js Glev project as API routes, then clean up, commit, and push to git.
+Step 1: Detect the Next.js router
+Check whether Glev uses App Router (folder app/ with layout.tsx and page.tsx at root or src/app/) or Pages Router (folder pages/api/). Use that convention for the new routes. If both exist, prefer App Router.
+Step 2: Create the following API routes
+Port the logic from cgm-server/llu.js, crypto.js, supabase.js and the Express handlers in server.js into Next.js Route Handlers (or pages/api/*.ts if Pages Router).
+For App Router, create:
+
+app/api/cgm/credentials/route.ts — POST (upsert) and DELETE (remove)
+app/api/cgm/latest/route.ts — GET
+app/api/cgm/history/route.ts — GET
+
+For Pages Router, equivalent files under pages/api/cgm/.
+All routes must:
+
+Set export const runtime = 'nodejs' (NOT edge — we need crypto, node:https).
+Set export const dynamic = 'force-dynamic' so responses aren't cached.
+Extract Authorization: Bearer <supabase_jwt> from the incoming request, verify via supabase.auth.getUser(token), reject with 401 on failure.
+Use process.env.SUPABASE_SERVICE_ROLE_KEY for the admin client (server-only).
+
+Step 3: Create shared modules
+Put shared logic under lib/cgm/ (or src/lib/cgm/):
+
+lib/cgm/crypto.ts — AES-256-GCM encrypt / decrypt (format iv:authTag:ciphertext hex), key from process.env.ENCRYPTION_KEY.
+lib/cgm/supabase.ts — admin Supabase client + verifyJwt(authHeader) returning { userId } or throwing.
+lib/cgm/llu.ts — LibreLinkUp client with:
+
+Base URL https://api-{region}.libreview.io (from DB row, default eu).
+Headers product: llu.android, version: 4.16.0, Accept-Encoding: gzip, plus Authorization + Account-Id (sha256 hex of user.id) after login.
+Flow: login (handle data.redirect region switch and ToU step via /auth/continue/tou), then GET /llu/connections (fast path, glucoseMeasurement lives on first patient, no extra call), optional GET /llu/connections/{patientId}/graph for history.
+Trend mapping: 1→fallingQuickly, 2→falling, 3→stable, 4→rising, 5→risingQuickly.
+Persistent axios instance with http.Agent/https.Agent keepAlive: true, timeout 3000 ms, one automatic retry on timeout/network error.
+On LLU 401: invalidate cached token in DB, re-login once, retry.
+
+
+
+Step 4: Caching strategy (important — different from the Express server)
+Because Vercel serverless functions cold-start, in-memory L1 is unreliable. Use Supabase cgm_credentials as the only cache layer: persist cached_token, cached_token_expires, cached_patient_id, cached_account_id_hash back to the row on every successful login. Reuse token if cached_token_expires - now > 60s. Optionally use a module-level Map as a best-effort warm-container cache (may or may not hit across invocations, that's fine).
+Step 5: Error handling
+Same status mapping as the Express version: 400 bad input · 401 auth · 404 no credentials · 502 LLU upstream · 504 timeout. JSON body { error: "..." }. Never throw uncaught into the handler.
+Step 6: Env vars
+Code reads (all server-only, no NEXT_PUBLIC_ prefix):
+
+SUPABASE_URL
+SUPABASE_ANON_KEY (for JWT verification)
+SUPABASE_SERVICE_ROLE_KEY
+ENCRYPTION_KEY
+
+Update .env.example at repo root to include these. Do not modify the existing NEXT_PUBLIC_* variables.
+Step 7: Dependencies
+Add @supabase/supabase-js and axios to the root package.json dependencies if not already present. Remove any references to the old cgm-server/ sub-project.
+Step 8: Clean up
+Delete the entire cgm-server/ directory.
+Step 9: Verify locally
+Run npm run build at the repo root. Ensure it compiles without TypeScript errors (assuming this is a TS project — use .ts extensions). If it's JS, use .js and JSDoc types where helpful.
+Step 10: Commit and push
+bashgit add -A
+git commit -m "Replace standalone cgm-server with Next.js API routes for CGM integration"
+git push
+Step 11: Report back
+Output a summary:
+
+Which router was detected (App or Pages).
+List of created/modified/deleted files.
+Build result (success/fail + any warnings).
+Git push result.
+Reminder text to the user: "Add these 4 env vars in Vercel → Project Settings → Environment Variables (all environments): SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, ENCRYPTION_KEY. Use the same values as in Replit Secrets. After that, redeploy."

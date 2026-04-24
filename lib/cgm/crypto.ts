@@ -1,10 +1,8 @@
-"use strict";
-
-const crypto = require("crypto");
+import crypto from "node:crypto";
 
 const ALGO = "aes-256-gcm";
 
-function getKey() {
+function getKey(): Buffer {
   const hex = process.env.ENCRYPTION_KEY;
   if (!hex) throw new Error("ENCRYPTION_KEY not set");
   const buf = Buffer.from(hex, "hex");
@@ -14,7 +12,7 @@ function getKey() {
   return buf;
 }
 
-function encrypt(plain) {
+export function encrypt(plain: string): string {
   if (typeof plain !== "string") throw new Error("encrypt: plain must be string");
   const key = getKey();
   const iv = crypto.randomBytes(12);
@@ -24,7 +22,7 @@ function encrypt(plain) {
   return [iv.toString("hex"), tag.toString("hex"), ct.toString("hex")].join(":");
 }
 
-function decrypt(payload) {
+export function decrypt(payload: string): string {
   if (typeof payload !== "string") throw new Error("decrypt: payload must be string");
   const parts = payload.split(":");
   if (parts.length !== 3) throw new Error("decrypt: malformed payload");
@@ -38,5 +36,3 @@ function decrypt(payload) {
   ]);
   return pt.toString("utf8");
 }
-
-module.exports = { encrypt, decrypt };

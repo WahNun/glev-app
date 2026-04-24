@@ -1,12 +1,10 @@
-"use strict";
+import axios, { AxiosInstance } from "axios";
+import http from "node:http";
+import https from "node:https";
+import crypto from "node:crypto";
 
-const axios = require("axios");
-const http = require("http");
-const https = require("https");
-const crypto = require("crypto");
-
-const { admin } = require("./supabase");
-const { encrypt, decrypt } = require("./crypto");
+import { adminClient } from "./supabase";
+import { encrypt, decrypt } from "./crypto";
 
 // ---------------------------------------------------------------------------
 // HTTP client — single instance, keep-alive, 3s timeout, one retry
@@ -14,77 +12,100 @@ const { encrypt, decrypt } = require("./crypto");
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 50 });
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 50 });
 
-const http_ = axios.create({
+const http_: AxiosInstance = axios.create({
   timeout: 3000,
   httpAgent,
   httpsAgent,
   headers: {
     "Content-Type": "application/json",
-    "product": "llu.android",
-    "version": "4.16.0",
+    product: "llu.android",
+    version: "4.16.0",
     "Accept-Encoding": "gzip",
   },
+  // We handle non-2xx ourselves where it matters.
+  validateStatus: (s) => s >= 200 && s < 500,
 });
 
-async function withRetry(fn) {
+async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
-  } catch (e) {
+  } catch (e: unknown) {
+    const err = e as { code?: string; response?: unknown; request?: unknown };
     const transient =
-      e.code === "ECONNABORTED" ||
-      e.code === "ECONNRESET" ||
-      e.code === "ETIMEDOUT" ||
-      (!e.response && !!e.request);
+      err.code === "ECONNABORTED" ||
+      err.code === "ECONNRESET" ||
+      err.code === "ETIMEDOUT" ||
+      (!err.response && !!err.request);
     if (!transient) throw e;
     return await fn();
   }
 }
 
-function baseUrl(region) {
+function baseUrl(region: string | null | undefined): string {
   const r = (region || "eu").toLowerCase();
   return `https://api-${r}.libreview.io`;
 }
 
-function sha256Hex(s) {
+function sha256Hex(s: string): string {
   return crypto.createHash("sha256").update(String(s)).digest("hex");
 }
 
 // ---------------------------------------------------------------------------
-// L1 in-memory cache: userId -> { token, expires (ms), patientId, accountIdHash, region }
+// Best-effort warm-container L1 cache. May or may not survive across
+// invocations on serverless — that's fine, Supabase is the canonical store.
 // ---------------------------------------------------------------------------
-const L1 = new Map();
+type Session = {
+  region: string;
+  token: string;
+  expires: number; // ms epoch
+  accountIdHash: string;
+  patientId?: string | null;
+};
 
-function l1Get(userId) {
+const L1 = new Map<string, Session>();
+
+function l1Get(userId: string): Session | null {
   const e = L1.get(userId);
   if (!e) return null;
-  if (e.expires && e.expires - Date.now() < 60_000) return null; // 60s skew
+  if (e.expires && e.expires - Date.now() < 60_000) return null;
   return e;
 }
 
-function l1Set(userId, patch) {
-  const cur = L1.get(userId) || {};
-  L1.set(userId, { ...cur, ...patch });
+function l1Set(userId: string, patch: Partial<Session>) {
+  const cur = L1.get(userId);
+  L1.set(userId, { ...(cur as Session), ...patch } as Session);
 }
 
-function l1Clear(userId) {
+function l1Clear(userId: string) {
   L1.delete(userId);
 }
 
 // ---------------------------------------------------------------------------
 // Supabase row IO
 // ---------------------------------------------------------------------------
-async function loadRow(userId) {
-  const { data, error } = await admin()
+type Row = {
+  user_id: string;
+  llu_email: string;
+  llu_password_encrypted: string;
+  llu_region: string | null;
+  cached_token: string | null;
+  cached_token_expires: string | null;
+  cached_patient_id: string | null;
+  cached_account_id_hash: string | null;
+};
+
+async function loadRow(userId: string): Promise<Row | null> {
+  const { data, error } = await adminClient()
     .from("cgm_credentials")
     .select("*")
     .eq("user_id", userId)
     .maybeSingle();
   if (error) throw new Error("supabase: " + error.message);
-  return data;
+  return (data as Row) || null;
 }
 
-async function saveCacheFields(userId, fields) {
-  const { error } = await admin()
+async function saveCacheFields(userId: string, fields: Record<string, unknown>) {
+  const { error } = await adminClient()
     .from("cgm_credentials")
     .update({ ...fields, updated_at: new Date().toISOString() })
     .eq("user_id", userId);
@@ -94,22 +115,41 @@ async function saveCacheFields(userId, fields) {
 // ---------------------------------------------------------------------------
 // LLU calls
 // ---------------------------------------------------------------------------
-async function lluLogin(region, email, password) {
+type LluLoginResult = {
+  region: string;
+  token: string;
+  expires: number;
+  accountIdHash: string;
+};
+
+interface LluAuthBody {
+  status?: number;
+  error?: { message?: string };
+  data?: {
+    redirect?: boolean;
+    region?: string;
+    step?: { type?: string };
+    authTicket?: { token?: string; expires?: number };
+    user?: { id?: string };
+  };
+}
+
+async function lluLogin(region: string, email: string, password: string): Promise<LluLoginResult> {
   const url = `${baseUrl(region)}/llu/auth/login`;
-  const res = await withRetry(() => http_.post(url, { email, password }));
+  const res = await withRetry(() => http_.post<LluAuthBody>(url, { email, password }));
   const body = res.data;
 
-  // Region redirect
   if (body?.data?.redirect === true && body?.data?.region) {
     return lluLogin(body.data.region, email, password);
   }
 
-  // Terms-of-use step
   if (body?.data?.step?.type === "tou") {
     const tou = await withRetry(() =>
-      http_.post(`${baseUrl(region)}/auth/continue/tou`, {}, {
-        headers: { Authorization: `Bearer ${body.data.authTicket?.token}` },
-      })
+      http_.post<LluAuthBody>(
+        `${baseUrl(region)}/auth/continue/tou`,
+        {},
+        { headers: { Authorization: `Bearer ${body.data?.authTicket?.token || ""}` } }
+      )
     );
     return finishLogin(region, tou.data);
   }
@@ -117,18 +157,17 @@ async function lluLogin(region, email, password) {
   return finishLogin(region, body);
 }
 
-function finishLogin(region, body) {
+function finishLogin(region: string, body: LluAuthBody): LluLoginResult {
   const ticket = body?.data?.authTicket;
   const user = body?.data?.user;
   if (!ticket?.token || !user?.id) {
     const status = body?.status;
     const msg = body?.error?.message || "LLU login failed";
-    const err = new Error(`${msg}${status ? ` (status=${status})` : ""}`);
+    const err: Error & { upstream?: boolean } = new Error(`${msg}${status ? ` (status=${status})` : ""}`);
     err.upstream = true;
     throw err;
   }
-  // ticket.expires is unix seconds
-  const expiresMs = (ticket.expires ? Number(ticket.expires) * 1000 : Date.now() + 50 * 60_000);
+  const expiresMs = ticket.expires ? Number(ticket.expires) * 1000 : Date.now() + 50 * 60_000;
   return {
     region,
     token: ticket.token,
@@ -137,70 +176,92 @@ function finishLogin(region, body) {
   };
 }
 
-function authedHeaders(token, accountIdHash) {
+function authedHeaders(token: string, accountIdHash: string) {
   return {
     Authorization: `Bearer ${token}`,
     "Account-Id": accountIdHash,
   };
 }
 
-async function lluConnections(region, token, accountIdHash) {
+interface LluConnectionsBody {
+  data?: Array<{
+    patientId?: string;
+    glucoseMeasurement?: LluMeasurement;
+  }>;
+}
+
+interface LluMeasurement {
+  Value?: number;
+  ValueInMgPerDl?: number;
+  Timestamp?: string;
+  TrendArrow?: number;
+}
+
+interface LluGraphBody {
+  data?: {
+    connection?: { glucoseMeasurement?: LluMeasurement };
+    graphData?: LluMeasurement[];
+  };
+}
+
+async function lluConnections(region: string, token: string, accountIdHash: string): Promise<LluConnectionsBody> {
   const url = `${baseUrl(region)}/llu/connections`;
-  const res = await withRetry(() =>
-    http_.get(url, { headers: authedHeaders(token, accountIdHash) })
-  );
+  const res = await withRetry(() => http_.get<LluConnectionsBody>(url, { headers: authedHeaders(token, accountIdHash) }));
+  if (res.status === 401) {
+    const e: Error & { status401?: boolean } = new Error("LLU 401");
+    e.status401 = true;
+    throw e;
+  }
   return res.data;
 }
 
-async function lluGraph(region, token, accountIdHash, patientId) {
+async function lluGraph(region: string, token: string, accountIdHash: string, patientId: string): Promise<LluGraphBody> {
   const url = `${baseUrl(region)}/llu/connections/${patientId}/graph`;
-  const res = await withRetry(() =>
-    http_.get(url, { headers: authedHeaders(token, accountIdHash) })
-  );
+  const res = await withRetry(() => http_.get<LluGraphBody>(url, { headers: authedHeaders(token, accountIdHash) }));
+  if (res.status === 401) {
+    const e: Error & { status401?: boolean } = new Error("LLU 401");
+    e.status401 = true;
+    throw e;
+  }
   return res.data;
 }
 
 // ---------------------------------------------------------------------------
-// Session orchestration: ensure we have a valid token + accountIdHash
+// Session orchestration
 // ---------------------------------------------------------------------------
-async function getSession(userId) {
-  // L1 hit
+async function getSession(userId: string): Promise<Session> {
   const hit = l1Get(userId);
   if (hit?.token && hit?.accountIdHash) return hit;
 
-  // Load row
   const row = await loadRow(userId);
   if (!row) {
-    const e = new Error("no credentials for user");
+    const e: Error & { status?: number } = new Error("no credentials for user");
     e.status = 404;
     throw e;
   }
 
   const region = row.llu_region || "eu";
-
-  // L2 cache
   const l2Expires = row.cached_token_expires ? Date.parse(row.cached_token_expires) : 0;
   if (row.cached_token && row.cached_account_id_hash && l2Expires - Date.now() > 60_000) {
-    const sess = {
+    const sess: Session = {
       region,
       token: row.cached_token,
       expires: l2Expires,
       accountIdHash: row.cached_account_id_hash,
-      patientId: row.cached_patient_id || null,
+      patientId: row.cached_patient_id,
     };
     l1Set(userId, sess);
     return sess;
   }
 
-  // Re-login
   const password = decrypt(row.llu_password_encrypted);
   const fresh = await lluLogin(region, row.llu_email, password);
-  const sess = {
+  const sess: Session = {
     region: fresh.region,
     token: fresh.token,
     expires: fresh.expires,
     accountIdHash: fresh.accountIdHash,
-    patientId: row.cached_patient_id || null,
+    patientId: row.cached_patient_id,
   };
   l1Set(userId, sess);
   await saveCacheFields(userId, {
@@ -212,19 +273,16 @@ async function getSession(userId) {
   return sess;
 }
 
-async function callWith401Retry(userId, fn) {
+async function callWith401Retry<T>(userId: string, fn: (sess: Session) => Promise<T>): Promise<T> {
   let sess = await getSession(userId);
   try {
     return await fn(sess);
-  } catch (e) {
-    const status = e?.response?.status;
-    if (status !== 401) throw e;
-    // Invalidate and retry once
+  } catch (e: unknown) {
+    const err = e as { status401?: boolean; response?: { status?: number } };
+    const is401 = err.status401 || err.response?.status === 401;
+    if (!is401) throw e;
     l1Clear(userId);
-    await saveCacheFields(userId, {
-      cached_token: null,
-      cached_token_expires: null,
-    });
+    await saveCacheFields(userId, { cached_token: null, cached_token_expires: null });
     sess = await getSession(userId);
     return await fn(sess);
   }
@@ -233,7 +291,7 @@ async function callWith401Retry(userId, fn) {
 // ---------------------------------------------------------------------------
 // Trend mapping
 // ---------------------------------------------------------------------------
-const TREND = {
+const TREND: Record<number, string> = {
   1: "fallingQuickly",
   2: "falling",
   3: "stable",
@@ -241,28 +299,39 @@ const TREND = {
   5: "risingQuickly",
 };
 
-function mapMeasurement(m) {
+export type Reading = {
+  value: number | null;
+  unit: "mg/dL";
+  timestamp: string | null;
+  trend: string;
+};
+
+function mapMeasurement(m: LluMeasurement | undefined | null): Reading | null {
   if (!m) return null;
   return {
     value: m.ValueInMgPerDl ?? m.Value ?? null,
     unit: "mg/dL",
     timestamp: m.Timestamp || null,
-    trend: TREND[m.TrendArrow] || "stable",
+    trend: TREND[m.TrendArrow ?? 3] || "stable",
   };
 }
 
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-async function setCredentials(userId, { email, password, region }) {
+export async function setCredentials(
+  userId: string,
+  args: { email?: string; password?: string; region?: string }
+): Promise<void> {
+  const { email, password, region } = args;
   if (!email || !password) {
-    const e = new Error("email and password required");
+    const e: Error & { status?: number } = new Error("email and password required");
     e.status = 400;
     throw e;
   }
   const enc = encrypt(password);
   const reg = (region || "eu").toLowerCase();
-  const { error } = await admin()
+  const { error } = await adminClient()
     .from("cgm_credentials")
     .upsert(
       {
@@ -282,8 +351,8 @@ async function setCredentials(userId, { email, password, region }) {
   l1Clear(userId);
 }
 
-async function deleteCredentials(userId) {
-  const { error } = await admin()
+export async function deleteCredentials(userId: string): Promise<void> {
+  const { error } = await adminClient()
     .from("cgm_credentials")
     .delete()
     .eq("user_id", userId);
@@ -291,33 +360,33 @@ async function deleteCredentials(userId) {
   l1Clear(userId);
 }
 
-async function getLatest(userId) {
+export async function getLatest(userId: string): Promise<{ current: Reading | null }> {
   return callWith401Retry(userId, async (sess) => {
     const data = await lluConnections(sess.region, sess.token, sess.accountIdHash);
     const first = data?.data?.[0];
     if (!first) {
-      const e = new Error("no patients linked");
+      const e: Error & { upstream?: boolean } = new Error("no patients linked");
       e.upstream = true;
       throw e;
     }
-    // Cache patientId
     if (first.patientId && first.patientId !== sess.patientId) {
       l1Set(userId, { patientId: first.patientId });
       saveCacheFields(userId, { cached_patient_id: first.patientId }).catch(() => {});
     }
-    const cur = mapMeasurement(first.glucoseMeasurement);
-    return { current: cur };
+    return { current: mapMeasurement(first.glucoseMeasurement) };
   });
 }
 
-async function getHistory(userId) {
+export async function getHistory(
+  userId: string
+): Promise<{ current: Reading | null; history: Reading[] }> {
   return callWith401Retry(userId, async (sess) => {
     let patientId = sess.patientId;
     if (!patientId) {
       const conn = await lluConnections(sess.region, sess.token, sess.accountIdHash);
-      patientId = conn?.data?.[0]?.patientId;
+      patientId = conn?.data?.[0]?.patientId || null;
       if (!patientId) {
-        const e = new Error("no patients linked");
+        const e: Error & { upstream?: boolean } = new Error("no patients linked");
         e.upstream = true;
         throw e;
       }
@@ -326,18 +395,12 @@ async function getHistory(userId) {
     }
     const g = await lluGraph(sess.region, sess.token, sess.accountIdHash, patientId);
     const conn = g?.data?.connection;
-    const history = (g?.data?.graphData || []).map(mapMeasurement).filter(Boolean);
+    const history = (g?.data?.graphData || [])
+      .map(mapMeasurement)
+      .filter((x): x is Reading => x !== null);
     return {
       current: mapMeasurement(conn?.glucoseMeasurement),
       history,
     };
   });
 }
-
-module.exports = {
-  setCredentials,
-  deleteCredentials,
-  getLatest,
-  getHistory,
-  _internal: { l1Clear, sha256Hex },
-};
