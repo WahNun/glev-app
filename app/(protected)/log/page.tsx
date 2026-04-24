@@ -3,7 +3,18 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { saveMeal, classifyMeal, computeEvaluation, computeCalories, fetchMeals, type ParsedFood, type Meal } from "@/lib/meals";
+import { supabase } from "@/lib/supabase";
+
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
+
+type CgmLatest = {
+  current: {
+    value: number;
+    unit: string;
+    timestamp: string;
+    trend: string;
+  };
+};
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
@@ -285,26 +296,60 @@ export default function LogPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transcript]);
 
-  async function getLatestCGM(): Promise<{ value: number; timestamp: string; formattedTime: string } | null> {
+  async function getLatestCGM(): Promise<
+    | { ok: true; value: number; timestamp: string; formattedTime: string }
+    | { ok: false; status: number; message: string }
+  > {
+    if (!supabase) return { ok: false, status: 401, message: "Session expired, please log in again." };
     try {
-      await new Promise(r => setTimeout(r, 400 + Math.random() * 500));
-      const value = Math.round(80 + Math.random() * 80);
-      const ts = new Date();
-      return {
-        value,
-        timestamp: ts.toISOString(),
-        formattedTime: ts.toLocaleTimeString("en", { hour: "numeric", minute: "2-digit" }),
-      };
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) return { ok: false, status: 401, message: "Session expired, please log in again." };
+
+      const res = await fetch("/api/cgm/latest", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+
+      if (!res.ok) {
+        const msg =
+          res.status === 401 ? "Session expired, please log in again." :
+          res.status === 404 ? "No CGM credentials configured. Go to Settings to connect LibreLinkUp." :
+          res.status === 502 ? "CGM service unavailable, please try again in a minute." :
+          "Could not load CGM reading.";
+        return { ok: false, status: res.status, message: msg };
+      }
+
+      const data = (await res.json()) as Partial<CgmLatest>;
+      const cur = data?.current;
+      if (!cur || typeof cur.value !== "number" || !cur.timestamp) {
+        return { ok: false, status: 502, message: "CGM service unavailable, please try again in a minute." };
+      }
+      const ts = new Date(cur.timestamp);
+      const formattedTime = isNaN(ts.getTime())
+        ? cur.timestamp
+        : ts.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+      return { ok: true, value: Math.round(cur.value), timestamp: cur.timestamp, formattedTime };
     } catch {
-      return null;
+      return { ok: false, status: 0, message: "Could not load CGM reading." };
     }
   }
 
-  async function pullCgm(opts: { force?: boolean } = {}) {
-    setCgmLoading(true); setError(""); setCgmFailed(false);
+  const [cgmError, setCgmError] = useState<string>("");
+
+  async function pullCgm(opts: { force?: boolean; silent?: boolean } = {}) {
+    if (!opts.silent) { setCgmLoading(true); setError(""); }
+    setCgmFailed(false);
+    setCgmError("");
     const res = await getLatestCGM();
-    setCgmLoading(false);
-    if (!res) { setCgmFailed(true); return; }
+    if (!opts.silent) setCgmLoading(false);
+    if (!res.ok) {
+      setCgmFailed(true);
+      // On silent polling, don't surface errors loudly — only show on explicit click.
+      if (!opts.silent) setCgmError(res.message);
+      return;
+    }
     setCgmTimestamp(res.formattedTime);
     // Don't overwrite a user-entered value unless refresh was clicked
     if (opts.force || !glucoseTouched || !glucose) {
@@ -312,6 +357,13 @@ export default function LogPage() {
       setGlucoseTouched(false);
     }
   }
+
+  // Auto-refresh every 60s while the page is mounted. Silent failures.
+  useEffect(() => {
+    const id = setInterval(() => { pullCgm({ silent: true }).catch(() => {}); }, 60_000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const hasAny = totalCarbs > 0 || totalProtein > 0 || totalFat > 0 || !!desc.trim();
 
@@ -468,6 +520,11 @@ export default function LogPage() {
                 CGM
               </button>
             </div>
+            {cgmError && (
+              <div style={{ marginTop:6, fontSize:11, color:PINK, letterSpacing:"0.02em" }}>
+                {cgmError}
+              </div>
+            )}
           </div>
           {macroUpdatedAt && Date.now() - macroUpdatedAt < 6000 && (
             <div style={{ fontSize:10, color:GREEN, letterSpacing:"0.06em", fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>

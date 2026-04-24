@@ -1,0 +1,30 @@
+In the Glev Next.js app, the "CGM" button next to the GLUCOSE BEFORE (MG/DL) field on the Glev Engine page (likely in app/engine/page.tsx, app/glev-engine/..., or a component named GlevEngine, EntryForm, CgmButton, or similar — search for it) currently does not fetch real data. Wire it up to the new /api/cgm/latest endpoint.
+Requirements:
+
+On click of the CGM button, call GET /api/cgm/latest with header Authorization: Bearer <supabase_access_token>. Get the token from the current Supabase session (supabase.auth.getSession() or via the existing Supabase context/hook already used in the app).
+If response is 200 with { current: { value, unit, timestamp, trend } }:
+
+Populate the glucose-before input with value.
+Update the "Last reading" label to show the timestamp formatted as local time (e.g. "Last reading: 14:32" or "vor 3 Min.").
+Keep the small green dot + "CGM" style on the button.
+
+
+During the fetch, show a loading state on the button (spinner or "Loading…" text), disable the click.
+Error cases — show a small inline message below the glucose field (or a toast, whichever pattern the app already uses):
+
+401 → "Session expired, please log in again."
+404 → "No CGM credentials configured. Go to Settings to connect LibreLinkUp."
+502 → "CGM service unavailable, please try again in a minute."
+Other → "Could not load CGM reading."
+Leave the glucose field's previous value untouched on error.
+
+
+Auto-refresh: Optionally poll /api/cgm/latest every 60 seconds when the Glev Engine page is mounted, so the displayed value stays fresh without manual button press. Clean up the interval on unmount.
+Type-safety: If TypeScript, define a CgmLatest type matching the API response and use it throughout.
+Don't touch the other fields (carbs, fiber, protein, fat, meal description) — they stay as-is.
+
+After implementation: Run npm run build to verify no TypeScript/lint errors, then:
+bashgit add -A
+git commit -m "Wire up CGM button to /api/cgm/latest endpoint for real-time glucose readings"
+git push origin main
+Report back with the files changed and the build result.
