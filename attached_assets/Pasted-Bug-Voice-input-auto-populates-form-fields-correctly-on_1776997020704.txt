@@ -1,0 +1,25 @@
+Bug: Voice input auto-populates form fields correctly on the FIRST voice input of a session. But on the SECOND and subsequent voice inputs in the same session, the form fields (carbs, protein, fat, fiber, meal_description, meal_classification) do NOT auto-update anymore — the GPT reasoning panel shows the new parse correctly, but the form remains stuck on the values from the first meal. The form fields only update if the user manually types "aktualisiere eingabe" into the chat.
+
+Expected: Every voice input should trigger auto-populate of form fields, regardless of whether it's the first, second, or tenth voice input in the session.
+
+STEP 1 — Investigate the parse/populate flow. Find and report:
+
+1a. The frontend component that handles voice input → transcription → parse. Name file + function.
+1b. The API route that returns parsed macros (likely app/api/parse/... or similar). Name it.
+1c. The function that writes parsed macros into form state (the setState call). Name it.
+1d. Look specifically for any flag that gets SET on the first parse and CHECKED on subsequent parses. Likely candidates:
+    - a `hasInitialParse` / `isFirstParse` / `formLocked` / `userHasReviewed` boolean
+    - a ref (useRef) that's never reset
+    - a conditional like `if (!form.carbs_grams)` that only populates empty fields
+    - a gate that treats subsequent parses as "conversation turns" rather than new meal inputs, routing them to the reasoning panel only and not to the form setter
+1e. Compare the code path for "voice input → parse" vs "text message 'aktualisiere eingabe' → parse". What's different between them? The text-triggered update works on every turn; the voice-triggered update only on the first. Find the divergence.
+
+Paste the relevant code blocks verbatim. Do NOT make changes yet.
+
+STEP 2 — Once identified, the fix should:
+- Treat every voice input as a fresh meal parse (not as a follow-up conversation turn)
+- Remove the gating flag / reset it on every new voice transcription
+- Ensure the form setter is always called with the new macros
+- Preserve per-field user edits: if the user manually edited a numeric field AFTER the last parse, don't overwrite that specific field. Track this with a per-field "dirty" flag that resets when a NEW meal entry starts (new voice input = new meal = reset dirty flags).
+
+STEP 3 — Report findings from STEP 1 first, before making changes. I want to see the architecture before editing.
