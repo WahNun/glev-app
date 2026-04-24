@@ -40,9 +40,12 @@ export default function MealEntryCardCollapsed({
     >
       <style>{`
         .glev-mec-cell-label{ font-size:9px; color:rgba(255,255,255,0.35); letter-spacing:0.08em; font-weight:600; margin-bottom:3px; text-transform:uppercase; }
-        /* Default (desktop / >= 720px): 4 equal cols + eval pill on the right */
+        /* Default (desktop / >= 720px): 4 equal cols + fixed-width eval pill on the right.
+           Fixed eval column ensures the 4 data columns line up vertically across all rows
+           regardless of pill text width (GOOD vs UNDER DOSE vs OVER DOSE). */
         .glev-mec { display:grid; gap:14px; grid-template-columns: 1fr 1fr 1fr 1fr; }
-        .glev-mec.glev-mec--with-eval { grid-template-columns: 1fr 1fr 1fr 1fr auto; }
+        .glev-mec.glev-mec--with-eval { grid-template-columns: 1fr 1fr 1fr 1fr 96px; }
+        .glev-mec-eval{ justify-self:end; }
         /* Tablet/mobile (< 720px): hide eval pill and keep 4 evenly distributed columns */
         @media (max-width: 720px) {
           .glev-mec, .glev-mec.glev-mec--with-eval { grid-template-columns: 1fr 1fr 1fr 1fr !important; gap: 10px; }
