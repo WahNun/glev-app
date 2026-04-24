@@ -1,0 +1,95 @@
+Add iOS-style drag-and-drop reordering of cards on the Dashboard and Insights screens.
+
+Interaction pattern (matching iOS home screen):
+- User long-presses any card (~500ms hold) → enters "edit mode"
+- All cards start a subtle wiggle animation
+- User can drag any card to a new position; other cards shift to make space
+- Tapping empty blank space (outside any card) exits edit mode and persists the new order
+- Order persists per user across devices/sessions
+
+=== DEPENDENCIES ===
+
+STEP 1 — Install:
+  npm install @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities
+
+=== PERSISTENCE LAYER ===
+
+STEP 2 — Add Supabase schema for user preferences. Run this SQL in Supabase:
+
+create table if not exists public.user_preferences (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  dashboard_card_order jsonb default '[]'::jsonb,
+  insights_card_order jsonb default '[]'::jsonb,
+  updated_at timestamptz default now()
+);
+
+alter table public.user_preferences enable row level security;
+
+create policy "Users can manage own preferences"
+  on public.user_preferences
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+Report this SQL in your response so I can run it.
+
+STEP 3 — Create two tiny API routes:
+  - GET  /api/preferences — returns { dashboard_card_order, insights_card_order } for the current user (cookie auth via the existing authenticate() helper in app/api/cgm/_helpers.ts)
+  - POST /api/preferences — accepts { dashboard_card_order?: string[], insights_card_order?: string[] } and upserts to user_preferences
+
+=== REUSABLE DnD COMPONENT ===
+
+STEP 4 — Create components/SortableCardGrid.tsx — a generic wrapper that:
+  - Takes children cards + an `orderKey` prop ("dashboard" or "insights") + an `onOrderChange` callback
+  - Detects long-press on any card (500ms hold) to enter edit mode
+  - While in edit mode, applies the wiggle CSS class to all cards
+  - Uses @dnd-kit/sortable's SortableContext + useSortable on each card
+  - Exits edit mode when user taps outside any card (document-level click listener while active, cancelling if the click hits a card)
+  - On exit: calls onOrderChange with the new ID array
+
+STEP 5 — Wiggle animation in globals.css:
+
+@keyframes wiggle {
+  0%, 100% { transform: rotate(-0.8deg); }
+  50% { transform: rotate(0.8deg); }
+}
+.wiggle {
+  animation: wiggle 0.2s ease-in-out infinite;
+  transform-origin: center;
+}
+/* Disable wiggle for users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .wiggle { animation: none; }
+}
+
+STEP 6 — Add a small "x" delete icon overlay on each card while in edit mode (top-right corner). For now it does nothing (or just hides the card from view locally — we'll wire real deletion later). Goal is just the iOS look-and-feel.
+
+=== WIRE INTO DASHBOARD + INSIGHTS ===
+
+STEP 7 — Dashboard (app/(protected)/dashboard/page.tsx or wherever dashboard lives):
+  - Wrap the card grid with <SortableCardGrid orderKey="dashboard" ... />
+  - On mount: fetch /api/preferences → apply dashboard_card_order to render cards in saved order
+  - Each card needs a stable string `id` prop (e.g. "glucose-trend", "control-score", "meal-history", ...)
+  - On order change: POST /api/preferences with { dashboard_card_order: newIds }
+  - If no saved order exists, use a sensible default order
+
+STEP 8 — Same for Insights screen (app/(protected)/insights/page.tsx or equivalent) — orderKey="insights".
+
+=== POLISH ===
+
+STEP 9 — Accessibility:
+  - Keyboard fallback: @dnd-kit supports keyboard DnD out of the box (Space to pick up, arrows to move, Space to drop). Make sure KeyboardSensor is registered alongside PointerSensor.
+  - Screen reader announcements: @dnd-kit's announcements prop can describe the reorder action.
+
+STEP 10 — Mobile touch: ensure long-press triggers edit mode (not regular click). Use @dnd-kit's TouchSensor with activationConstraint: { delay: 500, tolerance: 5 }.
+
+=== BUILD + SHIP ===
+
+STEP 11 — npm run build (fix any TS errors)
+STEP 12 — git add -A && git commit -m "feat: iOS-style long-press drag-to-reorder on Dashboard + Insights with Supabase persistence"
+STEP 13 — Push via the Replit Git pane in the sidebar (or via shell if Lucas already has auth set up).
+STEP 14 — Report:
+  - Build status + commit SHA
+  - The SQL from STEP 2 (to paste into Supabase)
+  - List of modified files
+  - The default card order you chose for dashboard + insights (so Lucas can sanity check)

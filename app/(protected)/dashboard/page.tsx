@@ -7,6 +7,12 @@ import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, get
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
 import CurrentDayGlucoseCard from "@/components/CurrentDayGlucoseCard";
 import GlucoseTrendFront from "@/components/GlucoseTrendChart";
+import SortableCardGrid, { type SortableItem } from "@/components/SortableCardGrid";
+import { useCardOrder } from "@/lib/cardOrder";
+
+/** Default top-to-bottom order of dashboard sections. Each ID also appears
+ *  as a key in the items array below — keep them in sync. */
+const DASHBOARD_DEFAULT_ORDER = ["today-glucose", "stats", "charts", "recent-entries"];
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
@@ -297,6 +303,30 @@ export default function DashboardPage() {
 
   const cards = buildCards(meals);
 
+  // Each entry is one draggable section on the dashboard. Long-press any of
+  // them to enter edit mode; drag to reorder; tap blank space to save.
+  const items: SortableItem[] = [
+    { id: "today-glucose", node: <CurrentDayGlucoseCard/> },
+    {
+      id: "stats",
+      node: (
+        <div className="glev-dash-grid" style={{ display:"grid", gap:14 }}>
+          {cards.map(c => <FlipCard key={c.key} card={c}/>)}
+        </div>
+      ),
+    },
+    {
+      id: "charts",
+      node: (
+        <div className="glev-dash-charts" style={{ display:"grid", gap:14 }}>
+          <TrendChart meals={meals}/>
+          <OutcomeChart meals={meals}/>
+        </div>
+      ),
+    },
+    { id: "recent-entries", node: <RecentEntries meals={recent} expanded={expanded} setExpanded={setExpanded} onViewAll={() => router.push("/entries")}/> },
+  ];
+
   return (
     <div style={{ maxWidth:1480, margin:"0 auto", width:"100%", overflowX:"hidden", boxSizing:"border-box" }}>
       <style>{`
@@ -304,26 +334,19 @@ export default function DashboardPage() {
         .glev-dash-head    { display: flex; }
         .glev-dash-grid    { grid-template-columns: repeat(4,1fr) !important; }
         .glev-dash-charts  { grid-template-columns: 3fr 2fr !important; }
-        .glev-today-wrap   { display: block; margin-bottom: 22px; }
         @media (max-width: 768px) {
           .glev-dash-head   { display: none !important; }
           .glev-dash-grid   { grid-template-columns: 1fr !important; gap: 12px !important; }
           .glev-dash-charts { grid-template-columns: 1fr !important; }
-          .glev-today-wrap  { margin-bottom: 14px; }
+          .glev-dash-stack  { gap: 14px !important; }
         }
       `}</style>
-
-      {/* Today's Glucose card — shown identically on mobile and desktop. */}
-      {/* Rendered once to avoid duplicate /api/cgm/history fetches. */}
-      <div className="glev-today-wrap">
-        <CurrentDayGlucoseCard/>
-      </div>
 
       <div className="glev-dash-head" style={{ marginBottom:28, justifyContent:"space-between", alignItems:"flex-end", flexWrap:"wrap", gap:12 }}>
         <div>
           <h1 style={{ fontSize:24, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>Dashboard</h1>
           <p style={{ color:"rgba(255,255,255,0.35)", fontSize:14 }}>
-            {meals.length} meals logged. Click any card to see formula.
+            {meals.length} meals logged. Hold any card to reorder · click to flip.
           </p>
         </div>
         <button onClick={() => router.push("/log")} style={{ padding:"10px 20px", borderRadius:10, border:"none", background:ACCENT, color:"#fff", cursor:"pointer", fontSize:14, fontWeight:600, boxShadow:`0 4px 20px ${ACCENT}40` }}>
@@ -331,22 +354,42 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      {/* FLIP CARDS — 4 cols desktop, single column on mobile */}
-      <div className="glev-dash-grid" style={{ display:"grid", gap:14, marginBottom:22 }}>
-        {cards.map(c => <FlipCard key={c.key} card={c}/>)}
-      </div>
+      <DashboardSortable items={items}/>
+    </div>
+  );
+}
 
-      {/* CHARTS — side-by-side on desktop, stacked on mobile */}
-      <div className="glev-dash-charts" style={{ display:"grid", gap:14, marginBottom:22 }}>
-        <TrendChart meals={meals}/>
-        <OutcomeChart meals={meals}/>
-      </div>
+/** Thin wrapper so we can call the useCardOrder hook without re-rendering
+ *  the whole DashboardPage on every persisted change. */
+function DashboardSortable({ items }: { items: SortableItem[] }) {
+  const { order, setOrder } = useCardOrder("dashboard", DASHBOARD_DEFAULT_ORDER);
+  return (
+    <SortableCardGrid
+      items={items}
+      order={order}
+      onOrderChange={setOrder}
+      gridClassName="glev-dash-stack"
+      gridStyle={{ display:"flex", flexDirection:"column", gap:22 }}
+    />
+  );
+}
 
-      {/* RECENT ENTRIES */}
-      <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, overflow:"hidden" }}>
+function RecentEntries({
+  meals: recent,
+  expanded,
+  setExpanded,
+  onViewAll,
+}: {
+  meals: Meal[];
+  expanded: string | null;
+  setExpanded: (id: string | null) => void;
+  onViewAll: () => void;
+}) {
+  return (
+    <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, overflow:"hidden" }}>
         <div style={{ padding:"18px 24px", display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom:`1px solid ${BORDER}` }}>
           <div style={{ fontSize:14, fontWeight:600 }}>Recent Entries</div>
-          <button onClick={() => router.push("/entries")} style={{ fontSize:12, color:ACCENT, background:"transparent", border:"none", cursor:"pointer" }}>View all →</button>
+          <button onClick={onViewAll} style={{ fontSize:12, color:ACCENT, background:"transparent", border:"none", cursor:"pointer" }}>View all →</button>
         </div>
         {recent.length === 0 ? (
           <div style={{ padding:"32px", textAlign:"center", color:"rgba(255,255,255,0.2)", fontSize:14 }}>No entries yet. Log your first meal.</div>
@@ -456,7 +499,6 @@ export default function DashboardPage() {
             })}
           </div>
         )}
-      </div>
     </div>
   );
 }

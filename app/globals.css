@@ -6,3 +6,19 @@ html, body { scrollbar-width: none; -ms-overflow-style: none; }
 html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; width: 0; height: 0; }
 *::-webkit-scrollbar { display: none; width: 0; height: 0; }
 * { scrollbar-width: none; -ms-overflow-style: none; }
+
+/* iOS-home-screen "edit mode" wiggle. Applied to every sortable card while the
+   user is reordering. The two-keyframe rotate creates a subtle jitter without
+   shifting layout. */
+@keyframes glev-wiggle {
+  0%, 100% { transform: rotate(-0.6deg); }
+  50%      { transform: rotate(0.6deg); }
+}
+.glev-wiggle {
+  animation: glev-wiggle 0.22s ease-in-out infinite;
+  transform-origin: center;
+}
+/* Respect users who've asked the OS for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  .glev-wiggle { animation: none; }
+}

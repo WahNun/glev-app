@@ -7,6 +7,19 @@ import { computeAdaptiveICR } from "@/lib/engine/adaptiveICR";
 import { detectPattern } from "@/lib/engine/patterns";
 import { suggestAdjustment, type AdaptiveSettings, type AdjustmentSuggestion } from "@/lib/engine/adjustment";
 import GlucoseTrendFront from "@/components/GlucoseTrendChart";
+import SortableCardGrid, { type SortableItem } from "@/components/SortableCardGrid";
+import { useCardOrder } from "@/lib/cardOrder";
+
+/** Default top-to-bottom order of insights sections. */
+const INSIGHTS_DEFAULT_ORDER = [
+  "overview",
+  "glucose-trend",
+  "adaptive-engine",
+  "performance-tiles",
+  "meal-type",
+  "time-of-day",
+  "patterns",
+];
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
@@ -137,58 +150,51 @@ export default function InsightsPage() {
     BALANCED:     "Mixed macros at moderate amounts. The most predictable category for standard ICR-based dosing.",
   };
 
-  return (
-    <div style={{ maxWidth:960, margin:"0 auto" }}>
-      <style>{`
-        @media (max-width: 720px) {
-          .glev-grid-4 { grid-template-columns: repeat(2, 1fr) !important; }
-          .glev-grid-3 { grid-template-columns: 1fr !important; }
-        }
-      `}</style>
-      <div style={{ marginBottom:28 }}>
-        <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>Performance Metrics</h1>
-        <p style={{ color:"rgba(255,255,255,0.35)", fontSize:13 }}>Tap any card to flip · {total} meals analyzed</p>
-      </div>
-
-      {/* OVERVIEW — flip tiles. gridAutoRows:1fr forces every row in the 2x2
-          mobile layout (and the single row at desktop) to share the height of
-          the tallest cell, so all four top cards line up exactly. Front+back
-          text is kept compact enough to fit the same box on both faces. */}
-      <div className="glev-grid-4" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:20, gridAutoRows:"1fr" }}>
-        {[
-          { label:"Total Meals",       val:total.toString(),          sub:"all time",          color:ACCENT,    formula:"count(meals)",                          explain:"Every meal you've logged. More data sharpens insights." },
-          { label:"Avg Carbs / Meal",  val:`${avgCarbs}g`,            sub:"per meal",          color:ORANGE,    formula:"Σ carbs_grams / meals",                 explain:"Average carbs per meal. Higher values demand sharper ICR accuracy." },
-          { label:"Last 7 Days",       val:last7.length.toString(),   sub:"meals this week",   color:GREEN,     formula:"count(meals in last 7 days)",           explain:`${last7Good} good · ${last7Carbs}g carbs · ${last7Insulin}u insulin this week.` },
-          { label:"Avg Glucose",       val:avgGlucose.toString(),     sub:"mg/dL pre-meal",    color:"#60A5FA", formula:"Σ glucose_before / count(non-null)",    explain:"Average pre-meal glucose. Lower = better fasting control." },
-        ].map((t,i) => <InsightFlipTile key={i} tile={t}/>)}
-      </div>
-
-      {/* GLUCOSE TREND */}
-      <FlipCard
-        accent={ACCENT}
-        padding="20px 24px"
-        marginBottom={20}
-        minHeight={380}
-        mobileMinHeight={420}
-        back={
-          <FlipBack
-            title="Glucose Trend"
-            accent={ACCENT}
-            paragraphs={[
-              "Each dot is the average pre-meal glucose for that day across all logged meals. Days without data inherit the previous day's value so the line stays continuous.",
-              "Look for a flat line in your target range (70–180 mg/dL) and steady morning values. A rising slope over multiple days suggests it's time to revisit your basal or ICR.",
-            ]}
-          />
-        }
-      >
-        <GlucoseTrendFront meals={meals} />
-      </FlipCard>
-
-      {/* ADAPTIVE ENGINE */}
-      <FlipCard
-        accent={ACCENT}
-        marginBottom={20}
-        back={
+  // Each entry is one draggable card on the insights page. Long-press to
+  // enter edit mode; tap blank space to save the new order.
+  const items: SortableItem[] = [
+    {
+      id: "overview",
+      node: (
+        <div className="glev-grid-4" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, gridAutoRows:"1fr" }}>
+          {[
+            { label:"Total Meals",       val:total.toString(),          sub:"all time",          color:ACCENT,    formula:"count(meals)",                          explain:"Every meal you've logged. More data sharpens insights." },
+            { label:"Avg Carbs / Meal",  val:`${avgCarbs}g`,            sub:"per meal",          color:ORANGE,    formula:"Σ carbs_grams / meals",                 explain:"Average carbs per meal. Higher values demand sharper ICR accuracy." },
+            { label:"Last 7 Days",       val:last7.length.toString(),   sub:"meals this week",   color:GREEN,     formula:"count(meals in last 7 days)",           explain:`${last7Good} good · ${last7Carbs}g carbs · ${last7Insulin}u insulin this week.` },
+            { label:"Avg Glucose",       val:avgGlucose.toString(),     sub:"mg/dL pre-meal",    color:"#60A5FA", formula:"Σ glucose_before / count(non-null)",    explain:"Average pre-meal glucose. Lower = better fasting control." },
+          ].map((t,i) => <InsightFlipTile key={i} tile={t}/>)}
+        </div>
+      ),
+    },
+    {
+      id: "glucose-trend",
+      node: (
+        <FlipCard
+          accent={ACCENT}
+          padding="20px 24px"
+          minHeight={380}
+          mobileMinHeight={420}
+          back={
+            <FlipBack
+              title="Glucose Trend"
+              accent={ACCENT}
+              paragraphs={[
+                "Each dot is the average pre-meal glucose for that day across all logged meals. Days without data inherit the previous day's value so the line stays continuous.",
+                "Look for a flat line in your target range (70–180 mg/dL) and steady morning values. A rising slope over multiple days suggests it's time to revisit your basal or ICR.",
+              ]}
+            />
+          }
+        >
+          <GlucoseTrendFront meals={meals} />
+        </FlipCard>
+      ),
+    },
+    {
+      id: "adaptive-engine",
+      node: (
+        <FlipCard
+          accent={ACCENT}
+          back={
           <FlipBack
             title="Adaptive Engine"
             accent={ACCENT}
@@ -228,27 +234,32 @@ export default function InsightsPage() {
           </div>
         )}
       </FlipCard>
-
-      {/* PERFORMANCE TILES — flip cards (front: stat; back: formula + explain) */}
-      <div className="glev-grid-3" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14, marginBottom:20 }}>
-        {[
-          { label:"Good Rate", val:`${goodRate}%`, sub:`${good} of ${total} meals`, color:GREEN, formula:"GOOD / Total × 100", explain:"Percentage of meals where insulin dose was optimal (within ±35% of ICR estimate)." },
-          { label:"Avg Glucose Before", val:`${avgGlucose}`, sub:"mg/dL pre-meal average", color:ACCENT, formula:"Sum of glucose_before / meal count", explain:"Lower avg pre-meal glucose reflects better fasting control between meals." },
-          { label:"Est. Carb Ratio", val:`1:${estICR}`, sub:"units per grams carbs", color:ORANGE, formula:"Carbs / Insulin (last 7 meals)", explain:"Your empirical ICR from recent logging. Compare to your prescribed ratio." },
-          { label:"Avg Carbs/Meal", val:`${avgCarbs}g`, sub:"per logged meal", color:"#A78BFA", formula:"Sum carbs_grams / meal count", explain:"Your average carbohydrate intake per meal. High values increase dosing complexity." },
-          { label:"Avg Insulin/Meal", val:`${avgInsulin}u`, sub:"rapid insulin units", color:"#60A5FA", formula:"Sum insulin_units / meal count", explain:"Average insulin per meal. Track this against carbs to validate your ratio." },
-          { label:"Avg Calories", val:`${avgCals}`, sub:"kcal per meal", color:"#F472B6", formula:"(Carbs×4 + Protein×4 + Fat×9) / meals", explain:"Average caloric intake per meal based on macronutrient breakdown." },
-        ].map((t,i) => (
-          <InsightFlipTile key={i} tile={t}/>
-        ))}
-      </div>
-
-      {/* MEAL TYPE ANALYSIS — always show all four types */}
-      <FlipCard
-        accent={ORANGE}
-        padding="22px 26px"
-        marginBottom={20}
-        back={
+      ),
+    },
+    {
+      id: "performance-tiles",
+      node: (
+        <div className="glev-grid-3" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14 }}>
+          {[
+            { label:"Good Rate", val:`${goodRate}%`, sub:`${good} of ${total} meals`, color:GREEN, formula:"GOOD / Total × 100", explain:"Percentage of meals where insulin dose was optimal (within ±35% of ICR estimate)." },
+            { label:"Avg Glucose Before", val:`${avgGlucose}`, sub:"mg/dL pre-meal average", color:ACCENT, formula:"Sum of glucose_before / meal count", explain:"Lower avg pre-meal glucose reflects better fasting control between meals." },
+            { label:"Est. Carb Ratio", val:`1:${estICR}`, sub:"units per grams carbs", color:ORANGE, formula:"Carbs / Insulin (last 7 meals)", explain:"Your empirical ICR from recent logging. Compare to your prescribed ratio." },
+            { label:"Avg Carbs/Meal", val:`${avgCarbs}g`, sub:"per logged meal", color:"#A78BFA", formula:"Sum carbs_grams / meal count", explain:"Your average carbohydrate intake per meal. High values increase dosing complexity." },
+            { label:"Avg Insulin/Meal", val:`${avgInsulin}u`, sub:"rapid insulin units", color:"#60A5FA", formula:"Sum insulin_units / meal count", explain:"Average insulin per meal. Track this against carbs to validate your ratio." },
+            { label:"Avg Calories", val:`${avgCals}`, sub:"kcal per meal", color:"#F472B6", formula:"(Carbs×4 + Protein×4 + Fat×9) / meals", explain:"Average caloric intake per meal based on macronutrient breakdown." },
+          ].map((t,i) => (
+            <InsightFlipTile key={i} tile={t}/>
+          ))}
+        </div>
+      ),
+    },
+    {
+      id: "meal-type",
+      node: (
+        <FlipCard
+          accent={ORANGE}
+          padding="22px 26px"
+          back={
           <FlipBack
             title="Meal Type Analysis"
             accent={ORANGE}
@@ -294,78 +305,114 @@ export default function InsightsPage() {
           })}
         </div>
       </FlipCard>
-
-      {/* TIME OF DAY */}
-      <FlipCard
-        accent={GREEN}
-        padding="22px 26px"
-        marginBottom={20}
-        back={
-          <FlipBack
-            title="Time-of-Day Analysis"
-            accent={GREEN}
-            paragraphs={[
-              "Meals are grouped by the hour of day they were logged: Morning (5–11), Afternoon (11–17), Evening (17–21), Night (21–5).",
-              "Success % is the share of meals in that window that landed GOOD. A weak window (e.g. mornings <50%) often points at the dawn phenomenon, where insulin sensitivity is lower and you may need a higher morning ICR.",
-              "Strong windows (>80%) are reliable references when you're calibrating your dosing for new foods.",
-            ]}
-          />
-        }
-      >
-        <div style={{ fontSize:14, fontWeight:600, marginBottom:4 }}>Time-of-Day Analysis</div>
-        <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginBottom:18 }}>When are your best and worst dosing outcomes?</div>
-        <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-          {Object.entries(timeGroups).map(([label, data]) => {
-            if (data.count === 0) return null;
-            const pct = Math.round(data.good/data.count*100);
-            const col = pct>=70?GREEN:pct>=50?ORANGE:PINK;
-            return (
-              <div key={label} style={{ display:"grid", gridTemplateColumns:"160px 1fr 60px 60px", gap:12, alignItems:"center" }}>
-                <div style={{ fontSize:12, color:"rgba(255,255,255,0.5)" }}>{label}</div>
-                <div style={{ height:6, borderRadius:99, background:"rgba(255,255,255,0.05)", overflow:"hidden" }}>
-                  <div style={{ height:"100%", width:`${pct}%`, background:col, borderRadius:99 }}/>
+      ),
+    },
+    {
+      id: "time-of-day",
+      node: (
+        <FlipCard
+          accent={GREEN}
+          padding="22px 26px"
+          back={
+            <FlipBack
+              title="Time-of-Day Analysis"
+              accent={GREEN}
+              paragraphs={[
+                "Meals are grouped by the hour of day they were logged: Morning (5–11), Afternoon (11–17), Evening (17–21), Night (21–5).",
+                "Success % is the share of meals in that window that landed GOOD. A weak window (e.g. mornings <50%) often points at the dawn phenomenon, where insulin sensitivity is lower and you may need a higher morning ICR.",
+                "Strong windows (>80%) are reliable references when you're calibrating your dosing for new foods.",
+              ]}
+            />
+          }
+        >
+          <div style={{ fontSize:14, fontWeight:600, marginBottom:4 }}>Time-of-Day Analysis</div>
+          <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginBottom:18 }}>When are your best and worst dosing outcomes?</div>
+          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+            {Object.entries(timeGroups).map(([label, data]) => {
+              if (data.count === 0) return null;
+              const pct = Math.round(data.good/data.count*100);
+              const col = pct>=70?GREEN:pct>=50?ORANGE:PINK;
+              return (
+                <div key={label} style={{ display:"grid", gridTemplateColumns:"160px 1fr 60px 60px", gap:12, alignItems:"center" }}>
+                  <div style={{ fontSize:12, color:"rgba(255,255,255,0.5)" }}>{label}</div>
+                  <div style={{ height:6, borderRadius:99, background:"rgba(255,255,255,0.05)", overflow:"hidden" }}>
+                    <div style={{ height:"100%", width:`${pct}%`, background:col, borderRadius:99 }}/>
+                  </div>
+                  <div style={{ fontSize:12, fontWeight:700, color:col, textAlign:"right" }}>{pct}%</div>
+                  <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", textAlign:"right" }}>{data.count} meals</div>
                 </div>
-                <div style={{ fontSize:12, fontWeight:700, color:col, textAlign:"right" }}>{pct}%</div>
-                <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", textAlign:"right" }}>{data.count} meals</div>
+              );
+            })}
+          </div>
+        </FlipCard>
+      ),
+    },
+    {
+      id: "patterns",
+      node: (
+        <FlipCard
+          accent={PINK}
+          padding="22px 26px"
+          back={
+            <FlipBack
+              title="Pattern Detection"
+              accent={PINK}
+              paragraphs={[
+                "Glev scans the most recent 10 meals plus your time-of-day breakdown looking for repeating signals: consistent under-dosing, frequent over-dosing, strong recent control, weak mornings or strong evenings.",
+                "Patterns only fire when there's enough recent data — log 15+ meals to unlock the full set of detectors.",
+                "These flags are heuristics, not diagnoses. Use them as starting points for conversations with your clinician.",
+              ]}
+            />
+          }
+        >
+          <div style={{ fontSize:14, fontWeight:600, marginBottom:4 }}>Pattern Detection</div>
+          <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginBottom:18 }}>AI-driven trend detection from your dosing history</div>
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            {patterns.map((p, i) => (
+              <div key={i} style={{ display:"flex", gap:14, padding:"14px 16px", background:`${p.color}08`, border:`1px solid ${p.color}20`, borderRadius:12 }}>
+                <div style={{ width:36, height:36, borderRadius:99, background:`${p.color}20`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:16 }}>
+                  {p.icon}
+                </div>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:600, color:p.color, marginBottom:4 }}>{p.title}</div>
+                  <div style={{ fontSize:12, color:"rgba(255,255,255,0.45)", lineHeight:1.6 }}>{p.desc}</div>
+                </div>
               </div>
-            );
-          })}
-        </div>
-      </FlipCard>
+            ))}
+          </div>
+        </FlipCard>
+      ),
+    },
+  ];
 
-      {/* PATTERN DETECTION */}
-      <FlipCard
-        accent={PINK}
-        padding="22px 26px"
-        back={
-          <FlipBack
-            title="Pattern Detection"
-            accent={PINK}
-            paragraphs={[
-              "Glev scans the most recent 10 meals plus your time-of-day breakdown looking for repeating signals: consistent under-dosing, frequent over-dosing, strong recent control, weak mornings or strong evenings.",
-              "Patterns only fire when there's enough recent data — log 15+ meals to unlock the full set of detectors.",
-              "These flags are heuristics, not diagnoses. Use them as starting points for conversations with your clinician.",
-            ]}
-          />
+  return (
+    <div style={{ maxWidth:960, margin:"0 auto" }}>
+      <style>{`
+        @media (max-width: 720px) {
+          .glev-grid-4 { grid-template-columns: repeat(2, 1fr) !important; }
+          .glev-grid-3 { grid-template-columns: 1fr !important; }
         }
-      >
-        <div style={{ fontSize:14, fontWeight:600, marginBottom:4 }}>Pattern Detection</div>
-        <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginBottom:18 }}>AI-driven trend detection from your dosing history</div>
-        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-          {patterns.map((p, i) => (
-            <div key={i} style={{ display:"flex", gap:14, padding:"14px 16px", background:`${p.color}08`, border:`1px solid ${p.color}20`, borderRadius:12 }}>
-              <div style={{ width:36, height:36, borderRadius:99, background:`${p.color}20`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:16 }}>
-                {p.icon}
-              </div>
-              <div>
-                <div style={{ fontSize:13, fontWeight:600, color:p.color, marginBottom:4 }}>{p.title}</div>
-                <div style={{ fontSize:12, color:"rgba(255,255,255,0.45)", lineHeight:1.6 }}>{p.desc}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </FlipCard>
+      `}</style>
+      <div style={{ marginBottom:28 }}>
+        <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>Performance Metrics</h1>
+        <p style={{ color:"rgba(255,255,255,0.35)", fontSize:13 }}>Tap any card to flip · hold to reorder · {total} meals analyzed</p>
+      </div>
+
+      <InsightsSortable items={items}/>
     </div>
+  );
+}
+
+/** Wrapper so we don't re-instantiate useCardOrder on every parent render. */
+function InsightsSortable({ items }: { items: SortableItem[] }) {
+  const { order, setOrder } = useCardOrder("insights", INSIGHTS_DEFAULT_ORDER);
+  return (
+    <SortableCardGrid
+      items={items}
+      order={order}
+      onOrderChange={setOrder}
+      gridStyle={{ display:"flex", flexDirection:"column", gap:20 }}
+    />
   );
 }
 

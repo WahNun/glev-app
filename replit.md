@@ -48,6 +48,32 @@ ALTER TABLE meals ADD COLUMN IF NOT EXISTS meal_type TEXT;
 
 (glucose_before, carbs_grams, insulin_units, evaluation were added in an earlier migration)
 
+## Database: Supabase `user_preferences` Table
+
+Stores per-user UI preferences such as the long-press drag-and-drop card
+order on the Dashboard and Insights pages.
+
+```sql
+CREATE TABLE IF NOT EXISTS user_preferences (
+  user_id                 UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  dashboard_card_order    JSONB NOT NULL DEFAULT '[]'::jsonb,
+  insights_card_order     JSONB NOT NULL DEFAULT '[]'::jsonb,
+  updated_at              TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE user_preferences ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can manage own preferences"
+  ON user_preferences
+  FOR ALL
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+```
+
+API: `GET /api/preferences` returns the saved arrays (empty when none),
+`POST /api/preferences` upserts either or both keys
+(`dashboard_card_order`, `insights_card_order`).
+
 ## Frontend Routes
 
 All protected routes live under `src/app/(protected)/` and require Supabase auth.
