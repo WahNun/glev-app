@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { fetchMeals, type Meal } from "@/lib/meals";
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
 import { computeAdaptiveICR } from "@/lib/engine/adaptiveICR";
 import { detectPattern } from "@/lib/engine/patterns";
 import { suggestAdjustment, type AdaptiveSettings, type AdjustmentSuggestion } from "@/lib/engine/adjustment";
-import { useCrosshair, CrosshairOverlay, CrosshairTooltip, type CrosshairPoint } from "@/components/ChartCrosshair";
+import GlucoseTrendFront from "@/components/GlucoseTrendChart";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
@@ -166,7 +166,7 @@ export default function InsightsPage() {
       {/* GLUCOSE TREND */}
       <FlipCard
         accent={ACCENT}
-        padding="22px 26px"
+        padding="20px 24px"
         marginBottom={20}
         back={
           <FlipBack
@@ -179,9 +179,7 @@ export default function InsightsPage() {
           />
         }
       >
-        <div style={{ fontSize:14, fontWeight:600, marginBottom:4 }}>Glucose Trend</div>
-        <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginBottom:14 }}>Average pre-meal glucose over the last 14 days</div>
-        <TrendSparkline meals={meals}/>
+        <GlucoseTrendFront meals={meals} />
       </FlipCard>
 
       {/* ADAPTIVE ENGINE */}
@@ -534,127 +532,3 @@ function StatRow({ label, val, color }: { label:string; val:string; color?:strin
   );
 }
 
-function TrendSparkline({ meals }: { meals: Meal[] }) {
-  const DAYS = 14;
-  const now = Date.now();
-  const buckets: Record<string, number[]> = {};
-  for (let i = 0; i < DAYS; i++) {
-    const d = new Date(now - (DAYS-1-i) * 86400000);
-    buckets[d.toDateString()] = [];
-  }
-  meals.forEach(m => {
-    const d = new Date(m.created_at).toDateString();
-    if (d in buckets && m.glucose_before) buckets[d].push(m.glucose_before);
-  });
-  const raw = Object.values(buckets).map(arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : null);
-  const filled: number[] = [];
-  let lastVal = 110;
-  raw.forEach(v => { if (v !== null) lastVal = v; filled.push(lastVal); });
-  const labels = Object.keys(buckets);
-
-  // Measure container so chart renders in pixel space (matches the
-  // dashboard chart's strategy and lets the crosshair use real coords).
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState<{ w: number; h: number }>({ w: 900, h: 290 });
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([entry]) => {
-      const r = entry.contentRect;
-      if (r.width > 0 && r.height > 0) {
-        setSize({ w: Math.round(r.width), h: Math.round(r.height) });
-      }
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  const W = size.w;
-  const H = size.h;
-  const padL = 36, padR = 12, padT = 12, padB = 26;
-  const mn = 70, mx = 230;
-  const toY = (v: number) => padT + (1 - (v - mn) / (mx - mn)) * (H - padT - padB);
-  const toX = (i: number) => padL + (i / Math.max(1, DAYS - 1)) * (W - padL - padR);
-
-  const path = filled.map((v, i) => `${i === 0 ? "M" : "L"}${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(" ");
-  const area = path + ` L${toX(DAYS - 1).toFixed(1)},${(H - padB).toFixed(1)} L${toX(0).toFixed(1)},${(H - padB).toFixed(1)} Z`;
-  const showIdx = W < 380
-    ? [0, Math.floor(DAYS / 2), DAYS - 1]
-    : [0, Math.floor(DAYS / 4), Math.floor(DAYS / 2), Math.floor(3 * DAYS / 4), DAYS - 1];
-
-  // Crosshair points: only days that actually had readings get tooltips —
-  // fill-forward days would otherwise display a misleading "stale" value.
-  const crosshairPoints = useMemo<CrosshairPoint[]>(() => {
-    if (W <= 0 || H <= 0) return [];
-    return filled
-      .map((v, i) => {
-        if (raw[i] === null) return null;
-        const date = new Date(labels[i]);
-        const dateStr = date.toLocaleDateString("en", { weekday: "short", month: "short", day: "numeric" });
-        return {
-          x: toX(i),
-          y: toY(v),
-          color: ACCENT,
-          tooltip: [dateStr, `${Math.round(v)} mg/dL avg`],
-        } satisfies CrosshairPoint;
-      })
-      .filter((p): p is CrosshairPoint => p !== null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filled, raw, labels, W, H]);
-
-  const { active, handlers } = useCrosshair(crosshairPoints);
-
-  return (
-    <div
-      ref={containerRef}
-      onClick={(e) => {
-        // Prevent the parent FlipCard from flipping while the user is
-        // interacting with the crosshair.
-        e.stopPropagation();
-      }}
-      style={{ position: "relative", width: "100%", flex: 1, minHeight: 240, touchAction: "pan-y" }}
-      {...handlers}
-    >
-      {W > 0 && H > 0 && (
-        <svg
-          width={W}
-          height={H}
-          viewBox={`0 0 ${W} ${H}`}
-          style={{ display: "block", position: "absolute", inset: 0, pointerEvents: "none" }}
-        >
-          {[80, 110, 140, 180].map(v => (
-            <g key={v}>
-              <line x1={padL} y1={toY(v)} x2={W - padR} y2={toY(v)} stroke="rgba(255,255,255,0.05)" strokeDasharray="4" />
-              <text x={padL - 4} y={toY(v) + 4} textAnchor="end" fontSize="10" fill="rgba(255,255,255,0.2)">{v}</text>
-            </g>
-          ))}
-          <defs>
-            <linearGradient id="insTrendGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#4F6EF7" stopOpacity="0.28" />
-              <stop offset="100%" stopColor="#4F6EF7" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          <path d={area} fill="url(#insTrendGrad)" />
-          <path d={path} fill="none" stroke="#4F6EF7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          {filled.map((v, i) => raw[i] !== null ? (
-            <circle key={i} cx={toX(i)} cy={toY(v)} r="3" fill="#4F6EF7" stroke="#111117" strokeWidth="1.5" />
-          ) : null)}
-          {showIdx.map(i => (
-            <text key={i} x={toX(i)} y={H - 8} textAnchor="middle" fontSize="10" fill="rgba(255,255,255,0.25)">
-              {new Date(labels[i]).toLocaleDateString("en", { month: "short", day: "numeric" })}
-            </text>
-          ))}
-          <CrosshairOverlay
-            active={active}
-            top={padT}
-            bottom={H - padB}
-            left={padL}
-            right={W - padR}
-          />
-        </svg>
-      )}
-      <CrosshairTooltip active={active} containerWidth={W} containerHeight={H} />
-    </div>
-  );
-}
