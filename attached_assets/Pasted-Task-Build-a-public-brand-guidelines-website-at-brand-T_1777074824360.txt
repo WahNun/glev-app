@@ -1,0 +1,92 @@
+Task: Build a public brand guidelines website at /brand. This is an interactive single-page brand book that anyone (press, designers, partners) can visit at glev.app/brand to see the visual system, copy guidelines, and download brand assets. Match the existing app's dark aesthetic.
+
+## File structure
+
+Create these files:
+- app/brand/page.tsx (the brand book page itself)
+- app/brand/layout.tsx (optional — if you need different metadata than the app shell)
+- components/brand/HexSwatch.tsx (click-to-copy color swatch component)
+- components/brand/LogoCard.tsx (logo display with download button)
+- components/brand/LogoPlayground.tsx (interactive GlevLogo with size/color/bg controls)
+- components/brand/SectionNav.tsx (sticky anchor navigation)
+
+Do NOT create new logo files. Import from the existing public/icon.svg and components/GlevLogo.tsx.
+
+## Page architecture
+
+Single long-scroll page, dark theme, max-width 1100px content column. Sticky top navigation with anchor links: Foundation · Color · Typography · Logo · Voice · Compliance.
+
+Background: #09090B. Cards: #111117 with rgba(255,255,255,0.08) borders. Text primary: #FFFFFF. Use Inter font (already in app).
+
+## Section 1 — Hero
+
+Top of page, full viewport height minus nav.
+- Render the Glev symbol from public/icon.svg at 128×128 centered.
+- Below: "glev." wordmark (Inter 96px, weight 700, letter-spacing -0.03em, fill #FFFFFF) with mint period dot (#22D3A0, ~6px radius positioned as sentence period after the v).
+- Below: "Brand guidelines · v1 · April 2026" in Inter 16px, fill rgba(255,255,255,0.5).
+- Below: tagline "Typ 1. Neu gedacht." in Inter 24px, fill rgba(255,255,255,0.75).
+
+## Section 2 — Foundation
+
+Anchor: #foundation
+Heading: "Foundation"
+
+Three subsections in a 3-column grid (stacks to 1-column on mobile):
+
+(a) "Was Glev ist"
+   "Der sprachgesteuerte Essens-Tracker für Typ-1-Diabetiker. Mahlzeiten in Sekunden loggen, Makros per KI, Glukose live vom CGM."
+
+(b) "Was Glev nicht ist"
+   "Kein Medizinprodukt. Kein Insulinrechner. Kein Diabetes-Coach. Glev ist ein Dokumentations- und Organisations-Tool — Therapieentscheidungen triffst du mit deinem Arzt."
+
+(c) "Für wen"
+   "Typ-1-Diabetiker mit CGM (aktuell FreeStyle Libre 2 via LibreLinkUp; Dexcom und Nightscout in Arbeit). Smartphone-nativ, deutschsprachiger Markt zuerst."
+
+Below the grid: a quote-style block with the founder line:
+   "Gebaut von Lucas — T1D, weil bestehende Apps mir zu langsam waren."
+
+## Section 3 — Color
+
+Anchor: #color
+Heading: "Color"
+
+Use the HexSwatch component for every color. Each swatch is a 160×160 card showing:
+- Color fill (full card)
+- Hex code in monospace at center (auto-contrast: white text on dark fills, black text on light fills)
+- Role label below hex
+- Click anywhere on the card → copy hex to clipboard, show inline toast "Kopiert: #XXXXXX" for 1.5s
+
+Group the swatches in four labeled sub-sections:
+
+### "Brand"
+- #4F6EF7 — Primary · CTAs, links, logo
+- #6B8BFF — Hover state
+- #4F6EF740 — Focus ring, outer-node fill (8-digit hex with alpha)
+
+### "Ink-Layer"
+- #09090B — Page background
+- #0A0A0F — Body background
+- #0D0D12 — Card alternative
+- #0F0F14 — Logo background
+- #111117 — Surface (primary cards/modals)
+- #141420 — Surface alternative
+
+### "Status"
+- #22D3A0 — Green · in-range, success, live
+- #FF9500 — Orange · hyper, warning
+- #FF2D78 — Pink · hypo, error, destructive
+- #FFD60A — Yellow · spike
+
+### "Meal-Types & Chart"
+- #FF9500 — Fast-carbs
+- #3B82F6 — High-protein
+- #A855F7 — High-fat
+- #22D3A0 — Balanced
+- #60A5FA — Glucose chart line
+- #F472B6 — Chart highlight (NOT for errors — use #FF2D78 for errors)
+- #A78BFA — UI secondary
+
+After the four groups, render a "Glucose-Trend-Gating" visualization:
+- A horizontal bar split into four zones colored #FF2D78 / #22D3A0 / #FF9500 / rgba(255,255,255,0.5)
+- Labels: "<70 Hypo" · "70–180 In-Range" · ">180 Hyper" · "Kein Wert"
+- Below: explanatory text "Live glucose values in the
