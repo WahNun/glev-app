@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useId } from "react";
 import { fetchMeals, type Meal } from "@/lib/meals";
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
 import { computeAdaptiveICR } from "@/lib/engine/adaptiveICR";
@@ -168,6 +168,8 @@ export default function InsightsPage() {
         accent={ACCENT}
         padding="20px 24px"
         marginBottom={20}
+        minHeight={380}
+        mobileMinHeight={420}
         back={
           <FlipBack
             title="Glucose Trend"
@@ -374,14 +376,23 @@ export default function InsightsPage() {
  */
 function FlipCard({
   children, back, accent = ACCENT, padding = "20px 24px", marginBottom,
+  minHeight, mobileMinHeight,
 }: {
   children: React.ReactNode;
   back: React.ReactNode;
   accent?: string;
   padding?: string;
   marginBottom?: number;
+  /** Pin the grid cell (and therefore the card) to a fixed desktop height. */
+  minHeight?: number;
+  /** Optional override for screens ≤768px wide. */
+  mobileMinHeight?: number;
 }) {
   const [flipped, setFlipped] = useState(false);
+  const rawId = useId();
+  const sizingClass = (minHeight || mobileMinHeight)
+    ? `glev-flip-${rawId.replace(/[^a-zA-Z0-9]/g, "")}`
+    : "";
   return (
     <div
       onClick={() => setFlipped(f => !f)}
@@ -391,7 +402,13 @@ function FlipCard({
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setFlipped(f => !f); } }}
       aria-pressed={flipped}
     >
-      <div style={{
+      {sizingClass && (
+        <style>{`
+          ${minHeight ? `.${sizingClass} { grid-template-rows: minmax(${minHeight}px, auto); }` : ""}
+          ${mobileMinHeight ? `@media (max-width: 768px) { .${sizingClass} { grid-template-rows: minmax(${mobileMinHeight}px, auto); } }` : ""}
+        `}</style>
+      )}
+      <div className={sizingClass} style={{
         display:"grid",
         transformStyle:"preserve-3d",
         transition:"transform 0.55s cubic-bezier(0.4,0,0.2,1)",
