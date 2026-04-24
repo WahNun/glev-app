@@ -10,7 +10,6 @@ function adminClient() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
   // Diagnostic: log presence + length only (NEVER the value).
-  console.log(
     "[cgm/credentials] admin key present:",
     !!serviceKey,
     "len:",
@@ -34,7 +33,6 @@ export async function POST(req: NextRequest) {
     } catch {
       return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
     }
-    console.log("[cgm/credentials POST] body keys:", Object.keys(body || {}));
 
     const email = body?.email;
     const password = body?.password;
@@ -69,7 +67,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (e: unknown) {
     const err = e as { message?: string; stack?: string; name?: string };
-    console.error("[cgm/credentials POST] error:", e);
     return NextResponse.json(
       {
         error: "internal",

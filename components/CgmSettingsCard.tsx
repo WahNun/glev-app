@@ -12,6 +12,9 @@ interface StatusResponse {
   connected: boolean;
   email: string | null;
   region: string | null;
+  tokenExpiresAt: string | null;
+  lastConnectedAt: string | null;
+  sessionHealth: "active" | "expiring_soon" | "expired" | "never_tested";
   lastReading: { value: number; trend: string; timestamp: string } | null;
 }
 
@@ -198,7 +201,7 @@ export default function CgmSettingsCard() {
           <div style={{ fontSize: 13, color: PINK }}>Fehler: {statusError}</div>
         ) : connected ? (
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
               <span
                 aria-hidden
                 style={{
@@ -213,6 +216,39 @@ export default function CgmSettingsCard() {
                 Verbunden mit LibreLinkUp
               </div>
             </div>
+            {/* Session-Health-Indicator */}
+            {(() => {
+              const h = status?.sessionHealth;
+              if (!h || h === "never_tested") {
+                return (
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginBottom: 14 }}>
+                    Noch nie getestet – klicke "Verbindung testen" um den Status zu prüfen.
+                  </div>
+                );
+              }
+              const cfg: Record<string, { color: string; label: string }> = {
+                active:        { color: GREEN,    label: "Session aktiv" },
+                expiring_soon: { color: "#FF9500", label: "Session läuft bald ab – bitte testen" },
+                expired:       { color: PINK,     label: "Session abgelaufen – bitte erneut verbinden" },
+              };
+              const { color, label } = cfg[h] ?? cfg.expired;
+              const expiresAt = status?.tokenExpiresAt ? new Date(status.tokenExpiresAt) : null;
+              const diffMin = expiresAt ? Math.round((expiresAt.getTime() - Date.now()) / 60_000) : null;
+              const suffix =
+                h === "active" && diffMin !== null && diffMin > 0
+                  ? ` (noch ${diffMin} min)`
+                  : h === "expiring_soon" && diffMin !== null && diffMin > 0
+                  ? ` (noch ${diffMin} min)`
+                  : h === "expired" && diffMin !== null
+                  ? ` (vor ${Math.abs(diffMin)} min)`
+                  : "";
+              return (
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 14 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 99, background: color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, color }}>{label}{suffix}</span>
+                </div>
+              );
+            })()}
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
               <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: "12px 14px" }}>

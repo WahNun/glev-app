@@ -1,4 +1,5 @@
 "use client";
+import { fetchCgmHistory } from "@/lib/cgm/clientCache";
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import CgmFetchButton, { type CgmFetchResult } from "@/components/CgmFetchButton";
@@ -39,30 +40,8 @@ export default function CurrentDayGlucoseCard() {
 
   const loadHistory = useCallback(async (signal?: { cancelled: boolean }) => {
     try {
-      const res = await fetch("/api/cgm/history", { cache: "no-store" });
-      if (res.status === 401 || res.status === 404 || res.status === 412) {
-        if (!signal?.cancelled) setS({ kind: "no-cgm" });
-        return;
-      }
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({} as { error?: string }));
-        const msg = (body && typeof body.error === "string" ? body.error : "") || `HTTP ${res.status}`;
-        const m = msg.toLowerCase();
-        if (
-          res.status === 502 ||
-          m.includes("no patients") ||
-          m.includes("not connected") ||
-          m.includes("credential") ||
-          m.includes("not linked") ||
-          m.includes("no cgm")
-        ) {
-          if (!signal?.cancelled) setS({ kind: "no-cgm" });
-          return;
-        }
-        if (!signal?.cancelled) setS({ kind: "error", msg });
-        return;
-      }
-      const data = (await res.json()) as { current: Reading | null; history: Reading[] };
+      const data = await fetchCgmHistory();
+      if (!data) throw new Error("CGM unavailable");
       const today0 = new Date();
       today0.setHours(0, 0, 0, 0);
       const todayStart = today0.getTime();
