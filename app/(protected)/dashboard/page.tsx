@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { fetchMeals, seedMealsIfEmpty, type Meal } from "@/lib/meals";
 import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, getEvalExplain } from "@/lib/mealTypes";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
 import CurrentDayGlucoseCard from "@/components/CurrentDayGlucoseCard";
+import { useCrosshair, CrosshairOverlay, CrosshairTooltip, type CrosshairPoint } from "@/components/ChartCrosshair";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
@@ -126,14 +127,32 @@ function TrendChart({ meals }: { meals: Meal[] }) {
   let last = 110;
   points.forEach(v => { if (v !== null) last = v; filled.push(last); });
 
-  // Slightly less elongated viewBox so the chart keeps a useful height
-  // when scaled to the full width of a narrow phone screen.
-  const W = 720, H = 320, padL = 32, padR = 14, padT = 16, padB = 36;
+  // Measure the chart container so the SVG renders in pixel space.
+  // Same approach as the daily glucose chart: avoids aspect-ratio
+  // distortion and lets the crosshair use real screen coordinates.
+  const chartRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState<{ w: number; h: number }>({ w: 720, h: 280 });
+  useEffect(() => {
+    const el = chartRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([entry]) => {
+      const r = entry.contentRect;
+      if (r.width > 0 && r.height > 0) {
+        setSize({ w: Math.round(r.width), h: Math.round(r.height) });
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const W = size.w;
+  const H = size.h;
+  const padL = 32, padR = 14, padT = 16, padB = 30;
   const mn = 60, mx = 240;
   const toY = (v: number) => padT + (1 - (v - mn) / (mx - mn)) * (H - padT - padB);
-  const toX = (i: number) => padL + (i / (DAYS - 1)) * (W - padL - padR);
+  const toX = (i: number) => padL + (i / Math.max(1, DAYS - 1)) * (W - padL - padR);
   const path = filled.map((v, i) => `${i === 0 ? "M" : "L"}${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(" ");
-  const area = path + ` L${toX(DAYS - 1).toFixed(1)},${H - padB} L${toX(0).toFixed(1)},${H - padB} Z`;
+  const area = path + ` L${toX(DAYS - 1).toFixed(1)},${(H - padB).toFixed(1)} L${toX(0).toFixed(1)},${(H - padB).toFixed(1)} Z`;
 
   // Front: highest/lowest annotation (only on real data points)
   type Pt = { i: number; v: number };
@@ -141,6 +160,29 @@ function TrendChart({ meals }: { meals: Meal[] }) {
   points.forEach((v, i) => { if (v != null) realPts.push({ i, v }); });
   const hiPt: Pt | null = realPts.length ? realPts.reduce((a, b) => (b.v > a.v ? b : a)) : null;
   const loPt: Pt | null = realPts.length ? realPts.reduce((a, b) => (b.v < a.v ? b : a)) : null;
+
+  // Crosshair-snappable points (only real data days; skip fill-forward).
+  const crosshairPoints = useMemo<CrosshairPoint[]>(() => {
+    if (W <= 0 || H <= 0) return [];
+    const out: CrosshairPoint[] = [];
+    points.forEach((v, i) => {
+      if (v == null) return;
+      const date = new Date(dateLabels[i]);
+      out.push({
+        x: toX(i),
+        y: toY(v),
+        color: ACCENT,
+        tooltip: [
+          date.toLocaleDateString("en", { weekday: "short", month: "short", day: "numeric" }),
+          `${Math.round(v)} mg/dL avg`,
+        ],
+      });
+    });
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [points, dateLabels, W, H]);
+
+  const { active, handlers } = useCrosshair(crosshairPoints);
 
   // Back: weekday averages + 7-day trend slope
   const weekdayBuckets: number[][] = Array.from({ length: 7 }, () => []);
@@ -201,45 +243,70 @@ function TrendChart({ meals }: { meals: Meal[] }) {
               <span style={{ fontSize:9, color:"rgba(255,255,255,0.2)", marginLeft:4 }}>↺</span>
             </div>
           </div>
-          <svg viewBox={`0 0 ${W} ${H}`} style={{ width:"100%", flex:1, overflow:"visible" }}>
-            {/* In-range band */}
-            <rect x={padL} y={toY(180)} width={W-padL-padR} height={toY(80)-toY(180)} fill={GREEN} fillOpacity="0.05"/>
-            {[80, 110, 140, 180, 220].map(v => (
-              <g key={v}>
-                <line x1={padL} y1={toY(v)} x2={W-padR} y2={toY(v)} stroke="rgba(255,255,255,0.05)" strokeDasharray="3 4"/>
-                <text x={padL-5} y={toY(v)+4} textAnchor="end" fontSize="9" fill="rgba(255,255,255,0.25)">{v}</text>
-              </g>
-            ))}
-            <defs>
-              <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={ACCENT} stopOpacity="0.28"/>
-                <stop offset="100%" stopColor={ACCENT} stopOpacity="0"/>
-              </linearGradient>
-            </defs>
-            <path d={area} fill="url(#trendGrad)"/>
-            <path d={path} fill="none" stroke={ACCENT} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            {filled.map((v, i) => points[i] !== null ? (
-              <circle key={i} cx={toX(i)} cy={toY(v)} r="3" fill={ACCENT} stroke={SURFACE} strokeWidth="1.5"/>
-            ) : null)}
-            {hiPt && (
-              <g>
-                <circle cx={toX(hiPt.i)} cy={toY(hiPt.v)} r="5" fill="none" stroke={ORANGE} strokeWidth="1.5"/>
-                <text x={toX(hiPt.i)} y={toY(hiPt.v)-9} textAnchor="middle" fontSize="9" fill={ORANGE} fontWeight="700">↑ {Math.round(hiPt.v)}</text>
-              </g>
+          <div
+            ref={chartRef}
+            onClick={(e) => {
+              // Don't flip the card while interacting with the crosshair.
+              e.stopPropagation();
+            }}
+            style={{ flex:1, minHeight:0, position:"relative", touchAction:"pan-y" }}
+            {...handlers}
+          >
+            {W > 0 && H > 0 && (
+              <svg
+                width={W}
+                height={H}
+                viewBox={`0 0 ${W} ${H}`}
+                style={{ display:"block", position:"absolute", inset:0, overflow:"visible", pointerEvents:"none" }}
+              >
+                {/* In-range band */}
+                <rect x={padL} y={toY(180)} width={W-padL-padR} height={toY(80)-toY(180)} fill={GREEN} fillOpacity="0.05"/>
+                {[80, 110, 140, 180, 220].map(v => (
+                  <g key={v}>
+                    <line x1={padL} y1={toY(v)} x2={W-padR} y2={toY(v)} stroke="rgba(255,255,255,0.05)" strokeDasharray="3 4"/>
+                    <text x={padL-5} y={toY(v)+4} textAnchor="end" fontSize="10" fill="rgba(255,255,255,0.25)">{v}</text>
+                  </g>
+                ))}
+                <defs>
+                  <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={ACCENT} stopOpacity="0.28"/>
+                    <stop offset="100%" stopColor={ACCENT} stopOpacity="0"/>
+                  </linearGradient>
+                </defs>
+                <path d={area} fill="url(#trendGrad)"/>
+                <path d={path} fill="none" stroke={ACCENT} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                {filled.map((v, i) => points[i] !== null ? (
+                  <circle key={i} cx={toX(i)} cy={toY(v)} r="3" fill={ACCENT} stroke={SURFACE} strokeWidth="1.5"/>
+                ) : null)}
+                {hiPt && (
+                  <g>
+                    <circle cx={toX(hiPt.i)} cy={toY(hiPt.v)} r="5" fill="none" stroke={ORANGE} strokeWidth="1.5"/>
+                    <text x={toX(hiPt.i)} y={toY(hiPt.v)-9} textAnchor="middle" fontSize="10" fill={ORANGE} fontWeight="700">↑ {Math.round(hiPt.v)}</text>
+                  </g>
+                )}
+                {loPt && (
+                  <g>
+                    <circle cx={toX(loPt.i)} cy={toY(loPt.v)} r="5" fill="none" stroke={PINK} strokeWidth="1.5"/>
+                    <text x={toX(loPt.i)} y={toY(loPt.v)+16} textAnchor="middle" fontSize="10" fill={PINK} fontWeight="700">↓ {Math.round(loPt.v)}</text>
+                  </g>
+                )}
+                {/* X labels: every other day */}
+                {dateLabels.map((d, i) => (i % 2 === 0 || i === DAYS - 1) ? (
+                  <text key={i} x={toX(i)} y={H-10} textAnchor="middle" fontSize="10" fill="rgba(255,255,255,0.28)">
+                    {new Date(d).toLocaleDateString("en", { month:"short", day:"numeric" })}
+                  </text>
+                ) : null)}
+                <CrosshairOverlay
+                  active={active}
+                  top={padT}
+                  bottom={H - padB}
+                  left={padL}
+                  right={W - padR}
+                />
+              </svg>
             )}
-            {loPt && (
-              <g>
-                <circle cx={toX(loPt.i)} cy={toY(loPt.v)} r="5" fill="none" stroke={PINK} strokeWidth="1.5"/>
-                <text x={toX(loPt.i)} y={toY(loPt.v)+16} textAnchor="middle" fontSize="9" fill={PINK} fontWeight="700">↓ {Math.round(loPt.v)}</text>
-              </g>
-            )}
-            {/* X labels: every other day */}
-            {dateLabels.map((d, i) => (i % 2 === 0 || i === DAYS - 1) ? (
-              <text key={i} x={toX(i)} y={H-12} textAnchor="middle" fontSize="9" fill="rgba(255,255,255,0.28)">
-                {new Date(d).toLocaleDateString("en", { month:"short", day:"numeric" })}
-              </text>
-            ) : null)}
-          </svg>
+            <CrosshairTooltip active={active} containerWidth={W} containerHeight={H} />
+          </div>
         </div>
         {/* BACK */}
         <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", transform:"rotateY(180deg)", background:`linear-gradient(145deg, ${ACCENT}10, ${SURFACE} 65%)`, border:`1px solid ${ACCENT}33`, borderRadius:16, padding:"20px 24px", boxSizing:"border-box", display:"flex", flexDirection:"column", gap:14, overflow:"hidden" }}>
