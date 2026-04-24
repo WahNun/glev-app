@@ -12,3 +12,9 @@ id = "h7XfZt2b8KEV4so0TxSX2"
 uri = "file://exports/glev-logo-glucose-2000.png"
 type = "image"
 title = "Glev logo — glucose variant, edge-safe (2000×2000 PNG)"
+
+[[outputs]]
+id = "4riejyexZl1llwpx2Nc_M"
+uri = "file://exports/glev-kontext-report.docx"
+type = "word_document"
+title = "Glev Kontext-Report (.docx fuer Google Docs)"
