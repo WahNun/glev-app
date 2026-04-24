@@ -53,7 +53,7 @@ export function computeAdaptiveICR(meals: Meal[]): AdaptiveICR {
     if (w <= 0) continue;
     const ratio = carbs / insulin;
     buckets.all.push({ value: ratio, weight: w });
-    buckets[timeOfDay(new Date(m.created_at))].push({ value: ratio, weight: w });
+    buckets[timeOfDay(new Date(m.meal_time ?? m.created_at))].push({ value: ratio, weight: w });
   }
 
   return {

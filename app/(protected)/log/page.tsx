@@ -58,6 +58,13 @@ function runGlevEngine(meals: Meal[], currentGlucose: number, carbs: number): Re
     carbDose: Math.round(carbDose * 10) / 10, correctionDose: Math.round(correctionDose * 10) / 10, similarMeals: [] };
 }
 
+function toDatetimeLocal(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export default function LogPage() {
   const router = useRouter();
   const [recording, setRecording] = useState(false);
@@ -74,6 +81,8 @@ export default function LogPage() {
   const [fat, setFat]           = useState("");
   const [desc, setDesc]         = useState("");
   const [insulin, setInsulin]   = useState("");
+  const [mealTime, setMealTime] = useState<string>(() => toDatetimeLocal(new Date().toISOString()));
+  const [mealTimeDirty, setMealTimeDirty] = useState(false);
 
   const [saving, setSaving]   = useState(false);
   const [error, setError]     = useState("");
@@ -117,6 +126,7 @@ export default function LogPage() {
     setRecording(false); setHasActiveMeal(false);
     setParsing(false); setTranscript("");
     setGlucose(""); setCarbs(""); setFiber(""); setProtein(""); setFat(""); setDesc(""); setInsulin("");
+    setMealTime(toDatetimeLocal(new Date().toISOString())); setMealTimeDirty(false);
     setSaving(false); setError(""); setSuccess(false);
     setChatMsgs([]); setChatInput(""); setPipeStatus("idle");
     setRec(null); setRecLoading(false);
@@ -380,6 +390,8 @@ export default function LogPage() {
       setGlucose(String(res.value));
       setGlucoseTouched(false);
     }
+    // Anchor meal_time to the CGM reading time unless the user edited it.
+    if (!mealTimeDirty) setMealTime(toDatetimeLocal(res.timestamp));
   }
 
   // Auto-refresh every 60s while the page is mounted. Silent failures.
@@ -408,6 +420,7 @@ export default function LogPage() {
         insulinUnits: insulinNum,
         mealType: classifyMeal(totalCarbs, totalProtein, totalFat),
         evaluation: ev,
+        mealTime: mealTime ? new Date(mealTime).toISOString() : new Date().toISOString(),
       });
       setSuccess(true);
       setHasActiveMeal(false);
@@ -550,6 +563,18 @@ export default function LogPage() {
                 {cgmError}
               </div>
             )}
+          </div>
+          <div>
+            <label style={labelStyle}>Meal Time</label>
+            <input
+              value={mealTime}
+              onChange={e => { setMealTime(e.target.value); setMealTimeDirty(true); }}
+              type="datetime-local"
+              style={inp}
+            />
+            <div style={{ marginTop:4, fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.02em" }}>
+              When you ate. Defaults to the latest CGM reading time — edit to backfill a past meal.
+            </div>
           </div>
           {macroUpdatedAt && Date.now() - macroUpdatedAt < 6000 && (
             <div style={{ fontSize:10, color:GREEN, letterSpacing:"0.06em", fontWeight:700, display:"flex", alignItems:"center", gap:6 }}>

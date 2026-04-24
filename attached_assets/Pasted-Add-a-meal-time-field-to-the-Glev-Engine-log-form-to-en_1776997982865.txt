@@ -1,0 +1,50 @@
+Add a meal_time field to the Glev Engine log form to enable historical meal backfilling, and ensure insulin is always manually overridable.
+
+--- FRONTEND (app/(protected)/log/page.tsx) ---
+
+STEP 1 — Add a datetime-local input in the ENTRY DETAILS section, placed logically (e.g., right below GLUCOSE BEFORE). Label: "Uhrzeit der Mahlzeit" or similar.
+
+STEP 2 — Add state:
+const [mealTime, setMealTime] = useState<string>(""); // format: YYYY-MM-DDTHH:mm
+const [mealTimeDirty, setMealTimeDirty] = useState(false);
+
+onChange handler sets mealTime and flips mealTimeDirty to true. resetForm() resets both.
+
+STEP 3 — Auto-populate from CGM fetch:
+- When CGM fetch succeeds, the response includes a timestamp. If (!mealTimeDirty) setMealTime(toDatetimeLocal(cgmTimestamp)).
+- Helper function:
+  function toDatetimeLocal(iso: string): string {
+    const d = new Date(iso);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+- If the form is mounted with no CGM data yet, default mealTime to the current time (same helper called with new Date().toISOString()).
+
+STEP 4 — On Confirm Log submission, include meal_time in the payload. Convert the datetime-local string back to an ISO timestamp:
+  const mealTimeISO = mealTime ? new Date(mealTime).toISOString() : new Date().toISOString();
+  // include in POST body as meal_time: mealTimeISO
+
+STEP 5 — INSULIN field audit: ensure the INSULIN (U) input is always editable. Look for readOnly / disabled props. After "Get Recommendation" populates it, the user must still be able to type a different value. Only gate Confirm Log on "insulin is a valid positive number", not on "insulin was set by recommendation".
+
+--- BACKEND ---
+
+STEP 6 — Find the API route that inserts meal rows (likely app/api/log-meal/route.ts, app/api/meals/route.ts, or similar — investigate). Report the route path.
+
+STEP 7 — Update the insert payload to include meal_time:
+  .insert({
+    user_id: user.id,
+    // ... existing fields ...
+    meal_time: body.meal_time || new Date().toISOString(),
+  })
+
+STEP 8 — Audit glucose-window evaluation logic (bg_1h, bg_1h_at, bg_2h, bg_2h_at): if anything uses created_at as the reference, switch it to meal_time. Historical meals must evaluate their post-prandial windows relative to when they were CONSUMED, not when they were LOGGED. Report every file where this change was made.
+
+--- BUILD + PUSH ---
+
+STEP 9 — npm run build
+
+STEP 10 — git add -A && git commit -m "meals: add meal_time for historical backfill + ensure insulin is manually overridable"
+
+STEP 11 — Push via the Replit Git pane in the sidebar (shell push times out). Verify: git log --oneline origin/main..HEAD must be empty after push.
+
+STEP 12 — Report: build status, push confirmation, commit SHA, list of modified files, and the API route path found in STEP 6.
