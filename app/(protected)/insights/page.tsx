@@ -444,23 +444,45 @@ type InsightTile = { label:string; val:string; sub:string; color:string; formula
 
 function InsightFlipTile({ tile }: { tile: InsightTile }) {
   const [flipped, setFlipped] = useState(false);
+  // Both faces are stacked in the same CSS-grid cell so the tile's height
+  // is automatically max(front, back). This prevents the back-side text
+  // from overflowing on narrow mobile columns. minHeight matches the
+  // previous fixed height so single-line tiles still feel substantial.
   return (
     <div
       onClick={() => setFlipped(f => !f)}
-      style={{ position:"relative", cursor:"pointer", height:148, perspective:1000 }}
+      role="button"
+      tabIndex={0}
+      aria-pressed={flipped}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setFlipped(f => !f); } }}
+      style={{ position:"relative", cursor:"pointer", perspective:1000, minHeight:148 }}
     >
       <div
         style={{
-          position:"absolute", inset:0, transformStyle:"preserve-3d",
+          display:"grid",
+          minHeight:"inherit",
+          transformStyle:"preserve-3d",
           transition:"transform 0.5s cubic-bezier(0.4,0,0.2,1)",
           transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
         }}
       >
         {/* FRONT */}
-        <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, padding:"16px 20px", boxSizing:"border-box", display:"flex", flexDirection:"column", justifyContent:"space-between" }}>
-          <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between" }}>
+        <div style={{
+          gridArea:"1 / 1",
+          backfaceVisibility:"hidden",
+          background:SURFACE,
+          border:`1px solid ${BORDER}`,
+          borderRadius:14,
+          padding:"16px 20px",
+          boxSizing:"border-box",
+          display:"flex",
+          flexDirection:"column",
+          justifyContent:"space-between",
+          gap:14,
+        }}>
+          <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:8 }}>
             <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase", fontWeight:600 }}>{tile.label}</div>
-            <span style={{ fontSize:9, color:"rgba(255,255,255,0.18)" }}>↺</span>
+            <span style={{ fontSize:9, color:"rgba(255,255,255,0.18)", flexShrink:0 }}>↺</span>
           </div>
           <div>
             <div style={{ fontSize:32, fontWeight:800, letterSpacing:"-0.03em", color:tile.color, lineHeight:1 }}>{tile.val}</div>
@@ -468,12 +490,24 @@ function InsightFlipTile({ tile }: { tile: InsightTile }) {
           </div>
         </div>
         {/* BACK */}
-        <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", transform:"rotateY(180deg)", background:`linear-gradient(145deg, ${tile.color}12, ${SURFACE} 65%)`, border:`1px solid ${tile.color}33`, borderRadius:14, padding:"14px 18px", boxSizing:"border-box", overflow:"hidden", display:"flex", flexDirection:"column", gap:8 }}>
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+        <div style={{
+          gridArea:"1 / 1",
+          backfaceVisibility:"hidden",
+          transform:"rotateY(180deg)",
+          background:`linear-gradient(145deg, ${tile.color}12, ${SURFACE} 65%)`,
+          border:`1px solid ${tile.color}33`,
+          borderRadius:14,
+          padding:"14px 18px",
+          boxSizing:"border-box",
+          display:"flex",
+          flexDirection:"column",
+          gap:8,
+        }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
             <div style={{ fontSize:10, color:tile.color, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>{tile.label}</div>
-            <span style={{ fontSize:9, color:"rgba(255,255,255,0.18)" }}>↺ back</span>
+            <span style={{ fontSize:9, color:"rgba(255,255,255,0.18)", flexShrink:0 }}>↺ back</span>
           </div>
-          <div style={{ fontSize:10, color:"rgba(255,255,255,0.6)", fontFamily:"monospace", background:"rgba(0,0,0,0.3)", padding:"6px 8px", borderRadius:6 }}>{tile.formula}</div>
+          <div style={{ fontSize:10, color:"rgba(255,255,255,0.6)", fontFamily:"monospace", background:"rgba(0,0,0,0.3)", padding:"6px 8px", borderRadius:6, wordBreak:"break-word" }}>{tile.formula}</div>
           <div style={{ fontSize:11, color:"rgba(255,255,255,0.55)", lineHeight:1.45 }}>{tile.explain}</div>
         </div>
       </div>
