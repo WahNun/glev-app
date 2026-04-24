@@ -253,9 +253,11 @@ export default function LogPage() {
       if (t.fiber   != null && !fiber)   setFiber(String(t.fiber));
       if (t.protein != null && !protein) setProtein(String(t.protein));
       if (t.fat     != null && !fat)     setFat(String(t.fat));
-      if (!desc) {
-        const names = (data.parsed || []).map((f: Partial<ParsedFood>) => f.name).filter(Boolean).join(", ");
-        if (names) setDesc(names);
+      // Trust the server-provided description directly — the API now always
+      // returns a clean comma-separated "<grams>g <ingredient>" list. No more
+      // ad-hoc concatenation of parsed[].name.
+      if (typeof data.description === "string" && data.description.trim()) {
+        setDesc(data.description.trim());
       }
 
       // Compose a reasoning bubble with the parsed items, totals, and meal classification.
@@ -304,16 +306,20 @@ export default function LogPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Chat failed");
       setChatMsgs(c => [...c, { role: "assistant", content: data.reply || "(no reply)" }]);
-      // Overwrite ALL macro fields atomically whenever a valid macros object
-      // arrives — never partial, never first-only. Server validation already
-      // guarantees carbs/protein/fat are finite numbers when `data.macros` is
-      // non-null, so we treat each response as the new source of truth.
-      if (data.macros && typeof data.macros === "object") {
+      // ATOMIC update contract: the server only sends `macros` when it also
+      // sends a paired `description`. We require both before applying ANY
+      // change, so the meal label can never go stale relative to its totals
+      // (and the UI never blends new numbers with an old ingredient list).
+      if (
+        data.macros && typeof data.macros === "object" &&
+        typeof data.description === "string" && data.description.trim()
+      ) {
         const m = data.macros as { carbs: number; protein: number; fat: number; fiber?: number; calories?: number };
         setCarbs(String(m.carbs));
         setProtein(String(m.protein));
         setFat(String(m.fat));
         setFiber(String(m.fiber ?? 0));
+        setDesc(data.description.trim());
         setMacroUpdatedAt(Date.now());
       }
     } catch (e) {

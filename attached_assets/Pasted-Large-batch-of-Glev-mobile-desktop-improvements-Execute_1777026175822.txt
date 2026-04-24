@@ -1,0 +1,35 @@
+Large batch of Glev mobile/desktop improvements. Execute sequentially, report after each numbered section.
+
+===========================================
+SECTION 1 — VOICE CORRECTION BUG (REGRESSION)
+===========================================
+
+Bug: After the first voice input in a Glev Engine session, subsequent voice corrections (routed via sendChat thanks to the hasActiveMeal flag) do NOT produce valid macro updates anymore. The chat reply comes back malformed or without a macros object, so autoFill never fires.
+
+1.1 — Audit /api/chat-macros route. Verify the system prompt instructs GPT to ALWAYS return a JSON macros object when the user is correcting a meal in the Glev Engine session — not just on explicit "aktualisiere" commands.
+1.2 — The system prompt should make it explicit: "You are refining an existing meal log. Every user message that describes food (whether it adds, subtracts, or corrects ingredients) must produce a full atomic macros object with fields carbs, protein, fat, fiber, and the full updated ingredient list as a description."
+1.3 — Also: the chat response must ALWAYS include an updated meal_description listing ALL current ingredients (e.g. "100g broccoli, 23g nut mix, 130g banana") — regardless of whether it's the first parse or a correction. This is a new requirement. Update both /api/parse-food (voice→new-meal) and /api/chat-macros (voice-or-text correction) to include a description field with the full ingredient list.
+1.4 — Frontend: autoFill and the chat handler must both setDesc with the returned description. No conditional guards.
+
+===========================================
+SECTION 2 — MEAL DESCRIPTION ALWAYS POPULATED
+===========================================
+
+2.1 — As part of 1.3, meal_description is now always returned by both parse endpoints. Remove any old logic in autoFill that builds the description by concatenating parsed[].name — use the description field from the API response directly.
+2.2 — The description should read like: "100g broccoli, 23g nut mix, 130g banana" — a clean comma-separated list of quantity+ingredient. Make sure GPT is instructed this way in both system prompts.
+
+===========================================
+SECTION 3 — MANUAL ENTRY IN ENTRY LOG (HISTORICAL LOGGING)
+===========================================
+
+3.1 — In the Entry Log view (the list of past meals), add a "+ New manual entry" button at the top of the list.
+3.2 — Tapping it opens a form (modal or inline card) that lets the user create a historical meal WITHOUT going through voice/GPT. Fields:
+    - Meal time (datetime-local input, defaults to now, freely editable for historical backfill)
+    - Meal description (text)
+    - Carbs (g), Protein (g), Fat (g), Fiber (g)
+    - Meal classification (dropdown: Fast Carbs / Balanced / etc.)
+    - Insulin units
+    - Glucose before (mg/dL) — manual input since CGM won't have data for past times
+    - Optional: 1h reading (bg_1h), 2h reading (bg_2h) + their timestamps
+3.3 — Submit POSTs to the existing meal-insert endpoint with the same schema.
+3.4 —

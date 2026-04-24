@@ -5,6 +5,7 @@ import { fetchMeals, deleteMeal, updateMealReadings, seedMealsIfEmpty, type Meal
 import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, getEvalExplain } from "@/lib/mealTypes";
 import { lifecycleFor, STATE_LABELS, type OutcomeState } from "@/lib/engine/lifecycle";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
+import ManualEntryModal from "@/components/ManualEntryModal";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
@@ -21,6 +22,7 @@ export default function EntriesPage() {
   const [search, setSearch]   = useState("");
   const [expanded, setExpanded] = useState<string|null>(null);
   const [deleting, setDeleting] = useState<string|null>(null);
+  const [manualOpen, setManualOpen] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -72,6 +74,30 @@ export default function EntriesPage() {
       <div style={{ marginBottom:24 }}>
         <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>Entry Log</h1>
         <p style={{ color:"rgba(255,255,255,0.35)", fontSize:14 }}>{filtered.length} of {meals.length} logged meals. Click a row to expand.</p>
+      </div>
+
+      {/* MANUAL ENTRY CTA */}
+      <div style={{ marginBottom:14 }}>
+        <button
+          onClick={() => setManualOpen(true)}
+          style={{
+            width:"100%",
+            padding:"12px 16px",
+            borderRadius:12,
+            border:`1px dashed ${ACCENT}55`,
+            background:`${ACCENT}10`,
+            color:ACCENT,
+            fontSize:13, fontWeight:700, letterSpacing:"-0.01em",
+            cursor:"pointer",
+            display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+            transition:"all 0.2s",
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = `${ACCENT}1f`; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = `${ACCENT}10`; }}
+        >
+          <span style={{ fontSize:18, lineHeight:1, marginTop:-1 }}>+</span>
+          New manual entry
+        </button>
       </div>
 
       {/* FILTERS + SEARCH */}
@@ -225,6 +251,20 @@ export default function EntriesPage() {
           })}
         </div>
       )}
+
+      <ManualEntryModal
+        open={manualOpen}
+        onClose={() => setManualOpen(false)}
+        onCreated={(meal) => {
+          // Insert into the visible list and respect the user's chosen meal
+          // time when sorting (most recent first by created_at).
+          setMeals((prev) => {
+            const next = [meal, ...prev];
+            next.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+            return next;
+          });
+        }}
+      />
     </div>
   );
 }

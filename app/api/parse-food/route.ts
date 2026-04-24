@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
       totals?: { carbs?: number; protein?: number; fat?: number; fiber?: number; calories?: number };
       mealType?: "FAST_CARBS" | "HIGH_FAT" | "HIGH_PROTEIN" | "BALANCED";
       summary?: string;
+      description?: string;
     } = {};
     try {
       const j = JSON.parse(cleaned);
@@ -46,6 +47,23 @@ export async function POST(req: NextRequest) {
     }
 
     const items = Array.isArray(result.items) ? result.items : [];
+
+    // Always provide a clean, comma-separated meal description. If GPT returned
+    // one, trust it; otherwise synthesize from the items so the client never
+    // has to fall back to ad-hoc string-building.
+    const synthesized = items
+      .map((it) => {
+        const grams = Number(it.grams);
+        const name  = (it.name ?? "").toString().trim();
+        if (!name || !Number.isFinite(grams) || grams <= 0) return null;
+        return `${Math.round(grams)}g ${name.toLowerCase()}`;
+      })
+      .filter((s): s is string => !!s)
+      .join(", ");
+    const description = (result.description && result.description.trim())
+      ? result.description.trim()
+      : synthesized;
+
     // Preserve old `parsed` field so existing client code still works.
     return NextResponse.json({
       raw,
@@ -54,6 +72,7 @@ export async function POST(req: NextRequest) {
       totals: result.totals ?? null,
       mealType: result.mealType ?? null,
       summary: result.summary ?? null,
+      description,
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "OpenAI request failed";
