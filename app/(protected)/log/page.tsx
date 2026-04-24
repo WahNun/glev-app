@@ -61,6 +61,8 @@ function runGlevEngine(meals: Meal[], currentGlucose: number, carbs: number): Re
 export default function LogPage() {
   const router = useRouter();
   const [recording, setRecording] = useState(false);
+  const [chatRecording, setChatRecording] = useState(false);
+  const [chatTranscribing, setChatTranscribing] = useState(false);
   const [parsing, setParsing]     = useState(false);
   const [pipeStatus, setPipeStatus] = useState<"idle" | "transcribing" | "parsing">("idle");
   const [transcript, setTranscript] = useState("");
@@ -113,7 +115,8 @@ export default function LogPage() {
   }, []);
 
   function resetForm() {
-    setRecording(false); setParsing(false); setTranscript("");
+    setRecording(false); setChatRecording(false); setChatTranscribing(false);
+    setParsing(false); setTranscript("");
     setGlucose(""); setCarbs(""); setFiber(""); setProtein(""); setFat(""); setDesc(""); setInsulin("");
     setSaving(false); setError(""); setSuccess(false);
     setChatMsgs([]); setChatInput(""); setPipeStatus("idle");
@@ -134,8 +137,11 @@ export default function LogPage() {
   const glucoseNum   = num(glucose);
   const insulinNum   = num(insulin);
 
-  async function startRecording() {
+  async function startRecording(target: "top" | "chat" = "top") {
     setError("");
+    // Only one mic active at a time — refuse if the other is recording.
+    if (target === "top" && chatRecording) return;
+    if (target === "chat" && (recording || chatBusy)) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunksRef.current = [];
@@ -152,20 +158,41 @@ export default function LogPage() {
                  : actualType.includes("mpeg") ? "mp3"
                  : actualType.includes("ogg")  ? "ogg"
                  : "webm";
-        await transcribeAndParse(blob, ext);
+        if (target === "chat") {
+          await transcribeForChat(blob, ext);
+        } else {
+          await transcribeAndParse(blob, ext);
+        }
       };
       rec.start();
       mediaRecRef.current = rec;
-      setRecording(true); setTranscript("");
+      if (target === "chat") {
+        setChatRecording(true);
+      } else {
+        setRecording(true);
+        setTranscript("");
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not access microphone.");
-      setRecording(false);
+      if (target === "chat") setChatRecording(false); else setRecording(false);
     }
   }
 
   function stopRecording() {
     mediaRecRef.current?.stop();
     setRecording(false);
+    setChatRecording(false);
+  }
+
+  // Shared transcription helper — POSTs the blob to /api/transcribe and
+  // returns the text. Throws on empty/error so callers can surface it.
+  async function transcribeBlob(blob: Blob, ext = "webm"): Promise<string> {
+    const fd = new FormData();
+    fd.append("audio", blob, `voice.${ext}`);
+    const tRes = await fetch("/api/transcribe", { method: "POST", body: fd });
+    const tData = await tRes.json();
+    if (!tRes.ok || !tData.text) throw new Error(tData.error || "Empty transcript");
+    return tData.text as string;
   }
 
   async function transcribeAndParse(blob: Blob, ext = "webm") {
@@ -173,18 +200,25 @@ export default function LogPage() {
     // Kick off CGM auto-fetch in parallel — do not block parsing on it.
     pullCgm();
     try {
-      const fd = new FormData();
-      fd.append("audio", blob, `voice.${ext}`);
-      const tRes = await fetch("/api/transcribe", { method: "POST", body: fd });
-      const tData = await tRes.json();
-      if (!tRes.ok || !tData.text) throw new Error(tData.error || "Empty transcript");
-      const text = tData.text as string;
+      const text = await transcribeBlob(blob, ext);
       setTranscript(text);
       setPipeStatus("parsing");
       await autoFill(text);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Transcription failed.");
     } finally { setParsing(false); setPipeStatus("idle"); }
+  }
+
+  // Voice → chat correction path. Routes the transcript through sendChat
+  // (atomic macro overwrite) instead of autoFill (new-meal parse).
+  async function transcribeForChat(blob: Blob, ext = "webm") {
+    setChatTranscribing(true); setError("");
+    try {
+      const text = await transcribeBlob(blob, ext);
+      await sendChat(text);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Transcription failed.");
+    } finally { setChatTranscribing(false); }
   }
 
   // Silent background compute — always kept fresh so the user just
@@ -437,7 +471,7 @@ export default function LogPage() {
             {recording && <div style={{ position:"absolute", inset:-16, borderRadius:"50%", background:`radial-gradient(circle,${ACCENT}24 0%,transparent 70%)`, animation:"vPulse 2s ease-in-out infinite", pointerEvents:"none" }}/>}
             <button
               className="mic-btn"
-              onClick={recording ? stopRecording : startRecording}
+              onClick={() => recording ? stopRecording() : startRecording("top")}
               disabled={parsing || !speechAvail}
               style={{
                 position:"absolute", inset:0, borderRadius:"50%",
@@ -773,23 +807,57 @@ export default function LogPage() {
             )}
           </div>
 
-          <div style={{ padding:"10px 12px", borderTop:`1px solid ${BORDER}`, display:"flex", gap:8 }}>
+          <div style={{ padding:"10px 12px", borderTop:`1px solid ${BORDER}`, display:"flex", gap:8, alignItems:"center" }}>
             <input
               value={chatInput}
               onChange={e => setChatInput(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); } }}
-              placeholder="Ask or correct… e.g. 'the banana was bigger'"
+              placeholder={chatRecording ? "Listening…" : chatTranscribing ? "Transcribing…" : "Ask or correct… e.g. 'the banana was bigger'"}
               style={{ ...inp, flex:1, fontSize:13 }}
-              disabled={chatBusy}
+              disabled={chatBusy || chatRecording || chatTranscribing}
             />
             <button
-              onClick={() => sendChat()}
-              disabled={chatBusy || !chatInput.trim()}
+              onClick={() => chatRecording ? stopRecording() : startRecording("chat")}
+              disabled={!speechAvail || chatBusy || chatTranscribing || recording}
+              title={chatRecording ? "Stop recording" : "Speak a correction"}
               style={{
-                padding:"0 16px", borderRadius:10, border:"none",
-                background: chatBusy || !chatInput.trim() ? "rgba(255,255,255,0.05)" : `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
-                color: chatBusy || !chatInput.trim() ? "rgba(255,255,255,0.3)" : "#fff",
-                cursor: chatBusy || !chatInput.trim() ? "default" : "pointer",
+                width: 38, height: 38, borderRadius: 10, padding: 0,
+                border: chatRecording ? `1px solid ${ACCENT}88` : `1px solid rgba(255,255,255,0.1)`,
+                background: chatRecording
+                  ? `${ACCENT}22`
+                  : (!speechAvail || chatBusy || chatTranscribing || recording) ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.06)",
+                color: chatRecording ? ACCENT : "rgba(255,255,255,0.75)",
+                cursor: (!speechAvail || chatBusy || chatTranscribing || recording) ? "default" : "pointer",
+                display:"flex", alignItems:"center", justifyContent:"center",
+                boxShadow: chatRecording ? `0 0 12px ${ACCENT}55` : "none",
+                transition:"all 0.15s",
+                position:"relative", flexShrink: 0,
+              }}
+            >
+              {chatTranscribing ? (
+                <div style={{ width:14, height:14, border:`1.5px solid ${ACCENT}44`, borderTopColor:ACCENT, borderRadius:"50%", animation:"spin 0.7s linear infinite" }}/>
+              ) : (
+                <>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={chatRecording ? ACCENT : "currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="2" width="6" height="11" rx="3" fill={chatRecording ? ACCENT : "currentColor"} stroke="none"/>
+                    <path d="M5 10a7 7 0 0 0 14 0"/>
+                    <line x1="12" y1="19" x2="12" y2="22"/>
+                    <line x1="9"  y1="22" x2="15" y2="22"/>
+                  </svg>
+                  {chatRecording && (
+                    <span style={{ position:"absolute", top:6, right:6, width:6, height:6, borderRadius:99, background:PINK, boxShadow:`0 0 6px ${PINK}`, animation:"vPulse 1.2s ease-in-out infinite" }}/>
+                  )}
+                </>
+              )}
+            </button>
+            <button
+              onClick={() => sendChat()}
+              disabled={chatBusy || chatRecording || chatTranscribing || !chatInput.trim()}
+              style={{
+                padding:"0 16px", height: 38, borderRadius:10, border:"none",
+                background: (chatBusy || chatRecording || chatTranscribing || !chatInput.trim()) ? "rgba(255,255,255,0.05)" : `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
+                color: (chatBusy || chatRecording || chatTranscribing || !chatInput.trim()) ? "rgba(255,255,255,0.3)" : "#fff",
+                cursor: (chatBusy || chatRecording || chatTranscribing || !chatInput.trim()) ? "default" : "pointer",
                 fontSize:13, fontWeight:700, letterSpacing:"-0.01em", whiteSpace:"nowrap",
               }}
             >Send</button>
