@@ -21,6 +21,13 @@ type State =
   | { kind: "error"; msg: string }
   | { kind: "ok"; readings: Array<{ t: number; v: number }>; current: { v: number; t: number } | null };
 
+const CARD_STYLE_TAG = `
+  .glev-today-card { height: 220px; }
+  @media (max-width: 768px) {
+    .glev-today-card { height: 300px; }
+  }
+`;
+
 export default function CurrentDayGlucoseCard() {
   const [s, setS] = useState<State>({ kind: "loading" });
   const [flipped, setFlipped] = useState(false);
@@ -86,13 +93,14 @@ export default function CurrentDayGlucoseCard() {
   return (
     <div
       onClick={() => s.kind === "ok" && setFlipped((f) => !f)}
+      className="glev-today-card"
       style={{
         position: "relative",
         cursor: s.kind === "ok" ? "pointer" : "default",
-        height: 220,
         perspective: 1200,
       }}
     >
+      <style>{CARD_STYLE_TAG}</style>
       <div
         style={{
           position: "absolute",
@@ -204,12 +212,14 @@ function Header({
 }
 
 function DayChart({ readings }: { readings: Array<{ t: number; v: number }> }) {
+  // Wider-than-tall but with enough vertical room that the trace stays
+  // readable when the SVG scales to a narrow phone width.
   const W = 720;
-  const H = 140;
-  const padL = 28;
+  const H = 240;
+  const padL = 30;
   const padR = 12;
-  const padT = 10;
-  const padB = 22;
+  const padT = 14;
+  const padB = 28;
 
   const today0 = new Date();
   today0.setHours(0, 0, 0, 0);

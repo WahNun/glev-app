@@ -44,80 +44,109 @@ export default function CgmFetchButton({
   title?: string;
 }) {
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState(false);
+  // `errMsg` is null whenever the last fetch succeeded — even if the value
+  // didn't change. The dot only turns red when we *actually* failed to
+  // contact the CGM (network drop, 4xx/5xx response, missing credentials).
+  const [errMsg, setErrMsg] = useState<string | null>(null);
 
   async function run(e: React.MouseEvent) {
     e.stopPropagation();
     if (loading) return;
     setLoading(true);
     const r = await fetchLatestCgm();
-    setErr(!r.ok);
     setLoading(false);
+    if (r.ok) {
+      // Successful fetch — clear any prior error and let the parent decide
+      // whether to update the displayed glucose. We never overwrite the
+      // displayed value here; the parent compares against its own state.
+      setErrMsg(null);
+    } else {
+      setErrMsg(r.message || "Could not reach the CGM service.");
+    }
     onResult(r);
   }
 
   const small = size === "sm";
+  const hasErr = errMsg != null;
+  const dotColor = hasErr ? PINK : GREEN;
+
   return (
-    <button
-      onClick={run}
-      disabled={loading}
-      title={title}
-      style={{
-        padding: small ? "0 10px" : "0 14px",
-        height: small ? 28 : 36,
-        borderRadius: small ? 8 : 10,
-        border: `1px solid ${ACCENT}44`,
-        background: loading ? "rgba(255,255,255,0.04)" : `${ACCENT}18`,
-        color: ACCENT,
-        cursor: loading ? "default" : "pointer",
-        fontSize: small ? 10 : 11,
-        fontWeight: 700,
-        whiteSpace: "nowrap",
-        letterSpacing: "0.04em",
-        display: "inline-flex",
-        alignItems: "center",
-        gap: small ? 5 : 6,
-        flexShrink: 0,
-      }}
-    >
-      <div
+    <div style={{ display: "inline-flex", flexDirection: "column", gap: 4, alignItems: "flex-start", maxWidth: "100%" }}>
+      <button
+        onClick={run}
+        disabled={loading}
+        title={hasErr ? errMsg! : title}
+        aria-label={hasErr ? `Retry CGM fetch — last error: ${errMsg}` : title}
         style={{
-          width: small ? 6 : 8,
-          height: small ? 6 : 8,
-          borderRadius: "50%",
-          background: err ? PINK : GREEN,
-          boxShadow: `0 0 5px ${err ? PINK : GREEN}88`,
+          padding: small ? "0 10px" : "0 14px",
+          height: small ? 28 : 36,
+          borderRadius: small ? 8 : 10,
+          border: `1px solid ${hasErr ? `${PINK}55` : `${ACCENT}44`}`,
+          background: loading ? "rgba(255,255,255,0.04)" : hasErr ? `${PINK}14` : `${ACCENT}18`,
+          color: hasErr ? PINK : ACCENT,
+          cursor: loading ? "default" : "pointer",
+          fontSize: small ? 10 : 11,
+          fontWeight: 700,
+          whiteSpace: "nowrap",
+          letterSpacing: "0.04em",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: small ? 5 : 6,
           flexShrink: 0,
         }}
-      />
-      {loading ? (
+      >
         <div
           style={{
-            width: small ? 10 : 12,
-            height: small ? 10 : 12,
-            border: `1.5px solid ${ACCENT}44`,
-            borderTopColor: ACCENT,
+            width: small ? 6 : 8,
+            height: small ? 6 : 8,
             borderRadius: "50%",
-            animation: "cgmspin 0.7s linear infinite",
+            background: dotColor,
+            boxShadow: `0 0 5px ${dotColor}88`,
+            flexShrink: 0,
           }}
         />
-      ) : (
-        <svg
-          width={small ? 10 : 12}
-          height={small ? 10 : 12}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke={ACCENT}
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+        {loading ? (
+          <div
+            style={{
+              width: small ? 10 : 12,
+              height: small ? 10 : 12,
+              border: `1.5px solid ${(hasErr ? PINK : ACCENT)}44`,
+              borderTopColor: hasErr ? PINK : ACCENT,
+              borderRadius: "50%",
+              animation: "cgmspin 0.7s linear infinite",
+            }}
+          />
+        ) : (
+          <svg
+            width={small ? 10 : 12}
+            height={small ? 10 : 12}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke={hasErr ? PINK : ACCENT}
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M21 12a9 9 0 1 1-3.1-6.8" />
+            <polyline points="21 4 21 10 15 10" />
+          </svg>
+        )}
+        {label}
+        <style>{`@keyframes cgmspin{to{transform:rotate(360deg)}}`}</style>
+      </button>
+      {hasErr && (
+        <div
+          role="alert"
+          style={{
+            fontSize: small ? 10 : 11,
+            color: PINK,
+            lineHeight: 1.35,
+            maxWidth: 260,
+          }}
         >
-          <path d="M21 12a9 9 0 1 1-3.1-6.8" />
-          <polyline points="21 4 21 10 15 10" />
-        </svg>
+          {errMsg}
+        </div>
       )}
-      {label}
-      <style>{`@keyframes cgmspin{to{transform:rotate(360deg)}}`}</style>
-    </button>
+    </div>
   );
 }

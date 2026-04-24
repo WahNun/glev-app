@@ -126,7 +126,9 @@ function TrendChart({ meals }: { meals: Meal[] }) {
   let last = 110;
   points.forEach(v => { if (v !== null) last = v; filled.push(last); });
 
-  const W = 720, H = 220, padL = 32, padR = 14, padT = 14, padB = 32;
+  // Slightly less elongated viewBox so the chart keeps a useful height
+  // when scaled to the full width of a narrow phone screen.
+  const W = 720, H = 320, padL = 32, padR = 14, padT = 16, padB = 36;
   const mn = 60, mx = 240;
   const toY = (v: number) => padT + (1 - (v - mn) / (mx - mn)) * (H - padT - padB);
   const toX = (i: number) => padL + (i / (DAYS - 1)) * (W - padL - padR);
@@ -167,9 +169,20 @@ function TrendChart({ meals }: { meals: Meal[] }) {
   const inRange = real.filter(p => p.v >= 80 && p.v <= 180).length;
   const tirPct = real.length ? Math.round((inRange / real.length) * 100) : 0;
 
-  const HEIGHT = 360;
+  // Card height: a bit taller on mobile so the chart stays comfortably
+  // readable when stacked under the stat tiles.
   return (
-    <div onClick={() => setFlipped(f => !f)} style={{ position:"relative", height:HEIGHT, perspective:1200, cursor:"pointer" }}>
+    <div
+      onClick={() => setFlipped(f => !f)}
+      className="glev-trend-card"
+      style={{ position:"relative", perspective:1200, cursor:"pointer" }}
+    >
+      <style>{`
+        .glev-trend-card { height: 380px; }
+        @media (max-width: 768px) {
+          .glev-trend-card { height: 420px; }
+        }
+      `}</style>
       <div style={{ position:"absolute", inset:0, transformStyle:"preserve-3d", transition:"transform 0.55s cubic-bezier(0.4,0,0.2,1)", transform:flipped ? "rotateY(180deg)" : "rotateY(0deg)" }}>
         {/* FRONT */}
         <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"20px 24px", boxSizing:"border-box", display:"flex", flexDirection:"column", overflow:"hidden" }}>
@@ -347,18 +360,17 @@ export default function DashboardPage() {
         .glev-dash-grid    { grid-template-columns: repeat(4,1fr) !important; }
         .glev-dash-charts  { grid-template-columns: 3fr 2fr !important; }
         .glev-today-wrap   { display: block; margin-bottom: 22px; }
-        .glev-today-wrap-mobile { display: none; }
         @media (max-width: 768px) {
           .glev-dash-head   { display: none !important; }
           .glev-dash-grid   { grid-template-columns: 1fr !important; gap: 12px !important; }
           .glev-dash-charts { grid-template-columns: 1fr !important; }
-          .glev-today-wrap  { display: none !important; }
-          .glev-today-wrap-mobile { display: block !important; margin-bottom: 14px; }
+          .glev-today-wrap  { margin-bottom: 14px; }
         }
       `}</style>
 
-      {/* MOBILE: today's glucose first */}
-      <div className="glev-today-wrap-mobile">
+      {/* Today's Glucose card — shown identically on mobile and desktop. */}
+      {/* Rendered once to avoid duplicate /api/cgm/history fetches. */}
+      <div className="glev-today-wrap">
         <CurrentDayGlucoseCard/>
       </div>
 

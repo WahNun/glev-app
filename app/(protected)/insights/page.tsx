@@ -541,7 +541,8 @@ function TrendSparkline({ meals }: { meals: Meal[] }) {
   let last = 110;
   raw.forEach(v => { if (v !== null) last = v; filled.push(last); });
 
-  const W = 900, H = 180, pad = 32;
+  // Taller viewBox so the line stays readable on narrow phone widths.
+  const W = 900, H = 280, pad = 36;
   const mn = 70, mx = 230;
   const toY = (v: number) => H - ((v - mn) / (mx - mn)) * (H - pad) - pad/2;
   const toX = (i: number) => (i / (DAYS - 1)) * (W - 2*pad) + pad;
