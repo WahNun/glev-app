@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { fetchMeals, classifyMeal, type Meal } from "@/lib/meals";
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
 import { logDebug } from "@/lib/debug";
 import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
-import EngineLogTab from "@/components/EngineLogTab";
+import { InsulinForm, ExerciseForm } from "@/components/EngineLogTab";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
@@ -119,7 +119,7 @@ function runGlevEngine(
 const CONF_COLOR: Record<string, string> = { HIGH:GREEN, MEDIUM:ORANGE, LOW:PINK };
 
 export default function EnginePage() {
-  const [tab, setTab]         = useState<"engine"|"log">("engine");
+  const [tab, setTab]         = useState<"engine"|"bolus"|"exercise">("engine");
   const [meals, setMeals]     = useState<Meal[]>([]);
   const [insulinLogs, setInsulinLogs] = useState<InsulinLog[]>([]);
   const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([]);
@@ -133,6 +133,88 @@ export default function EnginePage() {
   const [result, setResult]   = useState<Recommendation|null>(null);
   const [running, setRunning] = useState(false);
   const [cgmPulling, setCgmPulling] = useState(false);
+
+  // Voice input state — feeds the macro fields by transcribing → /api/parse-food.
+  const [recording, setRecording]   = useState(false);
+  const [parsing, setParsing]       = useState(false);
+  const [transcript, setTranscript] = useState("");
+  const [voiceErr, setVoiceErr]     = useState("");
+  const [speechAvail, setSpeechAvail] = useState(true);
+  const mediaRecRef    = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const ok = !!(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === "function" && typeof MediaRecorder !== "undefined");
+    if (!ok) setSpeechAvail(false);
+  }, []);
+
+  async function startRecording() {
+    setVoiceErr(""); setTranscript("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const preferred = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/mpeg"]
+        .find(t => MediaRecorder.isTypeSupported(t));
+      const rec = new MediaRecorder(stream, preferred ? { mimeType: preferred } : undefined);
+      rec.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      rec.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const actualType = rec.mimeType || preferred || "audio/webm";
+        const blob = new Blob(audioChunksRef.current, { type: actualType });
+        if (blob.size === 0) return;
+        const ext = actualType.includes("mp4")  ? "m4a"
+                 : actualType.includes("mpeg") ? "mp3"
+                 : actualType.includes("ogg")  ? "ogg"
+                 : "webm";
+        await handleVoice(blob, ext);
+      };
+      rec.start();
+      mediaRecRef.current = rec;
+      setRecording(true);
+    } catch (e) {
+      setVoiceErr(e instanceof Error ? e.message : "Mikrofon-Zugriff fehlgeschlagen.");
+      setRecording(false);
+    }
+  }
+
+  function stopRecording() {
+    mediaRecRef.current?.stop();
+    setRecording(false);
+  }
+
+  async function handleVoice(blob: Blob, ext = "webm") {
+    setParsing(true); setVoiceErr("");
+    try {
+      const fd = new FormData();
+      fd.append("audio", blob, `voice.${ext}`);
+      const tRes = await fetch("/api/transcribe", { method: "POST", body: fd });
+      const tData = await tRes.json();
+      if (!tRes.ok || !tData.text) throw new Error(tData.error || "Empty transcript");
+      const text = tData.text as string;
+      setTranscript(text);
+
+      const pRes = await fetch("/api/parse-food", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      const pData = await pRes.json();
+      const t = pData.totals || {};
+      if (t.carbs   != null) setCarbs(String(t.carbs));
+      if (t.fiber   != null) setFiber(String(t.fiber));
+      if (t.protein != null) setProtein(String(t.protein));
+      if (t.fat     != null) setFat(String(t.fat));
+      if (typeof pData.description === "string" && pData.description.trim()) {
+        setDesc(pData.description.trim());
+      }
+      logDebug("ENGINE.VOICE", { text, totals: t });
+    } catch (e) {
+      setVoiceErr(e instanceof Error ? e.message : "Sprach-Verarbeitung fehlgeschlagen.");
+    } finally {
+      setParsing(false);
+    }
+  }
 
   function handlePullCgm() {
     setCgmPulling(true);
@@ -180,7 +262,9 @@ export default function EnginePage() {
         <p style={{ color:"rgba(255,255,255,0.35)", fontSize:14 }}>
           {tab === "engine"
             ? "AI-powered insulin recommendations from your personal dosing history."
-            : "Log standalone insulin doses and exercise sessions. Pure documentation — no calculations."}
+            : tab === "bolus"
+            ? "Standalone Bolus- und Basal-Dosen dokumentieren. Glev rechnet nichts."
+            : "Sport-Sessions dokumentieren — Glev verknüpft sie mit Glukose-Reaktionen."}
         </p>
       </div>
 
@@ -191,8 +275,9 @@ export default function EnginePage() {
         borderRadius:12, padding:4,
       }}>
         {([
-          { id:"engine" as const, label:"Engine" },
-          { id:"log"    as const, label:"Log" },
+          { id:"engine"   as const, label:"Engine" },
+          { id:"bolus"    as const, label:"Bolus Log" },
+          { id:"exercise" as const, label:"Exercise Log" },
         ]).map(t => {
           const on = tab === t.id;
           return (
@@ -214,6 +299,58 @@ export default function EnginePage() {
       </div>
 
       {tab === "engine" && (<>
+      {/* Voice input — transcribes & auto-fills macros via /api/transcribe → /api/parse-food */}
+      <style>{`
+        @keyframes engVPulse { 0%,100%{opacity:0.35;transform:scale(1)} 50%{opacity:1;transform:scale(1.05)} }
+        @keyframes engSpin   { to { transform: rotate(360deg) } }
+        .eng-mic-btn:hover:not(:disabled) { transform: scale(1.04); }
+      `}</style>
+      <div style={{ ...card, padding:"22px 22px 20px", marginBottom:20 }}>
+        <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:11 }}>
+          <div style={{ position:"relative", width:84, height:84 }}>
+            {recording && <div style={{ position:"absolute", inset:-14, borderRadius:"50%", background:`radial-gradient(circle,${ACCENT}24 0%,transparent 70%)`, animation:"engVPulse 2s ease-in-out infinite", pointerEvents:"none" }}/>}
+            <button
+              className="eng-mic-btn"
+              type="button"
+              onClick={() => recording ? stopRecording() : startRecording()}
+              disabled={parsing || !speechAvail}
+              style={{
+                position:"absolute", inset:0, borderRadius:"50%",
+                border: recording ? `1px solid ${ACCENT}88` : `1px solid rgba(255,255,255,0.08)`,
+                cursor: parsing || !speechAvail ? "default" : "pointer",
+                background: `radial-gradient(circle at 36% 32%, #1e1e2e 0%, #141420 45%, #09090B 100%)`,
+                boxShadow: recording
+                  ? `0 0 0 1px ${ACCENT}55, 0 0 26px ${ACCENT}55, inset 0 0 18px rgba(79,110,247,0.15)`
+                  : `0 5px 20px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06)`,
+                display:"flex", alignItems:"center", justifyContent:"center",
+                transition:"all 0.2s",
+              }}
+            >
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={recording ? ACCENT : "rgba(255,255,255,0.85)"} strokeWidth="2" strokeLinecap="round">
+                <rect x="9" y="2" width="6" height="11" rx="3" fill={recording ? ACCENT : "rgba(255,255,255,0.85)"} stroke="none"/>
+                <path d="M5 10a7 7 0 0 0 14 0"/>
+                <line x1="12" y1="19" x2="12" y2="22"/>
+                <line x1="9"  y1="22" x2="15" y2="22"/>
+              </svg>
+            </button>
+          </div>
+          <div style={{ fontSize:11, fontWeight:600, letterSpacing:"0.12em", color: recording ? ACCENT : parsing ? ORANGE : "rgba(255,255,255,0.45)" }}>
+            {recording ? "LISTENING…" : parsing ? "PARSING…" : speechAvail ? "TAP TO SPEAK" : "VOICE UNAVAILABLE"}
+          </div>
+          {transcript ? (
+            <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)", fontStyle:"italic", textAlign:"center", lineHeight:1.5, padding:"7px 12px", background:"rgba(255,255,255,0.03)", borderRadius:8, border:"1px solid rgba(255,255,255,0.06)", maxWidth:480 }}>
+              &quot;{transcript}&quot;
+            </div>
+          ) : (
+            <div style={{ fontSize:10, color:"rgba(255,255,255,0.22)", letterSpacing:"0.06em", textAlign:"center" }}>
+              z. B. &quot;Pasta mit Tomatensauce, 80 g Nudeln und ein Apfel&quot;
+            </div>
+          )}
+          {voiceErr && <div style={{ fontSize:11, color:PINK }}>{voiceErr}</div>}
+          {!speechAvail && !voiceErr && <div style={{ fontSize:11, color:ORANGE }}>Sprach-Eingabe wird in diesem Browser nicht unterstützt.</div>}
+        </div>
+      </div>
+
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20, marginBottom:20 }}>
         <div style={card}>
           <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>Current Conditions</div>
@@ -428,7 +565,8 @@ export default function EnginePage() {
       )}
       </>)}
 
-      {tab === "log" && <EngineLogTab />}
+      {tab === "bolus"    && <InsulinForm />}
+      {tab === "exercise" && <ExerciseForm />}
     </div>
   );
 }

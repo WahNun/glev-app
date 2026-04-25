@@ -183,7 +183,7 @@ function Header({
         {current && (
           <div style={{ textAlign: "right" }}>
             <div style={{ fontSize: 9, color: "rgba(255,255,255,0.35)", letterSpacing: "0.08em", fontWeight: 600 }}>NOW</div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: c, letterSpacing: "-0.03em", lineHeight: 1, fontFamily: "var(--font-mono)" }}>
+            <div style={{ fontSize: 26, fontWeight: 800, color: c, letterSpacing: "-0.03em", lineHeight: 1 }}>
               {Math.round(current.v)}
               <span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", fontWeight: 500, marginLeft: 4 }}>mg/dL</span>
             </div>
@@ -306,14 +306,14 @@ function DayChart({ readings }: { readings: Array<{ t: number; v: number }> }) {
           {yTicks.map((v) => (
             <g key={v}>
               <line x1={padL} y1={toY(v)} x2={W - padR} y2={toY(v)} stroke="rgba(255,255,255,0.05)" strokeDasharray="3 4" />
-              <text x={padL - 5} y={toY(v) + 3} textAnchor="end" fontSize="10" fill="rgba(255,255,255,0.25)" fontFamily="var(--font-mono)">{v}</text>
+              <text x={padL - 5} y={toY(v) + 3} textAnchor="end" fontSize="10" fill="rgba(255,255,255,0.25)">{v}</text>
             </g>
           ))}
           {/* X hour labels */}
           {hourLabels.map((h) => {
             const t = dayStart + h * 3600 * 1000;
             return (
-              <text key={h} x={toX(t)} y={H - 6} textAnchor="middle" fontSize="10" fill="rgba(255,255,255,0.25)" fontFamily="var(--font-mono)">
+              <text key={h} x={toX(t)} y={H - 6} textAnchor="middle" fontSize="10" fill="rgba(255,255,255,0.25)">
                 {h.toString().padStart(2, "0")}
               </text>
             );
@@ -376,7 +376,7 @@ function BackStats({ readings }: { readings: Array<{ t: number; v: number }> }) 
         {stats.map((s) => (
           <div key={s.l} style={{ background: "rgba(255,255,255,0.025)", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "8px 10px", display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0 }}>
             <div style={{ fontSize: 9, color: "rgba(255,255,255,0.4)", letterSpacing: "0.07em", fontWeight: 600, marginBottom: 4, textTransform: "uppercase" }}>{s.l}</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: s.c || "rgba(255,255,255,0.9)", letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "var(--font-mono)" }}>{s.v}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: s.c || "rgba(255,255,255,0.9)", letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.v}</div>
           </div>
         ))}
       </div>

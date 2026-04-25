@@ -135,7 +135,7 @@ function StatusBanner({ status, accent }: { status: Status; accent: string }) {
   );
 }
 
-function InsulinForm() {
+export function InsulinForm() {
   const [type, setType] = useState<"bolus" | "basal">("bolus");
   const [name, setName] = useState("");
   const [units, setUnits] = useState("");
@@ -263,7 +263,7 @@ function InsulinForm() {
   );
 }
 
-function ExerciseForm() {
+export function ExerciseForm() {
   const [type, setType] = useState<"hypertrophy" | "cardio">("hypertrophy");
   const [duration, setDuration] = useState("");
   const [intensity, setIntensity] = useState<"low" | "medium" | "high">("medium");

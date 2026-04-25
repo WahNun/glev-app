@@ -138,7 +138,6 @@ export default function GlucoseTrendFront({
                   color: recentColor,
                   letterSpacing: "-0.03em",
                   lineHeight: 1,
-                  fontFamily: "var(--font-mono)",
                 }}
               >
                 {recentAvg}
@@ -187,7 +186,7 @@ export default function GlucoseTrendFront({
                   stroke="rgba(255,255,255,0.05)"
                   strokeDasharray="3 4"
                 />
-                <text x={padL - 5} y={toY(v) + 4} textAnchor="end" fontSize="10" fill="rgba(255,255,255,0.25)" fontFamily="var(--font-mono)">
+                <text x={padL - 5} y={toY(v) + 4} textAnchor="end" fontSize="10" fill="rgba(255,255,255,0.25)">
                   {v}
                 </text>
               </g>
@@ -222,7 +221,6 @@ export default function GlucoseTrendFront({
                   fontSize="10"
                   fill={ORANGE}
                   fontWeight="700"
-                  fontFamily="var(--font-mono)"
                 >
                   ↑ {Math.round(hiPt.v)}
                 </text>
@@ -238,7 +236,6 @@ export default function GlucoseTrendFront({
                   fontSize="10"
                   fill={PINK}
                   fontWeight="700"
-                  fontFamily="var(--font-mono)"
                 >
                   ↓ {Math.round(loPt.v)}
                 </text>
@@ -254,7 +251,6 @@ export default function GlucoseTrendFront({
                   textAnchor="middle"
                   fontSize="10"
                   fill="rgba(255,255,255,0.28)"
-                  fontFamily="var(--font-mono)"
                 >
                   {new Date(d).toLocaleDateString("en", { month: "short", day: "numeric" })}
                 </text>
