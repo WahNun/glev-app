@@ -241,8 +241,8 @@ export default function Home() {
                 gap: 12,
               }}
             >
-              <Link
-                href="/login"
+              <a
+                href="mailto:hello@glev.app?subject=Glev%20Waitlist&body=Ich%20m%C3%B6chte%20auf%20die%20Glev%20Warteliste."
                 className="glev-cta-primary"
                 style={{
                   padding: "14px 22px",
@@ -259,15 +259,15 @@ export default function Home() {
                   boxShadow: `0 6px 18px ${ACCENT}40`,
                 }}
               >
-                App öffnen
+                Reserviere deinen Platz
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="5" y1="12" x2="19" y2="12" />
                   <polyline points="13 6 19 12 13 18" />
                 </svg>
-              </Link>
+              </a>
 
               <Link
-                href="/brand"
+                href="/login"
                 className="glev-cta-ghost"
                 style={{
                   padding: "14px 22px",
@@ -283,7 +283,7 @@ export default function Home() {
                   gap: 8,
                 }}
               >
-                Brand-System
+                App öffnen
               </Link>
             </div>
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { fetchMeals, deleteMeal, updateMealReadings, type Meal } from "@/lib/meals";
-import { fetchRecentInsulinLogs, deleteInsulinLog, type InsulinLog } from "@/lib/insulin";
+import { fetchRecentInsulinLogs, deleteInsulinLog, updateInsulinReadings, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, deleteExerciseLog, type ExerciseLog } from "@/lib/exercise";
 import { evaluateExercise, exerciseTypeLabel, patternNote, interimMessage, finalMessage, deltaColor } from "@/lib/exerciseEval";
 import {
@@ -1078,6 +1078,90 @@ function NonMealRow({
   );
 }
 
+// ──────────────── Manual backfill for Bolus / Basal post-checkpoints ────────────────
+// Lets the user enter a meter reading when the auto-fetch worker either
+// never had data (CGM disconnected, history older than ~12h) or the job
+// timed out before the user opened the app. Shows one input per slot
+// where the current value is null AND we're within 30 min of the
+// expected time or past it. Mirrors LifecycleBlock for meals.
+type BackfillField = "after_1h" | "after_2h" | "after_12h" | "after_24h";
+function InsulinReadingsBackfill({ logId, slots }: {
+  logId: string;
+  slots: Array<{
+    label: string;        // e.g. "1H reading"
+    field: BackfillField;
+    expectedAt: Date;
+    currentValue: number | null;
+  }>;
+}) {
+  const [inputs, setInputs] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<BackfillField | null>(null);
+  const [err,  setErr]  = useState<string | null>(null);
+
+  // Surface inputs once we're within 30 min of the expected time —
+  // matches the meal LifecycleBlock grace window.
+  const GRACE_MS = 30 * 60_000;
+  const visible = slots.filter(s =>
+    s.currentValue == null && Date.now() >= s.expectedAt.getTime() - GRACE_MS
+  );
+  if (visible.length === 0) return null;
+
+  async function save(s: typeof slots[number]) {
+    const raw = (inputs[s.field] ?? "").trim();
+    const n = raw === "" ? null : Number(raw);
+    if (n != null && (!Number.isFinite(n) || n < 30 || n > 600)) {
+      setErr("Enter a glucose value between 30 and 600 mg/dL.");
+      return;
+    }
+    setBusy(s.field); setErr(null);
+    try {
+      await updateInsulinReadings(logId, { [s.field]: n });
+      // Trigger the entry-page refresh so the new value flows into the
+      // expanded view, evaluation copy, and outcome badge.
+      window.dispatchEvent(new CustomEvent("glev:insulin-updated"));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not save reading.");
+    } finally { setBusy(null); }
+  }
+
+  return (
+    <div style={{
+      background: "rgba(255,255,255,0.02)",
+      border: `1px solid ${BORDER}`,
+      borderRadius: 10,
+      padding: "10px 12px",
+      display: "flex",
+      flexDirection: "column",
+      gap: 8,
+    }}>
+      <div style={{ fontSize:9, color:"rgba(255,255,255,0.45)", letterSpacing:"0.08em", fontWeight:600 }}>
+        MANUAL OVERRIDE
+      </div>
+      <div style={{ fontSize:11, color:"rgba(255,255,255,0.55)", lineHeight:1.5 }}>
+        Auto-fetch couldn't pull from your CGM. Enter the meter reading and we'll backfill the entry.
+      </div>
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: visible.length > 1 ? "repeat(2,1fr)" : "1fr",
+        gap: 8,
+      }}>
+        {visible.map(s => (
+          <ReadingInput
+            key={s.field}
+            label={s.label}
+            value={inputs[s.field] ?? ""}
+            onChange={(v) => setInputs(prev => ({ ...prev, [s.field]: v }))}
+            onSave={() => save(s)}
+            busy={busy === s.field}
+            placeholder="mg/dL"
+          />
+        ))}
+      </div>
+      {err && <div style={{ fontSize:11, color:PINK }}>{err}</div>}
+    </div>
+  );
+}
+
 // ──────────────── BOLUS — full expanded view with badge ────────────────
 function BolusRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
   log: InsulinLog;
@@ -1155,6 +1239,17 @@ function BolusRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
                 <BolusDeltaPill label="Δ AT LOG → +2H" delta={d2h}/>
               </div>
             )}
+            {/* Manual backfill — appears once expected time has passed
+                and the auto-fetch hasn't filled in the value yet. */}
+            <div style={{ marginTop:8 }}>
+              <InsulinReadingsBackfill
+                logId={log.id}
+                slots={[
+                  { label:"1H reading", field:"after_1h", expectedAt:expect1h, currentValue:at1h },
+                  { label:"2H reading", field:"after_2h", expectedAt:expect2h, currentValue:at2h },
+                ]}
+              />
+            </div>
           </ExPanel>
 
           {/* 3) Evaluation panel ----------------------------------- */}
@@ -1354,6 +1449,17 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
                 label="BG +24H"
                 value={at24h != null ? `${Math.round(at24h)} mg/dL` : pendingLabel(expect24h)}
                 color={at24h != null ? undefined : "rgba(255,255,255,0.4)"}
+              />
+            </div>
+            {/* Manual backfill — appears once expected time has passed
+                and the auto-fetch hasn't filled in the value yet. */}
+            <div style={{ marginTop:8 }}>
+              <InsulinReadingsBackfill
+                logId={log.id}
+                slots={[
+                  { label:"12H reading", field:"after_12h", expectedAt:expect12h, currentValue:at12h },
+                  { label:"24H reading", field:"after_24h", expectedAt:expect24h, currentValue:at24h },
+                ]}
               />
             </div>
           </ExPanel>

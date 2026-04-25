@@ -83,3 +83,33 @@ export async function deleteInsulinLog(id: string): Promise<void> {
   const { error } = await supabase.from("insulin_logs").delete().eq("id", id);
   if (error) throw error;
 }
+
+/**
+ * Manual backfill for the post-fetch CGM readings on a Bolus or Basal log.
+ *
+ * Used by the entries-page expand views when the auto-fetch worker
+ * either never had data (CGM disconnected, history too short) or the
+ * job timed out before the user opened the app. The user enters the
+ * BG from their meter, and we write it directly to the same column
+ * the auto-fetch worker would have populated. Pass `null` to clear a
+ * value. Only the keys present in `readings` are touched.
+ */
+export async function updateInsulinReadings(
+  id: string,
+  readings: {
+    after_1h?: number | null;
+    after_2h?: number | null;
+    after_12h?: number | null;
+    after_24h?: number | null;
+  },
+): Promise<void> {
+  if (!supabase) throw new Error("Supabase is not configured");
+  const patch: Record<string, unknown> = {};
+  if (readings.after_1h  !== undefined) patch.glucose_after_1h  = readings.after_1h;
+  if (readings.after_2h  !== undefined) patch.glucose_after_2h  = readings.after_2h;
+  if (readings.after_12h !== undefined) patch.glucose_after_12h = readings.after_12h;
+  if (readings.after_24h !== undefined) patch.glucose_after_24h = readings.after_24h;
+  if (Object.keys(patch).length === 0) return;
+  const { error } = await supabase.from("insulin_logs").update(patch).eq("id", id);
+  if (error) throw new Error(error.message);
+}

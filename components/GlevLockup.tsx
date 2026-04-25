@@ -7,7 +7,7 @@ export default function GlevLockup({
   color = "#fff",
   symbolColor = "#4F6EF7",
   symbolBg = "#0F0F14",
-  showDot = false,
+  showDot = true,
   dotColor = "#22D3A0",
   gap,
   style,
