@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { fetchMeals, deleteMeal, updateMealReadings, type Meal } from "@/lib/meals";
 import { fetchRecentInsulinLogs, deleteInsulinLog, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, deleteExerciseLog, type ExerciseLog } from "@/lib/exercise";
@@ -17,8 +17,73 @@ const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
 function evC(ev: string|null) { return getEvalColor(ev); }
 function evL(ev: string|null) { return getEvalLabel(ev); }
 
-const FILTERS = ["All","Bolus","Basal","Exercise","GOOD","UNDERDOSE","OVERDOSE","SPIKE"] as const;
-type FilterKey = typeof FILTERS[number];
+// Multi-select filter sections. Selections are AND-ed across sections; OR-ed
+// within a section. Meal-kind / outcome implicitly restrict to meal rows;
+// exercise-kind implicitly restricts to exercise rows.
+type EntryTypeKey   = "meal" | "bolus" | "basal" | "exercise";
+type MealKindKey    = "FAST_CARBS" | "HIGH_PROTEIN" | "HIGH_FAT" | "BALANCED";
+type ExerciseKindKey = "cardio" | "hypertrophy";
+type OutcomeKey     = "GOOD" | "UNDERDOSE" | "OVERDOSE" | "SPIKE";
+
+interface FilterState {
+  entryType:    EntryTypeKey[];
+  mealKind:     MealKindKey[];
+  exerciseKind: ExerciseKindKey[];
+  outcome:      OutcomeKey[];
+}
+
+const EMPTY_FILTERS: FilterState = { entryType: [], mealKind: [], exerciseKind: [], outcome: [] };
+
+const ENTRY_TYPE_OPTIONS: { value: EntryTypeKey; label: string }[] = [
+  { value: "meal",     label: "Meal" },
+  { value: "bolus",    label: "Bolus" },
+  { value: "basal",    label: "Basal" },
+  { value: "exercise", label: "Exercise" },
+];
+const MEAL_KIND_OPTIONS: { value: MealKindKey; label: string }[] = [
+  { value: "FAST_CARBS",   label: "Fast Carbs" },
+  { value: "HIGH_PROTEIN", label: "High Protein" },
+  { value: "HIGH_FAT",     label: "High Fat" },
+  { value: "BALANCED",     label: "Balanced" },
+];
+const EXERCISE_KIND_OPTIONS: { value: ExerciseKindKey; label: string }[] = [
+  { value: "cardio",      label: "Cardio" },
+  { value: "hypertrophy", label: "Hypertrophy" },
+];
+const OUTCOME_OPTIONS: { value: OutcomeKey; label: string }[] = [
+  { value: "GOOD",      label: "Good" },
+  { value: "UNDERDOSE", label: "Under Dose" },
+  { value: "OVERDOSE",  label: "Over Dose" },
+  { value: "SPIKE",     label: "Spike" },
+];
+
+const FILTERS_STORAGE_KEY = "glev:entries-filters";
+const LEGACY_FILTER_KEY   = "glev:entries-filter";
+
+function totalActive(f: FilterState) {
+  return f.entryType.length + f.mealKind.length + f.exerciseKind.length + f.outcome.length;
+}
+
+function parseStoredFilters(raw: string | null): FilterState {
+  if (!raw) return EMPTY_FILTERS;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return EMPTY_FILTERS;
+    const pickArr = <T extends string>(input: unknown, allowed: readonly T[]): T[] => {
+      if (!Array.isArray(input)) return [];
+      const set = new Set(allowed as readonly string[]);
+      return input.filter((v): v is T => typeof v === "string" && set.has(v));
+    };
+    return {
+      entryType:    pickArr<EntryTypeKey>(parsed.entryType,       ENTRY_TYPE_OPTIONS.map(o => o.value)),
+      mealKind:     pickArr<MealKindKey>(parsed.mealKind,         MEAL_KIND_OPTIONS.map(o => o.value)),
+      exerciseKind: pickArr<ExerciseKindKey>(parsed.exerciseKind, EXERCISE_KIND_OPTIONS.map(o => o.value)),
+      outcome:      pickArr<OutcomeKey>(parsed.outcome,           OUTCOME_OPTIONS.map(o => o.value)),
+    };
+  } catch {
+    return EMPTY_FILTERS;
+  }
+}
 
 type Row =
   | { kind: "meal"; id: string; ts: string; data: Meal }
@@ -31,24 +96,60 @@ export default function EntriesPage() {
   const [insulin, setInsulin] = useState<InsulinLog[]>([]);
   const [exercise, setExercise] = useState<ExerciseLog[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter]   = useState<FilterKey>("All");
+  const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [search, setSearch]   = useState("");
   const [expanded, setExpanded] = useState<string|null>(null);
   const [deleting, setDeleting] = useState<string|null>(null);
   const [manualOpen, setManualOpen] = useState(false);
+  const filtersWrapRef = useRef<HTMLDivElement>(null);
 
-  // Restore filter from sessionStorage (per-tab persistence) on first mount.
+  // Restore filters from sessionStorage (per-tab persistence) on first mount.
+  // Old single-string values from the previous chip-bar shape are discarded.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const saved = sessionStorage.getItem("glev:entries-filter");
-    if (saved && (FILTERS as readonly string[]).includes(saved)) {
-      setFilter(saved as FilterKey);
+    const raw = sessionStorage.getItem(FILTERS_STORAGE_KEY);
+    setFilters(parseStoredFilters(raw));
+    // One-time cleanup of the legacy key so it doesn't linger forever.
+    if (sessionStorage.getItem(LEGACY_FILTER_KEY) != null) {
+      sessionStorage.removeItem(LEGACY_FILTER_KEY);
     }
   }, []);
   useEffect(() => {
     if (typeof window === "undefined") return;
-    sessionStorage.setItem("glev:entries-filter", filter);
-  }, [filter]);
+    sessionStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filters));
+  }, [filters]);
+
+  // Close the filter panel on outside click or Escape.
+  useEffect(() => {
+    if (!filtersOpen) return;
+    function onDown(e: MouseEvent) {
+      if (!filtersWrapRef.current) return;
+      if (!filtersWrapRef.current.contains(e.target as Node)) setFiltersOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setFiltersOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [filtersOpen]);
+
+  function toggleFilter<K extends keyof FilterState>(section: K, value: FilterState[K][number]) {
+    setFilters(prev => {
+      const list = prev[section] as string[];
+      const has = list.includes(value as string);
+      const next = has ? list.filter(v => v !== value) : [...list, value as string];
+      return { ...prev, [section]: next } as FilterState;
+    });
+  }
+  function clearAllFilters() {
+    setFilters(EMPTY_FILTERS);
+  }
+  const activeCount = totalActive(filters);
 
   // Meal rows expand directly into the full detail body (no intermediate
   // "light" summary). Bolus / basal / exercise rows have their own
@@ -152,22 +253,36 @@ export default function EntriesPage() {
     return all;
   }, [meals, insulin, exercise]);
 
-  const isOutcomeFilter = filter === "GOOD" || filter === "UNDERDOSE" || filter === "OVERDOSE" || filter === "SPIKE";
-
   const filtered = rows.filter(r => {
-    // Type filters
-    if (filter === "Bolus" && r.kind !== "bolus") return false;
-    if (filter === "Basal" && r.kind !== "basal") return false;
-    if (filter === "Exercise" && r.kind !== "exercise") return false;
-    // Outcome filters — only meal rows carry outcomes
-    if (isOutcomeFilter) {
+    // Entry-type — restricts by row kind directly.
+    if (filters.entryType.length > 0 && !filters.entryType.includes(r.kind as EntryTypeKey)) return false;
+
+    // Meal-kind — implicitly restricts to meal rows.
+    if (filters.mealKind.length > 0) {
+      if (r.kind !== "meal") return false;
+      const mt = r.data.meal_type as MealKindKey | null;
+      if (!mt || !filters.mealKind.includes(mt)) return false;
+    }
+
+    // Exercise-kind — implicitly restricts to exercise rows.
+    if (filters.exerciseKind.length > 0) {
+      if (r.kind !== "exercise") return false;
+      const ek = r.data.exercise_type as ExerciseKindKey;
+      if (!filters.exerciseKind.includes(ek)) return false;
+    }
+
+    // Outcome — implicitly restricts to meal rows.
+    if (filters.outcome.length > 0) {
       if (r.kind !== "meal") return false;
       const ev = r.data.evaluation;
-      const ok = ev === filter
-        || (filter === "OVERDOSE" && ev === "HIGH")
-        || (filter === "UNDERDOSE" && ev === "LOW");
-      if (!ok) return false;
+      const matches = filters.outcome.some(o =>
+        ev === o
+        || (o === "OVERDOSE"  && ev === "HIGH")
+        || (o === "UNDERDOSE" && ev === "LOW")
+      );
+      if (!matches) return false;
     }
+
     // Search across whatever text the row carries
     if (search) {
       const q = search.toLowerCase();
@@ -224,20 +339,102 @@ export default function EntriesPage() {
 
       {/* FILTERS + SEARCH */}
       <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:20 }}>
-        <style>{`
-          .glev-filter-bar { display:flex; gap:6px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding-bottom:2px; }
-          .glev-filter-bar::-webkit-scrollbar { display:none; }
-          .glev-filter-bar > button { flex-shrink:0; }
-        `}</style>
-        <div className="glev-filter-bar">
-          {FILTERS.map(f => (
-            <button key={f} onClick={() => setFilter(f)} style={{
-              padding:"7px 14px", borderRadius:99, border:`1px solid ${filter===f ? ACCENT+"60" : BORDER}`,
-              background:filter===f ? `${ACCENT}18` : "transparent",
-              color:filter===f ? ACCENT : "rgba(255,255,255,0.4)",
-              fontSize:12, fontWeight:filter===f?600:400, cursor:"pointer", whiteSpace:"nowrap",
-            }}>{f}</button>
-          ))}
+        <div ref={filtersWrapRef} style={{ position:"relative" }}>
+          <button
+            onClick={() => setFiltersOpen(v => !v)}
+            aria-expanded={filtersOpen}
+            aria-haspopup="dialog"
+            style={{
+              padding:"7px 14px",
+              borderRadius:99,
+              border:`1px solid ${activeCount > 0 ? ACCENT+"60" : BORDER}`,
+              background: activeCount > 0 ? `${ACCENT}18` : "transparent",
+              color: activeCount > 0 ? ACCENT : "rgba(255,255,255,0.55)",
+              fontSize:12,
+              fontWeight: activeCount > 0 ? 600 : 500,
+              cursor:"pointer",
+              display:"inline-flex", alignItems:"center", gap:8,
+              whiteSpace:"nowrap",
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+            </svg>
+            <span>Filters{activeCount > 0 ? ` · ${activeCount}` : ""}</span>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ transform: filtersOpen ? "rotate(180deg)" : "rotate(0deg)", transition:"transform 0.15s" }}>
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+
+          {filtersOpen && (
+            <div
+              role="dialog"
+              aria-label="Filter entries"
+              style={{
+                position:"absolute",
+                top:"calc(100% + 8px)",
+                left:0,
+                zIndex:30,
+                width:"min(360px, calc(100vw - 32px))",
+                maxHeight:"min(70vh, 520px)",
+                overflowY:"auto",
+                background:SURFACE,
+                border:`1px solid ${BORDER}`,
+                borderRadius:14,
+                boxShadow:"0 12px 32px rgba(0,0,0,0.45)",
+                padding:14,
+                display:"flex", flexDirection:"column", gap:14,
+              }}
+            >
+              <FilterSection
+                title="Entry type"
+                options={ENTRY_TYPE_OPTIONS}
+                selected={filters.entryType}
+                onToggle={(v) => toggleFilter("entryType", v)}
+              />
+              <FilterSection
+                title="Meal kind"
+                options={MEAL_KIND_OPTIONS}
+                selected={filters.mealKind}
+                onToggle={(v) => toggleFilter("mealKind", v)}
+              />
+              <FilterSection
+                title="Exercise kind"
+                options={EXERCISE_KIND_OPTIONS}
+                selected={filters.exerciseKind}
+                onToggle={(v) => toggleFilter("exerciseKind", v)}
+              />
+              <FilterSection
+                title="Outcome"
+                options={OUTCOME_OPTIONS}
+                selected={filters.outcome}
+                onToggle={(v) => toggleFilter("outcome", v)}
+              />
+
+              {activeCount > 0 && (
+                <div style={{ display:"flex", justifyContent:"flex-end", paddingTop:4, borderTop:`1px solid ${BORDER}` }}>
+                  <button
+                    onClick={clearAllFilters}
+                    style={{
+                      marginTop:8,
+                      padding:"7px 14px",
+                      borderRadius:99,
+                      border:`1px solid ${PINK}40`,
+                      background:`${PINK}10`,
+                      color:PINK,
+                      fontSize:12, fontWeight:600, cursor:"pointer",
+                      display:"inline-flex", alignItems:"center", gap:6,
+                    }}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                    Clear filters
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <input style={{ ...inp, width:"100%", boxSizing:"border-box" }} placeholder="Search entries…" value={search} onChange={e => setSearch(e.target.value)}/>
       </div>
@@ -988,6 +1185,57 @@ function Detail({ label, value, color }: { label: string; value: string; color?:
     <div style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
       <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{label}</div>
       <div style={{ fontSize:14, fontWeight:700, color: color || "rgba(255,255,255,0.9)", letterSpacing:"-0.01em" }}>{value}</div>
+    </div>
+  );
+}
+
+function FilterSection<T extends string>({
+  title, options, selected, onToggle,
+}: {
+  title: string;
+  options: { value: T; label: string }[];
+  selected: T[];
+  onToggle: (value: T) => void;
+}) {
+  return (
+    <div>
+      <div style={{ fontSize:9, color:"rgba(255,255,255,0.45)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8, textTransform:"uppercase" }}>
+        {title}
+      </div>
+      <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+        {options.map(opt => {
+          const active = selected.includes(opt.value);
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              role="checkbox"
+              aria-checked={active}
+              onClick={() => onToggle(opt.value)}
+              style={{
+                padding:"6px 12px",
+                borderRadius:99,
+                border:`1px solid ${active ? ACCENT+"60" : BORDER}`,
+                background: active ? `${ACCENT}18` : "transparent",
+                color: active ? ACCENT : "rgba(255,255,255,0.55)",
+                fontSize:12,
+                fontWeight: active ? 600 : 500,
+                cursor:"pointer",
+                whiteSpace:"nowrap",
+                display:"inline-flex", alignItems:"center", gap:6,
+                transition:"background 0.12s, color 0.12s, border-color 0.12s",
+              }}
+            >
+              {active && (
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+              )}
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
