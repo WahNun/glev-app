@@ -279,8 +279,22 @@ export function InsulinForm() {
 // the picker only shows the new set so going forward all rows use it.
 const EXERCISE_TYPE_OPTIONS: ExerciseType[] = ["cardio", "strength", "hiit", "yoga", "cycling", "run"];
 
+// Retroactive-start choices. Selecting anything other than "Now"
+// shifts the reference time the CGM scheduler uses to compute the
+// at-end and +1h fetches, so workouts that already ended can still
+// be evaluated from CGM history. Capped at 3 h to match the process
+// route's exercise abandon window.
+const STARTED_OPTIONS: { value: number; label: string }[] = [
+  { value: 0,   label: "Now" },
+  { value: 30,  label: "30m" },
+  { value: 60,  label: "1h" },
+  { value: 120, label: "2h" },
+  { value: 180, label: "3h" },
+];
+
 export function ExerciseForm() {
   const [type, setType] = useState<ExerciseType>("cardio");
+  const [startedMinAgo, setStartedMinAgo] = useState<number>(0);
   const [duration, setDuration] = useState("");
   const [intensity, setIntensity] = useState<"low" | "medium" | "high">("medium");
   const [notes, setNotes] = useState("");
@@ -288,6 +302,12 @@ export function ExerciseForm() {
 
   const d = parseInt(duration, 10);
   const valid = Number.isFinite(d) && d > 0 && d <= 600;
+
+  // Compute the actual workout start instant for the submit confirmation
+  // and the CGM scheduler. For "Now" this equals submit time.
+  function computeStartIso(): string {
+    return new Date(Date.now() - startedMinAgo * 60_000).toISOString();
+  }
 
   async function handleSubmit() {
     if (!valid) return;
@@ -301,23 +321,30 @@ export function ExerciseForm() {
         cgm_glucose_at_log: cgm,
         notes: notes.trim() || null,
       });
-      // Schedule post-fetches: at workout end (now + duration), and +1h after end.
-      const refEx = insertedEx?.created_at || new Date().toISOString();
+      // Schedule post-fetches: at workout end (start + duration), and
+      // +1h after end. For retroactive logs, refTime is shifted into
+      // the past so the at-end fetch can resolve immediately from CGM
+      // history.
+      const refIso = computeStartIso();
       void scheduleJobsForLog({
         logId: insertedEx.id,
         logType: "exercise",
-        refTimeIso: refEx,
+        refTimeIso: refIso,
         durationMinutes: d,
       });
       const typeLabel = exerciseTypeLabel(type);
+      const startedLabel = startedMinAgo === 0
+        ? ""
+        : ` (gestartet vor ${STARTED_OPTIONS.find(o => o.value === startedMinAgo)?.label})`;
       setStatus({
         kind: "ok",
         message: cgm != null
-          ? `Geloggt — ${d} min ${typeLabel} (${intensity}) bei ${Math.round(cgm)} mg/dL.`
-          : `Geloggt — ${d} min ${typeLabel} (${intensity}). Kein CGM-Wert verfügbar.`,
+          ? `Geloggt — ${d} min ${typeLabel} (${intensity})${startedLabel} bei ${Math.round(cgm)} mg/dL.`
+          : `Geloggt — ${d} min ${typeLabel} (${intensity})${startedLabel}. Kein CGM-Wert verfügbar.`,
       });
       setDuration("");
       setNotes("");
+      setStartedMinAgo(0);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Unbekannter Fehler";
       setStatus({ kind: "error", message: `Speichern fehlgeschlagen: ${msg}` });
@@ -375,6 +402,46 @@ export function ExerciseForm() {
                   }}
                 >
                   {exerciseTypeLabel(opt)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div>
+          <label style={labelStyle}>Gestartet</label>
+          {/* Retroactive start picker — shifts the CGM scheduler's
+              reference time so a workout already finished can still
+              be evaluated from CGM history within the 3 h window. */}
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(${STARTED_OPTIONS.length}, 1fr)`,
+            gap: 6,
+            background: "#0D0D12",
+            border: `1px solid ${BORDER}`,
+            borderRadius: 12,
+            padding: 4,
+          }}>
+            {STARTED_OPTIONS.map(opt => {
+              const on = opt.value === startedMinAgo;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setStartedMinAgo(opt.value)}
+                  style={{
+                    padding: "9px 10px",
+                    borderRadius: 8,
+                    border: "none",
+                    background: on ? `${ORANGE}22` : "transparent",
+                    color: on ? ORANGE : "rgba(255,255,255,0.55)",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    letterSpacing: "-0.01em",
+                    cursor: "pointer",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  {opt.value === 0 ? "Jetzt" : `vor ${opt.label}`}
                 </button>
               );
             })}

@@ -89,11 +89,38 @@ export async function POST(req: NextRequest) {
   // 1) Try an immediate "before" fetch from the CGM. If the user has no
   //    CGM connected or the upstream errors out, we just skip — the post
   //    jobs are still scheduled.
+  //
+  //    Retroactive logs (refTime more than ~5 min in the past) take the
+  //    nearest CGM history reading to refTime instead of the live
+  //    "current" value, so a workout logged after the fact gets a
+  //    sensible "before" anchor.
   let glucoseAtLog: number | null = null;
+  const nowMs = Date.now();
+  const refMs = refTime.getTime();
+  const RETRO_THRESHOLD_MS = 5 * 60_000;
+  const HISTORY_WINDOW_MS  = 10 * 60_000;
   try {
     const out = await getHistory(user.id);
-    const v = out?.current?.value;
-    if (typeof v === "number" && Number.isFinite(v)) glucoseAtLog = v;
+    if (nowMs - refMs > RETRO_THRESHOLD_MS) {
+      // Retroactive — match nearest history point within ±10min of refTime.
+      const hist = out?.history || [];
+      let best: { value: number; dt: number } | null = null;
+      for (const h of hist) {
+        const v = (h as { value?: unknown })?.value;
+        const tRaw = (h as { timestamp?: unknown; time?: unknown })?.timestamp
+                  ?? (h as { time?: unknown })?.time;
+        if (typeof v !== "number" || !Number.isFinite(v)) continue;
+        const tMs = typeof tRaw === "number" ? tRaw : Date.parse(String(tRaw));
+        if (!Number.isFinite(tMs)) continue;
+        const dt = Math.abs(tMs - refMs);
+        if (dt > HISTORY_WINDOW_MS) continue;
+        if (!best || dt < best.dt) best = { value: v, dt };
+      }
+      if (best) glucoseAtLog = best.value;
+    } else {
+      const v = out?.current?.value;
+      if (typeof v === "number" && Number.isFinite(v)) glucoseAtLog = v;
+    }
   } catch (e) {
     // Upstream failure (no creds, network, etc.) — silent skip.
     console.info("[cgm-jobs/schedule] no CGM 'before' value:", (e as Error)?.message || e);

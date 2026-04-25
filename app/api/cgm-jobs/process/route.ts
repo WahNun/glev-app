@@ -65,6 +65,14 @@ export async function POST(req: NextRequest) {
   const admin = adminClient();
   const nowMs = Date.now();
   const nowIso = new Date(nowMs).toISOString();
+  // Throttle re-attempts: a job that already failed once this pass
+  // shouldn't be retried again until RETRY_DELAY_MS has elapsed.
+  // We compare against `updated_at` (which is bumped on every retry)
+  // — `retry_count = 0` is allowed through immediately so first
+  // attempts aren't held back. This lets us keep `fetch_time`
+  // immutable as the original target, so the abandon-age check is
+  // stable across retries.
+  const retryCutoffIso = new Date(nowMs - RETRY_DELAY_MS).toISOString();
 
   // Pull due pending jobs (cap to 50 per pass to keep latency bounded).
   const { data: jobs, error: qErr } = await admin
@@ -73,6 +81,7 @@ export async function POST(req: NextRequest) {
     .eq("user_id", user.id)
     .eq("status", "pending")
     .lte("fetch_time", nowIso)
+    .or(`retry_count.eq.0,updated_at.lte.${retryCutoffIso}`)
     .order("fetch_time", { ascending: true })
     .limit(50);
   if (qErr) {
@@ -170,10 +179,12 @@ export async function POST(req: NextRequest) {
       if (finalStatus === "skipped") skipped++;
       else failed++;
     } else {
-      // Push fetch_time forward by RETRY_DELAY_MS so we don't busy-loop.
-      const next = new Date(nowMs + RETRY_DELAY_MS).toISOString();
+      // Bump retry_count + updated_at only — fetch_time stays as the
+      // ORIGINAL target so the next pass's `ageMs = nowMs - fetch_time`
+      // computation is stable. The throttle in the pickup query above
+      // (updated_at <= now - RETRY_DELAY_MS) prevents busy-looping.
       await admin.from("cgm_fetch_jobs")
-        .update({ retry_count: job.retry_count + 1, fetch_time: next, updated_at: nowIso })
+        .update({ retry_count: job.retry_count + 1, updated_at: nowIso })
         .eq("id", job.id);
       stillPending++;
     }
