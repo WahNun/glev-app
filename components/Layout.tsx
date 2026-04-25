@@ -120,7 +120,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         padding: "20px 12px", position: "sticky", top: 0, height: "100vh",
         overflowY: "auto",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 10px", marginBottom: 28 }}>
+        <div
+          onClick={() => setAboutOpen(true)}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setAboutOpen(true); } }}
+          role="button"
+          tabIndex={0}
+          aria-label="Open about Glev"
+          className="nav-btn"
+          style={{
+            display: "flex", alignItems: "center", gap: 10,
+            padding: "8px 10px", marginBottom: 24, marginTop: -4,
+            borderRadius: 10, cursor: "pointer",
+          }}
+        >
           <GlevLogo size={32} />
           <div>
             <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: "-0.03em", color: "#fff" }}>Glev</div>

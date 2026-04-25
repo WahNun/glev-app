@@ -50,29 +50,25 @@ export default function AboutGlevModal({ open, onClose }: { open: boolean; onClo
       style={{
         position: "fixed", inset: 0, zIndex: 999,
         background: "rgba(0,0,0,0.6)", backdropFilter: "blur(6px)",
-        display: "flex", alignItems: "flex-end", justifyContent: "center",
+        display: "flex", alignItems: "flex-start", justifyContent: "center",
         padding: 0,
       }}
     >
-      <style>{`@keyframes aboutSlideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
+      <style>{`@keyframes aboutSlideDown{from{transform:translateY(-20px);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
           width: "100%", maxWidth: 480,
           background: SURFACE,
-          borderTop: `1px solid ${BORDER}`,
+          borderBottom: `1px solid ${BORDER}`,
           borderLeft: `1px solid ${BORDER}`,
           borderRight: `1px solid ${BORDER}`,
-          borderRadius: "20px 20px 0 0",
-          padding: "20px 22px max(28px, env(safe-area-inset-bottom))",
-          animation: "aboutSlideUp 0.25s cubic-bezier(0.4,0,0.2,1)",
+          borderRadius: "0 0 20px 20px",
+          padding: "max(20px, calc(env(safe-area-inset-top) + 14px)) 22px 24px",
+          animation: "aboutSlideDown 0.25s cubic-bezier(0.4,0,0.2,1)",
           display: "flex", flexDirection: "column", gap: 18,
         }}
       >
-        <div style={{ display: "flex", justifyContent: "center", marginTop: 4 }}>
-          <div style={{ width: 38, height: 4, borderRadius: 99, background: "rgba(255,255,255,0.15)" }} />
-        </div>
-
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <GlevLogo size={48} />
           <div style={{ minWidth: 0 }}>
