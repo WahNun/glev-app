@@ -574,6 +574,7 @@ function NonMealLightExpand({
 // back to the 4·carbs + 4·protein + 9·fat estimate for older rows.
 // -----------------------------------------------------------------------------
 function DailyMacrosCard({ meals }: { meals: Meal[] }) {
+  const [expanded, setExpanded] = useState(false);
   const today = useMemo(() => {
     const todayStr = new Date().toDateString();
     const todays = meals.filter(m => parseDbDate(m.meal_time ?? m.created_at).toDateString() === todayStr);
@@ -609,15 +610,44 @@ function DailyMacrosCard({ meals }: { meals: Meal[] }) {
 
   return (
     <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, overflow:"hidden" }}>
-      {/* Header — uppercase title on the left, meal count on the right. */}
-      <div style={{ padding:"18px 24px 14px", display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom:`1px solid ${BORDER}` }}>
+      {/* Header doubles as the tap-to-expand toggle. Whole row is a button so
+          the click target is generous on touch devices; chevron rotates 180°
+          when expanded as the visible affordance. */}
+      <button
+        type="button"
+        onClick={() => setExpanded(v => !v)}
+        aria-expanded={expanded}
+        aria-controls="glev-macros-expanded"
+        style={{
+          all:"unset",
+          boxSizing:"border-box",
+          width:"100%",
+          padding:"18px 24px 14px",
+          display:"flex", justifyContent:"space-between", alignItems:"center",
+          borderBottom:`1px solid ${BORDER}`,
+          cursor:"pointer",
+        }}
+      >
         <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:"rgba(255,255,255,0.6)" }}>
           Today&apos;s Macros
         </div>
-        <div style={{ fontSize:11, color:"rgba(255,255,255,0.45)", fontWeight:500, fontFamily:"var(--font-mono)" }}>
-          {today.count} {today.count === 1 ? "meal" : "meals"}
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <div style={{ fontSize:11, color:"rgba(255,255,255,0.45)", fontWeight:500, fontFamily:"var(--font-mono)" }}>
+            {today.count} {today.count === 1 ? "meal" : "meals"}
+          </div>
+          <svg
+            width="11" height="11" viewBox="0 0 12 12"
+            style={{
+              transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
+              transition:"transform 200ms ease",
+              color:"rgba(255,255,255,0.4)",
+            }}
+            aria-hidden="true"
+          >
+            <path d="M3 4.5l3 3 3-3" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
         </div>
-      </div>
+      </button>
       {/* 4 rings always in a single row; each cell caps the ring at ~96px so it
           doesn't blow up on wide cards but still scales down cleanly on narrow
           phones via `width:100%` on the SVG (viewBox handles the rest). */}
@@ -628,6 +658,27 @@ function DailyMacrosCard({ meals }: { meals: Meal[] }) {
           </div>
         ))}
       </div>
+      {/* Expanded section — minimal default: surfaces calories (the macro that
+          was dropped from the collapsed view). Real expanded-view spec still
+          pending from product; replace this block when it lands. */}
+      {expanded && (
+        <div
+          id="glev-macros-expanded"
+          style={{ padding:"16px 24px 20px", borderTop:`1px solid ${BORDER}`, display:"flex", justifyContent:"space-between", alignItems:"baseline" }}
+        >
+          <div style={{ fontSize:10, color:"rgba(255,255,255,0.45)", letterSpacing:"0.1em", fontWeight:700, textTransform:"uppercase" }}>
+            Calories
+          </div>
+          <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
+            <span style={{ fontSize:22, fontWeight:800, color:ACCENT, letterSpacing:"-0.02em", fontFamily:"var(--font-mono)" }}>
+              {Math.round(today.calories)}
+            </span>
+            <span style={{ fontSize:11, color:"rgba(255,255,255,0.4)", fontWeight:500 }}>
+              kcal
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
