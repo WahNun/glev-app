@@ -38,11 +38,22 @@ export default function CgmFetchButton({
   size = "md",
   label = "CGM",
   title = "Refresh latest CGM reading",
+  variant = "default",
 }: {
   onResult: (r: CgmFetchResult) => void;
   size?: "sm" | "md";
   label?: string;
   title?: string;
+  /**
+   * `default` — pill button with dot + icon + label and a status row underneath
+   *             (used in Settings / standalone places).
+   * `ghost`   — icon-only square button with corner status dot, no label and no
+   *             status row. Designed to integrate into a card header next to a
+   *             timestamp without dominating the visual hierarchy. Errors are
+   *             surfaced via the `title` tooltip and the corner dot turning
+   *             pink.
+   */
+  variant?: "default" | "ghost";
 }) {
   const [loading, setLoading] = useState(false);
   // `errMsg` is null whenever the last fetch succeeded — even if the value
@@ -71,6 +82,80 @@ export default function CgmFetchButton({
   const small = size === "sm";
   const hasErr = errMsg != null;
   const dotColor = hasErr ? PINK : GREEN;
+
+  // Ghost variant: icon-only square button intended to live inside a card
+  // header alongside other meta (timestamps, labels). No label text, no
+  // status row underneath — error state is conveyed by the corner dot
+  // turning pink and by the native tooltip (`title` attr).
+  if (variant === "ghost") {
+    return (
+      <button
+        onClick={run}
+        disabled={loading}
+        title={hasErr ? errMsg! : title}
+        aria-label={hasErr ? `Retry CGM fetch — last error: ${errMsg}` : title}
+        style={{
+          width: 28,
+          height: 28,
+          padding: 0,
+          borderRadius: 8,
+          border: `1px solid ${hasErr ? `${PINK}55` : "rgba(255,255,255,0.08)"}`,
+          background: hasErr ? `${PINK}10` : "rgba(255,255,255,0.03)",
+          color: hasErr ? PINK : "rgba(255,255,255,0.7)",
+          cursor: loading ? "default" : "pointer",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          position: "relative",
+          flexShrink: 0,
+          transition: "background 120ms ease, border-color 120ms ease",
+        }}
+      >
+        {/* Corner status dot — green when healthy, pink when last fetch failed. */}
+        <span
+          aria-hidden
+          style={{
+            position: "absolute",
+            top: -2,
+            right: -2,
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            background: dotColor,
+            boxShadow: `0 0 4px ${dotColor}aa`,
+            pointerEvents: "none",
+          }}
+        />
+        {loading ? (
+          <div
+            style={{
+              width: 12,
+              height: 12,
+              border: `1.5px solid ${(hasErr ? PINK : "#ffffff")}33`,
+              borderTopColor: hasErr ? PINK : "rgba(255,255,255,0.85)",
+              borderRadius: "50%",
+              animation: "cgmspin 0.7s linear infinite",
+            }}
+          />
+        ) : (
+          <svg
+            width={13}
+            height={13}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke={hasErr ? PINK : "rgba(255,255,255,0.75)"}
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M21 12a9 9 0 1 1-3.1-6.8" />
+            <polyline points="21 4 21 10 15 10" />
+          </svg>
+        )}
+        <style>{`@keyframes cgmspin{to{transform:rotate(360deg)}}`}</style>
+      </button>
+    );
+  }
 
   return (
     <div style={{ display: "inline-flex", flexDirection: "column", gap: 4, alignItems: "flex-start", maxWidth: "100%" }}>

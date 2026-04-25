@@ -196,7 +196,7 @@ function HeroFront({
             </span>
           )}
           {(ok || state.kind === "error") && (
-            <CgmFetchButton size="sm" label="Refresh" onResult={onCgmRefresh} />
+            <CgmFetchButton variant="ghost" onResult={onCgmRefresh} title="Refresh CGM" />
           )}
           {flippable && (
             <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)" }}>↺</span>
