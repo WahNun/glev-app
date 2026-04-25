@@ -5,6 +5,14 @@ import { fetchMeals, deleteMeal, updateMealReadings, type Meal } from "@/lib/mea
 import { fetchRecentInsulinLogs, deleteInsulinLog, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, deleteExerciseLog, type ExerciseLog } from "@/lib/exercise";
 import { evaluateExercise, exerciseTypeLabel, patternNote, interimMessage, finalMessage, deltaColor } from "@/lib/exerciseEval";
+import {
+  evaluateBolus,
+  bolusInterimMessage,
+  bolusFinalMessage,
+  bolusDeltaColor,
+  bolusPendingLabel,
+} from "@/lib/insulinEval";
+import CgmSparkline, { type SparklinePoint } from "@/components/CgmSparkline";
 import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, getEvalExplain } from "@/lib/mealTypes";
 import { lifecycleFor, STATE_LABELS, type OutcomeState } from "@/lib/engine/lifecycle";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
@@ -445,15 +453,29 @@ export default function EntriesPage() {
       ) : (
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
           {filtered.map(r => {
-            // BOLUS / BASAL row — insulin event (no outcome).
-            if (r.kind === "bolus" || r.kind === "basal") {
+            // BOLUS row — insulin event with 5-state outcome badge.
+            if (r.kind === "bolus") {
               const i = r.data;
               const isOpen = expanded === i.id;
               return (
-                <InsulinRowCard
+                <BolusRowCard
                   key={i.id}
                   log={i}
-                  kind={r.kind}
+                  isOpen={isOpen}
+                  onToggle={() => expandRow(isOpen ? null : i.id)}
+                  onDelete={() => handleDeleteInsulin(i.id)}
+                  deleting={deleting === i.id}
+                />
+              );
+            }
+            // BASAL row — insulin event with 6h CGM trend, no outcome badge.
+            if (r.kind === "basal") {
+              const i = r.data;
+              const isOpen = expanded === i.id;
+              return (
+                <BasalRowCard
+                  key={i.id}
+                  log={i}
                   isOpen={isOpen}
                   onToggle={() => expandRow(isOpen ? null : i.id)}
                   onDelete={() => handleDeleteInsulin(i.id)}
@@ -883,15 +905,188 @@ function NonMealRow({
   );
 }
 
-function InsulinRowCard({ log, kind, isOpen, onToggle, onDelete, deleting }: {
-  log: InsulinLog; kind: "bolus" | "basal";
+// ──────────────── BOLUS — full expanded view with badge ────────────────
+function BolusRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
+  log: InsulinLog;
   isOpen: boolean; onToggle: () => void; onDelete: () => void; deleting: boolean;
 }) {
   const d = new Date(log.created_at);
   const dateStr = d.toLocaleDateString("en", { month:"short", day:"numeric" });
   const timeStr = d.toLocaleTimeString("en", { hour:"numeric", minute:"2-digit" });
-  const accent = kind === "bolus" ? INSULIN_ACCENT : BASAL_ACCENT;
-  const badge  = kind === "bolus" ? "BOLUS" : "BASAL";
+
+  const accent  = INSULIN_ACCENT;
+  const evalInfo = evaluateBolus(log);
+  const badgeColor = evalInfo.color;
+
+  // Glucose deltas vs the at-log baseline.
+  const before = numOrNull(log.cgm_glucose_at_log);
+  const at1h   = numOrNull(log.glucose_after_1h);
+  const at2h   = numOrNull(log.glucose_after_2h);
+  const d1h    = before != null && at1h != null ? Math.round(at1h - before) : null;
+  const d2h    = before != null && at2h != null ? Math.round(at2h - before) : null;
+
+  // Expected fetch times for "Pending · expected hh:mm".
+  const expect1h = new Date(d.getTime() + 60 * 60_000);
+  const expect2h = new Date(d.getTime() + 120 * 60_000);
+
+  return (
+    <NonMealRow
+      isOpen={isOpen}
+      onToggle={onToggle}
+      onDelete={onDelete}
+      deleting={deleting}
+      accent={badgeColor}
+      badge={evalInfo.label}
+      dateStr={dateStr}
+      timeStr={timeStr}
+      primaryLabel="Brand"
+      primaryValue={log.insulin_name || "rapid-acting"}
+      primaryColor="rgba(255,255,255,0.85)"
+      secondaryLabel="Dose"
+      secondaryValue={`${log.units}u`}
+      secondaryColor={accent}
+      secondaryMono
+      expandedDetails={
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {/* 1) Session details ------------------------------------ */}
+          <ExPanel title="SESSION DETAILS">
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8 }}>
+              <Detail label="DOSE" value={`${log.units} u`} color={accent}/>
+              <Detail label="INSULIN" value={log.insulin_name || "—"}/>
+              <Detail label="WHEN" value={`${dateStr} · ${timeStr}`}/>
+              <Detail label="TYPE" value="Bolus"/>
+            </div>
+          </ExPanel>
+
+          {/* 2) Glucose tracking ----------------------------------- */}
+          <ExPanel title="GLUCOSE TRACKING">
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
+              <Detail
+                label="BG AT LOG"
+                value={before != null ? `${Math.round(before)} mg/dL` : "—"}
+              />
+              <Detail
+                label="BG +1H"
+                value={at1h != null ? `${Math.round(at1h)} mg/dL` : bolusPendingLabel(expect1h)}
+                color={at1h != null ? undefined : "rgba(255,255,255,0.4)"}
+              />
+              <Detail
+                label="BG +2H"
+                value={at2h != null ? `${Math.round(at2h)} mg/dL` : bolusPendingLabel(expect2h)}
+                color={at2h != null ? undefined : "rgba(255,255,255,0.4)"}
+              />
+            </div>
+            {(d1h != null || d2h != null) && (
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8, marginTop:8 }}>
+                <BolusDeltaPill label="Δ AT LOG → +1H" delta={d1h}/>
+                <BolusDeltaPill label="Δ AT LOG → +2H" delta={d2h}/>
+              </div>
+            )}
+          </ExPanel>
+
+          {/* 3) Evaluation panel ----------------------------------- */}
+          <ExPanel title="EVALUATION">
+            <EvalBlock
+              heading="1H CHECK"
+              unlocked={at1h != null}
+              body={bolusInterimMessage(log) || "Waiting for the +1h glucose reading…"}
+              color={evalInfo.color}
+              outcomeLabel={null}
+            />
+            <div style={{ height:8 }}/>
+            <EvalBlock
+              heading="2H OUTCOME"
+              unlocked={at2h != null}
+              body={bolusFinalMessage(log) || "Waiting for the +2h glucose reading…"}
+              color={evalInfo.color}
+              outcomeLabel={at2h != null ? evalInfo.label : null}
+            />
+          </ExPanel>
+
+          {log.notes && (
+            <div style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
+              <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>NOTES</div>
+              <div style={{ fontSize:13, color:"rgba(255,255,255,0.8)", lineHeight:1.5 }}>{log.notes}</div>
+            </div>
+          )}
+
+          <div style={{
+            fontSize:11, color:"rgba(255,255,255,0.35)",
+            textAlign:"center", letterSpacing:"0.02em", lineHeight:1.5,
+            paddingTop:2,
+          }}>
+            For reference only — always consult your care team.
+          </div>
+        </div>
+      }
+    />
+  );
+}
+
+// ──────────────── BASAL — expanded view + 6h CGM trend (no badge) ────────────────
+function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
+  log: InsulinLog;
+  isOpen: boolean; onToggle: () => void; onDelete: () => void; deleting: boolean;
+}) {
+  const d = new Date(log.created_at);
+  const dateStr = d.toLocaleDateString("en", { month:"short", day:"numeric" });
+  const timeStr = d.toLocaleTimeString("en", { hour:"numeric", minute:"2-digit" });
+
+  const accent = BASAL_ACCENT;
+  const before = numOrNull(log.cgm_glucose_at_log);
+  const at12h  = numOrNull(log.glucose_after_12h);
+  const at24h  = numOrNull(log.glucose_after_24h);
+
+  // Expected fetch times for "Pending · expected hh:mm" hints.
+  const expect12h = new Date(d.getTime() + 12 * 60 * 60_000);
+  const expect24h = new Date(d.getTime() + 24 * 60 * 60_000);
+
+  // 6 h trend window — last 6 h leading up to the basal injection.
+  const fromMs = d.getTime() - 6 * 60 * 60_000;
+  const toMs   = d.getTime();
+
+  // Lazy-fetch CGM history when the row first opens. LLU graph only
+  // returns ~12 h of recent readings, so this only renders meaningful
+  // data for basals logged within the last ~12 h.
+  const [trend, setTrend] = useState<{
+    state: "idle" | "loading" | "ready" | "error";
+    points: SparklinePoint[];
+    error?: string;
+  }>({ state: "idle", points: [] });
+
+  useEffect(() => {
+    if (!isOpen || trend.state !== "idle") return;
+    setTrend({ state: "loading", points: [] });
+    let cancelled = false;
+    fetch("/api/cgm/history", { cache: "no-store" })
+      .then(async r => {
+        if (!r.ok) throw new Error(`history ${r.status}`);
+        const out = await r.json() as { history?: { timestamp?: string | null; value?: number | null }[] };
+        const pts: SparklinePoint[] = (out.history || [])
+          .map(h => {
+            const t = h.timestamp ? Date.parse(h.timestamp) : NaN;
+            const v = typeof h.value === "number" ? h.value : NaN;
+            return Number.isFinite(t) && Number.isFinite(v) ? { t, v } : null;
+          })
+          .filter((p): p is SparklinePoint => p !== null)
+          .sort((a, b) => a.t - b.t);
+        if (!cancelled) setTrend({ state: "ready", points: pts });
+      })
+      .catch(e => {
+        if (!cancelled) setTrend({ state: "error", points: [], error: (e as Error)?.message || "fetch failed" });
+      });
+    return () => { cancelled = true; };
+  }, [isOpen, trend.state]);
+
+  // Stats for the 6 h pre-injection window.
+  const inWindow = trend.points.filter(p => p.t >= fromMs && p.t <= toMs);
+  const stats = inWindow.length >= 2 ? {
+    min:   Math.round(Math.min(...inWindow.map(p => p.v))),
+    max:   Math.round(Math.max(...inWindow.map(p => p.v))),
+    avg:   Math.round(inWindow.reduce((s, p) => s + p.v, 0) / inWindow.length),
+    count: inWindow.length,
+  } : null;
+
   return (
     <NonMealRow
       isOpen={isOpen}
@@ -899,48 +1094,135 @@ function InsulinRowCard({ log, kind, isOpen, onToggle, onDelete, deleting }: {
       onDelete={onDelete}
       deleting={deleting}
       accent={accent}
-      badge={badge}
+      badge="BASAL"
       dateStr={dateStr}
       timeStr={timeStr}
-      // Order requested by the user: WHEN · TYPE(dot) · BRAND · DOSE · badge.
-      // → BRAND occupies the primary slot (col 3, neutral text), DOSE occupies
-      //   the secondary slot (col 4) with an accent + mono override so it
-      //   stays visually prominent.
       primaryLabel="Brand"
-      primaryValue={log.insulin_name || (kind === "bolus" ? "rapid-acting" : "long-acting")}
+      primaryValue={log.insulin_name || "long-acting"}
       primaryColor="rgba(255,255,255,0.85)"
       secondaryLabel="Dose"
       secondaryValue={`${log.units}u`}
       secondaryColor={accent}
       secondaryMono
       expandedDetails={
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8 }}>
-          <Detail label="DOSE" value={`${log.units} u`} color={accent}/>
-          <Detail label="INSULIN" value={log.insulin_name || "—"}/>
-          <Detail label="GLUCOSE AT LOG" value={log.cgm_glucose_at_log != null ? `${log.cgm_glucose_at_log} mg/dL` : "—"}/>
-          <Detail label="WHEN" value={`${dateStr} · ${timeStr}`}/>
-          {/* Post-fetch glucose values — bolus shows 1h/2h, basal shows 12h/24h.
-              Null until the CGM job ticker resolves them; "Pending" until then. */}
-          {kind === "bolus" ? (
-            <>
-              <Detail label="1H POST" value={log.glucose_after_1h != null ? `${log.glucose_after_1h} mg/dL` : "Pending"} color={log.glucose_after_1h != null ? undefined : "rgba(255,255,255,0.4)"}/>
-              <Detail label="2H POST" value={log.glucose_after_2h != null ? `${log.glucose_after_2h} mg/dL` : "Pending"} color={log.glucose_after_2h != null ? undefined : "rgba(255,255,255,0.4)"}/>
-            </>
-          ) : (
-            <>
-              <Detail label="12H POST" value={log.glucose_after_12h != null ? `${log.glucose_after_12h} mg/dL` : "Pending"} color={log.glucose_after_12h != null ? undefined : "rgba(255,255,255,0.4)"}/>
-              <Detail label="24H POST" value={log.glucose_after_24h != null ? `${log.glucose_after_24h} mg/dL` : "Pending"} color={log.glucose_after_24h != null ? undefined : "rgba(255,255,255,0.4)"}/>
-            </>
-          )}
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {/* 1) Session details ------------------------------------ */}
+          <ExPanel title="SESSION DETAILS">
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8 }}>
+              <Detail label="DOSE" value={`${log.units} u`} color={accent}/>
+              <Detail label="INSULIN" value={log.insulin_name || "—"}/>
+              <Detail label="WHEN" value={`${dateStr} · ${timeStr}`}/>
+              <Detail label="TYPE" value="Basal"/>
+            </div>
+          </ExPanel>
+
+          {/* 2) 6h CGM trend leading up to the injection ----------- */}
+          <ExPanel title="6 H GLUCOSE TREND (pre-injection)">
+            <div style={{
+              background:"rgba(255,255,255,0.02)",
+              border:`1px solid ${BORDER}`,
+              borderRadius:10, padding:"10px 12px",
+            }}>
+              {trend.state === "loading" && (
+                <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", textAlign:"center", padding:"24px 0" }}>
+                  Loading CGM history…
+                </div>
+              )}
+              {trend.state === "error" && (
+                <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", textAlign:"center", padding:"24px 0" }}>
+                  CGM not connected or history unavailable.
+                </div>
+              )}
+              {trend.state === "ready" && (
+                <CgmSparkline
+                  points={trend.points}
+                  fromMs={fromMs}
+                  toMs={toMs}
+                  markerMs={d.getTime()}
+                  color={accent}
+                />
+              )}
+              {/* Time-axis labels. */}
+              <div style={{
+                display:"flex", justifyContent:"space-between",
+                fontSize:9, color:"rgba(255,255,255,0.3)", letterSpacing:"0.06em",
+                marginTop:6,
+              }}>
+                <span>−6 h</span>
+                <span>−4 h</span>
+                <span>−2 h</span>
+                <span>injection</span>
+              </div>
+            </div>
+            {/* Window stats. */}
+            {stats != null && (
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginTop:8 }}>
+                <Detail label="MIN" value={`${stats.min} mg/dL`}/>
+                <Detail label="MAX" value={`${stats.max} mg/dL`}/>
+                <Detail label="AVG" value={`${stats.avg} mg/dL`}/>
+                <Detail label="READINGS" value={`${stats.count}`}/>
+              </div>
+            )}
+          </ExPanel>
+
+          {/* 3) Stored post-fetches (12h / 24h) — context only ----- */}
+          <ExPanel title="POST-INJECTION CHECKPOINTS">
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
+              <Detail
+                label="BG AT LOG"
+                value={before != null ? `${Math.round(before)} mg/dL` : "—"}
+              />
+              <Detail
+                label="BG +12H"
+                value={at12h != null ? `${Math.round(at12h)} mg/dL` : pendingLabel(expect12h)}
+                color={at12h != null ? undefined : "rgba(255,255,255,0.4)"}
+              />
+              <Detail
+                label="BG +24H"
+                value={at24h != null ? `${Math.round(at24h)} mg/dL` : pendingLabel(expect24h)}
+                color={at24h != null ? undefined : "rgba(255,255,255,0.4)"}
+              />
+            </div>
+          </ExPanel>
+
           {log.notes && (
-            <div style={{ gridColumn:"1 / -1", background:"rgba(255,255,255,0.02)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
+            <div style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
               <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>NOTES</div>
               <div style={{ fontSize:13, color:"rgba(255,255,255,0.8)", lineHeight:1.5 }}>{log.notes}</div>
             </div>
           )}
+
+          <div style={{
+            fontSize:11, color:"rgba(255,255,255,0.35)",
+            textAlign:"center", letterSpacing:"0.02em", lineHeight:1.5,
+            paddingTop:2,
+          }}>
+            Basal is continuous — Glev does not score individual injections. For reference only.
+          </div>
         </div>
       }
     />
+  );
+}
+
+/** Δ-pill specifically for the bolus tracking panel — uses the bolus
+ *  threshold colours so the visual matches the badge logic. */
+function BolusDeltaPill({ label, delta }: { label: string; delta: number | null }) {
+  const color = bolusDeltaColor(delta);
+  const text  = delta == null
+    ? "—"
+    : delta === 0
+      ? "0 mg/dL"
+      : `${delta > 0 ? "+" : ""}${delta} mg/dL`;
+  return (
+    <div style={{
+      background:"rgba(255,255,255,0.02)",
+      border:`1px solid ${BORDER}`,
+      borderRadius:10, padding:"10px 12px",
+    }}>
+      <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{label}</div>
+      <div style={{ fontSize:14, fontWeight:700, color, letterSpacing:"-0.01em", fontFamily:"var(--font-mono)" }}>{text}</div>
+    </div>
   );
 }
 
