@@ -696,9 +696,6 @@ export default function EnginePage() {
       )}
 
       {(() => {
-        // The fancy classification card is only for desktop. On mobile the
-        // classification is inlined as a small field inside the form above.
-        if (isMobile) return null;
         const gNum = parseFloat(glucose), cNum = parseFloat(carbs), pNum = parseFloat(protein), fNum = parseFloat(fat), fbNum = parseFloat(fiber);
         const allFilled = [gNum, cNum, pNum, fNum, fbNum].every(v => !isNaN(v) && v >= 0) && cNum > 0;
         if (!allFilled) return null;
