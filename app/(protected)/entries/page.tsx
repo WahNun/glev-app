@@ -6,6 +6,7 @@ import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, get
 import { lifecycleFor, STATE_LABELS, type OutcomeState } from "@/lib/engine/lifecycle";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
 import ManualEntryModal from "@/components/ManualEntryModal";
+import InsulinEntryModal from "@/components/InsulinEntryModal";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
@@ -23,6 +24,7 @@ export default function EntriesPage() {
   const [expanded, setExpanded] = useState<string|null>(null);
   const [deleting, setDeleting] = useState<string|null>(null);
   const [manualOpen, setManualOpen] = useState(false);
+  const [insulinOpen, setInsulinOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,11 +86,10 @@ export default function EntriesPage() {
       </div>
 
       {/* MANUAL ENTRY CTA */}
-      <div style={{ marginBottom:14 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
         <button
           onClick={() => setManualOpen(true)}
           style={{
-            width:"100%",
             padding:"12px 16px",
             borderRadius:12,
             border:`1px dashed ${ACCENT}55`,
@@ -103,7 +104,26 @@ export default function EntriesPage() {
           onMouseLeave={(e) => { e.currentTarget.style.background = `${ACCENT}10`; }}
         >
           <span style={{ fontSize:18, lineHeight:1, marginTop:-1 }}>+</span>
-          New manual entry
+          Mahlzeit
+        </button>
+        <button
+          onClick={() => setInsulinOpen(true)}
+          style={{
+            padding:"12px 16px",
+            borderRadius:12,
+            border:`1px dashed ${GREEN}55`,
+            background:`${GREEN}10`,
+            color:GREEN,
+            fontSize:13, fontWeight:700, letterSpacing:"-0.01em",
+            cursor:"pointer",
+            display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+            transition:"all 0.2s",
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = `${GREEN}1f`; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = `${GREEN}10`; }}
+        >
+          <span style={{ fontSize:18, lineHeight:1, marginTop:-1 }}>+</span>
+          Insulin
         </button>
       </div>
 
@@ -270,6 +290,16 @@ export default function EntriesPage() {
             next.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
             return next;
           });
+        }}
+      />
+
+      <InsulinEntryModal
+        open={insulinOpen}
+        onClose={() => setInsulinOpen(false)}
+        onCreated={() => {
+          // Notify any listeners (insulin-summary card, future log views)
+          // so they can refresh; entries page itself shows meals only.
+          window.dispatchEvent(new CustomEvent("glev:insulin-updated"));
         }}
       />
     </div>
