@@ -1,0 +1,113 @@
+Option 3: integriere beide Landing-Pages (/beta und /pro) — beide voll funktional mit Stripe Test-Mode (kein mailto:-Placeholder).
+
+Aber: die Pricing-Section auf der Homepage muss anders strukturiert werden als sie aktuell aussieht. Die alte 3-Card-Variante (Beta + Pro + "Nach Launch") schadet der /pro-Conversion, weil der "Nach Launch ab €9"-Anker /pro mathematisch unattraktiv macht. Stattdessen:
+
+## Pricing-Section: 2 Cards statt 3
+
+Auf der Homepage in der Pricing-Section nur ZWEI Cards nebeneinander:
+
+### Card 1 (links) — Beta-Reservierung
+
+Heading: "Beta-Reservierung"
+Preis: "€19" (large) "einmalig" (smaller, neben dem Preis)
+Bullet-Points (mit Mint-Häkchen):
+- Reservierung wird auf erstes Abo angerechnet
+- €4,50/Monat im ersten Jahr nach Launch
+- €9/Monat regulärer Preis danach
+- Limitiert auf 500 Plätze
+
+CTA: "Platz sichern" → /beta (border #4F6EF7 1px, neutral background, secondary feel)
+
+### Card 2 (rechts) — Pro-Mitgliedschaft (markiert mit "EMPFOHLEN"-Badge oben drauf)
+
+Heading: "Pro · Founder-Tier"
+Preis: "€24,90" (large) "/Monat" (smaller)
+Border: 2px solid #4F6EF7 (Most-popular-Markierung gemäß Brandbook-Konvention)
+Badge oben links: "EMPFOHLEN" auf #4F6EF7-Pille mit weißer Schrift
+
+Bullet-Points (mit Mint-Häkchen):
+- Karte heute hinterlegt, erste Buchung am Launch-Tag (1. Juli 2026)
+- Direkter Founder-Slack-Zugang für Feedback und Fragen
+- Lifetime-Preis-Lock — €24,90/Monat dauerhaft, auch nach späteren Preiserhöhungen
+- Früher Access zu neuen CGM-Integrationen (Dexcom, Nightscout) sobald verfügbar
+- Stimme bei Feature-Roadmap-Voting
+
+CTA: "Mitglied werden" → /pro (filled #4F6EF7 background, white text, primary feel)
+
+### KEINE dritte "Nach Launch"-Card
+
+Die "Nach Launch ab €9" Card aus der alten Marketing-Page wird nicht migriert. Sie verwirrt mehr als sie hilft.
+
+## FAQ ergänzen
+
+In der bestehenden FAQ-Section auf der Homepage eine neue Frage als ersten oder zweiten Eintrag einfügen:
+
+  Frage: "Was kostet Glev nach dem öffentlichen Launch?"
+  Antwort: "Ab 1. Juli 2026 ist Glev als Standard-Abo für €9/Monat verfügbar. Wer vorher reserviert oder als Pro-Mitglied startet, sichert sich Founder-Konditionen, die später nicht mehr verfügbar sein werden — die Beta-Reservierung gibt €4,50/Monat im ersten Jahr (statt €9), die Pro-Mitgliedschaft fixiert €24,90/Monat als Lifetime-Preis-Lock."
+
+## Hero-CTA-Hierarchie auf der Homepage
+
+Den existierenden Homepage-Hero-Button "Reserviere deinen Platz" durch eine zweistufige CTA-Struktur ersetzen:
+
+- Primary Button (groß, #4F6EF7 background, weiße Schrift): "Mitglied werden — €24,90/Monat" → /pro
+- Secondary Link (kleiner, direkt darunter, fill rgba(255,255,255,0.6), unterstrichen on hover): "Oder erstmal Platz reservieren für €19 →" → /beta
+
+So pushst du primär auf /pro, gibst aber /beta als ehrliche Alternative.
+
+## Volles Stripe-Setup im Test-Mode
+
+Beide Stripe-Routes (/api/beta/checkout, /api/pro/checkout, /api/beta/webhook, /api/pro/webhook) komplett funktional integrieren — kein Placeholder, kein mailto:.
+
+Env-Vars die in .env.example stehen müssen (ich setze die Werte später in Replit Secrets + Vercel):
+- STRIPE_SECRET_KEY (Test-Mode-Key)
+- STRIPE_WEBHOOK_SECRET (Test-Mode-Signing-Secret für /api/beta/webhook)
+- STRIPE_BETA_PRICE_ID (Test-Mode-Price-ID für €19 one-time product)
+- STRIPE_PRO_WEBHOOK_SECRET (Test-Mode-Signing-Secret für /api/pro/webhook — separater Webhook-Endpunkt)
+- STRIPE_PRO_PRICE_ID (Test-Mode-Price-ID für €24,90/month recurring product)
+- NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY (Test-Mode-Publishable-Key)
+
+Stripe-Products und Webhooks lege ich danach manuell im Stripe-Dashboard an, sobald der Code gepusht ist.
+
+## SQL-Migrationen
+
+Die SQL-Files für `beta_reservations` und `pro_subscriptions` aus _migrate/supabase/migrations/ in das aktuelle Projekt unter supabase/migrations/ einsortieren — Timestamps in den Filenames bewahren.
+
+NICHT auto-applyen. Ich führe sie manuell mit `npm run db:migrate <filename>` aus, sobald der Code gepusht ist und ich die Migrationen reviewt habe.
+
+## Komponenten-Wiederverwendung
+
+Falls die /beta- und /pro-Pages aus dem Migrations-ZIP eigene Header-/Footer-/FAQ-Komponenten mitbringen, NICHT in components/landing/ duplizieren. Stattdessen die Header/Footer-Komponenten der aktuellen Homepage wiederverwenden, sodass alle drei Pages (/, /beta, /pro) konsistent aussehen.
+
+Falls /beta und /pro eigene Hero-Komponenten haben (single-purpose conversion-style), die behalten — die unterscheiden sich legitim von der Marketing-Hero auf /.
+
+## Cleanup nach Integration
+
+- _migrate/ Ordner komplett löschen vor Commit
+- migrate.tar.gz falls noch irgendwo im Repo: löschen
+- Build verifizieren: npm run build
+
+## Commit + Push
+
+  git add -A
+  git commit -m "feat: integrate /beta + /pro landing pages, restructure homepage pricing to 2-card founder-tier model"
+  git push origin main
+
+## Report
+
+- Commit SHA
+- Liste der migrierten/erstellten Files
+- Liste der modifizierten Files (Homepage Hero, Pricing-Section, FAQ)
+- Liste der Files aus _migrate/ die NICHT migriert wurden
+- Confirmation dass npm run build passt
+- Liste der Env-Vars die ich in Vercel + Replit Secrets setzen muss
+- Liste der SQL-Migrationen in Apply-Reihenfolge (älteste Timestamp zuerst)
+- Confirmation dass _migrate/ gelöscht wurde
+
+## Out of scope
+
+- Keine Stripe-Live-Mode-Aktivierung — alles bleibt Test-Mode bis ich es manuell umstelle
+- Keine Stripe-Products/Prices anlegen — das mache ich im Stripe-Dashboard
+- Keine SQL-Migrationen auto-applyen
+- Den existierenden /brand-Pfad (falls vorhanden) nicht überschreiben
+- Authentifizierungsflow nicht anfassen
+- Keine zusätzlichen Pricing-Optionen erfinden über die zwei oben beschriebenen hinaus

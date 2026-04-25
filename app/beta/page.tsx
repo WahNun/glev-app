@@ -1,0 +1,250 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import CTAButton from "@/components/landing/CTAButton";
+import FAQ from "@/components/landing/FAQ";
+import Features from "@/components/landing/Features";
+import LandingFooter from "@/components/landing/Footer";
+import FounderSection from "@/components/landing/FounderSection";
+import Lockup from "@/components/landing/Lockup";
+import PricingCard from "@/components/landing/PricingCard";
+import Steps from "@/components/landing/Steps";
+import {
+  ACCENT,
+  BG,
+  BORDER,
+  MINT,
+  PINK,
+  SURFACE,
+  TEXT_DIM,
+  TEXT_FAINT,
+} from "@/components/landing/tokens";
+
+const CAPACITY = 500;
+
+type CountResponse = { count: number; capacity: number; remaining: number };
+
+export default function BetaPage() {
+  const [email, setEmail] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [count, setCount] = useState<CountResponse | null>(null);
+  const ctaRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/beta/count", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data: CountResponse) => {
+        if (!cancelled) setCount(data);
+      })
+      .catch(() => {
+        /* keep counter hidden on failure */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const remaining = count?.remaining ?? CAPACITY;
+  const isFull = count != null && remaining <= 0;
+  const isLow = !isFull && count != null && remaining < 50;
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+
+    const trimmed = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      setError("Bitte gib eine gültige Email-Adresse ein.");
+      ctaRef.current?.focus();
+      return;
+    }
+
+    if (isFull) {
+      window.location.href = "mailto:hello@glev.app?subject=Glev%20Beta%20Warteliste";
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/beta/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: trimmed }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+
+      if (res.status === 409) {
+        // Capacity hit between count poll and submit — fall back to mailto.
+        window.location.href = "mailto:hello@glev.app?subject=Glev%20Beta%20Warteliste";
+        return;
+      }
+
+      if (!res.ok || !data.url) {
+        setError(data.error ?? "Leider hat der Checkout nicht funktioniert — probier es gleich nochmal.");
+        setSubmitting(false);
+        return;
+      }
+      window.location.href = data.url;
+    } catch {
+      setError("Leider hat der Checkout nicht funktioniert — probier es gleich nochmal.");
+      setSubmitting(false);
+    }
+  }
+
+  const ctaLabel = isFull
+    ? "Auf die Warteliste"
+    : submitting
+      ? "Weiterleitung zu Stripe…"
+      : "Platz sichern — €19";
+
+  return (
+    <main
+      style={{
+        minHeight: "100vh",
+        background: BG,
+        color: "#fff",
+        padding: "48px 20px 64px",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+      }}
+    >
+      <div style={{ width: "100%", maxWidth: 680, display: "flex", flexDirection: "column", gap: 56 }}>
+        {/* 1. Hero */}
+        <section style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 20 }}>
+          <Lockup width={240} />
+          <h1
+            style={{
+              fontSize: "clamp(36px, 8vw, 48px)",
+              lineHeight: 1.05,
+              letterSpacing: "-0.03em",
+              fontWeight: 700,
+              color: "#fff",
+              margin: 0,
+            }}
+          >
+            Typ 1. Neu gedacht.
+          </h1>
+          <p style={{ fontSize: 18, lineHeight: 1.5, color: TEXT_DIM, margin: 0, maxWidth: 560 }}>
+            Der sprachgesteuerte Essens-Tracker für Typ-1-Diabetiker. Beta startet im Juli 2026.
+          </p>
+
+          <form onSubmit={handleSubmit} style={{ width: "100%", display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}>
+            <input
+              ref={ctaRef}
+              type="email"
+              required
+              autoComplete="email"
+              placeholder="deine@email.de"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              aria-label="Email-Adresse"
+              style={{
+                width: "100%",
+                background: SURFACE,
+                border: `1px solid ${BORDER}`,
+                borderRadius: 12,
+                padding: "14px 16px",
+                color: "#fff",
+                fontSize: 16,
+                fontFamily: "inherit",
+                outline: "none",
+                boxSizing: "border-box",
+                minHeight: 56,
+              }}
+              onFocus={(e) => (e.currentTarget.style.borderColor = ACCENT)}
+              onBlur={(e) => (e.currentTarget.style.borderColor = BORDER)}
+            />
+            <CTAButton submitting={submitting} label={ctaLabel} />
+            {error && (
+              <div role="alert" style={{ fontSize: 13, color: PINK, textAlign: "left" }}>
+                {error}
+              </div>
+            )}
+          </form>
+
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              fontSize: 14,
+              color: MINT,
+              marginTop: 4,
+              flexWrap: "wrap",
+              justifyContent: "center",
+            }}
+          >
+            <span aria-hidden>↺</span>
+            <span>Rückerstattung jederzeit vor Launch · wird aufs erste Abo angerechnet</span>
+          </div>
+
+          {count && !isFull && (
+            <div
+              style={{
+                fontSize: 13,
+                color: isLow ? PINK : TEXT_FAINT,
+                marginTop: 8,
+                fontFeatureSettings: '"tnum"',
+              }}
+            >
+              Noch{" "}
+              <span
+                style={{
+                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                  fontWeight: 600,
+                  color: isLow ? PINK : "rgba(255,255,255,0.7)",
+                }}
+              >
+                {remaining}
+              </span>{" "}
+              von 500 Beta-Plätzen verfügbar
+            </div>
+          )}
+        </section>
+
+        <Steps />
+        <Features />
+        <FounderSection />
+
+        <PricingCard
+          heading="Was du bekommst"
+          lines={[
+            { left: "€19 heute", right: "deine Beta-Reservierung" },
+            { left: "€4,50 / Monat im ersten Jahr", right: "nach Launch, als Beta-Tester" },
+            { left: "€9 / Monat danach", right: "regulärer Preis" },
+          ]}
+          footer="Reservierung wird auf dein erstes Monatsabo angerechnet."
+        />
+
+        <FAQ items={BETA_FAQ} />
+        <LandingFooter />
+      </div>
+    </main>
+  );
+}
+
+const BETA_FAQ = [
+  {
+    q: "Welche CGMs werden unterstützt?",
+    a: "Aktuell FreeStyle Libre 2 via LibreLinkUp. Dexcom G6/G7 sind in Arbeit. Nightscout-Support folgt.",
+  },
+  {
+    q: "Bekomme ich mein Geld zurück wenn die App nicht für mich ist?",
+    a: "Ja, jederzeit vor öffentlichem Launch. Nach Launch gilt die reguläre Kündigungsfrist des Monatsabos.",
+  },
+  {
+    q: "Ist Glev ein Medizinprodukt?",
+    a: "Nein. Glev ist ein Dokumentations- und Organisations-Tool. Therapieentscheidungen triffst du weiter mit deinem Arzt.",
+  },
+  {
+    q: "Wann startet die Beta?",
+    a: "Juli 2026. Beta-Tester bekommen den Zugangslink per Email zwei Wochen vor dem öffentlichen Launch.",
+  },
+  {
+    q: "Wo werden meine Daten gespeichert?",
+    a: "In der EU (Supabase Frankfurt). Deutsche DSGVO. Keine Datenweitergabe, keine Werbung.",
+  },
+];

@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev -p 5000",
     "build": "next build",
-    "start": "next start -p 5000"
+    "start": "next start -p 5000",
+    "db:migrate": "node scripts/apply-migration.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.1",
@@ -21,7 +22,8 @@
     "next": "^16.2.4",
     "openai": "^6.34.0",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "stripe": "^22.1.0"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.3.1",
