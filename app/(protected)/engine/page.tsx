@@ -406,7 +406,7 @@ export default function EnginePage() {
         {(isMobile
           ? [
               { id:"engine"   as const, label:"Engine" },
-              { id:"bolus"    as const, label:"Bolus Log" },
+              { id:"bolus"    as const, label:"Insulin Log" },
               { id:"exercise" as const, label:"Exercise Log" },
             ]
           : [
