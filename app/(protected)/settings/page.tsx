@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { reloadHistoricalEntries } from "@/lib/meals";
+import { fetchMacroTargets, saveMacroTargets, DEFAULT_MACRO_TARGETS, type MacroTargets } from "@/lib/userSettings";
 import ImportPanel from "@/components/ImportPanel";
 import CgmSettingsCard from "@/components/CgmSettingsCard";
 import { parseDbDate } from "@/lib/time";
@@ -40,6 +41,13 @@ export default function SettingsPage() {
   const [mealCount, setMealCount] = useState<number>(0);
   const [reloading, setReloading] = useState(false);
   const [reloadMsg, setReloadMsg] = useState<string>("");
+  // Macro targets live in Supabase (user_settings table) rather than
+  // localStorage so they sync across devices. Their own dedicated Save
+  // button keeps the existing localStorage Save Settings flow untouched.
+  const [macroTargets, setMacroTargets] = useState<MacroTargets>(DEFAULT_MACRO_TARGETS);
+  const [macroSaving, setMacroSaving] = useState(false);
+  const [savedMacros, setSavedMacros] = useState(false);
+  const [macroError, setMacroError]   = useState("");
 
   useEffect(() => {
     setSettings(loadSettings());
@@ -50,6 +58,9 @@ export default function SettingsPage() {
       setCreatedAt(user.created_at ? parseDbDate(user.created_at).toLocaleDateString("en",{year:"numeric",month:"long",day:"numeric"}) : "");
     });
     supabase.from("meals").select("id", { count:"exact", head:true }).then(({ count }) => setMealCount(count||0));
+    // fetchMacroTargets handles the !supabase / signed-out case internally
+    // by resolving to DEFAULT_MACRO_TARGETS, so it's safe to call here.
+    fetchMacroTargets().then(setMacroTargets).catch(() => {});
   }, []);
 
   function handleSave() {
@@ -77,6 +88,25 @@ export default function SettingsPage() {
 
   function upd<K extends keyof Settings>(key: K, val: Settings[K]) {
     setSettings(prev => ({ ...prev, [key]: val }));
+  }
+
+  function updMacro<K extends keyof MacroTargets>(key: K, val: MacroTargets[K]) {
+    setMacroTargets(prev => ({ ...prev, [key]: val }));
+  }
+
+  async function handleSaveMacroTargets() {
+    setMacroSaving(true);
+    setMacroError("");
+    try {
+      await saveMacroTargets(macroTargets);
+      setSavedMacros(true);
+      setTimeout(() => setSavedMacros(false), 2000);
+    } catch (e) {
+      setMacroError(e instanceof Error ? e.message : "Save failed");
+      setTimeout(() => setMacroError(""), 4000);
+    } finally {
+      setMacroSaving(false);
+    }
   }
 
   const card: React.CSSProperties = { background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"20px 24px" };
@@ -239,6 +269,59 @@ export default function SettingsPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+
+          <div style={card}>
+            <div style={{ fontSize:13, fontWeight:600, marginBottom:6 }}>Daily Macro Targets</div>
+            <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", marginBottom:16, lineHeight:1.5 }}>
+              Powers the &quot;Today&apos;s Macros&quot; rings on the dashboard. Defaults are sensible Type-1 starting points — adjust to match your nutrition plan. Saved to your account, syncs across devices.
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+              {([
+                { key:"carbs",   label:"Carbs (g)",   def:250, max:2000 },
+                { key:"protein", label:"Protein (g)", def:120, max:2000 },
+                { key:"fat",     label:"Fat (g)",     def:80,  max:2000 },
+                { key:"fiber",   label:"Fiber (g)",   def:30,  max:200  },
+              ] as Array<{ key: keyof MacroTargets; label: string; def: number; max: number }>).map(t => (
+                <div key={t.key}>
+                  <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>{t.label}</label>
+                  <input
+                    style={inp}
+                    type="number"
+                    min={0}
+                    max={t.max}
+                    value={macroTargets[t.key]}
+                    onChange={e => {
+                      const n = parseInt(e.target.value);
+                      updMacro(t.key, Number.isFinite(n) ? Math.max(0, Math.min(t.max, n)) : t.def);
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+            <div style={{ display:"flex", alignItems:"center", gap:12, marginTop:16, flexWrap:"wrap" }}>
+              <button
+                onClick={handleSaveMacroTargets}
+                disabled={macroSaving}
+                style={{
+                  padding:"10px 18px", borderRadius:10, border:`1px solid ${ACCENT}40`,
+                  cursor: macroSaving ? "wait" : "pointer",
+                  background:`${ACCENT}15`, color:ACCENT, fontSize:13, fontWeight:600,
+                  opacity: macroSaving ? 0.6 : 1,
+                }}
+              >
+                {macroSaving ? "Saving…" : savedMacros ? "✓ Saved" : "Save Macro Targets"}
+              </button>
+              <button
+                onClick={() => setMacroTargets(DEFAULT_MACRO_TARGETS)}
+                style={{ padding:"10px 16px", borderRadius:10, border:`1px solid ${BORDER}`, background:"transparent", color:"rgba(255,255,255,0.4)", fontSize:13, cursor:"pointer" }}
+              >
+                Reset to defaults
+              </button>
+              {macroError && (
+                <span style={{ fontSize:12, color:PINK }}>{macroError}</span>
+              )}
             </div>
           </div>
 

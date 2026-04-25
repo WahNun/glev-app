@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { fetchMeals, computeCalories, type Meal } from "@/lib/meals";
 import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
+import { fetchMacroTargets, DEFAULT_MACRO_TARGETS, type MacroTargets } from "@/lib/userSettings";
 import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, getEvalExplain } from "@/lib/mealTypes";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
 import MealEntryLightExpand from "@/components/MealEntryLightExpand";
@@ -276,6 +277,15 @@ export default function DashboardPage() {
   const [insulin, setInsulin] = useState<InsulinLog[]>([]);
   const [exercise, setExercise] = useState<ExerciseLog[]>([]);
   const [loading, setLoading] = useState(true);
+  // Per-user macro goals powering the "Today's Macros" rings. Loaded once
+  // on mount from user_settings; falls back to sensible Type-1 defaults so
+  // the rings always render even before the row exists or for signed-out
+  // SSR. Edited via Settings → "Daily Macro Targets".
+  const [macroTargets, setMacroTargets] = useState<MacroTargets>(DEFAULT_MACRO_TARGETS);
+
+  useEffect(() => {
+    fetchMacroTargets().then(setMacroTargets).catch(() => {});
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -338,7 +348,7 @@ export default function DashboardPage() {
   // them to enter edit mode; drag to reorder; tap blank space to save.
   const items: SortableItem[] = [
     { id: "today-glucose", node: <CurrentDayGlucoseCard/> },
-    { id: "today-macros",  node: <DailyMacrosCard meals={meals}/> },
+    { id: "today-macros",  node: <DailyMacrosCard meals={meals} targets={macroTargets}/> },
     {
       id: "stats",
       node: (
@@ -772,7 +782,7 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
 // logged meals. Calories use the meal's stored value where present, falling
 // back to the 4·carbs + 4·protein + 9·fat estimate for older rows.
 // -----------------------------------------------------------------------------
-function DailyMacrosCard({ meals }: { meals: Meal[] }) {
+function DailyMacrosCard({ meals, targets }: { meals: Meal[]; targets: MacroTargets }) {
   const [expanded, setExpanded] = useState(false);
   const today = useMemo(() => {
     const todayStr = new Date().toDateString();
@@ -797,14 +807,16 @@ function DailyMacrosCard({ meals }: { meals: Meal[] }) {
   // Collapsed view: 4 circular progress rings in a single row.
   // Color palette spec'd by product (Tailwind 500-shade reference):
   //   CARBS=#f97316, PROTEIN=#8b5cf6, FAT=#f59e0b, FIBER=#10b981.
-  // Targets are sensible Type-1 daily defaults; will become user-configurable
-  // when the prefs UI for macro goals lands. `calories` is intentionally not
-  // shown here — it surfaces in the expanded view.
+  // Targets come from the per-user user_settings table (edited in
+  // Settings → "Daily Macro Targets"); they fall back to sensible Type-1
+  // defaults from DEFAULT_MACRO_TARGETS until the user saves their own.
+  // `calories` is intentionally not shown here — it surfaces in the
+  // expanded view.
   const rings: Array<{ label: string; value: number; target: number; color: string; unit: string }> = [
-    { label: "CARBS",   value: Math.round(today.carbs),   target: 250, color: "#f97316", unit: "g" },
-    { label: "PROTEIN", value: Math.round(today.protein), target: 120, color: "#8b5cf6", unit: "g" },
-    { label: "FAT",     value: Math.round(today.fat),     target: 80,  color: "#f59e0b", unit: "g" },
-    { label: "FIBER",   value: Math.round(today.fiber),   target: 30,  color: "#10b981", unit: "g" },
+    { label: "CARBS",   value: Math.round(today.carbs),   target: targets.carbs,   color: "#f97316", unit: "g" },
+    { label: "PROTEIN", value: Math.round(today.protein), target: targets.protein, color: "#8b5cf6", unit: "g" },
+    { label: "FAT",     value: Math.round(today.fat),     target: targets.fat,     color: "#f59e0b", unit: "g" },
+    { label: "FIBER",   value: Math.round(today.fiber),   target: targets.fiber,   color: "#10b981", unit: "g" },
   ];
 
   return (
