@@ -95,16 +95,20 @@ export default function CurrentDayGlucoseCard() {
           transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
         }}
       >
-        {/* FRONT */}
+        {/* FRONT — hero glucose tile, mirroring the landing-page mockup
+            (`AppMockupPhone.tsx` ~line 282 "Live glucose hero") 1:1:
+            "GLUCOSE · LIVE" pill (GREEN, uppercase) + "Xm ago" timestamp,
+            big mono value + mg/dL + trend arrow with 15-min delta,
+            rolling 2-hour sparkline filling the remaining height. */}
         <div
           style={{
             position: "absolute",
             inset: 0,
             backfaceVisibility: "hidden",
-            background: SURFACE,
-            border: `1px solid ${BORDER}`,
+            background: `linear-gradient(135deg, ${ACCENT}10, ${SURFACE})`,
+            border: `1px solid ${ACCENT}30`,
             borderRadius: 16,
-            padding: "18px 20px",
+            padding: "16px 18px",
             boxSizing: "border-box",
             display: "flex",
             flexDirection: "column",
@@ -112,25 +116,7 @@ export default function CurrentDayGlucoseCard() {
             overflow: "hidden",
           }}
         >
-          <Header
-            title="Today's Glucose"
-            sub={s.kind === "ok"
-              ? `${s.readings.length} readings · ${new Date().toLocaleDateString("en", { weekday: "long", month: "short", day: "numeric" })}`
-              : s.kind === "loading" ? "Loading CGM data…"
-              : s.kind === "no-cgm" ? "Connect a CGM in Settings to see live glucose."
-              : `CGM error: ${s.msg}`}
-            current={s.kind === "ok" ? s.current : null}
-            flippable={s.kind === "ok"}
-            onCgmRefresh={onCgmRefresh}
-            showRefresh={s.kind === "ok" || s.kind === "error"}
-          />
-          {s.kind === "ok" && s.readings.length > 0 ? (
-            <DayChart readings={s.readings} />
-          ) : (
-            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.25)", fontSize: 12 }}>
-              {s.kind === "loading" ? "…" : s.kind === "no-cgm" ? "No CGM connected" : s.kind === "ok" ? "No readings yet today" : ""}
-            </div>
-          )}
+          <HeroFront state={s} onCgmRefresh={onCgmRefresh} flippable={s.kind === "ok"} />
         </div>
 
         {/* BACK */}
@@ -158,50 +144,182 @@ export default function CurrentDayGlucoseCard() {
   );
 }
 
-function Header({
-  title, sub, current, flippable, onCgmRefresh, showRefresh,
+/* HeroFront — replaces the old Header. Renders the entire FRONT card
+   contents for every state of `s` (loading / no-cgm / error / ok).
+   Visual reference: `AppMockupPhone.tsx` "Live glucose hero" tile.
+
+   Layout (ok state):
+     ┌──────────────────────────────────────────────┐
+     │ GLUCOSE · LIVE          1m ago [Refresh] ↺  │
+     │ 142  mg/dL                       ↗ +8 / 15m │
+     │ ┌──────────────────────────────────────────┐ │
+     │ │  rolling 2h sparkline (RollingChart)      │ │
+     │ └──────────────────────────────────────────┘ │
+     │ −2h          −1h                  now        │
+     └──────────────────────────────────────────────┘ */
+function HeroFront({
+  state, onCgmRefresh, flippable,
 }: {
-  title: string;
-  sub: string;
-  current: { v: number; t: number } | null;
+  state: State;
+  onCgmRefresh: (r: CgmFetchResult) => void;
   flippable: boolean;
-  onCgmRefresh?: (r: CgmFetchResult) => void;
-  showRefresh?: boolean;
 }) {
-  const c = current ? colorFor(current.v) : "rgba(255,255,255,0.5)";
+  const ok = state.kind === "ok";
+  const current = ok ? state.current : null;
+  const readings = ok ? state.readings : [];
+  const valueColor = current ? colorFor(current.v) : "rgba(255,255,255,0.5)";
+  const ageLabel = current ? formatAge(Date.now() - current.t) : null;
+  const delta = useMemo(
+    () => computeDelta15m(readings, current),
+    [readings, current],
+  );
+
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "-0.01em" }}>{title}</div>
-        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>{sub}</div>
-        {showRefresh && onCgmRefresh && (
-          <div style={{ marginTop: 8 }}>
+    <>
+      {/* Header row — uppercase pill label LEFT, age + refresh + flip RIGHT */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+      }}>
+        <span style={{
+          fontSize: 11, fontWeight: 700, letterSpacing: "0.12em",
+          color: GREEN, textTransform: "uppercase",
+        }}>
+          GLUCOSE · LIVE
+        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {ageLabel && (
+            <span style={{
+              fontSize: 10, color: "rgba(255,255,255,0.4)",
+              fontFamily: "var(--font-mono)",
+            }}>
+              {ageLabel}
+            </span>
+          )}
+          {(ok || state.kind === "error") && (
             <CgmFetchButton size="sm" label="Refresh" onResult={onCgmRefresh} />
-          </div>
-        )}
+          )}
+          {flippable && (
+            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)" }}>↺</span>
+          )}
+        </div>
       </div>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 8, flexShrink: 0 }}>
-        {current && (
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: 9, color: "rgba(255,255,255,0.35)", letterSpacing: "0.08em", fontWeight: 600 }}>NOW</div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: c, letterSpacing: "-0.03em", lineHeight: 1 }}>
-              {Math.round(current.v)}
-              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", fontWeight: 500, marginLeft: 4 }}>mg/dL</span>
-            </div>
-          </div>
-        )}
-        {flippable && <span style={{ fontSize: 9, color: "rgba(255,255,255,0.2)", marginLeft: 4 }}>↺</span>}
-      </div>
-    </div>
+
+      {/* Value + trend row — only when we have a current reading */}
+      {ok && current ? (
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+          <span style={{
+            fontSize: 48, fontWeight: 800, letterSpacing: "-0.04em",
+            color: valueColor, fontFamily: "var(--font-mono)", lineHeight: 1,
+          }}>
+            {Math.round(current.v)}
+          </span>
+          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>mg/dL</span>
+          {delta && (
+            <span style={{
+              marginLeft: "auto", display: "flex", alignItems: "center", gap: 4,
+              color: valueColor, fontSize: 11, fontWeight: 600,
+            }}>
+              <TrendArrow direction={delta.direction} color={valueColor} />
+              {delta.label}
+            </span>
+          )}
+        </div>
+      ) : (
+        <div style={{
+          minHeight: 48, display: "flex", alignItems: "center",
+          color: "rgba(255,255,255,0.45)", fontSize: 12,
+        }}>
+          {state.kind === "loading" ? "Loading CGM data…"
+            : state.kind === "no-cgm" ? "Connect a CGM in Settings to see live glucose."
+            : state.kind === "error" ? `CGM error: ${state.msg}`
+            : "No readings yet today"}
+        </div>
+      )}
+
+      {/* Chart fills remaining card height */}
+      {ok && readings.length > 0 ? (
+        <RollingChart readings={readings} />
+      ) : (
+        <div style={{ flex: 1 }} />
+      )}
+    </>
   );
 }
 
-function DayChart({ readings }: { readings: Array<{ t: number; v: number }> }) {
-  // Measure the container so the SVG always renders in true pixel space
-  // (no aspect-ratio squash). This makes the chart fill its slot on both
-  // narrow phones and wide desktop cards without distortion.
+/* Trend arrow icon — three flavours (NE up, SE down, →flat) matching
+   the hero mockup's stroke style. Color is passed in so it tracks the
+   current value's range color (GREEN / ORANGE / PINK). */
+function TrendArrow({ direction, color }: { direction: "up" | "down" | "flat"; color: string }) {
+  const common = {
+    width: 14, height: 14, viewBox: "0 0 24 24", fill: "none",
+    stroke: color, strokeWidth: 2.5,
+    strokeLinecap: "round" as const, strokeLinejoin: "round" as const,
+  };
+  if (direction === "up") {
+    return (
+      <svg {...common}>
+        <line x1="7" y1="17" x2="17" y2="7" />
+        <polyline points="9 7 17 7 17 15" />
+      </svg>
+    );
+  }
+  if (direction === "down") {
+    return (
+      <svg {...common}>
+        <line x1="7" y1="7" x2="17" y2="17" />
+        <polyline points="9 17 17 17 17 9" />
+      </svg>
+    );
+  }
+  return (
+    <svg {...common}>
+      <line x1="5" y1="12" x2="19" y2="12" />
+      <polyline points="15 8 19 12 15 16" />
+    </svg>
+  );
+}
+
+function formatAge(ms: number): string {
+  const min = Math.floor(ms / 60000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min}m ago`;
+  const h = Math.floor(min / 60);
+  return `${h}h ago`;
+}
+
+/* Compute the delta in mg/dL between the current reading and the reading
+   closest to (current.t − 15min). Requires ≥5min of separation so a brief
+   gap doesn't yield a misleading "±0" trend. Returns null if there is no
+   suitable historical reading. */
+function computeDelta15m(
+  readings: Array<{ t: number; v: number }>,
+  current: { v: number; t: number } | null,
+): { label: string; direction: "up" | "down" | "flat" } | null {
+  if (!current || readings.length < 2) return null;
+  const target = current.t - 15 * 60 * 1000;
+  let best: { t: number; v: number } | null = null;
+  let bestDist = Infinity;
+  for (const r of readings) {
+    if (r.t > current.t) continue;
+    const d = Math.abs(r.t - target);
+    if (d < bestDist) { bestDist = d; best = r; }
+  }
+  if (!best || current.t - best.t < 5 * 60 * 1000) return null;
+  const delta = Math.round(current.v - best.v);
+  const sign = delta > 0 ? "+" : delta < 0 ? "−" : "±";
+  const direction: "up" | "down" | "flat" = delta > 2 ? "up" : delta < -2 ? "down" : "flat";
+  return { label: `${sign}${Math.abs(delta)} / 15m`, direction };
+}
+
+/* RollingChart — last 2 hours of readings on a (now−2h) → now domain.
+   Filters the full-day `readings` array to the visible window; the data
+   hook itself (`loadHistory` in the parent) is unchanged. X-axis labels
+   are "−2h", "−1h", "now" per the hero spec. Line + last-point color
+   tracks `colorFor(last)` so out-of-range periods read at a glance. */
+function RollingChart({ readings }: { readings: Array<{ t: number; v: number }> }) {
+  // Measure the container so the SVG always renders in true pixel space.
   const containerRef = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState<{ w: number; h: number }>({ w: 720, h: 240 });
+  const [size, setSize] = useState<{ w: number; h: number }>({ w: 720, h: 200 });
 
   useEffect(() => {
     const el = containerRef.current;
@@ -218,30 +336,34 @@ function DayChart({ readings }: { readings: Array<{ t: number; v: number }> }) {
 
   const W = size.w;
   const H = size.h;
-  const padL = 32;
-  const padR = 12;
-  const padT = 12;
-  const padB = 24;
+  const padL = 28;
+  const padR = 10;
+  const padT = 8;
+  const padB = 22;
 
-  const today0 = new Date();
-  today0.setHours(0, 0, 0, 0);
-  const dayStart = today0.getTime();
-  const dayEnd = dayStart + 24 * 3600 * 1000;
+  // Rolling 2-hour window ending at now. Source readings come from the
+  // parent which loads the full day; we just slice client-side here.
+  const now = Date.now();
+  const winStart = now - 2 * 3600 * 1000;
+  const visible = useMemo(
+    () => readings.filter((r) => r.t >= winStart && r.t <= now),
+    [readings, winStart, now],
+  );
 
   const yMin = 40;
   const yMax = 300;
-  const toX = (t: number) => padL + ((t - dayStart) / (dayEnd - dayStart)) * (W - padL - padR);
+  const toX = (t: number) => padL + ((t - winStart) / (now - winStart)) * (W - padL - padR);
   const toY = (v: number) => padT + (1 - (v - yMin) / (yMax - yMin)) * (H - padT - padB);
 
-  // Vertical grid: a line every 30 minutes (48 per day). Hour-aligned
-  // lines are drawn slightly stronger so the eye still picks out hours.
-  const halfHourTicks = Array.from({ length: 49 }, (_, i) => i); // 0..48 → 0:00..24:00
-  // Hour labels are sparser to avoid overlap, esp. on narrow phones.
-  const hourLabels = W < 380 ? [0, 6, 12, 18] : [0, 3, 6, 9, 12, 15, 18, 21];
   const yTicks = [70, 110, 180, 250];
+  const xLabels: Array<{ t: number; label: string }> = [
+    { t: winStart,                  label: "−2h" },
+    { t: winStart + 3600 * 1000,    label: "−1h" },
+    { t: now,                       label: "now"  },
+  ];
 
-  const path = readings.map((r, i) => `${i === 0 ? "M" : "L"}${toX(r.t).toFixed(1)},${toY(r.v).toFixed(1)}`).join(" ");
-  const last = readings[readings.length - 1];
+  const path = visible.map((r, i) => `${i === 0 ? "M" : "L"}${toX(r.t).toFixed(1)},${toY(r.v).toFixed(1)}`).join(" ");
+  const last = visible[visible.length - 1];
   const lastX = last ? toX(last.t) : 0;
   const lastY = last ? toY(last.v) : 0;
   const lastC = last ? colorFor(last.v) : ACCENT;
@@ -249,7 +371,7 @@ function DayChart({ readings }: { readings: Array<{ t: number; v: number }> }) {
   // Crosshair-snappable points (pixel space).
   const crosshairPoints = useMemo<CrosshairPoint[]>(() => {
     if (W <= 0 || H <= 0) return [];
-    return readings.map((r) => {
+    return visible.map((r) => {
       const fmtTime = new Date(r.t).toLocaleTimeString("en", { hour: "2-digit", minute: "2-digit", hour12: false });
       return {
         x: toX(r.t),
@@ -258,9 +380,9 @@ function DayChart({ readings }: { readings: Array<{ t: number; v: number }> }) {
         tooltip: [fmtTime, `${Math.round(r.v)} mg/dL`],
       };
     });
-    // toX/toY depend on W/H/dayStart; readings + W + H is sufficient
+    // toX/toY depend on W/H/winStart/now; visible + W + H captures it all.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [readings, W, H]);
+  }, [visible, W, H]);
 
   const { active, handlers } = useCrosshair(crosshairPoints);
 
@@ -289,40 +411,22 @@ function DayChart({ readings }: { readings: Array<{ t: number; v: number }> }) {
             height={toY(RANGE_LOW) - toY(RANGE_HIGH)}
             fill={GREEN} fillOpacity="0.06"
           />
-          {/* X 30-min grid (subtle) + hour grid (slightly stronger) */}
-          {halfHourTicks.map((i) => {
-            const t = dayStart + i * 30 * 60 * 1000;
-            const x = toX(t);
-            const isHour = i % 2 === 0;
-            return (
-              <line
-                key={i}
-                x1={x} y1={padT} x2={x} y2={H - padB}
-                stroke={isHour ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.03)"}
-                strokeWidth="1"
-              />
-            );
-          })}
-          {/* Y grid */}
+          {/* Y grid + labels (70 / 110 / 180 / 250) */}
           {yTicks.map((v) => (
             <g key={v}>
               <line x1={padL} y1={toY(v)} x2={W - padR} y2={toY(v)} stroke="rgba(255,255,255,0.05)" strokeDasharray="3 4" />
-              <text x={padL - 5} y={toY(v) + 3} textAnchor="end" fontSize="10" fill="rgba(255,255,255,0.25)">{v}</text>
+              <text x={padL - 5} y={toY(v) + 3} textAnchor="end" fontSize="9" fill="rgba(255,255,255,0.25)">{v}</text>
             </g>
           ))}
-          {/* X hour labels */}
-          {hourLabels.map((h) => {
-            const t = dayStart + h * 3600 * 1000;
-            return (
-              <text key={h} x={toX(t)} y={H - 6} textAnchor="middle" fontSize="10" fill="rgba(255,255,255,0.25)">
-                {h.toString().padStart(2, "0")}
-              </text>
-            );
-          })}
-          {/* Now indicator */}
-          <line x1={toX(Date.now())} y1={padT} x2={toX(Date.now())} y2={H - padB} stroke={ACCENT} strokeOpacity="0.25" strokeDasharray="2 3" />
-          {/* Line */}
-          <path d={path} fill="none" stroke={ACCENT} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          {/* X markers + labels (−2h / −1h / now) */}
+          {xLabels.map((x) => (
+            <g key={x.label}>
+              <line x1={toX(x.t)} y1={padT} x2={toX(x.t)} y2={H - padB} stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
+              <text x={toX(x.t)} y={H - 6} textAnchor="middle" fontSize="9" fill="rgba(255,255,255,0.3)">{x.label}</text>
+            </g>
+          ))}
+          {/* Trace */}
+          <path d={path} fill="none" stroke={lastC} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           {/* Last point */}
           {last && <circle cx={lastX} cy={lastY} r="4" fill={lastC} stroke={SURFACE} strokeWidth="1.5" />}
           {/* Crosshair */}
