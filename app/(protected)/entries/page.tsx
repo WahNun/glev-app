@@ -900,10 +900,10 @@ function intensityLabel(v: string): string {
 
 function pendingLabel(expectedAt: Date): string {
   // Once the CGM job's 3 h window has elapsed, the job is finalised
-  // as 'skipped' server-side; surface that visibly here instead of
-  // showing "Pending · expected …" forever.
+  // as 'skipped' server-side. Mirror that exact wording in the UI
+  // so the displayed state matches the backend job status.
   if (Date.now() - expectedAt.getTime() > EXERCISE_NO_DATA_AFTER_MS) {
-    return "No data";
+    return "Skipped";
   }
   const hh = expectedAt.toLocaleTimeString("en", { hour:"numeric", minute:"2-digit" });
   return `Pending · expected ${hh}`;
