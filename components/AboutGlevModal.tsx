@@ -142,7 +142,7 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
       <span
         style={{
           fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.9)",
-          fontFamily: mono ? "ui-monospace, SFMono-Regular, Menlo, monospace" : undefined,
+          fontFamily: mono ? "var(--font-mono)" : undefined,
           maxWidth: "70%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
         }}
       >

@@ -57,8 +57,7 @@ export default function HexSwatch({
     >
       <div
         style={{
-          fontFamily:
-            "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+          fontFamily: "var(--font-mono)",
           fontSize: 15,
           fontWeight: 600,
           letterSpacing: "-0.01em",
@@ -78,8 +77,7 @@ export default function HexSwatch({
             background: "rgba(0,0,0,0.55)",
             color: "#fff",
             borderRadius: 12,
-            fontFamily:
-              "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+            fontFamily: "var(--font-mono)",
             fontSize: 12,
           }}
         >

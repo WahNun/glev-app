@@ -110,8 +110,7 @@ const inputStyle: React.CSSProperties = {
   borderRadius: 8,
   padding: "8px 12px",
   color: "#fff",
-  fontFamily:
-    "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+  fontFamily: "var(--font-mono)",
   fontSize: 13,
   width: "100%",
 };

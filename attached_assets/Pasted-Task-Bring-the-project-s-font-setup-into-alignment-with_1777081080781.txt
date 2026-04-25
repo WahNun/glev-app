@@ -1,0 +1,115 @@
+Task: Bring the project's font setup into alignment with the Glev brand guidelines (v1, April 2026). The brand spec lists three weights of Inter and JetBrains Mono as the canonical numerical typeface. Currently only Inter is loaded; JetBrains Mono is missing and the mono stack falls back to system fonts, which breaks brand consistency for glucose values, insulin units, timestamps, and hex codes.
+
+## Changes required
+
+### 1. Drop unused Inter weights
+
+In `app/layout.tsx`, the Inter import currently requests weights `["400", "500", "600", "700", "800", "900"]`. The brand spec only uses 400 (Regular), 500 (Medium), 600 (SemiBold), and 700 (Bold). Drop 800 and 900 — they're not used anywhere and add ~25-40KB of unused font payload.
+
+After the change, the import should look like:
+
+  const inter = Inter({
+    subsets: ["latin"],
+    weight: ["400", "500", "600", "700"],
+    variable: "--font-inter",
+    display: "swap",
+  });
+
+### 2. Add JetBrains Mono as a web font via next/font/google
+
+In the same `app/layout.tsx`, alongside the Inter import, add:
+
+  import { JetBrains_Mono } from "next/font/google";
+
+  const jetbrainsMono = JetBrains_Mono({
+    subsets: ["latin"],
+    weight: ["400", "500"],
+    variable: "--font-jetbrains-mono",
+    display: "swap",
+  });
+
+Apply the variable to the body class together with the Inter variable, e.g.:
+
+  <body className={`${inter.variable} ${jetbrainsMono.variable}`}>
+
+### 3. Update the global mono stack in `app/globals.css`
+
+Find the existing mono stack (currently `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace`). Replace it with:
+
+  font-family: var(--font-jetbrains-mono), 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+Keep the system fallbacks at the end so the font still degrades gracefully if the web font fails to load.
+
+If there is a CSS custom property like `--font-mono` defined in globals.css, point it at the new stack rather than search-and-replacing every component.
+
+### 4. Update components that hard-code the mono stack
+
+The following files reference the mono stack directly (found via ripgrep). Update each to use the new stack with `var(--font-jetbrains-mono)` at position 1:
+
+- components/brand/HexSwatch.tsx
+- app/brand/page.tsx (Type-System cards + Voice cards)
+- components/AboutGlevModal.tsx
+- components/ImportPanel.tsx
+- app/(protected)/dashboard/page.tsx (formula display)
+- app/(protected)/insights/page.tsx (formula tiles)
+- app/mockups/dark-cockpit/page.tsx (also has a one-off `'Courier New', monospace` at line 1500 — update that too for consistency, even though it's only a sandbox page)
+
+If they currently inline the full stack, replace it with the same value as in step 3. If they reference a `var(--font-mono)` already, no change needed beyond step 3.
+
+### 5. Add letter-spacing convention for headlines
+
+The brand spec mandates `letter-spacing: -0.03em` for Inter Bold (Hero, Headlines, Logo Wordmark). In `app/globals.css`, add either utility classes or a base rule:
+
+  h1, h2, h3 {
+    letter-spacing: -0.03em;
+  }
+
+Or, if you prefer scoped utilities:
+
+  .text-tight {
+    letter-spacing: -0.03em;
+  }
+
+Pick whichever pattern matches the rest of the codebase. Do NOT apply -0.03em globally to body text — only to Bold weight headings and the wordmark.
+
+### 6. Fix the self-contradicting documentation on app/brand/page.tsx
+
+The brand page currently documents "Keine Web-Mono geladen — nur System-Stack" in its typography section. After the changes above, that's no longer true. Update that copy to reflect the new state:
+
+  JetBrains Mono · Web-geladen via next/font/google · weight 400, 500
+  Reserviert für: Glukosewerte, Insulineinheiten, Zeitstempel, Hex-Codes, IDs, Tabellenzellen.
+
+Also update the typography sources section if it lists JetBrains Mono as "not loaded" or similar.
+
+### 7. Verify
+
+Run:
+  npm run build
+
+Open the brand page (glev.app/brand or localhost:3000/brand) and confirm:
+- The mono specimens render in JetBrains Mono (you'll see the distinctive curly tails on lowercase 'l', 'a', and the ligature-style equals sign)
+- Numerical displays in dashboard and insights pages render in the same font
+- Hex code labels in HexSwatch render in JetBrains Mono
+
+If JetBrains Mono is loading correctly, the rendered text will visibly differ from system mono fonts — letterforms are wider, more humanist, and have rounded terminals.
+
+### 8. Commit and push
+
+  git add -A
+  git commit -m "feat(brand): align font setup with brand spec — add JetBrains Mono, drop unused Inter weights"
+  git push origin main
+
+## Report back
+
+- Commit SHA
+- List of modified files
+- Confirmation that npm run build passes
+- Any decisions you made where the spec was ambiguous (e.g. whether to use h1/h2/h3 base rule or utility class for letter-spacing)
+- Screenshot of the brand page typography section after the change, so I can see JetBrains Mono is actually rendering
+
+## Out of scope
+
+- Don't touch the Inter font-family stack itself — that's already correct.
+- Don't introduce Tailwind config (the project doesn't use Tailwind).
+- Don't change any component's structural logic — this is purely a font-loading and styling change.
+- Don't update the marketing playbook PDF — that's external to the codebase.

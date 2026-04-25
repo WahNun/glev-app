@@ -724,7 +724,7 @@ function LogPage({ onLogged }: { onLogged?: ()=>void }) {
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
             <div style={{padding:"8px 10px",background:"rgba(255,255,255,0.03)",borderRadius:8,border:"1px solid rgba(255,255,255,0.06)"}}>
               <div style={{fontSize:9,color:"rgba(255,255,255,0.25)",letterSpacing:"0.06em",marginBottom:4}}>RAW RESPONSE</div>
-              <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",fontFamily:"monospace",wordBreak:"break-all",lineHeight:1.5}}>{pfRaw}</div>
+              <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",fontFamily:"var(--font-mono)",wordBreak:"break-all",lineHeight:1.5}}>{pfRaw}</div>
             </div>
             {pfParsed&&pfParsed.length>0&&(
               <div style={{padding:"8px 10px",background:`${GREEN}08`,borderRadius:8,border:`1px solid ${GREEN}22`}}>
@@ -1187,7 +1187,7 @@ function StatMetricFlipCard({ label, info, color, defaultFlipped }: {
             <span style={{fontSize:9,color:"rgba(255,255,255,0.22)"}}>↺ details</span>
           </div>
           <div style={{fontSize:12,color:"rgba(255,255,255,0.65)",fontStyle:"italic",lineHeight:1.4}}>{info.headline}</div>
-          <div style={{fontSize:9,color:color,fontFamily:"monospace",opacity:0.75}}>{info.formula}</div>
+          <div style={{fontSize:9,color:color,fontFamily:"var(--font-mono)",opacity:0.75}}>{info.formula}</div>
         </div>
         {/* back */}
         <div style={{position:"absolute",inset:0,backfaceVisibility:"hidden",transform:"rotateY(180deg)",background:`linear-gradient(145deg,${color}14,${SURFACE} 65%)`,border:`1px solid ${color}33`,borderRadius:14,padding:"14px 18px",boxSizing:"border-box",display:"flex",flexDirection:"column",gap:7,justifyContent:"space-between"}}>
@@ -1196,7 +1196,7 @@ function StatMetricFlipCard({ label, info, color, defaultFlipped }: {
             <span style={{fontSize:9,color:"rgba(255,255,255,0.18)"}}>↺ back</span>
           </div>
           <div style={{fontSize:11,color:"rgba(255,255,255,0.65)",lineHeight:1.5}}>{info.detail}</div>
-          <div style={{fontSize:9,color:color,fontFamily:"monospace",opacity:0.8}}>{info.formula}</div>
+          <div style={{fontSize:9,color:color,fontFamily:"var(--font-mono)",opacity:0.8}}>{info.formula}</div>
         </div>
       </div>
     </div>
@@ -1328,7 +1328,7 @@ function Recommend({ prefill }: { prefill?: Partial<ParsedVoiceEntry> }) {
                 <span style={{fontSize:56,fontWeight:900,color:"white",letterSpacing:"-0.03em"}}>{result.recommendedUnits.toFixed(1)}</span>
                 <span style={{fontSize:22,color:"rgba(255,255,255,0.4)",paddingBottom:6}}>u</span>
               </div>
-              <span style={{fontSize:11,color:"rgba(255,255,255,0.35)",fontFamily:"monospace"}}>Range {result.minUnits.toFixed(1)} – {result.maxUnits.toFixed(1)} u</span>
+              <span style={{fontSize:11,color:"rgba(255,255,255,0.35)",fontFamily:"var(--font-mono)"}}>Range {result.minUnits.toFixed(1)} – {result.maxUnits.toFixed(1)} u</span>
               {result.cappedForSafety&&<span style={{fontSize:10,color:ORANGE,marginTop:6}}>⚠ Capped for safety</span>}
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:8}}>
@@ -1497,7 +1497,7 @@ function VoicePage({ onLogged }: { onLogged?: ()=>void }) {
           {/* Rotating arc text — recording only */}
           {isRec&&(
             <g style={{transformOrigin:"126px 126px",animation:"arcRotate 8s linear infinite"}}>
-              <text fill={`rgba(79,110,247,0.65)`} fontSize="8" letterSpacing="5.5" fontFamily="'Courier New',monospace" fontWeight="700">
+              <text fill={`rgba(79,110,247,0.65)`} fontSize="8" letterSpacing="5.5" fontFamily="var(--font-mono)" fontWeight="700">
                 <textPath href="#vArcTop">RECORDING · RECORDING · RECORDING ·&nbsp;&nbsp;</textPath>
               </text>
             </g>
@@ -1691,14 +1691,14 @@ function ImportPage({ onLogged }: { onLogged?: ()=>void }) {
       <Card style={{padding:22}}>
         <div style={{fontSize:15,fontWeight:700,marginBottom:6}}>Import Data</div>
         <div style={{fontSize:12,color:"rgba(255,255,255,0.35)",marginBottom:16}}>
-          Paste CSV or tab-separated data. Columns: <span style={{fontFamily:"monospace",fontSize:11,color:ACCENT}}>{COLS.slice(0,6).join(", ")}…</span>
+          Paste CSV or tab-separated data. Columns: <span style={{fontFamily:"var(--font-mono)",fontSize:11,color:ACCENT}}>{COLS.slice(0,6).join(", ")}…</span>
         </div>
         <div style={{fontSize:10,color:"rgba(255,255,255,0.3)",marginBottom:8,letterSpacing:"0.08em"}}>REQUIRED: glucoseBefore, carbsGrams, insulinUnits</div>
         <textarea
           value={raw}
           onChange={e=>setRaw(e.target.value)}
           placeholder={"glucoseBefore\tcarbsGrams\tinsulinUnits\tmealType\n110\t60\t2\tBALANCED\n95\t45\t1.5\tFAST_CARBS"}
-          style={{...inp,height:140,fontFamily:"monospace",fontSize:12,fontWeight:400,resize:"vertical",lineHeight:1.6}}
+          style={{...inp,height:140,fontFamily:"var(--font-mono)",fontSize:12,fontWeight:400,resize:"vertical",lineHeight:1.6}}
         />
         <div style={{display:"flex",gap:10,marginTop:12}}>
           <button onClick={parseCSV} style={{padding:"10px 22px",background:"rgba(255,255,255,0.08)",border:"none",borderRadius:10,color:"white",fontSize:13,fontWeight:600,cursor:"pointer"}}>Parse & Preview</button>
@@ -1951,7 +1951,7 @@ function MobileDashboard({email,name:memberName,onSignOut}:{email?:string;name?:
                       <div style={{fontSize:11,color:"rgba(255,255,255,0.6)",lineHeight:1.45,fontStyle:"italic"}}>{info.headline}</div>
                       <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",lineHeight:1.4}}>{info.detail.slice(0,90)}…</div>
                       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                        <div style={{fontSize:9,color:sc.color,opacity:0.8,fontFamily:"monospace"}}>{info.formula}</div>
+                        <div style={{fontSize:9,color:sc.color,opacity:0.8,fontFamily:"var(--font-mono)"}}>{info.formula}</div>
                         <button
                           onClick={(e)=>{e.stopPropagation();setInsightFocus(sc.label);setMobilePage("insights");}}
                           style={{fontSize:9,color:sc.color,fontWeight:700,background:"none",border:`1px solid ${sc.color}44`,borderRadius:99,padding:"2px 8px",cursor:"pointer",display:"flex",alignItems:"center",gap:3,letterSpacing:"0.04em",flexShrink:0}}

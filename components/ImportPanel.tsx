@@ -309,7 +309,7 @@ export default function ImportPanel({ embedded = false }: { embedded?: boolean }
 
       <div style={{ ...card, marginBottom:20, borderColor:`${ACCENT}25` }}>
         <div style={{ fontSize:13, fontWeight:600, color:ACCENT, marginBottom:10 }}>Expected CSV Format</div>
-        <pre style={{ fontFamily:"monospace", fontSize:11, color:"rgba(255,255,255,0.5)", background:"rgba(0,0,0,0.3)", padding:"12px 14px", borderRadius:8, overflowX:"auto", lineHeight:1.6, margin:0 }}>{SAMPLE}</pre>
+        <pre style={{ fontFamily:"var(--font-mono)", fontSize:11, color:"rgba(255,255,255,0.5)", background:"rgba(0,0,0,0.3)", padding:"12px 14px", borderRadius:8, overflowX:"auto", lineHeight:1.6, margin:0 }}>{SAMPLE}</pre>
         <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:10, lineHeight:1.6 }}>
           Columns auto-detected. Supported: date, meal/food/description, glucose/bg, carbs, protein, fat, fiber, calories, insulin/dose, evaluation/result.
         </div>
@@ -318,7 +318,7 @@ export default function ImportPanel({ embedded = false }: { embedded?: boolean }
       <div style={{ ...card, marginBottom:20 }}>
         <div style={{ fontSize:13, fontWeight:600, marginBottom:12 }}>Paste CSV Data</div>
         <textarea
-          style={{ ...inp, height:200, resize:"vertical", fontFamily:"monospace", fontSize:12, fontFeatureSettings:'"tnum"' }}
+          style={{ ...inp, height:200, resize:"vertical", fontFamily:"var(--font-mono)", fontSize:12, fontFeatureSettings:'"tnum"' }}
           placeholder={SAMPLE}
           value={csv}
           onChange={e => { setCSV(e.target.value); setParsed(false); setDone(false); }}

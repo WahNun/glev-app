@@ -184,7 +184,7 @@ export default function BrandPage() {
               fontSize: 12,
               color: "rgba(255,255,255,0.7)",
               fontFamily:
-                "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                "var(--font-mono)",
               textAlign: "center",
             }}
           >
@@ -219,7 +219,7 @@ export default function BrandPage() {
         >
           <TypeCard
             title="Inter"
-            subtitle="Primärfamilie · 400 / 500 / 600 / 700 / 800 / 900"
+            subtitle="Primärfamilie · 400 / 500 / 600 / 700"
             sample="Aa Gg 0123 — Typ 1 neu gedacht."
             sampleStyle={{
               fontSize: 32,
@@ -229,16 +229,15 @@ export default function BrandPage() {
             note="Geladen via next/font/google in app/layout.tsx als CSS-Variable --font-inter."
           />
           <TypeCard
-            title="System Mono"
-            subtitle="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas"
+            title="JetBrains Mono"
+            subtitle="Web-geladen via next/font/google · 400 / 500"
             sample="142 mg/dL · 7.9 mmol/L · 1U / 12g KH"
             sampleStyle={{
-              fontFamily:
-                "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+              fontFamily: "var(--font-mono)",
               fontSize: 18,
               fontWeight: 500,
             }}
-            note="Für Zahlen, Hex-Codes und Insulin-/KH-Werte. Keine Web-Mono geladen — nur System-Stack."
+            note="Reserviert für: Glukosewerte, Insulineinheiten, Zeitstempel, Hex-Codes, IDs, Tabellenzellen. Exponiert als CSS-Variable --font-jetbrains-mono, abrufbar projektweit über var(--font-mono)."
           />
         </div>
 
@@ -673,7 +672,7 @@ function TypeCard({
             color: "rgba(255,255,255,0.55)",
             marginTop: 4,
             fontFamily:
-              "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+              "var(--font-mono)",
           }}
         >
           {subtitle}
@@ -732,7 +731,7 @@ function ScaleRow({
           textTransform: "uppercase",
           letterSpacing: "0.06em",
           fontFamily:
-            "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+            "var(--font-mono)",
         }}
       >
         {label}
@@ -743,7 +742,7 @@ function ScaleRow({
           fontSize: 11,
           color: "rgba(255,255,255,0.4)",
           fontFamily:
-            "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+            "var(--font-mono)",
           textAlign: "right",
         }}
       >
@@ -777,7 +776,7 @@ function VoiceCard({ kind, text }: { kind: "do" | "dont"; text: string }) {
           textTransform: "uppercase",
           letterSpacing: "0.08em",
           fontFamily:
-            "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+            "var(--font-mono)",
         }}
       >
         {isDo ? "Do" : "Don't"}

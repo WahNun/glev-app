@@ -106,7 +106,7 @@ function FlipCard({ card }: { card: CardData }) {
             <div style={{ fontSize:10, color:card.color, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>{card.label}</div>
             <span style={{ fontSize:9, color:"rgba(255,255,255,0.18)" }}>↺ back</span>
           </div>
-          <div style={{ fontSize:10, color:"rgba(255,255,255,0.55)", lineHeight:1.45, fontFamily:"monospace" }}>{card.formula}</div>
+          <div style={{ fontSize:10, color:"rgba(255,255,255,0.55)", lineHeight:1.45, fontFamily:"var(--font-mono)" }}>{card.formula}</div>
           <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)", lineHeight:1.4 }}>{card.explanation.slice(0,110)}…</div>
         </div>
       </div>

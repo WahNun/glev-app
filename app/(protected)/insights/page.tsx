@@ -725,7 +725,7 @@ function InsightFlipTile({ tile }: { tile: InsightTile }) {
             <div style={{ fontSize:10, color:tile.color, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>{tile.label}</div>
             <span style={{ fontSize:9, color:"rgba(255,255,255,0.18)", flexShrink:0 }}>↺ back</span>
           </div>
-          <div style={{ fontSize:10, color:"rgba(255,255,255,0.6)", fontFamily:"monospace", background:"rgba(0,0,0,0.3)", padding:"6px 8px", borderRadius:6, wordBreak:"break-word" }}>{tile.formula}</div>
+          <div style={{ fontSize:10, color:"rgba(255,255,255,0.6)", fontFamily:"var(--font-mono)", background:"rgba(0,0,0,0.3)", padding:"6px 8px", borderRadius:6, wordBreak:"break-word" }}>{tile.formula}</div>
           <div style={{ fontSize:11, color:"rgba(255,255,255,0.55)", lineHeight:1.45 }}>{tile.explain}</div>
         </div>
       </div>
