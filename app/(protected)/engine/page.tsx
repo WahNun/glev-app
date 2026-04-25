@@ -145,6 +145,7 @@ export default function EnginePage() {
   const [result, setResult]   = useState<Recommendation|null>(null);
   const [running, setRunning] = useState(false);
   const [cgmPulling, setCgmPulling] = useState(false);
+  const [lastReading, setLastReading] = useState<string>("");
 
   // Voice input state — feeds the macro fields by transcribing → /api/parse-food.
   const [recording, setRecording]   = useState(false);
@@ -280,6 +281,8 @@ export default function EnginePage() {
     setTimeout(() => {
       const reading = Math.round(85 + Math.random() * 70);
       setGlucose(String(reading));
+      const now = new Date();
+      setLastReading(`${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`);
       setCgmPulling(false);
       logDebug("ENGINE.CGM_PULL", { reading });
     }, 700);
@@ -518,74 +521,184 @@ export default function EnginePage() {
         </div>
       )}
 
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20, marginBottom:20 }}>
-        <div style={card}>
-          <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>Current Conditions</div>
-          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+      {isMobile ? (
+        // ---- Mobile: single-card flow that matches the original log-style
+        // layout the user is used to. No "Current Conditions" / "Meal Details"
+        // section titles; macros are a 2x2 grid (Carbs+Fiber, Protein+Fat);
+        // Meal Classification is always visible as an inline field that shows
+        // "Auto from macros" until the macros are filled.
+        <div style={{ ...card, marginBottom: 20 }}>
+          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            {/* Glucose + CGM pull */}
             <div>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
-                <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)" }}>Glucose Before (mg/dL)</label>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6, gap:8 }}>
+                <label style={{ fontSize:11, color:"rgba(255,255,255,0.4)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:600 }}>
+                  Glucose Before (mg/dL){lastReading ? ` · Last reading: ${lastReading}` : ""}
+                </label>
                 <button onClick={handlePullCgm} disabled={cgmPulling} style={{
                   display:"flex", alignItems:"center", gap:6,
                   padding:"4px 10px", borderRadius:99, border:`1px solid ${ACCENT}40`,
                   background:`${ACCENT}15`, color:ACCENT, fontSize:11, fontWeight:600,
-                  cursor: cgmPulling ? "wait" : "pointer",
+                  cursor: cgmPulling ? "wait" : "pointer", flexShrink:0,
                 }}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                    <polyline points="7 10 12 15 17 10"/>
-                    <line x1="12" y1="15" x2="12" y2="3"/>
-                  </svg>
-                  {cgmPulling ? "Pulling…" : "Pull CGM"}
+                  <span style={{ width:7, height:7, borderRadius:"50%", background:GREEN, boxShadow:`0 0 6px ${GREEN}` }}/>
+                  CGM
                 </button>
               </div>
               <input style={inp} type="number" placeholder="e.g. 115" value={glucose} onChange={e => setGlucose(e.target.value)}/>
             </div>
+
+            {/* Meal Time */}
             <div>
-              <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>Meal Time</label>
+              <label style={{ fontSize:11, color:"rgba(255,255,255,0.4)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:600, display:"block", marginBottom:6 }}>
+                Meal Time
+              </label>
               <input
-                style={{ ...inp, fontFamily:"inherit" }}
+                style={{ ...inp, fontFamily:"inherit", textAlign:"center" }}
                 type="datetime-local"
                 value={mealTime}
                 onChange={e => setMealTime(e.target.value)}
               />
-              <div style={{ fontSize:10, color:"rgba(255,255,255,0.25)", marginTop:4 }}>
-                When you ate. Edit to backfill a past meal.
+              <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", marginTop:6, lineHeight:1.45 }}>
+                When you ate. Defaults to the latest CGM reading time — edit to backfill a past meal.
               </div>
             </div>
-            <div>
-              <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>Planned Carbs (g)</label>
-              <input style={inp} type="number" placeholder="e.g. 60" value={carbs} onChange={e => setCarbs(e.target.value)}/>
-            </div>
-          </div>
-        </div>
 
-        <div style={card}>
-          <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>Meal Details (optional)</div>
-          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+            {/* Macros 2x2: Carbs+Fiber, Protein+Fat */}
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, rowGap:14 }}>
               <div>
-                <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>Protein (g)</label>
-                <input style={inp} type="number" placeholder="0" value={protein} onChange={e => setProtein(e.target.value)}/>
+                <label style={{ fontSize:11, color:"rgba(255,255,255,0.4)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:600, display:"block", marginBottom:6 }}>Carbs (g)</label>
+                <input style={inp} type="number" placeholder="e.g. 60" value={carbs} onChange={e => setCarbs(e.target.value)}/>
               </div>
               <div>
-                <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>Fat (g)</label>
-                <input style={inp} type="number" placeholder="0" value={fat} onChange={e => setFat(e.target.value)}/>
+                <label style={{ fontSize:11, color:"rgba(255,255,255,0.4)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:600, display:"block", marginBottom:6 }}>
+                  Fiber (g) <span style={{ textTransform:"none", color:"rgba(255,255,255,0.3)", fontSize:10, fontWeight:500 }}>opt.</span>
+                </label>
+                <input style={inp} type="number" placeholder="e.g. 8" value={fiber} onChange={e => setFiber(e.target.value)}/>
               </div>
               <div>
-                <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>Fiber (g)</label>
-                <input style={inp} type="number" placeholder="0" value={fiber} onChange={e => setFiber(e.target.value)}/>
+                <label style={{ fontSize:11, color:"rgba(255,255,255,0.4)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:600, display:"block", marginBottom:6 }}>Protein (g)</label>
+                <input style={inp} type="number" placeholder="e.g. 30" value={protein} onChange={e => setProtein(e.target.value)}/>
+              </div>
+              <div>
+                <label style={{ fontSize:11, color:"rgba(255,255,255,0.4)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:600, display:"block", marginBottom:6 }}>Fat (g)</label>
+                <input style={inp} type="number" placeholder="e.g. 15" value={fat} onChange={e => setFat(e.target.value)}/>
               </div>
             </div>
+
+            {/* Description */}
             <div>
-              <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>Description</label>
-              <input style={inp} placeholder="e.g. pasta with tomato sauce" value={desc} onChange={e => setDesc(e.target.value)}/>
+              <label style={{ fontSize:11, color:"rgba(255,255,255,0.4)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:600, display:"block", marginBottom:6 }}>
+                Meal Description
+              </label>
+              <input style={inp} placeholder="e.g. granola, banana, yogurt…" value={desc} onChange={e => setDesc(e.target.value)}/>
+            </div>
+
+            {/* Meal Classification — always visible, "Auto from macros" until
+                the macros are filled, then shows the actual class. */}
+            {(() => {
+              const cNum = parseFloat(carbs), pNum = parseFloat(protein), fNum = parseFloat(fat);
+              const filled = !isNaN(cNum) && cNum > 0 && !isNaN(pNum) && !isNaN(fNum);
+              const cls = filled ? classifyMeal(cNum, pNum, fNum) : null;
+              const color = cls ? (TYPE_COLORS[cls as string] || ACCENT) : "rgba(255,255,255,0.35)";
+              const label = cls ? TYPE_LABELS[cls] : "Auto from macros";
+              return (
+                <div>
+                  <label style={{ fontSize:11, color:"rgba(255,255,255,0.4)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:600, display:"block", marginBottom:6 }}>
+                    Meal Classification
+                  </label>
+                  <div style={{
+                    ...inp,
+                    display:"flex", alignItems:"center", gap:10,
+                    color: cls ? "#fff" : "rgba(255,255,255,0.45)",
+                    fontWeight: cls ? 600 : 400,
+                  }}>
+                    <span style={{
+                      width:8, height:8, borderRadius:"50%",
+                      background: color,
+                      boxShadow: cls ? `0 0 6px ${color}` : "none",
+                      flexShrink:0,
+                    }}/>
+                    {label}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      ) : (
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20, marginBottom:20 }}>
+          <div style={card}>
+            <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>Current Conditions</div>
+            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+              <div>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                  <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)" }}>Glucose Before (mg/dL)</label>
+                  <button onClick={handlePullCgm} disabled={cgmPulling} style={{
+                    display:"flex", alignItems:"center", gap:6,
+                    padding:"4px 10px", borderRadius:99, border:`1px solid ${ACCENT}40`,
+                    background:`${ACCENT}15`, color:ACCENT, fontSize:11, fontWeight:600,
+                    cursor: cgmPulling ? "wait" : "pointer",
+                  }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                      <polyline points="7 10 12 15 17 10"/>
+                      <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    {cgmPulling ? "Pulling…" : "Pull CGM"}
+                  </button>
+                </div>
+                <input style={inp} type="number" placeholder="e.g. 115" value={glucose} onChange={e => setGlucose(e.target.value)}/>
+              </div>
+              <div>
+                <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>Meal Time</label>
+                <input
+                  style={{ ...inp, fontFamily:"inherit" }}
+                  type="datetime-local"
+                  value={mealTime}
+                  onChange={e => setMealTime(e.target.value)}
+                />
+                <div style={{ fontSize:10, color:"rgba(255,255,255,0.25)", marginTop:4 }}>
+                  When you ate. Edit to backfill a past meal.
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>Planned Carbs (g)</label>
+                <input style={inp} type="number" placeholder="e.g. 60" value={carbs} onChange={e => setCarbs(e.target.value)}/>
+              </div>
+            </div>
+          </div>
+
+          <div style={card}>
+            <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>Meal Details (optional)</div>
+            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+                <div>
+                  <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>Protein (g)</label>
+                  <input style={inp} type="number" placeholder="0" value={protein} onChange={e => setProtein(e.target.value)}/>
+                </div>
+                <div>
+                  <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>Fat (g)</label>
+                  <input style={inp} type="number" placeholder="0" value={fat} onChange={e => setFat(e.target.value)}/>
+                </div>
+                <div>
+                  <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>Fiber (g)</label>
+                  <input style={inp} type="number" placeholder="0" value={fiber} onChange={e => setFiber(e.target.value)}/>
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>Description</label>
+                <input style={inp} placeholder="e.g. pasta with tomato sauce" value={desc} onChange={e => setDesc(e.target.value)}/>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {(() => {
+        // The fancy classification card is only for desktop. On mobile the
+        // classification is inlined as a small field inside the form above.
+        if (isMobile) return null;
         const gNum = parseFloat(glucose), cNum = parseFloat(carbs), pNum = parseFloat(protein), fNum = parseFloat(fat), fbNum = parseFloat(fiber);
         const allFilled = [gNum, cNum, pNum, fNum, fbNum].every(v => !isNaN(v) && v >= 0) && cNum > 0;
         if (!allFilled) return null;
