@@ -85,7 +85,7 @@ function buildCards(meals: Meal[]): CardData[] {
 function FlipCard({ card }: { card: CardData }) {
   const [flipped, setFlipped] = useState(false);
   return (
-    <div onClick={() => setFlipped(f => !f)} className="glev-stat-card" style={{ position:"relative", cursor:"pointer", height:120, perspective:1000 }}>
+    <div onClick={() => setFlipped(f => !f)} className="glev-stat-card" style={{ position:"relative", cursor:"pointer", height:140, perspective:1000 }}>
       <div style={{ position:"absolute", inset:0, transformStyle:"preserve-3d", transition:"transform 0.5s cubic-bezier(0.4,0,0.2,1)", transform:flipped ? "rotateY(180deg)" : "rotateY(0deg)" }}>
         {/* Front */}
         <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, padding:"14px 18px", boxSizing:"border-box", display:"flex", flexDirection:"column", justifyContent:"space-between" }}>
@@ -95,7 +95,7 @@ function FlipCard({ card }: { card: CardData }) {
           </div>
           <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", gap:8 }}>
             <div style={{ display:"flex", alignItems:"flex-end", gap:4 }}>
-              <span style={{ fontSize:32, fontWeight:800, color:card.color, letterSpacing:"-0.03em", lineHeight:1 }}>{card.value}</span>
+              <span style={{ fontSize:48, fontWeight:800, color:card.color, letterSpacing:"-0.03em", lineHeight:1 }}>{card.value}</span>
               <span style={{ fontSize:13, color:"rgba(255,255,255,0.3)", paddingBottom:3 }}>{card.unit}</span>
             </div>
             <span style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>{card.sub}</span>
@@ -362,7 +362,7 @@ export default function DashboardPage() {
         </div>
       ),
     },
-    { id: "recent-entries", node: <RecentEntries rows={recentRows} onViewAll={() => router.push("/entries")} onViewEntry={(id) => router.push(`/entries#${id}`)}/> },
+    { id: "recent-entries", node: <RecentEntries rows={recentRows} onViewAll={() => router.push("/log")} onViewEntry={(id) => router.push(`/entries#${id}`)}/> },
   ];
 
   return (
@@ -431,98 +431,172 @@ function RecentEntries({
   const toggle = (id: string) => setExpanded(prev => (prev === id ? null : id));
 
   return (
-    <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, overflow:"hidden" }}>
-        <div style={{ padding:"18px 24px", display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom:`1px solid ${BORDER}` }}>
-          <div style={{ fontSize:14, fontWeight:600 }}>Recent Entries</div>
-          <button onClick={onViewAll} style={{ fontSize:12, color:ACCENT, background:"transparent", border:"none", cursor:"pointer" }}>View all →</button>
+    <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"16px 20px 8px" }}>
+      {/* Header — RECENT label left, See all → ACCENT-coloured button right.
+          Spec'd typography: 11px / 0.12em / rgba(255,255,255,0.45) for the
+          label, 13px ACCENT for the link. */}
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
+        <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:"rgba(255,255,255,0.45)" }}>
+          Recent
         </div>
-        {rows.length === 0 ? (
-          <div style={{ padding:"32px", textAlign:"center", color:"rgba(255,255,255,0.2)", fontSize:14 }}>No entries yet. Log your first meal.</div>
-        ) : (
-          <div>
-            {rows.map(r => {
-              const isOpen = expanded === r.id;
-
-              if (r.kind === "meal") {
-                const m = r.meal!;
-                return (
-                  <div key={r.id} style={{ borderBottom:`1px solid ${BORDER}`, background: isOpen ? "rgba(255,255,255,0.015)" : undefined, transition:"background 0.15s ease" }}>
-                    <MealEntryCardCollapsed meal={m} onClick={() => toggle(r.id)}/>
-                    {isOpen && (
-                      <div style={{ borderTop:`1px solid ${BORDER}` }}>
-                        <MealEntryLightExpand
-                          meal={m}
-                          onViewFull={() => onViewEntry(m.id)}
-                        />
-                      </div>
-                    )}
-                  </div>
-                );
-              }
-
-              if (r.kind === "exercise") {
-                const x = r.exercise!;
-                return (
-                  <div key={r.id} style={{ borderBottom:`1px solid ${BORDER}`, background: isOpen ? "rgba(255,255,255,0.015)" : undefined, transition:"background 0.15s ease" }}>
-                    <NonMealRecentRow
-                      kind="exercise"
-                      ts={r.ts}
-                      primaryLabel="Duration"
-                      primaryValue={`${x.duration_minutes}m`}
-                      secondaryLabel="Type"
-                      secondaryValue={x.exercise_type === "cardio" ? "cardio" : "strength"}
-                      onClick={() => toggle(r.id)}
-                    />
-                    {isOpen && (
-                      <div style={{ borderTop:`1px solid ${BORDER}` }}>
-                        <NonMealLightExpand
-                          ts={r.ts}
-                          stats={[
-                            { label:"Duration",  value:`${x.duration_minutes} min`, color:KIND_ACCENT.exercise.color },
-                            { label:"Type",      value:x.exercise_type === "cardio" ? "Cardio" : "Strength" },
-                            { label:"Intensity", value:x.intensity || "—" },
-                            ...(x.cgm_glucose_at_log != null ? [{ label:"CGM at log", value:`${x.cgm_glucose_at_log} mg/dL` }] : []),
-                          ]}
-                          onViewFull={() => onViewEntry(r.id)}
-                        />
-                      </div>
-                    )}
-                  </div>
-                );
-              }
-
-              // bolus | basal
-              const i = r.insulin!;
-              return (
-                <div key={r.id} style={{ borderBottom:`1px solid ${BORDER}`, background: isOpen ? "rgba(255,255,255,0.015)" : undefined, transition:"background 0.15s ease" }}>
-                  <NonMealRecentRow
-                    kind={r.kind}
-                    ts={r.ts}
-                    primaryLabel="Dose"
-                    primaryValue={`${i.units}u`}
-                    secondaryLabel="Type"
-                    secondaryValue={i.insulin_name || (r.kind === "bolus" ? "rapid-acting" : "long-acting")}
-                    onClick={() => toggle(r.id)}
-                  />
-                  {isOpen && (
-                    <div style={{ borderTop:`1px solid ${BORDER}` }}>
+        <button
+          onClick={onViewAll}
+          style={{ fontSize:13, color:ACCENT, background:"transparent", border:"none", cursor:"pointer", padding:0, fontWeight:500 }}
+        >
+          See all →
+        </button>
+      </div>
+      {rows.length === 0 ? (
+        <div style={{ padding:"24px 0 16px", textAlign:"center", color:"rgba(255,255,255,0.25)", fontSize:13 }}>
+          No entries yet. Log your first meal.
+        </div>
+      ) : (
+        <div>
+          {rows.map(r => {
+            const isOpen = expanded === r.id;
+            return (
+              <div key={r.id}>
+                <UnifiedRecentRow row={r} onClick={() => toggle(r.id)} />
+                {isOpen && (
+                  <div style={{ paddingBottom:8 }}>
+                    {r.kind === "meal" ? (
+                      <MealEntryLightExpand
+                        meal={r.meal!}
+                        onViewFull={() => onViewEntry(r.meal!.id)}
+                      />
+                    ) : r.kind === "exercise" ? (
                       <NonMealLightExpand
                         ts={r.ts}
                         stats={[
-                          { label:"Dose",   value:`${i.units} u`, color:KIND_ACCENT[r.kind].color },
-                          { label:"Insulin", value:i.insulin_name || (r.kind === "bolus" ? "rapid-acting" : "long-acting") },
-                          { label:"Kind",   value:r.kind === "bolus" ? "Bolus" : "Basal", color:KIND_ACCENT[r.kind].color },
-                          ...(i.cgm_glucose_at_log != null ? [{ label:"CGM at log", value:`${i.cgm_glucose_at_log} mg/dL` }] : []),
+                          { label:"Duration",  value:`${r.exercise!.duration_minutes} min`, color:KIND_ACCENT.exercise.color },
+                          { label:"Type",      value:r.exercise!.exercise_type === "cardio" ? "Cardio" : "Strength" },
+                          { label:"Intensity", value:r.exercise!.intensity || "—" },
+                          ...(r.exercise!.cgm_glucose_at_log != null ? [{ label:"CGM at log", value:`${r.exercise!.cgm_glucose_at_log} mg/dL` }] : []),
                         ]}
                         onViewFull={() => onViewEntry(r.id)}
                       />
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+                    ) : (
+                      <NonMealLightExpand
+                        ts={r.ts}
+                        stats={[
+                          { label:"Dose",    value:`${r.insulin!.units} u`, color:KIND_ACCENT[r.kind].color },
+                          { label:"Insulin", value:r.insulin!.insulin_name || (r.kind === "bolus" ? "rapid-acting" : "long-acting") },
+                          { label:"Kind",    value:r.kind === "bolus" ? "Bolus" : "Basal", color:KIND_ACCENT[r.kind].color },
+                          ...(r.insulin!.cgm_glucose_at_log != null ? [{ label:"CGM at log", value:`${r.insulin!.cgm_glucose_at_log} mg/dL` }] : []),
+                        ]}
+                        onViewFull={() => onViewEntry(r.id)}
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Unified collapsed row used by RecentEntries for ALL kinds. Visual spec:
+//   flex / gap 12 / padding 12px 0 / borderBottom rgba(255,255,255,0.06).
+//   Left:  36px coloured circle with monogram letter (M / B / L / E).
+//   Mid:   14px bold title + 12px muted "time · macro/dose info".
+//   Right: meal → existing eval chip; non-meal → kind-coloured value chip.
+function UnifiedRecentRow({ row, onClick }: { row: RecentRow; onClick: () => void }) {
+  const accent = KIND_ACCENT[row.kind];
+  const letter =
+    row.kind === "meal"     ? "M"
+    : row.kind === "bolus"  ? "B"
+    : row.kind === "basal"  ? "L"   // Long-acting — disambiguates from bolus B
+    :                         "E";
+
+  const ts = parseDbDate(row.ts);
+  const timeStr = ts.toLocaleTimeString("en", { hour: "numeric", minute: "2-digit" });
+
+  let title: string;
+  let subtitle: string;
+  let rightSlot: React.ReactNode;
+
+  if (row.kind === "meal") {
+    const m = row.meal!;
+    title = TYPE_LABELS[m.type] || "Meal";
+    const macroBits: string[] = [];
+    if (m.carbs   != null) macroBits.push(`${m.carbs}g C`);
+    if (m.protein != null) macroBits.push(`${m.protein}g P`);
+    if (m.fat     != null) macroBits.push(`${m.fat}g F`);
+    subtitle = macroBits.length ? `${timeStr} · ${macroBits.join(" · ")}` : timeStr;
+    const evColor = getEvalColor(m.evaluation);
+    rightSlot = (
+      <span style={{
+        padding:"5px 10px", borderRadius:99, fontSize:10, fontWeight:700,
+        background:`${evColor}18`, color:evColor,
+        border:`1px solid ${evColor}30`, whiteSpace:"nowrap",
+        letterSpacing:"0.05em", textTransform:"uppercase",
+      }}>
+        {getEvalLabel(m.evaluation)}
+      </span>
+    );
+  } else if (row.kind === "exercise") {
+    const x = row.exercise!;
+    title = x.exercise_type === "cardio" ? "Cardio" : "Strength";
+    subtitle = `${timeStr} · ${x.duration_minutes}m`;
+    rightSlot = (
+      <span style={{
+        padding:"5px 10px", borderRadius:99, fontSize:10, fontWeight:700,
+        background:`${accent.color}18`, color:accent.color,
+        border:`1px solid ${accent.color}30`, whiteSpace:"nowrap",
+        letterSpacing:"0.05em", textTransform:"uppercase", fontFamily:"var(--font-mono)",
+      }}>
+        {`${x.duration_minutes}m`}
+      </span>
+    );
+  } else {
+    const i = row.insulin!;
+    title = i.insulin_name || (row.kind === "bolus" ? "Bolus" : "Basal");
+    subtitle = `${timeStr} · ${i.units}u`;
+    rightSlot = (
+      <span style={{
+        padding:"5px 10px", borderRadius:99, fontSize:10, fontWeight:700,
+        background:`${accent.color}18`, color:accent.color,
+        border:`1px solid ${accent.color}30`, whiteSpace:"nowrap",
+        letterSpacing:"0.05em", textTransform:"uppercase", fontFamily:"var(--font-mono)",
+      }}>
+        {`${i.units}u`}
+      </span>
+    );
+  }
+
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        display:"flex", gap:12, padding:"12px 0",
+        borderBottom:"1px solid rgba(255,255,255,0.06)",
+        alignItems:"center", cursor:"pointer",
+      }}
+    >
+      {/* Left circle */}
+      <div style={{
+        width:36, height:36, borderRadius:"50%",
+        background:`${accent.color}20`, color:accent.color,
+        display:"flex", alignItems:"center", justifyContent:"center",
+        fontWeight:800, fontSize:14, flexShrink:0,
+        border:`1px solid ${accent.color}40`, fontFamily:"var(--font-mono)",
+      }}>
+        {letter}
+      </div>
+      {/* Middle: title + subtitle */}
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ fontSize:14, fontWeight:700, color:"rgba(255,255,255,0.92)", letterSpacing:"-0.01em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+          {title}
+        </div>
+        <div style={{ fontSize:12, color:"rgba(255,255,255,0.45)", fontFamily:"var(--font-mono)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+          {subtitle}
+        </div>
+      </div>
+      {/* Right slot */}
+      {rightSlot}
     </div>
   );
 }
@@ -600,6 +674,7 @@ function computeControlScore(meals: Meal[], sinceMs: number, untilMs: number = I
 }
 
 function ControlScoreCard({ meals }: { meals: Meal[] }) {
+  const [flipped, setFlipped] = useState(false);
   const { score, count, delta, badge } = useMemo(() => {
     const now = Date.now();
     const W = 7 * 86400000;
@@ -615,54 +690,78 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
 
   const hasData = count > 0;
   return (
-    <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"18px 24px 22px" }}>
-      {/* Header — uppercase title left, status badge right (badge hidden when
-          there's no data so we don't force-rate an empty week). */}
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-        <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:"rgba(255,255,255,0.6)" }}>
-          Control Score · 7D
-        </div>
-        {hasData && (
-          <div style={{
-            fontSize:9, fontWeight:800, color:badge.color,
-            padding:"4px 10px", borderRadius:99,
-            border:`1px solid ${badge.color}55`, background:`${badge.color}18`,
-            letterSpacing:"0.1em",
-          }}>
-            {badge.text}
+    <div
+      onClick={() => setFlipped(f => !f)}
+      style={{ position:"relative", cursor:"pointer", minHeight:158, perspective:1000 }}
+    >
+      <div style={{ position:"absolute", inset:0, transformStyle:"preserve-3d", transition:"transform 0.5s cubic-bezier(0.4,0,0.2,1)", transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)" }}>
+        {/* ────────── Front ────────── */}
+        <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"18px 24px 22px", boxSizing:"border-box" }}>
+          {/* Header — title left, badge right (hidden when no data). */}
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+            <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:"rgba(255,255,255,0.6)" }}>
+              Control Score · 7D
+            </div>
+            {hasData && (
+              <div style={{
+                fontSize:9, fontWeight:800, color:badge.color,
+                padding:"4px 10px", borderRadius:99,
+                border:`1px solid ${badge.color}55`, background:`${badge.color}18`,
+                letterSpacing:"0.1em",
+              }}>
+                {badge.text}
+              </div>
+            )}
           </div>
-        )}
-      </div>
-      {/* Big score + "/ 100" + right-aligned delta vs previous week. */}
-      <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
-        <span style={{ fontSize:36, fontWeight:800, color:"#fff", letterSpacing:"-0.03em", fontFamily:"var(--font-mono)", lineHeight:1 }}>
-          {hasData ? score : "—"}
-        </span>
-        <span style={{ fontSize:13, color:"rgba(255,255,255,0.4)", fontWeight:500 }}>/ 100</span>
-        <span style={{
-          marginLeft:"auto",
-          fontSize:10, fontWeight:600, fontFamily:"var(--font-mono)",
-          color: delta == null ? "rgba(255,255,255,0.4)"
-               : delta > 0      ? GREEN
-               : delta < 0      ? PINK
-               :                  "rgba(255,255,255,0.5)",
-        }}>
-          {!hasData
-            ? "no entries · 7d"
-            : delta == null
-              ? `${count} entries · 7d`
-              : `${delta > 0 ? "+" : ""}${delta} vs last wk`}
-        </span>
-      </div>
-      {/* Gradient progress bar — accent → green, length matches the score. */}
-      <div style={{ height:6, marginTop:12, background:"rgba(255,255,255,0.06)", borderRadius:99, overflow:"hidden" }}>
-        <div style={{
-          height:"100%",
-          width:`${hasData ? Math.max(0, Math.min(100, score)) : 0}%`,
-          background:`linear-gradient(90deg, ${ACCENT}, ${GREEN})`,
-          borderRadius:99,
-          transition:"width 0.6s ease",
-        }}/>
+          {/* Big score (56px ACCENT) + "/ 100" + right-aligned delta. */}
+          <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
+            <span style={{ fontSize:56, fontWeight:800, color:ACCENT, letterSpacing:"-0.03em", fontFamily:"var(--font-mono)", lineHeight:1 }}>
+              {hasData ? score : "—"}
+            </span>
+            <span style={{ fontSize:13, color:"rgba(255,255,255,0.4)", fontWeight:500 }}>/ 100</span>
+            <span style={{
+              marginLeft:"auto",
+              fontSize:10, fontWeight:600, fontFamily:"var(--font-mono)",
+              color: delta == null ? "rgba(255,255,255,0.4)"
+                   : delta > 0      ? GREEN
+                   : delta < 0      ? PINK
+                   :                  "rgba(255,255,255,0.5)",
+            }}>
+              {!hasData
+                ? "no entries · 7d"
+                : delta == null
+                  ? `${count} entries · 7d`
+                  : `${delta > 0 ? "+" : ""}${delta} vs last wk`}
+            </span>
+          </div>
+          {/* Gradient progress bar — accent → green. */}
+          <div style={{ height:6, marginTop:14, background:"rgba(255,255,255,0.06)", borderRadius:99, overflow:"hidden" }}>
+            <div style={{
+              height:"100%",
+              width:`${hasData ? Math.max(0, Math.min(100, score)) : 0}%`,
+              background:`linear-gradient(90deg, ${ACCENT}, ${GREEN})`,
+              borderRadius:99,
+              transition:"width 0.6s ease",
+            }}/>
+          </div>
+          <span style={{ position:"absolute", bottom:8, right:14, fontSize:9, color:"rgba(255,255,255,0.18)" }}>↺</span>
+        </div>
+        {/* ────────── Back ────────── */}
+        <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", transform:"rotateY(180deg)", background:`linear-gradient(145deg, ${ACCENT}12, ${SURFACE} 65%)`, border:`1px solid ${ACCENT}33`, borderRadius:16, padding:"18px 24px 22px", boxSizing:"border-box", display:"flex", flexDirection:"column", gap:10 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:ACCENT }}>
+              How it&apos;s scored
+            </div>
+            <span style={{ fontSize:9, color:"rgba(255,255,255,0.18)" }}>↺ back</span>
+          </div>
+          <div style={{ fontSize:11, color:"rgba(255,255,255,0.7)", lineHeight:1.5, fontFamily:"var(--font-mono)" }}>
+            Score = Good% × 0.7 + (100 − Spike% − Hypo%) × 0.3, last 7 days.
+          </div>
+          <div style={{ fontSize:10, color:"rgba(255,255,255,0.45)", lineHeight:1.5 }}>
+            Rewards correctly dosed meals, penalises over- and under-doses.
+            Badges: STRONG ≥ 80 · GOOD ≥ 60 · POOR &lt; 60.
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -895,10 +994,11 @@ type RecentRow =
   | { kind: "basal";    id: string; ts: string; meal?: never;   insulin: InsulinLog; exercise?: never }
   | { kind: "exercise"; id: string; ts: string; meal?: never;   insulin?: never;     exercise: ExerciseLog };
 
-const KIND_ACCENT: Record<"bolus" | "basal" | "exercise", { color: string; label: string }> = {
+const KIND_ACCENT: Record<"meal" | "bolus" | "basal" | "exercise", { color: string; label: string }> = {
+  meal:     { color: "#f59e0b", label: "MEAL" },      // amber (matches FAT macro ring)
   bolus:    { color: "#4A90D9", label: "BOLUS" },     // blue
-  basal:    { color: "#8B5CF6", label: "BASAL" },     // purple
-  exercise: { color: "#10B981", label: "EXERCISE" },  // green
+  basal:    { color: "#8B5CF6", label: "BASAL" },     // purple (no spec'd colour, kept)
+  exercise: { color: "#10B981", label: "EXERCISE" },  // teal
 };
 
 /**
