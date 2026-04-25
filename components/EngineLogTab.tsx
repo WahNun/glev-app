@@ -344,11 +344,13 @@ export function ExerciseForm() {
       const startedLabel = startedMinAgo === 0
         ? ""
         : ` (gestartet vor ${STARTED_OPTIONS.find(o => o.value === startedMinAgo)?.label})`;
+      // Map the stored intensity token to the spec wording for display.
+      const intensityLabel = intensity === "medium" ? "moderate" : intensity;
       setStatus({
         kind: "ok",
         message: cgm != null
-          ? `Geloggt — ${d} min ${typeLabel} (${intensity})${startedLabel} bei ${Math.round(cgm)} mg/dL.`
-          : `Geloggt — ${d} min ${typeLabel} (${intensity})${startedLabel}. Kein CGM-Wert verfügbar.`,
+          ? `Geloggt — ${d} min ${typeLabel} (${intensityLabel})${startedLabel} bei ${Math.round(cgm)} mg/dL.`
+          : `Geloggt — ${d} min ${typeLabel} (${intensityLabel})${startedLabel}. Kein CGM-Wert verfügbar.`,
       });
       setDuration("");
       setNotes("");
@@ -471,13 +473,16 @@ export function ExerciseForm() {
         </div>
         <div>
           <label style={labelStyle}>Intensität</label>
+          {/* DB stores the legacy `medium` token (matches the existing
+              CHECK constraint on insulin_logs/exercise_logs); the
+              user-facing label reads "Moderate" per spec. */}
           <Segmented<"low" | "medium" | "high">
             value={intensity}
             onChange={setIntensity}
             accent={ORANGE}
             options={[
               { value: "low",    label: "Low" },
-              { value: "medium", label: "Medium" },
+              { value: "medium", label: "Moderate" },
               { value: "high",   label: "High" },
             ]}
           />

@@ -799,7 +799,7 @@ function ExerciseRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
             <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8 }}>
               <Detail label="TYPE" value={typeLbl}/>
               <Detail label="DURATION" value={`${log.duration_minutes} min`} color={accent}/>
-              <Detail label="INTENSITY" value={log.intensity}/>
+              <Detail label="INTENSITY" value={intensityLabel(log.intensity)}/>
               <Detail label="STARTED" value={`${dateStr} · ${timeStr}`}/>
               <Detail label="ENDED" value={`${endDateStr} · ${endTimeStr}`}/>
             </div>
@@ -889,6 +889,14 @@ function numOrNull(v: number | null | undefined): number | null {
 
 // 3 h matches EXERCISE_NO_DATA_AFTER_MS / EXERCISE_ABANDON_AFTER_MS.
 const EXERCISE_NO_DATA_AFTER_MS = 3 * 60 * 60 * 1000;
+
+/** Map the stored intensity token to the spec's display wording.
+ *  DB column still stores "medium" (legacy CHECK constraint), but the
+ *  spec calls for "moderate" in user-facing copy. */
+function intensityLabel(v: string): string {
+  if (v === "medium") return "Moderate";
+  return v.charAt(0).toUpperCase() + v.slice(1);
+}
 
 function pendingLabel(expectedAt: Date): string {
   // Once the CGM job's 3 h window has elapsed, the job is finalised
