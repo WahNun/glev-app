@@ -315,7 +315,9 @@ function computeDelta15m(
    Filters the full-day `readings` array to the visible window; the data
    hook itself (`loadHistory` in the parent) is unchanged. X-axis labels
    are "−2h", "−1h", "now" per the hero spec. Line + last-point color
-   tracks `colorFor(last)` so out-of-range periods read at a glance. */
+   tracks `glucoseLineColor(last.v)` — a smooth ramp through Tailwind
+   red/blue/green/yellow/orange so proximity to thresholds reads at a
+   glance and the line color updates dynamically each refresh. */
 function RollingChart({ readings }: { readings: Array<{ t: number; v: number }> }) {
   // Measure the container so the SVG always renders in true pixel space.
   const containerRef = useRef<HTMLDivElement>(null);
@@ -366,7 +368,7 @@ function RollingChart({ readings }: { readings: Array<{ t: number; v: number }> 
   const last = visible[visible.length - 1];
   const lastX = last ? toX(last.t) : 0;
   const lastY = last ? toY(last.v) : 0;
-  const lastC = last ? colorFor(last.v) : ACCENT;
+  const lastC = last ? glucoseLineColor(last.v) : ACCENT;
 
   // Crosshair-snappable points (pixel space).
   const crosshairPoints = useMemo<CrosshairPoint[]>(() => {
@@ -376,7 +378,7 @@ function RollingChart({ readings }: { readings: Array<{ t: number; v: number }> 
       return {
         x: toX(r.t),
         y: toY(r.v),
-        color: colorFor(r.v),
+        color: glucoseLineColor(r.v),
         tooltip: [fmtTime, `${Math.round(r.v)} mg/dL`],
       };
     });
@@ -493,6 +495,43 @@ function colorFor(v: number) {
   if (v < RANGE_LOW) return PINK;
   if (v > RANGE_HIGH) return ORANGE;
   return GREEN;
+}
+
+/**
+ * `glucoseLineColor` — smooth color ramp for the trendline / last-point dot
+ * in the rolling 2-hour chart. Distinct from `colorFor` (which is a 3-state
+ * status color used for the big value text and the daily-avg tile) so the
+ * chart can communicate proximity to thresholds via gradient transitions.
+ *
+ * Palette (Tailwind 500-shade reference, spec'd by product for this chart):
+ *   <55 mg/dL     → RED    (#ef4444) — too low
+ *   55–70 mg/dL   → RED → BLUE lerp  — approaching low (RED at 55, BLUE at 70)
+ *   70–180 mg/dL  → GREEN  (#10b981) — in target range
+ *   180–250 mg/dL → YELLOW → ORANGE lerp — going high
+ *   >250 mg/dL    → ORANGE (#f97316) — too high (saturates at orange)
+ */
+function glucoseLineColor(v: number): string {
+  const RED    = [0xef, 0x44, 0x44];
+  const BLUE   = [0x3b, 0x82, 0xf6];
+  const GREEN_ = [0x10, 0xb9, 0x81];
+  const YELLOW = [0xea, 0xb3, 0x08];
+  const ORANGE_= [0xf9, 0x73, 0x16];
+  const lerp = (a: number[], b: number[], t: number) =>
+    a.map((c, i) => Math.round(c + (b[i] - c) * Math.max(0, Math.min(1, t))));
+  const hex = (rgb: number[]) =>
+    `#${rgb.map((c) => c.toString(16).padStart(2, "0")).join("")}`;
+
+  if (v < 55) return hex(RED);
+  if (v < 70) {
+    // 55 → 70 lerps RED → BLUE (closer to 55 is more red, closer to 70 is more blue)
+    return hex(lerp(RED, BLUE, (v - 55) / 15));
+  }
+  if (v <= 180) return hex(GREEN_);
+  if (v <= 250) {
+    // 180 → 250 lerps YELLOW → ORANGE (closer to 180 is more yellow)
+    return hex(lerp(YELLOW, ORANGE_, (v - 180) / 70));
+  }
+  return hex(ORANGE_);
 }
 
 // LibreLinkUp timestamps look like "11/24/2024 4:23:12 PM" (UTC server time).
