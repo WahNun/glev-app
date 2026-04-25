@@ -32,15 +32,22 @@ type EntryTypeKey   = "meal" | "bolus" | "basal" | "exercise";
 type MealKindKey    = "FAST_CARBS" | "HIGH_PROTEIN" | "HIGH_FAT" | "BALANCED";
 type ExerciseKindKey = "cardio" | "hypertrophy";
 type OutcomeKey     = "GOOD" | "UNDERDOSE" | "OVERDOSE" | "SPIKE";
+type DateRangeKey   = "all" | "today" | "7d" | "30d" | "custom";
 
 interface FilterState {
   entryType:    EntryTypeKey[];
   mealKind:     MealKindKey[];
   exerciseKind: ExerciseKindKey[];
   outcome:      OutcomeKey[];
+  dateRange:    DateRangeKey;
+  dateFrom:     string | null; // YYYY-MM-DD, only used when dateRange === "custom"
+  dateTo:       string | null; // YYYY-MM-DD, only used when dateRange === "custom"
 }
 
-const EMPTY_FILTERS: FilterState = { entryType: [], mealKind: [], exerciseKind: [], outcome: [] };
+const EMPTY_FILTERS: FilterState = {
+  entryType: [], mealKind: [], exerciseKind: [], outcome: [],
+  dateRange: "all", dateFrom: null, dateTo: null,
+};
 
 const ENTRY_TYPE_OPTIONS: { value: EntryTypeKey; label: string }[] = [
   { value: "meal",     label: "Meal" },
@@ -64,12 +71,55 @@ const OUTCOME_OPTIONS: { value: OutcomeKey; label: string }[] = [
   { value: "OVERDOSE",  label: "Over Dose" },
   { value: "SPIKE",     label: "Spike" },
 ];
+const DATE_RANGE_OPTIONS: { value: DateRangeKey; label: string }[] = [
+  { value: "all",    label: "All time" },
+  { value: "today",  label: "Today" },
+  { value: "7d",     label: "Last 7 days" },
+  { value: "30d",    label: "Last 30 days" },
+  { value: "custom", label: "Custom" },
+];
+const DATE_RANGE_VALUES: readonly DateRangeKey[] = DATE_RANGE_OPTIONS.map(o => o.value);
+
+// Returns inclusive [startMs, endMs] for the chosen range relative to `now`.
+// Returns null when no date filter applies (i.e. "all", or "custom" without a
+// usable bound on either side).
+function dateRangeBounds(
+  range: DateRangeKey,
+  from: string | null,
+  to: string | null,
+  now: Date = new Date(),
+): { startMs: number; endMs: number } | null {
+  if (range === "all") return null;
+  if (range === "today") {
+    const s = new Date(now); s.setHours(0,0,0,0);
+    const e = new Date(now); e.setHours(23,59,59,999);
+    return { startMs: s.getTime(), endMs: e.getTime() };
+  }
+  if (range === "7d" || range === "30d") {
+    const days = range === "7d" ? 7 : 30;
+    const e = new Date(now); e.setHours(23,59,59,999);
+    const s = new Date(now); s.setHours(0,0,0,0);
+    s.setDate(s.getDate() - (days - 1));
+    return { startMs: s.getTime(), endMs: e.getTime() };
+  }
+  // custom
+  const startMs = from ? new Date(`${from}T00:00:00`).getTime() : -Infinity;
+  const endMs   = to   ? new Date(`${to}T23:59:59.999`).getTime() : Infinity;
+  if (!Number.isFinite(startMs) && !Number.isFinite(endMs)) return null;
+  return { startMs, endMs };
+}
 
 const FILTERS_STORAGE_KEY = "glev:entries-filters";
 const LEGACY_FILTER_KEY   = "glev:entries-filter";
 
 function totalActive(f: FilterState) {
-  return f.entryType.length + f.mealKind.length + f.exerciseKind.length + f.outcome.length;
+  return f.entryType.length + f.mealKind.length + f.exerciseKind.length + f.outcome.length
+    + (f.dateRange !== "all" ? 1 : 0);
+}
+
+const DATE_STR_RE = /^\d{4}-\d{2}-\d{2}$/;
+function pickDateStr(v: unknown): string | null {
+  return typeof v === "string" && DATE_STR_RE.test(v) ? v : null;
 }
 
 function parseStoredFilters(raw: string | null): FilterState {
@@ -82,11 +132,18 @@ function parseStoredFilters(raw: string | null): FilterState {
       const set = new Set(allowed as readonly string[]);
       return input.filter((v): v is T => typeof v === "string" && set.has(v));
     };
+    const dateRange: DateRangeKey =
+      typeof parsed.dateRange === "string" && (DATE_RANGE_VALUES as readonly string[]).includes(parsed.dateRange)
+        ? parsed.dateRange as DateRangeKey
+        : "all";
     return {
       entryType:    pickArr<EntryTypeKey>(parsed.entryType,       ENTRY_TYPE_OPTIONS.map(o => o.value)),
       mealKind:     pickArr<MealKindKey>(parsed.mealKind,         MEAL_KIND_OPTIONS.map(o => o.value)),
       exerciseKind: pickArr<ExerciseKindKey>(parsed.exerciseKind, EXERCISE_KIND_OPTIONS.map(o => o.value)),
       outcome:      pickArr<OutcomeKey>(parsed.outcome,           OUTCOME_OPTIONS.map(o => o.value)),
+      dateRange,
+      dateFrom:     dateRange === "custom" ? pickDateStr(parsed.dateFrom) : null,
+      dateTo:       dateRange === "custom" ? pickDateStr(parsed.dateTo)   : null,
     };
   } catch {
     return EMPTY_FILTERS;
@@ -146,13 +203,31 @@ export default function EntriesPage() {
     };
   }, [filtersOpen]);
 
-  function toggleFilter<K extends keyof FilterState>(section: K, value: FilterState[K][number]) {
+  type ListSection = "entryType" | "mealKind" | "exerciseKind" | "outcome";
+  function toggleFilter<K extends ListSection>(section: K, value: FilterState[K][number]) {
     setFilters(prev => {
       const list = prev[section] as string[];
       const has = list.includes(value as string);
       const next = has ? list.filter(v => v !== value) : [...list, value as string];
       return { ...prev, [section]: next } as FilterState;
     });
+  }
+  function setDateRange(value: DateRangeKey) {
+    setFilters(prev => {
+      // Switching away from "custom" clears the custom bounds; switching to
+      // "custom" keeps any previously-entered values so users don't lose them
+      // when toggling back.
+      if (value !== "custom") return { ...prev, dateRange: value, dateFrom: null, dateTo: null };
+      return { ...prev, dateRange: value };
+    });
+  }
+  function setDateBound(side: "from" | "to", value: string) {
+    setFilters(prev => ({
+      ...prev,
+      dateRange: "custom",
+      dateFrom: side === "from" ? (value || null) : prev.dateFrom,
+      dateTo:   side === "to"   ? (value || null) : prev.dateTo,
+    }));
   }
   function clearAllFilters() {
     setFilters(EMPTY_FILTERS);
@@ -261,7 +336,21 @@ export default function EntriesPage() {
     return all;
   }, [meals, insulin, exercise]);
 
+  // Memoize to keep the bounds stable across re-renders within the same render
+  // cycle and to recompute when the user changes the date filter.
+  const dateBounds = useMemo(
+    () => dateRangeBounds(filters.dateRange, filters.dateFrom, filters.dateTo),
+    [filters.dateRange, filters.dateFrom, filters.dateTo],
+  );
+
   const filtered = rows.filter(r => {
+    // Date range — same AND-across-sections rule as the other filters.
+    if (dateBounds) {
+      const t = new Date(r.ts).getTime();
+      if (Number.isNaN(t)) return false;
+      if (t < dateBounds.startMs || t > dateBounds.endMs) return false;
+    }
+
     // Entry-type — restricts by row kind directly.
     if (filters.entryType.length > 0 && !filters.entryType.includes(r.kind as EntryTypeKey)) return false;
 
@@ -394,6 +483,13 @@ export default function EntriesPage() {
                 display:"flex", flexDirection:"column", gap:14,
               }}
             >
+              <DateRangeSection
+                value={filters.dateRange}
+                from={filters.dateFrom}
+                to={filters.dateTo}
+                onChange={setDateRange}
+                onBoundChange={setDateBound}
+              />
               <FilterSection
                 title="Entry type"
                 options={ENTRY_TYPE_OPTIONS}
@@ -1518,6 +1614,100 @@ function FilterSection<T extends string>({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function DateRangeSection({
+  value, from, to, onChange, onBoundChange,
+}: {
+  value: DateRangeKey;
+  from: string | null;
+  to: string | null;
+  onChange: (value: DateRangeKey) => void;
+  onBoundChange: (side: "from" | "to", value: string) => void;
+}) {
+  return (
+    <div>
+      <div style={{ fontSize:9, color:"rgba(255,255,255,0.45)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8, textTransform:"uppercase" }}>
+        Date range
+      </div>
+      <div role="radiogroup" aria-label="Date range" style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+        {DATE_RANGE_OPTIONS.map(opt => {
+          const active = value === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() => onChange(opt.value)}
+              style={{
+                padding:"6px 12px",
+                borderRadius:99,
+                border:`1px solid ${active ? ACCENT+"60" : BORDER}`,
+                background: active ? `${ACCENT}18` : "transparent",
+                color: active ? ACCENT : "rgba(255,255,255,0.55)",
+                fontSize:12,
+                fontWeight: active ? 600 : 500,
+                cursor:"pointer",
+                whiteSpace:"nowrap",
+                display:"inline-flex", alignItems:"center", gap:6,
+                transition:"background 0.12s, color 0.12s, border-color 0.12s",
+              }}
+            >
+              {active && (
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+              )}
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+      {value === "custom" && (
+        <div style={{ display:"flex", gap:8, marginTop:10, flexWrap:"wrap" }}>
+          <label style={{ display:"flex", flexDirection:"column", gap:4, fontSize:10, color:"rgba(255,255,255,0.45)", letterSpacing:"0.06em", fontWeight:600, textTransform:"uppercase", flex:"1 1 140px" }}>
+            From
+            <input
+              type="date"
+              value={from ?? ""}
+              max={to ?? undefined}
+              onChange={(e) => onBoundChange("from", e.target.value)}
+              style={{
+                background:"#0D0D12",
+                border:`1px solid ${BORDER}`,
+                borderRadius:8,
+                padding:"7px 10px",
+                color:"#fff",
+                fontSize:12,
+                outline:"none",
+                colorScheme:"dark",
+              }}
+            />
+          </label>
+          <label style={{ display:"flex", flexDirection:"column", gap:4, fontSize:10, color:"rgba(255,255,255,0.45)", letterSpacing:"0.06em", fontWeight:600, textTransform:"uppercase", flex:"1 1 140px" }}>
+            To
+            <input
+              type="date"
+              value={to ?? ""}
+              min={from ?? undefined}
+              onChange={(e) => onBoundChange("to", e.target.value)}
+              style={{
+                background:"#0D0D12",
+                border:`1px solid ${BORDER}`,
+                borderRadius:8,
+                padding:"7px 10px",
+                color:"#fff",
+                fontSize:12,
+                outline:"none",
+                colorScheme:"dark",
+              }}
+            />
+          </label>
+        </div>
+      )}
     </div>
   );
 }
