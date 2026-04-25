@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { insertInsulinLog } from "@/lib/insulin";
-import { insertExerciseLog } from "@/lib/exercise";
+import { insertExerciseLog, type ExerciseType } from "@/lib/exercise";
+import { exerciseTypeLabel } from "@/lib/exerciseEval";
 import { scheduleJobsForLog } from "@/lib/cgmJobs";
 
 const ACCENT = "#4F6EF7";
@@ -273,8 +274,13 @@ export function InsulinForm() {
   );
 }
 
+// New exercise taxonomy used by the form. Legacy `hypertrophy` rows
+// remain valid in the DB and are mapped to "Strength" for display, but
+// the picker only shows the new set so going forward all rows use it.
+const EXERCISE_TYPE_OPTIONS: ExerciseType[] = ["cardio", "strength", "hiit", "yoga", "cycling", "run"];
+
 export function ExerciseForm() {
-  const [type, setType] = useState<"hypertrophy" | "cardio">("hypertrophy");
+  const [type, setType] = useState<ExerciseType>("cardio");
   const [duration, setDuration] = useState("");
   const [intensity, setIntensity] = useState<"low" | "medium" | "high">("medium");
   const [notes, setNotes] = useState("");
@@ -303,7 +309,7 @@ export function ExerciseForm() {
         refTimeIso: refEx,
         durationMinutes: d,
       });
-      const typeLabel = type === "hypertrophy" ? "Hypertrophy" : "Cardio";
+      const typeLabel = exerciseTypeLabel(type);
       setStatus({
         kind: "ok",
         message: cgm != null
@@ -336,15 +342,43 @@ export function ExerciseForm() {
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
           <label style={labelStyle}>Typ</label>
-          <Segmented<"hypertrophy" | "cardio">
-            value={type}
-            onChange={setType}
-            accent={ORANGE}
-            options={[
-              { value: "hypertrophy", label: "Hypertrophy" },
-              { value: "cardio", label: "Cardio" },
-            ]}
-          />
+          {/* 6 options — too wide for one row of equal columns on
+              narrow viewports. We render a 3-col grid that wraps to
+              2 rows; each cell is its own toggle button. */}
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, 1fr)",
+            gap: 6,
+            background: "#0D0D12",
+            border: `1px solid ${BORDER}`,
+            borderRadius: 12,
+            padding: 4,
+          }}>
+            {EXERCISE_TYPE_OPTIONS.map(opt => {
+              const on = opt === type;
+              return (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => setType(opt)}
+                  style={{
+                    padding: "9px 10px",
+                    borderRadius: 8,
+                    border: "none",
+                    background: on ? `${ORANGE}22` : "transparent",
+                    color: on ? ORANGE : "rgba(255,255,255,0.55)",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    letterSpacing: "-0.01em",
+                    cursor: "pointer",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  {exerciseTypeLabel(opt)}
+                </button>
+              );
+            })}
+          </div>
         </div>
         <div>
           <label style={labelStyle}>Dauer (Minuten)</label>

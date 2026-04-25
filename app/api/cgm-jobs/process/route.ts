@@ -10,7 +10,12 @@ export const dynamic = "force-dynamic";
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 5 * 60 * 1000;          // 5 min
 const MATCH_WINDOW_MS = 10 * 60 * 1000;        // ±10 min around fetch_time
-const ABANDON_AFTER_MS = 60 * 60 * 1000;       // 1h past fetch_time → mark failed if still no data
+const ABANDON_AFTER_MS = 60 * 60 * 1000;       // 1h past fetch_time → mark failed (meal/bolus/basal)
+// Exercise jobs get a longer tolerance: a workout can be logged
+// retroactively or the user might close the app and return hours later.
+// Within this window we still attempt to recover the value from CGM
+// history; beyond it we mark the job 'skipped'.
+const EXERCISE_ABANDON_AFTER_MS = 3 * 60 * 60 * 1000; // 3h
 
 function targetColumn(logType: LogType, fetchType: FetchType): { table: string; column: string } | null {
   if (logType === "meal") {
@@ -138,12 +143,32 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
-    // No data found.
-    if (job.retry_count >= MAX_RETRIES || ageMs >= ABANDON_AFTER_MS) {
+    // No data found. Exercise jobs allow up to 3h of catch-up so a
+    // workout logged retroactively (or one the user came back to after
+    // closing the app) can still resolve from CGM history. Crucially,
+    // exercise completion is governed ONLY by the age cutoff —
+    // MAX_RETRIES would otherwise abandon the job after ~10 minutes of
+    // ticks, defeating the 3h window. Other log types keep the
+    // existing dual cutoff (retries OR 1h age).
+    //
+    // Past the abandon window we mark the job 'skipped' for exercise
+    // (so the UI shows a clean outcome) and 'failed' for the others
+    // (keeps existing semantics).
+    const isExercise = job.log_type === "exercise";
+    const abandonMs = isExercise ? EXERCISE_ABANDON_AFTER_MS : ABANDON_AFTER_MS;
+    const overAge = ageMs >= abandonMs;
+    const overRetries = job.retry_count >= MAX_RETRIES;
+    const shouldFinalize = isExercise ? overAge : (overRetries || overAge);
+    if (shouldFinalize) {
+      const finalStatus: "failed" | "skipped" = isExercise ? "skipped" : "failed";
+      const errMsg = isExercise
+        ? "no CGM data within 3h of workout time"
+        : "no CGM data near fetch_time";
       await admin.from("cgm_fetch_jobs")
-        .update({ status: "failed", error_msg: "no CGM data near fetch_time", updated_at: nowIso })
+        .update({ status: finalStatus, error_msg: errMsg, updated_at: nowIso })
         .eq("id", job.id);
-      failed++;
+      if (finalStatus === "skipped") skipped++;
+      else failed++;
     } else {
       // Push fetch_time forward by RETRY_DELAY_MS so we don't busy-loop.
       const next = new Date(nowMs + RETRY_DELAY_MS).toISOString();

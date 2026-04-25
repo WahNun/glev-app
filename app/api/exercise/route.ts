@@ -7,7 +7,11 @@ export const dynamic = "force-dynamic";
 const COLS =
   "id,user_id,created_at,exercise_type,duration_minutes,intensity,cgm_glucose_at_log,notes";
 
-const VALID_TYPE = new Set(["hypertrophy", "cardio"]);
+// Mirrors lib/exercise.ts ExerciseType: keeps legacy 'hypertrophy' for
+// backward compat, adds the widened taxonomy used by the form.
+const VALID_TYPE = new Set([
+  "hypertrophy", "strength", "cardio", "hiit", "yoga", "cycling", "run",
+]);
 const VALID_INTENSITY = new Set(["low", "medium", "high"]);
 
 /** GET /api/exercise — caller's exercise_logs, newest first. */
@@ -58,7 +62,9 @@ export async function POST(req: NextRequest) {
   const notes = body.notes != null ? String(body.notes).trim() : null;
 
   if (!VALID_TYPE.has(exercise_type)) {
-    return NextResponse.json({ error: "exercise_type must be 'hypertrophy' or 'cardio'" }, { status: 400 });
+    return NextResponse.json({
+      error: "exercise_type must be one of: cardio, strength, hiit, yoga, cycling, run (legacy 'hypertrophy' also accepted)",
+    }, { status: 400 });
   }
   if (!VALID_INTENSITY.has(intensity)) {
     return NextResponse.json({ error: "intensity must be 'low', 'medium' or 'high'" }, { status: 400 });

@@ -3,14 +3,29 @@ import { supabase } from "./supabase";
 /**
  * Standalone exercise event log. Lets the engine relate movement to
  * glucose patterns. Pure documentation — no calculations.
+ *
+ * `hypertrophy` is the legacy value (rows created before the taxonomy
+ * widening). New form submissions use `strength`. The two are treated
+ * as equivalent everywhere downstream.
  */
+export type ExerciseType =
+  | "hypertrophy"  // legacy
+  | "strength"
+  | "cardio"
+  | "hiit"
+  | "yoga"
+  | "cycling"
+  | "run";
+
+export type ExerciseIntensity = "low" | "medium" | "high";
+
 export interface ExerciseLog {
   id: string;
   user_id: string;
   created_at: string;
-  exercise_type: "hypertrophy" | "cardio";
+  exercise_type: ExerciseType;
   duration_minutes: number;
-  intensity: "low" | "medium" | "high";
+  intensity: ExerciseIntensity;
   cgm_glucose_at_log: number | null;
   notes: string | null;
   // CGM auto-fetch results: at workout end, and +1h after end.
@@ -19,9 +34,9 @@ export interface ExerciseLog {
 }
 
 export interface ExerciseLogInput {
-  exercise_type: "hypertrophy" | "cardio";
+  exercise_type: ExerciseType;
   duration_minutes: number;
-  intensity: "low" | "medium" | "high";
+  intensity: ExerciseIntensity;
   cgm_glucose_at_log?: number | null;
   notes?: string | null;
 }

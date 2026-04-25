@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { fetchMeals, deleteMeal, updateMealReadings, type Meal } from "@/lib/meals";
 import { fetchRecentInsulinLogs, deleteInsulinLog, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, deleteExerciseLog, type ExerciseLog } from "@/lib/exercise";
+import { evaluateExercise, exerciseTypeLabel, patternNote, interimMessage, finalMessage, deltaColor } from "@/lib/exerciseEval";
 import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, getEvalExplain } from "@/lib/mealTypes";
 import { lifecycleFor, STATE_LABELS, type OutcomeState } from "@/lib/engine/lifecycle";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
@@ -750,44 +751,218 @@ function ExerciseRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
   log: ExerciseLog;
   isOpen: boolean; onToggle: () => void; onDelete: () => void; deleting: boolean;
 }) {
-  const d = new Date(log.created_at);
-  const dateStr = d.toLocaleDateString("en", { month:"short", day:"numeric" });
-  const timeStr = d.toLocaleTimeString("en", { hour:"numeric", minute:"2-digit" });
-  const accent = EXERCISE_ACCENT;
-  const typeLabel = log.exercise_type === "cardio" ? "cardio" : "strength";
+  const start = new Date(log.created_at);
+  const end   = new Date(start.getTime() + log.duration_minutes * 60_000);
+  const dateStr = start.toLocaleDateString("en", { month:"short", day:"numeric" });
+  const timeStr = start.toLocaleTimeString("en", { hour:"numeric", minute:"2-digit" });
+  // End-side date is computed independently so workouts that cross
+  // midnight (e.g. start 23:50, run 30 min) display the next day's
+  // date for ENDED instead of duplicating the start date.
+  const endDateStr = end.toLocaleDateString("en", { month:"short", day:"numeric" });
+  const endTimeStr = end.toLocaleTimeString("en", { hour:"numeric", minute:"2-digit" });
+
+  const accent  = EXERCISE_ACCENT;
+  const typeLbl = exerciseTypeLabel(log.exercise_type);
+  const evalInfo = evaluateExercise(log);
+  const badgeColor = evalInfo.color;
+
+  // Glucose deltas (Before → AtEnd, Before → +1h).
+  const before  = numOrNull(log.cgm_glucose_at_log);
+  const atEnd   = numOrNull(log.glucose_at_end);
+  const after1h = numOrNull(log.glucose_after_1h);
+  const dEnd    = before != null && atEnd   != null ? Math.round(atEnd   - before) : null;
+  const d1h     = before != null && after1h != null ? Math.round(after1h - before) : null;
+
+  // Expected fetch times for "Pending · expected hh:mm".
+  const expectAtEnd = end;
+  const expect1h    = new Date(end.getTime() + 60 * 60_000);
+
   return (
     <NonMealRow
       isOpen={isOpen}
       onToggle={onToggle}
       onDelete={onDelete}
       deleting={deleting}
-      accent={accent}
-      badge="WORKOUT"
+      accent={badgeColor}
+      badge={evalInfo.label}
       dateStr={dateStr}
       timeStr={timeStr}
       primaryLabel="Duration"
       primaryValue={`${log.duration_minutes}m`}
       primaryColor={accent}
       secondaryLabel="Type"
-      secondaryValue={typeLabel}
+      secondaryValue={typeLbl}
       expandedDetails={
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8 }}>
-          <Detail label="DURATION" value={`${log.duration_minutes} min`} color={accent}/>
-          <Detail label="TYPE" value={typeLabel}/>
-          <Detail label="INTENSITY" value={log.intensity}/>
-          <Detail label="GLUCOSE AT LOG" value={log.cgm_glucose_at_log != null ? `${log.cgm_glucose_at_log} mg/dL` : "—"}/>
-          {/* CGM auto-fetch: at workout end, and +1h after end. */}
-          <Detail label="AT END" value={log.glucose_at_end != null ? `${log.glucose_at_end} mg/dL` : "Pending"} color={log.glucose_at_end != null ? undefined : "rgba(255,255,255,0.4)"}/>
-          <Detail label="1H POST" value={log.glucose_after_1h != null ? `${log.glucose_after_1h} mg/dL` : "Pending"} color={log.glucose_after_1h != null ? undefined : "rgba(255,255,255,0.4)"}/>
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {/* 1) Session details ------------------------------------ */}
+          <ExPanel title="SESSION DETAILS">
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8 }}>
+              <Detail label="TYPE" value={typeLbl}/>
+              <Detail label="DURATION" value={`${log.duration_minutes} min`} color={accent}/>
+              <Detail label="INTENSITY" value={log.intensity}/>
+              <Detail label="STARTED" value={`${dateStr} · ${timeStr}`}/>
+              <Detail label="ENDED" value={`${endDateStr} · ${endTimeStr}`}/>
+            </div>
+          </ExPanel>
+
+          {/* 2) Glucose tracking ----------------------------------- */}
+          <ExPanel title="GLUCOSE TRACKING">
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
+              <Detail
+                label="BG BEFORE"
+                value={before != null ? `${Math.round(before)} mg/dL` : "—"}
+              />
+              <Detail
+                label="BG AT END"
+                value={atEnd != null ? `${Math.round(atEnd)} mg/dL` : pendingLabel(expectAtEnd)}
+                color={atEnd != null ? undefined : "rgba(255,255,255,0.4)"}
+              />
+              <Detail
+                label="BG +1H"
+                value={after1h != null ? `${Math.round(after1h)} mg/dL` : pendingLabel(expect1h)}
+                color={after1h != null ? undefined : "rgba(255,255,255,0.4)"}
+              />
+            </div>
+            {/* Coloured deltas — only show once both endpoints exist. */}
+            {(dEnd != null || d1h != null) && (
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8, marginTop:8 }}>
+                <DeltaPill label="Δ BEFORE → AT END" delta={dEnd}/>
+                <DeltaPill label="Δ BEFORE → +1H"    delta={d1h}/>
+              </div>
+            )}
+          </ExPanel>
+
+          {/* 3) Evaluation panel ----------------------------------- */}
+          <ExPanel title="EVALUATION">
+            <EvalBlock
+              heading="POST-WORKOUT CHECK"
+              unlocked={atEnd != null}
+              body={interimMessage(log) || "Waiting for the at-end glucose reading…"}
+              color={evalInfo.color}
+              outcomeLabel={atEnd != null ? evalInfo.label : null}
+            />
+            <div style={{ height:8 }}/>
+            <EvalBlock
+              heading="1H OUTCOME"
+              unlocked={after1h != null}
+              body={finalMessage(log) || "Waiting for the +1h glucose reading…"}
+              color={evalInfo.color}
+              outcomeLabel={after1h != null ? evalInfo.label : null}
+            />
+          </ExPanel>
+
+          {/* 4) Pattern note --------------------------------------- */}
+          <ExPanel title="PATTERN NOTE">
+            <div style={{ fontSize:13, color:"rgba(255,255,255,0.78)", lineHeight:1.55 }}>
+              {patternNote(log.exercise_type)}
+            </div>
+          </ExPanel>
+
           {log.notes && (
-            <div style={{ gridColumn:"1 / -1", background:"rgba(255,255,255,0.02)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
+            <div style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
               <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>NOTES</div>
               <div style={{ fontSize:13, color:"rgba(255,255,255,0.8)", lineHeight:1.5 }}>{log.notes}</div>
             </div>
           )}
+
+          {/* Disclaimer — last item before the inherited Delete button. */}
+          <div style={{
+            fontSize:11, color:"rgba(255,255,255,0.35)",
+            textAlign:"center", letterSpacing:"0.02em", lineHeight:1.5,
+            paddingTop:2,
+          }}>
+            For reference only — always consult your care team.
+          </div>
         </div>
       }
     />
+  );
+}
+
+// ──────────────── helpers used by the exercise expanded view ────────────────
+
+function numOrNull(v: number | null | undefined): number | null {
+  if (v == null) return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function pendingLabel(expectedAt: Date): string {
+  const hh = expectedAt.toLocaleTimeString("en", { hour:"numeric", minute:"2-digit" });
+  return `Pending · expected ${hh}`;
+}
+
+/** Section wrapper used inside the exercise expanded view. */
+function ExPanel({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={{
+      background:"rgba(255,255,255,0.015)",
+      border:`1px solid ${BORDER}`,
+      borderRadius:12,
+      padding:"12px 14px",
+    }}>
+      <div style={{
+        fontSize:10, fontWeight:700, letterSpacing:"0.1em",
+        color:"rgba(255,255,255,0.45)", marginBottom:10,
+      }}>{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function DeltaPill({ label, delta }: { label: string; delta: number | null }) {
+  const color = deltaColor(delta);
+  const text  = delta == null
+    ? "—"
+    : delta === 0
+      ? "0 mg/dL"
+      : `${delta > 0 ? "+" : ""}${delta} mg/dL`;
+  return (
+    <div style={{
+      background:"rgba(255,255,255,0.02)",
+      border:`1px solid ${BORDER}`,
+      borderRadius:10, padding:"10px 12px",
+    }}>
+      <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{label}</div>
+      <div style={{ fontSize:14, fontWeight:700, color, letterSpacing:"-0.01em", fontFamily:"var(--font-mono)" }}>{text}</div>
+    </div>
+  );
+}
+
+function EvalBlock({ heading, unlocked, body, color, outcomeLabel }: {
+  heading: string;
+  unlocked: boolean;
+  body: string;
+  color: string;
+  outcomeLabel: string | null;
+}) {
+  const border = unlocked ? `${color}40` : BORDER;
+  const bg     = unlocked ? `${color}10` : "rgba(255,255,255,0.02)";
+  return (
+    <div style={{
+      background: bg,
+      border: `1px solid ${border}`,
+      borderRadius: 10,
+      padding: "10px 12px",
+    }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:6 }}>
+        <span style={{
+          fontSize:9, fontWeight:700, letterSpacing:"0.1em",
+          color: unlocked ? color : "rgba(255,255,255,0.35)",
+        }}>{heading}</span>
+        {unlocked && outcomeLabel && (
+          <span style={{
+            fontSize:9, fontWeight:700, letterSpacing:"0.08em",
+            color, padding:"2px 8px", borderRadius:99,
+            border:`1px solid ${color}40`, background:`${color}15`,
+          }}>{outcomeLabel}</span>
+        )}
+      </div>
+      <div style={{
+        fontSize:13, lineHeight:1.5,
+        color: unlocked ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.35)",
+      }}>{body}</div>
+    </div>
   );
 }
 
