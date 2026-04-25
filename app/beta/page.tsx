@@ -1,11 +1,11 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import CTAButton from "@/components/landing/CTAButton";
 import FAQ from "@/components/landing/FAQ";
 import Features from "@/components/landing/Features";
 import LandingFooter from "@/components/landing/Footer";
-import FounderSection from "@/components/landing/FounderSection";
 import Lockup from "@/components/landing/Lockup";
 import PricingCard from "@/components/landing/PricingCard";
 import Steps from "@/components/landing/Steps";
@@ -207,7 +207,43 @@ export default function BetaPage() {
 
         <Steps />
         <Features />
-        <FounderSection />
+
+        {/* Founder — subtle, below the feature list */}
+        <section
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            textAlign: "center",
+            gap: 10,
+          }}
+        >
+          <div
+            style={{
+              width: 80,
+              height: 80,
+              borderRadius: "50%",
+              overflow: "hidden",
+              position: "relative",
+              border: `1px solid ${BORDER}`,
+              background: SURFACE,
+            }}
+          >
+            <Image
+              src="/founder.png"
+              alt="Lucas Wahnon"
+              width={80}
+              height={80}
+              style={{ objectFit: "cover", display: "block" }}
+            />
+          </div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: "#fff", letterSpacing: "-0.01em" }}>
+            Lucas Wahnon
+          </div>
+          <div style={{ fontSize: 13, color: TEXT_DIM }}>
+            Gründer · lebt selbst mit Typ 1
+          </div>
+        </section>
 
         <PricingCard
           heading="Was du bekommst"
