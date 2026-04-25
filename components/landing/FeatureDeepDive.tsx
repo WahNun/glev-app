@@ -30,7 +30,10 @@ const FEATURES: Feature[] = [
   {
     title: "Voice-first Mahlzeit-Logging",
     body: "Du sprichst deine Mahlzeit, Glev versteht Lebensmittel, Mengen und Zubereitungen. Schneller als jede Tipp-Form.",
-    desktopPage: "log",
+    // The "Glev Engine" page (key: "recommend") shows the voice mic
+    // surface plus the GPT-Reasoning side panel — that's the canonical
+    // voice-first surface in the desktop app.
+    desktopPage: "recommend",
     mobileTab: "engine",
   },
   {
