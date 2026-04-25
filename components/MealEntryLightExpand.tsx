@@ -3,6 +3,7 @@
 import React from "react";
 import type { Meal } from "@/lib/meals";
 import { TYPE_COLORS, TYPE_LABELS, getEvalColor, getEvalLabel } from "@/lib/mealTypes";
+import { parseDbDate, parseDbTs } from "@/lib/time";
 
 const ACCENT = "#4F6EF7";
 const GREEN  = "#22D3A0";
@@ -38,7 +39,7 @@ export default function MealEntryLightExpand({
     ? (delta > 30 ? PINK : delta > 0 ? ORANGE : GREEN)
     : "rgba(255,255,255,0.35)";
 
-  const date = new Date(meal.meal_time ?? meal.created_at);
+  const date = parseDbDate(meal.meal_time ?? meal.created_at);
   const fullTimestamp = date.toLocaleString("en", {
     month: "short", day: "numeric", year: "numeric",
     hour: "numeric", minute: "2-digit",
@@ -70,7 +71,7 @@ export default function MealEntryLightExpand({
   // BG After: if no `after` value and the meal is recent (< 2h), show "Pending"
   // otherwise show "—". This is a conservative placeholder until the scheduled
   // CGM-fetch system populates the field.
-  const ageMs = Date.now() - new Date(meal.created_at).getTime();
+  const ageMs = Date.now() - parseDbTs(meal.created_at);
   const ageHours = ageMs / 3_600_000;
   const afterValue: React.ReactNode = after != null
     ? `${after} mg/dL`

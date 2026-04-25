@@ -1,6 +1,7 @@
 import type { AdaptiveICR, TimeOfDay } from "./adaptiveICR";
 import type { InsulinLog } from "../insulin";
 import type { ExerciseLog } from "../exercise";
+import { parseDbTs } from "@/lib/time";
 
 export interface RecommendInput {
   carbs: number;
@@ -91,27 +92,27 @@ export function recommendDose(input: RecommendInput): RecommendOutput {
   const oneDayAgo   = nowMs - 24 * 3600_000;
 
   const recentBolusCount = (input.recentInsulinLogs ?? [])
-    .filter(l => l.insulin_type === "bolus" && new Date(l.created_at).getTime() >= sixHoursAgo)
+    .filter(l => l.insulin_type === "bolus" && parseDbTs(l.created_at) >= sixHoursAgo)
     .length;
   if (recentBolusCount > 2) {
     parts.push(`⚠ ${recentBolusCount} Bolus-Dosen in den letzten 6h — Active Insulin könnte noch wirken.`);
   }
 
   const lastBasal = (input.recentInsulinLogs ?? [])
-    .filter(l => l.insulin_type === "basal" && new Date(l.created_at).getTime() >= oneDayAgo)
-    .sort((x, y) => new Date(y.created_at).getTime() - new Date(x.created_at).getTime())[0];
+    .filter(l => l.insulin_type === "basal" && parseDbTs(l.created_at) >= oneDayAgo)
+    .sort((x, y) => parseDbTs(y.created_at) - parseDbTs(x.created_at))[0];
   if (lastBasal) {
-    const hAgo = Math.max(0, Math.round((nowMs - new Date(lastBasal.created_at).getTime()) / 3600_000));
+    const hAgo = Math.max(0, Math.round((nowMs - parseDbTs(lastBasal.created_at)) / 3600_000));
     parts.push(`Basal: ${lastBasal.units}u ${lastBasal.insulin_name || "Basal"} vor ${hAgo}h.`);
   }
 
   // Exercise sensitivity hint — last 4h, documentation only.
   const fourHoursAgo = nowMs - 4 * 3600_000;
   const recentExercise = (input.recentExerciseLogs ?? [])
-    .filter(l => new Date(l.created_at).getTime() >= fourHoursAgo)
-    .sort((x, y) => new Date(y.created_at).getTime() - new Date(x.created_at).getTime())[0];
+    .filter(l => parseDbTs(l.created_at) >= fourHoursAgo)
+    .sort((x, y) => parseDbTs(y.created_at) - parseDbTs(x.created_at))[0];
   if (recentExercise) {
-    const hAgo = Math.max(0, Math.round((nowMs - new Date(recentExercise.created_at).getTime()) / 3600_000));
+    const hAgo = Math.max(0, Math.round((nowMs - parseDbTs(recentExercise.created_at)) / 3600_000));
     parts.push(`⚠ ${recentExercise.duration_minutes} min ${recentExercise.exercise_type} (${recentExercise.intensity}) vor ${hAgo}h — erhöhte Insulin-Sensitivität möglich.`);
   }
 

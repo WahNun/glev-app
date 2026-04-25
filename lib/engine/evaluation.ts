@@ -1,5 +1,6 @@
 import type { InsulinLog } from "../insulin";
 import type { ExerciseLog } from "../exercise";
+import { parseDbTs } from "@/lib/time";
 
 export type Outcome = "GOOD" | "UNDERDOSE" | "OVERDOSE" | "SPIKE" | "CHECK_CONTEXT";
 
@@ -43,15 +44,15 @@ function contextSuffix(
   const notes: string[] = [];
 
   const recentBasal = insulinLogs.find(l =>
-    l.insulin_type === "basal" && new Date(l.created_at).getTime() >= dayAgo,
+    l.insulin_type === "basal" && parseDbTs(l.created_at) >= dayAgo,
   );
   if (recentBasal) {
-    const hoursAgo = Math.max(0, Math.round((now - new Date(recentBasal.created_at).getTime()) / 3600_000));
+    const hoursAgo = Math.max(0, Math.round((now - parseDbTs(recentBasal.created_at)) / 3600_000));
     notes.push(`Basal-Kontext: ${recentBasal.units}u ${recentBasal.insulin_name || "Basal"} vor ${hoursAgo}h.`);
   }
 
   const recentExercise = exerciseLogs.find(l =>
-    new Date(l.created_at).getTime() >= fourHoursAgo,
+    parseDbTs(l.created_at) >= fourHoursAgo,
   );
   if (recentExercise) {
     notes.push(`Bewegung: ${recentExercise.duration_minutes} min ${recentExercise.exercise_type} (${recentExercise.intensity}) in den letzten 4h.`);

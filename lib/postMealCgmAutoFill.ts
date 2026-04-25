@@ -3,6 +3,7 @@
 import { type Meal } from "@/lib/meals";
 import { supabase } from "@/lib/supabase";
 import { logDebug } from "@/lib/debug";
+import { parseLluTs as _parseLluTs, parseDbTs } from "@/lib/time";
 
 const STORAGE_KEY_BASE = "glev:scheduled-cgm-fills";
 const MATCH_WINDOW_MIN = 15;
@@ -19,16 +20,7 @@ let historyCache: { fetchedAt: number; data: CgmHistoryResponse } | null = null;
 const HISTORY_CACHE_MS = 30_000;
 
 function parseLluTs(ts: string | null): number | null {
-  if (!ts) return null;
-  const t = Date.parse(ts);
-  if (!isNaN(t)) return t;
-  const m = ts.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)?$/i);
-  if (!m) return null;
-  let h = parseInt(m[4], 10);
-  const ap = (m[7] || "").toUpperCase();
-  if (ap === "PM" && h < 12) h += 12;
-  if (ap === "AM" && h === 12) h = 0;
-  return new Date(parseInt(m[3], 10), parseInt(m[1], 10) - 1, parseInt(m[2], 10), h, parseInt(m[5], 10), parseInt(m[6], 10)).getTime();
+  return _parseLluTs(ts);
 }
 
 async function fetchCgmHistory(force = false): Promise<CgmHistoryResponse | null> {
@@ -220,7 +212,7 @@ export async function restoreScheduledTimers(): Promise<void> {
 export async function reconcilePendingMealsCgm(meals: Meal[]): Promise<{ filled: number }> {
   const now = Date.now();
   const candidates = meals.filter((m) => {
-    const t = m.meal_time ? Date.parse(m.meal_time) : Date.parse(m.created_at);
+    const t = m.meal_time ? parseDbTs(m.meal_time) : parseDbTs(m.created_at);
     if (!isFinite(t)) return false;
     if (now - t > HISTORY_HORIZON_MS) return false;
     const need1h = m.bg_1h == null && now >= t + ONE_HOUR_MS;
@@ -234,7 +226,7 @@ export async function reconcilePendingMealsCgm(meals: Meal[]): Promise<{ filled:
 
   let filled = 0;
   for (const m of candidates) {
-    const t = m.meal_time ? Date.parse(m.meal_time) : Date.parse(m.created_at);
+    const t = m.meal_time ? parseDbTs(m.meal_time) : parseDbTs(m.created_at);
     try {
       if (m.bg_1h == null && now >= t + ONE_HOUR_MS) {
         if (await fillSlot(m.id, t, "1h", hist.history)) filled++;

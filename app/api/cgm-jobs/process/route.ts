@@ -3,6 +3,7 @@ import { authenticate } from "../../cgm/_helpers";
 import { adminClient } from "@/lib/cgm/supabase";
 import { getHistory, type Reading } from "@/lib/cgm/llu";
 import type { LogType, FetchType, CgmFetchJob } from "@/lib/cgmJobs";
+import { parseDbTs, parseLluTs } from "@/lib/time";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,8 +42,8 @@ function pickReadingNear(history: Reading[], targetMs: number, windowMs: number)
   let bestDiff = Number.POSITIVE_INFINITY;
   for (const r of history) {
     if (!r.timestamp || r.value == null) continue;
-    const t = new Date(r.timestamp).getTime();
-    if (Number.isNaN(t)) continue;
+    const t = parseLluTs(r.timestamp);
+    if (t == null) continue;
     const d = Math.abs(t - targetMs);
     if (d <= windowMs && d < bestDiff) {
       best = r;
@@ -117,7 +118,7 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
-    const fetchTimeMs = new Date(job.fetch_time).getTime();
+    const fetchTimeMs = parseDbTs(job.fetch_time);
     const ageMs = nowMs - fetchTimeMs;
 
     // 1) Try historical match first (closest reading within ±10min of fetch_time).

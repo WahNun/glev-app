@@ -10,6 +10,7 @@ import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
 import EngineLogTab, { InsulinForm, ExerciseForm } from "@/components/EngineLogTab";
 import GlevLogo from "@/components/GlevLogo";
 import EngineChatPanel, { type SeedMessage } from "@/components/EngineChatPanel";
+import { parseDbTs, parseDbDate } from "@/lib/time";
 
 // datetime-local needs "YYYY-MM-DDTHH:mm" in the *local* timezone (the input
 // strips the offset). Using toISOString() would silently shift the value to
@@ -51,7 +52,7 @@ function safetyNotesFromLogs(
   const notes: string[] = [];
 
   const recentBolus = insulinLogs.filter(l =>
-    l.insulin_type === "bolus" && new Date(l.created_at).getTime() >= sixHoursAgo,
+    l.insulin_type === "bolus" && parseDbTs(l.created_at) >= sixHoursAgo,
   );
   if (recentBolus.length > 2) {
     const total = Math.round(recentBolus.reduce((s, l) => s + (l.units || 0), 0) * 10) / 10;
@@ -59,16 +60,16 @@ function safetyNotesFromLogs(
   }
 
   const recentBasal = insulinLogs.filter(l =>
-    l.insulin_type === "basal" && new Date(l.created_at).getTime() >= dayAgo,
+    l.insulin_type === "basal" && parseDbTs(l.created_at) >= dayAgo,
   );
   if (recentBasal.length > 0) {
     const last = recentBasal[0];
-    const hoursAgo = Math.max(0, Math.round((now - new Date(last.created_at).getTime()) / 3600_000));
+    const hoursAgo = Math.max(0, Math.round((now - parseDbTs(last.created_at)) / 3600_000));
     notes.push(`Basal-Kontext: zuletzt ${last.units}u ${last.insulin_name || "Basal"} vor ${hoursAgo}h.`);
   }
 
   const recentExercise = exerciseLogs.filter(l =>
-    new Date(l.created_at).getTime() >= fourHoursAgo,
+    parseDbTs(l.created_at) >= fourHoursAgo,
   );
   if (recentExercise.length > 0) {
     const e = recentExercise[0];
@@ -894,7 +895,7 @@ export default function EnginePage() {
                 <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:2 }}>Historical meals used in this recommendation</div>
               </div>
               {result.similarMeals.map(m => {
-                const date = new Date(m.created_at).toLocaleDateString("en",{month:"short",day:"numeric"});
+                const date = parseDbDate(m.created_at).toLocaleDateString("en",{month:"short",day:"numeric"});
                 return (
                   <div key={m.id} style={{ padding:"12px 20px", borderBottom:`1px solid ${BORDER}`, display:"grid", gridTemplateColumns:"1fr 60px 60px 70px 80px", gap:12, alignItems:"center", fontSize:12 }}>
                     <div style={{ color:"rgba(255,255,255,0.65)" }}>{m.input_text.length>45?m.input_text.slice(0,45)+"…":m.input_text}</div>

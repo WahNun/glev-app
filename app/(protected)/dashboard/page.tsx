@@ -11,6 +11,7 @@ import CurrentDayGlucoseCard from "@/components/CurrentDayGlucoseCard";
 import GlucoseTrendFront from "@/components/GlucoseTrendChart";
 import SortableCardGrid, { type SortableItem } from "@/components/SortableCardGrid";
 import { useCardOrder } from "@/lib/cardOrder";
+import { parseDbDate, parseDbTs } from "@/lib/time";
 
 /** Default top-to-bottom order of dashboard sections. Each ID also appears
  *  as a key in the items array below — keep them in sync. */
@@ -126,7 +127,7 @@ function TrendChart({ meals }: { meals: Meal[] }) {
     buckets[d.toDateString()] = [];
   }
   meals.forEach(m => {
-    const d = new Date(m.created_at).toDateString();
+    const d = parseDbDate(m.created_at).toDateString();
     if (d in buckets && m.glucose_before) buckets[d].push(m.glucose_before);
   });
   const points = Object.values(buckets).map(arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : null);
@@ -145,7 +146,7 @@ function TrendChart({ meals }: { meals: Meal[] }) {
   const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   meals.forEach(m => {
     if (!m.glucose_before) return;
-    const ts = new Date(m.created_at);
+    const ts = parseDbDate(m.created_at);
     if (now - ts.getTime() > 30 * 86400000) return;
     weekdayBuckets[ts.getDay()].push(m.glucose_before);
   });
@@ -316,7 +317,7 @@ export default function DashboardPage() {
       ...insulin.map<RecentRow>(i => ({ kind: i.insulin_type, id: i.id, ts: i.created_at, insulin: i })),
       ...exercise.map<RecentRow>(x => ({ kind: "exercise", id: x.id, ts: x.created_at, exercise: x })),
     ];
-    rows.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
+    rows.sort((a, b) => parseDbTs(b.ts) - parseDbTs(a.ts));
     return rows.slice(0, 6);
   }, [meals, insulin, exercise]);
 

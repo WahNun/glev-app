@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { type Meal } from "@/lib/meals";
 import { useCrosshair, CrosshairOverlay, CrosshairTooltip, type CrosshairPoint } from "@/components/ChartCrosshair";
+import { parseDbDate } from "@/lib/time";
 
 const ACCENT = "#4F6EF7";
 const GREEN = "#22D3A0";
@@ -32,7 +33,7 @@ export default function GlucoseTrendFront({
     buckets[d.toDateString()] = [];
   }
   meals.forEach((m) => {
-    const d = new Date(m.created_at).toDateString();
+    const d = parseDbDate(m.created_at).toDateString();
     if (d in buckets && m.glucose_before) buckets[d].push(m.glucose_before);
   });
   const dateLabels = Object.keys(buckets);

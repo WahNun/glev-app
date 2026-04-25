@@ -3,6 +3,7 @@
 import React from "react";
 import type { Meal } from "@/lib/meals";
 import { TYPE_COLORS, TYPE_SHORT, TYPE_LABELS, getEvalColor, getEvalLabel } from "@/lib/mealTypes";
+import { parseDbDate } from "@/lib/time";
 
 const ACCENT = "#4F6EF7";
 const ORANGE = "#FF9500";
@@ -18,7 +19,7 @@ export default function MealEntryCardCollapsed({
   showEval?: boolean;
 }) {
   const ts = meal.meal_time ?? meal.created_at;
-  const d = new Date(ts);
+  const d = parseDbDate(ts);
   const dateStr = d.toLocaleDateString("en", { month: "short", day: "numeric" });
   const timeStr = d.toLocaleTimeString("en", { hour: "numeric", minute: "2-digit" });
 

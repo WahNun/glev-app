@@ -1,5 +1,6 @@
 import type { Meal } from "@/lib/meals";
 import { lifecycleFor } from "./lifecycle";
+import { parseDbDate } from "@/lib/time";
 
 const OUTCOME_WEIGHT: Record<string, number> = {
   GOOD: 1.0,
@@ -53,7 +54,7 @@ export function computeAdaptiveICR(meals: Meal[]): AdaptiveICR {
     if (w <= 0) continue;
     const ratio = carbs / insulin;
     buckets.all.push({ value: ratio, weight: w });
-    buckets[timeOfDay(new Date(m.meal_time ?? m.created_at))].push({ value: ratio, weight: w });
+    buckets[timeOfDay(parseDbDate(m.meal_time ?? m.created_at))].push({ value: ratio, weight: w });
   }
 
   return {

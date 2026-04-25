@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { saveMeal, classifyMeal, computeEvaluation, computeCalories, fetchMeals, type ParsedFood, type Meal } from "@/lib/meals";
 import { scheduleAutoFillForMeal } from "@/lib/postMealCgmAutoFill";
 import { supabase } from "@/lib/supabase";
+import { parseDbDate, parseLluTs } from "@/lib/time";
 
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
 
@@ -367,10 +368,10 @@ export default function LogPage() {
       if (!cur || typeof cur.value !== "number" || !cur.timestamp) {
         return { ok: false, status: 502, message: "CGM service unavailable, please try again in a minute." };
       }
-      const ts = new Date(cur.timestamp);
-      const formattedTime = isNaN(ts.getTime())
+      const tsMs = parseLluTs(cur.timestamp);
+      const formattedTime = tsMs == null
         ? cur.timestamp
-        : ts.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+        : new Date(tsMs).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
       return { ok: true, value: Math.round(cur.value), timestamp: cur.timestamp, formattedTime };
     } catch {
       return { ok: false, status: 0, message: "Could not load CGM reading." };
@@ -724,7 +725,7 @@ export default function LogPage() {
                       <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", marginTop:2 }}>Historical meals used in this recommendation</div>
                     </div>
                     {rec.similarMeals.map(m => {
-                      const date = new Date(m.created_at).toLocaleDateString("en", { month:"short", day:"numeric" });
+                      const date = parseDbDate(m.created_at).toLocaleDateString("en", { month:"short", day:"numeric" });
                       return (
                         <div key={m.id} style={{ padding:"10px 16px", borderBottom:`1px solid ${BORDER}`, display:"grid", gridTemplateColumns:"1fr 50px 50px 60px 70px", gap:10, alignItems:"center", fontSize:11 }}>
                           <div style={{ color:"rgba(255,255,255,0.65)" }}>{m.input_text.length > 38 ? m.input_text.slice(0, 38) + "…" : m.input_text}</div>

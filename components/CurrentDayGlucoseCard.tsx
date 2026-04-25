@@ -4,6 +4,7 @@ import { fetchCgmHistory } from "@/lib/cgm/clientCache";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import CgmFetchButton, { type CgmFetchResult } from "@/components/CgmFetchButton";
 import { useCrosshair, CrosshairOverlay, CrosshairTooltip, type CrosshairPoint } from "@/components/ChartCrosshair";
+import { parseLluTs as _parseLluTs } from "@/lib/time";
 
 const ACCENT = "#4F6EF7";
 const GREEN = "#22D3A0";
@@ -390,17 +391,8 @@ function colorFor(v: number) {
   return GREEN;
 }
 
-// LibreLinkUp timestamps look like "11/24/2024 4:23:12 PM"
+// LibreLinkUp timestamps look like "11/24/2024 4:23:12 PM" (UTC server time).
+// Delegate to the shared parser so display times honour the user's device TZ.
 function parseLluTs(s: string): number {
-  const t = Date.parse(s);
-  if (!isNaN(t)) return t;
-  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)?$/i);
-  if (m) {
-    let h = parseInt(m[4], 10);
-    const ap = (m[7] || "").toUpperCase();
-    if (ap === "PM" && h < 12) h += 12;
-    if (ap === "AM" && h === 12) h = 0;
-    return new Date(parseInt(m[3], 10), parseInt(m[1], 10) - 1, parseInt(m[2], 10), h, parseInt(m[5], 10), parseInt(m[6], 10)).getTime();
-  }
-  return Date.now();
+  return _parseLluTs(s) ?? Date.now();
 }

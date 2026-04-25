@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { reloadHistoricalEntries } from "@/lib/meals";
 import ImportPanel from "@/components/ImportPanel";
 import CgmSettingsCard from "@/components/CgmSettingsCard";
+import { parseDbDate } from "@/lib/time";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
@@ -46,7 +47,7 @@ export default function SettingsPage() {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return;
       setEmail(user.email || "");
-      setCreatedAt(user.created_at ? new Date(user.created_at).toLocaleDateString("en",{year:"numeric",month:"long",day:"numeric"}) : "");
+      setCreatedAt(user.created_at ? parseDbDate(user.created_at).toLocaleDateString("en",{year:"numeric",month:"long",day:"numeric"}) : "");
     });
     supabase.from("meals").select("id", { count:"exact", head:true }).then(({ count }) => setMealCount(count||0));
   }, []);

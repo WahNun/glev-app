@@ -1,5 +1,6 @@
 import type { Meal } from "@/lib/meals";
 import { evaluateEntry, type Outcome } from "./evaluation";
+import { parseDbDate } from "@/lib/time";
 
 export type OutcomeState = "pending" | "provisional" | "final";
 
@@ -33,7 +34,7 @@ function classify(m: Meal) {
  * as a backwards-compatible bg_2h proxy. Pure function — no timers.
  */
 export function lifecycleFor(m: Meal, now: Date = new Date()): LifecycleResult {
-  const created = new Date(m.meal_time ?? m.created_at);
+  const created = parseDbDate(m.meal_time ?? m.created_at);
   const ageMinutes = Math.max(0, (now.getTime() - created.getTime()) / 60000);
   const bgBefore = m.glucose_before;
   const bg1h     = m.bg_1h;

@@ -17,6 +17,7 @@ import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, get
 import { lifecycleFor, STATE_LABELS, type OutcomeState } from "@/lib/engine/lifecycle";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
 import ManualEntryModal from "@/components/ManualEntryModal";
+import { parseDbDate, parseDbTs, parseLluTs } from "@/lib/time";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const PURPLE="#A78BFA", BLUE="#3B82F6";
@@ -356,7 +357,7 @@ export default function EntriesPage() {
       ...insulin.map<Row>(i => ({ kind: i.insulin_type, id: i.id, ts: i.created_at, data: i })),
       ...exercise.map<Row>(x => ({ kind: "exercise", id: x.id, ts: x.created_at, data: x })),
     ];
-    all.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
+    all.sort((a, b) => parseDbTs(b.ts) - parseDbTs(a.ts));
     return all;
   }, [meals, insulin, exercise]);
 
@@ -370,7 +371,7 @@ export default function EntriesPage() {
   const filtered = rows.filter(r => {
     // Date range — same AND-across-sections rule as the other filters.
     if (dateBounds) {
-      const t = new Date(r.ts).getTime();
+      const t = parseDbTs(r.ts);
       if (Number.isNaN(t)) return false;
       if (t < dateBounds.startMs || t > dateBounds.endMs) return false;
     }
@@ -647,7 +648,7 @@ export default function EntriesPage() {
             const m = r.data;
             const isOpen = expanded === m.id;
             const ev = m.evaluation;
-            const date = new Date(m.created_at);
+            const date = parseDbDate(m.meal_time ?? m.created_at);
             const dateStr = date.toLocaleDateString("en", { month:"short", day:"numeric" }).replace(/^(\w+) (\d+)$/, "$2. $1.");
             const totalProt = m.protein_grams ?? (Array.isArray(m.parsed_json) ? m.parsed_json.reduce((s,f)=>s+(f.protein||0),0) : 0);
             const totalFat  = m.fat_grams ?? (Array.isArray(m.parsed_json) ? m.parsed_json.reduce((s,f)=>s+(f.fat||0),0) : 0);
@@ -784,7 +785,7 @@ export default function EntriesPage() {
           // time when sorting (most recent first by created_at).
           setMeals((prev) => {
             const next = [meal, ...prev];
-            next.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+            next.sort((a, b) => parseDbTs(b.meal_time ?? b.created_at) - parseDbTs(a.meal_time ?? a.created_at));
             return next;
           });
         }}
@@ -1055,7 +1056,7 @@ function BolusRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
   log: InsulinLog;
   isOpen: boolean; onToggle: () => void; onDelete: () => void; deleting: boolean;
 }) {
-  const d = new Date(log.created_at);
+  const d = parseDbDate(log.created_at);
   const dateStr = d.toLocaleDateString("en", { month:"short", day:"numeric" });
   const timeStr = d.toLocaleTimeString("en", { hour:"numeric", minute:"2-digit" });
 
@@ -1173,7 +1174,7 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
   log: InsulinLog;
   isOpen: boolean; onToggle: () => void; onDelete: () => void; deleting: boolean;
 }) {
-  const d = new Date(log.created_at);
+  const d = parseDbDate(log.created_at);
   const dateStr = d.toLocaleDateString("en", { month:"short", day:"numeric" });
   const timeStr = d.toLocaleTimeString("en", { hour:"numeric", minute:"2-digit" });
 
@@ -1209,7 +1210,7 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
         const out = await r.json() as { history?: { timestamp?: string | null; value?: number | null }[] };
         const pts: SparklinePoint[] = (out.history || [])
           .map(h => {
-            const t = h.timestamp ? Date.parse(h.timestamp) : NaN;
+            const t = h.timestamp ? (parseLluTs(h.timestamp) ?? NaN) : NaN;
             const v = typeof h.value === "number" ? h.value : NaN;
             return Number.isFinite(t) && Number.isFinite(v) ? { t, v } : null;
           })
@@ -1375,7 +1376,7 @@ function ExerciseRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
   log: ExerciseLog;
   isOpen: boolean; onToggle: () => void; onDelete: () => void; deleting: boolean;
 }) {
-  const start = new Date(log.created_at);
+  const start = parseDbDate(log.created_at);
   const end   = new Date(start.getTime() + log.duration_minutes * 60_000);
   const dateStr = start.toLocaleDateString("en", { month:"short", day:"numeric" });
   const timeStr = start.toLocaleTimeString("en", { hour:"numeric", minute:"2-digit" });

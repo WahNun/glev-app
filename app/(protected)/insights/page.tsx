@@ -11,6 +11,7 @@ import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
 import GlucoseTrendFront from "@/components/GlucoseTrendChart";
 import SortableCardGrid, { type SortableItem } from "@/components/SortableCardGrid";
 import { useCardOrder } from "@/lib/cardOrder";
+import { parseDbTs, parseDbDate } from "@/lib/time";
 
 /** Default top-to-bottom order of insights sections. */
 const INSIGHTS_DEFAULT_ORDER = [
@@ -67,7 +68,7 @@ export default function InsightsPage() {
 
   const now = Date.now();
   const oneWeekMs = 7 * 86400000;
-  const last7 = meals.filter(m => now - new Date(m.created_at).getTime() <= oneWeekMs);
+  const last7 = meals.filter(m => now - parseDbTs(m.created_at) <= oneWeekMs);
   const last7Good = last7.filter(m => EVAL_NORM(m.evaluation) === "GOOD").length;
   const last7Carbs = Math.round(last7.reduce((s,m) => s + (m.carbs_grams || 0), 0));
   const last7Insulin = Math.round(last7.reduce((s,m) => s + (m.insulin_units || 0), 0) * 10) / 10;
@@ -115,7 +116,7 @@ export default function InsightsPage() {
     "Night (21–5)":    {count:0,good:0},
   };
   meals.forEach(m => {
-    const h = new Date(m.created_at).getHours();
+    const h = parseDbDate(m.created_at).getHours();
     const key = h >= 5 && h < 11 ? "Morning (5–11)" : h >= 11 && h < 17 ? "Afternoon (11–17)" : h >= 17 && h < 21 ? "Evening (17–21)" : "Night (21–5)";
     timeGroups[key].count++;
     if (EVAL_NORM(m.evaluation)==="GOOD") timeGroups[key].good++;
@@ -270,9 +271,9 @@ export default function InsightsPage() {
         const wkMs = 7 * 86400000;
         const moMs = 30 * 86400000;
 
-        const bolus7  = insulinLogs.filter(l => l.insulin_type === "bolus" && nowMs - new Date(l.created_at).getTime() <= wkMs);
-        const bolus30 = insulinLogs.filter(l => l.insulin_type === "bolus" && nowMs - new Date(l.created_at).getTime() <= moMs);
-        const basal30 = insulinLogs.filter(l => l.insulin_type === "basal" && nowMs - new Date(l.created_at).getTime() <= moMs);
+        const bolus7  = insulinLogs.filter(l => l.insulin_type === "bolus" && nowMs - parseDbTs(l.created_at) <= wkMs);
+        const bolus30 = insulinLogs.filter(l => l.insulin_type === "bolus" && nowMs - parseDbTs(l.created_at) <= moMs);
+        const basal30 = insulinLogs.filter(l => l.insulin_type === "basal" && nowMs - parseDbTs(l.created_at) <= moMs);
 
         const sum  = (arr: InsulinLog[]) => arr.reduce((s,l) => s + (l.units || 0), 0);
         const mean = (arr: InsulinLog[]) => arr.length ? sum(arr) / arr.length : null;
@@ -282,7 +283,7 @@ export default function InsightsPage() {
         const avgBasal30 = mean(basal30);
 
         const bolusPrev7 = insulinLogs.filter(l => {
-          const t = nowMs - new Date(l.created_at).getTime();
+          const t = nowMs - parseDbTs(l.created_at);
           return l.insulin_type === "bolus" && t > wkMs && t <= 2 * wkMs;
         });
         const sum7  = sum(bolus7);
@@ -351,7 +352,7 @@ export default function InsightsPage() {
         const nowMs = Date.now();
         const wkMs = 7 * 86400000;
         const fourWk = 4 * wkMs;
-        const recent = exerciseLogs.filter(l => nowMs - new Date(l.created_at).getTime() <= fourWk);
+        const recent = exerciseLogs.filter(l => nowMs - parseDbTs(l.created_at) <= fourWk);
         const sessionsPerWeek = recent.length / 4;
         const avgDuration = recent.length
           ? Math.round(recent.reduce((s,l) => s + l.duration_minutes, 0) / recent.length)

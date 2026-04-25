@@ -97,6 +97,7 @@ All protected routes live under `src/app/(protected)/` and require Supabase auth
 - `src/components/Layout.tsx` — Sidebar nav (desktop) + bottom nav + FAB (mobile)
 - `src/app/api/parse-food/route.ts` — AI meal parser (returns full macros per food)
 - `src/app/(protected)/layout.tsx` — Protected layout wrapper
+- `lib/time.ts` — `parseDbTs` / `parseDbDate` / `parseLluTs`. Defensive parsers for DB timestamps (handles both `timestamptz` and accidentally‑naive `timestamp` cols by appending "Z") and for LibreLinkUp's `M/D/YYYY h:mm:ss AM/PM` server‑UTC strings (decoded via `Date.UTC(...)` and rendered in the device TZ). All UI code reading `created_at`, `meal_time`, `bg_1h_at`, `bg_2h_at`, or LLU `Timestamp`/`history[].timestamp` MUST use these helpers — never raw `new Date(s)` / `Date.parse(s)`.
 
 ## Core Logic
 
