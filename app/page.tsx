@@ -4,6 +4,8 @@ import Link from "next/link";
 // react hooks no longer needed — homepage is now stateless
 import GlevLockup from "@/components/GlevLockup";
 import AppMockupPhone from "@/components/AppMockupPhone";
+import Steps from "@/components/landing/Steps";
+import FeatureDeepDive from "@/components/landing/FeatureDeepDive";
 
 const ACCENT  = "#4F6EF7";
 const HOVER   = "#6B8BFF";
@@ -315,6 +317,44 @@ export default function Home() {
             text="Glev rechnet keine Insulin-Dosen. Alles bleibt eine Tracking-App — Therapie macht der Arzt."
           />
         </div>
+      </section>
+
+      {/* HOW IT WORKS — 3 steps */}
+      <section
+        id="how"
+        style={{
+          position: "relative",
+          zIndex: 1,
+          maxWidth: 760,
+          margin: "0 auto",
+          padding: "16px 24px 64px",
+        }}
+      >
+        <h2
+          style={{
+            fontSize: "clamp(28px, 4vw, 36px)",
+            fontWeight: 700,
+            letterSpacing: "-0.03em",
+            margin: "0 0 28px",
+            color: "#fff",
+          }}
+        >
+          So funktioniert Glev
+        </h2>
+        <Steps />
+      </section>
+
+      {/* FEATURES IM DETAIL — 4 alternating rows with app screenshots */}
+      <section
+        style={{
+          position: "relative",
+          zIndex: 1,
+          maxWidth: 1080,
+          margin: "0 auto",
+          padding: "16px 24px 80px",
+        }}
+      >
+        <FeatureDeepDive />
       </section>
 
       {/* PRICING */}
