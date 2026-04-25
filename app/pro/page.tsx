@@ -187,9 +187,14 @@ export default function ProPage() {
             <Image
               src="/founder.png"
               alt="Lucas Wahnon"
-              width={80}
-              height={80}
-              style={{ objectFit: "cover", display: "block" }}
+              fill
+              sizes="80px"
+              style={{
+                objectFit: "cover",
+                objectPosition: "50% 22%",
+                transform: "scale(1.5)",
+                transformOrigin: "50% 22%",
+              }}
             />
           </div>
           <div style={{ fontSize: 15, fontWeight: 600, color: "#fff", letterSpacing: "-0.01em" }}>
