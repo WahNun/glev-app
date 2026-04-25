@@ -1,0 +1,32 @@
+We want to implement automatic CGM glucose fetching that fires at specific moments relative to each log submission. The CGM integration already exists (the "CGM" button on the glucose field). We now need a scheduled fetch system that populates BG readings on logs automatically.
+
+FETCH AT LOG SUBMIT (all log types):
+- When any log is confirmed/submitted, immediately trigger a CGM fetch and save the result as glucoseBefore on that log entry (this is the "current glucose at time of logging")
+
+SCHEDULED POST-LOG FETCHES by log type:
+
+1. MEAL LOGS:
+   - +60 min after log time → save as glucoseAfter1h
+   - +120 min after log time → save as glucoseAfter2h
+
+2. BOLUS LOGS (insulin injection):
+   - +60 min after injection time → save as glucoseAfter1h
+   - +120 min after injection time → save as glucoseAfter2h
+
+3. WORKOUT LOGS:
+   - At workout end time (already known from the log) → save as glucoseAtEnd
+   - +60 min after workout end time → save as glucoseAfter1h
+
+4. BASAL LOGS (long-acting insulin):
+   - +12h after injection time → save as glucoseAfter12h
+   - +24h after injection time → save as glucoseAfter24h
+
+IMPLEMENTATION NOTES:
+- Store scheduled fetch jobs in the database with: logId, fetchTime (UTC), fetchType (string key from above), status (pending / fetched / failed / skipped)
+- On app load and periodically (every 5 min), check for any pending fetch jobs whose fetchTime has passed and execute them
+- If the user does not have a CGM connected, mark the job as skipped gracefully — no error shown
+- If a fetch is attempted and the CGM returns no data (e.g. sensor gap), mark as failed and leave the glucose field as null — do not retry endlessly (max 2 retries, 5 min apart)
+- All fetched values should be saved back to the corresponding log entry in the database with the correct field key
+- The fetched values should be visible in the log entry's expanded view (BG After section) and on the Entry Log / Dashboard cards once the expandable card feature is in place
+- Fetch jobs should be cancelable: if a new log of the same type is submitted within the scheduled window, the old pending jobs are not cancelled (each log tracks its own jobs independently)
+- On the Entry Log expanded view, fetched post-glucose values should show their fetch type label (e.g. "1H POST", "2H POST", "AT END") next to the reading
