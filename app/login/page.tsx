@@ -3,38 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import GlevLockup from "@/components/GlevLockup";
 
 const ACCENT   = "#4F6EF7";
 const GREEN    = "#22D3A0";
 const PINK     = "#FF2D78";
 const BG       = "#09090B";
 const SURFACE  = "#111117";
-
-const LOGO_NODES = [{cx:16,cy:7},{cx:25,cy:12},{cx:25,cy:20},{cx:18,cy:26},{cx:9,cy:22},{cx:7,cy:14},{cx:16,cy:16}];
-const LOGO_EDGES = [[0,1],[1,2],[2,3],[3,4],[4,5],[5,0],[0,6],[1,6],[2,6],[3,6]];
-
-function LogoMark() {
-  const c = "#4F6EF7";
-  return (
-    <svg width="48" height="48" viewBox="0 0 32 32" fill="none">
-      <rect width="32" height="32" rx="9" fill="#0F0F14"/>
-      {LOGO_EDGES.map(([a, b], i) => (
-        <line key={i}
-          x1={LOGO_NODES[a].cx} y1={LOGO_NODES[a].cy}
-          x2={LOGO_NODES[b].cx} y2={LOGO_NODES[b].cy}
-          stroke={c} strokeWidth="0.9" strokeOpacity="0.55"
-        />
-      ))}
-      {LOGO_NODES.map((n, i) => (
-        <circle key={i} cx={n.cx} cy={n.cy}
-          r={i === 6 ? 3.5 : 2}
-          fill={i === 6 ? c : `${c}40`}
-          stroke={c} strokeWidth={i === 6 ? 0 : 0.8}
-        />
-      ))}
-    </svg>
-  );
-}
 
 const inp: React.CSSProperties = {
   background: "rgba(255,255,255,0.05)",
@@ -131,9 +106,8 @@ export default function LoginPage() {
     }}>
       <div style={{ width: "100%", maxWidth: 400 }}>
 
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, marginBottom: 32 }}>
-          <LogoMark />
-          <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", marginTop: 4 }}>Glev</div>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, marginBottom: 32 }}>
+          <GlevLockup size={44} />
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: "0.12em" }}>
             INSULIN DECISION SUPPORT
           </div>

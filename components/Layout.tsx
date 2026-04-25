@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { signOut } from "@/lib/auth";
 import GlevLogo from "@/components/GlevLogo";
+import GlevLockup from "@/components/GlevLockup";
 import AboutGlevModal from "@/components/AboutGlevModal";
 
 const ACCENT  = "#4F6EF7";
@@ -89,11 +90,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           aria-label="Open about Glev"
           style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", flex: 1, minWidth: 0 }}
         >
-          <GlevLogo size={30} />
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: "-0.02em", color: "#fff" }}>Glev</div>
-            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", marginTop: 1 }}>Smart insulin decisions</div>
-          </div>
+          <GlevLockup size={26} />
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", marginLeft: 4 }}>Smart insulin decisions</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ fontSize: 11, padding: "5px 12px", borderRadius: 99, background: `${GREEN}18`, color: GREEN, fontWeight: 600 }}>Live</div>
@@ -128,16 +126,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           aria-label="Open about Glev"
           className="nav-btn"
           style={{
-            display: "flex", alignItems: "center", gap: 10,
+            display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6,
             padding: "8px 10px", marginBottom: 24, marginTop: -4,
             borderRadius: 10, cursor: "pointer",
           }}
         >
-          <GlevLogo size={32} />
-          <div>
-            <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: "-0.03em", color: "#fff" }}>Glev</div>
-            <div style={{ fontSize: 9, color: "rgba(255,255,255,0.25)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Smart insulin decisions</div>
-          </div>
+          <GlevLockup size={28} />
+          <div style={{ fontSize: 9, color: "rgba(255,255,255,0.25)", letterSpacing: "0.08em", textTransform: "uppercase", marginLeft: 2 }}>Smart insulin decisions</div>
         </div>
 
         <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>

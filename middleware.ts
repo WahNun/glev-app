@@ -39,9 +39,7 @@ export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const isAuthed = getSessionFromCookies(req);
 
-  if (pathname === "/") {
-    return NextResponse.redirect(new URL(isAuthed ? "/dashboard" : "/login", req.url));
-  }
+  // `/` is the public marketing homepage — let it render for everyone.
   if (PROTECTED.some(p => pathname === p || pathname.startsWith(p + "/")) && !isAuthed) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
@@ -52,5 +50,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/dashboard/:path*", "/log/:path*", "/entries/:path*", "/insights/:path*", "/import/:path*", "/engine/:path*", "/login"],
+  matcher: ["/dashboard/:path*", "/log/:path*", "/entries/:path*", "/insights/:path*", "/import/:path*", "/engine/:path*", "/login"],
 };

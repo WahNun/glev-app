@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signOut, getCurrentUser } from "@/lib/auth";
-import GlevLogo from "@/components/GlevLogo";
+import GlevLockup from "@/components/GlevLockup";
 
 const ACCENT = "#4F6EF7";
 const PINK = "#FF2D78";
@@ -69,12 +69,9 @@ export default function AboutGlevModal({ open, onClose }: { open: boolean; onClo
           display: "flex", flexDirection: "column", gap: 18,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <GlevLogo size={48} />
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.03em" }}>Glev</div>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>Smart insulin decisions for Type&nbsp;1</div>
-          </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <GlevLockup size={40} />
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginLeft: 4 }}>Smart insulin decisions for Type&nbsp;1</div>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
