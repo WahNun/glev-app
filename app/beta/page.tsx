@@ -2,9 +2,10 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
+import AppMockupPhone from "@/components/AppMockupPhone";
 import CTAButton from "@/components/landing/CTAButton";
 import FAQ from "@/components/landing/FAQ";
-import Features from "@/components/landing/Features";
+import FeatureTrio from "@/components/landing/FeatureTrio";
 import LandingFooter from "@/components/landing/Footer";
 import Lockup from "@/components/landing/Lockup";
 import PricingCard from "@/components/landing/PricingCard";
@@ -105,151 +106,240 @@ export default function BetaPage() {
         minHeight: "100vh",
         background: BG,
         color: "#fff",
-        padding: "48px 20px 64px",
+        padding: "48px 0 64px",
         display: "flex",
         flexDirection: "column",
-        alignItems: "center",
       }}
     >
-      <div style={{ width: "100%", maxWidth: 680, display: "flex", flexDirection: "column", gap: 56 }}>
-        {/* 1. Hero */}
-        <section style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 20 }}>
-          <Lockup width={240} />
-          <h1
-            style={{
-              fontSize: "clamp(36px, 8vw, 48px)",
-              lineHeight: 1.05,
-              letterSpacing: "-0.03em",
-              fontWeight: 700,
-              color: "#fff",
-              margin: 0,
-            }}
-          >
-            Typ 1. Neu gedacht.
-          </h1>
-          <p style={{ fontSize: 18, lineHeight: 1.5, color: TEXT_DIM, margin: 0, maxWidth: 560 }}>
-            Der sprachgesteuerte Essens-Tracker für Typ-1-Diabetiker. Beta startet im Juli 2026.
-          </p>
+      <style>{`
+        .glev-hero-2col {
+          display: grid;
+          grid-template-columns: 1.05fr 0.95fr;
+          gap: 56px;
+          align-items: center;
+        }
+        .glev-feat-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 14px;
+        }
+        .glev-phone-stage { justify-self: end; }
+        .glev-hero-form { width: 100%; max-width: 420px; }
+        @media (max-width: 960px) {
+          .glev-hero-2col { grid-template-columns: 1fr; gap: 40px; }
+          .glev-phone-stage { justify-self: center; }
+          .glev-feat-grid { grid-template-columns: 1fr; }
+          .glev-hero-form { max-width: none; }
+          .glev-hero-left { align-items: center !important; text-align: center !important; }
+          .glev-hero-meta { justify-content: center !important; }
+        }
+      `}</style>
 
-          <form onSubmit={handleSubmit} style={{ width: "100%", display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}>
-            <input
-              ref={ctaRef}
-              type="email"
-              required
-              autoComplete="email"
-              placeholder="deine@email.de"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              aria-label="Email-Adresse"
-              style={{
-                width: "100%",
-                background: SURFACE,
-                border: `1px solid ${BORDER}`,
-                borderRadius: 12,
-                padding: "14px 16px",
-                color: "#fff",
-                fontSize: 16,
-                fontFamily: "inherit",
-                outline: "none",
-                boxSizing: "border-box",
-                minHeight: 56,
-              }}
-              onFocus={(e) => (e.currentTarget.style.borderColor = ACCENT)}
-              onBlur={(e) => (e.currentTarget.style.borderColor = BORDER)}
-            />
-            <CTAButton submitting={submitting} label={ctaLabel} />
-            {error && (
-              <div role="alert" style={{ fontSize: 13, color: PINK, textAlign: "left" }}>
-                {error}
-              </div>
-            )}
-          </form>
-
+      {/* 1. Hero — text/CTA left, app render right (stacks on mobile) */}
+      <section
+        style={{
+          width: "100%",
+          maxWidth: 1180,
+          margin: "0 auto 56px",
+          padding: "0 20px",
+          boxSizing: "border-box",
+        }}
+      >
+        <div className="glev-hero-2col">
           <div
+            className="glev-hero-left"
             style={{
               display: "flex",
-              alignItems: "center",
-              gap: 8,
-              fontSize: 14,
-              color: MINT,
-              marginTop: 4,
-              flexWrap: "wrap",
-              justifyContent: "center",
+              flexDirection: "column",
+              alignItems: "flex-start",
+              textAlign: "left",
+              gap: 20,
             }}
           >
-            <span aria-hidden>↺</span>
-            <span>Rückerstattung jederzeit vor Launch · wird aufs erste Abo angerechnet</span>
-          </div>
-
-          {count && !isFull && (
-            <div
+            <Lockup width={200} />
+            <h1
               style={{
-                fontSize: 13,
-                color: isLow ? PINK : TEXT_FAINT,
-                marginTop: 8,
-                fontFeatureSettings: '"tnum"',
+                fontSize: "clamp(40px, 6.4vw, 64px)",
+                lineHeight: 1.04,
+                letterSpacing: "-0.03em",
+                fontWeight: 700,
+                color: "#fff",
+                margin: 0,
               }}
             >
-              Noch{" "}
-              <span
+              Typ 1. Neu gedacht.
+            </h1>
+            <p style={{ fontSize: 18, lineHeight: 1.5, color: TEXT_DIM, margin: 0, maxWidth: 520 }}>
+              Der sprachgesteuerte Essens-Tracker für Typ-1-Diabetiker. Beta startet im Juli 2026.
+            </p>
+
+            <form
+              onSubmit={handleSubmit}
+              className="glev-hero-form"
+              style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}
+            >
+              <input
+                ref={ctaRef}
+                type="email"
+                required
+                autoComplete="email"
+                placeholder="deine@email.de"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                aria-label="Email-Adresse"
                 style={{
-                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-                  fontWeight: 600,
-                  color: isLow ? PINK : "rgba(255,255,255,0.7)",
+                  width: "100%",
+                  background: SURFACE,
+                  border: `1px solid ${BORDER}`,
+                  borderRadius: 12,
+                  padding: "14px 16px",
+                  color: "#fff",
+                  fontSize: 16,
+                  fontFamily: "inherit",
+                  outline: "none",
+                  boxSizing: "border-box",
+                  minHeight: 56,
+                }}
+                onFocus={(e) => (e.currentTarget.style.borderColor = ACCENT)}
+                onBlur={(e) => (e.currentTarget.style.borderColor = BORDER)}
+              />
+              <CTAButton submitting={submitting} label={ctaLabel} />
+              {error && (
+                <div role="alert" style={{ fontSize: 13, color: PINK, textAlign: "left" }}>
+                  {error}
+                </div>
+              )}
+            </form>
+
+            <div
+              className="glev-hero-meta"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                fontSize: 14,
+                color: MINT,
+                marginTop: 4,
+                flexWrap: "wrap",
+              }}
+            >
+              <span aria-hidden>↺</span>
+              <span>Rückerstattung jederzeit vor Launch · wird aufs erste Abo angerechnet</span>
+            </div>
+
+            {count && !isFull && (
+              <div
+                style={{
+                  fontSize: 13,
+                  color: isLow ? PINK : TEXT_FAINT,
+                  marginTop: 4,
+                  fontFeatureSettings: '"tnum"',
                 }}
               >
-                {remaining}
-              </span>{" "}
-              von 500 Beta-Plätzen verfügbar
-            </div>
-          )}
-        </section>
+                Noch{" "}
+                <span
+                  style={{
+                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                    fontWeight: 600,
+                    color: isLow ? PINK : "rgba(255,255,255,0.7)",
+                  }}
+                >
+                  {remaining}
+                </span>{" "}
+                von 500 Beta-Plätzen verfügbar
+              </div>
+            )}
+          </div>
 
+          <div className="glev-phone-stage">
+            <AppMockupPhone hideTopCog />
+          </div>
+        </div>
+      </section>
+
+      {/* 2. Steps */}
+      <section
+        style={{
+          width: "100%",
+          maxWidth: 680,
+          margin: "0 auto 56px",
+          padding: "0 20px",
+          boxSizing: "border-box",
+        }}
+      >
         <Steps />
-        <Features />
+      </section>
 
-        {/* Founder — subtle, below the feature list */}
-        <section
+      {/* 3. Feature cards (replaces the old bullet list) */}
+      <section
+        style={{
+          width: "100%",
+          maxWidth: 1080,
+          margin: "0 auto 56px",
+          padding: "0 20px",
+          boxSizing: "border-box",
+        }}
+      >
+        <FeatureTrio />
+      </section>
+
+      {/* 4. Founder — subtle, below the feature cards */}
+      <section
+        style={{
+          width: "100%",
+          maxWidth: 680,
+          margin: "0 auto 56px",
+          padding: "0 20px",
+          boxSizing: "border-box",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          textAlign: "center",
+          gap: 10,
+        }}
+      >
+        <div
           style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            textAlign: "center",
-            gap: 10,
+            width: 80,
+            height: 80,
+            borderRadius: "50%",
+            overflow: "hidden",
+            position: "relative",
+            border: `1px solid ${BORDER}`,
+            background: SURFACE,
           }}
         >
-          <div
+          <Image
+            src="/founder.png"
+            alt="Lucas Wahnon"
+            fill
+            sizes="80px"
             style={{
-              width: 80,
-              height: 80,
-              borderRadius: "50%",
-              overflow: "hidden",
-              position: "relative",
-              border: `1px solid ${BORDER}`,
-              background: SURFACE,
+              objectFit: "cover",
+              objectPosition: "50% 22%",
+              transform: "scale(1.5)",
+              transformOrigin: "50% 22%",
             }}
-          >
-            <Image
-              src="/founder.png"
-              alt="Lucas Wahnon"
-              fill
-              sizes="80px"
-              style={{
-                objectFit: "cover",
-                objectPosition: "50% 22%",
-                transform: "scale(1.5)",
-                transformOrigin: "50% 22%",
-              }}
-            />
-          </div>
-          <div style={{ fontSize: 15, fontWeight: 600, color: "#fff", letterSpacing: "-0.01em" }}>
-            Lucas Wahnon
-          </div>
-          <div style={{ fontSize: 13, color: TEXT_DIM }}>
-            Gründer · lebt selbst mit Typ 1
-          </div>
-        </section>
+          />
+        </div>
+        <div style={{ fontSize: 15, fontWeight: 600, color: "#fff", letterSpacing: "-0.01em" }}>
+          Lucas Wahnon
+        </div>
+        <div style={{ fontSize: 13, color: TEXT_DIM }}>
+          Gründer · lebt selbst mit Typ 1
+        </div>
+      </section>
 
+      {/* 5. Pricing */}
+      <section
+        style={{
+          width: "100%",
+          maxWidth: 680,
+          margin: "0 auto 56px",
+          padding: "0 20px",
+          boxSizing: "border-box",
+        }}
+      >
         <PricingCard
           heading="Was du bekommst"
           lines={[
@@ -259,10 +349,33 @@ export default function BetaPage() {
           ]}
           footer="Reservierung wird auf dein erstes Monatsabo angerechnet."
         />
+      </section>
 
+      {/* 6. FAQ */}
+      <section
+        style={{
+          width: "100%",
+          maxWidth: 680,
+          margin: "0 auto 56px",
+          padding: "0 20px",
+          boxSizing: "border-box",
+        }}
+      >
         <FAQ items={BETA_FAQ} />
+      </section>
+
+      {/* 7. Footer */}
+      <section
+        style={{
+          width: "100%",
+          maxWidth: 680,
+          margin: "0 auto",
+          padding: "0 20px",
+          boxSizing: "border-box",
+        }}
+      >
         <LandingFooter />
-      </div>
+      </section>
     </main>
   );
 }
