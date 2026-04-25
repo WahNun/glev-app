@@ -571,27 +571,54 @@ export default function EntriesPage() {
       {/* CARD STACK */}
       {filtered.length === 0 ? (
         <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"48px 24px", textAlign:"center", color:"rgba(255,255,255,0.2)", fontSize:14 }}>
-          {filters.dateRange !== "all" ? (
-            <>
-              <div style={{ color:"rgba(255,255,255,0.55)", fontSize:14 }}>
-                Showing <span style={{ color:"rgba(255,255,255,0.85)", fontWeight:600 }}>{dateRangeSummary(filters.dateRange, filters.dateFrom, filters.dateTo)}</span> · no entries match.
-              </div>
-              <button
-                onClick={() => setDateRange("all")}
-                style={{
-                  marginTop:14,
-                  padding:"7px 14px",
-                  borderRadius:99,
-                  border:`1px solid ${ACCENT}60`,
-                  background:`${ACCENT}18`,
-                  color:ACCENT,
-                  fontSize:12, fontWeight:600, cursor:"pointer",
-                  display:"inline-flex", alignItems:"center", gap:6,
-                }}
-              >
-                Switch to All time
-              </button>
-            </>
+          {filters.dateRange !== "all" || search !== "" ? (
+            // Show the date-range hint first when both apply — the date filter
+            // is usually the bigger reason for an empty list — followed by the
+            // search hint, each with its own one-click reset.
+            <div style={{ display:"flex", flexDirection:"column", gap:18, alignItems:"center" }}>
+              {filters.dateRange !== "all" && (
+                <div style={{ display:"flex", flexDirection:"column", gap:10, alignItems:"center" }}>
+                  <div style={{ color:"rgba(255,255,255,0.55)", fontSize:14 }}>
+                    Showing <span style={{ color:"rgba(255,255,255,0.85)", fontWeight:600 }}>{dateRangeSummary(filters.dateRange, filters.dateFrom, filters.dateTo)}</span> · no entries match.
+                  </div>
+                  <button
+                    onClick={() => setDateRange("all")}
+                    style={{
+                      padding:"7px 14px",
+                      borderRadius:99,
+                      border:`1px solid ${ACCENT}60`,
+                      background:`${ACCENT}18`,
+                      color:ACCENT,
+                      fontSize:12, fontWeight:600, cursor:"pointer",
+                      display:"inline-flex", alignItems:"center", gap:6,
+                    }}
+                  >
+                    Switch to All time
+                  </button>
+                </div>
+              )}
+              {search !== "" && (
+                <div style={{ display:"flex", flexDirection:"column", gap:10, alignItems:"center" }}>
+                  <div style={{ color:"rgba(255,255,255,0.55)", fontSize:14, maxWidth:480, overflowWrap:"anywhere" }}>
+                    No entries match <span style={{ color:"rgba(255,255,255,0.85)", fontWeight:600 }}>&ldquo;{search}&rdquo;</span>.
+                  </div>
+                  <button
+                    onClick={() => setSearch("")}
+                    style={{
+                      padding:"7px 14px",
+                      borderRadius:99,
+                      border:`1px solid ${ACCENT}60`,
+                      background:`${ACCENT}18`,
+                      color:ACCENT,
+                      fontSize:12, fontWeight:600, cursor:"pointer",
+                      display:"inline-flex", alignItems:"center", gap:6,
+                    }}
+                  >
+                    Clear search
+                  </button>
+                </div>
+              )}
+            </div>
           ) : (
             "No entries match this filter."
           )}
