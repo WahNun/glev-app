@@ -6,7 +6,8 @@ import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
 import { logDebug } from "@/lib/debug";
 import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
-import { InsulinForm, ExerciseForm } from "@/components/EngineLogTab";
+import EngineLogTab, { InsulinForm, ExerciseForm } from "@/components/EngineLogTab";
+import GlevLogo from "@/components/GlevLogo";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
@@ -119,7 +120,8 @@ function runGlevEngine(
 const CONF_COLOR: Record<string, string> = { HIGH:GREEN, MEDIUM:ORANGE, LOW:PINK };
 
 export default function EnginePage() {
-  const [tab, setTab]         = useState<"engine"|"bolus"|"exercise">("engine");
+  const [tab, setTab]         = useState<"engine"|"log"|"bolus"|"exercise">("engine");
+  const [isMobile, setIsMobile] = useState(false);
   const [meals, setMeals]     = useState<Meal[]>([]);
   const [insulinLogs, setInsulinLogs] = useState<InsulinLog[]>([]);
   const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([]);
@@ -148,6 +150,27 @@ export default function EnginePage() {
     const ok = !!(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === "function" && typeof MediaRecorder !== "undefined");
     if (!ok) setSpeechAvail(false);
   }, []);
+
+  // Track viewport — mobile gets 3 separate tabs (Engine | Bolus | Exercise),
+  // desktop keeps the 2-tab layout (Engine | Log) with both forms side-by-side.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 720px)");
+    const apply = () => setIsMobile(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  // Normalize tab when crossing the mobile↔desktop breakpoint so we never
+  // end up rendering nothing (e.g. tab="log" on mobile or tab="bolus" on desktop).
+  useEffect(() => {
+    setTab(prev => {
+      if (isMobile  && prev === "log")     return "bolus";
+      if (!isMobile && (prev === "bolus" || prev === "exercise")) return "log";
+      return prev;
+    });
+  }, [isMobile]);
 
   async function startRecording() {
     setVoiceErr(""); setTranscript("");
@@ -254,9 +277,7 @@ export default function EnginePage() {
     <div style={{ maxWidth:800, margin:"0 auto" }}>
       <div style={{ marginBottom:28 }}>
         <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
-          <div style={{ width:32, height:32, borderRadius:10, background:`${ACCENT}20`, border:`1px solid ${ACCENT}40`, display:"flex", alignItems:"center", justifyContent:"center" }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-          </div>
+          <GlevLogo size={32} />
           <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em" }}>Glev Engine</h1>
         </div>
         <p style={{ color:"rgba(255,255,255,0.35)", fontSize:14 }}>
@@ -274,11 +295,17 @@ export default function EnginePage() {
         background:"#0D0D12", border:`1px solid ${BORDER}`,
         borderRadius:12, padding:4,
       }}>
-        {([
-          { id:"engine"   as const, label:"Engine" },
-          { id:"bolus"    as const, label:"Bolus Log" },
-          { id:"exercise" as const, label:"Exercise Log" },
-        ]).map(t => {
+        {(isMobile
+          ? [
+              { id:"engine"   as const, label:"Engine" },
+              { id:"bolus"    as const, label:"Bolus Log" },
+              { id:"exercise" as const, label:"Exercise Log" },
+            ]
+          : [
+              { id:"engine" as const, label:"Engine" },
+              { id:"log"    as const, label:"Log" },
+            ]
+        ).map(t => {
           const on = tab === t.id;
           return (
             <button
@@ -565,6 +592,7 @@ export default function EnginePage() {
       )}
       </>)}
 
+      {tab === "log"      && <EngineLogTab />}
       {tab === "bolus"    && <InsulinForm />}
       {tab === "exercise" && <ExerciseForm />}
     </div>
