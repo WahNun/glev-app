@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { fetchMeals, type Meal } from "@/lib/meals";
 import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, getEvalExplain } from "@/lib/mealTypes";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
+import MealEntryLightExpand from "@/components/MealEntryLightExpand";
 import CurrentDayGlucoseCard from "@/components/CurrentDayGlucoseCard";
 import GlucoseTrendFront from "@/components/GlucoseTrendChart";
 import SortableCardGrid, { type SortableItem } from "@/components/SortableCardGrid";
@@ -323,7 +324,7 @@ export default function DashboardPage() {
         </div>
       ),
     },
-    { id: "recent-entries", node: <RecentEntries meals={recent} expanded={expanded} setExpanded={setExpanded} onViewAll={() => router.push("/entries")}/> },
+    { id: "recent-entries", node: <RecentEntries meals={recent} expanded={expanded} setExpanded={setExpanded} onViewAll={() => router.push("/entries")} onViewEntry={(id) => router.push(`/entries#${id}`)}/> },
   ];
 
   return (
@@ -378,11 +379,13 @@ function RecentEntries({
   expanded,
   setExpanded,
   onViewAll,
+  onViewEntry,
 }: {
   meals: Meal[];
   expanded: string | null;
   setExpanded: (id: string | null) => void;
   onViewAll: () => void;
+  onViewEntry: (id: string) => void;
 }) {
   return (
     <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, overflow:"hidden" }}>
@@ -410,89 +413,9 @@ function RecentEntries({
                   ) : (
                     <MealEntryCardCollapsed meal={m} onClick={() => setExpanded(m.id)}/>
                   )}
-                  {isOpen && (() => {
-                    const protein = m.protein_grams ?? (Array.isArray(m.parsed_json) ? m.parsed_json.reduce((s,f)=>s+(f.protein||0),0) : 0);
-                    const fat     = m.fat_grams     ?? (Array.isArray(m.parsed_json) ? m.parsed_json.reduce((s,f)=>s+(f.fat||0),0) : 0);
-                    const fiber   = m.fiber_grams   ?? (Array.isArray(m.parsed_json) ? m.parsed_json.reduce((s,f)=>s+(f.fiber||0),0) : 0);
-                    const carbs   = m.carbs_grams ?? 0;
-                    const cals    = m.calories ?? Math.round(carbs*4 + protein*4 + fat*9);
-                    const netCarbs = Math.max(0, carbs - fiber);
-                    const icr     = m.insulin_units && m.insulin_units > 0 ? netCarbs / m.insulin_units : null;
-                    const delta   = (m.glucose_after && m.glucose_before) ? m.glucose_after - m.glucose_before : null;
-                    const Cell = ({ l, v, c }: { l: string; v: string; c?: string }) => (
-                      <div style={{ display:"inline-flex", flexDirection:"column", minWidth:80 }}>
-                        <span style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.06em", textTransform:"uppercase" }}>{l}</span>
-                        <span style={{ fontSize:13, fontWeight:600, color:c || "rgba(255,255,255,0.85)", fontFamily:"var(--font-mono)" }}>{v}</span>
-                      </div>
-                    );
-                    return (
-                      <div style={{ padding:"0 24px 16px", display:"flex", flexDirection:"column", gap:10 }}>
-                        {/* Outcome — highlighted block, same weight as classification */}
-                        {ev && (() => {
-                          const c = evalColor(ev);
-                          return (
-                            <div style={{ marginTop:4, background:`${c}12`, border:`1px solid ${c}40`, borderRadius:10, padding:"10px 14px" }}>
-                              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, marginBottom: getEvalExplain(ev) ? 6 : 0 }}>
-                                <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.1em", fontWeight:700 }}>OUTCOME</div>
-                                <span style={{ padding:"4px 12px", borderRadius:99, fontSize:11, fontWeight:700, background:`${c}22`, color:c, border:`1px solid ${c}40`, whiteSpace:"nowrap", letterSpacing:"0.04em", textTransform:"uppercase" }}>
-                                  {evalLabel(ev)}
-                                </span>
-                              </div>
-                              {getEvalExplain(ev) && (
-                                <div style={{ fontSize:12, color:"rgba(255,255,255,0.6)", lineHeight:1.5 }}>{getEvalExplain(ev)}</div>
-                              )}
-                            </div>
-                          );
-                        })()}
-                        {/* Meal classification — highlighted block */}
-                        {m.meal_type && (() => {
-                          const c = TYPE_COLORS[m.meal_type] || "rgba(255,255,255,0.5)";
-                          return (
-                            <div style={{ background:`${c}12`, border:`1px solid ${c}30`, borderRadius:10, padding:"10px 14px" }}>
-                              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, marginBottom:6 }}>
-                                <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.1em", fontWeight:700 }}>MEAL CLASSIFICATION</div>
-                                <span style={{ padding:"4px 12px", borderRadius:99, fontSize:11, fontWeight:700, background:`${c}22`, color:c, border:`1px solid ${c}40`, whiteSpace:"nowrap", letterSpacing:"0.04em" }}>
-                                  {TYPE_LABELS[m.meal_type]}
-                                </span>
-                              </div>
-                              <span style={{ fontSize:12, color:"rgba(255,255,255,0.6)", lineHeight:1.5 }}>{TYPE_EXPLAIN[m.meal_type]}</span>
-                            </div>
-                          );
-                        })()}
-                        {/* Row 0 — Meal description (food + grams) */}
-                        {m.input_text && (
-                          <div style={{ borderLeft:`2px solid rgba(255,255,255,0.15)`, paddingLeft:14, paddingTop:10 }}>
-                            <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.1em", fontWeight:700, marginBottom:6 }}>MEAL</div>
-                            <div style={{ fontSize:13, color:"rgba(255,255,255,0.8)", lineHeight:1.55 }}>{m.input_text}</div>
-                          </div>
-                        )}
-                        {/* Row 1 — Macros & Dosing */}
-                        <div style={{ borderLeft:`2px solid ${ACCENT}55`, paddingLeft:14, paddingTop:10 }}>
-                          <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8 }}>MACROS &amp; DOSING</div>
-                          <div style={{ display:"flex", gap:18, flexWrap:"wrap" }}>
-                            <Cell l="Carbs"    v={`${carbs}g`}   c={ORANGE}/>
-                            <Cell l="Fiber"    v={`${fiber}g`}/>
-                            <Cell l="Net"      v={`${netCarbs}g`} c={GREEN}/>
-                            <Cell l="Protein"  v={`${protein}g`} c="#3B82F6"/>
-                            <Cell l="Fat"      v={`${fat}g`}     c="#A855F7"/>
-                            <Cell l="Calories" v={`${cals} kcal`} c="#A78BFA"/>
-                            <Cell l="Insulin"  v={`${m.insulin_units ?? 0}u`} c={ACCENT}/>
-                            <Cell l="Carb ratio" v={icr ? `1u / ${icr.toFixed(0)}g` : "—"}/>
-                          </div>
-                        </div>
-                        {/* Row 2 — Glucose */}
-                        <div style={{ borderLeft:`2px solid ${GREEN}55`, paddingLeft:14, paddingTop:6 }}>
-                          <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8 }}>GLUCOSE</div>
-                          <div style={{ display:"flex", gap:18, flexWrap:"wrap" }}>
-                            <Cell l="Before" v={m.glucose_before ? `${m.glucose_before} mg/dL` : "—"} c={m.glucose_before ? (m.glucose_before>140?ORANGE:m.glucose_before<80?PINK:GREEN) : undefined}/>
-                            <Cell l="After"  v={m.glucose_after  ? `${m.glucose_after} mg/dL`  : "not recorded"} c={m.glucose_after ? (m.glucose_after>180||m.glucose_after<70?PINK:GREEN) : "rgba(255,255,255,0.3)"}/>
-                            <Cell l="Delta"  v={delta!=null ? `${delta>0?"+":""}${delta} mg/dL` : "—"} c={delta!=null ? (Math.abs(delta)>60?PINK:Math.abs(delta)>30?ORANGE:GREEN) : undefined}/>
-                            <Cell l="Time"   v={time}/>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
+                  {isOpen && (
+                    <MealEntryLightExpand meal={m} onViewFull={() => onViewEntry(m.id)}/>
+                  )}
                 </div>
               );
             })}

@@ -5,6 +5,7 @@ import { fetchMeals, deleteMeal, updateMealReadings, type Meal } from "@/lib/mea
 import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, getEvalExplain } from "@/lib/mealTypes";
 import { lifecycleFor, STATE_LABELS, type OutcomeState } from "@/lib/engine/lifecycle";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
+import MealEntryLightExpand from "@/components/MealEntryLightExpand";
 import ManualEntryModal from "@/components/ManualEntryModal";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
@@ -21,8 +22,15 @@ export default function EntriesPage() {
   const [filter, setFilter]   = useState("All");
   const [search, setSearch]   = useState("");
   const [expanded, setExpanded] = useState<string|null>(null);
+  const [fullExpanded, setFullExpanded] = useState<string|null>(null);
   const [deleting, setDeleting] = useState<string|null>(null);
   const [manualOpen, setManualOpen] = useState(false);
+
+  // Wrap expand setter so changing rows always resets the heavy "full" view.
+  function expandRow(id: string | null) {
+    setExpanded(id);
+    if (id !== fullExpanded) setFullExpanded(null);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -41,6 +49,20 @@ export default function EntriesPage() {
       window.removeEventListener("glev:meals-updated", onUpdated);
     };
   }, []);
+
+  // Deep-link via URL hash: /entries#<id> auto-expands to the full view so
+  // "View full entry →" from the dashboard lands the user on the right row.
+  useEffect(() => {
+    const id = typeof window !== "undefined" ? window.location.hash.replace(/^#/, "") : "";
+    if (!id || meals.length === 0) return;
+    if (meals.some(m => m.id === id)) {
+      setExpanded(id);
+      setFullExpanded(id);
+      requestAnimationFrame(() => {
+        document.getElementById(`entry-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+  }, [meals]);
 
   async function handleDelete(id: string) {
     if (!confirm("Delete this entry? This cannot be undone.")) return;
@@ -155,13 +177,14 @@ export default function EntriesPage() {
             const catLabel = m.meal_type ? (TYPE_LABELS[m.meal_type] || m.meal_type.replace("_"," ")) : null;
             const catExplain = m.meal_type ? (TYPE_EXPLAIN[m.meal_type] || "") : "";
 
+            const isFull = fullExpanded === m.id;
             return (
-              <div key={m.id} className="entry-row" style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, overflow:"hidden" }}>
+              <div key={m.id} id={`entry-${m.id}`} className="entry-row" style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, overflow:"hidden" }}>
                 {/* Header — collapsed shows summary; expanded shows only date + time */}
                 {!isOpen ? (
-                  <MealEntryCardCollapsed meal={m} onClick={() => setExpanded(m.id)}/>
+                  <MealEntryCardCollapsed meal={m} onClick={() => expandRow(m.id)}/>
                 ) : (
-                  <div onClick={() => setExpanded(null)} style={{ padding:"14px 16px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between", gap:14 }}>
+                  <div onClick={() => expandRow(null)} style={{ padding:"14px 16px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between", gap:14 }}>
                     <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)", letterSpacing:"0.02em" }}>
                       {dateStr}
                       <span style={{ color:"rgba(255,255,255,0.25)", margin:"0 8px" }}>·</span>
@@ -173,8 +196,15 @@ export default function EntriesPage() {
                   </div>
                 )}
 
-                {/* Expanded body */}
-                {isOpen && (
+                {/* Light summary panel — shown whenever expanded. */}
+                {isOpen && !isFull && (
+                  <div style={{ borderTop:`1px solid rgba(255,255,255,0.04)` }}>
+                    <MealEntryLightExpand meal={m} onViewFull={() => setFullExpanded(m.id)}/>
+                  </div>
+                )}
+
+                {/* Heavy "full entry" body — only after the user clicks "View full entry →". */}
+                {isOpen && isFull && (
                   <div style={{ padding:"4px 16px 16px", borderTop:`1px solid rgba(255,255,255,0.04)`, display:"flex", flexDirection:"column", gap:14 }}>
                     {/* LIFECYCLE — pending / provisional / final */}
                     <LifecycleBlock

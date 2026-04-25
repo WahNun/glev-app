@@ -1,0 +1,26 @@
+PROBLEM:
+Individual non-meal logs (bolus insulin injections, basal insulin injections, exercise/workout logs) are not appearing in the Entry Log (/entries) or in the "Recent Entries" section on the Dashboard (/dashboard). Only meal logs (FC, HP, B, etc.) are visible. This needs to be fixed so all log types are fetched and rendered.
+
+INVESTIGATION STEPS (do these first):
+1. Check the API/database query that fetches entries for the Entry Log — confirm whether it is filtering by log type and excluding bolus/basal/exercise entries, or whether those entries simply don't exist in the DB yet because there is no UI to create them
+2. Check the database schema — confirm whether bolus, basal, and exercise logs are stored in the same table as meal logs or in separate tables
+3. Check the Entry Log component to see if it only renders entries that have a meal-specific structure (e.g. requires carbs/macros to be present)
+
+FIX:
+- Update the data fetch for the Entry Log to include all log types: meal, bolus, basal, and exercise
+- Update the Entry Log row renderer to handle each log type gracefully in the collapsed view:
+  - MEAL rows (existing): When / Type dot+label / Carbs / Insulin / Outcome badge
+  - BOLUS rows: When / Type dot "Bolus" / Dose (U) / Brand or rapid-acting label / — (no outcome badge or a neutral "LOGGED" badge)
+  - BASAL rows: When / Type dot "Basal" / Dose (U) / Brand or long-acting label / — (no outcome badge or "LOGGED")
+  - EXERCISE rows: When / Type dot "Exercise" / Duration (min) / Exercise type (cardio/strength/etc.) / — (no outcome badge or "LOGGED")
+- Update the Dashboard "Recent Entries" section to also fetch and display all log types with the same adapted row rendering
+- The subtitle on the Entry Log page currently says "19 of 19 logged meals" — update this to say "X of X logged entries" to reflect all types
+- The Dashboard subtitle "19 meals logged" → update to "19 entries logged"
+
+TYPE DOT COLOURS (use distinct colours so users can visually scan):
+- Meal types (FC, HP, B, etc.) → keep existing colours
+- Bolus → use a blue dot (e.g. #4A90D9)
+- Basal → use a purple dot (e.g. #8B5CF6)  
+- Exercise → use a green dot (e.g. #10B981)
+
+If bolus/basal/exercise log creation UI does not exist yet, at minimum make the Entry Log and Dashboard capable of rendering them correctly when the data exists — so we are unblocked for when that UI is added.
