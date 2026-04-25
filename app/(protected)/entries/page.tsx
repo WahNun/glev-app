@@ -887,7 +887,16 @@ function numOrNull(v: number | null | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+// 3 h matches EXERCISE_NO_DATA_AFTER_MS / EXERCISE_ABANDON_AFTER_MS.
+const EXERCISE_NO_DATA_AFTER_MS = 3 * 60 * 60 * 1000;
+
 function pendingLabel(expectedAt: Date): string {
+  // Once the CGM job's 3 h window has elapsed, the job is finalised
+  // as 'skipped' server-side; surface that visibly here instead of
+  // showing "Pending · expected …" forever.
+  if (Date.now() - expectedAt.getTime() > EXERCISE_NO_DATA_AFTER_MS) {
+    return "No data";
+  }
   const hh = expectedAt.toLocaleTimeString("en", { hour:"numeric", minute:"2-digit" });
   return `Pending · expected ${hh}`;
 }

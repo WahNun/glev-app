@@ -39,6 +39,10 @@ export interface ExerciseLogInput {
   intensity: ExerciseIntensity;
   cgm_glucose_at_log?: number | null;
   notes?: string | null;
+  // Retroactive logs pass an explicit start instant so the row's
+  // `created_at` matches the actual workout start (not the submit
+  // moment). Omit / undefined for "log it as starting now".
+  start_at?: string;
 }
 
 const COLS =
@@ -49,7 +53,7 @@ export async function insertExerciseLog(input: ExerciseLogInput): Promise<Exerci
   const { data: { user }, error: authErr } = await supabase.auth.getUser();
   if (authErr || !user) throw authErr || new Error("Not authenticated");
 
-  const row = {
+  const row: Record<string, unknown> = {
     user_id: user.id,
     exercise_type: input.exercise_type,
     duration_minutes: input.duration_minutes,
@@ -57,6 +61,12 @@ export async function insertExerciseLog(input: ExerciseLogInput): Promise<Exerci
     cgm_glucose_at_log: input.cgm_glucose_at_log ?? null,
     notes: input.notes?.trim() || null,
   };
+  // Only override created_at when the caller explicitly provides a
+  // past start time (retroactive logging). Otherwise the DB default
+  // `now()` is used, which keeps live submissions backwards-compatible.
+  if (input.start_at) {
+    row.created_at = input.start_at;
+  }
 
   const { data, error } = await supabase
     .from("exercise_logs")

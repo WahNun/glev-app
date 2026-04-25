@@ -5,7 +5,12 @@ export type ExerciseOutcome =
   | "DROPPED"
   | "SPIKED"
   | "HYPO_RISK"
-  | "PENDING";
+  | "PENDING"
+  | "NO_DATA";
+
+/** How long after a fetch_time the CGM job process route gives up. Mirrors
+ *  EXERCISE_ABANDON_AFTER_MS in app/api/cgm-jobs/process/route.ts. */
+export const EXERCISE_NO_DATA_AFTER_MS = 3 * 60 * 60 * 1000;
 
 export interface ExerciseOutcomeInfo {
   outcome: ExerciseOutcome;
@@ -21,6 +26,7 @@ const COLORS: Record<ExerciseOutcome, string> = {
   SPIKED:    "#F97316",
   HYPO_RISK: "#EF4444",
   PENDING:   "rgba(255,255,255,0.45)",
+  NO_DATA:   "rgba(255,255,255,0.4)",
 };
 
 const LABELS: Record<ExerciseOutcome, string> = {
@@ -29,6 +35,7 @@ const LABELS: Record<ExerciseOutcome, string> = {
   SPIKED:    "SPIKED",
   HYPO_RISK: "HYPO RISK",
   PENDING:   "PENDING",
+  NO_DATA:   "NO DATA",
 };
 
 /** Hypoglycaemia threshold (mg/dL) — anything below counts as hypo risk. */
@@ -53,8 +60,18 @@ export function evaluateExercise(log: ExerciseLog): ExerciseOutcomeInfo {
   // Spec rule: PENDING precedence — until the at-end reading exists,
   // the badge stays PENDING regardless of the +1h value. (A late +1h
   // hypo without an at-end value is degenerate and should not flip
-  // the badge from PENDING.)
-  if (atEnd == null) return mk("PENDING");
+  // the badge from PENDING.) But once we're past the CGM job's
+  // 3 h abandon window, switch to NO_DATA so the row doesn't sit
+  // pending forever.
+  if (atEnd == null) {
+    const startMs = Date.parse(log.created_at);
+    const expectedAtEndMs = Number.isFinite(startMs)
+      ? startMs + log.duration_minutes * 60_000
+      : NaN;
+    const overdue = Number.isFinite(expectedAtEndMs)
+      && Date.now() - expectedAtEndMs > EXERCISE_NO_DATA_AFTER_MS;
+    return mk(overdue ? "NO_DATA" : "PENDING");
+  }
 
   // Hypo risk wins over delta-based outcomes once at-end exists.
   if (atEnd < HYPO_THRESHOLD ||

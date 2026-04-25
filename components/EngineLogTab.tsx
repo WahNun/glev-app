@@ -312,20 +312,28 @@ export function ExerciseForm() {
   async function handleSubmit() {
     if (!valid) return;
     setStatus({ kind: "submitting" });
-    const cgm = await pullCurrentCgm();
+    const isRetro = startedMinAgo > 0;
+    // For live ("Now") submissions, anchor on the live CGM reading.
+    // For retroactive submissions, leave the baseline NULL so the
+    // scheduler fills it from CGM history at the actual start instant
+    // (current value would otherwise be wrong by ≥ startedMinAgo).
+    const cgm = isRetro ? null : await pullCurrentCgm();
     try {
+      const refIso = computeStartIso();
       const insertedEx = await insertExerciseLog({
         exercise_type: type,
         duration_minutes: d,
         intensity,
         cgm_glucose_at_log: cgm,
         notes: notes.trim() || null,
+        // Only override created_at for retroactive logs — live
+        // submissions keep the DB default `now()`.
+        start_at: isRetro ? refIso : undefined,
       });
       // Schedule post-fetches: at workout end (start + duration), and
       // +1h after end. For retroactive logs, refTime is shifted into
       // the past so the at-end fetch can resolve immediately from CGM
       // history.
-      const refIso = computeStartIso();
       void scheduleJobsForLog({
         logId: insertedEx.id,
         logType: "exercise",
