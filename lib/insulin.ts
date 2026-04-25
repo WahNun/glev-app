@@ -33,7 +33,7 @@ export async function fetchInsulinEntries(
   toIso?: string,
 ): Promise<InsulinEntry[]> {
   if (!supabase) throw new Error("Supabase is not configured");
-  let q = supabase.from("insulin_entries").select(COLS).order("at", { ascending: false });
+  let q = supabase.from("insulin_logs").select(COLS).order("at", { ascending: false });
   if (fromIso) q = q.gte("at", fromIso);
   if (toIso) q = q.lte("at", toIso);
   const { data, error } = await q;
@@ -56,7 +56,7 @@ export async function saveInsulinEntry(input: SaveInsulinInput): Promise<Insulin
   };
 
   const { data, error } = await supabase
-    .from("insulin_entries")
+    .from("insulin_logs")
     .insert(row)
     .select(COLS)
     .single();
@@ -67,7 +67,7 @@ export async function saveInsulinEntry(input: SaveInsulinInput): Promise<Insulin
 
 export async function deleteInsulinEntry(id: string): Promise<void> {
   if (!supabase) throw new Error("Supabase is not configured");
-  const { error } = await supabase.from("insulin_entries").delete().eq("id", id);
+  const { error } = await supabase.from("insulin_logs").delete().eq("id", id);
   if (error) throw error;
 }
 

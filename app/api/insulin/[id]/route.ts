@@ -11,7 +11,7 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
   if (!auth.user) return NextResponse.json({ error: auth.error }, { status: 401 });
 
   const { error } = await auth.sb
-    .from("insulin_entries")
+    .from("insulin_logs")
     .delete()
     .eq("id", id)
     .eq("user_id", auth.user.id);

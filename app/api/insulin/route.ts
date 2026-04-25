@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   const to = url.searchParams.get("to");
 
   let q = auth.sb
-    .from("insulin_entries")
+    .from("insulin_logs")
     .select(COLS)
     .eq("user_id", auth.user.id)
     .order("at", { ascending: false })
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
   };
 
   const { data, error } = await auth.sb
-    .from("insulin_entries")
+    .from("insulin_logs")
     .insert(row)
     .select(COLS)
     .single();
