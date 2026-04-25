@@ -1,31 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authedClient, isMissingTable } from "./_helpers";
+import { authedClient, isMissingTable } from "../insulin/_helpers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const COLS =
-  "id,user_id,created_at,insulin_type,insulin_name,units,cgm_glucose_at_log,notes";
+  "id,user_id,created_at,exercise_type,duration_minutes,intensity,cgm_glucose_at_log,notes";
 
-const VALID_TYPE = new Set(["bolus", "basal"]);
+const VALID_TYPE = new Set(["hypertrophy", "cardio"]);
+const VALID_INTENSITY = new Set(["low", "medium", "high"]);
 
-/**
- * GET /api/insulin
- * Returns the caller's insulin_logs ordered most-recent first.
- * Optional query params: ?from=ISO&to=ISO
- */
+/** GET /api/exercise — caller's exercise_logs, newest first. */
 export async function GET(req: NextRequest) {
   const auth = await authedClient(req);
-  if (!auth.user) {
-    return NextResponse.json({ error: auth.error }, { status: 401 });
-  }
+  if (!auth.user) return NextResponse.json({ error: auth.error }, { status: 401 });
 
   const url = new URL(req.url);
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to");
 
   let q = auth.sb
-    .from("insulin_logs")
+    .from("exercise_logs")
     .select(COLS)
     .eq("user_id", auth.user.id)
     .order("created_at", { ascending: false })
@@ -37,22 +32,17 @@ export async function GET(req: NextRequest) {
   const { data, error } = await q;
   if (error) {
     if (isMissingTable(error)) {
-      return NextResponse.json({ logs: [], warning: "insulin_logs table missing — run the migration" });
+      return NextResponse.json({ logs: [], warning: "exercise_logs table missing — run the migration" });
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   return NextResponse.json({ logs: data || [] });
 }
 
-/**
- * POST /api/insulin
- * Body: { insulin_type, insulin_name, units, cgm_glucose_at_log?, notes? }
- */
+/** POST /api/exercise — body: { exercise_type, duration_minutes, intensity, cgm_glucose_at_log?, notes? } */
 export async function POST(req: NextRequest) {
   const auth = await authedClient(req);
-  if (!auth.user) {
-    return NextResponse.json({ error: auth.error }, { status: 401 });
-  }
+  if (!auth.user) return NextResponse.json({ error: auth.error }, { status: 401 });
 
   let body: Record<string, unknown>;
   try {
@@ -61,20 +51,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const insulin_type = String(body.insulin_type ?? "").toLowerCase();
-  const insulin_name = String(body.insulin_name ?? "").trim();
-  const unitsRaw = Number(body.units);
+  const exercise_type = String(body.exercise_type ?? "").toLowerCase();
+  const intensity = String(body.intensity ?? "").toLowerCase();
+  const durRaw = Number(body.duration_minutes);
   const cgmRaw = body.cgm_glucose_at_log;
   const notes = body.notes != null ? String(body.notes).trim() : null;
 
-  if (!VALID_TYPE.has(insulin_type)) {
-    return NextResponse.json({ error: "insulin_type must be 'bolus' or 'basal'" }, { status: 400 });
+  if (!VALID_TYPE.has(exercise_type)) {
+    return NextResponse.json({ error: "exercise_type must be 'hypertrophy' or 'cardio'" }, { status: 400 });
   }
-  if (!insulin_name) {
-    return NextResponse.json({ error: "insulin_name is required" }, { status: 400 });
+  if (!VALID_INTENSITY.has(intensity)) {
+    return NextResponse.json({ error: "intensity must be 'low', 'medium' or 'high'" }, { status: 400 });
   }
-  if (!Number.isFinite(unitsRaw) || unitsRaw <= 0 || unitsRaw > 100) {
-    return NextResponse.json({ error: "units must be a number 0 < n ≤ 100" }, { status: 400 });
+  if (!Number.isFinite(durRaw) || !Number.isInteger(durRaw) || durRaw <= 0 || durRaw > 600) {
+    return NextResponse.json({ error: "duration_minutes must be an integer 0 < n ≤ 600" }, { status: 400 });
   }
 
   let cgm: number | null = null;
@@ -88,15 +78,15 @@ export async function POST(req: NextRequest) {
 
   const row = {
     user_id: auth.user.id,
-    insulin_type,
-    insulin_name,
-    units: Math.round(unitsRaw * 100) / 100,
+    exercise_type,
+    duration_minutes: durRaw,
+    intensity,
     cgm_glucose_at_log: cgm,
     notes: notes || null,
   };
 
   const { data, error } = await auth.sb
-    .from("insulin_logs")
+    .from("exercise_logs")
     .insert(row)
     .select(COLS)
     .single();
@@ -104,7 +94,7 @@ export async function POST(req: NextRequest) {
   if (error) {
     if (isMissingTable(error)) {
       return NextResponse.json(
-        { error: "insulin_logs table is missing — run the migration in Supabase first" },
+        { error: "exercise_logs table is missing — run the migration in Supabase first" },
         { status: 503 },
       );
     }

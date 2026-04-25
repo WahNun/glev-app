@@ -149,3 +149,25 @@ pnpm --filter @workspace/api-server run dev    # Start Express API server
 - Settings (ICR, glucose targets, notifications) persist in `localStorage` under `glev_settings`
 - ParsedFood now includes `carbs, protein, fat, fiber` macros (updated in v3)
 - Backward-compatible evaluation display: handles both old values (OVERDOSE/UNDERDOSE) and new (HIGH/LOW)
+
+## Insulin & Exercise Logging (v0.5)
+
+- **Tables**: `insulin_logs` (bolus/basal + units + name + cgm_glucose_at_log) and
+  `exercise_logs` (hypertrophy/cardio + duration + intensity + cgm_glucose_at_log).
+  Migration: `supabase/migrations/20260425_add_insulin_exercise_logs.sql`. Apply
+  via the Supabase SQL editor (matches existing project convention — no Drizzle).
+- **Helpers**: `lib/insulin.ts`, `lib/exercise.ts` (CRUD: insert / fetch / fetchRecent / delete).
+- **API routes**: `/api/insulin` + `/api/insulin/[id]`, `/api/exercise` + `/api/exercise/[id]`
+  (auth via shared `app/api/insulin/_helpers.ts → authedClient`).
+- **Engine page** has two tabs:
+  - `engine` → existing recommendation flow (now reads recent insulin + exercise logs).
+  - `log` → `<EngineLogTab/>` for standalone bolus / basal / hypertrophy / cardio
+    entries; auto-pulls latest CGM on submit. **Pure documentation — no calculations.**
+- **Insights**: two new sections (`insulin-stats`, `exercise-stats`), 4 + 3 tiles,
+  sortable alongside existing cards.
+- **Engine safety hooks** (in `lib/engine/recommendation.ts` + `lib/engine/evaluation.ts`):
+  optional `recentInsulinLogs` / `recentExerciseLogs` produce stacking warnings
+  (>2 bolus in 6h), basal-context notes (last 24h), and exercise-sensitivity hints
+  in the reasoning string only — never mutate the dose.
+- **Compliance**: kein Insulinrechner. Logging only. See `BACKLOG.md` for Whoop +
+  Nike workout-library follow-ups (deliberately out of scope).

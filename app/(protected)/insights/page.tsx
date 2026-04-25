@@ -6,6 +6,8 @@ import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
 import { computeAdaptiveICR } from "@/lib/engine/adaptiveICR";
 import { detectPattern } from "@/lib/engine/patterns";
 import { suggestAdjustment, type AdaptiveSettings, type AdjustmentSuggestion } from "@/lib/engine/adjustment";
+import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
+import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
 import GlucoseTrendFront from "@/components/GlucoseTrendChart";
 import SortableCardGrid, { type SortableItem } from "@/components/SortableCardGrid";
 import { useCardOrder } from "@/lib/cardOrder";
@@ -16,6 +18,8 @@ const INSIGHTS_DEFAULT_ORDER = [
   "glucose-trend",
   "adaptive-engine",
   "performance-tiles",
+  "insulin-stats",
+  "exercise-stats",
   "meal-type",
   "time-of-day",
   "patterns",
@@ -33,10 +37,16 @@ const EVAL_NORM = (ev: string|null) => {
 
 export default function InsightsPage() {
   const [meals, setMeals]     = useState<Meal[]>([]);
+  const [insulinLogs, setInsulinLogs]   = useState<InsulinLog[]>([]);
+  const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchMeals().then(setMeals).catch(console.error).finally(() => setLoading(false));
+    // Insulin & exercise logs feed the new sections — failure is non-fatal,
+    // the rest of the insights still render.
+    fetchRecentInsulinLogs(30).then(setInsulinLogs).catch(() => setInsulinLogs([]));
+    fetchRecentExerciseLogs(30).then(setExerciseLogs).catch(() => setExerciseLogs([]));
   }, []);
 
   if (loading) return (
@@ -252,6 +262,142 @@ export default function InsightsPage() {
           ))}
         </div>
       ),
+    },
+    {
+      id: "insulin-stats",
+      node: (() => {
+        const nowMs = Date.now();
+        const wkMs = 7 * 86400000;
+        const moMs = 30 * 86400000;
+
+        const bolus7  = insulinLogs.filter(l => l.insulin_type === "bolus" && nowMs - new Date(l.created_at).getTime() <= wkMs);
+        const bolus30 = insulinLogs.filter(l => l.insulin_type === "bolus" && nowMs - new Date(l.created_at).getTime() <= moMs);
+        const basal30 = insulinLogs.filter(l => l.insulin_type === "basal" && nowMs - new Date(l.created_at).getTime() <= moMs);
+
+        const sum  = (arr: InsulinLog[]) => arr.reduce((s,l) => s + (l.units || 0), 0);
+        const mean = (arr: InsulinLog[]) => arr.length ? sum(arr) / arr.length : null;
+
+        const avgBolus7  = mean(bolus7);
+        const avgBolus30 = mean(bolus30);
+        const avgBasal30 = mean(basal30);
+
+        const bolusPrev7 = insulinLogs.filter(l => {
+          const t = nowMs - new Date(l.created_at).getTime();
+          return l.insulin_type === "bolus" && t > wkMs && t <= 2 * wkMs;
+        });
+        const sum7  = sum(bolus7);
+        const sumP7 = sum(bolusPrev7);
+        let trendLabel = "—";
+        let trendSub   = "no recent data";
+        let trendColor = "rgba(255,255,255,0.4)";
+        if (bolus7.length > 0 || bolusPrev7.length > 0) {
+          if (sum7 > sumP7 * 1.1)      { trendLabel = "↑ rising";  trendSub = `${sum7.toFixed(1)}u vs ${sumP7.toFixed(1)}u prev`; trendColor = ORANGE; }
+          else if (sum7 < sumP7 * 0.9) { trendLabel = "↓ falling"; trendSub = `${sum7.toFixed(1)}u vs ${sumP7.toFixed(1)}u prev`; trendColor = GREEN; }
+          else                         { trendLabel = "→ stable";  trendSub = `${sum7.toFixed(1)}u vs ${sumP7.toFixed(1)}u prev`; trendColor = ACCENT; }
+        }
+
+        const bolusWithCgm = bolus30.filter(l => l.cgm_glucose_at_log != null);
+        const avgCgmAtBolus = bolusWithCgm.length
+          ? Math.round(bolusWithCgm.reduce((s,l) => s + (l.cgm_glucose_at_log || 0), 0) / bolusWithCgm.length)
+          : null;
+
+        return (
+          <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"22px 26px" }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:4 }}>
+              <div style={{ fontSize:14, fontWeight:600 }}>Insulin Logs</div>
+              <span style={{ fontSize:11, color:"rgba(255,255,255,0.35)" }}>
+                {insulinLogs.length} log{insulinLogs.length === 1 ? "" : "s"} · last 30 d
+              </span>
+            </div>
+            <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginBottom:18 }}>
+              Standalone bolus & basal entries from the Engine Log tab.
+            </div>
+            <div className="glev-grid-4" style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14 }}>
+              <InsightFlipTile tile={{
+                label:"Avg Bolus / Dose", color:GREEN,
+                val: avgBolus7  != null ? `${avgBolus7.toFixed(1)}u`  : "—",
+                sub: avgBolus30 != null ? `30 d avg ${avgBolus30.toFixed(1)}u` : "no data",
+                formula:"Σ units / count (bolus, last 7 d)",
+                explain:"Last-7-day average bolus dose, with the 30-day average for comparison.",
+              }}/>
+              <InsightFlipTile tile={{
+                label:"Avg Basal / Dose", color:ACCENT,
+                val: avgBasal30 != null ? `${avgBasal30.toFixed(1)}u` : "—",
+                sub: basal30.length ? `${basal30.length} doses · 30 d` : "no data",
+                formula:"Σ units / count (basal, last 30 d)",
+                explain:"Mean basal dose over the last 30 days. Track this against any titration changes.",
+              }}/>
+              <InsightFlipTile tile={{
+                label:"Insulin Trend", color:trendColor,
+                val: trendLabel, sub: trendSub,
+                formula:"Σ bolus units (last 7 d) vs prior 7 d",
+                explain:"Direction of total bolus units week-over-week. Rising trends often follow more carb-heavy days.",
+              }}/>
+              <InsightFlipTile tile={{
+                label:"BG @ Bolus", color:"#60A5FA",
+                val: avgCgmAtBolus != null ? `${avgCgmAtBolus}` : "—",
+                sub: avgCgmAtBolus != null ? `mg/dL · ${bolusWithCgm.length} logs` : "no CGM at log",
+                formula:"avg cgm_glucose_at_log (bolus, 30 d)",
+                explain:"Average glucose at the moment of bolus logging — high values suggest you're often dosing late.",
+              }}/>
+            </div>
+          </div>
+        );
+      })(),
+    },
+    {
+      id: "exercise-stats",
+      node: (() => {
+        const nowMs = Date.now();
+        const wkMs = 7 * 86400000;
+        const fourWk = 4 * wkMs;
+        const recent = exerciseLogs.filter(l => nowMs - new Date(l.created_at).getTime() <= fourWk);
+        const sessionsPerWeek = recent.length / 4;
+        const avgDuration = recent.length
+          ? Math.round(recent.reduce((s,l) => s + l.duration_minutes, 0) / recent.length)
+          : null;
+        const withCgm = recent.filter(l => l.cgm_glucose_at_log != null);
+        const avgCgmAtExercise = withCgm.length
+          ? Math.round(withCgm.reduce((s,l) => s + (l.cgm_glucose_at_log || 0), 0) / withCgm.length)
+          : null;
+
+        return (
+          <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"22px 26px" }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:4 }}>
+              <div style={{ fontSize:14, fontWeight:600 }}>Exercise Logs</div>
+              <span style={{ fontSize:11, color:"rgba(255,255,255,0.35)" }}>
+                {exerciseLogs.length} log{exerciseLogs.length === 1 ? "" : "s"} · last 30 d
+              </span>
+            </div>
+            <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginBottom:18 }}>
+              Hypertrophy & cardio sessions logged from the Engine Log tab.
+            </div>
+            <div className="glev-grid-3" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14 }}>
+              <InsightFlipTile tile={{
+                label:"Frequency", color:ORANGE,
+                val: `${sessionsPerWeek.toFixed(1)}`,
+                sub: `sessions / wk · last 4 wk`,
+                formula:"count(sessions, last 4 wk) / 4",
+                explain:"Average exercise sessions per week over the last four weeks.",
+              }}/>
+              <InsightFlipTile tile={{
+                label:"Avg Duration", color:"#A78BFA",
+                val: avgDuration != null ? `${avgDuration} min` : "—",
+                sub: recent.length ? `${recent.length} sessions` : "no data",
+                formula:"Σ duration_minutes / count",
+                explain:"Mean session length over the last four weeks.",
+              }}/>
+              <InsightFlipTile tile={{
+                label:"BG @ Exercise", color:"#60A5FA",
+                val: avgCgmAtExercise != null ? `${avgCgmAtExercise}` : "—",
+                sub: avgCgmAtExercise != null ? `mg/dL · ${withCgm.length} logs` : "no CGM at log",
+                formula:"avg cgm_glucose_at_log (exercise, 4 wk)",
+                explain:"Average glucose at the start of exercise sessions. Helps spot pre-workout patterns.",
+              }}/>
+            </div>
+          </div>
+        );
+      })(),
     },
     {
       id: "meal-type",

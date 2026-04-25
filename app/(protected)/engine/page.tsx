@@ -4,6 +4,9 @@ import { useState, useEffect } from "react";
 import { fetchMeals, classifyMeal, type Meal } from "@/lib/meals";
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
 import { logDebug } from "@/lib/debug";
+import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
+import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
+import EngineLogTab from "@/components/EngineLogTab";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
@@ -18,10 +21,57 @@ interface Recommendation {
   similarMeals: Meal[];
 }
 
+/**
+ * Append safety / context notes derived from recent insulin & exercise logs.
+ * Pure documentation — does not change the dose.
+ *  - Basal logged in the last 24h is mentioned for context.
+ *  - More than 2 boluses in the last 6h triggers a stacking-risk warning.
+ *  - Exercise (cardio or any high-intensity) in the last 4h is flagged.
+ */
+function safetyNotesFromLogs(
+  insulinLogs: InsulinLog[],
+  exerciseLogs: ExerciseLog[],
+): string[] {
+  const now = Date.now();
+  const sixHoursAgo  = now - 6  * 3600_000;
+  const fourHoursAgo = now - 4  * 3600_000;
+  const dayAgo       = now - 24 * 3600_000;
+  const notes: string[] = [];
+
+  const recentBolus = insulinLogs.filter(l =>
+    l.insulin_type === "bolus" && new Date(l.created_at).getTime() >= sixHoursAgo,
+  );
+  if (recentBolus.length > 2) {
+    const total = Math.round(recentBolus.reduce((s, l) => s + (l.units || 0), 0) * 10) / 10;
+    notes.push(`⚠ Stacking-Risiko: ${recentBolus.length} Bolus-Gaben in den letzten 6h (Σ ${total}u). Aktives Insulin könnte sich überlagern — vorsichtig dosieren.`);
+  }
+
+  const recentBasal = insulinLogs.filter(l =>
+    l.insulin_type === "basal" && new Date(l.created_at).getTime() >= dayAgo,
+  );
+  if (recentBasal.length > 0) {
+    const last = recentBasal[0];
+    const hoursAgo = Math.max(0, Math.round((now - new Date(last.created_at).getTime()) / 3600_000));
+    notes.push(`Basal-Kontext: zuletzt ${last.units}u ${last.insulin_name || "Basal"} vor ${hoursAgo}h.`);
+  }
+
+  const recentExercise = exerciseLogs.filter(l =>
+    new Date(l.created_at).getTime() >= fourHoursAgo,
+  );
+  if (recentExercise.length > 0) {
+    const e = recentExercise[0];
+    notes.push(`Bewegung: ${e.duration_minutes} min ${e.exercise_type} (${e.intensity}) in den letzten 4h — erhöhte Insulin-Empfindlichkeit möglich.`);
+  }
+
+  return notes;
+}
+
 function runGlevEngine(
   meals: Meal[],
   currentGlucose: number,
   carbs: number,
+  insulinLogs: InsulinLog[] = [],
+  exerciseLogs: ExerciseLog[] = [],
 ): Recommendation {
   const icr = 15, cf = 50, target = 110;
   const carbDose = carbs / icr;
@@ -34,11 +84,14 @@ function runGlevEngine(
     (m.evaluation === "GOOD") && m.insulin_units
   );
 
+  const safetyNotes = safetyNotesFromLogs(insulinLogs, exerciseLogs);
+  const safetySuffix = safetyNotes.length > 0 ? " " + safetyNotes.join(" ") : "";
+
   if (similar.length >= 3) {
     const avg = Math.round(similar.reduce((s,m)=>s+(m.insulin_units||0),0)/similar.length * 10)/10;
     return {
       dose: avg, confidence:"HIGH", source:"historical",
-      reasoning: `Based on ${similar.length} similar past meals with GOOD outcomes (±12g carbs, ±35 mg/dL glucose). Historical average insulin: ${avg}u.`,
+      reasoning: `Based on ${similar.length} similar past meals with GOOD outcomes (±12g carbs, ±35 mg/dL glucose). Historical average insulin: ${avg}u.${safetySuffix}`,
       carbDose:Math.round(carbDose*10)/10, correctionDose:Math.round(correctionDose*10)/10,
       similarMeals: similar.slice(0,5),
     };
@@ -49,7 +102,7 @@ function runGlevEngine(
     const blended = Math.round(((histAvg + formulaDose)/2)*10)/10;
     return {
       dose: blended, confidence:"MEDIUM", source:"blended",
-      reasoning: `Blended from ${similar.length} similar meal(s) + ICR formula. Limited historical data — log more meals for higher confidence.`,
+      reasoning: `Blended from ${similar.length} similar meal(s) + ICR formula. Limited historical data — log more meals for higher confidence.${safetySuffix}`,
       carbDose:Math.round(carbDose*10)/10, correctionDose:Math.round(correctionDose*10)/10,
       similarMeals: similar,
     };
@@ -57,7 +110,7 @@ function runGlevEngine(
 
   return {
     dose: formulaDose, confidence:"LOW", source:"formula",
-    reasoning: `No similar historical meals found. Using standard ICR formula: ${carbs}g ÷ ${icr} + ${Math.round(correctionDose*10)/10}u correction.`,
+    reasoning: `No similar historical meals found. Using standard ICR formula: ${carbs}g ÷ ${icr} + ${Math.round(correctionDose*10)/10}u correction.${safetySuffix}`,
     carbDose:Math.round(carbDose*10)/10, correctionDose:Math.round(correctionDose*10)/10,
     similarMeals:[],
   };
@@ -66,7 +119,10 @@ function runGlevEngine(
 const CONF_COLOR: Record<string, string> = { HIGH:GREEN, MEDIUM:ORANGE, LOW:PINK };
 
 export default function EnginePage() {
+  const [tab, setTab]         = useState<"engine"|"log">("engine");
   const [meals, setMeals]     = useState<Meal[]>([]);
+  const [insulinLogs, setInsulinLogs] = useState<InsulinLog[]>([]);
+  const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [glucose, setGlucose] = useState("");
   const [carbs, setCarbs]     = useState("");
@@ -90,6 +146,11 @@ export default function EnginePage() {
 
   useEffect(() => {
     fetchMeals().then(setMeals).catch(console.error).finally(() => setLoading(false));
+    // Recent insulin & exercise logs feed the safety-context notes in the
+    // Engine recommendation. Failure here is non-fatal — the engine still
+    // runs without log context.
+    fetchRecentInsulinLogs(7).then(setInsulinLogs).catch(() => setInsulinLogs([]));
+    fetchRecentExerciseLogs(7).then(setExerciseLogs).catch(() => setExerciseLogs([]));
   }, []);
 
   function handleRun() {
@@ -97,10 +158,10 @@ export default function EnginePage() {
     if (!c) return;
     setRunning(true);
     setTimeout(() => {
-      const rec = runGlevEngine(meals, g, c);
+      const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs);
       setResult(rec);
       setRunning(false);
-      logDebug("ENGINE", { input: { glucose: g, carbs: c }, matchedMeals: rec.similarMeals.map(m => ({ id: m.id, carbs: m.carbs_grams, glucose: m.glucose_before, insulin: m.insulin_units })), suggestedDose: rec.dose, confidence: rec.confidence });
+      logDebug("ENGINE", { input: { glucose: g, carbs: c }, matchedMeals: rec.similarMeals.map(m => ({ id: m.id, carbs: m.carbs_grams, glucose: m.glucose_before, insulin: m.insulin_units })), suggestedDose: rec.dose, confidence: rec.confidence, recentInsulin: insulinLogs.length, recentExercise: exerciseLogs.length });
     }, 600);
   }
 
@@ -116,9 +177,43 @@ export default function EnginePage() {
           </div>
           <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em" }}>Glev Engine</h1>
         </div>
-        <p style={{ color:"rgba(255,255,255,0.35)", fontSize:14 }}>AI-powered insulin recommendations from your personal dosing history.</p>
+        <p style={{ color:"rgba(255,255,255,0.35)", fontSize:14 }}>
+          {tab === "engine"
+            ? "AI-powered insulin recommendations from your personal dosing history."
+            : "Log standalone insulin doses and exercise sessions. Pure documentation — no calculations."}
+        </p>
       </div>
 
+      {/* TABS */}
+      <div style={{
+        display:"inline-flex", gap:4, marginBottom:24,
+        background:"#0D0D12", border:`1px solid ${BORDER}`,
+        borderRadius:12, padding:4,
+      }}>
+        {([
+          { id:"engine" as const, label:"Engine" },
+          { id:"log"    as const, label:"Log" },
+        ]).map(t => {
+          const on = tab === t.id;
+          return (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              style={{
+                padding:"8px 18px", borderRadius:8, border:"none",
+                background: on ? `${ACCENT}22` : "transparent",
+                color:    on ? ACCENT : "rgba(255,255,255,0.55)",
+                fontSize:13, fontWeight:700, letterSpacing:"-0.01em",
+                cursor:"pointer", transition:"all 0.15s",
+              }}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {tab === "engine" && (<>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20, marginBottom:20 }}>
         <div style={card}>
           <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>Current Conditions</div>
@@ -331,6 +426,9 @@ export default function EnginePage() {
           </div>
         </div>
       )}
+      </>)}
+
+      {tab === "log" && <EngineLogTab />}
     </div>
   );
 }

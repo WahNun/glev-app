@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authedClient } from "../_helpers";
+import { authedClient } from "../../insulin/_helpers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ export async function DELETE(
   if (!auth.user) return NextResponse.json({ error: auth.error }, { status: 401 });
 
   const { error } = await auth.sb
-    .from("insulin_logs")
+    .from("exercise_logs")
     .delete()
     .eq("id", id)
     .eq("user_id", auth.user.id);

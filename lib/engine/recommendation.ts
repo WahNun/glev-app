@@ -1,4 +1,6 @@
 import type { AdaptiveICR, TimeOfDay } from "./adaptiveICR";
+import type { InsulinLog } from "../insulin";
+import type { ExerciseLog } from "../exercise";
 
 export interface RecommendInput {
   carbs: number;
@@ -7,6 +9,13 @@ export interface RecommendInput {
   adaptiveICR: AdaptiveICR;
   correctionFactor?: number;
   timeOfDay?: TimeOfDay;
+  /**
+   * Optional standalone insulin / exercise logs — used to surface stacking
+   * warnings and basal-context notes in the reasoning string. Pure
+   * documentation: never mutates the recommended dose.
+   */
+  recentInsulinLogs?: InsulinLog[];
+  recentExerciseLogs?: ExerciseLog[];
 }
 
 export interface RecommendOutput {
@@ -75,6 +84,36 @@ export function recommendDose(input: RecommendInput): RecommendOutput {
   if (correctionDose > 0) parts.push(`(${input.currentBG} − ${targetBG}) ÷ ${cf} = +${correctionDose.toFixed(2)}u`);
   if (parts.length === 0) parts.push("No carbs and BG within target — no dose recommended.");
   if (clamped) parts.push(`Clamped to safety ceiling of ${MAX_DOSE_UNITS}u — verify carb count or consult clinician.`);
+
+  // Safety hooks from standalone logs — documentation only, no dose change.
+  const nowMs = Date.now();
+  const sixHoursAgo = nowMs - 6 * 3600_000;
+  const oneDayAgo   = nowMs - 24 * 3600_000;
+
+  const recentBolusCount = (input.recentInsulinLogs ?? [])
+    .filter(l => l.insulin_type === "bolus" && new Date(l.created_at).getTime() >= sixHoursAgo)
+    .length;
+  if (recentBolusCount > 2) {
+    parts.push(`⚠ ${recentBolusCount} Bolus-Dosen in den letzten 6h — Active Insulin könnte noch wirken.`);
+  }
+
+  const lastBasal = (input.recentInsulinLogs ?? [])
+    .filter(l => l.insulin_type === "basal" && new Date(l.created_at).getTime() >= oneDayAgo)
+    .sort((x, y) => new Date(y.created_at).getTime() - new Date(x.created_at).getTime())[0];
+  if (lastBasal) {
+    const hAgo = Math.max(0, Math.round((nowMs - new Date(lastBasal.created_at).getTime()) / 3600_000));
+    parts.push(`Basal: ${lastBasal.units}u ${lastBasal.insulin_name || "Basal"} vor ${hAgo}h.`);
+  }
+
+  // Exercise sensitivity hint — last 4h, documentation only.
+  const fourHoursAgo = nowMs - 4 * 3600_000;
+  const recentExercise = (input.recentExerciseLogs ?? [])
+    .filter(l => new Date(l.created_at).getTime() >= fourHoursAgo)
+    .sort((x, y) => new Date(y.created_at).getTime() - new Date(x.created_at).getTime())[0];
+  if (recentExercise) {
+    const hAgo = Math.max(0, Math.round((nowMs - new Date(recentExercise.created_at).getTime()) / 3600_000));
+    parts.push(`⚠ ${recentExercise.duration_minutes} min ${recentExercise.exercise_type} (${recentExercise.intensity}) vor ${hAgo}h — erhöhte Insulin-Sensitivität möglich.`);
+  }
 
   return {
     recommendedUnits: Math.round(total * 2) / 2, // half-unit rounding
