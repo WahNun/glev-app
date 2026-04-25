@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { fetchMeals, type Meal } from "@/lib/meals";
+import { fetchMeals, computeCalories, type Meal } from "@/lib/meals";
 import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
 import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, getEvalExplain } from "@/lib/mealTypes";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
+import MealEntryLightExpand from "@/components/MealEntryLightExpand";
 import CurrentDayGlucoseCard from "@/components/CurrentDayGlucoseCard";
 import GlucoseTrendFront from "@/components/GlucoseTrendChart";
 import SortableCardGrid, { type SortableItem } from "@/components/SortableCardGrid";
@@ -15,7 +16,7 @@ import { parseDbDate, parseDbTs } from "@/lib/time";
 
 /** Default top-to-bottom order of dashboard sections. Each ID also appears
  *  as a key in the items array below — keep them in sync. */
-const DASHBOARD_DEFAULT_ORDER = ["today-glucose", "stats", "charts", "recent-entries"];
+const DASHBOARD_DEFAULT_ORDER = ["today-glucose", "today-macros", "stats", "charts", "recent-entries"];
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
@@ -337,6 +338,7 @@ export default function DashboardPage() {
   // them to enter edit mode; drag to reorder; tap blank space to save.
   const items: SortableItem[] = [
     { id: "today-glucose", node: <CurrentDayGlucoseCard/> },
+    { id: "today-macros",  node: <DailyMacrosCard meals={meals}/> },
     {
       id: "stats",
       node: (
@@ -406,9 +408,9 @@ function DashboardSortable({ items }: { items: SortableItem[] }) {
 
 /**
  * Recent Entries renders a unified feed across meal / bolus / basal /
- * exercise rows. Clicking ANY row jumps to /entries#id where the full
- * detail view is opened automatically (the dashboard panel intentionally
- * stays compact — no inline expansion here).
+ * exercise rows. Tapping a row toggles an inline light-expansion (same
+ * UX as the Entries page). The "View full →" link inside the expansion
+ * navigates to `/entries#id` for the full two-stage detail view.
  */
 function RecentEntries({
   rows,
@@ -419,6 +421,9 @@ function RecentEntries({
   onViewAll: () => void;
   onViewEntry: (id: string) => void;
 }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const toggle = (id: string) => setExpanded(prev => (prev === id ? null : id));
+
   return (
     <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, overflow:"hidden" }}>
         <div style={{ padding:"18px 24px", display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom:`1px solid ${BORDER}` }}>
@@ -430,27 +435,52 @@ function RecentEntries({
         ) : (
           <div>
             {rows.map(r => {
+              const isOpen = expanded === r.id;
+
               if (r.kind === "meal") {
                 const m = r.meal!;
                 return (
-                  <div key={r.id} style={{ borderBottom:`1px solid ${BORDER}` }}>
-                    <MealEntryCardCollapsed meal={m} onClick={() => onViewEntry(m.id)}/>
+                  <div key={r.id} style={{ borderBottom:`1px solid ${BORDER}`, background: isOpen ? "rgba(255,255,255,0.015)" : undefined, transition:"background 0.15s ease" }}>
+                    <MealEntryCardCollapsed meal={m} onClick={() => toggle(r.id)}/>
+                    {isOpen && (
+                      <div style={{ borderTop:`1px solid ${BORDER}` }}>
+                        <MealEntryLightExpand
+                          meal={m}
+                          onViewFull={() => onViewEntry(m.id)}
+                        />
+                      </div>
+                    )}
                   </div>
                 );
               }
 
               if (r.kind === "exercise") {
+                const x = r.exercise!;
                 return (
-                  <div key={r.id} style={{ borderBottom:`1px solid ${BORDER}` }}>
+                  <div key={r.id} style={{ borderBottom:`1px solid ${BORDER}`, background: isOpen ? "rgba(255,255,255,0.015)" : undefined, transition:"background 0.15s ease" }}>
                     <NonMealRecentRow
                       kind="exercise"
                       ts={r.ts}
                       primaryLabel="Duration"
-                      primaryValue={`${r.exercise!.duration_minutes}m`}
+                      primaryValue={`${x.duration_minutes}m`}
                       secondaryLabel="Type"
-                      secondaryValue={r.exercise!.exercise_type === "cardio" ? "cardio" : "strength"}
-                      onClick={() => onViewEntry(r.id)}
+                      secondaryValue={x.exercise_type === "cardio" ? "cardio" : "strength"}
+                      onClick={() => toggle(r.id)}
                     />
+                    {isOpen && (
+                      <div style={{ borderTop:`1px solid ${BORDER}` }}>
+                        <NonMealLightExpand
+                          ts={r.ts}
+                          stats={[
+                            { label:"Duration",  value:`${x.duration_minutes} min`, color:KIND_ACCENT.exercise.color },
+                            { label:"Type",      value:x.exercise_type === "cardio" ? "Cardio" : "Strength" },
+                            { label:"Intensity", value:x.intensity || "—" },
+                            ...(x.cgm_glucose_at_log != null ? [{ label:"CGM at log", value:`${x.cgm_glucose_at_log} mg/dL` }] : []),
+                          ]}
+                          onViewFull={() => onViewEntry(r.id)}
+                        />
+                      </div>
+                    )}
                   </div>
                 );
               }
@@ -458,7 +488,7 @@ function RecentEntries({
               // bolus | basal
               const i = r.insulin!;
               return (
-                <div key={r.id} style={{ borderBottom:`1px solid ${BORDER}` }}>
+                <div key={r.id} style={{ borderBottom:`1px solid ${BORDER}`, background: isOpen ? "rgba(255,255,255,0.015)" : undefined, transition:"background 0.15s ease" }}>
                   <NonMealRecentRow
                     kind={r.kind}
                     ts={r.ts}
@@ -466,13 +496,143 @@ function RecentEntries({
                     primaryValue={`${i.units}u`}
                     secondaryLabel="Type"
                     secondaryValue={i.insulin_name || (r.kind === "bolus" ? "rapid-acting" : "long-acting")}
-                    onClick={() => onViewEntry(r.id)}
+                    onClick={() => toggle(r.id)}
                   />
+                  {isOpen && (
+                    <div style={{ borderTop:`1px solid ${BORDER}` }}>
+                      <NonMealLightExpand
+                        ts={r.ts}
+                        stats={[
+                          { label:"Dose",   value:`${i.units} u`, color:KIND_ACCENT[r.kind].color },
+                          { label:"Insulin", value:i.insulin_name || (r.kind === "bolus" ? "rapid-acting" : "long-acting") },
+                          { label:"Kind",   value:r.kind === "bolus" ? "Bolus" : "Basal", color:KIND_ACCENT[r.kind].color },
+                          ...(i.cgm_glucose_at_log != null ? [{ label:"CGM at log", value:`${i.cgm_glucose_at_log} mg/dL` }] : []),
+                        ]}
+                        onViewFull={() => onViewEntry(r.id)}
+                      />
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
         )}
+    </div>
+  );
+}
+
+/**
+ * Light expand body for non-meal rows (bolus / basal / exercise) on the
+ * dashboard. Mirrors the visual rhythm of MealEntryLightExpand: a small
+ * label + value grid plus a "View full entry →" footer that navigates
+ * to /entries#id.
+ */
+function NonMealLightExpand({
+  ts,
+  stats,
+  onViewFull,
+}: {
+  ts: string;
+  stats: Array<{ label: string; value: string; color?: string }>;
+  onViewFull: () => void;
+}) {
+  const date = parseDbDate(ts);
+  const fullTimestamp = date.toLocaleString("en", {
+    month: "short", day: "numeric", year: "numeric",
+    hour: "numeric", minute: "2-digit",
+  });
+
+  return (
+    <div style={{ padding:"12px 16px 14px", display:"flex", flexDirection:"column", gap:14 }}>
+      <div>
+        <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8, textTransform:"uppercase" }}>Details</div>
+        <div style={{ display:"flex", gap:24, flexWrap:"wrap" }}>
+          {stats.map(s => (
+            <div key={s.label} style={{ display:"flex", flexDirection:"column", minWidth:70, gap:3 }}>
+              <span style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:600 }}>{s.label}</span>
+              <span style={{ fontSize:13, fontWeight:700, color: s.color || "rgba(255,255,255,0.85)", fontFamily:"var(--font-mono)" }}>{s.value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap", paddingTop:8, borderTop:`1px solid ${BORDER}` }}>
+        <span style={{ fontSize:11, color:"rgba(255,255,255,0.45)", fontFamily:"var(--font-mono)" }}>{fullTimestamp}</span>
+        <button
+          onClick={(e) => { e.stopPropagation(); onViewFull(); }}
+          style={{ background:"transparent", border:"none", color:ACCENT, fontSize:12, fontWeight:600, cursor:"pointer", padding:"4px 0", letterSpacing:"-0.01em" }}
+        >
+          View full entry →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Daily Macros card — sums today's carbs / protein / fat / fiber across all
+// logged meals. Calories use the meal's stored value where present, falling
+// back to the 4·carbs + 4·protein + 9·fat estimate for older rows.
+// -----------------------------------------------------------------------------
+function DailyMacrosCard({ meals }: { meals: Meal[] }) {
+  const today = useMemo(() => {
+    const todayStr = new Date().toDateString();
+    const todays = meals.filter(m => parseDbDate(m.meal_time ?? m.created_at).toDateString() === todayStr);
+
+    let carbs = 0, protein = 0, fat = 0, fiber = 0, calories = 0;
+    for (const m of todays) {
+      const c = m.carbs_grams ?? 0;
+      const p = m.protein_grams ?? (Array.isArray(m.parsed_json) ? m.parsed_json.reduce((s, f) => s + (f.protein || 0), 0) : 0);
+      const f = m.fat_grams     ?? (Array.isArray(m.parsed_json) ? m.parsed_json.reduce((s, x) => s + (x.fat     || 0), 0) : 0);
+      const fb = m.fiber_grams  ?? (Array.isArray(m.parsed_json) ? m.parsed_json.reduce((s, x) => s + (x.fiber   || 0), 0) : 0);
+      carbs   += c;
+      protein += p;
+      fat     += f;
+      fiber   += fb;
+      calories += m.calories ?? computeCalories(c, p, f);
+    }
+
+    return { count: todays.length, carbs, protein, fat, fiber, calories };
+  }, [meals]);
+
+  const tiles: Array<{ label: string; value: string; color: string }> = [
+    { label: "Carbs",    value: `${Math.round(today.carbs)}g`,   color: ORANGE },
+    { label: "Protein",  value: `${Math.round(today.protein)}g`, color: "#3B82F6" },
+    { label: "Fat",      value: `${Math.round(today.fat)}g`,     color: "#A855F7" },
+    { label: "Fiber",    value: `${Math.round(today.fiber)}g`,   color: GREEN },
+    { label: "Calories", value: `${Math.round(today.calories)} kcal`, color: ACCENT },
+  ];
+
+  return (
+    <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, overflow:"hidden" }}>
+      <style>{`
+        .glev-macros-grid { display:grid; gap:10px; grid-template-columns: repeat(5, 1fr); }
+        @media (max-width: 720px) {
+          .glev-macros-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+      `}</style>
+      <div style={{ padding:"18px 24px 14px", display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom:`1px solid ${BORDER}` }}>
+        <div>
+          <div style={{ fontSize:14, fontWeight:600 }}>Today&apos;s Macros</div>
+          <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginTop:2 }}>
+            {today.count === 0 ? "No meals logged yet today" : `${today.count} meal${today.count === 1 ? "" : "s"} today`}
+          </div>
+        </div>
+        <span style={{ fontSize:10, color:"rgba(255,255,255,0.4)", letterSpacing:"0.07em", fontWeight:700, textTransform:"uppercase", fontFamily:"var(--font-mono)" }}>
+          {new Date().toLocaleDateString("en", { weekday:"short", month:"short", day:"numeric" })}
+        </span>
+      </div>
+      <div style={{ padding:"16px 20px" }}>
+        <div className="glev-macros-grid">
+          {tiles.map(t => (
+            <div key={t.label} style={{ background:"rgba(255,255,255,0.025)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"12px 14px" }}>
+              <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)", letterSpacing:"0.08em", fontWeight:600, marginBottom:6, textTransform:"uppercase" }}>{t.label}</div>
+              <div style={{ fontSize:18, fontWeight:800, color: today.count === 0 ? "rgba(255,255,255,0.25)" : t.color, letterSpacing:"-0.02em", fontFamily:"var(--font-mono)" }}>
+                {today.count === 0 ? "—" : t.value}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
