@@ -490,6 +490,34 @@ export default function EnginePage() {
         </div>
       </div>
 
+      {/* Mobile: GPT reasoning chat sits between the mic card and the form,
+          collapsed by default. The desktop equivalent lives in the right
+          column below. */}
+      {isMobile && (
+        <div style={{ marginBottom: 20 }}>
+          <EngineChatPanel
+            macros={{
+              carbs:   parseFloat(carbs)   || 0,
+              protein: parseFloat(protein) || 0,
+              fat:     parseFloat(fat)     || 0,
+              fiber:   parseFloat(fiber)   || 0,
+            }}
+            description={desc}
+            onPatch={(p) => {
+              setCarbs(String(p.carbs));
+              setProtein(String(p.protein));
+              setFat(String(p.fat));
+              setFiber(String(p.fiber));
+              if (p.description) setDesc(p.description);
+            }}
+            seed={chatSeed}
+            isMobile={true}
+            expanded={chatExpanded}
+            onToggleExpanded={() => setChatExpanded(v => !v)}
+          />
+        </div>
+      )}
+
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20, marginBottom:20 }}>
         <div style={card}>
           <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>Current Conditions</div>
@@ -774,28 +802,30 @@ export default function EnginePage() {
       )}
       </div>{/* /left column */}
 
-      <div style={{ minWidth:0, display:"flex", flexDirection:"column" }}>
-        <EngineChatPanel
-          macros={{
-            carbs:   parseFloat(carbs)   || 0,
-            protein: parseFloat(protein) || 0,
-            fat:     parseFloat(fat)     || 0,
-            fiber:   parseFloat(fiber)   || 0,
-          }}
-          description={desc}
-          onPatch={(p) => {
-            setCarbs(String(p.carbs));
-            setProtein(String(p.protein));
-            setFat(String(p.fat));
-            setFiber(String(p.fiber));
-            if (p.description) setDesc(p.description);
-          }}
-          seed={chatSeed}
-          isMobile={isMobile}
-          expanded={isMobile ? chatExpanded : true}
-          onToggleExpanded={() => setChatExpanded(v => !v)}
-        />
-      </div>
+      {!isMobile && (
+        <div style={{ minWidth:0, display:"flex", flexDirection:"column" }}>
+          <EngineChatPanel
+            macros={{
+              carbs:   parseFloat(carbs)   || 0,
+              protein: parseFloat(protein) || 0,
+              fat:     parseFloat(fat)     || 0,
+              fiber:   parseFloat(fiber)   || 0,
+            }}
+            description={desc}
+            onPatch={(p) => {
+              setCarbs(String(p.carbs));
+              setProtein(String(p.protein));
+              setFat(String(p.fat));
+              setFiber(String(p.fiber));
+              if (p.description) setDesc(p.description);
+            }}
+            seed={chatSeed}
+            isMobile={false}
+            expanded={true}
+            onToggleExpanded={() => {}}
+          />
+        </div>
+      )}
       </div>
       )}
 
