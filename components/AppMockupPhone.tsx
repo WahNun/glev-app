@@ -427,122 +427,361 @@ function EntriesScreen() {
 }
 
 /* ════════════════════════════════════════════════════════════════
-   GLEV ENGINE — voice-first quick log with example output.
+   GLEV ENGINE — 1:1 mirror of the real app's mobile Engine page.
+   Same metallic dark mic, same single-card form, same Meal
+   Classification banner, same Recommendation result block. Pre-
+   filled with deterministic demo data so visitors can see the full
+   flow without an account.
    ════════════════════════════════════════════════════════════════ */
 function EngineScreen({ onLogged }: { onLogged: () => void }) {
-  const [mode, setMode] = useState<"idle" | "result">("idle");
+  // Mic state mirrors the real page: idle → listening → parsing → idle.
+  // No real recording; we just animate through the states on tap.
+  const [micState, setMicState] = useState<"idle" | "listening" | "parsing">("idle");
+  const [showResult, setShowResult] = useState(false);
+  const [glucose] = useState("115");
+  const [carbs]   = useState("62");
+  const [protein] = useState("18");
+  const [fat]     = useState("22");
+  const [fiber]   = useState("4");
+  const [desc]    = useState("Pasta with pesto, 250g");
+  const [insulin, setInsulin] = useState("");
+  const [confirmed, setConfirmed] = useState(false);
+
+  function tapMic() {
+    if (micState !== "idle") return;
+    setMicState("listening");
+    setTimeout(() => {
+      setMicState("parsing");
+      setTimeout(() => setMicState("idle"), 1100);
+    }, 1500);
+  }
+
+  function getRec() {
+    setShowResult(true);
+    setInsulin("4.2");
+  }
+
+  function handleConfirm() {
+    setConfirmed(true);
+    setTimeout(() => onLogged(), 700);
+  }
+
+  // Form/input styles cloned from the real Engine page (`inp`, `card`,
+  // labelStyle), scaled down a notch so they fit the 290px phone width.
+  const inp: React.CSSProperties = {
+    background:"#0D0D12", border:`1px solid ${BORDER}`, borderRadius:8,
+    padding:"7px 10px", color:"#fff", fontSize:11, outline:"none", width:"100%",
+    boxSizing:"border-box",
+  };
+  const labelStyle: React.CSSProperties = {
+    fontSize:9, color:"rgba(255,255,255,0.4)", letterSpacing:"0.06em",
+    textTransform:"uppercase", fontWeight:600, display:"block", marginBottom:4,
+  };
+  const formCard: React.CSSProperties = {
+    background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14,
+    padding:"12px 12px",
+  };
+
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:14, paddingTop:6 }}>
-      <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
-        <div style={{ fontSize:10, color:ACCENT, fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase" }}>Glev Engine</div>
-        <div style={{ fontSize:13, color:"rgba(255,255,255,0.6)", textAlign:"center", lineHeight:1.5, padding:"0 12px" }}>
-          {mode === "idle"
-            ? "Sprich oder tippe deine Mahlzeit — Glev parst Makros & berechnet die Bolus-Dosis."
-            : "Ergebnis — überprüfe & bestätige."}
+    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+      {/* Header — eyebrow + GlevLogo + title + subtitle (1:1 from real) */}
+      <div>
+        <div style={{ fontSize:7.5, fontWeight:700, letterSpacing:"0.18em", color:"rgba(255,255,255,0.3)", marginBottom:4 }}>
+          GLEV — SMART INSULIN DECISIONS
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
+          <GlevLogo size={18}/>
+          <h1 style={{ fontSize:14, fontWeight:800, letterSpacing:"-0.03em", margin:0 }}>Glev Engine</h1>
+        </div>
+        <p style={{ color:"rgba(255,255,255,0.35)", fontSize:9.5, margin:0, lineHeight:1.4 }}>
+          AI-powered insulin recommendations from your dosing history.
+        </p>
+      </div>
+
+      {/* Tabs — Engine | Insulin Log | Exercise (Engine active, others visual) */}
+      <div style={{
+        display:"inline-flex", gap:3, alignSelf:"flex-start",
+        background:"#0D0D12", border:`1px solid ${BORDER}`,
+        borderRadius:9, padding:3,
+      }}>
+        {[
+          { id:"engine", label:"Engine",   active:true  },
+          { id:"bolus",  label:"Insulin Log", active:false },
+          { id:"exer",   label:"Exercise", active:false },
+        ].map(t => (
+          <div key={t.id} style={{
+            padding:"4px 10px", borderRadius:6,
+            background: t.active ? `${ACCENT}22` : "transparent",
+            color:    t.active ? ACCENT : "rgba(255,255,255,0.55)",
+            fontSize:9, fontWeight:700, letterSpacing:"-0.01em",
+          }}>{t.label}</div>
+        ))}
+      </div>
+
+      {/* Mic card — REAL styling: dark radial-gradient circle, ACCENT
+          ring + radial pulse on listening, 12% letter-spacing label */}
+      <style>{`
+        @keyframes engVPulseM { 0%,100%{opacity:0.35;transform:scale(1)} 50%{opacity:1;transform:scale(1.05)} }
+      `}</style>
+      <div style={{ ...formCard, padding:"14px 12px 12px" }}>
+        <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:7 }}>
+          <div style={{ position:"relative", width:64, height:64 }}>
+            {micState === "listening" && (
+              <div style={{
+                position:"absolute", inset:-10, borderRadius:"50%",
+                background:`radial-gradient(circle,${ACCENT}24 0%,transparent 70%)`,
+                animation:"engVPulseM 2s ease-in-out infinite", pointerEvents:"none",
+              }}/>
+            )}
+            <button
+              onClick={tapMic}
+              aria-label="Tap to speak"
+              style={{
+                position:"absolute", inset:0, borderRadius:"50%", padding:0,
+                border: micState === "listening"
+                  ? `1px solid ${ACCENT}88`
+                  : `1px solid rgba(255,255,255,0.08)`,
+                cursor: micState === "idle" ? "pointer" : "default",
+                background: `radial-gradient(circle at 36% 32%, #1e1e2e 0%, #141420 45%, #09090B 100%)`,
+                boxShadow: micState === "listening"
+                  ? `0 0 0 1px ${ACCENT}55, 0 0 22px ${ACCENT}55, inset 0 0 14px rgba(79,110,247,0.15)`
+                  : `0 4px 16px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06)`,
+                display:"flex", alignItems:"center", justifyContent:"center",
+                transition:"all 0.2s",
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                stroke={micState === "listening" ? ACCENT : "rgba(255,255,255,0.85)"}
+                strokeWidth="2" strokeLinecap="round">
+                <rect x="9" y="2" width="6" height="11" rx="3"
+                  fill={micState === "listening" ? ACCENT : "rgba(255,255,255,0.85)"} stroke="none"/>
+                <path d="M5 10a7 7 0 0 0 14 0"/>
+                <line x1="12" y1="19" x2="12" y2="22"/>
+                <line x1="9"  y1="22" x2="15" y2="22"/>
+              </svg>
+            </button>
+          </div>
+          <div style={{
+            fontSize:9, fontWeight:600, letterSpacing:"0.12em",
+            color: micState === "listening" ? ACCENT
+                 : micState === "parsing"   ? ORANGE
+                 : "rgba(255,255,255,0.45)",
+          }}>
+            {micState === "listening" ? "LISTENING…"
+              : micState === "parsing" ? "PARSING…"
+              : "TAP TO SPEAK"}
+          </div>
+          <div style={{ fontSize:8, color:"rgba(255,255,255,0.22)", letterSpacing:"0.06em", textAlign:"center" }}>
+            z. B. „Pasta mit Tomatensauce, 80g Nudeln und Apfel"
+          </div>
         </div>
       </div>
 
-      {/* Big mic */}
-      <div style={{ display:"flex", justifyContent:"center", padding:"6px 0" }}>
-        <button
-          onClick={() => setMode(m => m === "idle" ? "result" : "idle")}
-          aria-label="Tap to log a meal"
-          style={{
-            width:108, height:108, borderRadius:99,
-            background: mode === "result"
-              ? `linear-gradient(135deg, ${GREEN}, #5DE6BB)`
-              : `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
-            border:"none", color:"#fff", cursor:"pointer",
-            display:"flex", alignItems:"center", justifyContent:"center",
-            boxShadow: `0 0 30px ${mode === "result" ? GREEN : ACCENT}55, 0 8px 24px rgba(0,0,0,0.4)`,
-            animation: "glevMicPulseDemo 2.5s ease-in-out infinite",
-          }}
-        >
-          {mode === "result" ? (
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          ) : (
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-          )}
-        </button>
-      </div>
-      <style>{`
-        @keyframes glevMicPulseDemo {
-          0%,100% { transform: scale(1); box-shadow: 0 0 30px ${ACCENT}55, 0 8px 24px rgba(0,0,0,0.4); }
-          50%     { transform: scale(1.04); box-shadow: 0 0 40px ${ACCENT}88, 0 8px 24px rgba(0,0,0,0.4); }
-        }
-      `}</style>
+      {/* Single-card form — Glucose+CGM, Meal Time, Macros 2x2,
+          Description, inline Classification (1:1 mobile real layout) */}
+      <div style={formCard}>
+        <div style={{ display:"flex", flexDirection:"column", gap:9 }}>
+          <div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4, gap:6 }}>
+              <label style={labelStyle}>Glucose Before · 12:23</label>
+              <div style={{
+                display:"flex", alignItems:"center", gap:4,
+                padding:"2px 7px", borderRadius:99, border:`1px solid ${ACCENT}40`,
+                background:`${ACCENT}15`, color:ACCENT, fontSize:8.5, fontWeight:600,
+              }}>
+                <span style={{ width:5, height:5, borderRadius:"50%", background:GREEN, boxShadow:`0 0 4px ${GREEN}` }}/>
+                CGM
+              </div>
+            </div>
+            <input style={inp} value={glucose} readOnly/>
+          </div>
 
-      {mode === "idle" ? (
-        <>
-          <MockCard style={{ padding:"10px 14px" }}>
-            <CardLabel text="Or type" />
+          <div>
+            <label style={labelStyle}>Meal Time</label>
+            <div style={{ ...inp, textAlign:"center", color:"rgba(255,255,255,0.7)", fontFamily:"var(--font-mono)" }}>
+              2026-04-25 12:24
+            </div>
+          </div>
+
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, rowGap:9 }}>
+            <div>
+              <label style={labelStyle}>Carbs (g)</label>
+              <input style={inp} value={carbs} readOnly/>
+            </div>
+            <div>
+              <label style={labelStyle}>
+                Fiber (g) <span style={{ textTransform:"none", color:"rgba(255,255,255,0.3)", fontSize:8, fontWeight:500 }}>opt.</span>
+              </label>
+              <input style={inp} value={fiber} readOnly/>
+            </div>
+            <div>
+              <label style={labelStyle}>Protein (g)</label>
+              <input style={inp} value={protein} readOnly/>
+            </div>
+            <div>
+              <label style={labelStyle}>Fat (g)</label>
+              <input style={inp} value={fat} readOnly/>
+            </div>
+          </div>
+
+          <div>
+            <label style={labelStyle}>Meal Description</label>
+            <input style={inp} value={desc} readOnly/>
+          </div>
+
+          <div>
+            <label style={labelStyle}>Meal Classification</label>
             <div style={{
-              marginTop:8, fontSize:11, color:"rgba(255,255,255,0.4)",
-              padding:"10px 12px", background:"rgba(255,255,255,0.03)",
-              border:`1px solid ${BORDER}`, borderRadius:10,
+              ...inp, display:"flex", alignItems:"center", gap:7,
+              color:"#fff", fontWeight:600,
             }}>
-              z.B. „2 Scheiben Toast mit Marmelade…"
+              <span style={{ width:7, height:7, borderRadius:"50%", background:ACCENT, boxShadow:`0 0 5px ${ACCENT}`, flexShrink:0 }}/>
+              Balanced Meal
             </div>
-          </MockCard>
-          <MockCard>
-            <CardLabel text="Beispiele"/>
-            <div style={{ marginTop:8, display:"flex", flexDirection:"column", gap:6 }}>
-              {[
-                "Pasta with pesto · 250 g",
-                "Chicken bowl with rice & vegetables",
-                "Greek yogurt with honey & nuts",
-              ].map(s => (
-                <div key={s} style={{ fontSize:11, color:"rgba(255,255,255,0.55)", padding:"6px 10px", background:"rgba(255,255,255,0.02)", border:`1px solid ${BORDER}`, borderRadius:8 }}>
-                  {s}
-                </div>
-              ))}
-            </div>
-          </MockCard>
-        </>
+          </div>
+        </div>
+      </div>
+
+      {/* Meal Classification banner — auto-fired when all macros present
+          (1:1 real app: gradient, icon tile, badge, description, inline
+          stats row). Always shown here since the form is pre-filled. */}
+      <div style={{
+        background:`linear-gradient(135deg, ${ACCENT}10, ${ACCENT}04)`,
+        border:`1px solid ${ACCENT}35`, borderRadius:12,
+        padding:"11px 12px",
+        display:"flex", gap:9, alignItems:"flex-start",
+      }}>
+        <div style={{
+          width:28, height:28, borderRadius:8, flexShrink:0,
+          background:`${ACCENT}20`, border:`1px solid ${ACCENT}40`,
+          display:"flex", alignItems:"center", justifyContent:"center",
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 2v6"/><path d="M5 8h14"/><path d="M5 8l2 13h10l2-13"/>
+          </svg>
+        </div>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:5, flexWrap:"wrap", marginBottom:3 }}>
+            <span style={{ fontSize:7.5, color:"rgba(255,255,255,0.4)", letterSpacing:"0.08em", textTransform:"uppercase", fontWeight:600 }}>
+              Classification
+            </span>
+            <span style={{
+              padding:"2px 7px", borderRadius:99, fontSize:8, fontWeight:700,
+              background:`${ACCENT}25`, color:ACCENT, border:`1px solid ${ACCENT}45`,
+              letterSpacing:"0.04em", textTransform:"uppercase",
+            }}>
+              Balanced
+            </span>
+          </div>
+          <div style={{ fontSize:9.5, color:"rgba(255,255,255,0.7)", lineHeight:1.4, marginBottom:5 }}>
+            Macros are well-balanced — predictable absorption curve. Standard ICR usually works.
+          </div>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap", fontSize:8, color:"rgba(255,255,255,0.4)" }}>
+            <span>Carbs <strong style={{ color:"rgba(255,255,255,0.75)" }}>62g</strong></span>
+            <span>Protein <strong style={{ color:"rgba(255,255,255,0.75)" }}>18g</strong></span>
+            <span>Fat <strong style={{ color:"rgba(255,255,255,0.75)" }}>22g</strong></span>
+            <span>Net <strong style={{ color:"rgba(255,255,255,0.75)" }}>58g</strong></span>
+          </div>
+        </div>
+      </div>
+
+      {/* Get Recommendation OR (after tap) the full result block. The
+          real app reveals the result inline below the button — same here. */}
+      {!showResult ? (
+        <button onClick={getRec} style={{
+          width:"100%", padding:"12px", borderRadius:12, border:"none",
+          background:`linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
+          color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer",
+          boxShadow:`0 4px 18px ${ACCENT}40`,
+        }}>
+          Get Recommendation
+        </button>
       ) : (
         <>
-          {/* Parsed meal */}
-          <MockCard>
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:6 }}>
-              <CardLabel text="Glev parsed" color={ACCENT}/>
-              <Pill text="High confidence" color={GREEN}/>
+          <button disabled style={{
+            width:"100%", padding:"12px", borderRadius:12, border:"none",
+            background:"rgba(79,110,247,0.25)", color:"rgba(255,255,255,0.55)",
+            fontSize:12, fontWeight:700, cursor:"default",
+          }}>
+            Get Recommendation
+          </button>
+
+          {/* Input summary — two side-by-side cards (Glucose + Carbs) */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+            <div style={{ ...formCard, padding:"10px 12px" }}>
+              <div style={{ fontSize:8, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase", marginBottom:3 }}>Input Glucose</div>
+              <div style={{ display:"flex", alignItems:"baseline", gap:4 }}>
+                <span style={{ fontSize:18, fontWeight:800, color:"#60A5FA", letterSpacing:"-0.02em" }}>{glucose}</span>
+                <span style={{ fontSize:8, color:"rgba(255,255,255,0.35)" }}>mg/dL</span>
+              </div>
+              <div style={{ fontSize:8, color:"rgba(255,255,255,0.25)", marginTop:2 }}>in target</div>
             </div>
-            <div style={{ fontSize:13, fontWeight:700, color:"#fff", marginBottom:8 }}>Pasta with pesto · 250 g</div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:6 }}>
+            <div style={{ ...formCard, padding:"10px 12px" }}>
+              <div style={{ fontSize:8, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase", marginBottom:3 }}>Input Carbs</div>
+              <div style={{ display:"flex", alignItems:"baseline", gap:4 }}>
+                <span style={{ fontSize:18, fontWeight:800, color:ORANGE, letterSpacing:"-0.02em" }}>{carbs}</span>
+                <span style={{ fontSize:8, color:"rgba(255,255,255,0.35)" }}>g</span>
+              </div>
+              <div style={{ fontSize:8, color:"rgba(255,255,255,0.25)", marginTop:2 }}>moderate</div>
+            </div>
+          </div>
+
+          {/* Main Result block — dose hero + confidence pill + reasoning
+              + 3-up breakdown (Carb / Correction / Total) */}
+          <div style={{ background:SURFACE, border:`1px solid ${GREEN}30`, borderRadius:14, padding:"14px 14px" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10 }}>
+              <div>
+                <div style={{ fontSize:8, color:"rgba(255,255,255,0.35)", letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:4 }}>Recommended Dose</div>
+                <div style={{ fontSize:36, fontWeight:900, letterSpacing:"-0.04em", lineHeight:1, color:"#fff" }}>
+                  4.2<span style={{ fontSize:11, fontWeight:400, color:"rgba(255,255,255,0.4)", marginLeft:4 }}>units</span>
+                </div>
+              </div>
+              <div style={{ textAlign:"right" }}>
+                <div style={{ fontSize:8, color:"rgba(255,255,255,0.35)", marginBottom:3 }}>Confidence</div>
+                <span style={{ padding:"4px 10px", borderRadius:99, fontSize:9, fontWeight:700, background:`${GREEN}18`, color:GREEN, border:`1px solid ${GREEN}40` }}>HIGH</span>
+                <div style={{ fontSize:8, color:"rgba(255,255,255,0.3)", marginTop:3 }}>Historical data</div>
+              </div>
+            </div>
+            <div style={{ marginTop:10, padding:"8px 10px", background:"rgba(0,0,0,0.3)", borderRadius:8 }}>
+              <div style={{ fontSize:7.5, color:"rgba(255,255,255,0.3)", marginBottom:2, letterSpacing:"0.05em", textTransform:"uppercase" }}>Reasoning</div>
+              <div style={{ fontSize:9.5, color:"rgba(255,255,255,0.65)", lineHeight:1.45 }}>
+                Based on 4 similar past meals with GOOD outcomes (±12g carbs, ±35 mg/dL glucose). Historical avg: 4.2u.
+              </div>
+            </div>
+            <div style={{ marginTop:8, display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6 }}>
               {[
-                { l:"Carbs",   v:"62 g", c:ACCENT },
-                { l:"Protein", v:"18 g", c:"#A78BFA" },
-                { l:"Fat",     v:"22 g", c:ORANGE },
-              ].map(m => (
-                <div key={m.l} style={{ background:`${m.c}10`, border:`1px solid ${m.c}30`, borderRadius:9, padding:"7px 8px", textAlign:"center" }}>
-                  <div style={{ fontSize:8, color:"rgba(255,255,255,0.4)", textTransform:"uppercase", letterSpacing:"0.06em" }}>{m.l}</div>
-                  <div style={{ fontSize:14, fontWeight:800, color:m.c, fontFamily:"var(--font-mono)" }}>{m.v}</div>
+                { label:"Carb",       val:"4.1u",  sub:"62g ÷ 15",       c:ORANGE },
+                { label:"Correction", val:"+0.1u", sub:"(115−110)/50",   c:ACCENT },
+                { label:"Total",      val:"4.2u",  sub:"recommended",    c:GREEN  },
+              ].map(d => (
+                <div key={d.label} style={{ background:"rgba(255,255,255,0.03)", borderRadius:7, padding:"6px 4px", textAlign:"center" }}>
+                  <div style={{ fontSize:7.5, color:"rgba(255,255,255,0.3)", marginBottom:2 }}>{d.label}</div>
+                  <div style={{ fontSize:13, fontWeight:800, color:d.c }}>{d.val}</div>
+                  <div style={{ fontSize:7, color:"rgba(255,255,255,0.2)", marginTop:1 }}>{d.sub}</div>
                 </div>
               ))}
             </div>
-          </MockCard>
+          </div>
 
-          {/* Bolus suggestion */}
-          <MockCard style={{ background:`linear-gradient(135deg, ${ACCENT}10, ${SURFACE})`, borderColor:`${ACCENT}30` }}>
-            <CardLabel text="Suggested bolus" color={ACCENT}/>
-            <div style={{ display:"flex", alignItems:"baseline", gap:6, marginTop:4 }}>
-              <div style={{ fontSize:32, fontWeight:800, color:ACCENT, fontFamily:"var(--font-mono)", letterSpacing:"-0.03em" }}>4.2</div>
-              <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)" }}>units · Novorapid</div>
-            </div>
-            <div style={{ fontSize:9, color:"rgba(255,255,255,0.45)", marginTop:6, lineHeight:1.5 }}>
-              62 g ÷ 1:15 ICR = 4.13 U · BG correction +0 (in range) → round to 4.2 U
-            </div>
-          </MockCard>
-
+          {/* Insulin (U) input + Confirm Log + Cancel — 1:1 real */}
+          <div>
+            <label style={labelStyle}>Insulin (U)</label>
+            <input style={inp} value={insulin} onChange={(e) => setInsulin(e.target.value)}/>
+          </div>
           <button
-            onClick={onLogged}
+            onClick={handleConfirm}
+            disabled={confirmed}
             style={{
-              padding:"12px", borderRadius:12, border:"none", cursor:"pointer",
-              background:`linear-gradient(135deg, ${ACCENT}, #6B8BFF)`, color:"#fff",
-              fontSize:13, fontWeight:700, boxShadow:`0 4px 18px ${ACCENT}55`,
+              width:"100%", padding:"11px", borderRadius:12, border:"none",
+              background: confirmed
+                ? `${GREEN}30`
+                : `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
+              color:"#fff", fontSize:11, fontWeight:700,
+              cursor: confirmed ? "default" : "pointer",
+              boxShadow: confirmed ? "none" : `0 4px 18px ${ACCENT}40`,
             }}
           >
-            Log meal & bolus →
+            {confirmed ? "✓ Logged — opening Entry Log…" : "✓ Confirm Log"}
           </button>
         </>
       )}

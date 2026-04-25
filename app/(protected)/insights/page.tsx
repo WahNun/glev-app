@@ -17,8 +17,11 @@ import { parseDbTs, parseDbDate } from "@/lib/time";
 const INSIGHTS_DEFAULT_ORDER = [
   "overview",
   "glucose-trend",
+  "time-in-range",
+  "gmi-a1c",
   "adaptive-engine",
   "performance-tiles",
+  "meal-evaluation",
   "insulin-stats",
   "exercise-stats",
   "meal-type",
@@ -201,6 +204,179 @@ export default function InsightsPage() {
       ),
     },
     {
+      id: "time-in-range",
+      node: (() => {
+        // Bucket pre-meal glucose into the standard CGM consensus bands.
+        // V.low <54, Low 54–69, In 70–180, High >180. Compare last 7 days
+        // to the prior 7 to surface a week-over-week delta.
+        const wkAgo  = now - oneWeekMs;
+        const wk2Ago = now - 2 * oneWeekMs;
+        const last7Bg = last7
+          .filter(m => m.glucose_before != null)
+          .map(m => m.glucose_before as number);
+        const prev7Bg = meals.filter(m => {
+          const t = parseDbTs(m.created_at);
+          return t > wk2Ago && t <= wkAgo && m.glucose_before != null;
+        }).map(m => m.glucose_before as number);
+
+        const bucket = (arr: number[]) => {
+          const total = arr.length || 1;
+          const vlow = arr.filter(g => g < 54).length;
+          const lo   = arr.filter(g => g >= 54 && g < 70).length;
+          const inR  = arr.filter(g => g >= 70 && g <= 180).length;
+          const hi   = arr.filter(g => g > 180).length;
+          return {
+            vlow: Math.round((vlow / total) * 100),
+            lo:   Math.round((lo   / total) * 100),
+            inR:  Math.round((inR  / total) * 100),
+            hi:   Math.round((hi   / total) * 100),
+            n: arr.length,
+          };
+        };
+        const b7  = bucket(last7Bg);
+        const bP7 = bucket(prev7Bg);
+        const delta = b7.inR - bP7.inR;
+        const hasData = b7.n > 0;
+
+        return (
+          <FlipCard
+            accent={GREEN}
+            padding="22px 26px"
+            back={
+              <FlipBack
+                title="Time in Range"
+                accent={GREEN}
+                paragraphs={[
+                  "Time in Range is the share of your pre-meal glucose readings that fall in the 70–180 mg/dL target band — the international consensus target for adults with type 1 diabetes.",
+                  "The four buckets follow the consensus recommendations: Very low (<54), Low (54–69), In range (70–180), High (>180). Spending more time in range is consistently linked to better long-term outcomes.",
+                  `Computed from ${b7.n} pre-meal reading${b7.n === 1 ? "" : "s"} in the last 7 days. The delta vs the prior 7 days reflects week-over-week movement.`,
+                ]}
+              />
+            }
+          >
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+              <div>
+                <div style={{ fontSize:14, fontWeight:600 }}>Time in Range</div>
+                <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginTop:2 }}>
+                  70–180 mg/dL · last 7 days
+                </div>
+              </div>
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)" }}>
+                {b7.n} reading{b7.n === 1 ? "" : "s"}
+              </div>
+            </div>
+            {!hasData ? (
+              <div style={{ padding:"22px 0", textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:12 }}>
+                Log meals with pre-meal glucose to see your time-in-range.
+              </div>
+            ) : (
+              <>
+                <div style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:12 }}>
+                  <div style={{ fontSize:32, fontWeight:800, color:GREEN, letterSpacing:"-0.03em", lineHeight:1, fontFamily:"var(--font-mono)" }}>
+                    {b7.inR}
+                  </div>
+                  <div style={{ fontSize:14, color:GREEN, fontWeight:700 }}>%</div>
+                  {prev7Bg.length > 0 && (
+                    <div style={{ marginLeft:"auto", fontSize:11, color: delta >= 0 ? GREEN : ORANGE }}>
+                      {delta >= 0 ? "+" : ""}{delta} vs prev wk
+                    </div>
+                  )}
+                </div>
+                <div style={{ display:"flex", height:14, borderRadius:99, overflow:"hidden", background:"rgba(255,255,255,0.04)" }}>
+                  {b7.vlow > 0 && <div style={{ width:`${b7.vlow}%`, background:PINK }}/>}
+                  {b7.lo   > 0 && <div style={{ width:`${b7.lo}%`,   background:ORANGE }}/>}
+                  {b7.inR  > 0 && <div style={{ width:`${b7.inR}%`,  background:GREEN }}/>}
+                  {b7.hi   > 0 && <div style={{ width:`${b7.hi}%`,   background:"#FFD166" }}/>}
+                </div>
+                <div style={{ display:"flex", justifyContent:"space-between", marginTop:10, fontSize:11, color:"rgba(255,255,255,0.5)", flexWrap:"wrap", gap:6 }}>
+                  <span style={{ color:PINK }}>● V.low {b7.vlow}%</span>
+                  <span style={{ color:ORANGE }}>● Low {b7.lo}%</span>
+                  <span style={{ color:GREEN }}>● In {b7.inR}%</span>
+                  <span style={{ color:"#FFD166" }}>● High {b7.hi}%</span>
+                </div>
+              </>
+            )}
+          </FlipCard>
+        );
+      })(),
+    },
+    {
+      id: "gmi-a1c",
+      node: (() => {
+        // Glucose Management Indicator (GMI) approximates lab A1C from
+        // average sensor/pre-meal glucose. Formula:
+        //   GMI(%) = 3.31 + 0.02392 × avgBG(mg/dL)
+        // Source: Bergenstal et al. 2018, Diabetes Care.
+        const last7Bg = last7
+          .filter(m => m.glucose_before != null)
+          .map(m => m.glucose_before as number);
+        const prev7Bg = meals.filter(m => {
+          const t = parseDbTs(m.created_at);
+          return t > now - 2 * oneWeekMs && t <= now - oneWeekMs && m.glucose_before != null;
+        }).map(m => m.glucose_before as number);
+
+        const avg = (arr: number[]) =>
+          arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+        const last7Avg = avg(last7Bg);
+        const prev7Avg = avg(prev7Bg);
+        const gmi     = last7Avg != null ? +(3.31 + 0.02392 * last7Avg).toFixed(1) : null;
+        const prevGmi = prev7Avg != null ? +(3.31 + 0.02392 * prev7Avg).toFixed(1) : null;
+        const delta   = (gmi != null && prevGmi != null) ? +(gmi - prevGmi).toFixed(1) : null;
+
+        return (
+          <FlipCard
+            accent={ACCENT}
+            padding="22px 26px"
+            back={
+              <FlipBack
+                title="GMI / Estimated A1C"
+                accent={ACCENT}
+                paragraphs={[
+                  "GMI (Glucose Management Indicator) approximates your laboratory A1C from your average sensor or pre-meal glucose. The formula is GMI(%) = 3.31 + 0.02392 × avg glucose (mg/dL) — Bergenstal et al., Diabetes Care 2018.",
+                  "It's a useful interim signal between clinic A1C draws — but it's not a substitute. Real A1C captures longer-term glycation that GMI cannot, and individual differences in red-blood-cell turnover can shift the two apart.",
+                  `Computed from your last 7 days of pre-meal glucose readings${last7Avg != null ? ` (avg ${Math.round(last7Avg)} mg/dL across ${last7Bg.length} reading${last7Bg.length === 1 ? "" : "s"})` : ""}.`,
+                ]}
+              />
+            }
+          >
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+              <div>
+                <div style={{ fontSize:14, fontWeight:600 }}>GMI / Est. A1C</div>
+                <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginTop:2 }}>
+                  From last 7 days of pre-meal glucose
+                </div>
+              </div>
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)" }}>
+                {last7Avg != null ? `avg ${Math.round(last7Avg)} mg/dL` : "no data"}
+              </div>
+            </div>
+            {gmi == null ? (
+              <div style={{ padding:"20px 0", textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:12 }}>
+                Log meals with pre-meal glucose to estimate your A1C.
+              </div>
+            ) : (
+              <>
+                <div style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:8 }}>
+                  <div style={{ fontSize:32, fontWeight:800, color:"#fff", letterSpacing:"-0.03em", lineHeight:1, fontFamily:"var(--font-mono)" }}>
+                    {gmi.toFixed(1)}
+                  </div>
+                  <div style={{ fontSize:14, color:"rgba(255,255,255,0.4)" }}>%</div>
+                  {delta != null && (
+                    <div style={{ marginLeft:"auto", fontSize:11, color: delta < 0 ? GREEN : delta > 0 ? ORANGE : "rgba(255,255,255,0.4)" }}>
+                      {delta > 0 ? "+" : ""}{delta.toFixed(1)} vs prev wk
+                    </div>
+                  )}
+                </div>
+                <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", lineHeight:1.5 }}>
+                  GMI(%) = 3.31 + 0.02392 × avg BG. Approximates lab A1C — not a substitute.
+                </div>
+              </>
+            )}
+          </FlipCard>
+        );
+      })(),
+    },
+    {
       id: "adaptive-engine",
       node: (
         <FlipCard
@@ -263,6 +439,76 @@ export default function InsightsPage() {
           ))}
         </div>
       ),
+    },
+    {
+      id: "meal-evaluation",
+      node: (() => {
+        // Distribution of meal outcomes in the last 7 days. EVAL_NORM
+        // collapses OVERDOSE/HIGH/SPIKE → SPIKE bucket, UNDERDOSE/LOW → LOW
+        // bucket, GOOD stays GOOD.
+        const evals = last7
+          .map(m => EVAL_NORM(m.evaluation))
+          .filter(e => e === "GOOD" || e === "SPIKE" || e === "HIGH" || e === "LOW");
+        const goodN  = evals.filter(e => e === "GOOD").length;
+        const spikeN = evals.filter(e => e === "SPIKE" || e === "HIGH").length;
+        const lowN   = evals.filter(e => e === "LOW").length;
+        const totalN = goodN + spikeN + lowN;
+        const pct = (n: number) =>
+          totalN > 0 ? Math.round((n / totalN) * 100) : 0;
+        const rows = [
+          { label:"On target", count:goodN,  color:GREEN,  pct:pct(goodN)  },
+          { label:"Spiked",    count:spikeN, color:ORANGE, pct:pct(spikeN) },
+          { label:"Low risk",  count:lowN,   color:PINK,   pct:pct(lowN)   },
+        ];
+
+        return (
+          <FlipCard
+            accent={ORANGE}
+            padding="22px 26px"
+            back={
+              <FlipBack
+                title="Meal Evaluation"
+                accent={ORANGE}
+                paragraphs={[
+                  "Each logged meal is bucketed into one of three outcome bands once the post-meal glucose lands: On target (within ±35% of the ICR estimate), Spiked (post-meal high), and Low risk (post-meal low).",
+                  "Spike-heavy weeks often signal under-dosing or pre-bolus timing issues. Low-risk-heavy weeks often signal over-dosing — review your correction factor with your clinician.",
+                  `Computed from ${totalN} evaluated meal${totalN === 1 ? "" : "s"} in the last 7 days.`,
+                ]}
+              />
+            }
+          >
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
+              <div style={{ fontSize:14, fontWeight:600 }}>Meal Evaluation</div>
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)" }}>
+                last 7 days · {totalN} meal{totalN === 1 ? "" : "s"}
+              </div>
+            </div>
+            <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginBottom:18 }}>
+              Outcome distribution from your recently logged meals.
+            </div>
+            {totalN === 0 ? (
+              <div style={{ padding:"22px 0", textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:12 }}>
+                Log meals with post-meal glucose to see your evaluation distribution.
+              </div>
+            ) : (
+              <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+                {rows.map(r => (
+                  <div key={r.label} style={{ display:"grid", gridTemplateColumns:"95px 1fr 44px 60px", gap:12, alignItems:"center" }}>
+                    <div style={{ fontSize:12, color:r.color, fontWeight:600 }}>{r.label}</div>
+                    <div style={{ height:6, borderRadius:99, background:"rgba(255,255,255,0.05)", overflow:"hidden" }}>
+                      <div style={{ height:"100%", width:`${r.pct}%`, background:r.color, borderRadius:99, transition:"width 0.3s" }}/>
+                    </div>
+                    <div style={{ fontSize:12, fontWeight:700, color:r.color, textAlign:"right" }}>{r.pct}%</div>
+                    <div style={{ fontSize:11, color:"rgba(255,255,255,0.5)", textAlign:"right" }}>
+                      {r.count} meal{r.count === 1 ? "" : "s"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </FlipCard>
+        );
+      })(),
     },
     {
       id: "insulin-stats",
