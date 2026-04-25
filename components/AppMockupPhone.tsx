@@ -52,21 +52,25 @@ type AppMockupPhoneProps = {
    *  visitors just can't switch tabs. Used by feature cards on the
    *  marketing landing page so each card focuses on one screen. */
   lockTab?: Tab;
-  /** Tabs to exclude from the bottom nav AND from the top-right
-   *  account icon. Used by the hero render to hide the settings tab
-   *  from public visitors. Ignored when `lockTab` is set (locked phone
-   *  has no nav at all). */
+  /** Tabs to exclude from the bottom nav. Does NOT affect the
+   *  top-right cog (use `hideTopCog` for that — they're independent
+   *  so the hero can keep the settings tab visible while still
+   *  blocking accidental settings-on-banner-tap). Ignored when
+   *  `lockTab` is set. */
   excludeTabs?: Tab[];
+  /** Hide the top-right cog button. The hero uses this so a tap on
+   *  the header banner doesn't deep-link visitors into settings —
+   *  settings is still reachable via the bottom nav. */
+  hideTopCog?: boolean;
 };
 
-export default function AppMockupPhone({ lockTab, excludeTabs = [] }: AppMockupPhoneProps = {}) {
+export default function AppMockupPhone({ lockTab, excludeTabs = [], hideTopCog = false }: AppMockupPhoneProps = {}) {
   const [tab, setTab] = useState<Tab>(lockTab ?? "dashboard");
 
   // When locked we ignore tab changes — within-tab interactions still
   // mutate their own state inside DashboardScreen / EngineScreen / etc.
   const onTab = lockTab ? () => {} : setTab;
 
-  const excludeSettings = excludeTabs.includes("settings");
   const visibleTabs: Tab[] = (Object.keys(TAB_LABEL) as Tab[]).filter(t => !excludeTabs.includes(t));
 
   return (
@@ -77,7 +81,7 @@ export default function AppMockupPhone({ lockTab, excludeTabs = [] }: AppMockupP
           onTab={onTab}
           showBottomNav={!lockTab}
           visibleTabs={visibleTabs}
-          excludeSettings={excludeSettings}
+          hideTopCog={hideTopCog}
         />
       </PhoneShell>
 
@@ -130,16 +134,16 @@ function PhoneShell({ children }: { children: React.ReactNode }) {
 /* ════════════════════════════════════════════════════════════════
    Screen inner — top header + scrollable content + bottom nav.
    ════════════════════════════════════════════════════════════════ */
-function ScreenInner({ tab, onTab, showBottomNav, visibleTabs, excludeSettings }: {
+function ScreenInner({ tab, onTab, showBottomNav, visibleTabs, hideTopCog }: {
   tab: Tab;
   onTab: (t: Tab) => void;
   showBottomNav: boolean;
   visibleTabs: Tab[];
-  excludeSettings: boolean;
+  hideTopCog: boolean;
 }) {
   return (
     <div style={{ display:"flex", flexDirection:"column", height:"100%", background:BG, color:"#fff", fontFamily:"var(--font-inter), Inter, system-ui, sans-serif" }}>
-      <TopHeader onAccount={excludeSettings ? undefined : () => onTab("settings")} />
+      <TopHeader onAccount={hideTopCog ? undefined : () => onTab("settings")} />
       <div style={{ flex:1, minHeight:0, overflowY:"auto", overflowX:"hidden", padding:"12px 14px 14px" }}>
         {tab === "dashboard" && <DashboardScreen />}
         {tab === "entries"   && <EntriesScreen />}

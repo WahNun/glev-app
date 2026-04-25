@@ -295,7 +295,7 @@ export default function Home() {
 
           {/* RIGHT: iPhone with live, clickable app mockup */}
           <div className="glev-phone-stage">
-            <AppMockupPhone excludeTabs={["settings"]} />
+            <AppMockupPhone hideTopCog />
           </div>
         </div>
 
