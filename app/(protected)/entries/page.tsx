@@ -7,7 +7,6 @@ import { fetchRecentExerciseLogs, deleteExerciseLog, type ExerciseLog } from "@/
 import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, getEvalExplain } from "@/lib/mealTypes";
 import { lifecycleFor, STATE_LABELS, type OutcomeState } from "@/lib/engine/lifecycle";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
-import MealEntryLightExpand from "@/components/MealEntryLightExpand";
 import ManualEntryModal from "@/components/ManualEntryModal";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
@@ -34,7 +33,6 @@ export default function EntriesPage() {
   const [filter, setFilter]   = useState<FilterKey>("All");
   const [search, setSearch]   = useState("");
   const [expanded, setExpanded] = useState<string|null>(null);
-  const [fullExpanded, setFullExpanded] = useState<string|null>(null);
   const [deleting, setDeleting] = useState<string|null>(null);
   const [manualOpen, setManualOpen] = useState(false);
 
@@ -51,10 +49,11 @@ export default function EntriesPage() {
     sessionStorage.setItem("glev:entries-filter", filter);
   }, [filter]);
 
-  // Wrap expand setter so changing rows always resets the heavy "full" view.
+  // Meal rows expand directly into the full detail body (no intermediate
+  // "light" summary). Bolus / basal / exercise rows have their own
+  // collapsed→expanded body rendered by their respective row components.
   function expandRow(id: string | null) {
     setExpanded(id);
-    if (id !== fullExpanded) setFullExpanded(null);
   }
 
   useEffect(() => {
@@ -94,7 +93,6 @@ export default function EntriesPage() {
     if (!id || meals.length === 0) return;
     if (meals.some(m => m.id === id)) {
       setExpanded(id);
-      setFullExpanded(id);
       requestAnimationFrame(() => {
         document.getElementById(`entry-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
@@ -309,7 +307,6 @@ export default function EntriesPage() {
             const catLabel = m.meal_type ? (TYPE_LABELS[m.meal_type] || m.meal_type.replace("_"," ")) : null;
             const catExplain = m.meal_type ? (TYPE_EXPLAIN[m.meal_type] || "") : "";
 
-            const isFull = fullExpanded === m.id;
             return (
               <div key={m.id} id={`entry-${m.id}`} className="entry-row" style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, overflow:"hidden" }}>
                 {/* Header — collapsed shows summary; expanded shows only date + time */}
@@ -328,15 +325,8 @@ export default function EntriesPage() {
                   </div>
                 )}
 
-                {/* Light summary panel — shown whenever expanded. */}
-                {isOpen && !isFull && (
-                  <div style={{ borderTop:`1px solid rgba(255,255,255,0.04)` }}>
-                    <MealEntryLightExpand meal={m} onViewFull={() => setFullExpanded(m.id)}/>
-                  </div>
-                )}
-
-                {/* Heavy "full entry" body — only after the user clicks "View full entry →". */}
-                {isOpen && isFull && (
+                {/* Full entry body — shown directly on expand (no light intermediate). */}
+                {isOpen && (
                   <div style={{ padding:"4px 16px 16px", borderTop:`1px solid rgba(255,255,255,0.04)`, display:"flex", flexDirection:"column", gap:14 }}>
                     {/* LIFECYCLE — pending / provisional / final */}
                     <LifecycleBlock

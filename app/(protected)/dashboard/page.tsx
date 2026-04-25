@@ -7,7 +7,6 @@ import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
 import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, getEvalExplain } from "@/lib/mealTypes";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
-import MealEntryLightExpand from "@/components/MealEntryLightExpand";
 import CurrentDayGlucoseCard from "@/components/CurrentDayGlucoseCard";
 import GlucoseTrendFront from "@/components/GlucoseTrendChart";
 import SortableCardGrid, { type SortableItem } from "@/components/SortableCardGrid";
@@ -275,7 +274,6 @@ export default function DashboardPage() {
   const [insulin, setInsulin] = useState<InsulinLog[]>([]);
   const [exercise, setExercise] = useState<ExerciseLog[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -355,7 +353,7 @@ export default function DashboardPage() {
         </div>
       ),
     },
-    { id: "recent-entries", node: <RecentEntries rows={recentRows} expanded={expanded} setExpanded={setExpanded} onViewAll={() => router.push("/entries")} onViewEntry={(id) => router.push(`/entries#${id}`)}/> },
+    { id: "recent-entries", node: <RecentEntries rows={recentRows} onViewAll={() => router.push("/entries")} onViewEntry={(id) => router.push(`/entries#${id}`)}/> },
   ];
 
   return (
@@ -407,21 +405,16 @@ function DashboardSortable({ items }: { items: SortableItem[] }) {
 
 /**
  * Recent Entries renders a unified feed across meal / bolus / basal /
- * exercise rows. Meal rows expand inline (with the light-expand card);
- * non-meal rows aren't expandable here — clicking them jumps to the
- * matching anchor in the full Entry Log so the user can see the same
- * details and post-fetch glucose values.
+ * exercise rows. Clicking ANY row jumps to /entries#id where the full
+ * detail view is opened automatically (the dashboard panel intentionally
+ * stays compact — no inline expansion here).
  */
 function RecentEntries({
   rows,
-  expanded,
-  setExpanded,
   onViewAll,
   onViewEntry,
 }: {
   rows: RecentRow[];
-  expanded: string | null;
-  setExpanded: (id: string | null) => void;
   onViewAll: () => void;
   onViewEntry: (id: string) => void;
 }) {
@@ -438,21 +431,9 @@ function RecentEntries({
             {rows.map(r => {
               if (r.kind === "meal") {
                 const m = r.meal!;
-                const isOpen = expanded === m.id;
-                const time = new Date(m.meal_time ?? m.created_at).toLocaleString("en", { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" });
                 return (
                   <div key={r.id} style={{ borderBottom:`1px solid ${BORDER}` }}>
-                    {isOpen ? (
-                      <div onClick={() => setExpanded(null)} style={{ padding:"14px 24px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between", gap:16 }}>
-                        <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)", letterSpacing:"0.02em", fontFamily:"var(--font-mono)" }}>{time}</div>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2.5" strokeLinecap="round" style={{ transform:"rotate(90deg)", flexShrink:0 }}>
-                          <polyline points="9 6 15 12 9 18"/>
-                        </svg>
-                      </div>
-                    ) : (
-                      <MealEntryCardCollapsed meal={m} onClick={() => setExpanded(m.id)}/>
-                    )}
-                    {isOpen && <MealEntryLightExpand meal={m} onViewFull={() => onViewEntry(m.id)}/>}
+                    <MealEntryCardCollapsed meal={m} onClick={() => onViewEntry(m.id)}/>
                   </div>
                 );
               }
