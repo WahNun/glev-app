@@ -594,44 +594,93 @@ function DailyMacrosCard({ meals }: { meals: Meal[] }) {
     return { count: todays.length, carbs, protein, fat, fiber, calories };
   }, [meals]);
 
-  const tiles: Array<{ label: string; value: string; color: string }> = [
-    { label: "Carbs",    value: `${Math.round(today.carbs)}g`,   color: ORANGE },
-    { label: "Protein",  value: `${Math.round(today.protein)}g`, color: "#3B82F6" },
-    { label: "Fat",      value: `${Math.round(today.fat)}g`,     color: "#A855F7" },
-    { label: "Fiber",    value: `${Math.round(today.fiber)}g`,   color: GREEN },
-    { label: "Calories", value: `${Math.round(today.calories)} kcal`, color: ACCENT },
+  // Collapsed view: 4 circular progress rings in a single row.
+  // Color palette spec'd by product (Tailwind 500-shade reference):
+  //   CARBS=#f97316, PROTEIN=#8b5cf6, FAT=#f59e0b, FIBER=#10b981.
+  // Targets are sensible Type-1 daily defaults; will become user-configurable
+  // when the prefs UI for macro goals lands. `calories` is intentionally not
+  // shown here — it surfaces in the expanded view.
+  const rings: Array<{ label: string; value: number; target: number; color: string; unit: string }> = [
+    { label: "CARBS",   value: Math.round(today.carbs),   target: 250, color: "#f97316", unit: "g" },
+    { label: "PROTEIN", value: Math.round(today.protein), target: 120, color: "#8b5cf6", unit: "g" },
+    { label: "FAT",     value: Math.round(today.fat),     target: 80,  color: "#f59e0b", unit: "g" },
+    { label: "FIBER",   value: Math.round(today.fiber),   target: 30,  color: "#10b981", unit: "g" },
   ];
 
   return (
     <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, overflow:"hidden" }}>
-      <style>{`
-        .glev-macros-grid { display:grid; gap:10px; grid-template-columns: repeat(5, 1fr); }
-        @media (max-width: 720px) {
-          .glev-macros-grid { grid-template-columns: repeat(2, 1fr); }
-        }
-      `}</style>
+      {/* Header — uppercase title on the left, meal count on the right. */}
       <div style={{ padding:"18px 24px 14px", display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom:`1px solid ${BORDER}` }}>
-        <div>
-          <div style={{ fontSize:14, fontWeight:600 }}>Today&apos;s Macros</div>
-          <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginTop:2 }}>
-            {today.count === 0 ? "No meals logged yet today" : `${today.count} meal${today.count === 1 ? "" : "s"} today`}
-          </div>
+        <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:"rgba(255,255,255,0.6)" }}>
+          Today&apos;s Macros
         </div>
-        <span style={{ fontSize:10, color:"rgba(255,255,255,0.4)", letterSpacing:"0.07em", fontWeight:700, textTransform:"uppercase", fontFamily:"var(--font-mono)" }}>
-          {new Date().toLocaleDateString("en", { weekday:"short", month:"short", day:"numeric" })}
-        </span>
+        <div style={{ fontSize:11, color:"rgba(255,255,255,0.45)", fontWeight:500, fontFamily:"var(--font-mono)" }}>
+          {today.count} {today.count === 1 ? "meal" : "meals"}
+        </div>
       </div>
-      <div style={{ padding:"16px 20px" }}>
-        <div className="glev-macros-grid">
-          {tiles.map(t => (
-            <div key={t.label} style={{ background:"rgba(255,255,255,0.025)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"12px 14px" }}>
-              <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)", letterSpacing:"0.08em", fontWeight:600, marginBottom:6, textTransform:"uppercase" }}>{t.label}</div>
-              <div style={{ fontSize:18, fontWeight:800, color: today.count === 0 ? "rgba(255,255,255,0.25)" : t.color, letterSpacing:"-0.02em", fontFamily:"var(--font-mono)" }}>
-                {today.count === 0 ? "—" : t.value}
-              </div>
-            </div>
-          ))}
-        </div>
+      {/* 4 rings always in a single row; each cell caps the ring at ~96px so it
+          doesn't blow up on wide cards but still scales down cleanly on narrow
+          phones via `width:100%` on the SVG (viewBox handles the rest). */}
+      <div style={{ padding:"22px 16px 24px", display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:8 }}>
+        {rings.map(r => (
+          <div key={r.label} style={{ display:"flex", justifyContent:"center" }}>
+            <MacroRing {...r} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Single circular progress ring used by `DailyMacrosCard`. Big colored arc
+// over a faint track, bold mono number in the centre, CAPS label below, and
+// a small "/ {target}{unit}" hint underneath. The SVG renders at 100% of its
+// (capped) container width so the rings stay legible across viewports.
+function MacroRing({
+  label,
+  value,
+  target,
+  color,
+  unit,
+}: {
+  label: string;
+  value: number;
+  target: number;
+  color: string;
+  unit: string;
+}) {
+  const r = 32;                                     // SVG-unit radius
+  const circ = 2 * Math.PI * r;                     // ring circumference
+  const pct = target > 0 ? Math.min(1, value / target) : 0;
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:6, width:"100%", maxWidth:96 }}>
+      <svg width="100%" height="auto" viewBox="0 0 80 80" style={{ display:"block" }}>
+        {/* Faint background track */}
+        <circle cx="40" cy="40" r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="8" />
+        {/* Progress arc — rotate -90deg so 0% sits at 12 o'clock and the arc
+            grows clockwise; rounded cap so the leading edge looks polished. */}
+        <circle
+          cx="40" cy="40" r={r}
+          fill="none" stroke={color} strokeWidth="8" strokeLinecap="round"
+          strokeDasharray={`${(circ * pct).toFixed(2)} ${circ.toFixed(2)}`}
+          transform="rotate(-90 40 40)"
+        />
+        {/* Centre value — bold mono, white regardless of macro color. */}
+        <text
+          x="40" y="46"
+          textAnchor="middle"
+          fontSize="20" fontWeight="800" fill="#fff"
+          fontFamily="var(--font-mono)"
+        >
+          {value}
+        </text>
+      </svg>
+      <div style={{ fontSize:10, color:"rgba(255,255,255,0.55)", textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700 }}>
+        {label}
+      </div>
+      <div style={{ fontSize:9, color:"rgba(255,255,255,0.32)", fontFamily:"var(--font-mono)" }}>
+        / {target}{unit}
       </div>
     </div>
   );
