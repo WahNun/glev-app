@@ -658,27 +658,76 @@ function DailyMacrosCard({ meals }: { meals: Meal[] }) {
           </div>
         ))}
       </div>
-      {/* Expanded section — minimal default: surfaces calories (the macro that
-          was dropped from the collapsed view). Real expanded-view spec still
-          pending from product; replace this block when it lands. */}
-      {expanded && (
-        <div
-          id="glev-macros-expanded"
-          style={{ padding:"16px 24px 20px", borderTop:`1px solid ${BORDER}`, display:"flex", justifyContent:"space-between", alignItems:"baseline" }}
-        >
-          <div style={{ fontSize:10, color:"rgba(255,255,255,0.45)", letterSpacing:"0.1em", fontWeight:700, textTransform:"uppercase" }}>
-            Calories
+      {/* Expanded section — three blocks per product spec:
+            1. Calories total (prominent kcal)
+            2. % of daily target per macro (mini progress bars)
+            3. Tip box with contextual copy
+          The tip copy is generated from the current day's data; swap to
+          product-supplied strings when the editorial spec lands. */}
+      {expanded && (() => {
+        const pcts = rings.map(r => ({
+          label: r.label,
+          color: r.color,
+          pct: r.target > 0 ? r.value / r.target : 0,
+        }));
+        let tip: string;
+        if (today.count === 0) {
+          tip = "No meals logged yet today — add your first meal to start tracking.";
+        } else {
+          const lowest = pcts.reduce((a, b) => (b.pct < a.pct ? b : a));
+          const allOnTrack = pcts.every(p => p.pct >= 0.8);
+          tip = allOnTrack
+            ? "All macros tracking close to target today — nice work."
+            : `${lowest.label} is at ${Math.round(lowest.pct * 100)}% of target — consider adding more in your next meal.`;
+        }
+        return (
+          <div
+            id="glev-macros-expanded"
+            style={{ borderTop:`1px solid ${BORDER}`, padding:"18px 24px 22px", display:"flex", flexDirection:"column", gap:20 }}
+          >
+            {/* 1. Calories — prominent kcal total. */}
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
+              <div style={{ fontSize:10, color:"rgba(255,255,255,0.5)", letterSpacing:"0.1em", fontWeight:700, textTransform:"uppercase" }}>
+                Calories
+              </div>
+              <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
+                <span style={{ fontSize:28, fontWeight:800, color:ACCENT, letterSpacing:"-0.02em", fontFamily:"var(--font-mono)" }}>
+                  {Math.round(today.calories).toLocaleString()}
+                </span>
+                <span style={{ fontSize:12, color:"rgba(255,255,255,0.4)", fontWeight:500 }}>kcal</span>
+              </div>
+            </div>
+
+            {/* 2. % of daily target — one bar per macro, color-matched to its ring. */}
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+              <div style={{ fontSize:10, color:"rgba(255,255,255,0.45)", letterSpacing:"0.1em", fontWeight:700, textTransform:"uppercase", marginBottom:2 }}>
+                % of Daily Target
+              </div>
+              {pcts.map(p => (
+                <div key={p.label} style={{ display:"flex", alignItems:"center", gap:10 }}>
+                  <div style={{ flex:"0 0 60px", fontSize:10, color:"rgba(255,255,255,0.6)", letterSpacing:"0.06em", fontWeight:700 }}>
+                    {p.label}
+                  </div>
+                  <div style={{ flex:1, height:5, background:"rgba(255,255,255,0.06)", borderRadius:99, overflow:"hidden" }}>
+                    <div style={{ height:"100%", width:`${(Math.min(1, p.pct) * 100).toFixed(1)}%`, background:p.color, borderRadius:99 }} />
+                  </div>
+                  <div style={{ flex:"0 0 40px", textAlign:"right", fontSize:10, color:"rgba(255,255,255,0.55)", fontFamily:"var(--font-mono)", fontWeight:600 }}>
+                    {Math.round(p.pct * 100)}%
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* 3. Tip — accent label + dynamic body copy. */}
+            <div style={{ background:"rgba(255,255,255,0.025)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 14px" }}>
+              <div style={{ fontSize:11, lineHeight:1.55, color:"rgba(255,255,255,0.7)" }}>
+                <span style={{ color:ACCENT, fontWeight:800, letterSpacing:"0.08em", marginRight:8, fontSize:10 }}>TIP</span>
+                {tip}
+              </div>
+            </div>
           </div>
-          <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
-            <span style={{ fontSize:22, fontWeight:800, color:ACCENT, letterSpacing:"-0.02em", fontFamily:"var(--font-mono)" }}>
-              {Math.round(today.calories)}
-            </span>
-            <span style={{ fontSize:11, color:"rgba(255,255,255,0.4)", fontWeight:500 }}>
-              kcal
-            </span>
-          </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
