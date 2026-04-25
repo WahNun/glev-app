@@ -623,6 +623,50 @@ function EngineScreen({ onLogged }: { onLogged: () => void }) {
         </div>
       </div>
 
+      {/* AI Food Parser chip — collapsed state of EngineChatPanel on mobile.
+          Renders between mic card and form card, exactly like the real
+          mobile engine page (`app/(protected)/engine/page.tsx` line 504+
+          → `components/EngineChatPanel.tsx` mobileChip). Scaled down for
+          the 290px phone width. */}
+      <div style={{
+        display:"flex", alignItems:"center", justifyContent:"space-between",
+        gap:8, padding:"8px 12px",
+        background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 99,
+      }}>
+        <div style={{ display:"flex", alignItems:"baseline", gap:6, minWidth:0 }}>
+          <span style={{
+            fontSize:8.5, fontWeight:700, letterSpacing:"0.08em",
+            color:"rgba(255,255,255,0.5)",
+          }}>
+            AI FOOD PARSER
+          </span>
+          <span style={{
+            fontSize:7.5, fontWeight:600, color:ACCENT, letterSpacing:"0.02em",
+          }}>
+            GPT-powered
+          </span>
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
+          <span style={{
+            display:"inline-flex", alignItems:"center", gap:4,
+            fontSize:7.5, fontWeight:700, letterSpacing:"0.06em", color:GREEN,
+          }}>
+            <span style={{
+              width:5, height:5, borderRadius:"50%",
+              background:GREEN, boxShadow:`0 0 4px ${GREEN}`,
+            }}/>
+            READY
+          </span>
+          <svg
+            width="10" height="10" viewBox="0 0 24 24" fill="none"
+            stroke="rgba(255,255,255,0.45)" strokeWidth="2.2"
+            strokeLinecap="round" strokeLinejoin="round"
+          >
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </div>
+      </div>
+
       {/* Single-card form — Glucose+CGM, Meal Time, Macros 2x2,
           Description, inline Classification (1:1 mobile real layout) */}
       <div style={formCard}>
