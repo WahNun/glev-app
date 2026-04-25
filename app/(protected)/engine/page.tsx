@@ -597,8 +597,11 @@ export default function EnginePage() {
             {/* Meal Classification — always visible, "Auto from macros" until
                 the macros are filled, then shows the actual class. */}
             {(() => {
-              const cNum = parseFloat(carbs), pNum = parseFloat(protein), fNum = parseFloat(fat);
-              const filled = !isNaN(cNum) && cNum > 0 && !isNaN(pNum) && !isNaN(fNum);
+              const isFilled = (s: string) => s != null && s !== "" && !isNaN(parseFloat(s));
+              const filled = [carbs, protein, fat, fiber].some(isFilled);
+              const cNum = parseFloat(carbs) || 0;
+              const pNum = parseFloat(protein) || 0;
+              const fNum = parseFloat(fat) || 0;
               const cls = filled ? classifyMeal(cNum, pNum, fNum) : null;
               const color = cls ? (TYPE_COLORS[cls as string] || ACCENT) : "rgba(255,255,255,0.35)";
               const label = cls ? TYPE_LABELS[cls] : "Auto from macros";
@@ -913,7 +916,7 @@ export default function EnginePage() {
       </div>{/* /left column */}
 
       {!isMobile && (
-        <div style={{ minWidth:0, display:"flex", flexDirection:"column" }}>
+        <div style={{ minWidth:0, display:"flex", flexDirection:"column", height:"100%" }}>
           <EngineChatPanel
             macros={{
               carbs:   parseFloat(carbs)   || 0,
