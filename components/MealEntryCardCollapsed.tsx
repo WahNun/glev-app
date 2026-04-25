@@ -60,7 +60,7 @@ export default function MealEntryCardCollapsed({
       {/* Col 1: Date + Time */}
       <div style={{ minWidth: 0 }}>
         <div className="glev-mec-cell-label">When</div>
-        <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.85)", letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.85)", letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "var(--font-mono)" }}>
           {dateStr}
           <span style={{ color: "rgba(255,255,255,0.35)", fontWeight: 400, marginLeft: 6 }}>{timeStr}</span>
         </div>
@@ -84,7 +84,7 @@ export default function MealEntryCardCollapsed({
       {/* Col 3: Carbs */}
       <div style={{ minWidth: 0 }}>
         <div className="glev-mec-cell-label">Carbs</div>
-        <div style={{ fontSize: 14, fontWeight: 700, color: meal.carbs_grams ? ORANGE : "rgba(255,255,255,0.3)", letterSpacing: "-0.01em" }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: meal.carbs_grams ? ORANGE : "rgba(255,255,255,0.3)", letterSpacing: "-0.01em", fontFamily: "var(--font-mono)" }}>
           {meal.carbs_grams != null ? meal.carbs_grams : "—"}
           <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontWeight: 500, marginLeft: 2 }}>g</span>
         </div>
@@ -93,7 +93,7 @@ export default function MealEntryCardCollapsed({
       {/* Col 4: Insulin */}
       <div style={{ minWidth: 0 }}>
         <div className="glev-mec-cell-label">Insulin</div>
-        <div style={{ fontSize: 14, fontWeight: 700, color: meal.insulin_units ? ACCENT : "rgba(255,255,255,0.3)", letterSpacing: "-0.01em" }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: meal.insulin_units ? ACCENT : "rgba(255,255,255,0.3)", letterSpacing: "-0.01em", fontFamily: "var(--font-mono)" }}>
           {meal.insulin_units != null ? meal.insulin_units : "—"}
           <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontWeight: 500, marginLeft: 2 }}>u</span>
         </div>

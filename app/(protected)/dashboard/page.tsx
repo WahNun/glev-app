@@ -91,8 +91,8 @@ function FlipCard({ card }: { card: CardData }) {
           </div>
           <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", gap:8 }}>
             <div style={{ display:"flex", alignItems:"flex-end", gap:4 }}>
-              <span style={{ fontSize:32, fontWeight:800, color:card.color, letterSpacing:"-0.03em", lineHeight:1 }}>{card.value}</span>
-              <span style={{ fontSize:13, color:"rgba(255,255,255,0.3)", paddingBottom:3 }}>{card.unit}</span>
+              <span style={{ fontSize:32, fontWeight:800, color:card.color, letterSpacing:"-0.03em", lineHeight:1, fontFamily:"var(--font-mono)" }}>{card.value}</span>
+              <span style={{ fontSize:13, color:"rgba(255,255,255,0.3)", paddingBottom:3, fontFamily:"var(--font-mono)" }}>{card.unit}</span>
             </div>
             <span style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>{card.sub}</span>
           </div>
@@ -201,7 +201,7 @@ function TrendChart({ meals }: { meals: Meal[] }) {
             ].map(s => (
               <div key={s.l} style={{ background:"rgba(255,255,255,0.025)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
                 <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)", letterSpacing:"0.07em", fontWeight:600, marginBottom:4, textTransform:"uppercase" }}>{s.l}</div>
-                <div style={{ fontSize:14, fontWeight:700, color:s.c || "rgba(255,255,255,0.9)", letterSpacing:"-0.01em" }}>{s.v}</div>
+                <div style={{ fontSize:14, fontWeight:700, color:s.c || "rgba(255,255,255,0.9)", letterSpacing:"-0.01em", fontFamily:"var(--font-mono)" }}>{s.v}</div>
               </div>
             ))}
           </div>
@@ -213,7 +213,7 @@ function TrendChart({ meals }: { meals: Meal[] }) {
                 const c = v == null ? "rgba(255,255,255,0.1)" : v > 140 ? ORANGE : v < 80 ? PINK : GREEN;
                 return (
                   <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4, height:"100%", justifyContent:"flex-end" }}>
-                    <div style={{ fontSize:10, fontWeight:700, color: v == null ? "rgba(255,255,255,0.25)" : c }}>{v ?? "—"}</div>
+                    <div style={{ fontSize:10, fontWeight:700, color: v == null ? "rgba(255,255,255,0.25)" : c, fontFamily:"var(--font-mono)" }}>{v ?? "—"}</div>
                     <div style={{ width:"100%", maxWidth:32, height:`${h}%`, background:c, opacity: v == null ? 0.4 : 0.85, borderRadius:6, transition:"height 0.4s ease" }}/>
                     <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>{weekdayLabels[i]}</div>
                   </div>
@@ -253,7 +253,7 @@ function OutcomeChart({ meals }: { meals: Meal[] }) {
             <div key={g.label}>
               <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
                 <span style={{ fontSize:12, color:"rgba(255,255,255,0.5)" }}>{g.label}</span>
-                <span style={{ fontSize:12, fontWeight:600, color:g.color }}>{g.count} <span style={{ color:"rgba(255,255,255,0.3)", fontWeight:400 }}>({pct}%)</span></span>
+                <span style={{ fontSize:12, fontWeight:600, color:g.color, fontFamily:"var(--font-mono)" }}>{g.count} <span style={{ color:"rgba(255,255,255,0.3)", fontWeight:400 }}>({pct}%)</span></span>
               </div>
               <div style={{ height:6, borderRadius:99, background:"rgba(255,255,255,0.06)", overflow:"hidden" }}>
                 <div style={{ height:"100%", width:`${pct}%`, background:g.color, borderRadius:99, transition:"width 0.8s ease" }}/>
@@ -402,7 +402,7 @@ function RecentEntries({
                 <div key={m.id} style={{ borderBottom:`1px solid ${BORDER}` }}>
                   {isOpen ? (
                     <div onClick={() => setExpanded(null)} style={{ padding:"14px 24px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between", gap:16 }}>
-                      <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)", letterSpacing:"0.02em" }}>{time}</div>
+                      <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)", letterSpacing:"0.02em", fontFamily:"var(--font-mono)" }}>{time}</div>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2.5" strokeLinecap="round" style={{ transform:"rotate(90deg)", flexShrink:0 }}>
                         <polyline points="9 6 15 12 9 18"/>
                       </svg>
@@ -422,7 +422,7 @@ function RecentEntries({
                     const Cell = ({ l, v, c }: { l: string; v: string; c?: string }) => (
                       <div style={{ display:"inline-flex", flexDirection:"column", minWidth:80 }}>
                         <span style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.06em", textTransform:"uppercase" }}>{l}</span>
-                        <span style={{ fontSize:13, fontWeight:600, color:c || "rgba(255,255,255,0.85)" }}>{v}</span>
+                        <span style={{ fontSize:13, fontWeight:600, color:c || "rgba(255,255,255,0.85)", fontFamily:"var(--font-mono)" }}>{v}</span>
                       </div>
                     );
                     return (

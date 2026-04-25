@@ -220,6 +220,7 @@ export function CrosshairTooltip({
             color: i === 0 ? "rgba(255,255,255,0.5)" : active.color,
             letterSpacing: i === 0 ? "0.04em" : "-0.01em",
             lineHeight: 1.15,
+            fontFamily: "var(--font-mono)",
           }}
         >
           {line}
