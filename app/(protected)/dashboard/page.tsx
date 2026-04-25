@@ -520,11 +520,11 @@ function UnifiedRecentRow({ row, onClick }: { row: RecentRow; onClick: () => voi
 
   if (row.kind === "meal") {
     const m = row.meal!;
-    title = TYPE_LABELS[m.type] || "Meal";
+    title = (m.meal_type && TYPE_LABELS[m.meal_type]) || "Meal";
     const macroBits: string[] = [];
-    if (m.carbs   != null) macroBits.push(`${m.carbs}g C`);
-    if (m.protein != null) macroBits.push(`${m.protein}g P`);
-    if (m.fat     != null) macroBits.push(`${m.fat}g F`);
+    if (m.carbs_grams   != null) macroBits.push(`${m.carbs_grams}g C`);
+    if (m.protein_grams != null) macroBits.push(`${m.protein_grams}g P`);
+    if (m.fat_grams     != null) macroBits.push(`${m.fat_grams}g F`);
     subtitle = macroBits.length ? `${timeStr} · ${macroBits.join(" · ")}` : timeStr;
     const evColor = getEvalColor(m.evaluation);
     rightSlot = (

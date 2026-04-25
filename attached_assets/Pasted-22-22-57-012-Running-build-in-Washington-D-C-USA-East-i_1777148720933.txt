@@ -1,0 +1,40 @@
+22:22:57.012 Running build in Washington, D.C., USA (East) – iad1
+22:22:57.013 Build machine configuration: 2 cores, 8 GB
+22:22:57.144 Cloning github.com/WahNun/glev-app (Branch: main, Commit: 8684722)
+22:22:58.196 Cloning completed: 1.051s
+22:22:58.531 Restored build cache from previous deployment (FUBpVGJQzZHJ7ZNFHWZUgiTKtZgu)
+22:22:58.749 Running "vercel build"
+22:23:00.017 Vercel CLI 51.6.1
+22:23:00.312 Installing dependencies...
+22:23:01.769 
+22:23:01.770 added 1 package in 1s
+22:23:01.770 
+22:23:01.770 36 packages are looking for funding
+22:23:01.771   run `npm fund` for details
+22:23:01.800 Detected Next.js version: 16.2.4
+22:23:01.803 Running "npm run build"
+22:23:01.905 
+22:23:01.906 > glev-app@0.4.0 build
+22:23:01.906 > next build
+22:23:01.906 
+22:23:02.625   Applying modifyConfig from Vercel
+22:23:02.640 ▲ Next.js 16.2.4 (Turbopack)
+22:23:02.641 
+22:23:02.643 ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+22:23:02.683   Creating an optimized production build ...
+22:23:30.585 ✓ Compiled successfully in 27.5s
+22:23:30.592   Running TypeScript ...
+22:23:52.514 Failed to type check.
+22:23:52.514 
+22:23:52.516 ./app/(protected)/dashboard/page.tsx:523:27
+22:23:52.516 Type error: Property 'type' does not exist on type 'Meal'.
+22:23:52.516 
+22:23:52.516   [90m521 |[0m   [36mif[0m (row.kind === [32m"meal"[0m) {
+22:23:52.516   [90m522 |[0m     [36mconst[0m m = row.meal!;
+22:23:52.516 [31m[1m>[0m [90m523 |[0m     title = [33mTYPE_LABELS[0m[m.[36mtype[0m] || [32m"Meal"[0m;
+22:23:52.516   [90m    |[0m                           [31m[1m^[0m
+22:23:52.516   [90m524 |[0m     [36mconst[0m macroBits: string[] = [];
+22:23:52.517   [90m525 |[0m     [36mif[0m (m.carbs   != [36mnull[0m) macroBits.push([32m`[0m${m.carbs[32m}g C`[0m);
+22:23:52.517   [90m526 |[0m     [36mif[0m (m.protein != [36mnull[0m) macroBits.push([32m`[0m${m.protein[32m}g P`[0m);
+22:23:52.659 Next.js build worker exited with code: 1 and signal: null
+22:23:52.719 Error: Command "npm run build" exited with 1
