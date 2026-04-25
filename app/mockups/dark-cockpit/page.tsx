@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { Suspense, useState, useEffect, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import React from "react";
 import GlevLogo from "@/components/GlevLogo";
 
@@ -2505,30 +2506,56 @@ function LoginGate({onEnter,contained}:{onEnter:(email:string,name?:string)=>voi
 
 function DarkCockpit() {
   // MOCKUP: skip auth gate so the design renders standalone for comparison.
+  // Embed mode (?embed=1) is used by the marketing landing page to inline
+  // this mockup into feature cards via <iframe>. In embed mode the View
+  // Toggle bar and the desktop sidebar nav are hidden so visitors see
+  // only the focused page they were sent to (?page=...). Within-page
+  // interactions (card flips, sub-toggles, expand/collapse) keep working.
+  const sp = useSearchParams();
+  const embed       = sp?.get("embed") === "1";
+  const initialView = sp?.get("view") === "mobile" ? "mobile" : "desktop";
+  const spPage      = sp?.get("page");
+  const validPages: Page[] = ["dashboard","log","entries","insights","recommend","import","profile"];
+  const initialPage: Page = validPages.includes(spPage as Page) ? (spPage as Page) : "dashboard";
+
   const [loggedIn,setLoggedIn]=useState(true);
   const [userEmail,setUserEmail]=useState("demo@glev.app");
   const [userName,setUserName]=useState("Demo");
-  const [page, setPage] = useState<Page>("dashboard");
-  const [view, setView] = useState<"desktop"|"mobile">("desktop");
+  const [page, setPage] = useState<Page>(initialPage);
+  const [view, setView] = useState<"desktop"|"mobile">(initialView);
   const [refresh, setRefresh] = useState(0);
   const [insightFocus, setInsightFocus] = useState<string|null>(null);
+
+  // Skip SSR/initial render. Several inner screens (LogPage voice
+  // detection, recommend Math.random seeds, MobileDashboard CGM gauge)
+  // sample browser APIs and produce different markup on server vs
+  // client. Since this whole page is a marketing mockup with no SEO
+  // value, render nothing on the server and let the client take over.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   function onLogged() { setRefresh(r=>r+1); setPage("dashboard"); }
   function signOut() { setLoggedIn(false); setUserEmail(""); setUserName(""); setPage("dashboard"); }
   function goInsights(stat: string) { setInsightFocus(stat); setPage("insights"); }
 
+  if (!mounted) return null;
+
   return (
     <div style={{display:"flex",flexDirection:"column",minHeight:"100vh",background:BG,color:"white",fontFamily:"'Inter',system-ui,sans-serif"}}>
-      {/* View Toggle */}
+      {/* View Toggle — hidden in embed mode (used by marketing iframes). */}
+      {!embed && (
       <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"10px 0",background:"#0C0C10",borderBottom:`1px solid ${BORDER}`,gap:0}}>
         <button onClick={()=>setView("desktop")} style={{padding:"6px 22px",borderRadius:"8px 0 0 8px",background:view==="desktop"?`${ACCENT}22`:"transparent",border:`1px solid ${view==="desktop"?ACCENT:"rgba(255,255,255,0.12)"}`,color:view==="desktop"?ACCENT:"rgba(255,255,255,0.4)",fontSize:12,fontWeight:600,cursor:"pointer",letterSpacing:"0.04em",borderRight:"none",transition:"all 0.15s"}}>▭ Desktop</button>
         <button onClick={()=>setView("mobile")} style={{padding:"6px 22px",borderRadius:"0 8px 8px 0",background:view==="mobile"?`${ACCENT}22`:"transparent",border:`1px solid ${view==="mobile"?ACCENT:"rgba(255,255,255,0.12)"}`,color:view==="mobile"?ACCENT:"rgba(255,255,255,0.4)",fontSize:12,fontWeight:600,cursor:"pointer",letterSpacing:"0.04em",transition:"all 0.15s"}}>▯ Mobile</button>
       </div>
+      )}
 
       {view==="desktop" ? (
         <div style={{display:"flex",flex:1,overflow:"hidden",position:"relative"}}>
           {!loggedIn&&<LoginGate onEnter={(e,n)=>{setUserEmail(e);setUserName(n||"");setLoggedIn(true);}}/>}
-          {/* Sidebar */}
+          {/* Sidebar — hidden in embed mode so feature-card iframes show
+              only the page content (no nav between tabs). */}
+          {!embed && (
           <div style={{width:220,background:SURFACE,borderRight:`1px solid ${BORDER}`,display:"flex",flexDirection:"column",padding:"20px 12px",gap:2,flexShrink:0}}>
             <div style={{display:"flex",alignItems:"center",gap:10,padding:"4px 10px",marginBottom:18}}>
               <LogoCMark size={32}/>
@@ -2573,6 +2600,7 @@ function DarkCockpit() {
               );})()}
             </div>
           </div>
+          )}
 
           {/* Main */}
           <div style={{flex:1,padding:"24px 28px",overflow:"auto"}}>
@@ -2608,4 +2636,12 @@ function DarkCockpit() {
   );
 }
 
-export default function DarkCockpitPage() { return <DarkCockpit />; }
+export default function DarkCockpitPage() {
+  // useSearchParams() needs a Suspense boundary in App Router so
+  // static rendering can defer query-param resolution to the client.
+  return (
+    <Suspense fallback={null}>
+      <DarkCockpit />
+    </Suspense>
+  );
+}

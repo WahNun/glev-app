@@ -45,25 +45,54 @@ const TAB_CAPTION: Record<Tab, string> = {
   settings:  "ICR, Korrekturfaktor, Target-Range — alles in deiner Hand.",
 };
 
-export default function AppMockupPhone() {
-  const [tab, setTab] = useState<Tab>("dashboard");
+type AppMockupPhoneProps = {
+  /** Lock the phone to a single tab. Hides the bottom nav and the
+   *  caption row. Within-tab interactions (card flips, sub-toggles,
+   *  expand/collapse, voice mock, macro recompute) keep working —
+   *  visitors just can't switch tabs. Used by feature cards on the
+   *  marketing landing page so each card focuses on one screen. */
+  lockTab?: Tab;
+  /** Tabs to exclude from the bottom nav AND from the top-right
+   *  account icon. Used by the hero render to hide the settings tab
+   *  from public visitors. Ignored when `lockTab` is set (locked phone
+   *  has no nav at all). */
+  excludeTabs?: Tab[];
+};
+
+export default function AppMockupPhone({ lockTab, excludeTabs = [] }: AppMockupPhoneProps = {}) {
+  const [tab, setTab] = useState<Tab>(lockTab ?? "dashboard");
+
+  // When locked we ignore tab changes — within-tab interactions still
+  // mutate their own state inside DashboardScreen / EngineScreen / etc.
+  const onTab = lockTab ? () => {} : setTab;
+
+  const excludeSettings = excludeTabs.includes("settings");
+  const visibleTabs: Tab[] = (Object.keys(TAB_LABEL) as Tab[]).filter(t => !excludeTabs.includes(t));
 
   return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:22 }}>
       <PhoneShell>
-        <ScreenInner tab={tab} onTab={setTab} />
+        <ScreenInner
+          tab={tab}
+          onTab={onTab}
+          showBottomNav={!lockTab}
+          visibleTabs={visibleTabs}
+          excludeSettings={excludeSettings}
+        />
       </PhoneShell>
 
-      {/* Caption + tab pill row — mirrors the look of the previous
-          carousel so the section composition stays familiar. */}
-      <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:12 }}>
-        <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.16em", color:ACCENT, textTransform:"uppercase" }}>
-          {TAB_LABEL[tab]} · Live demo
+      {/* Caption + tab pill row — only when nav is interactive. Locked
+          phones rely on the surrounding feature card's own copy. */}
+      {!lockTab && (
+        <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:12 }}>
+          <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.16em", color:ACCENT, textTransform:"uppercase" }}>
+            {TAB_LABEL[tab]} · Live demo
+          </div>
+          <div style={{ fontSize:13, color:"rgba(255,255,255,0.55)", textAlign:"center", maxWidth:280, lineHeight:1.5, minHeight:36 }}>
+            {TAB_CAPTION[tab]}
+          </div>
         </div>
-        <div style={{ fontSize:13, color:"rgba(255,255,255,0.55)", textAlign:"center", maxWidth:280, lineHeight:1.5, minHeight:36 }}>
-          {TAB_CAPTION[tab]}
-        </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -101,10 +130,16 @@ function PhoneShell({ children }: { children: React.ReactNode }) {
 /* ════════════════════════════════════════════════════════════════
    Screen inner — top header + scrollable content + bottom nav.
    ════════════════════════════════════════════════════════════════ */
-function ScreenInner({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
+function ScreenInner({ tab, onTab, showBottomNav, visibleTabs, excludeSettings }: {
+  tab: Tab;
+  onTab: (t: Tab) => void;
+  showBottomNav: boolean;
+  visibleTabs: Tab[];
+  excludeSettings: boolean;
+}) {
   return (
     <div style={{ display:"flex", flexDirection:"column", height:"100%", background:BG, color:"#fff", fontFamily:"var(--font-inter), Inter, system-ui, sans-serif" }}>
-      <TopHeader onAccount={() => onTab("settings")} />
+      <TopHeader onAccount={excludeSettings ? undefined : () => onTab("settings")} />
       <div style={{ flex:1, minHeight:0, overflowY:"auto", overflowX:"hidden", padding:"12px 14px 14px" }}>
         {tab === "dashboard" && <DashboardScreen />}
         {tab === "entries"   && <EntriesScreen />}
@@ -112,12 +147,12 @@ function ScreenInner({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
         {tab === "insights"  && <InsightsScreen />}
         {tab === "settings"  && <SettingsScreen />}
       </div>
-      <BottomNav tab={tab} onTab={onTab} />
+      {showBottomNav && <BottomNav tab={tab} onTab={onTab} visibleTabs={visibleTabs} />}
     </div>
   );
 }
 
-function TopHeader({ onAccount }: { onAccount: () => void }) {
+function TopHeader({ onAccount }: { onAccount?: () => void }) {
   return (
     <header style={{
       paddingTop: 46, paddingLeft: 14, paddingRight: 14, paddingBottom: 10,
@@ -130,24 +165,26 @@ function TopHeader({ onAccount }: { onAccount: () => void }) {
       </div>
       <div style={{ display:"flex", alignItems:"center", gap:6 }}>
         <div style={{ fontSize:9, padding:"3px 9px", borderRadius:99, background:`${GREEN}1F`, color:GREEN, fontWeight:600, letterSpacing:"0.04em" }}>● Live</div>
-        <button
-          onClick={onAccount}
-          aria-label="Open settings"
-          style={{
-            width:26, height:26, borderRadius:99, padding:0,
-            background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)",
-            display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer",
-          }}
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-        </button>
+        {onAccount && (
+          <button
+            onClick={onAccount}
+            aria-label="Open settings"
+            style={{
+              width:26, height:26, borderRadius:99, padding:0,
+              background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)",
+              display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer",
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+          </button>
+        )}
       </div>
     </header>
   );
 }
 
-function BottomNav({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
-  const items: { id: Tab; label: string; icon: (active: boolean) => React.ReactNode }[] = [
+function BottomNav({ tab, onTab, visibleTabs }: { tab: Tab; onTab: (t: Tab) => void; visibleTabs: Tab[] }) {
+  const allItems: { id: Tab; label: string; icon: (active: boolean) => React.ReactNode }[] = [
     { id:"dashboard", label:"DASHBOARD",
       icon: a => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={a?ACCENT:"rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> },
     { id:"entries",   label:"ENTRY LOG",
@@ -159,6 +196,11 @@ function BottomNav({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
     { id:"settings",  label:"SETTINGS",
       icon: a => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={a?ACCENT:"rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> },
   ];
+  // Filter the visible nav items per `excludeTabs`. Width is computed
+  // from the resulting count so 4-tab navs don't leave a gap where the
+  // settings button used to sit.
+  const items = allItems.filter(it => visibleTabs.includes(it.id));
+  const itemWidth = `${100 / Math.max(items.length, 1)}%`;
   return (
     <nav style={{
       background: SURFACE, borderTop:`1px solid ${BORDER}`,
@@ -171,7 +213,7 @@ function BottomNav({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
         return (
           <button key={id} onClick={() => onTab(id)} style={{
             display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"flex-end",
-            gap:3, padding:0, height:42, width:"20%",
+            gap:3, padding:0, height:42, width:itemWidth,
             border:"none", background:"transparent", cursor:"pointer",
             color: active ? ACCENT : "rgba(255,255,255,0.3)",
             fontSize:8, fontWeight:600, letterSpacing:"0.04em",
