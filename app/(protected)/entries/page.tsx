@@ -109,6 +109,30 @@ function dateRangeBounds(
   return { startMs, endMs };
 }
 
+// Human-readable label for the active date range, used by the empty-state hint
+// when the date filter is the likely cause of an empty result.
+function dateRangeSummary(
+  range: DateRangeKey,
+  from: string | null,
+  to: string | null,
+): string {
+  if (range === "today") return "Today";
+  if (range === "7d")    return "Last 7 days";
+  if (range === "30d")   return "Last 30 days";
+  if (range === "custom") {
+    const fmt = (s: string) => {
+      const d = new Date(`${s}T00:00:00`);
+      if (Number.isNaN(d.getTime())) return s;
+      return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    };
+    if (from && to)  return `${fmt(from)} – ${fmt(to)}`;
+    if (from)        return `from ${fmt(from)}`;
+    if (to)          return `until ${fmt(to)}`;
+    return "Custom range";
+  }
+  return "All time";
+}
+
 const FILTERS_STORAGE_KEY = "glev:entries-filters";
 const LEGACY_FILTER_KEY   = "glev:entries-filter";
 
@@ -545,7 +569,32 @@ export default function EntriesPage() {
 
       {/* CARD STACK */}
       {filtered.length === 0 ? (
-        <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"48px", textAlign:"center", color:"rgba(255,255,255,0.2)", fontSize:14 }}>No entries match this filter.</div>
+        <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"48px 24px", textAlign:"center", color:"rgba(255,255,255,0.2)", fontSize:14 }}>
+          {filters.dateRange !== "all" ? (
+            <>
+              <div style={{ color:"rgba(255,255,255,0.55)", fontSize:14 }}>
+                Showing <span style={{ color:"rgba(255,255,255,0.85)", fontWeight:600 }}>{dateRangeSummary(filters.dateRange, filters.dateFrom, filters.dateTo)}</span> · no entries match.
+              </div>
+              <button
+                onClick={() => setDateRange("all")}
+                style={{
+                  marginTop:14,
+                  padding:"7px 14px",
+                  borderRadius:99,
+                  border:`1px solid ${ACCENT}60`,
+                  background:`${ACCENT}18`,
+                  color:ACCENT,
+                  fontSize:12, fontWeight:600, cursor:"pointer",
+                  display:"inline-flex", alignItems:"center", gap:6,
+                }}
+              >
+                Switch to All time
+              </button>
+            </>
+          ) : (
+            "No entries match this filter."
+          )}
+        </div>
       ) : (
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
           {filtered.map(r => {
