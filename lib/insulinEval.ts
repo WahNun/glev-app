@@ -28,10 +28,6 @@ const LABELS: Record<BolusOutcome, string> = {
 
 export const HYPO_THRESHOLD = 70;
 export const HIGH_THRESHOLD = 180;
-/** Mirrors ABANDON_AFTER_MS for non-exercise jobs in the process route
- *  (1 h past fetch_time → marked failed). The per-reading "Skipped" hint
- *  in the Glucose tracking panel uses this same cutoff. */
-export const BOLUS_NO_DATA_AFTER_MS = 60 * 60 * 1000;
 
 /** Significant rise vs baseline that flags meal under-bolusing. */
 const SPIKE_DELTA_MGDL = 50;
@@ -148,12 +144,26 @@ export function bolusFinalMessage(log: InsulinLog): string | null {
 }
 
 /** Per-reading "Pending · expected hh:mm" / "Skipped" label inside the
- *  Glucose tracking panel. Mirrors the exercise version but with the
- *  shorter (1 h) bolus job cutoff. */
+ *  Glucose tracking panel.
+ *
+ *  Semantics mirror the backend job lifecycle:
+ *    - `expectedAt` in the future → the CGM job's `fetch_time` hasn't
+ *      elapsed yet, so the worker has not (and cannot) attempt the
+ *      fetch. Always show "Pending" with a clock prefix, never "Skipped".
+ *    - `expectedAt` in the past + value still null → the job is
+ *      past-due with no data; mirror the backend's eventual "skipped"
+ *      outcome immediately so the UI doesn't misleadingly imply more
+ *      work is in flight.
+ *
+ *  The previous implementation used a 1 h grace cutoff that wrongly
+ *  flipped "+1H" to "Skipped" two hours after the bolus, even while
+ *  the user could see the +2H slot was still pending. */
 export function bolusPendingLabel(expectedAt: Date): string {
-  if (Date.now() - expectedAt.getTime() > BOLUS_NO_DATA_AFTER_MS) {
-    return "Skipped";
+  const exp = expectedAt.getTime();
+  if (!Number.isFinite(exp)) return "—";
+  if (Date.now() < exp) {
+    const hh = expectedAt.toLocaleTimeString("en", { hour:"numeric", minute:"2-digit" });
+    return `⏱ Pending · expected ${hh}`;
   }
-  const hh = expectedAt.toLocaleTimeString("en", { hour:"numeric", minute:"2-digit" });
-  return `Pending · expected ${hh}`;
+  return "Skipped";
 }
