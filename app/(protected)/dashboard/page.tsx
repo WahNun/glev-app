@@ -342,8 +342,14 @@ export default function DashboardPage() {
     {
       id: "stats",
       node: (
-        <div className="glev-dash-grid" style={{ display:"grid", gap:14 }}>
-          {cards.map(c => <FlipCard key={c.key} card={c}/>)}
+        // Hero ControlScoreCard sits on top; the legacy good/spike/hypo
+        // FlipCards stay below as supporting detail. The "control" entry is
+        // filtered out because the new hero card replaces it.
+        <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+          <ControlScoreCard meals={meals}/>
+          <div className="glev-dash-grid" style={{ display:"grid", gap:14 }}>
+            {cards.filter(c => c.key !== "control").map(c => <FlipCard key={c.key} card={c}/>)}
+          </div>
         </div>
       ),
     },
@@ -364,7 +370,7 @@ export default function DashboardPage() {
       <style>{`
         html, body { overflow-x: hidden; }
         .glev-dash-head    { display: flex; }
-        .glev-dash-grid    { grid-template-columns: repeat(4,1fr) !important; }
+        .glev-dash-grid    { grid-template-columns: repeat(3,1fr) !important; }
         .glev-dash-charts  { grid-template-columns: 3fr 2fr !important; }
         @media (max-width: 768px) {
           .glev-dash-head   { display: none !important; }
@@ -563,6 +569,100 @@ function NonMealLightExpand({
         >
           View full entry →
         </button>
+      </div>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Control Score helpers + hero card.
+//   Score formula matches the legacy `buildCards` math (Good% × 0.7 +
+//   (100 − Spike% − Hypo%) × 0.3) but is windowable so the hero card can
+//   render the rolling 7-day score and a delta vs the previous 7 days.
+//   Badge thresholds are the user-facing 3-tier mapping spec'd by product
+//   (STRONG ≥ 80 · GOOD ≥ 60 · POOR < 60), derived from the existing
+//   "80+ Excellent / 60–79 Good / 40–59 Fair / <40 Needs attention" text.
+// -----------------------------------------------------------------------------
+function computeControlScore(meals: Meal[], sinceMs: number, untilMs: number = Infinity): { score: number; count: number } {
+  const inWindow = meals.filter(m => {
+    const t = parseDbDate(m.created_at).getTime();
+    return t >= sinceMs && t < untilMs;
+  });
+  const total = inWindow.length;
+  if (!total) return { score: 0, count: 0 };
+  const good  = inWindow.filter(m => m.evaluation === "GOOD").length;
+  const spike = inWindow.filter(m => m.evaluation === "SPIKE" || m.evaluation === "LOW"  || m.evaluation === "UNDERDOSE").length;
+  const hypo  = inWindow.filter(m => m.evaluation === "HIGH"  || m.evaluation === "OVERDOSE").length;
+  const goodRate  = (good  / total) * 100;
+  const spikeRate = (spike / total) * 100;
+  const hypoRate  = (hypo  / total) * 100;
+  return { score: Math.round(goodRate * 0.7 + (100 - spikeRate - hypoRate) * 0.3), count: total };
+}
+
+function ControlScoreCard({ meals }: { meals: Meal[] }) {
+  const { score, count, delta, badge } = useMemo(() => {
+    const now = Date.now();
+    const W = 7 * 86400000;
+    const cur  = computeControlScore(meals, now - W, now);
+    const prev = computeControlScore(meals, now - 2 * W, now - W);
+    const delta = prev.count > 0 && cur.count > 0 ? cur.score - prev.score : null;
+    const badge =
+      cur.score >= 80 ? { text: "STRONG", color: GREEN }
+      : cur.score >= 60 ? { text: "GOOD",   color: ACCENT }
+      :                   { text: "POOR",   color: PINK };
+    return { score: cur.score, count: cur.count, delta, badge };
+  }, [meals]);
+
+  const hasData = count > 0;
+  return (
+    <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"18px 24px 22px" }}>
+      {/* Header — uppercase title left, status badge right (badge hidden when
+          there's no data so we don't force-rate an empty week). */}
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+        <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:"rgba(255,255,255,0.6)" }}>
+          Control Score · 7D
+        </div>
+        {hasData && (
+          <div style={{
+            fontSize:9, fontWeight:800, color:badge.color,
+            padding:"4px 10px", borderRadius:99,
+            border:`1px solid ${badge.color}55`, background:`${badge.color}18`,
+            letterSpacing:"0.1em",
+          }}>
+            {badge.text}
+          </div>
+        )}
+      </div>
+      {/* Big score + "/ 100" + right-aligned delta vs previous week. */}
+      <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
+        <span style={{ fontSize:36, fontWeight:800, color:"#fff", letterSpacing:"-0.03em", fontFamily:"var(--font-mono)", lineHeight:1 }}>
+          {hasData ? score : "—"}
+        </span>
+        <span style={{ fontSize:13, color:"rgba(255,255,255,0.4)", fontWeight:500 }}>/ 100</span>
+        <span style={{
+          marginLeft:"auto",
+          fontSize:10, fontWeight:600, fontFamily:"var(--font-mono)",
+          color: delta == null ? "rgba(255,255,255,0.4)"
+               : delta > 0      ? GREEN
+               : delta < 0      ? PINK
+               :                  "rgba(255,255,255,0.5)",
+        }}>
+          {!hasData
+            ? "no entries · 7d"
+            : delta == null
+              ? `${count} entries · 7d`
+              : `${delta > 0 ? "+" : ""}${delta} vs last wk`}
+        </span>
+      </div>
+      {/* Gradient progress bar — accent → green, length matches the score. */}
+      <div style={{ height:6, marginTop:12, background:"rgba(255,255,255,0.06)", borderRadius:99, overflow:"hidden" }}>
+        <div style={{
+          height:"100%",
+          width:`${hasData ? Math.max(0, Math.min(100, score)) : 0}%`,
+          background:`linear-gradient(90deg, ${ACCENT}, ${GREEN})`,
+          borderRadius:99,
+          transition:"width 0.6s ease",
+        }}/>
       </div>
     </div>
   );
