@@ -1,0 +1,27 @@
+In the Entry Log (/entries) and the Dashboard "Recent Entries" section, each log row is currently a flat collapsed card. We want to make each card individually expandable in place (no full-page navigation), showing a compact but contextually rich expanded state.
+
+COLLAPSED STATE (current behaviour — keep as-is):
+- When / Type dot + label / Carbs / Insulin / Outcome badge
+
+EXPANDED STATE (new — toggle on click):
+- A smooth accordion expansion directly below the collapsed row (no modal, no separate page)
+- Show the following contextual info in the expanded panel:
+  - GLUCOSE section:
+    - BG Before (mg/dL) — the CGM reading captured at log time
+    - BG After — the post-log CGM reading(s) scheduled per log type (see logic below); show "Pending" with a small clock icon if the fetch hasn't happened yet, or "—" if no CGM is connected
+    - Delta — calculated difference (BG After minus BG Before), shown with a + or - sign and colour coded (green if negative/stable, red/orange if positive spike)
+  - KEY DETAILS section:
+    - Log type specific summary: for meals show meal description + macro summary (C/P/F); for workout show duration + type; for bolus show dose + brand if available; for basal show dose + type
+    - Outcome badge with its label (e.g. UNDER DOSE, GOOD, SPIKE)
+    - Meal classification tag if applicable
+  - Timestamp (full date + time)
+  - A subtle "View full entry →" link that navigates to the existing full expanded view on Entry Log
+
+BEHAVIOUR:
+- Only one card can be expanded at a time (expanding another collapses the previous)
+- The Dashboard "Recent Entries" rows should support the same expansion behaviour
+- On mobile, the expanded panel should stack vertically and be fully readable
+- Use a chevron icon (▾/▸) on the right of each collapsed row to indicate expand/collapse state
+- The existing full-detail view in Entry Log (the current expanded accordion that already shows Outcome State, Macros & Dosing, etc.) should remain accessible and unchanged — the new inline expansion is a lighter summary layer on top
+
+Make sure the collapsed row height and styling remain exactly the same as today.
