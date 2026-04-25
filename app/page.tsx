@@ -27,6 +27,8 @@ export default function Home() {
         fontFamily: "var(--font-inter), Inter, system-ui, sans-serif",
         position: "relative",
         overflow: "hidden",
+        // Compensate for the now-fixed top nav (~56px content + iOS notch).
+        paddingTop: "calc(56px + env(safe-area-inset-top))",
       }}
     >
       {/* Soft brand glow background */}
@@ -86,52 +88,70 @@ export default function Home() {
         }
       `}</style>
 
-      {/* TOP NAV */}
+      {/* TOP NAV — fixed-to-viewport so it never freezes mid-scroll on iOS
+          Safari (the bug was: position:relative inside an overflow:hidden
+          parent caused jittery momentum-scroll handover on iPhone 13 mini).
+          Inner div keeps the 1180px max-width centering. Backdrop-blur over
+          a translucent BG so content scrolls cleanly underneath, and
+          safe-area-inset-top respects the notch. */}
       <nav
         style={{
-          position: "relative",
-          zIndex: 2,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          maxWidth: 1180,
-          margin: "0 auto",
-          padding: "22px 24px",
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 50,
+          background: "rgba(9,9,11,0.72)",
+          backdropFilter: "saturate(180%) blur(14px)",
+          WebkitBackdropFilter: "saturate(180%) blur(14px)",
+          borderBottom: `1px solid ${BORDER}`,
+          paddingTop: "env(safe-area-inset-top)",
         }}
       >
-        <Link href="/" style={{ textDecoration: "none", color: "inherit" }} aria-label="Glev home">
-          <GlevLockup size={28} />
-        </Link>
-        <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
-          <Link
-            href="/brand"
-            className="glev-link"
-            style={{
-              fontSize: 13,
-              fontWeight: 500,
-              color: "rgba(255,255,255,0.55)",
-              textDecoration: "none",
-              letterSpacing: "-0.005em",
-            }}
-          >
-            Brand
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            maxWidth: 1180,
+            margin: "0 auto",
+            padding: "14px 24px",
+          }}
+        >
+          <Link href="/" style={{ textDecoration: "none", color: "inherit" }} aria-label="Glev home">
+            <GlevLockup size={28} />
           </Link>
-          <Link
-            href="/login"
-            style={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: "#fff",
-              textDecoration: "none",
-              padding: "9px 16px",
-              borderRadius: 999,
-              border: `1px solid ${BORDER}`,
-              background: "rgba(255,255,255,0.03)",
-            }}
-            className="glev-cta-ghost"
-          >
-            Sign in
-          </Link>
+          <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
+            <Link
+              href="/brand"
+              className="glev-link"
+              style={{
+                fontSize: 13,
+                fontWeight: 500,
+                color: "rgba(255,255,255,0.55)",
+                textDecoration: "none",
+                letterSpacing: "-0.005em",
+              }}
+            >
+              Brand
+            </Link>
+            <Link
+              href="/login"
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: "#fff",
+                textDecoration: "none",
+                padding: "9px 16px",
+                borderRadius: 999,
+                border: `1px solid ${BORDER}`,
+                background: "rgba(255,255,255,0.03)",
+              }}
+              className="glev-cta-ghost"
+            >
+              Sign in
+            </Link>
+          </div>
         </div>
       </nav>
 
