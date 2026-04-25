@@ -1,10 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { insertInsulinLog } from "@/lib/insulin";
 import { insertExerciseLog, type ExerciseType } from "@/lib/exercise";
 import { exerciseTypeLabel } from "@/lib/exerciseEval";
 import { scheduleJobsForLog } from "@/lib/cgmJobs";
+import { fetchMeals, type Meal } from "@/lib/meals";
+import { parseDbDate } from "@/lib/time";
+
+// Builds the dropdown label for a meal in the "Zu Mahlzeit verknüpfen"
+// picker — "HH:MM — <first food name or meal_type> (Xg C)". Defensive
+// against parsed_json being null / non-array / lacking a name field.
+function formatMealOption(m: Meal): string {
+  const t = parseDbDate(m.meal_time ?? m.created_at);
+  const time = t.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  const carbs = Math.round(m.carbs_grams ?? 0);
+  let label: string = "Mahlzeit";
+  if (Array.isArray(m.parsed_json) && m.parsed_json.length > 0) {
+    const first = m.parsed_json[0] as { name?: string };
+    if (typeof first?.name === "string" && first.name.trim()) label = first.name.trim();
+  } else if (m.meal_type) {
+    label = m.meal_type;
+  }
+  return `${time} — ${label} (${carbs}g C)`;
+}
 
 const ACCENT = "#4F6EF7";
 const GREEN  = "#22D3A0";
@@ -143,6 +162,27 @@ export function InsulinForm() {
   const [units, setUnits] = useState("");
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
+  // Today's meals, newest first, capped at 10 — feeds the optional
+  // "Zu Mahlzeit verknüpfen" dropdown that only renders for bolus entries.
+  // Refetched whenever the user toggles to bolus so a meal logged in
+  // another tab/session shows up without a full reload.
+  const [todayMeals, setTodayMeals] = useState<Meal[]>([]);
+  const [relatedMealId, setRelatedMealId] = useState<string>("");
+
+  useEffect(() => {
+    if (type !== "bolus") return;
+    let cancelled = false;
+    fetchMeals().then(all => {
+      if (cancelled) return;
+      const todayStr = new Date().toDateString();
+      const todays = all
+        .filter(m => parseDbDate(m.meal_time ?? m.created_at).toDateString() === todayStr)
+        .sort((a, b) => parseDbDate(b.meal_time ?? b.created_at).getTime() - parseDbDate(a.meal_time ?? a.created_at).getTime())
+        .slice(0, 10);
+      setTodayMeals(todays);
+    }).catch(() => { /* dropdown silently empty if fetch fails */ });
+    return () => { cancelled = true; };
+  }, [type]);
 
   const placeholder = type === "bolus" ? "Fiasp" : "Tresiba";
   const u = parseFloat(units);
@@ -159,6 +199,9 @@ export function InsulinForm() {
         units: u,
         cgm_glucose_at_log: cgm,
         notes: notes.trim() || null,
+        // Only persisted for bolus entries (insertInsulinLog drops it for
+        // basal even if set, but we also clear the UI on type=basal).
+        related_entry_id: type === "bolus" && relatedMealId ? relatedMealId : null,
       });
       // Schedule post-fetches: bolus → +1h/+2h, basal → +12h/+24h.
       // refTime = the log's created_at (DB-assigned); fall back to "now"
@@ -177,6 +220,7 @@ export function InsulinForm() {
       });
       setUnits("");
       setNotes("");
+      setRelatedMealId("");
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Unbekannter Fehler";
       setStatus({ kind: "error", message: `Speichern fehlgeschlagen: ${msg}` });
@@ -243,6 +287,34 @@ export function InsulinForm() {
             onChange={e => setNotes(e.target.value)}
           />
         </div>
+        {/* Bolus-only: explicit link to a meal logged today. Engine ICR
+            pairing prefers this over the ±30min time-window heuristic.
+            Hidden for basal because basal isn't dosed against a meal. */}
+        {type === "bolus" && (
+          <div>
+            <label style={labelStyle}>Zu Mahlzeit verknüpfen (optional)</label>
+            <select
+              style={{ ...inp, appearance: "none", WebkitAppearance: "none", cursor: todayMeals.length ? "pointer" : "default" }}
+              value={relatedMealId}
+              onChange={e => setRelatedMealId(e.target.value)}
+              disabled={todayMeals.length === 0}
+            >
+              <option value="">— keine Verknüpfung —</option>
+              {todayMeals.map(m => (
+                <option key={m.id} value={m.id}>{formatMealOption(m)}</option>
+              ))}
+            </select>
+            {todayMeals.length === 0 ? (
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 6 }}>
+                Heute noch keine Mahlzeiten geloggt.
+              </div>
+            ) : (
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 6 }}>
+                Heute geloggte Mahlzeiten (max. 10, neueste zuerst).
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <button

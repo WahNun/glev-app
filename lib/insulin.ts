@@ -21,6 +21,11 @@ export interface InsulinLog {
   glucose_after_2h?: number | null;
   glucose_after_12h?: number | null;
   glucose_after_24h?: number | null;
+  // Optional explicit link to the meal this bolus was dosed for. Set by
+  // the user via the "Zu Mahlzeit verknüpfen" dropdown in the Bolus log
+  // dialog. Null for basal entries and un-tagged boluses. Engine ICR
+  // pairing (lib/engine/pairing.ts) prefers this over time-window matches.
+  related_entry_id?: string | null;
 }
 
 export interface InsulinLogInput {
@@ -29,10 +34,11 @@ export interface InsulinLogInput {
   units: number;
   cgm_glucose_at_log?: number | null;
   notes?: string | null;
+  related_entry_id?: string | null;
 }
 
 const COLS =
-  "id,user_id,created_at,insulin_type,insulin_name,units,cgm_glucose_at_log,notes";
+  "id,user_id,created_at,insulin_type,insulin_name,units,cgm_glucose_at_log,notes,related_entry_id";
 
 export async function insertInsulinLog(input: InsulinLogInput): Promise<InsulinLog> {
   if (!supabase) throw new Error("Supabase is not configured");
@@ -46,6 +52,8 @@ export async function insertInsulinLog(input: InsulinLogInput): Promise<InsulinL
     units: input.units,
     cgm_glucose_at_log: input.cgm_glucose_at_log ?? null,
     notes: input.notes?.trim() || null,
+    // Only meaningful for bolus entries; basal always passes null.
+    related_entry_id: input.insulin_type === "bolus" ? (input.related_entry_id ?? null) : null,
   };
 
   const { data, error } = await supabase
