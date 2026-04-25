@@ -1257,109 +1257,276 @@ function Insights({ focusedStat }: { focusedStat?: string | null }) {
 }
 
 // ─── RECOMMEND ───────────────────────────────────────────────────
-function Recommend({ prefill }: { prefill?: Partial<ParsedVoiceEntry> }) {
-  const [glucose,setGlucose]=useState(prefill?.glucoseBefore?.toString()||"");
-  const [carbs,setCarbs]=useState(prefill?.carbsGrams?.toString()||"");
-  const [fiber,setFiber]=useState(prefill?.fiberGrams?.toString()||"");
-  const [protein,setProtein]=useState("");
-  const [fat,setFat]=useState("");
-  const [desc,setDesc]=useState(prefill?.mealDescription||"");
-  const [mealType,setMealType]=useState<MealTypeKey>("BALANCED");
-  const [overridden,setOverridden]=useState(false);
-  const [cl,setCl]=useState<ReturnType<typeof classifyMeal>|null>(null);
-  const [result,setResult]=useState<Recommendation|null>(null);
-  const [loading,setLoading]=useState(false);
-
-  useEffect(()=>{
-    const c=Number(carbs)||0,p=Number(protein)||0,f=Number(fat)||0;
-    if(c+p+f===0&&!desc){setCl(null);return;}
-    const r=classifyMeal(c,p,f,desc);
-    setCl(r);
-    if(!overridden) setMealType(r.mealType);
-  },[carbs,protein,fat,desc,overridden]);
-
-  async function calc() {
-    if(!glucose||!carbs) return;
-    setLoading(true);
-    try {
-      const r=await apiFetch<Recommendation>("/recommendations",{method:"POST",body:JSON.stringify({
-        glucoseBefore:Number(glucose),carbsGrams:Number(carbs),
-        fiberGrams:fiber?Number(fiber):undefined,mealType,
-      })});
-      setResult(r);
-    } catch { } finally { setLoading(false); }
-  }
-
-  const netCarbs = carbs&&fiber ? Math.max(0,Number(carbs)-Number(fiber)) : null;
-
+function Recommend() {
+  // Static visual mock of the real production Glev Engine page
+  // (`app/(protected)/engine/page.tsx`). No real state / no API calls — this
+  // is rendered inside the landing page iframe at scale, so it just needs to
+  // *look* right. If the real engine page UI changes substantially, mirror
+  // those changes here.
+  const [tab, setTab] = useState<"engine"|"log">("engine");
   return (
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,alignItems:"start"}}>
-      <Card style={{padding:22}}>
-        <div style={{fontSize:15,fontWeight:700,marginBottom:18}}>Bolus Calculator</div>
-        <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>CURRENT GLUCOSE (mg/dL)</div><input value={glucose} onChange={e=>setGlucose(e.target.value)} placeholder="e.g. 115" type="number" style={inp}/></div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>PLANNED CARBS (g)</div><input value={carbs} onChange={e=>setCarbs(e.target.value)} placeholder="e.g. 60" type="number" style={inp}/></div>
-            <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>FIBER (g) <span style={{opacity:0.5}}>opt.</span></div><input value={fiber} onChange={e=>setFiber(e.target.value)} placeholder="e.g. 8" type="number" style={inp}/></div>
-          </div>
-          {netCarbs!==null&&(
-            <div style={{padding:"7px 11px",background:`${GREEN}0D`,border:`1px solid ${GREEN}33`,borderRadius:8,fontSize:11,color:GREEN}}>
-              <span style={{fontWeight:700,letterSpacing:"0.04em",marginRight:2}}>◈</span> Net carbs: <b style={{fontSize:13}}>{netCarbs}g</b> ({carbs}g − {fiber}g fiber)
+    <div>
+      {/* Subtitle below the wrapper-rendered "Glev Engine" page title */}
+      <div style={{fontSize:14,color:"rgba(255,255,255,0.5)",marginTop:-12,marginBottom:20,lineHeight:1.5}}>
+        AI-powered insulin recommendations from your personal dosing history.
+      </div>
+
+      {/* Engine | Log sub-tabs (decorative — clicking Log just toggles the
+          highlight; the panel content stays the Engine view) */}
+      <div style={{
+        display:"inline-flex", gap:4, marginBottom:24,
+        background:"#0D0D12", border:`1px solid ${BORDER}`,
+        borderRadius:12, padding:4,
+      }}>
+        {([{id:"engine" as const,label:"Engine"},{id:"log" as const,label:"Log"}]).map(t => {
+          const on = tab === t.id;
+          return (
+            <button
+              key={t.id}
+              onClick={()=>setTab(t.id)}
+              style={{
+                padding:"8px 18px", borderRadius:8, border:"none",
+                background: on ? `${ACCENT}22` : "transparent",
+                color:    on ? ACCENT : "rgba(255,255,255,0.55)",
+                fontSize:13, fontWeight:700, letterSpacing:"-0.01em",
+                cursor:"pointer", transition:"all 0.15s",
+              }}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Outer 2-col layout: form column | GPT REASONING column */}
+      <div style={{
+        display:"grid",
+        gridTemplateColumns:"minmax(0,1.65fr) minmax(0,1fr)",
+        gap:24, alignItems:"stretch",
+      }}>
+        {/* ── LEFT: form column ───────────────────────────────────── */}
+        <div style={{minWidth:0, display:"flex", flexDirection:"column"}}>
+          {/* Mic card */}
+          <Card style={{padding:"22px 22px 20px", marginBottom:20}}>
+            <div style={{display:"flex", flexDirection:"column", alignItems:"center", gap:11}}>
+              <div style={{position:"relative", width:84, height:84}}>
+                <button
+                  type="button"
+                  disabled
+                  aria-label="Tap to speak"
+                  style={{
+                    position:"absolute", inset:0, borderRadius:"50%",
+                    border:"1px solid rgba(255,255,255,0.08)",
+                    cursor:"default",
+                    background:"radial-gradient(circle at 36% 32%,#1e1e2e 0%,#141420 45%,#09090B 100%)",
+                    boxShadow:"0 5px 20px rgba(0,0,0,0.6),inset 0 1px 0 rgba(255,255,255,0.06)",
+                    display:"flex", alignItems:"center", justifyContent:"center",
+                    transition:"all 0.2s",
+                  }}
+                >
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="2" strokeLinecap="round">
+                    <rect x="9" y="2" width="6" height="11" rx="3" fill="rgba(255,255,255,0.85)" stroke="none"/>
+                    <path d="M5 10a7 7 0 0 0 14 0"/>
+                    <line x1="12" y1="19" x2="12" y2="22"/>
+                    <line x1="9"  y1="22" x2="15" y2="22"/>
+                  </svg>
+                </button>
+              </div>
+              <div style={{fontSize:11, fontWeight:600, letterSpacing:"0.12em", color:"rgba(255,255,255,0.45)"}}>
+                TAP TO SPEAK
+              </div>
+              <div style={{fontSize:10, color:"rgba(255,255,255,0.22)", letterSpacing:"0.06em", textAlign:"center"}}>
+                z. B. &quot;Pasta mit Tomatensauce, 80 g Nudeln und ein Apfel&quot;
+              </div>
             </div>
-          )}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>PROTEIN (g)</div><input value={protein} onChange={e=>setProtein(e.target.value)} placeholder="e.g. 30" type="number" style={inp}/></div>
-            <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>FAT (g)</div><input value={fat} onChange={e=>setFat(e.target.value)} placeholder="e.g. 15" type="number" style={inp}/></div>
+          </Card>
+
+          {/* Current Conditions | Meal Details */}
+          <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:20, marginBottom:20}}>
+            <Card style={{padding:22}}>
+              <div style={{fontSize:13, fontWeight:600, marginBottom:16}}>Current Conditions</div>
+              <div style={{display:"flex", flexDirection:"column", gap:12}}>
+                <div>
+                  <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6}}>
+                    <label style={{fontSize:12, color:"rgba(255,255,255,0.4)"}}>Glucose Before (mg/dL)</label>
+                    <button
+                      type="button"
+                      style={{
+                        display:"flex", alignItems:"center", gap:6,
+                        padding:"4px 10px", borderRadius:99,
+                        border:`1px solid ${ACCENT}40`,
+                        background:`${ACCENT}15`, color:ACCENT,
+                        fontSize:11, fontWeight:600, cursor:"pointer",
+                      }}
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                      </svg>
+                      Pull CGM
+                    </button>
+                  </div>
+                  <input style={inp} type="number" placeholder="e.g. 115" readOnly/>
+                </div>
+                <div>
+                  <label style={{fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6}}>Meal Time</label>
+                  {/* Static text mimicking a datetime-local input — using a real
+                      datetime-local with no defaultValue would render empty,
+                      and using `new Date()` would cause hydration drift. */}
+                  <div style={{...inp, display:"flex", alignItems:"center", justifyContent:"space-between", color:"#fff", fontWeight:600}}>
+                    <span>25.04.2026, 20:14</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round">
+                      <rect x="3" y="4" width="18" height="18" rx="2"/>
+                      <line x1="16" y1="2" x2="16" y2="6"/>
+                      <line x1="8"  y1="2" x2="8"  y2="6"/>
+                      <line x1="3"  y1="10" x2="21" y2="10"/>
+                    </svg>
+                  </div>
+                  <div style={{fontSize:10, color:"rgba(255,255,255,0.25)", marginTop:4}}>
+                    When you ate. Edit to backfill a past meal.
+                  </div>
+                </div>
+                <div>
+                  <label style={{fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6}}>Planned Carbs (g)</label>
+                  <input style={inp} type="number" placeholder="e.g. 60" readOnly/>
+                </div>
+              </div>
+            </Card>
+
+            <Card style={{padding:22}}>
+              <div style={{fontSize:13, fontWeight:600, marginBottom:16}}>Meal Details (optional)</div>
+              <div style={{display:"flex", flexDirection:"column", gap:12}}>
+                <div style={{display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8}}>
+                  <div>
+                    <label style={{fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6}}>Protein (g)</label>
+                    <input style={inp} type="number" placeholder="0" readOnly/>
+                  </div>
+                  <div>
+                    <label style={{fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6}}>Fat (g)</label>
+                    <input style={inp} type="number" placeholder="0" readOnly/>
+                  </div>
+                  <div>
+                    <label style={{fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6}}>Fiber (g)</label>
+                    <input style={inp} type="number" placeholder="0" readOnly/>
+                  </div>
+                </div>
+                <div>
+                  <label style={{fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6}}>Description</label>
+                  <input style={inp} placeholder="e.g. pasta with tomato sauce" readOnly/>
+                </div>
+              </div>
+            </Card>
           </div>
-          <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:5,letterSpacing:"0.08em"}}>DESCRIPTION</div><input value={desc} onChange={e=>setDesc(e.target.value)} placeholder="e.g. granola, juice…" style={{...inp,fontSize:12,fontWeight:400}}/></div>
-          <MacroWidget cl={cl} active={mealType} overridden={overridden} onPick={t=>{setMealType(t);setOverridden(t!==(cl?.mealType??"BALANCED"));}} onReset={()=>{setOverridden(false);if(cl)setMealType(cl.mealType);}}/>
-          <button onClick={calc} disabled={loading||!glucose||!carbs} style={{padding:"13px",background:`linear-gradient(135deg,${ACCENT},#6B8BFF)`,border:"none",borderRadius:10,color:"white",fontSize:14,fontWeight:700,cursor:"pointer",opacity:glucose&&carbs&&!loading?1:0.4}}>
-            {loading?"Calculating…":"Calculate Bolus"}
+
+          {/* Get Recommendation — disabled idle state (no carbs filled) */}
+          <button
+            type="button"
+            disabled
+            style={{
+              width:"100%", padding:"16px", borderRadius:14, border:"none",
+              background:"rgba(255,255,255,0.05)", color:"rgba(255,255,255,0.2)",
+              fontSize:16, fontWeight:700, cursor:"not-allowed",
+              transition:"all 0.2s", marginBottom:18,
+            }}
+          >
+            Get Recommendation
+          </button>
+
+          {/* Insulin field */}
+          <div style={{marginBottom:12}}>
+            <label style={{fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6}}>Insulin (U)</label>
+            <input style={inp} type="number" step="0.1" min="0" placeholder="e.g. 1.5" readOnly/>
+          </div>
+
+          {/* Confirm Log — primary CTA */}
+          <button
+            type="button"
+            style={{
+              width:"100%", padding:"15px", borderRadius:14, border:"none",
+              background:`linear-gradient(135deg,${ACCENT},#6B8BFF)`,
+              color:"#fff", fontSize:15, fontWeight:700, cursor:"pointer",
+              boxShadow:`0 4px 18px ${ACCENT}30`,
+              transition:"all 0.2s", marginBottom:10,
+            }}
+          >
+            ✓ Confirm Log
+          </button>
+
+          {/* Cancel */}
+          <button
+            type="button"
+            style={{
+              width:"100%", padding:"13px", borderRadius:14,
+              border:`1px solid ${BORDER}`, background:"transparent",
+              color:"rgba(255,255,255,0.55)", fontSize:14, fontWeight:600,
+              cursor:"pointer",
+            }}
+          >
+            Cancel
           </button>
         </div>
-      </Card>
 
-      <Card style={{padding:22}}>
-        <div style={{fontSize:13,fontWeight:600,marginBottom:14}}>Recommendation</div>
-        {result ? (
-          <div>
-            <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"24px 0",background:`${ACCENT}0D`,borderRadius:12,border:`1px solid ${ACCENT}22`,marginBottom:16}}>
-              <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginBottom:4}}>SUGGESTED DOSE</div>
-              <div style={{display:"flex",alignItems:"flex-end",gap:6}}>
-                <span style={{fontSize:56,fontWeight:900,color:"white",letterSpacing:"-0.03em"}}>{result.recommendedUnits.toFixed(1)}</span>
-                <span style={{fontSize:22,color:"rgba(255,255,255,0.4)",paddingBottom:6}}>u</span>
-              </div>
-              <span style={{fontSize:11,color:"rgba(255,255,255,0.35)",fontFamily:"var(--font-mono)"}}>Range {result.minUnits.toFixed(1)} – {result.maxUnits.toFixed(1)} u</span>
-              {result.cappedForSafety&&<span style={{fontSize:10,color:ORANGE,marginTop:6}}>⚠ Capped for safety</span>}
-            </div>
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {[
-                {label:"Confidence",value:result.confidence,color:result.confidence==="HIGH"?GREEN:ORANGE},
-                ...(result.carbRatio?[{label:"Carb ratio",value:`1u per ${result.carbRatio.toFixed(0)}g`,color:ACCENT}]:[]),
-                {label:"Similar meals",value:`${result.similarMealCount}`,color:"rgba(255,255,255,0.7)"},
-                {label:"Timing",value:mealType==="HIGH_FAT"?"Split dose":"Before meal",color:"rgba(255,255,255,0.7)"},
-              ].map(row=>(
-                <div key={row.label} style={{display:"flex",justifyContent:"space-between",padding:"10px 12px",background:"rgba(255,255,255,0.04)",borderRadius:8,fontSize:12}}>
-                  <span style={{color:"rgba(255,255,255,0.4)"}}>{row.label}</span>
-                  <span style={{fontWeight:700,color:row.color}}>{row.value}</span>
+        {/* ── RIGHT: GPT REASONING ──────────────────────────────── */}
+        <div style={{minWidth:0, display:"flex", flexDirection:"column"}}>
+          <Card style={{padding:0, display:"flex", flexDirection:"column", height:"100%", minHeight:0, overflow:"hidden"}}>
+            {/* header */}
+            <div style={{
+              display:"flex", alignItems:"flex-start", justifyContent:"space-between",
+              gap:12, padding:"18px 20px",
+              borderBottom:`1px solid ${BORDER}`,
+            }}>
+              <div style={{minWidth:0, flex:1}}>
+                <div style={{fontSize:13, fontWeight:700, letterSpacing:"0.02em", color:"#fff"}}>GPT REASONING</div>
+                <div style={{fontSize:11, color:"rgba(255,255,255,0.4)", marginTop:3, lineHeight:1.45}}>
+                  See why these macros were chosen — or correct them
                 </div>
-              ))}
+              </div>
+              <div style={{
+                display:"inline-flex", alignItems:"center", gap:6,
+                padding:"4px 10px", borderRadius:99,
+                background:`${GREEN}18`, border:`1px solid ${GREEN}40`,
+                fontSize:10, fontWeight:700, letterSpacing:"0.06em",
+                color:GREEN, flexShrink:0,
+              }}>
+                <span style={{width:6, height:6, borderRadius:"50%", background:GREEN, boxShadow:`0 0 6px ${GREEN}`}}/>
+                READY
+              </div>
             </div>
-            <div style={{marginTop:12,padding:"10px 14px",background:`${ACCENT}10`,borderRadius:8,fontSize:11,color:"rgba(255,255,255,0.5)",lineHeight:1.6}}>
-              {result.reasoning}
+
+            {/* body — empty-state copy from EngineChatPanel */}
+            <div style={{
+              flex:1, minHeight:0, padding:"24px 20px",
+              display:"flex", alignItems:"center", justifyContent:"center",
+            }}>
+              <div style={{fontSize:12, color:"rgba(255,255,255,0.35)", lineHeight:1.6, textAlign:"center", maxWidth:280}}>
+                Once you log a meal (voice or text), GPT will explain how it broke down the macros here. You can ask follow-ups or push back — corrections you confirm are applied to the form.
+              </div>
             </div>
-          </div>
-        ) : (
-          <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:280,color:"rgba(255,255,255,0.2)"}}>
-            <div style={{marginBottom:14,opacity:0.35}}>
-              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M13 2L4.09 12.96A1 1 0 005 14.5h6.5L11 22l8.91-10.96A1 1 0 0019 9.5h-6.5L13 2z" fill="#4F6EF7" stroke="#4F6EF7" strokeWidth="1" strokeLinejoin="round"/>
-              </svg>
+
+            {/* input row */}
+            <div style={{padding:"12px 14px", borderTop:`1px solid ${BORDER}`, display:"flex", gap:8}}>
+              <input
+                style={{...inp, flex:1, fontSize:12, fontWeight:400}}
+                placeholder='Ask or correct… e.g. "the banana was bigger"'
+                readOnly
+              />
+              <button
+                type="button"
+                style={{
+                  padding:"8px 16px", borderRadius:8,
+                  border:"1px solid rgba(255,255,255,0.1)",
+                  background:"rgba(255,255,255,0.05)",
+                  color:"rgba(255,255,255,0.6)",
+                  fontSize:12, fontWeight:600, cursor:"pointer",
+                }}
+              >
+                Send
+              </button>
             </div>
-            <div style={{fontSize:13}}>Enter parameters to calculate</div>
-          </div>
-        )}
-      </Card>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }
