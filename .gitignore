@@ -48,3 +48,26 @@ Thumbs.db
 .cache/
 .local/
 .next
+
+# Capacitor — native build artifacts and synced webDir copies.
+# The native project skeletons (ios/, android/) ARE committed so a
+# developer on macOS / a Java box can `npx cap open …` and build.
+# Below are the per-platform build outputs and CLI-managed mirrors of
+# `www/` that get regenerated on every `npx cap sync`.
+ios/App/build/
+ios/App/Pods/
+ios/App/.build/
+ios/App/App/public/
+ios/App/App/capacitor.config.json
+ios/DerivedData/
+ios/.build/
+ios/.swiftpm/
+android/.gradle/
+android/.idea/
+android/build/
+android/app/build/
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/captures/
+android/local.properties
+android/.cxx/

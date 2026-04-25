@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Glev</title>
+    <style>
+      html, body {
+        height: 100%; margin: 0; background: #0a0a0a; color: rgba(255,255,255,0.85);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+      .wrap {
+        height: 100%; display: flex; align-items: center; justify-content: center;
+        flex-direction: column; gap: 12px; text-align: center; padding: 24px;
+      }
+      .dot {
+        width: 10px; height: 10px; border-radius: 50%; background: #22c55e;
+        animation: pulse 1.4s ease-in-out infinite;
+      }
+      @keyframes pulse { 0%,100%{opacity:.35;transform:scale(.85)} 50%{opacity:1;transform:scale(1.1)} }
+      .label { font-size: 13px; letter-spacing: .04em; color: rgba(255,255,255,0.55); }
+    </style>
+  </head>
+  <body>
+    <!--
+      This file only exists to satisfy Capacitor's `webDir` requirement.
+      At runtime the native shell loads `https://glev.app` directly via
+      `server.url` in capacitor.config.ts, so this placeholder is only
+      ever shown if the app is launched without network OR the remote
+      URL is unreachable before the webview takes over.
+    -->
+    <div class="wrap">
+      <div class="dot"></div>
+      <div class="label">Loading Glev…</div>
+    </div>
+  </body>
+</html>

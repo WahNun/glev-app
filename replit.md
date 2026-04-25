@@ -172,3 +172,71 @@ pnpm --filter @workspace/api-server run dev    # Start Express API server
   in the reasoning string only — never mutate the dose.
 - **Compliance**: kein Insulinrechner. Logging only. See `BACKLOG.md` for Whoop +
   Nike workout-library follow-ups (deliberately out of scope).
+
+## Native (Capacitor) — iOS & Android shells for `https://glev.app`
+
+The web app is shipped natively via **Capacitor 8.x** in `server.url` mode:
+the iOS / Android binaries are thin webview shells that load the live
+Vercel-hosted `https://glev.app` build. This means content updates roll
+out the moment the web build deploys — no resubmission required for
+day-to-day changes (only native API / plugin / icon changes need a new
+binary).
+
+### Files
+
+- `capacitor.config.ts` — single source of truth. `appId: app.glev`,
+  `appName: Glev`, `webDir: www`, `server.url: https://glev.app`,
+  `androidScheme: https`, `ios.contentInset: always`.
+- `www/index.html` — placeholder shown only if the remote URL fails
+  before the webview loads it. Required because Capacitor's CLI
+  insists on a `webDir` even when `server.url` is set.
+- `ios/` — Xcode project skeleton (Swift Package Manager, no Pods).
+- `android/` — Gradle project skeleton.
+- `.gitignore` — excludes per-platform build outputs (`build/`,
+  `.gradle/`, `DerivedData/`, `Pods/`, the regenerated synced
+  `…/assets/public/` mirrors, etc.) but commits the native skeletons
+  so a Mac/Java machine can build straight from clone.
+
+### Native deps in `package.json`
+
+`@capacitor/core`, `@capacitor/cli`, `@capacitor/ios`, `@capacitor/android`
+all pinned at `^8.3.1`. They are NOT imported by the Next.js bundle —
+they only run in the `npx cap …` CLI on a developer machine. Adding
+them does not change the web build.
+
+### Developer workflow
+
+```bash
+# After web changes that don't touch native config — usually nothing
+# to do, since the shell loads https://glev.app live. If you DID touch
+# capacitor.config.ts or native plugins:
+npx cap sync                       # copy webDir + config into ios/android
+
+# iOS (requires macOS + Xcode 15+):
+npx cap open ios                   # opens ios/App/App.xcworkspace
+# then in Xcode: select a team, build, run on device/simulator.
+
+# Android (requires Android Studio + JDK 17+):
+npx cap open android               # opens android/ in Android Studio
+# then: Build > Generate Signed Bundle / APK.
+
+# Diagnostic:
+npx cap doctor                     # reports Capacitor + platform health
+```
+
+### Replit limitations
+
+- `cap doctor` reports `Xcode is not installed` — expected, the Replit
+  Linux container has no macOS toolchain. Xcode-only steps must be run
+  on a Mac.
+- `cap add android` works on Linux (just generates Gradle files), but
+  actually **building** the APK requires JDK 17+ + Android SDK, which
+  are not installed on Replit either. Build on Android Studio locally.
+
+### What to do for App Store / Play Store
+
+Out of scope for this commit — the project skeletons are in place but
+the developer still has to: configure Apple Developer / Play Console
+accounts, set bundle identifiers / signing certs, generate icons +
+splash assets, fill in `Info.plist` privacy strings (mic, etc.) for
+features the web app uses, and submit for review.
