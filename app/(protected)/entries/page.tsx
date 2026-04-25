@@ -17,6 +17,7 @@ import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, get
 import { lifecycleFor, STATE_LABELS, type OutcomeState } from "@/lib/engine/lifecycle";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
 import ManualEntryModal from "@/components/ManualEntryModal";
+import { CgmCountdownPair } from "@/components/CgmCountdownChip";
 import { parseDbDate, parseDbTs, parseLluTs } from "@/lib/time";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
@@ -721,6 +722,30 @@ export default function EntriesPage() {
                 {/* Full entry body — shown directly on expand (no light intermediate). */}
                 {isOpen && (
                   <div style={{ padding:"4px 16px 16px", borderTop:`1px solid rgba(255,255,255,0.04)`, display:"flex", flexDirection:"column", gap:14 }}>
+                    {/* CGM POST-FETCH COUNTDOWN — visual 1h/2h auto-fetch state */}
+                    <CgmCountdownPair
+                      logId={m.id}
+                      baseline={m.glucose_before}
+                      themeColor={GREEN}
+                      slots={[
+                        {
+                          label: "1h Post",
+                          fetchType: "bg_1h",
+                          fetchedValue: m.bg_1h,
+                          fetchedAtIso: m.bg_1h_at,
+                          windowStartIso: parseDbDate(m.meal_time ?? m.created_at).toISOString(),
+                          expectedFetchAtIso: new Date(parseDbDate(m.meal_time ?? m.created_at).getTime() + 60 * 60_000).toISOString(),
+                        },
+                        {
+                          label: "2h Post",
+                          fetchType: "bg_2h",
+                          fetchedValue: m.bg_2h,
+                          fetchedAtIso: m.bg_2h_at,
+                          windowStartIso: parseDbDate(m.meal_time ?? m.created_at).toISOString(),
+                          expectedFetchAtIso: new Date(parseDbDate(m.meal_time ?? m.created_at).getTime() + 120 * 60_000).toISOString(),
+                        },
+                      ]}
+                    />
                     {/* LIFECYCLE — pending / provisional / final */}
                     <LifecycleBlock
                       meal={m}
@@ -1217,22 +1242,32 @@ function BolusRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
 
           {/* 2) Glucose tracking ----------------------------------- */}
           <ExPanel title="GLUCOSE TRACKING">
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
-              <Detail
-                label="BG AT LOG"
-                value={before != null ? `${Math.round(before)} mg/dL` : "—"}
-              />
-              <Detail
-                label="BG +1H"
-                value={at1h != null ? `${Math.round(at1h)} mg/dL` : bolusPendingLabel(expect1h)}
-                color={at1h != null ? undefined : "rgba(255,255,255,0.4)"}
-              />
-              <Detail
-                label="BG +2H"
-                value={at2h != null ? `${Math.round(at2h)} mg/dL` : bolusPendingLabel(expect2h)}
-                color={at2h != null ? undefined : "rgba(255,255,255,0.4)"}
-              />
-            </div>
+            <Detail
+              label="BG AT LOG"
+              value={before != null ? `${Math.round(before)} mg/dL` : "—"}
+            />
+            <div style={{ height:8 }}/>
+            <CgmCountdownPair
+              logId={log.id}
+              baseline={before}
+              themeColor={INSULIN_ACCENT}
+              slots={[
+                {
+                  label: "1h Post",
+                  fetchType: "after_1h",
+                  fetchedValue: at1h,
+                  windowStartIso: log.created_at,
+                  expectedFetchAtIso: expect1h.toISOString(),
+                },
+                {
+                  label: "2h Post",
+                  fetchType: "after_2h",
+                  fetchedValue: at2h,
+                  windowStartIso: log.created_at,
+                  expectedFetchAtIso: expect2h.toISOString(),
+                },
+              ]}
+            />
             {(d1h != null || d2h != null) && (
               <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8, marginTop:8 }}>
                 <BolusDeltaPill label="Δ AT LOG → +1H" delta={d1h}/>
@@ -1435,22 +1470,32 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
 
           {/* 3) Stored post-fetches (12h / 24h) — context only ----- */}
           <ExPanel title="POST-INJECTION CHECKPOINTS">
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
-              <Detail
-                label="BG AT LOG"
-                value={before != null ? `${Math.round(before)} mg/dL` : "—"}
-              />
-              <Detail
-                label="BG +12H"
-                value={at12h != null ? `${Math.round(at12h)} mg/dL` : pendingLabel(expect12h)}
-                color={at12h != null ? undefined : "rgba(255,255,255,0.4)"}
-              />
-              <Detail
-                label="BG +24H"
-                value={at24h != null ? `${Math.round(at24h)} mg/dL` : pendingLabel(expect24h)}
-                color={at24h != null ? undefined : "rgba(255,255,255,0.4)"}
-              />
-            </div>
+            <Detail
+              label="BG AT LOG"
+              value={before != null ? `${Math.round(before)} mg/dL` : "—"}
+            />
+            <div style={{ height:8 }}/>
+            <CgmCountdownPair
+              logId={log.id}
+              baseline={before}
+              themeColor={BASAL_ACCENT}
+              slots={[
+                {
+                  label: "12h Post",
+                  fetchType: "after_12h",
+                  fetchedValue: at12h,
+                  windowStartIso: log.created_at,
+                  expectedFetchAtIso: expect12h.toISOString(),
+                },
+                {
+                  label: "24h Post",
+                  fetchType: "after_24h",
+                  fetchedValue: at24h,
+                  windowStartIso: log.created_at,
+                  expectedFetchAtIso: expect24h.toISOString(),
+                },
+              ]}
+            />
             {/* Manual backfill — appears once expected time has passed
                 and the auto-fetch hasn't filled in the value yet. */}
             <div style={{ marginTop:8 }}>
@@ -1565,22 +1610,32 @@ function ExerciseRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
 
           {/* 2) Glucose tracking ----------------------------------- */}
           <ExPanel title="GLUCOSE TRACKING">
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
-              <Detail
-                label="BG BEFORE"
-                value={before != null ? `${Math.round(before)} mg/dL` : "—"}
-              />
-              <Detail
-                label="BG AT END"
-                value={atEnd != null ? `${Math.round(atEnd)} mg/dL` : pendingLabel(expectAtEnd)}
-                color={atEnd != null ? undefined : "rgba(255,255,255,0.4)"}
-              />
-              <Detail
-                label="BG +1H"
-                value={after1h != null ? `${Math.round(after1h)} mg/dL` : pendingLabel(expect1h)}
-                color={after1h != null ? undefined : "rgba(255,255,255,0.4)"}
-              />
-            </div>
+            <Detail
+              label="BG BEFORE"
+              value={before != null ? `${Math.round(before)} mg/dL` : "—"}
+            />
+            <div style={{ height:8 }}/>
+            <CgmCountdownPair
+              logId={log.id}
+              baseline={before}
+              themeColor={EXERCISE_ACCENT}
+              slots={[
+                {
+                  label: "Workout End",
+                  fetchType: "at_end",
+                  fetchedValue: atEnd ?? null,
+                  windowStartIso: log.created_at,
+                  expectedFetchAtIso: expectAtEnd.toISOString(),
+                },
+                {
+                  label: "1h Post-End",
+                  fetchType: "exer_after_1h",
+                  fetchedValue: after1h ?? null,
+                  windowStartIso: end.toISOString(),
+                  expectedFetchAtIso: expect1h.toISOString(),
+                },
+              ]}
+            />
             {/* Coloured deltas — only show once both endpoints exist. */}
             {(dEnd != null || d1h != null) && (
               <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8, marginTop:8 }}>
