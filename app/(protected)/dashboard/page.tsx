@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { fetchMeals, type Meal } from "@/lib/meals";
+import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
+import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
 import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, getEvalExplain } from "@/lib/mealTypes";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
 import MealEntryLightExpand from "@/components/MealEntryLightExpand";
@@ -270,6 +272,8 @@ function OutcomeChart({ meals }: { meals: Meal[] }) {
 export default function DashboardPage() {
   const router = useRouter();
   const [meals, setMeals]     = useState<Meal[]>([]);
+  const [insulin, setInsulin] = useState<InsulinLog[]>([]);
+  const [exercise, setExercise] = useState<ExerciseLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -277,21 +281,48 @@ export default function DashboardPage() {
     let cancelled = false;
     async function load(initial: boolean) {
       try {
-        const data = await fetchMeals();
-        if (!cancelled) setMeals(data);
+        // Parallel fetch of all three log types so the "Recent Entries"
+        // panel and the totals counter reflect every kind of entry.
+        const [m, ins, ex] = await Promise.all([
+          fetchMeals(),
+          fetchRecentInsulinLogs(60).catch(() => []),
+          fetchRecentExerciseLogs(60).catch(() => []),
+        ]);
+        if (!cancelled) {
+          setMeals(m);
+          setInsulin(ins);
+          setExercise(ex);
+        }
       } catch (e) { console.error(e); }
       finally { if (!cancelled && initial) setLoading(false); }
     }
     load(true);
     function onUpdated() { load(false); }
-    window.addEventListener("glev:meals-updated", onUpdated);
+    window.addEventListener("glev:meals-updated",    onUpdated);
+    window.addEventListener("glev:insulin-updated",  onUpdated);
+    window.addEventListener("glev:exercise-updated", onUpdated);
     return () => {
       cancelled = true;
-      window.removeEventListener("glev:meals-updated", onUpdated);
+      window.removeEventListener("glev:meals-updated",    onUpdated);
+      window.removeEventListener("glev:insulin-updated",  onUpdated);
+      window.removeEventListener("glev:exercise-updated", onUpdated);
     };
   }, []);
 
-  const recent = meals.slice(0, 6);
+  // Build a unified, time-sorted row list across all log types so the
+  // 6 most recent entries are *actually* the most recent regardless of
+  // kind. Each row carries its discriminator + raw record.
+  const recentRows: RecentRow[] = useMemo(() => {
+    const rows: RecentRow[] = [
+      ...meals.map<RecentRow>(m => ({ kind: "meal", id: m.id, ts: m.meal_time ?? m.created_at, meal: m })),
+      ...insulin.map<RecentRow>(i => ({ kind: i.insulin_type, id: i.id, ts: i.created_at, insulin: i })),
+      ...exercise.map<RecentRow>(x => ({ kind: "exercise", id: x.id, ts: x.created_at, exercise: x })),
+    ];
+    rows.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
+    return rows.slice(0, 6);
+  }, [meals, insulin, exercise]);
+
+  const totalEntries = meals.length + insulin.length + exercise.length;
 
   if (loading) return (
     <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"60vh", gap:12, color:"rgba(255,255,255,0.3)" }}>
@@ -324,7 +355,7 @@ export default function DashboardPage() {
         </div>
       ),
     },
-    { id: "recent-entries", node: <RecentEntries meals={recent} expanded={expanded} setExpanded={setExpanded} onViewAll={() => router.push("/entries")} onViewEntry={(id) => router.push(`/entries#${id}`)}/> },
+    { id: "recent-entries", node: <RecentEntries rows={recentRows} expanded={expanded} setExpanded={setExpanded} onViewAll={() => router.push("/entries")} onViewEntry={(id) => router.push(`/entries#${id}`)}/> },
   ];
 
   return (
@@ -346,7 +377,7 @@ export default function DashboardPage() {
         <div>
           <h1 style={{ fontSize:24, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>Dashboard</h1>
           <p style={{ color:"rgba(255,255,255,0.35)", fontSize:14 }}>
-            {meals.length} meals logged. Hold any card to reorder · click to flip.
+            {totalEntries} entries logged. Hold any card to reorder · click to flip.
           </p>
         </div>
         <button onClick={() => router.push("/log")} style={{ padding:"10px 20px", borderRadius:10, border:"none", background:ACCENT, color:"#fff", cursor:"pointer", fontSize:14, fontWeight:600, boxShadow:`0 4px 20px ${ACCENT}40` }}>
@@ -374,14 +405,21 @@ function DashboardSortable({ items }: { items: SortableItem[] }) {
   );
 }
 
+/**
+ * Recent Entries renders a unified feed across meal / bolus / basal /
+ * exercise rows. Meal rows expand inline (with the light-expand card);
+ * non-meal rows aren't expandable here — clicking them jumps to the
+ * matching anchor in the full Entry Log so the user can see the same
+ * details and post-fetch glucose values.
+ */
 function RecentEntries({
-  meals: recent,
+  rows,
   expanded,
   setExpanded,
   onViewAll,
   onViewEntry,
 }: {
-  meals: Meal[];
+  rows: RecentRow[];
   expanded: string | null;
   setExpanded: (id: string | null) => void;
   onViewAll: () => void;
@@ -393,34 +431,166 @@ function RecentEntries({
           <div style={{ fontSize:14, fontWeight:600 }}>Recent Entries</div>
           <button onClick={onViewAll} style={{ fontSize:12, color:ACCENT, background:"transparent", border:"none", cursor:"pointer" }}>View all →</button>
         </div>
-        {recent.length === 0 ? (
+        {rows.length === 0 ? (
           <div style={{ padding:"32px", textAlign:"center", color:"rgba(255,255,255,0.2)", fontSize:14 }}>No entries yet. Log your first meal.</div>
         ) : (
           <div>
-            {recent.map(m => {
-              const isOpen = expanded === m.id;
-              const ev = m.evaluation;
-              const time = new Date(m.meal_time ?? m.created_at).toLocaleString("en", { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" });
+            {rows.map(r => {
+              if (r.kind === "meal") {
+                const m = r.meal!;
+                const isOpen = expanded === m.id;
+                const time = new Date(m.meal_time ?? m.created_at).toLocaleString("en", { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" });
+                return (
+                  <div key={r.id} style={{ borderBottom:`1px solid ${BORDER}` }}>
+                    {isOpen ? (
+                      <div onClick={() => setExpanded(null)} style={{ padding:"14px 24px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between", gap:16 }}>
+                        <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)", letterSpacing:"0.02em", fontFamily:"var(--font-mono)" }}>{time}</div>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2.5" strokeLinecap="round" style={{ transform:"rotate(90deg)", flexShrink:0 }}>
+                          <polyline points="9 6 15 12 9 18"/>
+                        </svg>
+                      </div>
+                    ) : (
+                      <MealEntryCardCollapsed meal={m} onClick={() => setExpanded(m.id)}/>
+                    )}
+                    {isOpen && <MealEntryLightExpand meal={m} onViewFull={() => onViewEntry(m.id)}/>}
+                  </div>
+                );
+              }
+
+              if (r.kind === "exercise") {
+                return (
+                  <div key={r.id} style={{ borderBottom:`1px solid ${BORDER}` }}>
+                    <NonMealRecentRow
+                      kind="exercise"
+                      ts={r.ts}
+                      primaryLabel="Duration"
+                      primaryValue={`${r.exercise!.duration_minutes}m`}
+                      secondaryLabel="Type"
+                      secondaryValue={r.exercise!.exercise_type === "cardio" ? "cardio" : "strength"}
+                      onClick={() => onViewEntry(r.id)}
+                    />
+                  </div>
+                );
+              }
+
+              // bolus | basal
+              const i = r.insulin!;
               return (
-                <div key={m.id} style={{ borderBottom:`1px solid ${BORDER}` }}>
-                  {isOpen ? (
-                    <div onClick={() => setExpanded(null)} style={{ padding:"14px 24px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between", gap:16 }}>
-                      <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)", letterSpacing:"0.02em", fontFamily:"var(--font-mono)" }}>{time}</div>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2.5" strokeLinecap="round" style={{ transform:"rotate(90deg)", flexShrink:0 }}>
-                        <polyline points="9 6 15 12 9 18"/>
-                      </svg>
-                    </div>
-                  ) : (
-                    <MealEntryCardCollapsed meal={m} onClick={() => setExpanded(m.id)}/>
-                  )}
-                  {isOpen && (
-                    <MealEntryLightExpand meal={m} onViewFull={() => onViewEntry(m.id)}/>
-                  )}
+                <div key={r.id} style={{ borderBottom:`1px solid ${BORDER}` }}>
+                  <NonMealRecentRow
+                    kind={r.kind}
+                    ts={r.ts}
+                    primaryLabel="Dose"
+                    primaryValue={`${i.units}u`}
+                    secondaryLabel="Type"
+                    secondaryValue={i.insulin_name || (r.kind === "bolus" ? "rapid-acting" : "long-acting")}
+                    onClick={() => onViewEntry(r.id)}
+                  />
                 </div>
               );
             })}
           </div>
         )}
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// RecentRow union + non-meal row renderer
+// -----------------------------------------------------------------------------
+type RecentRow =
+  | { kind: "meal";     id: string; ts: string; meal: Meal;     insulin?: never;     exercise?: never }
+  | { kind: "bolus";    id: string; ts: string; meal?: never;   insulin: InsulinLog; exercise?: never }
+  | { kind: "basal";    id: string; ts: string; meal?: never;   insulin: InsulinLog; exercise?: never }
+  | { kind: "exercise"; id: string; ts: string; meal?: never;   insulin?: never;     exercise: ExerciseLog };
+
+const KIND_ACCENT: Record<"bolus" | "basal" | "exercise", { color: string; label: string }> = {
+  bolus:    { color: "#4A90D9", label: "BOLUS" },     // blue
+  basal:    { color: "#8B5CF6", label: "BASAL" },     // purple
+  exercise: { color: "#10B981", label: "EXERCISE" },  // green
+};
+
+/**
+ * Compact 4-column row matching MealEntryCardCollapsed's grid so meal
+ * and non-meal rows align visually. Right-side eval pill is a neutral
+ * "LOGGED" badge since these don't have under/over-dose evaluation.
+ */
+function NonMealRecentRow({
+  kind, ts, primaryLabel, primaryValue, secondaryLabel, secondaryValue, onClick,
+}: {
+  kind: "bolus" | "basal" | "exercise";
+  ts: string;
+  primaryLabel: string;
+  primaryValue: string;
+  secondaryLabel: string;
+  secondaryValue: string;
+  onClick: () => void;
+}) {
+  const accent = KIND_ACCENT[kind];
+  const d = new Date(ts);
+  const dateStr = d.toLocaleDateString("en", { month: "short", day: "numeric" });
+  const timeStr = d.toLocaleTimeString("en", { hour: "numeric", minute: "2-digit" });
+
+  return (
+    <div
+      className="glev-mec glev-mec--with-eval"
+      onClick={onClick}
+      style={{ padding: "14px 16px", cursor: "pointer", alignItems: "center" }}
+    >
+      {/* Col 1: When */}
+      <div style={{ minWidth: 0 }}>
+        <div className="glev-mec-cell-label">When</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.85)", letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "var(--font-mono)" }}>
+          {dateStr}
+          <span style={{ color: "rgba(255,255,255,0.35)", fontWeight: 400, marginLeft: 6 }}>{timeStr}</span>
+        </div>
+      </div>
+
+      {/* Col 2: Type with coloured dot */}
+      <div style={{ minWidth: 0 }}>
+        <div className="glev-mec-cell-label">Type</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+          <span style={{ width: 7, height: 7, borderRadius: 99, background: accent.color, opacity: 0.85, flexShrink: 0 }} />
+          <span style={{ fontSize: 12, fontWeight: 700, color: accent.color, letterSpacing: "0.04em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {accent.label}
+          </span>
+        </div>
+      </div>
+
+      {/* Col 3: primary metric (dose / duration) */}
+      <div style={{ minWidth: 0 }}>
+        <div className="glev-mec-cell-label">{primaryLabel}</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: accent.color, letterSpacing: "-0.01em", fontFamily: "var(--font-mono)" }}>
+          {primaryValue}
+        </div>
+      </div>
+
+      {/* Col 4: secondary (brand / activity type) */}
+      <div style={{ minWidth: 0 }}>
+        <div className="glev-mec-cell-label">{secondaryLabel}</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.7)", letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {secondaryValue}
+        </div>
+      </div>
+
+      {/* Col 5: neutral LOGGED pill (matches meal eval column for alignment) */}
+      <span
+        className="glev-mec-eval"
+        style={{
+          padding: "5px 10px",
+          borderRadius: 99,
+          fontSize: 10,
+          fontWeight: 700,
+          background: `${accent.color}18`,
+          color: accent.color,
+          border: `1px solid ${accent.color}30`,
+          whiteSpace: "nowrap",
+          letterSpacing: "0.05em",
+          textTransform: "uppercase",
+        }}
+      >
+        LOGGED
+      </span>
     </div>
   );
 }
