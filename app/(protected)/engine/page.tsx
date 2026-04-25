@@ -1,13 +1,23 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { fetchMeals, classifyMeal, type Meal } from "@/lib/meals";
+import { fetchMeals, classifyMeal, computeCalories, computeEvaluation, saveMeal, type Meal } from "@/lib/meals";
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
 import { logDebug } from "@/lib/debug";
 import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
 import EngineLogTab, { InsulinForm, ExerciseForm } from "@/components/EngineLogTab";
 import GlevLogo from "@/components/GlevLogo";
+import EngineChatPanel, { type SeedMessage } from "@/components/EngineChatPanel";
+
+// datetime-local needs "YYYY-MM-DDTHH:mm" in the *local* timezone (the input
+// strips the offset). Using toISOString() would silently shift the value to
+// UTC; this helper keeps the wall-clock the user expects.
+function nowLocalDateTime(): string {
+  const d   = new Date();
+  const off = d.getTimezoneOffset() * 60_000;
+  return new Date(d.getTime() - off).toISOString().slice(0, 16);
+}
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
@@ -145,6 +155,16 @@ export default function EnginePage() {
   const mediaRecRef    = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
+  // Confirm-Log + integrated chat state. mealTime defaults to "now"; insulin
+  // is left blank until a recommendation arrives or the user types one in.
+  const [mealTime,    setMealTime]    = useState<string>(() => nowLocalDateTime());
+  const [insulin,     setInsulin]     = useState("");
+  const [confirming,  setConfirming]  = useState(false);
+  const [confirmErr,  setConfirmErr]  = useState("");
+  const [confirmedId, setConfirmedId] = useState<string | null>(null);
+  const [chatSeed,    setChatSeed]    = useState<SeedMessage | null>(null);
+  const [chatExpanded, setChatExpanded] = useState(false);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const ok = !!(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === "function" && typeof MediaRecorder !== "undefined");
@@ -231,6 +251,22 @@ export default function EnginePage() {
       if (typeof pData.description === "string" && pData.description.trim()) {
         setDesc(pData.description.trim());
       }
+      // Hand the parsed result to the chat panel so the user sees what the AI
+      // captured and can immediately push back ("the banana was bigger") in
+      // the same conversation thread.
+      const chatLines: string[] = [];
+      const descLine = typeof pData.description === "string" && pData.description.trim()
+        ? pData.description.trim()
+        : text;
+      chatLines.push(`Got it: ${descLine}`);
+      const macroBits: string[] = [];
+      if (t.carbs   != null) macroBits.push(`${t.carbs}g carbs`);
+      if (t.protein != null) macroBits.push(`${t.protein}g protein`);
+      if (t.fat     != null) macroBits.push(`${t.fat}g fat`);
+      if (t.fiber   != null) macroBits.push(`${t.fiber}g fiber`);
+      if (macroBits.length) chatLines.push(`Macros: ${macroBits.join(" · ")}.`);
+      chatLines.push(`Tell me if anything's off — I'll update the form on the left.`);
+      setChatSeed({ id: Date.now(), content: chatLines.join("\n\n") });
       logDebug("ENGINE.VOICE", { text, totals: t });
     } catch (e) {
       setVoiceErr(e instanceof Error ? e.message : "Sprach-Verarbeitung fehlgeschlagen.");
@@ -266,16 +302,85 @@ export default function EnginePage() {
       const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs);
       setResult(rec);
       setRunning(false);
+      // Pre-fill the insulin field with the recommendation only when the
+      // user hasn't already typed a value of their own. Never overwrite.
+      setInsulin(prev => (prev && prev.trim() !== "" ? prev : String(rec.dose)));
       logDebug("ENGINE", { input: { glucose: g, carbs: c }, matchedMeals: rec.similarMeals.map(m => ({ id: m.id, carbs: m.carbs_grams, glucose: m.glucose_before, insulin: m.insulin_units })), suggestedDose: rec.dose, confidence: rec.confidence, recentInsulin: insulinLogs.length, recentExercise: exerciseLogs.length });
     }, 600);
+  }
+
+  // Confirm Log writes the full meal+bolus row to the `meals` table via
+  // saveMeal — this is what the engine recommender reads back from. The
+  // standalone Log tab (Bolus / Exercise) is unaffected; that one is for
+  // quick manual entries that have no associated meal.
+  async function handleConfirmLog() {
+    setConfirmErr("");
+    const cNum = parseFloat(carbs);
+    const iNum = parseFloat(insulin);
+    const gParsed = glucose.trim() === "" ? NaN : parseFloat(glucose);
+    const gNum = Number.isFinite(gParsed) ? gParsed : null;
+    if (!Number.isFinite(cNum) || cNum <= 0) { setConfirmErr("Carbs are required."); return; }
+    if (!Number.isFinite(iNum) || iNum <= 0) { setConfirmErr("Enter the insulin dose you took."); return; }
+    const pNum  = parseFloat(protein) || 0;
+    const fNum  = parseFloat(fat)     || 0;
+    const fbNum = parseFloat(fiber)   || 0;
+    const cls   = classifyMeal(cNum, pNum, fNum);
+    const cal   = computeCalories(cNum, pNum, fNum);
+    const evalStr = computeEvaluation(cNum, iNum, gNum);
+    // datetime-local has no timezone — interpret it as the user's local wall
+    // clock and convert to a real ISO instant for storage.
+    const mealIso = mealTime ? new Date(mealTime).toISOString() : new Date().toISOString();
+    setConfirming(true);
+    try {
+      const saved = await saveMeal({
+        inputText: desc.trim() || transcript.trim() || "(manual entry)",
+        parsedJson: [{ name: desc.trim() || "meal", grams: 0, carbs: cNum, protein: pNum, fat: fNum, fiber: fbNum }],
+        glucoseBefore: gNum,
+        glucoseAfter: null,
+        carbsGrams: cNum,
+        proteinGrams: pNum,
+        fatGrams: fNum,
+        fiberGrams: fbNum,
+        calories: cal,
+        insulinUnits: iNum,
+        mealType: cls,
+        evaluation: evalStr,
+        createdAt: mealIso,
+        mealTime: mealIso,
+      });
+      setConfirmedId(saved.id);
+      logDebug("ENGINE.CONFIRM_LOG", { id: saved.id, carbs: cNum, insulin: iNum, glucose: gNum, mealType: cls });
+      // Refresh meals so the next recommendation immediately benefits.
+      fetchMeals().then(setMeals).catch(() => {});
+      // Reset the form for the next entry — but keep glucose since it's often
+      // still relevant for the next meal a few minutes later.
+      setCarbs(""); setProtein(""); setFat(""); setFiber("");
+      setDesc(""); setInsulin(""); setResult(null); setTranscript("");
+      setMealTime(nowLocalDateTime());
+      setChatSeed({ id: Date.now(), content: `Logged ${cNum}g carbs · ${iNum}u insulin. Form cleared.` });
+    } catch (e) {
+      setConfirmErr(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setConfirming(false);
+    }
+  }
+
+  function handleCancel() {
+    setGlucose(""); setCarbs(""); setProtein(""); setFat(""); setFiber("");
+    setDesc(""); setInsulin(""); setResult(null); setTranscript("");
+    setMealTime(nowLocalDateTime());
+    setConfirmErr(""); setConfirmedId(null);
   }
 
   const inp: React.CSSProperties = { background:"#0D0D12", border:`1px solid ${BORDER}`, borderRadius:10, padding:"11px 14px", color:"#fff", fontSize:14, outline:"none", width:"100%" };
   const card: React.CSSProperties = { background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"20px 24px" };
 
   return (
-    <div style={{ maxWidth:800, margin:"0 auto" }}>
+    <div style={{ maxWidth: isMobile || tab !== "engine" ? 800 : 1200, margin:"0 auto" }}>
       <div style={{ marginBottom:28 }}>
+        <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.18em", color:"rgba(255,255,255,0.3)", marginBottom:8 }}>
+          GLEV — SMART INSULIN DECISIONS
+        </div>
         <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
           <GlevLogo size={32} />
           <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em" }}>Glev Engine</h1>
@@ -325,7 +430,14 @@ export default function EnginePage() {
         })}
       </div>
 
-      {tab === "engine" && (<>
+      {tab === "engine" && (
+      <div style={{
+        display:"grid",
+        gridTemplateColumns: isMobile ? "minmax(0, 1fr)" : "minmax(0, 1.65fr) minmax(0, 1fr)",
+        gap: isMobile ? 16 : 24,
+        alignItems:"stretch",
+      }}>
+      <div style={{ minWidth:0, display:"flex", flexDirection:"column" }}>
       {/* Voice input — transcribes & auto-fills macros via /api/transcribe → /api/parse-food */}
       <style>{`
         @keyframes engVPulse { 0%,100%{opacity:0.35;transform:scale(1)} 50%{opacity:1;transform:scale(1.05)} }
@@ -400,6 +512,18 @@ export default function EnginePage() {
                 </button>
               </div>
               <input style={inp} type="number" placeholder="e.g. 115" value={glucose} onChange={e => setGlucose(e.target.value)}/>
+            </div>
+            <div>
+              <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>Meal Time</label>
+              <input
+                style={{ ...inp, fontFamily:"inherit" }}
+                type="datetime-local"
+                value={mealTime}
+                onChange={e => setMealTime(e.target.value)}
+              />
+              <div style={{ fontSize:10, color:"rgba(255,255,255,0.25)", marginTop:4 }}>
+                When you ate. Edit to backfill a past meal.
+              </div>
             </div>
             <div>
               <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>Planned Carbs (g)</label>
@@ -487,9 +611,67 @@ export default function EnginePage() {
         color: carbs ? "#fff" : "rgba(255,255,255,0.2)",
         fontSize:16, fontWeight:700, cursor:carbs?"pointer":"not-allowed",
         boxShadow:carbs?`0 4px 24px ${ACCENT}40`:"none",
-        transition:"all 0.2s", marginBottom:24,
+        transition:"all 0.2s", marginBottom:18,
       }}>
         {loading ? "Loading data…" : running ? "Analyzing history…" : "Get Recommendation"}
+      </button>
+
+      {/* Confirm-Log section: enter the dose you actually took, then save the
+          full meal+bolus row in one go. Engine pre-fills `insulin` from the
+          recommendation, but the user always has the final word. */}
+      <div style={{ marginBottom:12 }}>
+        <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>Insulin (U)</label>
+        <input
+          style={inp}
+          type="number"
+          step="0.1"
+          min="0"
+          placeholder="e.g. 1.5"
+          value={insulin}
+          onChange={e => { setInsulin(e.target.value); if (confirmedId) setConfirmedId(null); }}
+        />
+      </div>
+
+      {confirmErr && (
+        <div style={{ marginBottom:10, padding:"10px 14px", borderRadius:10, background:`${PINK}15`, border:`1px solid ${PINK}40`, color:PINK, fontSize:12 }}>
+          {confirmErr}
+        </div>
+      )}
+      {confirmedId && !confirmErr && (
+        <div style={{ marginBottom:10, padding:"10px 14px", borderRadius:10, background:`${GREEN}15`, border:`1px solid ${GREEN}40`, color:GREEN, fontSize:12 }}>
+          ✓ Logged. The next recommendation will already include this entry.
+        </div>
+      )}
+
+      <button
+        onClick={handleConfirmLog}
+        disabled={confirming || !carbs || !insulin}
+        style={{
+          width:"100%", padding:"15px", borderRadius:14, border:"none",
+          background: !confirming && carbs && insulin
+            ? `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`
+            : "rgba(79,110,247,0.25)",
+          color: !confirming && carbs && insulin ? "#fff" : "rgba(255,255,255,0.55)",
+          fontSize:15, fontWeight:700,
+          cursor: confirming || !carbs || !insulin ? "not-allowed" : "pointer",
+          boxShadow: !confirming && carbs && insulin ? `0 4px 18px ${ACCENT}30` : "none",
+          transition:"all 0.2s", marginBottom:10,
+        }}
+      >
+        {confirming ? "Saving…" : "✓ Confirm Log"}
+      </button>
+      <button
+        onClick={handleCancel}
+        disabled={confirming}
+        style={{
+          width:"100%", padding:"13px", borderRadius:14,
+          border:`1px solid ${BORDER}`, background:"transparent",
+          color:"rgba(255,255,255,0.55)", fontSize:14, fontWeight:600,
+          cursor: confirming ? "not-allowed" : "pointer",
+          marginBottom:24,
+        }}
+      >
+        Cancel
       </button>
 
       {result && (
@@ -590,7 +772,32 @@ export default function EnginePage() {
           </div>
         </div>
       )}
-      </>)}
+      </div>{/* /left column */}
+
+      <div style={{ minWidth:0, display:"flex", flexDirection:"column" }}>
+        <EngineChatPanel
+          macros={{
+            carbs:   parseFloat(carbs)   || 0,
+            protein: parseFloat(protein) || 0,
+            fat:     parseFloat(fat)     || 0,
+            fiber:   parseFloat(fiber)   || 0,
+          }}
+          description={desc}
+          onPatch={(p) => {
+            setCarbs(String(p.carbs));
+            setProtein(String(p.protein));
+            setFat(String(p.fat));
+            setFiber(String(p.fiber));
+            if (p.description) setDesc(p.description);
+          }}
+          seed={chatSeed}
+          isMobile={isMobile}
+          expanded={isMobile ? chatExpanded : true}
+          onToggleExpanded={() => setChatExpanded(v => !v)}
+        />
+      </div>
+      </div>
+      )}
 
       {tab === "log"      && <EngineLogTab />}
       {tab === "bolus"    && <InsulinForm />}
