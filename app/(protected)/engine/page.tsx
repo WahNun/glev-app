@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { fetchMeals, classifyMeal, computeCalories, computeEvaluation, saveMeal, type Meal } from "@/lib/meals";
+import { scheduleJobsForLog } from "@/lib/cgmJobs";
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
 import { logDebug } from "@/lib/debug";
 import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
@@ -353,6 +354,9 @@ export default function EnginePage() {
       });
       setConfirmedId(saved.id);
       logDebug("ENGINE.CONFIRM_LOG", { id: saved.id, carbs: cNum, insulin: iNum, glucose: gNum, mealType: cls });
+      // Schedule CGM auto-fetches at +1h / +2h after meal time. Fire-and-forget;
+      // failures (e.g. no CGM connected) are silent.
+      void scheduleJobsForLog({ logId: saved.id, logType: "meal", refTimeIso: mealIso });
       // Refresh meals so the next recommendation immediately benefits.
       fetchMeals().then(setMeals).catch(() => {});
       // Reset the form for the next entry — but keep glucose since it's often

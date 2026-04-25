@@ -1,0 +1,43 @@
+CONTEXT & EVALUATION PHILOSOPHY:
+Exercise affects glucose in complex ways — during aerobic exercise glucose typically drops, during high-intensity/anaerobic exercise it can spike due to cortisol/adrenaline. The post-workout window (especially 30–90 min after) carries delayed hypoglycaemia risk. We want to capture this pattern and surface it meaningfully.
+
+--- WHAT TO STORE ON AN EXERCISE LOG ---
+Ensure these fields exist on exercise log entries:
+- exerciseType (string: e.g. "cardio", "strength", "HIIT", "yoga", "cycling", "run", etc.)
+- durationMinutes (number)
+- intensityLevel (low / moderate / high) — if not already captured, add this optional field to the log form
+- startTime / endTime (or startTime + duration)
+- glucoseBefore (fetched at log submit)
+- glucoseAtEnd (fetched at workout end time)
+- glucoseAfter1h (fetched +60min after end)
+
+--- COLLAPSED VIEW for Exercise rows in Entry Log ---
+Column order:
+WHEN · TYPE (green dot + "EXERCISE") · DURATION (e.g. "45 min") · TYPE (e.g. "Cardio / Strength / HIIT") · outcome badge
+
+Outcome badge for exercise should be one of:
+- STABLE (green) — glucose within safe range before, during, and after
+- DROPPED (amber) — glucose fell significantly post-workout
+- SPIKED (red/orange) — glucose rose significantly (typical of anaerobic/HIIT)
+- HYPO RISK (red) — post-workout glucose below 70 mg/dL
+- PENDING (grey) — post-workout data not yet fetched
+
+--- EXPANDED VIEW for Exercise logs ---
+
+1. SESSION DETAILS
+   - Exercise type, duration, intensity (if logged), start time, end time
+
+2. GLUCOSE TRACKING
+   - BG Before workout (fetched at log submit)
+   - BG At End (fetched at workout end time) — "Pending [expected time]" if not yet
+   - BG +1h post-end (fetched +60min after end) — same pending logic
+   - Delta Before → At End and Before → +1h, colour coded
+
+3. EVALUATION PANEL
+
+   INTERIM (unlocks when glucoseAtEnd is fetched):
+   - Label: "POST-WORKOUT CHECK"
+   - Logic:
+     · BG dropped >30% from before → "Significant drop during workout — monitor closely, consider fast carbs"
+     · BG within ±15% of before → "Glucose stable during session"
+     · BG rose >20% from before → "Glucose spiked during workout — typical of high

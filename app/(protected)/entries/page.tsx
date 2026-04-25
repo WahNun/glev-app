@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { fetchMeals, deleteMeal, updateMealReadings, type Meal } from "@/lib/meals";
+import { fetchRecentInsulinLogs, deleteInsulinLog, type InsulinLog } from "@/lib/insulin";
+import { fetchRecentExerciseLogs, deleteExerciseLog, type ExerciseLog } from "@/lib/exercise";
 import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, getEvalExplain } from "@/lib/mealTypes";
 import { lifecycleFor, STATE_LABELS, type OutcomeState } from "@/lib/engine/lifecycle";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
@@ -9,22 +11,45 @@ import MealEntryLightExpand from "@/components/MealEntryLightExpand";
 import ManualEntryModal from "@/components/ManualEntryModal";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
+const PURPLE="#A78BFA", BLUE="#3B82F6";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
 
 function evC(ev: string|null) { return getEvalColor(ev); }
 function evL(ev: string|null) { return getEvalLabel(ev); }
 
-const FILTERS = ["All","GOOD","UNDERDOSE","OVERDOSE","SPIKE"];
+const FILTERS = ["All","Bolus","Basal","Exercise","GOOD","UNDERDOSE","OVERDOSE","SPIKE"] as const;
+type FilterKey = typeof FILTERS[number];
+
+type Row =
+  | { kind: "meal"; id: string; ts: string; data: Meal }
+  | { kind: "bolus"; id: string; ts: string; data: InsulinLog }
+  | { kind: "basal"; id: string; ts: string; data: InsulinLog }
+  | { kind: "exercise"; id: string; ts: string; data: ExerciseLog };
 
 export default function EntriesPage() {
   const [meals, setMeals]     = useState<Meal[]>([]);
+  const [insulin, setInsulin] = useState<InsulinLog[]>([]);
+  const [exercise, setExercise] = useState<ExerciseLog[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter]   = useState("All");
+  const [filter, setFilter]   = useState<FilterKey>("All");
   const [search, setSearch]   = useState("");
   const [expanded, setExpanded] = useState<string|null>(null);
   const [fullExpanded, setFullExpanded] = useState<string|null>(null);
   const [deleting, setDeleting] = useState<string|null>(null);
   const [manualOpen, setManualOpen] = useState(false);
+
+  // Restore filter from sessionStorage (per-tab persistence) on first mount.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = sessionStorage.getItem("glev:entries-filter");
+    if (saved && (FILTERS as readonly string[]).includes(saved)) {
+      setFilter(saved as FilterKey);
+    }
+  }, []);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    sessionStorage.setItem("glev:entries-filter", filter);
+  }, [filter]);
 
   // Wrap expand setter so changing rows always resets the heavy "full" view.
   function expandRow(id: string | null) {
@@ -36,17 +61,29 @@ export default function EntriesPage() {
     let cancelled = false;
     async function load(initial: boolean) {
       try {
-        const data = await fetchMeals();
-        if (!cancelled) setMeals(data);
+        const [m, ins, ex] = await Promise.all([
+          fetchMeals(),
+          fetchRecentInsulinLogs(60).catch(() => []),
+          fetchRecentExerciseLogs(60).catch(() => []),
+        ]);
+        if (!cancelled) {
+          setMeals(m);
+          setInsulin(ins);
+          setExercise(ex);
+        }
       } catch (e) { console.error(e); }
       finally { if (!cancelled && initial) setLoading(false); }
     }
     load(true);
     function onUpdated() { load(false); }
     window.addEventListener("glev:meals-updated", onUpdated);
+    window.addEventListener("glev:insulin-updated", onUpdated);
+    window.addEventListener("glev:exercise-updated", onUpdated);
     return () => {
       cancelled = true;
       window.removeEventListener("glev:meals-updated", onUpdated);
+      window.removeEventListener("glev:insulin-updated", onUpdated);
+      window.removeEventListener("glev:exercise-updated", onUpdated);
     };
   }, []);
 
@@ -79,12 +116,69 @@ export default function EntriesPage() {
     }
   }
 
-  const filtered = meals.filter(m => {
-    const matchEval = filter === "All" || m.evaluation === filter
-      || (filter==="OVERDOSE" && (m.evaluation==="OVERDOSE"||m.evaluation==="HIGH"))
-      || (filter==="UNDERDOSE"  && (m.evaluation==="UNDERDOSE"||m.evaluation==="LOW"));
-    const matchSearch = !search || m.input_text.toLowerCase().includes(search.toLowerCase());
-    return matchEval && matchSearch;
+  async function handleDeleteInsulin(id: string) {
+    if (!confirm("Delete this insulin entry? This cannot be undone.")) return;
+    setDeleting(id);
+    try {
+      await deleteInsulinLog(id);
+      setInsulin(xs => xs.filter(x => x.id !== id));
+      setExpanded(null);
+    } catch (e) {
+      console.error(e);
+      alert("Could not delete entry.");
+    } finally { setDeleting(null); }
+  }
+
+  async function handleDeleteExercise(id: string) {
+    if (!confirm("Delete this exercise entry? This cannot be undone.")) return;
+    setDeleting(id);
+    try {
+      await deleteExerciseLog(id);
+      setExercise(xs => xs.filter(x => x.id !== id));
+      setExpanded(null);
+    } catch (e) {
+      console.error(e);
+      alert("Could not delete entry.");
+    } finally { setDeleting(null); }
+  }
+
+  // Merge meal/bolus/basal/exercise into a single timeline (newest first).
+  const rows: Row[] = useMemo(() => {
+    const all: Row[] = [
+      ...meals.map<Row>(m => ({ kind: "meal", id: m.id, ts: m.meal_time ?? m.created_at, data: m })),
+      ...insulin.map<Row>(i => ({ kind: i.insulin_type, id: i.id, ts: i.created_at, data: i })),
+      ...exercise.map<Row>(x => ({ kind: "exercise", id: x.id, ts: x.created_at, data: x })),
+    ];
+    all.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
+    return all;
+  }, [meals, insulin, exercise]);
+
+  const isOutcomeFilter = filter === "GOOD" || filter === "UNDERDOSE" || filter === "OVERDOSE" || filter === "SPIKE";
+
+  const filtered = rows.filter(r => {
+    // Type filters
+    if (filter === "Bolus" && r.kind !== "bolus") return false;
+    if (filter === "Basal" && r.kind !== "basal") return false;
+    if (filter === "Exercise" && r.kind !== "exercise") return false;
+    // Outcome filters — only meal rows carry outcomes
+    if (isOutcomeFilter) {
+      if (r.kind !== "meal") return false;
+      const ev = r.data.evaluation;
+      const ok = ev === filter
+        || (filter === "OVERDOSE" && ev === "HIGH")
+        || (filter === "UNDERDOSE" && ev === "LOW");
+      if (!ok) return false;
+    }
+    // Search across whatever text the row carries
+    if (search) {
+      const q = search.toLowerCase();
+      let txt = "";
+      if (r.kind === "meal") txt = r.data.input_text ?? "";
+      else if (r.kind === "bolus" || r.kind === "basal") txt = `${r.data.insulin_name} ${r.data.notes ?? ""}`;
+      else if (r.kind === "exercise") txt = `${r.data.exercise_type} ${r.data.notes ?? ""}`;
+      if (!txt.toLowerCase().includes(q)) return false;
+    }
+    return true;
   });
 
   const inp: React.CSSProperties = { background:"#0D0D12", border:`1px solid ${BORDER}`, borderRadius:10, padding:"9px 14px", color:"#fff", fontSize:13, outline:"none" };
@@ -102,7 +196,7 @@ export default function EntriesPage() {
       <style>{``}</style>
       <div style={{ marginBottom:24 }}>
         <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>Entry Log</h1>
-        <p style={{ color:"rgba(255,255,255,0.35)", fontSize:14 }}>{filtered.length} of {meals.length} logged meals. Click a row to expand.</p>
+        <p style={{ color:"rgba(255,255,255,0.35)", fontSize:14 }}>{filtered.length} of {rows.length} logged entries. Click a row to expand.</p>
       </div>
 
       {/* MANUAL ENTRY CTA */}
@@ -130,18 +224,23 @@ export default function EntriesPage() {
       </div>
 
       {/* FILTERS + SEARCH */}
-      <div style={{ display:"flex", gap:10, marginBottom:20, flexWrap:"wrap", alignItems:"center" }}>
-        <div style={{ display:"flex", gap:6 }}>
+      <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:20 }}>
+        <style>{`
+          .glev-filter-bar { display:flex; gap:6px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding-bottom:2px; }
+          .glev-filter-bar::-webkit-scrollbar { display:none; }
+          .glev-filter-bar > button { flex-shrink:0; }
+        `}</style>
+        <div className="glev-filter-bar">
           {FILTERS.map(f => (
             <button key={f} onClick={() => setFilter(f)} style={{
               padding:"7px 14px", borderRadius:99, border:`1px solid ${filter===f ? ACCENT+"60" : BORDER}`,
               background:filter===f ? `${ACCENT}18` : "transparent",
               color:filter===f ? ACCENT : "rgba(255,255,255,0.4)",
-              fontSize:12, fontWeight:filter===f?600:400, cursor:"pointer",
+              fontSize:12, fontWeight:filter===f?600:400, cursor:"pointer", whiteSpace:"nowrap",
             }}>{f}</button>
           ))}
         </div>
-        <input style={{ ...inp, flex:1, minWidth:200 }} placeholder="Search meals…" value={search} onChange={e => setSearch(e.target.value)}/>
+        <input style={{ ...inp, width:"100%", boxSizing:"border-box" }} placeholder="Search entries…" value={search} onChange={e => setSearch(e.target.value)}/>
       </div>
 
       {/* CARD STACK */}
@@ -149,7 +248,40 @@ export default function EntriesPage() {
         <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"48px", textAlign:"center", color:"rgba(255,255,255,0.2)", fontSize:14 }}>No entries match this filter.</div>
       ) : (
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-          {filtered.map(m => {
+          {filtered.map(r => {
+            // BOLUS / BASAL row — insulin event (no outcome).
+            if (r.kind === "bolus" || r.kind === "basal") {
+              const i = r.data;
+              const isOpen = expanded === i.id;
+              return (
+                <InsulinRowCard
+                  key={i.id}
+                  log={i}
+                  kind={r.kind}
+                  isOpen={isOpen}
+                  onToggle={() => expandRow(isOpen ? null : i.id)}
+                  onDelete={() => handleDeleteInsulin(i.id)}
+                  deleting={deleting === i.id}
+                />
+              );
+            }
+            // EXERCISE row.
+            if (r.kind === "exercise") {
+              const x = r.data;
+              const isOpen = expanded === x.id;
+              return (
+                <ExerciseRowCard
+                  key={x.id}
+                  log={x}
+                  isOpen={isOpen}
+                  onToggle={() => expandRow(isOpen ? null : x.id)}
+                  onDelete={() => handleDeleteExercise(x.id)}
+                  deleting={deleting === x.id}
+                />
+              );
+            }
+            // MEAL row — original rendering preserved below.
+            const m = r.data;
             const isOpen = expanded === m.id;
             const ev = m.evaluation;
             const date = new Date(m.created_at);
@@ -427,6 +559,226 @@ function ReadingInput({ label, value, onChange, onSave, busy, placeholder }: {
           {busy ? "…" : "Save"}
         </button>
       </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Non-meal row cards. Layout mirrors MealEntryCardCollapsed
+// (When · Type · Dose|Duration · TypeName) but without an outcome pill,
+// and with a small inline expansion showing notes + delete.
+// ─────────────────────────────────────────────────────────────────────────
+
+const INSULIN_ACCENT = ACCENT;
+const BASAL_ACCENT   = "#A78BFA";
+const EXERCISE_ACCENT = "#22C55E";
+
+function NonMealRow({
+  isOpen, onToggle, onDelete, deleting, accent, badge, dateStr, timeStr,
+  primaryLabel, primaryValue, primaryColor,
+  secondaryLabel, secondaryValue, expandedDetails,
+}: {
+  isOpen: boolean;
+  onToggle: () => void;
+  onDelete: () => void;
+  deleting: boolean;
+  accent: string;
+  badge: string;
+  dateStr: string;
+  timeStr: string;
+  primaryLabel: string;
+  primaryValue: string;
+  primaryColor: string;
+  secondaryLabel: string;
+  secondaryValue: string;
+  expandedDetails: React.ReactNode;
+}) {
+  return (
+    <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, overflow:"hidden" }}>
+      {!isOpen ? (
+        <div onClick={onToggle} className="glev-mec" style={{
+          padding:"14px 16px", cursor:"pointer", alignItems:"center",
+          display:"grid", gap:14,
+          gridTemplateColumns:"1fr 1fr 1fr 1fr 96px",
+        }}>
+          <style>{`
+            @media (max-width: 720px) {
+              .glev-mec { grid-template-columns: 1fr 1fr 1fr 1fr !important; gap: 10px !important; }
+              .glev-mec .glev-mec-eval { display:none !important; }
+            }
+            @media (max-width: 380px) {
+              .glev-mec { gap: 8px !important; }
+            }
+          `}</style>
+          {/* Col 1: Date + Time */}
+          <div style={{ minWidth:0 }}>
+            <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>When</div>
+            <div style={{ fontSize:13, fontWeight:600, color:"rgba(255,255,255,0.85)", letterSpacing:"-0.01em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", fontFamily:"var(--font-mono)" }}>
+              {dateStr}
+              <span style={{ color:"rgba(255,255,255,0.35)", fontWeight:400, marginLeft:6 }}>{timeStr}</span>
+            </div>
+          </div>
+          {/* Col 2: Kind badge */}
+          <div style={{ minWidth:0 }}>
+            <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>Type</div>
+            <div style={{ display:"flex", alignItems:"center", gap:6, minWidth:0 }}>
+              <span style={{ width:7, height:7, borderRadius:99, background:accent, opacity:0.85, flexShrink:0 }}/>
+              <span style={{ fontSize:12, fontWeight:700, color:accent, letterSpacing:"0.04em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{badge}</span>
+            </div>
+          </div>
+          {/* Col 3: Primary metric (Dose / Duration) */}
+          <div style={{ minWidth:0 }}>
+            <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>{primaryLabel}</div>
+            <div style={{ fontSize:14, fontWeight:700, color:primaryColor, letterSpacing:"-0.01em", fontFamily:"var(--font-mono)" }}>{primaryValue}</div>
+          </div>
+          {/* Col 4: Secondary (Type name / Intensity) */}
+          <div style={{ minWidth:0 }}>
+            <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>{secondaryLabel}</div>
+            <div title={secondaryValue} style={{ fontSize:13, fontWeight:600, color:"rgba(255,255,255,0.8)", letterSpacing:"-0.01em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{secondaryValue}</div>
+          </div>
+          {/* Col 5: chevron */}
+          <span className="glev-mec-eval" style={{
+            justifySelf:"end", padding:"5px 10px", borderRadius:99, fontSize:10, fontWeight:700,
+            background:`${accent}18`, color:accent, border:`1px solid ${accent}30`,
+            whiteSpace:"nowrap", letterSpacing:"0.05em", textTransform:"uppercase",
+          }}>{badge}</span>
+        </div>
+      ) : (
+        <div onClick={onToggle} style={{ padding:"14px 16px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between", gap:14 }}>
+          <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)", letterSpacing:"0.02em" }}>
+            {dateStr}
+            <span style={{ color:"rgba(255,255,255,0.25)", margin:"0 8px" }}>·</span>
+            {timeStr}
+            <span style={{ color:accent, fontWeight:700, marginLeft:10, letterSpacing:"0.04em" }}>{badge}</span>
+          </div>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2.5" strokeLinecap="round" style={{ transform:"rotate(90deg)", flexShrink:0 }}>
+            <polyline points="9 6 15 12 9 18"/>
+          </svg>
+        </div>
+      )}
+
+      {isOpen && (
+        <div style={{ padding:"4px 16px 16px", borderTop:`1px solid rgba(255,255,255,0.04)`, display:"flex", flexDirection:"column", gap:12 }}>
+          {expandedDetails}
+          <button onClick={onDelete} disabled={deleting} style={{
+            marginTop:4, padding:"12px", borderRadius:10, border:`1px solid ${PINK}40`,
+            background:`${PINK}08`, color:PINK, fontSize:13, fontWeight:600,
+            cursor:deleting ? "wait" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, letterSpacing:"0.02em",
+          }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+            {deleting ? "Deleting…" : "Delete entry"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InsulinRowCard({ log, kind, isOpen, onToggle, onDelete, deleting }: {
+  log: InsulinLog; kind: "bolus" | "basal";
+  isOpen: boolean; onToggle: () => void; onDelete: () => void; deleting: boolean;
+}) {
+  const d = new Date(log.created_at);
+  const dateStr = d.toLocaleDateString("en", { month:"short", day:"numeric" });
+  const timeStr = d.toLocaleTimeString("en", { hour:"numeric", minute:"2-digit" });
+  const accent = kind === "bolus" ? INSULIN_ACCENT : BASAL_ACCENT;
+  const badge  = kind === "bolus" ? "BOLUS" : "BASAL";
+  return (
+    <NonMealRow
+      isOpen={isOpen}
+      onToggle={onToggle}
+      onDelete={onDelete}
+      deleting={deleting}
+      accent={accent}
+      badge={badge}
+      dateStr={dateStr}
+      timeStr={timeStr}
+      primaryLabel="Dose"
+      primaryValue={`${log.units}u`}
+      primaryColor={accent}
+      secondaryLabel="Type"
+      secondaryValue={log.insulin_name || (kind === "bolus" ? "rapid-acting" : "long-acting")}
+      expandedDetails={
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8 }}>
+          <Detail label="DOSE" value={`${log.units} u`} color={accent}/>
+          <Detail label="INSULIN" value={log.insulin_name || "—"}/>
+          <Detail label="GLUCOSE AT LOG" value={log.cgm_glucose_at_log != null ? `${log.cgm_glucose_at_log} mg/dL` : "—"}/>
+          <Detail label="WHEN" value={`${dateStr} · ${timeStr}`}/>
+          {/* Post-fetch glucose values — bolus shows 1h/2h, basal shows 12h/24h.
+              Null until the CGM job ticker resolves them; "Pending" until then. */}
+          {kind === "bolus" ? (
+            <>
+              <Detail label="1H POST" value={log.glucose_after_1h != null ? `${log.glucose_after_1h} mg/dL` : "Pending"} color={log.glucose_after_1h != null ? undefined : "rgba(255,255,255,0.4)"}/>
+              <Detail label="2H POST" value={log.glucose_after_2h != null ? `${log.glucose_after_2h} mg/dL` : "Pending"} color={log.glucose_after_2h != null ? undefined : "rgba(255,255,255,0.4)"}/>
+            </>
+          ) : (
+            <>
+              <Detail label="12H POST" value={log.glucose_after_12h != null ? `${log.glucose_after_12h} mg/dL` : "Pending"} color={log.glucose_after_12h != null ? undefined : "rgba(255,255,255,0.4)"}/>
+              <Detail label="24H POST" value={log.glucose_after_24h != null ? `${log.glucose_after_24h} mg/dL` : "Pending"} color={log.glucose_after_24h != null ? undefined : "rgba(255,255,255,0.4)"}/>
+            </>
+          )}
+          {log.notes && (
+            <div style={{ gridColumn:"1 / -1", background:"rgba(255,255,255,0.02)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
+              <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>NOTES</div>
+              <div style={{ fontSize:13, color:"rgba(255,255,255,0.8)", lineHeight:1.5 }}>{log.notes}</div>
+            </div>
+          )}
+        </div>
+      }
+    />
+  );
+}
+
+function ExerciseRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
+  log: ExerciseLog;
+  isOpen: boolean; onToggle: () => void; onDelete: () => void; deleting: boolean;
+}) {
+  const d = new Date(log.created_at);
+  const dateStr = d.toLocaleDateString("en", { month:"short", day:"numeric" });
+  const timeStr = d.toLocaleTimeString("en", { hour:"numeric", minute:"2-digit" });
+  const accent = EXERCISE_ACCENT;
+  const typeLabel = log.exercise_type === "cardio" ? "cardio" : "strength";
+  return (
+    <NonMealRow
+      isOpen={isOpen}
+      onToggle={onToggle}
+      onDelete={onDelete}
+      deleting={deleting}
+      accent={accent}
+      badge="WORKOUT"
+      dateStr={dateStr}
+      timeStr={timeStr}
+      primaryLabel="Duration"
+      primaryValue={`${log.duration_minutes}m`}
+      primaryColor={accent}
+      secondaryLabel="Type"
+      secondaryValue={typeLabel}
+      expandedDetails={
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8 }}>
+          <Detail label="DURATION" value={`${log.duration_minutes} min`} color={accent}/>
+          <Detail label="TYPE" value={typeLabel}/>
+          <Detail label="INTENSITY" value={log.intensity}/>
+          <Detail label="GLUCOSE AT LOG" value={log.cgm_glucose_at_log != null ? `${log.cgm_glucose_at_log} mg/dL` : "—"}/>
+          {/* CGM auto-fetch: at workout end, and +1h after end. */}
+          <Detail label="AT END" value={log.glucose_at_end != null ? `${log.glucose_at_end} mg/dL` : "Pending"} color={log.glucose_at_end != null ? undefined : "rgba(255,255,255,0.4)"}/>
+          <Detail label="1H POST" value={log.glucose_after_1h != null ? `${log.glucose_after_1h} mg/dL` : "Pending"} color={log.glucose_after_1h != null ? undefined : "rgba(255,255,255,0.4)"}/>
+          {log.notes && (
+            <div style={{ gridColumn:"1 / -1", background:"rgba(255,255,255,0.02)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
+              <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>NOTES</div>
+              <div style={{ fontSize:13, color:"rgba(255,255,255,0.8)", lineHeight:1.5 }}>{log.notes}</div>
+            </div>
+          )}
+        </div>
+      }
+    />
+  );
+}
+
+function Detail({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <div style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
+      <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{label}</div>
+      <div style={{ fontSize:14, fontWeight:700, color: color || "rgba(255,255,255,0.9)", letterSpacing:"-0.01em" }}>{value}</div>
     </div>
   );
 }

@@ -1,0 +1,72 @@
+CONTEXT:
+Bolus and Basal logs currently have no expanded view content beyond basic log data. We need to:
+1. Wire up the scheduled CGM autofetch for these log types
+2. Show the fetched glucose values in the expanded view
+3. Add an evaluation layer — an interim assessment at 1h and a final assessment at 2h (bolus) or 12h/24h (basal)
+
+--- AUTOFETCH SCHEDULE ---
+
+Check whether the existing meal log autofetch mechanism (which fires at +60min and +120min post-log) can be reused. If yes, extend it to also handle bolus and basal logs using the same infrastructure. If not, implement the same pattern fresh for these log types.
+
+BOLUS: fetch at +60min → glucoseAfter1h, fetch at +120min → glucoseAfter2h
+BASAL: fetch at +12h → glucoseAfter12h, fetch at +24h → glucoseAfter24h
+
+Store each scheduled fetch as a job in the DB with: logId, fetchTime (UTC), fetchType label, status (pending / fetched / failed / skipped)
+
+--- EXPANDED VIEW LAYOUT ---
+
+When a Bolus or Basal log row is expanded, show the following sections:
+
+1. LOG DETAILS
+   - Log type (Bolus / Basal), Brand, Dose, Injection time
+
+2. GLUCOSE TRACKING
+   For BOLUS:
+   - BG Before (at inject time) — fetched at log submit
+   - BG at +1h — show value if fetched, "Pending — expected [time]" if not yet due or in progress, "—" if CGM not connected
+   - BG at +2h — same pending/fetched/missing logic
+   - Delta from Before → 1h and Before → 2h, colour coded (green = dropping/stable, red = rising)
+
+   For BASAL:
+   - BG Before (at inject time)
+   - BG at +12h — same pending/fetched/missing logic
+   - BG at +24h — same
+   - Delta Before → 12h and Before → 24h
+
+3. EVALUATION PANEL (appears once data is available)
+   For BOLUS — show two evaluation states:
+
+   INTERIM (unlocks when glucoseAfter1h is fetched):
+   - Label: "1H ASSESSMENT"
+   - Logic:
+     · If BG dropped >20% from before → "Responding well — glucose falling as expected"
+     · If BG is within ±10% of before → "Slow response — glucose largely unchanged at 1h"
+     · If BG rose >10% from before → "Rising at 1h — bolus may be insufficient or timing off"
+     · If BG <70 mg/dL → "Hypoglycaemia risk — glucose below threshold at 1h"
+   - Show as an info card with a coloured state indicator (green / amber / red)
+
+   FINAL (unlocks when glucoseAfter2h is fetched):
+   - Label: "FINAL OUTCOME"
+   - Logic:
+     · If BG is within target range (70–140 mg/dL) AND dropped from before → "Good response — bolus effective"
+     · If BG remains elevated (>140 mg/dL) → "Under dose or late peak — glucose still high at 2h"
+     · If BG dropped below 70 → "Over dose — hypoglycaemia at 2h"
+     · If BG rose significantly (>30 mg/dL from before) → "Spike — bolus insufficient for meal load"
+   - Replace or sit alongside the INTERIM card once 2h data arrives
+
+   For BASAL:
+   INTERIM at 12h:
+   - Label: "12H CHECK"
+   - Logic:
+     · BG within target (70–140) → "Stable — basal holding glucose in range overnight/daytime"
+     · BG >140 → "Running high — basal dose may be insufficient"
+     · BG <70 → "Hypoglycaemia — basal dose may be too high"
+
+   FINAL at 24h:
+   - Label: "24H ASSESSMENT"
+   - Same threshold logic, but framed as full-cycle conclusion:
+     · "Basal effective — glucose stable across 24h"
+     · "Persistent highs — consider dose review with your care team"
+     · "Recurrent lows — basal dose may need adjustment"
+
+All evaluation text is informational only — no medical advice framing, just descriptive pattern observation. Add a small disclaimer line: "For reference only — always consult your care team for dose adjustments."

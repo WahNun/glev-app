@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { insertInsulinLog } from "@/lib/insulin";
 import { insertExerciseLog } from "@/lib/exercise";
+import { scheduleJobsForLog } from "@/lib/cgmJobs";
 
 const ACCENT = "#4F6EF7";
 const GREEN  = "#22D3A0";
@@ -151,12 +152,21 @@ export function InsulinForm() {
     setStatus({ kind: "submitting" });
     const cgm = await pullCurrentCgm();
     try {
-      await insertInsulinLog({
+      const inserted = await insertInsulinLog({
         insulin_type: type,
         insulin_name: name.trim(),
         units: u,
         cgm_glucose_at_log: cgm,
         notes: notes.trim() || null,
+      });
+      // Schedule post-fetches: bolus → +1h/+2h, basal → +12h/+24h.
+      // refTime = the log's created_at (DB-assigned); fall back to "now"
+      // in the unlikely case it isn't returned.
+      const ref = inserted?.created_at || new Date().toISOString();
+      void scheduleJobsForLog({
+        logId: inserted.id,
+        logType: type,
+        refTimeIso: ref,
       });
       setStatus({
         kind: "ok",
@@ -278,12 +288,20 @@ export function ExerciseForm() {
     setStatus({ kind: "submitting" });
     const cgm = await pullCurrentCgm();
     try {
-      await insertExerciseLog({
+      const insertedEx = await insertExerciseLog({
         exercise_type: type,
         duration_minutes: d,
         intensity,
         cgm_glucose_at_log: cgm,
         notes: notes.trim() || null,
+      });
+      // Schedule post-fetches: at workout end (now + duration), and +1h after end.
+      const refEx = insertedEx?.created_at || new Date().toISOString();
+      void scheduleJobsForLog({
+        logId: insertedEx.id,
+        logType: "exercise",
+        refTimeIso: refEx,
+        durationMinutes: d,
       });
       const typeLabel = type === "hypertrophy" ? "Hypertrophy" : "Cardio";
       setStatus({

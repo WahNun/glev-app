@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { scheduleJobsForLog } from "@/lib/cgmJobs";
 import {
   saveMeal,
   classifyMeal,
@@ -213,6 +214,10 @@ export default function ManualEntryModal({
       // (e.g. when user logs a meal that already happened > 1h ago without
       // a 1h reading) are picked up by the layout-level reconciliation.
       try { scheduleAutoFillForMeal(meal.id, mealIso); } catch { /* non-fatal */ }
+      // Unified CGM job scheduler — covers all log types. Conservative: only
+      // writes columns that are still NULL, so it coexists safely with the
+      // legacy per-meal auto-fill above.
+      void scheduleJobsForLog({ logId: meal.id, logType: "meal", refTimeIso: mealIso });
       if (typeof window !== "undefined") {
         window.dispatchEvent(new CustomEvent("glev:meal-saved", { detail: { id: meal.id, mealTime: mealIso } }));
       }

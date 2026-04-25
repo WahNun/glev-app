@@ -13,6 +13,9 @@ export interface ExerciseLog {
   intensity: "low" | "medium" | "high";
   cgm_glucose_at_log: number | null;
   notes: string | null;
+  // CGM auto-fetch results: at workout end, and +1h after end.
+  glucose_at_end?: number | null;
+  glucose_after_1h?: number | null;
 }
 
 export interface ExerciseLogInput {
@@ -55,7 +58,7 @@ export async function fetchExerciseLogs(
   toIso?: string,
 ): Promise<ExerciseLog[]> {
   if (!supabase) throw new Error("Supabase is not configured");
-  let q = supabase.from("exercise_logs").select(COLS).order("created_at", { ascending: false });
+  let q = supabase.from("exercise_logs").select("*").order("created_at", { ascending: false });
   if (fromIso) q = q.gte("created_at", fromIso);
   if (toIso)   q = q.lte("created_at", toIso);
   const { data, error } = await q;

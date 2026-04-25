@@ -14,6 +14,13 @@ export interface InsulinLog {
   units: number;
   cgm_glucose_at_log: number | null;
   notes: string | null;
+  // CGM auto-fetch results (populated by /api/cgm-jobs/process). Bolus
+  // uses 1h/2h, basal uses 12h/24h. Null = not fetched yet (pending or
+  // CGM not connected).
+  glucose_after_1h?: number | null;
+  glucose_after_2h?: number | null;
+  glucose_after_12h?: number | null;
+  glucose_after_24h?: number | null;
 }
 
 export interface InsulinLogInput {
@@ -56,7 +63,9 @@ export async function fetchInsulinLogs(
   toIso?: string,
 ): Promise<InsulinLog[]> {
   if (!supabase) throw new Error("Supabase is not configured");
-  let q = supabase.from("insulin_logs").select(COLS).order("created_at", { ascending: false });
+  // select("*") so newly added post-fetch columns load without
+  // requiring this string to be kept in sync with the schema.
+  let q = supabase.from("insulin_logs").select("*").order("created_at", { ascending: false });
   if (fromIso) q = q.gte("created_at", fromIso);
   if (toIso)   q = q.lte("created_at", toIso);
   const { data, error } = await q;
