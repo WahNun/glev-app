@@ -1,12 +1,12 @@
 import Image from "next/image";
-import { BORDER, TEXT_DIM } from "./tokens";
+import { ACCENT, TEXT_DIM } from "./tokens";
 
 type Feature = {
   title: string;
   body: string;
   /**
    * Marketing screenshot of the in-app flow. Sourced from
-   * /mockups/*.png — the same screenshots that power /mockups/dark-cockpit.
+   * /public/mockups/*.png — portrait phone screenshots (526×1129).
    */
   image: { src: string; alt: string };
 };
@@ -48,16 +48,19 @@ const FEATURES: Feature[] = [
 
 /**
  * Four alternating left/right rows. Each row pairs a real product
- * screenshot from /public/mockups/ with German marketing copy.
+ * screenshot from /public/mockups/ — rendered inside an iPhone-shaped
+ * portrait frame so the screenshots fit naturally at every breakpoint.
  *
- * On screens narrower than ~720px the rows stack mockup-above-text.
+ * Desktop (>720px): phone left or right (alternating), copy in the
+ *   other column.
+ * Mobile (≤720px): phone centered above the copy.
  */
 export default function FeatureDeepDive() {
   return (
     <section
       id="features"
       aria-label="Features im Detail"
-      style={{ display: "flex", flexDirection: "column", gap: 64 }}
+      style={{ display: "flex", flexDirection: "column", gap: 80 }}
     >
       <h2
         style={{
@@ -83,32 +86,14 @@ function FeatureRow({ feature, reverse }: { feature: Feature; reverse: boolean }
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "minmax(0, 480px) minmax(0, 1fr)",
-        gap: 40,
+        gridTemplateColumns: "260px minmax(0, 1fr)",
+        gap: 56,
         alignItems: "center",
       }}
       className={`feature-row ${reverse ? "feature-row--reverse" : ""}`}
     >
-      <div className="feature-row__mockup">
-        <div
-          style={{
-            position: "relative",
-            width: "100%",
-            aspectRatio: "3 / 2",
-            border: `1px solid ${BORDER}`,
-            borderRadius: 16,
-            overflow: "hidden",
-            background: "#0F0F14",
-          }}
-        >
-          <Image
-            src={feature.image.src}
-            alt={feature.image.alt}
-            fill
-            sizes="(max-width: 720px) 100vw, 480px"
-            style={{ objectFit: "cover", objectPosition: "top left" }}
-          />
-        </div>
+      <div className="feature-row__mockup" style={{ display: "flex", justifyContent: "center" }}>
+        <PhoneFrame src={feature.image.src} alt={feature.image.alt} />
       </div>
       <div className="feature-row__copy" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <h3
@@ -128,18 +113,63 @@ function FeatureRow({ feature, reverse }: { feature: Feature; reverse: boolean }
         @media (max-width: 720px) {
           .feature-row {
             grid-template-columns: 1fr !important;
-            gap: 20px !important;
+            gap: 28px !important;
+            justify-items: center;
+            text-align: center;
           }
-          .feature-row--reverse .feature-row__copy,
-          .feature-row--reverse .feature-row__mockup {
-            order: 0 !important;
-          }
+          .feature-row .feature-row__copy { align-items: center; }
         }
         @media (min-width: 721px) {
           .feature-row--reverse .feature-row__mockup { order: 2; }
           .feature-row--reverse .feature-row__copy   { order: 1; }
         }
       `}</style>
+    </div>
+  );
+}
+
+/**
+ * Static portrait phone frame around a screenshot. Aspect ratio matches
+ * the source PNGs (526:1129) so screenshots fill edge-to-edge with no
+ * cropping at any width.
+ */
+function PhoneFrame({ src, alt }: { src: string; alt: string }) {
+  return (
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        maxWidth: 260,
+        aspectRatio: "526 / 1129",
+        borderRadius: 36,
+        padding: 6,
+        background: "#0F0F14",
+        boxShadow: `
+          0 0 0 1px rgba(255,255,255,0.10),
+          0 24px 60px rgba(0,0,0,0.55),
+          0 4px 12px ${ACCENT}1A,
+          inset 0 0 0 1px rgba(255,255,255,0.04)
+        `,
+      }}
+    >
+      <div
+        style={{
+          position: "relative",
+          width: "100%",
+          height: "100%",
+          borderRadius: 30,
+          overflow: "hidden",
+          background: "#09090B",
+        }}
+      >
+        <Image
+          src={src}
+          alt={alt}
+          fill
+          sizes="(max-width: 720px) 260px, 260px"
+          style={{ objectFit: "cover", objectPosition: "center top" }}
+        />
+      </div>
     </div>
   );
 }
