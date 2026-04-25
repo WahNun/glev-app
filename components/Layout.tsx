@@ -136,7 +136,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <GlevLogo size={32} />
           <div>
             <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: "-0.03em", color: "#fff" }}>Glev</div>
-            <div style={{ fontSize: 9, color: "rgba(255,255,255,0.25)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Smart Insulin</div>
+            <div style={{ fontSize: 9, color: "rgba(255,255,255,0.25)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Smart insulin decisions</div>
           </div>
         </div>
 
