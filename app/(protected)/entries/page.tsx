@@ -566,7 +566,8 @@ const EXERCISE_ACCENT = "#22C55E";
 function NonMealRow({
   isOpen, onToggle, onDelete, deleting, accent, badge, dateStr, timeStr,
   primaryLabel, primaryValue, primaryColor,
-  secondaryLabel, secondaryValue, expandedDetails,
+  secondaryLabel, secondaryValue, secondaryColor, secondaryMono,
+  expandedDetails,
 }: {
   isOpen: boolean;
   onToggle: () => void;
@@ -581,6 +582,11 @@ function NonMealRow({
   primaryColor: string;
   secondaryLabel: string;
   secondaryValue: string;
+  /** Optional override — defaults to neutral white. Used by the bolus/basal
+   *  rows where the secondary column carries the DOSE and should keep its
+   *  accent + mono treatment after the BRAND/DOSE swap. */
+  secondaryColor?: string;
+  secondaryMono?: boolean;
   expandedDetails: React.ReactNode;
 }) {
   return (
@@ -621,10 +627,25 @@ function NonMealRow({
             <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>{primaryLabel}</div>
             <div style={{ fontSize:14, fontWeight:700, color:primaryColor, letterSpacing:"-0.01em", fontFamily:"var(--font-mono)" }}>{primaryValue}</div>
           </div>
-          {/* Col 4: Secondary (Type name / Intensity) */}
+          {/* Col 4: Secondary — neutral by default; bolus/basal pass an
+              accent + mono override so DOSE keeps its prominent styling. */}
           <div style={{ minWidth:0 }}>
             <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>{secondaryLabel}</div>
-            <div title={secondaryValue} style={{ fontSize:13, fontWeight:600, color:"rgba(255,255,255,0.8)", letterSpacing:"-0.01em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{secondaryValue}</div>
+            <div
+              title={secondaryValue}
+              style={{
+                fontSize: secondaryMono ? 14 : 13,
+                fontWeight: secondaryMono ? 700 : 600,
+                color: secondaryColor || "rgba(255,255,255,0.8)",
+                letterSpacing: "-0.01em",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                fontFamily: secondaryMono ? "var(--font-mono)" : undefined,
+              }}
+            >
+              {secondaryValue}
+            </div>
           </div>
           {/* Col 5: chevron */}
           <span className="glev-mec-eval" style={{
@@ -683,11 +704,17 @@ function InsulinRowCard({ log, kind, isOpen, onToggle, onDelete, deleting }: {
       badge={badge}
       dateStr={dateStr}
       timeStr={timeStr}
-      primaryLabel="Dose"
-      primaryValue={`${log.units}u`}
-      primaryColor={accent}
-      secondaryLabel="Type"
-      secondaryValue={log.insulin_name || (kind === "bolus" ? "rapid-acting" : "long-acting")}
+      // Order requested by the user: WHEN · TYPE(dot) · BRAND · DOSE · badge.
+      // → BRAND occupies the primary slot (col 3, neutral text), DOSE occupies
+      //   the secondary slot (col 4) with an accent + mono override so it
+      //   stays visually prominent.
+      primaryLabel="Brand"
+      primaryValue={log.insulin_name || (kind === "bolus" ? "rapid-acting" : "long-acting")}
+      primaryColor="rgba(255,255,255,0.85)"
+      secondaryLabel="Dose"
+      secondaryValue={`${log.units}u`}
+      secondaryColor={accent}
+      secondaryMono
       expandedDetails={
         <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8 }}>
           <Detail label="DOSE" value={`${log.units} u`} color={accent}/>
