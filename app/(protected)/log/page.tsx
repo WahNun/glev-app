@@ -468,10 +468,16 @@ export default function LogPage() {
   const hasAny = totalCarbs > 0 || totalProtein > 0 || totalFat > 0 || !!desc.trim();
 
   async function handleConfirm() {
-    if (!glucoseNum || !totalCarbs || !insulinNum) { setError("Glucose, carbs and insulin are required."); return; }
+    if (!glucoseNum || !totalCarbs) { setError("Glucose and carbs are required."); return; }
     setSaving(true); setError("");
     try {
-      const ev = computeEvaluation(totalCarbs, insulinNum, glucoseNum);
+      // Insulin wird erst nach Confirm binär abgefragt → vor dem Save
+      // ist insulinNum immer null und damit auch keine Evaluation möglich.
+      // (computeEvaluation braucht eine konkrete Dosis; wir setzen null
+      // und füllen Evaluation später, wenn die Dosis bekannt ist.)
+      const ev = insulinNum != null
+        ? computeEvaluation(totalCarbs, insulinNum, glucoseNum)
+        : null;
       const mealTimeIso = mealTime ? new Date(mealTime).toISOString() : new Date().toISOString();
       const saved = await saveMeal({
         inputText: desc || transcript || "Manual entry",
@@ -708,10 +714,12 @@ export default function LogPage() {
             })()}
           </div>
 
-          <div>
-            <label style={labelStyle}>Insulin (u)</label>
-            <input value={insulin} onChange={e => setInsulin(e.target.value)} placeholder="e.g. 1.5" type="number" step="0.5" style={inp}/>
-          </div>
+          {/* INSULIN-EINGABE wurde aus dem Pre-Confirm-Flow entfernt:
+              Sie wird nach der Log-Bestätigung als binäre Frage angeboten
+              (siehe besprochene UX). Hier nichts mehr rendern.
+              `insulin` State + setInsulin bleiben vorhanden, damit
+              `insulinNum` weiter null ergibt und abhängige UI-Pfade
+              (Correction-Bolus, Save, Confirm-Button) sauber durchlaufen. */}
 
           {/* CORRECTION-BOLUS TAG — only surfaces when a positive insulin dose
               is entered. Tagging links this dose to a parent meal so the
@@ -783,12 +791,12 @@ export default function LogPage() {
 
           {error && <div style={{ fontSize:12, color:PINK, padding:"8px 12px", background:`${PINK}10`, borderRadius:8, border:`1px solid ${PINK}25` }}>{error}</div>}
 
-          <button onClick={handleConfirm} disabled={saving || !glucose || !carbs || !insulin}
+          <button onClick={handleConfirm} disabled={saving || !glucose || !carbs}
             style={{ marginTop:4, padding:"14px", borderRadius:12, border:"none",
               background:`linear-gradient(135deg, ${ACCENT}, #6B8BFF)`, color:"#fff",
               fontSize:14, fontWeight:700, letterSpacing:"-0.01em",
-              cursor: (saving || !glucose || !carbs || !insulin) ? "default" : "pointer",
-              opacity: (glucose && carbs && insulin && !saving) ? 1 : 0.4,
+              cursor: (saving || !glucose || !carbs) ? "default" : "pointer",
+              opacity: (glucose && carbs && !saving) ? 1 : 0.4,
               transition:"opacity 0.2s",
             }}>
             {saving ? "Saving…" : "✓ Confirm Log"}
@@ -797,7 +805,7 @@ export default function LogPage() {
           <button
             onClick={() => {
               if (saving) return;
-              const dirty = hasAny || transcript.trim() || glucose || insulin;
+              const dirty = hasAny || transcript.trim() || glucose;
               if (dirty && !window.confirm("Discard this entry? All inputs will be cleared.")) return;
               resetForm();
             }}
