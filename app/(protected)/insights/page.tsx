@@ -9,6 +9,11 @@ import { suggestAdjustment, type AdaptiveSettings, type AdjustmentSuggestion } f
 import SortableCardGrid, { type SortableItem } from "@/components/SortableCardGrid";
 import { useCardOrder } from "@/lib/cardOrder";
 import { parseDbTs, parseDbDate } from "@/lib/time";
+import {
+  insertFingerstick,
+  fetchLatestFingerstick,
+  type FingerstickReading,
+} from "@/lib/fingerstick";
 
 /** Default top-to-bottom order. Hero block (time-in-range, gmi-a1c,
  *  glucose-trend, meal-evaluation) mirrors the homepage `InsightsScreen()`
@@ -19,6 +24,7 @@ const INSIGHTS_DEFAULT_ORDER = [
   "glucose-trend",
   "meal-evaluation",
   "adaptive-engine",
+  "fingerstick-log",
   "patterns",
   "meal-type",
   "time-of-day",
@@ -544,6 +550,10 @@ export default function InsightsPage() {
       ),
     },
     {
+      id: "fingerstick-log",
+      node: <FingerstickLogSection/>,
+    },
+    {
       id: "patterns",
       node: (
         <FlipCard
@@ -741,6 +751,220 @@ function CardLabel({ text, color }: { text: string; color?: string }) {
       color: color ?? "rgba(255,255,255,0.4)", textTransform:"uppercase",
     }}>{text}</div>
   );
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   Finger-Stick Glukose — manual reading capture inline in the Engine
+   section of the Insights page.
+
+   Reuses the existing dashboard write path: `insertFingerstick` from
+   `lib/fingerstick.ts` (table: `fingerstick_readings`, see migration
+   `supabase/migrations/20260426_add_fingerstick_readings.sql`).
+   No new tables, no new API routes, no dosing logic, no modal.
+   ───────────────────────────────────────────────────────────────────── */
+function FingerstickLogSection() {
+  const [value, setValue]       = useState<string>("");
+  const [whenLocal, setWhenLocal] = useState<string>(() => toLocalInputValue(new Date()));
+  const [note, setNote]         = useState<string>("");
+  const [busy, setBusy]         = useState(false);
+  const [feedback, setFeedback] = useState<{ kind: "ok" | "err"; msg: string } | null>(null);
+  const [latest, setLatest]     = useState<FingerstickReading | null>(null);
+
+  const valueId = useId();
+  const whenId  = useId();
+  const noteId  = useId();
+
+  useEffect(() => {
+    fetchLatestFingerstick().then(setLatest).catch(() => {});
+  }, []);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setFeedback(null);
+
+    const num = Number(value.replace(",", "."));
+    if (!Number.isFinite(num) || num < 20 || num > 600) {
+      setFeedback({ kind: "err", msg: "Wert muss zwischen 20 und 600 mg/dL liegen." });
+      return;
+    }
+
+    let measuredAt: string | undefined;
+    if (whenLocal) {
+      const d = new Date(whenLocal);
+      if (isNaN(d.getTime())) {
+        setFeedback({ kind: "err", msg: "Ungültiger Zeitpunkt." });
+        return;
+      }
+      measuredAt = d.toISOString();
+    }
+
+    setBusy(true);
+    try {
+      const saved = await insertFingerstick({
+        value_mg_dl: num,
+        measured_at: measuredAt,
+        notes: note.trim() || null,
+      });
+      setLatest(saved);
+      setValue("");
+      setNote("");
+      setWhenLocal(toLocalInputValue(new Date()));
+      setFeedback({ kind: "ok", msg: "Gespeichert ✓" });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Speichern fehlgeschlagen.";
+      setFeedback({ kind: "err", msg });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const inputStyle: React.CSSProperties = {
+    background: "rgba(255,255,255,0.04)",
+    border: `1px solid ${BORDER}`,
+    borderRadius: 10,
+    padding: "10px 12px",
+    color: "#fff",
+    fontSize: 13,
+    fontFamily: "inherit",
+    outline: "none",
+    width: "100%",
+    boxSizing: "border-box",
+  };
+
+  return (
+    <div style={{
+      background: SURFACE,
+      border: `1px solid ${BORDER}`,
+      borderRadius: 14,
+      padding: "14px 14px 12px",
+      display: "flex", flexDirection: "column", gap: 12,
+    }}>
+      {/* Header — plain label + sub, no pill, no info icon. */}
+      <div>
+        <CardLabel text="Finger-Stick Glukose"/>
+        <div style={{
+          marginTop: 4,
+          fontSize: 13, fontWeight: 600, color: "#fff", lineHeight: 1.3,
+        }}>
+          Manuelle Messung erfassen
+        </div>
+      </div>
+
+      <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {/* Value + time on one row when there's space. */}
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1.2fr)", gap: 10 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label htmlFor={valueId} style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", fontWeight: 600, letterSpacing: "0.04em" }}>
+              Wert
+            </label>
+            <input
+              id={valueId}
+              type="number"
+              inputMode="decimal"
+              min={20}
+              max={600}
+              step={1}
+              placeholder="mg/dL"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
+              required
+            />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <label htmlFor={whenId} style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", fontWeight: 600, letterSpacing: "0.04em" }}>
+              Zeitpunkt
+            </label>
+            <input
+              id={whenId}
+              type="datetime-local"
+              value={whenLocal}
+              onChange={(e) => setWhenLocal(e.target.value)}
+              style={inputStyle}
+            />
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <label htmlFor={noteId} style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", fontWeight: 600, letterSpacing: "0.04em" }}>
+            Notiz (optional)
+          </label>
+          <input
+            id={noteId}
+            type="text"
+            placeholder='z.B. "vor dem Sport"'
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            style={inputStyle}
+            maxLength={200}
+          />
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <button
+            type="submit"
+            disabled={busy}
+            style={{
+              padding: "9px 18px",
+              borderRadius: 10,
+              border: "none",
+              background: busy ? `${ACCENT}66` : ACCENT,
+              color: "#fff",
+              fontSize: 12, fontWeight: 700, letterSpacing: "0.02em",
+              cursor: busy ? "default" : "pointer",
+              transition: "background 120ms ease",
+            }}
+          >
+            {busy ? "Speichern…" : "Speichern"}
+          </button>
+          <span
+            role="status"
+            aria-live="polite"
+            style={{
+              fontSize: 12, fontWeight: 600,
+              color: feedback?.kind === "ok" ? GREEN : PINK,
+              minHeight: 16,
+            }}
+          >
+            {feedback?.msg ?? ""}
+          </span>
+        </div>
+      </form>
+
+      {/* Latest reading */}
+      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", lineHeight: 1.4 }}>
+        {latest
+          ? <>Letzter Wert: <span style={{ color: "#fff", fontFamily: "var(--font-mono)", fontWeight: 700 }}>{Math.round(latest.value_mg_dl)} mg/dL</span> · {formatLatestWhen(latest.measured_at)}</>
+          : <>Noch keine manuellen Werte erfasst.</>}
+      </div>
+
+      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", lineHeight: 1.4, fontStyle: "italic" }}>
+        Unabhängig vom CGM — nur manuell erfasste Werte.
+      </div>
+    </div>
+  );
+}
+
+/** Format a Date as the value expected by `<input type="datetime-local">`,
+ *  i.e. local-time `YYYY-MM-DDTHH:mm` (no seconds, no timezone suffix). */
+function toLocalInputValue(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** "heute 08:14" / "gestern 19:42" / "23.04. 14:20". */
+function formatLatestWhen(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  const now = new Date();
+  const startOfToday     = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfYesterday = startOfToday - 24 * 3600 * 1000;
+  const t = d.getTime();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const hh = pad(d.getHours()), mm = pad(d.getMinutes());
+  if (t >= startOfToday)     return `heute ${hh}:${mm}`;
+  if (t >= startOfYesterday) return `gestern ${hh}:${mm}`;
+  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}. ${hh}:${mm}`;
 }
 
 /** Sparkline — ported 1:1 from `components/AppMockupPhone.tsx`. */
