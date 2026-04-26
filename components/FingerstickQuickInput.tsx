@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { insertFingerstick, type FingerstickReading } from "@/lib/fingerstick";
 
 const ACCENT  = "#4F6EF7";
-const GREEN   = "#22D3A0";
 const PINK    = "#FF2D78";
 const SURFACE = "#111117";
 const BORDER  = "rgba(255,255,255,0.08)";
@@ -91,10 +90,11 @@ export default function FingerstickQuickInput({
         onClick={(e) => e.stopPropagation()}
         style={{
           width: "100%", maxWidth: 360,
-          background: SURFACE, border: `1px solid ${BORDER}`,
-          borderRadius: 18, padding: "22px 22px 18px",
+          background: `linear-gradient(135deg, ${ACCENT}10, ${SURFACE})`,
+          border: `1px solid ${ACCENT}30`,
+          borderRadius: 16, padding: "18px 18px 16px",
           boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
-          display: "flex", flexDirection: "column", gap: 14,
+          display: "flex", flexDirection: "column", gap: 12,
         }}
       >
         {/* Header */}
@@ -192,11 +192,11 @@ export default function FingerstickQuickInput({
             style={{
               flex: 2, padding: "12px", borderRadius: 12, border: "none",
               background: saving || !value
-                ? "rgba(34,211,160,0.25)"
-                : `linear-gradient(135deg, ${GREEN}, #1AB58A)`,
+                ? `${ACCENT}40`
+                : `linear-gradient(135deg, ${ACCENT}, #3B5BE0)`,
               color: "#fff", fontSize: 14, fontWeight: 700,
               cursor: saving || !value ? "not-allowed" : "pointer",
-              boxShadow: !saving && value ? `0 4px 18px ${GREEN}30` : "none",
+              boxShadow: !saving && value ? `0 4px 18px ${ACCENT}40` : "none",
             }}
           >
             {saving ? "Speichern…" : "Speichern"}
