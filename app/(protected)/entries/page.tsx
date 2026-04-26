@@ -789,6 +789,53 @@ export default function EntriesPage() {
                       </div>
                     )}
 
+                    {/* RELATED MEAL — this entry is itself a correction bolus */}
+                    {m.related_meal_id && (() => {
+                      const parent = meals.find(x => x.id === m.related_meal_id);
+                      return (
+                        <div style={{ background:`${ACCENT}10`, border:`1px solid ${ACCENT}40`, borderRadius:12, padding:"10px 12px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
+                          <div style={{ display:"flex", flexDirection:"column", gap:2, minWidth:0 }}>
+                            <div style={{ fontSize:9, color:"rgba(255,255,255,0.5)", letterSpacing:"0.1em", fontWeight:700 }}>KORREKTUR-BOLUS</div>
+                            <div style={{ fontSize:12, color:"rgba(255,255,255,0.75)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                              {parent ? `für: ${parent.input_text.length > 50 ? parent.input_text.slice(0, 50) + "…" : parent.input_text}` : "Original-Mahlzeit gelöscht"}
+                            </div>
+                          </div>
+                          <span style={{ padding:"4px 10px", borderRadius:99, fontSize:10, fontWeight:700, background:ACCENT, color:"#0A0A0F", whiteSpace:"nowrap", letterSpacing:"0.04em" }}>K</span>
+                        </div>
+                      );
+                    })()}
+
+                    {/* CORRECTION BOLI — other entries that reference this meal */}
+                    {(() => {
+                      const corrections = meals.filter(x => x.related_meal_id === m.id);
+                      if (corrections.length === 0) return null;
+                      const totalCorrInsulin = corrections.reduce((s, c) => s + (c.insulin_units || 0), 0);
+                      return (
+                        <div style={{ background:`${ACCENT}08`, border:`1px solid ${ACCENT}30`, borderRadius:12, padding:"10px 12px", display:"flex", flexDirection:"column", gap:8 }}>
+                          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
+                            <div style={{ fontSize:9, color:"rgba(255,255,255,0.5)", letterSpacing:"0.1em", fontWeight:700 }}>
+                              KORREKTUREN ({corrections.length})
+                            </div>
+                            <span style={{ padding:"4px 10px", borderRadius:99, fontSize:10, fontWeight:700, background:`${ACCENT}25`, color:ACCENT, border:`1px solid ${ACCENT}50`, whiteSpace:"nowrap" }}>
+                              +{totalCorrInsulin.toFixed(1)}u gesamt
+                            </span>
+                          </div>
+                          <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                            {corrections.map(c => {
+                              const t = parseDbDate(c.meal_time ?? c.created_at);
+                              const timeStr = t.toLocaleTimeString("en", { hour:"numeric", minute:"2-digit" });
+                              return (
+                                <div key={c.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, fontSize:11.5, color:"rgba(255,255,255,0.65)" }}>
+                                  <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{timeStr}</span>
+                                  <span style={{ color:ACCENT, fontWeight:700, flexShrink:0 }}>{c.insulin_units ?? 0}u</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     {/* MACROS & DOSING — 3-col grid of mini-cards */}
                     <div>
                       <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8 }}>MACROS &amp; DOSING</div>

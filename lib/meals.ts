@@ -31,6 +31,7 @@ export interface Meal {
   insulin_units: number | null;
   meal_type: string | null;
   evaluation: string | null;
+  related_meal_id: string | null;
   created_at: string;
 }
 
@@ -53,6 +54,7 @@ export interface SaveMealInput {
   evaluation: string | null;
   createdAt?: string | null;
   mealTime?: string | null;
+  relatedMealId?: string | null;
 }
 
 export function classifyMeal(carbs: number, protein: number, fat: number): string {
@@ -93,6 +95,7 @@ export async function saveMeal(input: SaveMealInput): Promise<Meal> {
     insulin_units:  input.insulinUnits,
     meal_type:      input.mealType,
     evaluation:     input.evaluation,
+    related_meal_id: input.relatedMealId ?? null,
   };
   if (input.createdAt) row.created_at = input.createdAt;
   if (input.mealTime) row.meal_time = input.mealTime;
@@ -106,6 +109,12 @@ export async function saveMeal(input: SaveMealInput): Promise<Meal> {
   // Retry without meal_time if the column is missing (schema not migrated yet).
   if (error && /meal_time/i.test(error.message ?? "")) {
     delete row.meal_time;
+    const r2 = await supabase.from("meals").insert(row).select().single();
+    data = r2.data; error = r2.error;
+  }
+  // Retry without related_meal_id if the column is missing (migration pending).
+  if (error && /related_meal_id/i.test(error.message ?? "")) {
+    delete row.related_meal_id;
     const r2 = await supabase.from("meals").insert(row).select().single();
     data = r2.data; error = r2.error;
   }
@@ -133,7 +142,7 @@ export async function deleteMeal(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
-const FULL_COLS = "id, user_id, input_text, parsed_json, glucose_before, glucose_after, bg_1h, bg_1h_at, bg_2h, bg_2h_at, outcome_state, meal_time, carbs_grams, protein_grams, fat_grams, fiber_grams, calories, insulin_units, meal_type, evaluation, created_at";
+const FULL_COLS = "id, user_id, input_text, parsed_json, glucose_before, glucose_after, bg_1h, bg_1h_at, bg_2h, bg_2h_at, outcome_state, meal_time, carbs_grams, protein_grams, fat_grams, fiber_grams, calories, insulin_units, meal_type, evaluation, related_meal_id, created_at";
 const MID_COLS  = "id, user_id, input_text, parsed_json, glucose_before, glucose_after, carbs_grams, protein_grams, fat_grams, fiber_grams, calories, insulin_units, meal_type, evaluation, created_at";
 const CORE_COLS = "id, user_id, input_text, parsed_json, glucose_before, carbs_grams, insulin_units, meal_type, evaluation, created_at";
 
@@ -213,6 +222,7 @@ export async function fetchMeals(): Promise<Meal[]> {
       data = (core.data ?? []).map((r: Record<string, unknown>) => ({
         ...r, glucose_after: null, protein_grams: null, fat_grams: null, fiber_grams: null, calories: null,
         bg_1h: null, bg_1h_at: null, bg_2h: null, bg_2h_at: null, outcome_state: null, meal_time: null,
+        related_meal_id: null,
       })) as unknown as typeof data;
       error = null;
     } else if (mid.error) {
@@ -220,6 +230,7 @@ export async function fetchMeals(): Promise<Meal[]> {
     } else {
       data = (mid.data ?? []).map((r: Record<string, unknown>) => ({
         ...r, bg_1h: null, bg_1h_at: null, bg_2h: null, bg_2h_at: null, outcome_state: null, meal_time: null,
+        related_meal_id: null,
       })) as unknown as typeof data;
       error = null;
     }

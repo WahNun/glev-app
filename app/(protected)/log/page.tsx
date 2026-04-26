@@ -84,6 +84,9 @@ export default function LogPage() {
   const [calories, setCalories] = useState("");
   const [desc, setDesc]         = useState("");
   const [insulin, setInsulin]   = useState("");
+  const [isCorrectionBolus, setIsCorrectionBolus] = useState(false);
+  const [relatedMealId, setRelatedMealId] = useState<string | null>(null);
+  const [recentMeals, setRecentMeals] = useState<Meal[]>([]);
   const [mealTime, setMealTime] = useState<string>(() => toDatetimeLocal(new Date().toISOString()));
   const [mealTimeDirty, setMealTimeDirty] = useState(false);
 
@@ -101,7 +104,15 @@ export default function LogPage() {
   const [rec, setRec]     = useState<Recommendation | null>(null);
   const [recLoading, setRecLoading] = useState(false);
 
-  useEffect(() => { fetchMeals().then(setMeals).catch(console.error); }, []);
+  useEffect(() => {
+    fetchMeals().then(fetched => {
+      setMeals(fetched);
+      // Surface meals from the last 6h so a correction bolus can be tagged
+      // back to the meal it's correcting. Read-only; no DB write.
+      const sixHoursAgo = Date.now() - 6 * 3600 * 1000;
+      setRecentMeals(fetched.filter(m => new Date(m.meal_time ?? m.created_at).getTime() >= sixHoursAgo));
+    }).catch(console.error);
+  }, []);
 
   // GPT reasoning chat panel
   type ChatMsg = { role: "user" | "assistant" | "system"; content: string };
@@ -129,6 +140,7 @@ export default function LogPage() {
     setRecording(false); setHasActiveMeal(false);
     setParsing(false); setTranscript("");
     setGlucose(""); setCarbs(""); setFiber(""); setProtein(""); setFat(""); setCalories(""); setDesc(""); setInsulin("");
+    setIsCorrectionBolus(false); setRelatedMealId(null);
     setMealTime(toDatetimeLocal(new Date().toISOString())); setMealTimeDirty(false);
     setSaving(false); setError(""); setSuccess(false);
     setChatMsgs([]); setChatInput(""); setPipeStatus("idle");
@@ -432,6 +444,7 @@ export default function LogPage() {
         mealType: classifyMeal(totalCarbs, totalProtein, totalFat),
         evaluation: ev,
         mealTime: mealTimeIso,
+        relatedMealId: isCorrectionBolus ? relatedMealId : null,
       });
       // Auto-fill bg_1h / bg_2h from CGM history at meal_time + 1h / +2h.
       // Schedules in-tab timers + persists so a reload / new tab can rehydrate;
@@ -761,6 +774,74 @@ export default function LogPage() {
             <label style={labelStyle}>Insulin (u){rec && <span style={{ marginLeft:8, fontSize:10, color:GREEN, fontWeight:700, letterSpacing:"0.04em" }}>· auto-filled from recommendation</span>}</label>
             <input value={insulin} onChange={e => setInsulin(e.target.value)} placeholder="e.g. 1.5" type="number" step="0.5" style={inp}/>
           </div>
+
+          {/* CORRECTION-BOLUS TAG — only surfaces when a positive insulin dose
+              is entered. Tagging links this dose to a parent meal so the
+              engine can tell "primary meal coverage" from "later correction"
+              when learning ICR. Self-FK; column added by 20260426 migration. */}
+          {insulinNum != null && insulinNum > 0 && (
+            <div style={{ background:`${ACCENT}08`, border:`1px solid ${ACCENT}30`, borderRadius:12, padding:"12px 14px", display:"flex", flexDirection:"column", gap: isCorrectionBolus ? 10 : 0 }}>
+              <label style={{ display:"flex", alignItems:"center", justifyContent:"space-between", cursor:"pointer", gap:12 }}>
+                <div style={{ display:"flex", flexDirection:"column", gap:2, minWidth:0 }}>
+                  <span style={{ fontSize:13, fontWeight:600, color:"#fff" }}>Korrektur-Bolus?</span>
+                  <span style={{ fontSize:10.5, color:"rgba(255,255,255,0.45)", lineHeight:1.4 }}>
+                    Diese Dosis korrigiert eine vorherige Mahlzeit (statt sie zu begleiten).
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={isCorrectionBolus}
+                  onChange={e => { setIsCorrectionBolus(e.target.checked); if (!e.target.checked) setRelatedMealId(null); }}
+                  style={{ width:18, height:18, accentColor:ACCENT, cursor:"pointer", flexShrink:0 }}
+                />
+              </label>
+              {isCorrectionBolus && (
+                <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                  <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:600 }}>
+                    Welche Mahlzeit korrigieren?
+                  </div>
+                  {recentMeals.length === 0 ? (
+                    <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)", padding:"8px 0", fontStyle:"italic" }}>
+                      Keine Mahlzeit in den letzten 6 Stunden.
+                    </div>
+                  ) : (
+                    <div style={{ display:"flex", flexDirection:"column", gap:4, maxHeight:200, overflowY:"auto" }}>
+                      {recentMeals.map(rm => {
+                        const t = new Date(rm.meal_time ?? rm.created_at);
+                        const timeStr = t.toLocaleTimeString("de-DE", { hour:"2-digit", minute:"2-digit" });
+                        const sel = relatedMealId === rm.id;
+                        return (
+                          <button
+                            key={rm.id}
+                            type="button"
+                            onClick={() => setRelatedMealId(sel ? null : rm.id)}
+                            style={{
+                              padding:"8px 10px",
+                              background: sel ? `${ACCENT}25` : "rgba(255,255,255,0.03)",
+                              border:`1px solid ${sel ? ACCENT : BORDER}`,
+                              borderRadius:8,
+                              color:"#fff",
+                              cursor:"pointer",
+                              textAlign:"left",
+                              display:"flex",
+                              justifyContent:"space-between",
+                              alignItems:"center",
+                              gap:8,
+                            }}
+                          >
+                            <span style={{ fontSize:11.5, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                              {rm.input_text.length > 40 ? rm.input_text.slice(0, 40) + "…" : rm.input_text}
+                            </span>
+                            <span style={{ fontSize:10, color:"rgba(255,255,255,0.5)", flexShrink:0, fontFamily:"var(--font-mono)" }}>{timeStr}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {error && <div style={{ fontSize:12, color:PINK, padding:"8px 12px", background:`${PINK}10`, borderRadius:8, border:`1px solid ${PINK}25` }}>{error}</div>}
 
