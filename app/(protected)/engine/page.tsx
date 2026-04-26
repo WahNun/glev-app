@@ -8,6 +8,7 @@ import { logDebug } from "@/lib/debug";
 import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
 import EngineLogTab, { InsulinForm, ExerciseForm } from "@/components/EngineLogTab";
+import FingerstickLogCard from "@/components/FingerstickLogCard";
 import GlevLogo from "@/components/GlevLogo";
 import EngineChatPanel, { type SeedMessage } from "@/components/EngineChatPanel";
 import { fetchLatestCgm } from "@/components/CgmFetchButton";
@@ -135,7 +136,7 @@ function runGlevEngine(
 const CONF_COLOR: Record<string, string> = { HIGH:GREEN, MEDIUM:ORANGE, LOW:PINK };
 
 export default function EnginePage() {
-  const [tab, setTab]         = useState<"engine"|"log"|"bolus"|"exercise">("engine");
+  const [tab, setTab]         = useState<"engine"|"log"|"bolus"|"exercise"|"fingerstick">("engine");
   const [isMobile, setIsMobile] = useState(false);
   const [meals, setMeals]     = useState<Meal[]>([]);
   const [adaptedICR, setAdaptedICR] = useState(15);
@@ -635,7 +636,11 @@ export default function EnginePage() {
             ? "AI-powered insulin recommendations from your personal dosing history."
             : tab === "bolus"
             ? "Standalone Bolus- und Basal-Dosen dokumentieren. Glev rechnet nichts."
-            : "Sport-Sessions dokumentieren — Glev verknüpft sie mit Glukose-Reaktionen."}
+            : tab === "fingerstick"
+            ? "Manueller Fingerstick — überschreibt CGM-Werte ≤ 5 min für die Engine."
+            : tab === "exercise"
+            ? "Sport-Sessions dokumentieren — Glev verknüpft sie mit Glukose-Reaktionen."
+            : "Insulin- und Exercise-Logs sowie manuelle Glukose-Werte dokumentieren."}
         </p>
       </div>
 
@@ -647,13 +652,15 @@ export default function EnginePage() {
       }}>
         {(isMobile
           ? [
-              { id:"engine"   as const, label:"Engine" },
-              { id:"bolus"    as const, label:"Insulin Log" },
-              { id:"exercise" as const, label:"Exercise Log" },
+              { id:"engine"      as const, label:"Engine" },
+              { id:"bolus"       as const, label:"Insulin Log" },
+              { id:"exercise"    as const, label:"Exercise Log" },
+              { id:"fingerstick" as const, label:"FS Glucose" },
             ]
           : [
-              { id:"engine" as const, label:"Engine" },
-              { id:"log"    as const, label:"Log" },
+              { id:"engine"      as const, label:"Engine" },
+              { id:"log"         as const, label:"Log" },
+              { id:"fingerstick" as const, label:"FS Glucose" },
             ]
         ).map(t => {
           const on = tab === t.id;
@@ -1344,9 +1351,10 @@ export default function EnginePage() {
       </div>
       )}
 
-      {tab === "log"      && <EngineLogTab />}
-      {tab === "bolus"    && <InsulinForm />}
-      {tab === "exercise" && <ExerciseForm />}
+      {tab === "log"         && <EngineLogTab />}
+      {tab === "bolus"       && <InsulinForm />}
+      {tab === "exercise"    && <ExerciseForm />}
+      {tab === "fingerstick" && <FingerstickLogCard />}
     </div>
   );
 }

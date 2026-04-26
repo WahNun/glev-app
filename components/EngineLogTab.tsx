@@ -7,7 +7,6 @@ import { exerciseTypeLabel } from "@/lib/exerciseEval";
 import { scheduleJobsForLog } from "@/lib/cgmJobs";
 import { fetchMeals, type Meal } from "@/lib/meals";
 import { parseDbDate } from "@/lib/time";
-import FingerstickLogCard from "@/components/FingerstickLogCard";
 
 // Builds the dropdown label for a meal in the "Zu Mahlzeit verknüpfen"
 // picker — "HH:MM — <first food name or meal_type> (Xg C)". Defensive
@@ -616,11 +615,9 @@ export default function EngineLogTab() {
         <ExerciseForm />
       </div>
 
-      {/* Manual fingerstick capture — moved here from /insights since the Log
-          tab is the natural home for any kind of manual reading entry. */}
-      <div style={{ marginTop: 20 }}>
-        <FingerstickLogCard />
-      </div>
+      {/* Manual fingerstick capture lives now as its own top-level tab
+          ("FS Glucose") on the engine screen — no longer rendered here to
+          avoid duplication. */}
 
       <div style={{
         marginTop: 20, padding: "14px 18px",
