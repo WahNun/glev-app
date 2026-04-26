@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
-import { fetchMeals, deleteMeal, updateMealReadings, type Meal } from "@/lib/meals";
+import { fetchMeals, deleteMeal, updateMeal, updateMealReadings, type Meal } from "@/lib/meals";
 import { fetchRecentInsulinLogs, deleteInsulinLog, updateInsulinReadings, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, deleteExerciseLog, type ExerciseLog } from "@/lib/exercise";
 import { evaluateExercise, exerciseTypeLabel, patternNote, interimMessage, finalMessage, deltaColor } from "@/lib/exerciseEval";
@@ -192,6 +192,11 @@ export default function EntriesPage() {
   const [search, setSearch]   = useState("");
   const [expanded, setExpanded] = useState<string|null>(null);
   const [deleting, setDeleting] = useState<string|null>(null);
+  // Editor mode for the expanded meal panel — when set to a meal id, the
+  // read-only body is replaced by an inline editor (macros + bolus) so the
+  // user can correct values after the fact. Only one entry at a time can be
+  // in edit mode; collapsing or switching expansion clears it.
+  const [editingId, setEditingId] = useState<string|null>(null);
   const [manualOpen, setManualOpen] = useState(false);
   const filtersWrapRef = useRef<HTMLDivElement>(null);
 
@@ -746,8 +751,23 @@ export default function EntriesPage() {
                   </div>
                 )}
 
-                {/* Full entry body — shown directly on expand (no light intermediate). */}
-                {isOpen && (
+                {/* Full entry body — shown directly on expand (no light intermediate).
+                    When editingId === m.id, the read-only blocks are swapped
+                    out for an inline editor so the user can correct macros +
+                    bolus after the fact. */}
+                {isOpen && editingId === m.id && (
+                  <div style={{ padding:"4px 16px 16px", borderTop:`1px solid rgba(255,255,255,0.04)` }}>
+                    <MealEditor
+                      meal={m}
+                      onSaved={(updated) => {
+                        setMeals(ms => ms.map(x => x.id === m.id ? updated : x));
+                        setEditingId(null);
+                      }}
+                      onCancel={() => setEditingId(null)}
+                    />
+                  </div>
+                )}
+                {isOpen && editingId !== m.id && (
                   <div style={{ padding:"4px 16px 16px", borderTop:`1px solid rgba(255,255,255,0.04)`, display:"flex", flexDirection:"column", gap:14 }}>
                     {/* CGM POST-FETCH COUNTDOWN — visual 1h/2h auto-fetch state */}
                     <CgmCountdownPair
@@ -890,11 +910,18 @@ export default function EntriesPage() {
                       </div>
                     </div>
 
-                    {/* DELETE */}
-                    <button onClick={() => handleDelete(m.id)} disabled={deleting === m.id} style={{ marginTop:4, padding:"12px", borderRadius:10, border:`1px solid ${PINK}40`, background:`${PINK}08`, color:PINK, fontSize:13, fontWeight:600, cursor:deleting === m.id ? "wait" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, letterSpacing:"0.02em" }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
-                      {deleting === m.id ? "Deleting…" : "Delete entry"}
-                    </button>
+                    {/* EDIT + DELETE — side by side. Edit swaps the body for
+                        an inline editor (handled at the panel root above). */}
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginTop:4 }}>
+                      <button onClick={() => setEditingId(m.id)} style={{ padding:"12px", borderRadius:10, border:`1px solid ${ACCENT}40`, background:`${ACCENT}08`, color:ACCENT, fontSize:13, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, letterSpacing:"0.02em" }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+                        Bearbeiten
+                      </button>
+                      <button onClick={() => handleDelete(m.id)} disabled={deleting === m.id} style={{ padding:"12px", borderRadius:10, border:`1px solid ${PINK}40`, background:`${PINK}08`, color:PINK, fontSize:13, fontWeight:600, cursor:deleting === m.id ? "wait" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, letterSpacing:"0.02em" }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+                        {deleting === m.id ? "Deleting…" : "Löschen"}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -2021,5 +2048,202 @@ function DateRangeSection({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Inline editor for an existing meal entry — lets the user fix macros and
+ * the bolus value after the fact (e.g. when the AI parser was off, or when
+ * a correction bolus was given later). Glucose readings, meal time, and
+ * meal_type are intentionally NOT editable here — those have their own
+ * dedicated flows (LifecycleBlock, BackfillBlock, classification engine).
+ *
+ * On save, calls updateMeal which recomputes evaluation + meal_type +
+ * calories server-side and returns the merged Meal so the parent can
+ * patch its local list without a full refetch.
+ */
+function MealEditor({ meal, onSaved, onCancel }: {
+  meal: Meal;
+  onSaved: (updated: Meal) => void;
+  onCancel: () => void;
+}) {
+  // Strings (not numbers) so the user can type freely — including clearing
+  // a field to zero. We coerce on save with the same 0-allowed semantics as
+  // the engine pre-confirm (0g carbs is valid for protein-only meals).
+  const [carbs,   setCarbs]   = useState<string>(String(meal.carbs_grams   ?? 0));
+  const [protein, setProtein] = useState<string>(String(meal.protein_grams ?? 0));
+  const [fat,     setFat]     = useState<string>(String(meal.fat_grams     ?? 0));
+  const [fiber,   setFiber]   = useState<string>(String(meal.fiber_grams   ?? 0));
+  // Insulin: empty string means "noch offen" (null in DB), explicit "0"
+  // means "0u given". We preserve that distinction in the editor even
+  // though the collapsed list shows both as "0u" by request.
+  const [bolus,   setBolus]   = useState<string>(meal.insulin_units != null ? String(meal.insulin_units) : "");
+  const [busy,    setBusy]    = useState(false);
+  const [err,     setErr]     = useState<string | null>(null);
+
+  function parseNum(s: string): number | null {
+    const t = s.trim().replace(",", ".");
+    if (t === "") return null;
+    const n = parseFloat(t);
+    if (!Number.isFinite(n)) return null;
+    return n;
+  }
+
+  async function handleSave() {
+    setErr(null);
+    const c  = parseNum(carbs);
+    const p  = parseNum(protein);
+    const f  = parseNum(fat);
+    const fb = parseNum(fiber);
+    if (c === null || p === null || f === null || fb === null) {
+      setErr("Bitte gültige Zahlen für alle Makros eintragen (0 ist erlaubt).");
+      return;
+    }
+    if (c < 0 || p < 0 || f < 0 || fb < 0) {
+      setErr("Makro-Werte dürfen nicht negativ sein.");
+      return;
+    }
+    // Insulin: empty → null (Bolus offen), else must be a finite number ≥ 0.
+    let i: number | null;
+    const bt = bolus.trim();
+    if (bt === "") {
+      i = null;
+    } else {
+      const iv = parseNum(bt);
+      if (iv === null || iv < 0) {
+        setErr("Bolus muss 0 oder positiv sein (oder leer für 'noch offen').");
+        return;
+      }
+      i = iv;
+    }
+    setBusy(true);
+    try {
+      const updated = await updateMeal(meal.id, {
+        carbs_grams:   c,
+        protein_grams: p,
+        fat_grams:     f,
+        fiber_grams:   fb,
+        insulin_units: i,
+      });
+      onSaved(updated);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Konnte nicht speichern.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
+        <div style={{ fontSize:9, color:"rgba(255,255,255,0.5)", letterSpacing:"0.1em", fontWeight:700 }}>
+          EINTRAG BEARBEITEN
+        </div>
+        <span style={{ padding:"4px 10px", borderRadius:99, fontSize:10, fontWeight:700, background:`${ACCENT}20`, color:ACCENT, border:`1px solid ${ACCENT}40`, letterSpacing:"0.04em", textTransform:"uppercase" }}>
+          Editor
+        </span>
+      </div>
+
+      <div style={{ fontSize:11, color:"rgba(255,255,255,0.5)", lineHeight:1.5 }}>
+        Korrigiert Makros + Bolus nachträglich. Outcome-Klassifikation und
+        Calories werden automatisch neu berechnet. Glukose-Werte und Uhrzeit
+        bleiben unverändert.
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8 }}>
+        <EditField label="Carbs (g)"   value={carbs}   onChange={setCarbs}   accent={ORANGE}    placeholder="0" />
+        <EditField label="Protein (g)" value={protein} onChange={setProtein} accent="#3B82F6"   placeholder="0" />
+        <EditField label="Fat (g)"     value={fat}     onChange={setFat}     accent="#A855F7"   placeholder="0" />
+        <EditField label="Fiber (g)"   value={fiber}   onChange={setFiber}                       placeholder="0" />
+      </div>
+
+      <EditField
+        label="Bolus (u) — leer lassen für 'noch offen'"
+        value={bolus}
+        onChange={setBolus}
+        accent={ACCENT}
+        placeholder="z.B. 2.5"
+      />
+
+      {err && (
+        <div style={{ fontSize:12, color:PINK, padding:"8px 10px", background:`${PINK}10`, border:`1px solid ${PINK}30`, borderRadius:8 }}>
+          {err}
+        </div>
+      )}
+
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginTop:4 }}>
+        <button
+          onClick={onCancel}
+          disabled={busy}
+          style={{
+            padding:"12px",
+            borderRadius:10,
+            border:`1px solid ${BORDER}`,
+            background:"rgba(255,255,255,0.03)",
+            color:"rgba(255,255,255,0.7)",
+            fontSize:13,
+            fontWeight:600,
+            cursor:busy ? "not-allowed" : "pointer",
+            letterSpacing:"0.02em",
+          }}
+        >
+          Abbrechen
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={busy}
+          style={{
+            padding:"12px",
+            borderRadius:10,
+            border:`1px solid ${ACCENT}`,
+            background:ACCENT,
+            color:"#0A0A0F",
+            fontSize:13,
+            fontWeight:700,
+            cursor:busy ? "wait" : "pointer",
+            letterSpacing:"0.02em",
+          }}
+        >
+          {busy ? "Speichere…" : "Speichern"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function EditField({ label, value, onChange, accent, placeholder }: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  accent?: string;
+  placeholder?: string;
+}) {
+  return (
+    <label style={{ display:"flex", flexDirection:"column", gap:4 }}>
+      <span style={{ fontSize:9, color:"rgba(255,255,255,0.45)", letterSpacing:"0.1em", fontWeight:700 }}>
+        {label}
+      </span>
+      <input
+        type="text"
+        inputMode="decimal"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        style={{
+          background:"rgba(255,255,255,0.03)",
+          border:`1px solid ${accent ? accent + "40" : BORDER}`,
+          borderRadius:8,
+          padding:"10px 12px",
+          color:"#fff",
+          fontSize:14,
+          fontWeight:600,
+          fontFamily:"var(--font-mono)",
+          outline:"none",
+          colorScheme:"dark",
+          width:"100%",
+          boxSizing:"border-box",
+        }}
+      />
+    </label>
   );
 }
