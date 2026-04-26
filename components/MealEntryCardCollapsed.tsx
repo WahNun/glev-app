@@ -2,7 +2,8 @@
 
 import React from "react";
 import type { Meal } from "@/lib/meals";
-import { TYPE_COLORS, TYPE_SHORT, TYPE_LABELS, getEvalColor, getEvalLabel } from "@/lib/mealTypes";
+import { TYPE_COLORS, TYPE_SHORT, TYPE_LABELS } from "@/lib/mealTypes";
+import { chipForMeal } from "@/lib/engine/chipState";
 import { parseDbDate } from "@/lib/time";
 
 const ACCENT = "#4F6EF7";
@@ -27,7 +28,10 @@ export default function MealEntryCardCollapsed({
   const catLabel = meal.meal_type ? TYPE_LABELS[meal.meal_type] || meal.meal_type : null;
   const catShort = meal.meal_type ? TYPE_SHORT[meal.meal_type] || meal.meal_type.slice(0, 2) : null;
 
-  const evColor = getEvalColor(meal.evaluation);
+  // 3-state chip: pending=gray / provisional=purple / final=outcome color.
+  // Replaces direct getEvalColor(meal.evaluation) so the list never shows a
+  // misleading orange "UNDER DOSE" pill while no post-meal reading exists.
+  const chip = chipForMeal(meal);
 
   return (
     <div
@@ -45,7 +49,7 @@ export default function MealEntryCardCollapsed({
            Fixed eval column ensures the 4 data columns line up vertically across all rows
            regardless of pill text width (GOOD vs UNDER DOSE vs OVER DOSE). */
         .glev-mec { display:grid; gap:14px; grid-template-columns: 1fr 1fr 1fr 1fr; }
-        .glev-mec.glev-mec--with-eval { grid-template-columns: 1fr 1fr 1fr 1fr 96px; }
+        .glev-mec.glev-mec--with-eval { grid-template-columns: 1fr 1fr 1fr 1fr 140px; }
         .glev-mec-eval{ justify-self:end; }
         /* Tablet/mobile (< 720px): hide eval pill and keep 4 evenly distributed columns */
         @media (max-width: 720px) {
@@ -100,24 +104,27 @@ export default function MealEntryCardCollapsed({
         </div>
       </div>
 
-      {/* Col 5: Eval pill (hidden on tiny screens) */}
+      {/* Col 5: Outcome chip (hidden on tiny screens). Drives off lifecycle
+          state — pending shows neutral grey, provisional shows muted purple,
+          only final entries display the colored outcome label. */}
       {showEval && (
         <span
           className="glev-mec-eval"
+          title={chip.body}
           style={{
             padding: "5px 10px",
             borderRadius: 99,
             fontSize: 10,
             fontWeight: 700,
-            background: `${evColor}18`,
-            color: evColor,
-            border: `1px solid ${evColor}30`,
+            background: `${chip.color}18`,
+            color: chip.color,
+            border: `1px solid ${chip.color}30`,
             whiteSpace: "nowrap",
             letterSpacing: "0.05em",
             textTransform: "uppercase",
           }}
         >
-          {getEvalLabel(meal.evaluation)}
+          {chip.label}
         </span>
       )}
     </div>

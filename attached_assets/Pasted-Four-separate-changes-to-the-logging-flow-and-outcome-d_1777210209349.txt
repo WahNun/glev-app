@@ -1,0 +1,149 @@
+Four separate changes to the logging flow and outcome display.
+Implement all four in one pass.
+
+---
+
+CHANGE 1 — Insulin input: allow zero
+
+In the meal log confirm screen (Engine tab / Log tab),
+the insulin input field currently rejects 0.
+
+Fix: change validation from > 0 to >= 0.
+0 is a valid entry — some meals require no bolus.
+Remove the error message "Enter the insulin dose you took"
+when value is 0. Only block submit if the field is empty
+(null / undefined).
+
+---
+
+CHANGE 2 — Post-confirm flow redesign
+
+Current behavior: after confirming a meal log, the screen
+stays as-is or navigates away.
+
+New behavior: immediately after confirm, the screen
+transforms in-place to show a decision screen with
+three options. Do not navigate away automatically.
+
+Decision screen layout:
+- Heading: "Mahlzeit gespeichert ✓"
+- Sub-line: show the logged meal summary in one line
+  (e.g. "43g Carbs · 5g Protein · 1g Fett")
+- Three buttons, stacked vertically:
+
+  Button 1 (primary, blue):
+  "Bolus hinzufügen →"
+  → navigates directly to the existing Bolus Log tab
+  → the current meal log ID is passed so the bolus
+    can be linked to this meal on save
+
+  Button 2 (secondary, outlined):
+  "Empfehlung berechnen →"
+  → opens the existing recommendation/calculation view
+    inline or as a sheet
+  → on confirm, the result is written back to this
+    meal log entry (insulin_units updated)
+
+  Button 3 (ghost/muted):
+  "Abbrechen — Log verwerfen"
+  → deletes the just-created meal log entry from the DB
+  → navigates back to the empty log screen
+  → show brief confirmation: "Log gelöscht"
+
+If the user navigates away without choosing: log is kept
+as-is (no bolus, no recommendation). Do not auto-delete.
+
+---
+
+CHANGE 3 — Edit existing log entries in Log tab
+
+Current behavior: expanding a log entry in the Log tab
+shows details, read-only.
+
+New behavior: add an "Bearbeiten" button or icon (pencil)
+in the expanded view of every log entry.
+
+On tap:
+- All editable fields become editable inline:
+  - carbs_grams, protein_grams, fat_grams, fiber_grams
+  - insulin_units
+  - bg_before (glucose_before)
+  - bg_1h, bg_2h (if already set)
+  - meal_type (classification dropdown)
+  - notes
+
+On save:
+- Write updated values to DB
+- Recalculate and update:
+  - delta_1h = bg_1h - bg_before (if both present)
+  - delta_2h = bg_2h - bg_before (if both present)
+  - meal classification (run classifyMeal() with new values)
+  - outcome (run evaluateEntry() / lifecycleFor() with
+    new values — update evaluation field in DB)
+- Show inline confirmation: "Gespeichert ✓"
+- Collapse back to read-only expanded view showing
+  updated values
+
+On cancel: discard changes, collapse to read-only.
+
+Important: after recalculation, all downstream displays
+(Control Score, Good Rate, Insights) must reflect the
+updated evaluation — since they read from the DB,
+this is automatic if the DB write is correct.
+
+---
+
+CHANGE 4 — Outcome chip pending states
+
+Current behavior: outcome chip shows orange (UNDER DOSE
+color) even while countdown is still running and no
+post-meal glucose data has arrived yet.
+
+New behavior — three distinct states:
+
+STATE A — Pending (no bg_1h yet, countdown running):
+- Chip color: neutral gray (#6B7280)
+- Chip label: "WARTET AUF WERTE"
+- Body text below chip:
+  "Wartet auf 1H-Glukosewert (erwartet [time])."
+- No outcome color. No UNDER DOSE / GOOD / etc. label.
+
+STATE B — Provisional (bg_1h present, waiting for bg_2h):
+- Chip color: muted purple (#7C3AED at 80% opacity
+  or similar — not orange, not red)
+- Chip label: "VORLÄUFIG"
+- Body text:
+  "1H-Wert: [bg_1h] mg/dL (Δ [delta_1h] mg/dL).
+   Wartet auf 2H-Glukosewert (erwartet [time]).
+   Hinweis: Der 2H-Wert ist der abschließende
+   Outcome-Indikator."
+- Show a trend hint based on delta_1h:
+  - delta_1h > +30: "Tendenz: BG steigt — vorläufig
+    erhöht."
+  - delta_1h < -30: "Tendenz: BG fällt — vorläufig
+    stabil oder fallend."
+  - else: "Tendenz: BG stabil im ersten Verlauf."
+- Still no final outcome color (no orange/red/green).
+
+STATE C — Final (bg_2h present, state = "final"):
+- Show outcome color as currently implemented
+  (GOOD = green, UNDER DOSE = orange, SPIKE = red, etc.)
+- This is the only state where orange/red appears.
+
+Do not change the outcome calculation logic —
+only change which color and text is displayed
+based on lifecycle state.
+
+---
+
+After implementation, output a change log:
+
+CHANGE LOG — Logging Flow + Outcome Chip Refactor
+
+[1] FILE: ...
+    COMPONENT: ...
+    CHANGE: ...
+
+Cover every file and component touched. For Change 3,
+explicitly note which recalculation functions are called
+on save and from which files they are imported.

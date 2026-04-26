@@ -114,6 +114,22 @@ export default function LogPage() {
     }).catch(console.error);
   }, []);
 
+  // Deep-link from engine's post-confirm decision panel: ?bolusFor=<mealId>
+  // pre-selects "Korrektur-Bolus" + the linked meal so the user only has to
+  // type the actual dose. Runs once recentMeals is loaded so the meal can
+  // actually be matched in the picker.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const bolusFor = params.get("bolusFor");
+    if (!bolusFor || recentMeals.length === 0) return;
+    if (!recentMeals.some(m => m.id === bolusFor)) return;
+    setIsCorrectionBolus(true);
+    setRelatedMealId(bolusFor);
+    // Clean the URL so a refresh doesn't re-trigger this prefill.
+    window.history.replaceState({}, "", window.location.pathname);
+  }, [recentMeals]);
+
   // GPT reasoning chat panel
   type ChatMsg = { role: "user" | "assistant" | "system"; content: string };
   const [chatMsgs, setChatMsgs]   = useState<ChatMsg[]>([]);

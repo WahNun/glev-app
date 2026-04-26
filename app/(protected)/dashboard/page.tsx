@@ -372,7 +372,7 @@ export default function DashboardPage() {
         </div>
       ),
     },
-    { id: "recent-entries", node: <RecentEntries rows={recentRows} onViewAll={() => router.push("/log")} onViewEntry={(id) => router.push(`/entries#${id}`)}/> },
+    { id: "recent-entries", node: <RecentEntries rows={recentRows} onViewAll={() => router.push("/log")} onViewEntry={(id) => router.push(`/entries#${id}`)} onMealUpdated={(m) => setMeals(prev => prev.map(x => x.id === m.id ? m : x))}/> },
   ];
 
   return (
@@ -432,10 +432,12 @@ function RecentEntries({
   rows,
   onViewAll,
   onViewEntry,
+  onMealUpdated,
 }: {
   rows: RecentRow[];
   onViewAll: () => void;
   onViewEntry: (id: string) => void;
+  onMealUpdated?: (m: Meal) => void;
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const toggle = (id: string) => setExpanded(prev => (prev === id ? null : id));
@@ -473,6 +475,7 @@ function RecentEntries({
                       <MealEntryLightExpand
                         meal={r.meal!}
                         onViewFull={() => onViewEntry(r.meal!.id)}
+                        onUpdated={onMealUpdated}
                       />
                     ) : r.kind === "exercise" ? (
                       <NonMealLightExpand

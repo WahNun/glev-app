@@ -929,9 +929,12 @@ function Stat({ label, val, color }: { label: string; val: string; color?: strin
   );
 }
 
+// Lifecycle chip palette aligned with lib/engine/chipState — pending stays
+// neutral (no premature outcome signal), provisional uses muted purple, and
+// final hands off to the per-outcome color via getEvalColor in callers.
 function stateColor(s: OutcomeState) {
-  if (s === "pending")     return "#A78BFA";
-  if (s === "provisional") return ORANGE;
+  if (s === "pending")     return "#6B7280";
+  if (s === "provisional") return "#7C3AED";
   return GREEN;
 }
 

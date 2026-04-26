@@ -142,6 +142,115 @@ export async function deleteMeal(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+export interface UpdateMealInput {
+  carbs_grams?:    number | null;
+  protein_grams?:  number | null;
+  fat_grams?:      number | null;
+  fiber_grams?:    number | null;
+  insulin_units?:  number | null;
+  glucose_before?: number | null;
+  bg_1h?:          number | null;
+  bg_2h?:          number | null;
+  meal_type?:      string | null;
+}
+
+/**
+ * Update an existing meal row + recompute the dependent fields:
+ * - meal_type      via classifyMeal (skipped if user passed an explicit value)
+ * - evaluation     via lib/engine/evaluation.evaluateEntry, using the best
+ *                  available post-meal reading (bg_2h preferred, then bg_1h,
+ *                  then null → fallback ICR-ratio heuristic)
+ * Outcome / delta_1h / delta_2h are computed on read by lifecycleFor — they
+ * are NOT stored, so no additional write is needed for those.
+ *
+ * Caller should refetch (or merge the returned Meal) so the chip + insights
+ * reflect the new evaluation immediately.
+ */
+export async function updateMeal(id: string, patch: UpdateMealInput): Promise<Meal> {
+  if (!supabase) throw new Error("Supabase is not configured");
+
+  // 1) Fetch the current row so we can compute the recalculated fields
+  //    against the FULL merged state (the patch is partial).
+  const { data: current, error: fetchErr } = await supabase
+    .from("meals").select(FULL_COLS).eq("id", id).single();
+  if (fetchErr) throw new Error(fetchErr.message);
+  const cur = current as Meal;
+
+  // 2) Build the merged values for recomputation.
+  const merged = {
+    carbs_grams:    patch.carbs_grams    ?? cur.carbs_grams    ?? 0,
+    protein_grams:  patch.protein_grams  ?? cur.protein_grams  ?? 0,
+    fat_grams:      patch.fat_grams      ?? cur.fat_grams      ?? 0,
+    fiber_grams:    patch.fiber_grams    ?? cur.fiber_grams    ?? 0,
+    insulin_units:  patch.insulin_units  ?? cur.insulin_units  ?? 0,
+    glucose_before: patch.glucose_before !== undefined ? patch.glucose_before : cur.glucose_before,
+    bg_1h:          patch.bg_1h          !== undefined ? patch.bg_1h          : cur.bg_1h,
+    bg_2h:          patch.bg_2h          !== undefined ? patch.bg_2h          : cur.bg_2h,
+  };
+  const explicitType = patch.meal_type !== undefined && patch.meal_type !== null && patch.meal_type !== "";
+  const newMealType = explicitType
+    ? patch.meal_type!
+    : classifyMeal(merged.carbs_grams, merged.protein_grams, merged.fat_grams);
+
+  // 3) Recompute evaluation — use the best available post-meal reading.
+  //    Mirror the chip + LifecycleBlock priority: bg_2h > bg_1h > null.
+  //    Lazy import keeps lib/meals.ts free of an engine cycle.
+  const { evaluateEntry } = await import("./engine/evaluation");
+  const bestAfter = merged.bg_2h ?? merged.bg_1h ?? null;
+  const ev = evaluateEntry({
+    carbs:           merged.carbs_grams,
+    protein:         merged.protein_grams,
+    fat:             merged.fat_grams,
+    fiber:           merged.fiber_grams,
+    insulin:         merged.insulin_units,
+    bgBefore:        merged.glucose_before,
+    bgAfter:         bestAfter,
+    classification:  (newMealType as "FAST_CARBS" | "HIGH_PROTEIN" | "HIGH_FAT" | "BALANCED"),
+  });
+
+  // 4) Build the DB patch — only include fields the caller actually sent,
+  //    plus the recomputed meal_type + evaluation + recomputed calories.
+  const dbPatch: Record<string, unknown> = {};
+  if (patch.carbs_grams    !== undefined) dbPatch.carbs_grams    = patch.carbs_grams;
+  if (patch.protein_grams  !== undefined) dbPatch.protein_grams  = patch.protein_grams;
+  if (patch.fat_grams      !== undefined) dbPatch.fat_grams      = patch.fat_grams;
+  if (patch.fiber_grams    !== undefined) dbPatch.fiber_grams    = patch.fiber_grams;
+  if (patch.insulin_units  !== undefined) dbPatch.insulin_units  = patch.insulin_units;
+  if (patch.glucose_before !== undefined) dbPatch.glucose_before = patch.glucose_before;
+  if (patch.bg_1h !== undefined) {
+    dbPatch.bg_1h = patch.bg_1h;
+    dbPatch.bg_1h_at = patch.bg_1h != null ? new Date().toISOString() : null;
+  }
+  if (patch.bg_2h !== undefined) {
+    dbPatch.bg_2h = patch.bg_2h;
+    dbPatch.bg_2h_at = patch.bg_2h != null ? new Date().toISOString() : null;
+  }
+  dbPatch.meal_type = newMealType;
+  dbPatch.evaluation = ev.outcome;
+  // calories follow the macros — recompute regardless of which macro changed.
+  dbPatch.calories = computeCalories(merged.carbs_grams, merged.protein_grams, merged.fat_grams);
+
+  let { data, error } = await supabase
+    .from("meals").update(dbPatch).eq("id", id).select(FULL_COLS).single();
+
+  // Schema fallback: if bg_1h_at / bg_2h_at columns are missing on a
+  // not-yet-migrated DB, drop them and retry once.
+  if (error && /bg_1h_at|bg_2h_at|column .* does not exist/i.test(error.message ?? "")) {
+    delete dbPatch.bg_1h_at;
+    delete dbPatch.bg_2h_at;
+    const r2 = await supabase
+      .from("meals").update(dbPatch).eq("id", id).select(FULL_COLS).single();
+    data = r2.data; error = r2.error;
+  }
+  if (error) throw new Error(error.message);
+
+  logDebug("MEAL_UPDATE", {
+    id, patch: Object.keys(dbPatch),
+    newMealType, newEvaluation: ev.outcome, bestAfter,
+  });
+  return data as Meal;
+}
+
 const FULL_COLS = "id, user_id, input_text, parsed_json, glucose_before, glucose_after, bg_1h, bg_1h_at, bg_2h, bg_2h_at, outcome_state, meal_time, carbs_grams, protein_grams, fat_grams, fiber_grams, calories, insulin_units, meal_type, evaluation, related_meal_id, created_at";
 const MID_COLS  = "id, user_id, input_text, parsed_json, glucose_before, glucose_after, carbs_grams, protein_grams, fat_grams, fiber_grams, calories, insulin_units, meal_type, evaluation, created_at";
 const CORE_COLS = "id, user_id, input_text, parsed_json, glucose_before, carbs_grams, insulin_units, meal_type, evaluation, created_at";

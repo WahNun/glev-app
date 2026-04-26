@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { fetchMeals, classifyMeal, computeCalories, computeEvaluation, saveMeal, type Meal } from "@/lib/meals";
+import { useRouter } from "next/navigation";
+import { fetchMeals, classifyMeal, computeCalories, computeEvaluation, saveMeal, deleteMeal, updateMeal, type Meal } from "@/lib/meals";
 import { scheduleJobsForLog } from "@/lib/cgmJobs";
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
 import { logDebug } from "@/lib/debug";
@@ -170,9 +171,21 @@ export default function EnginePage() {
   const [insulin,     setInsulin]     = useState("");
   const [confirming,  setConfirming]  = useState(false);
   const [confirmErr,  setConfirmErr]  = useState("");
-  const [confirmedId, setConfirmedId] = useState<string | null>(null);
+  // After a successful Confirm Log, the form does NOT reset — instead we
+  // park the saved row here so the post-confirm decision panel can offer
+  // 1) link a bolus  2) compute a recommendation  3) cancel/delete the log.
+  // confirmedMeal == null  → form mode (Confirm Log button visible)
+  // confirmedMeal != null  → decision mode (form fields locked for context)
+  const [confirmedMeal, setConfirmedMeal] = useState<Meal | null>(null);
+  // Sub-state inside the decision panel.  "decision" = the 3 buttons,
+  // "rec" = the recommendation result + Übernehmen/Zurück buttons.
+  const [decisionMode,  setDecisionMode]  = useState<"decision" | "rec">("decision");
+  const [decisionRec,   setDecisionRec]   = useState<Recommendation | null>(null);
+  const [decisionBusy,  setDecisionBusy]  = useState(false);
+  const [decisionToast, setDecisionToast] = useState<string | null>(null);
   const [chatSeed,    setChatSeed]    = useState<SeedMessage | null>(null);
   const [chatExpanded, setChatExpanded] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -398,7 +411,12 @@ export default function EnginePage() {
     const gParsed = glucose.trim() === "" ? NaN : parseFloat(glucose);
     const gNum = Number.isFinite(gParsed) ? gParsed : null;
     if (!Number.isFinite(cNum) || cNum <= 0) { setConfirmErr("Carbs are required."); return; }
-    if (!Number.isFinite(iNum) || iNum <= 0) { setConfirmErr("Enter the insulin dose you took."); return; }
+    // Insulin: 0 is a valid entry (some meals require no bolus). Only block
+    // when the field is empty / non-numeric / negative.
+    if (insulin.trim() === "" || !Number.isFinite(iNum) || iNum < 0) {
+      setConfirmErr("Bitte eine Insulindosis eintragen (0 ist erlaubt).");
+      return;
+    }
     const pNum  = parseFloat(protein) || 0;
     const fNum  = parseFloat(fat)     || 0;
     const fbNum = parseFloat(fiber)   || 0;
@@ -426,19 +444,19 @@ export default function EnginePage() {
         createdAt: mealIso,
         mealTime: mealIso,
       });
-      setConfirmedId(saved.id);
+      // Park the saved row + open the decision panel. Form fields stay
+      // populated so the panel has visible context — they only reset once
+      // the user finishes the post-confirm flow (Bolus / Empfehlung / Cancel).
+      setConfirmedMeal(saved);
+      setDecisionMode("decision");
+      setDecisionRec(null);
+      setDecisionToast(null);
       logDebug("ENGINE.CONFIRM_LOG", { id: saved.id, carbs: cNum, insulin: iNum, glucose: gNum, mealType: cls });
       // Schedule CGM auto-fetches at +1h / +2h after meal time. Fire-and-forget;
       // failures (e.g. no CGM connected) are silent.
       void scheduleJobsForLog({ logId: saved.id, logType: "meal", refTimeIso: mealIso });
       // Refresh meals so the next recommendation immediately benefits.
       fetchMeals().then(setMeals).catch(() => {});
-      // Reset the form for the next entry — but keep glucose since it's often
-      // still relevant for the next meal a few minutes later.
-      setCarbs(""); setProtein(""); setFat(""); setFiber("");
-      setDesc(""); setInsulin(""); setResult(null); setTranscript("");
-      setMealTime(nowLocalDateTime());
-      setChatSeed({ id: Date.now(), content: `Logged ${cNum}g carbs · ${iNum}u insulin. Form cleared.` });
     } catch (e) {
       setConfirmErr(e instanceof Error ? e.message : "Save failed");
     } finally {
@@ -446,11 +464,89 @@ export default function EnginePage() {
     }
   }
 
-  function handleCancel() {
-    setGlucose(""); setCarbs(""); setProtein(""); setFat(""); setFiber("");
+  // Reset form + clear all post-confirm state. Used by:
+  //  - the form-mode "Cancel" button
+  //  - all 3 decision buttons after their work is done
+  function resetForm(opts: { keepGlucose?: boolean } = {}) {
+    if (!opts.keepGlucose) setGlucose("");
+    setCarbs(""); setProtein(""); setFat(""); setFiber("");
     setDesc(""); setInsulin(""); setResult(null); setTranscript("");
     setMealTime(nowLocalDateTime());
-    setConfirmErr(""); setConfirmedId(null);
+    setConfirmErr("");
+    setConfirmedMeal(null);
+    setDecisionMode("decision");
+    setDecisionRec(null);
+    // Clear busy flag so the next decision panel (after the next Confirm Log)
+    // starts with enabled buttons. Toast is intentionally NOT cleared — its
+    // own setTimeout dismisses it independently.
+    setDecisionBusy(false);
+  }
+
+  function handleCancel() {
+    resetForm();
+  }
+
+  // ─── Post-confirm decision handlers ──────────────────────────────────────
+  // These run only when `confirmedMeal` is set. They fire the user's chosen
+  // follow-up (link a bolus, get a recommendation, or delete the log) and
+  // then close the decision panel by clearing confirmedMeal.
+
+  function handleDecisionBolus() {
+    if (!confirmedMeal) return;
+    // Hand off to the standalone Bolus tab on /log; the bolusFor query param
+    // lets that page prefill `relatedMealId` so the bolus is linked back
+    // to this meal entry on save.
+    router.push(`/log?bolusFor=${encodeURIComponent(confirmedMeal.id)}`);
+    resetForm({ keepGlucose: true });
+  }
+
+  function handleDecisionEmpfehlung() {
+    if (!confirmedMeal) return;
+    // Run the same engine the Empfehlung-berechnen button uses, but locked
+    // to the saved meal's carbs / glucose so the rec is for THIS log.
+    const g = confirmedMeal.glucose_before ?? parseFloat(glucose) ?? 110;
+    const c = confirmedMeal.carbs_grams ?? parseFloat(carbs) ?? 0;
+    if (!c) { setDecisionToast("Keine Carbs hinterlegt — Empfehlung nicht möglich."); return; }
+    setDecisionBusy(true);
+    setTimeout(() => {
+      const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs, adaptedICR);
+      setDecisionRec(rec);
+      setDecisionMode("rec");
+      setDecisionBusy(false);
+    }, 200);
+  }
+
+  async function handleDecisionAcceptRec() {
+    if (!confirmedMeal || !decisionRec) return;
+    setDecisionBusy(true);
+    try {
+      const updated = await updateMeal(confirmedMeal.id, { insulin_units: decisionRec.dose });
+      // Refresh the in-memory list so the next rec uses the updated dose.
+      fetchMeals().then(setMeals).catch(() => {});
+      setDecisionToast(`Dosis übernommen: ${decisionRec.dose}u`);
+      logDebug("ENGINE.DECISION.REC_ACCEPT", { id: confirmedMeal.id, newDose: decisionRec.dose, evaluation: updated.evaluation });
+      resetForm({ keepGlucose: true });
+      setTimeout(() => setDecisionToast(null), 2500);
+    } catch (e) {
+      setDecisionToast(e instanceof Error ? e.message : "Übernehmen fehlgeschlagen.");
+      setDecisionBusy(false);
+    }
+  }
+
+  async function handleDecisionDelete() {
+    if (!confirmedMeal) return;
+    setDecisionBusy(true);
+    try {
+      await deleteMeal(confirmedMeal.id);
+      fetchMeals().then(setMeals).catch(() => {});
+      setDecisionToast("Log gelöscht.");
+      logDebug("ENGINE.DECISION.DELETE", { id: confirmedMeal.id });
+      resetForm({ keepGlucose: true });
+      setTimeout(() => setDecisionToast(null), 2500);
+    } catch (e) {
+      setDecisionToast(e instanceof Error ? e.message : "Löschen fehlgeschlagen.");
+      setDecisionBusy(false);
+    }
   }
 
   const inp: React.CSSProperties = { background:"#0D0D12", border:`1px solid ${BORDER}`, borderRadius:10, padding:"11px 14px", color:"#fff", fontSize:14, outline:"none", width:"100%" };
@@ -844,7 +940,8 @@ export default function EnginePage() {
           min="0"
           placeholder="e.g. 1.5"
           value={insulin}
-          onChange={e => { setInsulin(e.target.value); if (confirmedId) setConfirmedId(null); }}
+          onChange={e => { setInsulin(e.target.value); if (confirmedMeal) setConfirmedMeal(null); }}
+          disabled={!!confirmedMeal}
         />
       </div>
 
@@ -853,42 +950,132 @@ export default function EnginePage() {
           {confirmErr}
         </div>
       )}
-      {confirmedId && !confirmErr && (
+      {/* Auto-dismiss toast for decision-panel actions (delete, accept rec, etc.) */}
+      {decisionToast && (
         <div style={{ marginBottom:10, padding:"10px 14px", borderRadius:10, background:`${GREEN}15`, border:`1px solid ${GREEN}40`, color:GREEN, fontSize:12 }}>
-          ✓ Logged. The next recommendation will already include this entry.
+          {decisionToast}
         </div>
       )}
 
-      <button
-        onClick={handleConfirmLog}
-        disabled={confirming || !carbs || !insulin}
-        style={{
-          width:"100%", padding:"15px", borderRadius:14, border:"none",
-          background: !confirming && carbs && insulin
-            ? `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`
-            : "rgba(79,110,247,0.25)",
-          color: !confirming && carbs && insulin ? "#fff" : "rgba(255,255,255,0.55)",
-          fontSize:15, fontWeight:700,
-          cursor: confirming || !carbs || !insulin ? "not-allowed" : "pointer",
-          boxShadow: !confirming && carbs && insulin ? `0 4px 18px ${ACCENT}30` : "none",
-          transition:"all 0.2s", marginBottom:10,
-        }}
-      >
-        {confirming ? "Saving…" : "✓ Confirm Log"}
-      </button>
-      <button
-        onClick={handleCancel}
-        disabled={confirming}
-        style={{
-          width:"100%", padding:"13px", borderRadius:14,
-          border:`1px solid ${BORDER}`, background:"transparent",
-          color:"rgba(255,255,255,0.55)", fontSize:14, fontWeight:600,
-          cursor: confirming ? "not-allowed" : "pointer",
-          marginBottom:24,
-        }}
-      >
-        Cancel
-      </button>
+      {/* Form mode: Confirm Log + Cancel.  Hidden once a meal has been saved
+          and the decision panel below takes over. */}
+      {!confirmedMeal && (
+        <>
+          <button
+            onClick={handleConfirmLog}
+            disabled={confirming || !carbs || !insulin}
+            style={{
+              width:"100%", padding:"15px", borderRadius:14, border:"none",
+              background: !confirming && carbs && insulin
+                ? `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`
+                : "rgba(79,110,247,0.25)",
+              color: !confirming && carbs && insulin ? "#fff" : "rgba(255,255,255,0.55)",
+              fontSize:15, fontWeight:700,
+              cursor: confirming || !carbs || !insulin ? "not-allowed" : "pointer",
+              boxShadow: !confirming && carbs && insulin ? `0 4px 18px ${ACCENT}30` : "none",
+              transition:"all 0.2s", marginBottom:10,
+            }}
+          >
+            {confirming ? "Saving…" : "✓ Confirm Log"}
+          </button>
+          <button
+            onClick={handleCancel}
+            disabled={confirming}
+            style={{
+              width:"100%", padding:"13px", borderRadius:14,
+              border:`1px solid ${BORDER}`, background:"transparent",
+              color:"rgba(255,255,255,0.55)", fontSize:14, fontWeight:600,
+              cursor: confirming ? "not-allowed" : "pointer",
+              marginBottom:24,
+            }}
+          >
+            Cancel
+          </button>
+        </>
+      )}
+
+      {/* Decision mode: shown after a successful Confirm Log.
+          Two sub-views: "decision" (3 buttons) + "rec" (recommendation result). */}
+      {confirmedMeal && (
+        <div style={{ marginBottom:24, padding:"16px 18px", borderRadius:14, background:`${ACCENT}08`, border:`1px solid ${ACCENT}30`, display:"flex", flexDirection:"column", gap:14 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <div style={{ fontSize:11, letterSpacing:"0.1em", fontWeight:700, color:GREEN, textTransform:"uppercase" }}>
+              ✓ Log gespeichert
+            </div>
+            <div style={{ fontSize:11, color:"rgba(255,255,255,0.45)", fontFamily:"var(--font-mono)" }}>
+              {(confirmedMeal.carbs_grams ?? 0)}g · {(confirmedMeal.insulin_units ?? 0)}u
+            </div>
+          </div>
+
+          {decisionMode === "decision" && (
+            <>
+              <div style={{ fontSize:13, color:"rgba(255,255,255,0.7)", lineHeight:1.5 }}>
+                Wie weiter? Bolus dokumentieren, Empfehlung berechnen oder den Eintrag verwerfen.
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
+                <button
+                  onClick={handleDecisionBolus}
+                  disabled={decisionBusy}
+                  style={{ padding:"12px 10px", borderRadius:10, border:"none", background:`linear-gradient(135deg, ${ACCENT}, #6B8BFF)`, color:"#fff", fontSize:13, fontWeight:700, cursor:decisionBusy?"not-allowed":"pointer" }}
+                >
+                  Bolus loggen
+                </button>
+                <button
+                  onClick={handleDecisionEmpfehlung}
+                  disabled={decisionBusy}
+                  style={{ padding:"12px 10px", borderRadius:10, border:`1px solid ${ACCENT}60`, background:"transparent", color:ACCENT, fontSize:13, fontWeight:700, cursor:decisionBusy?"not-allowed":"pointer" }}
+                >
+                  {decisionBusy && decisionMode === "decision" ? "…" : "Empfehlung"}
+                </button>
+                <button
+                  onClick={handleDecisionDelete}
+                  disabled={decisionBusy}
+                  style={{ padding:"12px 10px", borderRadius:10, border:`1px solid ${PINK}40`, background:"transparent", color:PINK, fontSize:13, fontWeight:700, cursor:decisionBusy?"not-allowed":"pointer" }}
+                >
+                  Abbrechen
+                </button>
+              </div>
+            </>
+          )}
+
+          {decisionMode === "rec" && decisionRec && (
+            <>
+              <div style={{ background:"#0D0D12", borderRadius:10, padding:"14px 16px", border:`1px solid ${BORDER}` }}>
+                <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)", letterSpacing:"0.08em", fontWeight:700, textTransform:"uppercase", marginBottom:6 }}>Empfehlung</div>
+                <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
+                  <span style={{ fontSize:30, fontWeight:800, color:ACCENT, letterSpacing:"-0.02em" }}>{decisionRec.dose}</span>
+                  <span style={{ fontSize:12, color:"rgba(255,255,255,0.45)" }}>u</span>
+                  <span style={{ fontSize:11, color:"rgba(255,255,255,0.4)", marginLeft:8 }}>
+                    aktuell: <strong style={{ color:"rgba(255,255,255,0.7)" }}>{confirmedMeal.insulin_units ?? 0}u</strong>
+                  </span>
+                  <span style={{ marginLeft:"auto", padding:"2px 8px", borderRadius:99, fontSize:10, fontWeight:700, background:`${ACCENT}22`, color:ACCENT, letterSpacing:"0.05em" }}>
+                    {decisionRec.confidence}
+                  </span>
+                </div>
+                <div style={{ fontSize:11, color:"rgba(255,255,255,0.5)", marginTop:8, lineHeight:1.5 }}>
+                  {decisionRec.reasoning}
+                </div>
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <button
+                  onClick={handleDecisionAcceptRec}
+                  disabled={decisionBusy}
+                  style={{ padding:"12px 10px", borderRadius:10, border:"none", background:`linear-gradient(135deg, ${ACCENT}, #6B8BFF)`, color:"#fff", fontSize:13, fontWeight:700, cursor:decisionBusy?"not-allowed":"pointer" }}
+                >
+                  {decisionBusy ? "Übernehme…" : "Übernehmen"}
+                </button>
+                <button
+                  onClick={() => { setDecisionMode("decision"); setDecisionRec(null); }}
+                  disabled={decisionBusy}
+                  style={{ padding:"12px 10px", borderRadius:10, border:`1px solid ${BORDER}`, background:"transparent", color:"rgba(255,255,255,0.6)", fontSize:13, fontWeight:600, cursor:decisionBusy?"not-allowed":"pointer" }}
+                >
+                  Zurück
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {result && (
         <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
