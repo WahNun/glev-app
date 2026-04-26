@@ -13,15 +13,19 @@ import SortableCardGrid, { type SortableItem } from "@/components/SortableCardGr
 import { useCardOrder } from "@/lib/cardOrder";
 import { parseDbTs, parseDbDate } from "@/lib/time";
 
-/** Default top-to-bottom order of insights sections. */
+/** Default top-to-bottom order of insights sections.
+ *  Hero block (time-in-range, vital-stats, glucose-trend, meal-evaluation)
+ *  follows the dark-cockpit reference design; deeper analysis cards
+ *  (overview, adaptive-engine, performance-tiles, insulin/exercise/meal-type
+ *  /time-of-day/patterns) sit underneath in their existing form. */
 const INSIGHTS_DEFAULT_ORDER = [
-  "overview",
-  "glucose-trend",
   "time-in-range",
   "gmi-a1c",
+  "glucose-trend",
+  "meal-evaluation",
+  "overview",
   "adaptive-engine",
   "performance-tiles",
-  "meal-evaluation",
   "insulin-stats",
   "exercise-stats",
   "meal-type",
@@ -254,15 +258,12 @@ export default function InsightsPage() {
               />
             }
           >
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-              <div>
-                <div style={{ fontSize:14, fontWeight:600 }}>Time in Range</div>
-                <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginTop:2 }}>
-                  70–180 mg/dL · last 7 days
-                </div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18, gap:12 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:"rgba(255,255,255,0.5)", letterSpacing:"0.12em", textTransform:"uppercase" }}>
+                Time in Range · 7D
               </div>
-              <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)" }}>
-                {b7.n} reading{b7.n === 1 ? "" : "s"}
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)", whiteSpace:"nowrap" }}>
+                70–180 mg/dL
               </div>
             </div>
             {!hasData ? (
@@ -271,24 +272,24 @@ export default function InsightsPage() {
               </div>
             ) : (
               <>
-                <div style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:12 }}>
-                  <div style={{ fontSize:32, fontWeight:800, color:GREEN, letterSpacing:"-0.03em", lineHeight:1, fontFamily:"var(--font-mono)" }}>
+                <div style={{ display:"flex", alignItems:"baseline", gap:6, marginBottom:18 }}>
+                  <div style={{ fontSize:56, fontWeight:800, color:GREEN, letterSpacing:"-0.04em", lineHeight:1, fontFamily:"var(--font-mono)" }}>
                     {b7.inR}
                   </div>
-                  <div style={{ fontSize:14, color:GREEN, fontWeight:700 }}>%</div>
+                  <div style={{ fontSize:20, color:GREEN, fontWeight:700, letterSpacing:"-0.02em" }}>%</div>
                   {prev7Bg.length > 0 && (
-                    <div style={{ marginLeft:"auto", fontSize:11, color: delta >= 0 ? GREEN : ORANGE }}>
+                    <div style={{ marginLeft:"auto", fontSize:12, color: delta >= 0 ? GREEN : ORANGE, fontWeight:600 }}>
                       {delta >= 0 ? "+" : ""}{delta} vs prev wk
                     </div>
                   )}
                 </div>
-                <div style={{ display:"flex", height:14, borderRadius:99, overflow:"hidden", background:"rgba(255,255,255,0.04)" }}>
+                <div style={{ display:"flex", height:10, borderRadius:99, overflow:"hidden", background:"rgba(255,255,255,0.04)" }}>
                   {b7.vlow > 0 && <div style={{ width:`${b7.vlow}%`, background:PINK }}/>}
                   {b7.lo   > 0 && <div style={{ width:`${b7.lo}%`,   background:ORANGE }}/>}
                   {b7.inR  > 0 && <div style={{ width:`${b7.inR}%`,  background:GREEN }}/>}
                   {b7.hi   > 0 && <div style={{ width:`${b7.hi}%`,   background:"#FFD166" }}/>}
                 </div>
-                <div style={{ display:"flex", justifyContent:"space-between", marginTop:10, fontSize:11, color:"rgba(255,255,255,0.5)", flexWrap:"wrap", gap:6 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", marginTop:12, fontSize:11, color:"rgba(255,255,255,0.55)", flexWrap:"wrap", gap:8 }}>
                   <span style={{ color:PINK }}>● V.low {b7.vlow}%</span>
                   <span style={{ color:ORANGE }}>● Low {b7.lo}%</span>
                   <span style={{ color:GREEN }}>● In {b7.inR}%</span>
@@ -301,12 +302,12 @@ export default function InsightsPage() {
       })(),
     },
     {
+      // ID kept as "gmi-a1c" for backwards compat with persisted card-order.
+      // Now renders TWO half-width cards side-by-side: AVG BG + GMI / Est. A1C
+      // — matches the dark-cockpit hero layout. GMI(%) = 3.31 + 0.02392 × avgBG
+      // (Bergenstal et al. 2018, Diabetes Care).
       id: "gmi-a1c",
       node: (() => {
-        // Glucose Management Indicator (GMI) approximates lab A1C from
-        // average sensor/pre-meal glucose. Formula:
-        //   GMI(%) = 3.31 + 0.02392 × avgBG(mg/dL)
-        // Source: Bergenstal et al. 2018, Diabetes Care.
         const last7Bg = last7
           .filter(m => m.glucose_before != null)
           .map(m => m.glucose_before as number);
@@ -319,60 +320,89 @@ export default function InsightsPage() {
           arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
         const last7Avg = avg(last7Bg);
         const prev7Avg = avg(prev7Bg);
-        const gmi     = last7Avg != null ? +(3.31 + 0.02392 * last7Avg).toFixed(1) : null;
-        const prevGmi = prev7Avg != null ? +(3.31 + 0.02392 * prev7Avg).toFixed(1) : null;
-        const delta   = (gmi != null && prevGmi != null) ? +(gmi - prevGmi).toFixed(1) : null;
+        const bgDelta  = (last7Avg != null && prev7Avg != null) ? Math.round(last7Avg - prev7Avg) : null;
+        const gmi      = last7Avg != null ? +(3.31 + 0.02392 * last7Avg).toFixed(1) : null;
+        const prevGmi  = prev7Avg != null ? +(3.31 + 0.02392 * prev7Avg).toFixed(1) : null;
+        const gmiDelta = (gmi != null && prevGmi != null) ? +(gmi - prevGmi).toFixed(1) : null;
 
         return (
-          <FlipCard
-            accent={ACCENT}
-            padding="22px 26px"
-            back={
-              <FlipBack
-                title="GMI / Estimated A1C"
-                accent={ACCENT}
-                paragraphs={[
-                  "GMI (Glucose Management Indicator) approximates your laboratory A1C from your average sensor or pre-meal glucose. The formula is GMI(%) = 3.31 + 0.02392 × avg glucose (mg/dL) — Bergenstal et al., Diabetes Care 2018.",
-                  "It's a useful interim signal between clinic A1C draws — but it's not a substitute. Real A1C captures longer-term glycation that GMI cannot, and individual differences in red-blood-cell turnover can shift the two apart.",
-                  `Computed from your last 7 days of pre-meal glucose readings${last7Avg != null ? ` (avg ${Math.round(last7Avg)} mg/dL across ${last7Bg.length} reading${last7Bg.length === 1 ? "" : "s"})` : ""}.`,
-                ]}
-              />
-            }
-          >
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-              <div>
-                <div style={{ fontSize:14, fontWeight:600 }}>GMI / Est. A1C</div>
-                <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginTop:2 }}>
-                  From last 7 days of pre-meal glucose
-                </div>
+          <div className="glev-vital-grid" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+            {/* AVG BG — left half */}
+            <FlipCard
+              accent={ACCENT}
+              padding="22px 26px"
+              back={
+                <FlipBack
+                  title="Average Glucose"
+                  accent={ACCENT}
+                  paragraphs={[
+                    "Mean pre-meal glucose across the last 7 days, calculated only from meals where you logged a pre-meal reading.",
+                    "Lower values reflect better fasting and overnight control. The delta vs the prior 7 days surfaces week-over-week movement.",
+                    `Computed from ${last7Bg.length} reading${last7Bg.length === 1 ? "" : "s"} in the last 7 days.`,
+                  ]}
+                />
+              }
+            >
+              <div style={{ fontSize:11, fontWeight:700, color:"rgba(255,255,255,0.5)", letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:14 }}>
+                Avg BG
               </div>
-              <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)" }}>
-                {last7Avg != null ? `avg ${Math.round(last7Avg)} mg/dL` : "no data"}
-              </div>
-            </div>
-            {gmi == null ? (
-              <div style={{ padding:"20px 0", textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:12 }}>
-                Log meals with pre-meal glucose to estimate your A1C.
-              </div>
-            ) : (
-              <>
-                <div style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:8 }}>
-                  <div style={{ fontSize:32, fontWeight:800, color:"#fff", letterSpacing:"-0.03em", lineHeight:1, fontFamily:"var(--font-mono)" }}>
-                    {gmi.toFixed(1)}
+              {last7Avg == null ? (
+                <div style={{ fontSize:32, fontWeight:800, color:"rgba(255,255,255,0.25)", fontFamily:"var(--font-mono)" }}>—</div>
+              ) : (
+                <>
+                  <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
+                    <div style={{ fontSize:46, fontWeight:800, color:"#fff", letterSpacing:"-0.04em", lineHeight:1, fontFamily:"var(--font-mono)" }}>
+                      {Math.round(last7Avg)}
+                    </div>
+                    <div style={{ fontSize:13, color:"rgba(255,255,255,0.4)" }}>mg/dL</div>
                   </div>
-                  <div style={{ fontSize:14, color:"rgba(255,255,255,0.4)" }}>%</div>
-                  {delta != null && (
-                    <div style={{ marginLeft:"auto", fontSize:11, color: delta < 0 ? GREEN : delta > 0 ? ORANGE : "rgba(255,255,255,0.4)" }}>
-                      {delta > 0 ? "+" : ""}{delta.toFixed(1)} vs prev wk
+                  {bgDelta != null && (
+                    <div style={{ marginTop:10, fontSize:12, color: bgDelta < 0 ? GREEN : bgDelta > 0 ? ORANGE : "rgba(255,255,255,0.4)", fontWeight:600 }}>
+                      {bgDelta > 0 ? "+" : ""}{bgDelta} vs prev
                     </div>
                   )}
-                </div>
-                <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", lineHeight:1.5 }}>
-                  GMI(%) = 3.31 + 0.02392 × avg BG. Approximates lab A1C — not a substitute.
-                </div>
-              </>
-            )}
-          </FlipCard>
+                </>
+              )}
+            </FlipCard>
+
+            {/* GMI / EST. A1C — right half */}
+            <FlipCard
+              accent={ACCENT}
+              padding="22px 26px"
+              back={
+                <FlipBack
+                  title="GMI / Estimated A1C"
+                  accent={ACCENT}
+                  paragraphs={[
+                    "GMI (Glucose Management Indicator) approximates your laboratory A1C from your average sensor or pre-meal glucose. The formula is GMI(%) = 3.31 + 0.02392 × avg glucose (mg/dL) — Bergenstal et al., Diabetes Care 2018.",
+                    "It's a useful interim signal between clinic A1C draws — but it's not a substitute. Real A1C captures longer-term glycation that GMI cannot, and individual differences in red-blood-cell turnover can shift the two apart.",
+                    `Computed from your last 7 days of pre-meal glucose readings${last7Avg != null ? ` (avg ${Math.round(last7Avg)} mg/dL across ${last7Bg.length} reading${last7Bg.length === 1 ? "" : "s"})` : ""}.`,
+                  ]}
+                />
+              }
+            >
+              <div style={{ fontSize:11, fontWeight:700, color:"rgba(255,255,255,0.5)", letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:14 }}>
+                GMI / Est. A1C
+              </div>
+              {gmi == null ? (
+                <div style={{ fontSize:32, fontWeight:800, color:"rgba(255,255,255,0.25)", fontFamily:"var(--font-mono)" }}>—</div>
+              ) : (
+                <>
+                  <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
+                    <div style={{ fontSize:46, fontWeight:800, color:"#fff", letterSpacing:"-0.04em", lineHeight:1, fontFamily:"var(--font-mono)" }}>
+                      {gmi.toFixed(1)}
+                    </div>
+                    <div style={{ fontSize:13, color:"rgba(255,255,255,0.4)" }}>%</div>
+                  </div>
+                  {gmiDelta != null && (
+                    <div style={{ marginTop:10, fontSize:12, color: gmiDelta < 0 ? GREEN : gmiDelta > 0 ? ORANGE : "rgba(255,255,255,0.4)", fontWeight:600 }}>
+                      {gmiDelta > 0 ? "+" : ""}{gmiDelta.toFixed(1)} vs prev
+                    </div>
+                  )}
+                </>
+              )}
+            </FlipCard>
+          </div>
         );
       })(),
     },
@@ -477,30 +507,31 @@ export default function InsightsPage() {
               />
             }
           >
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
-              <div style={{ fontSize:14, fontWeight:600 }}>Meal Evaluation</div>
-              <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)" }}>
-                last 7 days · {totalN} meal{totalN === 1 ? "" : "s"}
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18, gap:12 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:"rgba(255,255,255,0.5)", letterSpacing:"0.12em", textTransform:"uppercase" }}>
+                Meal Evaluation · 7D
               </div>
-            </div>
-            <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginBottom:18 }}>
-              Outcome distribution from your recently logged meals.
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)", whiteSpace:"nowrap" }}>
+                {totalN} meal{totalN === 1 ? "" : "s"}
+              </div>
             </div>
             {totalN === 0 ? (
               <div style={{ padding:"22px 0", textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:12 }}>
                 Log meals with post-meal glucose to see your evaluation distribution.
               </div>
             ) : (
-              <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
                 {rows.map(r => (
-                  <div key={r.label} style={{ display:"grid", gridTemplateColumns:"95px 1fr 44px 60px", gap:12, alignItems:"center" }}>
-                    <div style={{ fontSize:12, color:r.color, fontWeight:600 }}>{r.label}</div>
+                  <div key={r.label} style={{ display:"grid", gridTemplateColumns:"110px 1fr 36px", gap:14, alignItems:"center" }}>
+                    <div style={{ fontSize:13, color:r.color, fontWeight:600 }}>{r.label}</div>
                     <div style={{ height:6, borderRadius:99, background:"rgba(255,255,255,0.05)", overflow:"hidden" }}>
                       <div style={{ height:"100%", width:`${r.pct}%`, background:r.color, borderRadius:99, transition:"width 0.3s" }}/>
                     </div>
-                    <div style={{ fontSize:12, fontWeight:700, color:r.color, textAlign:"right" }}>{r.pct}%</div>
-                    <div style={{ fontSize:11, color:"rgba(255,255,255,0.5)", textAlign:"right" }}>
-                      {r.count} meal{r.count === 1 ? "" : "s"}
+                    <div
+                      title={`${r.pct}% · ${r.count} meal${r.count === 1 ? "" : "s"}`}
+                      style={{ fontSize:18, fontWeight:800, color:"#fff", textAlign:"right", letterSpacing:"-0.02em", fontFamily:"var(--font-mono)" }}
+                    >
+                      {r.count}
                     </div>
                   </div>
                 ))}
@@ -784,6 +815,7 @@ export default function InsightsPage() {
         @media (max-width: 720px) {
           .glev-grid-4 { grid-template-columns: repeat(2, 1fr) !important; }
           .glev-grid-3 { grid-template-columns: 1fr !important; }
+          .glev-vital-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
       <div style={{ marginBottom:28 }}>
