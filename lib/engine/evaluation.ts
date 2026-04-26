@@ -1,6 +1,7 @@
 import type { InsulinLog } from "../insulin";
 import type { ExerciseLog } from "../exercise";
 import { parseDbTs } from "@/lib/time";
+import { getInsulinSettings, type InsulinSettings } from "@/lib/userSettings";
 
 export type Outcome = "GOOD" | "UNDERDOSE" | "OVERDOSE" | "SPIKE" | "CHECK_CONTEXT";
 
@@ -16,6 +17,15 @@ export interface EvaluateEntryInput {
   bgAfter?: number | null;
   classification?: Classification;
   /**
+   * Glucose-velocity context from lifecycleFor (mg/dL per minute over
+   * the first 60 / 120 min). When provided, the reasoning string
+   * surfaces the speed numerically so the entries page can show
+   * "BG rose at +0.8 mg/dL/min in the first hour" without re-deriving
+   * it. Pure documentation — does not change the computed outcome.
+   */
+  speed1?: number | null;
+  speed2?: number | null;
+  /**
    * Optional context from the standalone insulin / exercise logs.
    * When provided, the reasoning string mentions a recent basal dose
    * or a recent exercise session that may explain the outcome.
@@ -23,6 +33,14 @@ export interface EvaluateEntryInput {
    */
   recentInsulinLogs?: InsulinLog[];
   recentExerciseLogs?: ExerciseLog[];
+  /**
+   * Personal insulin parameters (ICR / CF / target BG). When omitted,
+   * we fall back to getInsulinSettings() — which reads localStorage on
+   * the client and returns sensible defaults (15/50/110) on the server
+   * with a one-time console warning. Pass an explicit value to bypass
+   * the fallback (e.g. server-side recompute paths).
+   */
+  settings?: InsulinSettings;
 }
 
 export interface EvaluateEntryResult {
@@ -61,13 +79,28 @@ function contextSuffix(
   return notes.length > 0 ? " " + notes.join(" ") : "";
 }
 
+/** Render glucose-velocity notes from the lifecycle's speed1 / speed2. */
+function speedSuffix(speed1?: number | null, speed2?: number | null): string {
+  const parts: string[] = [];
+  if (speed1 != null && Number.isFinite(speed1)) {
+    const sign = speed1 > 0 ? "+" : "";
+    parts.push(`Anstiegs-Tempo 1H: ${sign}${speed1.toFixed(2)} mg/dL/min.`);
+  }
+  if (speed2 != null && Number.isFinite(speed2)) {
+    const sign = speed2 > 0 ? "+" : "";
+    parts.push(`Anstiegs-Tempo 2H: ${sign}${speed2.toFixed(2)} mg/dL/min.`);
+  }
+  return parts.length > 0 ? " " + parts.join(" ") : "";
+}
+
 /**
- * Deterministic post-hoc evaluation.
- *
- * Uses the glucose delta (bgAfter - bgBefore) as the ground truth for
- * the outcome — NOT GPT, NOT any heuristic dose ratio. If bgAfter is
- * missing we fall back to a conservative ICR-ratio estimate so that
- * entries without a post-meal reading still get a label.
+ * Deterministic post-hoc evaluation — single source of truth for
+ * outcome labelling across the app. Uses the glucose delta
+ * (bgAfter - bgBefore) as ground truth; if bgAfter is missing, falls
+ * back to a conservative ICR-ratio estimate using the user's
+ * personal ICR / CF / target BG (or DEFAULT_INSULIN_SETTINGS with a
+ * console warning) so entries without a post-meal reading still get
+ * a label.
  */
 export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
   const carbs    = Math.max(0, input.carbs || 0);
@@ -77,6 +110,7 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
   const bgBefore = input.bgBefore ?? null;
   const bgAfter  = input.bgAfter  ?? null;
   const cls      = input.classification || "BALANCED";
+  const settings = input.settings ?? getInsulinSettings();
 
   const delta = bgBefore != null && bgAfter != null ? bgAfter - bgBefore : null;
 
@@ -107,14 +141,14 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
     }
     const confidence: EvaluateEntryResult["confidence"] =
       Math.abs(delta) > 80 ? "high" : Math.abs(delta) > 25 ? "medium" : "high";
+    reasoning += speedSuffix(input.speed1, input.speed2);
     reasoning += contextSuffix(input.recentInsulinLogs, input.recentExerciseLogs);
     return { outcome, reasoning, confidence, delta, netCarbs };
   }
 
-  // No bgAfter: fallback ICR-ratio heuristic (lower confidence, marked CHECK_CONTEXT when ambiguous).
-  const ICR = 15, CF = 50, TARGET = 110;
-  let expected = netCarbs / ICR;
-  if (bgBefore && bgBefore > TARGET) expected += (bgBefore - TARGET) / CF;
+  // No bgAfter: fallback ICR-ratio heuristic using personal settings.
+  let expected = netCarbs / settings.icr;
+  if (bgBefore && bgBefore > settings.targetBg) expected += (bgBefore - settings.targetBg) / settings.cf;
   const ratio = insulin / Math.max(expected, 0.1);
 
   let outcome: Outcome;
@@ -129,6 +163,7 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
     outcome = "GOOD";
     reasoning = `Dose matches the ICR-expected amount within ±35% (no post-meal reading to confirm).`;
   }
+  reasoning += speedSuffix(input.speed1, input.speed2);
   reasoning += contextSuffix(input.recentInsulinLogs, input.recentExerciseLogs);
   return { outcome, reasoning, confidence: "low", delta: null, netCarbs };
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { saveMeal, classifyMeal, computeEvaluation, computeCalories } from "@/lib/meals";
+import { saveMeal, classifyMeal, computeCalories } from "@/lib/meals";
 import { logDebug } from "@/lib/debug";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
@@ -160,10 +160,14 @@ export default function ImportPanel({ embedded = false }: { embedded?: boolean }
       for (const r of sheetRows) {
         try {
           const cals = r.calories ?? computeCalories(r.carbs, r.protein, r.fat);
-          const ev = r.evaluation && ["GOOD","LOW","HIGH","SPIKE","OVERDOSE","UNDERDOSE"].includes(r.evaluation)
+          // Trust the user-supplied evaluation when it matches a known
+          // outcome label; otherwise leave NULL and let lifecycleFor fill
+          // it on first read (we no longer guess via the legacy
+          // computeEvaluation ICR-ratio shortcut on import).
+          const ev = r.evaluation && ["GOOD","LOW","HIGH","SPIKE","OVERDOSE","UNDERDOSE","CHECK_CONTEXT"].includes(r.evaluation)
             ? r.evaluation
-            : (r.insulin ? computeEvaluation(r.carbs, r.insulin, r.glucoseBefore) : "GOOD");
-          const mt = r.mealType && r.mealType !== "BALANCED" ? r.mealType : classifyMeal(r.carbs, r.protein, r.fat);
+            : null;
+          const mt = r.mealType && r.mealType !== "BALANCED" ? r.mealType : classifyMeal(r.carbs, r.protein, r.fat, r.fiber);
           await saveMeal({
             inputText: r.inputText,
             parsedJson: [],
@@ -218,11 +222,11 @@ export default function ImportPanel({ embedded = false }: { embedded?: boolean }
         const calories = row.calories
           ? parseFloat(row.calories)
           : computeCalories(carbs, protein, fat);
-        const ev = row.evaluation
-          ? (["GOOD","LOW","HIGH","SPIKE","OVERDOSE","UNDERDOSE"].includes(row.evaluation.toUpperCase())
-             ? row.evaluation.toUpperCase()
-             : computeEvaluation(carbs, insulin||0, glucose))
-          : (insulin ? computeEvaluation(carbs, insulin, glucose) : "GOOD");
+        // CSV evaluations are trusted when they map to a known outcome
+        // label; otherwise NULL → lifecycleFor will fill on read.
+        const ev = row.evaluation && ["GOOD","LOW","HIGH","SPIKE","OVERDOSE","UNDERDOSE","CHECK_CONTEXT"].includes(row.evaluation.toUpperCase())
+          ? row.evaluation.toUpperCase()
+          : null;
         const createdAt = toISO(row.date);
         await saveMeal({
           inputText: row.meal || "Imported meal",
@@ -235,7 +239,7 @@ export default function ImportPanel({ embedded = false }: { embedded?: boolean }
           fiberGrams: fiber,
           calories,
           insulinUnits: insulin,
-          mealType: classifyMeal(carbs, protein, fat),
+          mealType: classifyMeal(carbs, protein, fat, fiber),
           evaluation: ev,
           createdAt: createdAt ?? null,
         });

@@ -57,23 +57,26 @@ export interface SaveMealInput {
   relatedMealId?: string | null;
 }
 
-export function classifyMeal(carbs: number, protein: number, fat: number): string {
-  if (carbs >= 45) return "FAST_CARBS";
-  if (protein >= 25 && protein > fat && protein > carbs) return "HIGH_PROTEIN";
-  if (fat >= 20 && fat > protein && fat > carbs) return "HIGH_FAT";
+/**
+ * Deterministic meal-type classifier — single source of truth shared
+ * with the GPT prompt (lib/ai/systemPrompt.ts) so the AI's classification
+ * and the local fallback always agree.
+ *
+ * Rules (checked in order — first match wins):
+ *   FAST_CARBS    → fiber < 5g  AND carbs >= 20g
+ *                   (low-fiber carb load: bread, rice, juice, candy)
+ *   HIGH_FAT      → fat_kcal / total_kcal > 0.45
+ *                   (fat dominates the energy mix: pizza, fried, nuts)
+ *   HIGH_PROTEIN  → protein > carbs  AND protein > fat  AND protein >= 25g
+ *                   (steak, chicken, eggs, shakes)
+ *   BALANCED      → otherwise
+ */
+export function classifyMeal(carbs: number, protein: number, fat: number, fiber: number = 0): string {
+  if (fiber < 5 && carbs >= 20) return "FAST_CARBS";
+  const totalKcal = computeCalories(carbs, protein, fat);
+  if (totalKcal > 0 && (fat * 9) / totalKcal > 0.45) return "HIGH_FAT";
+  if (protein > carbs && protein > fat && protein >= 25) return "HIGH_PROTEIN";
   return "BALANCED";
-}
-
-export function computeEvaluation(carbsGrams: number, insulinUnits: number, glucoseBefore: number | null): string {
-  const icr = 15;
-  const cf  = 50;
-  const target = 110;
-  let est = carbsGrams / icr;
-  if (glucoseBefore && glucoseBefore > target) est += (glucoseBefore - target) / cf;
-  const ratio = insulinUnits / Math.max(est, 0.1);
-  if (ratio > 1.35) return "HIGH";
-  if (ratio < 0.65) return "LOW";
-  return "GOOD";
 }
 
 export async function saveMeal(input: SaveMealInput): Promise<Meal> {
@@ -190,23 +193,34 @@ export async function updateMeal(id: string, patch: UpdateMealInput): Promise<Me
   const explicitType = patch.meal_type !== undefined && patch.meal_type !== null && patch.meal_type !== "";
   const newMealType = explicitType
     ? patch.meal_type!
-    : classifyMeal(merged.carbs_grams, merged.protein_grams, merged.fat_grams);
+    : classifyMeal(merged.carbs_grams, merged.protein_grams, merged.fat_grams, merged.fiber_grams);
 
-  // 3) Recompute evaluation — use the best available post-meal reading.
-  //    Mirror the chip + LifecycleBlock priority: bg_2h > bg_1h > null.
+  // 3) Recompute evaluation through lifecycleFor — single source of truth.
+  //    The cached `evaluation` column is only populated when the row reaches
+  //    state === "final" (bg_2h captured in-window AND ageMinutes >= 120).
+  //    Pending / provisional rows leave evaluation = null so the dashboard
+  //    Control Score never counts a half-baked outcome.
   //    Lazy import keeps lib/meals.ts free of an engine cycle.
-  const { evaluateEntry } = await import("./engine/evaluation");
-  const bestAfter = merged.bg_2h ?? merged.bg_1h ?? null;
-  const ev = evaluateEntry({
-    carbs:           merged.carbs_grams,
-    protein:         merged.protein_grams,
-    fat:             merged.fat_grams,
-    fiber:           merged.fiber_grams,
-    insulin:         merged.insulin_units,
-    bgBefore:        merged.glucose_before,
-    bgAfter:         bestAfter,
-    classification:  (newMealType as "FAST_CARBS" | "HIGH_PROTEIN" | "HIGH_FAT" | "BALANCED"),
-  });
+  const { lifecycleFor } = await import("./engine/lifecycle");
+  const nowAt = new Date().toISOString();
+  const bg1hAtAfter = patch.bg_1h !== undefined ? (patch.bg_1h != null ? nowAt : null) : cur.bg_1h_at;
+  const bg2hAtAfter = patch.bg_2h !== undefined ? (patch.bg_2h != null ? nowAt : null) : cur.bg_2h_at;
+  const mergedMeal: Meal = {
+    ...cur,
+    carbs_grams:    merged.carbs_grams,
+    protein_grams:  merged.protein_grams,
+    fat_grams:      merged.fat_grams,
+    fiber_grams:    merged.fiber_grams,
+    insulin_units:  merged.insulin_units,
+    glucose_before: merged.glucose_before,
+    bg_1h:          merged.bg_1h,
+    bg_1h_at:       bg1hAtAfter,
+    bg_2h:          merged.bg_2h,
+    bg_2h_at:       bg2hAtAfter,
+    meal_type:      newMealType,
+  };
+  const lc = lifecycleFor(mergedMeal);
+  const finalEvaluation = lc.state === "final" ? lc.outcome : null;
 
   // 4) Build the DB patch — only include fields the caller actually sent,
   //    plus the recomputed meal_type + evaluation + recomputed calories.
@@ -219,14 +233,14 @@ export async function updateMeal(id: string, patch: UpdateMealInput): Promise<Me
   if (patch.glucose_before !== undefined) dbPatch.glucose_before = patch.glucose_before;
   if (patch.bg_1h !== undefined) {
     dbPatch.bg_1h = patch.bg_1h;
-    dbPatch.bg_1h_at = patch.bg_1h != null ? new Date().toISOString() : null;
+    dbPatch.bg_1h_at = bg1hAtAfter;
   }
   if (patch.bg_2h !== undefined) {
     dbPatch.bg_2h = patch.bg_2h;
-    dbPatch.bg_2h_at = patch.bg_2h != null ? new Date().toISOString() : null;
+    dbPatch.bg_2h_at = bg2hAtAfter;
   }
   dbPatch.meal_type = newMealType;
-  dbPatch.evaluation = ev.outcome;
+  dbPatch.evaluation = finalEvaluation;
   // calories follow the macros — recompute regardless of which macro changed.
   dbPatch.calories = computeCalories(merged.carbs_grams, merged.protein_grams, merged.fat_grams);
 
@@ -246,7 +260,7 @@ export async function updateMeal(id: string, patch: UpdateMealInput): Promise<Me
 
   logDebug("MEAL_UPDATE", {
     id, patch: Object.keys(dbPatch),
-    newMealType, newEvaluation: ev.outcome, bestAfter,
+    newMealType, lifecycleState: lc.state, newEvaluation: finalEvaluation,
   });
   return data as Meal;
 }
@@ -283,6 +297,24 @@ export async function updateMealReadings(
   if (!error) {
     if (readings.bg1h !== undefined) applied.push("bg_1h");
     if (readings.bg2h !== undefined) applied.push("bg_2h");
+
+    // Refresh the cached `evaluation` column whenever a 2h reading is
+    // newly attached — the row may now satisfy lifecycle.state === "final"
+    // and the dashboard Control Score reads `evaluation` directly. Skip
+    // when only bg_1h is being touched (1h alone never goes final).
+    if (readings.bg2h !== undefined) {
+      const { data: row } = await supabase
+        .from("meals").select(FULL_COLS).eq("id", id).single();
+      if (row) {
+        const { lifecycleFor } = await import("./engine/lifecycle");
+        const lc = lifecycleFor(row as Meal);
+        const evaluation = lc.state === "final" ? lc.outcome : null;
+        if (evaluation !== (row as Meal).evaluation) {
+          await supabase.from("meals").update({ evaluation }).eq("id", id);
+        }
+      }
+    }
+
     return { applied, warnings };
   }
 
@@ -401,7 +433,7 @@ function buildHistoricalRows(userId: string) {
     fiber_grams: s.fiber_grams,
     calories: computeCalories(s.carbs_grams, s.protein_grams, s.fat_grams),
     insulin_units: s.insulin_units,
-    meal_type: classifyMeal(s.carbs_grams, s.protein_grams, s.fat_grams),
+    meal_type: classifyMeal(s.carbs_grams, s.protein_grams, s.fat_grams, s.fiber_grams),
     evaluation: s.evaluation,
     created_at: s.created_at,
   }));

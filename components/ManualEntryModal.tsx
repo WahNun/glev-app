@@ -5,7 +5,6 @@ import { scheduleJobsForLog } from "@/lib/cgmJobs";
 import {
   saveMeal,
   classifyMeal,
-  computeEvaluation,
   computeCalories,
   type Meal,
 } from "@/lib/meals";
@@ -130,8 +129,12 @@ export default function ManualEntryModal({
     if (bg1hN != null && (bg1hN < 30 || bg1hN > 600)) { setError("1h reading must be between 30 and 600 mg/dL."); return; }
     if (bg2hN != null && (bg2hN < 30 || bg2hN > 600)) { setError("2h reading must be between 30 and 600 mg/dL."); return; }
 
-    const cls = mealType === "AUTO" ? classifyMeal(carbsN, proteinN, fatN) : mealType;
-    const ev  = computeEvaluation(carbsN, insulinN, glucoseN);
+    const cls = mealType === "AUTO" ? classifyMeal(carbsN, proteinN, fatN, fiberN) : mealType;
+    // Evaluation is no longer pre-computed at save time — the deterministic
+    // lifecycleFor pipeline (lib/engine/lifecycle.ts) decides when a row
+    // reaches "final" and only THEN writes the evaluation column. When
+    // bg_1h / bg_2h are passed below, updateMealReadings (and the
+    // updateMeal recompute path) populate it accordingly.
 
     setSaving(true);
     try {
@@ -148,7 +151,7 @@ export default function ManualEntryModal({
         calories:     computeCalories(carbsN, proteinN, fatN),
         insulinUnits: insulinN,
         mealType:     cls,
-        evaluation:   ev,
+        evaluation:   null,
         createdAt:    mealIso,
         mealTime:     mealIso,
       });

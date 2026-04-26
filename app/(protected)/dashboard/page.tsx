@@ -671,20 +671,38 @@ function NonMealLightExpand({
 //   (STRONG ≥ 80 · GOOD ≥ 60 · POOR < 60), derived from the existing
 //   "80+ Excellent / 60–79 Good / 40–59 Fair / <40 Needs attention" text.
 // -----------------------------------------------------------------------------
+// Four mutually-exclusive buckets aligned with the deterministic
+// evaluator's outcome labels (lib/engine/evaluation.ts):
+//   GOOD       — dose matched the meal (Δ within ±30 mg/dL)
+//   SPIKE      — post-meal high (rapid spike OR slow underdose); incl. legacy "HIGH"
+//   OVERDOSE   — post-meal low (insulin overshot); incl. legacy "LOW"
+//   OTHER      — CHECK_CONTEXT, null, or anything we can't categorise yet
+//                (pending / provisional rows whose lifecycleFor hasn't
+//                cached an evaluation, plus the diagnostic CHECK_CONTEXT
+//                outcome). Excluded from BOTH numerator and denominator
+//                so a fresh untracked meal doesn't drag the score down.
+//
+// Score = % of evaluated meals that landed in GOOD, clamped to 0..100.
+// `count` returns the denominator (evaluated meals only) so the card's
+// "not enough data" branch still triggers correctly.
 function computeControlScore(meals: Meal[], sinceMs: number, untilMs: number = Infinity): { score: number; count: number } {
   const inWindow = meals.filter(m => {
     const t = parseDbDate(m.created_at).getTime();
     return t >= sinceMs && t < untilMs;
   });
-  const total = inWindow.length;
-  if (!total) return { score: 0, count: 0 };
-  const good  = inWindow.filter(m => m.evaluation === "GOOD").length;
-  const spike = inWindow.filter(m => m.evaluation === "SPIKE" || m.evaluation === "LOW"  || m.evaluation === "UNDERDOSE").length;
-  const hypo  = inWindow.filter(m => m.evaluation === "HIGH"  || m.evaluation === "OVERDOSE").length;
-  const goodRate  = (good  / total) * 100;
-  const spikeRate = (spike / total) * 100;
-  const hypoRate  = (hypo  / total) * 100;
-  return { score: Math.round(goodRate * 0.7 + (100 - spikeRate - hypoRate) * 0.3), count: total };
+  let good = 0, spike = 0, overdose = 0;
+  for (const m of inWindow) {
+    const ev = m.evaluation;
+    if (ev === "GOOD")                                     good++;
+    else if (ev === "SPIKE" || ev === "UNDERDOSE" || ev === "HIGH") spike++;
+    else if (ev === "OVERDOSE" || ev === "LOW")            overdose++;
+    // Anything else (CHECK_CONTEXT, null, unknown) → OTHER, ignored.
+  }
+  const evaluatedCount = good + spike + overdose;
+  if (!evaluatedCount) return { score: 0, count: 0 };
+  const raw = (good / evaluatedCount) * 100;
+  const score = Math.max(0, Math.min(100, Math.round(raw)));
+  return { score, count: evaluatedCount };
 }
 
 function ControlScoreCard({ meals }: { meals: Meal[] }) {

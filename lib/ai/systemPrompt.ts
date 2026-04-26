@@ -15,10 +15,10 @@ liquids. Lowercase ingredient names. No extra commentary, no leading/trailing
 period. This is what the user sees as their meal label, so it must always be
 populated and stay in sync with the items array.
 
-Classify whole meal:
-  FAST_CARBS    -> simple sugars dominate (sugars/carbs>0.6 && fiber<5g): bread, rice, juice, candy
+Classify whole meal (rules checked in order — first match wins, MUST mirror lib/meals.ts classifyMeal exactly):
+  FAST_CARBS    -> fiber<5g && carbs>=20g (low-fiber carb load): bread, rice, juice, candy, gummies
   HIGH_FAT      -> fat_kcal/total_kcal>0.45: pizza, fried, cheese-heavy, nuts, butter, oil
-  HIGH_PROTEIN  -> protein>carbs && protein>25g: steak, chicken, eggs, shakes
+  HIGH_PROTEIN  -> protein>carbs && protein>fat && protein>=25g: steak, chicken, eggs, shakes
   BALANCED      -> otherwise
 Round all numbers to whole integers. Calories = carbs*4+protein*4+fat*9.
 IMPORTANT: You only parse and classify. Never suggest insulin doses,

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { saveMeal, classifyMeal, computeEvaluation, computeCalories, fetchMeals, type ParsedFood, type Meal } from "@/lib/meals";
+import { saveMeal, classifyMeal, computeCalories, fetchMeals, type ParsedFood, type Meal } from "@/lib/meals";
 import { scheduleAutoFillForMeal } from "@/lib/postMealCgmAutoFill";
 import { supabase } from "@/lib/supabase";
 import { parseDbDate, parseLluTs } from "@/lib/time";
@@ -321,7 +321,7 @@ export default function LogPage() {
       // Compose a reasoning bubble with the parsed items, totals, and meal classification.
       const items: Partial<ParsedFood>[] = data.parsed || [];
       const tCarbs = t.carbs ?? 0, tProt = t.protein ?? 0, tFat = t.fat ?? 0, tFiber = t.fiber ?? 0;
-      const cType = data.mealType ?? classifyMeal(tCarbs, tProt, tFat);
+      const cType = data.mealType ?? classifyMeal(tCarbs, tProt, tFat, tFiber);
       const parts: string[] = [];
       if (data.summary) parts.push(data.summary);
       if (items.length) {
@@ -471,13 +471,11 @@ export default function LogPage() {
     if (!glucoseNum || !totalCarbs) { setError("Glucose and carbs are required."); return; }
     setSaving(true); setError("");
     try {
-      // Insulin wird erst nach Confirm binär abgefragt → vor dem Save
-      // ist insulinNum immer null und damit auch keine Evaluation möglich.
-      // (computeEvaluation braucht eine konkrete Dosis; wir setzen null
-      // und füllen Evaluation später, wenn die Dosis bekannt ist.)
-      const ev = insulinNum != null
-        ? computeEvaluation(totalCarbs, insulinNum, glucoseNum)
-        : null;
+      // Evaluation wird NICHT mehr beim Save vorberechnet — lifecycleFor
+      // (lib/engine/lifecycle.ts) entscheidet beim 2h-Reading, ob ein Row
+      // 'final' wird, und nur dann schreibt updateMeal/updateMealReadings
+      // den Evaluation-Wert. Saves starten immer mit evaluation = null.
+      const ev = null;
       const mealTimeIso = mealTime ? new Date(mealTime).toISOString() : new Date().toISOString();
       const saved = await saveMeal({
         inputText: desc || transcript || "Manual entry",
@@ -489,7 +487,7 @@ export default function LogPage() {
         fiberGrams: totalFiber,
         calories: num(calories) ?? computeCalories(totalCarbs, totalProtein, totalFat),
         insulinUnits: insulinNum,
-        mealType: classifyMeal(totalCarbs, totalProtein, totalFat),
+        mealType: classifyMeal(totalCarbs, totalProtein, totalFat, totalFiber),
         evaluation: ev,
         mealTime: mealTimeIso,
         relatedMealId: isCorrectionBolus ? relatedMealId : null,
@@ -701,7 +699,10 @@ export default function LogPage() {
             <label style={labelStyle}>Meal Classification</label>
             {(() => {
               const hasMacros = totalCarbs > 0 || totalProtein > 0 || totalFat > 0;
-              const t = hasMacros ? classifyMeal(totalCarbs, totalProtein, totalFat) : null;
+              // Pass fiber so the live chip uses the same 4-arg rules as
+               // the saved row (handleConfirm at L490) and the AI prompt —
+               // otherwise a high-fiber FAST_CARBS gate flips silently.
+              const t = hasMacros ? classifyMeal(totalCarbs, totalProtein, totalFat, totalFiber) : null;
               const color = t ? (TYPE_COLORS[t] || ACCENT) : "rgba(255,255,255,0.3)";
               const label = t ? (TYPE_LABELS[t] || t) : "Auto from macros";
               return (

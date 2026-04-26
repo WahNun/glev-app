@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { fetchMeals, classifyMeal, computeCalories, computeEvaluation, saveMeal, deleteMeal, updateMeal, type Meal } from "@/lib/meals";
+import { fetchMeals, classifyMeal, computeCalories, saveMeal, deleteMeal, updateMeal, type Meal } from "@/lib/meals";
 import { scheduleJobsForLog } from "@/lib/cgmJobs";
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
 import { logDebug } from "@/lib/debug";
@@ -161,6 +161,12 @@ export default function EnginePage() {
   const [parsing, setParsing]       = useState(false);
   const [transcript, setTranscript] = useState("");
   const [voiceErr, setVoiceErr]     = useState("");
+  // Capture the AI-supplied meal classification from the most recent
+  // /api/parse-food round-trip. The GPT classifier and lib/meals.classifyMeal
+  // share the same rules now, so the AI value is the canonical answer when
+  // available. Cleared on every new recording so a stale AI label can't
+  // bleed into a freshly typed meal. Falls back to classifyMeal() when null.
+  const [aiMealType, setAiMealType] = useState<string | null>(null);
   const [speechAvail, setSpeechAvail] = useState(true);
   const mediaRecRef    = useRef<MediaRecorder | null>(null);
   const recordingStopTsRef = useRef<number | null>(null);
@@ -252,6 +258,9 @@ export default function EnginePage() {
       setVoiceErr(e instanceof Error ? e.message : "Mikrofon-Zugriff fehlgeschlagen.");
       setRecording(false);
     }
+    // Reset the AI-supplied meal label at the START of every new recording
+    // so a stale parse-food result can't be reused for a different meal.
+    setAiMealType(null);
   }
 
   function stopRecording() {
@@ -300,6 +309,15 @@ export default function EnginePage() {
       console.log("[PERF voice/engine] TOTAL (stop → form filled):", Date.now() - tStop, "ms");
       if (typeof pData.description === "string" && pData.description.trim()) {
         setDesc(pData.description.trim());
+      }
+      // Capture the AI classification so handleConfirmLog can prefer it
+      // over the deterministic classifyMeal fallback. Validate against the
+      // four canonical labels so a malformed response can't slip through.
+      const aiCls = pData.mealType;
+      if (typeof aiCls === "string" && ["FAST_CARBS", "HIGH_FAT", "HIGH_PROTEIN", "BALANCED"].includes(aiCls)) {
+        setAiMealType(aiCls);
+      } else {
+        setAiMealType(null);
       }
       // Hand the parsed result to the chat panel so the user sees what the AI
       // captured and can immediately push back ("the banana was bigger") in
@@ -455,12 +473,18 @@ export default function EnginePage() {
     const pNum  = parseFloat(protein) || 0;
     const fNum  = parseFloat(fat)     || 0;
     const fbNum = parseFloat(fiber)   || 0;
-    const cls   = classifyMeal(cNum, pNum, fNum);
+    // AI classification wins when /api/parse-food provided one — both
+    // sources share the same FAST_CARBS / HIGH_FAT / HIGH_PROTEIN /
+    // BALANCED rules, but the AI sees richer context (sugar fraction,
+    // ingredient identity) and resolves edge cases the macro-only
+    // fallback can't. Falls back to classifyMeal() for typed entries.
+    const cls   = aiMealType ?? classifyMeal(cNum, pNum, fNum, fbNum);
     const cal   = computeCalories(cNum, pNum, fNum);
-    // Evaluation lässt sich ohne Dosis nicht berechnen — bleibt null und wird
-    // später (nach der Bolus-Eingabe im Post-Confirm-Flow) per UPDATE auf
-    // der Meal-Row gesetzt.
-    const evalStr = iNum != null ? computeEvaluation(cNum, iNum, gNum) : null;
+    // Evaluation is no longer pre-computed at save time — lifecycleFor
+    // (lib/engine/lifecycle.ts) decides when a row reaches "final" and
+    // only THEN writes the evaluation column via updateMealReadings or
+    // updateMeal. Inserts always start with evaluation = null.
+    const evalStr = null;
     // datetime-local has no timezone — interpret it as the user's local wall
     // clock and convert to a real ISO instant for storage.
     const mealIso = mealTime ? new Date(mealTime).toISOString() : new Date().toISOString();
@@ -879,7 +903,11 @@ export default function EnginePage() {
               const cNum = parseFloat(carbs) || 0;
               const pNum = parseFloat(protein) || 0;
               const fNum = parseFloat(fat) || 0;
-              const cls = filled ? classifyMeal(cNum, pNum, fNum) : null;
+              const fbNum = parseFloat(fiber) || 0;
+              // Live preview chip: prefer the AI label captured from the
+              // most recent /api/parse-food response when present, so the
+              // chip matches what handleConfirmLog will persist.
+              const cls = filled ? (aiMealType ?? classifyMeal(cNum, pNum, fNum, fbNum)) : null;
               const color = cls ? (TYPE_COLORS[cls as string] || ACCENT) : "rgba(255,255,255,0.35)";
               const label = cls ? TYPE_LABELS[cls] : "Auto from macros";
               return (
@@ -985,7 +1013,7 @@ export default function EnginePage() {
           HIGH_FAT: "Fat-dominant — significantly delayed absorption. Split-bolus or extended-bolus often appropriate.",
           BALANCED: "Macros are well-balanced — predictable absorption curve. Standard ICR usually works.",
         };
-        const cls = classifyMeal(cNum, pNum, fNum);
+        const cls = aiMealType ?? classifyMeal(cNum, pNum, fNum, fbNum);
         const color = TYPE_COLORS[cls as string] || ACCENT;
         return (
           <div style={{
