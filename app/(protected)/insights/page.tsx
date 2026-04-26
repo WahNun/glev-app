@@ -452,35 +452,23 @@ export default function InsightsPage() {
               : "–";
             return (
               <>
-                {/* Chip header — pill-shaped, mirrors AI FOOD PARSER chip */}
+                {/* Plain header row — CardLabel on left, status pill on right.
+                    No chip wrapper: the headline lives in the card itself. */}
                 <div style={{
                   display:"flex", alignItems:"center", justifyContent:"space-between",
-                  gap:10, padding:"10px 14px",
-                  background:"rgba(255,255,255,0.02)",
-                  border:`1px solid ${BORDER}`,
-                  borderRadius:99,
-                  marginBottom:12,
+                  gap:10, marginBottom:12,
                 }}>
-                  <div style={{ display:"flex", alignItems:"baseline", gap:8, minWidth:0 }}>
-                    <span style={{
-                      fontSize:11, fontWeight:700, letterSpacing:"0.08em",
-                      color:"rgba(255,255,255,0.5)",
-                    }}>
-                      ADAPTIVE ENGINE
-                    </span>
-                    <span style={{
-                      fontSize:10, fontWeight:600, color:ACCENT, letterSpacing:"0.02em",
-                    }}>
-                      Glev-tuned
-                    </span>
-                  </div>
+                  <CardLabel text="Adaptive Engine"/>
                   <span style={{
                     display:"inline-flex", alignItems:"center", gap:6,
-                    fontSize:10, fontWeight:700, letterSpacing:"0.06em",
+                    fontSize:9, fontWeight:700, letterSpacing:"0.1em",
                     color: statusColor, flexShrink:0,
+                    padding:"3px 8px", borderRadius:99,
+                    border:`1px solid ${statusColor}55`,
+                    background:`${statusColor}18`,
                   }}>
                     <span style={{
-                      width:7, height:7, borderRadius:"50%",
+                      width:6, height:6, borderRadius:"50%",
                       background: statusColor,
                       boxShadow: `0 0 6px ${statusColor}`,
                     }}/>
@@ -488,18 +476,22 @@ export default function InsightsPage() {
                   </span>
                 </div>
 
-                {/* Headline metric: ICR centered like a hero number */}
+                {/* Hero ICR — matches the colourful big-number style used by
+                    Avg BG / GMI / performance tiles: 24px mono, lineHeight 1,
+                    ACCENT colour as the engine's signature. */}
                 <div style={{
-                  display:"flex", alignItems:"baseline", gap:10,
-                  padding:"4px 2px 8px", marginBottom:8,
+                  display:"flex", alignItems:"baseline", gap:8,
+                  padding:"2px 2px 10px", marginBottom:10,
                   borderBottom:`1px solid rgba(255,255,255,0.05)`,
                 }}>
-                  <span style={{ fontSize:11, color:"rgba(255,255,255,0.4)", fontWeight:600, letterSpacing:"0.04em" }}>
+                  <span style={{ fontSize:10, color:"rgba(255,255,255,0.4)", fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase" }}>
                     ICR
                   </span>
                   <span style={{
-                    fontSize:24, fontWeight:800, letterSpacing:"-0.02em",
-                    color: adaptiveICR.global ? "#fff" : "rgba(255,255,255,0.35)",
+                    fontSize:24, fontWeight:800,
+                    color: adaptiveICR.global ? ACCENT : "rgba(255,255,255,0.25)",
+                    fontFamily:"var(--font-mono)",
+                    lineHeight:1, letterSpacing:"-0.03em",
                   }}>
                     {icrText}
                   </span>
