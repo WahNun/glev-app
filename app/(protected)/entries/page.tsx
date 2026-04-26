@@ -684,9 +684,36 @@ export default function EntriesPage() {
             const carbs = m.carbs_grams ?? 0;
             const netCarbs = Math.max(0, carbs - totalFiber);
             const icr = m.insulin_units && m.insulin_units > 0 ? netCarbs / m.insulin_units : null;
-            const glucDelta = (m.glucose_after && m.glucose_before) ? m.glucose_after - m.glucose_before : null;
+            // BG AFTER picks the freshest post-meal reading: prefer 2h (more
+            // authoritative, captures peak settling), fall back to 1h, then to
+            // any manually-recorded glucose_after. Tag and timestamp track in
+            // lock-step so DELTA + TIME GAP describe the same data point.
+            const afterValue: number | null =
+              m.bg_2h ?? m.bg_1h ?? m.glucose_after ?? null;
+            const afterAtIso: string | null =
+              m.bg_2h != null ? (m.bg_2h_at ?? null)
+              : m.bg_1h != null ? (m.bg_1h_at ?? null)
+              : null;
+            const afterTag: "1H" | "2H" | null =
+              m.bg_2h != null ? "2H"
+              : m.bg_1h != null ? "1H"
+              : null;
+            const glucDelta = (afterValue != null && m.glucose_before)
+              ? afterValue - m.glucose_before
+              : null;
+            // Time gap: minutes between meal_time and the chosen reading's
+            // recorded-at. Formatted "1h 02m" or "47m" depending on size.
+            const timeGapStr: string | null = (() => {
+              if (!afterAtIso || !m.meal_time) return null;
+              const diffMs = parseDbTs(afterAtIso) - parseDbTs(m.meal_time);
+              if (!Number.isFinite(diffMs) || diffMs <= 0) return null;
+              const totalMin = Math.round(diffMs / 60_000);
+              const h = Math.floor(totalMin / 60);
+              const mm = totalMin % 60;
+              return h > 0 ? `${h}h ${String(mm).padStart(2, "0")}m` : `${mm}m`;
+            })();
             const bgC = m.glucose_before ? (m.glucose_before > 140 ? ORANGE : m.glucose_before < 80 ? PINK : GREEN) : "rgba(255,255,255,0.7)";
-            const afterC = m.glucose_after ? (m.glucose_after > 180 || m.glucose_after < 70 ? PINK : GREEN) : "rgba(255,255,255,0.3)";
+            const afterC = afterValue != null ? (afterValue > 180 || afterValue < 70 ? PINK : GREEN) : "rgba(255,255,255,0.3)";
             const deltaC = glucDelta !== null ? (Math.abs(glucDelta) < 50 ? GREEN : glucDelta > 0 ? ORANGE : PINK) : "rgba(255,255,255,0.3)";
             const evColor = evC(ev);
 
@@ -857,9 +884,9 @@ export default function EntriesPage() {
                       <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8 }}>GLUCOSE</div>
                       <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8 }}>
                         <MiniCard l="BG BEFORE" v={m.glucose_before ? `${m.glucose_before} mg/dL` : "—"} c={bgC}/>
-                        <MiniCard l="BG AFTER" v={m.glucose_after ? `${m.glucose_after} mg/dL` : "—"} c={afterC}/>
-                        <MiniCard l="DELTA" v={glucDelta !== null ? `${glucDelta > 0 ? "+" : ""}${glucDelta} mg/dL` : "—"} c={deltaC}/>
-                        <MiniCard l="TIME GAP" v="—"/>
+                        <MiniCard l={afterTag ? `BG AFTER (${afterTag})` : "BG AFTER"} v={afterValue != null ? `${afterValue} mg/dL` : "—"} c={afterC}/>
+                        <MiniCard l={afterTag ? `DELTA (${afterTag})` : "DELTA"} v={glucDelta !== null ? `${glucDelta > 0 ? "+" : ""}${glucDelta} mg/dL` : "—"} c={deltaC}/>
+                        <MiniCard l="TIME GAP" v={timeGapStr ?? "—"} c={timeGapStr ? "rgba(255,255,255,0.9)" : undefined}/>
                       </div>
                     </div>
 
