@@ -2081,6 +2081,27 @@ function MealEditor({ meal, onSaved, onCancel }: {
   const [busy,    setBusy]    = useState(false);
   const [err,     setErr]     = useState<string | null>(null);
 
+  // Auto-scroll the editor into view when it mounts. The list is long and
+  // the editor often opens far below the fold (depending on which entry the
+  // user clicked) — without this, the page sits at its previous scroll
+  // position and the user has to hunt for the editor manually.
+  // Using "start" with a small offset to clear the sticky page header.
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    // Defer one frame so the layout is settled (the editor swaps in
+    // synchronously but the surrounding page can still be reflowing).
+    const id = requestAnimationFrame(() => {
+      const el = rootRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      // Scroll to position the editor 80px from the viewport top to leave
+      // breathing room under the page's sticky filter bar.
+      const target = window.scrollY + rect.top - 80;
+      window.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
+    });
+    return () => cancelAnimationFrame(id);
+  }, []);
+
   function parseNum(s: string): number | null {
     const t = s.trim().replace(",", ".");
     if (t === "") return null;
@@ -2134,7 +2155,7 @@ function MealEditor({ meal, onSaved, onCancel }: {
   }
 
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+    <div ref={rootRef} style={{ display:"flex", flexDirection:"column", gap:14, scrollMarginTop:80 }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
         <div style={{ fontSize:9, color:"rgba(255,255,255,0.5)", letterSpacing:"0.1em", fontWeight:700 }}>
           EINTRAG BEARBEITEN
