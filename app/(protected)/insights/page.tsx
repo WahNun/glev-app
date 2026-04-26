@@ -449,6 +449,10 @@ export default function InsightsPage() {
               : "–";
             return (
               <>
+                {/* Corner-pinned ℹ in the very top-right of the card. Sits inside
+                    the front shell's top padding so it never overlaps the status
+                    pill below and never shifts existing layout. */}
+                <InfoCornerIcon/>
                 {/* Plain header row — CardLabel on left, status pill on right.
                     No chip wrapper: the headline lives in the card itself. */}
                 <div style={{
@@ -456,33 +460,21 @@ export default function InsightsPage() {
                   gap:10, marginBottom:12,
                 }}>
                   <CardLabel text="Adaptive Engine"/>
-                  <div style={{ display:"inline-flex", alignItems:"center", gap:8, flexShrink:0 }}>
-                    {/* Subtle ℹ: signals a back side without competing with status pill. */}
-                    <span aria-hidden style={{
-                      width:14, height:14, borderRadius:"50%",
-                      display:"inline-flex", alignItems:"center", justifyContent:"center",
-                      fontSize:9, fontWeight:700, fontStyle:"italic", fontFamily:"Georgia, serif",
-                      color:"rgba(255,255,255,0.4)",
-                      border:"1px solid rgba(255,255,255,0.18)",
-                      background:"rgba(255,255,255,0.02)",
-                      lineHeight:1,
-                    }}>i</span>
+                  <span style={{
+                    display:"inline-flex", alignItems:"center", gap:6,
+                    fontSize:9, fontWeight:700, letterSpacing:"0.1em",
+                    color: statusColor, flexShrink:0,
+                    padding:"3px 8px", borderRadius:99,
+                    border:`1px solid ${statusColor}55`,
+                    background:`${statusColor}18`,
+                  }}>
                     <span style={{
-                      display:"inline-flex", alignItems:"center", gap:6,
-                      fontSize:9, fontWeight:700, letterSpacing:"0.1em",
-                      color: statusColor,
-                      padding:"3px 8px", borderRadius:99,
-                      border:`1px solid ${statusColor}55`,
-                      background:`${statusColor}18`,
-                    }}>
-                      <span style={{
-                        width:6, height:6, borderRadius:"50%",
-                        background: statusColor,
-                        boxShadow: `0 0 6px ${statusColor}`,
-                      }}/>
-                      {statusLabel}
-                    </span>
-                  </div>
+                      width:6, height:6, borderRadius:"50%",
+                      background: statusColor,
+                      boxShadow: `0 0 6px ${statusColor}`,
+                    }}/>
+                    {statusLabel}
+                  </span>
                 </div>
 
                 {/* Hero ICR — matches the colourful big-number style used by
@@ -795,42 +787,40 @@ function DisclaimerChip() {
   );
 }
 
-/** Redesigned ICR back: heading + body + sub-line + disclaimer pinned bottom + tap-to-flip hint. */
+/** Redesigned ICR back: heading + body + sub-line + disclaimer pinned bottom + bottom tap-to-flip hint. */
 function IcrInfoBack({ heading, body, subLine, accent }: {
   heading: string; body: string; subLine: string; accent: string;
 }) {
   return (
     <div style={{ display:"flex", flexDirection:"column", height:"100%", gap:8 }}>
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, marginBottom:2 }}>
-        <div style={{ fontSize:10, color:accent, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>
-          {heading}
-        </div>
-        <span style={{ fontSize:9, color:"rgba(255,255,255,0.35)", flexShrink:0 }}>← zurück</span>
+      <div style={{ fontSize:10, color:accent, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>
+        {heading}
       </div>
       <div style={{ fontSize:11, color:"rgba(255,255,255,0.7)", lineHeight:1.55 }}>{body}</div>
       <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)", letterSpacing:"0.02em", marginTop:2 }}>
         {subLine}
       </div>
-      <div style={{ marginTop:"auto", paddingTop:10 }}>
+      {/* Bottom region: disclaimer chip + return hint, both pinned to the bottom. */}
+      <div style={{ marginTop:"auto", paddingTop:10, display:"flex", flexDirection:"column", gap:6 }}>
         <DisclaimerChip/>
+        <div style={{ fontSize:9, color:"rgba(255,255,255,0.32)", textAlign:"right", letterSpacing:"0.02em" }}>
+          ← zurück · tippen
+        </div>
       </div>
     </div>
   );
 }
 
-/** Subtle ℹ affordance pinned to a tile's top-right corner.
- *  Position: absolute against the nearest positioned ancestor (front-face shell).
- *  Pointer-events disabled so the parent's tap-to-flip stays the click target. */
+/** Subtle ℹ affordance pinned to a tile's top-right corner. Sized & positioned
+ *  to sit inside the card's top padding so it never collides with header content
+ *  (e.g. status pills) and never shifts existing layout. Pointer-events disabled
+ *  so the parent's tap-to-flip stays the click target. */
 function InfoCornerIcon() {
   return (
     <span aria-hidden style={{
-      position:"absolute", top:6, right:8,
-      width:14, height:14, borderRadius:"50%",
-      display:"inline-flex", alignItems:"center", justifyContent:"center",
-      fontSize:9, fontWeight:700, fontStyle:"italic", fontFamily:"Georgia, serif",
+      position:"absolute", top:4, right:10,
+      fontSize:10, fontWeight:700, fontStyle:"italic", fontFamily:"Georgia, serif",
       color:"rgba(255,255,255,0.4)",
-      border:"1px solid rgba(255,255,255,0.18)",
-      background:"rgba(255,255,255,0.02)",
       pointerEvents:"none", lineHeight:1,
     }}>i</span>
   );
