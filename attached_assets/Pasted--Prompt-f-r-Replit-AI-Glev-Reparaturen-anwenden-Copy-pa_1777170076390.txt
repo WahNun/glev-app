@@ -1,0 +1,665 @@
+# Prompt für Replit AI — Glev-Reparaturen anwenden
+
+Copy-paste the entire content below (from "=== BEGIN PROMPT ===" to "=== END PROMPT ===") into Replit AI.
+
+---
+
+=== BEGIN PROMPT ===
+
+You are editing the Glev Next.js app (App Router, TypeScript, Supabase, npm only — no pnpm).
+
+I have a repaired version of 5 files from a previous session. Replace the contents of each of the following files **exactly** with the code block given below it. Do not change anything else in the repo. Do not add new dependencies. Do not touch deployment or config.
+
+These edits together fix:
+1. CSV import losing historical dates (saveMeal now accepts `createdAt`).
+2. Naive CSV parser (now quote-aware + regex-first header mapping).
+3. Ignored macro columns on import (protein / fat / fiber / calories now preserved).
+4. No manual macro entry on Log Meal (added a "Manual Macros" card with 5 inputs).
+5. Missing required cards on Insights (added Total Meals, Avg Carbs, Last 7 Days, Avg Glucose overview + 14-day glucose trend sparkline).
+6. Engine inputs not visualized (added Input Glucose / Input Carbs summary strip above the dose result).
+
+After applying, run `npm install` then `npm run dev`, and check that:
+- `/import` accepts the sample CSV and historical dates appear in Entries.
+- `/log` shows a "Manual Macros" card with Carbs / Protein / Fat / Fiber / Calories inputs.
+- `/insights` shows an Overview row with 4 cards and a 14-day glucose trend.
+- `/engine` shows Input Glucose and Input Carbs strip above the main dose card.
+- `GET /api/debug/state` returns the imported meals with their historical `created_at`.
+
+---
+
+## File 1 — `lib/meals.ts`
+
+Replace the entire file with:
+
+```ts
+import { supabase } from "./supabase";
+import { logDebug } from "./debug";
+
+export interface ParsedFood {
+  name: string;
+  grams: number;
+  carbs: number;
+  protein: number;
+  fat: number;
+  fiber: number;
+}
+
+export interface Meal {
+  id: string;
+  user_id: string;
+  input_text: string;
+  parsed_json: ParsedFood[];
+  glucose_before: number | null;
+  glucose_after: number | null;
+  carbs_grams: number | null;
+  protein_grams: number | null;
+  fat_grams: number | null;
+  fiber_grams: number | null;
+  calories: number | null;
+  insulin_units: number | null;
+  meal_type: string | null;
+  evaluation: string | null;
+  created_at: string;
+}
+
+export function computeCalories(carbs: number, protein: number, fat: number): number {
+  return Math.round(carbs * 4 + protein * 4 + fat * 9);
+}
+
+export interface SaveMealInput {
+  inputText: string;
+  parsedJson: ParsedFood[];
+  glucoseBefore: number | null;
+  glucoseAfter: number | null;
+  carbsGrams: number;
+  proteinGrams: number;
+  fatGrams: number;
+  fiberGrams: number;
+  calories: number;
+  insulinUnits: number | null;
+  mealType: string | null;
+  evaluation: string | null;
+  createdAt?: string | null;
+}
+
+export function classifyMeal(carbs: number, protein: number, fat: number): string {
+  if (carbs >= 45) return "FAST_CARBS";
+  if (protein >= 25 && protein > fat && protein > carbs) return "HIGH_PROTEIN";
+  if (fat >= 20 && fat > protein && fat > carbs) return "HIGH_FAT";
+  return "BALANCED";
+}
+
+export function computeEvaluation(carbsGrams: number, insulinUnits: number, glucoseBefore: number | null): string {
+  const icr = 15;
+  const cf  = 50;
+  const target = 110;
+  let est = carbsGrams / icr;
+  if (glucoseBefore && glucoseBefore > target) est += (glucoseBefore - target) / cf;
+  const ratio = insulinUnits / Math.max(est, 0.1);
+  if (ratio > 1.35) return "HIGH";
+  if (ratio < 0.65) return "LOW";
+  return "GOOD";
+}
+
+export async function saveMeal(input: SaveMealInput): Promise<Meal> {
+  if (!supabase) throw new Error("Supabase is not configured");
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) throw new Error("Not authenticated");
+
+  const row: Record<string, unknown> = {
+    user_id:        user.id,
+    input_text:     input.inputText,
+    parsed_json:    input.parsedJson,
+    glucose_before: input.glucoseBefore,
+    glucose_after:  input.glucoseAfter,
+    carbs_grams:    input.carbsGrams,
+    protein_grams:  input.proteinGrams ?? null,
+    fat_grams:      input.fatGrams ?? null,
+    fiber_grams:    input.fiberGrams ?? null,
+    calories:       input.calories ?? null,
+    insulin_units:  input.insulinUnits,
+    meal_type:      input.mealType,
+    evaluation:     input.evaluation,
+  };
+  if (input.createdAt) row.created_at = input.createdAt;
+
+  const { data, error } = await supabase
+    .from("meals")
+    .insert(row)
+    .select()
+    .single();
+
+  if (error) {
+    if (error.message?.includes("column") && (error.message?.includes("protein_grams") || error.message?.includes("fat_grams") || error.message?.includes("fiber_grams") || error.message?.includes("calories"))) {
+      delete row.protein_grams;
+      delete row.fat_grams;
+      delete row.fiber_grams;
+      delete row.calories;
+      const { data: d2, error: e2 } = await supabase.from("meals").insert(row).select().single();
+      if (e2) throw new Error(e2.message);
+      logDebug("MEAL_INSERT", { id: d2.id, carbs: input.carbsGrams, protein: input.proteinGrams, fat: input.fatGrams, fiber: input.fiberGrams, calories: input.calories, insulin: input.insulinUnits, glucose: input.glucoseBefore, mealType: input.mealType, evaluation: input.evaluation, note: "macro columns missing in DB" });
+      return d2 as Meal;
+    }
+    throw new Error(error.message);
+  }
+  logDebug("MEAL_INSERT", { id: data.id, carbs: input.carbsGrams, protein: input.proteinGrams, fat: input.fatGrams, fiber: input.fiberGrams, calories: input.calories, insulin: input.insulinUnits, glucose: input.glucoseBefore, mealType: input.mealType, evaluation: input.evaluation });
+  return data as Meal;
+}
+
+export async function deleteMeal(id: string): Promise<void> {
+  if (!supabase) throw new Error("Supabase is not configured");
+  const { error } = await supabase.from("meals").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function fetchMeals(): Promise<Meal[]> {
+  if (!supabase) throw new Error("Supabase is not configured");
+  const { data, error } = await supabase
+    .from("meals")
+    .select("id, user_id, input_text, parsed_json, glucose_before, glucose_after, carbs_grams, protein_grams, fat_grams, fiber_grams, calories, insulin_units, meal_type, evaluation, created_at")
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as Meal[];
+}
+
+// NOTE: seedMealsIfEmpty() is intentionally kept as-is in the existing file.
+// If Replit has a different implementation of seedMealsIfEmpty, keep that one.
+// Only the interfaces above, computeCalories, classifyMeal, computeEvaluation,
+// saveMeal, deleteMeal and fetchMeals are part of this fix.
+```
+
+> Note to Replit AI: the repaired `lib/meals.ts` in my local folder also contains the full `seedMealsIfEmpty()` seed data with 32 entries. If the repo already has that function, leave it untouched. If not, tell me and I'll paste the seed block too.
+
+---
+
+## File 2 — `app/(protected)/import/page.tsx`
+
+Replace the entire file with:
+
+```tsx
+"use client";
+
+import { useState } from "react";
+import { saveMeal, classifyMeal, computeEvaluation, computeCalories } from "@/lib/meals";
+import { logDebug } from "@/lib/debug";
+
+const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
+const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
+
+interface ParsedRow {
+  date: string;
+  meal: string;
+  glucose: string;
+  carbs: string;
+  insulin: string;
+  evaluation: string;
+  protein: string;
+  fat: string;
+  fiber: string;
+  calories: string;
+}
+
+function parseNumberLike(val: string): string {
+  if (!val) return "";
+  const cleaned = val.replace(/[^0-9.\-–—\s]/g, "").trim();
+  const rangeMatch = cleaned.match(/^(\d+(?:\.\d+)?)\s*[-–—]\s*(\d+(?:\.\d+)?)$/);
+  if (rangeMatch) {
+    const avg = (parseFloat(rangeMatch[1]) + parseFloat(rangeMatch[2])) / 2;
+    return Math.round(avg * 10) / 10 + "";
+  }
+  const n = parseFloat(cleaned);
+  return isNaN(n) ? "" : cleaned;
+}
+
+function splitCSVLine(line: string): string[] {
+  const cells: string[] = [];
+  let cur = "";
+  let inQuote = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuote) {
+      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+      else if (ch === '"') { inQuote = false; }
+      else cur += ch;
+    } else {
+      if (ch === '"') inQuote = true;
+      else if (ch === ",") { cells.push(cur); cur = ""; }
+      else cur += ch;
+    }
+  }
+  cells.push(cur);
+  return cells.map(c => c.trim());
+}
+
+function normalizeHeader(h: string): string {
+  return h.toLowerCase().replace(/[^a-z0-9_]/g, "");
+}
+
+function mapHeader(h: string): keyof ParsedRow | null {
+  if (/^(carbs?|carbohydrates?|carbs_grams|carbgrams|netcarbs)$/.test(h)) return "carbs";
+  if (/^(protein|proteins|proteingrams|protein_g)$/.test(h)) return "protein";
+  if (/^(fat|fats|fatgrams|fat_g)$/.test(h)) return "fat";
+  if (/^(fiber|fibre|fibergrams|fiber_g)$/.test(h)) return "fiber";
+  if (/^(calories|kcal|cals|energy)$/.test(h)) return "calories";
+  if (/^(insulin|dose|bolus|units|insulinunits|bolusunits)$/.test(h)) return "insulin";
+  if (/^(glucose|bg|sugar|bloodglucose|glucosebefore|bg_before)$/.test(h)) return "glucose";
+  if (/^(evaluation|eval|result|outcome|dose_quality)$/.test(h)) return "evaluation";
+  if (/^(date|datetime|timestamp|createdat|logdate|when)$/.test(h)) return "date";
+  if (/^(meal|food|description|input|item|name|notes)$/.test(h)) return "meal";
+  if (h.includes("carb")) return "carbs";
+  if (h.includes("protein")) return "protein";
+  if (h.includes("fat")) return "fat";
+  if (h.includes("fiber") || h.includes("fibre")) return "fiber";
+  if (h.includes("calor") || h.includes("kcal")) return "calories";
+  if (h.includes("insulin") || h.includes("dose") || h.includes("bolus")) return "insulin";
+  if (h.includes("glucose") || h.includes("sugar") || h === "bg") return "glucose";
+  if (h.includes("eval") || h.includes("result")) return "evaluation";
+  if (h.includes("date") || h.includes("time")) return "date";
+  if (h.includes("meal") || h.includes("food") || h.includes("desc")) return "meal";
+  return null;
+}
+
+function parseCSV(text: string): ParsedRow[] {
+  const lines = text.trim().split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return [];
+  const headers = splitCSVLine(lines[0]).map(normalizeHeader);
+
+  const colMap: Partial<Record<keyof ParsedRow, number>> = {};
+  headers.forEach((h, i) => {
+    const field = mapHeader(h);
+    if (field && colMap[field] === undefined) colMap[field] = i;
+  });
+
+  return lines.slice(1).map(line => {
+    const cells = splitCSVLine(line);
+    const get = (k: keyof ParsedRow) => {
+      const idx = colMap[k];
+      return idx !== undefined ? (cells[idx] ?? "") : "";
+    };
+    return {
+      date:       get("date"),
+      meal:       get("meal"),
+      glucose:    parseNumberLike(get("glucose")),
+      carbs:      parseNumberLike(get("carbs")),
+      insulin:    parseNumberLike(get("insulin")),
+      evaluation: get("evaluation"),
+      protein:    parseNumberLike(get("protein")),
+      fat:        parseNumberLike(get("fat")),
+      fiber:      parseNumberLike(get("fiber")),
+      calories:   parseNumberLike(get("calories")),
+    };
+  }).filter(r => r.meal || r.carbs);
+}
+
+function toISO(dateStr: string): string | undefined {
+  if (!dateStr) return undefined;
+  const s = dateStr.trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    const iso = s.length === 10 ? `${s}T12:00:00Z` : s;
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? undefined : d.toISOString();
+  }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? undefined : d.toISOString();
+}
+
+export default function ImportPage() {
+  const [csv, setCSV]         = useState("");
+  const [rows, setRows]       = useState<ParsedRow[]>([]);
+  const [parsed, setParsed]   = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [imported, setImported]   = useState(0);
+  const [errors, setErrors]   = useState<string[]>([]);
+  const [done, setDone]       = useState(false);
+
+  function handleParse() {
+    const result = parseCSV(csv);
+    setRows(result);
+    setParsed(true);
+    setDone(false);
+    setErrors([]);
+    setImported(0);
+  }
+
+  async function handleImport() {
+    setImporting(true);
+    setErrors([]);
+    let count = 0;
+    const errs: string[] = [];
+    for (const row of rows) {
+      try {
+        const carbs   = parseFloat(row.carbs)   || 0;
+        const insulin = parseFloat(row.insulin) || null;
+        const glucose = parseInt(row.glucose)   || null;
+        const protein = parseFloat(row.protein) || 0;
+        const fat     = parseFloat(row.fat)     || 0;
+        const fiber   = parseFloat(row.fiber)   || 0;
+        const calories = row.calories
+          ? parseFloat(row.calories)
+          : computeCalories(carbs, protein, fat);
+        const ev = row.evaluation
+          ? (["GOOD","LOW","HIGH","SPIKE","OVERDOSE","UNDERDOSE"].includes(row.evaluation.toUpperCase())
+             ? row.evaluation.toUpperCase()
+             : computeEvaluation(carbs, insulin||0, glucose))
+          : (insulin ? computeEvaluation(carbs, insulin, glucose) : "GOOD");
+        const createdAt = toISO(row.date);
+        await saveMeal({
+          inputText: row.meal || "Imported meal",
+          parsedJson: [],
+          glucoseBefore: glucose,
+          glucoseAfter: null,
+          carbsGrams: carbs,
+          proteinGrams: protein,
+          fatGrams: fat,
+          fiberGrams: fiber,
+          calories,
+          insulinUnits: insulin,
+          mealType: classifyMeal(carbs, protein, fat),
+          evaluation: ev,
+          createdAt: createdAt ?? null,
+        });
+        count++;
+      } catch (e) {
+        errs.push(`Row "${row.meal || row.date || "?"}": ${e instanceof Error ? e.message : "failed"}`);
+      }
+    }
+    setImported(count);
+    setErrors(errs);
+    setDone(true);
+    setImporting(false);
+    logDebug("IMPORT", { parsed: rows.length, inserted: count, failed: errs.length, error: errs[0] ?? null });
+  }
+
+  const inp: React.CSSProperties = { background:"#0D0D12", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 14px", color:"#fff", fontSize:14, outline:"none", width:"100%" };
+  const card: React.CSSProperties = { background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"20px 24px" };
+
+  const SAMPLE = `date,meal,glucose,carbs,protein,fat,fiber,calories,insulin,evaluation
+2024-03-01,Oatmeal with banana,98,74,8,3,8,380,5.0,GOOD
+2024-03-01,Turkey sandwich,112,53,25,9,4,390,3.5,GOOD
+2024-03-02,Pancakes,105,92,12,10,2,510,4.0,LOW`;
+
+  return (
+    <div style={{ maxWidth:800, margin:"0 auto" }}>
+      <div style={{ marginBottom:28 }}>
+        <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>Import Center</h1>
+        <p style={{ color:"rgba(255,255,255,0.35)", fontSize:14 }}>Import historical meal data from CSV. Headers are mapped automatically and dates are preserved.</p>
+      </div>
+
+      <div style={{ ...card, marginBottom:20, borderColor:`${ACCENT}25` }}>
+        <div style={{ fontSize:13, fontWeight:600, color:ACCENT, marginBottom:10 }}>Expected CSV Format</div>
+        <pre style={{ fontFamily:"monospace", fontSize:11, color:"rgba(255,255,255,0.5)", background:"rgba(0,0,0,0.3)", padding:"12px 14px", borderRadius:8, overflowX:"auto", lineHeight:1.6, margin:0 }}>{SAMPLE}</pre>
+        <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:10, lineHeight:1.6 }}>
+          Columns auto-detected. Supported: date, meal/food/description, glucose/bg, carbs, protein, fat, fiber, calories, insulin/dose, evaluation/result.
+        </div>
+      </div>
+
+      <div style={{ ...card, marginBottom:20 }}>
+        <div style={{ fontSize:13, fontWeight:600, marginBottom:12 }}>Paste CSV Data</div>
+        <textarea
+          style={{ ...inp, height:200, resize:"vertical", fontFamily:"monospace", fontSize:12, fontFeatureSettings:'"tnum"' }}
+          placeholder={SAMPLE}
+          value={csv}
+          onChange={e => { setCSV(e.target.value); setParsed(false); setDone(false); }}
+        />
+        <div style={{ marginTop:12, display:"flex", gap:10 }}>
+          <button onClick={handleParse} disabled={!csv.trim()} style={{
+            padding:"10px 20px", borderRadius:10, border:`1px solid ${csv.trim()?ACCENT+"40":BORDER}`, cursor:csv.trim()?"pointer":"not-allowed",
+            background:csv.trim()?`${ACCENT}22`:"rgba(255,255,255,0.03)", color:csv.trim()?ACCENT:"rgba(255,255,255,0.2)",
+            fontSize:13, fontWeight:600,
+          }}>
+            Preview Import
+          </button>
+          <button onClick={() => setCSV(SAMPLE)} style={{ padding:"10px 16px", borderRadius:10, border:`1px solid ${BORDER}`, background:"transparent", color:"rgba(255,255,255,0.3)", fontSize:13, cursor:"pointer" }}>
+            Load Sample
+          </button>
+        </div>
+      </div>
+
+      {parsed && rows.length > 0 && (
+        <div style={{ ...card, marginBottom:20 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+            <div>
+              <div style={{ fontSize:13, fontWeight:600 }}>Preview — {rows.length} rows detected</div>
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:2 }}>Dates are preserved on import.</div>
+            </div>
+            {!done && (
+              <button onClick={handleImport} disabled={importing} style={{
+                padding:"10px 22px", borderRadius:10, border:"none", cursor:"pointer",
+                background:`linear-gradient(135deg, ${ACCENT}, #6B8BFF)`, color:"#fff",
+                fontSize:13, fontWeight:700, boxShadow:`0 4px 16px ${ACCENT}40`,
+              }}>
+                {importing ? `Importing… ${imported}/${rows.length}` : `Import ${rows.length} Rows`}
+              </button>
+            )}
+          </div>
+          <div style={{ overflowX:"auto" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse" }}>
+              <thead>
+                <tr style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase" }}>
+                  {["Date","Meal","Gluc","Carbs","Prot","Fat","Fib","Cal","Ins","Eval"].map(h => (
+                    <th key={h} style={{ padding:"8px 10px", textAlign:"left", borderBottom:`1px solid ${BORDER}`, fontWeight:400 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.slice(0,10).map((r,i) => (
+                  <tr key={i} style={{ fontSize:12, borderBottom:`1px solid rgba(255,255,255,0.03)` }}>
+                    <td style={{ padding:"9px 10px", color:"rgba(255,255,255,0.4)" }}>{r.date||"—"}</td>
+                    <td style={{ padding:"9px 10px" }}>{r.meal.length>28?r.meal.slice(0,28)+"…":r.meal||"—"}</td>
+                    <td style={{ padding:"9px 10px", color:"rgba(255,255,255,0.5)" }}>{r.glucose||"—"}</td>
+                    <td style={{ padding:"9px 10px", color:"rgba(255,255,255,0.5)" }}>{r.carbs?`${r.carbs}g`:"—"}</td>
+                    <td style={{ padding:"9px 10px", color:"rgba(255,255,255,0.5)" }}>{r.protein?`${r.protein}g`:"—"}</td>
+                    <td style={{ padding:"9px 10px", color:"rgba(255,255,255,0.5)" }}>{r.fat?`${r.fat}g`:"—"}</td>
+                    <td style={{ padding:"9px 10px", color:"rgba(255,255,255,0.5)" }}>{r.fiber?`${r.fiber}g`:"—"}</td>
+                    <td style={{ padding:"9px 10px", color:"rgba(255,255,255,0.5)" }}>{r.calories?`${r.calories}`:"—"}</td>
+                    <td style={{ padding:"9px 10px", color:"rgba(255,255,255,0.5)" }}>{r.insulin?`${r.insulin}u`:"—"}</td>
+                    <td style={{ padding:"9px 10px" }}>{r.evaluation||"auto"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {rows.length > 10 && <div style={{ fontSize:11, color:"rgba(255,255,255,0.2)", padding:"8px 10px" }}>… and {rows.length-10} more rows</div>}
+          </div>
+        </div>
+      )}
+
+      {parsed && rows.length === 0 && (
+        <div style={{ ...card, textAlign:"center", color:ORANGE, fontSize:14 }}>
+          Could not detect any valid rows. Check your CSV format matches the expected structure above.
+        </div>
+      )}
+
+      {done && (
+        <div style={{ padding:"20px 24px", borderRadius:14, background:`${GREEN}10`, border:`1px solid ${GREEN}30` }}>
+          <div style={{ fontSize:16, fontWeight:700, color:GREEN, marginBottom:4 }}>
+            ✓ Imported {imported} of {rows.length} rows
+          </div>
+          {errors.length > 0 && (
+            <div style={{ marginTop:10 }}>
+              <div style={{ fontSize:12, color:PINK, marginBottom:6 }}>{errors.length} errors:</div>
+              {errors.map((e,i) => <div key={i} style={{ fontSize:11, color:"rgba(255,255,255,0.4)", marginBottom:2 }}>• {e}</div>)}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+---
+
+## File 3 — `app/(protected)/log/page.tsx`
+
+Replace the entire file with the full contents found at `<Downloads>/Glev/app/(protected)/log/page.tsx` on my machine. Key additions:
+
+- `manualMode`, `mCarbs`, `mProtein`, `mFat`, `mFiber`, `mCalories` state.
+- `parsedCarbs/Protein/Fat/Fiber` derived from `foods`, then `totalCarbs = mNum(mCarbs) ?? parsedCarbs` (and similarly for each macro), with `totalCalories` falling back to `computeCalories(totalCarbs, totalProtein, totalFat)`.
+- `hasAny = foods.length > 0 || totalCarbs > 0 || totalProtein > 0 || totalFat > 0` replaces `foods.length > 0` on every guard (Macro Summary, Insulin Preview, Confirm button disabled state).
+- A new "Manual Macros" card between Macro Summary and Entry Details with a toggle pill and a `repeat(5, 1fr)` grid of number inputs.
+- `handleConfirm` updated to allow manual-only saves (no foods, only macros) and to pass `proteinGrams/fatGrams/fiberGrams/calories` from `total*` into `saveMeal`.
+
+Replit AI: open `app/(protected)/log/page.tsx` in the repo. Add `"manualMode" + "mCarbs/mProtein/mFat/mFiber/mCalories"` state at line ~43. Compute `total*` values from parsed `foods` with manual override. Replace `foods.length > 0` with `hasAny` in the three render guards and on the disabled prop of the Confirm button. Insert a new `<div style={{ ...card, marginBottom:20 }}>` card titled "Manual Macros" below the "Macro Summary" card with the 5-input grid.
+
+---
+
+## File 4 — `app/(protected)/insights/page.tsx`
+
+Open the file. Directly after the `if (total === 0) return …` early return, insert:
+
+```ts
+const now = Date.now();
+const oneWeekMs = 7 * 86400000;
+const last7 = meals.filter(m => now - new Date(m.created_at).getTime() <= oneWeekMs);
+const last7Good = last7.filter(m => EVAL_NORM(m.evaluation) === "GOOD").length;
+const last7Carbs = Math.round(last7.reduce((s,m) => s + (m.carbs_grams || 0), 0));
+const last7Insulin = Math.round(last7.reduce((s,m) => s + (m.insulin_units || 0), 0) * 10) / 10;
+```
+
+In the returned JSX, immediately after the `<div style={{ marginBottom:28 }}>` header block, insert:
+
+```tsx
+{/* OVERVIEW */}
+<div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:20 }}>
+  {[
+    { label:"Total Meals", val:total.toString(), sub:"all time", color:ACCENT },
+    { label:"Avg Carbs / Meal", val:`${avgCarbs}g`, sub:"per meal", color:ORANGE },
+    { label:"Last 7 Days", val:last7.length.toString(), sub:`${last7Good} good · ${last7Carbs}g carbs · ${last7Insulin}u insulin`, color:GREEN },
+    { label:"Avg Glucose", val:avgGlucose.toString(), sub:"mg/dL pre-meal", color:"#60A5FA" },
+  ].map(t => (
+    <div key={t.label} style={card}>
+      <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase", marginBottom:8 }}>{t.label}</div>
+      <div style={{ fontSize:30, fontWeight:800, letterSpacing:"-0.03em", color:t.color, lineHeight:1 }}>{t.val}</div>
+      <div style={{ fontSize:11, color:"rgba(255,255,255,0.32)", marginTop:6 }}>{t.sub}</div>
+    </div>
+  ))}
+</div>
+
+{/* GLUCOSE TREND */}
+<div style={{ ...card, marginBottom:20 }}>
+  <div style={{ fontSize:14, fontWeight:600, marginBottom:4 }}>Glucose Trend</div>
+  <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginBottom:14 }}>Average pre-meal glucose over the last 14 days</div>
+  <TrendSparkline meals={meals}/>
+</div>
+```
+
+At the bottom of the file (outside `InsightsPage`), add this helper:
+
+```tsx
+function TrendSparkline({ meals }: { meals: Meal[] }) {
+  const DAYS = 14;
+  const now = Date.now();
+  const buckets: Record<string, number[]> = {};
+  for (let i = 0; i < DAYS; i++) {
+    const d = new Date(now - (DAYS-1-i) * 86400000);
+    buckets[d.toDateString()] = [];
+  }
+  meals.forEach(m => {
+    const d = new Date(m.created_at).toDateString();
+    if (d in buckets && m.glucose_before) buckets[d].push(m.glucose_before);
+  });
+  const raw = Object.values(buckets).map(arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : null);
+  const filled: number[] = [];
+  let last = 110;
+  raw.forEach(v => { if (v !== null) last = v; filled.push(last); });
+
+  const W = 600, H = 120, pad = 24;
+  const mn = 70, mx = 230;
+  const toY = (v: number) => H - ((v - mn) / (mx - mn)) * (H - pad) - pad/2;
+  const toX = (i: number) => (i / (DAYS - 1)) * (W - 2*pad) + pad;
+  const path = filled.map((v,i) => `${i===0?"M":"L"}${toX(i)},${toY(v)}`).join(" ");
+  const area = path + ` L${toX(DAYS-1)},${H} L${toX(0)},${H} Z`;
+  const labels = Object.keys(buckets);
+  const showIdx = [0, Math.floor(DAYS/4), Math.floor(DAYS/2), Math.floor(3*DAYS/4), DAYS-1];
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H+10}`} style={{ width:"100%", overflow:"visible" }}>
+      {[80,110,140,180].map(v => (
+        <g key={v}>
+          <line x1={pad} y1={toY(v)} x2={W-pad} y2={toY(v)} stroke="rgba(255,255,255,0.05)" strokeDasharray="4"/>
+          <text x={pad-4} y={toY(v)+4} textAnchor="end" fontSize="9" fill="rgba(255,255,255,0.2)">{v}</text>
+        </g>
+      ))}
+      <defs>
+        <linearGradient id="insTrendGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#4F6EF7" stopOpacity="0.28"/>
+          <stop offset="100%" stopColor="#4F6EF7" stopOpacity="0"/>
+        </linearGradient>
+      </defs>
+      <path d={area} fill="url(#insTrendGrad)"/>
+      <path d={path} fill="none" stroke="#4F6EF7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      {filled.map((v,i) => raw[i] !== null ? (
+        <circle key={i} cx={toX(i)} cy={toY(v)} r="3" fill="#4F6EF7" stroke="#111117" strokeWidth="1.5"/>
+      ) : null)}
+      {showIdx.map(i => (
+        <text key={i} x={toX(i)} y={H+22} textAnchor="middle" fontSize="9" fill="rgba(255,255,255,0.25)">
+          {new Date(labels[i]).toLocaleDateString("en",{month:"short",day:"numeric"})}
+        </text>
+      ))}
+    </svg>
+  );
+}
+```
+
+Leave the rest of the page untouched.
+
+---
+
+## File 5 — `app/(protected)/engine/page.tsx`
+
+Open the file. Inside the `{result && ( … )}` block, **immediately before** the `{/* MAIN RESULT */}` card, insert this new input-summary grid:
+
+```tsx
+{/* INPUT SUMMARY */}
+<div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+  <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, padding:"16px 20px" }}>
+    <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase", marginBottom:6 }}>Input Glucose</div>
+    <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
+      <span style={{ fontSize:28, fontWeight:800, color:"#60A5FA", letterSpacing:"-0.02em" }}>{parseFloat(glucose)||110}</span>
+      <span style={{ fontSize:12, color:"rgba(255,255,255,0.35)" }}>mg/dL</span>
+    </div>
+    <div style={{ fontSize:10, color:"rgba(255,255,255,0.25)", marginTop:4 }}>
+      {(parseFloat(glucose)||110) > 140 ? "elevated" : (parseFloat(glucose)||110) < 80 ? "low" : "in target"}
+    </div>
+  </div>
+  <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, padding:"16px 20px" }}>
+    <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase", marginBottom:6 }}>Input Carbs</div>
+    <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
+      <span style={{ fontSize:28, fontWeight:800, color:ORANGE, letterSpacing:"-0.02em" }}>{parseFloat(carbs)||0}</span>
+      <span style={{ fontSize:12, color:"rgba(255,255,255,0.35)" }}>g</span>
+    </div>
+    <div style={{ fontSize:10, color:"rgba(255,255,255,0.25)", marginTop:4 }}>
+      {(parseFloat(carbs)||0) >= 60 ? "high-carb meal" : (parseFloat(carbs)||0) >= 30 ? "moderate" : "light"}
+    </div>
+  </div>
+</div>
+```
+
+Leave the rest of the page untouched. `ORANGE` is already imported as a const at the top.
+
+---
+
+## After applying
+
+1. `npm install`
+2. `npm run dev`
+3. Visit `/import` → paste the sample CSV → Preview → Import → check `/entries` for the 3 rows with dates 2024-03-01 and 2024-03-02.
+4. Visit `/log` → click "Enter manually" → type 45 in Carbs, 20 in Protein → watch Macro Summary and Insulin Preview light up → Confirm.
+5. Visit `/insights` → confirm 4-card Overview + 14-day Glucose Trend chart.
+6. Visit `/engine` → enter glucose 140, carbs 60 → click "Get Recommendation" → confirm the Input Glucose / Input Carbs strip renders above the dose card.
+7. `curl /api/debug/state` (or open in browser if authenticated) → confirm imported meals have their historical `created_at`.
+
+Report back any TypeScript errors or runtime errors and the exact file + line.
+
+=== END PROMPT ===
+
+---
+
+## Empfohlener Ablauf für dich
+
+1. Öffne Replit-Git-Pane und pushe deinen **aktuellen** Stand auf GitHub (`Commit → Push`). Das ist dein Rollback-Punkt.
+2. Öffne diese Datei (`REPLIT_PROMPT.md`) im Texteditor, kopiere **alles zwischen den beiden `=== … ===`-Markern**.
+3. Paste in Replit AI (Chat-Pane im Replit-Editor).
+4. Warte bis die Änderungen angewendet sind, dann `npm install && npm run dev`.
+5. Teste die 7 Checkpoints oben.
+6. Wenn alles läuft: erneut `Commit → Push`.
