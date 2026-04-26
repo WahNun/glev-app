@@ -495,8 +495,9 @@ export default function InsightsPage() {
                   }}>
                     {icrText}
                   </span>
-                  <span style={{ fontSize:10, color:"rgba(255,255,255,0.35)", marginLeft:"auto" }}>
-                    from {enginePattern.sampleSize} final meal{enginePattern.sampleSize === 1 ? "" : "s"}
+                  <span style={{ fontSize:10, color:"rgba(255,255,255,0.35)", marginLeft:"auto", textAlign:"right", lineHeight:1.25 }}>
+                    outcome-weighted<br/>
+                    {enginePattern.sampleSize} final meal{enginePattern.sampleSize === 1 ? "" : "s"}
                   </span>
                 </div>
 
@@ -672,8 +673,8 @@ export default function InsightsPage() {
               formula:"GOOD / Total × 100",            explain:"Share of meals where the dose was within ±35% of the ICR estimate." },
             { label:"Avg glucose",  val:`${avgGlucose}`, sub:"mg/dL pre-meal",           color:ACCENT,
               formula:"Σ glucose_before / count",      explain:"Average pre-meal glucose. Lower reflects better fasting control." },
-            { label:"Est. ICR",     val:`1:${estICR}`,   sub:"last 7 meals",             color:ORANGE,
-              formula:"carbs / insulin (last 7)",      explain:"Empirical ICR from your most recent meals. Compare to your prescribed ratio." },
+            { label:"Raw ICR",      val:`1:${estICR}`,   sub:"raw 7d avg · ignores outcome", color:ORANGE,
+              formula:"carbs / insulin (last 7)",      explain:"Naive average of carbs ÷ insulin over the last 7 meals. Ignores whether the dose actually landed in target — spikes and overdoses count the same as good outcomes. The Adaptive Engine ICR above is the smarter, outcome-weighted version." },
             { label:"Avg insulin",  val:`${avgInsulin}u`, sub:`${avgCarbs}g avg carbs`, color:"#A78BFA",
               formula:"Σ units / count",               explain:"Mean insulin per meal. Track against carbs to validate your ratio." },
           ].map((t,i) => <InsightFlipTile key={i} tile={t}/>)}
