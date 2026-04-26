@@ -412,13 +412,13 @@ function computeDelta15m(
   return { label: `${sign}${Math.abs(delta)} / 15m`, direction };
 }
 
-/* RollingChart — last 2 hours of readings on a (now−2h) → now domain.
-   Filters the full-day `readings` array to the visible window; the data
-   hook itself (`loadHistory` in the parent) is unchanged. X-axis labels
-   are "−2h", "−1h", "now" per the hero spec. Line + last-point color
-   tracks `glucoseLineColor(last.v)` — a smooth ramp through Tailwind
-   red/blue/green/yellow/orange so proximity to thresholds reads at a
-   glance and the line color updates dynamically each refresh. */
+/* RollingChart — full day of readings on a (00:00 today) → now domain so
+   the user sees the day's full glucose curve, not just a rolling 2-hour
+   window. Filters the parent's full-day `readings` array client-side.
+   X-axis labels are hour markers (0h / 6h / 12h / 18h / now) — only
+   those within the elapsed window are rendered. Touch-revealed grid
+   uses 1-hour vertical intervals for fine time orientation. Line +
+   last-point color tracks `glucoseLineColor(last.v)`. */
 function RollingChart({ readings }: { readings: ChartPoint[] }) {
   // Measure the container so the SVG always renders in true pixel space.
   const containerRef = useRef<HTMLDivElement>(null);
@@ -444,10 +444,15 @@ function RollingChart({ readings }: { readings: ChartPoint[] }) {
   const padT = 8;
   const padB = 22;
 
-  // Rolling 2-hour window ending at now. Source readings come from the
-  // parent which loads the full day; we just slice client-side here.
+  // Full-day window: 00:00 today (local) → now. Source readings come
+  // from the parent which loads the full day; we just slice client-side
+  // here (defensive — anything outside today is dropped).
   const now = Date.now();
-  const winStart = now - 2 * 3600 * 1000;
+  const winStart = useMemo(() => {
+    const d = new Date(now);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  }, [now]);
   const visible = useMemo(
     () => readings.filter((r) => r.t >= winStart && r.t <= now),
     [readings, winStart, now],
@@ -465,11 +470,17 @@ function RollingChart({ readings }: { readings: ChartPoint[] }) {
   const toY = (v: number) => padT + (1 - (v - yMin) / (yMax - yMin)) * (H - padT - padB);
 
   const yTicks = [70, 110, 180, 250];
-  const xLabels: Array<{ t: number; label: string }> = [
-    { t: winStart,                  label: "−2h" },
-    { t: winStart + 3600 * 1000,    label: "−1h" },
-    { t: now,                       label: "now"  },
-  ];
+  // Hour-of-day markers (0h / 6h / 12h / 18h) — only those already
+  // elapsed are rendered; "now" always anchors the right edge.
+  const xLabels: Array<{ t: number; label: string }> = useMemo(() => {
+    const labels: Array<{ t: number; label: string }> = [{ t: winStart, label: "0h" }];
+    for (const h of [6, 12, 18]) {
+      const t = winStart + h * 3600 * 1000;
+      if (t <= now - 30 * 60 * 1000) labels.push({ t, label: `${h}h` });
+    }
+    labels.push({ t: now, label: "now" });
+    return labels;
+  }, [winStart, now]);
 
   const path = visibleCgm.map((r, i) => `${i === 0 ? "M" : "L"}${toX(r.t).toFixed(1)},${toY(r.v).toFixed(1)}`).join(" ");
   const lastCgm = visibleCgm[visibleCgm.length - 1];
@@ -533,16 +544,16 @@ function RollingChart({ readings }: { readings: ChartPoint[] }) {
             <text key={`xl${x.label}`} x={toX(x.t)} y={H - 6} textAnchor="middle" fontSize="9" fill="rgba(255,255,255,0.3)">{x.label}</text>
           ))}
           {/* Touch-revealed grid — appears only while the crosshair is
-              active. 30-min vertical intervals (5 lines: −2h, −1.5h, −1h,
-              −30m, now) for finer time orientation than the 1-h labels,
-              plus horizontal lines at the Y ticks for value reference. */}
+              active. 1-hour vertical intervals across the elapsed window
+              for fine time orientation, plus horizontal lines at the
+              Y ticks for value reference. */}
           {active && (
             <g style={{ pointerEvents: "none" }}>
               {yTicks.map((v) => (
                 <line key={`gh${v}`} x1={padL} y1={toY(v)} x2={W - padR} y2={toY(v)} stroke="rgba(255,255,255,0.09)" strokeDasharray="3 4" />
               ))}
-              {[0, 1, 2, 3, 4].map((i) => {
-                const t = winStart + i * 30 * 60 * 1000;
+              {Array.from({ length: Math.floor((now - winStart) / (3600 * 1000)) + 1 }, (_, i) => {
+                const t = winStart + i * 3600 * 1000;
                 return (
                   <line key={`gv${i}`} x1={toX(t)} y1={padT} x2={toX(t)} y2={H - padB} stroke="rgba(255,255,255,0.09)" strokeWidth="1" strokeDasharray="2 4" />
                 );
