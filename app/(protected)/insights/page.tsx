@@ -818,11 +818,11 @@ function IcrInfoBack({ heading, body, subLine, accent }: {
 function InfoCornerIcon() {
   return (
     <span aria-hidden style={{
-      position:"absolute", top:4, right:10,
-      fontSize:10, fontWeight:700, fontStyle:"italic", fontFamily:"Georgia, serif",
-      color:"rgba(255,255,255,0.4)",
-      pointerEvents:"none", lineHeight:1,
-    }}>i</span>
+      position:"absolute", top:3, right:6,
+      fontSize:10, lineHeight:1,
+      color:"rgba(255,255,255,0.45)",
+      pointerEvents:"none",
+    }}>{"\u2139\uFE0E"}</span>
   );
 }
 
