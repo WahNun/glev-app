@@ -54,7 +54,7 @@ function useNow(active: boolean): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!active) return;
-    const id = setInterval(() => setNow(Date.now()), 30_000);
+    const id = setInterval(() => setNow(Date.now()), 1_000);
     return () => clearInterval(id);
   }, [active]);
   return now;
@@ -199,12 +199,10 @@ function PendingDisplay({ startAtMs, expectedAtMs, now, themeColor }: {
   const elapsedMs = Math.max(0, Math.min(totalMs, now - startAtMs));
   const pct = elapsedMs / totalMs;
   const remainMs = Math.max(0, expectedAtMs - now);
-  const minLeft = Math.ceil(remainMs / 60_000);
-  const text = minLeft >= 90
-    ? `in ${Math.floor(minLeft / 60)}h ${minLeft % 60}m`
-    : minLeft >= 1
-      ? `in ${minLeft} min`
-      : "in <1 min";
+  const totalSec = Math.ceil(remainMs / 1_000);
+  const mm = String(Math.floor(totalSec / 60)).padStart(2, "0");
+  const ss = String(totalSec % 60).padStart(2, "0");
+  const text = `${mm}:${ss}`;
   const expectedDate = new Date(expectedAtMs);
   return (
     <>
@@ -228,10 +226,10 @@ function MissingDisplay({ expectedAtMs }: { expectedAtMs: number }) {
   const expectedDate = new Date(expectedAtMs);
   return (
     <>
-      <div style={{ fontSize: 14, fontWeight: 700, color: "rgba(255,255,255,0.35)" }}>
-        Kein Wert
+      <div style={{ fontSize: 14, fontWeight: 700, color: PINK }}>
+        Überfällig
       </div>
-      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)" }}>
+      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)" }}>
         Erwartet {expectedDate.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
       </div>
     </>
