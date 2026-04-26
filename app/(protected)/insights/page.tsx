@@ -429,14 +429,11 @@ export default function InsightsPage() {
         <FlipCard
           accent={ACCENT}
           back={
-            <FlipBack
-              title="Adaptive Engine"
+            <IcrInfoBack
+              heading="Wie wird dieser Wert berechnet?"
               accent={ACCENT}
-              paragraphs={[
-                `Glev learns your insulin-to-carb ratio (ICR) from finalised meals — meals where bg_2h is logged. Confidence rises with sample size and stability of recent ratios.`,
-                `Pattern: "${enginePattern.label}" computed from ${enginePattern.sampleSize} final meals. The engine flags consistent under- or over-dosing and proposes ICR or correction-factor changes.`,
-                `Any suggestion is advisory only — please confirm changes with your clinician before adopting them.`,
-              ]}
+              body="Der Adaptive ICR basiert auf allen abgeschlossenen Mahlzeiten (state = final, bg_2h vorhanden). Jede Mahlzeit wird nach Outcome gewichtet: Mahlzeiten mit gutem BG-Verlauf zählen stärker als Spikes oder Underdoses. Er zeigt, welche Carb-Insulin-Quote bei dir empirisch zu stabilen Werten geführt hat — nicht was du dosiert hast, sondern was tatsächlich gewirkt hat."
+              subLine="Datenbasis: alle finalisierten Mahlzeiten · outcome-gewichtet"
             />
           }
         >
@@ -459,21 +456,33 @@ export default function InsightsPage() {
                   gap:10, marginBottom:12,
                 }}>
                   <CardLabel text="Adaptive Engine"/>
-                  <span style={{
-                    display:"inline-flex", alignItems:"center", gap:6,
-                    fontSize:9, fontWeight:700, letterSpacing:"0.1em",
-                    color: statusColor, flexShrink:0,
-                    padding:"3px 8px", borderRadius:99,
-                    border:`1px solid ${statusColor}55`,
-                    background:`${statusColor}18`,
-                  }}>
+                  <div style={{ display:"inline-flex", alignItems:"center", gap:8, flexShrink:0 }}>
+                    {/* Subtle ℹ: signals a back side without competing with status pill. */}
+                    <span aria-hidden style={{
+                      width:14, height:14, borderRadius:"50%",
+                      display:"inline-flex", alignItems:"center", justifyContent:"center",
+                      fontSize:9, fontWeight:700, fontStyle:"italic", fontFamily:"Georgia, serif",
+                      color:"rgba(255,255,255,0.4)",
+                      border:"1px solid rgba(255,255,255,0.18)",
+                      background:"rgba(255,255,255,0.02)",
+                      lineHeight:1,
+                    }}>i</span>
                     <span style={{
-                      width:6, height:6, borderRadius:"50%",
-                      background: statusColor,
-                      boxShadow: `0 0 6px ${statusColor}`,
-                    }}/>
-                    {statusLabel}
-                  </span>
+                      display:"inline-flex", alignItems:"center", gap:6,
+                      fontSize:9, fontWeight:700, letterSpacing:"0.1em",
+                      color: statusColor,
+                      padding:"3px 8px", borderRadius:99,
+                      border:`1px solid ${statusColor}55`,
+                      background:`${statusColor}18`,
+                    }}>
+                      <span style={{
+                        width:6, height:6, borderRadius:"50%",
+                        background: statusColor,
+                        boxShadow: `0 0 6px ${statusColor}`,
+                      }}/>
+                      {statusLabel}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Hero ICR — matches the colourful big-number style used by
@@ -674,7 +683,16 @@ export default function InsightsPage() {
             { label:"Avg glucose",  val:`${avgGlucose}`, sub:"mg/dL pre-meal",           color:ACCENT,
               formula:"Σ glucose_before / count",      explain:"Average pre-meal glucose. Lower reflects better fasting control." },
             { label:"Raw ICR",      val:`1:${estICR}`,   sub:"raw 7d avg · ignores outcome", color:ORANGE,
-              formula:"carbs / insulin (last 7)",      explain:"Naive average of carbs ÷ insulin over the last 7 meals. Ignores whether the dose actually landed in target — spikes and overdoses count the same as good outcomes. The Adaptive Engine ICR above is the smarter, outcome-weighted version." },
+              formula:"carbs / insulin (last 7)",      explain:"Naive average of carbs ÷ insulin over the last 7 meals. Ignores whether the dose actually landed in target — spikes and overdoses count the same as good outcomes. The Adaptive Engine ICR above is the smarter, outcome-weighted version.",
+              infoBack: (
+                <IcrInfoBack
+                  heading="Was zeigt dieser Wert?"
+                  accent={ORANGE}
+                  body="Der Raw ICR ist der einfache Durchschnitt deiner letzten 7 Dosierungen — unabhängig davon ob das Ergebnis gut oder schlecht war. Er spiegelt dein tatsächliches Dosierverhalten der letzten Tage wider. Wenn dieser Wert stark vom Adaptive ICR abweicht, kann das bedeuten dass du zuletzt anders dosiert hast als dein langfristiger Schnitt — das ist eine Beobachtung, keine Empfehlung."
+                  subLine="Datenbasis: letzte 7 Mahlzeiten mit Carbs + Insulin · ungewichtet"
+                />
+              ),
+            },
             { label:"Avg insulin",  val:`${avgInsulin}u`, sub:`${avgCarbs}g avg carbs`, color:"#A78BFA",
               formula:"Σ units / count",               explain:"Mean insulin per meal. Track against carbs to validate your ratio." },
           ].map((t,i) => <InsightFlipTile key={i} tile={t}/>)}
@@ -760,6 +778,64 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
  *
  * Padding / borderRadius defaults match the mockup's `MockCard`.
  */
+/** Small medical-disclaimer pill. Neutral gray — informational, not alarming. */
+function DisclaimerChip() {
+  return (
+    <div style={{
+      display:"inline-flex", alignItems:"center", gap:6,
+      padding:"5px 10px", borderRadius:99,
+      background:"rgba(255,255,255,0.04)",
+      border:"1px solid rgba(255,255,255,0.1)",
+      fontSize:10, color:"rgba(255,255,255,0.55)", lineHeight:1.35,
+      maxWidth:"100%",
+    }}>
+      <span aria-hidden style={{ fontSize:11, lineHeight:1 }}>⚕️</span>
+      <span>ICR-Anpassungen immer mit deinem Diabetologen besprechen.</span>
+    </div>
+  );
+}
+
+/** Redesigned ICR back: heading + body + sub-line + disclaimer pinned bottom + tap-to-flip hint. */
+function IcrInfoBack({ heading, body, subLine, accent }: {
+  heading: string; body: string; subLine: string; accent: string;
+}) {
+  return (
+    <div style={{ display:"flex", flexDirection:"column", height:"100%", gap:8 }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, marginBottom:2 }}>
+        <div style={{ fontSize:10, color:accent, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>
+          {heading}
+        </div>
+        <span style={{ fontSize:9, color:"rgba(255,255,255,0.35)", flexShrink:0 }}>← zurück</span>
+      </div>
+      <div style={{ fontSize:11, color:"rgba(255,255,255,0.7)", lineHeight:1.55 }}>{body}</div>
+      <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)", letterSpacing:"0.02em", marginTop:2 }}>
+        {subLine}
+      </div>
+      <div style={{ marginTop:"auto", paddingTop:10 }}>
+        <DisclaimerChip/>
+      </div>
+    </div>
+  );
+}
+
+/** Subtle ℹ affordance pinned to a tile's top-right corner.
+ *  Position: absolute against the nearest positioned ancestor (front-face shell).
+ *  Pointer-events disabled so the parent's tap-to-flip stays the click target. */
+function InfoCornerIcon() {
+  return (
+    <span aria-hidden style={{
+      position:"absolute", top:6, right:8,
+      width:14, height:14, borderRadius:"50%",
+      display:"inline-flex", alignItems:"center", justifyContent:"center",
+      fontSize:9, fontWeight:700, fontStyle:"italic", fontFamily:"Georgia, serif",
+      color:"rgba(255,255,255,0.4)",
+      border:"1px solid rgba(255,255,255,0.18)",
+      background:"rgba(255,255,255,0.02)",
+      pointerEvents:"none", lineHeight:1,
+    }}>i</span>
+  );
+}
+
 function FlipCard({
   children, back, accent = ACCENT, padding = "12px 14px",
 }: {
@@ -856,7 +932,7 @@ function FlipBack({ title, accent, paragraphs }: { title: string; accent: string
  *  Same dynamic-height ghost trick as FlipCard: parent height tracks
  *  the active face so flipping to a longer back grows the tile rather
  *  than clipping/scrolling. Tile shrinks back when flipped to front. */
-type InsightTile = { label:string; val:string; sub:string; color:string; formula:string; explain:string };
+type InsightTile = { label:string; val:string; sub:string; color:string; formula:string; explain:string; infoBack?: React.ReactNode };
 function InsightFlipTile({ tile }: { tile: InsightTile }) {
   const [flipped, setFlipped] = useState(false);
   const [activeFace, setActiveFace] = useState<"front"|"back">("front");
@@ -885,9 +961,13 @@ function InsightFlipTile({ tile }: { tile: InsightTile }) {
         {tile.val}
       </div>
       <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", marginTop:4 }}>{tile.sub}</div>
+      {/* Show ℹ affordance only on tiles that opt-in to a richer back side. */}
+      {tile.infoBack && <InfoCornerIcon/>}
     </>
   );
-  const backContent = (
+  // If the tile supplies a custom info back (e.g. Raw ICR), render that instead
+  // of the default formula/explain pair. Other tiles keep the legacy back.
+  const backContent = tile.infoBack ?? (
     <>
       <div style={{ fontSize:9, fontWeight:700, color:tile.color, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:4 }}>
         {tile.label}
