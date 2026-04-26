@@ -21,7 +21,7 @@ export default function FounderSection() {
         }}
       >
         <Image
-          src="/founder-lucas.png"
+          src="/founder.png"
           alt="Lucas, Founder von Glev"
           fill
           sizes="96px"

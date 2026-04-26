@@ -6,6 +6,7 @@ import AppMockupPhone from "@/components/AppMockupPhone";
 import CTAButton from "@/components/landing/CTAButton";
 import FAQ from "@/components/landing/FAQ";
 import FeatureTrio from "@/components/landing/FeatureTrio";
+import FounderSection from "@/components/landing/FounderSection";
 import LandingFooter from "@/components/landing/Footer";
 import Lockup from "@/components/landing/Lockup";
 import PricingCard from "@/components/landing/PricingCard";
@@ -283,54 +284,7 @@ export default function BetaPage() {
         <FeatureTrio />
       </section>
 
-      {/* 4. Founder — subtle, below the feature cards */}
-      <section
-        style={{
-          width: "100%",
-          maxWidth: 680,
-          margin: "0 auto 56px",
-          padding: "0 20px",
-          boxSizing: "border-box",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          textAlign: "center",
-          gap: 10,
-        }}
-      >
-        <div
-          style={{
-            width: 80,
-            height: 80,
-            borderRadius: "50%",
-            overflow: "hidden",
-            position: "relative",
-            border: `1px solid ${BORDER}`,
-            background: SURFACE,
-          }}
-        >
-          <Image
-            src="/founder.png"
-            alt="Lucas Wahnon"
-            fill
-            sizes="80px"
-            style={{
-              objectFit: "cover",
-              objectPosition: "50% 22%",
-              transform: "scale(1.5)",
-              transformOrigin: "50% 22%",
-            }}
-          />
-        </div>
-        <div style={{ fontSize: 15, fontWeight: 600, color: "#fff", letterSpacing: "-0.01em" }}>
-          Lucas Wahnon
-        </div>
-        <div style={{ fontSize: 13, color: TEXT_DIM }}>
-          Gründer · lebt selbst mit Typ 1
-        </div>
-      </section>
-
-      {/* 5. Pricing */}
+      {/* 4. Pricing */}
       <section
         style={{
           width: "100%",
@@ -349,6 +303,19 @@ export default function BetaPage() {
           ]}
           footer="Reservierung wird auf dein erstes Monatsabo angerechnet."
         />
+      </section>
+
+      {/* 5. Founder — Lucas's diagnosis story, directly above FAQ */}
+      <section
+        style={{
+          width: "100%",
+          maxWidth: 680,
+          margin: "0 auto 56px",
+          padding: "0 20px",
+          boxSizing: "border-box",
+        }}
+      >
+        <FounderSection />
       </section>
 
       {/* 6. FAQ */}
