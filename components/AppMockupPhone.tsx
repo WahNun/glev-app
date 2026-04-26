@@ -416,27 +416,39 @@ function EntryIcon({ kind }: { kind: "meal" | "bolus" | "exercise" | "basal" }) 
    ENTRIES — chronological log with mixed event types.
    ════════════════════════════════════════════════════════════════ */
 function EntriesScreen() {
-  const entries: Array<{
-    kind: "meal" | "bolus" | "exercise" | "basal";
-    title: string; time: string; sub: string; badge?: string; badgeColor?: string;
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+
+  type EvalKind = "GOOD" | "HIGH" | "LOW";
+  const evalColor: Record<EvalKind, string> = { GOOD: GREEN, HIGH: PINK, LOW: ACCENT };
+
+  const meals: Array<{
+    meal: string; time: string;
+    carbs: number; protein: number; fat: number; fiber: number; calories: number;
+    glucose: number; insulin: number;
+    evaluation: EvalKind;
   }> = [
-    { kind:"meal",     title:"Pasta with pesto",  time:"12:24", sub:"62g carbs · 4.2 U bolus", badge:"ON TARGET", badgeColor:GREEN },
-    { kind:"bolus",    title:"4.2 U Novorapid",   time:"12:20", sub:"For lunch · paired meal",  badge:"PAIRED",   badgeColor:ACCENT },
-    { kind:"exercise", title:"Easy run · 32 min", time:"11:10", sub:"Zone 2 · −24 mg/dL",      badge:"DONE",     badgeColor:GREEN },
-    { kind:"basal",    title:"22 U Tresiba",      time:"08:45", sub:"Daily basal · long-acting", badge:"PENDING",  badgeColor:"rgba(255,255,255,0.4)" },
-    { kind:"meal",     title:"Müsli with berries", time:"08:10", sub:"48g carbs · 3.0 U bolus", badge:"SPIKED",   badgeColor:ORANGE },
-    { kind:"meal",     title:"Coffee, no sugar",   time:"07:30", sub:"0g carbs · no bolus",     badge:"FREE",     badgeColor:GREEN },
+    { meal:"Haferflocken, Blaubeeren, Mandelmilch", time:"08:14", carbs:52, protein:12, fat:8,  fiber:6, calories:328, glucose:108, insulin:3.5, evaluation:"GOOD" },
+    { meal:"Chicken Bowl mit Reis und Avocado",     time:"12:41", carbs:68, protein:38, fat:18, fiber:5, calories:590, glucose:124, insulin:4.8, evaluation:"HIGH" },
+    { meal:"Linsencurry mit Naan",                  time:"19:22", carbs:74, protein:22, fat:12, fiber:9, calories:490, glucose:115, insulin:5.2, evaluation:"GOOD" },
   ];
+
+  const MealStat = ({ l, v, c }: { l: string; v: string; c?: string }) => (
+    <div style={{ background:"rgba(255,255,255,0.03)", border:`1px solid ${BORDER}`, borderRadius:8, padding:"6px 8px" }}>
+      <div style={{ fontSize:8, color:"rgba(255,255,255,0.4)", fontWeight:600, letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:2 }}>{l}</div>
+      <div style={{ fontSize:11, fontWeight:700, color:c || "rgba(255,255,255,0.85)" }}>{v}</div>
+    </div>
+  );
+
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
       <div style={{ padding:"4px 2px 6px", display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
-        <div style={{ fontSize:13, fontWeight:700, letterSpacing:"-0.02em" }}>Today, Apr 25</div>
-        <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)" }}>6 events</div>
+        <div style={{ fontSize:13, fontWeight:700, letterSpacing:"-0.02em" }}>Heute, 25. Apr</div>
+        <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)" }}>3 Mahlzeiten</div>
       </div>
 
       {/* Filter pills */}
       <div style={{ display:"flex", gap:5, paddingBottom:4 }}>
-        {["All","Meals","Bolus","Basal","Exercise"].map((l, i) => (
+        {["Alle","Mahlzeiten","Bolus","Basal","Sport"].map((l, i) => (
           <div key={l} style={{
             fontSize:9, fontWeight:600, padding:"4px 9px", borderRadius:99,
             background: i === 0 ? `${ACCENT}20` : "rgba(255,255,255,0.04)",
@@ -446,26 +458,52 @@ function EntriesScreen() {
         ))}
       </div>
 
-      {entries.map((e, i) => (
-        <MockCard key={i} style={{ padding:"10px 12px" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-            <EntryIcon kind={e.kind}/>
-            <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", gap:6 }}>
-                <div style={{ fontSize:11.5, fontWeight:700, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{e.title}</div>
-                <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)", fontFamily:"var(--font-mono)", flexShrink:0 }}>{e.time}</div>
+      {meals.map((m, i) => {
+        const isOpen = expandedIndex === i;
+        const evColor = evalColor[m.evaluation];
+        return (
+          <MockCard key={i} style={{ padding:"10px 12px", overflow:"hidden" }}>
+            <div
+              onClick={() => setExpandedIndex(isOpen ? null : i)}
+              style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer" }}
+            >
+              <EntryIcon kind="meal"/>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", gap:6 }}>
+                  <div style={{ fontSize:11.5, fontWeight:700, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{m.meal}</div>
+                  <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)", fontFamily:"var(--font-mono)", flexShrink:0 }}>{m.time}</div>
+                </div>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:6, marginTop:3 }}>
+                  <div style={{ fontSize:9.5, color:"rgba(255,255,255,0.5)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{m.carbs}g KH · {m.insulin}u Bolus</div>
+                  <Pill text={m.evaluation} color={evColor}/>
+                </div>
               </div>
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:6, marginTop:3 }}>
-                <div style={{ fontSize:9.5, color:"rgba(255,255,255,0.5)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{e.sub}</div>
-                {e.badge && <Pill text={e.badge} color={e.badgeColor!}/>}
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0, transform: isOpen ? "rotate(180deg)" : "rotate(0deg)", transition:"transform 0.2s" }}>
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </div>
+
+            <div style={{ maxHeight: isOpen ? 200 : 0, overflow:"hidden", transition:"max-height 0.25s ease" }}>
+              <div style={{ marginTop:10, paddingTop:10, borderTop:`1px solid rgba(255,255,255,0.06)`, display:"flex", flexDirection:"column", gap:8 }}>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
+                  <MealStat l="Carbs"        v={`${m.carbs}g`}        c={ORANGE}/>
+                  <MealStat l="Protein"      v={`${m.protein}g`}      c="#A78BFA"/>
+                  <MealStat l="Fett"         v={`${m.fat}g`}          c={ACCENT}/>
+                  <MealStat l="Ballaststoffe" v={`${m.fiber}g`}/>
+                  <MealStat l="Kalorien"     v={`${m.calories} kcal`} c={GREEN}/>
+                </div>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, fontSize:10, color:"rgba(255,255,255,0.55)", padding:"4px 2px" }}>
+                  <span>Glukose vor Essen: <strong style={{ color:"#fff", fontWeight:700 }}>{m.glucose}</strong> mg/dL</span>
+                  <span>Bolus: <strong style={{ color:"#fff", fontWeight:700 }}>{m.insulin}</strong>u</span>
+                </div>
               </div>
             </div>
-          </div>
-        </MockCard>
-      ))}
+          </MockCard>
+        );
+      })}
 
       <div style={{ textAlign:"center", fontSize:9, color:"rgba(255,255,255,0.3)", padding:"12px 0 4px" }}>
-        ─ Yesterday ─
+        ─ Gestern ─
       </div>
     </div>
   );
