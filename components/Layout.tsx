@@ -23,7 +23,7 @@ const NAV = [
   { label: "Glev Engine", path: "/engine", icon: (a: boolean) => (
     <GlevLogo size={20} color={a ? ACCENT : "rgba(255,255,255,0.55)"} bg="transparent"/>
   )},
-  { label: "Auswertungen", path: "/insights", icon: (a: boolean) => (
+  { label: "Insights", path: "/insights", icon: (a: boolean) => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a7 7 0 0 1 4 12.8V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.2A7 7 0 0 1 12 2z"/><path d="M9 21h6"/><path d="M9 18h6"/></svg>
   )},
   { label: "Einstellungen", path: "/settings", icon: (a: boolean) => (
