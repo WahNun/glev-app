@@ -120,7 +120,11 @@ export default function FingerstickLogCard() {
       </div>
 
       <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1.2fr)", gap: 10 }}>
+        {/* Equal-width grid — Wert and Zeitpunkt share the row 1:1 so
+            the date chip never visually dwarfs the numeric input. The
+            datetime-local control will internally truncate / shorten
+            its display rather than overflow its column. */}
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 10 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <label htmlFor={valueId} style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", fontWeight: 600, letterSpacing: "0.04em" }}>
               Wert

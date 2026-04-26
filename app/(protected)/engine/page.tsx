@@ -690,18 +690,21 @@ export default function EnginePage() {
         </p>
       </div>
 
-      {/* TABS */}
+      {/* TABS — full-width strip with equal-share buttons so the
+          active pill never visually outweighs its neighbours and the
+          row never overflows narrow viewports. Mobile uses shorter
+          labels to keep each chip on a single line at 13px. */}
       <div style={{
-        display:"inline-flex", gap:4, marginBottom:24,
+        display:"flex", width:"100%", gap:4, marginBottom:24,
         background:"#0D0D12", border:`1px solid ${BORDER}`,
-        borderRadius:12, padding:4,
+        borderRadius:12, padding:4, boxSizing:"border-box",
       }}>
         {(isMobile
           ? [
               { id:"engine"      as const, label:"Engine" },
-              { id:"bolus"       as const, label:"Insulin Log" },
-              { id:"exercise"    as const, label:"Exercise Log" },
-              { id:"fingerstick" as const, label:"FS Glucose" },
+              { id:"bolus"       as const, label:"Insulin" },
+              { id:"exercise"    as const, label:"Exercise" },
+              { id:"fingerstick" as const, label:"FS" },
             ]
           : [
               { id:"engine"      as const, label:"Engine" },
@@ -715,11 +718,16 @@ export default function EnginePage() {
               key={t.id}
               onClick={() => setTab(t.id)}
               style={{
-                padding:"8px 18px", borderRadius:8, border:"none",
+                flex:"1 1 0", minWidth:0,
+                padding: isMobile ? "8px 6px" : "8px 18px",
+                borderRadius:8, border:"none",
                 background: on ? `${ACCENT}22` : "transparent",
                 color:    on ? ACCENT : "rgba(255,255,255,0.55)",
-                fontSize:13, fontWeight:700, letterSpacing:"-0.01em",
+                fontSize: isMobile ? 12 : 13,
+                fontWeight:700, letterSpacing:"-0.01em",
                 cursor:"pointer", transition:"all 0.15s",
+                textAlign:"center", whiteSpace:"nowrap",
+                overflow:"hidden", textOverflow:"ellipsis",
               }}
             >
               {t.label}
