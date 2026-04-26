@@ -157,7 +157,9 @@ export default function EngineChatPanel({
       <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
         {/* Status precedence: parsing (voice→macros pipeline) > sending
             (chat round-trip) > ready. Parsing wins because it's the
-            longest-running and most user-visible op of the three. */}
+            longest-running and most user-visible op of the three.
+            Busy states render a spinning arc instead of the static dot
+            so the user gets unambiguous "still working" feedback. */}
         {(() => {
           const isBusy = parsing || sending;
           const label  = parsing ? "PARSING" : sending ? "THINKING" : "READY";
@@ -168,11 +170,23 @@ export default function EngineChatPanel({
               fontSize:10, fontWeight:700, letterSpacing:"0.06em",
               color,
             }}>
-              <span style={{
-                width:7, height:7, borderRadius:"50%",
-                background: color,
-                boxShadow: `0 0 6px ${color}`,
-              }}/>
+              <style>{`@keyframes efpSpin { to { transform: rotate(360deg) } }`}</style>
+              {isBusy ? (
+                <svg
+                  width="11" height="11" viewBox="0 0 24 24"
+                  fill="none" stroke={color} strokeWidth="3" strokeLinecap="round"
+                  style={{ animation: "efpSpin 0.9s linear infinite", flexShrink: 0 }}
+                  aria-hidden="true"
+                >
+                  <path d="M21 12a9 9 0 1 1-6.22-8.56" />
+                </svg>
+              ) : (
+                <span style={{
+                  width:7, height:7, borderRadius:"50%",
+                  background: color,
+                  boxShadow: `0 0 6px ${color}`,
+                }}/>
+              )}
               {label}
             </span>
           );
@@ -207,21 +221,42 @@ export default function EngineChatPanel({
           See why these macros were chosen — or correct them
         </div>
       </div>
-      <div style={{
-        display:"inline-flex", alignItems:"center", gap:6,
-        padding:"4px 10px", borderRadius:99,
-        background: sending ? `${ORANGE}18` : `${GREEN}18`,
-        border: `1px solid ${sending ? ORANGE : GREEN}40`,
-        fontSize:10, fontWeight:700, letterSpacing:"0.06em",
-        color: sending ? ORANGE : GREEN, flexShrink:0,
-      }}>
-        <span style={{
-          width:6, height:6, borderRadius:"50%",
-          background: sending ? ORANGE : GREEN,
-          boxShadow: `0 0 6px ${sending ? ORANGE : GREEN}`,
-        }}/>
-        {sending ? "THINKING" : "READY"}
-      </div>
+      {/* Desktop status pill mirrors the mobile chip: parsing > sending >
+          ready, busy states render a spinning arc instead of a dot. */}
+      {(() => {
+        const isBusy = parsing || sending;
+        const label  = parsing ? "PARSING" : sending ? "THINKING" : "READY";
+        const color  = isBusy ? ORANGE : GREEN;
+        return (
+          <div style={{
+            display:"inline-flex", alignItems:"center", gap:6,
+            padding:"4px 10px", borderRadius:99,
+            background: `${color}18`,
+            border: `1px solid ${color}40`,
+            fontSize:10, fontWeight:700, letterSpacing:"0.06em",
+            color, flexShrink:0,
+          }}>
+            <style>{`@keyframes efpSpin { to { transform: rotate(360deg) } }`}</style>
+            {isBusy ? (
+              <svg
+                width="10" height="10" viewBox="0 0 24 24"
+                fill="none" stroke={color} strokeWidth="3" strokeLinecap="round"
+                style={{ animation: "efpSpin 0.9s linear infinite", flexShrink: 0 }}
+                aria-hidden="true"
+              >
+                <path d="M21 12a9 9 0 1 1-6.22-8.56" />
+              </svg>
+            ) : (
+              <span style={{
+                width:6, height:6, borderRadius:"50%",
+                background: color,
+                boxShadow: `0 0 6px ${color}`,
+              }}/>
+            )}
+            {label}
+          </div>
+        );
+      })()}
     </div>
   );
 

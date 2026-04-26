@@ -448,7 +448,10 @@ export default function EnginePage() {
     const iNum: number | null = null;
     const gParsed = glucose.trim() === "" ? NaN : parseFloat(glucose);
     const gNum = Number.isFinite(gParsed) ? gParsed : null;
-    if (!Number.isFinite(cNum) || cNum <= 0) { setConfirmErr("Carbs are required."); return; }
+    // 0g ist eine legitime Eingabe (z.B. reine Protein-/Fett-Mahlzeiten wie
+    // Steak, Eier, Käse — können trotzdem über FPU Insulin brauchen). Nur
+    // leere Eingabe oder negative Werte ablehnen.
+    if (!Number.isFinite(cNum) || cNum < 0) { setConfirmErr("Bitte Kohlenhydrate eintragen (0 ist erlaubt)."); return; }
     const pNum  = parseFloat(protein) || 0;
     const fNum  = parseFloat(fat)     || 0;
     const fbNum = parseFloat(fiber)   || 0;
