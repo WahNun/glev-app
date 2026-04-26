@@ -81,6 +81,7 @@ export default function LogPage() {
   const [fiber, setFiber]       = useState("");
   const [protein, setProtein]   = useState("");
   const [fat, setFat]           = useState("");
+  const [calories, setCalories] = useState("");
   const [desc, setDesc]         = useState("");
   const [insulin, setInsulin]   = useState("");
   const [mealTime, setMealTime] = useState<string>(() => toDatetimeLocal(new Date().toISOString()));
@@ -127,7 +128,7 @@ export default function LogPage() {
   function resetForm() {
     setRecording(false); setHasActiveMeal(false);
     setParsing(false); setTranscript("");
-    setGlucose(""); setCarbs(""); setFiber(""); setProtein(""); setFat(""); setDesc(""); setInsulin("");
+    setGlucose(""); setCarbs(""); setFiber(""); setProtein(""); setFat(""); setCalories(""); setDesc(""); setInsulin("");
     setMealTime(toDatetimeLocal(new Date().toISOString())); setMealTimeDirty(false);
     setSaving(false); setError(""); setSuccess(false);
     setChatMsgs([]); setChatInput(""); setPipeStatus("idle");
@@ -251,10 +252,11 @@ export default function LogPage() {
       const res  = await fetch("/api/parse-food", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ text }) });
       const data = await res.json();
       const t = data.totals || {};
-      if (t.carbs   != null && !carbs)   setCarbs(String(t.carbs));
-      if (t.fiber   != null && !fiber)   setFiber(String(t.fiber));
-      if (t.protein != null && !protein) setProtein(String(t.protein));
-      if (t.fat     != null && !fat)     setFat(String(t.fat));
+      if (t.carbs    != null && !carbs)    setCarbs(String(t.carbs));
+      if (t.fiber    != null && !fiber)    setFiber(String(t.fiber));
+      if (t.protein  != null && !protein)  setProtein(String(t.protein));
+      if (t.fat      != null && !fat)      setFat(String(t.fat));
+      if (t.calories != null && !calories) setCalories(String(t.calories));
       // Trust the server-provided description directly — the API now always
       // returns a clean comma-separated "<grams>g <ingredient>" list. No more
       // ad-hoc concatenation of parsed[].name.
@@ -425,7 +427,7 @@ export default function LogPage() {
         proteinGrams: totalProtein,
         fatGrams: totalFat,
         fiberGrams: totalFiber,
-        calories: computeCalories(totalCarbs, totalProtein, totalFat),
+        calories: num(calories) ?? computeCalories(totalCarbs, totalProtein, totalFat),
         insulinUnits: insulinNum,
         mealType: classifyMeal(totalCarbs, totalProtein, totalFat),
         evaluation: ev,
@@ -597,6 +599,10 @@ export default function LogPage() {
               UPDATED FROM LATEST CORRECTION
             </div>
           )}
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:4, marginBottom:-4 }}>
+            <span style={{ fontSize:10, fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase", color:ACCENT, padding:"3px 9px", borderRadius:99, background:`${ACCENT}14`, border:`1px solid ${ACCENT}33` }}>Manuelle Makros</span>
+            <span style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.02em" }}>Carbs ist Pflicht · Kalorien werden sonst berechnet</span>
+          </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
             <div>
               <label style={labelStyle}>Carbs (g)</label>
@@ -616,6 +622,10 @@ export default function LogPage() {
               <label style={labelStyle}>Fat (g)</label>
               <input value={fat} onChange={e => setFat(e.target.value)} placeholder="e.g. 15" type="number" style={inp}/>
             </div>
+          </div>
+          <div>
+            <label style={labelStyle}>Kalorien (kcal) <span style={{ opacity:0.5, textTransform:"none", fontSize:9 }}>opt. — auto-berechnet wenn leer</span></label>
+            <input value={calories} onChange={e => setCalories(e.target.value)} placeholder={totalCarbs || totalProtein || totalFat ? `auto: ${computeCalories(totalCarbs, totalProtein, totalFat)}` : "e.g. 520"} type="number" style={inp}/>
           </div>
           <div>
             <label style={labelStyle}>Meal Description</label>
