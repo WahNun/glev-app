@@ -677,16 +677,19 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
 }
 
 /**
- * FlipCard — generic flip wrapper.
+ * FlipCard — generic flip wrapper with dynamic height.
  *
- * IMPORTANT height behaviour: the FRONT face is in normal flow and
- * therefore determines the card's height. The BACK face is absolutely
- * positioned (`inset:0`) and overlays the same area — it does NOT push
- * the parent taller no matter how much copy it contains. This is the
- * key fix that keeps Avg BG / GMI / Meal Eval tightly fit to their
- * front content (matching the homepage hero mockup).
+ * Height behaviour: an INVISIBLE ghost div sits in normal flow rendering
+ * the *active* face's content — that's what determines the parent's
+ * height. Both the real front and back faces are absolutely positioned
+ * over the ghost. When the user flips, the active face swaps at the
+ * midpoint of the 0.55 s spin (275 ms) — exactly when the card is
+ * edge-on and the height change is hidden behind the perspective. This
+ * means:
+ *   • Front-only state → parent = front content height (tight, matches mockup)
+ *   • Flipped state → parent grows to back content height (no clipping, no scroll)
  *
- * Padding/borderRadius defaults match the mockup's `MockCard`.
+ * Padding / borderRadius defaults match the mockup's `MockCard`.
  */
 function FlipCard({
   children, back, accent = ACCENT, padding = "12px 14px",
@@ -697,6 +700,33 @@ function FlipCard({
   padding?: string;
 }) {
   const [flipped, setFlipped] = useState(false);
+  // Which face's content the ghost mirrors. Swapped at flip-midpoint
+  // (~275 ms) so the parent-height jump happens while the card is
+  // edge-on — invisible to the user.
+  const [activeFace, setActiveFace] = useState<"front"|"back">("front");
+
+  useEffect(() => {
+    const target = flipped ? "back" : "front";
+    if (target === activeFace) return;
+    const t = setTimeout(() => setActiveFace(target), 275);
+    return () => clearTimeout(t);
+  }, [flipped, activeFace]);
+
+  const frontShell: React.CSSProperties = {
+    background: SURFACE,
+    border: `1px solid ${BORDER}`,
+    borderRadius: 14,
+    padding,
+    boxSizing: "border-box",
+  };
+  const backShell: React.CSSProperties = {
+    background: `linear-gradient(145deg, ${accent}12, ${SURFACE} 65%)`,
+    border: `1px solid ${accent}33`,
+    borderRadius: 14,
+    padding,
+    boxSizing: "border-box",
+  };
+
   return (
     <div
       onClick={() => setFlipped(f => !f)}
@@ -706,35 +736,31 @@ function FlipCard({
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setFlipped(f => !f); } }}
       aria-pressed={flipped}
     >
+      {/* GHOST — invisible, in normal flow, determines parent height. */}
+      <div aria-hidden style={{ visibility:"hidden", pointerEvents:"none", ...(activeFace==="back" ? backShell : frontShell) }}>
+        {activeFace === "back" ? back : children}
+      </div>
+      {/* FLIP STAGE — absolutely overlays the ghost. */}
       <div style={{
-        position:"relative",
+        position:"absolute", inset:0,
         transformStyle:"preserve-3d",
         transition:"transform 0.55s cubic-bezier(0.4,0,0.2,1)",
         transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
       }}>
-        {/* FRONT — normal flow, determines parent height */}
+        {/* FRONT */}
         <div style={{
-          position:"relative",
+          position:"absolute", inset:0,
           backfaceVisibility:"hidden",
-          background:SURFACE,
-          border:`1px solid ${BORDER}`,
-          borderRadius:14,
-          padding,
-          boxSizing:"border-box",
+          ...frontShell,
         }}>
           {children}
         </div>
-        {/* BACK — absolute overlay, never pushes parent taller */}
+        {/* BACK */}
         <div style={{
           position:"absolute", inset:0,
           backfaceVisibility:"hidden",
           transform:"rotateY(180deg)",
-          background:`linear-gradient(145deg, ${accent}12, ${SURFACE} 65%)`,
-          border:`1px solid ${accent}33`,
-          borderRadius:14,
-          padding,
-          boxSizing:"border-box",
-          overflow:"auto",
+          ...backShell,
         }}>
           {back}
         </div>
@@ -758,11 +784,52 @@ function FlipBack({ title, accent, paragraphs }: { title: string; accent: string
 }
 
 /** Compact 2-up stat tile used by the performance-tiles card.
- *  Same mockup-spec compact styling (12 px padding, 9 px label, 24 px value).
- *  Tap-to-flip reveals the formula + a one-line explanation. */
+ *  Same dynamic-height ghost trick as FlipCard: parent height tracks
+ *  the active face so flipping to a longer back grows the tile rather
+ *  than clipping/scrolling. Tile shrinks back when flipped to front. */
 type InsightTile = { label:string; val:string; sub:string; color:string; formula:string; explain:string };
 function InsightFlipTile({ tile }: { tile: InsightTile }) {
   const [flipped, setFlipped] = useState(false);
+  const [activeFace, setActiveFace] = useState<"front"|"back">("front");
+
+  useEffect(() => {
+    const target = flipped ? "back" : "front";
+    if (target === activeFace) return;
+    const t = setTimeout(() => setActiveFace(target), 250); // midpoint of 0.5 s flip
+    return () => clearTimeout(t);
+  }, [flipped, activeFace]);
+
+  const frontShell: React.CSSProperties = {
+    background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14,
+    padding:"10px 12px", boxSizing:"border-box",
+  };
+  const backShell: React.CSSProperties = {
+    background:`linear-gradient(145deg, ${tile.color}12, ${SURFACE} 65%)`,
+    border:`1px solid ${tile.color}33`, borderRadius:14,
+    padding:"10px 12px", boxSizing:"border-box",
+  };
+
+  const frontContent = (
+    <>
+      <CardLabel text={tile.label}/>
+      <div style={{ fontSize:24, fontWeight:800, color:tile.color, fontFamily:"var(--font-mono)", lineHeight:1, letterSpacing:"-0.03em", marginTop:6 }}>
+        {tile.val}
+      </div>
+      <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", marginTop:4 }}>{tile.sub}</div>
+    </>
+  );
+  const backContent = (
+    <>
+      <div style={{ fontSize:9, fontWeight:700, color:tile.color, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:4 }}>
+        {tile.label}
+      </div>
+      <div style={{ fontSize:9, color:"rgba(255,255,255,0.6)", fontFamily:"var(--font-mono)", background:"rgba(0,0,0,0.3)", padding:"4px 6px", borderRadius:5, marginBottom:4, wordBreak:"break-word" }}>
+        {tile.formula}
+      </div>
+      <div style={{ fontSize:10, color:"rgba(255,255,255,0.55)", lineHeight:1.4 }}>{tile.explain}</div>
+    </>
+  );
+
   return (
     <div
       onClick={(e) => { e.stopPropagation(); setFlipped(f => !f); }}
@@ -772,42 +839,22 @@ function InsightFlipTile({ tile }: { tile: InsightTile }) {
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setFlipped(f => !f); } }}
       style={{ position:"relative", cursor:"pointer", perspective:1000 }}
     >
+      {/* GHOST — invisible, in normal flow, determines parent height. */}
+      <div aria-hidden style={{ visibility:"hidden", pointerEvents:"none", ...(activeFace==="back" ? backShell : frontShell) }}>
+        {activeFace === "back" ? backContent : frontContent}
+      </div>
+      {/* FLIP STAGE */}
       <div style={{
-        position:"relative",
+        position:"absolute", inset:0,
         transformStyle:"preserve-3d",
         transition:"transform 0.5s cubic-bezier(0.4,0,0.2,1)",
         transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
       }}>
-        {/* FRONT */}
-        <div style={{
-          position:"relative",
-          backfaceVisibility:"hidden",
-          background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14,
-          padding:"10px 12px", boxSizing:"border-box",
-        }}>
-          <CardLabel text={tile.label}/>
-          <div style={{ fontSize:24, fontWeight:800, color:tile.color, fontFamily:"var(--font-mono)", lineHeight:1, letterSpacing:"-0.03em", marginTop:6 }}>
-            {tile.val}
-          </div>
-          <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", marginTop:4 }}>{tile.sub}</div>
+        <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", ...frontShell }}>
+          {frontContent}
         </div>
-        {/* BACK */}
-        <div style={{
-          position:"absolute", inset:0,
-          backfaceVisibility:"hidden",
-          transform:"rotateY(180deg)",
-          background:`linear-gradient(145deg, ${tile.color}12, ${SURFACE} 65%)`,
-          border:`1px solid ${tile.color}33`, borderRadius:14,
-          padding:"10px 12px", boxSizing:"border-box",
-          overflow:"auto",
-        }}>
-          <div style={{ fontSize:9, fontWeight:700, color:tile.color, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:4 }}>
-            {tile.label}
-          </div>
-          <div style={{ fontSize:9, color:"rgba(255,255,255,0.6)", fontFamily:"var(--font-mono)", background:"rgba(0,0,0,0.3)", padding:"4px 6px", borderRadius:5, marginBottom:4, wordBreak:"break-word" }}>
-            {tile.formula}
-          </div>
-          <div style={{ fontSize:10, color:"rgba(255,255,255,0.55)", lineHeight:1.4 }}>{tile.explain}</div>
+        <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", transform:"rotateY(180deg)", ...backShell }}>
+          {backContent}
         </div>
       </div>
     </div>
