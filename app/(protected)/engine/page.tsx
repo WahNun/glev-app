@@ -624,6 +624,25 @@ export default function EnginePage() {
     }
   }
 
+  // "Speichern — kein Bolus": commits insulin_units = 0 to the saved meal row
+  // and returns to the empty log screen. For meals where the user consciously
+  // skipped insulin (e.g. low-carb snack, hypo treatment, pure protein bite).
+  async function handleDecisionNoBolus() {
+    if (!confirmedMeal) return;
+    setDecisionBusy(true);
+    try {
+      await updateMeal(confirmedMeal.id, { insulin_units: 0 });
+      fetchMeals().then(setMeals).catch(() => {});
+      setDecisionToast("Gespeichert ✓ — 0u Bolus");
+      logDebug("ENGINE.DECISION.NO_BOLUS", { id: confirmedMeal.id });
+      resetForm({ keepGlucose: true });
+      setTimeout(() => setDecisionToast(null), 2500);
+    } catch (e) {
+      setDecisionToast(e instanceof Error ? e.message : "Speichern fehlgeschlagen.");
+      setDecisionBusy(false);
+    }
+  }
+
   const inp: React.CSSProperties = { background:"#0D0D12", border:`1px solid ${BORDER}`, borderRadius:10, padding:"11px 14px", color:"#fff", fontSize:14, outline:"none", width:"100%" };
   const card: React.CSSProperties = { background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"20px 24px" };
 
@@ -1102,6 +1121,13 @@ export default function EnginePage() {
                   Abbrechen
                 </button>
               </div>
+              <button
+                onClick={handleDecisionNoBolus}
+                disabled={decisionBusy}
+                style={{ width:"100%", padding:"11px 14px", borderRadius:10, border:`1px solid ${BORDER}`, background:"rgba(255,255,255,0.03)", color:"rgba(255,255,255,0.55)", fontSize:12, fontWeight:600, cursor:decisionBusy?"not-allowed":"pointer", letterSpacing:"0.01em" }}
+              >
+                Speichern — kein Bolus
+              </button>
             </>
           )}
 
