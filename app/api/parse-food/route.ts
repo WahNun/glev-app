@@ -5,6 +5,7 @@ import { SYSTEM_PROMPT } from "@/lib/ai/systemPrompt";
 const TIMEOUT_MS = 8000;
 
 export async function POST(req: NextRequest) {
+  const t0 = Date.now();
   const body = await req.json().catch(() => ({}));
   const { text } = body as { text?: string };
 
@@ -12,9 +13,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "text is required" }, { status: 400 });
   }
 
+  const tBody = Date.now();
+  // eslint-disable-next-line no-console
+  console.log("[PERF parse-food] body parse:", tBody - t0, "ms · input len:", text.length, "chars");
+
   let openai;
   try { openai = getOpenAIClient(); }
   catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : "AI not configured" }, { status: 503 }); }
+
+  const tInit = Date.now();
+  // eslint-disable-next-line no-console
+  console.log("[PERF parse-food] openai init:", tInit - tBody, "ms");
 
   try {
     const completion = await openai.chat.completions.create({
@@ -26,6 +35,10 @@ export async function POST(req: NextRequest) {
         { role: "user",   content: text },
       ],
     }, { timeout: TIMEOUT_MS });
+
+    const tGpt = Date.now();
+    // eslint-disable-next-line no-console
+    console.log("[PERF parse-food] GPT-4o-mini call:", tGpt - tInit, "ms");
 
     const raw = completion.choices[0]?.message?.content ?? "";
     const cleaned = raw.replace(/```json\s*|\s*```/g, "").trim();
@@ -64,6 +77,10 @@ export async function POST(req: NextRequest) {
       ? result.description.trim()
       : synthesized;
 
+    const tDone = Date.now();
+    // eslint-disable-next-line no-console
+    console.log("[PERF parse-food] post-process:", tDone - tGpt, "ms · items:", items.length, "· total:", tDone - t0, "ms");
+
     // Preserve old `parsed` field so existing client code still works.
     return NextResponse.json({
       raw,
@@ -75,6 +92,9 @@ export async function POST(req: NextRequest) {
       description,
     });
   } catch (err: unknown) {
+    const tErr = Date.now();
+    // eslint-disable-next-line no-console
+    console.log("[PERF parse-food] FAILED after:", tErr - t0, "ms");
     const msg = err instanceof Error ? err.message : "OpenAI request failed";
     return NextResponse.json({ error: msg }, { status: 500 });
   }
