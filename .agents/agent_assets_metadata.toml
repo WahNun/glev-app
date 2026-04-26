@@ -24,3 +24,9 @@ id = "QZeuMqTqoU9LG-7vHstuK"
 uri = "file://.local/reports/raw-icr-decision.md"
 type = "text"
 title = "Raw ICR — Entscheidungsreport"
+
+[[outputs]]
+id = "_1UINEAJXimFhV9vpHu8g"
+uri = "file://.local/reports/insights-cards-audit.md"
+type = "text"
+title = "Insights Cards — History & Comprehensiveness Audit"
