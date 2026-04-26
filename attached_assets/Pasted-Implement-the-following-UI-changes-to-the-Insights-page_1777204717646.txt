@@ -1,0 +1,36 @@
+Implement the following UI changes to the Insights page ICR tiles. Both tiles keep their current front-side values. Add a flip/backside to each with explanatory text and a disclaimer chip.
+
+TILE 1 — Adaptive ICR (blue hero card)
+Frontside: unchanged.
+Backside:
+	•	Heading: Wie wird dieser Wert berechnet?
+	•	Body text: Der Adaptive ICR basiert auf allen abgeschlossenen Mahlzeiten (state = final, bg_2h vorhanden). Jede Mahlzeit wird nach Outcome gewichtet: Mahlzeiten mit gutem BG-Verlauf zählen stärker als Spikes oder Underdoses. Er zeigt, welche Carb-Insulin-Quote bei dir empirisch zu stabilen Werten geführt hat — nicht was du dosiert hast, sondern was tatsächlich gewirkt hat.
+	•	Sub-line: Datenbasis: alle finalisierten Mahlzeiten · outcome-gewichtet
+	•	Disclaimer chip at bottom: ⚕️ ICR-Anpassungen immer mit deinem Diabetologen besprechen.
+
+TILE 2 — Raw ICR (orange performance tile)
+Frontside: unchanged.
+Backside:
+	•	Heading: Was zeigt dieser Wert?
+	•	Body text: Der Raw ICR ist der einfache Durchschnitt deiner letzten 7 Dosierungen — unabhängig davon ob das Ergebnis gut oder schlecht war. Er spiegelt dein tatsächliches Dosierverhalten der letzten Tage wider. Wenn dieser Wert stark vom Adaptive ICR abweicht, kann das bedeuten dass du zuletzt anders dosiert hast als dein langfristiger Schnitt — das ist eine Beobachtung, keine Empfehlung.
+	•	Sub-line: Datenbasis: letzte 7 Mahlzeiten mit Carbs + Insulin · ungewichtet
+	•	Disclaimer chip at bottom: ⚕️ ICR-Anpassungen immer mit deinem Diabetologen besprechen.
+
+IMPLEMENTATION NOTES:
+	•	Flip mechanic: tap anywhere on the card toggles front/backside. Add a subtle ℹ icon in the top-right corner of each tile frontside to signal that a backside exists.
+	•	Disclaimer chip styling: small pill, neutral color (not red, not green — medical gray or muted tone), icon ⚕️ left of text, text small/muted. Should feel informational, not alarming.
+	•	Backside should have a subtle ← zurück or tap-to-flip indicator at the bottom so the user knows how to return.
+	•	Do not change any calculation logic in this task — UI only.
+
+After implementation, output a change log:
+
+CHANGE LOG — ICR Tile Backside
+
+[1] FILE: ...
+    COMPONENT: ...
+    CHANGE: ...
+
+[2] ...
+
+
+Cover every file and component touched.”
