@@ -137,20 +137,22 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div style={{
-            marginTop: 20, paddingTop: 18,
-            borderTop: "1px solid rgba(255,255,255,0.06)",
-            textAlign: "center",
-            fontSize: 13, color: "rgba(255,255,255,0.5)",
-          }}>
-            Noch kein Account?{" "}
-            <Link href="/beta" style={{ color: ACCENT, fontWeight: 600, textDecoration: "none" }}>
-              → Beta reservieren
-            </Link>
-          </div>
         </div>
 
-        <div style={{ textAlign: "center", marginTop: 20, fontSize: 10, color: "rgba(255,255,255,0.15)", letterSpacing: "0.06em" }}>
+        {/* Login ist ausschließlich für bereits registrierte Beta-Member.
+            Account-Erstellung läuft über den bezahlten Beta-/Pro-Flow auf
+            der Startseite — daher hier KEIN „Sign up"-CTA. Stattdessen ein
+            neutraler Rückweg, falls jemand versehentlich auf /login landet. */}
+        <div style={{ textAlign: "center", marginTop: 18, fontSize: 12, color: "rgba(255,255,255,0.35)" }}>
+          <Link
+            href="/"
+            style={{ color: "rgba(255,255,255,0.55)", textDecoration: "none", fontWeight: 500 }}
+          >
+            ← Zurück zur Startseite
+          </Link>
+        </div>
+
+        <div style={{ textAlign: "center", marginTop: 14, fontSize: 10, color: "rgba(255,255,255,0.15)", letterSpacing: "0.06em" }}>
           MEMBERS ONLY · PRIVATE BETA
         </div>
       </div>
