@@ -1,0 +1,56 @@
+Add a Finger-Stick Glucose (FS) logging function inside the Engine tab on the Insights page. This is a UI + data task.
+
+---
+
+CONTEXT:
+The Dashboard has a daily glucose card that allows logging a manually measured finger-stick glucose value. We do NOT want to replicate or embed that card. We want a lean, standalone FS glucose logging function directly inside the Engine tab — input, submit, confirmation. No card wrapper, no dashboard chrome around it.
+
+---
+
+REQUIREMENTS:
+
+1. PLACEMENT
+- Inside the Engine tab on the Insights page, add a clearly separated section below the existing Engine content.
+- Section heading: `Finger-Stick Glukose` · Sub-label: `Manuelle Messung erfassen`
+- No new tab, no modal — inline within the Engine tab.
+
+2. INPUT UI
+- Single numeric input field, placeholder: `mg/dL`
+- Timestamp: defaults to now, user can edit (time picker or manual input)
+- Optional single-line note field, placeholder: `Notiz (optional) — z.B. "vor dem Sport"`
+- Submit button: `Speichern`
+- Keep it minimal — no card styling, no extra chrome. Form only.
+
+3. LOGIC
+- On submit: write to the same table and column that the Dashboard daily glucose card already writes to. Reuse the existing write function or API route exactly — do not create a new table, new endpoint, or new write path.
+- On success: show inline confirmation text `Gespeichert ✓` directly below the button, clear all fields, stay on the page.
+- On error: show inline error message below the button.
+
+4. LAST ENTRY DISPLAY
+- Directly below the form, show the most recently logged FS value with its timestamp in a single line.
+- Example: `Letzter Wert: 112 mg/dL · heute 08:14`
+- Reuse existing data fetching logic if available. No separate card component.
+
+5. CLEAR DISTINCTION FROM CGM
+- Add a single small muted line near the heading to make clear this is manual only.
+- Text: `Unabhängig vom CGM — nur manuell erfasste Werte.`
+
+---
+
+DO NOT:
+- Embed or reuse the Dashboard glucose card component
+- Create new DB tables or new API routes if existing ones cover this
+- Add any insulin dosing logic, recommendations, or evaluation here
+- Open a modal or navigate away on submit
+
+---
+
+After implementation, output a change log in this format:
+
+CHANGE LOG — Engine Tab FS Logging
+
+[1] FILE: ...
+    COMPONENT: ...
+    CHANGE: ...
+
+Cover every file and component touched. Note explicitly which existing write functions, hooks, or API routes were reused and from which file.
