@@ -614,8 +614,8 @@ function BackStats({ readings }: { readings: Array<{ t: number; v: number }> }) 
     { l: "Time in range", v: `${tir}%`, c: tir >= 70 ? GREEN : tir >= 50 ? ORANGE : PINK },
     { l: "Time above 180", v: `${tar}%`, c: tar > 25 ? ORANGE : "rgba(255,255,255,0.85)" },
     { l: "Time below 70", v: `${tbr}%`, c: tbr > 4 ? PINK : "rgba(255,255,255,0.85)" },
-    { l: "Highest", v: `${Math.round(max.v)} @ ${fmtTime(max.t)}`, c: ORANGE },
-    { l: "Lowest", v: `${Math.round(min.v)} @ ${fmtTime(min.t)}`, c: PINK },
+    { l: "Highest", v: `${Math.round(max.v)}`, c: ORANGE },
+    { l: "Lowest", v: `${Math.round(min.v)}`, c: PINK },
   ];
 
   return (

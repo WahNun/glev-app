@@ -1071,12 +1071,11 @@ function NonMealRow({
               .glev-mec { gap: 8px !important; }
             }
           `}</style>
-          {/* Col 1: Date + Time */}
+          {/* Col 1: Date (time shown in expanded detail) */}
           <div style={{ minWidth:0 }}>
             <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>When</div>
             <div style={{ fontSize:13, fontWeight:600, color:"rgba(255,255,255,0.85)", letterSpacing:"-0.01em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", fontFamily:"var(--font-mono)" }}>
               {dateStr}
-              <span style={{ color:"rgba(255,255,255,0.35)", fontWeight:400, marginLeft:6 }}>{timeStr}</span>
             </div>
           </div>
           {/* Col 2: Kind badge */}
@@ -1123,8 +1122,6 @@ function NonMealRow({
         <div onClick={onToggle} style={{ padding:"14px 16px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between", gap:14 }}>
           <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)", letterSpacing:"0.02em" }}>
             {dateStr}
-            <span style={{ color:"rgba(255,255,255,0.25)", margin:"0 8px" }}>·</span>
-            {timeStr}
             <span style={{ color:accent, fontWeight:700, marginLeft:10, letterSpacing:"0.04em" }}>{badge}</span>
           </div>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2.5" strokeLinecap="round" style={{ transform:"rotate(90deg)", flexShrink:0 }}>
