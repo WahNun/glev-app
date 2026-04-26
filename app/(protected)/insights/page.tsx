@@ -12,8 +12,11 @@ import { parseDbTs, parseDbDate } from "@/lib/time";
 import {
   insertFingerstick,
   fetchLatestFingerstick,
+  fetchFingersticks,
   type FingerstickReading,
 } from "@/lib/fingerstick";
+import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
+import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
 
 /** Default top-to-bottom order. Hero block (time-in-range, gmi-a1c,
  *  glucose-trend, meal-evaluation) mirrors the homepage `InsightsScreen()`
@@ -22,9 +25,13 @@ const INSIGHTS_DEFAULT_ORDER = [
   "time-in-range",
   "gmi-a1c",
   "glucose-trend",
+  "hypo-events",
+  "hyper-events",
+  "glucose-variability",
   "meal-evaluation",
   "adaptive-engine",
   "fingerstick-log",
+  "tdd",
   "patterns",
   "meal-type",
   "time-of-day",
@@ -48,12 +55,97 @@ const EVAL_NORM = (ev: string|null) => {
   return ev;
 };
 
+// ── Clinical thresholds — hardcoded clinical-standard defaults ──
+// BACKLOG: Allow users to customize clinical thresholds (Hypo, Hyper,
+// TIR range, CV% target) in Settings, to be defined in consultation
+// with their physician. Until implemented, use the hardcoded clinical
+// standard defaults below.
+const HYPO_THRESHOLD_MGDL  = 70;   // BG < 70 → hypo
+const HYPER_THRESHOLD_MGDL = 250;  // BG > 250 → hyper
+const TIR_LOW_MGDL         = 70;   // TIR target band lower bound (TBR < this)
+const TIR_HIGH_MGDL        = 180;  // TIR target band upper bound (TAR > this)
+const CV_STABLE_PCT        = 36;   // < this = stable (green)
+const CV_HIGH_PCT          = 50;   // > this = unstable (red); between = yellow
+const MIN_DATAPOINTS       = 3;    // < this in window → "Nicht genug Daten"
+
+/** A single BG reading drawn from any source (meal pre/post, insulin
+ *  pre/post, exercise pre/end/post, fingerstick). `t` is the
+ *  approximate measurement timestamp in ms since epoch. */
+type BgReading = { v: number; t: number };
+
+/** Pool every available glucose value across meals, insulin logs,
+ *  exercise logs and manual fingersticks since `sinceMs`. Used by the
+ *  hypo/hyper counters, the CV%-variability tile and the extended TIR
+ *  bar so all three look at the same coherent reading universe. */
+function collectBgReadings(
+  meals: Meal[],
+  insulinLogs: InsulinLog[],
+  exerciseLogs: ExerciseLog[],
+  fingersticks: FingerstickReading[],
+  sinceMs: number,
+): BgReading[] {
+  const HOUR = 3600 * 1000;
+  const out: BgReading[] = [];
+  const push = (v: number | null | undefined, t: number) => {
+    if (v == null) return;
+    const num = Number(v);
+    if (!Number.isFinite(num)) return;
+    if (t < sinceMs) return;
+    out.push({ v: num, t });
+  };
+
+  for (const m of meals) {
+    const t0 = parseDbTs(m.created_at);
+    const anyM = m as unknown as Record<string, unknown>;
+    push(m.glucose_before as number | null | undefined, t0);
+    push(anyM.bg_1h as number | null | undefined, t0 + 1 * HOUR);
+    push(anyM.bg_2h as number | null | undefined, t0 + 2 * HOUR);
+  }
+  for (const il of insulinLogs) {
+    const t0 = parseDbTs(il.created_at);
+    push(il.cgm_glucose_at_log, t0);
+    push(il.glucose_after_1h,  t0 +  1 * HOUR);
+    push(il.glucose_after_2h,  t0 +  2 * HOUR);
+    push(il.glucose_after_12h, t0 + 12 * HOUR);
+    push(il.glucose_after_24h, t0 + 24 * HOUR);
+  }
+  for (const ex of exerciseLogs) {
+    const t0 = parseDbTs(ex.created_at);
+    const tEnd = t0 + (ex.duration_minutes || 0) * 60 * 1000;
+    push(ex.cgm_glucose_at_log, t0);
+    push(ex.glucose_at_end,     tEnd);
+    push(ex.glucose_after_1h,   tEnd + 1 * HOUR);
+  }
+  for (const fs of fingersticks) {
+    push(fs.value_mg_dl, parseDbTs(fs.measured_at));
+  }
+  return out;
+}
+
 export default function InsightsPage() {
-  const [meals, setMeals]     = useState<Meal[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [meals, setMeals]               = useState<Meal[]>([]);
+  const [insulinLogs, setInsulinLogs]   = useState<InsulinLog[]>([]);
+  const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([]);
+  const [fingersticks, setFingersticks] = useState<FingerstickReading[]>([]);
+  const [loading, setLoading]           = useState(true);
 
   useEffect(() => {
-    fetchMeals().then(setMeals).catch(console.error).finally(() => setLoading(false));
+    // 14d covers every metric window (CV% needs 14d; hypo/hyper/TDD only 7d).
+    const fingerstickFromIso = new Date(Date.now() - 14 * 86400000).toISOString();
+    Promise.all([
+      fetchMeals().catch(() => [] as Meal[]),
+      fetchRecentInsulinLogs(14).catch(() => [] as InsulinLog[]),
+      fetchRecentExerciseLogs(14).catch(() => [] as ExerciseLog[]),
+      fetchFingersticks(fingerstickFromIso).catch(() => [] as FingerstickReading[]),
+    ])
+      .then(([m, il, ex, fs]) => {
+        setMeals(m);
+        setInsulinLogs(il);
+        setExerciseLogs(ex);
+        setFingersticks(fs);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
   }, []);
 
   if (loading) return (
@@ -131,6 +223,56 @@ export default function InsightsPage() {
     if (d.avg != null) { lastVal = d.avg; return d.avg; }
     return lastVal ?? firstFallback;
   });
+
+  // ── Cross-source BG reading pools (meals + insulin + exercise + fingerstick) ──
+  const fourteenAgo = now - 14 * 86400000;
+  const readings14 = collectBgReadings(meals, insulinLogs, exerciseLogs, fingersticks, fourteenAgo);
+  const readings7  = readings14.filter(r => r.t >= wkAgo);
+
+  // ── Hypo / Hyper event counters (7d, count of individual readings) ──
+  const hypoEnough  = readings7.length >= MIN_DATAPOINTS;
+  const hyperEnough = readings7.length >= MIN_DATAPOINTS;
+  const hypoCount7d  = readings7.filter(r => r.v < HYPO_THRESHOLD_MGDL).length;
+  const hyperCount7d = readings7.filter(r => r.v > HYPER_THRESHOLD_MGDL).length;
+
+  // ── Glucose Variability CV% (14d, ATTD consensus) ──
+  const cvEnough = readings14.length >= MIN_DATAPOINTS;
+  let cvPct: number | null = null;
+  if (cvEnough) {
+    const vals = readings14.map(r => r.v);
+    const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+    if (mean > 0) {
+      const variance = vals.reduce((s, v) => s + (v - mean) * (v - mean), 0) / vals.length;
+      cvPct = +((Math.sqrt(variance) / mean) * 100).toFixed(1);
+    }
+  }
+  const cvColor = cvPct == null
+    ? "rgba(255,255,255,0.4)"
+    : cvPct < CV_STABLE_PCT ? GREEN
+    : cvPct <= CV_HIGH_PCT  ? HIGH_YELLOW
+    : PINK;
+
+  // ── TDD: total daily insulin units (bolus + basal) ──
+  const startToday = new Date(); startToday.setHours(0, 0, 0, 0);
+  const tddByDay = new Map<string, number>();
+  for (const il of insulinLogs) {
+    const t = parseDbTs(il.created_at);
+    if (t < wkAgo) continue;
+    const d = new Date(t); d.setHours(0, 0, 0, 0);
+    const key = d.toISOString().slice(0, 10);
+    tddByDay.set(key, (tddByDay.get(key) ?? 0) + Number(il.units || 0));
+  }
+  const tddDayCount    = tddByDay.size;
+  const tddEnough      = tddDayCount >= MIN_DATAPOINTS;
+  const tddTodayKey    = startToday.toISOString().slice(0, 10);
+  const tddToday       = tddByDay.get(tddTodayKey) ?? 0;
+  const tddSum7        = Array.from(tddByDay.values()).reduce((a, b) => a + b, 0);
+  const tddAvg7        = tddEnough ? +(tddSum7 / 7).toFixed(1) : null;
+
+  // ── Extended TIR (TBR / TIR / TAR three-color view, reuses b7 buckets) ──
+  const tbrPct = b7.vlow + b7.lo;     // < 70
+  const tirPct = b7.inR;              // 70–180
+  const tarPct = b7.hi;               // > 180
 
   // ── Meal evaluation distribution ──
   const evals = last7
@@ -270,17 +412,23 @@ export default function InsightsPage() {
                   </div>
                 )}
               </div>
-              <div style={{ display:"flex", height:12, borderRadius:99, overflow:"hidden", background:"rgba(255,255,255,0.04)" }}>
-                {b7.vlow > 0 && <div style={{ width:`${b7.vlow}%`, background:PINK }}/>}
-                {b7.lo   > 0 && <div style={{ width:`${b7.lo}%`,   background:ORANGE }}/>}
-                {b7.inR  > 0 && <div style={{ width:`${b7.inR}%`,  background:GREEN }}/>}
-                {b7.hi   > 0 && <div style={{ width:`${b7.hi}%`,   background:HIGH_YELLOW }}/>}
+              {/* 3-color TBR / TIR / TAR bar (clinical consensus). The
+                  legacy 4-segment bar (vlow/lo/inR/hi from `b7`) was
+                  collapsed into TBR=vlow+lo / TIR=inR / TAR=hi to match
+                  the ATTD consensus three-band visual standard. */}
+              <div
+                role="img"
+                aria-label={`Time below range ${tbrPct} percent, in range ${tirPct} percent, above range ${tarPct} percent`}
+                style={{ display:"flex", height:12, borderRadius:99, overflow:"hidden", background:"rgba(255,255,255,0.04)" }}
+              >
+                {tbrPct > 0 && <div style={{ width:`${tbrPct}%`, background:PINK }}/>}
+                {tirPct > 0 && <div style={{ width:`${tirPct}%`, background:GREEN }}/>}
+                {tarPct > 0 && <div style={{ width:`${tarPct}%`, background:HIGH_YELLOW }}/>}
               </div>
-              <div style={{ display:"flex", justifyContent:"space-between", marginTop:6, fontSize:8, color:"rgba(255,255,255,0.4)", flexWrap:"wrap", gap:4 }}>
-                <span style={{ color:PINK }}>● V.low {b7.vlow}%</span>
-                <span style={{ color:ORANGE }}>● Low {b7.lo}%</span>
-                <span style={{ color:GREEN }}>● In {b7.inR}%</span>
-                <span style={{ color:HIGH_YELLOW }}>● High {b7.hi}%</span>
+              <div style={{ display:"flex", justifyContent:"space-between", marginTop:6, fontSize:9, color:"rgba(255,255,255,0.5)", flexWrap:"wrap", gap:6 }}>
+                <span style={{ color:PINK }}>● TBR &lt;70 · {tbrPct}%</span>
+                <span style={{ color:GREEN }}>● TIR 70–180 · {tirPct}%</span>
+                <span style={{ color:HIGH_YELLOW }}>● TAR &gt;180 · {tarPct}%</span>
               </div>
             </>
           )}
@@ -386,6 +534,159 @@ export default function InsightsPage() {
           <div style={{ display:"flex", justifyContent:"space-between", marginTop:4, fontSize:8, color:"rgba(255,255,255,0.35)" }}>
             {trendDays.map((d, i) => <span key={i}>{d.label}</span>)}
           </div>
+        </FlipCard>
+      ),
+    },
+    // ── Hypo events counter (7d, BG < 70 mg/dL) ──
+    {
+      id: "hypo-events",
+      node: (() => {
+        const accent = hypoCount7d > 0 ? PINK : GREEN;
+        return (
+          <FlipCard
+            accent={accent}
+            back={
+              <ThresholdBack
+                title="Hypo Events · 7d"
+                accent={accent}
+                paragraphs={[
+                  "Anzahl Glukose-Messwerte unter 70 mg/dL in den letzten 7 Tagen. Gepoolt aus Mahlzeiten, Insulin- und Bewegungs-Logs sowie manuellen Fingersticks.",
+                  "70 mg/dL ist die klinische Grenze für Hypoglykämie (ATTD-Konsensus 2019). Häufige Hypos können auf zu hohe Bolus-Dosen, zu hohes Basal oder ein zu niedriges ICR hindeuten.",
+                  hypoEnough
+                    ? `Berechnet aus ${readings7.length} Messwert${readings7.length === 1 ? "" : "en"} der letzten 7 Tage.`
+                    : "Mindestens 3 Messwerte in 7 Tagen nötig, um diese Karte anzuzeigen.",
+                ]}
+              />
+            }
+          >
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+              <CardLabel text="Hypo Events · 7d"/>
+              <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>&lt; {HYPO_THRESHOLD_MGDL} mg/dL</div>
+            </div>
+            {!hypoEnough ? (
+              <div style={{ padding:"18px 0", textAlign:"center" }}>
+                <div style={{ fontSize:13, color:"rgba(255,255,255,0.45)", fontWeight:600 }}>Nicht genug Daten</div>
+                <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", marginTop:4 }}>≥ {MIN_DATAPOINTS} Messwerte erforderlich</div>
+              </div>
+            ) : (
+              <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
+                <div style={{ fontSize:36, fontWeight:800, color:accent, letterSpacing:"-0.04em", fontFamily:"var(--font-mono)", lineHeight:1 }}>
+                  {hypoCount7d}
+                </div>
+                <div style={{ fontSize:11, color:accent, fontWeight:600 }}>
+                  {hypoCount7d === 0 ? "Keine Hypos" : hypoCount7d === 1 ? "Hypo" : "Hypos"}
+                </div>
+                <div style={{ marginLeft:"auto", fontSize:9, color:"rgba(255,255,255,0.4)" }}>
+                  {readings7.length} Messwerte
+                </div>
+              </div>
+            )}
+          </FlipCard>
+        );
+      })(),
+    },
+    // ── Hyper events counter (7d, BG > 250 mg/dL) ──
+    {
+      id: "hyper-events",
+      node: (() => {
+        const accent = hyperCount7d > 0 ? ORANGE : GREEN;
+        return (
+          <FlipCard
+            accent={accent}
+            back={
+              <ThresholdBack
+                title="Hyper Events · 7d"
+                accent={accent}
+                paragraphs={[
+                  "Anzahl Glukose-Messwerte über 250 mg/dL in den letzten 7 Tagen. Gepoolt aus Mahlzeiten, Insulin- und Bewegungs-Logs sowie manuellen Fingersticks.",
+                  "Werte über 250 mg/dL gelten als deutliche Hyperglykämie (ATTD-Konsensus 2019). Häufige Hyper-Events können auf ein zu hohes ICR, einen zu niedrigen Bolus oder ein zu niedriges Basal hindeuten.",
+                  hyperEnough
+                    ? `Berechnet aus ${readings7.length} Messwert${readings7.length === 1 ? "" : "en"} der letzten 7 Tage.`
+                    : "Mindestens 3 Messwerte in 7 Tagen nötig, um diese Karte anzuzeigen.",
+                ]}
+              />
+            }
+          >
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+              <CardLabel text="Hyper Events · 7d"/>
+              <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>&gt; {HYPER_THRESHOLD_MGDL} mg/dL</div>
+            </div>
+            {!hyperEnough ? (
+              <div style={{ padding:"18px 0", textAlign:"center" }}>
+                <div style={{ fontSize:13, color:"rgba(255,255,255,0.45)", fontWeight:600 }}>Nicht genug Daten</div>
+                <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", marginTop:4 }}>≥ {MIN_DATAPOINTS} Messwerte erforderlich</div>
+              </div>
+            ) : (
+              <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
+                <div style={{ fontSize:36, fontWeight:800, color:accent, letterSpacing:"-0.04em", fontFamily:"var(--font-mono)", lineHeight:1 }}>
+                  {hyperCount7d}
+                </div>
+                <div style={{ fontSize:11, color:accent, fontWeight:600 }}>
+                  {hyperCount7d === 0 ? "Keine Hypers" : hyperCount7d === 1 ? "Hyper" : "Hypers"}
+                </div>
+                <div style={{ marginLeft:"auto", fontSize:9, color:"rgba(255,255,255,0.4)" }}>
+                  {readings7.length} Messwerte
+                </div>
+              </div>
+            )}
+          </FlipCard>
+        );
+      })(),
+    },
+    // ── Glucose Variability CV% (14d, ATTD consensus thresholds) ──
+    {
+      id: "glucose-variability",
+      node: (
+        <FlipCard
+          accent={cvColor}
+          back={
+            <ThresholdBack
+              title="Glukose-Variabilität · 14d"
+              accent={cvColor}
+              paragraphs={[
+                "Variationskoeffizient (CV%) = (Standardabweichung / Mittelwert) × 100, berechnet aus allen Glukose-Messwerten der letzten 14 Tage. Zeigt, wie stabil oder schwankend deine Glukose verläuft — unabhängig vom Niveau.",
+                "ATTD-Konsensus 2019: < 36 % gilt als stabil (grün), 36–50 % als mittel (gelb), > 50 % als instabil (rot). Höhere CV-Werte korrelieren mit häufigeren Hypos.",
+                cvEnough
+                  ? `Berechnet aus ${readings14.length} Messwert${readings14.length === 1 ? "" : "en"} der letzten 14 Tage.`
+                  : "Mindestens 3 Messwerte in 14 Tagen nötig, um diese Karte anzuzeigen.",
+              ]}
+            />
+          }
+        >
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+            <CardLabel text="Glukose-Variabilität · 14d"/>
+            <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>CV%</div>
+          </div>
+          {!cvEnough || cvPct == null ? (
+            <div style={{ padding:"18px 0", textAlign:"center" }}>
+              <div style={{ fontSize:13, color:"rgba(255,255,255,0.45)", fontWeight:600 }}>Nicht genug Daten</div>
+              <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", marginTop:4 }}>≥ {MIN_DATAPOINTS} Messwerte erforderlich</div>
+            </div>
+          ) : (
+            <>
+              <div style={{ display:"flex", alignItems:"baseline", gap:6, marginBottom:8 }}>
+                <div style={{ fontSize:36, fontWeight:800, color:cvColor, letterSpacing:"-0.04em", fontFamily:"var(--font-mono)", lineHeight:1 }}>
+                  {cvPct.toFixed(1)}
+                </div>
+                <div style={{ fontSize:14, color:cvColor, fontWeight:700 }}>%</div>
+                <div style={{ marginLeft:"auto", fontSize:9, color:cvColor, fontWeight:700 }}>
+                  {cvPct < CV_STABLE_PCT ? "Stabil" : cvPct <= CV_HIGH_PCT ? "Mittel" : "Instabil"}
+                </div>
+              </div>
+              {/* Threshold bar: green ≤36, yellow 36–50, red >50 (clamped to 75% for display). */}
+              <div style={{ position:"relative", height:6, borderRadius:99, overflow:"hidden", background:"rgba(255,255,255,0.05)" }}>
+                <div style={{ position:"absolute", left:0,           top:0, bottom:0, width:`${(CV_STABLE_PCT/75)*100}%`,                              background:GREEN,       opacity:0.55 }}/>
+                <div style={{ position:"absolute", left:`${(CV_STABLE_PCT/75)*100}%`, top:0, bottom:0, width:`${((CV_HIGH_PCT-CV_STABLE_PCT)/75)*100}%`, background:HIGH_YELLOW, opacity:0.55 }}/>
+                <div style={{ position:"absolute", left:`${(CV_HIGH_PCT/75)*100}%`,   top:0, bottom:0, right:0,                                          background:PINK,        opacity:0.55 }}/>
+                <div style={{ position:"absolute", left:`${Math.min(cvPct, 75) / 75 * 100}%`, top:-2, bottom:-2, width:2, background:"#fff", borderRadius:1, transform:"translateX(-1px)" }}/>
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", marginTop:6, fontSize:8, color:"rgba(255,255,255,0.4)" }}>
+                <span style={{ color:GREEN }}>● &lt; 36 stabil</span>
+                <span style={{ color:HIGH_YELLOW }}>● 36–50 mittel</span>
+                <span style={{ color:PINK }}>● &gt; 50 instabil</span>
+              </div>
+            </>
+          )}
         </FlipCard>
       ),
     },
@@ -1008,18 +1309,46 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
  * Padding / borderRadius defaults match the mockup's `MockCard`.
  */
 /** Small medical-disclaimer pill. Neutral gray — informational, not alarming. */
-function DisclaimerChip() {
+/** Default disclaimer text for ICR-context cards. */
+const DEFAULT_DISCLAIMER_TEXT = "ICR-Anpassungen immer mit deinem Diabetologen besprechen.";
+/** Disclaimer text used by every clinical-threshold card (hypo / hyper / CV% / TDD). */
+const THRESHOLD_DISCLAIMER_TEXT = "Schwellenwerte sind klinische Standardwerte. Besprich Abweichungen immer mit deinem Diabetologen.";
+
+function DisclaimerChip({ text = DEFAULT_DISCLAIMER_TEXT }: { text?: string } = {}) {
   return (
     <div style={{
-      display:"inline-flex", alignItems:"center", gap:6,
-      padding:"5px 10px", borderRadius:99,
+      display:"inline-flex", alignItems:"flex-start", gap:6,
+      padding:"5px 10px", borderRadius:12,
       background:"rgba(255,255,255,0.04)",
       border:"1px solid rgba(255,255,255,0.1)",
       fontSize:10, color:"rgba(255,255,255,0.55)", lineHeight:1.35,
       maxWidth:"100%",
     }}>
-      <span aria-hidden style={{ fontSize:11, lineHeight:1 }}>⚕️</span>
-      <span>ICR-Anpassungen immer mit deinem Diabetologen besprechen.</span>
+      <span aria-hidden style={{ fontSize:11, lineHeight:1.2 }}>⚕️</span>
+      <span>{text}</span>
+    </div>
+  );
+}
+
+/** Back-of-card content used by every clinical-threshold tile.
+ *  Mirrors the `FlipBack` style but pins a `DisclaimerChip` (with the
+ *  threshold-specific text) at the bottom, like `IcrInfoBack`. */
+function ThresholdBack({
+  title,
+  accent,
+  paragraphs,
+}: { title: string; accent: string; paragraphs: string[] }) {
+  return (
+    <div style={{ display:"flex", flexDirection:"column", height:"100%", gap:8 }}>
+      <div style={{ fontSize:12, color:accent, fontWeight:700, letterSpacing:"0.01em", lineHeight:1.25 }}>
+        {title}
+      </div>
+      <div style={{ fontSize:10, color:"rgba(255,255,255,0.7)", lineHeight:1.5, display:"flex", flexDirection:"column", gap:6 }}>
+        {paragraphs.map((p, i) => <div key={i}>{p}</div>)}
+      </div>
+      <div style={{ marginTop:"auto", display:"flex", flexDirection:"column", gap:6, alignItems:"flex-start" }}>
+        <DisclaimerChip text={THRESHOLD_DISCLAIMER_TEXT}/>
+      </div>
     </div>
   );
 }

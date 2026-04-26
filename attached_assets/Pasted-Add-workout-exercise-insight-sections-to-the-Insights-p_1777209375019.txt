@@ -1,0 +1,134 @@
+Add workout/exercise insight sections to the Insights page.
+The data infrastructure already exists — this is primarily a
+data-fetching + UI task. Do not rebuild what exists.
+
+---
+
+EXISTING INFRASTRUCTURE (reuse exactly, do not rebuild):
+- DB table: exercise_logs (columns: cgm_glucose_at_log,
+  glucose_at_end, glucose_after_1h, outcome, duration_minutes,
+  exercise_type, intensity, notes, created_at + more)
+- Outcome classifier: lib/exerciseEval.ts
+  (outcomes: STABLE / DROPPED / SPIKED / HYPO_RISK / PENDING)
+- CGM auto-fetch: already populates BG columns automatically
+- Engine integration: lib/engine/evaluation.ts + recommendation.ts
+  (advisory only — do not change this)
+
+The Insights page currently fetches zero workout data.
+Start by adding the exercise_logs fetch to the Insights data layer,
+then build the sections below.
+
+---
+
+SECTION 1 — Workout Outcome Distribution (id: "workout-outcomes")
+
+What it shows:
+- Distribution of workout outcomes over last 30 days:
+  STABLE / DROPPED / SPIKED / HYPO_RISK as percentage bars
+- Hero number: total workouts in last 30 days
+- Sub-line: "Trainings letzte 30 Tage"
+
+Color per outcome:
+- STABLE: green
+- DROPPED: yellow
+- SPIKED: orange
+- HYPO_RISK: red
+
+Backside:
+"Glev klassifiziert jeden Workout anhand deines Glukoseverlaufs:
+STABLE = BG blieb im Zielbereich. DROPPED = BG fiel deutlich,
+aber kein Hypo-Risiko. SPIKED = BG stieg unerwartet an.
+HYPO_RISK = BG fiel unter 70 mg/dL oder naherte sich kritisch."
+
+Disclaimer chip:
+⚕️ "Schwellenwerte sind klinische Standardwerte. Besprich
+Abweichungen immer mit deinem Diabetologen."
+
+Minimum data: < 3 workouts → "Nicht genug Daten"
+
+---
+
+SECTION 2 — BG Response by Exercise Type (id: "workout-bg-response")
+
+What it shows:
+- For each exercise_type that appears in the data: average
+  BG delta from cgm_glucose_at_log to glucose_after_1h
+- Display as a simple bar list, one row per exercise type
+- Example: "Laufen  −18 mg/dL avg · 12 sessions"
+- Sort by frequency descending
+
+Backside:
+"Zeigt wie verschiedene Trainingsarten deinen Blutzucker
+im Durchschnitt beeinflussen — gemessen von vor dem Training
+bis eine Stunde danach. Hilft Muster zu erkennen welche
+Aktivitaten BG-Anpassungen erfordern."
+
+Disclaimer chip: same as Section 1.
+
+Minimum data: < 3 sessions per type → skip that type.
+If no type has enough data → "Nicht genug Daten"
+
+---
+
+SECTION 3 — Workout Patterns (id: "workout-patterns")
+
+What it shows:
+- Text-based pattern cards, max 3 patterns, auto-generated
+  from the data. Examples:
+  - "Abendtraining fuhrt bei dir haufig zu DROPPED (67%
+    der Abend-Sessions)"
+  - "Laufen > 45 min erhoht dein Hypo-Risiko (4 von 6
+    Sessions HYPO_RISK)"
+  - "Nach Krafttraining steigt dein BG im Schnitt +12 mg/dL"
+- If fewer than 2 meaningful patterns found: hide this section
+  entirely (do not show "Nicht genug Daten" card)
+
+Pattern detection logic:
+- Group by time_of_day (morning/afternoon/evening based on
+  created_at hour)
+- Group by exercise_type
+- Group by duration bucket (< 30min / 30–60min / > 60min)
+- For each group with >= 3 sessions: check if one outcome
+  dominates (> 60%) → surface as pattern
+
+Backside:
+"Automatisch erkannte Muster aus deinen Workout-Daten.
+Mindestens 3 Sessions pro Gruppe erforderlich. Muster
+aktualisieren sich mit jedem neuen Workout."
+
+Disclaimer chip: same as Section 1.
+
+---
+
+PLACEMENT (insert after existing patterns section):
+... (existing sections above)
+workout-outcomes    (NEW)
+workout-bg-response (NEW)
+workout-patterns    (NEW)
+meal-type           (existing, unchanged)
+...
+
+---
+
+GENERAL RULES:
+- Reuse exerciseEval.ts outcome types exactly — do not redefine
+- Reuse existing flip/backside mechanic (IcrInfoBack pattern)
+- Reuse existing DisclaimerChip component
+- Do not touch lib/exerciseEval.ts, evaluation.ts,
+  or recommendation.ts — read only
+- Do not create new DB tables or API routes if existing
+  ones cover it
+
+---
+
+After implementation output a change log:
+
+CHANGE LOG — Workout Insights Sections
+
+[1] FILE: ...
+    COMPONENT: ...
+    CHANGE: ...
+
+Cover every file and component touched. Note explicitly
+which existing hooks, fetch functions, or data layers
+were reused or extended.
