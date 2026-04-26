@@ -85,8 +85,9 @@ function runGlevEngine(
   carbs: number,
   insulinLogs: InsulinLog[] = [],
   exerciseLogs: ExerciseLog[] = [],
+  icr: number = 15,
 ): Recommendation {
-  const icr = 15, cf = 50, target = 110;
+  const cf = 50, target = 110;
   const carbDose = carbs / icr;
   const correctionDose = Math.max(0, (currentGlucose - target) / cf);
   const formulaDose = Math.round((carbDose + correctionDose) * 10) / 10;
@@ -135,6 +136,9 @@ export default function EnginePage() {
   const [tab, setTab]         = useState<"engine"|"log"|"bolus"|"exercise">("engine");
   const [isMobile, setIsMobile] = useState(false);
   const [meals, setMeals]     = useState<Meal[]>([]);
+  const [adaptedICR, setAdaptedICR] = useState(15);
+  const [icrConfidence, setIcrConfidence] = useState<"low" | "medium" | "high">("low");
+  const [icrSampleSize, setIcrSampleSize] = useState(0);
   const [insulinLogs, setInsulinLogs] = useState<InsulinLog[]>([]);
   const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -291,7 +295,35 @@ export default function EnginePage() {
   }
 
   useEffect(() => {
-    fetchMeals().then(setMeals).catch(console.error).finally(() => setLoading(false));
+    fetchMeals()
+      .then(fetched => {
+        setMeals(fetched);
+        // Adaptive ICR — derive a personalised insulin:carb ratio from the
+        // user's last 14 days of meals (capped at 20 most-recent samples).
+        // HIGH evals mean past doses were too generous → push ICR up
+        // (more carbs per unit = less insulin). LOW evals mean past doses
+        // were too small → push ICR down. Read-only: never written to DB.
+        const fourteenDaysAgo = Date.now() - 14 * 24 * 3600 * 1000;
+        const recent = fetched
+          .filter(m => parseDbTs(m.created_at) >= fourteenDaysAgo)
+          .sort((a, b) => parseDbTs(b.created_at) - parseDbTs(a.created_at))
+          .slice(0, 20);
+        const evals = recent
+          .map(m => m.evaluation)
+          .filter((e): e is string => e === "HIGH" || e === "LOW" || e === "GOOD");
+        if (evals.length >= 3) {
+          const high = evals.filter(e => e === "HIGH").length;
+          const low  = evals.filter(e => e === "LOW").length;
+          const netBias = (high - low) / evals.length;
+          const newICR = Math.round(Math.min(25, Math.max(8, 15 + netBias * 4)));
+          setAdaptedICR(newICR);
+          setIcrConfidence(evals.length >= 10 ? "high" : evals.length >= 5 ? "medium" : "low");
+          setIcrSampleSize(evals.length);
+          logDebug("ENGINE.ADAPTIVE_ICR", { newICR, sampleSize: evals.length, high, low, netBias });
+        }
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
     // Recent insulin & exercise logs feed the safety-context notes in the
     // Engine recommendation. Failure here is non-fatal — the engine still
     // runs without log context.
@@ -304,7 +336,7 @@ export default function EnginePage() {
     if (!c) return;
     setRunning(true);
     setTimeout(() => {
-      const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs);
+      const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs, adaptedICR);
       setResult(rec);
       setRunning(false);
       // Pre-fill the insulin field with the recommendation only when the
@@ -871,7 +903,7 @@ export default function EnginePage() {
 
             <div style={{ marginTop:16, display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
               {[
-                { label:"Carb Dose", val:`${result.carbDose}u`, sub:`${carbs}g ÷ 15 ICR`, color:ORANGE },
+                { label:"Carb Dose", val:`${result.carbDose}u`, sub:`${carbs}g ÷ ${adaptedICR} ICR`, color:ORANGE },
                 { label:"Correction", val:`+${result.correctionDose}u`, sub:`(BG - 110) ÷ 50`, color:ACCENT },
                 { label:"Total", val:`${result.dose}u`, sub:"recommended", color:GREEN },
               ].map(d => (
@@ -883,6 +915,28 @@ export default function EnginePage() {
               ))}
             </div>
           </div>
+
+          {/* ADAPTIVE ICR INFO — read-only display, never written to DB */}
+          {icrSampleSize >= 3 ? (
+            <div style={{ padding:"10px 14px", background:"rgba(255,255,255,0.02)", borderRadius:10, border:`1px solid ${BORDER}`, display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, fontSize:11.5, color:"rgba(255,255,255,0.55)", flexWrap:"wrap" }}>
+              <span>
+                ICR <strong style={{ color:"rgba(255,255,255,0.85)" }}>{adaptedICR}:1</strong>
+                {" — basierend auf "}
+                <strong style={{ color:"rgba(255,255,255,0.85)" }}>{icrSampleSize}</strong>
+                {" Einträgen · Konfidenz "}
+                <strong style={{ color:"rgba(255,255,255,0.85)" }}>{icrConfidence}</strong>
+              </span>
+              {adaptedICR !== 15 && (
+                <span style={{ color: adaptedICR > 15 ? GREEN : ORANGE, fontWeight:700, fontSize:11, whiteSpace:"nowrap" }}>
+                  {adaptedICR > 15 ? "↑ konservativer" : "↓ aggressiver"}
+                </span>
+              )}
+            </div>
+          ) : (
+            <div style={{ padding:"10px 14px", background:"rgba(255,255,255,0.02)", borderRadius:10, border:`1px solid ${BORDER}`, fontSize:11.5, color:"rgba(255,255,255,0.4)" }}>
+              ICR <strong style={{ color:"rgba(255,255,255,0.6)" }}>15:1</strong> — Standardwert (≥3 Einträge nötig zur Anpassung)
+            </div>
+          )}
 
           {/* SIMILAR MEALS */}
           {result.similarMeals.length > 0 && (
