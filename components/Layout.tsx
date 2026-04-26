@@ -169,48 +169,48 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <nav className="glev-mobile-nav" style={{
         position: "fixed", bottom: 0, left: 0, right: 0,
         background: SURFACE, borderTop: `1px solid ${BORDER}`,
-        justifyContent: "space-around", alignItems: "stretch",
-        padding: "10px 18px max(18px, env(safe-area-inset-bottom))", zIndex: 100,
+        // Equal-share buttons across the full width — no extra side
+        // padding so the 5 labels never collide with each other on
+        // narrow phones (320–360 px).
+        padding: "6px 4px max(12px, env(safe-area-inset-bottom))", zIndex: 100,
       }}>
         {NAV.map(({ label, path, icon }) => {
           const active = pathname.startsWith(path);
-          const isCenter = path === "/log";
-          // Every item is the same fixed-height button with content packed
-          // toward the bottom (justifyContent: flex-end). That guarantees
-          // the labels sit on a single baseline regardless of icon size, so
-          // the larger Glev circle simply rises higher above the line.
+          // Each button claims an equal slice (`flex: 1 1 0` + `min-width: 0`)
+          // so labels stay on one line and the active accent pill never spills
+          // into its neighbour. Sentence-case + slightly larger 11 px text is
+          // far more legible on mobile than the previous 9 px ALL-CAPS.
           return (
             <button
               key={path}
               onClick={() => router.push(path)}
+              aria-current={active ? "page" : undefined}
               style={{
+                flex: "1 1 0",
+                minWidth: 0,
                 display: "flex", flexDirection: "column",
-                alignItems: "center", justifyContent: "flex-end",
-                gap: 4, padding: 0, height: 44,
+                alignItems: "center", justifyContent: "center",
+                gap: 4, padding: "6px 2px", height: 56,
                 border: "none", background: "transparent", cursor: "pointer",
-                color: active ? ACCENT : "rgba(255,255,255,0.3)",
-                fontSize: 9, fontWeight: 600, letterSpacing: "0.04em",
+                color: active ? ACCENT : "rgba(255,255,255,0.45)",
+                fontSize: 11, fontWeight: active ? 600 : 500, letterSpacing: "0.01em",
+                borderRadius: 10,
+                transition: "color 0.15s",
               }}
             >
-              {isCenter ? (
-                <span style={{
-                  width: 30, height: 30, borderRadius: 99,
-                  background: active
-                    ? `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`
-                    : `radial-gradient(circle at 36% 32%, #1e1e2e 0%, #141420 45%, #09090B 100%)`,
-                  border: active ? "none" : `1px solid rgba(255,255,255,0.12)`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  boxShadow: active ? `0 2px 10px ${ACCENT}55` : "0 2px 6px rgba(0,0,0,0.4)",
-                  transition: "all 0.2s",
-                }}>
-                  <GlevLogo size={18} color={active ? "#fff" : ACCENT} bg="transparent"/>
-                </span>
-              ) : (
-                <span style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 22 }}>
-                  {icon(active)}
-                </span>
-              )}
-              <span style={{ lineHeight: 1 }}>{isCenter ? "GLEV" : label.toUpperCase()}</span>
+              <span style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                height: 22, width: 22,
+              }}>
+                {icon(active)}
+              </span>
+              <span style={{
+                lineHeight: 1.1,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                maxWidth: "100%",
+              }}>{label}</span>
             </button>
           );
         })}
