@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { reloadHistoricalEntries } from "@/lib/meals";
 import { fetchMacroTargets, saveMacroTargets, DEFAULT_MACRO_TARGETS, type MacroTargets } from "@/lib/userSettings";
 import ImportPanel from "@/components/ImportPanel";
+import ExportPanel from "@/components/ExportPanel";
 import CgmSettingsCard from "@/components/CgmSettingsCard";
 import { parseDbDate } from "@/lib/time";
 
@@ -33,7 +34,7 @@ function saveSettings(s: Settings) {
 }
 
 export default function SettingsPage() {
-  const [tab, setTab]         = useState<"overview"|"settings"|"cgm"|"import">("overview");
+  const [tab, setTab]         = useState<"overview"|"settings"|"integrations"|"data">("overview");
   const [email, setEmail]     = useState("");
   const [createdAt, setCreatedAt] = useState("");
   const [settings, setSettings]   = useState<Settings>(DEFAULTS);
@@ -121,14 +122,14 @@ export default function SettingsPage() {
 
       {/* TABS */}
       <div style={{ display:"flex", gap:4, marginBottom:24, background:"rgba(255,255,255,0.04)", borderRadius:12, padding:4, width:"fit-content" }}>
-        {(["overview","settings","cgm","import"] as const).map(t => (
+        {(["overview","settings","integrations","data"] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} style={{
             padding:"8px 20px", borderRadius:9, border:"none", cursor:"pointer",
             background:tab===t?SURFACE:"transparent",
             color:tab===t?"#fff":"rgba(255,255,255,0.4)",
             fontSize:13, fontWeight:tab===t?600:400,
             boxShadow:tab===t?"0 1px 4px rgba(0,0,0,0.4)":"none",
-            textTransform: t === "cgm" ? "uppercase" : "capitalize",
+            textTransform: "capitalize",
           }}>{t}</button>
         ))}
       </div>
@@ -340,12 +341,71 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {tab === "cgm" && (
-        <CgmSettingsCard />
+      {tab === "integrations" && (
+        <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+          {/* CGM (LibreLinkUp) */}
+          <div>
+            <div style={{ fontSize:11, fontWeight:700, color:ACCENT, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:10 }}>
+              CGM
+            </div>
+            <CgmSettingsCard />
+          </div>
+
+          {/* Google Sheets — placeholder until OAuth flow is wired up */}
+          <div>
+            <div style={{ fontSize:11, fontWeight:700, color:ACCENT, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:10 }}>
+              Google
+            </div>
+            <div style={{
+              ...card,
+              display:"flex", alignItems:"center", justifyContent:"space-between", gap:16, flexWrap:"wrap",
+            }}>
+              <div style={{ display:"flex", alignItems:"center", gap:14, minWidth:0, flex:"1 1 240px" }}>
+                <div style={{
+                  width:40, height:40, borderRadius:10, flexShrink:0,
+                  background:"rgba(255,255,255,0.05)", border:`1px solid ${BORDER}`,
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                }}>
+                  {/* Sheets glyph */}
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                    <line x1="3" y1="9" x2="21" y2="9"/>
+                    <line x1="3" y1="15" x2="21" y2="15"/>
+                    <line x1="9" y1="3" x2="9" y2="21"/>
+                    <line x1="15" y1="3" x2="15" y2="21"/>
+                  </svg>
+                </div>
+                <div style={{ minWidth:0 }}>
+                  <div style={{ fontSize:14, fontWeight:600, color:"rgba(255,255,255,0.9)", marginBottom:2 }}>
+                    Google Sheets
+                  </div>
+                  <div style={{ fontSize:12, color:"rgba(255,255,255,0.45)" }}>
+                    Mahlzeiten, Insulin und CGM in eine Tabelle synchronisieren.
+                  </div>
+                </div>
+              </div>
+              <span style={{
+                fontSize:10, fontWeight:700, padding:"4px 10px", borderRadius:99,
+                background:"rgba(255,255,255,0.05)", color:"rgba(255,255,255,0.5)",
+                border:`1px solid ${BORDER}`, letterSpacing:"0.08em", textTransform:"uppercase",
+                whiteSpace:"nowrap",
+              }}>
+                Coming soon
+              </span>
+            </div>
+            <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginTop:8, lineHeight:1.5 }}>
+              Verknüpfe dein Google-Konto, um deine Glev-Daten automatisch in eine eigene Google-Tabelle zu spiegeln. Folgt nach der CSV/PDF-Export-Funktion.
+            </div>
+          </div>
+        </div>
       )}
 
-      {tab === "import" && (
-        <ImportPanel embedded />
+      {tab === "data" && (
+        <div style={{ display:"flex", flexDirection:"column", gap:32 }}>
+          <ExportPanel />
+          <div style={{ height:1, background:BORDER }}/>
+          <ImportPanel embedded />
+        </div>
       )}
 
       <p style={{
