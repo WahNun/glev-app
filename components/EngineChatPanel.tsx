@@ -36,10 +36,17 @@ export interface EngineChatPanelProps {
   isMobile:    boolean;
   expanded:    boolean;
   onToggleExpanded: () => void;
+  // External signal: voice-to-macros pipeline is currently parsing (Whisper +
+  // /api/parse-food). Surfaced in the mobile chip status badge so the user
+  // gets the feedback exactly where the parser identifies itself, instead of
+  // muddling the Meal Classification chip with a transient state that has
+  // nothing to do with classification.
+  parsing?:    boolean;
 }
 
 export default function EngineChatPanel({
   macros, description, onPatch, seed, isMobile, expanded, onToggleExpanded,
+  parsing = false,
 }: EngineChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput]       = useState("");
@@ -148,18 +155,28 @@ export default function EngineChatPanel({
         </span>
       </div>
       <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
-        <span style={{
-          display:"inline-flex", alignItems:"center", gap:6,
-          fontSize:10, fontWeight:700, letterSpacing:"0.06em",
-          color: sending ? ORANGE : GREEN,
-        }}>
-          <span style={{
-            width:7, height:7, borderRadius:"50%",
-            background: sending ? ORANGE : GREEN,
-            boxShadow: `0 0 6px ${sending ? ORANGE : GREEN}`,
-          }}/>
-          {sending ? "THINKING" : "READY"}
-        </span>
+        {/* Status precedence: parsing (voice→macros pipeline) > sending
+            (chat round-trip) > ready. Parsing wins because it's the
+            longest-running and most user-visible op of the three. */}
+        {(() => {
+          const isBusy = parsing || sending;
+          const label  = parsing ? "PARSING" : sending ? "THINKING" : "READY";
+          const color  = isBusy ? ORANGE : GREEN;
+          return (
+            <span style={{
+              display:"inline-flex", alignItems:"center", gap:6,
+              fontSize:10, fontWeight:700, letterSpacing:"0.06em",
+              color,
+            }}>
+              <span style={{
+                width:7, height:7, borderRadius:"50%",
+                background: color,
+                boxShadow: `0 0 6px ${color}`,
+              }}/>
+              {label}
+            </span>
+          );
+        })()}
         <svg
           width="14" height="14" viewBox="0 0 24 24" fill="none"
           stroke="rgba(255,255,255,0.45)" strokeWidth="2.2"

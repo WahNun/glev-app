@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
 import { fetchMeals, classifyMeal, computeCalories, computeEvaluation, saveMeal, deleteMeal, updateMeal, type Meal } from "@/lib/meals";
 import { scheduleJobsForLog } from "@/lib/cgmJobs";
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
@@ -178,15 +177,21 @@ export default function EnginePage() {
   // confirmedMeal == null  → form mode (Confirm Log button visible)
   // confirmedMeal != null  → decision mode (form fields locked for context)
   const [confirmedMeal, setConfirmedMeal] = useState<Meal | null>(null);
-  // Sub-state inside the decision panel.  "decision" = the 3 buttons,
-  // "rec" = the recommendation result + Übernehmen/Zurück buttons.
-  const [decisionMode,  setDecisionMode]  = useState<"decision" | "rec">("decision");
+  // Sub-state inside the decision panel.
+  //   "decision" = the 3 binary-choice buttons (Bolus / Empfehlung / Abbrechen).
+  //   "rec"      = the recommendation result + Übernehmen→/Zurück buttons.
+  //   "insulin"  = editable insulin input + Confirm Log + Zurück. Reached from
+  //                EITHER "decision" via Bolus loggen (input starts blank)
+  //                OR "rec" via Übernehmen→ (input pre-populated with rec.dose,
+  //                still editable). Wir patchen die Dosis erst HIER, nie silent.
+  const [decisionMode,  setDecisionMode]  = useState<"decision" | "rec" | "insulin">("decision");
   const [decisionRec,   setDecisionRec]   = useState<Recommendation | null>(null);
   const [decisionBusy,  setDecisionBusy]  = useState(false);
   const [decisionToast, setDecisionToast] = useState<string | null>(null);
+  // Inline error inside the insulin sub-mode (validation + PATCH failures).
+  const [decisionInsulinErr, setDecisionInsulinErr] = useState<string | null>(null);
   const [chatSeed,    setChatSeed]    = useState<SeedMessage | null>(null);
   const [chatExpanded, setChatExpanded] = useState(false);
-  const router = useRouter();
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -522,11 +527,13 @@ export default function EnginePage() {
 
   function handleDecisionBolus() {
     if (!confirmedMeal) return;
-    // Hand off to the standalone Bolus tab on /log; the bolusFor query param
-    // lets that page prefill `relatedMealId` so the bolus is linked back
-    // to this meal entry on save.
-    router.push(`/log?bolusFor=${encodeURIComponent(confirmedMeal.id)}`);
-    resetForm({ keepGlucose: true });
+    // Bolus-Pfad: in-place insulin sub-mode öffnen, Feld leer. Kein Routing
+    // mehr nach /log — der User dokumentiert die tatsächlich gesetzte Dosis
+    // direkt hier an der schon gespeicherten Mahlzeit (PATCH via
+    // handleConfirmDecisionInsulin).
+    setInsulin("");
+    setDecisionInsulinErr(null);
+    setDecisionMode("insulin");
   }
 
   function handleDecisionEmpfehlung() {
@@ -545,21 +552,56 @@ export default function EnginePage() {
     }, 200);
   }
 
-  async function handleDecisionAcceptRec() {
+  function handleDecisionAcceptRec() {
     if (!confirmedMeal || !decisionRec) return;
+    // KEIN silent-write mehr. "Übernehmen →" trägt die empfohlene Dosis nur
+    // ins editierbare Insulin-Feld ein und schaltet in den insulin-Sub-Mode.
+    // Der eigentliche PATCH passiert erst bei Confirm Log dort
+    // (handleConfirmDecisionInsulin), damit der User die Dosis vorher
+    // bestätigen oder anpassen kann.
+    setInsulin(String(decisionRec.dose));
+    setDecisionInsulinErr(null);
+    setDecisionMode("insulin");
+  }
+
+  // Final commit aus dem insulin-Sub-Mode: PATCH der Dosis auf die schon
+  // existierende Meal-Row (egal ob die Eingabe leer-gestartet aus dem Bolus-
+  // Pfad oder pre-populated aus dem Empfehlungs-Pfad kommt).
+  async function handleConfirmDecisionInsulin() {
+    if (!confirmedMeal) return;
+    setDecisionInsulinErr(null);
+    const iNum = parseFloat(insulin);
+    if (insulin.trim() === "" || !Number.isFinite(iNum) || iNum < 0) {
+      setDecisionInsulinErr("Bitte eine gültige Dosis eintragen (0 ist erlaubt).");
+      return;
+    }
     setDecisionBusy(true);
     try {
-      const updated = await updateMeal(confirmedMeal.id, { insulin_units: decisionRec.dose });
+      const updated = await updateMeal(confirmedMeal.id, { insulin_units: iNum });
       // Refresh the in-memory list so the next rec uses the updated dose.
       fetchMeals().then(setMeals).catch(() => {});
-      setDecisionToast(`Dosis übernommen: ${decisionRec.dose}u`);
-      logDebug("ENGINE.DECISION.REC_ACCEPT", { id: confirmedMeal.id, newDose: decisionRec.dose, evaluation: updated.evaluation });
+      setDecisionToast(`Dosis ${iNum}u gespeichert.`);
+      logDebug("ENGINE.DECISION.INSULIN_CONFIRM", {
+        id: confirmedMeal.id,
+        newDose: iNum,
+        evaluation: updated.evaluation,
+        viaRec: decisionRec != null,
+      });
       resetForm({ keepGlucose: true });
       setTimeout(() => setDecisionToast(null), 2500);
     } catch (e) {
-      setDecisionToast(e instanceof Error ? e.message : "Übernehmen fehlgeschlagen.");
+      setDecisionInsulinErr(e instanceof Error ? e.message : "Speichern fehlgeschlagen.");
       setDecisionBusy(false);
     }
+  }
+
+  // Zurück aus dem insulin-Sub-Mode. Wenn wir aus dem Empfehlungs-Pfad kamen
+  // (`decisionRec` gesetzt), geht es zurück in die rec-View — sonst zurück
+  // zur binären 3-Button-Decision-View.
+  function handleDecisionInsulinBack() {
+    setDecisionInsulinErr(null);
+    setInsulin("");
+    setDecisionMode(decisionRec ? "rec" : "decision");
   }
 
   async function handleDecisionDelete() {
@@ -717,6 +759,7 @@ export default function EnginePage() {
             isMobile={true}
             expanded={chatExpanded}
             onToggleExpanded={() => setChatExpanded(v => !v)}
+            parsing={parsing}
           />
         </div>
       )}
@@ -795,7 +838,12 @@ export default function EnginePage() {
             </div>
 
             {/* Meal Classification — always visible, "Auto from macros" until
-                the macros are filled, then shows the actual class. */}
+                the macros are filled, then shows the actual class. Der
+                Parsing-Indikator gehört NICHT hierher (sonst flippt das Chip
+                semantisch zwischen "Klassifizierung läuft" und "Voice-Parsing
+                läuft", obwohl es zwei verschiedene Prozesse sind). Das
+                Parsing-Feedback rendert jetzt im AI-FOOD-PARSER-Chip oben
+                via EngineChatPanel `parsing` prop. */}
             {(() => {
               const isFilled = (s: string) => s != null && s !== "" && !isNaN(parseFloat(s));
               const filled = [carbs, protein, fat, fiber].some(isFilled);
@@ -804,7 +852,7 @@ export default function EnginePage() {
               const fNum = parseFloat(fat) || 0;
               const cls = filled ? classifyMeal(cNum, pNum, fNum) : null;
               const color = cls ? (TYPE_COLORS[cls as string] || ACCENT) : "rgba(255,255,255,0.35)";
-              const label = parsing ? "Parsing…" : cls ? TYPE_LABELS[cls] : "Auto from macros";
+              const label = cls ? TYPE_LABELS[cls] : "Auto from macros";
               return (
                 <div>
                   <label style={{ fontSize:11, color:"rgba(255,255,255,0.4)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:600, display:"block", marginBottom:6 }}>
@@ -813,24 +861,15 @@ export default function EnginePage() {
                   <div style={{
                     ...inp,
                     display:"flex", alignItems:"center", gap:10,
-                    color: parsing ? ACCENT : cls ? "#fff" : "rgba(255,255,255,0.45)",
-                    fontWeight: parsing || cls ? 600 : 400,
+                    color: cls ? "#fff" : "rgba(255,255,255,0.45)",
+                    fontWeight: cls ? 600 : 400,
                   }}>
-                    {parsing ? (
-                      <svg width="14" height="14" viewBox="0 0 24 24" style={{ flexShrink:0 }} aria-hidden="true">
-                        <circle cx="12" cy="12" r="9" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="3"/>
-                        <path d="M21 12a9 9 0 0 0-9-9" fill="none" stroke={ACCENT} strokeWidth="3" strokeLinecap="round">
-                          <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.8s" repeatCount="indefinite"/>
-                        </path>
-                      </svg>
-                    ) : (
-                      <span style={{
-                        width:8, height:8, borderRadius:"50%",
-                        background: color,
-                        boxShadow: cls ? `0 0 6px ${color}` : "none",
-                        flexShrink:0,
-                      }}/>
-                    )}
+                    <span style={{
+                      width:8, height:8, borderRadius:"50%",
+                      background: color,
+                      boxShadow: cls ? `0 0 6px ${color}` : "none",
+                      flexShrink:0,
+                    }}/>
                     {label}
                   </div>
                 </div>
@@ -1021,7 +1060,7 @@ export default function EnginePage() {
               ✓ Log gespeichert
             </div>
             <div style={{ fontSize:11, color:"rgba(255,255,255,0.45)", fontFamily:"var(--font-mono)" }}>
-              {(confirmedMeal.carbs_grams ?? 0)}g · {(confirmedMeal.insulin_units ?? 0)}u
+              {(confirmedMeal.carbs_grams ?? 0)}g · {confirmedMeal.insulin_units != null ? `${confirmedMeal.insulin_units}u` : "Bolus offen"}
             </div>
           </div>
 
@@ -1064,7 +1103,9 @@ export default function EnginePage() {
                   <span style={{ fontSize:30, fontWeight:800, color:ACCENT, letterSpacing:"-0.02em" }}>{decisionRec.dose}</span>
                   <span style={{ fontSize:12, color:"rgba(255,255,255,0.45)" }}>u</span>
                   <span style={{ fontSize:11, color:"rgba(255,255,255,0.4)", marginLeft:8 }}>
-                    aktuell: <strong style={{ color:"rgba(255,255,255,0.7)" }}>{confirmedMeal.insulin_units ?? 0}u</strong>
+                    aktuell: <strong style={{ color:"rgba(255,255,255,0.7)" }}>
+                      {confirmedMeal.insulin_units != null ? `${confirmedMeal.insulin_units}u` : "—"}
+                    </strong>
                   </span>
                   <span style={{ marginLeft:"auto", padding:"2px 8px", borderRadius:99, fontSize:10, fontWeight:700, background:`${ACCENT}22`, color:ACCENT, letterSpacing:"0.05em" }}>
                     {decisionRec.confidence}
@@ -1080,12 +1121,70 @@ export default function EnginePage() {
                   disabled={decisionBusy}
                   style={{ padding:"12px 10px", borderRadius:10, border:"none", background:`linear-gradient(135deg, ${ACCENT}, #6B8BFF)`, color:"#fff", fontSize:13, fontWeight:700, cursor:decisionBusy?"not-allowed":"pointer" }}
                 >
-                  {decisionBusy ? "Übernehme…" : "Übernehmen"}
+                  Übernehmen →
                 </button>
                 <button
                   onClick={() => { setDecisionMode("decision"); setDecisionRec(null); }}
                   disabled={decisionBusy}
                   style={{ padding:"12px 10px", borderRadius:10, border:`1px solid ${BORDER}`, background:"transparent", color:"rgba(255,255,255,0.6)", fontSize:13, fontWeight:600, cursor:decisionBusy?"not-allowed":"pointer" }}
+                >
+                  Zurück
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* Insulin-Sub-Mode: editierbares Eingabefeld + Confirm Log + Zurück.
+              Reachable EITHER via Bolus loggen (input startet leer) OR via
+              Empfehlung → Übernehmen → (input vorbelegt mit rec.dose).
+              Hier passiert der eigentliche PATCH der Dosis auf die schon
+              gespeicherte Mahlzeit — vorher wird NICHTS in die DB geschrieben. */}
+          {decisionMode === "insulin" && (
+            <>
+              <div style={{ fontSize:13, color:"rgba(255,255,255,0.7)", lineHeight:1.5 }}>
+                {decisionRec
+                  ? <>Empfehlung <strong style={{ color:ACCENT }}>{decisionRec.dose}u</strong> übernommen — anpassen falls nötig, dann bestätigen.</>
+                  : <>Trage die tatsächlich gespritzte Insulindosis für diese Mahlzeit ein.</>}
+              </div>
+              <div>
+                <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>Insulin (U)</label>
+                <input
+                  style={inp}
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  placeholder="e.g. 1.5"
+                  value={insulin}
+                  onChange={e => { setInsulin(e.target.value); if (decisionInsulinErr) setDecisionInsulinErr(null); }}
+                  disabled={decisionBusy}
+                  autoFocus
+                />
+              </div>
+              {decisionInsulinErr && (
+                <div style={{ padding:"10px 14px", borderRadius:10, background:`${PINK}15`, border:`1px solid ${PINK}40`, color:PINK, fontSize:12 }}>
+                  {decisionInsulinErr}
+                </div>
+              )}
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <button
+                  onClick={handleConfirmDecisionInsulin}
+                  disabled={decisionBusy || !insulin.trim()}
+                  style={{
+                    padding:"13px 10px", borderRadius:10, border:"none",
+                    background: !decisionBusy && insulin.trim()
+                      ? `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`
+                      : "rgba(79,110,247,0.25)",
+                    color: !decisionBusy && insulin.trim() ? "#fff" : "rgba(255,255,255,0.55)",
+                    fontSize:13, fontWeight:700,
+                    cursor: decisionBusy || !insulin.trim() ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {decisionBusy ? "Speichere…" : "✓ Confirm Log"}
+                </button>
+                <button
+                  onClick={handleDecisionInsulinBack}
+                  disabled={decisionBusy}
+                  style={{ padding:"13px 10px", borderRadius:10, border:`1px solid ${BORDER}`, background:"transparent", color:"rgba(255,255,255,0.6)", fontSize:13, fontWeight:600, cursor:decisionBusy?"not-allowed":"pointer" }}
                 >
                   Zurück
                 </button>
@@ -1237,6 +1336,7 @@ export default function EnginePage() {
             seed={chatSeed}
             isMobile={false}
             expanded={true}
+            parsing={parsing}
             onToggleExpanded={() => {}}
           />
         </div>
