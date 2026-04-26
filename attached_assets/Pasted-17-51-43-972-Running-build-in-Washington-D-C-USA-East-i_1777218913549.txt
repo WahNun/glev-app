@@ -1,0 +1,47 @@
+17:51:43.972 Running build in Washington, D.C., USA (East) – iad1
+17:51:43.973 Build machine configuration: 2 cores, 8 GB
+17:51:44.106 Cloning github.com/WahNun/glev-app (Branch: main, Commit: 415c7a2)
+17:51:45.399 Cloning completed: 1.292s
+17:51:45.590 Restored build cache from previous deployment (65MfjGj7q6dXWuJRNwiGVMwNV6cX)
+17:51:45.812 Running "vercel build"
+17:51:46.509 Vercel CLI 51.6.1
+17:51:47.246 Installing dependencies...
+17:51:48.169 
+17:51:48.169 up to date in 716ms
+17:51:48.170 
+17:51:48.170 38 packages are looking for funding
+17:51:48.170   run `npm fund` for details
+17:51:48.202 Detected Next.js version: 16.2.4
+17:51:48.206 Running "npm run build"
+17:51:48.307 
+17:51:48.307 > glev-app@0.4.0 build
+17:51:48.308 > next build
+17:51:48.308 
+17:51:49.015   Applying modifyConfig from Vercel
+17:51:49.031 ▲ Next.js 16.2.4 (Turbopack)
+17:51:49.032 
+17:51:49.040 ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+17:51:49.077   Creating an optimized production build ...
+17:52:21.338 ✓ Compiled successfully in 31.9s
+17:52:21.342   Running TypeScript ...
+17:52:45.007   Finished TypeScript in 23.7s ...
+17:52:45.012   Collecting page data using 1 worker ...
+17:52:46.286   Generating static pages using 1 worker (0/33) ...
+17:52:46.643   Generating static pages using 1 worker (8/33) 
+17:52:46.674   Generating static pages using 1 worker (16/33) 
+17:52:46.742   Generating static pages using 1 worker (24/33) 
+17:52:46.870 ⨯ useSearchParams() should be wrapped in a suspense boundary at page "/welcome". Read more: https://nextjs.org/docs/messages/missing-suspense-with-csr-bailout
+17:52:46.870     at S (/vercel/path0/.next/server/chunks/ssr/node_modules_next_0w2y7fz._.js:2:2692)
+17:52:46.871     at r (/vercel/path0/.next/server/chunks/ssr/node_modules_next_0w2y7fz._.js:4:6760)
+17:52:46.871     at /vercel/path0/.next/server/chunks/ssr/_0wxrzk2._.js:1:5576
+17:52:46.871     at an (/vercel/path0/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:84267)
+17:52:46.871     at ai (/vercel/path0/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:86086)
+17:52:46.871     at al (/vercel/path0/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:107860)
+17:52:46.872     at ao (/vercel/path0/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:105275)
+17:52:46.872     at aa (/vercel/path0/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:84619)
+17:52:46.872     at ai (/vercel/path0/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:86135)
+17:52:46.872     at ai (/vercel/path0/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:104615)
+17:52:46.873 Error occurred prerendering page "/welcome". Read more: https://nextjs.org/docs/messages/prerender-error
+17:52:46.873 Export encountered an error on /welcome/page: /welcome, exiting the build.
+17:52:46.901 ⨯ Next.js build worker exited with code: 1 and signal: null
+17:52:46.956 Error: Command "npm run build" exited with 1

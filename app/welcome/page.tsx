@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
@@ -30,7 +30,48 @@ type VerifyState =
   | { kind: "valid"; email: string | null }
   | { kind: "invalid"; reason: string };
 
+// Page-level default export wraps the inner component in Suspense.
+// Required by Next.js App Router because useSearchParams() forces the
+// route into client-side rendering at request time. Without the Suspense
+// boundary, Vercel's static prerender pass for /welcome fails with
+// "useSearchParams() should be wrapped in a suspense boundary".
 export default function WelcomePage() {
+  return (
+    <Suspense fallback={<WelcomeFallback />}>
+      <WelcomeInner />
+    </Suspense>
+  );
+}
+
+// Lightweight fallback that mirrors the shell of the real page so the
+// transition into the verifying state doesn't flash an empty viewport.
+function WelcomeFallback() {
+  return (
+    <main style={{
+      minHeight: "100vh", background: BG,
+      display: "flex", flexDirection: "column",
+      alignItems: "center", justifyContent: "center", padding: 24,
+    }}>
+      <div style={{ width: "100%", maxWidth: 440 }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, marginBottom: 32 }}>
+          <GlevLockup size={44} />
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: "0.12em" }}>
+            INSULIN DECISION SUPPORT
+          </div>
+        </div>
+        <div style={{
+          background: SURFACE, borderRadius: 18,
+          border: "1px solid rgba(255,255,255,0.07)", padding: 28,
+          textAlign: "center", color: "rgba(255,255,255,0.45)", fontSize: 13,
+        }}>
+          Lädt …
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function WelcomeInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("session_id");
