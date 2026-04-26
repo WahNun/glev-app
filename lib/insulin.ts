@@ -43,7 +43,16 @@ const COLS =
 export async function insertInsulinLog(input: InsulinLogInput): Promise<InsulinLog> {
   if (!supabase) throw new Error("Supabase is not configured");
   const { data: { user }, error: authErr } = await supabase.auth.getUser();
-  if (authErr || !user) throw authErr || new Error("Not authenticated");
+  // PostgrestError / AuthError from supabase-js are plain objects, NOT
+  // real Error subclasses. If we re-throw them as-is, downstream
+  // `e instanceof Error` checks fail and the UI shows "Unbekannter
+  // Fehler" instead of the actual cause (RLS denied, missing column,
+  // session expired, …). Wrap every throw in a real Error so callers
+  // get the message they need to debug.
+  if (authErr || !user) {
+    const m = authErr?.message || "Nicht angemeldet — bitte erneut einloggen.";
+    throw new Error(m);
+  }
 
   const row = {
     user_id: user.id,
@@ -62,7 +71,13 @@ export async function insertInsulinLog(input: InsulinLogInput): Promise<InsulinL
     .select(COLS)
     .single();
 
-  if (error) throw error;
+  if (error) {
+    // Surface the PostgrestError message + code so RLS / FK / NOT NULL
+    // / missing-column failures are visible in the UI banner instead
+    // of being swallowed by the catch-block's instanceof Error check.
+    const code = error.code ? ` [${error.code}]` : "";
+    throw new Error(`${error.message}${code}`);
+  }
   return data as InsulinLog;
 }
 
@@ -77,7 +92,7 @@ export async function fetchInsulinLogs(
   if (fromIso) q = q.gte("created_at", fromIso);
   if (toIso)   q = q.lte("created_at", toIso);
   const { data, error } = await q;
-  if (error) throw error;
+  if (error) throw new Error(error.message);
   return (data || []) as InsulinLog[];
 }
 
@@ -89,7 +104,7 @@ export async function fetchRecentInsulinLogs(days: number): Promise<InsulinLog[]
 export async function deleteInsulinLog(id: string): Promise<void> {
   if (!supabase) throw new Error("Supabase is not configured");
   const { error } = await supabase.from("insulin_logs").delete().eq("id", id);
-  if (error) throw error;
+  if (error) throw new Error(error.message);
 }
 
 /**

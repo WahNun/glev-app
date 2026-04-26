@@ -56,6 +56,29 @@ const labelStyle: React.CSSProperties = {
   marginBottom: 6,
 };
 
+/**
+ * Extract a human-readable message from anything that ended up in a
+ * catch block. Real Errors hand back `.message` directly; supabase-js
+ * PostgrestError / AuthError values are plain objects with the same
+ * `.message` shape but fail `instanceof Error`, so we have to dig
+ * manually. Falls back to "Unbekannter Fehler" only when the throw
+ * had no usable text at all.
+ */
+function extractErrMessage(e: unknown): string {
+  if (e instanceof Error && e.message) return e.message;
+  if (e && typeof e === "object") {
+    const o = e as { message?: unknown; code?: unknown; details?: unknown; hint?: unknown };
+    const parts: string[] = [];
+    if (typeof o.message === "string" && o.message.trim()) parts.push(o.message.trim());
+    if (typeof o.details === "string" && o.details.trim()) parts.push(o.details.trim());
+    if (typeof o.hint    === "string" && o.hint.trim())    parts.push(o.hint.trim());
+    if (typeof o.code    === "string" && o.code.trim())    parts.push(`[${o.code.trim()}]`);
+    if (parts.length) return parts.join(" — ");
+  }
+  if (typeof e === "string" && e.trim()) return e.trim();
+  return "Unbekannter Fehler";
+}
+
 /** Pull current CGM reading; null on any failure (network, no LLU, 401). */
 async function pullCurrentCgm(): Promise<number | null> {
   try {
@@ -222,7 +245,12 @@ export function InsulinForm() {
       setNotes("");
       setRelatedMealId("");
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Unbekannter Fehler";
+      // Defensive: lib functions SHOULD wrap supabase errors in Error
+      // (see lib/insulin.ts), but PostgrestError / AuthError are plain
+      // objects with a `.message` field — extract it manually so a
+      // missed wrap somewhere upstream doesn't degrade to the generic
+      // "Unbekannter Fehler" fallback.
+      const msg = extractErrMessage(e);
       setStatus({ kind: "error", message: `Speichern fehlgeschlagen: ${msg}` });
     }
   }
@@ -428,7 +456,9 @@ export function ExerciseForm() {
       setNotes("");
       setStartedMinAgo(0);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Unbekannter Fehler";
+      // See InsulinForm above — extract `.message` from PostgrestError-
+      // like plain objects so the banner shows the real cause.
+      const msg = extractErrMessage(e);
       setStatus({ kind: "error", message: `Speichern fehlgeschlagen: ${msg}` });
     }
   }
