@@ -40,7 +40,10 @@ export default function MealEntryCardCollapsed({
       style={{
         padding: "14px 16px",
         cursor: onClick ? "pointer" : "default",
-        alignItems: "center",
+        // start-aligned because the When column is now two lines (date over
+        // time); centering would make the cell labels (WHEN/TYPE/CARBS/
+        // INSULIN) sit on different baselines per row.
+        alignItems: "start",
       }}
     >
       <style>{`
@@ -62,12 +65,17 @@ export default function MealEntryCardCollapsed({
         }
       `}</style>
 
-      {/* Col 1: Date + Time */}
+      {/* Col 1: Date stacked above Time. Side-by-side caused truncation
+          ("Apr 26 6...") in narrow viewports because both strings competed
+          for one wrappable line. Stacking gives each its own row so the
+          date can never be cut off. */}
       <div style={{ minWidth: 0 }}>
         <div className="glev-mec-cell-label">When</div>
         <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.85)", letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "var(--font-mono)" }}>
           {dateStr}
-          <span style={{ color: "rgba(255,255,255,0.35)", fontWeight: 400, marginLeft: 6 }}>{timeStr}</span>
+        </div>
+        <div style={{ fontSize: 11, fontWeight: 500, color: "rgba(255,255,255,0.4)", letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "var(--font-mono)", marginTop: 2 }}>
+          {timeStr}
         </div>
       </div>
 
