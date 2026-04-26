@@ -16,7 +16,8 @@ import {
   type FingerstickReading,
 } from "@/lib/fingerstick";
 import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
-import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
+import { fetchRecentExerciseLogs, type ExerciseLog, type ExerciseType } from "@/lib/exercise";
+import { evaluateExercise, type ExerciseOutcome } from "@/lib/exerciseEval";
 
 /** Default top-to-bottom order. Hero block (time-in-range, gmi-a1c,
  *  glucose-trend, meal-evaluation) mirrors the homepage `InsightsScreen()`
@@ -33,6 +34,9 @@ const INSIGHTS_DEFAULT_ORDER = [
   "fingerstick-log",
   "tdd",
   "patterns",
+  "workout-outcomes",
+  "workout-bg-response",
+  "workout-patterns",
   "meal-type",
   "time-of-day",
   "performance-tiles",
@@ -135,7 +139,7 @@ export default function InsightsPage() {
     Promise.all([
       fetchMeals().catch(() => [] as Meal[]),
       fetchRecentInsulinLogs(14).catch(() => [] as InsulinLog[]),
-      fetchRecentExerciseLogs(14).catch(() => [] as ExerciseLog[]),
+      fetchRecentExerciseLogs(30).catch(() => [] as ExerciseLog[]),
       fetchFingersticks(fingerstickFromIso).catch(() => [] as FingerstickReading[]),
     ])
       .then(([m, il, ex, fs]) => {
@@ -273,6 +277,122 @@ export default function InsightsPage() {
   const tbrPct = b7.vlow + b7.lo;     // < 70
   const tirPct = b7.inR;              // 70–180
   const tarPct = b7.hi;               // > 180
+
+  // ── Workout (exercise) analytics, 30-day window ──
+  const thirtyAgo = now - 30 * 86400000;
+  const exercise30 = exerciseLogs.filter(ex => parseDbTs(ex.created_at) >= thirtyAgo);
+  // Pre-evaluate once so all three workout sections share the same outcomes.
+  const exerciseEvaluated = exercise30.map(ex => ({ ex, outcome: evaluateExercise(ex).outcome }));
+
+  // Outcome distribution (PENDING excluded — still in progress).
+  const RANKED_OUTCOMES: ExerciseOutcome[] = ["STABLE", "DROPPED", "SPIKED", "HYPO_RISK"];
+  const workoutOutcomeCounts: Record<ExerciseOutcome, number> = {
+    STABLE: 0, DROPPED: 0, SPIKED: 0, HYPO_RISK: 0, PENDING: 0,
+  };
+  for (const { outcome } of exerciseEvaluated) workoutOutcomeCounts[outcome]++;
+  const workoutClassifiedTotal = RANKED_OUTCOMES.reduce((s, o) => s + workoutOutcomeCounts[o], 0);
+  const workoutTotal30         = exercise30.length;
+  const workoutOutcomeEnough   = workoutTotal30 >= MIN_DATAPOINTS;
+
+  // BG response by exercise type (avg Δ from cgm_glucose_at_log → +1h after).
+  // `hypertrophy` is the legacy alias for `strength` — collapse them so the
+  // row count is stable across the type-rename in lib/exercise.ts.
+  const normType = (t: ExerciseType): ExerciseType => (t === "hypertrophy" ? "strength" : t);
+  const typeAgg = new Map<ExerciseType, { count: number; deltaSum: number }>();
+  for (const ex of exercise30) {
+    const before = ex.cgm_glucose_at_log;
+    const after  = ex.glucose_after_1h;
+    if (before == null || after == null) continue;
+    const k = normType(ex.exercise_type);
+    const cur = typeAgg.get(k) ?? { count: 0, deltaSum: 0 };
+    cur.count++;
+    cur.deltaSum += Number(after) - Number(before);
+    typeAgg.set(k, cur);
+  }
+  const EX_TYPE_LABEL_DE: Record<ExerciseType, string> = {
+    run: "Laufen", cycling: "Radfahren", cardio: "Cardio",
+    hiit: "HIIT", strength: "Krafttraining", hypertrophy: "Krafttraining", yoga: "Yoga",
+  };
+  const bgResponseRows = Array.from(typeAgg.entries())
+    .filter(([, s]) => s.count >= MIN_DATAPOINTS)
+    .map(([k, s]) => ({ type: k, label: EX_TYPE_LABEL_DE[k] ?? k, count: s.count, avgDelta: Math.round(s.deltaSum / s.count) }))
+    .sort((a, b) => b.count - a.count);
+  const bgResponseEnough = bgResponseRows.length > 0;
+
+  // Auto-detected workout patterns. Spec: max 3, hide section if < 2.
+  type WorkoutPattern = { title: string; desc: string; color: string; icon: string };
+  const OUTCOME_LABEL_DE: Record<ExerciseOutcome, string> = {
+    STABLE: "stabilem BG", DROPPED: "starkem BG-Abfall",
+    SPIKED: "BG-Anstiegen", HYPO_RISK: "Hypo-Risiko", PENDING: "—",
+  };
+  const OUTCOME_COLOR_DE: Record<ExerciseOutcome, string> = {
+    STABLE: GREEN, DROPPED: HIGH_YELLOW, SPIKED: ORANGE, HYPO_RISK: PINK, PENDING: "rgba(255,255,255,0.4)",
+  };
+  const OUTCOME_ICON_DE: Record<ExerciseOutcome, string> = {
+    STABLE: "✓", DROPPED: "↓", SPIKED: "↑", HYPO_RISK: "⚠", PENDING: "•",
+  };
+  function detectGroup<K extends string>(
+    keyFn: (ex: ExerciseLog) => K | null,
+    titleFn: (k: K) => string,
+  ): WorkoutPattern[] {
+    const groups = new Map<K, { count: number; outcomes: Map<ExerciseOutcome, number> }>();
+    for (const { ex, outcome } of exerciseEvaluated) {
+      if (outcome === "PENDING") continue;
+      const k = keyFn(ex); if (k == null) continue;
+      const g = groups.get(k) ?? { count: 0, outcomes: new Map<ExerciseOutcome, number>() };
+      g.count++;
+      g.outcomes.set(outcome, (g.outcomes.get(outcome) ?? 0) + 1);
+      groups.set(k, g);
+    }
+    const out: WorkoutPattern[] = [];
+    for (const [k, g] of groups) {
+      if (g.count < MIN_DATAPOINTS) continue;
+      let bestOutcome: ExerciseOutcome = "STABLE"; let bestN = 0;
+      for (const [oc, n] of g.outcomes) if (n > bestN) { bestN = n; bestOutcome = oc; }
+      // Spec: dominant outcome must be STRICTLY > 60 %. Compare on the raw
+      // ratio, NOT on the rounded display percentage, to avoid 59.6 → 60
+      // rounding artifacts incorrectly promoting a sub-threshold group.
+      const ratio = bestN / g.count;
+      if (ratio <= 0.60) continue;
+      const pct = Math.round(ratio * 100);
+      out.push({
+        title: titleFn(k),
+        desc: `führt häufig zu ${OUTCOME_LABEL_DE[bestOutcome]} (${pct} % von ${g.count} Sessions)`,
+        color: OUTCOME_COLOR_DE[bestOutcome],
+        icon: OUTCOME_ICON_DE[bestOutcome],
+      });
+    }
+    // Largest sample first → more trustworthy patterns float to the top.
+    return out.sort((a, b) => {
+      const an = parseInt(a.desc.match(/von (\d+)/)?.[1] ?? "0", 10);
+      const bn = parseInt(b.desc.match(/von (\d+)/)?.[1] ?? "0", 10);
+      return bn - an;
+    });
+  }
+  const TOD_LABEL_DE = { morning:"Morgentraining", afternoon:"Nachmittagstraining", evening:"Abendtraining", night:"Nachttraining" } as const;
+  type TodKey = keyof typeof TOD_LABEL_DE;
+  const todKey = (ex: ExerciseLog): TodKey => {
+    const h = new Date(parseDbTs(ex.created_at)).getHours();
+    return (h >= 5 && h < 11) ? "morning" : (h < 17 ? "afternoon" : (h < 22 ? "evening" : "night"));
+  };
+  const DUR_LABEL_DE = { short:"Trainings unter 30 Minuten", medium:"Trainings 30–60 Minuten", long:"Trainings über 60 Minuten" } as const;
+  type DurKey = keyof typeof DUR_LABEL_DE;
+  // Returns null for missing / non-finite / non-positive durations so the
+  // caller (`detectGroup`) skips legacy rows where `duration_minutes` is
+  // null/undefined instead of misbucketing them as "long".
+  const durKey = (ex: ExerciseLog): DurKey | null => {
+    const d = ex.duration_minutes;
+    if (typeof d !== "number" || !Number.isFinite(d) || d <= 0) return null;
+    return d < 30 ? "short" : d <= 60 ? "medium" : "long";
+  };
+
+  const workoutPatternsAll = [
+    ...detectGroup<TodKey>(todKey, k => TOD_LABEL_DE[k]),
+    ...detectGroup<ExerciseType>(ex => normType(ex.exercise_type), k => EX_TYPE_LABEL_DE[k] ?? k),
+    ...detectGroup<DurKey>(durKey, k => DUR_LABEL_DE[k]),
+  ];
+  const workoutPatterns = workoutPatternsAll.slice(0, 3);
+  const showWorkoutPatterns = workoutPatterns.length >= 2;
 
   // ── Meal evaluation distribution ──
   const evals = last7
@@ -854,6 +974,58 @@ export default function InsightsPage() {
       id: "fingerstick-log",
       node: <FingerstickLogSection/>,
     },
+    // ── Total Daily Dose · 7d (sum of insulin units per day) ──
+    {
+      id: "tdd",
+      node: (
+        <FlipCard
+          accent={ACCENT}
+          back={
+            <ThresholdBack
+              title="Total Daily Dose · 7d"
+              accent={ACCENT}
+              paragraphs={[
+                "Total Daily Dose (TDD) ist die Summe aller protokollierten Insulin-Einheiten pro Tag — Bolus + Basal aus dem Engine-Log.",
+                "Hauptzahl: Tagesdurchschnitt der letzten 7 Tage (Summe ÷ 7). Heutige Tagessumme separat darunter. Eine konstante TDD signalisiert stabile Stoffwechseleinstellung; Schwankungen > 20 % können auf veränderten Insulinbedarf hindeuten.",
+                tddEnough
+                  ? `Berechnet aus ${insulinLogs.filter(il => parseDbTs(il.created_at) >= now - 7 * 86400000).length} Insulin-Logs an ${tddDayCount} Tagen der letzten 7 Tage.`
+                  : "Mindestens 3 Tage mit Insulin-Logs in 7 Tagen nötig, um diese Karte anzuzeigen.",
+              ]}
+            />
+          }
+        >
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+            <CardLabel text="Total Daily Dose · 7d"/>
+            <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>U / Tag</div>
+          </div>
+          {!tddEnough || tddAvg7 == null ? (
+            <div style={{ padding:"18px 0", textAlign:"center" }}>
+              <div style={{ fontSize:13, color:"rgba(255,255,255,0.45)", fontWeight:600 }}>Nicht genug Daten</div>
+              <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", marginTop:4 }}>≥ {MIN_DATAPOINTS} Tage mit Insulin-Logs erforderlich</div>
+            </div>
+          ) : (
+            <>
+              <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
+                <div style={{ fontSize:36, fontWeight:800, color:"#fff", letterSpacing:"-0.04em", fontFamily:"var(--font-mono)", lineHeight:1 }}>
+                  {tddAvg7.toFixed(1)}
+                </div>
+                <div style={{ fontSize:14, color:"rgba(255,255,255,0.5)", fontWeight:700 }}>U/Tag</div>
+                <div style={{ marginLeft:"auto", fontSize:9, color:"rgba(255,255,255,0.4)" }}>Ø 7d</div>
+              </div>
+              <div style={{ marginTop:10, display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 10px", background:`${ACCENT}10`, border:`1px solid ${ACCENT}25`, borderRadius:10 }}>
+                <div style={{ fontSize:10, color:"rgba(255,255,255,0.6)", fontWeight:600 }}>Heute</div>
+                <div style={{ display:"flex", alignItems:"baseline", gap:4 }}>
+                  <div style={{ fontSize:18, fontWeight:800, color:ACCENT, fontFamily:"var(--font-mono)", lineHeight:1 }}>
+                    {tddToday.toFixed(1)}
+                  </div>
+                  <div style={{ fontSize:10, color:ACCENT, fontWeight:700 }}>U</div>
+                </div>
+              </div>
+            </>
+          )}
+        </FlipCard>
+      ),
+    },
     {
       id: "patterns",
       node: (
@@ -890,6 +1062,168 @@ export default function InsightsPage() {
           </div>
         </FlipCard>
       ),
+    },
+    // ── Workout Outcome Distribution · 30d ──
+    {
+      id: "workout-outcomes",
+      node: (
+        <FlipCard
+          accent={ACCENT}
+          back={
+            <ThresholdBack
+              title="Workout Outcome Distribution"
+              accent={ACCENT}
+              paragraphs={[
+                "Glev klassifiziert jeden Workout anhand deines Glukoseverlaufs: STABLE = BG blieb im Zielbereich. DROPPED = BG fiel deutlich, aber kein Hypo-Risiko. SPIKED = BG stieg unerwartet an. HYPO_RISK = BG fiel unter 70 mg/dL oder näherte sich kritisch.",
+                "PENDING-Sessions (CGM-Werte noch nicht eingetroffen) werden nicht gewertet. Der Hauptzähler zeigt alle Trainings inklusive PENDING — die Verteilung darunter nur die ausgewerteten.",
+                workoutOutcomeEnough
+                  ? `${workoutTotal30} Trainings in den letzten 30 Tagen, davon ${workoutClassifiedTotal} ausgewertet.`
+                  : "Mindestens 3 Trainings in 30 Tagen nötig, um diese Karte anzuzeigen.",
+              ]}
+            />
+          }
+        >
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+            <CardLabel text="Workout Outcomes · 30d"/>
+            <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>Verteilung</div>
+          </div>
+          {!workoutOutcomeEnough ? (
+            <div style={{ padding:"18px 0", textAlign:"center" }}>
+              <div style={{ fontSize:13, color:"rgba(255,255,255,0.45)", fontWeight:600 }}>Nicht genug Daten</div>
+              <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", marginTop:4 }}>≥ {MIN_DATAPOINTS} Trainings in 30 Tagen erforderlich</div>
+            </div>
+          ) : (
+            <>
+              <div style={{ display:"flex", alignItems:"baseline", gap:6, marginBottom:10 }}>
+                <div style={{ fontSize:36, fontWeight:800, color:"#fff", letterSpacing:"-0.04em", fontFamily:"var(--font-mono)", lineHeight:1 }}>
+                  {workoutTotal30}
+                </div>
+                <div style={{ fontSize:11, color:"rgba(255,255,255,0.5)", fontWeight:600 }}>Trainings letzte 30 Tage</div>
+              </div>
+              <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                {RANKED_OUTCOMES.map(oc => {
+                  const n = workoutOutcomeCounts[oc];
+                  const pct = workoutClassifiedTotal > 0 ? Math.round((n / workoutClassifiedTotal) * 100) : 0;
+                  const color = OUTCOME_COLOR_DE[oc];
+                  return (
+                    <div key={oc} style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      <div style={{ width:78, fontSize:10, color, fontWeight:700, letterSpacing:"0.02em" }}>{oc}</div>
+                      <div style={{ flex:1, position:"relative", height:6, borderRadius:99, background:"rgba(255,255,255,0.04)", overflow:"hidden" }}>
+                        <div style={{ width:`${pct}%`, height:"100%", background:color, opacity:0.85 }}/>
+                      </div>
+                      <div style={{ width:54, textAlign:"right", fontSize:10, color:"rgba(255,255,255,0.55)", fontFamily:"var(--font-mono)" }}>
+                        {pct}% · {n}
+                      </div>
+                    </div>
+                  );
+                })}
+                {workoutOutcomeCounts.PENDING > 0 && (
+                  <div style={{ marginTop:2, fontSize:9, color:"rgba(255,255,255,0.35)" }}>
+                    + {workoutOutcomeCounts.PENDING} PENDING (CGM-Werte ausstehend)
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </FlipCard>
+      ),
+    },
+    // ── BG Response by Exercise Type · 30d ──
+    {
+      id: "workout-bg-response",
+      node: (
+        <FlipCard
+          accent={ACCENT}
+          back={
+            <ThresholdBack
+              title="BG Response nach Trainingsart"
+              accent={ACCENT}
+              paragraphs={[
+                "Zeigt wie verschiedene Trainingsarten deinen Blutzucker im Durchschnitt beeinflussen — gemessen von vor dem Training bis eine Stunde danach. Hilft Muster zu erkennen, welche Aktivitäten BG-Anpassungen erfordern.",
+                "Pro Trainingsart sind mindestens 3 Sessions mit vollständigen CGM-Werten (vor und +1h) nötig, sonst wird die Zeile ausgeblendet.",
+                bgResponseEnough
+                  ? `${bgResponseRows.length} Trainingsart${bgResponseRows.length === 1 ? "" : "en"} mit ausreichend Daten.`
+                  : "Noch keine Trainingsart erreicht 3 Sessions mit vollständigen CGM-Werten.",
+              ]}
+            />
+          }
+        >
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+            <CardLabel text="BG-Response · Trainingsart"/>
+            <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>vor → +1h</div>
+          </div>
+          {!bgResponseEnough ? (
+            <div style={{ padding:"18px 0", textAlign:"center" }}>
+              <div style={{ fontSize:13, color:"rgba(255,255,255,0.45)", fontWeight:600 }}>Nicht genug Daten</div>
+              <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", marginTop:4 }}>≥ {MIN_DATAPOINTS} Sessions pro Trainingsart erforderlich</div>
+            </div>
+          ) : (
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+              {bgResponseRows.map(row => {
+                const positive = row.avgDelta > 0;
+                const negative = row.avgDelta < 0;
+                const color = negative ? GREEN : positive ? ORANGE : "rgba(255,255,255,0.6)";
+                const sign = positive ? "+" : negative ? "−" : "±";
+                return (
+                  <div key={row.type} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 10px", background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:10 }}>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:11, fontWeight:700, color:"#fff", letterSpacing:"0.01em" }}>{row.label}</div>
+                      <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)", marginTop:1 }}>{row.count} Session{row.count === 1 ? "" : "s"}</div>
+                    </div>
+                    <div style={{ display:"flex", alignItems:"baseline", gap:3 }}>
+                      <div style={{ fontSize:18, fontWeight:800, color, fontFamily:"var(--font-mono)", lineHeight:1 }}>
+                        {sign}{Math.abs(row.avgDelta)}
+                      </div>
+                      <div style={{ fontSize:9, color:"rgba(255,255,255,0.5)", fontWeight:600 }}>mg/dL</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </FlipCard>
+      ),
+    },
+    // ── Workout Patterns (auto-detected, hidden if < 2 patterns) ──
+    {
+      id: "workout-patterns",
+      // Spec: "If fewer than 2 meaningful patterns found: hide this
+      // section entirely". A null `node` is filtered out below before
+      // it reaches SortableCardGrid.
+      node: showWorkoutPatterns ? (
+        <FlipCard
+          accent={ACCENT}
+          back={
+            <ThresholdBack
+              title="Workout Patterns"
+              accent={ACCENT}
+              paragraphs={[
+                "Automatisch erkannte Muster aus deinen Workout-Daten. Mindestens 3 Sessions pro Gruppe (Tageszeit, Trainingsart, Dauer) erforderlich. Muster aktualisieren sich mit jedem neuen Workout.",
+                "Ein Muster erscheint nur, wenn ein Outcome (STABLE / DROPPED / SPIKED / HYPO_RISK) in mindestens 60 % der Sessions einer Gruppe dominiert. PENDING-Sessions zählen nicht mit.",
+                `Aktuell ${workoutPatterns.length} Muster aus ${exerciseEvaluated.length} ausgewerteten Trainings der letzten 30 Tage.`,
+              ]}
+            />
+          }
+        >
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+            <CardLabel text="Workout Patterns"/>
+            <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>{workoutPatterns.length} Signal{workoutPatterns.length === 1 ? "" : "e"}</div>
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+            {workoutPatterns.map((p, i) => (
+              <div key={i} style={{ display:"flex", gap:8, padding:"8px 10px", background:`${p.color}10`, border:`1px solid ${p.color}25`, borderRadius:10, alignItems:"flex-start" }}>
+                <div style={{ width:22, height:22, borderRadius:99, background:`${p.color}20`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:11, color:p.color, fontWeight:700 }}>
+                  {p.icon}
+                </div>
+                <div style={{ minWidth:0 }}>
+                  <div style={{ fontSize:11, fontWeight:600, color:p.color, marginBottom:2 }}>{p.title}</div>
+                  <div style={{ fontSize:10, color:"rgba(255,255,255,0.5)", lineHeight:1.45 }}>{p.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </FlipCard>
+      ) : null,
     },
     {
       id: "meal-type",
@@ -1026,7 +1360,9 @@ export default function InsightsPage() {
         <p style={{ color:"rgba(255,255,255,0.35)", fontSize:12 }}>Tap any card to flip · hold to reorder · {total} meals analyzed</p>
       </div>
 
-      <InsightsSortable items={items}/>
+      {/* Filter out items whose node was set to null (e.g. workout-patterns
+          when fewer than 2 patterns are detected — spec says hide entirely). */}
+      <InsightsSortable items={items.filter(it => it.node !== null)}/>
     </div>
   );
 }
