@@ -103,11 +103,15 @@ export default function MealEntryCardCollapsed({
         </div>
       </div>
 
-      {/* Col 4: Insulin */}
+      {/* Col 4: Insulin. Aus User-Sicht ist "noch nicht eingetragen" (null)
+          identisch zum Outcome "0u gegeben" — beide bedeuten "kein Bolus
+          zu dieser Mahlzeit". Daher hier einheitlich als 0 darstellen,
+          statt zwei verschiedene Flags ("—" vs "0") für dasselbe Outcome
+          zu zeigen. Farbe bleibt für 0/null gedimmt. */}
       <div style={{ minWidth: 0 }}>
         <div className="glev-mec-cell-label">Insulin</div>
         <div style={{ fontSize: 14, fontWeight: 700, color: meal.insulin_units ? ACCENT : "rgba(255,255,255,0.3)", letterSpacing: "-0.01em", fontFamily: "var(--font-mono)" }}>
-          {meal.insulin_units != null ? meal.insulin_units : "—"}
+          {meal.insulin_units ?? 0}
           <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontWeight: 500, marginLeft: 2 }}>u</span>
         </div>
       </div>
