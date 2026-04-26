@@ -7,6 +7,7 @@ import { exerciseTypeLabel } from "@/lib/exerciseEval";
 import { scheduleJobsForLog } from "@/lib/cgmJobs";
 import { fetchMeals, type Meal } from "@/lib/meals";
 import { parseDbDate } from "@/lib/time";
+import { isToday } from "@/lib/utils/datetime";
 
 // Builds the dropdown label for a meal in the "Zu Mahlzeit verknüpfen"
 // picker — "HH:MM — <first food name or meal_type> (Xg C)". Defensive
@@ -174,9 +175,8 @@ export function InsulinForm() {
     let cancelled = false;
     fetchMeals().then(all => {
       if (cancelled) return;
-      const todayStr = new Date().toDateString();
       const todays = all
-        .filter(m => parseDbDate(m.meal_time ?? m.created_at).toDateString() === todayStr)
+        .filter(m => isToday(m.meal_time ?? m.created_at ?? ""))
         .sort((a, b) => parseDbDate(b.meal_time ?? b.created_at).getTime() - parseDbDate(a.meal_time ?? a.created_at).getTime())
         .slice(0, 10);
       setTodayMeals(todays);

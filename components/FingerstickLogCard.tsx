@@ -6,6 +6,7 @@ import {
   fetchLatestFingerstick,
   type FingerstickReading,
 } from "@/lib/fingerstick";
+import { isToday, isWithinDays, formatLocalTime } from "@/lib/utils/datetime";
 
 const ACCENT  = "#4F6EF7";
 const GREEN   = "#22D3A0";
@@ -19,17 +20,13 @@ function toLocalInputValue(d: Date): string {
 }
 
 function formatLatestWhen(iso: string): string {
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  const now = new Date();
-  const startOfToday     = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const startOfYesterday = startOfToday - 24 * 3600 * 1000;
-  const t = d.getTime();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const hh = pad(d.getHours()), mm = pad(d.getMinutes());
-  if (t >= startOfToday)     return `heute ${hh}:${mm}`;
-  if (t >= startOfYesterday) return `gestern ${hh}:${mm}`;
-  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}. ${hh}:${mm}`;
+  if (!iso) return iso;
+  const time = formatLocalTime(iso, "time");
+  if (time === "—") return iso;
+  if (isToday(iso))         return `heute ${time}`;
+  // "gestern" = within last 2 days but not today.
+  if (isWithinDays(iso, 2)) return `gestern ${time}`;
+  return `${formatLocalTime(iso, "date")} ${time}`;
 }
 
 export default function FingerstickLogCard() {

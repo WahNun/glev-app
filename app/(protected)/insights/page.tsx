@@ -9,6 +9,7 @@ import { suggestAdjustment, type AdaptiveSettings, type AdjustmentSuggestion } f
 import SortableCardGrid, { type SortableItem } from "@/components/SortableCardGrid";
 import { useCardOrder } from "@/lib/cardOrder";
 import { parseDbTs, parseDbDate } from "@/lib/time";
+import { startOfDay, startOfToday, startOfDaysAgo } from "@/lib/utils/datetime";
 import {
   fetchFingersticks,
   type FingerstickReading,
@@ -132,7 +133,9 @@ export default function InsightsPage() {
 
   useEffect(() => {
     // 14d covers every metric window (CV% needs 14d; hypo/hyper/TDD only 7d).
-    const fingerstickFromIso = new Date(Date.now() - 14 * 86400000).toISOString();
+    // Calendar-aware lower bound: midnight 13 days ago in user's TZ → covers
+    // today + previous 13 calendar days.
+    const fingerstickFromIso = startOfDaysAgo(13).toISOString();
     Promise.all([
       fetchMeals().catch(() => [] as Meal[]),
       fetchRecentInsulinLogs(14).catch(() => [] as InsulinLog[]),
@@ -166,16 +169,18 @@ export default function InsightsPage() {
   );
 
   const now = Date.now();
-  const oneWeekMs = 7 * 86400000;
-  const wkAgo  = now - oneWeekMs;
-  const wk2Ago = now - 2 * oneWeekMs;
-  const last7 = meals.filter(m => now - parseDbTs(m.created_at) <= oneWeekMs);
+  // Calendar-aware week boundaries (midnight in user's TZ) — see
+  // lib/utils/datetime. wkAgo = midnight 6d ago → "last 7 calendar days
+  // including today". wk2Ago = midnight 13d ago → prior 7-day window.
+  const wkAgo  = startOfDaysAgo(6).getTime();
+  const wk2Ago = startOfDaysAgo(13).getTime();
+  const last7 = meals.filter(m => parseDbTs(m.created_at) >= wkAgo);
 
   // ── Time in Range buckets (consensus 70–180 mg/dL band) ──
   const last7Bg = last7.filter(m => m.glucose_before != null).map(m => m.glucose_before as number);
   const prev7Bg = meals.filter(m => {
     const t = parseDbTs(m.created_at);
-    return t > wk2Ago && t <= wkAgo && m.glucose_before != null;
+    return t >= wk2Ago && t < wkAgo && m.glucose_before != null;
   }).map(m => m.glucose_before as number);
 
   const bucket = (arr: number[]) => {
@@ -204,13 +209,12 @@ export default function InsightsPage() {
   // ── 7-day trend: daily avg pre-meal glucose, oldest → newest ──
   const trendDays: { label: string; avg: number | null }[] = [];
   for (let i = 6; i >= 0; i--) {
-    const dayStart = new Date(now - i * 86400000);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = dayStart.getTime() + 86400000;
+    const dayStart = startOfDaysAgo(i);
+    const dayEndMs = startOfDaysAgo(i - 1).getTime();
     const dayBgs = meals
       .filter(m => {
         const t = parseDbTs(m.created_at);
-        return t >= dayStart.getTime() && t < dayEnd && m.glucose_before != null;
+        return t >= dayStart.getTime() && t < dayEndMs && m.glucose_before != null;
       })
       .map(m => m.glucose_before as number);
     trendDays.push({
@@ -226,7 +230,8 @@ export default function InsightsPage() {
   });
 
   // ── Cross-source BG reading pools (meals + insulin + exercise + fingerstick) ──
-  const fourteenAgo = now - 14 * 86400000;
+  // Calendar-aware: midnight 13d ago in user's TZ = "last 14 calendar days".
+  const fourteenAgo = startOfDaysAgo(13).getTime();
   const readings14 = collectBgReadings(meals, insulinLogs, exerciseLogs, fingersticks, fourteenAgo);
   const readings7  = readings14.filter(r => r.t >= wkAgo);
 
@@ -254,18 +259,17 @@ export default function InsightsPage() {
     : PINK;
 
   // ── TDD: total daily insulin units (bolus + basal) ──
-  const startToday = new Date(); startToday.setHours(0, 0, 0, 0);
   const tddByDay = new Map<string, number>();
   for (const il of insulinLogs) {
     const t = parseDbTs(il.created_at);
     if (t < wkAgo) continue;
-    const d = new Date(t); d.setHours(0, 0, 0, 0);
-    const key = d.toISOString().slice(0, 10);
+    const dayStart = startOfDay(new Date(t));
+    const key = dayStart.toISOString().slice(0, 10);
     tddByDay.set(key, (tddByDay.get(key) ?? 0) + Number(il.units || 0));
   }
   const tddDayCount    = tddByDay.size;
   const tddEnough      = tddDayCount >= MIN_DATAPOINTS;
-  const tddTodayKey    = startToday.toISOString().slice(0, 10);
+  const tddTodayKey    = startOfToday().toISOString().slice(0, 10);
   const tddToday       = tddByDay.get(tddTodayKey) ?? 0;
   const tddSum7        = Array.from(tddByDay.values()).reduce((a, b) => a + b, 0);
   const tddAvg7        = tddEnough ? +(tddSum7 / 7).toFixed(1) : null;
@@ -981,7 +985,7 @@ export default function InsightsPage() {
                 "Total Daily Dose (TDD) ist die Summe aller protokollierten Insulin-Einheiten pro Tag — Bolus + Basal aus dem Engine-Log.",
                 "Hauptzahl: Tagesdurchschnitt der letzten 7 Tage (Summe ÷ 7). Heutige Tagessumme separat darunter. Eine konstante TDD signalisiert stabile Stoffwechseleinstellung; Schwankungen > 20 % können auf veränderten Insulinbedarf hindeuten.",
                 tddEnough
-                  ? `Berechnet aus ${insulinLogs.filter(il => parseDbTs(il.created_at) >= now - 7 * 86400000).length} Insulin-Logs an ${tddDayCount} Tagen der letzten 7 Tage.`
+                  ? `Berechnet aus ${insulinLogs.filter(il => parseDbTs(il.created_at) >= wkAgo).length} Insulin-Logs an ${tddDayCount} Tagen der letzten 7 Tage.`
                   : "Mindestens 3 Tage mit Insulin-Logs in 7 Tagen nötig, um diese Karte anzuzeigen.",
               ]}
             />

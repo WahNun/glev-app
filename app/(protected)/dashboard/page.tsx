@@ -14,6 +14,7 @@ import GlucoseTrendFront from "@/components/GlucoseTrendChart";
 import SortableCardGrid, { type SortableItem } from "@/components/SortableCardGrid";
 import { useCardOrder } from "@/lib/cardOrder";
 import { parseDbDate, parseDbTs } from "@/lib/time";
+import { isToday, startOfDaysAgo } from "@/lib/utils/datetime";
 
 /** Default top-to-bottom order of dashboard sections. Each ID also appears
  *  as a key in the items array below — keep them in sync. */
@@ -690,9 +691,13 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
   const [flipped, setFlipped] = useState(false);
   const { score, count, delta, badge } = useMemo(() => {
     const now = Date.now();
-    const W = 7 * 86400000;
-    const cur  = computeControlScore(meals, now - W, now);
-    const prev = computeControlScore(meals, now - 2 * W, now - W);
+    // Calendar-aware 7-day windows: current week starts at midnight 6 days
+    // ago in the user's local TZ; prior week is the 7 days immediately
+    // before that. Replaces the old rolling 168h boundaries.
+    const wkStart   = startOfDaysAgo(6).getTime();
+    const prevStart = startOfDaysAgo(13).getTime();
+    const cur  = computeControlScore(meals, wkStart, now);
+    const prev = computeControlScore(meals, prevStart, wkStart);
     const delta = prev.count > 0 && cur.count > 0 ? cur.score - prev.score : null;
     const badge =
       cur.score >= 80 ? { text: "STRONG", color: GREEN }
@@ -788,8 +793,7 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
 function DailyMacrosCard({ meals, targets }: { meals: Meal[]; targets: MacroTargets }) {
   const [expanded, setExpanded] = useState(false);
   const today = useMemo(() => {
-    const todayStr = new Date().toDateString();
-    const todays = meals.filter(m => parseDbDate(m.meal_time ?? m.created_at).toDateString() === todayStr);
+    const todays = meals.filter(m => isToday(m.meal_time ?? m.created_at ?? ""));
 
     let carbs = 0, protein = 0, fat = 0, fiber = 0, calories = 0;
     for (const m of todays) {
