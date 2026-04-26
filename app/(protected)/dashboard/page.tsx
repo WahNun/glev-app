@@ -96,7 +96,7 @@ function FlipCard({ card }: { card: CardData }) {
           </div>
           <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", gap:8 }}>
             <div style={{ display:"flex", alignItems:"flex-end", gap:4 }}>
-              <span style={{ fontSize:48, fontWeight:800, color:card.color, letterSpacing:"-0.03em", lineHeight:1 }}>{card.value}</span>
+              <span style={{ fontSize:56, fontWeight:800, color:card.color, letterSpacing:"-0.03em", lineHeight:1, fontFamily:"var(--font-mono)" }}>{card.value}</span>
               <span style={{ fontSize:13, color:"rgba(255,255,255,0.3)", paddingBottom:3 }}>{card.unit}</span>
             </div>
             <span style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>{card.sub}</span>
@@ -179,9 +179,9 @@ function TrendChart({ meals }: { meals: Meal[] }) {
       style={{ position:"relative", perspective:1200, cursor:"pointer" }}
     >
       <style>{`
-        .glev-trend-card { height: 380px; }
+        .glev-trend-card { height: 240px; }
         @media (max-width: 768px) {
-          .glev-trend-card { height: 420px; }
+          .glev-trend-card { height: 220px; }
         }
       `}</style>
       <div style={{ position:"absolute", inset:0, transformStyle:"preserve-3d", transition:"transform 0.55s cubic-bezier(0.4,0,0.2,1)", transform:flipped ? "rotateY(180deg)" : "rotateY(0deg)" }}>
