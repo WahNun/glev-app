@@ -10,7 +10,8 @@ import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
 import EngineLogTab, { InsulinForm, ExerciseForm } from "@/components/EngineLogTab";
 import GlevLogo from "@/components/GlevLogo";
 import EngineChatPanel, { type SeedMessage } from "@/components/EngineChatPanel";
-import { parseDbTs, parseDbDate } from "@/lib/time";
+import { fetchLatestCgm } from "@/components/CgmFetchButton";
+import { parseDbTs, parseDbDate, parseLluTs } from "@/lib/time";
 
 // datetime-local needs "YYYY-MM-DDTHH:mm" in the *local* timezone (the input
 // strips the offset). Using toISOString() would silently shift the value to
@@ -275,6 +276,11 @@ export default function EnginePage() {
       chatLines.push(`Tell me if anything's off — I'll update the form on the left.`);
       setChatSeed({ id: Date.now(), content: chatLines.join("\n\n") });
       logDebug("ENGINE.VOICE", { text, totals: t });
+      // Voice submission implies the user is logging a meal *now* — pull
+      // the latest CGM reading in parallel so the glucose-before field is
+      // populated automatically. Fire-and-forget: failures are logged via
+      // handlePullCgm itself and don't surface here.
+      void handlePullCgm();
     } catch (e) {
       setVoiceErr(e instanceof Error ? e.message : "Sprach-Verarbeitung fehlgeschlagen.");
     } finally {
@@ -282,16 +288,29 @@ export default function EnginePage() {
     }
   }
 
-  function handlePullCgm() {
+  // Pull the latest reading from the user's connected CGM (LibreLinkUp via
+  // /api/cgm/latest). Replaces the earlier random-number placeholder.
+  // Triggered both by the "CGM" button and automatically after a successful
+  // voice meal-submission (see handleVoice below) so the glucose-before
+  // field always reflects the user's level at meal time.
+  async function handlePullCgm() {
+    if (cgmPulling) return;
     setCgmPulling(true);
-    setTimeout(() => {
-      const reading = Math.round(85 + Math.random() * 70);
-      setGlucose(String(reading));
-      const now = new Date();
-      setLastReading(`${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`);
+    try {
+      const r = await fetchLatestCgm();
+      if (r.ok) {
+        const reading = Math.round(r.value);
+        setGlucose(String(reading));
+        const tsMs = r.timestamp ? parseLluTs(r.timestamp) : null;
+        const d = new Date(tsMs ?? Date.now());
+        setLastReading(`${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`);
+        logDebug("ENGINE.CGM_PULL", { reading, timestamp: r.timestamp });
+      } else {
+        logDebug("ENGINE.CGM_PULL_FAIL", { status: r.status, message: r.message });
+      }
+    } finally {
       setCgmPulling(false);
-      logDebug("ENGINE.CGM_PULL", { reading });
-    }, 700);
+    }
   }
 
   useEffect(() => {

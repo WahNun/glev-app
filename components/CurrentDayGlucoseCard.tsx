@@ -29,9 +29,9 @@ type State =
 // the trace gets. Numbers chosen to give a generous chart area on both
 // viewports without crowding the dashboard grid.
 const CARD_STYLE_TAG = `
-  .glev-today-card { height: 320px; }
+  .glev-today-card { height: 240px; }
   @media (max-width: 768px) {
-    .glev-today-card { height: 300px; }
+    .glev-today-card { height: 220px; }
   }
 `;
 
@@ -413,20 +413,33 @@ function RollingChart({ readings }: { readings: Array<{ t: number; v: number }> 
             height={toY(RANGE_LOW) - toY(RANGE_HIGH)}
             fill={GREEN} fillOpacity="0.06"
           />
-          {/* Y grid + labels (70 / 110 / 180 / 250) */}
+          {/* Y axis tick labels (70 / 110 / 180 / 250) — text only,
+              no horizontal gridlines unless the user is touching the chart. */}
           {yTicks.map((v) => (
-            <g key={v}>
-              <line x1={padL} y1={toY(v)} x2={W - padR} y2={toY(v)} stroke="rgba(255,255,255,0.05)" strokeDasharray="3 4" />
-              <text x={padL - 5} y={toY(v) + 3} textAnchor="end" fontSize="9" fill="rgba(255,255,255,0.25)">{v}</text>
-            </g>
+            <text key={`yl${v}`} x={padL - 5} y={toY(v) + 3} textAnchor="end" fontSize="9" fill="rgba(255,255,255,0.25)">{v}</text>
           ))}
-          {/* X markers + labels (−2h / −1h / now) */}
+          {/* X axis labels (−2h / −1h / now) — text only at bottom,
+              no vertical gridlines unless the user is touching the chart. */}
           {xLabels.map((x) => (
-            <g key={x.label}>
-              <line x1={toX(x.t)} y1={padT} x2={toX(x.t)} y2={H - padB} stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
-              <text x={toX(x.t)} y={H - 6} textAnchor="middle" fontSize="9" fill="rgba(255,255,255,0.3)">{x.label}</text>
-            </g>
+            <text key={`xl${x.label}`} x={toX(x.t)} y={H - 6} textAnchor="middle" fontSize="9" fill="rgba(255,255,255,0.3)">{x.label}</text>
           ))}
+          {/* Touch-revealed grid — appears only while the crosshair is
+              active. 30-min vertical intervals (5 lines: −2h, −1.5h, −1h,
+              −30m, now) for finer time orientation than the 1-h labels,
+              plus horizontal lines at the Y ticks for value reference. */}
+          {active && (
+            <g style={{ pointerEvents: "none" }}>
+              {yTicks.map((v) => (
+                <line key={`gh${v}`} x1={padL} y1={toY(v)} x2={W - padR} y2={toY(v)} stroke="rgba(255,255,255,0.09)" strokeDasharray="3 4" />
+              ))}
+              {[0, 1, 2, 3, 4].map((i) => {
+                const t = winStart + i * 30 * 60 * 1000;
+                return (
+                  <line key={`gv${i}`} x1={toX(t)} y1={padT} x2={toX(t)} y2={H - padB} stroke="rgba(255,255,255,0.09)" strokeWidth="1" strokeDasharray="2 4" />
+                );
+              })}
+            </g>
+          )}
           {/* Trace */}
           <path d={path} fill="none" stroke={lastC} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           {/* Last point */}
