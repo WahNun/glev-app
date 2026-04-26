@@ -42,11 +42,17 @@ export interface EngineChatPanelProps {
   // muddling the Meal Classification chip with a transient state that has
   // nothing to do with classification.
   parsing?:    boolean;
+  // Whether the user has already used voice input this session. Drives
+  // the one-shot collapsed-state hint ("▸ Tippe um Details zu sehen").
+  // Once true the hint stays hidden because the auto-expand on parse
+  // already taught the user the panel exists — repeating it would be
+  // noise.
+  hasUsedVoice?: boolean;
 }
 
 export default function EngineChatPanel({
   macros, description, onPatch, seed, isMobile, expanded, onToggleExpanded,
-  parsing = false,
+  parsing = false, hasUsedVoice = false,
 }: EngineChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput]       = useState("");
@@ -192,10 +198,10 @@ export default function EngineChatPanel({
           );
         })()}
         <svg
-          width="14" height="14" viewBox="0 0 24 24" fill="none"
-          stroke="rgba(255,255,255,0.45)" strokeWidth="2.2"
+          width="16" height="16" viewBox="0 0 24 24" fill="none"
+          stroke="#9999AA" strokeWidth="2"
           strokeLinecap="round" strokeLinejoin="round"
-          style={{ transform: expanded ? "rotate(180deg)" : "none", transition:"transform 0.15s" }}
+          style={{ transform: expanded ? "rotate(180deg)" : "none", transition:"transform 0.25s ease" }}
         >
           <polyline points="6 9 12 15 18 9"/>
         </svg>
@@ -260,9 +266,26 @@ export default function EngineChatPanel({
     </div>
   );
 
-  // ---- Mobile, collapsed: chip only --------------------------------------
+  // ---- Mobile, collapsed: chip + (one-shot) hint -------------------------
+  // First-run discoverability: until the user has triggered the parser
+  // at least once via voice, render a subtle caption below the chip
+  // pointing at the chevron. Disappears for the rest of the session
+  // once hasUsedVoice flips to true (the auto-expand on parse-success
+  // already demonstrates the affordance, so the hint becomes redundant).
   if (isMobile && !expanded) {
-    return mobileChip;
+    return (
+      <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+        {mobileChip}
+        {!hasUsedVoice && (
+          <div style={{
+            fontSize:10, color:"#666680", letterSpacing:"0.02em",
+            textAlign:"center", paddingLeft:4, paddingRight:4,
+          }}>
+            ▸ Tippe um Details zu sehen
+          </div>
+        )}
+      </div>
+    );
   }
 
   // ---- Mobile, expanded: chip + body card stacked ------------------------

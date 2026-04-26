@@ -199,6 +199,16 @@ export default function EnginePage() {
   const [decisionInsulinErr, setDecisionInsulinErr] = useState<string | null>(null);
   const [chatSeed,    setChatSeed]    = useState<SeedMessage | null>(null);
   const [chatExpanded, setChatExpanded] = useState(false);
+  // Track whether the user has ever used voice input. Drives the
+  // collapsed-state hint on the AI FOOD PARSER chip ("▸ Tippe um
+  // Details zu sehen") — once they've spoken once, the hint disappears
+  // permanently for that session because the auto-expand on parse
+  // already taught them the panel exists.
+  const [hasUsedVoice, setHasUsedVoice] = useState(false);
+  // Ref on the AI FOOD PARSER mobile wrapper so the post-transcription
+  // sequence (fields fill → reasoning expands → scrollIntoView) can
+  // bring the panel into view smoothly.
+  const chatPanelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -341,6 +351,19 @@ export default function EnginePage() {
       // populated automatically. Fire-and-forget: failures are logged via
       // handlePullCgm itself and don't surface here.
       void handlePullCgm();
+      // Sequential UX flow: macros are now filled → expand the AI FOOD
+      // PARSER panel and scroll it into view so the user sees GPT's
+      // reasoning right after their words become numbers. 300ms delay
+      // lets the macro fields finish their re-render first so the user
+      // perceives "fields fill → panel opens" instead of both at once.
+      setHasUsedVoice(true);
+      setTimeout(() => {
+        setChatExpanded(true);
+        // block: "center" keeps both the freshly-filled fields and the
+        // newly-opened reasoning panel visible without jumping the
+        // viewport too aggressively.
+        chatPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 300);
     } catch (e) {
       // eslint-disable-next-line no-console
       console.log("[PERF voice/engine] FAILED after:", Date.now() - tStop, "ms");
@@ -704,12 +727,12 @@ export default function EnginePage() {
               { id:"engine"      as const, label:"Engine" },
               { id:"bolus"       as const, label:"Insulin" },
               { id:"exercise"    as const, label:"Exercise" },
-              { id:"fingerstick" as const, label:"FS" },
+              { id:"fingerstick" as const, label:"Glukose" },
             ]
           : [
               { id:"engine"      as const, label:"Engine" },
               { id:"log"         as const, label:"Log" },
-              { id:"fingerstick" as const, label:"FS Glucose" },
+              { id:"fingerstick" as const, label:"Glukose" },
             ]
         ).map(t => {
           const on = tab === t.id;
@@ -744,86 +767,18 @@ export default function EnginePage() {
         alignItems:"stretch",
       }}>
       <div style={{ minWidth:0, display:"flex", flexDirection:"column" }}>
-      {/* Voice input — transcribes & auto-fills macros via /api/transcribe → /api/parse-food */}
+      {/* Voice input keyframes — kept here because the pill (rendered
+          below the macro fields, see further down) and the parser
+          status spinner share the engVPulse animation. */}
       <style>{`
-        @keyframes engVPulse { 0%,100%{opacity:0.35;transform:scale(1)} 50%{opacity:1;transform:scale(1.05)} }
+        @keyframes engVPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.15)} }
         @keyframes engSpin   { to { transform: rotate(360deg) } }
-        .eng-mic-btn:hover:not(:disabled) { transform: scale(1.04); }
       `}</style>
-      <div style={{ ...card, padding:"22px 22px 20px", marginBottom:20 }}>
-        <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:11 }}>
-          <div style={{ position:"relative", width:84, height:84 }}>
-            {recording && <div style={{ position:"absolute", inset:-14, borderRadius:"50%", background:`radial-gradient(circle,${ACCENT}24 0%,transparent 70%)`, animation:"engVPulse 2s ease-in-out infinite", pointerEvents:"none" }}/>}
-            <button
-              className="eng-mic-btn"
-              type="button"
-              onClick={() => recording ? stopRecording() : startRecording()}
-              disabled={parsing || !speechAvail}
-              style={{
-                position:"absolute", inset:0, borderRadius:"50%",
-                border: recording ? `1px solid ${ACCENT}88` : `1px solid rgba(255,255,255,0.08)`,
-                cursor: parsing || !speechAvail ? "default" : "pointer",
-                background: `radial-gradient(circle at 36% 32%, #1e1e2e 0%, #141420 45%, #09090B 100%)`,
-                boxShadow: recording
-                  ? `0 0 0 1px ${ACCENT}55, 0 0 26px ${ACCENT}55, inset 0 0 18px rgba(79,110,247,0.15)`
-                  : `0 5px 20px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06)`,
-                display:"flex", alignItems:"center", justifyContent:"center",
-                transition:"all 0.2s",
-              }}
-            >
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={recording ? ACCENT : "rgba(255,255,255,0.85)"} strokeWidth="2" strokeLinecap="round">
-                <rect x="9" y="2" width="6" height="11" rx="3" fill={recording ? ACCENT : "rgba(255,255,255,0.85)"} stroke="none"/>
-                <path d="M5 10a7 7 0 0 0 14 0"/>
-                <line x1="12" y1="19" x2="12" y2="22"/>
-                <line x1="9"  y1="22" x2="15" y2="22"/>
-              </svg>
-            </button>
-          </div>
-          <div style={{ fontSize:11, fontWeight:600, letterSpacing:"0.12em", color: recording ? ACCENT : parsing ? ORANGE : "rgba(255,255,255,0.45)" }}>
-            {recording ? "LISTENING…" : parsing ? "PARSING…" : speechAvail ? "TAP TO SPEAK" : "VOICE UNAVAILABLE"}
-          </div>
-          {transcript ? (
-            <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)", fontStyle:"italic", textAlign:"center", lineHeight:1.5, padding:"7px 12px", background:"rgba(255,255,255,0.03)", borderRadius:8, border:"1px solid rgba(255,255,255,0.06)", maxWidth:480 }}>
-              &quot;{transcript}&quot;
-            </div>
-          ) : (
-            <div style={{ fontSize:10, color:"rgba(255,255,255,0.22)", letterSpacing:"0.06em", textAlign:"center" }}>
-              z. B. &quot;Pasta mit Tomatensauce, 80 g Nudeln und ein Apfel&quot;
-            </div>
-          )}
-          {voiceErr && <div style={{ fontSize:11, color:PINK }}>{voiceErr}</div>}
-          {!speechAvail && !voiceErr && <div style={{ fontSize:11, color:ORANGE }}>Sprach-Eingabe wird in diesem Browser nicht unterstützt.</div>}
-        </div>
-      </div>
 
-      {/* Mobile: GPT reasoning chat sits between the mic card and the form,
-          collapsed by default. The desktop equivalent lives in the right
-          column below. */}
-      {isMobile && (
-        <div style={{ marginBottom: 20 }}>
-          <EngineChatPanel
-            macros={{
-              carbs:   parseFloat(carbs)   || 0,
-              protein: parseFloat(protein) || 0,
-              fat:     parseFloat(fat)     || 0,
-              fiber:   parseFloat(fiber)   || 0,
-            }}
-            description={desc}
-            onPatch={(p) => {
-              setCarbs(String(p.carbs));
-              setProtein(String(p.protein));
-              setFat(String(p.fat));
-              setFiber(String(p.fiber));
-              if (p.description) setDesc(p.description);
-            }}
-            seed={chatSeed}
-            isMobile={true}
-            expanded={chatExpanded}
-            onToggleExpanded={() => setChatExpanded(v => !v)}
-            parsing={parsing}
-          />
-        </div>
-      )}
+      {/* Mobile parser panel moved BELOW the form (after the voice pill)
+          so the user perceives a clean top-to-bottom flow:
+          form → pill → reasoning → confirm. Desktop renders its own
+          parser instance in the right column further down. */}
 
       {isMobile ? (
         // ---- Mobile: single-card flow that matches the original log-style
@@ -888,6 +843,56 @@ export default function EnginePage() {
                 <label style={{ fontSize:11, color:"rgba(255,255,255,0.4)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:600, display:"block", marginBottom:6 }}>Fat (g)</label>
                 <input style={inp} type="number" placeholder="e.g. 15" value={fat} onChange={e => setFat(e.target.value)}/>
               </div>
+            </div>
+
+            {/* Voice pill — compact FAB centered below the macro 2x2.
+                Replaces the dominant 84px mic card. Tap toggles
+                recording. While idle: muted neutral chrome so it
+                doesn't compete with the form. While recording: solid
+                accent + pulse animation so it's unambiguously "live".
+                Disabled when the upstream parse is still in flight or
+                the browser doesn't support MediaRecorder. */}
+            <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:8 }}>
+              <button
+                type="button"
+                onClick={() => recording ? stopRecording() : startRecording()}
+                disabled={parsing || !speechAvail}
+                aria-label={recording ? "Aufnahme stoppen" : "Sprach-Eingabe starten"}
+                style={{
+                  display:"inline-flex", alignItems:"center", justifyContent:"center", gap:8,
+                  height:48, padding:"0 20px", borderRadius:24,
+                  background: recording ? "#4F6EF7" : "#1C1C24",
+                  border: recording ? "1px solid #4F6EF7" : "1px solid #2A2A36",
+                  color: recording ? "#fff" : (parsing || !speechAvail ? "rgba(153,153,170,0.5)" : "#9999AA"),
+                  fontSize:13, fontWeight:600, letterSpacing:"-0.01em",
+                  cursor: parsing || !speechAvail ? "not-allowed" : "pointer",
+                  animation: recording ? "engVPulse 0.8s ease-in-out infinite" : undefined,
+                  transition:"background 0.2s, color 0.2s, border-color 0.2s",
+                  WebkitTapHighlightColor:"transparent",
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="9" y="2" width="6" height="11" rx="3" fill="currentColor" stroke="none"/>
+                  <path d="M5 10a7 7 0 0 0 14 0"/>
+                  <line x1="12" y1="19" x2="12" y2="22"/>
+                  <line x1="9"  y1="22" x2="15" y2="22"/>
+                </svg>
+                {recording ? "Stopp" : parsing ? "Verarbeite…" : "Sprechen"}
+              </button>
+              {/* Inline transcript / error captions — small, secondary,
+                  centered. Only render when there's something to say so
+                  the pill stays the visual focus when idle. */}
+              {transcript && (
+                <div style={{ fontSize:11, color:"rgba(255,255,255,0.45)", fontStyle:"italic", textAlign:"center", lineHeight:1.4, maxWidth:380 }}>
+                  &quot;{transcript}&quot;
+                </div>
+              )}
+              {voiceErr && <div style={{ fontSize:11, color:PINK, textAlign:"center" }}>{voiceErr}</div>}
+              {!speechAvail && !voiceErr && (
+                <div style={{ fontSize:10, color:ORANGE, textAlign:"center" }}>
+                  Sprach-Eingabe wird in diesem Browser nicht unterstützt.
+                </div>
+              )}
             </div>
 
             {/* Description */}
@@ -1006,6 +1011,48 @@ export default function EnginePage() {
                 <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>Description</label>
                 <input style={inp} placeholder="e.g. pasta with tomato sauce" value={desc} onChange={e => setDesc(e.target.value)}/>
               </div>
+              {/* Desktop voice pill — same compact FAB, parked at the
+                  bottom of the left column form so the post-voice flow
+                  matches mobile (form fields above → pill → reasoning
+                  panel in the right column auto-expands). */}
+              <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:8, marginTop:6 }}>
+                <button
+                  type="button"
+                  onClick={() => recording ? stopRecording() : startRecording()}
+                  disabled={parsing || !speechAvail}
+                  aria-label={recording ? "Aufnahme stoppen" : "Sprach-Eingabe starten"}
+                  style={{
+                    display:"inline-flex", alignItems:"center", justifyContent:"center", gap:8,
+                    height:48, padding:"0 20px", borderRadius:24,
+                    background: recording ? "#4F6EF7" : "#1C1C24",
+                    border: recording ? "1px solid #4F6EF7" : "1px solid #2A2A36",
+                    color: recording ? "#fff" : (parsing || !speechAvail ? "rgba(153,153,170,0.5)" : "#9999AA"),
+                    fontSize:13, fontWeight:600, letterSpacing:"-0.01em",
+                    cursor: parsing || !speechAvail ? "not-allowed" : "pointer",
+                    animation: recording ? "engVPulse 0.8s ease-in-out infinite" : undefined,
+                    transition:"background 0.2s, color 0.2s, border-color 0.2s",
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="9" y="2" width="6" height="11" rx="3" fill="currentColor" stroke="none"/>
+                    <path d="M5 10a7 7 0 0 0 14 0"/>
+                    <line x1="12" y1="19" x2="12" y2="22"/>
+                    <line x1="9"  y1="22" x2="15" y2="22"/>
+                  </svg>
+                  {recording ? "Stopp" : parsing ? "Verarbeite…" : "Sprechen"}
+                </button>
+                {transcript && (
+                  <div style={{ fontSize:11, color:"rgba(255,255,255,0.45)", fontStyle:"italic", textAlign:"center", lineHeight:1.4, maxWidth:380 }}>
+                    &quot;{transcript}&quot;
+                  </div>
+                )}
+                {voiceErr && <div style={{ fontSize:11, color:PINK, textAlign:"center" }}>{voiceErr}</div>}
+                {!speechAvail && !voiceErr && (
+                  <div style={{ fontSize:10, color:ORANGE, textAlign:"center" }}>
+                    Sprach-Eingabe wird in diesem Browser nicht unterstützt.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -1079,39 +1126,70 @@ export default function EnginePage() {
         </div>
       )}
 
+      {/* Mobile parser panel re-mounted HERE — between the form/pill
+          above and the Confirm/Cancel buttons below. Wrapped in a div
+          carrying chatPanelRef so the post-transcription auto-expand
+          can scrollIntoView it smoothly. */}
+      {isMobile && (
+        <div ref={chatPanelRef} style={{ marginBottom: 16 }}>
+          <EngineChatPanel
+            macros={{
+              carbs:   parseFloat(carbs)   || 0,
+              protein: parseFloat(protein) || 0,
+              fat:     parseFloat(fat)     || 0,
+              fiber:   parseFloat(fiber)   || 0,
+            }}
+            description={desc}
+            onPatch={(p) => {
+              setCarbs(String(p.carbs));
+              setProtein(String(p.protein));
+              setFat(String(p.fat));
+              setFiber(String(p.fiber));
+              if (p.description) setDesc(p.description);
+            }}
+            seed={chatSeed}
+            isMobile={true}
+            expanded={chatExpanded}
+            onToggleExpanded={() => setChatExpanded(v => !v)}
+            parsing={parsing}
+            hasUsedVoice={hasUsedVoice}
+          />
+        </div>
+      )}
+
       {/* Form mode: Confirm Log + Cancel.  Hidden once a meal has been saved
-          and the decision panel below takes over. */}
+          and the decision panel below takes over. Visual hierarchy
+          updated: primary = solid accent block 48px, secondary =
+          text-only ghost button so it doesn't visually compete. */}
       {!confirmedMeal && (
         <>
           <button
             onClick={handleConfirmLog}
             disabled={confirming || !carbs}
             style={{
-              width:"100%", padding:"15px", borderRadius:14, border:"none",
-              background: !confirming && carbs
-                ? `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`
-                : "rgba(79,110,247,0.25)",
+              width:"100%", height:48, borderRadius:12, border:"none",
+              background: !confirming && carbs ? "#4F6EF7" : "rgba(79,110,247,0.25)",
               color: !confirming && carbs ? "#fff" : "rgba(255,255,255,0.55)",
-              fontSize:15, fontWeight:700,
+              fontSize:15, fontWeight:700, letterSpacing:"-0.01em",
               cursor: confirming || !carbs ? "not-allowed" : "pointer",
-              boxShadow: !confirming && carbs ? `0 4px 18px ${ACCENT}30` : "none",
-              transition:"all 0.2s", marginBottom:10,
+              transition:"background 0.2s, opacity 0.2s",
+              marginBottom:6,
             }}
           >
-            {confirming ? "Saving…" : "✓ Confirm Log"}
+            {confirming ? "Speichere…" : "Bestätigen"}
           </button>
           <button
             onClick={handleCancel}
             disabled={confirming}
             style={{
-              width:"100%", padding:"13px", borderRadius:14,
-              border:`1px solid ${BORDER}`, background:"transparent",
-              color:"rgba(255,255,255,0.55)", fontSize:14, fontWeight:600,
+              width:"100%", height:36, borderRadius:8,
+              border:"none", background:"transparent",
+              color:"#666680", fontSize:13, fontWeight:500, letterSpacing:"-0.01em",
               cursor: confirming ? "not-allowed" : "pointer",
               marginBottom:24,
             }}
           >
-            Cancel
+            Abbrechen
           </button>
         </>
       )}
@@ -1183,8 +1261,20 @@ export default function EnginePage() {
                     {decisionRec.confidence}
                   </span>
                 </div>
-                <div style={{ fontSize:11, color:"rgba(255,255,255,0.5)", marginTop:8, lineHeight:1.5 }}>
-                  {decisionRec.reasoning}
+                {/* Reasoning sub-card — own background so the GPT
+                    explanation reads as a distinct "why" block under
+                    the dose number above. */}
+                <div style={{
+                  marginTop:16, padding:"12px 16px",
+                  background:"#0D0D14", border:"1px solid #1C1C28",
+                  borderRadius:12,
+                }}>
+                  <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.08em", color:"#666680", textTransform:"uppercase", marginBottom:6 }}>
+                    GPT Reasoning
+                  </div>
+                  <div style={{ fontSize:13, lineHeight:1.6, color:"#AAAACC" }}>
+                    {decisionRec.reasoning}
+                  </div>
                 </div>
               </div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
@@ -1313,9 +1403,15 @@ export default function EnginePage() {
               </div>
             </div>
 
-            <div style={{ marginTop:20, padding:"14px 16px", background:"rgba(0,0,0,0.3)", borderRadius:10 }}>
-              <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginBottom:4, letterSpacing:"0.05em", textTransform:"uppercase" }}>Reasoning</div>
-              <div style={{ fontSize:13, color:"rgba(255,255,255,0.65)", lineHeight:1.6 }}>{result.reasoning}</div>
+            <div style={{
+              marginTop:16, padding:"12px 16px",
+              background:"#0D0D14", border:"1px solid #1C1C28",
+              borderRadius:12,
+            }}>
+              <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.08em", color:"#666680", textTransform:"uppercase", marginBottom:6 }}>
+                GPT Reasoning
+              </div>
+              <div style={{ fontSize:13, lineHeight:1.6, color:"#AAAACC" }}>{result.reasoning}</div>
             </div>
 
             <div style={{ marginTop:16, display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
