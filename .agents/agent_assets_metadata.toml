@@ -18,3 +18,9 @@ id = "4riejyexZl1llwpx2Nc_M"
 uri = "file://exports/glev-kontext-report.docx"
 type = "word_document"
 title = "Glev Kontext-Report (.docx fuer Google Docs)"
+
+[[outputs]]
+id = "QZeuMqTqoU9LG-7vHstuK"
+uri = "file://.local/reports/raw-icr-decision.md"
+type = "text"
+title = "Raw ICR — Entscheidungsreport"

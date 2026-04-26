@@ -1,0 +1,33 @@
+FIXES REQUIRED:
+1. Unify the two evaluation systems (CRITICAL)
+	•	computeEvaluation in lib/meals.ts (Dose-Ratio, ignores bg_2h) is currently what populates evaluation in the DB, which feeds the Control Score, Good Rate, and Insights Distribution.
+	•	evaluateEntry in lib/engine/evaluation.ts (Δ-based, clinically correct) is only used for Patterns and Adaptive ICR.
+	•	These can and do contradict each other.
+	•	Fix: The evaluation field in the DB must only be written when lifecycleFor returns state === "final". Use evaluateEntry (Δ-based) as the single source of truth for all downstream consumers: Control Score, Good Rate, Spike Rate, Insights Distribution. Remove or deprecate computeEvaluation from the write path.
+2. Time Gap validation in lifecycle evaluation
+	•	Currently lifecycleFor checks meal age relative to now, but does NOT check whether bg_1h_at / bg_2h_at are actually close to the expected 1H / 2H windows relative to meal_time.
+	•	A reading taken 3h12m after the meal is still used as the 2H-Δ baseline without any flag.
+	•	Fix: After resolving bg1h and bg2h, compare the actual reading timestamp against the expected window:
+	•	bg_1h_at should be within ±30 min of meal_time + 60min
+	•	bg_2h_at should be within ±30 min of meal_time + 120min
+	•	If outside tolerance: do not use the reading for outcome classification. Set outcome to null and reasoning to “Reading outside expected window (actual gap: X min) — outcome cannot be reliably determined.” Keep state as “provisional” not “final”.
+3. ICR / CF / Target from User Settings
+	•	computeEvaluation and the fallback in evaluateEntry (line ~115) hardcode ICR=15, CF=50, Target=110.
+	•	Fix: Read ICR, CF, and target BG from user settings. If user settings are missing, fall back to these defaults but log a warning. Do not silently use hardcoded values when user settings exist.
+4. Single meal classifier
+	•	There are two classifiers with conflicting rules: GPT-based (lib/ai/systemPrompt.ts) and deterministic (lib/meals.ts:60-65). They can produce different results for the same meal.
+	•	Fix: Define one canonical deterministic classifier with medically grounded thresholds. Update the GPT system prompt to follow the exact same rules. The deterministic classifier is always the fallback and must be used for recalculation / re-evaluation. Remove the conflict.
+	•	Canonical rules to implement:
+	•	FAST_CARBS: carbs ≥ 45g AND (sugars/carbs > 0.5 OR fiber < 5g)
+	•	HIGH_FAT: fat_kcal / total_kcal > 0.45
+	•	HIGH_PROTEIN: protein > carbs AND protein > fat AND protein ≥ 25g
+	•	BALANCED: everything else
+5. Fix Control Score formula
+	•	Current formula: score = goodRate * 0.7 + (100 - spikeRate - hypoRate) * 0.3
+	•	Problem 1: UNDERDOSE meals are counted in the spike bucket AND reduce the second term — double penalty.
+	•	Problem 2: No clamping — score can go negative.
+	•	Problem 3: Score reads from m.evaluation (old write-path) not engine — fixed by Fix 1.
+	•	Fix: Deduplicate buckets (a meal counts in exactly one bucket: GOOD, SPIKE, HYPO, or OTHER). Clamp final score to 0–100. Formula after deduplication: score = clamp(goodRate * 0.7 + (100 - spikeRate - hypoRate) * 0.3, 0, 100).
+6. Use speed1 / speed2 in outcome reasoning
+	•	delta1 / 60 and delta2 / 120 are calculated in lifecycle.ts but never used.
+	•	Fix: Include rate of change (mg/dL per minute) in the reasoning string for final and provisional outcomes. Example: “BG rose at +0.38 mg/dL/min in the first hour — consistent with fast carb absorption.”
