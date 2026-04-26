@@ -123,19 +123,11 @@ export default function Home() {
             <GlevLockup size={28} />
           </Link>
           <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
-            <Link
-              href="/brand"
-              className="glev-link"
-              style={{
-                fontSize: 13,
-                fontWeight: 500,
-                color: "rgba(255,255,255,0.55)",
-                textDecoration: "none",
-                letterSpacing: "-0.005em",
-              }}
-            >
-              Brand
-            </Link>
+            {/* Brand-Link bewusst aus dem Header entfernt — nur noch
+                versteckt im Footer als Copyright-Tail erreichbar.
+                Begründung: das Brand-Book ist Marketing-/Dev-Material,
+                kein User-Pfad — soll im öffentlichen Header keinen
+                Slot belegen. */}
             <Link
               href="/login"
               style={{
@@ -629,7 +621,21 @@ export default function Home() {
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <GlevLockup size={20} color="rgba(255,255,255,0.7)" />
-          <span>© 2026 Glev · hello@glev.app</span>
+          <span>
+            © 2026 Glev · hello@glev.app
+            {/* Brand-Book Link, gut versteckt: gleiche Farbe wie Copyright,
+                kein Underline, nur durch dezente Trenn-Mittelpunkt sichtbar.
+                Bleibt für Direktaufruf via /brand erreichbar; SectionNav etc.
+                im /brand selbst funktionieren wie bisher. */}
+            {" · "}
+            <Link
+              href="/brand"
+              style={{ color: "inherit", textDecoration: "none" }}
+              aria-label="Glev Brand Book"
+            >
+              Brand
+            </Link>
+          </span>
         </div>
         <div style={{ maxWidth: 560, lineHeight: 1.5 }}>
           Glev ist ein Dokumentations- und Organisations-Tool, kein
