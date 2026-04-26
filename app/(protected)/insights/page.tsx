@@ -2,17 +2,27 @@
 
 import React, { useState, useEffect, useId } from "react";
 import { fetchMeals, type Meal } from "@/lib/meals";
+import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
+import { computeAdaptiveICR } from "@/lib/engine/adaptiveICR";
+import { detectPattern } from "@/lib/engine/patterns";
+import { suggestAdjustment, type AdaptiveSettings, type AdjustmentSuggestion } from "@/lib/engine/adjustment";
 import SortableCardGrid, { type SortableItem } from "@/components/SortableCardGrid";
 import { useCardOrder } from "@/lib/cardOrder";
-import { parseDbTs } from "@/lib/time";
+import { parseDbTs, parseDbDate } from "@/lib/time";
 
-/** Default top-to-bottom order — mirrors the homepage hero phone mockup
- *  (`InsightsScreen()` in `components/AppMockupPhone.tsx`) 1:1. */
+/** Default top-to-bottom order. Hero block (time-in-range, gmi-a1c,
+ *  glucose-trend, meal-evaluation) mirrors the homepage `InsightsScreen()`
+ *  mockup 1:1; deeper-analysis cards stack underneath for variety. */
 const INSIGHTS_DEFAULT_ORDER = [
   "time-in-range",
   "gmi-a1c",
   "glucose-trend",
   "meal-evaluation",
+  "adaptive-engine",
+  "patterns",
+  "meal-type",
+  "time-of-day",
+  "performance-tiles",
 ];
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
@@ -105,8 +115,6 @@ export default function InsightsPage() {
       avg: dayBgs.length ? dayBgs.reduce((a, b) => a + b, 0) / dayBgs.length : null,
     });
   }
-  // Forward-fill missing days so the line stays continuous; if the very
-  // first day has no data, fall back to the overall avg (or 100 mg/dL).
   let lastVal: number | null = null;
   const firstFallback = last7Avg ?? 100;
   const trendValues: number[] = trendDays.map(d => {
@@ -129,11 +137,89 @@ export default function InsightsPage() {
     { label:"Low risk",  count:lowN,   color:PINK,   pct:evalPct(lowN)   },
   ];
 
+  // ── Deeper-analysis derivations (used by cards under the hero block) ──
+  const normed     = meals.map(m => ({ ...m, ev: EVAL_NORM(m.evaluation) }));
+  const goodAll    = normed.filter(m => m.ev==="GOOD").length;
+  const goodRate   = Math.round(goodAll/total*100);
+  const avgGlucose = Math.round(meals.filter(m=>m.glucose_before).reduce((s,m)=>s+(m.glucose_before||0),0) / Math.max(meals.filter(m=>m.glucose_before).length,1));
+  const avgCarbs   = Math.round(meals.filter(m=>m.carbs_grams).reduce((s,m)=>s+(m.carbs_grams||0),0) / Math.max(meals.filter(m=>m.carbs_grams).length,1));
+  const avgInsulin = (meals.filter(m=>m.insulin_units).reduce((s,m)=>s+(m.insulin_units||0),0) / Math.max(meals.filter(m=>m.insulin_units).length,1)).toFixed(1);
+  const icr7 = meals.slice(0,7).filter(m=>m.carbs_grams&&m.insulin_units).map(m=>(m.carbs_grams||0)/(m.insulin_units||1));
+  const estICR = icr7.length ? Math.round(icr7.reduce((a,b)=>a+b,0)/icr7.length) : 15;
+
+  // Meal type breakdown (FAST_CARBS / HIGH_PROTEIN / HIGH_FAT / BALANCED)
+  const types: Record<string, {count:number; totalCarbs:number; totalInsulin:number; good:number}> = {
+    FAST_CARBS:   {count:0,totalCarbs:0,totalInsulin:0,good:0},
+    HIGH_PROTEIN: {count:0,totalCarbs:0,totalInsulin:0,good:0},
+    HIGH_FAT:     {count:0,totalCarbs:0,totalInsulin:0,good:0},
+    BALANCED:     {count:0,totalCarbs:0,totalInsulin:0,good:0},
+  };
+  meals.forEach(m => {
+    const t = m.meal_type || "BALANCED";
+    if (t in types) {
+      types[t].count++;
+      types[t].totalCarbs   += m.carbs_grams   || 0;
+      types[t].totalInsulin += m.insulin_units  || 0;
+      if (EVAL_NORM(m.evaluation)==="GOOD") types[t].good++;
+    }
+  });
+  const TYPE_ORDER = ["FAST_CARBS", "HIGH_PROTEIN", "HIGH_FAT", "BALANCED"] as const;
+
+  // Time-of-day buckets
+  const timeGroups: Record<string,{count:number;good:number}> = {
+    "Morning (5–11)":    {count:0,good:0},
+    "Afternoon (11–17)": {count:0,good:0},
+    "Evening (17–21)":   {count:0,good:0},
+    "Night (21–5)":      {count:0,good:0},
+  };
+  meals.forEach(m => {
+    const h = parseDbDate(m.created_at).getHours();
+    const key = h >= 5 && h < 11 ? "Morning (5–11)"
+              : h >= 11 && h < 17 ? "Afternoon (11–17)"
+              : h >= 17 && h < 21 ? "Evening (17–21)"
+              : "Night (21–5)";
+    timeGroups[key].count++;
+    if (EVAL_NORM(m.evaluation)==="GOOD") timeGroups[key].good++;
+  });
+
+  // Pattern detection (last 10 meals + time-of-day cross-check)
+  const recentMeals = meals.slice(0, 10);
+  const recentGood  = recentMeals.filter(m=>EVAL_NORM(m.evaluation)==="GOOD").length;
+  const recentLow   = recentMeals.filter(m=>EVAL_NORM(m.evaluation)==="LOW").length;
+  const recentHigh  = recentMeals.filter(m=>EVAL_NORM(m.evaluation)==="HIGH").length;
+  const patterns: {icon:string;title:string;desc:string;color:string}[] = [];
+  if (recentLow >= 4)  patterns.push({ icon:"↑", title:"Consistent under-dosing", desc:`${recentLow} of last 10 meals were under-dosed. Consider increasing your ICR ratio or checking carb counts.`, color:ORANGE });
+  if (recentHigh >= 3) patterns.push({ icon:"↓", title:"Frequent over-dosing", desc:`${recentHigh} of last 10 meals led to over-dose. Review correction factor — it may be too aggressive.`, color:PINK });
+  if (recentGood >= 7) patterns.push({ icon:"✓", title:"Strong recent control", desc:`${recentGood} of your last 10 meals were well-dosed. Your current insulin strategy is working.`, color:GREEN });
+  const morningSucc = timeGroups["Morning (5–11)"];
+  const eveningSucc = timeGroups["Evening (17–21)"];
+  if (morningSucc.count >= 3 && morningSucc.good/morningSucc.count < 0.5) patterns.push({ icon:"☀", title:"Morning control issues", desc:"Morning meals have a lower success rate. Dawn phenomenon may be increasing insulin resistance.", color:ORANGE });
+  if (eveningSucc.count >= 3 && eveningSucc.good/eveningSucc.count > 0.8) patterns.push({ icon:"🌙", title:"Evening dosing strength", desc:"Evening meal dosing is particularly accurate. Use evening meals as reference for ICR calibration.", color:ACCENT });
+  if (patterns.length === 0) patterns.push({ icon:"→", title:"No strong patterns yet", desc:"Log 15+ meals to activate pattern detection. More data reveals deeper insights.", color:"rgba(255,255,255,0.3)" });
+
+  // Adaptive engine derivations
+  const adaptiveICR  = computeAdaptiveICR(meals);
+  const enginePattern = detectPattern(meals);
+  const settings: AdaptiveSettings = {
+    icr: adaptiveICR.global ? Math.round(adaptiveICR.global * 10) / 10 : 15,
+    correctionFactor: 50,
+    lastUpdated: null,
+    adjustmentHistory: [],
+  };
+  const suggestion: AdjustmentSuggestion = suggestAdjustment(settings, enginePattern);
+
+  const TYPE_HELP: Record<string, string> = {
+    FAST_CARBS:   "Quick-digesting carbs. Pre-bolus 10–15 min ahead.",
+    HIGH_PROTEIN: "Slower glucose rise; some users need a small carb-equivalent dose for protein.",
+    HIGH_FAT:     "Fat-heavy meals delay carb absorption — consider a split or extended bolus.",
+    BALANCED:     "Mixed macros at moderate amounts. Most predictable for standard ICR dosing.",
+  };
+
   // ─────────────────────────────────────────────────────────────────
-  // Card definitions — each one matches the mockup phone's
-  // `InsightsScreen()` proportions exactly (12px×14px padding, 9px
-  // uppercase labels, 36px / 24px hero numbers, height-12 stacked bars,
-  // height-36 sparkline, height-6 evaluation bars).
+  // HERO cards (mockup 1:1) + DEEPER-ANALYSIS cards underneath.
+  // Hero matches `InsightsScreen()` in components/AppMockupPhone.tsx
+  // exactly (12×14 padding, 9 px uppercase labels, 36/24 hero numbers).
+  // Deeper cards reuse the same compact language for visual consistency.
   // ─────────────────────────────────────────────────────────────────
   const items: SortableItem[] = [
     {
@@ -192,8 +278,8 @@ export default function InsightsPage() {
       ),
     },
     {
-      // Two side-by-side stat cards — kept under the legacy "gmi-a1c"
-      // ID so persisted card-orders from earlier versions keep working.
+      // Two side-by-side stat cards. ID kept as "gmi-a1c" for backwards
+      // compat with persisted card-orders from earlier versions.
       id: "gmi-a1c",
       node: (
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
@@ -336,6 +422,196 @@ export default function InsightsPage() {
         </FlipCard>
       ),
     },
+    // ──── Deeper analysis cards (below the hero block) ────
+    {
+      id: "adaptive-engine",
+      node: (
+        <FlipCard
+          accent={ACCENT}
+          back={
+            <FlipBack
+              title="Adaptive Engine"
+              accent={ACCENT}
+              paragraphs={[
+                `Glev learns your insulin-to-carb ratio (ICR) from finalised meals — meals where bg_2h is logged. Confidence rises with sample size and stability of recent ratios.`,
+                `Pattern: "${enginePattern.label}" computed from ${enginePattern.sampleSize} final meals. The engine flags consistent under- or over-dosing and proposes ICR or correction-factor changes.`,
+                `Any suggestion is advisory only — please confirm changes with your clinician before adopting them.`,
+              ]}
+            />
+          }
+        >
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8, gap:8 }}>
+            <CardLabel text="Adaptive engine"/>
+            <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)", whiteSpace:"nowrap" }}>
+              ICR <span style={{ color:adaptiveICR.global ? GREEN : "rgba(255,255,255,0.4)", fontWeight:700 }}>
+                {adaptiveICR.global ? `1:${(Math.round(adaptiveICR.global*10)/10)}` : "–"}
+              </span>
+            </div>
+          </div>
+          <div style={{ fontSize:11, color:"rgba(255,255,255,0.65)", lineHeight:1.5, marginBottom:6 }}>
+            <span style={{ color:"#fff", fontWeight:600 }}>{enginePattern.label}</span>
+            <span style={{ color:"rgba(255,255,255,0.35)" }}> · {enginePattern.sampleSize} final meals · confidence {enginePattern.confidence}</span>
+          </div>
+          <div style={{ fontSize:11, color:"rgba(255,255,255,0.55)", lineHeight:1.5 }}>
+            {enginePattern.explanation}
+          </div>
+          {(suggestion.hasSuggestion || enginePattern.type === "spiking" || enginePattern.type === "overdosing" || enginePattern.type === "underdosing") && (
+            <div style={{ marginTop:10, padding:"8px 10px", borderRadius:8, background:"rgba(79,110,247,0.08)", border:`1px solid ${ACCENT}33` }}>
+              <div style={{ fontSize:9, fontWeight:700, color:ACCENT, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:4 }}>
+                {suggestion.hasSuggestion ? "Suggested adjustment" : "Advisory"}
+              </div>
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.85)", lineHeight:1.5 }}>{suggestion.message}</div>
+            </div>
+          )}
+        </FlipCard>
+      ),
+    },
+    {
+      id: "patterns",
+      node: (
+        <FlipCard
+          accent={PINK}
+          back={
+            <FlipBack
+              title="Pattern Detection"
+              accent={PINK}
+              paragraphs={[
+                "Glev scans the most recent 10 meals plus your time-of-day breakdown looking for repeating signals: consistent under-dosing, frequent over-dosing, strong recent control, weak mornings or strong evenings.",
+                "Patterns only fire when there's enough recent data — log 15+ meals to unlock the full set of detectors.",
+                "These flags are heuristics, not diagnoses. Use them as starting points for conversations with your clinician.",
+              ]}
+            />
+          }
+        >
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+            <CardLabel text="Pattern detection"/>
+            <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>{patterns.length} signal{patterns.length===1?"":"s"}</div>
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+            {patterns.map((p, i) => (
+              <div key={i} style={{ display:"flex", gap:8, padding:"8px 10px", background:`${p.color}08`, border:`1px solid ${p.color}20`, borderRadius:10, alignItems:"flex-start" }}>
+                <div style={{ width:22, height:22, borderRadius:99, background:`${p.color}20`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:11 }}>
+                  {p.icon}
+                </div>
+                <div style={{ minWidth:0 }}>
+                  <div style={{ fontSize:11, fontWeight:600, color:p.color, marginBottom:2 }}>{p.title}</div>
+                  <div style={{ fontSize:10, color:"rgba(255,255,255,0.5)", lineHeight:1.45 }}>{p.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </FlipCard>
+      ),
+    },
+    {
+      id: "meal-type",
+      node: (
+        <FlipCard
+          accent={ORANGE}
+          back={
+            <FlipBack
+              title="Meal Type Analysis"
+              accent={ORANGE}
+              paragraphs={[
+                "Glev classifies every meal into one of four macro profiles — Fast Carbs, High Protein, High Fat, or Balanced — based on the ratio of carbs, protein and fat.",
+                "Success % is the share of meals in that category that landed in the GOOD outcome band. Categories with low success often need a different bolus strategy (timing, split dose, extended bolus).",
+                "Categories with no logged meals are shown empty — log at least one meal of that type to see numbers.",
+              ]}
+            />
+          }
+        >
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+            <CardLabel text="Meal type · success %"/>
+            <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>by macro profile</div>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
+            {TYPE_ORDER.map(type => {
+              const data = types[type];
+              const has = data.count > 0;
+              const successPct = has ? Math.round(data.good/data.count*100) : 0;
+              const avgC = has ? Math.round(data.totalCarbs/data.count) : 0;
+              const avgI = has ? (data.totalInsulin/data.count).toFixed(1) : "0.0";
+              const col  = TYPE_COLORS[type];
+              const barCol = !has ? "rgba(255,255,255,0.12)" : successPct>=70?GREEN:successPct>=50?ORANGE:PINK;
+              return (
+                <div key={type} style={{ background:`${col}08`, border:`1px solid ${col}20`, borderRadius:10, padding:"8px 10px", opacity: has ? 1 : 0.55 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6, gap:4 }}>
+                    <div style={{ fontSize:9, fontWeight:700, color:col, letterSpacing:"0.06em", textTransform:"uppercase", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{TYPE_LABELS[type]}</div>
+                    <div style={{ fontSize:11, fontWeight:700, color:has?barCol:"rgba(255,255,255,0.3)", fontFamily:"var(--font-mono)" }}>
+                      {has ? `${successPct}%` : "—"}
+                    </div>
+                  </div>
+                  <div style={{ height:4, borderRadius:99, background:"rgba(255,255,255,0.05)", overflow:"hidden", marginBottom:6 }}>
+                    <div style={{ height:"100%", width:`${successPct}%`, background:barCol, borderRadius:99 }}/>
+                  </div>
+                  <div style={{ fontSize:9, color:"rgba(255,255,255,0.45)", lineHeight:1.4 }}>
+                    {has ? `${data.count} meal${data.count===1?"":"s"} · ${avgC}g · ${avgI}u` : "No data"}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </FlipCard>
+      ),
+    },
+    {
+      id: "time-of-day",
+      node: (
+        <FlipCard
+          accent={GREEN}
+          back={
+            <FlipBack
+              title="Time-of-Day Analysis"
+              accent={GREEN}
+              paragraphs={[
+                "Meals are grouped by the hour of day they were logged: Morning (5–11), Afternoon (11–17), Evening (17–21), Night (21–5).",
+                "Success % is the share of meals in that window that landed GOOD. A weak window (e.g. mornings <50%) often points at the dawn phenomenon, where insulin sensitivity is lower and you may need a higher morning ICR.",
+                "Strong windows (>80%) are reliable references when you're calibrating your dosing for new foods.",
+              ]}
+            />
+          }
+        >
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+            <CardLabel text="Time of day · success %"/>
+            <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>by window</div>
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+            {Object.entries(timeGroups).map(([label, data]) => {
+              const has = data.count > 0;
+              const pct = has ? Math.round(data.good/data.count*100) : 0;
+              const col = !has ? "rgba(255,255,255,0.12)" : pct>=70?GREEN:pct>=50?ORANGE:PINK;
+              return (
+                <div key={label} style={{ display:"grid", gridTemplateColumns:"110px 1fr 32px 32px", gap:8, alignItems:"center" }}>
+                  <div style={{ fontSize:10, color:"rgba(255,255,255,0.55)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{label}</div>
+                  <div style={{ height:6, borderRadius:99, background:"rgba(255,255,255,0.04)", overflow:"hidden" }}>
+                    <div style={{ height:"100%", width:`${pct}%`, background:col, borderRadius:99 }}/>
+                  </div>
+                  <div style={{ fontSize:10, fontWeight:700, color: has?col:"rgba(255,255,255,0.3)", textAlign:"right", fontFamily:"var(--font-mono)" }}>{has?`${pct}%`:"—"}</div>
+                  <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", textAlign:"right" }}>{data.count}</div>
+                </div>
+              );
+            })}
+          </div>
+        </FlipCard>
+      ),
+    },
+    {
+      id: "performance-tiles",
+      node: (
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+          {[
+            { label:"Good rate",    val:`${goodRate}%`,  sub:`${goodAll} of ${total}`,   color:GREEN,
+              formula:"GOOD / Total × 100",            explain:"Share of meals where the dose was within ±35% of the ICR estimate." },
+            { label:"Avg glucose",  val:`${avgGlucose}`, sub:"mg/dL pre-meal",           color:ACCENT,
+              formula:"Σ glucose_before / count",      explain:"Average pre-meal glucose. Lower reflects better fasting control." },
+            { label:"Est. ICR",     val:`1:${estICR}`,   sub:"last 7 meals",             color:ORANGE,
+              formula:"carbs / insulin (last 7)",      explain:"Empirical ICR from your most recent meals. Compare to your prescribed ratio." },
+            { label:"Avg insulin",  val:`${avgInsulin}u`, sub:`${avgCarbs}g avg carbs`, color:"#A78BFA",
+              formula:"Σ units / count",               explain:"Mean insulin per meal. Track against carbs to validate your ratio." },
+          ].map((t,i) => <InsightFlipTile key={i} tile={t}/>)}
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -375,9 +651,7 @@ function CardLabel({ text, color }: { text: string; color?: string }) {
   );
 }
 
-/** Sparkline — ported 1:1 from `components/AppMockupPhone.tsx`. Renders
- *  a soft gradient fill plus a 1.8 px line through the supplied values
- *  in a 268×36 viewBox that scales to the parent width. */
+/** Sparkline — ported 1:1 from `components/AppMockupPhone.tsx`. */
 function Sparkline({ values, color }: { values: number[]; color: string }) {
   const W = 268, H = 36;
   const min = Math.min(...values), max = Math.max(...values);
@@ -403,11 +677,16 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
 }
 
 /**
- * FlipCard — generic flip wrapper used by all four insight cards.
- * Front and back are stacked in the same CSS-grid cell so the parent's
- * height automatically equals max(front, back) without us needing to
- * hard-code it.  Padding/borderRadius defaults match the mockup's
- * `MockCard` (12 × 14, radius 14).
+ * FlipCard — generic flip wrapper.
+ *
+ * IMPORTANT height behaviour: the FRONT face is in normal flow and
+ * therefore determines the card's height. The BACK face is absolutely
+ * positioned (`inset:0`) and overlays the same area — it does NOT push
+ * the parent taller no matter how much copy it contains. This is the
+ * key fix that keeps Avg BG / GMI / Meal Eval tightly fit to their
+ * front content (matching the homepage hero mockup).
+ *
+ * Padding/borderRadius defaults match the mockup's `MockCard`.
  */
 function FlipCard({
   children, back, accent = ACCENT, padding = "12px 14px",
@@ -421,35 +700,33 @@ function FlipCard({
   return (
     <div
       onClick={() => setFlipped(f => !f)}
-      style={{ position:"relative", cursor:"pointer", perspective:1400, height:"100%" }}
+      style={{ position:"relative", cursor:"pointer", perspective:1400 }}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setFlipped(f => !f); } }}
       aria-pressed={flipped}
     >
       <div style={{
-        display:"grid",
-        height:"100%",
+        position:"relative",
         transformStyle:"preserve-3d",
         transition:"transform 0.55s cubic-bezier(0.4,0,0.2,1)",
         transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
       }}>
+        {/* FRONT — normal flow, determines parent height */}
         <div style={{
-          gridArea:"1 / 1",
+          position:"relative",
           backfaceVisibility:"hidden",
           background:SURFACE,
           border:`1px solid ${BORDER}`,
           borderRadius:14,
           padding,
           boxSizing:"border-box",
-          position:"relative",
-          display:"flex",
-          flexDirection:"column",
         }}>
           {children}
         </div>
+        {/* BACK — absolute overlay, never pushes parent taller */}
         <div style={{
-          gridArea:"1 / 1",
+          position:"absolute", inset:0,
           backfaceVisibility:"hidden",
           transform:"rotateY(180deg)",
           background:`linear-gradient(145deg, ${accent}12, ${SURFACE} 65%)`,
@@ -457,7 +734,7 @@ function FlipCard({
           borderRadius:14,
           padding,
           boxSizing:"border-box",
-          overflow:"hidden",
+          overflow:"auto",
         }}>
           {back}
         </div>
@@ -468,7 +745,7 @@ function FlipCard({
 
 function FlipBack({ title, accent, paragraphs }: { title: string; accent: string; paragraphs: string[] }) {
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:8, height:"100%" }}>
+    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
         <div style={{ fontSize:10, color:accent, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>{title}</div>
         <span style={{ fontSize:9, color:"rgba(255,255,255,0.3)" }}>↺ tap to flip back</span>
@@ -476,6 +753,63 @@ function FlipBack({ title, accent, paragraphs }: { title: string; accent: string
       {paragraphs.map((p, i) => (
         <div key={i} style={{ fontSize:11, color:"rgba(255,255,255,0.65)", lineHeight:1.5 }}>{p}</div>
       ))}
+    </div>
+  );
+}
+
+/** Compact 2-up stat tile used by the performance-tiles card.
+ *  Same mockup-spec compact styling (12 px padding, 9 px label, 24 px value).
+ *  Tap-to-flip reveals the formula + a one-line explanation. */
+type InsightTile = { label:string; val:string; sub:string; color:string; formula:string; explain:string };
+function InsightFlipTile({ tile }: { tile: InsightTile }) {
+  const [flipped, setFlipped] = useState(false);
+  return (
+    <div
+      onClick={(e) => { e.stopPropagation(); setFlipped(f => !f); }}
+      role="button"
+      tabIndex={0}
+      aria-pressed={flipped}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setFlipped(f => !f); } }}
+      style={{ position:"relative", cursor:"pointer", perspective:1000 }}
+    >
+      <div style={{
+        position:"relative",
+        transformStyle:"preserve-3d",
+        transition:"transform 0.5s cubic-bezier(0.4,0,0.2,1)",
+        transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
+      }}>
+        {/* FRONT */}
+        <div style={{
+          position:"relative",
+          backfaceVisibility:"hidden",
+          background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14,
+          padding:"10px 12px", boxSizing:"border-box",
+        }}>
+          <CardLabel text={tile.label}/>
+          <div style={{ fontSize:24, fontWeight:800, color:tile.color, fontFamily:"var(--font-mono)", lineHeight:1, letterSpacing:"-0.03em", marginTop:6 }}>
+            {tile.val}
+          </div>
+          <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", marginTop:4 }}>{tile.sub}</div>
+        </div>
+        {/* BACK */}
+        <div style={{
+          position:"absolute", inset:0,
+          backfaceVisibility:"hidden",
+          transform:"rotateY(180deg)",
+          background:`linear-gradient(145deg, ${tile.color}12, ${SURFACE} 65%)`,
+          border:`1px solid ${tile.color}33`, borderRadius:14,
+          padding:"10px 12px", boxSizing:"border-box",
+          overflow:"auto",
+        }}>
+          <div style={{ fontSize:9, fontWeight:700, color:tile.color, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:4 }}>
+            {tile.label}
+          </div>
+          <div style={{ fontSize:9, color:"rgba(255,255,255,0.6)", fontFamily:"var(--font-mono)", background:"rgba(0,0,0,0.3)", padding:"4px 6px", borderRadius:5, marginBottom:4, wordBreak:"break-word" }}>
+            {tile.formula}
+          </div>
+          <div style={{ fontSize:10, color:"rgba(255,255,255,0.55)", lineHeight:1.4 }}>{tile.explain}</div>
+        </div>
+      </div>
     </div>
   );
 }
