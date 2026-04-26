@@ -5,6 +5,12 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import CgmFetchButton, { type CgmFetchResult } from "@/components/CgmFetchButton";
 import { useCrosshair, CrosshairOverlay, CrosshairTooltip, type CrosshairPoint } from "@/components/ChartCrosshair";
 import { parseLluTs as _parseLluTs } from "@/lib/time";
+import FingerstickQuickInput from "@/components/FingerstickQuickInput";
+import {
+  fetchRecentFingersticks,
+  FS_OVERRIDE_WINDOW_MS,
+  type FingerstickReading,
+} from "@/lib/fingerstick";
 
 const ACCENT = "#4F6EF7";
 const GREEN = "#22D3A0";
@@ -18,11 +24,21 @@ const RANGE_HIGH = 180;
 
 type Reading = { value: number | null; unit: string; timestamp: string | null; trend: string };
 
+/** A single chart point with its source — used by RollingChart to render
+    CGM points as a connected line (circle marker on last value) and
+    fingerstick points as standalone squares with a white outline. */
+export type ChartPoint = { t: number; v: number; source: "cgm" | "fingerstick" };
+
 type State =
   | { kind: "loading" }
   | { kind: "no-cgm" }
   | { kind: "error"; msg: string }
-  | { kind: "ok"; readings: Array<{ t: number; v: number }>; current: { v: number; t: number } | null };
+  | {
+      kind: "ok";
+      cgm: Array<{ t: number; v: number }>;
+      fingersticks: Array<{ t: number; v: number }>;
+      cgmCurrent: { v: number; t: number } | null;
+    };
 
 // The chart fills the remaining space inside the card via the DayChart's
 // own ResizeObserver, so the card height directly controls how much room
@@ -38,27 +54,38 @@ const CARD_STYLE_TAG = `
 export default function CurrentDayGlucoseCard() {
   const [s, setS] = useState<State>({ kind: "loading" });
   const [flipped, setFlipped] = useState(false);
+  const [fsOpen, setFsOpen] = useState(false);
 
   const loadHistory = useCallback(async (signal?: { cancelled: boolean }) => {
     try {
-      const data = await fetchCgmHistory();
+      // Fetch CGM history and today's fingersticks in parallel. FS failure
+      // is non-fatal — we degrade to CGM-only rather than block the card.
+      const [data, fsResult] = await Promise.all([
+        fetchCgmHistory(),
+        fetchRecentFingersticks(24).catch(() => [] as FingerstickReading[]),
+      ]);
       if (!data) throw new Error("CGM unavailable");
       const today0 = new Date();
       today0.setHours(0, 0, 0, 0);
       const todayStart = today0.getTime();
       const now = Date.now();
 
-      const all = (data.history || [])
+      const cgm = (data.history || [])
         .filter((r) => r.value != null && r.timestamp)
         .map((r) => ({ t: parseLluTs(r.timestamp!), v: r.value! }))
         .filter((r) => r.t >= todayStart && r.t <= now)
         .sort((a, b) => a.t - b.t);
 
-      const cur = data.current && data.current.value != null && data.current.timestamp
-        ? { v: data.current.value, t: parseLluTs(data.current.timestamp) }
-        : (all.length ? { v: all[all.length - 1].v, t: all[all.length - 1].t } : null);
+      const fingersticks = fsResult
+        .map((r) => ({ t: new Date(r.measured_at).getTime(), v: Number(r.value_mg_dl) }))
+        .filter((r) => Number.isFinite(r.t) && Number.isFinite(r.v) && r.t >= todayStart && r.t <= now)
+        .sort((a, b) => a.t - b.t);
 
-      if (!signal?.cancelled) setS({ kind: "ok", readings: all, current: cur });
+      const cgmCurrent = data.current && data.current.value != null && data.current.timestamp
+        ? { v: data.current.value, t: parseLluTs(data.current.timestamp) }
+        : (cgm.length ? { v: cgm[cgm.length - 1].v, t: cgm[cgm.length - 1].t } : null);
+
+      if (!signal?.cancelled) setS({ kind: "ok", cgm, fingersticks, cgmCurrent });
     } catch (e) {
       if (!signal?.cancelled) setS({ kind: "error", msg: e instanceof Error ? e.message : "fetch failed" });
     }
@@ -70,9 +97,13 @@ export default function CurrentDayGlucoseCard() {
     return () => { signal.cancelled = true; };
   }, [loadHistory]);
 
-  // Refresh full daily history after the user pulls a new latest reading.
+  // Refresh full daily history after the user pulls a new latest reading
+  // (CGM) or saves a new fingerstick. Both data streams need to re-merge.
   const onCgmRefresh = useCallback((r: CgmFetchResult) => {
     if (r.ok) loadHistory();
+  }, [loadHistory]);
+  const onFsSaved = useCallback(() => {
+    loadHistory();
   }, [loadHistory]);
 
   return (
@@ -116,7 +147,12 @@ export default function CurrentDayGlucoseCard() {
             overflow: "hidden",
           }}
         >
-          <HeroFront state={s} onCgmRefresh={onCgmRefresh} flippable={s.kind === "ok"} />
+          <HeroFront
+            state={s}
+            onCgmRefresh={onCgmRefresh}
+            onOpenFs={() => setFsOpen(true)}
+            flippable={s.kind === "ok"}
+          />
         </div>
 
         {/* BACK */}
@@ -137,9 +173,15 @@ export default function CurrentDayGlucoseCard() {
             overflow: "hidden",
           }}
         >
-          {s.kind === "ok" && <BackStats readings={s.readings} />}
+          {s.kind === "ok" && <BackStats readings={s.cgm} />}
         </div>
       </div>
+
+      {/* Fingerstick quick-input modal — rendered as a sibling of the
+          flippable inner so the modal isn't warped by the 3D transform.
+          position:fixed makes the on-screen position viewport-anchored
+          regardless of DOM placement. */}
+      <FingerstickQuickInput open={fsOpen} onClose={() => setFsOpen(false)} onSaved={onFsSaved} />
     </div>
   );
 }
@@ -158,25 +200,51 @@ export default function CurrentDayGlucoseCard() {
      │ −2h          −1h                  now        │
      └──────────────────────────────────────────────┘ */
 function HeroFront({
-  state, onCgmRefresh, flippable,
+  state, onCgmRefresh, onOpenFs, flippable,
 }: {
   state: State;
   onCgmRefresh: (r: CgmFetchResult) => void;
+  onOpenFs: () => void;
   flippable: boolean;
 }) {
-  const ok = state.kind === "ok";
-  const current = ok ? state.current : null;
-  const readings = ok ? state.readings : [];
+  const ok  = state.kind === "ok";
+  const cgm = ok ? state.cgm : [];
+  const fs  = ok ? state.fingersticks : [];
+  const cgmCurrent = ok ? state.cgmCurrent : null;
+
+  // Override rule: a fingerstick measured within FS_OVERRIDE_WINDOW_MS
+  // outranks the latest CGM value as the trustworthy "current" reading.
+  // After the window expires, we fall back to CGM automatically.
+  const now = Date.now();
+  const latestFs = fs.length ? fs[fs.length - 1] : null;
+  const fsOverride = latestFs && (now - latestFs.t) <= FS_OVERRIDE_WINDOW_MS
+    ? latestFs : null;
+  const current = fsOverride ?? cgmCurrent;
   const valueColor = current ? colorFor(current.v) : "rgba(255,255,255,0.5)";
-  const ageLabel = current ? formatAge(Date.now() - current.t) : null;
+  const ageLabel = current ? formatAge(now - current.t) : null;
+
+  // Trend delta is CGM-derived: fingersticks are too sparse to drive a
+  // 15-min slope. Skipped while a FS override is active to avoid the
+  // confusing combination of "current=FS" + "delta=from CGM".
   const delta = useMemo(
-    () => computeDelta15m(readings, current),
-    [readings, current],
+    () => fsOverride ? null : computeDelta15m(cgm, cgmCurrent),
+    [cgm, cgmCurrent, fsOverride],
   );
+
+  // Merged points handed to the chart, sorted chronologically. The chart
+  // distinguishes them visually (CGM = connected line + circle on last,
+  // fingersticks = standalone squares with white outline).
+  const chartPoints: ChartPoint[] = useMemo(() => {
+    const merged: ChartPoint[] = [
+      ...cgm.map((r) => ({ t: r.t, v: r.v, source: "cgm" as const })),
+      ...fs.map((r) => ({ t: r.t, v: r.v, source: "fingerstick" as const })),
+    ];
+    return merged.sort((a, b) => a.t - b.t);
+  }, [cgm, fs]);
 
   return (
     <>
-      {/* Header row — uppercase pill label LEFT, age + refresh + flip RIGHT */}
+      {/* Header row — uppercase pill label LEFT, age + FS + refresh + flip RIGHT */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
       }}>
@@ -195,6 +263,27 @@ function HeroFront({
               {ageLabel}
             </span>
           )}
+          {/* Manual fingerstick entry — opens the quick-input modal.
+              stopPropagation so the parent card doesn't flip on click. */}
+          <button
+            onClick={(e) => { e.stopPropagation(); onOpenFs(); }}
+            title="Manual fingerstick reading"
+            aria-label="Log manual fingerstick reading"
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 4,
+              padding: "3px 8px", borderRadius: 99,
+              border: `1px solid rgba(255,255,255,0.18)`,
+              background: "rgba(255,255,255,0.05)",
+              color: "rgba(255,255,255,0.7)",
+              fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
+              cursor: "pointer", textTransform: "uppercase",
+            }}
+          >
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
+            FS
+          </button>
           {(ok || state.kind === "error") && (
             <CgmFetchButton variant="ghost" onResult={onCgmRefresh} title="Refresh CGM" />
           )}
@@ -214,6 +303,18 @@ function HeroFront({
             {Math.round(current.v)}
           </span>
           <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>mg/dL</span>
+          {fsOverride && (
+            <span style={{
+              padding: "2px 7px", borderRadius: 99,
+              background: "rgba(255,255,255,0.08)",
+              border: "1px solid rgba(255,255,255,0.2)",
+              color: "rgba(255,255,255,0.85)",
+              fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
+              textTransform: "uppercase",
+            }}>
+              FS
+            </span>
+          )}
           {delta && (
             <span style={{
               marginLeft: "auto", display: "flex", alignItems: "center", gap: 4,
@@ -237,8 +338,8 @@ function HeroFront({
       )}
 
       {/* Chart fills remaining card height */}
-      {ok && readings.length > 0 ? (
-        <RollingChart readings={readings} />
+      {ok && chartPoints.length > 0 ? (
+        <RollingChart readings={chartPoints} />
       ) : (
         <div style={{ flex: 1 }} />
       )}
@@ -318,7 +419,7 @@ function computeDelta15m(
    tracks `glucoseLineColor(last.v)` — a smooth ramp through Tailwind
    red/blue/green/yellow/orange so proximity to thresholds reads at a
    glance and the line color updates dynamically each refresh. */
-function RollingChart({ readings }: { readings: Array<{ t: number; v: number }> }) {
+function RollingChart({ readings }: { readings: ChartPoint[] }) {
   // Measure the container so the SVG always renders in true pixel space.
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState<{ w: number; h: number }>({ w: 720, h: 200 });
@@ -352,6 +453,12 @@ function RollingChart({ readings }: { readings: Array<{ t: number; v: number }> 
     [readings, winStart, now],
   );
 
+  // Split for rendering: CGM drives the connected trace + last-point dot;
+  // fingersticks render as standalone squares with a white outline ON TOP
+  // of the trace so they remain visually distinct from CGM circles.
+  const visibleCgm = useMemo(() => visible.filter((r) => r.source === "cgm"),         [visible]);
+  const visibleFs  = useMemo(() => visible.filter((r) => r.source === "fingerstick"), [visible]);
+
   const yMin = 40;
   const yMax = 300;
   const toX = (t: number) => padL + ((t - winStart) / (now - winStart)) * (W - padL - padR);
@@ -364,22 +471,24 @@ function RollingChart({ readings }: { readings: Array<{ t: number; v: number }> 
     { t: now,                       label: "now"  },
   ];
 
-  const path = visible.map((r, i) => `${i === 0 ? "M" : "L"}${toX(r.t).toFixed(1)},${toY(r.v).toFixed(1)}`).join(" ");
-  const last = visible[visible.length - 1];
-  const lastX = last ? toX(last.t) : 0;
-  const lastY = last ? toY(last.v) : 0;
-  const lastC = last ? glucoseLineColor(last.v) : ACCENT;
+  const path = visibleCgm.map((r, i) => `${i === 0 ? "M" : "L"}${toX(r.t).toFixed(1)},${toY(r.v).toFixed(1)}`).join(" ");
+  const lastCgm = visibleCgm[visibleCgm.length - 1];
+  const lastX = lastCgm ? toX(lastCgm.t) : 0;
+  const lastY = lastCgm ? toY(lastCgm.v) : 0;
+  const lastC = lastCgm ? glucoseLineColor(lastCgm.v) : ACCENT;
 
-  // Crosshair-snappable points (pixel space).
+  // Crosshair-snappable points (pixel space). Includes BOTH CGM and FS so
+  // the user can hover/touch either kind of marker.
   const crosshairPoints = useMemo<CrosshairPoint[]>(() => {
     if (W <= 0 || H <= 0) return [];
     return visible.map((r) => {
       const fmtTime = new Date(r.t).toLocaleTimeString("en", { hour: "2-digit", minute: "2-digit", hour12: false });
+      const tag = r.source === "fingerstick" ? "FS" : "CGM";
       return {
         x: toX(r.t),
         y: toY(r.v),
         color: glucoseLineColor(r.v),
-        tooltip: [fmtTime, `${Math.round(r.v)} mg/dL`],
+        tooltip: [fmtTime, `${Math.round(r.v)} mg/dL · ${tag}`],
       };
     });
     // toX/toY depend on W/H/winStart/now; visible + W + H captures it all.
@@ -440,10 +549,24 @@ function RollingChart({ readings }: { readings: Array<{ t: number; v: number }> 
               })}
             </g>
           )}
-          {/* Trace */}
+          {/* Trace (CGM only — fingersticks are isolated measurements) */}
           <path d={path} fill="none" stroke={lastC} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          {/* Last point */}
-          {last && <circle cx={lastX} cy={lastY} r="4" fill={lastC} stroke={SURFACE} strokeWidth="1.5" />}
+          {/* Last CGM point */}
+          {lastCgm && <circle cx={lastX} cy={lastY} r="4" fill={lastC} stroke={SURFACE} strokeWidth="1.5" />}
+          {/* Fingerstick markers — 8×8 squares with white outline so they
+              visually contrast with the CGM trace and the last-point dot. */}
+          {visibleFs.map((r, i) => {
+            const cx = toX(r.t);
+            const cy = toY(r.v);
+            return (
+              <rect
+                key={`fs${i}-${r.t}`}
+                x={cx - 4} y={cy - 4} width={8} height={8}
+                fill={glucoseLineColor(r.v)}
+                stroke="#ffffff" strokeWidth="1.5"
+              />
+            );
+          })}
           {/* Crosshair */}
           <CrosshairOverlay
             active={active}

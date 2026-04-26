@@ -11,6 +11,7 @@ import EngineLogTab, { InsulinForm, ExerciseForm } from "@/components/EngineLogT
 import GlevLogo from "@/components/GlevLogo";
 import EngineChatPanel, { type SeedMessage } from "@/components/EngineChatPanel";
 import { fetchLatestCgm } from "@/components/CgmFetchButton";
+import { fetchLatestFingerstick, FS_OVERRIDE_WINDOW_MS } from "@/lib/fingerstick";
 import { parseDbTs, parseDbDate, parseLluTs } from "@/lib/time";
 
 // datetime-local needs "YYYY-MM-DDTHH:mm" in the *local* timezone (the input
@@ -288,8 +289,13 @@ export default function EnginePage() {
     }
   }
 
-  // Pull the latest reading from the user's connected CGM (LibreLinkUp via
-  // /api/cgm/latest). Replaces the earlier random-number placeholder.
+  // Pull the latest glucose reading for the engine's glucose-before field.
+  //
+  // Source priority:
+  //   1. Manual fingerstick measured within FS_OVERRIDE_WINDOW_MS — capillary
+  //      blood is the gold standard, so a fresh fingerstick outranks CGM.
+  //   2. Latest CGM reading via /api/cgm/latest (LibreLinkUp).
+  //
   // Triggered both by the "CGM" button and automatically after a successful
   // voice meal-submission (see handleVoice below) so the glucose-before
   // field always reflects the user's level at meal time.
@@ -297,6 +303,22 @@ export default function EnginePage() {
     if (cgmPulling) return;
     setCgmPulling(true);
     try {
+      // Step 1 — try a recent fingerstick. Non-fatal on failure: fall through
+      // to CGM rather than blocking the calculation.
+      const fs = await fetchLatestFingerstick().catch(() => null);
+      if (fs) {
+        const measuredMs = new Date(fs.measured_at).getTime();
+        if (Number.isFinite(measuredMs) && (Date.now() - measuredMs) <= FS_OVERRIDE_WINDOW_MS) {
+          const reading = Math.round(Number(fs.value_mg_dl));
+          setGlucose(String(reading));
+          const d = new Date(measuredMs);
+          setLastReading(`${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")} · FS`);
+          logDebug("ENGINE.FS_USED", { reading, measured_at: fs.measured_at });
+          return;
+        }
+      }
+
+      // Step 2 — fall back to CGM.
       const r = await fetchLatestCgm();
       if (r.ok) {
         const reading = Math.round(r.value);
