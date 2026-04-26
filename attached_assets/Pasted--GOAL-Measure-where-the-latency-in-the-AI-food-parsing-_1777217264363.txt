@@ -1,0 +1,72 @@
+## GOAL
+Measure where the latency in the AI food parsing pipeline actually comes from.
+Do NOT optimize yet — only instrument and report.
+
+---
+
+## STEP 1 — Add timing logs to the parse-food API route
+
+Find the API route that handles food parsing (likely app/api/parse-food/route.ts or similar).
+
+Add console.time / console.timeEnd (or Date.now() deltas) around each stage:
+
+const t0 = Date.now()
+
+// [existing] Whisper transcription (if voice)
+const t1 = Date.now()
+console.log('[PERF] Whisper transcription:', t1 - t0, 'ms')
+
+// [existing] GPT-4o mini parsing call
+const t2 = Date.now()
+console.log('[PERF] GPT parsing:', t2 - t1, 'ms')
+
+// [existing] Response build + return
+const t3 = Date.now()
+console.log('[PERF] Total route time:', t3 - t0, 'ms')
+
+Add these logs without changing any existing logic. If voice and text parsing go through different code paths, add logs to both.
+
+---
+
+## STEP 2 — Add client-side timing
+
+In the component that calls the parse-food API (likely the AI Food Parser chip or the form on /log):
+
+Add timing from the moment the API call is fired to the moment the response is received:
+
+const clientStart = Date.now()
+const result = await fetch('/api/parse-food', ...)
+console.log('[PERF] Client round-trip:', Date.now() - clientStart, 'ms')
+
+---
+
+## STEP 3 — Run 5 test parses and report results
+
+After adding the logs:
+1. Test with a voice input (e.g. "Pasta mit Pesto, 250 Gramm")
+2. Test with a text input (e.g. "handful blueberries, 2 eggs")
+3. Run each 3 times
+
+Report the timing breakdown as a table:
+
+| Test | Whisper (ms) | GPT (ms) | Other (ms) | Total route (ms) | Client round-trip (ms) |
+|---|---|---|---|---|---|
+| Voice 1 | | | | | |
+| Voice 2 | | | | | |
+| Voice 3 | | | | | |
+| Text 1 | — | | | | |
+| Text 2 | — | | | | |
+| Text 3 | — | | | | |
+
+"Other" = total route time minus Whisper minus GPT (= overhead, cold starts, etc.)
+
+---
+
+## STEP 4 — Report findings
+
+After the table, answer:
+1. Which stage takes the most time on average?
+2. Is there significant variance between runs (cold start effect)?
+3. Is client round-trip significantly higher than total route time (= network overhead)?
+
+Do NOT make any changes to logic, models, or prompts — only add timing instrumentation.
