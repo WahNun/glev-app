@@ -775,7 +775,7 @@ export default function EnginePage() {
               const fNum = parseFloat(fat) || 0;
               const cls = filled ? classifyMeal(cNum, pNum, fNum) : null;
               const color = cls ? (TYPE_COLORS[cls as string] || ACCENT) : "rgba(255,255,255,0.35)";
-              const label = cls ? TYPE_LABELS[cls] : "Auto from macros";
+              const label = parsing ? "Parsing…" : cls ? TYPE_LABELS[cls] : "Auto from macros";
               return (
                 <div>
                   <label style={{ fontSize:11, color:"rgba(255,255,255,0.4)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:600, display:"block", marginBottom:6 }}>
@@ -784,15 +784,24 @@ export default function EnginePage() {
                   <div style={{
                     ...inp,
                     display:"flex", alignItems:"center", gap:10,
-                    color: cls ? "#fff" : "rgba(255,255,255,0.45)",
-                    fontWeight: cls ? 600 : 400,
+                    color: parsing ? ACCENT : cls ? "#fff" : "rgba(255,255,255,0.45)",
+                    fontWeight: parsing || cls ? 600 : 400,
                   }}>
-                    <span style={{
-                      width:8, height:8, borderRadius:"50%",
-                      background: color,
-                      boxShadow: cls ? `0 0 6px ${color}` : "none",
-                      flexShrink:0,
-                    }}/>
+                    {parsing ? (
+                      <svg width="14" height="14" viewBox="0 0 24 24" style={{ flexShrink:0 }} aria-hidden="true">
+                        <circle cx="12" cy="12" r="9" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="3"/>
+                        <path d="M21 12a9 9 0 0 0-9-9" fill="none" stroke={ACCENT} strokeWidth="3" strokeLinecap="round">
+                          <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.8s" repeatCount="indefinite"/>
+                        </path>
+                      </svg>
+                    ) : (
+                      <span style={{
+                        width:8, height:8, borderRadius:"50%",
+                        background: color,
+                        boxShadow: cls ? `0 0 6px ${color}` : "none",
+                        flexShrink:0,
+                      }}/>
+                    )}
                     {label}
                   </div>
                 </div>

@@ -666,12 +666,21 @@ export default function LogPage() {
               const hasMacros = totalCarbs > 0 || totalProtein > 0 || totalFat > 0;
               const t = hasMacros ? classifyMeal(totalCarbs, totalProtein, totalFat) : null;
               const color = t ? (TYPE_COLORS[t] || ACCENT) : "rgba(255,255,255,0.3)";
-              const label = t ? (TYPE_LABELS[t] || t) : "Auto from macros";
+              const label = parsing ? "Parsing…" : t ? (TYPE_LABELS[t] || t) : "Auto from macros";
               return (
-                <div style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 12px", borderRadius:10, background:t ? `${color}14` : "rgba(255,255,255,0.03)", border:`1px solid ${t ? `${color}55` : "rgba(255,255,255,0.08)"}` }}>
-                  <div style={{ width:8, height:8, borderRadius:99, background:color, boxShadow:t ? `0 0 6px ${color}88` : "none" }}/>
-                  <span style={{ fontSize:13, fontWeight:700, color:t ? color : "rgba(255,255,255,0.4)", letterSpacing:"-0.01em" }}>{label}</span>
-                  {t && <span style={{ marginLeft:"auto", fontSize:10, color:"rgba(255,255,255,0.35)", letterSpacing:"0.04em" }}>auto</span>}
+                <div style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 12px", borderRadius:10, background: parsing ? `${ACCENT}14` : t ? `${color}14` : "rgba(255,255,255,0.03)", border:`1px solid ${parsing ? `${ACCENT}55` : t ? `${color}55` : "rgba(255,255,255,0.08)"}` }}>
+                  {parsing ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" style={{ flexShrink:0 }} aria-hidden="true">
+                      <circle cx="12" cy="12" r="9" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="3"/>
+                      <path d="M21 12a9 9 0 0 0-9-9" fill="none" stroke={ACCENT} strokeWidth="3" strokeLinecap="round">
+                        <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.8s" repeatCount="indefinite"/>
+                      </path>
+                    </svg>
+                  ) : (
+                    <div style={{ width:8, height:8, borderRadius:99, background:color, boxShadow:t ? `0 0 6px ${color}88` : "none" }}/>
+                  )}
+                  <span style={{ fontSize:13, fontWeight:700, color: parsing ? ACCENT : t ? color : "rgba(255,255,255,0.4)", letterSpacing:"-0.01em" }}>{label}</span>
+                  {!parsing && t && <span style={{ marginLeft:"auto", fontSize:10, color:"rgba(255,255,255,0.35)", letterSpacing:"0.04em" }}>auto</span>}
                 </div>
               );
             })()}
