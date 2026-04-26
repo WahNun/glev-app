@@ -1,0 +1,72 @@
+# Prompt für Replit AI — /signin 404 untersuchen und beheben
+
+Copy everything between `=== BEGIN PROMPT ===` and `=== END PROMPT ===` into Replit AI.
+
+---
+
+=== BEGIN PROMPT ===
+
+You are working inside the Glev Next.js repl. The task is to investigate why `/signin` returns a 404 and fix it so users can actually log in.
+
+## Step 1 — Audit the auth structure
+
+Run these checks and report ALL output:
+
+1. `find app -type f | grep -E "sign|auth|login|callback" | sort` — find all auth-related routes
+2. `cat app/layout.tsx` — check for redirect logic or middleware references
+3. `cat middleware.ts 2>/dev/null || echo "no middleware.ts"` — check middleware
+4. `cat app/(protected)/layout.tsx 2>/dev/null || echo "not found"` — check protected group layout
+5. Check if any of these paths exist as files:
+   - `app/signin/page.tsx`
+   - `app/sign-in/page.tsx`
+   - `app/auth/page.tsx`
+   - `app/auth/login/page.tsx`
+   - `app/login/page.tsx`
+
+Report exactly which files exist and which don't.
+
+## Step 2 — Understand the Supabase auth flow
+
+6. `cat lib/supabase.ts` — check if it's a browser client or server client
+7. Look for any `supabase.auth.signIn` or `supabase.auth.signInWithPassword` calls — report which files they appear in
+
+## Step 3 — Fix
+
+Based on what you find, do ONE of the following:
+
+**Option A** — If there's an existing login page at a different path (e.g. `/auth/login`):
+- Create `app/signin/page.tsx` that simply does a client-side redirect to the real login path:
+```tsx
+"use client";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+export default function SignInRedirect() {
+  const router = useRouter();
+  useEffect(() => { router.replace("/auth/login"); }, []);
+  return null;
+}
+```
+Replace `/auth/login` with the actual path you found.
+
+**Option B** — If there is NO login page anywhere:
+- Create `app/signin/page.tsx` as a real Supabase email+password login page using inline styles matching the Glev dark theme (SURFACE `#111117`, ACCENT `#4F6EF7`, text white). It should:
+  - Have email + password inputs
+  - Call `supabase.auth.signInWithPassword({ email, password })`
+  - On success redirect to `/(protected)/dashboard` or `/dashboard` (whichever exists)
+  - On error show the error message in PINK `#FF2D78`
+  - Match the existing dark card style used elsewhere in the app
+
+## Step 4 — Verify
+
+7. `npm run build` — confirm no TypeScript errors
+8. Confirm that navigating to `/signin` now renders something (not 404)
+
+## Rules
+
+- Do NOT change any working auth logic
+- Do NOT touch middleware unless it's causing the 404 directly
+- Do NOT install new packages
+- Use inline styles only, no Tailwind or new CSS files
+- npm only, no pnpm
+
+=== END PROMPT ===
