@@ -532,6 +532,9 @@ export default function InsightsPage() {
                       {suggestion.hasSuggestion ? "Suggested adjustment" : "Advisory"}
                     </div>
                     <div style={{ fontSize:11, color:"rgba(255,255,255,0.85)", lineHeight:1.5 }}>{suggestion.message}</div>
+                    <div style={{ marginTop:8 }}>
+                      <DisclaimerChip/>
+                    </div>
                   </div>
                 )}
               </>
