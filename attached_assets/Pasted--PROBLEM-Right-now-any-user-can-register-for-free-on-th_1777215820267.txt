@@ -1,0 +1,98 @@
+## PROBLEM
+Right now any user can register for free on the login page. We need to close this. Only users who paid via Stripe on /beta should be able to create an account.
+
+## GOAL
+Registration is only possible after Stripe payment. The login page becomes login-only. A dedicated /welcome page handles post-payment account creation.
+
+---
+
+## STEP 1 — Remove signup from the login page
+
+Find the login/signin page (likely app/(auth)/login/page.tsx, app/signin/page.tsx, or similar).
+
+Current behavior: there is a toggle or tab that switches between "Login" and "Sign up" (or "Registrieren").
+
+Change:
+- Remove the signup toggle, tab, or button entirely
+- The page shows ONLY the login form
+- Add a small text below the form:
+  "Noch kein Account? → Beta reservieren"
+  This text links to /beta (existing public page).
+- Do NOT change any login logic, only remove the signup UI path.
+
+---
+
+## STEP 2 — Find the Stripe success_url for /beta checkout
+
+Find where the Stripe checkout session is created for the /beta page.
+It will be in an API route like app/api/checkout/route.ts or app/api/stripe/route.ts or similar.
+
+Look for `success_url` in the Stripe session creation.
+
+Change the success_url to:
+`${process.env.NEXT_PUBLIC_APP_URL}/welcome?session_id={CHECKOUT_SESSION_ID}`
+
+If NEXT_PUBLIC_APP_URL doesn't exist, use https://glev.app directly.
+
+---
+
+## STEP 3 — Create the /welcome page
+
+Create app/(public)/welcome/page.tsx.
+
+This page:
+1. Reads the session_id from the URL query parameter
+2. Calls a new API route /api/verify-payment (see Step 4) to confirm the Stripe session was paid
+3. If verified: shows a signup form (email + password) — this is the ONLY place in the app where new accounts can be created
+4. If not verified (no session_id, or session not paid): shows error "Kein gültiger Beta-Zugang gefunden." with a button linking back to /beta
+
+The signup form:
+- Fields: Email, Passwort, Passwort bestätigen
+- Button: "Account erstellen"
+- On submit: calls Supabase signUp({ email, password }) using the existing Supabase client
+- On success: redirect to /dashboard (or wherever the app's main protected route is)
+- On error: show the error message inline
+
+Styling: match the existing dark theme (background #111117, accent #4F6EF7, same card/input style as the rest of the app).
+
+---
+
+## STEP 4 — Create /api/verify-payment route
+
+Create app/api/verify-payment/route.ts:
+
+import { NextRequest, NextResponse } from 'next/server'
+import Stripe from 'stripe'
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: '2023-10-16',
+})
+
+export async function GET(req: NextRequest) {
+  const sessionId = req.nextUrl.searchParams.get('session_id')
+  if (!sessionId) return NextResponse.json({ valid: false }, { status: 400 })
+  try {
+    const session = await stripe.checkout.sessions.retrieve(sessionId)
+    const valid = session.payment_status === 'paid'
+    return NextResponse.json({ valid })
+  } catch (e) {
+    return NextResponse.json({ valid: false }, { status: 400 })
+  }
+}
+
+---
+
+## STEP 5 — Verify
+
+After the change:
+1. Login page → no signup option visible → only login form + "Beta reservieren" link
+2. /welcome without session_id → error message shown, link to /beta
+3. /beta → Stripe checkout → after payment → /welcome?session_id=... → signup form → account creation works
+4. Any attempt to sign up outside of /welcome → not possible
+
+Do NOT change:
+- Any existing login logic
+- The /beta page checkout itself (only the success_url target)
+- Any API routes unrelated to auth
+- Database schema
+- Stripe configuration beyond success_url

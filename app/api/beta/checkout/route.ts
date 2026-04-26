@@ -130,7 +130,7 @@ export async function POST(req: NextRequest) {
           reservation_id: rowId,
         },
       },
-      success_url: `${origin}/beta/success?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${origin}/welcome?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/beta/cancelled`,
       locale: "de",
     });
