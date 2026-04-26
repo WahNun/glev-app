@@ -804,7 +804,7 @@ function IcrInfoBack({ heading, body, subLine, accent }: {
       <div style={{ marginTop:"auto", paddingTop:10, display:"flex", flexDirection:"column", gap:6 }}>
         <DisclaimerChip/>
         <div style={{ fontSize:9, color:"rgba(255,255,255,0.32)", textAlign:"right", letterSpacing:"0.02em" }}>
-          ← zurück · tippen
+          ← zurück
         </div>
       </div>
     </div>
