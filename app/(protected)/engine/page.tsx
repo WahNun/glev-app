@@ -418,9 +418,12 @@ export default function EnginePage() {
       const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs, adaptedICR);
       setResult(rec);
       setRunning(false);
-      // Pre-fill the insulin field with the recommendation only when the
-      // user hasn't already typed a value of their own. Never overwrite.
-      setInsulin(prev => (prev && prev.trim() !== "" ? prev : String(rec.dose)));
+      // PRE-FILL ENTFERNT: Insulin wird jetzt erst NACH Confirm Log + binärer
+      // Bolus-Entscheidung im Post-Confirm-Flow eingegeben. Kein silent-set
+      // mehr in den `insulin`-State, sonst würde beim Save eine Dosis
+      // gespeichert, die der User nie bestätigt hat. Die Empfehlung
+      // (`rec.dose`) bleibt im `result`-State und wird im Decision-Panel
+      // angezeigt, sobald der Bolus-Pfad gewählt ist.
       logDebug("ENGINE", { input: { glucose: g, carbs: c }, matchedMeals: rec.similarMeals.map(m => ({ id: m.id, carbs: m.carbs_grams, glucose: m.glucose_before, insulin: m.insulin_units })), suggestedDose: rec.dose, confidence: rec.confidence, recentInsulin: insulinLogs.length, recentExercise: exerciseLogs.length });
     }, 600);
   }
@@ -432,22 +435,23 @@ export default function EnginePage() {
   async function handleConfirmLog() {
     setConfirmErr("");
     const cNum = parseFloat(carbs);
-    const iNum = parseFloat(insulin);
+    // Insulin wird im Pre-Confirm-Flow NICHT mehr abgefragt. Falls aus
+    // irgendeinem Grund (z.B. alter HMR-State) doch ein Wert im `insulin`
+    // State steht, wird er ignoriert — `iNum` ist konsistent null bis der
+    // User im Post-Confirm-Decision-Panel auf den Bolus-Pfad geht.
+    const iNum: number | null = null;
     const gParsed = glucose.trim() === "" ? NaN : parseFloat(glucose);
     const gNum = Number.isFinite(gParsed) ? gParsed : null;
     if (!Number.isFinite(cNum) || cNum <= 0) { setConfirmErr("Carbs are required."); return; }
-    // Insulin: 0 is a valid entry (some meals require no bolus). Only block
-    // when the field is empty / non-numeric / negative.
-    if (insulin.trim() === "" || !Number.isFinite(iNum) || iNum < 0) {
-      setConfirmErr("Bitte eine Insulindosis eintragen (0 ist erlaubt).");
-      return;
-    }
     const pNum  = parseFloat(protein) || 0;
     const fNum  = parseFloat(fat)     || 0;
     const fbNum = parseFloat(fiber)   || 0;
     const cls   = classifyMeal(cNum, pNum, fNum);
     const cal   = computeCalories(cNum, pNum, fNum);
-    const evalStr = computeEvaluation(cNum, iNum, gNum);
+    // Evaluation lässt sich ohne Dosis nicht berechnen — bleibt null und wird
+    // später (nach der Bolus-Eingabe im Post-Confirm-Flow) per UPDATE auf
+    // der Meal-Row gesetzt.
+    const evalStr = iNum != null ? computeEvaluation(cNum, iNum, gNum) : null;
     // datetime-local has no timezone — interpret it as the user's local wall
     // clock and convert to a real ISO instant for storage.
     const mealIso = mealTime ? new Date(mealTime).toISOString() : new Date().toISOString();
@@ -951,22 +955,13 @@ export default function EnginePage() {
         );
       })()}
 
-      {/* Confirm-Log section: enter the dose you actually took, then save the
-          full meal+bolus row in one go. Engine pre-fills `insulin` from the
-          recommendation, but the user always has the final word. */}
-      <div style={{ marginBottom:12 }}>
-        <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>Insulin (U)</label>
-        <input
-          style={inp}
-          type="number"
-          step="0.1"
-          min="0"
-          placeholder="e.g. 1.5"
-          value={insulin}
-          onChange={e => { setInsulin(e.target.value); if (confirmedMeal) setConfirmedMeal(null); }}
-          disabled={!!confirmedMeal}
-        />
-      </div>
+      {/* INSULIN-EINGABEFELD HIER ENTFERNT.
+          Der Pre-Confirm-Flow speichert die Mahlzeit ohne Dosis. Erst nach
+          Confirm Log öffnet sich das Decision-Panel (`confirmedMeal != null`)
+          mit der binären Frage "Bolus eingeben? / Empfehlung holen? / Verwerfen?".
+          Wählt der User dort "Bolus", routet `handleDecisionBolus` nach
+          `/log?bolusFor=<id>` — dort findet die eigentliche Insulin-Eingabe
+          statt, sauber an die soeben gespeicherte Mahlzeit gekoppelt. */}
 
       {confirmErr && (
         <div style={{ marginBottom:10, padding:"10px 14px", borderRadius:10, background:`${PINK}15`, border:`1px solid ${PINK}40`, color:PINK, fontSize:12 }}>
@@ -986,16 +981,16 @@ export default function EnginePage() {
         <>
           <button
             onClick={handleConfirmLog}
-            disabled={confirming || !carbs || !insulin}
+            disabled={confirming || !carbs}
             style={{
               width:"100%", padding:"15px", borderRadius:14, border:"none",
-              background: !confirming && carbs && insulin
+              background: !confirming && carbs
                 ? `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`
                 : "rgba(79,110,247,0.25)",
-              color: !confirming && carbs && insulin ? "#fff" : "rgba(255,255,255,0.55)",
+              color: !confirming && carbs ? "#fff" : "rgba(255,255,255,0.55)",
               fontSize:15, fontWeight:700,
-              cursor: confirming || !carbs || !insulin ? "not-allowed" : "pointer",
-              boxShadow: !confirming && carbs && insulin ? `0 4px 18px ${ACCENT}30` : "none",
+              cursor: confirming || !carbs ? "not-allowed" : "pointer",
+              boxShadow: !confirming && carbs ? `0 4px 18px ${ACCENT}30` : "none",
               transition:"all 0.2s", marginBottom:10,
             }}
           >
