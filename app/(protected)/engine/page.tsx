@@ -163,6 +163,7 @@ export default function EnginePage() {
   const [voiceErr, setVoiceErr]     = useState("");
   const [speechAvail, setSpeechAvail] = useState(true);
   const mediaRecRef    = useRef<MediaRecorder | null>(null);
+  const recordingStopTsRef = useRef<number | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
   // Confirm-Log + integrated chat state. mealTime defaults to "now"; insulin
@@ -228,6 +229,10 @@ export default function EnginePage() {
         const actualType = rec.mimeType || preferred || "audio/webm";
         const blob = new Blob(audioChunksRef.current, { type: actualType });
         if (blob.size === 0) return;
+        const tBlob = Date.now();
+        const tStop = recordingStopTsRef.current ?? tBlob;
+        // eslint-disable-next-line no-console
+        console.log("[PERF voice/engine] stop → blob built:", tBlob - tStop, "ms · blob:", Math.round(blob.size / 1024), "KB ·", actualType);
         const ext = actualType.includes("mp4")  ? "m4a"
                  : actualType.includes("mpeg") ? "mp3"
                  : actualType.includes("ogg")  ? "ogg"
@@ -244,32 +249,49 @@ export default function EnginePage() {
   }
 
   function stopRecording() {
+    recordingStopTsRef.current = Date.now();
     mediaRecRef.current?.stop();
     setRecording(false);
   }
 
   async function handleVoice(blob: Blob, ext = "webm") {
+    const tHandlerStart = Date.now();
+    const tStop = recordingStopTsRef.current ?? tHandlerStart;
     setParsing(true); setVoiceErr("");
     try {
       const fd = new FormData();
       fd.append("audio", blob, `voice.${ext}`);
+      const tTrFetch0 = Date.now();
       const tRes = await fetch("/api/transcribe", { method: "POST", body: fd });
       const tData = await tRes.json();
+      const tTranscribeDone = Date.now();
+      // eslint-disable-next-line no-console
+      console.log("[PERF voice/engine] /api/transcribe round-trip:", tTranscribeDone - tTrFetch0, "ms");
       if (!tRes.ok || !tData.text) throw new Error(tData.error || "Empty transcript");
       const text = tData.text as string;
       setTranscript(text);
 
+      const tPfFetch0 = Date.now();
+      // eslint-disable-next-line no-console
+      console.log("[PERF voice/engine] transcribe → parse start gap:", tPfFetch0 - tTranscribeDone, "ms");
       const pRes = await fetch("/api/parse-food", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
       });
       const pData = await pRes.json();
+      const tParseDone = Date.now();
+      // eslint-disable-next-line no-console
+      console.log("[PERF voice/engine] /api/parse-food round-trip:", tParseDone - tPfFetch0, "ms");
       const t = pData.totals || {};
       if (t.carbs   != null) setCarbs(String(t.carbs));
       if (t.fiber   != null) setFiber(String(t.fiber));
       if (t.protein != null) setProtein(String(t.protein));
       if (t.fat     != null) setFat(String(t.fat));
+      // eslint-disable-next-line no-console
+      console.log("[PERF voice/engine] parse response → form fields filled:", Date.now() - tParseDone, "ms");
+      // eslint-disable-next-line no-console
+      console.log("[PERF voice/engine] TOTAL (stop → form filled):", Date.now() - tStop, "ms");
       if (typeof pData.description === "string" && pData.description.trim()) {
         setDesc(pData.description.trim());
       }
@@ -296,9 +318,12 @@ export default function EnginePage() {
       // handlePullCgm itself and don't surface here.
       void handlePullCgm();
     } catch (e) {
+      // eslint-disable-next-line no-console
+      console.log("[PERF voice/engine] FAILED after:", Date.now() - tStop, "ms");
       setVoiceErr(e instanceof Error ? e.message : "Sprach-Verarbeitung fehlgeschlagen.");
     } finally {
       setParsing(false);
+      recordingStopTsRef.current = null;
     }
   }
 

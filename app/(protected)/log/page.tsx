@@ -144,6 +144,7 @@ export default function LogPage() {
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
 
   const mediaRecRef = useRef<MediaRecorder | null>(null);
+  const recordingStopTsRef = useRef<number | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
   useEffect(() => {
@@ -196,6 +197,10 @@ export default function LogPage() {
         const actualType = rec.mimeType || preferred || "audio/webm";
         const blob = new Blob(audioChunksRef.current, { type: actualType });
         if (blob.size === 0) return;
+        const tBlob = Date.now();
+        const tStop = recordingStopTsRef.current ?? tBlob;
+        // eslint-disable-next-line no-console
+        console.log("[PERF voice/log] stop → blob built:", tBlob - tStop, "ms · blob:", Math.round(blob.size / 1024), "KB ·", actualType);
         const ext = actualType.includes("mp4")  ? "m4a"
                  : actualType.includes("mpeg") ? "mp3"
                  : actualType.includes("ogg")  ? "ogg"
@@ -213,6 +218,7 @@ export default function LogPage() {
   }
 
   function stopRecording() {
+    recordingStopTsRef.current = Date.now();
     mediaRecRef.current?.stop();
     setRecording(false);
   }
@@ -222,8 +228,11 @@ export default function LogPage() {
   async function transcribeBlob(blob: Blob, ext = "webm"): Promise<string> {
     const fd = new FormData();
     fd.append("audio", blob, `voice.${ext}`);
+    const tFetch0 = Date.now();
     const tRes = await fetch("/api/transcribe", { method: "POST", body: fd });
     const tData = await tRes.json();
+    // eslint-disable-next-line no-console
+    console.log("[PERF voice/log] /api/transcribe round-trip:", Date.now() - tFetch0, "ms");
     if (!tRes.ok || !tData.text) throw new Error(tData.error || "Empty transcript");
     return tData.text as string;
   }
@@ -231,22 +240,33 @@ export default function LogPage() {
   // Single mic → context-aware router.
   // No active meal → autoFill (new meal). Active meal → sendChat (correction).
   async function handleVoiceInput(blob: Blob, ext = "webm") {
+    const tHandlerStart = Date.now();
+    const tStop = recordingStopTsRef.current ?? tHandlerStart;
     setParsing(true); setError(""); setPipeStatus("transcribing");
     if (!hasActiveMeal) pullCgm(); // background CGM only on a fresh meal
     try {
       const text = await transcribeBlob(blob, ext);
       if (!text) return;
+      const tAfterTranscribe = Date.now();
       if (hasActiveMeal) {
         setPipeStatus("idle");
+        // eslint-disable-next-line no-console
+        console.log("[PERF voice/log] transcribe → chat-macros branch (correction path, parse-food skipped)");
         await sendChat(text);
       } else {
         setTranscript(text);
         setPipeStatus("parsing");
+        // eslint-disable-next-line no-console
+        console.log("[PERF voice/log] transcribe → parse start gap:", Date.now() - tAfterTranscribe, "ms");
         await autoFill(text);
       }
+      // eslint-disable-next-line no-console
+      console.log("[PERF voice/log] TOTAL (stop → done):", Date.now() - tStop, "ms · branch:", hasActiveMeal ? "chat" : "parse");
     } catch (e) {
+      // eslint-disable-next-line no-console
+      console.log("[PERF voice/log] FAILED after:", Date.now() - tStop, "ms");
       setError(e instanceof Error ? e.message : "Transcription failed.");
-    } finally { setParsing(false); setPipeStatus("idle"); }
+    } finally { setParsing(false); setPipeStatus("idle"); recordingStopTsRef.current = null; }
   }
 
   // Silent background compute — always kept fresh so the user just
@@ -277,14 +297,20 @@ export default function LogPage() {
     // Show the user message in the chat ("you said …") so the chat reads as a conversation
     setChatMsgs(c => [...c, { role: "user", content: text }]);
     try {
+      const tFetch0 = Date.now();
       const res  = await fetch("/api/parse-food", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ text }) });
       const data = await res.json();
+      const tParseDone = Date.now();
+      // eslint-disable-next-line no-console
+      console.log("[PERF voice/log] /api/parse-food round-trip:", tParseDone - tFetch0, "ms");
       const t = data.totals || {};
       if (t.carbs    != null && !carbs)    setCarbs(String(t.carbs));
       if (t.fiber    != null && !fiber)    setFiber(String(t.fiber));
       if (t.protein  != null && !protein)  setProtein(String(t.protein));
       if (t.fat      != null && !fat)      setFat(String(t.fat));
       if (t.calories != null && !calories) setCalories(String(t.calories));
+      // eslint-disable-next-line no-console
+      console.log("[PERF voice/log] parse response → form fields filled:", Date.now() - tParseDone, "ms");
       // Trust the server-provided description directly — the API now always
       // returns a clean comma-separated "<grams>g <ingredient>" list. No more
       // ad-hoc concatenation of parsed[].name.
