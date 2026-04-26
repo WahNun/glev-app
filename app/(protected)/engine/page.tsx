@@ -917,17 +917,6 @@ export default function EnginePage() {
         );
       })()}
 
-      <button onClick={handleRun} disabled={!carbs || running || loading} style={{
-        width:"100%", padding:"16px", borderRadius:14, border:"none",
-        background: carbs ? `linear-gradient(135deg, ${ACCENT}, #6B8BFF)` : "rgba(255,255,255,0.05)",
-        color: carbs ? "#fff" : "rgba(255,255,255,0.2)",
-        fontSize:16, fontWeight:700, cursor:carbs?"pointer":"not-allowed",
-        boxShadow:carbs?`0 4px 24px ${ACCENT}40`:"none",
-        transition:"all 0.2s", marginBottom:18,
-      }}>
-        {loading ? "Lade Daten…" : running ? "Analysiere Verlauf…" : "Empfehlung berechnen"}
-      </button>
-
       {/* Confirm-Log section: enter the dose you actually took, then save the
           full meal+bolus row in one go. Engine pre-fills `insulin` from the
           recommendation, but the user always has the final word. */}
