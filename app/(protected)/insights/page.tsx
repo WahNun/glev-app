@@ -440,29 +440,105 @@ export default function InsightsPage() {
             />
           }
         >
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8, gap:8 }}>
-            <CardLabel text="Adaptive engine"/>
-            <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)", whiteSpace:"nowrap" }}>
-              ICR <span style={{ color:adaptiveICR.global ? GREEN : "rgba(255,255,255,0.4)", fontWeight:700 }}>
-                {adaptiveICR.global ? `1:${(Math.round(adaptiveICR.global*10)/10)}` : "–"}
-              </span>
-            </div>
-          </div>
-          <div style={{ fontSize:11, color:"rgba(255,255,255,0.65)", lineHeight:1.5, marginBottom:6 }}>
-            <span style={{ color:"#fff", fontWeight:600 }}>{enginePattern.label}</span>
-            <span style={{ color:"rgba(255,255,255,0.35)" }}> · {enginePattern.sampleSize} final meals · confidence {enginePattern.confidence}</span>
-          </div>
-          <div style={{ fontSize:11, color:"rgba(255,255,255,0.55)", lineHeight:1.5 }}>
-            {enginePattern.explanation}
-          </div>
-          {(suggestion.hasSuggestion || enginePattern.type === "spiking" || enginePattern.type === "overdosing" || enginePattern.type === "underdosing") && (
-            <div style={{ marginTop:10, padding:"8px 10px", borderRadius:8, background:"rgba(79,110,247,0.08)", border:`1px solid ${ACCENT}33` }}>
-              <div style={{ fontSize:9, fontWeight:700, color:ACCENT, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:4 }}>
-                {suggestion.hasSuggestion ? "Suggested adjustment" : "Advisory"}
-              </div>
-              <div style={{ fontSize:11, color:"rgba(255,255,255,0.85)", lineHeight:1.5 }}>{suggestion.message}</div>
-            </div>
-          )}
+          {(() => {
+            // Engine status maps to confidence: high → TUNED (green/ready),
+            // medium → LEARNING (accent), low → WARMING UP (orange).
+            // Mirrors the "AI FOOD PARSER · GPT-powered · READY" chip vibe.
+            const conf = enginePattern.confidence;
+            const statusLabel = conf === "high" ? "TUNED" : conf === "medium" ? "LEARNING" : "WARMING UP";
+            const statusColor = conf === "high" ? GREEN : conf === "medium" ? ACCENT : ORANGE;
+            const icrText = adaptiveICR.global
+              ? `1:${(Math.round(adaptiveICR.global * 10) / 10)}`
+              : "–";
+            return (
+              <>
+                {/* Chip header — pill-shaped, mirrors AI FOOD PARSER chip */}
+                <div style={{
+                  display:"flex", alignItems:"center", justifyContent:"space-between",
+                  gap:10, padding:"10px 14px",
+                  background:"rgba(255,255,255,0.02)",
+                  border:`1px solid ${BORDER}`,
+                  borderRadius:99,
+                  marginBottom:12,
+                }}>
+                  <div style={{ display:"flex", alignItems:"baseline", gap:8, minWidth:0 }}>
+                    <span style={{
+                      fontSize:11, fontWeight:700, letterSpacing:"0.08em",
+                      color:"rgba(255,255,255,0.5)",
+                    }}>
+                      ADAPTIVE ENGINE
+                    </span>
+                    <span style={{
+                      fontSize:10, fontWeight:600, color:ACCENT, letterSpacing:"0.02em",
+                    }}>
+                      Glev-tuned
+                    </span>
+                  </div>
+                  <span style={{
+                    display:"inline-flex", alignItems:"center", gap:6,
+                    fontSize:10, fontWeight:700, letterSpacing:"0.06em",
+                    color: statusColor, flexShrink:0,
+                  }}>
+                    <span style={{
+                      width:7, height:7, borderRadius:"50%",
+                      background: statusColor,
+                      boxShadow: `0 0 6px ${statusColor}`,
+                    }}/>
+                    {statusLabel}
+                  </span>
+                </div>
+
+                {/* Headline metric: ICR centered like a hero number */}
+                <div style={{
+                  display:"flex", alignItems:"baseline", gap:10,
+                  padding:"4px 2px 8px", marginBottom:8,
+                  borderBottom:`1px solid rgba(255,255,255,0.05)`,
+                }}>
+                  <span style={{ fontSize:11, color:"rgba(255,255,255,0.4)", fontWeight:600, letterSpacing:"0.04em" }}>
+                    ICR
+                  </span>
+                  <span style={{
+                    fontSize:24, fontWeight:800, letterSpacing:"-0.02em",
+                    color: adaptiveICR.global ? "#fff" : "rgba(255,255,255,0.35)",
+                  }}>
+                    {icrText}
+                  </span>
+                  <span style={{ fontSize:10, color:"rgba(255,255,255,0.35)", marginLeft:"auto" }}>
+                    from {enginePattern.sampleSize} final meal{enginePattern.sampleSize === 1 ? "" : "s"}
+                  </span>
+                </div>
+
+                {/* Pattern label */}
+                <div style={{ fontSize:12, color:"rgba(255,255,255,0.65)", lineHeight:1.5, marginBottom:6 }}>
+                  <span style={{ color:"#fff", fontWeight:600 }}>{enginePattern.label}</span>
+                </div>
+                <div style={{ fontSize:11, color:"rgba(255,255,255,0.55)", lineHeight:1.5 }}>
+                  {enginePattern.explanation}
+                </div>
+
+                {/* Suggestion / advisory block */}
+                {(suggestion.hasSuggestion || enginePattern.type === "spiking" || enginePattern.type === "overdosing" || enginePattern.type === "underdosing") && (
+                  <div style={{
+                    marginTop:12, padding:"10px 12px", borderRadius:10,
+                    background:`linear-gradient(135deg, ${ACCENT}14, ${ACCENT}06)`,
+                    border:`1px solid ${ACCENT}33`,
+                  }}>
+                    <div style={{
+                      display:"flex", alignItems:"center", gap:6,
+                      fontSize:9, fontWeight:700, color:ACCENT,
+                      letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:4,
+                    }}>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.7.6 1 1.5 1 2.3v1h6v-1c0-.8.3-1.7 1-2.3A7 7 0 0 0 12 2z"/>
+                      </svg>
+                      {suggestion.hasSuggestion ? "Suggested adjustment" : "Advisory"}
+                    </div>
+                    <div style={{ fontSize:11, color:"rgba(255,255,255,0.85)", lineHeight:1.5 }}>{suggestion.message}</div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </FlipCard>
       ),
     },
