@@ -35,6 +35,12 @@ export interface InsulinLogInput {
   cgm_glucose_at_log?: number | null;
   notes?: string | null;
   related_entry_id?: string | null;
+  // Optional explicit injection instant (ISO 8601) for back-dated /
+  // forgotten-shot logging. Mirrors lib/exercise.ts `start_at`. When
+  // omitted the DB default `now()` is used so live submissions stay
+  // backwards compatible. Caller is responsible for clamping the
+  // value to a sensible range (we accept anything Postgres can store).
+  at?: string;
 }
 
 const COLS =
@@ -54,7 +60,7 @@ export async function insertInsulinLog(input: InsulinLogInput): Promise<InsulinL
     throw new Error(m);
   }
 
-  const row = {
+  const row: Record<string, unknown> = {
     user_id: user.id,
     insulin_type: input.insulin_type,
     insulin_name: input.insulin_name.trim(),
@@ -64,6 +70,9 @@ export async function insertInsulinLog(input: InsulinLogInput): Promise<InsulinL
     // Only meaningful for bolus entries; basal always passes null.
     related_entry_id: input.insulin_type === "bolus" ? (input.related_entry_id ?? null) : null,
   };
+  // Override created_at only for back-dated logs. Live submissions
+  // omit `at` and let the DB default `now()` fire.
+  if (input.at) row.created_at = input.at;
 
   const { data, error } = await supabase
     .from("insulin_logs")

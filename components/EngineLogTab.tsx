@@ -56,6 +56,39 @@ const labelStyle: React.CSSProperties = {
   marginBottom: 6,
 };
 
+// ── Datetime-local helpers ──────────────────────────────────────────
+// `<input type="datetime-local">` works in *local* wall-clock time
+// formatted as "YYYY-MM-DDTHH:mm" (no timezone). We have to convert
+// to/from real Date instances ourselves so the persisted ISO string
+// matches the user's intent.
+function toLocalDtString(d: Date): string {
+  const off = d.getTimezoneOffset() * 60_000;
+  return new Date(d.getTime() - off).toISOString().slice(0, 16);
+}
+function nowLocalDt(): string { return toLocalDtString(new Date()); }
+// 365 days back — matches the spec "from past year to real time".
+// Used for the input's `min` attribute so the native picker greys
+// out anything older.
+function oneYearAgoLocalDt(): string {
+  return toLocalDtString(new Date(Date.now() - 365 * 86400_000));
+}
+function parseLocalDt(v: string): Date | null {
+  if (!v) return null;
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+}
+// "vor 3 Std" / "vor 2 Tagen" — short relative-time label for the
+// success banner so users immediately see we honored the back-date.
+function relativeAgo(deltaMs: number): string {
+  if (deltaMs < 60_000)            return "gerade eben";
+  const min = Math.round(deltaMs / 60_000);
+  if (min < 60)                    return `vor ${min} Min`;
+  const hr  = Math.round(min / 60);
+  if (hr < 24)                     return `vor ${hr} Std`;
+  const day = Math.round(hr / 24);
+  return `vor ${day} ${day === 1 ? "Tag" : "Tagen"}`;
+}
+
 /**
  * Extract a human-readable message from anything that ended up in a
  * catch block. Real Errors hand back `.message` directly; supabase-js
@@ -186,6 +219,11 @@ export function InsulinForm() {
   const [units, setUnits] = useState("");
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
+  // Injection time picker — defaults to "now" for live submissions.
+  // Users can back-date up to 365 days for forgotten / retroactive
+  // shots. Stored as the datetime-local string format ("YYYY-MM-DDTHH:mm")
+  // and converted to a real ISO instant in handleSubmit.
+  const [at, setAt] = useState<string>(() => nowLocalDt());
   // Today's meals, newest first, capped at 10 — feeds the optional
   // "Zu Mahlzeit verknüpfen" dropdown that only renders for bolus entries.
   // Refetched whenever the user toggles to bolus so a meal logged in
@@ -209,12 +247,26 @@ export function InsulinForm() {
 
   const placeholder = type === "bolus" ? "Fiasp" : "Tresiba";
   const u = parseFloat(units);
-  const valid = type && name.trim().length > 0 && Number.isFinite(u) && u > 0 && u <= 100;
+  const atDate = parseLocalDt(at);
+  // Validate the picker too — invalid date OR more than 365 days back
+  // OR > 1 minute in the future (small grace window for clock drift)
+  // disables the submit button.
+  const nowMs = Date.now();
+  const atValid = !!atDate && atDate.getTime() >= nowMs - 365 * 86400_000 && atDate.getTime() <= nowMs + 60_000;
+  const valid = type && name.trim().length > 0 && Number.isFinite(u) && u > 0 && u <= 100 && atValid;
 
   async function handleSubmit() {
-    if (!valid) return;
+    if (!valid || !atDate) return;
     setStatus({ kind: "submitting" });
-    const cgm = await pullCurrentCgm();
+    // Treat anything older than 5 minutes as a back-dated entry: the
+    // current CGM reading would be wrong by ≥ that delta, so we leave
+    // cgm_glucose_at_log NULL and let the scheduler fill it from CGM
+    // history at the actual injection instant. Mirrors the Exercise
+    // form's retroactive pattern.
+    const deltaMs = nowMs - atDate.getTime();
+    const isRetro = deltaMs > 5 * 60_000;
+    const cgm = isRetro ? null : await pullCurrentCgm();
+    const atIso = atDate.toISOString();
     try {
       const inserted = await insertInsulinLog({
         insulin_type: type,
@@ -225,25 +277,36 @@ export function InsulinForm() {
         // Only persisted for bolus entries (insertInsulinLog drops it for
         // basal even if set, but we also clear the UI on type=basal).
         related_entry_id: type === "bolus" && relatedMealId ? relatedMealId : null,
+        // Override created_at when the picker isn't "now" — passed
+        // unconditionally because lib/insulin.ts only writes it when
+        // truthy and the live default still ends up within the same
+        // second the DB would otherwise have used.
+        at: atIso,
       });
-      // Schedule post-fetches: bolus → +1h/+2h, basal → +12h/+24h.
-      // refTime = the log's created_at (DB-assigned); fall back to "now"
-      // in the unlikely case it isn't returned.
-      const ref = inserted?.created_at || new Date().toISOString();
+      // Schedule post-fetches relative to the chosen injection time
+      // (not "now") so back-dated bolus +2h / basal +24h fetches can
+      // resolve immediately from CGM history. Falls back to the chosen
+      // instant if the row didn't echo created_at for some reason.
+      const ref = inserted?.created_at || atIso;
       void scheduleJobsForLog({
         logId: inserted.id,
         logType: type,
         refTimeIso: ref,
       });
+      const typeLabel = type === "bolus" ? "Bolus" : "Basal";
+      const whenLabel = isRetro ? ` (${relativeAgo(deltaMs)})` : "";
       setStatus({
         kind: "ok",
         message: cgm != null
-          ? `Geloggt — ${u}u ${type === "bolus" ? "Bolus" : "Basal"} (${name.trim()}) bei ${Math.round(cgm)} mg/dL.`
-          : `Geloggt — ${u}u ${type === "bolus" ? "Bolus" : "Basal"} (${name.trim()}). Kein CGM-Wert verfügbar.`,
+          ? `Geloggt — ${u}u ${typeLabel} (${name.trim()})${whenLabel} bei ${Math.round(cgm)} mg/dL.`
+          : `Geloggt — ${u}u ${typeLabel} (${name.trim()})${whenLabel}. Kein CGM-Wert verfügbar.`,
       });
       setUnits("");
       setNotes("");
       setRelatedMealId("");
+      // Reset the picker to a fresh "now" so the next log doesn't
+      // silently inherit the previous back-date.
+      setAt(nowLocalDt());
     } catch (e) {
       // Defensive: lib functions SHOULD wrap supabase errors in Error
       // (see lib/insulin.ts), but PostgrestError / AuthError are plain
@@ -305,6 +368,28 @@ export function InsulinForm() {
             value={units}
             onChange={e => setUnits(e.target.value)}
           />
+        </div>
+        <div>
+          {/* Injection time picker — both Bolus and Basal can be back-dated
+              up to 365 days for forgotten / retroactive shots. Native
+              datetime-local picker handles date AND time in one widget.
+              Defaults to "now". When the chosen time is > 5 min in the
+              past, handleSubmit skips the live CGM pull and lets the
+              scheduler fill from history (mirrors the Exercise form). */}
+          <label style={labelStyle}>Zeitpunkt</label>
+          <input
+            style={inp}
+            type="datetime-local"
+            value={at}
+            min={oneYearAgoLocalDt()}
+            max={nowLocalDt()}
+            onChange={e => setAt(e.target.value)}
+          />
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 6 }}>
+            {atDate && nowMs - atDate.getTime() > 5 * 60_000
+              ? `Rückdatiert — ${relativeAgo(nowMs - atDate.getTime())}. Kein Live-CGM, Werte werden aus dem Verlauf geholt.`
+              : "Standard: jetzt. Bis zu 365 Tage rückdatierbar."}
+          </div>
         </div>
         <div>
           <label style={labelStyle}>Notiz (optional)</label>
