@@ -793,7 +793,7 @@ function IcrInfoBack({ heading, body, subLine, accent }: {
 }) {
   return (
     <div style={{ display:"flex", flexDirection:"column", height:"100%", gap:8 }}>
-      <div style={{ fontSize:10, color:accent, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>
+      <div style={{ fontSize:12, color:accent, fontWeight:700, letterSpacing:"0.01em", lineHeight:1.25 }}>
         {heading}
       </div>
       <div style={{ fontSize:11, color:"rgba(255,255,255,0.7)", lineHeight:1.55 }}>{body}</div>
