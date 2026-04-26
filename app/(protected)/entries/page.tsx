@@ -432,8 +432,8 @@ export default function EntriesPage() {
     <div style={{ maxWidth:960, margin:"0 auto" }}>
       <style>{``}</style>
       <div style={{ marginBottom:24 }}>
-        <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>Entry Log</h1>
-        <p style={{ color:"rgba(255,255,255,0.35)", fontSize:14 }}>{filtered.length} of {rows.length} logged entries. Click a row to expand.</p>
+        <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>Einträge</h1>
+        <p style={{ color:"rgba(255,255,255,0.35)", fontSize:14 }}>{filtered.length} von {rows.length} Einträgen. Klicke eine Zeile zum Aufklappen.</p>
       </div>
 
       {/* MANUAL ENTRY CTA */}

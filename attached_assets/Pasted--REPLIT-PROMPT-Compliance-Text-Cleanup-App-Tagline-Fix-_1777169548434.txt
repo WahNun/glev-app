@@ -1,0 +1,74 @@
+# REPLIT PROMPT — Compliance Text Cleanup + App-Tagline Fix
+
+Paste everything between === BEGIN === and === END === into Replit AI.
+
+=== BEGIN ===
+
+Search the ENTIRE codebase for every occurrence of the following strings and fix them as described below.
+
+---
+
+## 1. REMOVE "Smart insulin decisions" everywhere
+
+Search for: `Smart insulin decisions`
+Action: Remove completely. Do NOT replace with anything. The GlevLockup component and any other component that renders this subtitle should simply show nothing below the logo.
+
+Also search for: `smart insulin decisions` (lowercase variants) and remove those too.
+
+---
+
+## 2. REMOVE the in-app subtitle/tagline under the logo
+
+In all app screens (NOT the marketing pages /beta, /pro, and the homepage /), remove any tagline or subtitle rendered below the Glev logo. The logo should stand alone inside the app.
+
+On marketing pages (/beta, /pro, homepage), keep existing tagline structure as-is — do not touch those files.
+
+---
+
+## 3. TRANSLATE these English UI strings to German
+
+Make these replacements throughout the app (all .tsx files inside app/(protected)/ and components/):
+
+| English | German |
+|---|---|
+| Get Recommendation | Empfehlung berechnen |
+| Dashboard | Dashboard (keep as-is) |
+| Entry Log | Einträge |
+| Insights | Auswertungen |
+| Settings | Einstellungen |
+| Save | Speichern |
+| Cancel | Abbrechen |
+| Log Meal | Mahlzeit loggen |
+| Import | Import (keep as-is) |
+| Load more | Mehr laden |
+| No entries yet | Noch keine Einträge |
+| Submit | Senden |
+| Back | Zurück |
+
+---
+
+## 4. ADD compliance disclaimer
+
+In the Settings screen (app/(protected)/settings/page.tsx), add a small disclaimer text at the very bottom of the page, styled in a muted/gray color, small font size:
+
+```
+Glev ist ein Dokumentations- und Organisations-Tool, kein Medizinprodukt. Therapieentscheidungen triffst du in Absprache mit deinem Arzt.
+```
+
+---
+
+## 5. VERIFY
+
+After making all changes:
+- Search codebase for "Smart insulin decisions" — must return 0 results
+- Search codebase for "Get Recommendation" — must return 0 results
+- Confirm disclaimer is visible in Settings screen
+
+Do NOT touch:
+- Any files in app/beta/, app/pro/, app/page.tsx (marketing pages)
+- Any API routes
+- Database schema
+- Stripe configuration
+- Any styling (colors, fonts, spacing)
+
+=== END ===

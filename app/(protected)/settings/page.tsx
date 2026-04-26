@@ -166,7 +166,7 @@ export default function SettingsPage() {
 
           {/* ICR Info */}
           <div style={card}>
-            <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>Your Insulin Settings</div>
+            <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>Deine Insulin-Einstellungen</div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
               {[
                 { label:"Insulin-to-Carb Ratio", val:`1:${settings.icr}`, sub:"grams per unit", color:ACCENT },
@@ -311,13 +311,13 @@ export default function SettingsPage() {
                   opacity: macroSaving ? 0.6 : 1,
                 }}
               >
-                {macroSaving ? "Saving…" : savedMacros ? "✓ Saved" : "Save Macro Targets"}
+                {macroSaving ? "Speichere…" : savedMacros ? "✓ Gespeichert" : "Makro-Ziele speichern"}
               </button>
               <button
                 onClick={() => setMacroTargets(DEFAULT_MACRO_TARGETS)}
                 style={{ padding:"10px 16px", borderRadius:10, border:`1px solid ${BORDER}`, background:"transparent", color:"rgba(255,255,255,0.4)", fontSize:13, cursor:"pointer" }}
               >
-                Reset to defaults
+                Zurücksetzen
               </button>
               {macroError && (
                 <span style={{ fontSize:12, color:PINK }}>{macroError}</span>
@@ -331,10 +331,10 @@ export default function SettingsPage() {
               background:`linear-gradient(135deg, ${ACCENT}, #6B8BFF)`, color:"#fff",
               fontSize:15, fontWeight:700, boxShadow:`0 4px 20px ${ACCENT}40`,
             }}>
-              {saved ? "✓ Saved!" : "Save Settings"}
+              {saved ? "✓ Gespeichert!" : "Einstellungen speichern"}
             </button>
             <button onClick={() => setSettings(DEFAULTS)} style={{ padding:"14px 20px", borderRadius:12, border:`1px solid ${BORDER}`, background:"transparent", color:"rgba(255,255,255,0.4)", fontSize:14, cursor:"pointer" }}>
-              Reset
+              Zurücksetzen
             </button>
           </div>
         </div>
@@ -347,6 +347,20 @@ export default function SettingsPage() {
       {tab === "import" && (
         <ImportPanel embedded />
       )}
+
+      <p style={{
+        marginTop: 48,
+        marginBottom: 8,
+        marginLeft: "auto",
+        marginRight: "auto",
+        maxWidth: 560,
+        fontSize: 11,
+        lineHeight: 1.55,
+        color: "rgba(255,255,255,0.35)",
+        textAlign: "center",
+      }}>
+        Glev ist ein Dokumentations- und Organisations-Tool, kein Medizinprodukt. Therapieentscheidungen triffst du in Absprache mit deinem Arzt.
+      </p>
     </div>
   );
 }

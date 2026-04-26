@@ -386,9 +386,6 @@ export default function EnginePage() {
   return (
     <div style={{ maxWidth: isMobile || tab !== "engine" ? 800 : 1200, margin:"0 auto" }}>
       <div style={{ marginBottom:28 }}>
-        <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.18em", color:"rgba(255,255,255,0.3)", marginBottom:8 }}>
-          GLEV — SMART INSULIN DECISIONS
-        </div>
         <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
           <GlevLogo size={32} />
           <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em" }}>Glev Engine</h1>
@@ -759,7 +756,7 @@ export default function EnginePage() {
         boxShadow:carbs?`0 4px 24px ${ACCENT}40`:"none",
         transition:"all 0.2s", marginBottom:18,
       }}>
-        {loading ? "Loading data…" : running ? "Analyzing history…" : "Get Recommendation"}
+        {loading ? "Lade Daten…" : running ? "Analysiere Verlauf…" : "Empfehlung berechnen"}
       </button>
 
       {/* Confirm-Log section: enter the dose you actually took, then save the

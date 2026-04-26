@@ -477,7 +477,6 @@ export default function LogPage() {
       `}</style>
 
       <div style={{ marginBottom:6 }}>
-        <div style={{ fontSize:10, color:"rgba(255,255,255,0.35)", letterSpacing:"0.14em", marginBottom:6 }}>GLEV — SMART INSULIN DECISIONS</div>
         <h1 style={{ fontSize:28, fontWeight:800, letterSpacing:"-0.03em", margin:0 }}>Glev Engine</h1>
       </div>
 
@@ -653,7 +652,7 @@ export default function LogPage() {
               transition:"all 0.2s",
             }}
           >
-            {recLoading ? "Analyzing history…" : rec ? "↻ Re-run Recommendation" : "Get Recommendation"}
+            {recLoading ? "Analysiere Verlauf…" : rec ? "↻ Empfehlung neu berechnen" : "Empfehlung berechnen"}
           </button>
 
           {/* Recommendation result card (Glev Engine style) */}

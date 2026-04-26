@@ -71,7 +71,6 @@ export default function AboutGlevModal({ open, onClose }: { open: boolean; onClo
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <GlevLockup size={40} />
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginLeft: 4 }}>Smart insulin decisions for Type&nbsp;1</div>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

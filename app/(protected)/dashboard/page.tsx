@@ -398,7 +398,7 @@ export default function DashboardPage() {
           </p>
         </div>
         <button onClick={() => router.push("/log")} style={{ padding:"10px 20px", borderRadius:10, border:"none", background:ACCENT, color:"#fff", cursor:"pointer", fontSize:14, fontWeight:600, boxShadow:`0 4px 20px ${ACCENT}40` }}>
-          + Log Meal
+          + Mahlzeit loggen
         </button>
       </div>
 
@@ -458,7 +458,7 @@ function RecentEntries({
       </div>
       {rows.length === 0 ? (
         <div style={{ padding:"24px 0 16px", textAlign:"center", color:"rgba(255,255,255,0.25)", fontSize:13 }}>
-          No entries yet. Log your first meal.
+          Noch keine Einträge. Logge deine erste Mahlzeit.
         </div>
       ) : (
         <div>

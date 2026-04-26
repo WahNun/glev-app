@@ -436,7 +436,7 @@ export default function ManualEntryModal({
               cursor: saving ? "not-allowed" : "pointer",
             }}
           >
-            Cancel
+            Abbrechen
           </button>
           <button
             onClick={handleSubmit}

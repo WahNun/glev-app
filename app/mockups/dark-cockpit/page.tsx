@@ -2069,7 +2069,6 @@ function MobileDashboard({email,name:memberName,onSignOut}:{email?:string;name?:
             <LogoCMark size={30}/>
             <div>
               <div style={{fontSize:17,fontWeight:800,letterSpacing:"-0.02em"}}>Glev</div>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.35)",marginTop:1}}>Smart insulin decisions</div>
             </div>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -2773,7 +2772,6 @@ function DarkCockpit() {
           <div style={{flex:1,padding:"24px 28px",overflow:"auto"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
               <div>
-                <div style={{fontSize:10,color:"rgba(255,255,255,0.3)",letterSpacing:"0.12em",marginBottom:3}}>GLEV — SMART INSULIN DECISIONS</div>
                 <h1 style={{fontSize:20,fontWeight:700,margin:0,letterSpacing:"-0.02em"}}>{PAGE_TITLES[page]}</h1>
               </div>
             </div>

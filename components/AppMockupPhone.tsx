@@ -31,10 +31,10 @@ const BEZEL   = 12;
 
 const TAB_LABEL: Record<Tab, string> = {
   dashboard: "Dashboard",
-  entries:   "Entry Log",
+  entries:   "Einträge",
   engine:    "Glev Engine",
-  insights:  "Insights",
-  settings:  "Settings",
+  insights:  "Auswertungen",
+  settings:  "Einstellungen",
 };
 
 const TAB_CAPTION: Record<Tab, string> = {
@@ -165,7 +165,6 @@ function TopHeader({ onAccount }: { onAccount?: () => void }) {
     }}>
       <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
         <GlevLockup size={20}/>
-        <div style={{ fontSize:8, color:"rgba(255,255,255,0.32)", letterSpacing:"0.06em" }}>Smart insulin decisions</div>
       </div>
       <div style={{ display:"flex", alignItems:"center", gap:6 }}>
         <div style={{ fontSize:9, padding:"3px 9px", borderRadius:99, background:`${GREEN}1F`, color:GREEN, fontWeight:600, letterSpacing:"0.04em" }}>● Live</div>
@@ -530,11 +529,8 @@ function EngineScreen({ onLogged }: { onLogged: () => void }) {
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-      {/* Header — eyebrow + GlevLogo + title + subtitle (1:1 from real) */}
+      {/* Header — GlevLogo + title + subtitle (1:1 from real) */}
       <div>
-        <div style={{ fontSize:7.5, fontWeight:700, letterSpacing:"0.18em", color:"rgba(255,255,255,0.3)", marginBottom:4 }}>
-          GLEV — SMART INSULIN DECISIONS
-        </div>
         <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
           <GlevLogo size={18}/>
           <h1 style={{ fontSize:14, fontWeight:800, letterSpacing:"-0.03em", margin:0 }}>Glev Engine</h1>
@@ -775,7 +771,7 @@ function EngineScreen({ onLogged }: { onLogged: () => void }) {
         </div>
       </div>
 
-      {/* Get Recommendation OR (after tap) the full result block. The
+      {/* Empfehlung berechnen OR (after tap) the full result block. The
           real app reveals the result inline below the button — same here. */}
       {!showResult ? (
         <button onClick={getRec} style={{
@@ -784,7 +780,7 @@ function EngineScreen({ onLogged }: { onLogged: () => void }) {
           color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer",
           boxShadow:`0 4px 18px ${ACCENT}40`,
         }}>
-          Get Recommendation
+          Empfehlung berechnen
         </button>
       ) : (
         <>
@@ -793,7 +789,7 @@ function EngineScreen({ onLogged }: { onLogged: () => void }) {
             background:"rgba(79,110,247,0.25)", color:"rgba(255,255,255,0.55)",
             fontSize:12, fontWeight:700, cursor:"default",
           }}>
-            Get Recommendation
+            Empfehlung berechnen
           </button>
 
           {/* Input summary — two side-by-side cards (Glucose + Carbs) */}
@@ -871,7 +867,7 @@ function EngineScreen({ onLogged }: { onLogged: () => void }) {
               boxShadow: confirmed ? "none" : `0 4px 18px ${ACCENT}40`,
             }}
           >
-            {confirmed ? "✓ Logged — opening Entry Log…" : "✓ Confirm Log"}
+            {confirmed ? "✓ Geloggt — öffne Einträge…" : "✓ Eintrag bestätigen"}
           </button>
         </>
       )}
