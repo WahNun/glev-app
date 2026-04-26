@@ -26,6 +26,10 @@ const INSIGHTS_DEFAULT_ORDER = [
 ];
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
+// ACCENT_SOFT: lower-hierarchy sibling of ACCENT for the Raw ICR tile —
+// same blue family as the Adaptive Engine, clearly lighter/less saturated
+// to signal "secondary view of the same metric".
+const ACCENT_SOFT="#93A5FA";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
 const HIGH_YELLOW = "#FFD166";
 
@@ -670,21 +674,27 @@ export default function InsightsPage() {
       node: (
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
           {[
-            { label:"Good rate",    val:`${goodRate}%`,  sub:`${goodAll} of ${total}`,   color:GREEN,
-              formula:"GOOD / Total × 100",            explain:"Share of meals where the dose was within ±35% of the ICR estimate." },
-            { label:"Avg glucose",  val:`${avgGlucose}`, sub:"mg/dL pre-meal",           color:ACCENT,
-              formula:"Σ glucose_before / count",      explain:"Average pre-meal glucose. Lower reflects better fasting control." },
-            { label:"Raw ICR",      val:`1:${estICR}`,   sub:"raw 7d avg · ignores outcome", color:ORANGE,
+            // Raw ICR moved to slot 0 (top-left) so it sits visually adjacent
+            // to the Adaptive Engine hero card directly above the grid —
+            // grouping both ICR-related views into one cluster. Color switched
+            // from ORANGE to ACCENT_SOFT (lighter sibling of the Adaptive
+            // Engine's ACCENT) to signal "same metric family, lower hierarchy".
+            { label:"Raw ICR",      val:`1:${estICR}`,   sub:"raw 7d avg · ignores outcome", color:ACCENT_SOFT,
               formula:"carbs / insulin (last 7)",      explain:"Naive average of carbs ÷ insulin over the last 7 meals. Ignores whether the dose actually landed in target — spikes and overdoses count the same as good outcomes. The Adaptive Engine ICR above is the smarter, outcome-weighted version.",
               infoBack: (
                 <IcrInfoBack
                   heading="Was zeigt dieser Wert?"
-                  accent={ORANGE}
+                  accent={ACCENT_SOFT}
                   body="Der Raw ICR ist der einfache Durchschnitt deiner letzten 7 Dosierungen — unabhängig davon ob das Ergebnis gut oder schlecht war. Er spiegelt dein tatsächliches Dosierverhalten der letzten Tage wider. Wenn dieser Wert stark vom Adaptive ICR abweicht, kann das bedeuten dass du zuletzt anders dosiert hast als dein langfristiger Schnitt — das ist eine Beobachtung, keine Empfehlung."
                   subLine="Datenbasis: letzte 7 Mahlzeiten mit Carbs + Insulin · ungewichtet"
                 />
               ),
             },
+            { label:"Avg glucose",  val:`${avgGlucose}`, sub:"mg/dL pre-meal",           color:ACCENT,
+              formula:"Σ glucose_before / count",      explain:"Average pre-meal glucose. Lower reflects better fasting control." },
+            // Good rate moved out of slot 0 into Raw ICR's previous position.
+            { label:"Good rate",    val:`${goodRate}%`,  sub:`${goodAll} of ${total}`,   color:GREEN,
+              formula:"GOOD / Total × 100",            explain:"Share of meals where the dose was within ±35% of the ICR estimate." },
             { label:"Avg insulin",  val:`${avgInsulin}u`, sub:`${avgCarbs}g avg carbs`, color:"#A78BFA",
               formula:"Σ units / count",               explain:"Mean insulin per meal. Track against carbs to validate your ratio." },
           ].map((t,i) => <InsightFlipTile key={i} tile={t}/>)}
