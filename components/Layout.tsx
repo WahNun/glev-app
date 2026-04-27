@@ -6,6 +6,7 @@ import { signOut } from "@/lib/auth";
 import GlevLogo from "@/components/GlevLogo";
 import GlevLockup from "@/components/GlevLockup";
 import AboutGlevModal from "@/components/AboutGlevModal";
+import GlevActionSheet from "@/components/GlevActionSheet";
 import { EngineHeaderProvider, useEngineHeader } from "@/lib/engineHeaderContext";
 
 const ACCENT  = "#4F6EF7";
@@ -13,6 +14,14 @@ const GREEN   = "#22D3A0";
 const SURFACE = "#111117";
 const BORDER  = "rgba(255,255,255,0.06)";
 const BG      = "#09090B";
+
+// Mobile nav uses slightly different surfaces than the rest of the app:
+// the spec asks for #111117 with a 0.08-alpha top border (vs the global
+// 0.06 BORDER), and inactive tabs use a brighter 0.4-alpha white than
+// the desktop sidebar's 0.45 so the 4-tab bar reads cleanly on phones.
+const NAV_SURFACE  = "#111117";
+const NAV_BORDER   = "rgba(255,255,255,0.08)";
+const NAV_INACTIVE = "rgba(255,255,255,0.4)";
 
 const NAV = [
   { label: "Dashboard", path: "/dashboard", icon: (a: boolean) => (
@@ -47,6 +56,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router   = useRouter();
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [actionSheetOpen, setActionSheetOpen] = useState(false);
   const engineHdr = useEngineHeader();
 
   useEffect(() => {
@@ -223,55 +233,123 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         {children}
       </main>
 
+      {/* MOBILE BOTTOM NAV — 4 visible tabs (Dashboard left, Glev center
+          elevated, History right-of-center, Settings far right). Glev is a
+          floating circular FAB that opens an action sheet instead of
+          navigating; the spacer slot keeps the 4 underlying labels evenly
+          distributed so the elevated button doesn't visually collide with
+          its neighbours. The sheet itself lives below as a portal-style
+          overlay so it can cover the nav. */}
       <nav className="glev-mobile-nav" style={{
         position: "fixed", bottom: 0, left: 0, right: 0,
-        background: SURFACE, borderTop: `1px solid ${BORDER}`,
-        // Equal-share buttons across the full width — no extra side
-        // padding so the 5 labels never collide with each other on
-        // narrow phones (320–360 px).
-        padding: "6px 4px max(12px, env(safe-area-inset-bottom))", zIndex: 100,
+        background: NAV_SURFACE, borderTop: `1px solid ${NAV_BORDER}`,
+        padding: "6px 4px env(safe-area-inset-bottom, 0px)", zIndex: 100,
       }}>
-        {NAV.map(({ label, path, icon }) => {
-          const active = pathname.startsWith(path);
-          // Each button claims an equal slice (`flex: 1 1 0` + `min-width: 0`)
-          // so labels stay on one line and the active accent pill never spills
-          // into its neighbour. Sentence-case + slightly larger 11 px text is
-          // far more legible on mobile than the previous 9 px ALL-CAPS.
-          return (
-            <button
-              key={path}
-              onClick={() => router.push(path)}
-              aria-current={active ? "page" : undefined}
-              style={{
-                flex: "1 1 0",
-                minWidth: 0,
-                display: "flex", flexDirection: "column",
-                alignItems: "center", justifyContent: "center",
-                gap: 4, padding: "6px 2px", height: 56,
-                border: "none", background: "transparent", cursor: "pointer",
-                color: active ? ACCENT : "rgba(255,255,255,0.45)",
-                fontSize: 11, fontWeight: active ? 600 : 500, letterSpacing: "0.01em",
-                borderRadius: 10,
-                transition: "color 0.15s",
-              }}
-            >
-              <span style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                height: 22, width: 22,
-              }}>
-                {icon(active)}
-              </span>
-              <span style={{
-                lineHeight: 1.1,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                maxWidth: "100%",
-              }}>{label}</span>
-            </button>
-          );
-        })}
+        <MobileTab
+          label="Dashboard"
+          active={pathname.startsWith("/dashboard")}
+          onClick={() => router.push("/dashboard")}
+          icon={(a) => (
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : NAV_INACTIVE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 11l9-8 9 8" />
+              <path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10" />
+            </svg>
+          )}
+        />
+        {/* Spacer — same flex weight as a tab so the four labels remain
+            evenly spaced; the Glev FAB is positioned absolutely above it. */}
+        <div aria-hidden style={{ flex: "1 1 0", minWidth: 0 }} />
+        <MobileTab
+          label="History"
+          active={pathname.startsWith("/history")}
+          onClick={() => router.push("/history")}
+          icon={(a) => (
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : NAV_INACTIVE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 12a9 9 0 1 0 3-6.7" />
+              <polyline points="3 4 3 10 9 10" />
+              <polyline points="12 7 12 12 16 14" />
+            </svg>
+          )}
+        />
+        <MobileTab
+          label="Settings"
+          active={pathname.startsWith("/settings")}
+          onClick={() => router.push("/settings")}
+          icon={(a) => (
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : NAV_INACTIVE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+          )}
+        />
+
+        {/* Glev FAB — circular, elevated, dead-centre. Tap opens the
+            action sheet; never navigates directly. */}
+        <button
+          type="button"
+          onClick={() => setActionSheetOpen(true)}
+          aria-label="Glev Aktionen"
+          aria-haspopup="dialog"
+          aria-expanded={actionSheetOpen}
+          style={{
+            position: "absolute",
+            left: "50%", top: -20,
+            transform: "translateX(-50%)",
+            width: 56, height: 56, borderRadius: "50%",
+            background: ACCENT, border: "none", cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: "white",
+            boxShadow: "0 6px 18px rgba(79,110,247,0.45), 0 2px 6px rgba(0,0,0,0.4)",
+            transition: "transform 0.15s, box-shadow 0.15s",
+          }}
+        >
+          <GlevLogo size={26} color="white" bg="transparent" />
+        </button>
       </nav>
+
+      <GlevActionSheet open={actionSheetOpen} onClose={() => setActionSheetOpen(false)} />
     </div>
+  );
+}
+
+/**
+ * Single button slot in the new 4-tab mobile bottom nav. Kept as a tiny
+ * local component so each tab definition above stays a single readable
+ * JSX block instead of being buried in a NAV.map() loop — the Glev FAB
+ * doesn't fit the tab shape, so a simple map() no longer made sense.
+ */
+function MobileTab({
+  label, active, onClick, icon,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  icon: (active: boolean) => React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-current={active ? "page" : undefined}
+      style={{
+        flex: "1 1 0",
+        minWidth: 0,
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        gap: 4, padding: "6px 2px", height: 56,
+        border: "none", background: "transparent", cursor: "pointer",
+        color: active ? ACCENT : NAV_INACTIVE,
+        fontSize: 11, fontWeight: active ? 600 : 500, letterSpacing: "0.01em",
+        borderRadius: 10,
+        transition: "color 0.15s",
+      }}
+    >
+      <span style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 22, width: 22 }}>
+        {icon(active)}
+      </span>
+      <span style={{
+        lineHeight: 1.1, whiteSpace: "nowrap",
+        overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%",
+      }}>{label}</span>
+    </button>
   );
 }

@@ -1,5 +1,5 @@
 STATUS: DONE
-LAST_DONE: Stripe Checkout Fix — neue Server Actions submitProCheckout/submitBetaCheckout (nur FormData-Signatur) direkt am `<form action={…}>` verkabelt. useActionState-Wrapper raus, Pending-State über useFormStatus-Subkomponente, Errors via ?error=, Beta-Capacity via ?full=1. Dadurch hat das Form jetzt schon zur SSR-Zeit ein action-Attribut und Submits funktionieren auch vor Hydration.
-NEXT: Im Browser /pro und /beta testen — Email eingeben, Submit, sollte zu checkout.stripe.com weiterleiten. Bei Fehler: ?error=… in der URL und rote Fehlermeldung sichtbar.
+LAST_DONE: Mobile-Bottom-Nav-Redesign — 4 sichtbare Tabs (Dashboard, Glev FAB elevated center, History, Settings) statt 5 gleich breiter. Glev = 56 px Kreis #4F6EF7, schwebt 20 px über der Bar, öffnet GlevActionSheet (Mahlzeit loggen → /log; Weiteres expandiert inline → Glukose /engine, Insulin /log, Exercise /log). History = neue Route /history mit Pill-Sub-Tabs [Insights] [Einträge], rendert die existierenden Page-Komponenten direkt ohne sie anzufassen. Desktop-Sidebar unverändert, alle bestehenden Pages unangetastet. Neu: components/GlevActionSheet.tsx, app/(protected)/history/page.tsx; geändert: components/Layout.tsx.
+NEXT: Mobile testen — Glev-FAB tap → Sheet, Weiteres expandiert, Overlay/Esc/× schließt; History-Tab → /history, Sub-Tab-Wechsel rendert Insights/Entries.
 QUESTION:
-TIMESTAMP: 00:14
+TIMESTAMP: 00:23
