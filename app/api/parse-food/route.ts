@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
       model: "gpt-4o-mini",
       response_format: { type: "json_object" },
       temperature: 0.1,
+      max_tokens: 350,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user",   content: text },
