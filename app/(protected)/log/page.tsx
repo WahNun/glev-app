@@ -530,7 +530,7 @@ export default function LogPage() {
   const liveTypeLabel = liveType ? (TYPE_LABELS[liveType] || liveType) : "Auto from macros";
 
   return (
-    <div style={{ maxWidth:1280, marginRight:"auto", display:"flex", flexDirection:"column", gap:14 }}>
+    <div style={{ maxWidth:1100, margin:"0 auto", display:"flex", flexDirection:"column", gap:14 }}>
       <style>{`
         @keyframes vPulse { 0%,100%{opacity:0.35;transform:scale(1)} 50%{opacity:1;transform:scale(1.05)} }
         @keyframes spin   { to { transform: rotate(360deg) } }
@@ -565,6 +565,14 @@ export default function LogPage() {
             display: flex !important;
           }
         }
+        /* Wizard step pills — base size for mobile, larger on desktop.
+           Sizing lives in CSS (not the inline style object) so we can
+           respond to viewport without an isMobile state hook. The 768px
+           threshold matches Layout.tsx's sidebar breakpoint. */
+        .wizard-pill { font-size: 12px; padding: 8px 12px; }
+        @media (min-width: 769px) {
+          .wizard-pill { font-size: 14px; padding: 10px 22px; }
+        }
       `}</style>
 
       <div style={{ marginBottom:6 }}>
@@ -591,14 +599,13 @@ export default function LogPage() {
               role="tab"
               aria-selected={active}
               aria-current={active ? "step" : undefined}
+              className="wizard-pill"
               style={{
                 flex: "1 1 0",
-                padding: "8px 12px",
                 borderRadius: 99,
                 border: `1px solid ${active ? ACCENT : `${ACCENT}55`}`,
                 background: active ? ACCENT : "transparent",
                 color: active ? "#fff" : `${ACCENT}cc`,
-                fontSize: 12,
                 fontWeight: 700,
                 letterSpacing: "0.04em",
                 textAlign: "center",
@@ -774,7 +781,14 @@ export default function LogPage() {
                     <span style={{ fontSize:10, fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase", color:ACCENT, padding:"3px 9px", borderRadius:99, background:`${ACCENT}14`, border:`1px solid ${ACCENT}33` }}>Makros</span>
                     <span style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.02em" }}>Kohlenhydrate ist Pflicht · Kalorien werden sonst berechnet</span>
                   </div>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                  {/* MAKRO-GRID — auto-fit collapses 5 macro fields to 2-3
+                      cols on Desktop, 1-2 cols on tablets, 1 col on phones.
+                      minmax(220px, 1fr): 220px is the comfortable minimum
+                      width for "z.B. 60" + label. Glukose, Mahlzeit-Zeit,
+                      Beschreibung stay full-row outside this grid because
+                      they have special concerns (CGM button, datetime
+                      input, free text). */}
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(220px, 1fr))", gap:10 }}>
                     <div>
                       <label style={labelStyle}>Kohlenhydrate (g) <span style={{ color:PINK, marginLeft:4 }}>*</span></label>
                       <input value={carbs} onChange={e => setCarbs(e.target.value)} placeholder="z.B. 60" type="number" style={inp}/>
@@ -783,8 +797,6 @@ export default function LogPage() {
                       <label style={labelStyle}>Protein (g) <span style={{ opacity:0.5, textTransform:"none", fontSize:9 }}>opt.</span></label>
                       <input value={protein} onChange={e => setProtein(e.target.value)} placeholder="z.B. 30" type="number" style={inp}/>
                     </div>
-                  </div>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                     <div>
                       <label style={labelStyle}>Fett (g) <span style={{ opacity:0.5, textTransform:"none", fontSize:9 }}>opt.</span></label>
                       <input value={fat} onChange={e => setFat(e.target.value)} placeholder="z.B. 15" type="number" style={inp}/>
@@ -793,10 +805,10 @@ export default function LogPage() {
                       <label style={labelStyle}>Ballaststoffe (g) <span style={{ opacity:0.5, textTransform:"none", fontSize:9 }}>opt.</span></label>
                       <input value={fiber} onChange={e => setFiber(e.target.value)} placeholder="z.B. 8" type="number" style={inp}/>
                     </div>
-                  </div>
-                  <div>
-                    <label style={labelStyle}>Kalorien (kcal) <span style={{ opacity:0.5, textTransform:"none", fontSize:9 }}>opt. — auto-berechnet wenn leer</span></label>
-                    <input value={calories} onChange={e => setCalories(e.target.value)} placeholder={totalCarbs || totalProtein || totalFat ? `auto: ${computeCalories(totalCarbs, totalProtein, totalFat)}` : "z.B. 520"} type="number" style={inp}/>
+                    <div>
+                      <label style={labelStyle}>Kalorien (kcal) <span style={{ opacity:0.5, textTransform:"none", fontSize:9 }}>opt. — auto-berechnet wenn leer</span></label>
+                      <input value={calories} onChange={e => setCalories(e.target.value)} placeholder={totalCarbs || totalProtein || totalFat ? `auto: ${computeCalories(totalCarbs, totalProtein, totalFat)}` : "z.B. 520"} type="number" style={inp}/>
+                    </div>
                   </div>
                   <div>
                     <label style={labelStyle}>Beschreibung</label>

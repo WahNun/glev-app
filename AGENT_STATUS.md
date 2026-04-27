@@ -1,40 +1,61 @@
-STATUS: DONE (i18n Foundation + initiale String-Replacements)
+STATUS: DONE (Task #18 — Desktop-Layout für /log-Wizard + Sidebar-Nav-Sync)
 LAST_DONE:
-  Spec "Bilinguale App (DE/EN) mit next-intl" Schritte 1-7 (Schritt 7 partial — wizard-chrome only).
-  Zwei technische Abweichungen von der Spec (mit Absicht):
-    1. Spec wollte deprecated @supabase/auth-helpers-nextjs → habe stattdessen den existierenden lib/supabase.ts Singleton genutzt (basiert auf @supabase/ssr + @supabase/supabase-js).
-    2. Spec's i18n.ts gab IMMER 'de' zurück → das wäre kaputt weil next-intl Messages server-side beim Request lädt; Client-Context allein wechselt die Sprache nicht. Habe stattdessen Cookie-basierte Locale-Source implementiert (NEXT_LOCALE Cookie, server liest in i18n/request.ts, Client setzt + reload bei Sprachwechsel).
+  4 zielgenaue Patches für Desktop-Responsive (≥768px) — Mobile-Layout unverändert.
 
-  Konkret gemacht:
-  ─── Foundation ───
-  • supabase/migrations/20260427_add_profiles_language.sql → angewandt (profiles.language text DEFAULT 'de')
-  • npm install next-intl
-  • messages/de.json + messages/en.json mit nav/log/engine/history/settings/common namespaces (45+ keys)
-  • i18n/request.ts → liest NEXT_LOCALE Cookie, default 'de', lädt entsprechendes JSON
-  • next.config.ts → withNextIntl wrapper hinzu
-  • app/layout.tsx → async, holt locale+messages server-side, wrappt children mit NextIntlClientProvider; html lang={locale} dynamisch
-  • lib/locale.ts → setLocale(lang) helper: schreibt Cookie, persistiert in profiles.language, location.reload()
-  • components/LanguageSync.tsx → mounted in protected layout; reconciliert beim Login DB-Sprache mit Cookie und reloadet falls divergent (Cross-Device-Sync)
+  1. components/Layout.tsx Z.34 — NAV "Log"-Eintrag: path "/entries" → "/log".
+     Klick auf Sidebar-"Log" landet jetzt im 3-Step-Wizard statt in der alten Entries-Liste.
+     Label "Log" beibehalten (matcht englische Convention der anderen Items).
 
-  ─── UI ───
-  • app/(protected)/settings/page.tsx → Sprache-Toggle Card als ERSTES Element im "settings" Tab. Zwei Buttons (🇩🇪 Deutsch / 🇬🇧 English), aktive Sprache hervorgehoben in ACCENT-Farbe. setCurrentLocale optimistisch + setLocale() trigger persist+reload.
+  2. app/(protected)/log/page.tsx Z.536 — Outer-Container:
+     maxWidth 1280 → 1100 + marginRight:"auto" → margin:"0 auto".
+     Zentriert die Page auf Desktop statt links-bündig zu kleben. 1100 (statt der Spec-Vorgabe 680)
+     gewählt weil die Page ein 2-Col-Layout (Form 60% + AI-Chat 40%) hat das bei 680 zerquetscht würde.
+     Die existierende 900px-Media-Query stackt das auf Mobile sowieso zu 1-Col.
 
-  ─── String-Replacements ───
-  • app/(protected)/log/page.tsx: title h1, STEP_KEYS array (statt hardcoded STEP_LABELS), pill aria-label, pill labels, chat_intro, alle 3 WizardNav nextLabel/primaryLabel/nextHint
-  • components/Layout.tsx: 3 mobile-nav labels (Dashboard / History / Settings) → tNav("dashboard"|"history"|"settings")
+  3. app/(protected)/log/page.tsx Z.794-815 — Step 2 Makro-Block:
+     Drei separate Container (carbs/protein 2-col + fett/fiber 2-col + kalorien standalone)
+     in EINEN auto-fit-Grid `repeat(auto-fit, minmax(220px, 1fr))` zusammengefasst.
+     Auf Desktop ergibt das 2-3 Spalten je nach Breite, auf Mobile 1 Spalte. 220px als
+     Minimum gewählt weil das die kleinste Breite ist bei der Label + Input + opt-Hint
+     noch ohne Wrap passen.
+     Glukose / Mahlzeit-Zeit / Beschreibung bleiben full-row außerhalb des Grids
+     (Spezial-Behandlung wegen CGM-Btn / datetime-Input / Volltext).
 
-  Bug während Implementation: de.json hatte invalid JSON in chat_placeholder weil ich „...„ mit normalen " als Schließzeichen gemixt habe. Sofort gefixt mit \" escapes. node JSON.parse jetzt clean auf beiden Files.
+  4. app/(protected)/log/page.tsx Pills (Z.575-578 CSS, Z.605-616 JSX):
+     `.wizard-pill` Class hinzu mit responsiven Sizes:
+       - Base (Mobile): font-size 12, padding 8/12
+       - @media (min-width: 769px): font-size 14, padding 10/22
+     Inline `fontSize:12, padding:"8px 12px"` aus dem Pill-Style-Object entfernt
+     (jetzt via CSS-Class). 768px-Breakpoint matcht Layout.tsx-Sidebar-Convention.
 
-  tsc clean. Workflow restart. Ready zum Sprache-Toggeln.
+  Verifikation:
+  - npx tsc --noEmit clean
+  - Workflow restart sauber (Next.js 16.2.4 Ready in 678ms)
+  - HTTP smoke: /log und /dashboard antworten 307 (Auth-Redirect, korrekt)
+  - Server-Logs sauber, keine HMR-Errors, Browser-Console ohne neue Fehler
+  - Auto-Commit sollte nach mark_task_complete via Spec-autorisiertem `git push origin main`
+    auf GitHub landen (Commit-Msg: "fix: desktop responsive layout for /log wizard + sidebar nav sync")
 
-NEXT (offen — separate Runden):
-  a) USER testen: Settings → "settings" Tab → Englisch klicken → Reload → Pills/Nav/Buttons jetzt Englisch?
-  b) Restliche /log-Strings: Field-Labels (Glukose vorher, Mahlzeit-Zeit, Carbs/Protein/Fat/Fiber/Calories), Klassifikations-Chip-Texte, "Speichere…" Toast, Korrektur-Bolus Sektion, Recommendation Card. Alle Reasoning-Strings (von runGlevEngine + GPT) bleiben absichtlich auf DE — die werden vom Engine generiert nicht aus Messages geholt.
-  c) /history, /dashboard, /insights Strings — separate Runden
-  d) Zwei NICHT-i18n-Restpunkte aus voriger Runde: /engine cleanen + /log?type=insulin/exercise Sub-Flow (von vor zwei Runden, noch offen)
-  e) Push nach main (User-Auth erforderlich)
+  Bewusst NICHT geändert (außerhalb Task-Scope):
+  - Mobile-Bottom-Nav (vor 2 Runden gefixt, OK)
+  - saveMeal-Logik / CGM-Pipeline / Voice-Pipeline
+  - i18n-Strings (Sidebar-NAV-Array bleibt englisch — i18n-Roll-out ist separater Strang)
+  - /engine Page (Spec sagt explizit: eigene Runde)
+  - /entries Page (existiert weiter, von Mobile-Nav History → /history erreichbar)
+
+NEXT (offen — aus Plan-File "Offene Fragen" + bekannte Stränge):
+  a) Sidebar-Layout: Insights bleibt drin, History/Verlauf NICHT zur Sidebar hinzugefügt
+     (Spec wollte History rein + Insights raus). Falls User das anders will — eigene Runde.
+  b) /log maxWidth-Fallback: falls auf Desktop >900px die Chat-Spalte zu schmal wirkt,
+     entweder Outer-maxWidth runter oder 2-Col bei <1024px zu 1-Col kollabieren.
+  c) Restliche /log-Strings i18n (carbs/protein/fat/fiber/kcal Labels, Speichere-Toast,
+     Korrektur-Bolus-Section, Recommendation-Card) — Strang aus Task #17 i18n Foundation.
+  d) /engine Page Cleanup (offen seit 2+ Runden — eigener Task).
+  e) /log?type=insulin/exercise Sub-Flow (offen seit 2+ Runden).
 
 QUESTION:
-  Sprache-Toggle in Settings testen? Wenn das funktioniert: alle Restpunkte (b-e) priorisieren?
+  Ein/zwei Klick-Throughs auf Desktop ≥900px probieren — Pills lesbarer? Makros
+  in 2-3 Spalten? Sidebar-Log → Wizard? Wenn ja: zu welchem Strang weiter
+  (i18n-Rest / /engine-Cleanup / Sidebar-Items)?
 
-TIMESTAMP: 23:46
+TIMESTAMP: 23:56
