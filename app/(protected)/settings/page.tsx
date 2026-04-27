@@ -7,6 +7,7 @@ import { fetchMacroTargets, saveMacroTargets, DEFAULT_MACRO_TARGETS, type MacroT
 import ImportPanel from "@/components/ImportPanel";
 import ExportPanel from "@/components/ExportPanel";
 import CgmSettingsCard from "@/components/CgmSettingsCard";
+import NightscoutSettingsCard from "@/components/NightscoutSettingsCard";
 import { parseDbDate } from "@/lib/time";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78";
@@ -337,6 +338,14 @@ export default function SettingsPage() {
               CGM
             </div>
             <CgmSettingsCard />
+          </div>
+
+          {/* Nightscout — eigener self-hosted CGM server */}
+          <div>
+            <div style={{ fontSize:11, fontWeight:700, color:ACCENT, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:10 }}>
+              Nightscout
+            </div>
+            <NightscoutSettingsCard />
           </div>
 
           {/* Google Sheets — placeholder until OAuth flow is wired up */}

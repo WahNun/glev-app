@@ -1,9 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import AppMockupPhone from "@/components/AppMockupPhone";
 import CTAButton from "@/components/landing/CTAButton";
+import { startBetaCheckout, type BetaCheckoutState } from "./actions";
 import FAQ from "@/components/landing/FAQ";
 import FeatureTrio from "@/components/landing/FeatureTrio";
 import FounderSection from "@/components/landing/FounderSection";
@@ -26,12 +27,21 @@ const CAPACITY = 500;
 
 type CountResponse = { count: number; capacity: number; remaining: number };
 
+const MAILTO_WAITLIST =
+  "mailto:hello@glev.app?subject=Glev%20Beta%20Warteliste";
+
 export default function BetaPage() {
   const [email, setEmail] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [count, setCount] = useState<CountResponse | null>(null);
   const ctaRef = useRef<HTMLInputElement | null>(null);
+  // Server action drives the form submit so the click works even if React
+  // hasn't hydrated yet (the symptom was a default GET reload back to /beta
+  // with email in the URL instead of a POST to Stripe).
+  const [state, formAction, isPending] = useActionState<
+    BetaCheckoutState | null,
+    FormData
+  >(startBetaCheckout, null);
+  const error = state?.error ?? null;
 
   useEffect(() => {
     let cancelled = false;
@@ -48,56 +58,22 @@ export default function BetaPage() {
     };
   }, []);
 
+  // Capacity exhaustion can race the count poll: if Stripe checkout responds
+  // 409 the action returns { full: true } — degrade gracefully to mailto so
+  // the user isn't stuck on a red error.
+  useEffect(() => {
+    if (state?.full) {
+      window.location.href = MAILTO_WAITLIST;
+    }
+  }, [state]);
+
   const remaining = count?.remaining ?? CAPACITY;
   const isFull = count != null && remaining <= 0;
   const isLow = !isFull && count != null && remaining < 50;
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError(null);
-
-    const trimmed = email.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      setError("Bitte gib eine gültige Email-Adresse ein.");
-      ctaRef.current?.focus();
-      return;
-    }
-
-    if (isFull) {
-      window.location.href = "mailto:hello@glev.app?subject=Glev%20Beta%20Warteliste";
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const res = await fetch("/api/beta/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: trimmed }),
-      });
-      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
-
-      if (res.status === 409) {
-        // Capacity hit between count poll and submit — fall back to mailto.
-        window.location.href = "mailto:hello@glev.app?subject=Glev%20Beta%20Warteliste";
-        return;
-      }
-
-      if (!res.ok || !data.url) {
-        setError(data.error ?? "Leider hat der Checkout nicht funktioniert — probier es gleich nochmal.");
-        setSubmitting(false);
-        return;
-      }
-      window.location.href = data.url;
-    } catch {
-      setError("Leider hat der Checkout nicht funktioniert — probier es gleich nochmal.");
-      setSubmitting(false);
-    }
-  }
-
   const ctaLabel = isFull
     ? "Auf die Warteliste"
-    : submitting
+    : isPending
       ? "Weiterleitung zu Stripe…"
       : "Platz sichern — €19";
 
@@ -175,12 +151,13 @@ export default function BetaPage() {
             </p>
 
             <form
-              onSubmit={handleSubmit}
+              action={formAction}
               className="glev-hero-form"
               style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}
             >
               <input
                 ref={ctaRef}
+                name="email"
                 type="email"
                 required
                 autoComplete="email"
@@ -204,7 +181,7 @@ export default function BetaPage() {
                 onFocus={(e) => (e.currentTarget.style.borderColor = ACCENT)}
                 onBlur={(e) => (e.currentTarget.style.borderColor = BORDER)}
               />
-              <CTAButton submitting={submitting} label={ctaLabel} />
+              <CTAButton submitting={isPending} label={ctaLabel} />
               {error && (
                 <div role="alert" style={{ fontSize: 13, color: PINK, textAlign: "left" }}>
                   {error}

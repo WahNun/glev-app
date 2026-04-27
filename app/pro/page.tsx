@@ -2,9 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useActionState, useRef, useState } from "react";
 import AppMockupPhone from "@/components/AppMockupPhone";
 import CTAButton from "@/components/landing/CTAButton";
+import { startProCheckout, type ProCheckoutState } from "./actions";
 import FAQ from "@/components/landing/FAQ";
 import FeatureTrio from "@/components/landing/FeatureTrio";
 import FounderSection from "@/components/landing/FounderSection";
@@ -30,52 +31,18 @@ import {
  */
 export default function ProPage() {
   const [email, setEmail] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const ctaRef = useRef<HTMLInputElement | null>(null);
+  // useActionState wires the <form action={formAction}> submit straight to the
+  // Stripe checkout server action. Bypasses the previous client-side fetch
+  // path that lost submits when the user clicked before React had hydrated
+  // (the symptom was a default GET reload back to /pro with email in the URL).
+  const [state, formAction, isPending] = useActionState<
+    ProCheckoutState | null,
+    FormData
+  >(startProCheckout, null);
+  const error = state?.error ?? null;
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError(null);
-
-    const trimmed = email.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      setError("Bitte gib eine gültige Email-Adresse ein.");
-      ctaRef.current?.focus();
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const res = await fetch("/api/pro/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: trimmed }),
-      });
-      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
-
-      if (res.status === 409) {
-        setError(
-          data.error ??
-            "Diese Email hat bereits eine aktive Mitgliedschaft. Schreib uns an hello@glev.app, wenn du Hilfe brauchst.",
-        );
-        setSubmitting(false);
-        return;
-      }
-
-      if (!res.ok || !data.url) {
-        setError(data.error ?? "Leider hat der Checkout nicht funktioniert — probier es gleich nochmal.");
-        setSubmitting(false);
-        return;
-      }
-      window.location.href = data.url;
-    } catch {
-      setError("Leider hat der Checkout nicht funktioniert — probier es gleich nochmal.");
-      setSubmitting(false);
-    }
-  }
-
-  const ctaLabel = submitting
+  const ctaLabel = isPending
     ? "Weiterleitung zu Stripe…"
     : "Mitgliedschaft starten — €24,90/Monat";
 
@@ -153,12 +120,13 @@ export default function ProPage() {
             </p>
 
             <form
-              onSubmit={handleSubmit}
+              action={formAction}
               className="glev-hero-form"
               style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}
             >
               <input
                 ref={ctaRef}
+                name="email"
                 type="email"
                 required
                 autoComplete="email"
@@ -182,7 +150,7 @@ export default function ProPage() {
                 onFocus={(e) => (e.currentTarget.style.borderColor = ACCENT)}
                 onBlur={(e) => (e.currentTarget.style.borderColor = BORDER)}
               />
-              <CTAButton submitting={submitting} label={ctaLabel} />
+              <CTAButton submitting={isPending} label={ctaLabel} />
               {error && (
                 <div role="alert" style={{ fontSize: 13, color: PINK, textAlign: "left" }}>
                   {error}

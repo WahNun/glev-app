@@ -60,7 +60,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid json body" }, { status: 400 });
   }
 
-  const url = typeof body.url === "string" ? body.url : "";
+  const submittedUrl =
+    typeof body.url === "string" ? body.url.trim() : "";
   // Empty / whitespace-only token = "no token supplied THIS time".
   // We resolve below: if the user already has a saved token, keep it;
   // otherwise the connection is genuinely unauthenticated. This lets
@@ -72,15 +73,30 @@ export async function POST(req: NextRequest) {
       : null;
 
   try {
-    let effectiveToken = submittedToken;
-    if (effectiveToken == null) {
-      const existing = await getCredentials(user.id);
-      if (existing?.token) effectiveToken = existing.token;
+    // Resolve URL + token: prefer what the user just submitted, fall back
+    // to the saved profile values. This lets background callers (or a
+    // "test connection" button that posts an empty body) trigger a re-sync
+    // against existing credentials without re-typing them.
+    const existing = await getCredentials(user.id);
+    const effectiveUrl = submittedUrl || existing?.url || "";
+    const effectiveToken =
+      submittedToken ?? (existing?.token ?? null);
+
+    // EXISTENCE check first — clearer error than "url must start with
+    // http://" when the user hasn't configured Nightscout at all yet.
+    // Format validation still happens inside verifyCredentials below so
+    // a *bad* URL still surfaces a precise error; we just intercept the
+    // empty-string / never-configured case here.
+    if (!effectiveUrl) {
+      return NextResponse.json(
+        { error: "No Nightscout URL configured" },
+        { status: 400 }
+      );
     }
 
     // Probe FIRST — never persist a URL we can't reach.
-    const probe = await verifyCredentials(url, effectiveToken);
-    await setCredentials(user.id, { url, token: effectiveToken });
+    const probe = await verifyCredentials(effectiveUrl, effectiveToken);
+    await setCredentials(user.id, { url: effectiveUrl, token: effectiveToken });
     return NextResponse.json({
       connected: true,
       current: probe.current,
