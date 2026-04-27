@@ -298,15 +298,29 @@ export default function EngineChatPanel({
           border: `1px solid ${BORDER}`,
           borderRadius: 16,
           display:"flex", flexDirection:"column",
-          // Adaptive height so the whole panel (messages + input row) plus
-          // the surrounding step indicator, mic button, parser chip and
-          // bottom tab bar all fit inside the viewport on small phones
-          // (iPhone 13 mini = ~700px dvh) without scrolling, while still
-          // giving larger devices generous room. dvh accounts for iOS
-          // Safari's dynamic browser chrome better than vh.
-          // Reserved 420px = top header (76) + bottom nav (110) + step
-          // indicator (~70) + Sprechen button stack (~150) + safe areas.
-          height: "clamp(220px, calc(100dvh - 420px), 55dvh)",
+          // Adaptive height so the WHOLE panel (messages + input row)
+          // always fits between the Sprechen button above and the fixed
+          // bottom tab bar below, on every device — even iPhone 13 mini
+          // with the Safari URL bar visible. Earlier revisions used dvh
+          // and a 420px reservation which forced the panel to 220px on
+          // tiny viewports while only ~150px was actually available, so
+          // the input row sat behind the fixed bottom nav.
+          //
+          // svh = "small viewport height" = the viewport with browser
+          // chrome at its tallest (worst case). Using svh instead of
+          // dvh guarantees first-paint correctness; once Safari's URL
+          // bar collapses on scroll the chat just gets a little extra
+          // breathing room (the chat body grows up to the 50dvh cap).
+          //
+          // Reservation 540px = global header (~76) + bottom nav (~110)
+          // + Layout safe-area paddings (subtracted explicitly via env)
+          // + step indicator (~70) + Sprechen button + voice err
+          // (~70) + mobile chip (~52) + Weiter/Zurück row (~70) + flex
+          // gaps (~30). Min 140 keeps input + ~1 message visible even
+          // on the most cramped viewport (iPhone SE 1st-gen / mini in
+          // Safari) instead of letting the input clip below the nav.
+          height:
+            "clamp(140px, calc(100svh - 540px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 50dvh)",
           overflow:"hidden",
         }}>
           {renderBody()}
