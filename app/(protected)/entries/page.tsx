@@ -967,16 +967,37 @@ function stateColor(s: OutcomeState) {
 
 function LifecycleBlock({ meal, onUpdated }: { meal: Meal; onUpdated: (patch: Partial<Meal>) => void }) {
   const lc = lifecycleFor(meal);
-  const c = stateColor(lc.state);
+  // When the lifecycle has reached "final" with a real outcome, swap the
+  // generic "Final outcome" chip for the actual evaluation result (Good /
+  // Spike / Over Dose / …) and color-code it via the outcome palette so
+  // the user sees the verdict at a glance instead of a meta-state label.
+  const showOutcomeChip = lc.state === "final" && lc.outcome != null;
+  const chipLabel = showOutcomeChip ? getEvalLabel(lc.outcome) : STATE_LABELS[lc.state];
+  const c = showOutcomeChip ? getEvalColor(lc.outcome) : stateColor(lc.state);
+
   const [bg1h, setBg1h] = useState<string>(meal.bg_1h?.toString() ?? "");
   const [bg2h, setBg2h] = useState<string>(meal.bg_2h?.toString() ?? "");
   const [busy, setBusy] = useState(false);
   const [err,  setErr]  = useState<string | null>(null);
+  // Inline edit toggle for the 1h/2h reading inputs. Once a value is saved
+  // we collapse the inputs into a clean read-only block; the user can
+  // re-open them via the small "Bearbeiten" link inside this card.
+  const [editingReadings, setEditingReadings] = useState(false);
 
   // Show 1h input from 30 min onwards (so user can record an early reading);
   // show 2h input from 90 min onwards.
   const show1h = lc.ageMinutes >= 30;
   const show2h = lc.ageMinutes >= 90;
+  // A reading slot is "filled" once the meal row carries a real value —
+  // typically populated either by the user or by the CGM auto-fill job.
+  const filled1h = meal.bg_1h != null;
+  const filled2h = meal.bg_2h != null;
+  const showInput1h = show1h && (editingReadings || !filled1h);
+  const showInput2h = show2h && (editingReadings || !filled2h);
+  // Show the small "Bearbeiten" link only when at least one slot is
+  // already filled and we're currently in read-only mode — no point
+  // offering an edit affordance when nothing exists yet to edit.
+  const canToggleEdit = (filled1h || filled2h) && !editingReadings;
 
   async function save(field: "bg1h" | "bg2h") {
     const raw = (field === "bg1h" ? bg1h : bg2h).trim();
@@ -1013,7 +1034,7 @@ function LifecycleBlock({ meal, onUpdated }: { meal: Meal; onUpdated: (patch: Pa
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
         <div style={{ fontSize:9, color:"rgba(255,255,255,0.5)", letterSpacing:"0.1em", fontWeight:700 }}>OUTCOME STATE</div>
         <span style={{ padding:"6px 14px", borderRadius:99, fontSize:11, fontWeight:700, background:c, color:"#0A0A0F", letterSpacing:"0.04em", textTransform:"uppercase" }}>
-          {STATE_LABELS[lc.state]}
+          {chipLabel}
         </span>
       </div>
       <div style={{ fontSize:12, color:"rgba(255,255,255,0.65)", lineHeight:1.5 }}>{lc.reasoning}</div>
@@ -1035,14 +1056,34 @@ function LifecycleBlock({ meal, onUpdated }: { meal: Meal; onUpdated: (patch: Pa
           </div>
         </div>
       )}
-      {(show1h || show2h) && (
+      {(showInput1h || showInput2h) && (
         <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8, marginTop:4 }}>
-          {show1h && (
+          {showInput1h && (
             <ReadingInput label="1h reading" value={bg1h} onChange={setBg1h} onSave={() => save("bg1h")} busy={busy} placeholder={meal.bg_1h?.toString() ?? "mg/dL"} />
           )}
-          {show2h && (
+          {showInput2h && (
             <ReadingInput label="2h reading" value={bg2h} onChange={setBg2h} onSave={() => save("bg2h")} busy={busy} placeholder={meal.bg_2h?.toString() ?? "mg/dL"} />
           )}
+        </div>
+      )}
+      {(canToggleEdit || editingReadings) && (
+        <div style={{ display:"flex", justifyContent:"flex-end", marginTop:2 }}>
+          <button
+            onClick={() => setEditingReadings(v => !v)}
+            style={{
+              background:"transparent",
+              border:`1px solid ${BORDER}`,
+              borderRadius:8,
+              color:"rgba(255,255,255,0.6)",
+              fontSize:11,
+              fontWeight:600,
+              padding:"4px 10px",
+              cursor:"pointer",
+              letterSpacing:"-0.01em",
+            }}
+          >
+            {editingReadings ? "Fertig" : "Bearbeiten"}
+          </button>
         </div>
       )}
       {err && <div style={{ fontSize:11, color:PINK }}>{err}</div>}
