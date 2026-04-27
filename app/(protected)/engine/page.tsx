@@ -604,6 +604,72 @@ export default function EnginePage() {
     }
   }
 
+  // FIX A v2: Direct-save path from Step 2. Same persistence pipeline as
+  // handleWizardSave (classification, calorie calc, saveMeal, schedule
+  // CGM follow-up jobs) but commits insulin_units = 0 — the user is just
+  // documenting macros without a bolus calculation. No `result` required
+  // since the engine never ran. Lands in the same green-confirmation
+  // post-save state via setWizardSavedDose(0). The user is never forced
+  // through the bolus recommendation just to log a meal.
+  async function handleSaveWithoutBolus() {
+    setConfirmErr("");
+    const cNum = parseFloat(carbs);
+    if (!Number.isFinite(cNum) || cNum < 0) {
+      setConfirmErr("Bitte Kohlenhydrate eintragen (0 ist erlaubt).");
+      return;
+    }
+    const pNum  = parseFloat(protein) || 0;
+    const fNum  = parseFloat(fat)     || 0;
+    const fbNum = parseFloat(fiber)   || 0;
+    const gParsed = glucose.trim() === "" ? NaN : parseFloat(glucose);
+    const gNum = Number.isFinite(gParsed) ? gParsed : null;
+    const cls   = aiMealType ?? classifyMeal(cNum, pNum, fNum, fbNum);
+    const cal   = computeCalories(cNum, pNum, fNum);
+    const mealIso = mealTime ? new Date(mealTime).toISOString() : new Date().toISOString();
+    setConfirming(true);
+    try {
+      const saved = await saveMeal({
+        inputText: desc.trim() || transcript.trim() || "(manual entry)",
+        parsedJson: [{ name: desc.trim() || "meal", grams: 0, carbs: cNum, protein: pNum, fat: fNum, fiber: fbNum }],
+        glucoseBefore: gNum,
+        glucoseAfter: null,
+        carbsGrams: cNum,
+        proteinGrams: pNum,
+        fatGrams: fNum,
+        fiberGrams: fbNum,
+        calories: cal,
+        // KEY: zero bolus — user explicitly chose the "no-bolus" path.
+        insulinUnits: 0,
+        mealType: cls,
+        evaluation: null,
+        createdAt: mealIso,
+        mealTime: mealIso,
+      });
+      void scheduleJobsForLog({ logId: saved.id, logType: "meal", refTimeIso: mealIso });
+      fetchMeals().then(setMeals).catch(() => {});
+      logDebug("ENGINE.SAVE_NO_BOLUS", { id: saved.id, carbs: cNum, glucose: gNum, mealType: cls });
+      // Same post-save state as handleWizardSave so both paths converge
+      // on the identical "✓ Gespeichert — N IE geloggt" confirmation.
+      setWizardSavedDose(0);
+    } catch (e) {
+      setConfirmErr(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setConfirming(false);
+    }
+  }
+
+  // Centralized post-save reset — used by both Step 2 (no-bolus) and
+  // Step 3 (bolus) "Neues Essen" buttons so the two save paths share
+  // identical reset semantics. keepGlucose: true preserves the latest
+  // CGM reading so the next meal doesn't need a re-pull.
+  function handleNewMeal() {
+    resetForm({ keepGlucose: true });
+    setStepIndex(0);
+    setReasoningExpanded(false);
+    setWizardSavedDose(null);
+    setConfirmErr("");
+  }
+
   // Confirm Log writes the full meal+bolus row to the `meals` table via
   // saveMeal — this is what the engine recommender reads back from. The
   // standalone Log tab (Bolus / Exercise) is unaffected; that one is for
@@ -1076,8 +1142,40 @@ export default function EnginePage() {
             </div>
           )}
 
-          {/* ───────── STEP 2: Makros prüfen ───────── */}
-          {stepIndex === 1 && (
+          {/* ───────── STEP 2: Makros prüfen (or post-save confirmation) ───────── */}
+          {stepIndex === 1 && wizardSavedDose !== null && (
+            <div style={{ ...card, padding: 24 }}>
+              <div
+                style={{
+                  width: "100%", padding: "14px 18px",
+                  borderRadius: 12,
+                  background: `${GREEN}12`,
+                  border: `1px solid ${GREEN}40`,
+                  color: GREEN,
+                  fontSize: 14, fontWeight: 700, letterSpacing: "-0.01em",
+                  textAlign: "center",
+                  marginBottom: 14,
+                }}
+                role="status"
+                aria-live="polite"
+              >
+                ✓ Gespeichert — {wizardSavedDose} IE geloggt
+              </div>
+              <button
+                onClick={handleNewMeal}
+                style={{
+                  width: "100%", height: 52, borderRadius: 12, border: "none",
+                  background: ACCENT,
+                  color: "#fff", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
+                  cursor: "pointer",
+                  transition: "background 0.2s",
+                }}
+              >
+                Neues Essen
+              </button>
+            </div>
+          )}
+          {stepIndex === 1 && wizardSavedDose === null && (
             <div style={{ ...card, padding: 24 }}>
               <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 20, color: "#fff" }}>
                 Makros prüfen
@@ -1147,47 +1245,68 @@ export default function EnginePage() {
                 </div>
               </div>
 
-              {/* Bottom action row: Zurück (ghost, left) + Berechnen (primary, right). */}
-              <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: 10 }}>
+              {/* FIX A v2: Two-path action row.
+                  Primary "Speichern (ohne Bolus)" → handleSaveWithoutBolus
+                    commits with insulin_units = 0, lands in green confirm.
+                  Secondary "Bolus berechnen →" → handleRun runs the engine
+                    and advances to Step 3 (recommendation + bolus save).
+                  Tertiary "← Zurück" → back to Step 1.
+                  The user is never forced through the bolus path just to
+                  log a meal — Direkt-Speichern is always one click away. */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <button
-                  onClick={() => setStepIndex(0)}
-                  disabled={running}
+                  onClick={handleSaveWithoutBolus}
+                  disabled={confirming || running}
                   style={{
-                    padding: "0 18px", height: 48, borderRadius: 10,
-                    border: "none", background: "transparent",
-                    color: "#666680", fontSize: 13, fontWeight: 600,
-                    cursor: running ? "not-allowed" : "pointer",
+                    width: "100%", height: 52, borderRadius: 12, border: "none",
+                    background: confirming ? "rgba(79,110,247,0.4)" : ACCENT,
+                    color: "#fff", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
+                    cursor: confirming ? "wait" : "pointer",
+                    transition: "background 0.2s",
                   }}
                 >
-                  ← Zurück
+                  {confirming ? "Speichere…" : "✓ Speichern (ohne Bolus)"}
                 </button>
                 {(() => {
-                  const enabled = !running && parseFloat(carbs) > 0;
+                  const enabled = !running && !confirming && parseFloat(carbs) > 0;
                   return (
                     <button
                       onClick={handleRun}
                       disabled={!enabled}
                       style={{
-                        height: 48, borderRadius: 10, border: "none",
-                        background: enabled ? ACCENT : "rgba(79,110,247,0.25)",
-                        color: enabled ? "#fff" : "rgba(255,255,255,0.55)",
+                        width: "100%", height: 48, borderRadius: 10,
+                        border: `1px solid ${enabled ? ACCENT + "60" : BORDER}`,
+                        background: "transparent",
+                        color: enabled ? ACCENT : "rgba(255,255,255,0.35)",
                         fontSize: 14, fontWeight: 700, letterSpacing: "-0.01em",
                         cursor: enabled ? "pointer" : "not-allowed",
-                        transition: "background 0.2s",
+                        transition: "all 0.2s",
                         display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
                       }}
                     >
                       {running && (
                         <span style={{
                           display: "inline-block", width: 14, height: 14,
-                          border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#fff",
+                          border: `2px solid ${ACCENT}40`, borderTopColor: ACCENT,
                           borderRadius: "50%", animation: "engSpin 0.7s linear infinite",
                         }}/>
                       )}
-                      {running ? "Berechne…" : "Berechnen →"}
+                      {running ? "Berechne…" : "Bolus berechnen →"}
                     </button>
                   );
                 })()}
+                <button
+                  onClick={() => setStepIndex(0)}
+                  disabled={running || confirming}
+                  style={{
+                    width: "100%", height: 36, borderRadius: 8,
+                    border: "none", background: "transparent",
+                    color: "#666680", fontSize: 13, fontWeight: 500,
+                    cursor: running || confirming ? "not-allowed" : "pointer",
+                  }}
+                >
+                  ← Zurück
+                </button>
               </div>
             </div>
           )}
@@ -1341,16 +1460,7 @@ export default function EnginePage() {
                         ✓ Gespeichert — {wizardSavedDose} IE geloggt
                       </div>
                       <button
-                        onClick={() => {
-                          // resetForm clears desc/transcript/macros/result.
-                          // keepGlucose: true preserves the latest CGM
-                          // reading so the next meal doesn't need a re-pull.
-                          resetForm({ keepGlucose: true });
-                          setStepIndex(0);
-                          setReasoningExpanded(false);
-                          setWizardSavedDose(null);
-                          setConfirmErr("");
-                        }}
+                        onClick={handleNewMeal}
                         style={{
                           width: "100%", height: 52, borderRadius: 12, border: "none",
                           background: ACCENT,
