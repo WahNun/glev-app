@@ -1,0 +1,59 @@
+# Option A: 3-Step Wizard von /engine nach /log verschieben
+
+## Ziel
+Der 3-Step Wizard (Essen / Makros / Ergebnis) der aktuell in `app/(protected)/engine/page.tsx` lebt, soll der primäre UI von `app/(protected)/log/page.tsx` werden. `/engine` wird danach zu einem reinen CGM/Berechnungs-Screen (kein Meal-Wizard mehr).
+
+## Was der Wizard können muss (alle Felder bleiben erhalten)
+
+### Step 1 — Essen
+- Food-Name Input (Text)
+- Voice-Input Button (Mikrofon) → Speech-to-Text → AI-Parse via `/api/parse-food`
+- Erkanntes Essen anzeigen (Name, Portion)
+
+### Step 2 — Makros (alle editierbar, vorausgefüllt vom AI-Parse)
+- Kohlenhydrate (carbs_grams) — number, Suffix "g"
+- Protein (protein_grams) — number, Suffix "g"
+- Fett (fat_grams) — number, Suffix "g"
+- Ballaststoffe (fiber_grams) — number, Suffix "g"
+- Kalorien (calories) — number, Suffix "kcal"
+- Glukose vorher (glucose_before) — number, Suffix "mg/dL" (Pflichtfeld)
+- Mahlzeit-Zeit (meal_time) — datetime picker, default: jetzt
+
+### Step 3 — Ergebnis
+- Meal-Classification-Chip anzeigen (FAST_CARBS / HIGH_PROTEIN / HIGH_FAT / HIGH_FIBER / BALANCED) mit jeweiliger Farbe
+- Glev Engine Empfehlung: Insulin-Einheiten (insulin_units), Correction-Bolus-Toggle
+- Speichern-Button → schreibt alle Felder in `meals`-Tabelle
+
+## Felder die gespeichert werden müssen
+```
+name, carbs_grams, protein_grams, fat_grams, fiber_grams, calories,
+meal_type, glucose_before, insulin_units, meal_time
+```
+Alle Spalten existieren bereits in der DB.
+
+## Migrations-Strategie (sicher, kein Datenverlust)
+
+1. **Wizard-Logik aus `/engine` extrahieren** — die bestehende Step-Logik (stepIndex, handleWizardSave, Pill-Tabs, alle Handler) als eigenständige Component oder direkt in `/log/page.tsx` übernehmen. Copy-first, dann aufräumen.
+
+2. **`app/(protected)/log/page.tsx` ersetzen** — aktuelle 905-Zeilen Form durch den Wizard ersetzen. Der gesamte Save-Aufruf (Supabase insert) bleibt gleich, nur die UI-Struktur ändert sich.
+
+3. **`app/(protected)/engine/page.tsx` aufräumen** — Wizard-UI entfernen. Engine zeigt danach:
+   - Aktueller Glukosewert (aus CGM oder manuelle Eingabe)
+   - Letzte Mahlzeit + Empfehlung
+   - Glev Score / Engine Output
+   - KEIN Meal-Log-Flow mehr (Nutzer loggt über /log)
+
+4. **Navigation prüfen** — sicherstellen dass alle Links/Buttons die zu "Mahlzeit loggen" führen auf `/log` zeigen (nicht `/engine`). Der Glev FAB → "Mahlzeit loggen" → `/log` muss funktionieren.
+
+## Pill-Tab Design (Referenz aus aktuellem Engine-Code)
+```
+[ Essen ] [ Makros ] [ Ergebnis ]
+```
+- Aktiver Tab: gefüllt mit #4F6EF7 (Accent-Blau)
+- Inaktive Tabs: transparent, Border #4F6EF7
+- Klick wechselt Step NICHT (nur über Weiter/Zurück Buttons navigieren)
+
+## Nach den Änderungen
+1. `tsc --noEmit` — muss clean sein (0 Errors)
+2. Kurz manuell testen: `/log` öffnen → Step 1 → Step 2 → Step 3 → Save
+3. `git add -A && git commit -m "feat: move meal wizard to /log, clean up /engine" && git push origin main`
