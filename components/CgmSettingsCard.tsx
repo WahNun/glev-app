@@ -70,6 +70,12 @@ export default function CgmSettingsCard() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const [formSuccess, setFormSuccess] = useState("");
+  // Per-field inline validation errors. Set by onBlur (don't pester the user
+  // while they're still typing) and cleared the moment they edit the field
+  // again. Keep formError reserved for true server failures so submit-time
+  // errors don't shadow validation hints and vice-versa.
+  const [emailError, setEmailError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
 
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
@@ -191,6 +197,12 @@ export default function CgmSettingsCard() {
   function validateEmail(s: string) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
   }
+  // LibreLinkUp accepts arbitrary passwords (no published min length); we
+  // mirror the backend's `password.length < 1` check so we surface the same
+  // failure inline before the round-trip rather than after.
+  function validatePassword(s: string) {
+    return s.length >= 1;
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -200,14 +212,20 @@ export default function CgmSettingsCard() {
       setFormError("Dieser CGM-Typ ist noch nicht verfügbar.");
       return;
     }
+    // Inline-first validation: route field errors back to the per-field
+    // slots so the user sees them right under the offending input, not as a
+    // disconnected banner at the bottom of the form. formError stays
+    // reserved for true server failures.
+    let invalid = false;
     if (!validateEmail(email)) {
-      setFormError("Bitte eine gültige E-Mail-Adresse eingeben.");
-      return;
+      setEmailError("Bitte eine gültige E-Mail-Adresse eingeben.");
+      invalid = true;
     }
-    if (password.length < 1) {
-      setFormError("Passwort darf nicht leer sein.");
-      return;
+    if (!validatePassword(password)) {
+      setPasswordError("Passwort darf nicht leer sein.");
+      invalid = true;
     }
+    if (invalid) return;
     if (region !== "EU" && region !== "US") {
       setFormError("Region muss EU oder US sein.");
       return;

@@ -463,7 +463,17 @@ export default function EnginePage() {
     } catch (e) {
       // eslint-disable-next-line no-console
       console.log("[PERF voice/engine] FAILED after:", Date.now() - tStop, "ms");
-      setVoiceErr(e instanceof Error ? e.message : "Sprach-Verarbeitung fehlgeschlagen.");
+      // FIX B: Map cryptic native messages to actionable German hints so the
+      // user knows what to try next. Anything we don't recognise still shows
+      // the raw message rather than a useless generic fallback.
+      const raw = e instanceof Error ? e.message : "";
+      const friendly =
+        /empty transcript/i.test(raw)              ? "Keine Sprache erkannt — bitte deutlicher sprechen oder den Chat unten benutzen." :
+        /permission denied|not allowed/i.test(raw) ? "Mikrofon-Zugriff verweigert. Bitte in den Browser-Einstellungen erlauben." :
+        /failed to fetch|networkerror/i.test(raw)  ? "Verbindung fehlgeschlagen — bitte erneut versuchen." :
+        raw                                         ? raw :
+                                                      "Sprach-Verarbeitung fehlgeschlagen.";
+      setVoiceErr(friendly);
     } finally {
       setParsing(false);
       recordingStopTsRef.current = null;
@@ -827,7 +837,11 @@ export default function EnginePage() {
       setConfirmedMeal(saved);
       setDecisionMode("decision");
       setDecisionRec(null);
-      setDecisionToast(null);
+      // FIX A: Visible save feedback. The decision panel that pops up below
+      // is contextual UI, not a save confirmation, so without this toast
+      // users had no signal that the row actually persisted.
+      setDecisionToast("Mahlzeit gespeichert ✓");
+      setTimeout(() => setDecisionToast(null), 2500);
       logDebug("ENGINE.CONFIRM_LOG", { id: saved.id, carbs: cNum, insulin: iNum, glucose: gNum, mealType: cls });
       // Schedule CGM auto-fetches at +1h / +2h after meal time. Fire-and-forget;
       // failures (e.g. no CGM connected) are silent.
@@ -1017,32 +1031,35 @@ export default function EnginePage() {
         // doesn't host the chevron.
         return (
           <div style={{ marginBottom: tabsExpanded || !isMobile ? 16 : 0 }}>
-            {!isMobile && (
-              <button
-                type="button"
-                onClick={() => setTabsExpanded(!tabsExpanded)}
-                aria-expanded={tabsExpanded}
-                aria-controls="engine-tabs-body"
-                style={{
-                  display:"flex", alignItems:"center", justifyContent:"space-between",
-                  width:"100%", padding:"10px 14px",
-                  background:"#0D0D12", border:`1px solid ${BORDER}`,
-                  borderRadius:12, cursor:"pointer",
-                  color: ACCENT, fontSize: 13, fontWeight: 700, letterSpacing:"-0.01em",
-                  transition:"background 0.15s",
-                }}
+            {/* FIX C: In-page tab toggle is now visible on mobile too. The
+                global header chevron stays as a secondary entry point but
+                is small + competes with Live + the user icon, so users
+                miss it. The in-page button is right where the eye lands
+                when the chat panel is collapsed. */}
+            <button
+              type="button"
+              onClick={() => setTabsExpanded(!tabsExpanded)}
+              aria-expanded={tabsExpanded}
+              aria-controls="engine-tabs-body"
+              style={{
+                display:"flex", alignItems:"center", justifyContent:"space-between",
+                width:"100%", padding: isMobile ? "8px 12px" : "10px 14px",
+                background:"#0D0D12", border:`1px solid ${BORDER}`,
+                borderRadius:12, cursor:"pointer",
+                color: ACCENT, fontSize: isMobile ? 12 : 13, fontWeight: 700, letterSpacing:"-0.01em",
+                transition:"background 0.15s",
+              }}
+            >
+              <span>{activeLabel}</span>
+              <svg
+                width="16" height="16" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                aria-hidden="true"
+                style={{ transition:"transform 0.2s", transform: tabsExpanded ? "rotate(180deg)" : "rotate(0deg)" }}
               >
-                <span>{activeLabel}</span>
-                <svg
-                  width="16" height="16" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                  aria-hidden="true"
-                  style={{ transition:"transform 0.2s", transform: tabsExpanded ? "rotate(180deg)" : "rotate(0deg)" }}
-                >
-                  <polyline points="6 9 12 15 18 9"/>
-                </svg>
-              </button>
-            )}
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
             {tabsExpanded && (
               <div
                 id="engine-tabs-body"
@@ -1277,6 +1294,16 @@ export default function EnginePage() {
               </button>
               {voiceErr && (
                 <div style={{ fontSize: 11, color: PINK, textAlign: "center", maxWidth: 360 }}>{voiceErr}</div>
+              )}
+              {/* FIX B: Explain WHY the Sprechen button is disabled when the
+                  browser doesn't expose MediaRecorder + getUserMedia (iOS
+                  Safari < 14.5, embedded webviews, http://). Without this
+                  hint the button just appears greyed out with no recourse,
+                  and users don't realise they can fall back to the chat. */}
+              {!speechAvail && !voiceErr && (
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", textAlign: "center", maxWidth: 360, lineHeight: 1.4 }}>
+                  Sprach-Eingabe in diesem Browser nicht verfügbar — bitte den Chat unten nutzen.
+                </div>
               )}
               <div ref={chatPanelRef} style={{ width: "100%", marginTop: 4 }}>
                 <EngineChatPanel

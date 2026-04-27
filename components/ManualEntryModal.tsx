@@ -70,6 +70,7 @@ export default function ManualEntryModal({
   const [bg2hAt,  setBg2hAt]    = useState("");
 
   const [saving,  setSaving]    = useState(false);
+  const [saved,   setSaved]     = useState(false);
   const [error,   setError]     = useState<string | null>(null);
 
   // CGM auto-fill provenance — tracks which BG fields the modal populated
@@ -336,8 +337,18 @@ export default function ManualEntryModal({
         window.dispatchEvent(new CustomEvent("glev:meal-saved", { detail: { id: meal.id, mealTime: mealIso } }));
       }
 
-      onCreated(meal);
-      onClose();
+      // FIX A: Brief inline "Gespeichert ✓" state so the user gets explicit
+      // visual confirmation before the modal disappears. Without this the
+      // modal closes the instant the network round-trip resolves and the
+      // user is left wondering whether the save actually went through.
+      setSaving(false);
+      setSaved(true);
+      setTimeout(() => {
+        setSaved(false);
+        onCreated(meal);
+        onClose();
+      }, 900);
+      return;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save the entry.");
     } finally {
@@ -644,21 +655,29 @@ export default function ManualEntryModal({
           ) : (
             <button
               onClick={handleSubmit}
-              disabled={saving}
+              disabled={saving || saved}
               style={{
                 padding: "10px 18px", borderRadius: 10, border: "none",
-                background: saving
+                background: saved
+                  ? `${GREEN}22`
+                  : saving
                   ? "rgba(255,255,255,0.06)"
                   : `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
-                color: saving ? "rgba(255,255,255,0.3)" : "#fff",
+                color: saved ? GREEN : saving ? "rgba(255,255,255,0.3)" : "#fff",
                 fontSize: 13, fontWeight: 700,
-                cursor: saving ? "not-allowed" : "pointer",
-                boxShadow: saving ? "none" : `0 4px 20px ${ACCENT}40`,
+                cursor: saving || saved ? "default" : "pointer",
+                boxShadow: saving || saved ? "none" : `0 4px 20px ${ACCENT}40`,
+                border: saved ? `1px solid ${GREEN}55` : "none",
                 transition: "all 0.2s",
                 display: "flex", alignItems: "center", gap: 8,
               }}
             >
-              {saving ? (
+              {saved ? (
+                <>
+                  <span style={{ fontSize: 16, lineHeight: 1 }}>✓</span>
+                  Gespeichert
+                </>
+              ) : saving ? (
                 <>
                   <style>{`@keyframes mem_spin{to{transform:rotate(360deg)}}`}</style>
                   <span style={{
