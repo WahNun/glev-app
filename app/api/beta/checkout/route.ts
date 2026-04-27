@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getStripe, BETA_CAPACITY, BETA_AMOUNT_CENTS } from "@/lib/stripeServer";
+import {
+  BETA_AMOUNT_CENTS,
+  BETA_CAPACITY,
+  classifyCheckoutError,
+  getStripe,
+} from "@/lib/stripeServer";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,6 +14,34 @@ export const dynamic = "force-dynamic";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const GENERIC_ERROR = "Leider hat der Checkout nicht funktioniert — probier es gleich nochmal";
+
+/**
+ * Roll back a freshly-created `pending` reservation to `cancelled` after
+ * Stripe rejects the session create. The `eq("status", "pending")` guard is
+ * defense-in-depth: if the webhook for a *prior* successful checkout for the
+ * same email lands between our insert and this rollback, we must not touch a
+ * row that has since flipped to `paid`. Best-effort — failure to rollback is
+ * logged but does not change the user-visible response.
+ */
+async function rollbackPendingReservation(
+  sb: SupabaseClient,
+  rowId: string,
+): Promise<void> {
+  try {
+    const { error } = await sb
+      .from("beta_reservations")
+      .update({ status: "cancelled" })
+      .eq("id", rowId)
+      .eq("status", "pending");
+    if (error) {
+      // eslint-disable-next-line no-console
+      console.error("[beta/checkout] rollback failed:", error.code, error.message);
+    }
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error("[beta/checkout] rollback threw:", e);
+  }
+}
 
 function getOrigin(req: NextRequest): string {
   // Trust the public origin first (works behind proxies / Vercel),
@@ -116,26 +150,50 @@ export async function POST(req: NextRequest) {
 
     const origin = getOrigin(req);
     const stripe = getStripe();
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      line_items: [{ price: process.env.STRIPE_BETA_PRICE_ID!, quantity: 1 }],
-      customer_email: email,
-      metadata: {
-        feature: "beta_reservation",
-        reservation_id: rowId,
-      },
-      payment_intent_data: {
+
+    // From here on, the row in `beta_reservations` is `pending`. Any failure
+    // path below MUST roll it back to `cancelled` — otherwise the table fills
+    // up with stale pending rows that never convert and `email` is unique, so
+    // the user can't even retry with the same address (insert path returns a
+    // duplicate-key error masked as GENERIC_ERROR).
+    let session;
+    try {
+      session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        line_items: [{ price: process.env.STRIPE_BETA_PRICE_ID!, quantity: 1 }],
+        customer_email: email,
         metadata: {
           feature: "beta_reservation",
           reservation_id: rowId,
         },
-      },
-      success_url: `${origin}/welcome?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/beta/cancelled`,
-      locale: "de",
-    });
+        payment_intent_data: {
+          metadata: {
+            feature: "beta_reservation",
+            reservation_id: rowId,
+          },
+        },
+        success_url: `${origin}/welcome?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}/beta/cancelled`,
+        locale: "de",
+      });
+    } catch (stripeErr) {
+      // Full Stripe error (with code/param/request_id) is logged for ops.
+      // The user gets a category-specific message via classifyCheckoutError,
+      // not the generic "try again" — config errors don't fix themselves.
+      // eslint-disable-next-line no-console
+      console.error("[beta/checkout] stripe error:", stripeErr);
+      await rollbackPendingReservation(sb, rowId);
+      const { userError, status } = classifyCheckoutError(stripeErr);
+      return NextResponse.json({ error: userError }, { status });
+    }
 
     if (!session.url) {
+      // Stripe accepted the request but returned no redirect URL. Treat as
+      // transient (rare; usually a brief Stripe outage between create and
+      // response) and roll back so the user can retry cleanly.
+      // eslint-disable-next-line no-console
+      console.error("[beta/checkout] session.url missing for session", session.id);
+      await rollbackPendingReservation(sb, rowId);
       return NextResponse.json({ error: GENERIC_ERROR }, { status: 500 });
     }
 
@@ -149,6 +207,11 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ url: session.url });
   } catch (e) {
+    // Last-line catch — any unexpected throw before/after the Stripe try/catch
+    // (e.g. supabase admin client init blowing up). Rollback would require us
+    // to know rowId here, which we don't in scope — accept that this rare
+    // path may leave a pending row, since the inner branches handle the
+    // common failures.
     // eslint-disable-next-line no-console
     console.error("[beta/checkout] unexpected:", e);
     return NextResponse.json({ error: GENERIC_ERROR }, { status: 500 });
