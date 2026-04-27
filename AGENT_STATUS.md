@@ -1,5 +1,5 @@
-STATUS: WAITING
-LAST_DONE: Engine save toast (1A) + Step 1 voice hint/error i18n (1B) + mobile in-page tabs toggle (1C) + LibreView inline email/password validation onBlur (2) — tsc clean.
-NEXT: Du musst `git push origin main` selbst ausführen (Push aus dem Agent ist gesperrt). Auto-Commit läuft beim Task-Abschluss.
+STATUS: DONE
+LAST_DONE: 5. Mahlzeit-Klasse HIGH_FIBER (fiber>=8g) hinzugefügt — lib/meals.ts classifyMeal + lib/ai/systemPrompt.ts (Reihenfolge: FAST_CARBS → HIGH_FAT → HIGH_PROTEIN → HIGH_FIBER → BALANCED).
+NEXT: Nichts geplant — auf nächste Anweisung warten.
 QUESTION:
-TIMESTAMP: 23:04
+TIMESTAMP: 23:22

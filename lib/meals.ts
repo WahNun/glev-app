@@ -64,18 +64,25 @@ export interface SaveMealInput {
  *
  * Rules (checked in order — first match wins):
  *   FAST_CARBS    → fiber < 5g  AND carbs >= 20g
- *                   (low-fiber carb load: bread, rice, juice, candy)
+ *                   (low-fiber carb load: bread, rice, juice, candy, fruit)
  *   HIGH_FAT      → fat_kcal / total_kcal > 0.45
- *                   (fat dominates the energy mix: pizza, fried, nuts)
+ *                   (fat dominates the energy mix: pizza, fried, cheese,
+ *                   nuts, avocado, cream — drives the delayed-rise pizza
+ *                   effect)
  *   HIGH_PROTEIN  → protein > carbs  AND protein > fat  AND protein >= 25g
- *                   (steak, chicken, eggs, shakes)
- *   BALANCED      → otherwise
+ *                   (steak, chicken, fish, eggs, legumes, dairy, shakes)
+ *   HIGH_FIBER    → fiber >= 8g
+ *                   (vegetables, whole grain, legumes, fiber drinks —
+ *                   slows carb absorption so the BG rise is gentler than
+ *                   the carb count alone would suggest)
+ *   BALANCED      → otherwise (no dominant macro)
  */
 export function classifyMeal(carbs: number, protein: number, fat: number, fiber: number = 0): string {
   if (fiber < 5 && carbs >= 20) return "FAST_CARBS";
   const totalKcal = computeCalories(carbs, protein, fat);
   if (totalKcal > 0 && (fat * 9) / totalKcal > 0.45) return "HIGH_FAT";
   if (protein > carbs && protein > fat && protein >= 25) return "HIGH_PROTEIN";
+  if (fiber >= 8) return "HIGH_FIBER";
   return "BALANCED";
 }
 
