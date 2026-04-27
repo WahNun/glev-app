@@ -115,15 +115,22 @@ export default function SettingsPage() {
       </div>
 
       {/* TABS */}
-      <div style={{ display:"flex", gap:4, marginBottom:24, background:"rgba(255,255,255,0.04)", borderRadius:12, padding:4, width:"fit-content" }}>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:4, marginBottom:24, background:"rgba(255,255,255,0.04)", borderRadius:12, padding:4, width:"100%" }}>
         {(["overview","settings","integrations","data"] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} style={{
-            padding:"8px 20px", borderRadius:9, border:"none", cursor:"pointer",
+            padding:"8px 6px", borderRadius:9, border:"none", cursor:"pointer",
             background:tab===t?SURFACE:"transparent",
-            color:tab===t?"#fff":"rgba(255,255,255,0.4)",
-            fontSize:13, fontWeight:tab===t?600:400,
+            color:tab===t?"#fff":"rgba(255,255,255,0.45)",
+            fontSize:12, fontWeight:tab===t?600:500,
             boxShadow:tab===t?"0 1px 4px rgba(0,0,0,0.4)":"none",
             textTransform: "capitalize",
+            whiteSpace:"nowrap",
+            textAlign:"center",
+            letterSpacing:"-0.01em",
+            minWidth:0,
+            overflow:"hidden",
+            textOverflow:"ellipsis",
+            transition:"background 120ms ease, color 120ms ease",
           }}>{t}</button>
         ))}
       </div>
