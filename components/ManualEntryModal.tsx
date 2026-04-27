@@ -657,7 +657,8 @@ export default function ManualEntryModal({
               onClick={handleSubmit}
               disabled={saving || saved}
               style={{
-                padding: "10px 18px", borderRadius: 10, border: "none",
+                padding: "10px 18px", borderRadius: 10,
+                border: saved ? `1px solid ${GREEN}55` : "none",
                 background: saved
                   ? `${GREEN}22`
                   : saving
@@ -667,7 +668,6 @@ export default function ManualEntryModal({
                 fontSize: 13, fontWeight: 700,
                 cursor: saving || saved ? "default" : "pointer",
                 boxShadow: saving || saved ? "none" : `0 4px 20px ${ACCENT}40`,
-                border: saved ? `1px solid ${GREEN}55` : "none",
                 transition: "all 0.2s",
                 display: "flex", alignItems: "center", gap: 8,
               }}

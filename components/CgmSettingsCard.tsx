@@ -670,26 +670,65 @@ export default function CgmSettingsCard() {
                   <label style={label} htmlFor="cgm-email">LibreLinkUp E-Mail</label>
                   <input
                     id="cgm-email"
-                    style={inp}
+                    style={{
+                      ...inp,
+                      border: emailError ? `1px solid ${PINK}` : inp.border,
+                    }}
                     type="email"
                     autoComplete="username"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      // Clear inline error the moment the user edits — they
+                      // are actively trying to fix it; harassing them with a
+                      // red border on every keystroke just creates anxiety.
+                      if (emailError) setEmailError("");
+                    }}
+                    onBlur={() => {
+                      if (email.length > 0 && !validateEmail(email)) {
+                        setEmailError("Bitte eine gültige E-Mail-Adresse eingeben.");
+                      }
+                    }}
+                    aria-invalid={!!emailError}
+                    aria-describedby={emailError ? "cgm-email-err" : undefined}
                     required
                     placeholder="follower@example.com"
                   />
+                  {emailError && (
+                    <div id="cgm-email-err" role="alert" style={{ fontSize: 11, color: PINK, marginTop: 4 }}>
+                      {emailError}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label style={label} htmlFor="cgm-password">LibreLinkUp Passwort</label>
                   <input
                     id="cgm-password"
-                    style={inp}
+                    style={{
+                      ...inp,
+                      border: passwordError ? `1px solid ${PINK}` : inp.border,
+                    }}
                     type="password"
                     autoComplete="current-password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (passwordError) setPasswordError("");
+                    }}
+                    onBlur={() => {
+                      if (!validatePassword(password)) {
+                        setPasswordError("Passwort darf nicht leer sein.");
+                      }
+                    }}
+                    aria-invalid={!!passwordError}
+                    aria-describedby={passwordError ? "cgm-password-err" : undefined}
                     required
                   />
+                  {passwordError && (
+                    <div id="cgm-password-err" role="alert" style={{ fontSize: 11, color: PINK, marginTop: 4 }}>
+                      {passwordError}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label style={label} htmlFor="cgm-region">Region</label>
