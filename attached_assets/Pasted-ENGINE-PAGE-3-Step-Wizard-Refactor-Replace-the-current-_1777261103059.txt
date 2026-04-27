@@ -1,0 +1,86 @@
+ENGINE PAGE — 3-Step Wizard Refactor
+
+Replace the current single-scroll Engine tab with a 3-step stepper UI. Same route (app/(protected)/engine/page.tsx), same backend logic, same API calls — only the UI flow changes.
+
+---
+
+STEP INDICATOR (top of page, below header)
+
+Show a simple 3-dot or 3-step progress bar:
+● ○ ○  →  ● ● ○  →  ● ● ●
+Labels: "Essen" | "Makros" | "Ergebnis"
+Style: active dot = #4F6EF7, inactive = #2A2A36, connector line between dots
+
+---
+
+STEP 1 — "Was hast du gegessen?"
+
+Show ONLY:
+1. A large pill button "🎤 Sprechen" (centered, height 56px, bg #4F6EF7, border-radius 28px, full-width max 280px) — triggers voice recording exactly as it does now
+2. Below it: a text input "Beschreib dein Essen... z.B. Haferflocken mit Banane" (full-width, height 48px)
+3. A "Weiter →" button at bottom (disabled/gray until either: voice has completed OR text input has at least 5 characters)
+
+When voice completes → GPT fills carbs/protein/fat/fiber in state → "Weiter →" becomes active → auto-advance to Step 2 after 800ms delay (give user time to see it worked)
+
+When user types manually → "Weiter →" becomes active immediately
+
+Show meal_description and meal_classification state from this step onward.
+
+Nothing else on this screen. No glucose field, no macro fields yet.
+
+---
+
+STEP 2 — "Makros prüfen"
+
+Show:
+1. Section header "Makros" — 4 fields in 2x2 grid:
+   - CARBS (G) — pre-filled from GPT or empty
+   - FIBER (G) opt. — pre-filled or empty
+   - PROTEIN (G) — pre-filled or empty
+   - FAT (G) — pre-filled or empty
+   All fields editable.
+
+2. Section header "Glukose & Zeit"
+   - GLUCOSE BEFORE (MG/DL) field + CGM pill toggle (existing logic)
+   - MEAL TIME datetime field (existing logic)
+
+3. Bottom row: "← Zurück" (ghost, left) | "Berechnen →" (bg #4F6EF7, right, height 48px)
+   "Berechnen →" triggers the existing dose calculation API call.
+   Show a loading spinner on the button while calculating.
+
+---
+
+STEP 3 — "Deine Empfehlung"
+
+Show the result. Layout:
+1. Large result card (bg #0D0D14, border 1px solid #1C1C28, border-radius 16px, padding 20px):
+   - "Empfohlene Dosis" label (12px uppercase #666680)
+   - Dose value large (32px bold white) e.g. "4.5 IE"
+   - Below: ICR value small "ICR: 1:12" and Confidence badge
+
+2. Collapsible "GPT Reasoning" section (collapsed by default, ChevronDown icon, same style as before)
+
+3. Meal summary line: small gray text showing what was logged (e.g. "Haferflocken mit Banane · 60g KH")
+
+4. Bottom: "✓ Bestätigen & Speichern" (full-width, bg #4F6EF7, height 52px) — triggers the existing saveMeal logic
+   Below it: "← Nochmal anpassen" (text-only, color #666680) — goes back to Step 2
+
+If calculation fails → show error inline in Step 3 area, "← Zurück" to Step 2.
+
+---
+
+STATE MANAGEMENT
+
+Use a single stepIndex state (0, 1, 2) to control which step renders.
+All existing state (carbs, protein, fat, fiber, glucose, mealTime, mealDescription, reasoning, dose, icr, etc.) stays at the page level — only the view changes per step.
+
+---
+
+DO NOT CHANGE:
+- Any API calls or calculation logic
+- Supabase saveMeal logic
+- CGM integration
+- Voice recording logic
+- Any other page
+
+After implementing, run npm run build, confirm exit 0, report changed files.

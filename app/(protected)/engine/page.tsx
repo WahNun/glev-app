@@ -155,6 +155,17 @@ export default function EnginePage() {
   const [running, setRunning] = useState(false);
   const [cgmPulling, setCgmPulling] = useState(false);
   const [lastReading, setLastReading] = useState<string>("");
+  // 3-Step Wizard state — drives which view of the Engine tab is shown.
+  // 0 = "Was hast du gegessen?" (voice/text input)
+  // 1 = "Makros prüfen" (macros + glucose + meal time)
+  // 2 = "Deine Empfehlung" (recommendation + Bestätigen & Speichern)
+  // Cross-step state (glucose, carbs, etc.) stays at the page level — only
+  // the rendering switches per step. Component is single-mount so going
+  // back/forward preserves all field values automatically.
+  const [stepIndex, setStepIndex] = useState<0 | 1 | 2>(0);
+  // Step 3 GPT Reasoning section is collapsible to keep the result card
+  // scannable; user expands by tapping the chevron.
+  const [reasoningExpanded, setReasoningExpanded] = useState(false);
 
   // Voice input state — feeds the macro fields by transcribing → /api/parse-food.
   const [recording, setRecording]   = useState(false);
@@ -364,6 +375,15 @@ export default function EnginePage() {
         // viewport too aggressively.
         chatPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       }, 300);
+      // Wizard auto-advance: if the user is still on Step 1 ("Was hast du
+      // gegessen?"), bump to Step 2 ("Makros prüfen") 800 ms after the
+      // macros land so they perceive "fields fill → screen swaps". The
+      // functional update guards against back-jumping if the user manually
+      // navigated forward during the wait, or if voice was triggered while
+      // already in the macro/result step (e.g. correcting a meal).
+      setTimeout(() => {
+        setStepIndex(prev => prev === 0 ? 1 : prev);
+      }, 800);
     } catch (e) {
       // eslint-disable-next-line no-console
       console.log("[PERF voice/engine] FAILED after:", Date.now() - tStop, "ms");
@@ -465,6 +485,11 @@ export default function EnginePage() {
       const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs, adaptedICR);
       setResult(rec);
       setRunning(false);
+      // Wizard auto-advance: bump from Step 2 ("Makros prüfen") to Step 3
+      // ("Ergebnis") so the recommendation appears the moment the calc
+      // completes. Functional guard prevents jumping if user navigated
+      // away during the 600ms cosmetic delay.
+      setStepIndex(prev => prev === 1 ? 2 : prev);
       // PRE-FILL ENTFERNT: Insulin wird jetzt erst NACH Confirm Log + binärer
       // Bolus-Entscheidung im Post-Confirm-Flow eingegeben. Kein silent-set
       // mehr in den `insulin`-State, sonst würde beim Save eine Dosis
@@ -473,6 +498,76 @@ export default function EnginePage() {
       // angezeigt, sobald der Bolus-Pfad gewählt ist.
       logDebug("ENGINE", { input: { glucose: g, carbs: c }, matchedMeals: rec.similarMeals.map(m => ({ id: m.id, carbs: m.carbs_grams, glucose: m.glucose_before, insulin: m.insulin_units })), suggestedDose: rec.dose, confidence: rec.confidence, recentInsulin: insulinLogs.length, recentExercise: exerciseLogs.length });
     }, 600);
+  }
+
+  // Wizard Step 3 commit: saves the meal AND the recommended dose in one
+  // shot. Mirrors handleConfirmLog's validation/save logic but writes
+  // insulin_units = result.dose so the user doesn't need a second
+  // confirmation step in the new linear flow. Resets to Step 1 on success
+  // so the next meal can be entered. Keeps glucose populated (CGM tap
+  // saver) but clears macros / desc / result.
+  async function handleWizardSave() {
+    if (!result) return;
+    setConfirmErr("");
+    const cNum = parseFloat(carbs);
+    if (!Number.isFinite(cNum) || cNum < 0) {
+      setConfirmErr("Bitte Kohlenhydrate eintragen (0 ist erlaubt).");
+      return;
+    }
+    const pNum  = parseFloat(protein) || 0;
+    const fNum  = parseFloat(fat)     || 0;
+    const fbNum = parseFloat(fiber)   || 0;
+    const gParsed = glucose.trim() === "" ? NaN : parseFloat(glucose);
+    const gNum = Number.isFinite(gParsed) ? gParsed : null;
+    // Same classification + calorie pipeline as handleConfirmLog so the
+    // saved row is identical except for the insulin_units field.
+    const cls   = aiMealType ?? classifyMeal(cNum, pNum, fNum, fbNum);
+    const cal   = computeCalories(cNum, pNum, fNum);
+    const mealIso = mealTime ? new Date(mealTime).toISOString() : new Date().toISOString();
+    setConfirming(true);
+    try {
+      const saved = await saveMeal({
+        inputText: desc.trim() || transcript.trim() || "(manual entry)",
+        parsedJson: [{ name: desc.trim() || "meal", grams: 0, carbs: cNum, protein: pNum, fat: fNum, fiber: fbNum }],
+        glucoseBefore: gNum,
+        glucoseAfter: null,
+        carbsGrams: cNum,
+        proteinGrams: pNum,
+        fatGrams: fNum,
+        fiberGrams: fbNum,
+        calories: cal,
+        // KEY DIFFERENCE vs handleConfirmLog: the engine's recommended dose
+        // is committed alongside the meal in the same write. The wizard's
+        // "✓ Bestätigen & Speichern" button represents the user's explicit
+        // accept of that dose — no separate decision panel afterwards.
+        insulinUnits: result.dose,
+        mealType: cls,
+        // Evaluation stays null on insert — lifecycleFor (lib/engine/lifecycle.ts)
+        // writes it once the row reaches "final" via updateMealReadings.
+        evaluation: null,
+        createdAt: mealIso,
+        mealTime: mealIso,
+      });
+      // Schedule CGM auto-fetches at +1h / +2h after meal time. Fire-and-forget;
+      // failures (e.g. no CGM connected) are silent.
+      void scheduleJobsForLog({ logId: saved.id, logType: "meal", refTimeIso: mealIso });
+      // Refresh meals so the next recommendation immediately benefits.
+      fetchMeals().then(setMeals).catch(() => {});
+      setDecisionToast(`✓ Gespeichert mit ${result.dose}u Bolus`);
+      setTimeout(() => setDecisionToast(null), 2500);
+      logDebug("ENGINE.WIZARD_SAVE", { id: saved.id, carbs: cNum, insulin: result.dose, glucose: gNum, mealType: cls });
+      // Reset to Step 1 with empty form for the next meal entry.
+      // keepGlucose: true so the next meal starts with the latest reading
+      // already populated (saves a CGM tap). resetForm also clears `result`,
+      // `desc`, `transcript`, and the macro fields.
+      resetForm({ keepGlucose: true });
+      setStepIndex(0);
+      setReasoningExpanded(false);
+    } catch (e) {
+      setConfirmErr(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setConfirming(false);
+    }
   }
 
   // Confirm Log writes the full meal+bolus row to the `meals` table via
@@ -556,6 +651,7 @@ export default function EnginePage() {
     if (!opts.keepGlucose) setGlucose("");
     setCarbs(""); setProtein(""); setFat(""); setFiber("");
     setDesc(""); setInsulin(""); setResult(null); setTranscript("");
+    setAiMealType(null);
     setMealTime(nowLocalDateTime());
     setConfirmErr("");
     setConfirmedMeal(null);
@@ -760,759 +856,412 @@ export default function EnginePage() {
       </div>
 
       {tab === "engine" && (
-      <div style={{
-        display:"grid",
-        gridTemplateColumns: isMobile ? "minmax(0, 1fr)" : "minmax(0, 1.65fr) minmax(0, 1fr)",
-        gap: isMobile ? 16 : 24,
-        alignItems:"stretch",
-      }}>
-      <div style={{ minWidth:0, display:"flex", flexDirection:"column" }}>
-      {/* Voice input keyframes — kept here because the pill (rendered
-          below the macro fields, see further down) and the parser
-          status spinner share the engVPulse animation. */}
-      <style>{`
-        @keyframes engVPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.15)} }
-        @keyframes engSpin   { to { transform: rotate(360deg) } }
-      `}</style>
+        <div style={{ maxWidth: 600, margin: "0 auto" }}>
+          <style>{`
+            @keyframes engVPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.06)} }
+            @keyframes engSpin   { to { transform: rotate(360deg) } }
+          `}</style>
 
-      {/* Mobile parser panel moved BELOW the form (after the voice pill)
-          so the user perceives a clean top-to-bottom flow:
-          form → pill → reasoning → confirm. Desktop renders its own
-          parser instance in the right column further down. */}
-
-      {isMobile ? (
-        // ---- Mobile: single-card flow that matches the original log-style
-        // layout the user is used to. No "Current Conditions" / "Meal Details"
-        // section titles; macros are a 2x2 grid (Carbs+Fiber, Protein+Fat);
-        // Meal Classification is always visible as an inline field that shows
-        // "Auto from macros" until the macros are filled.
-        <div style={{ ...card, marginBottom: 20 }}>
-          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-            {/* Glucose + CGM pull */}
-            <div>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6, gap:8 }}>
-                <label style={{ fontSize:11, color:"rgba(255,255,255,0.4)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:600 }}>
-                  Glucose Before (mg/dL){lastReading ? ` · Last reading: ${lastReading}` : ""}
-                </label>
-                <button onClick={handlePullCgm} disabled={cgmPulling} style={{
-                  display:"flex", alignItems:"center", gap:6,
-                  padding:"4px 10px", borderRadius:99, border:`1px solid ${ACCENT}40`,
-                  background:`${ACCENT}15`, color:ACCENT, fontSize:11, fontWeight:600,
-                  cursor: cgmPulling ? "wait" : "pointer", flexShrink:0,
-                }}>
-                  <span style={{ width:7, height:7, borderRadius:"50%", background:GREEN, boxShadow:`0 0 6px ${GREEN}` }}/>
-                  CGM
-                </button>
-              </div>
-              <input style={inp} type="number" placeholder="e.g. 115" value={glucose} onChange={e => setGlucose(e.target.value)}/>
-            </div>
-
-            {/* Meal Time */}
-            <div>
-              <label style={{ fontSize:11, color:"rgba(255,255,255,0.4)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:600, display:"block", marginBottom:6 }}>
-                Meal Time
-              </label>
-              <input
-                style={{ ...inp, fontFamily:"inherit", textAlign:"center" }}
-                type="datetime-local"
-                value={mealTime}
-                onChange={e => setMealTime(e.target.value)}
-              />
-              <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)", marginTop:6, lineHeight:1.45 }}>
-                When you ate. Defaults to the latest CGM reading time — edit to backfill a past meal.
-              </div>
-            </div>
-
-            {/* Macros 2x2: Carbs+Fiber, Protein+Fat */}
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, rowGap:14 }}>
-              <div>
-                <label style={{ fontSize:11, color:"rgba(255,255,255,0.4)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:600, display:"block", marginBottom:6 }}>Carbs (g)</label>
-                <input style={inp} type="number" placeholder="e.g. 60" value={carbs} onChange={e => setCarbs(e.target.value)}/>
-              </div>
-              <div>
-                <label style={{ fontSize:11, color:"rgba(255,255,255,0.4)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:600, display:"block", marginBottom:6 }}>
-                  Fiber (g) <span style={{ textTransform:"none", color:"rgba(255,255,255,0.3)", fontSize:10, fontWeight:500 }}>opt.</span>
-                </label>
-                <input style={inp} type="number" placeholder="e.g. 8" value={fiber} onChange={e => setFiber(e.target.value)}/>
-              </div>
-              <div>
-                <label style={{ fontSize:11, color:"rgba(255,255,255,0.4)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:600, display:"block", marginBottom:6 }}>Protein (g)</label>
-                <input style={inp} type="number" placeholder="e.g. 30" value={protein} onChange={e => setProtein(e.target.value)}/>
-              </div>
-              <div>
-                <label style={{ fontSize:11, color:"rgba(255,255,255,0.4)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:600, display:"block", marginBottom:6 }}>Fat (g)</label>
-                <input style={inp} type="number" placeholder="e.g. 15" value={fat} onChange={e => setFat(e.target.value)}/>
-              </div>
-            </div>
-
-            {/* Voice pill — compact FAB centered below the macro 2x2.
-                Replaces the dominant 84px mic card. Tap toggles
-                recording. While idle: muted neutral chrome so it
-                doesn't compete with the form. While recording: solid
-                accent + pulse animation so it's unambiguously "live".
-                Disabled when the upstream parse is still in flight or
-                the browser doesn't support MediaRecorder. */}
-            <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:8 }}>
-              <button
-                type="button"
-                onClick={() => recording ? stopRecording() : startRecording()}
-                disabled={parsing || !speechAvail}
-                aria-label={recording ? "Aufnahme stoppen" : "Sprach-Eingabe starten"}
-                style={{
-                  display:"inline-flex", alignItems:"center", justifyContent:"center", gap:8,
-                  height:48, padding:"0 20px", borderRadius:24,
-                  background: recording ? "#4F6EF7" : "#1C1C24",
-                  border: recording ? "1px solid #4F6EF7" : "1px solid #2A2A36",
-                  color: recording ? "#fff" : (parsing || !speechAvail ? "rgba(153,153,170,0.5)" : "#9999AA"),
-                  fontSize:13, fontWeight:600, letterSpacing:"-0.01em",
-                  cursor: parsing || !speechAvail ? "not-allowed" : "pointer",
-                  animation: recording ? "engVPulse 0.8s ease-in-out infinite" : undefined,
-                  transition:"background 0.2s, color 0.2s, border-color 0.2s",
-                  WebkitTapHighlightColor:"transparent",
-                }}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <rect x="9" y="2" width="6" height="11" rx="3" fill="currentColor" stroke="none"/>
-                  <path d="M5 10a7 7 0 0 0 14 0"/>
-                  <line x1="12" y1="19" x2="12" y2="22"/>
-                  <line x1="9"  y1="22" x2="15" y2="22"/>
-                </svg>
-                {recording ? "Stopp" : parsing ? "Verarbeite…" : "Sprechen"}
-              </button>
-              {/* Inline transcript / error captions — small, secondary,
-                  centered. Only render when there's something to say so
-                  the pill stays the visual focus when idle. */}
-              {transcript && (
-                <div style={{ fontSize:11, color:"rgba(255,255,255,0.45)", fontStyle:"italic", textAlign:"center", lineHeight:1.4, maxWidth:380 }}>
-                  &quot;{transcript}&quot;
-                </div>
-              )}
-              {voiceErr && <div style={{ fontSize:11, color:PINK, textAlign:"center" }}>{voiceErr}</div>}
-              {!speechAvail && !voiceErr && (
-                <div style={{ fontSize:10, color:ORANGE, textAlign:"center" }}>
-                  Sprach-Eingabe wird in diesem Browser nicht unterstützt.
-                </div>
-              )}
-            </div>
-
-            {/* Description */}
-            <div>
-              <label style={{ fontSize:11, color:"rgba(255,255,255,0.4)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:600, display:"block", marginBottom:6 }}>
-                Meal Description
-              </label>
-              <input style={inp} placeholder="e.g. granola, banana, yogurt…" value={desc} onChange={e => setDesc(e.target.value)}/>
-            </div>
-
-            {/* Meal Classification — always visible, "Auto from macros" until
-                the macros are filled, then shows the actual class. Der
-                Parsing-Indikator gehört NICHT hierher (sonst flippt das Chip
-                semantisch zwischen "Klassifizierung läuft" und "Voice-Parsing
-                läuft", obwohl es zwei verschiedene Prozesse sind). Das
-                Parsing-Feedback rendert jetzt im AI-FOOD-PARSER-Chip oben
-                via EngineChatPanel `parsing` prop. */}
-            {(() => {
-              const isFilled = (s: string) => s != null && s !== "" && !isNaN(parseFloat(s));
-              const filled = [carbs, protein, fat, fiber].some(isFilled);
-              const cNum = parseFloat(carbs) || 0;
-              const pNum = parseFloat(protein) || 0;
-              const fNum = parseFloat(fat) || 0;
-              const fbNum = parseFloat(fiber) || 0;
-              // Live preview chip: prefer the AI label captured from the
-              // most recent /api/parse-food response when present, so the
-              // chip matches what handleConfirmLog will persist.
-              const cls = filled ? (aiMealType ?? classifyMeal(cNum, pNum, fNum, fbNum)) : null;
-              const color = cls ? (TYPE_COLORS[cls as string] || ACCENT) : "rgba(255,255,255,0.35)";
-              const label = cls ? TYPE_LABELS[cls] : "Auto from macros";
-              return (
-                <div>
-                  <label style={{ fontSize:11, color:"rgba(255,255,255,0.4)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:600, display:"block", marginBottom:6 }}>
-                    Meal Classification
-                  </label>
-                  <div style={{
-                    ...inp,
-                    display:"flex", alignItems:"center", gap:10,
-                    color: cls ? "#fff" : "rgba(255,255,255,0.45)",
-                    fontWeight: cls ? 600 : 400,
-                  }}>
-                    <span style={{
-                      width:8, height:8, borderRadius:"50%",
-                      background: color,
-                      boxShadow: cls ? `0 0 6px ${color}` : "none",
-                      flexShrink:0,
-                    }}/>
-                    {label}
+          {/* STEP INDICATOR — three dots + connectors at top, labels below.
+              Active dot = ACCENT (#4F6EF7), past dots filled too, future dots
+              #2A2A36 muted. Connector line between dots fills as user advances. */}
+          <div style={{ marginBottom: 28 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "center" }} role="list" aria-label="Wizard-Schritte">
+              {[0, 1, 2].map((i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }} role="listitem">
+                  <div
+                    aria-current={i === stepIndex ? "step" : undefined}
+                    aria-label={`Schritt ${i + 1} von 3`}
+                    style={{
+                      width: 32, height: 32, borderRadius: 16,
+                      background: i <= stepIndex ? ACCENT : "#2A2A36",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 13, fontWeight: 700,
+                      color: i <= stepIndex ? "#fff" : "rgba(255,255,255,0.4)",
+                      transition: "background 0.2s, color 0.2s",
+                    }}
+                  >
+                    {i + 1}
                   </div>
+                  {i < 2 && (
+                    <div style={{
+                      width: 56, height: 2,
+                      background: i < stepIndex ? ACCENT : "#2A2A36",
+                      transition: "background 0.2s",
+                    }}/>
+                  )}
                 </div>
-              );
-            })()}
-          </div>
-        </div>
-      ) : (
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20, marginBottom:20 }}>
-          <div style={card}>
-            <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>Current Conditions</div>
-            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-              <div>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
-                  <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)" }}>Glucose Before (mg/dL)</label>
-                  <button onClick={handlePullCgm} disabled={cgmPulling} style={{
-                    display:"flex", alignItems:"center", gap:6,
-                    padding:"4px 10px", borderRadius:99, border:`1px solid ${ACCENT}40`,
-                    background:`${ACCENT}15`, color:ACCENT, fontSize:11, fontWeight:600,
-                    cursor: cgmPulling ? "wait" : "pointer",
-                  }}>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                      <polyline points="7 10 12 15 17 10"/>
-                      <line x1="12" y1="15" x2="12" y2="3"/>
-                    </svg>
-                    {cgmPulling ? "Pulling…" : "Pull CGM"}
-                  </button>
-                </div>
-                <input style={inp} type="number" placeholder="e.g. 115" value={glucose} onChange={e => setGlucose(e.target.value)}/>
-              </div>
-              <div>
-                <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>Meal Time</label>
-                <input
-                  style={{ ...inp, fontFamily:"inherit" }}
-                  type="datetime-local"
-                  value={mealTime}
-                  onChange={e => setMealTime(e.target.value)}
-                />
-                <div style={{ fontSize:10, color:"rgba(255,255,255,0.25)", marginTop:4 }}>
-                  When you ate. Edit to backfill a past meal.
-                </div>
-              </div>
-              <div>
-                <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>Planned Carbs (g)</label>
-                <input style={inp} type="number" placeholder="e.g. 60" value={carbs} onChange={e => setCarbs(e.target.value)}/>
-              </div>
+              ))}
+            </div>
+            <div style={{
+              display: "grid", gridTemplateColumns: "1fr 1fr 1fr",
+              marginTop: 10, fontSize: 12, fontWeight: 600,
+              textAlign: "center", letterSpacing: "-0.01em",
+            }}>
+              <span style={{ color: stepIndex === 0 ? ACCENT : "rgba(255,255,255,0.45)" }}>Essen</span>
+              <span style={{ color: stepIndex === 1 ? ACCENT : "rgba(255,255,255,0.45)" }}>Makros</span>
+              <span style={{ color: stepIndex === 2 ? ACCENT : "rgba(255,255,255,0.45)" }}>Ergebnis</span>
             </div>
           </div>
 
-          <div style={card}>
-            <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>Meal Details (optional)</div>
-            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
-                <div>
-                  <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>Protein (g)</label>
-                  <input style={inp} type="number" placeholder="0" value={protein} onChange={e => setProtein(e.target.value)}/>
-                </div>
-                <div>
-                  <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>Fat (g)</label>
-                  <input style={inp} type="number" placeholder="0" value={fat} onChange={e => setFat(e.target.value)}/>
-                </div>
-                <div>
-                  <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>Fiber (g)</label>
-                  <input style={inp} type="number" placeholder="0" value={fiber} onChange={e => setFiber(e.target.value)}/>
-                </div>
-              </div>
-              <div>
-                <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>Description</label>
-                <input style={inp} placeholder="e.g. pasta with tomato sauce" value={desc} onChange={e => setDesc(e.target.value)}/>
-              </div>
-              {/* Desktop voice pill — same compact FAB, parked at the
-                  bottom of the left column form so the post-voice flow
-                  matches mobile (form fields above → pill → reasoning
-                  panel in the right column auto-expands). */}
-              <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:8, marginTop:6 }}>
+          {/* Page-level success toast (post-save) and error banner. Rendered
+              above the active step so they're visible regardless of current step. */}
+          {decisionToast && (
+            <div style={{ marginBottom: 16, padding: "10px 14px", borderRadius: 10, background: `${GREEN}15`, border: `1px solid ${GREEN}40`, color: GREEN, fontSize: 12 }}>
+              {decisionToast}
+            </div>
+          )}
+          {confirmErr && (
+            <div style={{ marginBottom: 16, padding: "10px 14px", borderRadius: 10, background: `${PINK}15`, border: `1px solid ${PINK}40`, color: PINK, fontSize: 12 }}>
+              {confirmErr}
+            </div>
+          )}
+
+          {/* ───────── STEP 1: Was hast du gegessen? ───────── */}
+          {stepIndex === 0 && (
+            <div style={{ ...card, padding: "28px 24px" }}>
+              <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", textAlign: "center", marginBottom: 24, color: "#fff" }}>
+                Was hast du gegessen?
+              </h2>
+
+              {/* Voice pill — large, primary, centered (56px h, 280px max w,
+                  bg ACCENT, border-radius 28px). Same recording handlers as
+                  before; auto-advance to Step 2 fires inside handleVoice. */}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginBottom: 24 }}>
                 <button
                   type="button"
                   onClick={() => recording ? stopRecording() : startRecording()}
                   disabled={parsing || !speechAvail}
                   aria-label={recording ? "Aufnahme stoppen" : "Sprach-Eingabe starten"}
                   style={{
-                    display:"inline-flex", alignItems:"center", justifyContent:"center", gap:8,
-                    height:48, padding:"0 20px", borderRadius:24,
-                    background: recording ? "#4F6EF7" : "#1C1C24",
-                    border: recording ? "1px solid #4F6EF7" : "1px solid #2A2A36",
-                    color: recording ? "#fff" : (parsing || !speechAvail ? "rgba(153,153,170,0.5)" : "#9999AA"),
-                    fontSize:13, fontWeight:600, letterSpacing:"-0.01em",
+                    display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 10,
+                    width: "100%", maxWidth: 280, height: 56, borderRadius: 28,
+                    background: ACCENT,
+                    border: "none",
+                    color: "#fff",
+                    fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
                     cursor: parsing || !speechAvail ? "not-allowed" : "pointer",
                     animation: recording ? "engVPulse 0.8s ease-in-out infinite" : undefined,
-                    transition:"background 0.2s, color 0.2s, border-color 0.2s",
+                    opacity: parsing || !speechAvail ? 0.55 : 1,
+                    transition: "background 0.2s, opacity 0.2s",
+                    WebkitTapHighlightColor: "transparent",
                   }}
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <rect x="9" y="2" width="6" height="11" rx="3" fill="currentColor" stroke="none"/>
                     <path d="M5 10a7 7 0 0 0 14 0"/>
                     <line x1="12" y1="19" x2="12" y2="22"/>
-                    <line x1="9"  y1="22" x2="15" y2="22"/>
+                    <line x1="9" y1="22" x2="15" y2="22"/>
                   </svg>
                   {recording ? "Stopp" : parsing ? "Verarbeite…" : "Sprechen"}
                 </button>
                 {transcript && (
-                  <div style={{ fontSize:11, color:"rgba(255,255,255,0.45)", fontStyle:"italic", textAlign:"center", lineHeight:1.4, maxWidth:380 }}>
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", fontStyle: "italic", textAlign: "center", lineHeight: 1.4, maxWidth: 360 }}>
                     &quot;{transcript}&quot;
                   </div>
                 )}
-                {voiceErr && <div style={{ fontSize:11, color:PINK, textAlign:"center" }}>{voiceErr}</div>}
+                {voiceErr && <div style={{ fontSize: 11, color: PINK, textAlign: "center" }}>{voiceErr}</div>}
                 {!speechAvail && !voiceErr && (
-                  <div style={{ fontSize:10, color:ORANGE, textAlign:"center" }}>
+                  <div style={{ fontSize: 10, color: ORANGE, textAlign: "center" }}>
                     Sprach-Eingabe wird in diesem Browser nicht unterstützt.
                   </div>
                 )}
               </div>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {(() => {
-        const gNum = parseFloat(glucose), cNum = parseFloat(carbs), pNum = parseFloat(protein), fNum = parseFloat(fat), fbNum = parseFloat(fiber);
-        const allFilled = [gNum, cNum, pNum, fNum, fbNum].every(v => !isNaN(v) && v >= 0) && cNum > 0;
-        if (!allFilled) return null;
-        const TYPE_DESC: Record<string,string> = {
-          FAST_CARBS: "High glycemic load — expect a sharp glucose rise. Consider pre-bolusing 15–20 min before eating.",
-          HIGH_PROTEIN: "Protein-dominant — slower digestion, lower spike risk. Watch for delayed glucose rise.",
-          HIGH_FAT: "Fat-dominant — significantly delayed absorption. Split-bolus or extended-bolus often appropriate.",
-          BALANCED: "Macros are well-balanced — predictable absorption curve. Standard ICR usually works.",
-        };
-        const cls = aiMealType ?? classifyMeal(cNum, pNum, fNum, fbNum);
-        const color = TYPE_COLORS[cls as string] || ACCENT;
-        return (
-          <div style={{
-            background:`linear-gradient(135deg, ${color}10, ${color}04)`,
-            border:`1px solid ${color}35`, borderRadius:16,
-            padding:"18px 22px", marginBottom:20,
-            display:"flex", gap:18, alignItems:"flex-start",
-          }}>
-            <div style={{
-              width:42, height:42, borderRadius:12, flexShrink:0,
-              background:`${color}20`, border:`1px solid ${color}40`,
-              display:"flex", alignItems:"center", justifyContent:"center",
-            }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 2v6"/><path d="M5 8h14"/><path d="M5 8l2 13h10l2-13"/>
-              </svg>
-            </div>
-            <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:6 }}>
-                <span style={{ fontSize:10, color:"rgba(255,255,255,0.4)", letterSpacing:"0.08em", textTransform:"uppercase", fontWeight:600 }}>Meal Classification</span>
-                <span style={{ padding:"4px 12px", borderRadius:99, fontSize:11, fontWeight:700, background:`${color}25`, color, border:`1px solid ${color}45`, letterSpacing:"0.04em", textTransform:"uppercase" }}>
-                  {TYPE_LABELS[cls]}
-                </span>
-              </div>
-              <div style={{ fontSize:13, color:"rgba(255,255,255,0.7)", lineHeight:1.55 }}>{TYPE_DESC[cls]}</div>
-              <div style={{ marginTop:10, display:"flex", gap:14, flexWrap:"wrap", fontSize:11, color:"rgba(255,255,255,0.4)" }}>
-                <span>Carbs <strong style={{ color:"rgba(255,255,255,0.75)" }}>{cNum}g</strong></span>
-                <span>Protein <strong style={{ color:"rgba(255,255,255,0.75)" }}>{pNum}g</strong></span>
-                <span>Fat <strong style={{ color:"rgba(255,255,255,0.75)" }}>{fNum}g</strong></span>
-                <span>Fiber <strong style={{ color:"rgba(255,255,255,0.75)" }}>{fbNum}g</strong></span>
-                <span>Net carbs <strong style={{ color:"rgba(255,255,255,0.75)" }}>{Math.max(0, cNum - fbNum)}g</strong></span>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* INSULIN-EINGABEFELD HIER ENTFERNT.
-          Der Pre-Confirm-Flow speichert die Mahlzeit ohne Dosis. Erst nach
-          Confirm Log öffnet sich das Decision-Panel (`confirmedMeal != null`)
-          mit der binären Frage "Bolus eingeben? / Empfehlung holen? / Verwerfen?".
-          Wählt der User dort "Bolus", routet `handleDecisionBolus` nach
-          `/log?bolusFor=<id>` — dort findet die eigentliche Insulin-Eingabe
-          statt, sauber an die soeben gespeicherte Mahlzeit gekoppelt. */}
-
-      {confirmErr && (
-        <div style={{ marginBottom:10, padding:"10px 14px", borderRadius:10, background:`${PINK}15`, border:`1px solid ${PINK}40`, color:PINK, fontSize:12 }}>
-          {confirmErr}
-        </div>
-      )}
-      {/* Auto-dismiss toast for decision-panel actions (delete, accept rec, etc.) */}
-      {decisionToast && (
-        <div style={{ marginBottom:10, padding:"10px 14px", borderRadius:10, background:`${GREEN}15`, border:`1px solid ${GREEN}40`, color:GREEN, fontSize:12 }}>
-          {decisionToast}
-        </div>
-      )}
-
-      {/* Mobile parser panel re-mounted HERE — between the form/pill
-          above and the Confirm/Cancel buttons below. Wrapped in a div
-          carrying chatPanelRef so the post-transcription auto-expand
-          can scrollIntoView it smoothly. */}
-      {isMobile && (
-        <div ref={chatPanelRef} style={{ marginBottom: 16 }}>
-          <EngineChatPanel
-            macros={{
-              carbs:   parseFloat(carbs)   || 0,
-              protein: parseFloat(protein) || 0,
-              fat:     parseFloat(fat)     || 0,
-              fiber:   parseFloat(fiber)   || 0,
-            }}
-            description={desc}
-            onPatch={(p) => {
-              setCarbs(String(p.carbs));
-              setProtein(String(p.protein));
-              setFat(String(p.fat));
-              setFiber(String(p.fiber));
-              if (p.description) setDesc(p.description);
-            }}
-            seed={chatSeed}
-            isMobile={true}
-            expanded={chatExpanded}
-            onToggleExpanded={() => setChatExpanded(v => !v)}
-            parsing={parsing}
-            hasUsedVoice={hasUsedVoice}
-          />
-        </div>
-      )}
-
-      {/* Form mode: Confirm Log + Cancel.  Hidden once a meal has been saved
-          and the decision panel below takes over. Visual hierarchy
-          updated: primary = solid accent block 48px, secondary =
-          text-only ghost button so it doesn't visually compete. */}
-      {!confirmedMeal && (
-        <>
-          <button
-            onClick={handleConfirmLog}
-            disabled={confirming || !carbs}
-            style={{
-              width:"100%", height:48, borderRadius:12, border:"none",
-              background: !confirming && carbs ? "#4F6EF7" : "rgba(79,110,247,0.25)",
-              color: !confirming && carbs ? "#fff" : "rgba(255,255,255,0.55)",
-              fontSize:15, fontWeight:700, letterSpacing:"-0.01em",
-              cursor: confirming || !carbs ? "not-allowed" : "pointer",
-              transition:"background 0.2s, opacity 0.2s",
-              marginBottom:6,
-            }}
-          >
-            {confirming ? "Speichere…" : "Bestätigen"}
-          </button>
-          <button
-            onClick={handleCancel}
-            disabled={confirming}
-            style={{
-              width:"100%", height:36, borderRadius:8,
-              border:"none", background:"transparent",
-              color:"#666680", fontSize:13, fontWeight:500, letterSpacing:"-0.01em",
-              cursor: confirming ? "not-allowed" : "pointer",
-              marginBottom:24,
-            }}
-          >
-            Abbrechen
-          </button>
-        </>
-      )}
-
-      {/* Decision mode: shown after a successful Confirm Log.
-          Two sub-views: "decision" (3 buttons) + "rec" (recommendation result). */}
-      {confirmedMeal && (
-        <div style={{ marginBottom:24, padding:"16px 18px", borderRadius:14, background:`${ACCENT}08`, border:`1px solid ${ACCENT}30`, display:"flex", flexDirection:"column", gap:14 }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-            <div style={{ fontSize:11, letterSpacing:"0.1em", fontWeight:700, color:GREEN, textTransform:"uppercase" }}>
-              ✓ Log gespeichert
-            </div>
-            <div style={{ fontSize:11, color:"rgba(255,255,255,0.45)", fontFamily:"var(--font-mono)" }}>
-              {(confirmedMeal.carbs_grams ?? 0)}g · {confirmedMeal.insulin_units != null ? `${confirmedMeal.insulin_units}u` : "Bolus offen"}
-            </div>
-          </div>
-
-          {decisionMode === "decision" && (
-            <>
-              <div style={{ fontSize:13, color:"rgba(255,255,255,0.7)", lineHeight:1.5 }}>
-                Wie weiter? Bolus dokumentieren, Empfehlung berechnen oder den Eintrag verwerfen.
-              </div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
-                <button
-                  onClick={handleDecisionBolus}
-                  disabled={decisionBusy}
-                  style={{ padding:"12px 10px", borderRadius:10, border:"none", background:`linear-gradient(135deg, ${ACCENT}, #6B8BFF)`, color:"#fff", fontSize:13, fontWeight:700, cursor:decisionBusy?"not-allowed":"pointer" }}
-                >
-                  Bolus loggen
-                </button>
-                <button
-                  onClick={handleDecisionEmpfehlung}
-                  disabled={decisionBusy}
-                  style={{ padding:"12px 10px", borderRadius:10, border:`1px solid ${ACCENT}60`, background:"transparent", color:ACCENT, fontSize:13, fontWeight:700, cursor:decisionBusy?"not-allowed":"pointer" }}
-                >
-                  {decisionBusy && decisionMode === "decision" ? "…" : "Empfehlung"}
-                </button>
-                <button
-                  onClick={handleDecisionDelete}
-                  disabled={decisionBusy}
-                  style={{ padding:"12px 10px", borderRadius:10, border:`1px solid ${PINK}40`, background:"transparent", color:PINK, fontSize:13, fontWeight:700, cursor:decisionBusy?"not-allowed":"pointer" }}
-                >
-                  Abbrechen
-                </button>
-              </div>
-              <button
-                onClick={handleDecisionNoBolus}
-                disabled={decisionBusy}
-                style={{ width:"100%", padding:"11px 14px", borderRadius:10, border:`1px solid ${BORDER}`, background:"rgba(255,255,255,0.03)", color:"rgba(255,255,255,0.55)", fontSize:12, fontWeight:600, cursor:decisionBusy?"not-allowed":"pointer", letterSpacing:"0.01em" }}
-              >
-                Speichern — kein Bolus
-              </button>
-            </>
-          )}
-
-          {decisionMode === "rec" && decisionRec && (
-            <>
-              <div style={{ background:"#0D0D12", borderRadius:10, padding:"14px 16px", border:`1px solid ${BORDER}` }}>
-                <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)", letterSpacing:"0.08em", fontWeight:700, textTransform:"uppercase", marginBottom:6 }}>Empfehlung</div>
-                <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
-                  <span style={{ fontSize:30, fontWeight:800, color:ACCENT, letterSpacing:"-0.02em" }}>{decisionRec.dose}</span>
-                  <span style={{ fontSize:12, color:"rgba(255,255,255,0.45)" }}>u</span>
-                  <span style={{ fontSize:11, color:"rgba(255,255,255,0.4)", marginLeft:8 }}>
-                    aktuell: <strong style={{ color:"rgba(255,255,255,0.7)" }}>
-                      {confirmedMeal.insulin_units != null ? `${confirmedMeal.insulin_units}u` : "—"}
-                    </strong>
-                  </span>
-                  <span style={{ marginLeft:"auto", padding:"2px 8px", borderRadius:99, fontSize:10, fontWeight:700, background:`${ACCENT}22`, color:ACCENT, letterSpacing:"0.05em" }}>
-                    {decisionRec.confidence}
-                  </span>
-                </div>
-                {/* Reasoning sub-card — own background so the GPT
-                    explanation reads as a distinct "why" block under
-                    the dose number above. */}
-                <div style={{
-                  marginTop:16, padding:"12px 16px",
-                  background:"#0D0D14", border:"1px solid #1C1C28",
-                  borderRadius:12,
-                }}>
-                  <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.08em", color:"#666680", textTransform:"uppercase", marginBottom:6 }}>
-                    GPT Reasoning
-                  </div>
-                  <div style={{ fontSize:13, lineHeight:1.6, color:"#AAAACC" }}>
-                    {decisionRec.reasoning}
-                  </div>
-                </div>
-              </div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-                <button
-                  onClick={handleDecisionAcceptRec}
-                  disabled={decisionBusy}
-                  style={{ padding:"12px 10px", borderRadius:10, border:"none", background:`linear-gradient(135deg, ${ACCENT}, #6B8BFF)`, color:"#fff", fontSize:13, fontWeight:700, cursor:decisionBusy?"not-allowed":"pointer" }}
-                >
-                  Übernehmen →
-                </button>
-                <button
-                  onClick={() => { setDecisionMode("decision"); setDecisionRec(null); }}
-                  disabled={decisionBusy}
-                  style={{ padding:"12px 10px", borderRadius:10, border:`1px solid ${BORDER}`, background:"transparent", color:"rgba(255,255,255,0.6)", fontSize:13, fontWeight:600, cursor:decisionBusy?"not-allowed":"pointer" }}
-                >
-                  Zurück
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* Insulin-Sub-Mode: editierbares Eingabefeld + Confirm Log + Zurück.
-              Reachable EITHER via Bolus loggen (input startet leer) OR via
-              Empfehlung → Übernehmen → (input vorbelegt mit rec.dose).
-              Hier passiert der eigentliche PATCH der Dosis auf die schon
-              gespeicherte Mahlzeit — vorher wird NICHTS in die DB geschrieben. */}
-          {decisionMode === "insulin" && (
-            <>
-              <div style={{ fontSize:13, color:"rgba(255,255,255,0.7)", lineHeight:1.5 }}>
-                {decisionRec
-                  ? <>Empfehlung <strong style={{ color:ACCENT }}>{decisionRec.dose}u</strong> übernommen — anpassen falls nötig, dann bestätigen.</>
-                  : <>Trage die tatsächlich gespritzte Insulindosis für diese Mahlzeit ein.</>}
-              </div>
-              <div>
-                <label style={{ fontSize:12, color:"rgba(255,255,255,0.4)", display:"block", marginBottom:6 }}>Insulin (U)</label>
+              {/* Text-input fallback — user can also type the description.
+                  Bound to the same `desc` state the voice path fills, so
+                  either input path drives the same downstream save. */}
+              <div style={{ marginBottom: 24 }}>
                 <input
-                  style={inp}
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  placeholder="e.g. 1.5"
-                  value={insulin}
-                  onChange={e => { setInsulin(e.target.value); if (decisionInsulinErr) setDecisionInsulinErr(null); }}
-                  disabled={decisionBusy}
-                  autoFocus
+                  style={{ ...inp, height: 48 }}
+                  placeholder="Beschreib dein Essen… z.B. Haferflocken mit Banane"
+                  aria-label="Beschreibung deines Essens"
+                  value={desc}
+                  onChange={(e) => setDesc(e.target.value)}
                 />
               </div>
-              {decisionInsulinErr && (
-                <div style={{ padding:"10px 14px", borderRadius:10, background:`${PINK}15`, border:`1px solid ${PINK}40`, color:PINK, fontSize:12 }}>
-                  {decisionInsulinErr}
+
+              {/* Weiter button — enabled when EITHER voice produced a
+                  transcript OR the user typed at least 5 chars manually.
+                  parsing is excluded so the button can't fire mid-transcribe. */}
+              {(() => {
+                const enabled = !parsing && (transcript.trim().length > 0 || desc.trim().length >= 5);
+                return (
+                  <button
+                    onClick={() => setStepIndex(1)}
+                    disabled={!enabled}
+                    style={{
+                      width: "100%", height: 48, borderRadius: 12, border: "none",
+                      background: enabled ? ACCENT : "rgba(79,110,247,0.25)",
+                      color: enabled ? "#fff" : "rgba(255,255,255,0.55)",
+                      fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
+                      cursor: enabled ? "pointer" : "not-allowed",
+                      transition: "background 0.2s",
+                    }}
+                  >
+                    Weiter →
+                  </button>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* ───────── STEP 2: Makros prüfen ───────── */}
+          {stepIndex === 1 && (
+            <div style={{ ...card, padding: 24 }}>
+              <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 20, color: "#fff" }}>
+                Makros prüfen
+              </h2>
+
+              {/* Section header: Makros — 2x2 grid (Carbs+Fiber, Protein+Fat) */}
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ fontSize: 11, color: "#666680", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700, marginBottom: 12 }}>
+                  Makros
                 </div>
-              )}
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, rowGap: 14 }}>
+                  <div>
+                    <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>Carbs (g)</label>
+                    <input style={inp} type="number" placeholder="e.g. 60" value={carbs} onChange={(e) => setCarbs(e.target.value)}/>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>
+                      Fiber (g) <span style={{ textTransform: "none", color: "rgba(255,255,255,0.3)", fontSize: 10, fontWeight: 500 }}>opt.</span>
+                    </label>
+                    <input style={inp} type="number" placeholder="e.g. 8" value={fiber} onChange={(e) => setFiber(e.target.value)}/>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>Protein (g)</label>
+                    <input style={inp} type="number" placeholder="e.g. 30" value={protein} onChange={(e) => setProtein(e.target.value)}/>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>Fat (g)</label>
+                    <input style={inp} type="number" placeholder="e.g. 15" value={fat} onChange={(e) => setFat(e.target.value)}/>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section header: Glukose & Zeit — glucose + CGM pull pill, meal time */}
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ fontSize: 11, color: "#666680", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700, marginBottom: 12 }}>
+                  Glukose & Zeit
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, gap: 8 }}>
+                      <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600 }}>
+                        Glucose Before (mg/dL){lastReading ? ` · Last: ${lastReading}` : ""}
+                      </label>
+                      <button onClick={handlePullCgm} disabled={cgmPulling} style={{
+                        display: "flex", alignItems: "center", gap: 6,
+                        padding: "4px 10px", borderRadius: 99, border: `1px solid ${ACCENT}40`,
+                        background: `${ACCENT}15`, color: ACCENT, fontSize: 11, fontWeight: 600,
+                        cursor: cgmPulling ? "wait" : "pointer", flexShrink: 0,
+                      }}>
+                        <span style={{ width: 7, height: 7, borderRadius: "50%", background: GREEN, boxShadow: `0 0 6px ${GREEN}` }}/>
+                        {cgmPulling ? "Pulling…" : "CGM"}
+                      </button>
+                    </div>
+                    <input style={inp} type="number" placeholder="e.g. 115" value={glucose} onChange={(e) => setGlucose(e.target.value)}/>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>
+                      Meal Time
+                    </label>
+                    <input
+                      style={{ ...inp, fontFamily: "inherit", textAlign: "center" }}
+                      type="datetime-local"
+                      value={mealTime}
+                      onChange={(e) => setMealTime(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom action row: Zurück (ghost, left) + Berechnen (primary, right). */}
+              <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: 10 }}>
                 <button
-                  onClick={handleConfirmDecisionInsulin}
-                  disabled={decisionBusy || !insulin.trim()}
+                  onClick={() => setStepIndex(0)}
+                  disabled={running}
                   style={{
-                    padding:"13px 10px", borderRadius:10, border:"none",
-                    background: !decisionBusy && insulin.trim()
-                      ? `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`
-                      : "rgba(79,110,247,0.25)",
-                    color: !decisionBusy && insulin.trim() ? "#fff" : "rgba(255,255,255,0.55)",
-                    fontSize:13, fontWeight:700,
-                    cursor: decisionBusy || !insulin.trim() ? "not-allowed" : "pointer",
+                    padding: "0 18px", height: 48, borderRadius: 10,
+                    border: "none", background: "transparent",
+                    color: "#666680", fontSize: 13, fontWeight: 600,
+                    cursor: running ? "not-allowed" : "pointer",
                   }}
                 >
-                  {decisionBusy ? "Speichere…" : "✓ Confirm Log"}
+                  ← Zurück
                 </button>
-                <button
-                  onClick={handleDecisionInsulinBack}
-                  disabled={decisionBusy}
-                  style={{ padding:"13px 10px", borderRadius:10, border:`1px solid ${BORDER}`, background:"transparent", color:"rgba(255,255,255,0.6)", fontSize:13, fontWeight:600, cursor:decisionBusy?"not-allowed":"pointer" }}
-                >
-                  Zurück
-                </button>
+                {(() => {
+                  const enabled = !running && parseFloat(carbs) > 0;
+                  return (
+                    <button
+                      onClick={handleRun}
+                      disabled={!enabled}
+                      style={{
+                        height: 48, borderRadius: 10, border: "none",
+                        background: enabled ? ACCENT : "rgba(79,110,247,0.25)",
+                        color: enabled ? "#fff" : "rgba(255,255,255,0.55)",
+                        fontSize: 14, fontWeight: 700, letterSpacing: "-0.01em",
+                        cursor: enabled ? "pointer" : "not-allowed",
+                        transition: "background 0.2s",
+                        display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
+                      }}
+                    >
+                      {running && (
+                        <span style={{
+                          display: "inline-block", width: 14, height: 14,
+                          border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#fff",
+                          borderRadius: "50%", animation: "engSpin 0.7s linear infinite",
+                        }}/>
+                      )}
+                      {running ? "Berechne…" : "Berechnen →"}
+                    </button>
+                  );
+                })()}
               </div>
-            </>
+            </div>
           )}
-        </div>
-      )}
 
-      {result && (
-        <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-          {/* INPUT SUMMARY */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-            <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, padding:"16px 20px" }}>
-              <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase", marginBottom:6 }}>Input Glucose</div>
-              <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
-                <span style={{ fontSize:28, fontWeight:800, color:"#60A5FA", letterSpacing:"-0.02em" }}>{parseFloat(glucose)||110}</span>
-                <span style={{ fontSize:12, color:"rgba(255,255,255,0.35)" }}>mg/dL</span>
-              </div>
-              <div style={{ fontSize:10, color:"rgba(255,255,255,0.25)", marginTop:4 }}>
-                {(parseFloat(glucose)||110) > 140 ? "elevated" : (parseFloat(glucose)||110) < 80 ? "low" : "in target"}
-              </div>
-            </div>
-            <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, padding:"16px 20px" }}>
-              <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase", marginBottom:6 }}>Input Carbs</div>
-              <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
-                <span style={{ fontSize:28, fontWeight:800, color:ORANGE, letterSpacing:"-0.02em" }}>{parseFloat(carbs)||0}</span>
-                <span style={{ fontSize:12, color:"rgba(255,255,255,0.35)" }}>g</span>
-              </div>
-              <div style={{ fontSize:10, color:"rgba(255,255,255,0.25)", marginTop:4 }}>
-                {(parseFloat(carbs)||0) >= 60 ? "high-carb meal" : (parseFloat(carbs)||0) >= 30 ? "moderate" : "light"}
-              </div>
-            </div>
-          </div>
+          {/* ───────── STEP 3: Deine Empfehlung ───────── */}
+          {stepIndex === 2 && (
+            <div>
+              <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 16, color: "#fff" }}>
+                Deine Empfehlung
+              </h2>
 
-          {/* MAIN RESULT */}
-          <div style={{ background:SURFACE, border:`1px solid ${CONF_COLOR[result.confidence]}30`, borderRadius:16, padding:"28px 28px" }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:16 }}>
-              <div>
-                <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:8 }}>Recommended Dose</div>
-                <div style={{ fontSize:60, fontWeight:900, letterSpacing:"-0.04em", lineHeight:1, color:"#fff" }}>
-                  {result.dose}
-                  <span style={{ fontSize:20, fontWeight:400, color:"rgba(255,255,255,0.4)", marginLeft:6 }}>units</span>
+              {!result ? (
+                // Defensive: should not happen because handleRun gates the
+                // transition on a successful calc, but if state was lost
+                // (e.g. tab switch + reset) give the user a clean way back.
+                <div style={{ ...card, padding: 20, marginBottom: 16 }}>
+                  <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 13, lineHeight: 1.5, marginBottom: 14 }}>
+                    Keine Empfehlung verfügbar. Bitte zurück zu Schritt 2 und neu berechnen.
+                  </div>
+                  <button
+                    onClick={() => setStepIndex(1)}
+                    style={{
+                      padding: "10px 18px", borderRadius: 10,
+                      border: `1px solid ${BORDER}`, background: "transparent",
+                      color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                    }}
+                  >
+                    ← Zurück
+                  </button>
                 </div>
-              </div>
-              <div style={{ textAlign:"right" }}>
-                <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginBottom:8 }}>Confidence</div>
-                <span style={{ padding:"8px 20px", borderRadius:99, fontSize:14, fontWeight:700, background:`${CONF_COLOR[result.confidence]}18`, color:CONF_COLOR[result.confidence], border:`1px solid ${CONF_COLOR[result.confidence]}40` }}>
-                  {result.confidence}
-                </span>
-                <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:6 }}>
-                  {result.source === "historical" ? "Historical data" : result.source === "blended" ? "Blended model" : "ICR formula"}
-                </div>
-              </div>
-            </div>
+              ) : (
+                <>
+                  {/* Result card — dose front-and-center, 32px bold white,
+                      confidence chip + ICR ratio underneath. */}
+                  <div style={{
+                    background: "#0D0D14", border: "1px solid #1C1C28",
+                    borderRadius: 16, padding: 20, marginBottom: 14,
+                  }}>
+                    <div style={{ fontSize: 11, color: "#666680", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700, marginBottom: 8 }}>
+                      Empfohlene Dosis
+                    </div>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 14 }}>
+                      <span style={{ fontSize: 32, fontWeight: 800, color: "#fff", letterSpacing: "-0.03em", lineHeight: 1 }}>
+                        {result.dose}
+                      </span>
+                      <span style={{ fontSize: 14, color: "rgba(255,255,255,0.45)", fontWeight: 600 }}>IE</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 12, flexWrap: "wrap" }}>
+                      <span style={{ color: "rgba(255,255,255,0.55)" }}>ICR: 1:{adaptedICR}</span>
+                      <span style={{
+                        padding: "2px 10px", borderRadius: 99,
+                        fontSize: 10, fontWeight: 700, letterSpacing: "0.05em",
+                        background: `${CONF_COLOR[result.confidence]}22`,
+                        color: CONF_COLOR[result.confidence],
+                        border: `1px solid ${CONF_COLOR[result.confidence]}40`,
+                      }}>
+                        {result.confidence}
+                      </span>
+                      <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 11 }}>
+                        {result.source === "historical" ? "Historische Daten" : result.source === "blended" ? "Blended Modell" : "ICR Formel"}
+                      </span>
+                    </div>
+                  </div>
 
-            <div style={{
-              marginTop:16, padding:"12px 16px",
-              background:"#0D0D14", border:"1px solid #1C1C28",
-              borderRadius:12,
-            }}>
-              <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.08em", color:"#666680", textTransform:"uppercase", marginBottom:6 }}>
-                GPT Reasoning
-              </div>
-              <div style={{ fontSize:13, lineHeight:1.6, color:"#AAAACC" }}>{result.reasoning}</div>
-            </div>
+                  {/* Collapsible GPT reasoning — chevron toggles the body. */}
+                  <div style={{
+                    background: "#0D0D14", border: "1px solid #1C1C28",
+                    borderRadius: 12, marginBottom: 14, overflow: "hidden",
+                  }}>
+                    <button
+                      onClick={() => setReasoningExpanded(v => !v)}
+                      aria-expanded={reasoningExpanded}
+                      aria-controls="gpt-reasoning-body"
+                      style={{
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        width: "100%", padding: "12px 16px",
+                        background: "transparent", border: "none", cursor: "pointer",
+                        color: "#666680", fontSize: 11, fontWeight: 700,
+                        letterSpacing: "0.08em", textTransform: "uppercase",
+                      }}
+                    >
+                      <span>GPT Reasoning</span>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+                        style={{ transition: "transform 0.2s", transform: reasoningExpanded ? "rotate(180deg)" : "rotate(0deg)" }}
+                      >
+                        <polyline points="6 9 12 15 18 9"/>
+                      </svg>
+                    </button>
+                    {reasoningExpanded && (
+                      <div id="gpt-reasoning-body" style={{ padding: "0 16px 14px", fontSize: 13, lineHeight: 1.6, color: "#AAAACC" }}>
+                        {result.reasoning}
+                      </div>
+                    )}
+                  </div>
 
-            <div style={{ marginTop:16, display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
-              {[
-                { label:"Carb Dose", val:`${result.carbDose}u`, sub:`${carbs}g ÷ ${adaptedICR} ICR`, color:ORANGE },
-                { label:"Correction", val:`+${result.correctionDose}u`, sub:`(BG - 110) ÷ 50`, color:ACCENT },
-                { label:"Total", val:`${result.dose}u`, sub:"recommended", color:GREEN },
-              ].map(d => (
-                <div key={d.label} style={{ background:"rgba(255,255,255,0.03)", borderRadius:10, padding:"12px 14px", textAlign:"center" }}>
-                  <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginBottom:4 }}>{d.label}</div>
-                  <div style={{ fontSize:22, fontWeight:800, color:d.color }}>{d.val}</div>
-                  <div style={{ fontSize:10, color:"rgba(255,255,255,0.2)", marginTop:2 }}>{d.sub}</div>
-                </div>
-              ))}
-            </div>
-          </div>
+                  {/* Meal summary line — shows what the user is about to save. */}
+                  <div style={{ marginBottom: 18, fontSize: 12, color: "rgba(255,255,255,0.45)", lineHeight: 1.5, padding: "0 4px" }}>
+                    {(desc.trim() || transcript.trim() || "Mahlzeit")} · {parseFloat(carbs) || 0}g KH
+                  </div>
 
-          {/* ADAPTIVE ICR INFO — read-only display, never written to DB */}
-          {icrSampleSize >= 3 ? (
-            <div style={{ padding:"10px 14px", background:"rgba(255,255,255,0.02)", borderRadius:10, border:`1px solid ${BORDER}`, display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, fontSize:11.5, color:"rgba(255,255,255,0.55)", flexWrap:"wrap" }}>
-              <span>
-                ICR <strong style={{ color:"rgba(255,255,255,0.85)" }}>{adaptedICR}:1</strong>
-                {" — basierend auf "}
-                <strong style={{ color:"rgba(255,255,255,0.85)" }}>{icrSampleSize}</strong>
-                {" Einträgen · Konfidenz "}
-                <strong style={{ color:"rgba(255,255,255,0.85)" }}>{icrConfidence}</strong>
-              </span>
-              {adaptedICR !== 15 && (
-                <span style={{ color: adaptedICR > 15 ? GREEN : ORANGE, fontWeight:700, fontSize:11, whiteSpace:"nowrap" }}>
-                  {adaptedICR > 15 ? "↑ konservativer" : "↓ aggressiver"}
-                </span>
+                  {/* Primary commit + back link. handleWizardSave writes the
+                      meal AND insulin_units = result.dose in one shot, then
+                      resets to Step 1 for the next entry. */}
+                  <button
+                    onClick={handleWizardSave}
+                    disabled={confirming}
+                    style={{
+                      width: "100%", height: 52, borderRadius: 12, border: "none",
+                      background: confirming ? "rgba(79,110,247,0.4)" : ACCENT,
+                      color: "#fff", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
+                      cursor: confirming ? "wait" : "pointer",
+                      marginBottom: 8,
+                      transition: "background 0.2s",
+                    }}
+                  >
+                    {confirming ? "Speichere…" : "✓ Bestätigen & Speichern"}
+                  </button>
+                  <button
+                    onClick={() => setStepIndex(1)}
+                    disabled={confirming}
+                    style={{
+                      width: "100%", height: 36, borderRadius: 8,
+                      border: "none", background: "transparent",
+                      color: "#666680", fontSize: 13, fontWeight: 500,
+                      cursor: confirming ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    ← Nochmal anpassen
+                  </button>
+
+                  {/* Important medical disclaimer — same wording as the legacy result panel. */}
+                  <div style={{ marginTop: 24, padding: "14px 18px", background: "rgba(255,255,255,0.03)", borderRadius: 12, border: `1px solid ${BORDER}` }}>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", lineHeight: 1.6 }}>
+                      <strong style={{ color: "rgba(255,255,255,0.4)" }}>Important:</strong> Glev Engine provides decision support only. Always consult your endocrinologist before adjusting insulin doses. This tool is not a medical device.
+                    </div>
+                  </div>
+                </>
               )}
             </div>
-          ) : (
-            <div style={{ padding:"10px 14px", background:"rgba(255,255,255,0.02)", borderRadius:10, border:`1px solid ${BORDER}`, fontSize:11.5, color:"rgba(255,255,255,0.4)" }}>
-              ICR <strong style={{ color:"rgba(255,255,255,0.6)" }}>15:1</strong> — Standardwert (≥3 Einträge nötig zur Anpassung)
-            </div>
           )}
-
-          {/* SIMILAR MEALS */}
-          {result.similarMeals.length > 0 && (
-            <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, overflow:"hidden" }}>
-              <div style={{ padding:"16px 20px", borderBottom:`1px solid ${BORDER}` }}>
-                <div style={{ fontSize:13, fontWeight:600 }}>Reference Meals ({result.similarMeals.length})</div>
-                <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:2 }}>Historical meals used in this recommendation</div>
-              </div>
-              {result.similarMeals.map(m => {
-                const date = parseDbDate(m.created_at).toLocaleDateString("en",{month:"short",day:"numeric"});
-                return (
-                  <div key={m.id} style={{ padding:"12px 20px", borderBottom:`1px solid ${BORDER}`, display:"grid", gridTemplateColumns:"1fr 60px 60px 70px 80px", gap:12, alignItems:"center", fontSize:12 }}>
-                    <div style={{ color:"rgba(255,255,255,0.65)" }}>{m.input_text.length>45?m.input_text.slice(0,45)+"…":m.input_text}</div>
-                    <div style={{ color:"rgba(255,255,255,0.35)", textAlign:"right" }}>{m.glucose_before}</div>
-                    <div style={{ color:"rgba(255,255,255,0.35)", textAlign:"right" }}>{m.carbs_grams}g</div>
-                    <div style={{ textAlign:"right" }}>{m.insulin_units}u</div>
-                    <div style={{ textAlign:"right" }}><span style={{ padding:"2px 8px", borderRadius:99, fontSize:10, fontWeight:700, background:`${GREEN}18`, color:GREEN, border:`1px solid ${GREEN}30` }}>{date}</span></div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {loading && <div style={{ color:"rgba(255,255,255,0.3)", fontSize:12, textAlign:"center" }}>Loading historical data…</div>}
-
-          <div style={{ padding:"14px 18px", background:"rgba(255,255,255,0.03)", borderRadius:12, border:`1px solid ${BORDER}` }}>
-            <div style={{ fontSize:11, color:"rgba(255,255,255,0.25)", lineHeight:1.6 }}>
-              <strong style={{ color:"rgba(255,255,255,0.4)" }}>Important:</strong> Glev Engine provides decision support only. Always consult your endocrinologist before adjusting insulin doses. This tool is not a medical device.
-            </div>
-          </div>
         </div>
-      )}
-      </div>{/* /left column */}
+        )}
 
-      {!isMobile && (
-        <div style={{ minWidth:0, display:"flex", flexDirection:"column", height:"100%" }}>
-          <EngineChatPanel
-            macros={{
-              carbs:   parseFloat(carbs)   || 0,
-              protein: parseFloat(protein) || 0,
-              fat:     parseFloat(fat)     || 0,
-              fiber:   parseFloat(fiber)   || 0,
-            }}
-            description={desc}
-            onPatch={(p) => {
-              setCarbs(String(p.carbs));
-              setProtein(String(p.protein));
-              setFat(String(p.fat));
-              setFiber(String(p.fiber));
-              if (p.description) setDesc(p.description);
-            }}
-            seed={chatSeed}
-            isMobile={false}
-            expanded={true}
-            parsing={parsing}
-            onToggleExpanded={() => {}}
-          />
-        </div>
-      )}
-      </div>
-      )}
-
-      {tab === "log"         && <EngineLogTab />}
+              {tab === "log"         && <EngineLogTab />}
       {tab === "bolus"       && <InsulinForm />}
       {tab === "exercise"    && <ExerciseForm />}
       {tab === "fingerstick" && <FingerstickLogCard />}
