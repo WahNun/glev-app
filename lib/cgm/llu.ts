@@ -319,6 +319,22 @@ function mapMeasurement(m: LluMeasurement | undefined | null): Reading | null {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
+// Public wrapper around the internal lluLogin() so the credentials API
+// route can verify a user's email/password against LibreLinkUp BEFORE
+// it persists them. Throws with the upstream error message ("notAuthenticated"
+// / "invalid credentials" / etc.) on failure — the route maps that to a
+// 401 so the UI's connect step can show the real cause instead of the
+// user finding out later when "Verbindung testen" finally trips it. The
+// returned `region` may differ from the input if LLU's regional redirect
+// fired during login, so callers should persist that region.
+export async function verifyCredentials(
+  email: string,
+  password: string,
+  region: string
+): Promise<LluLoginResult> {
+  return lluLogin((region || "eu").toLowerCase(), email, password);
+}
+
 export async function setCredentials(
   userId: string,
   args: { email?: string; password?: string; region?: string }
