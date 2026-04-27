@@ -1,17 +1,25 @@
-STATUS: PARTIAL (2/3) — Frage zu #3
+STATUS: DONE (Wizard auf /log) — wartet auf User-Test + Push-Freigabe
 LAST_DONE:
-  #1 Routing-Fix in components/GlevActionSheet.tsx — SUB_OPTIONS aktualisiert: "Insulin loggen" → /log?type=insulin (statt /log), "Exercise loggen" → /log?type=exercise (statt /log). "Mahlzeit loggen" routet weiterhin /log (war SCHON korrekt — Spec lag falsch dass es auf /engine routet). "Glukose messen" bleibt /engine (Spec adressiert nicht).
-  #2 Mobile-Nav-Layout in components/Layout.tsx — Glev-FAB von left:50% → left:37.5% verschoben + Comment ergänzt. Damit sitzt der FAB exakt mittig über dem Spacer-Slot (Slot 2 von 4 in der flex-grid: Dashboard 12.5% / Spacer 37.5% / History 62.5% / Settings 87.5%). Dashboard ↔ FAB = 25% gap, FAB ↔ History = 25% gap → symmetrisch. Vorher überlagerte der FAB bei left:50% das History-Label.
-  tsc --noEmit clean, Workflow restartet.
+  #3 (Option A — halber Schritt): app/(protected)/log/page.tsx komplett refactored zum 3-Step-Wizard.
+  - Pill-Tabs oben: [1 Essen] [2 Makros] [3 Ergebnis] — display-only, KEIN onClick (per Spec)
+  - Nav nur via Zurück/Weiter Buttons (Step 1 hat nur Weiter, Step 3 hat Zurück + Speichern)
+  - Step 1 (Essen): Voice-Mic + AI-Parser-Status + Erkannt-Card mit editable Beschreibung + Vorgeschlagene-Makros-Vorschau
+    Weiter aktiv wenn Transcript ODER Beschreibung ODER irgendwelche Makros vorhanden
+  - Step 2 (Makros): Glukose vorher (mit CGM-Refresh-Button) + Mahlzeit-Zeit + Carbs/Protein/Fett/Ballaststoffe/Kalorien + Beschreibung
+    Weiter aktiv wenn Glukose UND Carbs gefüllt — Hint zeigt warum disabled
+    Alle Labels DE übersetzt (Kohlenhydrate / Protein / Fett / Ballaststoffe / Kalorien)
+  - Step 3 (Ergebnis): Klassifikations-Chip (TYPE_COLORS/TYPE_LABELS, Farb-Coded) + Glev-Empfehlungs-Card (Dose/Konfidenz/Reasoning, auto-trigger beim Step-Wechsel) + editierbares Insulin-Feld (vorgefüllt) + Korrektur-Bolus-Toggle + parent-meal Picker + Speichern + Abbrechen
+  - Voice-Pipeline + AI-Parse + Chat-Korrektur-Routing + CGM-60s-Polling + scheduleAutoFillForMeal + glev:meal-saved Event + ?bolusFor= Deep-Link (springt jetzt auto zu Step 3) — alle erhalten
+  - GPT-Chat-Panel rechts: Steps 1-2 sichtbar, Step 3 ausgeblendet (Final-Summary), Mobile via CSS hidden
+  - WizardNav-Helper-Component für Zurück/Weiter/Speichern (kein Code-Doppel)
+  - saveMeal-Aufruf 1:1 unverändert: alle 5 Macros + glucoseBefore + insulinUnits + mealType + mealTime + relatedMealId + Empty-Eval (lifecycleFor entscheidet)
+  tsc --noEmit clean. Workflow restartet, läuft auf Port 5000.
 
-NEXT (wartet auf User-Bestätigung): #3 Log-Wizard-Rewrite. Spec will /log durch 3-Step Essen/Makros/Ergebnis ersetzen, ABER:
-  (a) Wizard existiert bereits — am /engine, nicht /log (app/(protected)/engine/page.tsx Z. 160+, stepIndex 0/1/2, "Essen / Makros / Ergebnis" Pills, handleWizardSave).
-  (b) Aktuelles /log ist 905-Zeilen-Komplett-Form (Glukose+Insulin+Macros+Meal-Time+Related-Meal+Voice-Pipeline+Glev-Engine-Recommendation). Alle 5 Macro-Felder sind bereits drin und voll gewired.
-  (c) Strikter Food-only-Wizard würde Glukose/Insulin/Time/Related-Meal/Engine-Empfehlung aus /log killen — Insulin-Decision-Support futsch.
-  Drei Optionen für User:
-    A) /engine-Wizard nach /log MOVEN (engine bleibt für Glukose-Pulls, log bekommt vollen Wizard inkl. Insulin)
-    B) /log so lassen, nur Labels Carbs→Kohlenhydrate / Fiber→Ballaststoffe / Fat→Fett auf Deutsch übersetzen
-    C) /log wirklich nuken und mit Food-only-Wizard ersetzen (Insulin-Tracking aus /log fällt weg, müsste an /engine wandern)
+NEXT:
+  a) USER soll testen: /log öffnen → Voice oder Text → Step 1→2→3 → Save → /dashboard Redirect
+  b) Wenn ok: Push nach main (User-Auth erforderlich)
+  c) Danach: /engine cleanen (Wizard-UI raus, nur Glukose/Letzte-Mahlzeit/Score behalten) — ist die zweite Hälfte von Option A, separates Patch
+  d) Action-Sheet Insulin/Exercise Routes: /log?type=insulin und /log?type=exercise zeigen aktuell den Meal-Wizard ohne Sub-Flow für Insulin/Exercise. Falls User pure Insulin/Exercise-Logging direkt vom FAB will, muss /log auf ?type= switchen (oder Routen zurück nach /engine?tab=).
 
-QUESTION: Welche der 3 Optionen für Wizard-Thema (A/B/C)?
-TIMESTAMP: 00:38
+QUESTION: Push nach main jetzt freigeben oder erst manuell auf Replit testen?
+TIMESTAMP: 23:17
