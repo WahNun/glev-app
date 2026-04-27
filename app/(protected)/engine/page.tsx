@@ -11,6 +11,7 @@ import EngineLogTab, { InsulinForm, ExerciseForm } from "@/components/EngineLogT
 import FingerstickLogCard from "@/components/FingerstickLogCard";
 import GlevLogo from "@/components/GlevLogo";
 import EngineChatPanel, { type SeedMessage } from "@/components/EngineChatPanel";
+import { useEngineHeader } from "@/lib/engineHeaderContext";
 import { fetchLatestCgm } from "@/components/CgmFetchButton";
 import { fetchLatestFingerstick, FS_OVERRIDE_WINDOW_MS } from "@/lib/fingerstick";
 import { parseDbTs, parseDbDate, parseLluTs } from "@/lib/time";
@@ -168,10 +169,17 @@ export default function EnginePage() {
   // = not yet saved (default), number = saved with that many IE. The user's
   // explicit "Neues Essen" click clears this and resets the form.
   const [wizardSavedDose, setWizardSavedDose] = useState<number | null>(null);
+  // Tabs-expanded state lives in the global EngineHeaderContext so the
+  // chevron control can render in the mobile app header (oben rechts
+  // next to Live + user icon) instead of inside this page body. We
+  // alias the hook return value to keep the rest of the page readable.
+  const engineHdr = useEngineHeader();
+  const tabsExpanded    = engineHdr.tabsExpanded;
+  const setTabsExpanded = engineHdr.setTabsExpanded;
   // FIX C: Tab strip is collapsed by default to give Step 1's voice/text
-  // input the full vertical real estate. Header shows the active tab label
-  // + chevron; expanding reveals the buttons. Selecting a tab auto-collapses.
-  const [tabsExpanded, setTabsExpanded] = useState(false);
+  // input the full vertical real estate. The chevron control itself now
+  // lives in the global mobile app header (see Layout.tsx); this page
+  // only renders the expanded tab buttons row when tabsExpanded === true.
   // Step 3 GPT Reasoning section is collapsible to keep the result card
   // scannable; user expands by tapping the chevron.
   const [reasoningExpanded, setReasoningExpanded] = useState(false);
@@ -285,6 +293,32 @@ export default function EnginePage() {
       return prev;
     });
   }, [isMobile]);
+
+  // Register the engine page with the global EngineHeaderContext so the
+  // mobile app header can render the chevron tab toggle in the top-right
+  // bar (next to Live + user icon). The activeLabel mirrors the current
+  // tab so the chip always shows what's selected. visible flips to true
+  // on mount and back to false on unmount; Layout also defensively
+  // resets it on route change to handle edge cases.
+  useEffect(() => {
+    const labels: Record<typeof tab, string> = {
+      engine:      "Engine",
+      log:         "Log",
+      bolus:       "Insulin",
+      exercise:    "Übung",
+      fingerstick: "Glukose",
+    };
+    engineHdr.setActiveLabel(labels[tab] ?? "Engine");
+  }, [tab, engineHdr]);
+
+  useEffect(() => {
+    engineHdr.setVisible(true);
+    return () => {
+      engineHdr.setVisible(false);
+      engineHdr.setTabsExpanded(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function startRecording() {
     setVoiceErr(""); setTranscript("");
