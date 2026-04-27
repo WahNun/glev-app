@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { Suspense, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import AppMockupPhone from "@/components/AppMockupPhone";
@@ -44,7 +44,7 @@ function ProSubmitButton() {
  * A/B partner to /beta. No reservation deposit, no seat counter, billing
  * begins on the public launch date (1 July 2026) via a Stripe trial.
  */
-export default function ProPage() {
+function ProContent() {
   const [email, setEmail] = useState("");
   const ctaRef = useRef<HTMLInputElement | null>(null);
   // The form binds directly to the submitProCheckout server action (see
@@ -316,3 +316,19 @@ const PRO_FAQ = [
     a: "In der EU (Supabase Frankfurt). Deutsche DSGVO. Keine Datenweitergabe, keine Werbung.",
   },
 ];
+
+/**
+ * Suspense wrapper required by Next.js 14+ when a client component uses
+ * useSearchParams() — without it the static prerender fails with
+ * "useSearchParams() should be wrapped in a suspense boundary". The
+ * fallback is null because /pro is a "use client" page that hydrates
+ * immediately; there's no meaningful skeleton to show in the brief
+ * server-render gap.
+ */
+export default function ProPage() {
+  return (
+    <Suspense fallback={null}>
+      <ProContent />
+    </Suspense>
+  );
+}

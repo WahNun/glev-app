@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import AppMockupPhone from "@/components/AppMockupPhone";
@@ -47,7 +47,7 @@ function BetaSubmitButton({ isFull }: { isFull: boolean }) {
   return <CTAButton submitting={pending} label={label} />;
 }
 
-export default function BetaPage() {
+function BetaContent() {
   const [email, setEmail] = useState("");
   const [count, setCount] = useState<CountResponse | null>(null);
   const ctaRef = useRef<HTMLInputElement | null>(null);
@@ -359,3 +359,16 @@ const BETA_FAQ = [
     a: "In der EU (Supabase Frankfurt). Deutsche DSGVO. Keine Datenweitergabe, keine Werbung.",
   },
 ];
+
+/**
+ * Suspense wrapper required by Next.js 14+ when a client component uses
+ * useSearchParams() — without it the static prerender fails with
+ * "useSearchParams() should be wrapped in a suspense boundary".
+ */
+export default function BetaPage() {
+  return (
+    <Suspense fallback={null}>
+      <BetaContent />
+    </Suspense>
+  );
+}

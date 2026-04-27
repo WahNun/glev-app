@@ -1,0 +1,68 @@
+Bitte diese Änderungen in zwei Dateien umsetzen: der Beta-Landingpage und der Pro-Landingpage. Keine neuen Komponenten, keine Architekturänderungen — nur Text und eine neue Feature-Card.
+
+DATEI 1 — Beta-Landingpage (app/(public)/beta/page.tsx oder ähnlich)
+
+H1 ersetzen:
+
+Alt: Typ 1. Neu gedacht.
+Neu: Einmal sprechen. Makros berechnet. CGM verknüpft. (mit Zeilenumbrüchen nach jedem Satz, wie die anderen Headlines auf der Seite formatiert sind)
+
+
+Subline (der <p> direkt unter dem H1) ersetzen:
+
+Alt: Der sprachgesteuerte Essens-Tracker für Typ-1-Diabetiker. Beta startet im Juli 2026.
+Neu: Glev ist der Meal-Tracker für Typ-1-Diabetiker, der mitdenkt — Spracheingabe, KI-Makros, CGM live.
+
+
+Counter-Text ersetzen (der Text der die verfügbaren Plätze anzeigt):
+
+Alt: Noch X von 500 Beta-Plätzen verfügbar (oder ähnliche Formulierung)
+Neu: Limitiert auf 500 Beta-Plätze. — die dynamische Zahl komplett entfernen
+
+
+Feature H3 ersetzen:
+
+Alt: Sprich, statt zu tippen → Neu: Sprach-Input, kein Formular
+Alt: Dokumentation, kein Coach → Neu: Du behältst die Kontrolle
+
+
+Feature-Text nach Dokumentation, kein Coach ersetzen:
+
+Alt: Glev rechnet keine Insulin-Dosen. Alles bleibt eine Tracking-App — Therapie macht der Arzt.
+Neu: Glev dokumentiert. Du und dein Arzt entscheiden.
+
+
+
+
+DATEI 2 — Pro-Landingpage (app/(public)/pro/page.tsx oder ähnlich)
+
+H1 — identisch wie Beta:
+
+Neu: Einmal sprechen. Makros berechnet. CGM verknüpft.
+
+
+Subline ersetzen:
+
+Alt: Der sprachgesteuerte Essens-Tracker für Typ-1-Diabetiker. Direkter Zugang ab dem 1. Juli 2026.
+Neu: Sprach-Log. KI-Makros. CGM live. In unter 10 Sekunden dokumentiert.
+
+
+Feature H3 — identisch wie Beta:
+
+Sprich, statt zu tippen → Sprach-Input, kein Formular
+Dokumentation, kein Coach → Du behältst die Kontrolle
+
+
+Feature-Text nach Dokumentation, kein Coach — identisch wie Beta:
+
+Neu: Glev dokumentiert. Du und dein Arzt entscheiden.
+
+
+Neue 4. Feature-Card hinzufügen — direkt nach Du behältst die Kontrolle, mit exakt demselben Komponenten-Pattern wie die anderen drei Cards:
+
+Dot-Farbe: #FF2D78 (Pink)
+H3: Arztbericht als PDF
+Text: Dein Tracking — fertig aufbereitet für das nächste Arztgespräch. Automatisch generiert.
+
+
+Cross-Sell-Text entfernen — die Zeile Lieber niedriger Einstieg + Lock-in? glev.app/beta für €19 Reservierung aus dem Seiteninhalt entfernen (kann in die FAQ wenn gewünscht, sonst ganz raus).
