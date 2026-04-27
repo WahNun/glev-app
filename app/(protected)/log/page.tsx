@@ -530,11 +530,35 @@ export default function LogPage() {
         @keyframes spin   { to { transform: rotate(360deg) } }
         .mic-btn:hover:not(:disabled) { transform: scale(1.04); }
         .log-grid { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 18px; align-items: start; }
-        @media (max-width: 900px) {
-          .log-grid { grid-template-columns: 1fr; }
-          .log-grid .chat-col { position: static !important; max-height: 480px; display: none; }
-        }
         .log-grid .chat-col { position: sticky; top: 16px; }
+        /* Mobile: stack vertically AND let the chat panel flex-grow to fill
+           every remaining pixel between the AI Parser chip and the bottom
+           nav bar. The 240px subtraction accounts for the workspace's
+           top chrome (logo bar + artifact-selector chip ≈ 116px), the
+           page H1 + pill tabs (≈ 60px), the footer nav with its safe-area
+           padding (≈ 80px), and a small 24px slack so we never undercut
+           the viewport on devices with notches. The !important overrides
+           are needed because the chat-col root carries inline desktop
+           sizes (height: calc(100vh - 180px), maxHeight: 760, …) which
+           would otherwise win the cascade. */
+        @media (max-width: 900px) {
+          .log-grid {
+            display: flex !important;
+            flex-direction: column !important;
+            grid-template-columns: 1fr;
+            gap: 12px !important;
+            min-height: calc(100dvh - 240px) !important;
+          }
+          .log-grid > div:first-child { flex: 0 0 auto !important; }
+          .log-grid .chat-col {
+            position: static !important;
+            height: auto !important;
+            max-height: none !important;
+            min-height: 240px !important;
+            flex: 1 1 auto !important;
+            display: flex !important;
+          }
+        }
       `}</style>
 
       <div style={{ marginBottom:6 }}>
@@ -545,9 +569,12 @@ export default function LogPage() {
           They surface progress through the wizard; navigation happens
           exclusively via the Zurück/Weiter buttons at the bottom of each
           step. Active pill: filled with ACCENT. Inactive: transparent
-          background, ACCENT border. */}
+          background, ACCENT border.
+          marginTop creates visible breathing room from the workspace
+          chrome above (artifact-selector "Engine" chip) — without it
+          the pills look glued to that chip on narrow viewports. */}
       <div role="tablist" aria-label="Wizard-Schritte" style={{
-        display: "flex", gap: 8, padding: "4px 0",
+        display: "flex", gap: 8, padding: "4px 0", marginTop: 14,
       }}>
         {STEP_LABELS.map((label, i) => {
           const active = i === stepIndex;

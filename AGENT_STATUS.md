@@ -1,25 +1,20 @@
-STATUS: DONE (Wizard auf /log) — wartet auf User-Test + Push-Freigabe
+STATUS: DONE (Mobile-Layout-Fixes /log) — Hot-reload aktiv, kein Restart nötig
 LAST_DONE:
-  #3 (Option A — halber Schritt): app/(protected)/log/page.tsx komplett refactored zum 3-Step-Wizard.
-  - Pill-Tabs oben: [1 Essen] [2 Makros] [3 Ergebnis] — display-only, KEIN onClick (per Spec)
-  - Nav nur via Zurück/Weiter Buttons (Step 1 hat nur Weiter, Step 3 hat Zurück + Speichern)
-  - Step 1 (Essen): Voice-Mic + AI-Parser-Status + Erkannt-Card mit editable Beschreibung + Vorgeschlagene-Makros-Vorschau
-    Weiter aktiv wenn Transcript ODER Beschreibung ODER irgendwelche Makros vorhanden
-  - Step 2 (Makros): Glukose vorher (mit CGM-Refresh-Button) + Mahlzeit-Zeit + Carbs/Protein/Fett/Ballaststoffe/Kalorien + Beschreibung
-    Weiter aktiv wenn Glukose UND Carbs gefüllt — Hint zeigt warum disabled
-    Alle Labels DE übersetzt (Kohlenhydrate / Protein / Fett / Ballaststoffe / Kalorien)
-  - Step 3 (Ergebnis): Klassifikations-Chip (TYPE_COLORS/TYPE_LABELS, Farb-Coded) + Glev-Empfehlungs-Card (Dose/Konfidenz/Reasoning, auto-trigger beim Step-Wechsel) + editierbares Insulin-Feld (vorgefüllt) + Korrektur-Bolus-Toggle + parent-meal Picker + Speichern + Abbrechen
-  - Voice-Pipeline + AI-Parse + Chat-Korrektur-Routing + CGM-60s-Polling + scheduleAutoFillForMeal + glev:meal-saved Event + ?bolusFor= Deep-Link (springt jetzt auto zu Step 3) — alle erhalten
-  - GPT-Chat-Panel rechts: Steps 1-2 sichtbar, Step 3 ausgeblendet (Final-Summary), Mobile via CSS hidden
-  - WizardNav-Helper-Component für Zurück/Weiter/Speichern (kein Code-Doppel)
-  - saveMeal-Aufruf 1:1 unverändert: alle 5 Macros + glucoseBefore + insulinUnits + mealType + mealTime + relatedMealId + Empty-Eval (lifecycleFor entscheidet)
-  tsc --noEmit clean. Workflow restartet, läuft auf Port 5000.
+  3 Mobile-Layout-Fixes für /log (Step 1):
+  #1 Pills weiter weg vom Engine-Chip — marginTop:14 auf den Pill-Tab-Container hinzugefügt. Vorher klebten [1 Essen | 2 Makros | 3 Ergebnis] direkt unter dem Workspace-Artifact-Chip "Engine". Jetzt 14px Luft + Comment.
+  #2 Chat-Panel auf Mobile sichtbar (vorher hatte ich display:none gesetzt — User will Chat aber sehen).
+  #3 Chat-Panel adaptiv: füllt jetzt den ganzen Raum zwischen AI-Parser-Chip und Bottom-Footer-Nav.
+     - .log-grid auf Mobile: display:flex, flex-direction:column, min-height:calc(100dvh - 240px) — die 240px decken Workspace-Header (~116) + Page-H1+Pills (~60) + Footer-Nav mit Safe-Area (~80) + 24px Slack für Notch-Devices.
+     - .log-grid > div:first-child (left col): flex:0 0 auto — nimmt nur Natural-Height, der Rest geht an chat-col.
+     - .chat-col auf Mobile: position:static, height:auto, max-height:none, min-height:240px (Floor), flex:1 1 auto, display:flex.
+     - !important nötig weil chat-col Inline-Styles für Desktop trägt (height:calc(100vh-180px), maxHeight:760, minHeight:420) die sonst die Cascade gewinnen.
+     - Nutzt 100dvh statt 100vh wegen iOS Safari URL-Bar-Verhalten.
+  tsc clean.
 
 NEXT:
-  a) USER soll testen: /log öffnen → Voice oder Text → Step 1→2→3 → Save → /dashboard Redirect
-  b) Wenn ok: Push nach main (User-Auth erforderlich)
-  c) Danach: /engine cleanen (Wizard-UI raus, nur Glukose/Letzte-Mahlzeit/Score behalten) — ist die zweite Hälfte von Option A, separates Patch
-  d) Action-Sheet Insulin/Exercise Routes: /log?type=insulin und /log?type=exercise zeigen aktuell den Meal-Wizard ohne Sub-Flow für Insulin/Exercise. Falls User pure Insulin/Exercise-Logging direkt vom FAB will, muss /log auf ?type= switchen (oder Routen zurück nach /engine?tab=).
+  a) USER testen auf Replit-Preview (Hot-Reload sollte Änderungen sofort zeigen — Browser hard-refresh falls nicht)
+  b) Falls Layout passt: Push nach main (User-Auth erforderlich)
+  c) Restschritte aus Option A bleiben offen: /engine cleanen + /log?type=insulin/exercise Sub-Flow
 
-QUESTION: Push nach main jetzt freigeben oder erst manuell auf Replit testen?
-TIMESTAMP: 23:17
+QUESTION: Layout jetzt richtig auf Handy? Push freigeben?
+TIMESTAMP: 23:25
