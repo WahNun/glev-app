@@ -22,6 +22,16 @@ interface LatestResponse {
   current: { value: number | null; unit: string; timestamp: string | null; trend: string } | null;
 }
 
+// /api/cgm/glucose returns Junction state: connected = profile.junction_user_id
+// is set; glucose is the last reading in mg/dL (already converted from mmol/L
+// by the route). Failures return { connected: false } silently.
+interface JunctionStateResponse {
+  connected: boolean;
+  glucose: number | null;
+  timestamp: string | null;
+  trend?: string | null;
+}
+
 const card: React.CSSProperties = {
   background: SURFACE,
   border: `1px solid ${BORDER}`,
@@ -66,6 +76,14 @@ export default function CgmSettingsCard() {
 
   const [disconnecting, setDisconnecting] = useState(false);
 
+  // Junction (LibreView via Vital→Junction Link) is independent of LibreLinkUp.
+  // Both providers can be connected simultaneously and the engine page reads
+  // from each independently (LLU via /api/cgm/latest, Junction via
+  // /api/cgm/glucose). The dropdown lets the user pick which to set up.
+  const [junctionState, setJunctionState] = useState<JunctionStateResponse | null>(null);
+  const [junctionConnecting, setJunctionConnecting] = useState(false);
+  const [junctionMessage, setJunctionMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+
   const loadStatus = useCallback(async () => {
     setLoadingStatus(true);
     setStatusError("");
@@ -85,9 +103,54 @@ export default function CgmSettingsCard() {
     }
   }, []);
 
+  // Junction state fetcher — silent on error (the route itself returns
+  // { connected: false } for any failure, so 5xx here is genuine network/auth
+  // trouble; we treat as disconnected and let the user retry via the form).
+  const loadJunctionState = useCallback(async () => {
+    try {
+      const res = await fetch("/api/cgm/glucose", { cache: "no-store" });
+      if (!res.ok) {
+        setJunctionState({ connected: false, glucose: null, timestamp: null });
+        return;
+      }
+      const data = (await res.json()) as JunctionStateResponse;
+      setJunctionState(data);
+    } catch {
+      setJunctionState({ connected: false, glucose: null, timestamp: null });
+    }
+  }, []);
+
   useEffect(() => {
     void loadStatus();
-  }, [loadStatus]);
+    void loadJunctionState();
+  }, [loadStatus, loadJunctionState]);
+
+  // Junction OAuth callback handler — when user returns from Junction's hosted
+  // Link flow, the redirect lands at /settings?cgm=connected. Refresh state,
+  // show success, then clean the URL so a refresh doesn't re-trigger the toast.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const flag = params.get("cgm");
+    if (flag === "connected") {
+      setCgmType("libreview-junction");
+      setShowForm(true);
+      setJunctionMessage({ kind: "success", text: "LibreView verbunden — Glev liest jetzt deine Werte." });
+      void loadJunctionState();
+      const url = new URL(window.location.href);
+      url.searchParams.delete("cgm");
+      window.history.replaceState({}, "", url.toString());
+    } else if (flag === "error") {
+      const detail = params.get("detail") || "Unbekannter Fehler";
+      setCgmType("libreview-junction");
+      setShowForm(true);
+      setJunctionMessage({ kind: "error", text: `LibreView-Verbindung abgebrochen: ${detail}` });
+      const url = new URL(window.location.href);
+      url.searchParams.delete("cgm");
+      url.searchParams.delete("detail");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, [loadJunctionState]);
 
   function validateEmail(s: string) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
@@ -151,6 +214,45 @@ export default function CgmSettingsCard() {
       setTestResult({ ok: false, msg: err instanceof Error ? err.message : "Fehler" });
     } finally {
       setTesting(false);
+    }
+  }
+
+  // Junction connect — POSTs to /api/cgm/connect (which creates/recovers the
+  // Junction user, requests a link_token, and returns { link_url }), then
+  // redirects the browser to Junction's hosted Link flow. On return the
+  // useEffect above handles ?cgm=connected. Errors include the upstream
+  // detail (e.g. {"detail":"invalid token"}) so the user sees the actual cause.
+  async function handleJunctionConnect() {
+    setJunctionConnecting(true);
+    setJunctionMessage(null);
+    try {
+      const res = await fetch("/api/cgm/connect", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        cache: "no-store",
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        link_url?: string;
+        error?: string;
+        detail?: unknown;
+      };
+      if (!res.ok || !body.link_url) {
+        const detailText =
+          typeof body.detail === "string"
+            ? body.detail
+            : body.detail
+            ? JSON.stringify(body.detail)
+            : "";
+        const msg = body.error || `Fehler ${res.status}`;
+        throw new Error(detailText ? `${msg}: ${detailText}` : msg);
+      }
+      window.location.href = body.link_url;
+    } catch (err) {
+      setJunctionMessage({
+        kind: "error",
+        text: err instanceof Error ? err.message : "Verbindung fehlgeschlagen",
+      });
+      setJunctionConnecting(false);
     }
   }
 
@@ -423,6 +525,7 @@ export default function CgmSettingsCard() {
                 style={inp}
               >
                 <option value="librelinkup">LibreLinkUp</option>
+                <option value="libreview-junction">LibreView (Junction)</option>
                 <option value="dexcom" disabled>Dexcom (coming soon)</option>
                 <option value="nightscout" disabled>Nightscout (coming soon)</option>
               </select>
@@ -467,34 +570,102 @@ export default function CgmSettingsCard() {
                     <option value="US">US</option>
                   </select>
                 </div>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  style={{
+                    padding: "12px 18px",
+                    borderRadius: 12,
+                    border: "none",
+                    cursor: submitting ? "wait" : "pointer",
+                    background: `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
+                    color: "#fff",
+                    fontSize: 14,
+                    fontWeight: 700,
+                    boxShadow: `0 4px 20px ${ACCENT}40`,
+                    opacity: submitting ? 0.6 : 1,
+                    marginTop: 4,
+                  }}
+                >
+                  {submitting ? "Verbinde…" : "Speichern & verbinden"}
+                </button>
+                {formError && (
+                  <div style={{ fontSize: 13, color: PINK, marginTop: 4 }}>{formError}</div>
+                )}
+                {formSuccess && (
+                  <div style={{ fontSize: 13, color: GREEN, marginTop: 4 }}>{formSuccess}</div>
+                )}
               </>
             )}
 
-            <button
-              type="submit"
-              disabled={submitting || cgmType !== "librelinkup"}
-              style={{
-                padding: "12px 18px",
-                borderRadius: 12,
-                border: "none",
-                cursor: submitting ? "wait" : "pointer",
-                background: `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
-                color: "#fff",
-                fontSize: 14,
-                fontWeight: 700,
-                boxShadow: `0 4px 20px ${ACCENT}40`,
-                opacity: submitting || cgmType !== "librelinkup" ? 0.6 : 1,
-                marginTop: 4,
-              }}
-            >
-              {submitting ? "Verbinde…" : "Speichern & verbinden"}
-            </button>
-
-            {formError && (
-              <div style={{ fontSize: 13, color: PINK, marginTop: 4 }}>{formError}</div>
-            )}
-            {formSuccess && (
-              <div style={{ fontSize: 13, color: GREEN, marginTop: 4 }}>{formSuccess}</div>
+            {cgmType === "libreview-junction" && (
+              <>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "rgba(255,255,255,0.55)",
+                    lineHeight: 1.6,
+                    background: "rgba(255,255,255,0.03)",
+                    border: `1px solid ${BORDER}`,
+                    borderRadius: 10,
+                    padding: "12px 14px",
+                  }}
+                >
+                  Verbinde dein LibreView-Konto über Junction. Du wirst kurz auf
+                  die Junction-Seite weitergeleitet, meldest dich dort mit deinen
+                  LibreView-Zugangsdaten an, und kommst danach zurück. Glev liest
+                  dann deinen aktuellen Glukosewert automatisch in den Engine-Tab.
+                </div>
+                {junctionState?.connected && junctionState.glucose != null && (
+                  <div
+                    style={{
+                      fontSize: 13,
+                      color: GREEN,
+                      background: `${GREEN}10`,
+                      border: `1px solid ${GREEN}30`,
+                      borderRadius: 10,
+                      padding: "10px 14px",
+                    }}
+                  >
+                    ✓ Verbunden — letzter Wert: {junctionState.glucose} mg/dL
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={handleJunctionConnect}
+                  disabled={junctionConnecting}
+                  style={{
+                    padding: "12px 18px",
+                    borderRadius: 12,
+                    border: "none",
+                    cursor: junctionConnecting ? "wait" : "pointer",
+                    background: `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
+                    color: "#fff",
+                    fontSize: 14,
+                    fontWeight: 700,
+                    boxShadow: `0 4px 20px ${ACCENT}40`,
+                    opacity: junctionConnecting ? 0.6 : 1,
+                    marginTop: 4,
+                  }}
+                >
+                  {junctionConnecting
+                    ? "Verbinde…"
+                    : junctionState?.connected
+                    ? "LibreView neu verbinden"
+                    : "LibreView verbinden"}
+                </button>
+                {junctionMessage && (
+                  <div
+                    style={{
+                      fontSize: 13,
+                      color: junctionMessage.kind === "success" ? GREEN : PINK,
+                      marginTop: 4,
+                    }}
+                  >
+                    {junctionMessage.text}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </form>
