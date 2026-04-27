@@ -456,15 +456,10 @@ export default function EnginePage() {
         // viewport too aggressively.
         chatPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       }, 300);
-      // Wizard auto-advance: if the user is still on Step 1 ("Was hast du
-      // gegessen?"), bump to Step 2 ("Makros prüfen") 800 ms after the
-      // macros land so they perceive "fields fill → screen swaps". The
-      // functional update guards against back-jumping if the user manually
-      // navigated forward during the wait, or if voice was triggered while
-      // already in the macro/result step (e.g. correcting a meal).
-      setTimeout(() => {
-        setStepIndex(prev => prev === 0 ? 1 : prev);
-      }, 800);
+      // No auto-advance: the user explicitly asked to stay on Step 1 after
+      // the parse so they can read the chat, push back on the AI, or tweak
+      // the form before committing. Step 1 → Step 2 is now driven by the
+      // explicit "Weiter zu Makros prüfen →" button rendered below the chat.
     } catch (e) {
       // eslint-disable-next-line no-console
       console.log("[PERF voice/engine] FAILED after:", Date.now() - tStop, "ms");
@@ -1293,11 +1288,11 @@ export default function EnginePage() {
                   }}
                   description={desc}
                   onPatch={(patch) => {
-                    // AI returned macros — fill the form and (if any
-                    // macro came back populated) auto-advance to Step 2,
-                    // mirroring the voice path. Pure questions where
-                    // the AI returns zero macros leave the user on
-                    // Step 1 to keep chatting.
+                    // AI returned macros — fill the form silently. We do
+                    // NOT auto-advance: the user explicitly wants to read
+                    // the chat reply and confirm before moving to Step 2.
+                    // The "Weiter →" button below the chat handles the
+                    // hand-off.
                     setCarbs(String(patch.carbs));
                     setProtein(String(patch.protein));
                     setFat(String(patch.fat));
@@ -1306,15 +1301,7 @@ export default function EnginePage() {
                     const hasMacros =
                       patch.carbs > 0 || patch.protein > 0 ||
                       patch.fat > 0   || patch.fiber > 0;
-                    if (hasMacros) {
-                      void handlePullCgm();
-                      // Only auto-advance if the user is still on Step 1.
-                      // Without this guard, a follow-up AI message arriving
-                      // while the user already navigated back/forward would
-                      // jerk them back to Step 2 — which felt buggy. Mirrors
-                      // the voice-path guard at line ~465.
-                      setStepIndex(prev => prev === 0 ? 1 : prev);
-                    }
+                    if (hasMacros) void handlePullCgm();
                   }}
                   seed={chatSeed}
                   isMobile={isMobile}
@@ -1324,6 +1311,39 @@ export default function EnginePage() {
                   hasUsedVoice={hasUsedVoice}
                 />
               </div>
+              {(() => {
+                const anyMacro =
+                  (Number(carbs)   || 0) > 0 ||
+                  (Number(protein) || 0) > 0 ||
+                  (Number(fat)     || 0) > 0 ||
+                  (Number(fiber)   || 0) > 0;
+                const ready = hasUsedVoice || anyMacro;
+                if (!ready) return null;
+                return (
+                  <button
+                    type="button"
+                    onClick={() => setStepIndex(1)}
+                    style={{
+                      display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
+                      width: "100%", maxWidth: 360, height: 48, borderRadius: 14,
+                      background: `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
+                      border: "none", color: "#fff",
+                      fontSize: 14, fontWeight: 700, letterSpacing: "-0.01em",
+                      cursor: "pointer",
+                      boxShadow: `0 4px 20px ${ACCENT}40`,
+                      WebkitTapHighlightColor: "transparent",
+                      marginTop: 6,
+                    }}
+                    aria-label="Weiter zu Schritt 2: Makros prüfen"
+                  >
+                    Weiter zu Makros prüfen
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <line x1="5" y1="12" x2="19" y2="12"/>
+                      <polyline points="12 5 19 12 12 19"/>
+                    </svg>
+                  </button>
+                );
+              })()}
             </div>
           )}
 
