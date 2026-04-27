@@ -925,28 +925,14 @@ export default function EnginePage() {
 
   return (
     <div style={{ maxWidth: isMobile || tab !== "engine" ? 800 : 1200, margin:"0 auto" }}>
-      <div style={{ marginBottom:28 }}>
-        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
-          <GlevLogo size={32} />
-          <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em" }}>Glev Engine</h1>
-        </div>
-        <p style={{ color:"rgba(255,255,255,0.35)", fontSize:14 }}>
-          {tab === "engine"
-            ? "AI-powered insulin recommendations from your personal dosing history."
-            : tab === "bolus"
-            ? "Standalone Bolus- und Basal-Dosen dokumentieren. Glev rechnet nichts."
-            : tab === "fingerstick"
-            ? "Manueller Fingerstick — überschreibt CGM-Werte ≤ 5 min für die Engine."
-            : tab === "exercise"
-            ? "Sport-Sessions dokumentieren — Glev verknüpft sie mit Glukose-Reaktionen."
-            : "Insulin- und Exercise-Logs sowie manuelle Glukose-Werte dokumentieren."}
-        </p>
-      </div>
-
-      {/* FIX C: Collapsible tab strip. Default = collapsed (just a header
-          chip showing the active tab + chevron). Click header to expand
-          and see all buttons. Selecting a tab auto-collapses again so
-          Step 1's voice/input area gets max vertical real estate. */}
+      {/* The previous "Glev Engine" h1 + subtitle block was removed per
+          UX request — page identification now comes from the global app
+          header (logo top-left) and the tab chip (top-right chevron),
+          so the chat panel can sit immediately under the header without
+          wasting vertical space. Tabs are toggled via the chevron in
+          the global mobile header (see Layout.tsx). On desktop where
+          there is no global mobile header, we still render an in-page
+          toggle so the tab strip remains reachable. */}
       {(() => {
         const tabsCfg = isMobile
           ? [
@@ -961,37 +947,45 @@ export default function EnginePage() {
               { id:"fingerstick" as const, label:"Glukose" },
             ];
         const activeLabel = tabsCfg.find(t => t.id === tab)?.label ?? "Engine";
+        // Mobile: the chevron lives in the global header — render only
+        // the expanded tab buttons row when tabsExpanded is true, with
+        // zero top margin so it sits flush below the app header.
+        // Desktop: keep the in-page toggle since the desktop sidebar
+        // doesn't host the chevron.
         return (
-          <div style={{ marginBottom: 24 }}>
-            <button
-              type="button"
-              onClick={() => setTabsExpanded(v => !v)}
-              aria-expanded={tabsExpanded}
-              aria-controls="engine-tabs-body"
-              style={{
-                display:"flex", alignItems:"center", justifyContent:"space-between",
-                width:"100%", padding:"10px 14px",
-                background:"#0D0D12", border:`1px solid ${BORDER}`,
-                borderRadius:12, cursor:"pointer",
-                color: ACCENT, fontSize: 13, fontWeight: 700, letterSpacing:"-0.01em",
-                transition:"background 0.15s",
-              }}
-            >
-              <span>{activeLabel}</span>
-              <svg
-                width="16" height="16" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                aria-hidden="true"
-                style={{ transition:"transform 0.2s", transform: tabsExpanded ? "rotate(180deg)" : "rotate(0deg)" }}
+          <div style={{ marginBottom: tabsExpanded || !isMobile ? 16 : 0 }}>
+            {!isMobile && (
+              <button
+                type="button"
+                onClick={() => setTabsExpanded(!tabsExpanded)}
+                aria-expanded={tabsExpanded}
+                aria-controls="engine-tabs-body"
+                style={{
+                  display:"flex", alignItems:"center", justifyContent:"space-between",
+                  width:"100%", padding:"10px 14px",
+                  background:"#0D0D12", border:`1px solid ${BORDER}`,
+                  borderRadius:12, cursor:"pointer",
+                  color: ACCENT, fontSize: 13, fontWeight: 700, letterSpacing:"-0.01em",
+                  transition:"background 0.15s",
+                }}
               >
-                <polyline points="6 9 12 15 18 9"/>
-              </svg>
-            </button>
+                <span>{activeLabel}</span>
+                <svg
+                  width="16" height="16" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                  aria-hidden="true"
+                  style={{ transition:"transform 0.2s", transform: tabsExpanded ? "rotate(180deg)" : "rotate(0deg)" }}
+                >
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </button>
+            )}
             {tabsExpanded && (
               <div
                 id="engine-tabs-body"
                 style={{
-                  display:"flex", width:"100%", gap:4, marginTop:6,
+                  display:"flex", width:"100%", gap:4,
+                  marginTop: isMobile ? 0 : 6,
                   background:"#0D0D12", border:`1px solid ${BORDER}`,
                   borderRadius:12, padding:4, boxSizing:"border-box",
                 }}
