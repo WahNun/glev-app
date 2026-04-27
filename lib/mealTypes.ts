@@ -5,12 +5,13 @@ export const PALETTE = {
   PURPLE: "#A855F7",
 } as const;
 
-export type MealType = "FAST_CARBS" | "HIGH_PROTEIN" | "HIGH_FAT" | "BALANCED";
+export type MealType = "FAST_CARBS" | "HIGH_PROTEIN" | "HIGH_FAT" | "HIGH_FIBER" | "BALANCED";
 
 export const TYPE_COLORS: Record<string, string> = {
   FAST_CARBS:   PALETTE.ORANGE,
   HIGH_PROTEIN: PALETTE.BLUE,
   HIGH_FAT:     PALETTE.PURPLE,
+  HIGH_FIBER:   "#4DB6AC",
   BALANCED:     PALETTE.GREEN,
 };
 

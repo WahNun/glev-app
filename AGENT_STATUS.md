@@ -1,5 +1,5 @@
 STATUS: DONE
-LAST_DONE: 5. Mahlzeit-Klasse HIGH_FIBER (fiber>=8g) hinzugefügt — lib/meals.ts classifyMeal + lib/ai/systemPrompt.ts (Reihenfolge: FAST_CARBS → HIGH_FAT → HIGH_PROTEIN → HIGH_FIBER → BALANCED).
+LAST_DONE: HIGH_FIBER-Farbe (#4DB6AC) zu lib/mealTypes.ts → TYPE_COLORS hinzugefügt + MealType-Union erweitert. BALANCED war bereits #22D3A0 (PALETTE.GREEN), keine Änderung nötig.
 NEXT: Nichts geplant — auf nächste Anweisung warten.
-QUESTION:
-TIMESTAMP: 23:22
+QUESTION: Soll ich später auch TYPE_LABELS / TYPE_SHORT / TYPE_EXPLAIN für HIGH_FIBER ergänzen? Aktuell fallen sie auf "high fiber" / "HI" / "" zurück.
+TIMESTAMP: 23:25
