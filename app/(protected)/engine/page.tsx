@@ -1094,34 +1094,130 @@ export default function EnginePage() {
 
           {/* STEP INDICATOR — three dots + connectors at top, labels below.
               Active dot = ACCENT (#4F6EF7), past dots filled too, future dots
-              #2A2A36 muted. Connector line between dots fills as user advances. */}
+              #2A2A36 muted. Connector line between dots fills as user advances.
+              Arrow buttons LEFT and RIGHT of the dots row let the user move
+              between steps manually — appear from Step 2 onwards (i.e. once
+              the AI macro auto-advance has fired) so Step 1 stays a clean
+              "speak / chat" surface with no extra controls. Both arrows are
+              always rendered (visibility:hidden when not applicable) so the
+              dots never shift horizontally when the buttons appear / hide. */}
           <div style={{ marginBottom: 28 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "center" }} role="list" aria-label="Wizard-Schritte">
-              {[0, 1, 2].map((i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }} role="listitem">
-                  <div
-                    aria-current={i === stepIndex ? "step" : undefined}
-                    aria-label={`Schritt ${i + 1} von 3`}
-                    style={{
-                      width: 32, height: 32, borderRadius: 16,
-                      background: i <= stepIndex ? ACCENT : "#2A2A36",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 13, fontWeight: 700,
-                      color: i <= stepIndex ? "#fff" : "rgba(255,255,255,0.4)",
-                      transition: "background 0.2s, color 0.2s",
-                    }}
-                  >
-                    {i + 1}
-                  </div>
-                  {i < 2 && (
-                    <div style={{
-                      width: 56, height: 2,
-                      background: i < stepIndex ? ACCENT : "#2A2A36",
-                      transition: "background 0.2s",
-                    }}/>
-                  )}
-                </div>
-              ))}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 12,
+              }}
+            >
+              {(() => {
+                const showNav = stepIndex >= 1;
+                const canBack = stepIndex > 0;
+                const canFwd = stepIndex < 2;
+                const navBtn = (dir: "back" | "fwd") => {
+                  const active =
+                    showNav && (dir === "back" ? canBack : canFwd);
+                  return (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setStepIndex((prev) => {
+                          if (dir === "back" && prev > 0)
+                            return (prev - 1) as 0 | 1 | 2;
+                          if (dir === "fwd" && prev < 2)
+                            return (prev + 1) as 0 | 1 | 2;
+                          return prev;
+                        })
+                      }
+                      disabled={!active}
+                      aria-label={
+                        dir === "back" ? "Vorheriger Schritt" : "Nächster Schritt"
+                      }
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 18,
+                        background: "transparent",
+                        border: `1px solid ${
+                          active ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.06)"
+                        }`,
+                        color: active
+                          ? "rgba(255,255,255,0.75)"
+                          : "rgba(255,255,255,0.18)",
+                        cursor: active ? "pointer" : "default",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        visibility: showNav ? "visible" : "hidden",
+                        transition:
+                          "color 0.15s, border-color 0.15s, background 0.15s",
+                        WebkitTapHighlightColor: "transparent",
+                        flexShrink: 0,
+                        padding: 0,
+                      }}
+                    >
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        {dir === "back" ? (
+                          <polyline points="15 18 9 12 15 6" />
+                        ) : (
+                          <polyline points="9 18 15 12 9 6" />
+                        )}
+                      </svg>
+                    </button>
+                  );
+                };
+                return (
+                  <>
+                    {navBtn("back")}
+                    <div
+                      style={{ display: "flex", alignItems: "center", gap: 10 }}
+                      role="list"
+                      aria-label="Wizard-Schritte"
+                    >
+                      {[0, 1, 2].map((i) => (
+                        <div
+                          key={i}
+                          style={{ display: "flex", alignItems: "center", gap: 10 }}
+                          role="listitem"
+                        >
+                          <div
+                            aria-current={i === stepIndex ? "step" : undefined}
+                            aria-label={`Schritt ${i + 1} von 3`}
+                            style={{
+                              width: 32, height: 32, borderRadius: 16,
+                              background: i <= stepIndex ? ACCENT : "#2A2A36",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              fontSize: 13, fontWeight: 700,
+                              color: i <= stepIndex ? "#fff" : "rgba(255,255,255,0.4)",
+                              transition: "background 0.2s, color 0.2s",
+                            }}
+                          >
+                            {i + 1}
+                          </div>
+                          {i < 2 && (
+                            <div style={{
+                              width: 56, height: 2,
+                              background: i < stepIndex ? ACCENT : "#2A2A36",
+                              transition: "background 0.2s",
+                            }}/>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {navBtn("fwd")}
+                  </>
+                );
+              })()}
             </div>
             <div style={{
               display: "grid", gridTemplateColumns: "1fr 1fr 1fr",
@@ -1210,7 +1306,12 @@ export default function EnginePage() {
                       patch.fat > 0   || patch.fiber > 0;
                     if (hasMacros) {
                       void handlePullCgm();
-                      setStepIndex(1);
+                      // Only auto-advance if the user is still on Step 1.
+                      // Without this guard, a follow-up AI message arriving
+                      // while the user already navigated back/forward would
+                      // jerk them back to Step 2 — which felt buggy. Mirrors
+                      // the voice-path guard at line ~465.
+                      setStepIndex(prev => prev === 0 ? 1 : prev);
                     }
                   }}
                   seed={chatSeed}
