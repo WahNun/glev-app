@@ -50,9 +50,35 @@ export async function GET(req: NextRequest) {
 
     const { data: profile } = await sb
       .from("profiles")
-      .select("junction_user_id")
+      .select("junction_user_id, nightscout_url")
       .eq("user_id", user.id)
       .maybeSingle();
+
+    // Nightscout takes precedence over Junction when both are connected,
+    // matching the dispatcher rule in lib/cgm/index.ts (resolveSource):
+    // an explicit Nightscout URL is the user's most recent intent.
+    if (profile?.nightscout_url) {
+      try {
+        const { getLatest } = await import("@/lib/cgm/nightscout");
+        const { current } = await getLatest(user.id);
+        return NextResponse.json({
+          connected: true,
+          glucose: current?.value ?? null,
+          timestamp: current?.timestamp ?? null,
+          source: "nightscout",
+        });
+      } catch (e) {
+        // Fail soft — settings card / engine page treat as disconnected
+        // so the user can re-enter credentials. Don't fall through to
+        // Junction: the user explicitly chose Nightscout.
+        const msg = e instanceof Error ? e.message : "unknown";
+        return NextResponse.json({
+          connected: false,
+          source: "nightscout",
+          error: msg,
+        });
+      }
+    }
 
     const junctionUserId = profile?.junction_user_id ?? null;
     if (!junctionUserId) {

@@ -84,6 +84,19 @@ export default function CgmSettingsCard() {
   const [junctionConnecting, setJunctionConnecting] = useState(false);
   const [junctionMessage, setJunctionMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
 
+  // Nightscout (open-source CGM platform) — third source. URL+token stored on
+  // profiles.nightscout_url / nightscout_token_enc. The token is optional —
+  // many self-hosted instances run unauthenticated. `nightscoutHasToken` lets
+  // us show "(gespeichert)" without ever exposing the plaintext token.
+  const [nightscoutUrl, setNightscoutUrl] = useState("");
+  const [nightscoutToken, setNightscoutToken] = useState("");
+  const [nightscoutHasToken, setNightscoutHasToken] = useState(false);
+  const [nightscoutConnected, setNightscoutConnected] = useState(false);
+  const [nightscoutLatest, setNightscoutLatest] = useState<number | null>(null);
+  const [nightscoutSubmitting, setNightscoutSubmitting] = useState(false);
+  const [nightscoutMessage, setNightscoutMessage] =
+    useState<{ kind: "success" | "error"; text: string } | null>(null);
+
   const loadStatus = useCallback(async () => {
     setLoadingStatus(true);
     setStatusError("");
@@ -120,10 +133,33 @@ export default function CgmSettingsCard() {
     }
   }, []);
 
+  // Nightscout state fetcher — same silent-on-error policy as Junction. The
+  // GET on the sync route returns { connected, url, hasToken } so the form
+  // can pre-fill the URL field without ever exposing the plaintext token.
+  const loadNightscoutState = useCallback(async () => {
+    try {
+      const res = await fetch("/api/cgm/nightscout/sync", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        connected?: boolean;
+        url?: string | null;
+        hasToken?: boolean;
+      };
+      if (data?.connected) {
+        setNightscoutConnected(true);
+        setNightscoutUrl(data.url || "");
+        setNightscoutHasToken(!!data.hasToken);
+      }
+    } catch {
+      // silent — treat as disconnected
+    }
+  }, []);
+
   useEffect(() => {
     void loadStatus();
     void loadJunctionState();
-  }, [loadStatus, loadJunctionState]);
+    void loadNightscoutState();
+  }, [loadStatus, loadJunctionState, loadNightscoutState]);
 
   // Junction OAuth callback handler — when user returns from Junction's hosted
   // Link flow, the redirect lands at /settings?cgm=connected. Refresh state,
@@ -253,6 +289,85 @@ export default function CgmSettingsCard() {
         text: err instanceof Error ? err.message : "Verbindung fehlgeschlagen",
       });
       setJunctionConnecting(false);
+    }
+  }
+
+  async function handleNightscoutConnect() {
+    setNightscoutMessage(null);
+    const url = nightscoutUrl.trim().replace(/\/+$/, "");
+    if (!/^https?:\/\//i.test(url)) {
+      setNightscoutMessage({
+        kind: "error",
+        text: "URL muss mit http:// oder https:// beginnen.",
+      });
+      return;
+    }
+    setNightscoutSubmitting(true);
+    try {
+      // Empty token field with an existing saved token = "preserve token" —
+      // the server-side route honours this so users don't have to re-paste
+      // the token every time they edit their URL.
+      const tokenToSend =
+        nightscoutToken.trim().length > 0 ? nightscoutToken.trim() : null;
+      const res = await fetch("/api/cgm/nightscout/sync", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url, token: tokenToSend }),
+        cache: "no-store",
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        connected?: boolean;
+        current?: { value: number | null } | null;
+        error?: string;
+      };
+      if (!res.ok) throw new Error(body?.error || `Fehler ${res.status}`);
+      setNightscoutConnected(true);
+      // Update hasToken flag: if user just sent a token OR they preserved
+      // an existing one, we have a token now.
+      setNightscoutHasToken(tokenToSend != null || nightscoutHasToken);
+      setNightscoutToken("");
+      const cur = body?.current ?? null;
+      setNightscoutLatest(cur?.value ?? null);
+      setNightscoutMessage({
+        kind: "success",
+        text:
+          cur?.value != null
+            ? `✓ Verbunden — letzter Wert: ${cur.value} mg/dL`
+            : "✓ Verbunden — noch keine Werte verfügbar.",
+      });
+    } catch (err) {
+      setNightscoutMessage({
+        kind: "error",
+        text: err instanceof Error ? err.message : "Verbindung fehlgeschlagen",
+      });
+    } finally {
+      setNightscoutSubmitting(false);
+    }
+  }
+
+  async function handleNightscoutDisconnect() {
+    if (!confirm("Nightscout-Verbindung wirklich trennen?")) return;
+    setNightscoutSubmitting(true);
+    try {
+      const res = await fetch("/api/cgm/nightscout/sync", {
+        method: "DELETE",
+        cache: "no-store",
+      });
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(body?.error || `Fehler ${res.status}`);
+      setNightscoutConnected(false);
+      setNightscoutHasToken(false);
+      setNightscoutUrl("");
+      setNightscoutToken("");
+      setNightscoutLatest(null);
+      setNightscoutMessage(null);
+    } catch (err) {
+      setNightscoutMessage({
+        kind: "error",
+        text: err instanceof Error ? err.message : "Trennen fehlgeschlagen",
+      });
+    } finally {
+      setNightscoutSubmitting(false);
     }
   }
 
@@ -526,8 +641,8 @@ export default function CgmSettingsCard() {
               >
                 <option value="librelinkup">LibreLinkUp</option>
                 <option value="libreview-junction">LibreView (Junction)</option>
+                <option value="nightscout">Nightscout</option>
                 <option value="dexcom" disabled>Dexcom (coming soon)</option>
-                <option value="nightscout" disabled>Nightscout (coming soon)</option>
               </select>
             </div>
 
@@ -663,6 +778,153 @@ export default function CgmSettingsCard() {
                     }}
                   >
                     {junctionMessage.text}
+                  </div>
+                )}
+              </>
+            )}
+
+            {cgmType === "nightscout" && (
+              <>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "rgba(255,255,255,0.55)",
+                    lineHeight: 1.6,
+                    background: "rgba(255,255,255,0.03)",
+                    border: `1px solid ${BORDER}`,
+                    borderRadius: 10,
+                    padding: "12px 14px",
+                  }}
+                >
+                  Verbinde dein Nightscout-Konto. Kompatibel mit Dexcom,
+                  FreeStyle Libre, Accu-Chek SmartGuide und anderen. Den Token
+                  findest du in deiner Nightscout-Adminoberfläche unter
+                  „Authorization → Subjects". Test-Instanz ohne Token:{" "}
+                  <code
+                    style={{
+                      color: "rgba(255,255,255,0.75)",
+                      background: "rgba(255,255,255,0.05)",
+                      padding: "1px 6px",
+                      borderRadius: 4,
+                    }}
+                  >
+                    cgm-remote-monitor.nightscout.me
+                  </code>
+                </div>
+
+                <div>
+                  <label style={label} htmlFor="ns-url">
+                    Nightscout URL
+                  </label>
+                  <input
+                    id="ns-url"
+                    type="url"
+                    value={nightscoutUrl}
+                    onChange={(e) => setNightscoutUrl(e.target.value)}
+                    placeholder="https://mynightscout.fly.dev"
+                    style={inp}
+                    autoComplete="off"
+                  />
+                </div>
+
+                <div>
+                  <label style={label} htmlFor="ns-token">
+                    API Secret / Token{" "}
+                    {nightscoutHasToken && nightscoutConnected ? (
+                      <span style={{ color: "rgba(255,255,255,0.4)" }}>
+                        — gespeichert (leer lassen um zu behalten)
+                      </span>
+                    ) : (
+                      <span style={{ color: "rgba(255,255,255,0.4)" }}>
+                        — optional
+                      </span>
+                    )}
+                  </label>
+                  <input
+                    id="ns-token"
+                    type="password"
+                    value={nightscoutToken}
+                    onChange={(e) => setNightscoutToken(e.target.value)}
+                    placeholder={
+                      nightscoutHasToken
+                        ? "•••••••• (gespeichert)"
+                        : "Frei lassen wenn keiner gesetzt"
+                    }
+                    style={inp}
+                    autoComplete="off"
+                  />
+                </div>
+
+                {nightscoutConnected && nightscoutLatest != null && (
+                  <div
+                    style={{
+                      fontSize: 13,
+                      color: GREEN,
+                      background: `${GREEN}10`,
+                      border: `1px solid ${GREEN}30`,
+                      borderRadius: 10,
+                      padding: "10px 14px",
+                    }}
+                  >
+                    ✓ Verbunden — letzter Wert: {nightscoutLatest} mg/dL
+                  </div>
+                )}
+
+                <div style={{ display: "flex", gap: 10, marginTop: 4, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    onClick={handleNightscoutConnect}
+                    disabled={nightscoutSubmitting}
+                    style={{
+                      padding: "12px 18px",
+                      borderRadius: 12,
+                      border: "none",
+                      cursor: nightscoutSubmitting ? "wait" : "pointer",
+                      background: `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
+                      color: "#fff",
+                      fontSize: 14,
+                      fontWeight: 700,
+                      boxShadow: `0 4px 20px ${ACCENT}40`,
+                      opacity: nightscoutSubmitting ? 0.6 : 1,
+                    }}
+                  >
+                    {nightscoutSubmitting
+                      ? "Verbinde…"
+                      : nightscoutConnected
+                      ? "Aktualisieren"
+                      : "Verbinden"}
+                  </button>
+                  {nightscoutConnected && (
+                    <button
+                      type="button"
+                      onClick={handleNightscoutDisconnect}
+                      disabled={nightscoutSubmitting}
+                      style={{
+                        padding: "12px 18px",
+                        borderRadius: 12,
+                        border: `1px solid ${PINK}50`,
+                        background: "transparent",
+                        color: PINK,
+                        fontSize: 14,
+                        fontWeight: 600,
+                        cursor: nightscoutSubmitting ? "wait" : "pointer",
+                      }}
+                    >
+                      Trennen
+                    </button>
+                  )}
+                </div>
+
+                {nightscoutMessage && (
+                  <div
+                    style={{
+                      fontSize: 13,
+                      color:
+                        nightscoutMessage.kind === "success" ? GREEN : PINK,
+                      marginTop: 4,
+                    }}
+                  >
+                    {nightscoutMessage.text}
                   </div>
                 )}
               </>

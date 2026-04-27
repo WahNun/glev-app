@@ -1,0 +1,42 @@
+-- Nightscout (open-source CGM platform) — second CGM source alongside
+-- LibreLinkUp (lib/cgm/llu.ts) and LibreView-via-Junction (already in
+-- profiles.junction_user_id). Nightscout itself proxies Dexcom, FreeStyle
+-- Libre, Accu-Chek SmartGuide and others — adding this one integration
+-- makes Glev compatible with virtually all major CGMs without needing
+-- device-specific APIs.
+--
+-- The `profiles` table already exists with shape (per existing
+-- 20260427_add_junction_user_id.sql migration's comment):
+--   user_id      uuid PRIMARY KEY  (= auth.uid())
+--   role         text NOT NULL
+--   display_name text NULL
+--   created_at   timestamptz NOT NULL
+--   updated_at   timestamptz NOT NULL
+--   junction_user_id text NULL
+--   cgm_connected    boolean NOT NULL DEFAULT false
+-- with RLS enabled (select_self / update_self / select_linked_patients).
+-- This migration is purely additive — two new nullable columns; no PK,
+-- RLS or trigger changes.
+--
+-- Two new columns:
+--   nightscout_url       — base URL of the user's Nightscout instance,
+--                          e.g. "https://mynightscout.fly.dev". Stored
+--                          plain (a URL is not a secret on its own;
+--                          mirrors the llu_email pattern in cgm_credentials).
+--                          Trailing slash is stripped client-side before
+--                          insert.
+--   nightscout_token_enc — Nightscout API token (the URL-safe read token
+--                          generated in the Nightscout admin UI), encrypted
+--                          with lib/cgm/crypto.ts (AES-256-GCM, ENCRYPTION_KEY
+--                          env var). Same encryption format as
+--                          cgm_credentials.llu_password_encrypted so we
+--                          reuse the existing key + crypto helpers.
+--                          NULL when the Nightscout site is configured
+--                          without auth (the public test instance
+--                          https://cgm-remote-monitor.nightscout.me
+--                          works without a token).
+--
+-- Idempotent (safe to re-run via npm run db:migrate).
+
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS nightscout_url       text;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS nightscout_token_enc text;

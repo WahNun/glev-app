@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticate } from "../../cgm/_helpers";
 import { adminClient } from "@/lib/cgm/supabase";
-import { getHistory, type Reading } from "@/lib/cgm/llu";
+// Use the source dispatcher (lib/cgm/index) so users connected via Nightscout
+// get their post-meal BG follow-ups from Nightscout instead of LLU. The
+// dispatcher's return shape is a SUPERSET of the LLU one (adds a `source`
+// field) so existing `out.current` / `out.history` usage below is unchanged.
+import { getHistory } from "@/lib/cgm";
+import type { Reading } from "@/lib/cgm/llu";
 import type { LogType, FetchType, CgmFetchJob } from "@/lib/cgmJobs";
 import { parseDbTs, parseLluTs } from "@/lib/time";
 
