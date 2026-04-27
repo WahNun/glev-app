@@ -6,7 +6,19 @@ import { logDebug } from "@/lib/debug";
 import { parseLluTs as _parseLluTs, parseDbTs } from "@/lib/time";
 
 const STORAGE_KEY_BASE = "glev:scheduled-cgm-fills";
-const MATCH_WINDOW_MIN = 15;
+/**
+ * Tolerance window (minutes) around the 1h / 2h target when picking the
+ * closest CGM reading to populate bg_1h / bg_2h. Wide on purpose: per
+ * user spec, ANY post-meal reading near the 2-hour mark should flip the
+ * outcome chip to GOOD / HIGH / LOW. Sparse-data CGMs (Libre 14d at
+ * 15-min cadence with occasional gaps) and users who scan late often
+ * have no value within ±15 min of the exact target. 60 min covers
+ * 30–90 min after meal for the "1h" slot and 60–180 min for the "2h"
+ * slot — wide enough to never strand a meal in "VORLÄUFIG" forever
+ * just because the closest scan was 25 min off, narrow enough to not
+ * grab a reading from the middle of the next meal.
+ */
+const MATCH_WINDOW_MIN = 60;
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const TWO_HOURS_MS = 2 * ONE_HOUR_MS;
 const HISTORY_HORIZON_MS = 12 * ONE_HOUR_MS;

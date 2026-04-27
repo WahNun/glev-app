@@ -1,12 +1,16 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* Font stacks. JetBrains Mono is loaded via next/font/google in
-   app/layout.tsx and exposed as --font-jetbrains-mono. Components should
-   reference var(--font-mono) / var(--font-sans) instead of inlining the
-   full stack so we have a single source of truth. */
-:root {
+/* Font stacks. Inter and JetBrains Mono are loaded via next/font/google
+   in app/layout.tsx, which sets the CSS variables --font-inter and
+   --font-mono on <html>. The :root :where() selector below provides
+   compose-time fallback chains while having lower specificity than the
+   class selectors next/font generates, so the next/font values always
+   win when the fonts are ready but components have a working stack
+   from first paint. Components should reference var(--font-mono) /
+   var(--font-sans) instead of inlining the full stack. */
+:where(:root) {
   --font-sans: var(--font-inter), 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-mono: var(--font-jetbrains-mono), 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 html, body {

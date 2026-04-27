@@ -307,8 +307,8 @@ function DashboardScreen() {
         </div>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:10 }}>
           <MacroRing label="Carbs" value={186} target={250} color={ACCENT} unit="g"/>
-          <MacroRing label="Protein" value={94} target={120} color={"#A78BFA"} unit="g"/>
-          <MacroRing label="Fat" value={62} target={80} color={ORANGE} unit="g"/>
+          <MacroRing label="Protein" value={94} target={120} color={"#3B82F6"} unit="g"/>
+          <MacroRing label="Fat" value={62} target={80} color={"#A855F7"} unit="g"/>
         </div>
       </MockCard>
 

@@ -640,7 +640,7 @@ export default function CgmSettingsCard() {
                 style={inp}
               >
                 <option value="librelinkup">LibreLinkUp</option>
-                <option value="libreview-junction">LibreView (Junction)</option>
+                <option value="libreview-junction">LibreView (Junction) — Coming Soon</option>
                 <option value="nightscout">Nightscout</option>
                 <option value="dexcom" disabled>Dexcom (coming soon)</option>
               </select>
@@ -724,12 +724,33 @@ export default function CgmSettingsCard() {
                     border: `1px solid ${BORDER}`,
                     borderRadius: 10,
                     padding: "12px 14px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
                   }}
                 >
-                  Verbinde dein LibreView-Konto über Junction. Du wirst kurz auf
-                  die Junction-Seite weitergeleitet, meldest dich dort mit deinen
-                  LibreView-Zugangsdaten an, und kommst danach zurück. Glev liest
-                  dann deinen aktuellen Glukosewert automatisch in den Engine-Tab.
+                  <span
+                    style={{
+                      alignSelf: "flex-start",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      color: "rgba(255,255,255,0.85)",
+                      background: "rgba(255,255,255,0.08)",
+                      border: `1px solid ${BORDER}`,
+                      borderRadius: 999,
+                      padding: "3px 9px",
+                    }}
+                  >
+                    Coming Soon
+                  </span>
+                  <span>
+                    Verbinde dein LibreView-Konto über Junction. Du wirst kurz auf
+                    die Junction-Seite weitergeleitet, meldest dich dort mit deinen
+                    LibreView-Zugangsdaten an, und kommst danach zurück. Glev liest
+                    dann deinen aktuellen Glukosewert automatisch in den Engine-Tab.
+                  </span>
                 </div>
                 {junctionState?.connected && junctionState.glucose != null && (
                   <div
@@ -745,29 +766,34 @@ export default function CgmSettingsCard() {
                     ✓ Verbunden — letzter Wert: {junctionState.glucose} mg/dL
                   </div>
                 )}
+                {/* Junction integration is feature-frozen for now — button is
+                    intentionally disabled with "Bald verfügbar" label so the
+                    settings UI signals the upcoming option without exposing a
+                    half-finished flow. Code path below (handleJunctionConnect,
+                    /api/cgm/connect, junctionState polling) is intentionally
+                    kept intact so we can re-enable with a single line change
+                    once the Junction integration is production-ready. */}
                 <button
                   type="button"
                   onClick={handleJunctionConnect}
-                  disabled={junctionConnecting}
+                  disabled
+                  aria-disabled="true"
+                  title="Bald verfügbar"
                   style={{
                     padding: "12px 18px",
                     borderRadius: 12,
                     border: "none",
-                    cursor: junctionConnecting ? "wait" : "pointer",
+                    cursor: "not-allowed",
                     background: `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
                     color: "#fff",
                     fontSize: 14,
                     fontWeight: 700,
                     boxShadow: `0 4px 20px ${ACCENT}40`,
-                    opacity: junctionConnecting ? 0.6 : 1,
+                    opacity: 0.5,
                     marginTop: 4,
                   }}
                 >
-                  {junctionConnecting
-                    ? "Verbinde…"
-                    : junctionState?.connected
-                    ? "LibreView neu verbinden"
-                    : "LibreView verbinden"}
+                  Bald verfügbar
                 </button>
                 {junctionMessage && (
                   <div
