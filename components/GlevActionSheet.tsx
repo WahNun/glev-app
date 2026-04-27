@@ -73,8 +73,8 @@ const RUN = (
 
 const SUB_OPTIONS: Sub[] = [
   { label: "Glukose messen", href: "/engine", icon: DROPLET },
-  { label: "Insulin loggen", href: "/log", icon: SYRINGE },
-  { label: "Exercise loggen", href: "/log", icon: RUN },
+  { label: "Insulin loggen", href: "/log?type=insulin", icon: SYRINGE },
+  { label: "Exercise loggen", href: "/log?type=exercise", icon: RUN },
 ];
 
 export default function GlevActionSheet({ open, onClose }: Props) {

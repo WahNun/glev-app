@@ -1,0 +1,60 @@
+# Fix: Nav Routing + Layout + Log Screen
+
+## Problems to fix
+
+### 1. Routing in `components/Layout.tsx`
+
+In the bottom action sheet (Glev FAB sheet), the "Mahlzeit loggen" button is routing to `/engine` — it must route to `/log`.
+
+Find the sheet action for "Mahlzeit loggen" and change the router.push call:
+```ts
+// WRONG (current)
+router.push('/engine')
+
+// CORRECT
+router.push('/log')
+```
+
+Also check "Exercise loggen" — it must route to a dedicated exercise route, NOT `/engine`. If no `/exercise` page exists yet, route it to `/log?type=exercise` for now.
+
+### 2. Nav layout cleanup in `components/Layout.tsx`
+
+The mobile bottom nav currently looks broken/misaligned. The 4 nav items (Dashboard, [Glev FAB center], History, Settings) must be evenly distributed across the full width.
+
+Ensure:
+- The nav bar uses `display: flex; justify-content: space-around; align-items: center;` (or equivalent Tailwind)
+- Dashboard and History icons sit symmetrically on either side of the central Glev FAB
+- Settings icon is on the far right
+- No elements overlap or crowd together
+- The Glev FAB center button uses `position: relative; top: -20px` to float above the bar
+
+Clean, symmetric layout. All 4 touch targets must be clearly separated and tappable.
+
+### 3. Log screen (`app/log/page.tsx`)
+
+The Log screen must show the 3-step wizard UI:
+- Step 1: **Essen** — food name input, voice input button, detected food result
+- Step 2: **Makros** — carbs (g), protein (g), fat (g), fiber (g), calories (kcal) fields (editable)
+- Step 3: **Ergebnis** — meal classification (FAST_CARBS / HIGH_PROTEIN / HIGH_FAT / HIGH_FIBER / BALANCED), save button
+
+If the current `app/log/page.tsx` shows a large black microphone button as the primary UI (old version), replace it entirely with the 3-step wizard. The wizard was partially implemented — restore or rewrite it cleanly.
+
+The wizard steps use a pill/tab indicator at the top: `Essen · Makros · Ergebnis`
+
+On step 2 (Makros), show editable number inputs for:
+- Kohlenhydrate (carbs_grams) - number input, suffix "g"
+- Protein (protein_grams) - number input, suffix "g"  
+- Fett (fat_grams) - number input, suffix "g"
+- Ballaststoffe (fiber_grams) - number input, suffix "g"
+- Kalorien (calories) - number input, suffix "kcal"
+
+These values come from the AI parse result but are user-editable before saving.
+
+On save, write all fields to the `meals` table including:
+- name, carbs_grams, protein_grams, fat_grams, fiber_grams, calories, meal_type
+
+The DB columns already exist (migration was already run).
+
+## After changes
+
+Run `tsc --noEmit` to confirm no TypeScript errors, then commit and push to main.

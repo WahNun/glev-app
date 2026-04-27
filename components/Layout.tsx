@@ -283,8 +283,14 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           )}
         />
 
-        {/* Glev FAB — circular, elevated, dead-centre. Tap opens the
-            action sheet; never navigates directly. */}
+        {/* Glev FAB — circular, elevated. Sits over the spacer slot
+            (slot 2 of the 4-equal-flex grid: Dashboard / Spacer / History
+            / Settings → centers at 12.5% / 37.5% / 62.5% / 87.5%). At
+            left:37.5% the FAB is exactly equidistant from Dashboard
+            (left, 25% gap) and History (right, 25% gap), so the four
+            touch targets read as a balanced row instead of the FAB
+            covering the History label as it did at left:50%. Tap opens
+            the action sheet; never navigates directly. */}
         <button
           type="button"
           onClick={() => setActionSheetOpen(true)}
@@ -293,7 +299,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           aria-expanded={actionSheetOpen}
           style={{
             position: "absolute",
-            left: "50%", top: -20,
+            left: "37.5%", top: -20,
             transform: "translateX(-50%)",
             width: 56, height: 56, borderRadius: "50%",
             background: ACCENT, border: "none", cursor: "pointer",
