@@ -65,10 +65,17 @@ export function chipForMeal(meal: Meal, now: Date = new Date()): ChipState {
     };
   }
 
+  // Final: prefer the freshly computed lc.outcome over the cached
+  // meal.evaluation column. The cache is only refreshed on saveMeal,
+  // so existing rows whose 2h reading came in outside the legacy
+  // ±30 min window still have evaluation=null in the DB. Reading
+  // lc.outcome here makes the chip flip to GOOD / HIGH / LOW the
+  // moment a 2h value is present, without requiring a re-save.
+  const outcome = lc.outcome ?? meal.evaluation;
   return {
     state: "final",
-    color: getEvalColor(meal.evaluation),
-    label: getEvalLabel(meal.evaluation),
+    color: getEvalColor(outcome),
+    label: getEvalLabel(outcome),
     body: lc.reasoning,
     lc,
   };

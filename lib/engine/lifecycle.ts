@@ -94,20 +94,22 @@ export function lifecycleFor(m: Meal, now: Date = new Date(), settings?: Insulin
     settings,
   });
 
-  // Final: bg2h captured in-window AND enough time has passed.
-  if (bg2hRaw != null && bgBefore != null && ageMinutes >= TWO_HOURS && bg2hInWindow) {
+  // Final: bg2h captured. Per user spec the 2h reading ALWAYS locks in
+  // the final outcome — the ±30 min window only governs the wording of
+  // the reasoning note (so the user still sees if the value came in late
+  // or early), but no longer downgrades the chip back to "provisional".
+  // A reading entered hours after the meal still represents the user's
+  // best post-meal data point and should drive the GOOD / HIGH / LOW
+  // verdict instead of leaving the chip stuck on "preliminary".
+  if (bg2hRaw != null && bgBefore != null) {
     const ev = baseEval(bg2hRaw);
-    return { state: "final", outcome: ev.outcome, reasoning: ev.reasoning, delta1, delta2, speed1, speed2, ageMinutes };
-  }
-
-  // bg2h captured but OUTSIDE the ±30 min window — held provisional with
-  // an explicit timing note so the user sees why the outcome is not final.
-  if (bg2hRaw != null && bgBefore != null && !bg2hInWindow && gap2Min != null) {
-    const ev = baseEval(bg2hRaw);
-    const direction = gap2Min > 0 ? "after" : "before";
-    const offset = Math.round(Math.abs(gap2Min));
-    const note = `2h reading captured ${offset} min ${direction} the expected 2-hour mark — outside the ±${CHECKPOINT_TOLERANCE_MIN} min window, so result stays provisional. ${ev.reasoning}`;
-    return { state: "provisional", outcome: ev.outcome, reasoning: note, delta1, delta2, speed1, speed2, ageMinutes };
+    let reasoning = ev.reasoning;
+    if (gap2Min != null && !bg2hInWindow) {
+      const direction = gap2Min > 0 ? "after" : "before";
+      const offset = Math.round(Math.abs(gap2Min));
+      reasoning = `2h reading captured ${offset} min ${direction} the expected 2-hour mark (outside ±${CHECKPOINT_TOLERANCE_MIN} min window). ${ev.reasoning}`;
+    }
+    return { state: "final", outcome: ev.outcome, reasoning, delta1, delta2, speed1, speed2, ageMinutes };
   }
 
   // Provisional: bg1h captured. Validate timing too — an out-of-window
