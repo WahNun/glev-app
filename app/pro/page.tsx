@@ -2,10 +2,12 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useActionState, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { useFormStatus } from "react-dom";
+import { useSearchParams } from "next/navigation";
 import AppMockupPhone from "@/components/AppMockupPhone";
 import CTAButton from "@/components/landing/CTAButton";
-import { startProCheckout, type ProCheckoutState } from "./actions";
+import { submitProCheckout } from "./actions";
 import FAQ from "@/components/landing/FAQ";
 import FeatureTrio from "@/components/landing/FeatureTrio";
 import FounderSection from "@/components/landing/FounderSection";
@@ -25,6 +27,19 @@ import {
 } from "@/components/landing/tokens";
 
 /**
+ * Submit button rendered inside the <form> so useFormStatus can read the
+ * pending state (which only works for descendants of the form). Lives at
+ * module scope so it stays a stable component reference across renders.
+ */
+function ProSubmitButton() {
+  const { pending } = useFormStatus();
+  const label = pending
+    ? "Weiterleitung zu Stripe…"
+    : "Mitgliedschaft starten — €24,90/Monat";
+  return <CTAButton submitting={pending} label={label} />;
+}
+
+/**
  * /pro — direct monthly-subscription landing page.
  * A/B partner to /beta. No reservation deposit, no seat counter, billing
  * begins on the public launch date (1 July 2026) via a Stripe trial.
@@ -32,19 +47,14 @@ import {
 export default function ProPage() {
   const [email, setEmail] = useState("");
   const ctaRef = useRef<HTMLInputElement | null>(null);
-  // useActionState wires the <form action={formAction}> submit straight to the
-  // Stripe checkout server action. Bypasses the previous client-side fetch
-  // path that lost submits when the user clicked before React had hydrated
-  // (the symptom was a default GET reload back to /pro with email in the URL).
-  const [state, formAction, isPending] = useActionState<
-    ProCheckoutState | null,
-    FormData
-  >(startProCheckout, null);
-  const error = state?.error ?? null;
-
-  const ctaLabel = isPending
-    ? "Weiterleitung zu Stripe…"
-    : "Mitgliedschaft starten — €24,90/Monat";
+  // The form binds directly to the submitProCheckout server action (see
+  // app/pro/actions.ts) so Next.js can inject the action URL into the
+  // rendered <form> at SSR time. The previous useActionState wrapper left
+  // the form without an action attribute and pre-hydration submits did a
+  // default GET reload back to /pro — exactly what we were trying to fix.
+  // Errors come back via ?error=<msg> from the server action's redirect.
+  const searchParams = useSearchParams();
+  const error = searchParams.get("error");
 
   return (
     <main
@@ -120,7 +130,7 @@ export default function ProPage() {
             </p>
 
             <form
-              action={formAction}
+              action={submitProCheckout}
               className="glev-hero-form"
               style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}
             >
@@ -150,7 +160,7 @@ export default function ProPage() {
                 onFocus={(e) => (e.currentTarget.style.borderColor = ACCENT)}
                 onBlur={(e) => (e.currentTarget.style.borderColor = BORDER)}
               />
-              <CTAButton submitting={isPending} label={ctaLabel} />
+              <ProSubmitButton />
               {error && (
                 <div role="alert" style={{ fontSize: 13, color: PINK, textAlign: "left" }}>
                   {error}

@@ -78,3 +78,24 @@ export async function startProCheckout(
 
   redirect(data.url);
 }
+
+/**
+ * Direct `<form action={…}>` target for the /pro hero form.
+ *
+ * The previous useActionState-wrapped variant left the rendered <form>
+ * without an `action` attribute, so a submit before hydration bubbled up
+ * as a default GET reload back to /pro (with the email leaked into the
+ * query string) and never POSTed to /api/pro/checkout. Binding this
+ * unwrapped server action lets Next.js inject the action URL at SSR time
+ * so progressive-enhancement submits work even before React boots.
+ *
+ * Errors are surfaced by redirecting back to /pro?error=<msg>; the page
+ * reads them via useSearchParams. On success startProCheckout already
+ * redirects to Stripe's session.url, so we never return.
+ */
+export async function submitProCheckout(formData: FormData): Promise<void> {
+  const result = await startProCheckout(null, formData);
+  if (result?.error) {
+    redirect(`/pro?error=${encodeURIComponent(result.error)}`);
+  }
+}

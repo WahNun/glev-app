@@ -77,3 +77,28 @@ export async function startBetaCheckout(
 
   redirect(data.url);
 }
+
+/**
+ * Direct `<form action={…}>` target for the /beta hero form.
+ *
+ * Same rationale as submitProCheckout: useActionState rendered the form
+ * without an `action` attribute so pre-hydration submits did a default
+ * GET reload back to /beta with email in the query string instead of
+ * POSTing to /api/beta/checkout. Binding this raw server action lets
+ * Next.js inject the action URL at SSR so progressive-enhancement
+ * submits work immediately.
+ *
+ * Capacity exhaustion (409) → /beta?full=1 so the client useEffect can
+ * swap the page over to the mailto waitlist link (mirrors the legacy
+ * onSubmit fallback). Validation/server failure → /beta?error=<msg>
+ * which the page surfaces via useSearchParams.
+ */
+export async function submitBetaCheckout(formData: FormData): Promise<void> {
+  const result = await startBetaCheckout(null, formData);
+  if (result?.full) {
+    redirect("/beta?full=1");
+  }
+  if (result?.error) {
+    redirect(`/beta?error=${encodeURIComponent(result.error)}`);
+  }
+}

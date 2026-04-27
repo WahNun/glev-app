@@ -1,10 +1,12 @@
 "use client";
 
 import Image from "next/image";
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useFormStatus } from "react-dom";
+import { useSearchParams } from "next/navigation";
 import AppMockupPhone from "@/components/AppMockupPhone";
 import CTAButton from "@/components/landing/CTAButton";
-import { startBetaCheckout, type BetaCheckoutState } from "./actions";
+import { submitBetaCheckout } from "./actions";
 import FAQ from "@/components/landing/FAQ";
 import FeatureTrio from "@/components/landing/FeatureTrio";
 import FounderSection from "@/components/landing/FounderSection";
@@ -30,18 +32,34 @@ type CountResponse = { count: number; capacity: number; remaining: number };
 const MAILTO_WAITLIST =
   "mailto:hello@glev.app?subject=Glev%20Beta%20Warteliste";
 
+/**
+ * Submit button rendered inside the <form> so useFormStatus can read the
+ * pending state. Receives `isFull` via prop because the capacity-exhausted
+ * label depends on the parent's count poll, which lives outside the form.
+ */
+function BetaSubmitButton({ isFull }: { isFull: boolean }) {
+  const { pending } = useFormStatus();
+  const label = isFull
+    ? "Auf die Warteliste"
+    : pending
+      ? "Weiterleitung zu Stripe…"
+      : "Platz sichern — €19";
+  return <CTAButton submitting={pending} label={label} />;
+}
+
 export default function BetaPage() {
   const [email, setEmail] = useState("");
   const [count, setCount] = useState<CountResponse | null>(null);
   const ctaRef = useRef<HTMLInputElement | null>(null);
-  // Server action drives the form submit so the click works even if React
-  // hasn't hydrated yet (the symptom was a default GET reload back to /beta
-  // with email in the URL instead of a POST to Stripe).
-  const [state, formAction, isPending] = useActionState<
-    BetaCheckoutState | null,
-    FormData
-  >(startBetaCheckout, null);
-  const error = state?.error ?? null;
+  // The form binds directly to the submitBetaCheckout server action so
+  // Next.js can inject the action URL into the rendered <form> at SSR
+  // time. The previous useActionState wrapper left the form without an
+  // action attribute, so pre-hydration submits did a default GET reload
+  // back to /beta with email in the query string. Errors come back via
+  // ?error=<msg> and capacity exhaustion via ?full=1.
+  const searchParams = useSearchParams();
+  const error = searchParams.get("error");
+  const isFullFromUrl = searchParams.get("full") === "1";
 
   useEffect(() => {
     let cancelled = false;
@@ -58,24 +76,19 @@ export default function BetaPage() {
     };
   }, []);
 
-  // Capacity exhaustion can race the count poll: if Stripe checkout responds
-  // 409 the action returns { full: true } — degrade gracefully to mailto so
-  // the user isn't stuck on a red error.
+  // Capacity exhaustion can race the count poll: if Stripe checkout
+  // responds 409 the server action redirects back to /beta?full=1 —
+  // degrade gracefully to the mailto waitlist so the user isn't stuck on
+  // a red error.
   useEffect(() => {
-    if (state?.full) {
+    if (isFullFromUrl) {
       window.location.href = MAILTO_WAITLIST;
     }
-  }, [state]);
+  }, [isFullFromUrl]);
 
   const remaining = count?.remaining ?? CAPACITY;
   const isFull = count != null && remaining <= 0;
   const isLow = !isFull && count != null && remaining < 50;
-
-  const ctaLabel = isFull
-    ? "Auf die Warteliste"
-    : isPending
-      ? "Weiterleitung zu Stripe…"
-      : "Platz sichern — €19";
 
   return (
     <main
@@ -151,7 +164,7 @@ export default function BetaPage() {
             </p>
 
             <form
-              action={formAction}
+              action={submitBetaCheckout}
               className="glev-hero-form"
               style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}
             >
@@ -181,7 +194,7 @@ export default function BetaPage() {
                 onFocus={(e) => (e.currentTarget.style.borderColor = ACCENT)}
                 onBlur={(e) => (e.currentTarget.style.borderColor = BORDER)}
               />
-              <CTAButton submitting={isPending} label={ctaLabel} />
+              <BetaSubmitButton isFull={isFull} />
               {error && (
                 <div role="alert" style={{ fontSize: 13, color: PINK, textAlign: "left" }}>
                   {error}

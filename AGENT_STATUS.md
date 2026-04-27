@@ -1,5 +1,5 @@
 STATUS: DONE
-LAST_DONE: HIGH_FIBER-Farbe (#4DB6AC) zu lib/mealTypes.ts → TYPE_COLORS hinzugefügt + MealType-Union erweitert. BALANCED war bereits #22D3A0 (PALETTE.GREEN), keine Änderung nötig.
-NEXT: Nichts geplant — auf nächste Anweisung warten.
-QUESTION: Soll ich später auch TYPE_LABELS / TYPE_SHORT / TYPE_EXPLAIN für HIGH_FIBER ergänzen? Aktuell fallen sie auf "high fiber" / "HI" / "" zurück.
-TIMESTAMP: 23:25
+LAST_DONE: Stripe Checkout Fix — neue Server Actions submitProCheckout/submitBetaCheckout (nur FormData-Signatur) direkt am `<form action={…}>` verkabelt. useActionState-Wrapper raus, Pending-State über useFormStatus-Subkomponente, Errors via ?error=, Beta-Capacity via ?full=1. Dadurch hat das Form jetzt schon zur SSR-Zeit ein action-Attribut und Submits funktionieren auch vor Hydration.
+NEXT: Im Browser /pro und /beta testen — Email eingeben, Submit, sollte zu checkout.stripe.com weiterleiten. Bei Fehler: ?error=… in der URL und rote Fehlermeldung sichtbar.
+QUESTION:
+TIMESTAMP: 00:14
