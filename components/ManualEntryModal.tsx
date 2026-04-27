@@ -79,6 +79,15 @@ export default function ManualEntryModal({
     glucose: false, bg1h: false, bg2h: false,
   });
 
+  // Two-step wizard: "form" = inputs (meal time, macros, insulin, glucose-before),
+  // "review" = read-only summary including auto-filled 1h/2h. Save only fires
+  // from the review step. Resets to "form" each time the modal opens.
+  const [step, setStep] = useState<"form" | "review">("form");
+  // True while a CGM fetch is in-flight after a meal-time edit, so the
+  // Weiter-button can show "Glukose laden…" instead of letting the user
+  // proceed before the auto-fill resolves.
+  const [cgmLoading, setCgmLoading] = useState(false);
+
   // Reset every time the modal opens so historical entries don't leak between sessions.
   useEffect(() => {
     if (!open) return;
@@ -89,6 +98,8 @@ export default function ManualEntryModal({
     setBg1h(""); setBg1hAt(""); setBg2h(""); setBg2hAt("");
     setAutoFilled({ glucose: false, bg1h: false, bg2h: false });
     setSaving(false); setError(null);
+    setStep("form");
+    setCgmLoading(false);
   }, [open]);
 
   // Default the bg_1h / bg_2h timestamps to +1h / +2h after the meal time when
@@ -115,36 +126,66 @@ export default function ManualEntryModal({
     if (!open) return;
     const mt = parseLocalDt(mealTime);
     if (!mt) return;
+    setCgmLoading(true);
+    let cancelled = false;
     const handle = setTimeout(async () => {
       const ms = mt.getTime();
       const now = Date.now();
+      // ±5 min around "now" → use the live /api/cgm/latest endpoint so
+      // a real-time meal log gets the freshest sensor value rather than
+      // the up-to-30s-stale /history cache. Past times bypass /latest
+      // and use the historical lookup. Future times skip CGM entirely.
+      const NOW_WINDOW_MS = 5 * 60 * 1000;
+      const delta = ms - now; // negative = past, positive = future
 
-      // glucose-before always tries (meals can be backfilled or scheduled)
-      if (!glucose || autoFilled.glucose) {
-        const r = await findCgmReadingNearTime(ms);
-        if (r) {
-          setGlucose(String(Math.round(r.value)));
-          setAutoFilled(s => ({ ...s, glucose: true }));
+      try {
+        // glucose-before — only fetch if user hasn't typed something
+        // (or last value was auto-filled and meal time changed).
+        if ((!glucose || autoFilled.glucose) && delta <= NOW_WINDOW_MS) {
+          let v: number | null = null;
+          if (delta >= -NOW_WINDOW_MS) {
+            // "now" — pull the freshest reading directly from the source.
+            try {
+              const r = await fetch("/api/cgm/latest", { cache: "no-store" });
+              if (r.ok) {
+                const j = await r.json();
+                const raw = j?.current?.value;
+                if (Number.isFinite(raw)) v = Math.round(raw);
+              }
+            } catch { /* fall through to history */ }
+          }
+          if (v == null) {
+            // Past meal (or /latest unavailable) — historical lookup.
+            const hit = await findCgmReadingNearTime(ms);
+            if (hit) v = Math.round(hit.value);
+          }
+          if (!cancelled && v != null) {
+            setGlucose(String(v));
+            setAutoFilled(s => ({ ...s, glucose: true }));
+          }
         }
-      }
-      // bg_1h: only if +1h is in the past (otherwise no CGM data exists yet)
-      if (now >= ms + 60 * 60 * 1000 && (!bg1h || autoFilled.bg1h)) {
-        const r = await findCgmReadingNearTime(ms + 60 * 60 * 1000);
-        if (r) {
-          setBg1h(String(Math.round(r.value)));
-          setAutoFilled(s => ({ ...s, bg1h: true }));
+
+        // bg_1h: only if +1h is already in the past (no future CGM data).
+        if (now >= ms + 60 * 60 * 1000 && (!bg1h || autoFilled.bg1h)) {
+          const hit = await findCgmReadingNearTime(ms + 60 * 60 * 1000);
+          if (!cancelled && hit) {
+            setBg1h(String(Math.round(hit.value)));
+            setAutoFilled(s => ({ ...s, bg1h: true }));
+          }
         }
-      }
-      // bg_2h: only if +2h is in the past
-      if (now >= ms + 120 * 60 * 1000 && (!bg2h || autoFilled.bg2h)) {
-        const r = await findCgmReadingNearTime(ms + 120 * 60 * 1000);
-        if (r) {
-          setBg2h(String(Math.round(r.value)));
-          setAutoFilled(s => ({ ...s, bg2h: true }));
+        // bg_2h: only if +2h is already in the past.
+        if (now >= ms + 120 * 60 * 1000 && (!bg2h || autoFilled.bg2h)) {
+          const hit = await findCgmReadingNearTime(ms + 120 * 60 * 1000);
+          if (!cancelled && hit) {
+            setBg2h(String(Math.round(hit.value)));
+            setAutoFilled(s => ({ ...s, bg2h: true }));
+          }
         }
+      } finally {
+        if (!cancelled) setCgmLoading(false);
       }
     }, 400);
-    return () => clearTimeout(handle);
+    return () => { cancelled = true; clearTimeout(handle); setCgmLoading(false); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mealTime, open]);
 
@@ -383,6 +424,7 @@ export default function ManualEntryModal({
 
         {/* Body */}
         <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+        {step === "form" && (<>
           {/* Meal time */}
           <div>
             <label style={labelStyle}>Meal time</label>
@@ -455,48 +497,6 @@ export default function ManualEntryModal({
             </div>
           </div>
 
-          {/* Optional 1h / 2h follow-ups */}
-          <div style={{
-            border: `1px dashed ${BORDER}`,
-            borderRadius: 12,
-            padding: "12px 14px",
-            display: "flex", flexDirection: "column", gap: 10,
-          }}>
-            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", letterSpacing: "0.08em", fontWeight: 700, textTransform: "uppercase" }}>
-              Follow-up readings <span style={{ opacity: 0.6, textTransform: "none", letterSpacing: 0 }}>· optional</span>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <div>
-                <label style={labelStyle}>1h reading (mg/dL)</label>
-                <input
-                  value={bg1h}
-                  onChange={(e) => { setBg1h(e.target.value); setAutoFilled(s => ({ ...s, bg1h: false })); }}
-                  type="number" min={30} max={600}
-                  placeholder={autoFilled.bg1h ? "auto from CGM" : "—"}
-                  style={{ ...inp, color: autoFilled.bg1h ? ACCENT : "#fff" }}
-                />
-              </div>
-              <div>
-                <label style={labelStyle}>1h taken at</label>
-                <input value={bg1hAt} onChange={(e) => setBg1hAt(e.target.value)} type="datetime-local" style={inp}/>
-              </div>
-              <div>
-                <label style={labelStyle}>2h reading (mg/dL)</label>
-                <input
-                  value={bg2h}
-                  onChange={(e) => { setBg2h(e.target.value); setAutoFilled(s => ({ ...s, bg2h: false })); }}
-                  type="number" min={30} max={600}
-                  placeholder={autoFilled.bg2h ? "auto from CGM" : "—"}
-                  style={{ ...inp, color: autoFilled.bg2h ? ACCENT : "#fff" }}
-                />
-              </div>
-              <div>
-                <label style={labelStyle}>2h taken at</label>
-                <input value={bg2hAt} onChange={(e) => setBg2hAt(e.target.value)} type="datetime-local" style={inp}/>
-              </div>
-            </div>
-          </div>
-
           {error && (
             <div style={{
               fontSize: 12, color: PINK,
@@ -506,6 +506,91 @@ export default function ManualEntryModal({
               border: `1px solid ${PINK}25`,
             }}>{error}</div>
           )}
+        </>)}
+
+        {step === "review" && (() => {
+          const mt = parseLocalDt(mealTime);
+          const mtStr = mt ? mt.toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : mealTime;
+          const carbsForSave = carbsN ?? 0;
+          const cls = mealType === "AUTO" ? classifyMeal(carbsForSave, proteinN, fatN, fiberN) : mealType;
+          const clsLabel = TYPE_OPTIONS.find(o => o.value === cls)?.label ?? cls;
+          const at1 = parseLocalDt(bg1hAt);
+          const at2 = parseLocalDt(bg2hAt);
+          const Row = ({ label, value, accent }: { label: string; value: React.ReactNode; accent?: string }) => (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, padding: "8px 0", borderBottom: `1px solid ${BORDER}` }}>
+              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", letterSpacing: "0.04em" }}>{label}</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: accent ?? "#fff", textAlign: "right" }}>{value}</span>
+            </div>
+          );
+          const fmtTime = (d: Date | null) => d ? d.toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
+
+          return (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", lineHeight: 1.5 }}>
+                Prüf bitte alles. Glucose-Werte unten kommen aus deinem CGM — falls etwas fehlt, war keine Messung im Zeitfenster verfügbar.
+              </div>
+
+              {/* Meal */}
+              <div style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "10px 14px" }}>
+                <Row label="Zeit" value={mtStr} />
+                <Row label="Beschreibung" value={desc.trim() || "—"} />
+                <Row label="Klassifizierung" value={clsLabel} />
+              </div>
+
+              {/* Macros */}
+              <div style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "10px 14px" }}>
+                <Row label="Carbs"   value={`${carbsForSave} g`} />
+                <Row label="Protein" value={`${proteinN} g`} />
+                <Row label="Fat"     value={`${fatN} g`} />
+                <Row label="Fiber"   value={`${fiberN} g`} />
+                <Row label="Calories" value={`${computeCalories(carbsForSave, proteinN, fatN)} kcal`} />
+              </div>
+
+              {/* Insulin + Glucose */}
+              <div style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "10px 14px" }}>
+                <Row label="Insulin" value={insulinN != null ? `${insulinN} u` : "—"} />
+                <Row
+                  label="Glucose vorher"
+                  value={glucoseN != null ? `${glucoseN} mg/dL${autoFilled.glucose ? " · auto" : ""}` : "—"}
+                  accent={glucoseN != null && autoFilled.glucose ? ACCENT : undefined}
+                />
+              </div>
+
+              {/* Follow-ups (CGM-derived) */}
+              {(bg1hN != null || bg2hN != null) && (
+                <div style={{ background: "rgba(255,255,255,0.03)", border: `1px dashed ${BORDER}`, borderRadius: 12, padding: "10px 14px" }}>
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", letterSpacing: "0.08em", fontWeight: 700, textTransform: "uppercase", marginBottom: 4 }}>
+                    Follow-up <span style={{ opacity: 0.6, textTransform: "none", letterSpacing: 0 }}>· aus CGM</span>
+                  </div>
+                  {bg1hN != null && (
+                    <Row
+                      label={`1h (${fmtTime(at1)})`}
+                      value={`${bg1hN} mg/dL${autoFilled.bg1h ? " · auto" : ""}`}
+                      accent={autoFilled.bg1h ? ACCENT : undefined}
+                    />
+                  )}
+                  {bg2hN != null && (
+                    <Row
+                      label={`2h (${fmtTime(at2)})`}
+                      value={`${bg2hN} mg/dL${autoFilled.bg2h ? " · auto" : ""}`}
+                      accent={autoFilled.bg2h ? ACCENT : undefined}
+                    />
+                  )}
+                </div>
+              )}
+
+              {error && (
+                <div style={{
+                  fontSize: 12, color: PINK,
+                  padding: "8px 12px",
+                  background: `${PINK}10`,
+                  borderRadius: 8,
+                  border: `1px solid ${PINK}25`,
+                }}>{error}</div>
+              )}
+            </div>
+          );
+        })()}
         </div>
 
         {/* Footer */}
@@ -516,7 +601,7 @@ export default function ManualEntryModal({
           background: "rgba(255,255,255,0.02)",
         }}>
           <button
-            onClick={onClose}
+            onClick={() => step === "review" ? setStep("form") : onClose()}
             disabled={saving}
             style={{
               padding: "10px 16px", borderRadius: 10,
@@ -527,43 +612,72 @@ export default function ManualEntryModal({
               cursor: saving ? "not-allowed" : "pointer",
             }}
           >
-            Abbrechen
+            {step === "review" ? "Zurück" : "Abbrechen"}
           </button>
-          <button
-            onClick={handleSubmit}
-            disabled={!canSubmit || saving}
-            style={{
-              padding: "10px 18px", borderRadius: 10, border: "none",
-              background: !canSubmit || saving
-                ? "rgba(255,255,255,0.06)"
-                : `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
-              color: !canSubmit || saving ? "rgba(255,255,255,0.3)" : "#fff",
-              fontSize: 13, fontWeight: 700,
-              cursor: !canSubmit || saving ? "not-allowed" : "pointer",
-              boxShadow: !canSubmit || saving ? "none" : `0 4px 20px ${ACCENT}40`,
-              transition: "all 0.2s",
-              display: "flex", alignItems: "center", gap: 8,
-            }}
-          >
-            {saving ? (
-              <>
-                <style>{`@keyframes mem_spin{to{transform:rotate(360deg)}}`}</style>
-                <span style={{
-                  width: 12, height: 12,
-                  border: `1.5px solid rgba(255,255,255,0.4)`,
-                  borderTopColor: "#fff",
-                  borderRadius: "50%",
-                  animation: "mem_spin 0.7s linear infinite",
-                }}/>
-                Saving…
-              </>
-            ) : (
-              <>
-                <span style={{ fontSize: 14, lineHeight: 1, color: GREEN }}>✓</span>
-                Save entry
-              </>
-            )}
-          </button>
+          {step === "form" ? (
+            <button
+              onClick={() => {
+                if (!hasAnyMacro) {
+                  setError("Mindestens ein Makro (Carbs, Protein, Fett oder Faser) eintragen.");
+                  return;
+                }
+                setError(null);
+                setStep("review");
+              }}
+              disabled={!canSubmit || cgmLoading}
+              title={cgmLoading ? "CGM-Werte laden…" : undefined}
+              style={{
+                padding: "10px 18px", borderRadius: 10, border: "none",
+                background: !canSubmit || cgmLoading
+                  ? "rgba(255,255,255,0.06)"
+                  : `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
+                color: !canSubmit || cgmLoading ? "rgba(255,255,255,0.3)" : "#fff",
+                fontSize: 13, fontWeight: 700,
+                cursor: !canSubmit || cgmLoading ? "not-allowed" : "pointer",
+                boxShadow: !canSubmit || cgmLoading ? "none" : `0 4px 20px ${ACCENT}40`,
+                transition: "all 0.2s",
+                display: "flex", alignItems: "center", gap: 8,
+              }}
+            >
+              {cgmLoading ? "Glukose laden…" : "Weiter →"}
+            </button>
+          ) : (
+            <button
+              onClick={handleSubmit}
+              disabled={saving}
+              style={{
+                padding: "10px 18px", borderRadius: 10, border: "none",
+                background: saving
+                  ? "rgba(255,255,255,0.06)"
+                  : `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
+                color: saving ? "rgba(255,255,255,0.3)" : "#fff",
+                fontSize: 13, fontWeight: 700,
+                cursor: saving ? "not-allowed" : "pointer",
+                boxShadow: saving ? "none" : `0 4px 20px ${ACCENT}40`,
+                transition: "all 0.2s",
+                display: "flex", alignItems: "center", gap: 8,
+              }}
+            >
+              {saving ? (
+                <>
+                  <style>{`@keyframes mem_spin{to{transform:rotate(360deg)}}`}</style>
+                  <span style={{
+                    width: 12, height: 12,
+                    border: `1.5px solid rgba(255,255,255,0.4)`,
+                    borderTopColor: "#fff",
+                    borderRadius: "50%",
+                    animation: "mem_spin 0.7s linear infinite",
+                  }}/>
+                  Saving…
+                </>
+              ) : (
+                <>
+                  <span style={{ fontSize: 14, lineHeight: 1, color: GREEN }}>✓</span>
+                  Bestätigen &amp; speichern
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
     </div>
