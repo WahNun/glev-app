@@ -298,7 +298,16 @@ export default function EngineChatPanel({
           border: `1px solid ${BORDER}`,
           borderRadius: 16,
           display:"flex", flexDirection:"column",
-          height: "55vh", minHeight: 360, overflow:"hidden",
+          // Adaptive height so the whole panel (messages + input row) plus
+          // the surrounding step indicator, mic button, parser chip and
+          // bottom tab bar all fit inside the viewport on small phones
+          // (iPhone 13 mini = ~700px dvh) without scrolling, while still
+          // giving larger devices generous room. dvh accounts for iOS
+          // Safari's dynamic browser chrome better than vh.
+          // Reserved 420px = top header (76) + bottom nav (110) + step
+          // indicator (~70) + Sprechen button stack (~150) + safe areas.
+          height: "clamp(220px, calc(100dvh - 420px), 55dvh)",
+          overflow:"hidden",
         }}>
           {renderBody()}
         </div>
