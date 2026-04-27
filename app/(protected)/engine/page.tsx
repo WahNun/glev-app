@@ -7,6 +7,7 @@ import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
 import { logDebug } from "@/lib/debug";
 import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
+import { computeAdaptiveICR } from "@/lib/engine/adaptiveICR";
 import EngineLogTab, { InsulinForm, ExerciseForm } from "@/components/EngineLogTab";
 import FingerstickLogCard from "@/components/FingerstickLogCard";
 import GlevLogo from "@/components/GlevLogo";
@@ -524,28 +525,29 @@ export default function EnginePage() {
     fetchMeals()
       .then(fetched => {
         setMeals(fetched);
-        // Adaptive ICR — derive a personalised insulin:carb ratio from the
-        // user's last 14 days of meals (capped at 20 most-recent samples).
-        // HIGH evals mean past doses were too generous → push ICR up
-        // (more carbs per unit = less insulin). LOW evals mean past doses
-        // were too small → push ICR down. Read-only: never written to DB.
-        const fourteenDaysAgo = Date.now() - 14 * 24 * 3600 * 1000;
-        const recent = fetched
-          .filter(m => parseDbTs(m.created_at) >= fourteenDaysAgo)
-          .sort((a, b) => parseDbTs(b.created_at) - parseDbTs(a.created_at))
-          .slice(0, 20);
-        const evals = recent
-          .map(m => m.evaluation)
-          .filter((e): e is string => e === "HIGH" || e === "LOW" || e === "GOOD");
-        if (evals.length >= 3) {
-          const high = evals.filter(e => e === "HIGH").length;
-          const low  = evals.filter(e => e === "LOW").length;
-          const netBias = (high - low) / evals.length;
-          const newICR = Math.round(Math.min(25, Math.max(8, 15 + netBias * 4)));
+        // Adaptive ICR — single source of truth shared with the Insights
+        // page (lib/engine/adaptiveICR.ts). Outcome-weighted average of
+        // carbs/insulin across all FINALIZED meals (state==="final"):
+        // GOOD weight 1.0, SPIKE 0.7, UNDER/OVERDOSE 0.3, CHECK_CONTEXT 0.5.
+        // Read-only: never written to DB.
+        //
+        // Why this matters: the previous inline formula
+        // `clamp(8, 25, 15 + netBias*4)` had two bugs that caused the
+        // Engine recommendation to disagree with Insights:
+        //   1. Sign was inverted — LOW outcomes mean the prior dose was
+        //      TOO BIG, so ICR should go UP (less insulin per gram of
+        //      carbs), not down. The old formula pushed ICR DOWN on LOW.
+        //   2. Hard cap at 25 made it impossible to converge on the
+        //      empirical 1:37.5 some users actually need.
+        const adaptive = computeAdaptiveICR(fetched);
+        if (adaptive.global !== null && adaptive.sampleSize >= 3) {
+          // Round to 1 decimal — matches Insights display precision and
+          // keeps `runGlevEngine`'s `carbs / icr` math stable.
+          const newICR = Math.round(adaptive.global * 10) / 10;
           setAdaptedICR(newICR);
-          setIcrConfidence(evals.length >= 10 ? "high" : evals.length >= 5 ? "medium" : "low");
-          setIcrSampleSize(evals.length);
-          logDebug("ENGINE.ADAPTIVE_ICR", { newICR, sampleSize: evals.length, high, low, netBias });
+          setIcrConfidence(adaptive.sampleSize >= 10 ? "high" : adaptive.sampleSize >= 5 ? "medium" : "low");
+          setIcrSampleSize(adaptive.sampleSize);
+          logDebug("ENGINE.ADAPTIVE_ICR", { newICR, sampleSize: adaptive.sampleSize, source: "computeAdaptiveICR.global" });
         }
       })
       .catch(console.error)
