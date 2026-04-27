@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
-import { fetchMeals, deleteMeal, updateMeal, updateMealReadings, type Meal } from "@/lib/meals";
+import { fetchMeals, deleteMeal, updateMeal, type Meal } from "@/lib/meals";
 import { fetchRecentInsulinLogs, deleteInsulinLog, updateInsulinReadings, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, deleteExerciseLog, type ExerciseLog } from "@/lib/exercise";
 import { evaluateExercise, exerciseTypeLabel, patternNote, interimMessage, finalMessage, deltaColor } from "@/lib/exerciseEval";
@@ -975,61 +975,12 @@ function LifecycleBlock({ meal, onUpdated }: { meal: Meal; onUpdated: (patch: Pa
   const chipLabel = showOutcomeChip ? getEvalLabel(lc.outcome) : STATE_LABELS[lc.state];
   const c = showOutcomeChip ? getEvalColor(lc.outcome) : stateColor(lc.state);
 
-  const [bg1h, setBg1h] = useState<string>(meal.bg_1h?.toString() ?? "");
-  const [bg2h, setBg2h] = useState<string>(meal.bg_2h?.toString() ?? "");
-  const [busy, setBusy] = useState(false);
-  const [err,  setErr]  = useState<string | null>(null);
-  // Inline edit toggle for the 1h/2h reading inputs. Once a value is saved
-  // we collapse the inputs into a clean read-only block; the user can
-  // re-open them via the small "Bearbeiten" link inside this card.
-  const [editingReadings, setEditingReadings] = useState(false);
-
-  // Show 1h input from 30 min onwards (so user can record an early reading);
-  // show 2h input from 90 min onwards.
-  const show1h = lc.ageMinutes >= 30;
-  const show2h = lc.ageMinutes >= 90;
-  // Reading inputs are gated *exclusively* behind the "Bearbeiten" toggle —
-  // never auto-displayed. While the CGM countdown is running we want the
-  // top-of-card countdown chips to be the only signal (no parallel empty
-  // input nagging the user to type something), and once a value is filled
-  // we keep the read-only summary clean. The user opts in to manual
-  // entry / correction only by clicking Bearbeiten.
-  const showInput1h = show1h && editingReadings;
-  const showInput2h = show2h && editingReadings;
-  // Bearbeiten is offered as soon as any reading window has opened, even
-  // if both slots are still empty — that's the only way the user has to
-  // override / pre-empt the auto-fill while the countdown is ticking.
-  const canToggleEdit = (show1h || show2h) && !editingReadings;
-
-  async function save(field: "bg1h" | "bg2h") {
-    const raw = (field === "bg1h" ? bg1h : bg2h).trim();
-    const n = raw === "" ? null : Number(raw);
-    if (n != null && (!Number.isFinite(n) || n < 30 || n > 600)) {
-      setErr("Enter a glucose value between 30 and 600 mg/dL.");
-      return;
-    }
-    setBusy(true); setErr(null);
-    try {
-      const result = await updateMealReadings(meal.id, { [field]: n } as { bg1h?: number | null; bg2h?: number | null });
-      const now = new Date().toISOString();
-      // Optimistic local update — applies even when the column fell back to
-      // glucose_after, so the UI reflects the new value immediately.
-      if (field === "bg1h") {
-        // Only persist locally if the new column was actually written.
-        if (result.applied.includes("bg_1h")) {
-          onUpdated({ bg_1h: n, bg_1h_at: n != null ? now : null });
-        }
-      } else {
-        onUpdated(
-          result.applied.includes("bg_2h")
-            ? { bg_2h: n, bg_2h_at: n != null ? now : null }
-            : { bg_2h: n, bg_2h_at: n != null ? now : null, glucose_after: n }
-        );
-      }
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "Could not save reading.");
-    } finally { setBusy(false); }
-  }
+  // 1h/2h reading inputs intentionally live ONLY in the row-level
+  // "Bearbeiten" editor (toggled by setEditingId at the bottom-left of
+  // the expanded card). This block stays a clean read-only summary —
+  // the countdown chips above carry the pending state, the chip + delta
+  // boxes below carry the resolved one, and the user goes through the
+  // existing edit flow if they want to override anything manually.
 
   return (
     <div style={{ marginTop:14, background:`${c}10`, border:`1px solid ${c}40`, borderRadius:12, padding:"12px 14px", display:"flex", flexDirection:"column", gap:10 }}>
@@ -1058,37 +1009,6 @@ function LifecycleBlock({ meal, onUpdated }: { meal: Meal; onUpdated: (patch: Pa
           </div>
         </div>
       )}
-      {(showInput1h || showInput2h) && (
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8, marginTop:4 }}>
-          {showInput1h && (
-            <ReadingInput label="1h reading" value={bg1h} onChange={setBg1h} onSave={() => save("bg1h")} busy={busy} placeholder={meal.bg_1h?.toString() ?? "mg/dL"} />
-          )}
-          {showInput2h && (
-            <ReadingInput label="2h reading" value={bg2h} onChange={setBg2h} onSave={() => save("bg2h")} busy={busy} placeholder={meal.bg_2h?.toString() ?? "mg/dL"} />
-          )}
-        </div>
-      )}
-      {(canToggleEdit || editingReadings) && (
-        <div style={{ display:"flex", justifyContent:"flex-end", marginTop:2 }}>
-          <button
-            onClick={() => setEditingReadings(v => !v)}
-            style={{
-              background:"transparent",
-              border:`1px solid ${BORDER}`,
-              borderRadius:8,
-              color:"rgba(255,255,255,0.6)",
-              fontSize:11,
-              fontWeight:600,
-              padding:"4px 10px",
-              cursor:"pointer",
-              letterSpacing:"-0.01em",
-            }}
-          >
-            {editingReadings ? "Fertig" : "Bearbeiten"}
-          </button>
-        </div>
-      )}
-      {err && <div style={{ fontSize:11, color:PINK }}>{err}</div>}
     </div>
   );
 }
