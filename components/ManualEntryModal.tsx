@@ -8,7 +8,7 @@ import {
   computeCalories,
   type Meal,
 } from "@/lib/meals";
-import { scheduleAutoFillForMeal } from "@/lib/postMealCgmAutoFill";
+import { scheduleAutoFillForMeal, findCgmReadingNearTime } from "@/lib/postMealCgmAutoFill";
 import { supabase } from "@/lib/supabase";
 
 const ACCENT = "#4F6EF7";
@@ -72,6 +72,13 @@ export default function ManualEntryModal({
   const [saving,  setSaving]    = useState(false);
   const [error,   setError]     = useState<string | null>(null);
 
+  // CGM auto-fill provenance — tracks which BG fields the modal populated
+  // from /api/cgm/history (so a meal_time tweak can refresh them) vs which
+  // ones the user typed by hand (locked from overwrite). Reset on open.
+  const [autoFilled, setAutoFilled] = useState<{ glucose: boolean; bg1h: boolean; bg2h: boolean }>({
+    glucose: false, bg1h: false, bg2h: false,
+  });
+
   // Reset every time the modal opens so historical entries don't leak between sessions.
   useEffect(() => {
     if (!open) return;
@@ -80,6 +87,7 @@ export default function ManualEntryModal({
     setDesc(""); setCarbs(""); setProtein(""); setFat(""); setFiber("");
     setInsulin(""); setGlucose(""); setMealType("AUTO");
     setBg1h(""); setBg1hAt(""); setBg2h(""); setBg2hAt("");
+    setAutoFilled({ glucose: false, bg1h: false, bg2h: false });
     setSaving(false); setError(null);
   }, [open]);
 
@@ -93,6 +101,53 @@ export default function ManualEntryModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mealTime]);
 
+  // CGM auto-fill — when the user picks (or changes) the meal time, look up
+  // the closest CGM reading at the meal time itself for "glucose before",
+  // and at meal_time +1h / +2h for the optional follow-up readings (only
+  // if those targets are already in the past). Manually-typed values are
+  // never overwritten: the autoFilled flag records modal-owned values,
+  // and the field's onChange handler clears the flag the moment the user
+  // edits it. Debounced 400 ms so dragging the datetime input doesn't
+  // spam the network. Failures (no CGM linked, history endpoint down,
+  // no reading inside the ±60min window) silently leave the field
+  // empty — manual entry is always the fallback.
+  useEffect(() => {
+    if (!open) return;
+    const mt = parseLocalDt(mealTime);
+    if (!mt) return;
+    const handle = setTimeout(async () => {
+      const ms = mt.getTime();
+      const now = Date.now();
+
+      // glucose-before always tries (meals can be backfilled or scheduled)
+      if (!glucose || autoFilled.glucose) {
+        const r = await findCgmReadingNearTime(ms);
+        if (r) {
+          setGlucose(String(Math.round(r.value)));
+          setAutoFilled(s => ({ ...s, glucose: true }));
+        }
+      }
+      // bg_1h: only if +1h is in the past (otherwise no CGM data exists yet)
+      if (now >= ms + 60 * 60 * 1000 && (!bg1h || autoFilled.bg1h)) {
+        const r = await findCgmReadingNearTime(ms + 60 * 60 * 1000);
+        if (r) {
+          setBg1h(String(Math.round(r.value)));
+          setAutoFilled(s => ({ ...s, bg1h: true }));
+        }
+      }
+      // bg_2h: only if +2h is in the past
+      if (now >= ms + 120 * 60 * 1000 && (!bg2h || autoFilled.bg2h)) {
+        const r = await findCgmReadingNearTime(ms + 120 * 60 * 1000);
+        if (r) {
+          setBg2h(String(Math.round(r.value)));
+          setAutoFilled(s => ({ ...s, bg2h: true }));
+        }
+      }
+    }, 400);
+    return () => clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mealTime, open]);
+
   if (!open) return null;
 
   const carbsN   = num(carbs);
@@ -104,32 +159,47 @@ export default function ManualEntryModal({
   const bg1hN    = num(bg1h);
   const bg2hN    = num(bg2h);
 
-  const canSubmit = carbsN != null && carbsN > 0 && insulinN != null && glucoseN != null;
+  // Relaxed save criterion — the only hard requirement is that *some*
+  // macro was entered (otherwise the row carries no nutritional info at
+  // all and breaks downstream evaluation). Insulin, glucose-before and
+  // the 1h/2h follow-ups are now optional: glucose-before auto-fills
+  // from CGM history when a source is linked, and insulin can be a pure
+  // food-only log (e.g. a quick snack the user wants in the diary
+  // without a bolus). This unblocks "Protein Eistee · 24g protein · 0g
+  // carbs · no bolus" style entries the strict version rejected.
+  const hasAnyMacro = (carbsN ?? 0) > 0 || proteinN > 0 || fatN > 0 || fiberN > 0;
+  const canSubmit = hasAnyMacro;
 
   async function handleSubmit() {
     setError(null);
 
-    // ─── Required fields ───────────────────────────────────────────────
-    if (carbsN == null || carbsN <= 0) { setError("Carbs are required."); return; }
-    if (insulinN == null)              { setError("Insulin units are required."); return; }
-    if (glucoseN == null)              { setError("Glucose before is required."); return; }
+    // ─── Required field ────────────────────────────────────────────────
+    if (!hasAnyMacro) {
+      setError("Mindestens ein Makro (Carbs, Protein, Fett oder Faser) eintragen.");
+      return;
+    }
     const mt = parseLocalDt(mealTime);
     if (!mt) { setError("Please pick a valid meal time."); return; }
 
     // ─── Physiological ranges ──────────────────────────────────────────
     // HTML min/max are advisory — typed input can still produce out-of-range
     // values. We block obviously implausible numbers so the entry log stays
-    // analytically clean (negative insulin, BG=10, carbs=999, etc).
-    if (carbsN > 500)                            { setError("Carbs look too high — please double-check (max 500g)."); return; }
-    if (proteinN < 0 || proteinN > 500)          { setError("Protein must be between 0 and 500g."); return; }
-    if (fatN     < 0 || fatN     > 500)          { setError("Fat must be between 0 and 500g."); return; }
-    if (fiberN   < 0 || fiberN   > 200)          { setError("Fiber must be between 0 and 200g."); return; }
-    if (insulinN < 0 || insulinN > 50)           { setError("Insulin must be between 0 and 50 units."); return; }
-    if (glucoseN < 30 || glucoseN > 600)         { setError("Glucose before must be between 30 and 600 mg/dL."); return; }
+    // analytically clean (negative insulin, BG=10, carbs=999, etc). All
+    // checks now skip when the field is empty, since insulin / glucose are
+    // optional.
+    if (carbsN != null && carbsN > 500)             { setError("Carbs look too high — please double-check (max 500g)."); return; }
+    if (proteinN < 0 || proteinN > 500)             { setError("Protein must be between 0 and 500g."); return; }
+    if (fatN     < 0 || fatN     > 500)             { setError("Fat must be between 0 and 500g."); return; }
+    if (fiberN   < 0 || fiberN   > 200)             { setError("Fiber must be between 0 and 200g."); return; }
+    if (insulinN != null && (insulinN < 0 || insulinN > 50))   { setError("Insulin must be between 0 and 50 units."); return; }
+    if (glucoseN != null && (glucoseN < 30 || glucoseN > 600)) { setError("Glucose before must be between 30 and 600 mg/dL."); return; }
     if (bg1hN != null && (bg1hN < 30 || bg1hN > 600)) { setError("1h reading must be between 30 and 600 mg/dL."); return; }
     if (bg2hN != null && (bg2hN < 30 || bg2hN > 600)) { setError("2h reading must be between 30 and 600 mg/dL."); return; }
 
-    const cls = mealType === "AUTO" ? classifyMeal(carbsN, proteinN, fatN, fiberN) : mealType;
+    // Coerce missing values for the persisted row + classifier. carbs=0
+    // is legitimate (pure protein/fat snack); the classifier handles it.
+    const carbsForSave = carbsN ?? 0;
+    const cls = mealType === "AUTO" ? classifyMeal(carbsForSave, proteinN, fatN, fiberN) : mealType;
     // Evaluation is no longer pre-computed at save time — the deterministic
     // lifecycleFor pipeline (lib/engine/lifecycle.ts) decides when a row
     // reaches "final" and only THEN writes the evaluation column. When
@@ -144,11 +214,11 @@ export default function ManualEntryModal({
         parsedJson:   [],
         glucoseBefore: glucoseN,
         glucoseAfter:  null,
-        carbsGrams:   carbsN,
+        carbsGrams:   carbsForSave,
         proteinGrams: proteinN,
         fatGrams:     fatN,
         fiberGrams:   fiberN,
-        calories:     computeCalories(carbsN, proteinN, fatN),
+        calories:     computeCalories(carbsForSave, proteinN, fatN),
         insulinUnits: insulinN,
         mealType:     cls,
         evaluation:   null,
@@ -289,7 +359,7 @@ export default function ManualEntryModal({
           <div>
             <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: "-0.02em" }}>New manual entry</div>
             <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>
-              Backfill a past meal. Skips voice / GPT — saved straight to your log.
+              Backfill a past meal. Glucose-Felder füllen sich aus deinem CGM-Verlauf — eintippen reicht für den Rest.
             </div>
           </div>
           <button
@@ -375,7 +445,13 @@ export default function ManualEntryModal({
             </div>
             <div>
               <label style={labelStyle}>Glucose before (mg/dL)</label>
-              <input value={glucose} onChange={(e) => setGlucose(e.target.value)} type="number" min={30} max={600} placeholder="e.g. 115" style={inp}/>
+              <input
+                value={glucose}
+                onChange={(e) => { setGlucose(e.target.value); setAutoFilled(s => ({ ...s, glucose: false })); }}
+                type="number" min={30} max={600}
+                placeholder={autoFilled.glucose ? "auto from CGM" : "e.g. 115"}
+                style={{ ...inp, color: autoFilled.glucose ? ACCENT : "#fff" }}
+              />
             </div>
           </div>
 
@@ -392,7 +468,13 @@ export default function ManualEntryModal({
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               <div>
                 <label style={labelStyle}>1h reading (mg/dL)</label>
-                <input value={bg1h} onChange={(e) => setBg1h(e.target.value)} type="number" min={30} max={600} placeholder="—" style={inp}/>
+                <input
+                  value={bg1h}
+                  onChange={(e) => { setBg1h(e.target.value); setAutoFilled(s => ({ ...s, bg1h: false })); }}
+                  type="number" min={30} max={600}
+                  placeholder={autoFilled.bg1h ? "auto from CGM" : "—"}
+                  style={{ ...inp, color: autoFilled.bg1h ? ACCENT : "#fff" }}
+                />
               </div>
               <div>
                 <label style={labelStyle}>1h taken at</label>
@@ -400,7 +482,13 @@ export default function ManualEntryModal({
               </div>
               <div>
                 <label style={labelStyle}>2h reading (mg/dL)</label>
-                <input value={bg2h} onChange={(e) => setBg2h(e.target.value)} type="number" min={30} max={600} placeholder="—" style={inp}/>
+                <input
+                  value={bg2h}
+                  onChange={(e) => { setBg2h(e.target.value); setAutoFilled(s => ({ ...s, bg2h: false })); }}
+                  type="number" min={30} max={600}
+                  placeholder={autoFilled.bg2h ? "auto from CGM" : "—"}
+                  style={{ ...inp, color: autoFilled.bg2h ? ACCENT : "#fff" }}
+                />
               </div>
               <div>
                 <label style={labelStyle}>2h taken at</label>

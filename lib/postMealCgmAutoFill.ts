@@ -62,6 +62,22 @@ function nearestReading(history: CgmReading[], targetMs: number): { value: numbe
   return best;
 }
 
+/**
+ * Public CGM-history lookup used by the manual-entry modal to auto-fill
+ * glucose-before / bg_1h / bg_2h when the user picks a meal time. Returns
+ * null when no CGM source is linked, the history endpoint is offline, or
+ * no reading falls inside the ±MATCH_WINDOW_MIN tolerance — the caller
+ * should silently fall back to manual entry in that case.
+ *
+ * Uses the same 30 s in-memory cache as the auto-fill timers so rapid
+ * meal-time tweaks in the modal don't hammer /api/cgm/history.
+ */
+export async function findCgmReadingNearTime(targetMs: number): Promise<{ value: number; ageMin: number } | null> {
+  const hist = await fetchCgmHistory();
+  if (!hist?.history?.length) return null;
+  return nearestReading(hist.history, targetMs);
+}
+
 // User-namespaced storage keys so account switches do not bleed scheduled
 // timers across users. Falls back to the un-namespaced legacy key while a
 // user-id is being resolved on first call.
