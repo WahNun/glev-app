@@ -227,6 +227,35 @@ export default function EnginePage() {
     if (!ok) setSpeechAvail(false);
   }, []);
 
+  // On-mount Junction CGM auto-fill — fetch the latest glucose reading via
+  // /api/cgm/glucose (Junction LibreView path; the existing LibreLink-Up
+  // direct integration via handlePullCgm is independent and unchanged).
+  // Never blocks: the route is built to fail silently and return
+  // { connected: false } on any error, and this effect itself swallows
+  // network failures so the engine page always renders. We use a ref to
+  // ensure we only auto-fill on first mount — if the user has already
+  // typed a glucose value or pulled via the CGM button, we don't overwrite.
+  const cgmAutoFillTriedRef = useRef(false);
+  useEffect(() => {
+    if (cgmAutoFillTriedRef.current) return;
+    cgmAutoFillTriedRef.current = true;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch("/api/cgm/glucose", { cache: "no-store" });
+        if (!r.ok) return;
+        const j = (await r.json()) as { connected?: boolean; glucose?: number | null };
+        if (cancelled) return;
+        if (j.connected && typeof j.glucose === "number" && j.glucose > 0) {
+          setGlucose(prev => prev === "" ? String(j.glucose) : prev);
+        }
+      } catch {
+        // Spec: fail silently — CGM unavailability must never block manual entry.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   // Track viewport — mobile gets 3 separate tabs (Engine | Bolus | Exercise),
   // desktop keeps the 2-tab layout (Engine | Log) with both forms side-by-side.
   useEffect(() => {

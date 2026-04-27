@@ -7,6 +7,7 @@ import { fetchMacroTargets, saveMacroTargets, DEFAULT_MACRO_TARGETS, type MacroT
 import ImportPanel from "@/components/ImportPanel";
 import ExportPanel from "@/components/ExportPanel";
 import CgmSettingsCard from "@/components/CgmSettingsCard";
+import JunctionCgmCard from "@/components/JunctionCgmCard";
 import { parseDbDate } from "@/lib/time";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78";
@@ -349,6 +350,7 @@ export default function SettingsPage() {
               CGM
             </div>
             <CgmSettingsCard />
+            <JunctionCgmCard />
           </div>
 
           {/* Google Sheets — placeholder until OAuth flow is wired up */}
