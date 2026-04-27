@@ -1053,15 +1053,16 @@ export default function EnginePage() {
             </div>
           )}
 
-          {/* ───────── STEP 1 (FIX B): nichts außer Mic + Text-Input.
-              Voice path auto-advances inside handleVoice (line ~414).
-              Text path: type → Enter → /api/parse-food → fields fill →
-              advance to Step 2. No header, no transcript preview, no
-              "Weiter" button, no warnings. The single-line voice error
-              below the mic button stays because the user otherwise has
-              no way to tell that recording failed. ───────── */}
+          {/* ───────── STEP 1: Pill-FAB Mikrofon + AI Chat-Panel.
+              Voice path: tap mic → record → handleVoice → /api/parse-food
+              → fields fill → auto-advance to Step 2.
+              Chat path: user types into EngineChatPanel → /api/chat-macros
+              → AI replies in the message thread → onPatch fills the form
+              → if macros come back populated, auto-advance to Step 2.
+              Both inputs are visible without scrolling so the user can
+              choose freely between speaking or chatting. ───────── */}
           {stepIndex === 0 && (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 18, padding: "32px 16px 16px" }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, padding: "24px 0 8px" }}>
               <button
                 type="button"
                 onClick={() => recording ? stopRecording() : startRecording()}
@@ -1090,55 +1091,42 @@ export default function EnginePage() {
               {voiceErr && (
                 <div style={{ fontSize: 11, color: PINK, textAlign: "center", maxWidth: 360 }}>{voiceErr}</div>
               )}
-              <input
-                style={{ ...inp, height: 48, maxWidth: 360, width: "100%" }}
-                placeholder="Oder tippe dein Essen..."
-                aria-label="Essen tippen"
-                value={desc}
-                onChange={(e) => setDesc(e.target.value)}
-                disabled={parsing}
-                onKeyDown={async (e) => {
-                  if (e.key !== "Enter") return;
-                  const text = desc.trim();
-                  if (!text || parsing) return;
-                  e.preventDefault();
-                  // Mirror the voice path's parse-and-advance flow but
-                  // skip transcription. Same /api/parse-food contract,
-                  // same field fills, same auto-advance.
-                  setParsing(true);
-                  setVoiceErr("");
-                  try {
-                    const pRes = await fetch("/api/parse-food", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ text }),
-                    });
-                    const pData = await pRes.json();
-                    if (!pRes.ok) throw new Error(pData.error || "Parse failed");
-                    const t = pData.totals || {};
-                    if (t.carbs   != null) setCarbs(String(t.carbs));
-                    if (t.fiber   != null) setFiber(String(t.fiber));
-                    if (t.protein != null) setProtein(String(t.protein));
-                    if (t.fat     != null) setFat(String(t.fat));
-                    if (typeof pData.description === "string" && pData.description.trim()) {
-                      setDesc(pData.description.trim());
+              <div ref={chatPanelRef} style={{ width: "100%", marginTop: 4 }}>
+                <EngineChatPanel
+                  macros={{
+                    carbs:   Number(carbs)   || 0,
+                    protein: Number(protein) || 0,
+                    fat:     Number(fat)     || 0,
+                    fiber:   Number(fiber)   || 0,
+                  }}
+                  description={desc}
+                  onPatch={(patch) => {
+                    // AI returned macros — fill the form and (if any
+                    // macro came back populated) auto-advance to Step 2,
+                    // mirroring the voice path. Pure questions where
+                    // the AI returns zero macros leave the user on
+                    // Step 1 to keep chatting.
+                    setCarbs(String(patch.carbs));
+                    setProtein(String(patch.protein));
+                    setFat(String(patch.fat));
+                    setFiber(String(patch.fiber));
+                    if (patch.description) setDesc(patch.description);
+                    const hasMacros =
+                      patch.carbs > 0 || patch.protein > 0 ||
+                      patch.fat > 0   || patch.fiber > 0;
+                    if (hasMacros) {
+                      void handlePullCgm();
+                      setStepIndex(1);
                     }
-                    const aiCls = pData.mealType;
-                    if (typeof aiCls === "string" && ["FAST_CARBS","HIGH_FAT","HIGH_PROTEIN","BALANCED"].includes(aiCls)) {
-                      setAiMealType(aiCls);
-                    } else {
-                      setAiMealType(null);
-                    }
-                    logDebug("ENGINE.TEXT_INPUT", { text, totals: t });
-                    void handlePullCgm();
-                    setStepIndex(1);
-                  } catch (err) {
-                    setVoiceErr(err instanceof Error ? err.message : "Verarbeitung fehlgeschlagen.");
-                  } finally {
-                    setParsing(false);
-                  }
-                }}
-              />
+                  }}
+                  seed={chatSeed}
+                  isMobile={isMobile}
+                  expanded={true}
+                  onToggleExpanded={() => { /* always expanded in Step 1 */ }}
+                  parsing={parsing}
+                  hasUsedVoice={hasUsedVoice}
+                />
+              </div>
             </div>
           )}
 
