@@ -2,6 +2,8 @@ import { ACCENT, BORDER, MINT, SURFACE } from "./tokens";
 
 const ORANGE = "#FF9500";
 
+export type FeatureExtra = { color: string; title: string; text: string };
+
 function FeatureCard({
   color,
   title,
@@ -64,17 +66,18 @@ function FeatureCard({
 }
 
 /**
- * Three colored feature cards used identically across /, /beta, /pro.
+ * Three (or four) colored feature cards used across /, /beta, /pro.
  * Renders a CSS grid with class `glev-feat-grid` — the parent page
  * is responsible for providing the responsive grid CSS (3-col on
- * desktop, 1-col on mobile).
+ * desktop, 1-col on mobile). The optional `extra` slot adds a fourth
+ * card (used by /pro to show the Arztbericht-PDF feature).
  */
-export default function FeatureTrio() {
+export default function FeatureTrio({ extra }: { extra?: FeatureExtra } = {}) {
   return (
     <div className="glev-feat-grid">
       <FeatureCard
         color={ACCENT}
-        title="Sprich, statt zu tippen"
+        title="Sprach-Input, kein Formular"
         text={`Voice-Input, KI-Parser. „Pasta mit Tomatensauce, 80 g Nudeln und ein Apfel." → Makros in 2 s.`}
       />
       <FeatureCard
@@ -84,9 +87,10 @@ export default function FeatureTrio() {
       />
       <FeatureCard
         color={ORANGE}
-        title="Dokumentation, kein Coach"
-        text="Glev rechnet keine Insulin-Dosen. Alles bleibt eine Tracking-App — Therapie macht der Arzt."
+        title="Du behältst die Kontrolle"
+        text="Glev dokumentiert. Du und dein Arzt entscheiden."
       />
+      {extra && <FeatureCard color={extra.color} title={extra.title} text={extra.text} />}
     </div>
   );
 }

@@ -123,10 +123,10 @@ function ProContent() {
                 margin: 0,
               }}
             >
-              Typ 1. Neu gedacht.
+              Einmal sprechen.<br />Makros berechnet.<br />CGM verknüpft.
             </h1>
             <p style={{ fontSize: 18, lineHeight: 1.5, color: TEXT_DIM, margin: 0, maxWidth: 520 }}>
-              Der sprachgesteuerte Essens-Tracker für Typ-1-Diabetiker. Direkter Zugang ab dem {LAUNCH_DATE_LABEL}.
+              Sprach-Log. KI-Makros. CGM live. In unter 10 Sekunden dokumentiert.
             </p>
 
             <form
@@ -214,7 +214,13 @@ function ProContent() {
           boxSizing: "border-box",
         }}
       >
-        <FeatureTrio />
+        <FeatureTrio
+          extra={{
+            color: "#FF2D78",
+            title: "Arztbericht als PDF",
+            text: "Dein Tracking — fertig aufbereitet für das nächste Arztgespräch. Automatisch generiert.",
+          }}
+        />
       </section>
 
       {/* 4. Pricing */}
@@ -234,21 +240,6 @@ function ProContent() {
             { left: "Karte wird heute hinterlegt — heute keine Buchung", right: "erste Abbuchung am Launch-Tag" },
             { left: "Jederzeit kündbar", right: "im Account-Bereich oder per Email an hello@glev.app" },
           ]}
-          footer={
-            <>
-              Lieber niedriger Einstieg + Lock-in?{" "}
-              <Link
-                href="/beta"
-                style={{
-                  color: MINT,
-                  textDecoration: "underline",
-                  textUnderlineOffset: 2,
-                }}
-              >
-                glev.app/beta für €19 Reservierung
-              </Link>
-            </>
-          }
         />
       </section>
 

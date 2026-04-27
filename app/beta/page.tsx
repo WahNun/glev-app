@@ -157,10 +157,10 @@ function BetaContent() {
                 margin: 0,
               }}
             >
-              Typ 1. Neu gedacht.
+              Einmal sprechen.<br />Makros berechnet.<br />CGM verknüpft.
             </h1>
             <p style={{ fontSize: 18, lineHeight: 1.5, color: TEXT_DIM, margin: 0, maxWidth: 520 }}>
-              Der sprachgesteuerte Essens-Tracker für Typ-1-Diabetiker. Beta startet im Juli 2026.
+              Glev ist der Meal-Tracker für Typ-1-Diabetiker, der mitdenkt — Spracheingabe, KI-Makros, CGM live.
             </p>
 
             <form
@@ -218,26 +218,15 @@ function BetaContent() {
               <span>Rückerstattung jederzeit vor Launch · wird aufs erste Abo angerechnet</span>
             </div>
 
-            {count && !isFull && (
+            {!isFull && (
               <div
                 style={{
                   fontSize: 13,
-                  color: isLow ? PINK : TEXT_FAINT,
+                  color: TEXT_FAINT,
                   marginTop: 4,
-                  fontFeatureSettings: '"tnum"',
                 }}
               >
-                Noch{" "}
-                <span
-                  style={{
-                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-                    fontWeight: 600,
-                    color: isLow ? PINK : "rgba(255,255,255,0.7)",
-                  }}
-                >
-                  {remaining}
-                </span>{" "}
-                von 500 Beta-Plätzen verfügbar
+                Limitiert auf 500 Beta-Plätze.
               </div>
             )}
           </div>
