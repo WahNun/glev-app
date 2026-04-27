@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { signOut } from "@/lib/auth";
 import GlevLogo from "@/components/GlevLogo";
 import GlevLockup from "@/components/GlevLockup";
@@ -55,6 +56,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 function LayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router   = useRouter();
+  const tNav = useTranslations("nav");
   const [aboutOpen, setAboutOpen] = useState(false);
   const [actionSheetOpen, setActionSheetOpen] = useState(false);
   const engineHdr = useEngineHeader();
@@ -246,7 +248,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         padding: "6px 4px env(safe-area-inset-bottom, 0px)", zIndex: 100,
       }}>
         <MobileTab
-          label="Dashboard"
+          label={tNav("dashboard")}
           active={pathname.startsWith("/dashboard")}
           onClick={() => router.push("/dashboard")}
           icon={(a) => (
@@ -260,7 +262,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             evenly spaced; the Glev FAB is positioned absolutely above it. */}
         <div aria-hidden style={{ flex: "1 1 0", minWidth: 0 }} />
         <MobileTab
-          label="History"
+          label={tNav("history")}
           active={pathname.startsWith("/history")}
           onClick={() => router.push("/history")}
           icon={(a) => (
@@ -272,7 +274,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           )}
         />
         <MobileTab
-          label="Settings"
+          label={tNav("settings")}
           active={pathname.startsWith("/settings")}
           onClick={() => router.push("/settings")}
           icon={(a) => (

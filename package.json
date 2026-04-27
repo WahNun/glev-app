@@ -21,6 +21,7 @@
     "axios": "^1.15.2",
     "googleapis": "^171.4.0",
     "next": "^16.2.4",
+    "next-intl": "^4.9.2",
     "openai": "^6.34.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",

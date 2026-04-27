@@ -1,20 +1,40 @@
-STATUS: DONE (Mobile-Layout-Fixes /log) — Hot-reload aktiv, kein Restart nötig
+STATUS: DONE (i18n Foundation + initiale String-Replacements)
 LAST_DONE:
-  3 Mobile-Layout-Fixes für /log (Step 1):
-  #1 Pills weiter weg vom Engine-Chip — marginTop:14 auf den Pill-Tab-Container hinzugefügt. Vorher klebten [1 Essen | 2 Makros | 3 Ergebnis] direkt unter dem Workspace-Artifact-Chip "Engine". Jetzt 14px Luft + Comment.
-  #2 Chat-Panel auf Mobile sichtbar (vorher hatte ich display:none gesetzt — User will Chat aber sehen).
-  #3 Chat-Panel adaptiv: füllt jetzt den ganzen Raum zwischen AI-Parser-Chip und Bottom-Footer-Nav.
-     - .log-grid auf Mobile: display:flex, flex-direction:column, min-height:calc(100dvh - 240px) — die 240px decken Workspace-Header (~116) + Page-H1+Pills (~60) + Footer-Nav mit Safe-Area (~80) + 24px Slack für Notch-Devices.
-     - .log-grid > div:first-child (left col): flex:0 0 auto — nimmt nur Natural-Height, der Rest geht an chat-col.
-     - .chat-col auf Mobile: position:static, height:auto, max-height:none, min-height:240px (Floor), flex:1 1 auto, display:flex.
-     - !important nötig weil chat-col Inline-Styles für Desktop trägt (height:calc(100vh-180px), maxHeight:760, minHeight:420) die sonst die Cascade gewinnen.
-     - Nutzt 100dvh statt 100vh wegen iOS Safari URL-Bar-Verhalten.
-  tsc clean.
+  Spec "Bilinguale App (DE/EN) mit next-intl" Schritte 1-7 (Schritt 7 partial — wizard-chrome only).
+  Zwei technische Abweichungen von der Spec (mit Absicht):
+    1. Spec wollte deprecated @supabase/auth-helpers-nextjs → habe stattdessen den existierenden lib/supabase.ts Singleton genutzt (basiert auf @supabase/ssr + @supabase/supabase-js).
+    2. Spec's i18n.ts gab IMMER 'de' zurück → das wäre kaputt weil next-intl Messages server-side beim Request lädt; Client-Context allein wechselt die Sprache nicht. Habe stattdessen Cookie-basierte Locale-Source implementiert (NEXT_LOCALE Cookie, server liest in i18n/request.ts, Client setzt + reload bei Sprachwechsel).
 
-NEXT:
-  a) USER testen auf Replit-Preview (Hot-Reload sollte Änderungen sofort zeigen — Browser hard-refresh falls nicht)
-  b) Falls Layout passt: Push nach main (User-Auth erforderlich)
-  c) Restschritte aus Option A bleiben offen: /engine cleanen + /log?type=insulin/exercise Sub-Flow
+  Konkret gemacht:
+  ─── Foundation ───
+  • supabase/migrations/20260427_add_profiles_language.sql → angewandt (profiles.language text DEFAULT 'de')
+  • npm install next-intl
+  • messages/de.json + messages/en.json mit nav/log/engine/history/settings/common namespaces (45+ keys)
+  • i18n/request.ts → liest NEXT_LOCALE Cookie, default 'de', lädt entsprechendes JSON
+  • next.config.ts → withNextIntl wrapper hinzu
+  • app/layout.tsx → async, holt locale+messages server-side, wrappt children mit NextIntlClientProvider; html lang={locale} dynamisch
+  • lib/locale.ts → setLocale(lang) helper: schreibt Cookie, persistiert in profiles.language, location.reload()
+  • components/LanguageSync.tsx → mounted in protected layout; reconciliert beim Login DB-Sprache mit Cookie und reloadet falls divergent (Cross-Device-Sync)
 
-QUESTION: Layout jetzt richtig auf Handy? Push freigeben?
-TIMESTAMP: 23:25
+  ─── UI ───
+  • app/(protected)/settings/page.tsx → Sprache-Toggle Card als ERSTES Element im "settings" Tab. Zwei Buttons (🇩🇪 Deutsch / 🇬🇧 English), aktive Sprache hervorgehoben in ACCENT-Farbe. setCurrentLocale optimistisch + setLocale() trigger persist+reload.
+
+  ─── String-Replacements ───
+  • app/(protected)/log/page.tsx: title h1, STEP_KEYS array (statt hardcoded STEP_LABELS), pill aria-label, pill labels, chat_intro, alle 3 WizardNav nextLabel/primaryLabel/nextHint
+  • components/Layout.tsx: 3 mobile-nav labels (Dashboard / History / Settings) → tNav("dashboard"|"history"|"settings")
+
+  Bug während Implementation: de.json hatte invalid JSON in chat_placeholder weil ich „...„ mit normalen " als Schließzeichen gemixt habe. Sofort gefixt mit \" escapes. node JSON.parse jetzt clean auf beiden Files.
+
+  tsc clean. Workflow restart. Ready zum Sprache-Toggeln.
+
+NEXT (offen — separate Runden):
+  a) USER testen: Settings → "settings" Tab → Englisch klicken → Reload → Pills/Nav/Buttons jetzt Englisch?
+  b) Restliche /log-Strings: Field-Labels (Glukose vorher, Mahlzeit-Zeit, Carbs/Protein/Fat/Fiber/Calories), Klassifikations-Chip-Texte, "Speichere…" Toast, Korrektur-Bolus Sektion, Recommendation Card. Alle Reasoning-Strings (von runGlevEngine + GPT) bleiben absichtlich auf DE — die werden vom Engine generiert nicht aus Messages geholt.
+  c) /history, /dashboard, /insights Strings — separate Runden
+  d) Zwei NICHT-i18n-Restpunkte aus voriger Runde: /engine cleanen + /log?type=insulin/exercise Sub-Flow (von vor zwei Runden, noch offen)
+  e) Push nach main (User-Auth erforderlich)
+
+QUESTION:
+  Sprache-Toggle in Settings testen? Wenn das funktioniert: alle Restpunkte (b-e) priorisieren?
+
+TIMESTAMP: 23:46

@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getMessages } from "next-intl/server";
 import "./globals.css";
 import { PreventZoom } from "@/components/PreventZoom";
 
@@ -47,12 +49,21 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Locale + messages are resolved server-side from the NEXT_LOCALE
+  // cookie (see i18n/request.ts). NextIntlClientProvider hydrates the
+  // bundle into every client component below it so useTranslations()
+  // works without per-component fetches.
+  const locale = await getLocale();
+  const messages = await getMessages();
+
   return (
-    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
+    <html lang={locale} className={`${inter.variable} ${jetbrainsMono.variable}`}>
       <body>
-        <PreventZoom />
-        {children}
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <PreventZoom />
+          {children}
+        </NextIntlClientProvider>
       </body>
     </html>
   );

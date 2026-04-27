@@ -1,0 +1,76 @@
+# Fix: Desktop Layout — Responsive Wizard + Sidebar-Nav Sync
+
+## Ziel
+Die jüngsten Änderungen (Wizard auf /log, Routing-Fixes, Nav-Updates) sollen auch auf Desktop-Breite (≥768px) korrekt funktionieren und gut aussehen.
+
+## Problem 1: Desktop-Sidebar-Nav Routing
+
+In `components/Layout.tsx` gibt es neben dem Mobile-Bottom-Nav auch eine Desktop-Sidebar. Prüfe ob die Sidebar-Links noch auf die alten Routen zeigen.
+
+Sicherstellen dass in der Desktop-Sidebar gilt:
+- "Mahlzeit loggen" → `/log` (nicht `/engine`)
+- "Dashboard" → `/dashboard`
+- "Verlauf" / "History" → `/history`
+- "Einstellungen" → `/settings`
+- "Glev Engine" → `/engine` (reiner CGM/Score-Screen)
+
+Falls die Sidebar einen eigenen "Log"-Button oder "Meal"-Link hat, auf `/log` korrigieren.
+
+## Problem 2: /log Wizard auf Desktop zu schmal
+
+Der neue 3-Step-Wizard auf `/log` ist für Mobile gebaut. Auf Desktop sieht er wahrscheinlich aus wie ein schmaler Handy-Streifen in der Mitte.
+
+Fix: Wizard auf Desktop in einem zentrierten, breiteren Container mit max-width:
+
+```tsx
+// In app/(protected)/log/page.tsx — äußerster Container:
+<div style={{
+  maxWidth: 680,
+  margin: '0 auto',
+  padding: '24px 16px',
+  minHeight: '100vh'
+}}>
+  {/* Wizard content */}
+</div>
+```
+
+Auf Mobile (< 768px): volle Breite, kein max-width-Limit.
+
+## Problem 3: Desktop 2-Spalten-Layout für Step 2 (Makros)
+
+Step 2 hat 5 Felder (Carbs, Protein, Fat, Fiber, Kalorien) + Glukose + Zeit. Auf Desktop hat man Platz für ein 2-Spalten-Grid statt einfacher Stacked-Liste.
+
+```tsx
+// Step 2 Felder-Grid — Desktop 2 Spalten, Mobile 1 Spalte
+<div style={{
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+  gap: 16
+}}>
+  {/* Carbs, Protein, Fat, Fiber, Kalorien, Glukose, Zeit */}
+</div>
+```
+
+## Problem 4: Pill-Tabs auf Desktop zu klein
+
+Die Schritt-Indikatoren `[1 Essen] [2 Makros] [3 Ergebnis]` sollen auf Desktop etwas größer sein:
+
+```tsx
+// Pill-Tab Styles:
+fontSize: isMobile ? 13 : 15,
+padding: isMobile ? '6px 16px' : '8px 24px'
+```
+
+## Was NICHT geändert werden darf
+- Keine Änderungen an saveMeal-Logik
+- Keine Änderungen am Mobile-Nav (der ist bereits gefixt)
+- Keine Änderungen an der CGM/Voice-Pipeline
+- Kein Breaking Change am `/engine`-Page (noch nicht anfassen)
+
+## Breakpoint-Definition
+Verwende überall denselben Breakpoint wie bereits im Layout: `768px` (oder was aktuell in der Codebase definiert ist — prüfen mit `grep -r "768" components/Layout.tsx`).
+
+## Nach den Änderungen
+1. `tsc --noEmit` — clean
+2. In der Replit-Preview: Fenster auf Desktop-Breite ziehen, /log aufrufen, alle 3 Steps durchklicken
+3. `git add -A && git commit -m "fix: desktop responsive layout for /log wizard + sidebar nav sync" && git push origin main`

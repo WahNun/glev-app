@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { supabase } from "@/lib/supabase";
 import { reloadHistoricalEntries } from "@/lib/meals";
 import { fetchMacroTargets, saveMacroTargets, DEFAULT_MACRO_TARGETS, type MacroTargets } from "@/lib/userSettings";
@@ -9,6 +10,7 @@ import ExportPanel from "@/components/ExportPanel";
 import CgmSettingsCard from "@/components/CgmSettingsCard";
 import NightscoutSettingsCard from "@/components/NightscoutSettingsCard";
 import { parseDbDate } from "@/lib/time";
+import { setLocale, readLocaleCookie, DEFAULT_LOCALE, type Locale } from "@/lib/locale";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
@@ -35,6 +37,7 @@ function saveSettings(s: Settings) {
 }
 
 export default function SettingsPage() {
+  const tSettings = useTranslations("settings");
   const [tab, setTab]         = useState<"overview"|"settings"|"integrations"|"data">("overview");
   const [email, setEmail]     = useState("");
   const [createdAt, setCreatedAt] = useState("");
@@ -43,6 +46,14 @@ export default function SettingsPage() {
   const [mealCount, setMealCount] = useState<number>(0);
   const [reloading, setReloading] = useState(false);
   const [reloadMsg, setReloadMsg] = useState<string>("");
+  // Reflects the NEXT_LOCALE cookie so the language toggle highlights
+  // the correct button immediately on mount. Reads in an effect because
+  // document.cookie is browser-only — server render shows DEFAULT.
+  const [currentLocale, setCurrentLocale] = useState<Locale>(DEFAULT_LOCALE);
+  useEffect(() => {
+    const fromCookie = readLocaleCookie();
+    if (fromCookie) setCurrentLocale(fromCookie);
+  }, []);
   // Macro targets live in Supabase (user_settings table) rather than
   // localStorage so they sync across devices. Their own dedicated Save
   // button keeps the existing localStorage Save Settings flow untouched.
@@ -220,6 +231,45 @@ export default function SettingsPage() {
 
       {tab === "settings" && (
         <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+          {/* LANGUAGE TOGGLE — first card in the Settings tab so it's
+              easy to find. Calling setLocale() persists the choice to
+              Supabase (profiles.language), updates the NEXT_LOCALE
+              cookie, then hard-reloads so the server picks up the new
+              messages bundle. We optimistically flip currentLocale so
+              the active button highlights immediately even though the
+              page is about to refresh. */}
+          <div style={card}>
+            <div style={{ fontSize:13, fontWeight:600, marginBottom:14 }}>
+              {tSettings("language")} / Sprache / Language
+            </div>
+            <div style={{ display:"flex", gap:10 }}>
+              {(["de","en"] as const).map(loc => {
+                const active = currentLocale === loc;
+                const label = loc === "de" ? "Deutsch" : "English";
+                const flag  = loc === "de" ? "🇩🇪" : "🇬🇧";
+                return (
+                  <button
+                    key={loc}
+                    type="button"
+                    onClick={() => { setCurrentLocale(loc); void setLocale(loc); }}
+                    style={{
+                      flex:1, padding:"12px 16px", borderRadius:10,
+                      border:`1px solid ${active ? ACCENT : BORDER}`,
+                      background: active ? ACCENT : "transparent",
+                      color: active ? "#fff" : "rgba(255,255,255,0.7)",
+                      fontSize:14, fontWeight:600, cursor:"pointer",
+                      display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+                      transition:"background 120ms ease, color 120ms ease",
+                    }}
+                  >
+                    <span style={{ fontSize:18 }}>{flag}</span>
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div style={card}>
             <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>Glucose Targets</div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>

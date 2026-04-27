@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { saveMeal, classifyMeal, computeCalories, fetchMeals, type ParsedFood, type Meal } from "@/lib/meals";
 import { scheduleAutoFillForMeal } from "@/lib/postMealCgmAutoFill";
 import { supabase } from "@/lib/supabase";
@@ -67,10 +68,15 @@ function toDatetimeLocal(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-const STEP_LABELS: Array<"Essen" | "Makros" | "Ergebnis"> = ["Essen", "Makros", "Ergebnis"];
+// Translation keys for the wizard step pills. Rendered via t(STEP_KEYS[i])
+// against the "log" namespace in messages/<locale>.json. The order is the
+// canonical step order (Essen → Makros → Ergebnis); changing it would
+// reorder the visible pills, NOT just relabel them.
+const STEP_KEYS = ["step1", "step2", "step3"] as const;
 
 export default function LogPage() {
   const router = useRouter();
+  const t = useTranslations("log");
   const [recording, setRecording] = useState(false);
   const [hasActiveMeal, setHasActiveMeal] = useState(false);
   const [parsing, setParsing]     = useState(false);
@@ -562,7 +568,7 @@ export default function LogPage() {
       `}</style>
 
       <div style={{ marginBottom:6 }}>
-        <h1 style={{ fontSize:28, fontWeight:800, letterSpacing:"-0.03em", margin:0 }}>Mahlzeit loggen</h1>
+        <h1 style={{ fontSize:28, fontWeight:800, letterSpacing:"-0.03em", margin:0 }}>{t("title")}</h1>
       </div>
 
       {/* PILL TABS — display-only per spec ("Klick wechselt Step NICHT").
@@ -573,14 +579,15 @@ export default function LogPage() {
           marginTop creates visible breathing room from the workspace
           chrome above (artifact-selector "Engine" chip) — without it
           the pills look glued to that chip on narrow viewports. */}
-      <div role="tablist" aria-label="Wizard-Schritte" style={{
+      <div role="tablist" aria-label={t("wizard_steps")} style={{
         display: "flex", gap: 8, padding: "4px 0", marginTop: 14,
       }}>
-        {STEP_LABELS.map((label, i) => {
+        {STEP_KEYS.map((key, i) => {
+          const label = t(key);
           const active = i === stepIndex;
           return (
             <div
-              key={label}
+              key={key}
               role="tab"
               aria-selected={active}
               aria-current={active ? "step" : undefined}
@@ -703,9 +710,9 @@ export default function LogPage() {
               <WizardNav
                 onBack={null}
                 onNext={() => setStepIndex(1)}
-                nextLabel="Weiter zu Makros"
+                nextLabel={t("next_to_macros")}
                 nextDisabled={!canAdvanceFrom1}
-                nextHint={canAdvanceFrom1 ? null : "Sprich oder tippe ein Essen ein"}
+                nextHint={canAdvanceFrom1 ? null : t("hint_speak_or_type")}
               />
             </>
           )}
@@ -803,9 +810,9 @@ export default function LogPage() {
               <WizardNav
                 onBack={() => setStepIndex(0)}
                 onNext={() => setStepIndex(2)}
-                nextLabel="Weiter zu Ergebnis"
+                nextLabel={t("next_to_result")}
                 nextDisabled={!canAdvanceFrom2}
-                nextHint={canAdvanceFrom2 ? null : "Glukose & Kohlenhydrate sind Pflicht"}
+                nextHint={canAdvanceFrom2 ? null : t("carbs_required_hint")}
               />
             </>
           )}
@@ -944,7 +951,7 @@ export default function LogPage() {
               <WizardNav
                 onBack={() => setStepIndex(1)}
                 onNext={null}
-                primaryLabel={saving ? "Speichere…" : "Mahlzeit speichern"}
+                primaryLabel={saving ? t("saving") : t("save_meal")}
                 primaryDisabled={saving || !glucoseNum || !totalCarbs}
                 onPrimary={handleConfirm}
               />
@@ -985,9 +992,7 @@ export default function LogPage() {
           <div ref={chatScrollRef} style={{ flex:1, overflowY:"auto", padding:"14px 18px", display:"flex", flexDirection:"column", gap:10 }}>
             {chatMsgs.length === 0 && !chatBusy && (
               <div style={{ color:"rgba(255,255,255,0.35)", fontSize:12, textAlign:"center", padding:"24px 8px", lineHeight:1.6 }}>
-                Sobald du eine Mahlzeit loggst (Sprache oder Text), erklärt
-                GPT hier wie es die Makros aufgeteilt hat. Du kannst nachfragen
-                oder korrigieren — bestätigte Korrekturen werden links übernommen.
+                {t("chat_intro")}
               </div>
             )}
             {chatMsgs.map((m, i) => {

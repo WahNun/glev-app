@@ -1,0 +1,315 @@
+# Feature: Bilinguale App (DE/EN) mit next-intl
+
+## Ziel
+Die App soll vollständig auf Deutsch und Englisch verfügbar sein. User wählen ihre Sprache in Settings. Die Wahl wird in Supabase (`profiles.language`) gespeichert und beim nächsten Login wiederhergestellt.
+
+## Strategie (wichtig — nicht abweichen)
+
+**NICHT** alle Strings in Supabase speichern — das wäre ein extra DB-Request bei jedem Page-Load.
+
+Stattdessen:
+- UI-Strings → zwei JSON-Dateien im Repo (`messages/de.json` + `messages/en.json`)
+- User-Sprachpräferenz → ein Feld `language text DEFAULT 'de'` in `profiles`-Tabelle
+- Library: `next-intl` (Standard für Next.js App Router i18n)
+
+---
+
+## Schritt 1: Supabase Migration
+
+```sql
+ALTER TABLE profiles
+  ADD COLUMN IF NOT EXISTS language text DEFAULT 'de';
+```
+
+Führe diese Migration in Supabase aus (SQL Editor).
+
+---
+
+## Schritt 2: next-intl installieren
+
+```bash
+npm install next-intl
+```
+
+---
+
+## Schritt 3: Message-Dateien anlegen
+
+Erstelle `messages/de.json`:
+```json
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "history": "Verlauf",
+    "settings": "Einstellungen"
+  },
+  "log": {
+    "title": "Mahlzeit loggen",
+    "step1": "Essen",
+    "step2": "Makros",
+    "step3": "Ergebnis",
+    "carbs": "Kohlenhydrate",
+    "protein": "Protein",
+    "fat": "Fett",
+    "fiber": "Ballaststoffe",
+    "calories": "Kalorien",
+    "glucose_before": "Glukose vorher",
+    "meal_time": "Mahlzeit-Zeit",
+    "insulin": "Insulin",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "next": "Weiter",
+    "back": "Zurück",
+    "listening": "Zuhören...",
+    "tap_to_speak": "Tippe um zu sprechen"
+  },
+  "engine": {
+    "title": "Glev Engine",
+    "current_glucose": "Aktueller Glukosewert",
+    "recommendation": "Empfehlung",
+    "dose": "Dosis",
+    "confidence": "Konfidenz"
+  },
+  "history": {
+    "title": "Verlauf",
+    "insights": "Insights",
+    "entries": "Einträge",
+    "no_entries": "Noch keine Einträge"
+  },
+  "settings": {
+    "title": "Einstellungen",
+    "language": "Sprache",
+    "german": "Deutsch",
+    "english": "Englisch",
+    "cgm": "CGM Verbindung",
+    "account": "Konto",
+    "logout": "Abmelden"
+  },
+  "common": {
+    "loading": "Laden...",
+    "error": "Fehler",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "confirm": "Bestätigen"
+  }
+}
+```
+
+Erstelle `messages/en.json` mit identischer Struktur, englischen Werten:
+```json
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "history": "History",
+    "settings": "Settings"
+  },
+  "log": {
+    "title": "Log Meal",
+    "step1": "Food",
+    "step2": "Macros",
+    "step3": "Result",
+    "carbs": "Carbohydrates",
+    "protein": "Protein",
+    "fat": "Fat",
+    "fiber": "Fiber",
+    "calories": "Calories",
+    "glucose_before": "Glucose before",
+    "meal_time": "Meal time",
+    "insulin": "Insulin",
+    "save": "Save",
+    "cancel": "Cancel",
+    "next": "Next",
+    "back": "Back",
+    "listening": "Listening...",
+    "tap_to_speak": "Tap to speak"
+  },
+  "engine": {
+    "title": "Glev Engine",
+    "current_glucose": "Current glucose",
+    "recommendation": "Recommendation",
+    "dose": "Dose",
+    "confidence": "Confidence"
+  },
+  "history": {
+    "title": "History",
+    "insights": "Insights",
+    "entries": "Entries",
+    "no_entries": "No entries yet"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "german": "German",
+    "english": "English",
+    "cgm": "CGM Connection",
+    "account": "Account",
+    "logout": "Sign out"
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm"
+  }
+}
+```
+
+---
+
+## Schritt 4: next-intl Setup für App Router
+
+Erstelle `i18n.ts` im Root:
+```ts
+import { getRequestConfig } from 'next-intl/server';
+
+export default getRequestConfig(async () => {
+  // Default DE — wird später durch User-Präferenz aus Supabase ersetzt
+  const locale = 'de';
+  return {
+    locale,
+    messages: (await import(`./messages/${locale}.json`)).default
+  };
+});
+```
+
+Update `next.config.js` (oder `next.config.ts`):
+```js
+const createNextIntlPlugin = require('next-intl/plugin');
+const withNextIntl = createNextIntlPlugin('./i18n.ts');
+
+module.exports = withNextIntl({
+  // ...deine bestehende Config
+});
+```
+
+---
+
+## Schritt 5: Language Context Provider
+
+Erstelle `components/LanguageProvider.tsx`:
+```tsx
+'use client';
+import { createContext, useContext, useEffect, useState } from 'react';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+
+type Language = 'de' | 'en';
+
+const LanguageContext = createContext<{
+  language: Language;
+  setLanguage: (lang: Language) => void;
+}>({ language: 'de', setLanguage: () => {} });
+
+export function LanguageProvider({ children }: { children: React.ReactNode }) {
+  const [language, setLanguageState] = useState<Language>('de');
+  const supabase = createClientComponentClient();
+
+  useEffect(() => {
+    // Lade Sprache aus Supabase beim Start
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      supabase
+        .from('profiles')
+        .select('language')
+        .eq('id', user.id)
+        .single()
+        .then(({ data }) => {
+          if (data?.language) setLanguageState(data.language as Language);
+        });
+    });
+  }, []);
+
+  const setLanguage = async (lang: Language) => {
+    setLanguageState(lang);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from('profiles').update({ language: lang }).eq('id', user.id);
+    }
+  };
+
+  return (
+    <LanguageContext.Provider value={{ language, setLanguage }}>
+      {children}
+    </LanguageContext.Provider>
+  );
+}
+
+export const useLanguage = () => useContext(LanguageContext);
+```
+
+Wrap `app/layout.tsx` mit `<LanguageProvider>`.
+
+---
+
+## Schritt 6: Sprach-Toggle in Settings
+
+In `app/(protected)/settings/page.tsx` einen Language-Selector hinzufügen:
+
+```tsx
+import { useLanguage } from '@/components/LanguageProvider';
+
+// Inside component:
+const { language, setLanguage } = useLanguage();
+
+// UI:
+<div>
+  <h3>Sprache / Language</h3>
+  <div style={{ display: 'flex', gap: 8 }}>
+    <button
+      onClick={() => setLanguage('de')}
+      style={{
+        background: language === 'de' ? '#4F6EF7' : 'transparent',
+        color: language === 'de' ? 'white' : '#4F6EF7',
+        border: '1px solid #4F6EF7',
+        borderRadius: 8,
+        padding: '8px 16px'
+      }}
+    >
+      🇩🇪 Deutsch
+    </button>
+    <button
+      onClick={() => setLanguage('en')}
+      style={{
+        background: language === 'en' ? '#4F6EF7' : 'transparent',
+        color: language === 'en' ? 'white' : '#4F6EF7',
+        border: '1px solid #4F6EF7',
+        borderRadius: 8,
+        padding: '8px 16px'
+      }}
+    >
+      🇬🇧 English
+    </button>
+  </div>
+</div>
+```
+
+---
+
+## Schritt 7: Strings in Komponenten ersetzen (Priorität: /log zuerst)
+
+In jeder Komponente:
+```tsx
+import { useTranslations } from 'next-intl';
+
+// Inside component:
+const t = useTranslations('log');
+
+// Verwendung:
+<label>{t('carbs')}</label>  // → "Kohlenhydrate" oder "Carbohydrates"
+```
+
+Fange mit `app/(protected)/log/page.tsx` an (größte Wirkung), dann `/settings`, dann `/history`, dann Layout-Nav.
+
+---
+
+## Wichtige Hinweise
+
+- `tsc --noEmit` nach jedem Schritt ausführen
+- Erst Schritt 1-4 (Setup) commiten, dann Schritt 5-7 schrittweise
+- Fehlende Strings in den JSON-Dateien werden von next-intl als Fehler geloggt — gut so, so findet man fehlende Übersetzungen sofort
+- Fallback-Locale ist `de` — wenn ein String fehlt, zeigt next-intl den deutschen Text
+
+## Am Ende: Push zu main
+```bash
+git add -A && git commit -m "feat: i18n setup (DE/EN) with next-intl + language toggle in settings" && git push origin main
+```
