@@ -46,9 +46,8 @@ export default function SettingsPage() {
   // localStorage so they sync across devices. Their own dedicated Save
   // button keeps the existing localStorage Save Settings flow untouched.
   const [macroTargets, setMacroTargets] = useState<MacroTargets>(DEFAULT_MACRO_TARGETS);
-  const [macroSaving, setMacroSaving] = useState(false);
-  const [savedMacros, setSavedMacros] = useState(false);
-  const [macroError, setMacroError]   = useState("");
+  const [saveError, setSaveError] = useState("");
+  const [saving, setSaving]       = useState(false);
 
   useEffect(() => {
     setSettings(loadSettings());
@@ -64,10 +63,20 @@ export default function SettingsPage() {
     fetchMacroTargets().then(setMacroTargets).catch(() => {});
   }, []);
 
-  function handleSave() {
-    saveSettings(settings);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  async function handleSave() {
+    setSaving(true);
+    setSaveError("");
+    try {
+      saveSettings(settings);
+      await saveMacroTargets(macroTargets);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "Save failed");
+      setTimeout(() => setSaveError(""), 4000);
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function handleReloadHistorical() {
@@ -93,21 +102,6 @@ export default function SettingsPage() {
 
   function updMacro<K extends keyof MacroTargets>(key: K, val: MacroTargets[K]) {
     setMacroTargets(prev => ({ ...prev, [key]: val }));
-  }
-
-  async function handleSaveMacroTargets() {
-    setMacroSaving(true);
-    setMacroError("");
-    try {
-      await saveMacroTargets(macroTargets);
-      setSavedMacros(true);
-      setTimeout(() => setSavedMacros(false), 2000);
-    } catch (e) {
-      setMacroError(e instanceof Error ? e.message : "Save failed");
-      setTimeout(() => setMacroError(""), 4000);
-    } finally {
-      setMacroSaving(false);
-    }
   }
 
   const card: React.CSSProperties = { background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"20px 24px" };
@@ -301,42 +295,29 @@ export default function SettingsPage() {
                 </div>
               ))}
             </div>
-            <div style={{ display:"flex", alignItems:"center", gap:12, marginTop:16, flexWrap:"wrap" }}>
-              <button
-                onClick={handleSaveMacroTargets}
-                disabled={macroSaving}
-                style={{
-                  padding:"10px 18px", borderRadius:10, border:`1px solid ${ACCENT}40`,
-                  cursor: macroSaving ? "wait" : "pointer",
-                  background:`${ACCENT}15`, color:ACCENT, fontSize:13, fontWeight:600,
-                  opacity: macroSaving ? 0.6 : 1,
-                }}
-              >
-                {macroSaving ? "Speichere…" : savedMacros ? "✓ Gespeichert" : "Makro-Ziele speichern"}
+          </div>
+
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            <div style={{ display:"flex", gap:10 }}>
+              <button onClick={handleSave} disabled={saving} style={{
+                flex:1, padding:"14px", borderRadius:12, border:"none",
+                cursor: saving ? "wait" : "pointer",
+                background:`linear-gradient(135deg, ${ACCENT}, #6B8BFF)`, color:"#fff",
+                fontSize:15, fontWeight:700, boxShadow:`0 4px 20px ${ACCENT}40`,
+                opacity: saving ? 0.7 : 1,
+              }}>
+                {saving ? "Speichere…" : saved ? "✓ Gespeichert!" : "Einstellungen speichern"}
               </button>
               <button
-                onClick={() => setMacroTargets(DEFAULT_MACRO_TARGETS)}
-                style={{ padding:"10px 16px", borderRadius:10, border:`1px solid ${BORDER}`, background:"transparent", color:"rgba(255,255,255,0.4)", fontSize:13, cursor:"pointer" }}
+                onClick={() => { setSettings(DEFAULTS); setMacroTargets(DEFAULT_MACRO_TARGETS); }}
+                style={{ padding:"14px 20px", borderRadius:12, border:`1px solid ${BORDER}`, background:"transparent", color:"rgba(255,255,255,0.4)", fontSize:14, cursor:"pointer" }}
               >
                 Zurücksetzen
               </button>
-              {macroError && (
-                <span style={{ fontSize:12, color:PINK }}>{macroError}</span>
-              )}
             </div>
-          </div>
-
-          <div style={{ display:"flex", gap:10 }}>
-            <button onClick={handleSave} style={{
-              flex:1, padding:"14px", borderRadius:12, border:"none", cursor:"pointer",
-              background:`linear-gradient(135deg, ${ACCENT}, #6B8BFF)`, color:"#fff",
-              fontSize:15, fontWeight:700, boxShadow:`0 4px 20px ${ACCENT}40`,
-            }}>
-              {saved ? "✓ Gespeichert!" : "Einstellungen speichern"}
-            </button>
-            <button onClick={() => setSettings(DEFAULTS)} style={{ padding:"14px 20px", borderRadius:12, border:`1px solid ${BORDER}`, background:"transparent", color:"rgba(255,255,255,0.4)", fontSize:14, cursor:"pointer" }}>
-              Zurücksetzen
-            </button>
+            {saveError && (
+              <div style={{ fontSize:12, color:PINK, paddingLeft:4 }}>{saveError}</div>
+            )}
           </div>
         </div>
       )}
