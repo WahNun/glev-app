@@ -169,6 +169,14 @@ export default function EnginePage() {
   // = not yet saved (default), number = saved with that many IE. The user's
   // explicit "Neues Essen" click clears this and resets the form.
   const [wizardSavedDose, setWizardSavedDose] = useState<number | null>(null);
+  // Step 2 tertiary path: experienced users can type the bolus dose
+  // directly (without running the engine) via a small collapsible
+  // input row below the "Bolus berechnen" secondary button.
+  // directBolusOpen toggles the inline number-input + save row;
+  // directBolusValue is the IE entered. Both reset when the wizard
+  // is reset (handleNewMeal) so the next meal starts clean.
+  const [directBolusOpen, setDirectBolusOpen] = useState(false);
+  const [directBolusValue, setDirectBolusValue] = useState("");
   // Tabs-expanded state lives in the global EngineHeaderContext so the
   // chevron control can render in the mobile app header (oben rechts
   // next to Live + user icon) instead of inside this page body. We
@@ -692,6 +700,62 @@ export default function EnginePage() {
     }
   }
 
+  // Step 2 tertiary path: commit the meal with a user-typed bolus dose
+  // (no engine run). Same persistence pipeline as handleSaveWithoutBolus
+  // (classification, calorie calc, saveMeal, schedule CGM follow-ups);
+  // only the insulin_units value differs. Lands in the same green
+  // confirmation via setWizardSavedDose so the three save paths
+  // (no-bolus / engine-recommended / direct-entry) all converge on
+  // the identical "✓ Gespeichert — N IE geloggt" success state.
+  async function handleSaveWithDirectBolus() {
+    setConfirmErr("");
+    const cNum = parseFloat(carbs);
+    if (!Number.isFinite(cNum) || cNum < 0) {
+      setConfirmErr("Bitte Kohlenhydrate eintragen (0 ist erlaubt).");
+      return;
+    }
+    const iNum = parseFloat(directBolusValue);
+    if (!Number.isFinite(iNum) || iNum < 0) {
+      setConfirmErr("Bitte gültige IE eintragen (≥ 0).");
+      return;
+    }
+    const pNum  = parseFloat(protein) || 0;
+    const fNum  = parseFloat(fat)     || 0;
+    const fbNum = parseFloat(fiber)   || 0;
+    const gParsed = glucose.trim() === "" ? NaN : parseFloat(glucose);
+    const gNum = Number.isFinite(gParsed) ? gParsed : null;
+    const cls = aiMealType ?? classifyMeal(cNum, pNum, fNum, fbNum);
+    const cal = computeCalories(cNum, pNum, fNum);
+    const mealIso = mealTime ? new Date(mealTime).toISOString() : new Date().toISOString();
+    setConfirming(true);
+    try {
+      const saved = await saveMeal({
+        inputText: desc.trim() || transcript.trim() || "(manual entry)",
+        parsedJson: [{ name: desc.trim() || "meal", grams: 0, carbs: cNum, protein: pNum, fat: fNum, fiber: fbNum }],
+        glucoseBefore: gNum,
+        glucoseAfter: null,
+        carbsGrams: cNum,
+        proteinGrams: pNum,
+        fatGrams: fNum,
+        fiberGrams: fbNum,
+        calories: cal,
+        insulinUnits: iNum,
+        mealType: cls,
+        evaluation: null,
+        createdAt: mealIso,
+        mealTime: mealIso,
+      });
+      void scheduleJobsForLog({ logId: saved.id, logType: "meal", refTimeIso: mealIso });
+      fetchMeals().then(setMeals).catch(() => {});
+      logDebug("ENGINE.SAVE_DIRECT_BOLUS", { id: saved.id, carbs: cNum, glucose: gNum, mealType: cls, insulinUnits: iNum });
+      setWizardSavedDose(iNum);
+    } catch (e) {
+      setConfirmErr(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setConfirming(false);
+    }
+  }
+
   // Centralized post-save reset — used by both Step 2 (no-bolus) and
   // Step 3 (bolus) "Neues Essen" buttons so the two save paths share
   // identical reset semantics. keepGlucose: true preserves the latest
@@ -702,6 +766,8 @@ export default function EnginePage() {
     setReasoningExpanded(false);
     setWizardSavedDose(null);
     setConfirmErr("");
+    setDirectBolusOpen(false);
+    setDirectBolusValue("");
   }
 
   // Confirm Log writes the full meal+bolus row to the `meals` table via
@@ -1261,15 +1327,25 @@ export default function EnginePage() {
                 </div>
               </div>
 
-              {/* FIX A v2: Two-path action row.
-                  Primary "Speichern (ohne Bolus)" → handleSaveWithoutBolus
-                    commits with insulin_units = 0, lands in green confirm.
-                  Secondary "Bolus berechnen →" → handleRun runs the engine
-                    and advances to Step 3 (recommendation + bolus save).
-                  Tertiary "← Zurück" → back to Step 1.
-                  The user is never forced through the bolus path just to
-                  log a meal — Direkt-Speichern is always one click away. */}
+              {/* Three-path action row, visually tiered:
+                    1. PRIMARY  — "Speichern (ohne Bolus)" full-width
+                       accent button. Commits insulin_units = 0; lands
+                       in the green Step-2 success state.
+                    2. SECONDARY — "Bolus berechnen →" outline button.
+                       Always clickable (only disabled while another
+                       action is in flight); never carbs-gated since
+                       greying it out makes it feel unavailable. Runs
+                       the engine and advances to Step 3.
+                    3. TERTIARY — "Bolus direkt eingeben" link-style.
+                       For experienced users who know their dose; toggles
+                       a tiny inline number input + "Speichern mit X IE"
+                       which commits with the typed dose and lands in the
+                       same green success state.
+                    4. "← Zurück" stays at the bottom for back-nav.
+                  All three save paths converge on the identical
+                  wizardSavedDose / "✓ Gespeichert — N IE" confirm. */}
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {/* PRIMARY ────────────────────────────────────────── */}
                 <button
                   onClick={handleSaveWithoutBolus}
                   disabled={confirming || running}
@@ -1283,19 +1359,25 @@ export default function EnginePage() {
                 >
                   {confirming ? "Speichere…" : "✓ Speichern (ohne Bolus)"}
                 </button>
+
+                {/* SECONDARY ──────────────────────────────────────── */}
                 {(() => {
-                  const enabled = !running && !confirming && parseFloat(carbs) > 0;
+                  // Only blocked by transient busy states; never by
+                  // carbs == 0 — the user explicitly asked for this
+                  // button to always look clickable.
+                  const blocked = running || confirming;
                   return (
                     <button
                       onClick={handleRun}
-                      disabled={!enabled}
+                      disabled={blocked}
                       style={{
                         width: "100%", height: 48, borderRadius: 10,
-                        border: `1px solid ${enabled ? ACCENT + "60" : BORDER}`,
+                        border: `1px solid ${ACCENT}60`,
                         background: "transparent",
-                        color: enabled ? ACCENT : "rgba(255,255,255,0.35)",
+                        color: ACCENT,
                         fontSize: 14, fontWeight: 700, letterSpacing: "-0.01em",
-                        cursor: enabled ? "pointer" : "not-allowed",
+                        cursor: blocked ? "wait" : "pointer",
+                        opacity: blocked ? 0.7 : 1,
                         transition: "all 0.2s",
                         display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
                       }}
@@ -1311,6 +1393,118 @@ export default function EnginePage() {
                     </button>
                   );
                 })()}
+
+                {/* TERTIARY ───────────────────────────────────────── */}
+                {!directBolusOpen ? (
+                  <button
+                    type="button"
+                    onClick={() => setDirectBolusOpen(true)}
+                    disabled={running || confirming}
+                    style={{
+                      width: "100%", height: 32, borderRadius: 6,
+                      border: "none", background: "transparent",
+                      color: "rgba(255,255,255,0.55)",
+                      fontSize: 12, fontWeight: 600, letterSpacing: "-0.01em",
+                      cursor: running || confirming ? "not-allowed" : "pointer",
+                      textDecoration: "underline", textUnderlineOffset: 3,
+                      textDecorationColor: "rgba(255,255,255,0.25)",
+                    }}
+                  >
+                    Bolus direkt eingeben
+                  </button>
+                ) : (
+                  <div
+                    style={{
+                      display: "flex", flexDirection: "column", gap: 8,
+                      padding: 12, borderRadius: 10,
+                      background: "rgba(79,110,247,0.05)",
+                      border: `1px solid ${ACCENT}30`,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: ACCENT, letterSpacing: "-0.01em" }}>
+                        Direkter Bolus
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => { setDirectBolusOpen(false); setDirectBolusValue(""); setConfirmErr(""); }}
+                        disabled={confirming}
+                        aria-label="Abbrechen"
+                        style={{
+                          background: "transparent", border: "none",
+                          color: "rgba(255,255,255,0.45)", fontSize: 18,
+                          lineHeight: 1, cursor: confirming ? "not-allowed" : "pointer",
+                          padding: "0 4px",
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+                      <div style={{ position: "relative", flex: "0 0 110px" }}>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          step="0.5"
+                          min="0"
+                          value={directBolusValue}
+                          onChange={(e) => setDirectBolusValue(e.target.value)}
+                          placeholder="0"
+                          disabled={confirming}
+                          autoFocus
+                          style={{
+                            width: "100%", height: 44,
+                            background: "#0D0D12",
+                            border: `1px solid ${BORDER}`,
+                            borderRadius: 10,
+                            padding: "0 36px 0 12px",
+                            color: "#fff", fontSize: 16, fontWeight: 700,
+                            outline: "none", textAlign: "right",
+                          }}
+                        />
+                        <span style={{
+                          position: "absolute", right: 12, top: "50%",
+                          transform: "translateY(-50%)",
+                          color: "rgba(255,255,255,0.45)", fontSize: 12, fontWeight: 600,
+                          pointerEvents: "none",
+                        }}>
+                          IE
+                        </span>
+                      </div>
+                      {(() => {
+                        const iNum = parseFloat(directBolusValue);
+                        const valid = Number.isFinite(iNum) && iNum >= 0;
+                        const blocked = confirming || running || !valid;
+                        return (
+                          <button
+                            type="button"
+                            onClick={handleSaveWithDirectBolus}
+                            disabled={blocked}
+                            style={{
+                              flex: 1, height: 44, borderRadius: 10,
+                              border: "none",
+                              background: confirming
+                                ? "rgba(79,110,247,0.4)"
+                                : valid ? ACCENT : "rgba(79,110,247,0.25)",
+                              color: "#fff",
+                              fontSize: 13, fontWeight: 700, letterSpacing: "-0.01em",
+                              cursor: blocked ? (confirming ? "wait" : "not-allowed") : "pointer",
+                              transition: "background 0.2s",
+                            }}
+                          >
+                            {confirming
+                              ? "Speichere…"
+                              : valid
+                                ? `Speichern mit ${iNum} IE`
+                                : "Speichern"}
+                          </button>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                )}
+
+                {/* BACK ───────────────────────────────────────────── */}
                 <button
                   onClick={() => setStepIndex(0)}
                   disabled={running || confirming}
