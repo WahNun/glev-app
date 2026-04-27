@@ -988,16 +988,18 @@ function LifecycleBlock({ meal, onUpdated }: { meal: Meal; onUpdated: (patch: Pa
   // show 2h input from 90 min onwards.
   const show1h = lc.ageMinutes >= 30;
   const show2h = lc.ageMinutes >= 90;
-  // A reading slot is "filled" once the meal row carries a real value —
-  // typically populated either by the user or by the CGM auto-fill job.
-  const filled1h = meal.bg_1h != null;
-  const filled2h = meal.bg_2h != null;
-  const showInput1h = show1h && (editingReadings || !filled1h);
-  const showInput2h = show2h && (editingReadings || !filled2h);
-  // Show the small "Bearbeiten" link only when at least one slot is
-  // already filled and we're currently in read-only mode — no point
-  // offering an edit affordance when nothing exists yet to edit.
-  const canToggleEdit = (filled1h || filled2h) && !editingReadings;
+  // Reading inputs are gated *exclusively* behind the "Bearbeiten" toggle —
+  // never auto-displayed. While the CGM countdown is running we want the
+  // top-of-card countdown chips to be the only signal (no parallel empty
+  // input nagging the user to type something), and once a value is filled
+  // we keep the read-only summary clean. The user opts in to manual
+  // entry / correction only by clicking Bearbeiten.
+  const showInput1h = show1h && editingReadings;
+  const showInput2h = show2h && editingReadings;
+  // Bearbeiten is offered as soon as any reading window has opened, even
+  // if both slots are still empty — that's the only way the user has to
+  // override / pre-empt the auto-fill while the countdown is ticking.
+  const canToggleEdit = (show1h || show2h) && !editingReadings;
 
   async function save(field: "bg1h" | "bg2h") {
     const raw = (field === "bg1h" ? bg1h : bg2h).trim();
