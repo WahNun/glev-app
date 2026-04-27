@@ -163,6 +163,15 @@ export default function EnginePage() {
   // the rendering switches per step. Component is single-mount so going
   // back/forward preserves all field values automatically.
   const [stepIndex, setStepIndex] = useState<0 | 1 | 2>(0);
+  // FIX A: After Step 3 save, we hold the committed dose here so the wizard
+  // can show "✓ Gespeichert — N IE geloggt" instead of auto-resetting. Null
+  // = not yet saved (default), number = saved with that many IE. The user's
+  // explicit "Neues Essen" click clears this and resets the form.
+  const [wizardSavedDose, setWizardSavedDose] = useState<number | null>(null);
+  // FIX C: Tab strip is collapsed by default to give Step 1's voice/text
+  // input the full vertical real estate. Header shows the active tab label
+  // + chevron; expanding reveals the buttons. Selecting a tab auto-collapses.
+  const [tabsExpanded, setTabsExpanded] = useState(false);
   // Step 3 GPT Reasoning section is collapsible to keep the result card
   // scannable; user expands by tapping the chevron.
   const [reasoningExpanded, setReasoningExpanded] = useState(false);
@@ -582,16 +591,12 @@ export default function EnginePage() {
       void scheduleJobsForLog({ logId: saved.id, logType: "meal", refTimeIso: mealIso });
       // Refresh meals so the next recommendation immediately benefits.
       fetchMeals().then(setMeals).catch(() => {});
-      setDecisionToast(`✓ Gespeichert mit ${result.dose}u Bolus`);
-      setTimeout(() => setDecisionToast(null), 2500);
       logDebug("ENGINE.WIZARD_SAVE", { id: saved.id, carbs: cNum, insulin: result.dose, glucose: gNum, mealType: cls });
-      // Reset to Step 1 with empty form for the next meal entry.
-      // keepGlucose: true so the next meal starts with the latest reading
-      // already populated (saves a CGM tap). resetForm also clears `result`,
-      // `desc`, `transcript`, and the macro fields.
-      resetForm({ keepGlucose: true });
-      setStepIndex(0);
-      setReasoningExpanded(false);
+      // FIX A: Hold on Step 3 with a green confirmation. No auto-reset, no
+      // auto-navigate — the user explicitly clicks "Neues Essen" below to
+      // clear the form and return to Step 1. This avoids the surprise of
+      // the screen jumping away the moment they hit Save.
+      setWizardSavedDose(result.dose);
     } catch (e) {
       setConfirmErr(e instanceof Error ? e.message : "Save failed");
     } finally {
@@ -838,51 +843,87 @@ export default function EnginePage() {
         </p>
       </div>
 
-      {/* TABS — full-width strip with equal-share buttons so the
-          active pill never visually outweighs its neighbours and the
-          row never overflows narrow viewports. Mobile uses shorter
-          labels to keep each chip on a single line at 13px. */}
-      <div style={{
-        display:"flex", width:"100%", gap:4, marginBottom:24,
-        background:"#0D0D12", border:`1px solid ${BORDER}`,
-        borderRadius:12, padding:4, boxSizing:"border-box",
-      }}>
-        {(isMobile
+      {/* FIX C: Collapsible tab strip. Default = collapsed (just a header
+          chip showing the active tab + chevron). Click header to expand
+          and see all buttons. Selecting a tab auto-collapses again so
+          Step 1's voice/input area gets max vertical real estate. */}
+      {(() => {
+        const tabsCfg = isMobile
           ? [
               { id:"engine"      as const, label:"Engine" },
               { id:"bolus"       as const, label:"Insulin" },
-              { id:"exercise"    as const, label:"Exercise" },
+              { id:"exercise"    as const, label:"Übung" },
               { id:"fingerstick" as const, label:"Glukose" },
             ]
           : [
               { id:"engine"      as const, label:"Engine" },
               { id:"log"         as const, label:"Log" },
               { id:"fingerstick" as const, label:"Glukose" },
-            ]
-        ).map(t => {
-          const on = tab === t.id;
-          return (
+            ];
+        const activeLabel = tabsCfg.find(t => t.id === tab)?.label ?? "Engine";
+        return (
+          <div style={{ marginBottom: 24 }}>
             <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
+              type="button"
+              onClick={() => setTabsExpanded(v => !v)}
+              aria-expanded={tabsExpanded}
+              aria-controls="engine-tabs-body"
               style={{
-                flex:"1 1 0", minWidth:0,
-                padding: isMobile ? "8px 6px" : "8px 18px",
-                borderRadius:8, border:"none",
-                background: on ? `${ACCENT}22` : "transparent",
-                color:    on ? ACCENT : "rgba(255,255,255,0.55)",
-                fontSize: isMobile ? 12 : 13,
-                fontWeight:700, letterSpacing:"-0.01em",
-                cursor:"pointer", transition:"all 0.15s",
-                textAlign:"center", whiteSpace:"nowrap",
-                overflow:"hidden", textOverflow:"ellipsis",
+                display:"flex", alignItems:"center", justifyContent:"space-between",
+                width:"100%", padding:"10px 14px",
+                background:"#0D0D12", border:`1px solid ${BORDER}`,
+                borderRadius:12, cursor:"pointer",
+                color: ACCENT, fontSize: 13, fontWeight: 700, letterSpacing:"-0.01em",
+                transition:"background 0.15s",
               }}
             >
-              {t.label}
+              <span>{activeLabel}</span>
+              <svg
+                width="16" height="16" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                aria-hidden="true"
+                style={{ transition:"transform 0.2s", transform: tabsExpanded ? "rotate(180deg)" : "rotate(0deg)" }}
+              >
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
             </button>
-          );
-        })}
-      </div>
+            {tabsExpanded && (
+              <div
+                id="engine-tabs-body"
+                style={{
+                  display:"flex", width:"100%", gap:4, marginTop:6,
+                  background:"#0D0D12", border:`1px solid ${BORDER}`,
+                  borderRadius:12, padding:4, boxSizing:"border-box",
+                }}
+              >
+                {tabsCfg.map(t => {
+                  const on = tab === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => { setTab(t.id); setTabsExpanded(false); }}
+                      style={{
+                        flex:"1 1 0", minWidth:0,
+                        padding: isMobile ? "8px 6px" : "8px 18px",
+                        borderRadius:8, border:"none",
+                        background: on ? `${ACCENT}22` : "transparent",
+                        color:    on ? ACCENT : "rgba(255,255,255,0.55)",
+                        fontSize: isMobile ? 12 : 13,
+                        fontWeight:700, letterSpacing:"-0.01em",
+                        cursor:"pointer", transition:"all 0.15s",
+                        textAlign:"center", whiteSpace:"nowrap",
+                        overflow:"hidden", textOverflow:"ellipsis",
+                      }}
+                    >
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {tab === "engine" && (
         <div style={{ maxWidth: 600, margin: "0 auto" }}>
@@ -946,92 +987,92 @@ export default function EnginePage() {
             </div>
           )}
 
-          {/* ───────── STEP 1: Was hast du gegessen? ───────── */}
+          {/* ───────── STEP 1 (FIX B): nichts außer Mic + Text-Input.
+              Voice path auto-advances inside handleVoice (line ~414).
+              Text path: type → Enter → /api/parse-food → fields fill →
+              advance to Step 2. No header, no transcript preview, no
+              "Weiter" button, no warnings. The single-line voice error
+              below the mic button stays because the user otherwise has
+              no way to tell that recording failed. ───────── */}
           {stepIndex === 0 && (
-            <div style={{ ...card, padding: "28px 24px" }}>
-              <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", textAlign: "center", marginBottom: 24, color: "#fff" }}>
-                Was hast du gegessen?
-              </h2>
-
-              {/* Voice pill — large, primary, centered (56px h, 280px max w,
-                  bg ACCENT, border-radius 28px). Same recording handlers as
-                  before; auto-advance to Step 2 fires inside handleVoice. */}
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginBottom: 24 }}>
-                <button
-                  type="button"
-                  onClick={() => recording ? stopRecording() : startRecording()}
-                  disabled={parsing || !speechAvail}
-                  aria-label={recording ? "Aufnahme stoppen" : "Sprach-Eingabe starten"}
-                  style={{
-                    display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 10,
-                    width: "100%", maxWidth: 280, height: 56, borderRadius: 28,
-                    background: ACCENT,
-                    border: "none",
-                    color: "#fff",
-                    fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
-                    cursor: parsing || !speechAvail ? "not-allowed" : "pointer",
-                    animation: recording ? "engVPulse 0.8s ease-in-out infinite" : undefined,
-                    opacity: parsing || !speechAvail ? 0.55 : 1,
-                    transition: "background 0.2s, opacity 0.2s",
-                    WebkitTapHighlightColor: "transparent",
-                  }}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <rect x="9" y="2" width="6" height="11" rx="3" fill="currentColor" stroke="none"/>
-                    <path d="M5 10a7 7 0 0 0 14 0"/>
-                    <line x1="12" y1="19" x2="12" y2="22"/>
-                    <line x1="9" y1="22" x2="15" y2="22"/>
-                  </svg>
-                  {recording ? "Stopp" : parsing ? "Verarbeite…" : "Sprechen"}
-                </button>
-                {transcript && (
-                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", fontStyle: "italic", textAlign: "center", lineHeight: 1.4, maxWidth: 360 }}>
-                    &quot;{transcript}&quot;
-                  </div>
-                )}
-                {voiceErr && <div style={{ fontSize: 11, color: PINK, textAlign: "center" }}>{voiceErr}</div>}
-                {!speechAvail && !voiceErr && (
-                  <div style={{ fontSize: 10, color: ORANGE, textAlign: "center" }}>
-                    Sprach-Eingabe wird in diesem Browser nicht unterstützt.
-                  </div>
-                )}
-              </div>
-
-              {/* Text-input fallback — user can also type the description.
-                  Bound to the same `desc` state the voice path fills, so
-                  either input path drives the same downstream save. */}
-              <div style={{ marginBottom: 24 }}>
-                <input
-                  style={{ ...inp, height: 48 }}
-                  placeholder="Beschreib dein Essen… z.B. Haferflocken mit Banane"
-                  aria-label="Beschreibung deines Essens"
-                  value={desc}
-                  onChange={(e) => setDesc(e.target.value)}
-                />
-              </div>
-
-              {/* Weiter button — enabled when EITHER voice produced a
-                  transcript OR the user typed at least 5 chars manually.
-                  parsing is excluded so the button can't fire mid-transcribe. */}
-              {(() => {
-                const enabled = !parsing && (transcript.trim().length > 0 || desc.trim().length >= 5);
-                return (
-                  <button
-                    onClick={() => setStepIndex(1)}
-                    disabled={!enabled}
-                    style={{
-                      width: "100%", height: 48, borderRadius: 12, border: "none",
-                      background: enabled ? ACCENT : "rgba(79,110,247,0.25)",
-                      color: enabled ? "#fff" : "rgba(255,255,255,0.55)",
-                      fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
-                      cursor: enabled ? "pointer" : "not-allowed",
-                      transition: "background 0.2s",
-                    }}
-                  >
-                    Weiter →
-                  </button>
-                );
-              })()}
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 18, padding: "32px 16px 16px" }}>
+              <button
+                type="button"
+                onClick={() => recording ? stopRecording() : startRecording()}
+                disabled={parsing || !speechAvail}
+                aria-label={recording ? "Aufnahme stoppen" : "Sprach-Eingabe starten"}
+                style={{
+                  display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 10,
+                  width: "100%", maxWidth: 280, height: 56, borderRadius: 28,
+                  background: ACCENT, border: "none", color: "#fff",
+                  fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
+                  cursor: parsing || !speechAvail ? "not-allowed" : "pointer",
+                  animation: recording ? "engVPulse 0.8s ease-in-out infinite" : undefined,
+                  opacity: parsing || !speechAvail ? 0.55 : 1,
+                  transition: "background 0.2s, opacity 0.2s",
+                  WebkitTapHighlightColor: "transparent",
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="9" y="2" width="6" height="11" rx="3" fill="currentColor" stroke="none"/>
+                  <path d="M5 10a7 7 0 0 0 14 0"/>
+                  <line x1="12" y1="19" x2="12" y2="22"/>
+                  <line x1="9" y1="22" x2="15" y2="22"/>
+                </svg>
+                {recording ? "Stopp" : parsing ? "Verarbeite…" : "Sprechen"}
+              </button>
+              {voiceErr && (
+                <div style={{ fontSize: 11, color: PINK, textAlign: "center", maxWidth: 360 }}>{voiceErr}</div>
+              )}
+              <input
+                style={{ ...inp, height: 48, maxWidth: 360, width: "100%" }}
+                placeholder="Oder tippe dein Essen..."
+                aria-label="Essen tippen"
+                value={desc}
+                onChange={(e) => setDesc(e.target.value)}
+                disabled={parsing}
+                onKeyDown={async (e) => {
+                  if (e.key !== "Enter") return;
+                  const text = desc.trim();
+                  if (!text || parsing) return;
+                  e.preventDefault();
+                  // Mirror the voice path's parse-and-advance flow but
+                  // skip transcription. Same /api/parse-food contract,
+                  // same field fills, same auto-advance.
+                  setParsing(true);
+                  setVoiceErr("");
+                  try {
+                    const pRes = await fetch("/api/parse-food", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ text }),
+                    });
+                    const pData = await pRes.json();
+                    if (!pRes.ok) throw new Error(pData.error || "Parse failed");
+                    const t = pData.totals || {};
+                    if (t.carbs   != null) setCarbs(String(t.carbs));
+                    if (t.fiber   != null) setFiber(String(t.fiber));
+                    if (t.protein != null) setProtein(String(t.protein));
+                    if (t.fat     != null) setFat(String(t.fat));
+                    if (typeof pData.description === "string" && pData.description.trim()) {
+                      setDesc(pData.description.trim());
+                    }
+                    const aiCls = pData.mealType;
+                    if (typeof aiCls === "string" && ["FAST_CARBS","HIGH_FAT","HIGH_PROTEIN","BALANCED"].includes(aiCls)) {
+                      setAiMealType(aiCls);
+                    } else {
+                      setAiMealType(null);
+                    }
+                    logDebug("ENGINE.TEXT_INPUT", { text, totals: t });
+                    void handlePullCgm();
+                    setStepIndex(1);
+                  } catch (err) {
+                    setVoiceErr(err instanceof Error ? err.message : "Verarbeitung fehlgeschlagen.");
+                  } finally {
+                    setParsing(false);
+                  }
+                }}
+              />
             </div>
           )}
 
@@ -1247,35 +1288,81 @@ export default function EnginePage() {
                     {(desc.trim() || transcript.trim() || "Mahlzeit")} · {parseFloat(carbs) || 0}g KH
                   </div>
 
-                  {/* Primary commit + back link. handleWizardSave writes the
-                      meal AND insulin_units = result.dose in one shot, then
-                      resets to Step 1 for the next entry. */}
-                  <button
-                    onClick={handleWizardSave}
-                    disabled={confirming}
-                    style={{
-                      width: "100%", height: 52, borderRadius: 12, border: "none",
-                      background: confirming ? "rgba(79,110,247,0.4)" : ACCENT,
-                      color: "#fff", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
-                      cursor: confirming ? "wait" : "pointer",
-                      marginBottom: 8,
-                      transition: "background 0.2s",
-                    }}
-                  >
-                    {confirming ? "Speichere…" : "✓ Bestätigen & Speichern"}
-                  </button>
-                  <button
-                    onClick={() => setStepIndex(1)}
-                    disabled={confirming}
-                    style={{
-                      width: "100%", height: 36, borderRadius: 8,
-                      border: "none", background: "transparent",
-                      color: "#666680", fontSize: 13, fontWeight: 500,
-                      cursor: confirming ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    ← Nochmal anpassen
-                  </button>
+                  {/* FIX A: Pre-save → show Save + Back. Post-save →
+                      hide both, show green confirmation + "Neues Essen"
+                      reset button. The user must explicitly opt in to
+                      starting a new meal — the save no longer surprises
+                      them by jumping away from this screen. */}
+                  {wizardSavedDose === null ? (
+                    <>
+                      <button
+                        onClick={handleWizardSave}
+                        disabled={confirming}
+                        style={{
+                          width: "100%", height: 52, borderRadius: 12, border: "none",
+                          background: confirming ? "rgba(79,110,247,0.4)" : ACCENT,
+                          color: "#fff", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
+                          cursor: confirming ? "wait" : "pointer",
+                          marginBottom: 8,
+                          transition: "background 0.2s",
+                        }}
+                      >
+                        {confirming ? "Speichere…" : "✓ Bestätigen & Speichern"}
+                      </button>
+                      <button
+                        onClick={() => setStepIndex(1)}
+                        disabled={confirming}
+                        style={{
+                          width: "100%", height: 36, borderRadius: 8,
+                          border: "none", background: "transparent",
+                          color: "#666680", fontSize: 13, fontWeight: 500,
+                          cursor: confirming ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        ← Nochmal anpassen
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <div
+                        style={{
+                          width: "100%", padding: "14px 18px",
+                          borderRadius: 12,
+                          background: `${GREEN}12`,
+                          border: `1px solid ${GREEN}40`,
+                          color: GREEN,
+                          fontSize: 14, fontWeight: 700, letterSpacing: "-0.01em",
+                          textAlign: "center",
+                          marginBottom: 10,
+                        }}
+                        role="status"
+                        aria-live="polite"
+                      >
+                        ✓ Gespeichert — {wizardSavedDose} IE geloggt
+                      </div>
+                      <button
+                        onClick={() => {
+                          // resetForm clears desc/transcript/macros/result.
+                          // keepGlucose: true preserves the latest CGM
+                          // reading so the next meal doesn't need a re-pull.
+                          resetForm({ keepGlucose: true });
+                          setStepIndex(0);
+                          setReasoningExpanded(false);
+                          setWizardSavedDose(null);
+                          setConfirmErr("");
+                        }}
+                        style={{
+                          width: "100%", height: 52, borderRadius: 12, border: "none",
+                          background: ACCENT,
+                          color: "#fff", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
+                          cursor: "pointer",
+                          transition: "background 0.2s",
+                        }}
+                      >
+                        Neues Essen
+                      </button>
+                    </>
+                  )}
 
                   {/* Important medical disclaimer — same wording as the legacy result panel. */}
                   <div style={{ marginTop: 24, padding: "14px 18px", background: "rgba(255,255,255,0.03)", borderRadius: 12, border: `1px solid ${BORDER}` }}>
