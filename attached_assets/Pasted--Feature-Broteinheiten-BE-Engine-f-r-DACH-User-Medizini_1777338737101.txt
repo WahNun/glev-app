@@ -1,0 +1,261 @@
+# Feature: Broteinheiten (BE) Engine für DACH-User
+
+## Medizinischer Kontext
+- 1 BE = 12g Kohlenhydrate (Deutschland & Österreich Standard)
+- 1 KE = 10g Kohlenhydrate (Schweiz)
+- DACH-Diabetologen schreiben ICR als "BE/IE" (z.B. 2 BE/IE = 1 IE pro 24g KH)
+- US-Standard: g KH/IE direkt
+
+## Ziel
+User aus DACH können in Settings ihre bevorzugte Einheit wählen:
+- **g KH** (international, aktueller Standard in App)
+- **BE** (1 BE = 12g, Deutschland/Österreich)
+- **KE** (1 KE = 10g, Schweiz)
+
+Die Engine rechnet intern IMMER in Gramm — die Einheit ist nur Display + Input-Umrechnung.
+
+---
+
+## Schritt 1: Supabase Migration
+
+```sql
+ALTER TABLE profiles
+  ADD COLUMN IF NOT EXISTS carb_unit text DEFAULT 'g';
+  -- Werte: 'g' | 'BE' | 'KE'
+```
+
+---
+
+## Schritt 2: Konstanten in `lib/carbUnits.ts` anlegen
+
+Neue Datei erstellen:
+
+```ts
+// lib/carbUnits.ts
+
+export type CarbUnit = 'g' | 'BE' | 'KE';
+
+export const CARB_UNITS: Record<CarbUnit, { label: string; gPerUnit: number; description: string }> = {
+  g: {
+    label: 'g KH',
+    gPerUnit: 1,
+    description: 'Gramm Kohlenhydrate (international)'
+  },
+  BE: {
+    label: 'BE',
+    gPerUnit: 12,
+    description: 'Broteinheit — 1 BE = 12g KH (Deutschland, Österreich)'
+  },
+  KE: {
+    label: 'KE',
+    gPerUnit: 10,
+    description: 'Kohlenhydrateinheit — 1 KE = 10g KH (Schweiz)'
+  }
+};
+
+// Gramm → gewählte Einheit
+export function gToUnit(grams: number, unit: CarbUnit): number {
+  const { gPerUnit } = CARB_UNITS[unit];
+  return Math.round((grams / gPerUnit) * 10) / 10; // 1 Dezimalstelle
+}
+
+// Gewählte Einheit → Gramm
+export function unitToG(value: number, unit: CarbUnit): number {
+  return value * CARB_UNITS[unit].gPerUnit;
+}
+
+// ICR-Anzeige: g/IE → BE/IE oder KE/IE
+export function icrToUnit(icrGperIE: number, unit: CarbUnit): number {
+  // icrGperIE = Gramm KH pro 1 IE Insulin
+  // z.B. 24 g/IE → 2 BE/IE (bei 12g/BE)
+  return Math.round((icrGperIE / CARB_UNITS[unit].gPerUnit) * 10) / 10;
+}
+
+// BE/IE oder KE/IE → g/IE (für interne Engine-Berechnung)
+export function icrFromUnit(icrInUnit: number, unit: CarbUnit): number {
+  return icrInUnit * CARB_UNITS[unit].gPerUnit;
+}
+```
+
+---
+
+## Schritt 3: useCarbUnit Hook
+
+Neue Datei `hooks/useCarbUnit.ts`:
+
+```ts
+'use client';
+import { useState, useEffect } from 'react';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { CarbUnit, gToUnit, unitToG, icrToUnit } from '@/lib/carbUnits';
+
+export function useCarbUnit() {
+  const [unit, setUnitState] = useState<CarbUnit>('g');
+  const supabase = createClientComponentClient();
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      supabase
+        .from('profiles')
+        .select('carb_unit')
+        .eq('id', user.id)
+        .single()
+        .then(({ data }) => {
+          if (data?.carb_unit) setUnitState(data.carb_unit as CarbUnit);
+        });
+    });
+  }, []);
+
+  const setUnit = async (u: CarbUnit) => {
+    setUnitState(u);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from('profiles').update({ carb_unit: u }).eq('id', user.id);
+    }
+  };
+
+  return {
+    unit,
+    setUnit,
+    // Helper direkt auf Hook — kein Import von lib nötig in Komponenten
+    display: (grams: number) => `${gToUnit(grams, unit)} ${unit}`,
+    toGrams: (value: number) => unitToG(value, unit),
+    displayICR: (icrGperIE: number) => `${icrToUnit(icrGperIE, unit)} ${unit}/IE`,
+  };
+}
+```
+
+---
+
+## Schritt 4: Settings — Einheit-Selector
+
+In `app/(protected)/settings/page.tsx` einen BE/KE/g-Selector hinzufügen:
+
+```tsx
+import { useCarbUnit } from '@/hooks/useCarbUnit';
+import { CARB_UNITS, CarbUnit } from '@/lib/carbUnits';
+
+// Inside component:
+const { unit, setUnit } = useCarbUnit();
+
+// UI — unter "Einstellungen" oder in einem "Diabetes"-Abschnitt:
+<section>
+  <h3 style={{ color: '#888', fontSize: 12, marginBottom: 8 }}>
+    KOHLENHYDRAT-EINHEIT
+  </h3>
+  <div style={{ display: 'flex', gap: 8 }}>
+    {(['g', 'BE', 'KE'] as CarbUnit[]).map((u) => (
+      <button
+        key={u}
+        onClick={() => setUnit(u)}
+        style={{
+          background: unit === u ? '#4F6EF7' : 'transparent',
+          color: unit === u ? 'white' : '#4F6EF7',
+          border: '1px solid #4F6EF7',
+          borderRadius: 8,
+          padding: '8px 16px',
+          cursor: 'pointer',
+          flex: 1
+        }}
+      >
+        <div style={{ fontWeight: 600 }}>{u === 'g' ? 'g KH' : u}</div>
+        <div style={{ fontSize: 11, opacity: 0.8 }}>
+          {u === 'g' ? '—' : `1 ${u} = ${CARB_UNITS[u].gPerUnit}g`}
+        </div>
+      </button>
+    ))}
+  </div>
+  <p style={{ fontSize: 12, color: '#666', marginTop: 8 }}>
+    {CARB_UNITS[unit].description}
+  </p>
+</section>
+```
+
+---
+
+## Schritt 5: Log-Wizard Step 2 — Carbs-Input in gewählter Einheit
+
+In `app/(protected)/log/page.tsx` Step 2:
+
+```tsx
+const { unit, toGrams, display } = useCarbUnit();
+
+// Carbs-Input Label dynamisch:
+<label>Kohlenhydrate ({unit})</label>
+<input
+  type="number"
+  step={unit === 'g' ? 1 : 0.5}
+  placeholder={unit === 'g' ? 'z.B. 60' : unit === 'BE' ? 'z.B. 5' : 'z.B. 6'}
+  value={carbsInUnit}   // lokaler State in der gewählten Einheit
+  onChange={(e) => {
+    setCarbsInUnit(Number(e.target.value));
+    // Intern immer Gramm speichern:
+    setCarbs(toGrams(Number(e.target.value)));
+  }}
+/>
+<span>{unit}</span>
+
+// Makros-Vorschau aus AI-Parse auch konvertieren:
+// Wenn AI-Parse 60g zurückgibt → display(60) → "5 BE" oder "6 KE" oder "60 g KH"
+```
+
+**Wichtig:** `saveMeal()` schreibt IMMER Gramm in die DB (`carbs_grams`). Die Konvertierung passiert nur im UI.
+
+---
+
+## Schritt 6: Engine-Output in gewählter Einheit
+
+In der Glev Engine Empfehlung (Step 3 + /engine):
+
+```tsx
+const { displayICR } = useCarbUnit();
+
+// Statt "ICR: 24 g/IE" zeigen:
+// BE-User sieht: "ICR: 2 BE/IE"
+// KE-User sieht: "2.4 KE/IE"
+// g-User sieht: "24 g/IE"
+
+<span>Adaptiver ICR: {displayICR(adaptiveICR)}</span>
+```
+
+Auch die Empfehlung in Step 3:
+
+```tsx
+// "Deine Mahlzeit hat 5 BE → bei ICR 2 BE/IE empfehlen wir 2.5 IE"
+// Statt: "Deine Mahlzeit hat 60g KH → bei ICR 24g/IE empfehlen wir 2.5 IE"
+```
+
+---
+
+## Schritt 7: History / Einträge-Liste
+
+In `/history` Einträge-Cards:
+
+```tsx
+const { display } = useCarbUnit();
+
+// Statt "60g KH" zeigt User mit BE-Setting: "5 BE"
+<span>{display(entry.carbs_grams)}</span>
+```
+
+---
+
+## Was NICHT geändert wird
+- DB speichert immer Gramm (`carbs_grams numeric`) — kein Migration auf BE nötig
+- AI-Parse gibt immer Gramm zurück — nur UI-Layer konvertiert
+- ICR-Berechnung läuft intern in g/IE — `displayICR()` konvertiert nur für Anzeige
+- Kein Breaking Change an bestehenden Daten
+
+---
+
+## Reihenfolge
+1. `lib/carbUnits.ts` anlegen
+2. Supabase Migration ausführen
+3. `hooks/useCarbUnit.ts` anlegen
+4. Settings Selector einbauen
+5. `/log` Step 2 Carbs-Input anpassen
+6. Engine ICR-Anzeige anpassen
+7. History-Cards anpassen
+8. `tsc --noEmit` — clean
+9. `git add -A && git commit -m "feat: BE/KE/g carb unit selector for DACH users" && git push origin main`
