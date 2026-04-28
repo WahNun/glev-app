@@ -537,7 +537,7 @@ export default function LogPage() {
   const liveTypeLabel = liveType ? (TYPE_LABELS[liveType] || liveType) : "Auto from macros";
 
   return (
-    <div style={{ maxWidth:1100, margin:"0 auto", display:"flex", flexDirection:"column", gap:14 }}>
+    <div style={{ maxWidth:680, margin:"0 auto", padding:"24px 16px", display:"flex", flexDirection:"column", gap:14 }}>
       <style>{`
         @keyframes vPulse { 0%,100%{opacity:0.35;transform:scale(1)} 50%{opacity:1;transform:scale(1.05)} }
         @keyframes spin   { to { transform: rotate(360deg) } }
@@ -827,7 +827,7 @@ export default function LogPage() {
                       Beschreibung stay full-row outside this grid because
                       they have special concerns (CGM button, datetime
                       input, free text). */}
-                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(220px, 1fr))", gap:10 }}>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(240px, 1fr))", gap:16 }}>
                     <div>
                       <label style={labelStyle}>{t("carbs_label")} <span style={{ color:PINK, marginLeft:4 }}>*</span></label>
                       <input value={carbs} onChange={e => setCarbs(e.target.value)} placeholder={t("placeholder_carbs")} type="number" style={inp}/>

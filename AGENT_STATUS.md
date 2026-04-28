@@ -1,71 +1,35 @@
 # Agent Status
 
-## Letzter abgeschlossener Task
-**FS-Pill (manueller Fingerstick-Trigger) aus Live-Glucose-Karte entfernt**
+## Last completed task
+**Task A — Desktop Layout für /log Wizard** (this turn)
 
-### Kontext
-User-Klärung erhalten: das `FS`-Pill mit Plus-Symbol im Header der
-"Glucose · Live"-Karte soll weg (öffnete bisher das
-Fingerstick-Quick-Input-Modal). Carry-over aus #25-Track.
+Edits in `app/(protected)/log/page.tsx`:
+- L543 outer container: `maxWidth:1100` → `maxWidth:680`, added `padding:"24px 16px"`
+- L833 Step-2 macros grid: `minmax(220px, 1fr)` → `minmax(240px, 1fr)`, gap `10` → `16`
+- A.(c) sidebar nav: **already correct** — `Mahlzeit loggen` routes to `/log` in both `components/GlevActionSheet.tsx:184` (`go("/log")`) and `app/(protected)/dashboard/page.tsx:404` (`router.push("/log")`). No `/engine` route exists for this label.
 
-### Was geändert wurde (`components/CurrentDayGlucoseCard.tsx`)
-1. **Import entfernt**: `FingerstickQuickInput` (war nur hier verwendet
-   — Grep über `components/` + `app/` bestätigt: keine weiteren Refs).
-2. **State weg**: `[fsOpen, setFsOpen]` mitsamt `useState`.
-3. **Callback weg**: `onFsSaved` (war nur als `onSaved`-Prop des Modals
-   gebraucht).
-4. **Prop-Wiring weg**: `onOpenFs={() => setFsOpen(true)}` aus dem
-   `<HeroFront>`-Aufruf, sowie `onOpenFs` aus dem
-   HeroFront-Function-Signature + Type.
-5. **Modal-Render weg**: `<FingerstickQuickInput open=… />` plus der
-   3D-Transform-Sibling-Erklärungs-Kommentar.
-6. **Button weg**: Der `<button>` mit Plus-SVG + "FS"-Label im Header
-   (zwischen `ageLabel` und `<CgmFetchButton>`) inkl. seines
-   "Manual fingerstick entry"-Kommentars.
-7. **Header-Kommentar aktualisiert**: ASCII-Layout-Hinweis "age + FS +
-   refresh + flip RIGHT" → "age + refresh + flip RIGHT" + neuer Satz
-   der erklärt, dass die Karte jetzt read-only ist und manuelle
-   FS-Eingabe weiterhin über `FingerstickLogCard` möglich bleibt.
+`tsc --noEmit --skipLibCheck` → clean.
 
-### Was bewusst NICHT angefasst wurde
-- `fetchRecentFingersticks(24)`-Aufruf in `loadHistory` bleibt — die
-  FS-Daten werden weiterhin geladen und im Chart als 8×8-Quadrate +
-  als "FS"-Override-Badge neben dem aktuellen Wert dargestellt. Nur
-  die manuelle Eingabe-UI fällt weg.
-- `FS_OVERRIDE_WINDOW_MS` + `fsOverride`-Logik + das "FS"-Badge bei
-  L315 (Anzeige neben dem Wert wenn FS aktuell überstimmt) bleiben.
-- `components/FingerstickQuickInput.tsx` selbst nicht gelöscht — kann
-  bei Bedarf wieder eingebunden werden.
-- `components/FingerstickLogCard.tsx` ist die alternative Surface für
-  manuelle Eingabe (existiert separat) — unverändert.
+## Push status
+**Blocked at platform level.** `git push origin main` now returns:
+> Destructive git operations are not allowed in the main agent.
 
-### Verifikation
-- `npx tsc --noEmit --skipLibCheck` → keine Errors.
-- HMR übernimmt JSX-Änderung sofort, Workflow-Restart nicht nötig.
+Auto-checkpoint `ddd063d` (Pro-page grid 2x2, last turn) is committed locally + on `gitsafe-backup/main` but NOT pushed to `origin/main`. Same for this turn's log-page edits. User must push manually from shell, or request a background task agent to do it.
 
-## Vorheriger Task in dieser Session — angefragt aber NICHT durchgeführt
-**"Fix the redirect-in-try-catch bug in app/actions/stripe.ts"**
+## Pending follow-ups (queued by user — not yet started)
+- **Task B — i18n DE/EN (next-intl)**: Most infra ALREADY exists — `next-intl` is in deps, `messages/de.json` + `messages/en.json` exist, `i18n/request.ts` exists, `useTranslations`/`useLocale` already imported in `app/(protected)/log/page.tsx`. Remaining: expand message coverage, add Settings DE/EN toggle, `LanguageProvider` client component to persist `profiles.language`, wire in `app/layout.tsx`.
+- **Task C — Broteinheiten-Engine UI wiring**: `lib/carbUnits.ts` ready, migration `profiles.carb_unit` applied (per scratchpad). Remaining: `hooks/useCarbUnit.ts`, Settings g/BE/KE selector, dynamic Carbs label in /log Step 2, Engine ICR display unit, History card carb display.
+- **Locale-aware date/time pattern**: `lib/engine/chipState.ts` done. Remaining: insulinEval, EngineLogTab, MealEntryCardCollapsed, MealEntryLightExpand, CGM components, entries/page L116/185/1255/1394/1617/1778. Pattern: `localeToBcp47(useLocale())` from `@/lib/time`.
 
-Der angefragte Bug existiert nicht:
-- Datei `app/actions/stripe.ts` existiert nicht. Die Stripe-Server-
-  Actions liegen in `app/beta/actions.ts` und `app/pro/actions.ts`.
-- Beide Dateien wurden gescannt: jeder `redirect()`-Call steht
-  AUSSERHALB jedes try/catch-Blocks. Der `try`-Block enthält nur
-  `fetch` + `res.json()`; `redirect(data.url)` kommt erst nach den
-  Status-Checks im normalen Code-Flow.
-- `submitBetaCheckout` / `submitProCheckout` haben gar kein try/catch
-  — nur direkte Redirects.
-- `isRedirectError` einzubauen wäre dead code.
+## Key files (current state)
+- `app/(protected)/log/page.tsx` — 1197 lines, wizard (3 steps), already uses next-intl `useTranslations`
+- `app/pro/page.tsx` — feature grid 2x2 (last turn)
+- `components/CurrentDayGlucoseCard.tsx` — FS-pill removed, header has GLUCOSE·LIVE label / age / refresh / ↺ flip
+- `components/Layout.tsx` — sidebar nav: dashboard / glev (→/engine) / history / settings
+- `components/GlevActionSheet.tsx` — "Mahlzeit loggen" → /log ✓
+- `messages/de.json`, `messages/en.json` — exist, partial coverage
+- `i18n/request.ts` — exists
+- `lib/carbUnits.ts` — exists (no UI wiring yet)
 
-Kein Patch, kein Commit, kein Push gemacht. User-Feedback abgewartet.
-
-### Pausiert bzw. carry-over (verbleibend)
-1. **Locale-aware date/time formatting**: Nur `lib/engine/chipState.ts`
-   gelandet, Rest offen.
-2. **BE/KE feature**: Migration applied, UI wiring pending.
-
-### NICHT gemacht (per Direktive)
-- Kein `git commit` (auto-checkpoint übernimmt).
-- Kein `git push` — das User-Push-Request war an den Stripe-Fix
-  gekoppelt (der nicht existiert); FS-Removal war separater Task.
-- Kein `suggest_deploy` (Beta-Mode).
+## Workflow note
+`Start application` workflow showed `EADDRINUSE :::5000` again this turn — second start attempt collided with the running dev server. Restarted at end of turn.
