@@ -226,18 +226,23 @@ export default function EngineChatPanel({
         border: `1px solid ${BORDER}`,
         borderRadius: 16,
         display:"flex", flexDirection:"column",
-        // Adaptive height so the WHOLE panel (header + messages + input)
-        // always fits between the Sprechen button above and the fixed
-        // bottom tab bar below, on every device. svh = "small viewport
-        // height" = the viewport with browser chrome at its tallest
-        // (worst case), so first-paint never clips the input row.
-        // Reservation 540px = global header + bottom nav + Layout safe-
-        // area paddings + step indicator + Sprechen + voice err + the
-        // new card header (~52) + Weiter/Zurück + flex gaps. Min 140
-        // keeps input + ~1 message visible on iPhone SE 1st-gen / mini
-        // in Safari instead of letting the input clip below the nav.
+        // Per UX request: the chat panel should claim the ENTIRE
+        // vertical space between the Sprechen button above and the
+        // fixed bottom tab bar below — no longer capped at 50 dvh.
+        // svh = the viewport at its smallest (browser chrome at its
+        // tallest), so first-paint never clips the input row.
+        // Reservation ~340 px = global app header (~64) + step
+        // indicator + sub-tab toggle + Sprechen pill + small gaps
+        // (~196) + bottom tab bar (~80). Min 200 keeps the panel
+        // usable on iPhone SE 1st-gen / mini in case the reservation
+        // overshoots on a particular browser chrome height. The
+        // Weiter / Zurück action button is intentionally pushed
+        // below the visible area when shown — Step 1 only reveals
+        // it once macros are filled, at which point the user is
+        // about to advance anyway.
         height:
-          "clamp(140px, calc(100svh - 540px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 50dvh)",
+          "calc(100svh - 340px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))",
+        minHeight: 200,
         overflow:"hidden",
       }}>
         {header}
