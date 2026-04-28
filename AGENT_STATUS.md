@@ -1,70 +1,60 @@
-STATUS: DONE (Glev-FAB-Submenü fixt + Desktop-Sidebar auf 4 Items)
+STATUS: DONE (Exercise-Tab auf /engine konsistent gemacht)
 LAST_DONE:
-  Spec aus zwei User-Beschwerden in Folge:
-  • "führt nicht zum gewünschten insulin bolus log screen"
-  • "führt nicht zum gewünschten FS Glucose manual entry screen"
-  Plus Klarstellung: "es gibt 4 elemente im nav … log wird mit insights zu verlauf
-  zusammengeführt"
+  Spec: User-Beschwerde "führt nicht zum gewünschten exercise log screen" — Folge-Bug
+  nach dem letzten Fix der Glev-FAB-Sub-Optionen. Insulin + FS hatten keine
+  Folge-Beschwerden, also dort hat /engine?tab=bolus / ?tab=fingerstick gehalten.
+  Exercise war aber laut User noch kaputt.
 
-  Root-Cause der zwei Klick-Fehler war components/GlevActionSheet.tsx — die SUB_OPTIONS
-  zeigten auf falsche URLs:
-  • "Glukose messen"  → /engine            (landete auf engine-Haupttab, nicht FS-Karte)
-  • "Insulin loggen"  → /log?type=insulin  (landete auf Mahlzeit-Wizard)
-  • "Exercise loggen" → /log?type=exercise (gleiches Problem)
-  /log ist der Meal-Wizard. Die Insulin-/FS-/Exercise-Karten leben unter /engine als
-  interne Tabs (engine.tsx Z.145 tab-state mit "engine"|"log"|"bolus"|"exercise"|"fingerstick").
+  Root-Cause-Analyse von /engine: zwei zusammenwirkende Probleme die exercise (und auch
+  bolus auf Desktop) brachen:
 
-  Fix in 3 Files:
+  1. Die Tab-Strip-Konfiguration in app/(protected)/engine/page.tsx Z.1029-1040 war
+     mobile↔desktop unterschiedlich:
+     • mobile : engine, bolus, exercise, fingerstick (4 Buttons)
+     • desktop: engine, log, fingerstick (3 Buttons — exercise + bolus FEHLTEN!)
+     Folge auf Desktop: FAB-Klick auf "Exercise loggen" → /engine?tab=exercise →
+     mein searchParams-Effekt setzt tab="exercise" → die ExerciseForm rendert
+     unterhalb, ABER die Tab-Strip oben zeigt "Engine" als activeLabel (Fallback wenn
+     tab nicht in tabsCfg), wirkt also als hätte die Navigation nicht stattgefunden.
 
-  1. components/GlevActionSheet.tsx Z.83-87
-     SUB_OPTIONS jetzt:
-     • Glukose messen  → /engine?tab=fingerstick
-     • Insulin loggen  → /engine?tab=bolus
-     • Exercise loggen → /engine?tab=exercise
-     Plus Kommentar warum (engine page reads ?tab= on mount + on searchParams change)
+  2. Z.311-319 normalize-Effekt der mobile↔desktop:
+     • !isMobile && (prev === "bolus" || prev === "exercise") → return "log"
+     Das forciert exercise/bolus auf Desktop zurück auf den "log"-Meta-Tab. Wenn der
+     User die Browser-Größe je ändert (oder auf Desktop landet während die initiale
+     Render isMobile=false hat und dann ein mq-event kommt), springt der Tab zurück
+     auf "log" und überschreibt die Deep-Link-Auswahl.
 
-  2. app/(protected)/engine/page.tsx Z.3 + Z.146-159
-     • neuer import: useSearchParams from next/navigation
-     • neuer useEffect: liest ?tab= aus URL, setzt setTab() wenn Wert in
-       {engine,log,bolus,exercise,fingerstick}
-     • Dependency [searchParams] (NICHT []) damit Re-Klick auf FAB während man schon
-       auf /engine ist trotzdem den Tab wechselt — Next.js remountet die Page nicht
-       bei reinen Query-Changes
-
-  3. components/Layout.tsx Z.30-53 + Z.216-234
-     Desktop-Sidebar reduziert von 5 → 4 Items wie der User es will:
-     • Dashboard | Verlauf | Glev | Settings (statt: Dashboard, Log, Glev, Insights, Settings)
-     • Log-Tab und standalone Insights-Tab raus — beide jetzt erreichbar über /history
-       (das hat schon interne Sub-Tabs Insights/Entries)
-     • NAV-Item-Shape geändert von {label,path,icon} → {key:NavKey,path,icon}
-       damit tNav(key) gerendert wird statt hardcoded English (Verlauf vs History je
-       nach UI-Sprache)
-     • NAV.map render-Loop entsprechend angepasst
-
-  4. messages/de.json + messages/en.json
-     • neuer Key "nav.glev" → "Glev" in beiden (Brand bleibt, beide Sprachen)
+  Fix in app/(protected)/engine/page.tsx:
+  • Z.1043-1048: tabsCfg vereinheitlicht — mobile + desktop bekommen die gleichen 4
+    Buttons (engine | Insulin | Übung | Glukose). Der Desktop-only "Log"-Combined-Tab
+    fällt raus — User klickt jetzt direkt den Sub-Tab den er will, statt den
+    Meta-View. EngineLogTab als Komponente bleibt im Code (für Backward-Compat falls
+    nochmal gebraucht, und wird von tab="log" weiterhin gerendert wenn tab manuell
+    auf "log" steht).
+  • Z.314-325: normalize-Effekt vereinfacht — nur noch ein Downgrade übrig (mobile
+    + tab="log" → "bolus", weil mobile keinen log-Tab hat). Kein Downgrade mehr für
+    bolus/exercise auf Desktop, weil die jetzt eigene Strip-Buttons haben.
 
   Verifikation:
   • npx tsc --noEmit clean
-  • Workflow restart sauber (Next 16.2.4 Ready in 305ms)
-  • /history 200, /engine?tab=fingerstick|bolus|exercise alle 307 (Auth-Redirect = Route exists)
-  • Browser-Console Error "MISSING_MESSAGE nav.glev" war Pre-HMR-Stale (Key existiert,
-    Timestamp lag vor dem letzten Reconnect)
+  • Workflow restart sauber (Next 16.2.4)
+  • /engine?tab=exercise|bolus|fingerstick alle 307 (Auth-Redirect = Routes existieren)
+  • activeLabel rechnet jetzt korrekt für alle vier Sub-Tabs (Engine|Insulin|Übung|Glukose)
+    auf beiden Viewports
 
-  Bewusst NICHT geändert (auch wenn Tasks dazu existieren):
-  • Task #27 "Glev von Desktop-Sidebar zu Top-Level-Aktion" — User hat in dieser Runde
-    nichts dazu gesagt, nur "4 Items" gefordert was jetzt erfüllt ist (mit Glev drin)
-  • Mobile bottom-nav — war schon 4 Tabs (Dashboard | [Glev FAB] | History | Settings),
-    kein Refactor nötig
-  • /history page selbst — funktioniert schon, hat Insights/Entries Sub-Tabs
-  • Das alte /entries und /insights und /log — Routes existieren noch und funktionieren,
-    aber sind jetzt nur über Deep-Links (oder von /history/dashboard/etc) erreichbar.
-    Können später sauber gelöscht werden falls keine Inbound-Links
+  Bewusst NICHT geändert:
+  • EngineLogTab.tsx Komponente bleibt erhalten — nur nicht mehr per Tab-Button
+    erreichbar, aber tab="log" rendert sie noch falls jemand das Setup-Code irgendwo
+    verwendet. Falls später Cleanup gewünscht: tab-Type kann auf "engine"|"bolus"|
+    "exercise"|"fingerstick" reduziert werden (raus mit "log").
+  • Mobile bottom-nav — schon korrekt (4 Tabs)
+  • Desktop sidebar — schon korrekt aus letzter Runde (4 Items)
+  • GlevActionSheet SUB_OPTIONS — die zeigen jetzt schon richtig auf
+    /engine?tab=fingerstick|bolus|exercise (Letzte Runde)
 
 NEXT (offen):
-  Task #19 Verlauf in Sidebar — IMPLEMENTED reingekommen + jetzt von mir nochmal
-    übergebügelt (NAV-Refactor war redundant aber konsistent jetzt)
-  Task #21 /log Restliche i18n-Strings — IN_PROGRESS
+  Task #21 Restliche /log-Texte i18n — IMPLEMENTED (extern reingekommen, evtl noch
+    Smoke-Test nötig wenn User es bemerkt)
   Task #22 Engine Chat-Sidebar Desktop — PROPOSED
   Task #23 Engine Step-Indikator → /log-Pills — PROPOSED
   Task #24 Sprache wirkt nicht auf Step 1 (Voice) — PROPOSED
@@ -72,11 +62,16 @@ NEXT (offen):
   Task #26 EN-TTS für Insulin-Begründung — PROPOSED
   Task #27 Glev → Top-Level-Aktion (Desktop) — PROPOSED
 
-QUESTION:
-  FAB testen: Glev-Button mittig in Mobile-Bottom-Nav antippen → "Mahlzeit loggen" geht
-  zum Meal-Wizard, "Weiteres" aufklappen → "Glukose messen" sollte FS-Karte öffnen,
-  "Insulin loggen" die Bolus-Form, "Exercise loggen" die Exercise-Form.
-  Auf Desktop: Sidebar zeigt jetzt 4 Items mit "Verlauf" statt Log+Insights.
-  Was als nächstes? Glev von Desktop-Sidebar weg (Task #27)?
+  Falls später die Combined-"Log"-Sicht gar nicht mehr gebraucht wird:
+  • EngineLogTab als Komponente entfernen
+  • Tab-Type auf 4 Werte reduzieren (engine|bolus|exercise|fingerstick)
+  • setActiveLabel labels Map entsprechend kürzen
 
-TIMESTAMP: 00:25
+QUESTION:
+  FAB → Weiteres → "Exercise loggen" sollte jetzt auf beiden Viewports die
+  Übung-Tab zeigen mit ExerciseForm darunter, und der Tab-Strip-Button oben
+  zeigt "Übung" statt "Engine". Bestätigen ob das jetzt der gewünschte Screen ist?
+  Falls ja, gleiches für Insulin (Strip zeigt jetzt "Insulin") und Glukose-Tab
+  prüfen — beide sollten konsistent sein.
+
+TIMESTAMP: 00:35

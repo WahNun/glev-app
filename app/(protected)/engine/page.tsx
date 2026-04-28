@@ -308,12 +308,15 @@ export default function EnginePage() {
     return () => mq.removeEventListener("change", apply);
   }, []);
 
-  // Normalize tab when crossing the mobile↔desktop breakpoint so we never
-  // end up rendering nothing (e.g. tab="log" on mobile or tab="bolus" on desktop).
+  // Normalize tab when crossing the mobile↔desktop breakpoint. Now that
+  // desktop also shows bolus + exercise as dedicated tab buttons (so the
+  // GlevActionSheet deep-links work the same on both viewports), the only
+  // tab that needs downgrading is "log" — it's the combined desktop-only
+  // meta-view that doesn't exist on mobile. Mobile equivalent of "log"
+  // is just "bolus" (Insulin form), since that's the most common entry.
   useEffect(() => {
     setTab(prev => {
-      if (isMobile  && prev === "log")     return "bolus";
-      if (!isMobile && (prev === "bolus" || prev === "exercise")) return "log";
+      if (isMobile && prev === "log") return "bolus";
       return prev;
     });
   }, [isMobile]);
@@ -1026,18 +1029,20 @@ export default function EnginePage() {
           there is no global mobile header, we still render an in-page
           toggle so the tab strip remains reachable. */}
       {(() => {
-        const tabsCfg = isMobile
-          ? [
-              { id:"engine"      as const, label:"Engine" },
-              { id:"bolus"       as const, label:"Insulin" },
-              { id:"exercise"    as const, label:"Übung" },
-              { id:"fingerstick" as const, label:"Glukose" },
-            ]
-          : [
-              { id:"engine"      as const, label:"Engine" },
-              { id:"log"         as const, label:"Log" },
-              { id:"fingerstick" as const, label:"Glukose" },
-            ];
+        // Same 4 sub-tabs on mobile + desktop so GlevActionSheet deep-links
+        // (?tab=bolus|exercise|fingerstick) light up the matching strip
+        // button on both viewports. Previously desktop only had
+        // engine|log|fingerstick which meant arriving via "Exercise loggen"
+        // on desktop showed the form below but the strip's active label
+        // fell back to "Engine" — confusing the user into thinking the
+        // navigation broke. The "log" combined view is dropped; users
+        // now click the dedicated tab they want.
+        const tabsCfg = [
+          { id:"engine"      as const, label:"Engine" },
+          { id:"bolus"       as const, label:"Insulin" },
+          { id:"exercise"    as const, label:"Übung" },
+          { id:"fingerstick" as const, label:"Glukose" },
+        ];
         const activeLabel = tabsCfg.find(t => t.id === tab)?.label ?? "Engine";
         // Mobile: the chevron lives in the global header — render only
         // the expanded tab buttons row when tabsExpanded is true, with
