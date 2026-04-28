@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabase";
 import { parseLluTs, localeToBcp47 } from "@/lib/time";
 
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
+import GlevLogo from "@/components/GlevLogo";
 
 type CgmLatest = {
   current: {
@@ -541,6 +542,19 @@ export default function LogPage() {
         @keyframes vPulse { 0%,100%{opacity:0.35;transform:scale(1)} 50%{opacity:1;transform:scale(1.05)} }
         @keyframes spin   { to { transform: rotate(360deg) } }
         .mic-btn:hover:not(:disabled) { transform: scale(1.04); }
+        /* Recording-state glow halo for the Glev mic button. Mirrors the
+           Engine page's engRecHalo so both speech entry points share the
+           same "yes, we're listening" visual language: an ACCENT outer
+           ring that pulses between dim and bright, layered on top of
+           the existing radial vPulse aura behind the button. */
+        @keyframes glevMicHalo {
+          0%,100% { box-shadow: 0 0 0 1px ${ACCENT}55, 0 0 30px ${ACCENT}55, inset 0 0 20px rgba(79,110,247,0.15); }
+          50%     { box-shadow: 0 0 0 1px ${ACCENT}cc, 0 0 48px ${ACCENT}aa, inset 0 0 28px rgba(79,110,247,0.28); }
+        }
+        @keyframes glevMicIconPulse {
+          0%,100% { filter: drop-shadow(0 0 6px ${ACCENT}88); }
+          50%     { filter: drop-shadow(0 0 14px ${ACCENT}ee); }
+        }
         .log-grid { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 18px; align-items: start; }
         .log-grid .chat-col { position: sticky; top: 16px; }
         /* Mobile: stack vertically AND let the chat panel flex-grow to fill
@@ -645,19 +659,38 @@ export default function LogPage() {
                         border: recording ? `1px solid ${ACCENT}88` : `1px solid rgba(255,255,255,0.08)`,
                         cursor: parsing || !speechAvail ? "default" : "pointer",
                         background: `radial-gradient(circle at 36% 32%, #1e1e2e 0%, #141420 45%, #09090B 100%)`,
+                        // While recording: pulsing ACCENT halo via keyframe (matches
+                        // the Engine page's mic-pill so both surfaces share the same
+                        // listening-state cue). Idle: soft inset highlight + drop
+                        // shadow, no animation.
                         boxShadow: recording
-                          ? `0 0 0 1px ${ACCENT}55, 0 0 30px ${ACCENT}55, inset 0 0 20px rgba(79,110,247,0.15)`
+                          ? undefined
                           : `0 6px 24px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06)`,
+                        animation: recording ? "glevMicHalo 1.4s ease-in-out infinite" : undefined,
                         display:"flex", alignItems:"center", justifyContent:"center",
                         transition:"all 0.2s",
                       }}
                     >
-                      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke={recording ? ACCENT : "rgba(255,255,255,0.85)"} strokeWidth="2" strokeLinecap="round">
-                        <rect x="9" y="2" width="6" height="11" rx="3" fill={recording ? ACCENT : "rgba(255,255,255,0.85)"} stroke="none"/>
-                        <path d="M5 10a7 7 0 0 0 14 0"/>
-                        <line x1="12" y1="19" x2="12" y2="22"/>
-                        <line x1="9"  y1="22" x2="15" y2="22"/>
-                      </svg>
+                      {/* Brand-mark fill: the mic button now carries the Glev
+                          hexagon (same component as the nav rail) instead of a
+                          generic microphone glyph, making "speak to Glev" the
+                          obvious action. Icon colour shifts ACCENT-blue + gains
+                          a pulsing drop-shadow when recording is live. */}
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          display: "inline-flex",
+                          animation: recording ? "glevMicIconPulse 1.4s ease-in-out infinite" : undefined,
+                          filter: recording ? undefined : `drop-shadow(0 0 4px ${ACCENT}33)`,
+                          transition: "filter 0.25s",
+                        }}
+                      >
+                        <GlevLogo
+                          size={42}
+                          color={recording ? ACCENT : "rgba(255,255,255,0.92)"}
+                          bg="transparent"
+                        />
+                      </span>
                     </button>
                   </div>
                   <div style={{ fontSize:11, fontWeight:600, letterSpacing:"0.12em", color: recording ? ACCENT : "rgba(255,255,255,0.45)" }}>
