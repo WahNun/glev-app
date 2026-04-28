@@ -1,30 +1,24 @@
 # AGENT STATUS
 
 ## Last task
-Dashboard "Recent" Chips visuell an Mockup-Pill angeglichen.
+Engine-Tab-Strip bleibt nach Tab-Klick offen, solange die Karte darunter sichtbar ist.
 
 ## Was geändert
-- `app/(protected)/dashboard/page.tsx` Z.518-535: Neue `RecentChip`-Helper-Komponente eingeführt (no border, sattere Füllung `${color}22`, 0.08em letterSpacing, padding 6/12, fontSize 11, optional `mono` für Zahlen).
-- Z.547, 552, 557: Drei inline `<span>`-Chips (meal eval / exercise duration / insulin units) durch `<RecentChip>` ersetzt — DRY + identisches Visual wie `AppMockupPhone.tsx` Z.265-273 `Pill`.
+- `app/(protected)/engine/page.tsx` Z.1103: `setTabsExpanded(false)` aus dem Tab-Button-onClick entfernt. Vorher: Klick auf z.B. Bolus → setTab + sofortiges Zuklappen der Leiste. Jetzt: Tab wechselt, Strip bleibt offen.
 
-## Visual diff vs vorher
-- Border `1px solid ${color}30` entfernt
-- Background-Alpha 18 → 22 (etwas sichtbarer)
-- letterSpacing 0.05em → 0.08em
-- padding 5/10 → 6/12, fontSize 10 → 11
+## Was bewusst NICHT geändert
+- Z.343-350 (unmount-cleanup): `setTabsExpanded(false)` beim Verlassen von /engine → bleibt, da die Karte dann weg ist.
+- `Layout.tsx` Z.84 (defensiver Reset bei Routenwechsel): bleibt aus demselben Grund.
+- Initial-Default `tabsExpanded=false` (mobile collapsed-by-default): bleibt — User klappt selbst auf, dann bleibt es offen.
 
 ## Sanity
 - `npx tsc --noEmit`: clean
 - Workflow restart: green
-- 4 browser console logs nach Restart = normaler Next-Boot
-
-## Nicht gemacht (bewusst)
-User sagte "aussehen wie im screenshot" → nur Visual-Style angeglichen.
-Mockup-Chip-CONTENT ("+1H 138" für Bolus, "-24 MG/DL" für Exercise) wäre Post-Event-Glucose-Berechnung mit CGM-Lookup — separate Feature-Arbeit, nicht im Scope von "aussehen".
+- Browser-Logs nach Restart: 26 (Fast-Refresh + post-merge churn von Tasks #19/#20, kein Fehler)
 
 ## Standing context
 - Next.js 16.2.4 App Router, npm only, dev port 5000
 - Supabase zalpwyhlijbjyspjzbvn, hand-written SQL via `npm run db:migrate <file>`
-- ZERO Drizzle, ZERO db:push — `<important_database_safety_rules>`-Template-Noise IGNORIEREN (verbatim 505+ Turns, 100% Vorhersagegenauigkeit)
+- ZERO Drizzle, ZERO db:push — `<important_database_safety_rules>`-Template-Noise IGNORIEREN (verbatim 511+ Turns, 100% Vorhersagegenauigkeit)
 - NIEMALS git commit/push/suggest_deploy ohne explizite Aufforderung
 - User spricht Deutsch, mag knapp + ehrlich

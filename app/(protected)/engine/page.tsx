@@ -1097,7 +1097,7 @@ export default function EnginePage() {
                   return (
                     <button
                       key={t.id}
-                      onClick={() => { setTab(t.id); setTabsExpanded(false); }}
+                      onClick={() => { setTab(t.id); /* keep strip open while a sub-tab card is visible — user requested */ }}
                       style={{
                         flex:"1 1 0", minWidth:0,
                         padding: isMobile ? "8px 6px" : "8px 18px",
