@@ -23,11 +23,16 @@ const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
 const CONF_COLOR: Record<string, string> = { HIGH: GREEN, MEDIUM: ORANGE, LOW: PINK };
 
+type GlevReasoning =
+  | { kind: "historical"; count: number; avg: number }
+  | { kind: "blended"; count: number }
+  | { kind: "formula"; carbs: number; icr: number; correction: number };
+
 interface Recommendation {
   dose: number;
   confidence: "HIGH" | "MEDIUM" | "LOW";
   source: string;
-  reasoning: string;
+  reasoning: GlevReasoning;
   carbDose: number;
   correctionDose: number;
   similarMeals: Meal[];
@@ -46,18 +51,18 @@ function runGlevEngine(meals: Meal[], currentGlucose: number, carbs: number): Re
   if (similar.length >= 3) {
     const avg = Math.round(similar.reduce((s, m) => s + (m.insulin_units || 0), 0) / similar.length * 10) / 10;
     return { dose: avg, confidence: "HIGH", source: "historical",
-      reasoning: `Basiert auf ${similar.length} ähnlichen Mahlzeiten mit GUTEM Verlauf (±12g Carbs, ±35 mg/dL Glukose). Historischer Insulin-Schnitt: ${avg}u.`,
+      reasoning: { kind: "historical", count: similar.length, avg },
       carbDose: Math.round(carbDose * 10) / 10, correctionDose: Math.round(correctionDose * 10) / 10, similarMeals: similar.slice(0, 5) };
   }
   if (similar.length >= 1) {
     const histAvg = similar.reduce((s, m) => s + (m.insulin_units || 0), 0) / similar.length;
     const blended = Math.round(((histAvg + formulaDose) / 2) * 10) / 10;
     return { dose: blended, confidence: "MEDIUM", source: "blended",
-      reasoning: `Mix aus ${similar.length} ähnlicher Mahlzeit + ICR-Formel. Wenig historische Daten — log mehr Mahlzeiten für höhere Konfidenz.`,
+      reasoning: { kind: "blended", count: similar.length },
       carbDose: Math.round(carbDose * 10) / 10, correctionDose: Math.round(correctionDose * 10) / 10, similarMeals: similar };
   }
   return { dose: formulaDose, confidence: "LOW", source: "formula",
-    reasoning: `Keine ähnlichen Mahlzeiten gefunden. Standard ICR-Formel: ${carbs}g ÷ ${icr} + ${Math.round(correctionDose * 10) / 10}u Korrektur.`,
+    reasoning: { kind: "formula", carbs, icr, correction: Math.round(correctionDose * 10) / 10 },
     carbDose: Math.round(carbDose * 10) / 10, correctionDose: Math.round(correctionDose * 10) / 10, similarMeals: [] };
 }
 
@@ -872,7 +877,9 @@ export default function LogPage() {
                       <span style={{ fontSize:14, color:"rgba(255,255,255,0.55)" }}>{t("units_recommended_label")}</span>
                     </div>
                     <div style={{ fontSize:12, color:"rgba(255,255,255,0.6)", lineHeight:1.5 }}>
-                      {rec.reasoning}
+                      {rec.reasoning.kind === "historical" && t("reasoning_historical", { count: rec.reasoning.count, avg: rec.reasoning.avg })}
+                      {rec.reasoning.kind === "blended" && t("reasoning_blended", { count: rec.reasoning.count })}
+                      {rec.reasoning.kind === "formula" && t("reasoning_formula", { carbs: rec.reasoning.carbs, icr: rec.reasoning.icr, correction: rec.reasoning.correction })}
                     </div>
                   </>
                 )}
