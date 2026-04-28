@@ -1,0 +1,86 @@
+KONTEXT
+Stripe Checkout schlägt fehl mit "Zahlung gerade nicht verfügbar". Alle Environment Variables sind in Vercel gesetzt (STRIPE_SECRET_KEY, STRIPE_PRO_PRICE_ID, NEXT_PUBLIC_APP_URL). Der Preis wird auf der Seite korrekt angezeigt (€24,90). Der echte Fehler ist aber versteckt im catch-Block.
+Wahrscheinlichste Ursachen:
+
+Test/Live-Mismatch — sk_test_... Key mit live Price ID (oder umgekehrt)
+Price ID ist im Code hardcodiert statt process.env zu nutzen
+Stripe-Account noch nicht für Live-Zahlungen freigeschalten (Business Verification)
+
+
+STEP 1 — Checkout-Route finden und Price ID prüfen
+bashgrep -r "checkout.sessions.create\|STRIPE_PRO_PRICE_ID\|price_" app/ lib/ --include="*.ts" --include="*.tsx" -n
+Öffne die gefundene Datei. Prüfe:
+
+Wird process.env.STRIPE_PRO_PRICE_ID verwendet oder eine hardcodierte price_xxx ID?
+Falls hardcodiert: durch process.env.STRIPE_PRO_PRICE_ID ersetzen.
+
+
+STEP 2 — Mode-Check einbauen
+In der Checkout-Funktion/-Route direkt nach der Stripe-Instanziierung einfügen:
+tsconst isTestMode = process.env.STRIPE_SECRET_KEY?.startsWith('sk_test_')
+console.log('[STRIPE DEBUG] mode:', isTestMode ? 'TEST' : 'LIVE')
+console.log('[STRIPE DEBUG] price ID:', process.env.STRIPE_PRO_PRICE_ID)
+console.log('[STRIPE DEBUG] key prefix:', process.env.STRIPE_SECRET_KEY?.substring(0, 12))
+
+STEP 3 — Echten Fehler aus catch-Block zurückgeben
+Finde den catch-Block der aktuell den generischen Text "Zahlung gerade nicht verfügbar" auslöst. Ersetze ihn so, dass der echte Stripe-Fehler geloggt wird UND ans Frontend weitergegeben wird:
+Falls API Route (route.ts):
+ts} catch (e: any) {
+  console.error('[STRIPE ERROR]', e.message, '| type:', e.type, '| code:', e.code)
+  return NextResponse.json({ error: e.message ?? 'Stripe-Fehler' }, { status: 500 })
+}
+Falls Server Action (stripe.ts):
+ts} catch (e: any) {
+  if (isRedirectError(e)) throw e
+  console.error('[STRIPE ERROR]', e.message, '| type:', e.type, '| code:', e.code)
+  redirect(`/pro?error=${encodeURIComponent(e.message ?? 'Stripe-Fehler')}`)
+}
+Und auf der /pro Page: stelle sicher dass der ?error= Query-Parameter angezeigt wird, nicht nur ein generischer Text. Zum Beispiel:
+tsx// In der /pro Page:
+const searchParams = useSearchParams()  // oder als Server Component prop
+const errorMsg = searchParams.get('error')
+// Im JSX:
+{errorMsg && <p className="text-red-500 text-sm">{decodeURIComponent(errorMsg)}</p>}
+
+STEP 4 — /beta Checkout separat prüfen
+Suche ob /beta eine eigene Checkout-Route/-Action hat oder dieselbe wie /pro nutzt:
+bashgrep -r "STRIPE_BETA_PRICE_ID\|checkoutBeta\|beta" app/ --include="*.ts" --include="*.tsx" -n
+Stelle sicher:
+
+/pro verwendet STRIPE_PRO_PRICE_ID
+/beta verwendet STRIPE_BETA_PRICE_ID
+Beide sind als process.env.STRIPE_... gesetzt, nicht hardcodiert
+
+
+STEP 5 — Deploy und Vercel Logs auslesen
+Nach dem Commit + Push:
+
+Vercel Dashboard → glev-plus-v1 → Deployments → Functions
+/pro aufrufen → Checkout-Button klicken
+In Vercel Logs nach [STRIPE DEBUG] und [STRIPE ERROR] suchen
+Ergebnis in AGENT_STATUS.md schreiben — den genauen Fehlertext
+
+Mögliche Ausgaben und was sie bedeuten:
+Log-AusgabeBedeutungmode: TEST, price: price_live_xxxTest/Live Mismatch — Lucas muss sk_live_ in Vercel setzenmode: LIVE, price: price_test_xxxUmgekehrter Mismatch — Lucas muss live Price ID in Vercel setzenNo such pricePrice ID existiert nicht in diesem Stripe-Account/ModeYour account cannot currently make live chargesStripe Business Verification fehltInvalid API KeySTRIPE_SECRET_KEY in Vercel falsch oder abgelaufen
+
+NACH DEM DEBUG
+Sobald der echte Fehler bekannt ist:
+
+Debug-Logs entfernen (oder auskommentieren)
+AGENT_STATUS.md mit konkretem Befund + Fix aktualisieren
+git add -A && git commit -m "fix(stripe): debug logging, price ID guard"
+git push origin main
+
+Falls git push blockiert: git push https://github.com/lucas1493/Glev.git HEAD:main
+DO NOT CHANGE
+
+Auth-Logik
+Supabase
+Andere Seiten/Routes
+Nightscout / LibreLinkUp
+NEXT_PUBLIC_APP_URL
+
+folgendes:
+Wann startet die Beta?
+"Juli 2026. Beta-Tester bekommen den Zugangslink per Email zwei Wochen vor dem öffentlichen Launch."
+es sollte klarer kommuniziert werden auf der beta landing page dass die zwei wochen early access dabei sind bei den 19€

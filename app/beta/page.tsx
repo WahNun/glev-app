@@ -211,6 +211,23 @@ function BetaContent() {
                 fontSize: 14,
                 color: MINT,
                 marginTop: 4,
+                fontWeight: 600,
+                flexWrap: "wrap",
+              }}
+            >
+              <span aria-hidden>★</span>
+              <span>2 Wochen Early Access vor öffentlichem Launch (Juli 2026)</span>
+            </div>
+
+            <div
+              className="glev-hero-meta"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                fontSize: 13,
+                color: TEXT_DIM,
+                marginTop: 2,
                 flexWrap: "wrap",
               }}
             >
@@ -276,11 +293,11 @@ function BetaContent() {
         <PricingCard
           heading="Was du bekommst"
           lines={[
-            { left: "€19 heute", right: "deine Beta-Reservierung" },
+            { left: "€19 heute", right: "Beta-Reservierung + 2 Wochen Early Access vor Launch" },
             { left: "€4,50 / Monat im ersten Jahr", right: "nach Launch, als Beta-Tester" },
             { left: "€9 / Monat danach", right: "regulärer Preis" },
           ]}
-          footer="Reservierung wird auf dein erstes Monatsabo angerechnet."
+          footer="Reservierung wird auf dein erstes Monatsabo angerechnet. Early-Access-Link kommt zwei Wochen vor öffentlichem Launch per Email."
         />
       </section>
 
