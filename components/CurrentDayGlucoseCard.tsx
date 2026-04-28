@@ -5,7 +5,6 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import CgmFetchButton, { type CgmFetchResult } from "@/components/CgmFetchButton";
 import { useCrosshair, CrosshairOverlay, CrosshairTooltip, type CrosshairPoint } from "@/components/ChartCrosshair";
 import { parseLluTs as _parseLluTs } from "@/lib/time";
-import FingerstickQuickInput from "@/components/FingerstickQuickInput";
 import {
   fetchRecentFingersticks,
   FS_OVERRIDE_WINDOW_MS,
@@ -54,7 +53,6 @@ const CARD_STYLE_TAG = `
 export default function CurrentDayGlucoseCard() {
   const [s, setS] = useState<State>({ kind: "loading" });
   const [flipped, setFlipped] = useState(false);
-  const [fsOpen, setFsOpen] = useState(false);
 
   const loadHistory = useCallback(async (signal?: { cancelled: boolean }) => {
     try {
@@ -102,9 +100,6 @@ export default function CurrentDayGlucoseCard() {
   const onCgmRefresh = useCallback((r: CgmFetchResult) => {
     if (r.ok) loadHistory();
   }, [loadHistory]);
-  const onFsSaved = useCallback(() => {
-    loadHistory();
-  }, [loadHistory]);
 
   return (
     <div
@@ -150,7 +145,6 @@ export default function CurrentDayGlucoseCard() {
           <HeroFront
             state={s}
             onCgmRefresh={onCgmRefresh}
-            onOpenFs={() => setFsOpen(true)}
             flippable={s.kind === "ok"}
           />
         </div>
@@ -177,11 +171,6 @@ export default function CurrentDayGlucoseCard() {
         </div>
       </div>
 
-      {/* Fingerstick quick-input modal — rendered as a sibling of the
-          flippable inner so the modal isn't warped by the 3D transform.
-          position:fixed makes the on-screen position viewport-anchored
-          regardless of DOM placement. */}
-      <FingerstickQuickInput open={fsOpen} onClose={() => setFsOpen(false)} onSaved={onFsSaved} />
     </div>
   );
 }
@@ -200,11 +189,10 @@ export default function CurrentDayGlucoseCard() {
      │ −2h          −1h                  now        │
      └──────────────────────────────────────────────┘ */
 function HeroFront({
-  state, onCgmRefresh, onOpenFs, flippable,
+  state, onCgmRefresh, flippable,
 }: {
   state: State;
   onCgmRefresh: (r: CgmFetchResult) => void;
-  onOpenFs: () => void;
   flippable: boolean;
 }) {
   const ok  = state.kind === "ok";
@@ -244,7 +232,12 @@ function HeroFront({
 
   return (
     <>
-      {/* Header row — uppercase pill label LEFT, age + FS + refresh + flip RIGHT */}
+      {/* Header row — uppercase pill label LEFT, age + refresh + flip RIGHT.
+          Manual fingerstick entry pill was removed per user request — the
+          card now stays read-only; FS data still flows in from the
+          background fetch + appears on the chart and as the "FS"
+          override badge next to the value. To log a fingerstick by hand,
+          use the dedicated FingerstickLogCard surface instead. */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
       }}>
@@ -263,27 +256,6 @@ function HeroFront({
               {ageLabel}
             </span>
           )}
-          {/* Manual fingerstick entry — opens the quick-input modal.
-              stopPropagation so the parent card doesn't flip on click. */}
-          <button
-            onClick={(e) => { e.stopPropagation(); onOpenFs(); }}
-            title="Manual fingerstick reading"
-            aria-label="Log manual fingerstick reading"
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 4,
-              padding: "3px 8px", borderRadius: 99,
-              border: `1px solid rgba(255,255,255,0.18)`,
-              background: "rgba(255,255,255,0.05)",
-              color: "rgba(255,255,255,0.7)",
-              fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
-              cursor: "pointer", textTransform: "uppercase",
-            }}
-          >
-            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 5v14M5 12h14"/>
-            </svg>
-            FS
-          </button>
           {(ok || state.kind === "error") && (
             <CgmFetchButton variant="ghost" onResult={onCgmRefresh} title="Refresh CGM" />
           )}

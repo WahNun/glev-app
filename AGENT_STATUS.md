@@ -1,69 +1,71 @@
 # Agent Status
 
 ## Letzter abgeschlossener Task
-**Log-Page Mikrofon-Button trägt jetzt das Glev-Brand-Mark + pulsierender ACCENT-Halo beim Aufnehmen**
+**FS-Pill (manueller Fingerstick-Trigger) aus Live-Glucose-Karte entfernt**
 
 ### Kontext
-User-Request: "Fill the microphone button with the Glev icon and give
-it visual feedback while recording — glowing light effect on dark
-background. Make the Glev icon in the nav bar in line with the other
-icons (normal grey, light blue glow when selected)."
+User-Klärung erhalten: das `FS`-Pill mit Plus-Symbol im Header der
+"Glucose · Live"-Karte soll weg (öffnete bisher das
+Fingerstick-Quick-Input-Modal). Carry-over aus #25-Track.
 
-### Status der beiden Anliegen
-1. **Nav-Bar Glev-Icon**: Bereits korrekt — sowohl Desktop-Sidebar
-   (`components/Layout.tsx` L46-50) als auch Mobile-Bottom-Nav (L281-300)
-   rendern `<GlevLogo>` in derselben Größe wie die anderen Tab-Icons
-   (18px desktop / 22px mobile), grau wenn inaktiv
-   (`rgba(255,255,255,0.4-0.45)`), ACCENT `#4F6EF7` + Drop-Shadow-Halo
-   wenn aktiv. **Keine Änderung nötig.**
-2. **Mic-Button**: Engine-Page (`app/(protected)/engine/page.tsx`
-   L1313) nutzt bereits GlevLogo + pulsing halo (engRecHalo). Log-Page
-   (`app/(protected)/log/page.tsx` L639) hatte noch generischen SVG-Mic
-   ohne Brand-Bezug → **gefixt**.
+### Was geändert wurde (`components/CurrentDayGlucoseCard.tsx`)
+1. **Import entfernt**: `FingerstickQuickInput` (war nur hier verwendet
+   — Grep über `components/` + `app/` bestätigt: keine weiteren Refs).
+2. **State weg**: `[fsOpen, setFsOpen]` mitsamt `useState`.
+3. **Callback weg**: `onFsSaved` (war nur als `onSaved`-Prop des Modals
+   gebraucht).
+4. **Prop-Wiring weg**: `onOpenFs={() => setFsOpen(true)}` aus dem
+   `<HeroFront>`-Aufruf, sowie `onOpenFs` aus dem
+   HeroFront-Function-Signature + Type.
+5. **Modal-Render weg**: `<FingerstickQuickInput open=… />` plus der
+   3D-Transform-Sibling-Erklärungs-Kommentar.
+6. **Button weg**: Der `<button>` mit Plus-SVG + "FS"-Label im Header
+   (zwischen `ageLabel` und `<CgmFetchButton>`) inkl. seines
+   "Manual fingerstick entry"-Kommentars.
+7. **Header-Kommentar aktualisiert**: ASCII-Layout-Hinweis "age + FS +
+   refresh + flip RIGHT" → "age + refresh + flip RIGHT" + neuer Satz
+   der erklärt, dass die Karte jetzt read-only ist und manuelle
+   FS-Eingabe weiterhin über `FingerstickLogCard` möglich bleibt.
 
-### Was geändert wurde (`app/(protected)/log/page.tsx`)
-1. **Import**: `GlevLogo` aus `@/components/GlevLogo` ergänzt (L15).
-2. **SVG-Mic ersetzt**: Der Microphone-Capsule-SVG (rect+arc+stem) im
-   Step-1-Mic-Button wurde durch `<GlevLogo size={42}>` ersetzt. Der
-   Hexagon-Glyph ist jetzt das primäre visuelle Signal — "Glev hört zu"
-   statt "irgendein Mikrofon".
-3. **Recording-Animationen** (zwei neue Keyframes in der `<style>`-Block):
-   - `glevMicHalo` 1.4s ease-in-out: pulst die `box-shadow` des Buttons
-     zwischen `30px ${ACCENT}55` und `48px ${ACCENT}aa` (außen) +
-     `inset 20-28px rgba(79,110,247,0.15-0.28)` (innen). Spiegelt
-     bewusst die `engRecHalo`-Animation der Engine-Page → einheitliche
-     "we're listening"-Sprache über beide Voice-Surfaces.
-   - `glevMicIconPulse` 1.4s ease-in-out: pulst den `drop-shadow` am
-     Glev-Icon selbst zwischen 6px und 14px Blur. Zusätzliches Feedback
-     direkt am Glyph statt nur am Container.
-4. **Idle-State**: Icon bleibt mit dezentem `4px ${ACCENT}33`-Drop-Shadow
-   (sehr leichte Andeutung, keine Bewegung).
-5. **Recording-State**: Icon-Color schaltet von `rgba(255,255,255,0.92)`
-   auf vollen ACCENT-Blue um.
-6. Outer `vPulse`-Aura (radial-gradient 0%-70%) bleibt erhalten — die
-   neuen Halo/Pulse-Animationen layern darauf.
+### Was bewusst NICHT angefasst wurde
+- `fetchRecentFingersticks(24)`-Aufruf in `loadHistory` bleibt — die
+  FS-Daten werden weiterhin geladen und im Chart als 8×8-Quadrate +
+  als "FS"-Override-Badge neben dem aktuellen Wert dargestellt. Nur
+  die manuelle Eingabe-UI fällt weg.
+- `FS_OVERRIDE_WINDOW_MS` + `fsOverride`-Logik + das "FS"-Badge bei
+  L315 (Anzeige neben dem Wert wenn FS aktuell überstimmt) bleiben.
+- `components/FingerstickQuickInput.tsx` selbst nicht gelöscht — kann
+  bei Bedarf wieder eingebunden werden.
+- `components/FingerstickLogCard.tsx` ist die alternative Surface für
+  manuelle Eingabe (existiert separat) — unverändert.
 
 ### Verifikation
 - `npx tsc --noEmit --skipLibCheck` → keine Errors.
-- HMR übernimmt JSX-/CSS-Änderungen sofort, Workflow-Restart nicht nötig.
+- HMR übernimmt JSX-Änderung sofort, Workflow-Restart nicht nötig.
 
-### Was NICHT gemacht wurde
-- Nav-Bar nicht angefasst (war bereits korrekt — siehe Code-Kommentare
-  in `Layout.tsx` L41-45 und L281-289, die genau diesen Designwunsch
-  bereits dokumentieren und implementieren).
-- Engine-Page-Mic nicht angefasst (war bereits korrekt — nutzte schon
-  GlevLogo + engRecHalo).
-- Andere Mic-Buttons (z.B. in `AppMockupPhone.tsx` Marketing-Mockup
-  oder `mockups/dark-cockpit/page.tsx`) nicht angefasst — out of scope.
+## Vorheriger Task in dieser Session — angefragt aber NICHT durchgeführt
+**"Fix the redirect-in-try-catch bug in app/actions/stripe.ts"**
 
-### Pausiert bzw. carry-over (unverändert)
+Der angefragte Bug existiert nicht:
+- Datei `app/actions/stripe.ts` existiert nicht. Die Stripe-Server-
+  Actions liegen in `app/beta/actions.ts` und `app/pro/actions.ts`.
+- Beide Dateien wurden gescannt: jeder `redirect()`-Call steht
+  AUSSERHALB jedes try/catch-Blocks. Der `try`-Block enthält nur
+  `fetch` + `res.json()`; `redirect(data.url)` kommt erst nach den
+  Status-Checks im normalen Code-Flow.
+- `submitBetaCheckout` / `submitProCheckout` haben gar kein try/catch
+  — nur direkte Redirects.
+- `isRedirectError` einzubauen wäre dead code.
+
+Kein Patch, kein Commit, kein Push gemacht. User-Feedback abgewartet.
+
+### Pausiert bzw. carry-over (verbleibend)
 1. **Locale-aware date/time formatting**: Nur `lib/engine/chipState.ts`
    gelandet, Rest offen.
-2. **Fullscreen-Button im Live-Glucose-Widget entfernen**: Blockiert,
-   "FS"-Pill ist Fingerstick-Trigger — User-Klärung pending.
-3. **BE/KE feature**: Migration applied, UI wiring pending.
+2. **BE/KE feature**: Migration applied, UI wiring pending.
 
 ### NICHT gemacht (per Direktive)
 - Kein `git commit` (auto-checkpoint übernimmt).
-- Kein `git push` — Nutzer hat es diese Runde nicht angefordert.
+- Kein `git push` — das User-Push-Request war an den Stripe-Fix
+  gekoppelt (der nicht existiert); FS-Removal war separater Task.
 - Kein `suggest_deploy` (Beta-Mode).
