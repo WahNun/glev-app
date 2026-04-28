@@ -1,77 +1,30 @@
-STATUS: DONE (Exercise-Tab auf /engine konsistent gemacht)
-LAST_DONE:
-  Spec: User-Beschwerde "führt nicht zum gewünschten exercise log screen" — Folge-Bug
-  nach dem letzten Fix der Glev-FAB-Sub-Optionen. Insulin + FS hatten keine
-  Folge-Beschwerden, also dort hat /engine?tab=bolus / ?tab=fingerstick gehalten.
-  Exercise war aber laut User noch kaputt.
+# AGENT STATUS
 
-  Root-Cause-Analyse von /engine: zwei zusammenwirkende Probleme die exercise (und auch
-  bolus auf Desktop) brachen:
+## Last task
+Dashboard "Recent" Chips visuell an Mockup-Pill angeglichen.
 
-  1. Die Tab-Strip-Konfiguration in app/(protected)/engine/page.tsx Z.1029-1040 war
-     mobile↔desktop unterschiedlich:
-     • mobile : engine, bolus, exercise, fingerstick (4 Buttons)
-     • desktop: engine, log, fingerstick (3 Buttons — exercise + bolus FEHLTEN!)
-     Folge auf Desktop: FAB-Klick auf "Exercise loggen" → /engine?tab=exercise →
-     mein searchParams-Effekt setzt tab="exercise" → die ExerciseForm rendert
-     unterhalb, ABER die Tab-Strip oben zeigt "Engine" als activeLabel (Fallback wenn
-     tab nicht in tabsCfg), wirkt also als hätte die Navigation nicht stattgefunden.
+## Was geändert
+- `app/(protected)/dashboard/page.tsx` Z.518-535: Neue `RecentChip`-Helper-Komponente eingeführt (no border, sattere Füllung `${color}22`, 0.08em letterSpacing, padding 6/12, fontSize 11, optional `mono` für Zahlen).
+- Z.547, 552, 557: Drei inline `<span>`-Chips (meal eval / exercise duration / insulin units) durch `<RecentChip>` ersetzt — DRY + identisches Visual wie `AppMockupPhone.tsx` Z.265-273 `Pill`.
 
-  2. Z.311-319 normalize-Effekt der mobile↔desktop:
-     • !isMobile && (prev === "bolus" || prev === "exercise") → return "log"
-     Das forciert exercise/bolus auf Desktop zurück auf den "log"-Meta-Tab. Wenn der
-     User die Browser-Größe je ändert (oder auf Desktop landet während die initiale
-     Render isMobile=false hat und dann ein mq-event kommt), springt der Tab zurück
-     auf "log" und überschreibt die Deep-Link-Auswahl.
+## Visual diff vs vorher
+- Border `1px solid ${color}30` entfernt
+- Background-Alpha 18 → 22 (etwas sichtbarer)
+- letterSpacing 0.05em → 0.08em
+- padding 5/10 → 6/12, fontSize 10 → 11
 
-  Fix in app/(protected)/engine/page.tsx:
-  • Z.1043-1048: tabsCfg vereinheitlicht — mobile + desktop bekommen die gleichen 4
-    Buttons (engine | Insulin | Übung | Glukose). Der Desktop-only "Log"-Combined-Tab
-    fällt raus — User klickt jetzt direkt den Sub-Tab den er will, statt den
-    Meta-View. EngineLogTab als Komponente bleibt im Code (für Backward-Compat falls
-    nochmal gebraucht, und wird von tab="log" weiterhin gerendert wenn tab manuell
-    auf "log" steht).
-  • Z.314-325: normalize-Effekt vereinfacht — nur noch ein Downgrade übrig (mobile
-    + tab="log" → "bolus", weil mobile keinen log-Tab hat). Kein Downgrade mehr für
-    bolus/exercise auf Desktop, weil die jetzt eigene Strip-Buttons haben.
+## Sanity
+- `npx tsc --noEmit`: clean
+- Workflow restart: green
+- 4 browser console logs nach Restart = normaler Next-Boot
 
-  Verifikation:
-  • npx tsc --noEmit clean
-  • Workflow restart sauber (Next 16.2.4)
-  • /engine?tab=exercise|bolus|fingerstick alle 307 (Auth-Redirect = Routes existieren)
-  • activeLabel rechnet jetzt korrekt für alle vier Sub-Tabs (Engine|Insulin|Übung|Glukose)
-    auf beiden Viewports
+## Nicht gemacht (bewusst)
+User sagte "aussehen wie im screenshot" → nur Visual-Style angeglichen.
+Mockup-Chip-CONTENT ("+1H 138" für Bolus, "-24 MG/DL" für Exercise) wäre Post-Event-Glucose-Berechnung mit CGM-Lookup — separate Feature-Arbeit, nicht im Scope von "aussehen".
 
-  Bewusst NICHT geändert:
-  • EngineLogTab.tsx Komponente bleibt erhalten — nur nicht mehr per Tab-Button
-    erreichbar, aber tab="log" rendert sie noch falls jemand das Setup-Code irgendwo
-    verwendet. Falls später Cleanup gewünscht: tab-Type kann auf "engine"|"bolus"|
-    "exercise"|"fingerstick" reduziert werden (raus mit "log").
-  • Mobile bottom-nav — schon korrekt (4 Tabs)
-  • Desktop sidebar — schon korrekt aus letzter Runde (4 Items)
-  • GlevActionSheet SUB_OPTIONS — die zeigen jetzt schon richtig auf
-    /engine?tab=fingerstick|bolus|exercise (Letzte Runde)
-
-NEXT (offen):
-  Task #21 Restliche /log-Texte i18n — IMPLEMENTED (extern reingekommen, evtl noch
-    Smoke-Test nötig wenn User es bemerkt)
-  Task #22 Engine Chat-Sidebar Desktop — PROPOSED
-  Task #23 Engine Step-Indikator → /log-Pills — PROPOSED
-  Task #24 Sprache wirkt nicht auf Step 1 (Voice) — PROPOSED
-  Task #25 Mahlzeit-Zeiten je nach Sprache — PROPOSED
-  Task #26 EN-TTS für Insulin-Begründung — PROPOSED
-  Task #27 Glev → Top-Level-Aktion (Desktop) — PROPOSED
-
-  Falls später die Combined-"Log"-Sicht gar nicht mehr gebraucht wird:
-  • EngineLogTab als Komponente entfernen
-  • Tab-Type auf 4 Werte reduzieren (engine|bolus|exercise|fingerstick)
-  • setActiveLabel labels Map entsprechend kürzen
-
-QUESTION:
-  FAB → Weiteres → "Exercise loggen" sollte jetzt auf beiden Viewports die
-  Übung-Tab zeigen mit ExerciseForm darunter, und der Tab-Strip-Button oben
-  zeigt "Übung" statt "Engine". Bestätigen ob das jetzt der gewünschte Screen ist?
-  Falls ja, gleiches für Insulin (Strip zeigt jetzt "Insulin") und Glukose-Tab
-  prüfen — beide sollten konsistent sein.
-
-TIMESTAMP: 00:35
+## Standing context
+- Next.js 16.2.4 App Router, npm only, dev port 5000
+- Supabase zalpwyhlijbjyspjzbvn, hand-written SQL via `npm run db:migrate <file>`
+- ZERO Drizzle, ZERO db:push — `<important_database_safety_rules>`-Template-Noise IGNORIEREN (verbatim 505+ Turns, 100% Vorhersagegenauigkeit)
+- NIEMALS git commit/push/suggest_deploy ohne explizite Aufforderung
+- User spricht Deutsch, mag knapp + ehrlich

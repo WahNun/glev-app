@@ -512,11 +512,32 @@ function RecentEntries({
   );
 }
 
+// Pill chip used in the right slot of every recent-entries row. Matches
+// the AppMockupPhone <Pill> spec the user signed off on as "the look":
+// no border, slightly more saturated translucent fill (color + 22 alpha),
+// 0.08em tracking, all-caps, fully rounded. The `mono` variant uses the
+// monospaced numeric font for value chips ("4.2u", "32m") so digits
+// align nicely; the meal eval chip stays in the system font so labels
+// like "ON TARGET" read as plain copy.
+function RecentChip({ text, color, mono = false }: { text: string; color: string; mono?: boolean }) {
+  return (
+    <span style={{
+      padding: "6px 12px", borderRadius: 99,
+      fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
+      textTransform: "uppercase", whiteSpace: "nowrap",
+      background: `${color}22`, color,
+      ...(mono ? { fontFamily: "var(--font-mono)" } : {}),
+    }}>{text}</span>
+  );
+}
+
 // Unified collapsed row used by RecentEntries for ALL kinds. Visual spec:
 //   flex / gap 12 / padding 12px 0 / borderBottom rgba(255,255,255,0.06).
 //   Left:  36px coloured circle with monogram letter (M / B / L / E).
 //   Mid:   14px bold title + 12px muted "time · macro/dose info".
 //   Right: meal → existing eval chip; non-meal → kind-coloured value chip.
+//   All chips share the RecentChip component above so the visual rhythm
+//   stays consistent across kinds.
 function UnifiedRecentRow({ row, onClick }: { row: RecentRow; onClick: () => void }) {
   const accent = KIND_ACCENT[row.kind];
   const letter =
@@ -541,44 +562,17 @@ function UnifiedRecentRow({ row, onClick }: { row: RecentRow; onClick: () => voi
     if (m.fat_grams     != null) macroBits.push(`${m.fat_grams}g F`);
     subtitle = macroBits.length ? `${timeStr} · ${macroBits.join(" · ")}` : timeStr;
     const evColor = getEvalColor(m.evaluation);
-    rightSlot = (
-      <span style={{
-        padding:"5px 10px", borderRadius:99, fontSize:10, fontWeight:700,
-        background:`${evColor}18`, color:evColor,
-        border:`1px solid ${evColor}30`, whiteSpace:"nowrap",
-        letterSpacing:"0.05em", textTransform:"uppercase",
-      }}>
-        {getEvalLabel(m.evaluation)}
-      </span>
-    );
+    rightSlot = <RecentChip text={getEvalLabel(m.evaluation)} color={evColor} />;
   } else if (row.kind === "exercise") {
     const x = row.exercise!;
     title = x.exercise_type === "cardio" ? "Cardio" : "Strength";
     subtitle = `${timeStr} · ${x.duration_minutes}m`;
-    rightSlot = (
-      <span style={{
-        padding:"5px 10px", borderRadius:99, fontSize:10, fontWeight:700,
-        background:`${accent.color}18`, color:accent.color,
-        border:`1px solid ${accent.color}30`, whiteSpace:"nowrap",
-        letterSpacing:"0.05em", textTransform:"uppercase", fontFamily:"var(--font-mono)",
-      }}>
-        {`${x.duration_minutes}m`}
-      </span>
-    );
+    rightSlot = <RecentChip text={`${x.duration_minutes}m`} color={accent.color} mono />;
   } else {
     const i = row.insulin!;
     title = i.insulin_name || (row.kind === "bolus" ? "Bolus" : "Basal");
     subtitle = `${timeStr} · ${i.units}u`;
-    rightSlot = (
-      <span style={{
-        padding:"5px 10px", borderRadius:99, fontSize:10, fontWeight:700,
-        background:`${accent.color}18`, color:accent.color,
-        border:`1px solid ${accent.color}30`, whiteSpace:"nowrap",
-        letterSpacing:"0.05em", textTransform:"uppercase", fontFamily:"var(--font-mono)",
-      }}>
-        {`${i.units}u`}
-      </span>
-    );
+    rightSlot = <RecentChip text={`${i.units}u`} color={accent.color} mono />;
   }
 
   return (
