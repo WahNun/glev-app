@@ -1,29 +1,29 @@
 # Agent Status
 
-## Last Task: Compliance-Page (Datenschutz + AGB) + Footer-Link
+## Last Task: Dexcom Partnership Mockups (PNG)
 
 **Done:**
-- `app/legal/page.tsx` — neue Public-Page mit Tab-Switcher (Datenschutzerklärung + AGB), Inhalt 1:1 aus `attached_assets/datenschutzerklaerung_1777410421430.html` übernommen.
-- CSS vollständig auf `.glev-legal`-Wrapper gescopt → keine Kollision mit `app/globals.css` Dark-Theme. Light-Theme der Compliance-Doku bleibt erhalten.
-- Tab-State via `useState`, `window.scrollTo({top:0})` beim Wechsel (Parität zum Original-Script).
-- Footer hat zusätzlich `Zurück zur Startseite`-Link.
-- `app/page.tsx` Footer (L627-636): „Datenschutz · AGB" Link zwischen Copyright und „Brand", gleiches dezentes Styling (`color:inherit`, kein Underline, " · "-Trenner).
-- `npx tsc --noEmit`: clean.
-- Workflow restart: clean.
-- `curl http://localhost:5000/legal`: HTTP 200, Content rendert (Datenschutzerklärung, Rechtliche Dokumente, glev-legal, tab-panel alle im HTML).
+- `scripts/generate-mockups.js` — Node-Script, generiert beide PNGs aus reinem Canvas-Code (keine Browser/Puppeteer).
+- `public/mockup-consent-flow.png` — 390×780 (iPhone-Hochformat), Dark UI, Header mit Back-Arrow, glev-Wordmark, Karten „Welche Daten?" (Lock-Icon) und „Deine Rechte" (Clipboard-Icon), Primary-Button „Verbindung erlauben", Ghost-Button „Ablehnen", Footer „Datenschutz · AGB".
+- `public/mockup-data-flow.png` — 900×500 (Querformat), Titel + Subtitle, 4 Boxen Row 1 (Dexcom Sensor → Dexcom Web API → Glev Backend → Supabase) mit beschrifteten Pfeilen, 1 Box Row 2 (Glev App) mit vertikalem Pfeil „WebSocket / Push" von Glev Backend, Legende unten rechts mit Lock-Icon „Alle Verbindungen TLS 1.3 · Daten verlassen die EU nicht".
+- Beide Boxen-Style identisch zum Brief: bg `#1C1C28`, border `#4F6EF7` 2px, radius 10, padding 20.
+- Verifiziert: `file public/mockup-*.png` → korrekte Dimensionen (390×780 + 900×500) und PNG-RGBA.
 
-**Routen:**
-- `/legal` (public, kein Auth) — Tabs: dse (default) / agb.
+**Technische Abweichung:**
+- User-Brief hat `npm install canvas` vorgegeben — schlug fehl wegen fehlender System-Libs (`libuuid.so.1`) auf NixOS. Switche auf `@napi-rs/canvas` (drop-in API, prebuilt Rust-Binaries, keine cairo/pango Pflicht). Funktional 1:1 äquivalent.
+- Emoji-Icons (🔒, 📋) durch nativ gezeichnete Vektor-Shapes ersetzt — System hat keine Emoji-Fonts (nur DejaVu Sans), Emojis würden als Boxen rendern.
 
-**Bewusst NICHT gemacht:**
-- Kein Code-Review (statische Content-Page, keine Logik).
-- Kein git push, kein deploy-Vorschlag (per Projekt-Vorgabe).
-- Keine i18n-Integration — Compliance-Text ist DACH-spezifisch deutsch und sollte juristisch nicht über GPT/i18n übersetzt werden.
+**DevDep:**
+- `@napi-rs/canvas` als devDependency hinzugefügt (2 Pakete).
+
+**Nicht gemacht:**
+- Kein git push, kein Commit (per Brief: „Kein git add / commit nötig").
+- Workflow-Restart hat zwischendurch Port-5000-Konflikt geworfen (alter Prozess hatte Port nicht freigegeben) — beim zweiten Restart sauber durchgelaufen.
 
 ## Open / Pending (aus früheren Sessions)
 - /insights, /entries, /history Audit
 - PDF i18n review
 - IOB-Berechnung review
-- ICR/CF/targetBg in Postgres `user_settings` migrieren (aktuell nur localStorage — siehe vorheriger Diagnose-Report)
+- ICR/CF/targetBg in Postgres `user_settings` migrieren (aktuell nur localStorage)
 - Konsolidierung der zwei Bolus-Engines (`runGlevEngine` vs `recommendDose`)
 - Stripe `STRIPE_BETA_PRICE_ID` in Vercel-Env fehlt
