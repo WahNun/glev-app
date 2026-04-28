@@ -833,18 +833,23 @@ function DailyMacrosCard({ meals, targets }: { meals: Meal[]; targets: MacroTarg
   }, [meals]);
 
   // Collapsed view: 4 circular progress rings in a single row.
-  // Color palette spec'd by product (Tailwind 500-shade reference):
-  //   CARBS=#f97316, PROTEIN=#8b5cf6, FAT=#f59e0b, FIBER=#10b981.
+  // Colors match the meal-type chips on Insights → "Meal type · success %"
+  // so the ring color tells the same story as the chip badge:
+  //   CARBS   = TYPE_COLORS.FAST_CARBS   (orange  — fast-glucose macro)
+  //   PROTEIN = TYPE_COLORS.HIGH_PROTEIN (blue    — slows absorption)
+  //   FAT     = TYPE_COLORS.HIGH_FAT    (purple  — delays the spike)
+  //   FIBER   = TYPE_COLORS.BALANCED    (green   — supports a balanced response)
+  // Sourcing from TYPE_COLORS keeps ring + chip palettes in sync forever.
   // Targets come from the per-user user_settings table (edited in
   // Settings → "Daily Macro Targets"); they fall back to sensible Type-1
   // defaults from DEFAULT_MACRO_TARGETS until the user saves their own.
   // `calories` is intentionally not shown here — it surfaces in the
   // expanded view.
   const rings: Array<{ label: string; value: number; target: number; color: string; unit: string }> = [
-    { label: "CARBS",   value: Math.round(today.carbs),   target: targets.carbs,   color: "#f97316", unit: "g" },
-    { label: "PROTEIN", value: Math.round(today.protein), target: targets.protein, color: "#8b5cf6", unit: "g" },
-    { label: "FAT",     value: Math.round(today.fat),     target: targets.fat,     color: "#f59e0b", unit: "g" },
-    { label: "FIBER",   value: Math.round(today.fiber),   target: targets.fiber,   color: "#10b981", unit: "g" },
+    { label: "CARBS",   value: Math.round(today.carbs),   target: targets.carbs,   color: TYPE_COLORS.FAST_CARBS,   unit: "g" },
+    { label: "PROTEIN", value: Math.round(today.protein), target: targets.protein, color: TYPE_COLORS.HIGH_PROTEIN, unit: "g" },
+    { label: "FAT",     value: Math.round(today.fat),     target: targets.fat,     color: TYPE_COLORS.HIGH_FAT,     unit: "g" },
+    { label: "FIBER",   value: Math.round(today.fiber),   target: targets.fiber,   color: TYPE_COLORS.BALANCED,     unit: "g" },
   ];
 
   return (
@@ -1035,7 +1040,7 @@ type RecentRow =
   | { kind: "exercise"; id: string; ts: string; meal?: never;   insulin?: never;     exercise: ExerciseLog };
 
 const KIND_ACCENT: Record<"meal" | "bolus" | "basal" | "exercise", { color: string; label: string }> = {
-  meal:     { color: "#f59e0b", label: "MEAL" },      // amber (matches FAT macro ring)
+  meal:     { color: "#f59e0b", label: "MEAL" },      // amber — neutral accent for the meal kind row
   bolus:    { color: "#4A90D9", label: "BOLUS" },     // blue
   basal:    { color: "#8B5CF6", label: "BASAL" },     // purple (no spec'd colour, kept)
   exercise: { color: "#10B981", label: "EXERCISE" },  // teal

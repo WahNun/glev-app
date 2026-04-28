@@ -1,41 +1,68 @@
 # Agent Status
 
 ## Letzter abgeschlossener Task
-**Logo-Fix auf Landing Pages — grüner Punkt jetzt korrekt als Satzpunkt**
+**Macro-Ringe im Dashboard übernehmen Chip-Farben aus Insights → "Meal type · success %"**
 
 ### Problem
-`components/landing/Lockup.tsx` (verwendet von `/pro` und `/beta`) hatte
-den grünen Punkt bei `cy=50`, während die Schrift-Baseline auf `y=58`
-sitzt — der Kreis schwebte 8px ÜBER der Baseline und klebte mittig am
-"v" statt unten als Satzpunkt zu sitzen.
+Die 4 Macro-Ringe in der "Today's Macros"-Karte (Dashboard) hatten
+Tailwind-500-Farben, die nicht zu den Meal-Type-Chips auf der
+Insights-Seite passten. Visuelle Sprache war inkonsistent: derselbe
+"Carbs"-Begriff trug unterschiedliche Farben je nach Bildschirm.
 
-### Was geändert wurde (`components/landing/Lockup.tsx`)
-- `<circle cx="168" cy="50" r="4">` → `<circle cx="164" cy="56" r="4">`
-- Bei r=4 und Baseline y=58: cy=56 = Mittelpunkt 2px über Baseline,
-  Unterkante 2px unter Baseline → liest sich exakt wie ein "."-Zeichen.
-- cx von 168→164 zog den Punkt 4px näher ans "v" (war vorher zu weit weg).
-- Erklärender Kommentarblock im SVG eingefügt, damit der Bug nicht
-  wieder rückwärts gepatcht wird.
+### Was geändert wurde (`app/(protected)/dashboard/page.tsx`)
+Hardcodete Hex-Werte ersetzt durch `TYPE_COLORS`-Lookup aus
+`@/lib/mealTypes` (Import war bereits L8 vorhanden):
 
-### Was NICHT geändert wurde (war bereits korrekt)
-- `app/page.tsx` (`/`) → nutzt `<GlevLockup>` mit echtem "."-Zeichen
-  und `alignItems: "baseline"` — sitzt nativ richtig.
-- `app/brand/page.tsx`, `components/brand/SectionNav.tsx`,
-  `lib/pdfReport.tsx` → alle nutzen den HTML-`<span>.</span>`-Pattern,
-  sitzen nativ auf der Baseline.
-- `components/GlevLogo.tsx` (Glyph) — kein Punkt enthalten.
-- Public-Assets (`/icon.svg`, Favicons, Apple-Touch-Icon) — zeigen nur
-  den Glyph, kein Wordmark.
+| Ring    | Vorher              | Nachher                                  |
+|---------|---------------------|------------------------------------------|
+| CARBS   | `#f97316` orange-500 | `TYPE_COLORS.FAST_CARBS`   = `#FF9500`   |
+| PROTEIN | `#8b5cf6` violet-500 | `TYPE_COLORS.HIGH_PROTEIN` = `#3B82F6`   |
+| FAT     | `#f59e0b` amber-500  | `TYPE_COLORS.HIGH_FAT`     = `#A855F7`   |
+| FIBER   | `#10b981` emerald-500| `TYPE_COLORS.BALANCED`     = `#22D3A0`   |
+
+Mapping-Logik:
+- CARBS → FAST_CARBS (orange = schnelle Glukose-Wirkung)
+- PROTEIN → HIGH_PROTEIN (blau = verlangsamt Absorption)
+- FAT → HIGH_FAT (lila = verzögert Spike)
+- FIBER → BALANCED (grün = ausgewogene Antwort)
+
+Quelle ist `TYPE_COLORS` statt Hex-Literals → wenn die Chips je
+geändert werden, wandern die Ringe automatisch mit. Erklärungs-Block
+oberhalb des `rings`-Arrays neu geschrieben (statt veraltetem
+"Tailwind-500-Reference"-Hinweis).
+
+### Bereinigt
+- Veralteter Kommentar bei `KIND_ACCENT.meal` ("amber (matches FAT
+  macro ring)") korrigiert — FAT ist jetzt lila, daher ist die
+  Quervergleichs-Aussage gestrichen, Kommentar lautet jetzt nur noch
+  "amber — neutral accent for the meal kind row".
+
+### Was NICHT geändert wurde
+- `KIND_ACCENT`-Farben für bolus/basal/exercise/meal — sind out of scope
+  (User wollte nur die Macro-Kreise umfärben).
+- `TYPE_COLORS` selbst — die Quelle bleibt unverändert.
+- `components/AppMockupPhone.tsx` — die `MacroRing`-Demo dort hat eigene
+  Hardcodings, die nicht im Dashboard rendern (Marketing-Mockup).
 
 ### Verifikation
-- `npx tsc --noEmit --skipLibCheck` → clean (kein Output).
-- Workflow `Start application` neu gestartet → läuft.
+- `npx tsc --noEmit --skipLibCheck` → keine Errors.
+- HMR übernimmt CSS-Änderung sofort, Workflow-Restart nicht nötig.
 
-### Push
-- Aktueller HEAD: `c2289b5` (PDF-Header von vorigem Task).
-- Logo-Fix liegt im Working-Tree, wird beim nächsten Auto-Checkpoint
-  gemeinsam committed → braucht dann Push.
+### Pausiert bzw. carry-over
+1. **Locale-aware date/time formatting** (Task #25-Erweiterung): nur
+   `lib/engine/chipState.ts` mit `locale`-Param + Default `"de-DE"`
+   gelandet (rückwärtskompatibel, kein Schaden). Restliche Edits in
+   `lib/insulinEval.ts`, `EngineLogTab`, `MealEntryCardCollapsed`,
+   `MealEntryLightExpand`, CGM-Komponenten und `entries/page.tsx` noch
+   offen — Nutzer hat zwischendurch Pivot gemacht.
+2. **Fullscreen-Button im Live-Glucose-Widget entfernen**: blockiert
+   durch Rückfrage — im `CurrentDayGlucoseCard` existiert kein echter
+   Fullscreen-Button, nur ein "FS"-Pill (= Fingerstick-Modal-Trigger).
+   User muss klären welcher Button gemeint ist.
+3. **BE/KE feature**: Migration applied, `lib/carbUnits.ts` ready, UI
+   wiring noch nicht angefangen (länger pausiert).
 
-## Carry-over (offen)
-- BE/KE-Feature: SQL-Migration angewandt, `lib/carbUnits.ts` bereit,
-  UI-Wiring (Settings + Engine + Log + Insights) steht noch aus.
+### NICHT gemacht (per Direktive)
+- Kein `git commit` (auto-checkpoint übernimmt).
+- Kein `git push` — Nutzer hat es diese Runde nicht angefordert.
+- Kein `suggest_deploy` (Beta-Mode).
