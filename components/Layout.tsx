@@ -24,20 +24,27 @@ const NAV_SURFACE  = "#111117";
 const NAV_BORDER   = "rgba(255,255,255,0.08)";
 const NAV_INACTIVE = "rgba(255,255,255,0.4)";
 
-const NAV = [
-  { label: "Dashboard", path: "/dashboard", icon: (a: boolean) => (
+// Desktop sidebar items. 4 entries, mirrors the mobile bottom-nav
+// shape (Dashboard | Verlauf | Glev | Settings). Mobile renders Glev
+// as a centered FAB instead of a tab; desktop shows it inline. The
+// labels reuse the nav.* i18n keys so a German user sees "Verlauf"
+// and an English user sees "History". The "log" tab and standalone
+// "insights" tab were dropped per user request — both are now
+// reachable via the merged Verlauf page (/history) which has internal
+// Insights/Entries sub-tabs.
+type NavKey = "dashboard" | "history" | "glev" | "settings";
+type NavItem = { key: NavKey; path: string; icon: (a: boolean) => React.ReactNode };
+const NAV: NavItem[] = [
+  { key: "dashboard", path: "/dashboard", icon: (a) => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
   )},
-  { label: "Log", path: "/log", icon: (a: boolean) => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1.5" fill={a ? ACCENT : "rgba(255,255,255,0.4)"}/><circle cx="4" cy="12" r="1.5" fill={a ? ACCENT : "rgba(255,255,255,0.4)"}/><circle cx="4" cy="18" r="1.5" fill={a ? ACCENT : "rgba(255,255,255,0.4)"}/></svg>
+  { key: "history", path: "/history", icon: (a) => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 4 3 10 9 10"/><polyline points="12 7 12 12 16 14"/></svg>
   )},
-  { label: "Glev", path: "/engine", icon: (a: boolean) => (
+  { key: "glev", path: "/engine", icon: (a) => (
     <GlevLogo size={20} color={a ? ACCENT : "rgba(255,255,255,0.55)"} bg="transparent"/>
   )},
-  { label: "Insights", path: "/insights", icon: (a: boolean) => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a7 7 0 0 1 4 12.8V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.2A7 7 0 0 1 12 2z"/><path d="M9 21h6"/><path d="M9 18h6"/></svg>
-  )},
-  { label: "Settings", path: "/settings", icon: (a: boolean) => (
+  { key: "settings", path: "/settings", icon: (a) => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
   )},
 ];
@@ -203,7 +210,10 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         </div>
 
         <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
-          {NAV.map(({ label, path, icon }) => {
+          {NAV.map(({ key, path, icon }) => {
+            // /engine has its own internal tabs that we deep-link to
+            // via ?tab= — those navigations don't change pathname so
+            // the active highlight stays correct without extra logic.
             const active = pathname.startsWith(path);
             return (
               <button key={path} className="nav-btn" onClick={() => router.push(path)} style={{
@@ -215,7 +225,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
                 textAlign: "left", width: "100%",
               }}>
                 {icon(active)}
-                {label}
+                {tNav(key)}
               </button>
             );
           })}

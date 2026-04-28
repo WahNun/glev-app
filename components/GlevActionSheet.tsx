@@ -71,10 +71,16 @@ const RUN = (
   </svg>
 );
 
+// Targets the engine page's internal tabs via ?tab=. The engine page
+// reads this on mount + whenever the search params change, so even
+// re-clicking from /engine itself switches the visible tab.
+//   fingerstick → manual FS glucose entry card
+//   bolus       → InsulinForm (basal/bolus log)
+//   exercise    → ExerciseForm
 const SUB_OPTIONS: Sub[] = [
-  { label: "Glukose messen", href: "/engine", icon: DROPLET },
-  { label: "Insulin loggen", href: "/log?type=insulin", icon: SYRINGE },
-  { label: "Exercise loggen", href: "/log?type=exercise", icon: RUN },
+  { label: "Glukose messen", href: "/engine?tab=fingerstick", icon: DROPLET },
+  { label: "Insulin loggen", href: "/engine?tab=bolus",       icon: SYRINGE },
+  { label: "Exercise loggen", href: "/engine?tab=exercise",   icon: RUN },
 ];
 
 export default function GlevActionSheet({ open, onClose }: Props) {

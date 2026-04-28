@@ -2,6 +2,7 @@
   "nav": {
     "dashboard": "Dashboard",
     "history": "History",
+    "glev": "Glev",
     "settings": "Settings"
   },
   "log": {

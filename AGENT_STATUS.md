@@ -1,58 +1,82 @@
-STATUS: DONE (Sprache-Picker als Dropdown + Save-Button)
+STATUS: DONE (Glev-FAB-Submenü fixt + Desktop-Sidebar auf 4 Items)
 LAST_DONE:
-  Spec: "die sprachbuttons müssen keine buttons sein es reicht ein simples dropdown menü
-  rechts davon in der gleichen card der save / speichern button"
+  Spec aus zwei User-Beschwerden in Folge:
+  • "führt nicht zum gewünschten insulin bolus log screen"
+  • "führt nicht zum gewünschten FS Glucose manual entry screen"
+  Plus Klarstellung: "es gibt 4 elemente im nav … log wird mit insights zu verlauf
+  zusammengeführt"
 
-  Vorher (war seit letztem Turn drin): 2 große Sprach-Buttons nebeneinander, Klick auf
-  inaktiven öffnet Confirm-Modal mit Cancel/Confirm. User wollte das simpler.
+  Root-Cause der zwei Klick-Fehler war components/GlevActionSheet.tsx — die SUB_OPTIONS
+  zeigten auf falsche URLs:
+  • "Glukose messen"  → /engine            (landete auf engine-Haupttab, nicht FS-Karte)
+  • "Insulin loggen"  → /log?type=insulin  (landete auf Mahlzeit-Wizard)
+  • "Exercise loggen" → /log?type=exercise (gleiches Problem)
+  /log ist der Meal-Wizard. Die Insulin-/FS-/Exercise-Karten leben unter /engine als
+  interne Tabs (engine.tsx Z.145 tab-state mit "engine"|"log"|"bolus"|"exercise"|"fingerstick").
 
-  Jetzt (in derselben Card, eine Reihe):
-  • flex:1 <select>-Dropdown links — zeigt 🇩🇪 Deutsch / 🇬🇧 English
-  • "Speichern"-Button rechts (whiteSpace nowrap, ACCENT-filled wenn pending)
-  • Save ist DISABLED solange Dropdown == aktuelle Locale (nichts zu speichern)
-  • Kleiner Hint unter der Reihe sobald pending: "Die App lädt neu, …"
-    (re-uses settings.language_confirm_body i18n key — beide Sprachen)
-  • Kein Modal mehr — Dropdown→Save IST schon eine 2-Step-Bestätigung
+  Fix in 3 Files:
 
-  Custom-Styling am Select (damit es nicht nach Browser-OS-Default aussieht):
-  • appearance:none + WebkitAppearance:none
-  • inline-SVG Pfeil als backgroundImage rechts
-  • Dark-Theme (background:SURFACE, color:#fff, border BORDER)
-  • <option> Background explizit gesetzt damit Chrome/Firefox-Dropdown-Liste auch dunkel ist
+  1. components/GlevActionSheet.tsx Z.83-87
+     SUB_OPTIONS jetzt:
+     • Glukose messen  → /engine?tab=fingerstick
+     • Insulin loggen  → /engine?tab=bolus
+     • Exercise loggen → /engine?tab=exercise
+     Plus Kommentar warum (engine page reads ?tab= on mount + on searchParams change)
 
-  pendingLocale state (existiert seit letztem Turn): wird jetzt vom Select gesetzt
-  statt vom Button — beim Re-Pick auf currentLocale wieder auf null zurück damit
-  Save sauber disabled.
+  2. app/(protected)/engine/page.tsx Z.3 + Z.146-159
+     • neuer import: useSearchParams from next/navigation
+     • neuer useEffect: liest ?tab= aus URL, setzt setTab() wenn Wert in
+       {engine,log,bolus,exercise,fingerstick}
+     • Dependency [searchParams] (NICHT []) damit Re-Klick auf FAB während man schon
+       auf /engine ist trotzdem den Tab wechselt — Next.js remountet die Page nicht
+       bei reinen Query-Changes
 
-  Geänderte Dateien:
-  • app/(protected)/settings/page.tsx Z.244-308 — kompletter Card-Block ersetzt
-    (alte Buttons + Modal raus → Dropdown + Save + inline Hint rein)
-  • messages/de.json + messages/en.json — UNGEÄNDERT (keys aus letztem Turn werden
-    weiter verwendet)
+  3. components/Layout.tsx Z.30-53 + Z.216-234
+     Desktop-Sidebar reduziert von 5 → 4 Items wie der User es will:
+     • Dashboard | Verlauf | Glev | Settings (statt: Dashboard, Log, Glev, Insights, Settings)
+     • Log-Tab und standalone Insights-Tab raus — beide jetzt erreichbar über /history
+       (das hat schon interne Sub-Tabs Insights/Entries)
+     • NAV-Item-Shape geändert von {label,path,icon} → {key:NavKey,path,icon}
+       damit tNav(key) gerendert wird statt hardcoded English (Verlauf vs History je
+       nach UI-Sprache)
+     • NAV.map render-Loop entsprechend angepasst
+
+  4. messages/de.json + messages/en.json
+     • neuer Key "nav.glev" → "Glev" in beiden (Brand bleibt, beide Sprachen)
 
   Verifikation:
   • npx tsc --noEmit clean
-  • Workflow restart sauber (HMR Refresh-Logs only)
-  • HTTP /settings → 200
+  • Workflow restart sauber (Next 16.2.4 Ready in 305ms)
+  • /history 200, /engine?tab=fingerstick|bolus|exercise alle 307 (Auth-Redirect = Route exists)
+  • Browser-Console Error "MISSING_MESSAGE nav.glev" war Pre-HMR-Stale (Key existiert,
+    Timestamp lag vor dem letzten Reconnect)
 
-  Bewusst NICHT geändert:
-  • lib/locale.ts setLocale() — Cookie + DB + reload bleibt korrekt, nur der Trigger
-    ist jetzt der Save-Button statt Modal-Confirm
-  • language_confirm_title key bleibt in messages/* (ungenutzt jetzt, aber nicht
-    löschen — könnte sonst beim Rollback-Bedarf wieder gebraucht werden, ist nur
-    je 1 Zeile und macht 0 Bundle-Impact)
-  • currentLocale/Cookie-Reconcile-Logik (Z.53-60) — funktioniert weiter
+  Bewusst NICHT geändert (auch wenn Tasks dazu existieren):
+  • Task #27 "Glev von Desktop-Sidebar zu Top-Level-Aktion" — User hat in dieser Runde
+    nichts dazu gesagt, nur "4 Items" gefordert was jetzt erfüllt ist (mit Glev drin)
+  • Mobile bottom-nav — war schon 4 Tabs (Dashboard | [Glev FAB] | History | Settings),
+    kein Refactor nötig
+  • /history page selbst — funktioniert schon, hat Insights/Entries Sub-Tabs
+  • Das alte /entries und /insights und /log — Routes existieren noch und funktionieren,
+    aber sind jetzt nur über Deep-Links (oder von /history/dashboard/etc) erreichbar.
+    Können später sauber gelöscht werden falls keine Inbound-Links
 
 NEXT (offen):
-  Task #19 Verlauf-Sidebar — wartet auf User-Input ob Insights ersetzen oder als 6.
-  Task #20 Engine-Desktop-Layout — ist gerade IMPLEMENTED reingekommen, könnte review brauchen
-  Task #21 /log restliche i18n-Strings — IN_PROGRESS
-  Task #22 Engine Chat-Sidebar Desktop — PROPOSED, braucht User-Approve
-  Task #23 Engine Step-Indikator → /log-Pills — PROPOSED, braucht User-Approve
+  Task #19 Verlauf in Sidebar — IMPLEMENTED reingekommen + jetzt von mir nochmal
+    übergebügelt (NAV-Refactor war redundant aber konsistent jetzt)
+  Task #21 /log Restliche i18n-Strings — IN_PROGRESS
+  Task #22 Engine Chat-Sidebar Desktop — PROPOSED
+  Task #23 Engine Step-Indikator → /log-Pills — PROPOSED
+  Task #24 Sprache wirkt nicht auf Step 1 (Voice) — PROPOSED
+  Task #25 Mahlzeit-Zeiten je nach Sprache — PROPOSED
+  Task #26 EN-TTS für Insulin-Begründung — PROPOSED
+  Task #27 Glev → Top-Level-Aktion (Desktop) — PROPOSED
 
 QUESTION:
-  Settings öffnen → Dropdown auf English umstellen → Save klicken (oder zurück auf Deutsch
-  → Save wird disabled). Falls noch was am Look stört (Pfeil-Position, Save-Padding,
-  Hint-Farbe) — sag's. Sonst: welcher Strang?
+  FAB testen: Glev-Button mittig in Mobile-Bottom-Nav antippen → "Mahlzeit loggen" geht
+  zum Meal-Wizard, "Weiteres" aufklappen → "Glukose messen" sollte FS-Karte öffnen,
+  "Insulin loggen" die Bolus-Form, "Exercise loggen" die Exercise-Form.
+  Auf Desktop: Sidebar zeigt jetzt 4 Items mit "Verlauf" statt Log+Insights.
+  Was als nächstes? Glev von Desktop-Sidebar weg (Task #27)?
 
-TIMESTAMP: 00:14
+TIMESTAMP: 00:25

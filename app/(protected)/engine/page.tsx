@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { fetchMeals, classifyMeal, computeCalories, saveMeal, deleteMeal, updateMeal, type Meal } from "@/lib/meals";
 import { scheduleJobsForLog } from "@/lib/cgmJobs";
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
@@ -139,6 +140,20 @@ const CONF_COLOR: Record<string, string> = { HIGH:GREEN, MEDIUM:ORANGE, LOW:PINK
 
 export default function EnginePage() {
   const [tab, setTab]         = useState<"engine"|"log"|"bolus"|"exercise"|"fingerstick">("engine");
+  // Sync the active sub-tab from the URL ?tab= query so deep-links
+  // from the GlevActionSheet ("Glukose messen", "Insulin loggen",
+  // "Exercise loggen") land directly on the right card. We listen to
+  // searchParams (not just []) so re-clicking the FAB while already
+  // on /engine still switches tabs — Next.js does NOT remount the
+  // page when only the query string changes.
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    if (!searchParams) return;
+    const t = searchParams.get("tab");
+    if (t === "log" || t === "bolus" || t === "exercise" || t === "fingerstick" || t === "engine") {
+      setTab(t);
+    }
+  }, [searchParams]);
   const [isMobile, setIsMobile] = useState(false);
   const [meals, setMeals]     = useState<Meal[]>([]);
   const [adaptedICR, setAdaptedICR] = useState(15);
