@@ -299,9 +299,11 @@ export default function EnginePage() {
 
   // Track viewport — mobile gets 3 separate tabs (Engine | Bolus | Exercise),
   // desktop keeps the 2-tab layout (Engine | Log) with both forms side-by-side.
+  // Breakpoint 768px matches Layout.tsx's sidebar↔mobile threshold, so the
+  // page swaps its tab strip at the same width the chrome swaps the nav.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const mq = window.matchMedia("(max-width: 720px)");
+    const mq = window.matchMedia("(max-width: 768px)");
     const apply = () => setIsMobile(mq.matches);
     apply();
     mq.addEventListener("change", apply);
@@ -1019,7 +1021,7 @@ export default function EnginePage() {
   const card: React.CSSProperties = { background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"20px 24px" };
 
   return (
-    <div style={{ maxWidth: isMobile || tab !== "engine" ? 800 : 1200, margin:"0 auto" }}>
+    <div style={{ maxWidth: 1100, margin:"0 auto" }}>
       {/* The previous "Glev Engine" h1 + subtitle block was removed per
           UX request — page identification now comes from the global app
           header (logo top-left) and the tab chip (top-right chevron),
@@ -1120,7 +1122,12 @@ export default function EnginePage() {
       })()}
 
       {tab === "engine" && (
-        <div style={{ maxWidth: 600, margin: "0 auto" }}>
+        <div style={{ maxWidth: 720, margin: "0 auto" }}>
+          {/* Wizard form is single-column by design (chat lives inside Step 1's
+              body), so we cap the inner column at 720 — wide enough to feel
+              generous on desktop but narrow enough that long input rows stay
+              comfortable to scan. The outer container at 1100 keeps the page
+              centered and matches /log's desktop pattern. */}
           <style>{`
             @keyframes engVPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.06)} }
             @keyframes engSpin   { to { transform: rotate(360deg) } }
@@ -1438,7 +1445,12 @@ export default function EnginePage() {
                 <div style={{ fontSize: 11, color: "#666680", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700, marginBottom: 12 }}>
                   Makros
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, rowGap: 14 }}>
+                {/* Macro grid — auto-fit collapses 4 fields to 2 cols on
+                    desktop, 1 col on narrow phones. minmax(180px, 1fr) keeps
+                    "e.g. 60 / opt." labels readable without forcing a fixed
+                    2-col that wraps awkwardly on tablets. Mirrors /log's
+                    macro-grid pattern. */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, rowGap: 14 }}>
                   <div>
                     <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>Carbs (g)</label>
                     <input style={inp} type="number" placeholder="e.g. 60" value={carbs} onChange={(e) => setCarbs(e.target.value)}/>

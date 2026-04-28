@@ -717,14 +717,14 @@ export function ExerciseForm() {
 export default function EngineLogTab() {
   return (
     <div>
-      <style>{`
-        @media (max-width: 720px) {
-          .glev-log-grid { grid-template-columns: 1fr !important; }
-        }
-      `}</style>
+      {/* InsulinForm + ExerciseForm sit side-by-side on desktop and stack on
+          mobile. auto-fit minmax(320px, 1fr) collapses to one column once
+          either form would be narrower than 320px, which lines up with the
+          768px sidebar↔mobile breakpoint in Layout.tsx for typical viewports
+          while still gracefully degrading on intermediate widths. */}
       <div
         className="glev-log-grid"
-        style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}
+        style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20 }}
       >
         <InsulinForm />
         <ExerciseForm />
