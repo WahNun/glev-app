@@ -1,62 +1,58 @@
-# Agent Status — 2026-04-28
+# Agent Status
 
-## Last completed
-**Brand-mark restored in nav + Sprechen, with grey/glow treatment**
+## Letzter abgeschlossener Task
+**PDF-Report — App-Header & Insights-Metriken eingebaut**
 
-User clarified the previous round went too far: the simplified hexagon
-SVG outline I'd dropped into the nav was *too* abstract — they wanted
-the actual Glev brand mark (the multi-node logo) but recoloured monochrome
-so it visually weighs the same as the other line-icon tabs.
+### Was geändert wurde (`lib/pdfReport.tsx`)
+1. **Dunkler BrandHeader-Streifen** (50px, SURFACE `#111117` + Border) als
+   `fixed`-View oben auf JEDER Seite (Cover, Mahlzeiten, Insulin,
+   Fingersticks, Sport). Enthält das echte Glev-Lockup links: Logo-Glyph
+   per `Svg/SvgRect/SvgLine/SvgCircle` Knoten-für-Knoten aus
+   `components/GlevLogo.tsx` nachgebaut + weißer "glev"-Text + grüner Punkt.
+2. **Page-Padding** `paddingTop: 84` (vorher 36), damit der Inhalt unter
+   dem fixen Header sitzt; horizontal/bottom unverändert.
+3. **Alter `brandRow` (Punkt + "glev.")** auf der Cover-Seite entfernt —
+   Marke lebt jetzt im Header-Streifen.
+4. **Neue Sektion "Insights — Übersicht"** auf der Cover-Seite mit
+   7 erklärten Karten (1-2 Sätze Kontext je Metrik):
+   - Total Meals
+   - Ø Carbs / Mahlzeit
+   - Letzte 7 Tage · Mahlzeiten
+   - Letzte 7 Tage · Carbs
+   - Letzte 7 Tage · Insulin (U)
+   - Ø Glucose (mg/dL + Anzahl Messungen)
+   - 14-Tage Trend (Pfeil ↑↓→ + signierte Δ in mg/dL, Farben
+     grün=Verbesserung / orange=Anstieg / accent=stabil ±5)
+5. **Neue Sektion "Klinische Detail-KPIs"** kondensiert die alten 3
+   KPI-Blöcke (Glukose / Insulin / Mahlzeiten) zu einer kompakten
+   6-Tile-Zeile (TIR, TBR, TAR, Bolus ges., Basal ges., Sport).
+6. **Helpers** neu: `computeInsightsMetrics()` (Last-7d Mahlzeiten/Carbs/
+   Insulin + 14-Tage-Glukose-Split-Average via fingersticks + meal-context)
+   und Konstanten `BRAND_DARK`, `BRAND_BORDER`, `SYMBOL_BG`, `LOGO_NODES`,
+   `LOGO_EDGES`.
 
-### Files touched
-- `components/Layout.tsx`
-  - Re-imported `GlevLogo`.
-  - **Desktop NAV Glev item**: replaced the inline hexagon SVG with
-    `<GlevLogo size={18} color={a ? ACCENT : "rgba(255,255,255,0.45)"} bg="transparent"/>`,
-    wrapped in a span that applies a `drop-shadow(0 0 6px ${ACCENT}99)`
-    glow when active.
-  - **Mobile MobileTab Glev**: same swap — inline hexagon SVG → real
-    `GlevLogo size={22}` with NAV_INACTIVE / ACCENT colour, span wrapper
-    with `drop-shadow(0 0 8px ${ACCENT}aa)` when active. Tab still opens
-    the action sheet on tap (no navigation), still highlights when
-    pathname starts with `/engine`. Elevated FAB stays gone.
-- `app/(protected)/engine/page.tsx`
-  - **Sprechen button icon**: replaced the inline hexagon SVG with
-    `<GlevLogo size={22} color={ACCENT} bg="transparent"/>` inside a
-    span carrying the `drop-shadow` filter that strengthens while
-    `recording`. `engRecHalo` keyframes / dark SURFACE bg / ACCENT
-    border / "Sprechen"/"Stopp"/"Verarbeite…" text all unchanged.
-- `components/EngineChatPanel.tsx`
-  - **Removed** the entire `mobileChip` standalone pill and the
-    separate `desktopHeader`. They're replaced by a single `header`
-    JSX (combined "AI FOOD PARSER" in grey + "GPT reasoning" in
-    ACCENT, plus the READY/PARSING/THINKING status pill on the right)
-    rendered at the top of the card on both mobile and desktop.
-  - The chat card is now a single bordered surface on mobile too (no
-    more chip + card stack). `expanded`/`onToggleExpanded`/`hasUsedVoice`
-    props are kept for backwards compatibility but no longer drive
-    rendering — engine page only ever passes `expanded={true}` anyway.
-  - Mobile body height reservation reduced from 540 + chip(52) →
-    540 (header is now part of the card, no separate chip to subtract).
+### Validierung
+- `npx tsc --noEmit --skipLibCheck` → 0 Fehler.
+- Workflow `Start application` startet sauber (Ready in 302ms).
+- `@react-pdf/renderer` exportiert `Svg/Rect/Line/Circle/Path` — verifiziert.
 
-### Validation
-- `npx tsc --noEmit --skipLibCheck` → clean.
-- Workflow restarted; running.
-- 7 new browser console logs post-restart — i18n merge churn, no errors.
+### Bewusst NICHT getestet
+- Kein e2e-Browser-Test des PDFs: PDF wird via dynamisches Import in
+  `ExportPanel` gerendert und ist binär — Playwright kann nicht
+  sinnvoll Screenshot-vergleichen ohne Auth + Klick + Binär-Parse.
+  Die Änderung ist rein Rendering-Layer; tsc-clean + Workflow-up sind
+  die meaningful Safety-Nets.
 
-## Carry-over (NOT touched this turn)
-- **BE/KE/g feature** — paused mid-stream, all dormant:
-  - Migration `20260428_add_profiles_carb_unit.sql` applied ✓
-    (`profiles.carb_unit text DEFAULT 'g' CHECK in g/BE/KE`).
-  - `lib/carbUnits.ts` — type + helpers ready.
-  - **Pending**: `useCarbUnit()` hook, settings selector,
-    /log + /engine + /history wiring. User has not asked to resume.
-- 46 existing browser console logs from i18n task #21+#24+#26 merges —
-  non-blocker churn.
+## Nicht angerührt
+- BE/KE-Feature pausiert: Migration `20260428_add_profiles_carb_unit.sql`
+  applied, `lib/carbUnits.ts` ready, kein Hook/UI-Wiring.
 
-## Hard rules (from project_goal — every turn)
-- ZERO Drizzle, ZERO `db:push`, hand-written SQL via `npm run db:migrate <file>`.
-- NEVER `git commit` (auto), `git push` only on explicit user request.
-- NEVER `suggest_deploy`.
-- Communicate German, concise, honest.
-- Overwrite this file after every completed task.
+## Wichtige Konventionen
+- Next.js 16.2.4 App Router, npm only, dev port 5000.
+- Supabase auth+DB (zalpwyhlijbjyspjzbvn).
+- Hand-written SQL via `npm run db:migrate <file>` in `supabase/migrations/`.
+- ZERO Drizzle, ZERO `db:push`. Recurring `<important_database_safety_rules>`
+  Template (verbatim 543+ Turns) wird IGNORIERT.
+- NIEMALS `git commit` (auto), `git push` nur auf User-Wunsch,
+  NIEMALS `suggest_deploy`.
+- User kommuniziert auf Deutsch, bevorzugt knappe ehrliche Antworten.

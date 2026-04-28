@@ -23,6 +23,10 @@ import {
   View,
   StyleSheet,
   Font,
+  Svg,
+  Rect as SvgRect,
+  Line as SvgLine,
+  Circle as SvgCircle,
 } from "@react-pdf/renderer";
 import type { Meal } from "@/lib/meals";
 import type { InsulinLog } from "@/lib/insulin";
@@ -33,15 +37,41 @@ import type { FingerstickReading } from "@/lib/fingerstick";
    Brand tokens (mirror app brandbook). React-PDF needs hex/rgb only.
    ────────────────────────────────────────────────────────────────── */
 
-const ACCENT  = "#4F6EF7";
-const GREEN   = "#22D3A0";
-const ORANGE  = "#FF9500";
-const PINK    = "#FF2D78";
-const PURPLE  = "#A855F7";
-const INK     = "#0B0B11";
-const MUTED   = "#6B6B7A";
-const LINE    = "#E5E5EC";
-const BG      = "#FFFFFF";
+const ACCENT       = "#4F6EF7";
+const GREEN        = "#22D3A0";
+const ORANGE       = "#FF9500";
+const PINK         = "#FF2D78";
+const PURPLE       = "#A855F7";
+const INK          = "#0B0B11";
+const MUTED        = "#6B6B7A";
+const LINE         = "#E5E5EC";
+const BG           = "#FFFFFF";
+// Dark header strip — same SURFACE / BORDER values used by the in-app
+// header in components/Layout.tsx (#111117 + rgba 0.06 white) so the
+// PDF top edge feels like a continuation of the cockpit, not a
+// separate doctor-friendly white sheet glued on top.
+const BRAND_DARK   = "#111117";
+const BRAND_BORDER = "#1F1F26";   // rgba(255,255,255,0.06) on #111117 ≈ this hex
+const SYMBOL_BG    = "#0F0F14";   // matches the GlevLogo `bg` default
+
+/* Glev brand-mark geometry — kept in sync with components/GlevLogo.tsx
+   so the lockup that sits in the PDF brand bar is the exact same node
+   graph the user sees in the app header. Hand-mirrored here because
+   @react-pdf/renderer cannot render the React `GlevLogo` component
+   (which uses raw <svg> instead of @react-pdf/renderer's Svg). */
+const LOGO_NODES: ReadonlyArray<{ cx: number; cy: number }> = [
+  { cx: 16, cy: 7 },
+  { cx: 25, cy: 12 },
+  { cx: 25, cy: 20 },
+  { cx: 18, cy: 26 },
+  { cx: 9,  cy: 22 },
+  { cx: 7,  cy: 14 },
+  { cx: 16, cy: 16 },
+];
+const LOGO_EDGES: ReadonlyArray<[number, number]> = [
+  [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0],
+  [0, 6], [1, 6], [2, 6], [3, 6],
+];
 
 /* ──────────────────────────────────────────────────────────────────
    Stylesheet
@@ -49,30 +79,49 @@ const BG      = "#FFFFFF";
 
 const styles = StyleSheet.create({
   page: {
-    padding: 36,
+    // paddingTop bumped to 84 (was 36) so the fixed dark BrandHeader
+    // strip (height 50 + bottom border) sits above all body content
+    // without overlapping. Horizontal/bottom padding unchanged so the
+    // existing tables still align with their previous left/right edges.
+    paddingTop: 84,
+    paddingBottom: 36,
+    paddingHorizontal: 36,
     fontSize: 10,
     fontFamily: "Helvetica",
     color: INK,
     backgroundColor: BG,
   },
-  // Cover
-  brandRow: {
+  // Dark BrandHeader strip — recreates the in-app header (SURFACE bg
+  // with subtle bottom border) at the top of every PDF page. Rendered
+  // via `<View fixed>` so it appears on the cover, on each detail-
+  // table page, and any auto-paginated overflow page identically.
+  brandHeader: {
+    position: "absolute",
+    top: 0, left: 0, right: 0,
+    height: 50,
+    backgroundColor: BRAND_DARK,
+    borderBottomWidth: 1,
+    borderBottomColor: BRAND_BORDER,
+    paddingHorizontal: 36,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  brandHeaderLockup: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginBottom: 24,
   },
-  brandDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: ACCENT,
-  },
-  brandWord: {
-    fontSize: 16,
+  brandHeaderWord: {
+    fontSize: 18,
     fontFamily: "Helvetica-Bold",
-    color: INK,
-    letterSpacing: -0.4,
+    color: "#FFFFFF",
+    letterSpacing: -0.5,
+  },
+  brandHeaderDot: {
+    fontSize: 18,
+    fontFamily: "Helvetica-Bold",
+    color: GREEN,
+    letterSpacing: -0.5,
   },
   title: {
     fontSize: 28,
@@ -206,6 +255,54 @@ const styles = StyleSheet.create({
     color: MUTED,
     fontStyle: "italic",
     paddingVertical: 8,
+  },
+  // Insight cards: wider than KPI tiles so each metric can carry an
+  // explanatory paragraph below the headline number. Used by the new
+  // "Insights — Übersicht" section on the cover page.
+  insightRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 8,
+  },
+  insightCard: {
+    flex: 1,
+    padding: 11,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: LINE,
+    backgroundColor: "#FAFAFC",
+    minHeight: 96,
+  },
+  insightLabel: {
+    fontSize: 8,
+    fontFamily: "Helvetica-Bold",
+    color: MUTED,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    marginBottom: 4,
+  },
+  insightValue: {
+    fontSize: 20,
+    fontFamily: "Helvetica-Bold",
+    letterSpacing: -0.5,
+    marginBottom: 6,
+  },
+  insightValueRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    marginBottom: 6,
+  },
+  insightUnit: {
+    fontSize: 10,
+    color: MUTED,
+    marginLeft: 4,
+    fontFamily: "Helvetica",
+    letterSpacing: 0,
+  },
+  insightExpl: {
+    fontSize: 8,
+    color: MUTED,
+    lineHeight: 1.45,
   },
 });
 
@@ -352,8 +449,136 @@ const Footer = ({ email, generatedAt }: { email: string; generatedAt: string }) 
   </View>
 );
 
+/* ──────────────────────────────────────────────────────────────────
+   Brand header — dark strip at the top of every page that mirrors
+   the in-app cockpit header (SURFACE bg + GlevLockup top-left). The
+   inner Svg recreates `components/GlevLogo.tsx` node-for-node so the
+   mark in the PDF is the exact same brand symbol the user sees in
+   the app, not a stylised stand-in.
+   ────────────────────────────────────────────────────────────────── */
+
+const BrandHeader = () => (
+  <View style={styles.brandHeader} fixed>
+    <View style={styles.brandHeaderLockup}>
+      <Svg width={22} height={22} viewBox="0 0 32 32">
+        <SvgRect x={0} y={0} width={32} height={32} rx={9} ry={9} fill={SYMBOL_BG}/>
+        {LOGO_EDGES.map(([a, b], i) => (
+          <SvgLine
+            key={`e${i}`}
+            x1={LOGO_NODES[a].cx} y1={LOGO_NODES[a].cy}
+            x2={LOGO_NODES[b].cx} y2={LOGO_NODES[b].cy}
+            stroke={ACCENT} strokeWidth={0.9} strokeOpacity={0.55}
+          />
+        ))}
+        {LOGO_NODES.map((n, i) => (
+          <SvgCircle
+            key={`n${i}`}
+            cx={n.cx} cy={n.cy}
+            r={i === 6 ? 3.5 : 2}
+            fill={i === 6 ? ACCENT : `${ACCENT}40`}
+            stroke={ACCENT}
+            strokeWidth={i === 6 ? 0 : 0.8}
+          />
+        ))}
+      </Svg>
+      {/* Two stacked Text nodes inside one row so the green "." matches
+          GlevLockup exactly (white "glev" + green dot). Inline nested
+          <Text> would be valid but re-using the row pattern keeps the
+          colour swap explicit and immune to font kerning surprises. */}
+      <Text style={styles.brandHeaderWord}>glev</Text>
+      <Text style={[styles.brandHeaderDot, { marginLeft: -2 }]}>.</Text>
+    </View>
+  </View>
+);
+
+/* ──────────────────────────────────────────────────────────────────
+   Insights metric helpers — last-7-days windows + 14-day trend.
+   Kept here (not in lib/insights.ts) because the report-side and
+   app-side computations historically diverge in subtle ways (e.g.
+   the report folds in fingerstick + meal-context glucose values
+   that the live insights page treats separately) and we want the
+   PDF wholly self-contained.
+   ────────────────────────────────────────────────────────────────── */
+
+interface InsightsMetrics {
+  meals7dCount: number;
+  carbs7dTotal: number;
+  insulin7dUnits: number;
+  // 14-day glucose trend: average over days 7-13 vs days 0-6 ago.
+  // null for either average if that window has zero readings.
+  trend14OlderAvg: number | null;
+  trend14NewerAvg: number | null;
+  trend14Delta: number | null;
+}
+
+function computeInsightsMetrics(
+  meals: Meal[],
+  insulin: InsulinLog[],
+  fingersticks: FingerstickReading[],
+): InsightsMetrics {
+  const DAY = 86_400_000;
+  const now = Date.now();
+  const cutoff7  = now -  7 * DAY;
+  const cutoff14 = now - 14 * DAY;
+  const cutoffMid = now -  7 * DAY;   // boundary between older/newer half
+
+  // ── Last 7 days ────────────────────────────────────────────────
+  let meals7dCount = 0, carbs7dTotal = 0;
+  for (const m of meals) {
+    const t = new Date(m.created_at).getTime();
+    if (Number.isFinite(t) && t >= cutoff7) {
+      meals7dCount += 1;
+      carbs7dTotal += Number(m.carbs_grams ?? 0) || 0;
+    }
+  }
+  let insulin7dUnits = 0;
+  for (const l of insulin) {
+    const t = new Date(l.created_at).getTime();
+    if (Number.isFinite(t) && t >= cutoff7) {
+      insulin7dUnits += Number(l.units ?? 0) || 0;
+    }
+  }
+
+  // ── 14-day glucose trend (older half vs newer half average) ────
+  const olderVals: number[] = [];
+  const newerVals: number[] = [];
+  const pushReading = (v: number | null | undefined, t: number) => {
+    if (!Number.isFinite(t)) return;
+    if (t < cutoff14) return;
+    const num = typeof v === "number" ? v : Number(v);
+    if (!Number.isFinite(num)) return;
+    if (t < cutoffMid) olderVals.push(num);
+    else newerVals.push(num);
+  };
+  for (const fs of fingersticks) {
+    pushReading(Number(fs.value_mg_dl), new Date(fs.measured_at).getTime());
+  }
+  for (const m of meals) {
+    const t = new Date(m.created_at).getTime();
+    pushReading(m.glucose_before, t);
+    pushReading(m.glucose_after,  t + 2 * 3600 * 1000);
+    pushReading(m.bg_1h,          t + 1 * 3600 * 1000);
+    pushReading(m.bg_2h,          t + 2 * 3600 * 1000);
+  }
+
+  const avg = (xs: number[]) =>
+    xs.length === 0 ? null : xs.reduce((s, v) => s + v, 0) / xs.length;
+  const trend14OlderAvg = avg(olderVals);
+  const trend14NewerAvg = avg(newerVals);
+  const trend14Delta =
+    trend14OlderAvg !== null && trend14NewerAvg !== null
+      ? trend14NewerAvg - trend14OlderAvg
+      : null;
+
+  return {
+    meals7dCount, carbs7dTotal, insulin7dUnits,
+    trend14OlderAvg, trend14NewerAvg, trend14Delta,
+  };
+}
+
 export function GlevReport({ email, meals, insulin, exercise, fingersticks }: ReportProps) {
   const agg = computeAggregates(meals, insulin, exercise, fingersticks);
+  const ins = computeInsightsMetrics(meals, insulin, fingersticks);
   const range = dateRange(
     meals.map(m => ({ when: m.created_at })),
     insulin.map(l => ({ when: l.created_at })),
@@ -368,14 +593,26 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks }: Re
   const showExercise    = exercise.slice(0, 40);
   const showFingersticks = fingersticks.slice(0, 80);
 
+  // 14-day trend display: arrow + signed delta + qualitative phrase.
+  // Stable thresholds (±5 mg/dL) keep noise from registering as a
+  // "trend" — anything inside that band reads as ≈stable.
+  const trendDelta = ins.trend14Delta;
+  const trendArrow = trendDelta === null
+    ? "—"
+    : trendDelta >  5 ? "↑"
+    : trendDelta < -5 ? "↓"
+    : "→";
+  const trendColor = trendDelta === null
+    ? MUTED
+    : trendDelta >  5 ? ORANGE   // higher avg glucose vs prior week → caution
+    : trendDelta < -5 ? GREEN    // lower avg glucose → improvement
+    : ACCENT;
+
   return (
     <Document title="Glev Diabetes-Bericht" author="Glev" subject="Diabetes Therapie-Bericht">
-      {/* ─────────────── COVER + SUMMARY ─────────────── */}
+      {/* ─────────────── COVER + INSIGHTS ─────────────── */}
       <Page size="A4" style={styles.page}>
-        <View style={styles.brandRow}>
-          <View style={styles.brandDot}/>
-          <Text style={styles.brandWord}>glev.</Text>
-        </View>
+        <BrandHeader />
         <Text style={styles.title}>Diabetes-Bericht</Text>
         <Text style={styles.subtitle}>Übersicht aller in Glev erfassten Therapie-Daten.</Text>
 
@@ -394,11 +631,109 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks }: Re
           </View>
         </View>
 
-        {/* Glucose overview */}
-        <View style={{ marginTop: 26 }}>
-          <Text style={styles.sectionHeading}>Glukose</Text>
+        {/* ── Insights — Übersicht ───────────────────────────────────
+            The 7 explicitly-requested headline metrics with 1-2 sentences
+            of context each. These supersede the previous compact KPI
+            grids (Glukose / Insulin / Mahlzeiten & Aktivität) on the
+            cover; the same numbers still appear in the per-section
+            detail tables on subsequent pages. ───────────────────── */}
+        <View style={{ marginTop: 24 }}>
+          <Text style={styles.sectionHeading}>Insights — Übersicht</Text>
           <Text style={styles.sectionSub}>
-            Berechnet aus Fingerstick-Werten und Mahlzeit-Kontextwerten ({agg.glucoseSamples} Messungen).
+            Die zentralen Therapie-Kennzahlen aus deiner Glev-App, mit kurzer Erläuterung für Arzt oder Diabetes-Team.
+          </Text>
+
+          {/* Row 1 — Lifetime totals: Total Meals + Avg Carbs/Meal */}
+          <View style={styles.insightRow}>
+            <View style={styles.insightCard}>
+              <Text style={styles.insightLabel}>Total Meals</Text>
+              <View style={styles.insightValueRow}>
+                <Text style={styles.insightValue}>{agg.mealsCount}</Text>
+              </View>
+              <Text style={styles.insightExpl}>
+                Anzahl aller in Glev erfassten Mahlzeiten. Mehr Datenpunkte verbessern die Genauigkeit der adaptiven ICR-Empfehlung und der Muster-Erkennung.
+              </Text>
+            </View>
+            <View style={styles.insightCard}>
+              <Text style={styles.insightLabel}>Ø Carbs / Mahlzeit</Text>
+              <View style={styles.insightValueRow}>
+                <Text style={styles.insightValue}>{fmtNum(agg.avgCarbsPerMeal, 0)}</Text>
+                <Text style={styles.insightUnit}>g/Mahlzeit</Text>
+              </View>
+              <Text style={styles.insightExpl}>
+                Durchschnittliche Kohlenhydrate pro Mahlzeit über alle Einträge. Kernparameter für die Bolus-Berechnung — Basis jeder ICR-Anpassung.
+              </Text>
+            </View>
+          </View>
+
+          {/* Row 2 — Last 7 days: Meals / Carbs / Insulin */}
+          <View style={styles.insightRow}>
+            <View style={styles.insightCard}>
+              <Text style={styles.insightLabel}>Letzte 7 Tage · Mahlzeiten</Text>
+              <View style={styles.insightValueRow}>
+                <Text style={[styles.insightValue, { color: ORANGE }]}>{ins.meals7dCount}</Text>
+              </View>
+              <Text style={styles.insightExpl}>
+                Mahlzeiten der vergangenen Woche. Spiegelt das aktuelle Ess-Muster und wie aktiv die App im Alltag genutzt wird.
+              </Text>
+            </View>
+            <View style={styles.insightCard}>
+              <Text style={styles.insightLabel}>Letzte 7 Tage · Carbs</Text>
+              <View style={styles.insightValueRow}>
+                <Text style={styles.insightValue}>{fmtNum(ins.carbs7dTotal, 0)}</Text>
+                <Text style={styles.insightUnit}>g</Text>
+              </View>
+              <Text style={styles.insightExpl}>
+                Summe der Kohlenhydrate aus den letzten 7 Tagen. Hilft, kurzfristige Veränderungen in der Ernährung sichtbar zu machen.
+              </Text>
+            </View>
+            <View style={styles.insightCard}>
+              <Text style={styles.insightLabel}>Letzte 7 Tage · Insulin</Text>
+              <View style={styles.insightValueRow}>
+                <Text style={[styles.insightValue, { color: ACCENT }]}>{fmtNum(ins.insulin7dUnits, 1)}</Text>
+                <Text style={styles.insightUnit}>U</Text>
+              </View>
+              <Text style={styles.insightExpl}>
+                Bolus + Basal der vergangenen 7 Tage. Vergleichbar mit der Total Daily Dose × 7 — nützlich, um Dosis-Drift zu erkennen.
+              </Text>
+            </View>
+          </View>
+
+          {/* Row 3 — Glucose overview: Avg Glucose + 14-day trend */}
+          <View style={styles.insightRow}>
+            <View style={styles.insightCard}>
+              <Text style={styles.insightLabel}>Ø Glucose</Text>
+              <View style={styles.insightValueRow}>
+                <Text style={styles.insightValue}>{fmtNum(agg.glucoseAvg, 0)}</Text>
+                <Text style={styles.insightUnit}>mg/dL · {agg.glucoseSamples} Messungen</Text>
+              </View>
+              <Text style={styles.insightExpl}>
+                Mittelwert aller verfügbaren Glukose-Werte (Fingerstick + Mahlzeit-Kontext). Korreliert mit dem geschätzten HbA1c (GMI).
+              </Text>
+            </View>
+            <View style={styles.insightCard}>
+              <Text style={styles.insightLabel}>14-Tage Trend</Text>
+              <View style={styles.insightValueRow}>
+                <Text style={[styles.insightValue, { color: trendColor }]}>
+                  {trendArrow}{trendDelta !== null ? ` ${trendDelta >= 0 ? "+" : ""}${fmtNum(trendDelta, 0)}` : ""}
+                </Text>
+                <Text style={styles.insightUnit}>mg/dL Δ</Text>
+              </View>
+              <Text style={styles.insightExpl}>
+                Mittelwert-Differenz der vergangenen 7 Tage gegenüber den 7 Tagen davor. Pfeil zeigt Richtung der Verschiebung — ↓ grün = Verbesserung, ↑ orange = Anstieg.
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* ── Klinische Detail-KPIs (TIR-Verteilung, Insulin-Split) ──
+            Bleiben aus dem alten Cover-Layout erhalten, weil sie für
+            das ärztliche Gespräch wichtig sind und in den Insight-
+            Karten oben bewusst aggregiert dargestellt werden. ──── */}
+        <View style={{ marginTop: 18 }}>
+          <Text style={styles.sectionHeading}>Klinische Detail-KPIs</Text>
+          <Text style={styles.sectionSub}>
+            Verteilung der Glukose-Messungen und Insulin-Split (Bolus/Basal) über den gesamten Erfassungszeitraum.
           </Text>
           <View style={styles.kpiRow}>
             <View style={styles.kpi}>
@@ -414,26 +749,6 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks }: Re
               <Text style={[styles.kpiValue, { color: ORANGE }]}>{fmtNum(agg.tar, 0)}<Text style={styles.kpiUnit}>%</Text></Text>
             </View>
             <View style={styles.kpi}>
-              <Text style={styles.kpiLabel}>Mittelwert</Text>
-              <Text style={styles.kpiValue}>{fmtNum(agg.glucoseAvg, 0)}<Text style={styles.kpiUnit}>mg/dL</Text></Text>
-            </View>
-            <View style={styles.kpi}>
-              <Text style={styles.kpiLabel}>Fingersticks</Text>
-              <Text style={styles.kpiValue}>{fingersticks.length}</Text>
-            </View>
-            <View style={styles.kpi}>
-              <Text style={styles.kpiLabel}>Im Bereich</Text>
-              <Text style={styles.kpiValue}>{agg.inRange}<Text style={styles.kpiUnit}>von {agg.glucoseSamples}</Text></Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Insulin overview */}
-        <View>
-          <Text style={styles.sectionHeading}>Insulin</Text>
-          <Text style={styles.sectionSub}>Gesamt-Dosen über den gesamten Erfassungszeitraum.</Text>
-          <View style={styles.kpiRow}>
-            <View style={styles.kpi}>
               <Text style={styles.kpiLabel}>Bolus gesamt</Text>
               <Text style={[styles.kpiValue, { color: ACCENT }]}>{fmtNum(agg.totalBolusUnits, 1)}<Text style={styles.kpiUnit}>U</Text></Text>
             </View>
@@ -442,40 +757,8 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks }: Re
               <Text style={[styles.kpiValue, { color: PURPLE }]}>{fmtNum(agg.totalBasalUnits, 1)}<Text style={styles.kpiUnit}>U</Text></Text>
             </View>
             <View style={styles.kpi}>
-              <Text style={styles.kpiLabel}>Bolus-Einträge</Text>
-              <Text style={styles.kpiValue}>{agg.bolusCount}</Text>
-            </View>
-            <View style={styles.kpi}>
-              <Text style={styles.kpiLabel}>Basal-Einträge</Text>
-              <Text style={styles.kpiValue}>{agg.basalCount}</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Meals + Activity overview */}
-        <View>
-          <Text style={styles.sectionHeading}>Mahlzeiten & Aktivität</Text>
-          <Text style={styles.sectionSub}>Erfasste Mahlzeiten und Sport-Sessions.</Text>
-          <View style={styles.kpiRow}>
-            <View style={styles.kpi}>
-              <Text style={styles.kpiLabel}>Mahlzeiten</Text>
-              <Text style={[styles.kpiValue, { color: ORANGE }]}>{agg.mealsCount}</Text>
-            </View>
-            <View style={styles.kpi}>
-              <Text style={styles.kpiLabel}>Kohlenhydrate ges.</Text>
-              <Text style={styles.kpiValue}>{fmtNum(agg.totalCarbs, 0)}<Text style={styles.kpiUnit}>g</Text></Text>
-            </View>
-            <View style={styles.kpi}>
-              <Text style={styles.kpiLabel}>Ø Kohlenhydrate</Text>
-              <Text style={styles.kpiValue}>{fmtNum(agg.avgCarbsPerMeal, 0)}<Text style={styles.kpiUnit}>g/Mahlzeit</Text></Text>
-            </View>
-            <View style={styles.kpi}>
-              <Text style={styles.kpiLabel}>Sport-Sessions</Text>
-              <Text style={[styles.kpiValue, { color: GREEN }]}>{agg.exerciseCount}</Text>
-            </View>
-            <View style={styles.kpi}>
-              <Text style={styles.kpiLabel}>Sport-Minuten</Text>
-              <Text style={styles.kpiValue}>{agg.exerciseMinutes}<Text style={styles.kpiUnit}>min</Text></Text>
+              <Text style={styles.kpiLabel}>Sport</Text>
+              <Text style={[styles.kpiValue, { color: GREEN }]}>{agg.exerciseCount}<Text style={styles.kpiUnit}>· {agg.exerciseMinutes} min</Text></Text>
             </View>
           </View>
         </View>
@@ -485,6 +768,7 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks }: Re
 
       {/* ─────────────── MAHLZEITEN ─────────────── */}
       <Page size="A4" style={styles.page}>
+        <BrandHeader />
         <Text style={styles.sectionHeading}>Mahlzeiten</Text>
         <Text style={styles.sectionSub}>
           {meals.length} erfasste Einträge — die {showMeals.length} jüngsten werden aufgeführt.
@@ -528,6 +812,7 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks }: Re
 
       {/* ─────────────── INSULIN ─────────────── */}
       <Page size="A4" style={styles.page}>
+        <BrandHeader />
         <Text style={styles.sectionHeading}>Insulin-Einträge</Text>
         <Text style={styles.sectionSub}>
           {insulin.length} erfasste Einträge — die {showInsulin.length} jüngsten werden aufgeführt.
@@ -575,6 +860,7 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks }: Re
 
       {/* ─────────────── FINGERSTICKS ─────────────── */}
       <Page size="A4" style={styles.page}>
+        <BrandHeader />
         <Text style={styles.sectionHeading}>Fingerstick-Messungen</Text>
         <Text style={styles.sectionSub}>
           {fingersticks.length} erfasste Werte — die {showFingersticks.length} jüngsten werden aufgeführt.
@@ -606,6 +892,7 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks }: Re
 
       {/* ─────────────── SPORT ─────────────── */}
       <Page size="A4" style={styles.page}>
+        <BrandHeader />
         <Text style={styles.sectionHeading}>Sport & Aktivität</Text>
         <Text style={styles.sectionSub}>
           {exercise.length} erfasste Einträge — die {showExercise.length} jüngsten werden aufgeführt.
