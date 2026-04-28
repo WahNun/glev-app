@@ -76,18 +76,23 @@ function ProContent() {
         }
         .glev-feat-grid {
           display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 14px;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 24px;
+          max-width: 900px;
+          margin: 0 auto;
         }
+        .glev-feat-grid > div { height: 100%; }
         .glev-phone-stage { justify-self: end; }
         .glev-hero-form { width: 100%; max-width: 420px; }
         @media (max-width: 960px) {
           .glev-hero-2col { grid-template-columns: 1fr; gap: 40px; }
           .glev-phone-stage { justify-self: center; }
-          .glev-feat-grid { grid-template-columns: 1fr; }
           .glev-hero-form { max-width: none; }
           .glev-hero-left { align-items: center !important; text-align: center !important; }
           .glev-hero-meta { justify-content: center !important; }
+        }
+        @media (max-width: 640px) {
+          .glev-feat-grid { grid-template-columns: 1fr; }
         }
       `}</style>
 
