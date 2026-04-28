@@ -1,13 +1,7 @@
 "use client";
 
-import Image from "next/image";
-import Link from "next/link";
-import { Suspense, useRef, useState } from "react";
-import { useFormStatus } from "react-dom";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import AppMockupPhone from "@/components/AppMockupPhone";
-import CTAButton from "@/components/landing/CTAButton";
-import { submitProCheckout } from "./actions";
 import FAQ from "@/components/landing/FAQ";
 import FeatureTrio from "@/components/landing/FeatureTrio";
 import FounderSection from "@/components/landing/FounderSection";
@@ -17,26 +11,53 @@ import PricingCard from "@/components/landing/PricingCard";
 import Steps from "@/components/landing/Steps";
 import {
   ACCENT,
+  ACCENT_HOVER,
   BG,
-  BORDER,
   LAUNCH_DATE_LABEL,
   MINT,
-  PINK,
-  SURFACE,
   TEXT_DIM,
 } from "@/components/landing/tokens";
 
+const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/bJe4gzfLK1OUezHfzebfO01";
+
 /**
- * Submit button rendered inside the <form> so useFormStatus can read the
- * pending state (which only works for descendants of the form). Lives at
- * module scope so it stays a stable component reference across renders.
+ * Primary CTA — direct link to the Stripe Payment Link for the monthly
+ * subscription. Stripe collects the email itself at checkout, so no local
+ * form/server-action round-trip is needed.
  */
-function ProSubmitButton() {
-  const { pending } = useFormStatus();
-  const label = pending
-    ? "Weiterleitung zu Stripe…"
-    : "Mitgliedschaft starten — €24,90/Monat";
-  return <CTAButton submitting={pending} label={label} />;
+function ProCTALink() {
+  const [hover, setHover] = useState(false);
+  return (
+    <a
+      href={STRIPE_PAYMENT_LINK}
+      target="_blank"
+      rel="noopener noreferrer"
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: hover ? ACCENT_HOVER : ACCENT,
+        color: "#fff",
+        textDecoration: "none",
+        border: "none",
+        borderRadius: 12,
+        padding: "16px 32px",
+        fontSize: 18,
+        fontWeight: 600,
+        fontFamily: "inherit",
+        minHeight: 56,
+        cursor: "pointer",
+        boxShadow: hover ? "0 0 0 4px rgba(79,110,247,0.25)" : "0 0 0 0 rgba(79,110,247,0)",
+        transition: "background 120ms ease, box-shadow 120ms ease",
+        outlineColor: "rgba(79,110,247,0.4)",
+        boxSizing: "border-box",
+      }}
+    >
+      Mitgliedschaft starten — €24,90/Monat
+    </a>
+  );
 }
 
 /**
@@ -45,16 +66,6 @@ function ProSubmitButton() {
  * begins on the public launch date (1 July 2026) via a Stripe trial.
  */
 function ProContent() {
-  const [email, setEmail] = useState("");
-  const ctaRef = useRef<HTMLInputElement | null>(null);
-  // The form binds directly to the submitProCheckout server action (see
-  // app/pro/actions.ts) so Next.js can inject the action URL into the
-  // rendered <form> at SSR time. The previous useActionState wrapper left
-  // the form without an action attribute and pre-hydration submits did a
-  // default GET reload back to /pro — exactly what we were trying to fix.
-  // Errors come back via ?error=<msg> from the server action's redirect.
-  const searchParams = useSearchParams();
-  const error = searchParams.get("error");
 
   return (
     <main
@@ -134,44 +145,12 @@ function ProContent() {
               Sprach-Log. KI-Makros. CGM live. In unter 10 Sekunden dokumentiert.
             </p>
 
-            <form
-              action={submitProCheckout}
+            <div
               className="glev-hero-form"
               style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}
             >
-              <input
-                ref={ctaRef}
-                name="email"
-                type="email"
-                required
-                autoComplete="email"
-                placeholder="deine@email.de"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                aria-label="Email-Adresse"
-                style={{
-                  width: "100%",
-                  background: SURFACE,
-                  border: `1px solid ${BORDER}`,
-                  borderRadius: 12,
-                  padding: "14px 16px",
-                  color: "#fff",
-                  fontSize: 16,
-                  fontFamily: "inherit",
-                  outline: "none",
-                  boxSizing: "border-box",
-                  minHeight: 56,
-                }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = ACCENT)}
-                onBlur={(e) => (e.currentTarget.style.borderColor = BORDER)}
-              />
-              <ProSubmitButton />
-              {error && (
-                <div role="alert" style={{ fontSize: 13, color: PINK, textAlign: "left" }}>
-                  {error}
-                </div>
-              )}
-            </form>
+              <ProCTALink />
+            </div>
 
             <div
               className="glev-hero-meta"
