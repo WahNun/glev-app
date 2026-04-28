@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { supabase } from "@/lib/supabase";
 import { reloadHistoricalEntries } from "@/lib/meals";
 import { fetchMacroTargets, saveMacroTargets, DEFAULT_MACRO_TARGETS, type MacroTargets } from "@/lib/userSettings";
@@ -9,7 +9,7 @@ import ImportPanel from "@/components/ImportPanel";
 import ExportPanel from "@/components/ExportPanel";
 import CgmSettingsCard from "@/components/CgmSettingsCard";
 import NightscoutSettingsCard from "@/components/NightscoutSettingsCard";
-import { parseDbDate } from "@/lib/time";
+import { parseDbDate, localeToBcp47 } from "@/lib/time";
 import { setLocale, readLocaleCookie, DEFAULT_LOCALE, type Locale } from "@/lib/locale";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78";
@@ -39,6 +39,7 @@ function saveSettings(s: Settings) {
 export default function SettingsPage() {
   const tSettings = useTranslations("settings");
   const tCommon = useTranslations("common");
+  const dateLocale = localeToBcp47(useLocale());
   const [tab, setTab]         = useState<"overview"|"settings"|"integrations"|"data">("overview");
   const [email, setEmail]     = useState("");
   const [createdAt, setCreatedAt] = useState("");
@@ -74,7 +75,7 @@ export default function SettingsPage() {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return;
       setEmail(user.email || "");
-      setCreatedAt(user.created_at ? parseDbDate(user.created_at).toLocaleDateString("en",{year:"numeric",month:"long",day:"numeric"}) : "");
+      setCreatedAt(user.created_at ? parseDbDate(user.created_at).toLocaleDateString(dateLocale,{year:"numeric",month:"long",day:"numeric"}) : "");
     });
     supabase.from("meals").select("id", { count:"exact", head:true }).then(({ count }) => setMealCount(count||0));
     // fetchMacroTargets handles the !supabase / signed-out case internally

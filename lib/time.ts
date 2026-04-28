@@ -42,6 +42,31 @@ export function parseDbDate(s: string | null | undefined): Date {
   return new Date(parseDbTs(s));
 }
 
+/** Map a next-intl locale code (e.g. "de", "en") to a BCP-47 tag suitable
+ *  for `Intl.DateTimeFormat` / `toLocaleTimeString` / `toLocaleDateString`.
+ *
+ *  next-intl exposes the active locale as a bare language code ("de", "en")
+ *  via `useLocale()`. Passing those to `toLocale*String` works, but the
+ *  resulting format is "language-default" — for `en` that's en-US (12h
+ *  AM/PM), for `de` that's de-DE (24h). We make the regional choice
+ *  explicit here so that:
+ *    - DE-Toggle → "de-DE" (24h, dd.mm.yyyy)
+ *    - EN-Toggle → "en-US" (12h AM/PM, m/d/yyyy)
+ *  stays predictable across the entire app. Already-qualified tags
+ *  ("de-CH", "en-GB", …) pass through unchanged. Unknown codes also pass
+ *  through, so adding a new locale to next-intl just works.
+ */
+const BCP47_LOCALE_MAP: Record<string, string> = {
+  de: "de-DE",
+  en: "en-US",
+};
+
+export function localeToBcp47(locale: string | null | undefined): string {
+  if (!locale) return "de-DE";
+  if (locale.includes("-")) return locale;
+  return BCP47_LOCALE_MAP[locale] ?? locale;
+}
+
 /** Parse a LibreLinkUp `Timestamp` field (server UTC, "M/D/YYYY h:mm:ss AM/PM")
  *  into epoch ms. Returns null when the string is missing or unrecognised. */
 export function parseLluTs(s: string | null | undefined): number | null {

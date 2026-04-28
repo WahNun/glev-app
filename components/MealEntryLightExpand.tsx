@@ -21,11 +21,15 @@ const MEAL_TYPES: Array<{ value: string; label: string }> = [
 
 export default function MealEntryLightExpand({
   meal,
+  locale = "de-DE",
   onViewFull,
   viewFullLabel = "View full entry →",
   onUpdated,
 }: {
   meal: Meal;
+  /** BCP-47 locale for the timestamp footer. Pass `localeToBcp47(useLocale())`
+   *  from the call site so the format follows the active UI language. */
+  locale?: string;
   onViewFull: () => void;
   viewFullLabel?: string;
   onUpdated?: (m: Meal) => void;
@@ -50,7 +54,7 @@ export default function MealEntryLightExpand({
     : "rgba(255,255,255,0.35)";
 
   const date = parseDbDate(meal.meal_time ?? meal.created_at);
-  const fullTimestamp = date.toLocaleString("en", {
+  const fullTimestamp = date.toLocaleString(locale, {
     month: "short", day: "numeric", year: "numeric",
     hour: "numeric", minute: "2-digit",
   });

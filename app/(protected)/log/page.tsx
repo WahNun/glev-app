@@ -6,7 +6,7 @@ import { useTranslations, useLocale } from "next-intl";
 import { saveMeal, classifyMeal, computeCalories, fetchMeals, type ParsedFood, type Meal } from "@/lib/meals";
 import { scheduleAutoFillForMeal } from "@/lib/postMealCgmAutoFill";
 import { supabase } from "@/lib/supabase";
-import { parseLluTs } from "@/lib/time";
+import { parseLluTs, localeToBcp47 } from "@/lib/time";
 
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
 
@@ -82,7 +82,7 @@ const STEP_KEYS = ["step1", "step2", "step3"] as const;
 export default function LogPage() {
   const router = useRouter();
   const t = useTranslations("log");
-  const locale = useLocale();
+  const locale = localeToBcp47(useLocale());
   const [recording, setRecording] = useState(false);
   const [hasActiveMeal, setHasActiveMeal] = useState(false);
   const [parsing, setParsing]     = useState(false);

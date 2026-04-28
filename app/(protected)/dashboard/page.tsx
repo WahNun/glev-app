@@ -13,7 +13,8 @@ import CurrentDayGlucoseCard from "@/components/CurrentDayGlucoseCard";
 import GlucoseTrendFront from "@/components/GlucoseTrendChart";
 import SortableCardGrid, { type SortableItem } from "@/components/SortableCardGrid";
 import { useCardOrder } from "@/lib/cardOrder";
-import { parseDbDate, parseDbTs } from "@/lib/time";
+import { parseDbDate, parseDbTs, localeToBcp47 } from "@/lib/time";
+import { useLocale } from "next-intl";
 import { isToday, startOfDaysAgo } from "@/lib/utils/datetime";
 
 /** Default top-to-bottom order of dashboard sections. Each ID also appears
@@ -274,6 +275,7 @@ function OutcomeChart({ meals }: { meals: Meal[] }) {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const dateLocale = localeToBcp47(useLocale());
   const [meals, setMeals]     = useState<Meal[]>([]);
   const [insulin, setInsulin] = useState<InsulinLog[]>([]);
   const [exercise, setExercise] = useState<ExerciseLog[]>([]);
@@ -373,7 +375,7 @@ export default function DashboardPage() {
         </div>
       ),
     },
-    { id: "recent-entries", node: <RecentEntries rows={recentRows} onViewAll={() => router.push("/log")} onViewEntry={(id) => router.push(`/entries#${id}`)} onMealUpdated={(m) => setMeals(prev => prev.map(x => x.id === m.id ? m : x))}/> },
+    { id: "recent-entries", node: <RecentEntries rows={recentRows} locale={dateLocale} onViewAll={() => router.push("/log")} onViewEntry={(id) => router.push(`/entries#${id}`)} onMealUpdated={(m) => setMeals(prev => prev.map(x => x.id === m.id ? m : x))}/> },
   ];
 
   return (
@@ -431,11 +433,13 @@ function DashboardSortable({ items }: { items: SortableItem[] }) {
  */
 function RecentEntries({
   rows,
+  locale,
   onViewAll,
   onViewEntry,
   onMealUpdated,
 }: {
   rows: RecentRow[];
+  locale: string;
   onViewAll: () => void;
   onViewEntry: (id: string) => void;
   onMealUpdated?: (m: Meal) => void;
@@ -469,18 +473,20 @@ function RecentEntries({
             const isOpen = expanded === r.id;
             return (
               <div key={r.id}>
-                <UnifiedRecentRow row={r} onClick={() => toggle(r.id)} />
+                <UnifiedRecentRow row={r} locale={locale} onClick={() => toggle(r.id)} />
                 {isOpen && (
                   <div style={{ paddingBottom:8 }}>
                     {r.kind === "meal" ? (
                       <MealEntryLightExpand
                         meal={r.meal!}
+                        locale={locale}
                         onViewFull={() => onViewEntry(r.meal!.id)}
                         onUpdated={onMealUpdated}
                       />
                     ) : r.kind === "exercise" ? (
                       <NonMealLightExpand
                         ts={r.ts}
+                        locale={locale}
                         stats={[
                           { label:"Duration",  value:`${r.exercise!.duration_minutes} min`, color:KIND_ACCENT.exercise.color },
                           { label:"Type",      value:r.exercise!.exercise_type === "cardio" ? "Cardio" : "Strength" },
@@ -492,6 +498,7 @@ function RecentEntries({
                     ) : (
                       <NonMealLightExpand
                         ts={r.ts}
+                        locale={locale}
                         stats={[
                           { label:"Dose",    value:`${r.insulin!.units} u`, color:KIND_ACCENT[r.kind].color },
                           { label:"Insulin", value:r.insulin!.insulin_name || (r.kind === "bolus" ? "rapid-acting" : "long-acting") },
@@ -538,7 +545,7 @@ function RecentChip({ text, color, mono = false }: { text: string; color: string
 //   Right: meal → existing eval chip; non-meal → kind-coloured value chip.
 //   All chips share the RecentChip component above so the visual rhythm
 //   stays consistent across kinds.
-function UnifiedRecentRow({ row, onClick }: { row: RecentRow; onClick: () => void }) {
+function UnifiedRecentRow({ row, locale, onClick }: { row: RecentRow; locale: string; onClick: () => void }) {
   const accent = KIND_ACCENT[row.kind];
   const letter =
     row.kind === "meal"     ? "M"
@@ -547,7 +554,7 @@ function UnifiedRecentRow({ row, onClick }: { row: RecentRow; onClick: () => voi
     :                         "E";
 
   const ts = parseDbDate(row.ts);
-  const timeStr = ts.toLocaleTimeString("en", { hour: "numeric", minute: "2-digit" });
+  const timeStr = ts.toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
 
   let title: string;
   let subtitle: string;
@@ -617,15 +624,17 @@ function UnifiedRecentRow({ row, onClick }: { row: RecentRow; onClick: () => voi
  */
 function NonMealLightExpand({
   ts,
+  locale,
   stats,
   onViewFull,
 }: {
   ts: string;
+  locale: string;
   stats: Array<{ label: string; value: string; color?: string }>;
   onViewFull: () => void;
 }) {
   const date = parseDbDate(ts);
-  const fullTimestamp = date.toLocaleString("en", {
+  const fullTimestamp = date.toLocaleString(locale, {
     month: "short", day: "numeric", year: "numeric",
     hour: "numeric", minute: "2-digit",
   });
