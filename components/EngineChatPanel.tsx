@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 const ACCENT  = "#4F6EF7";
 const GREEN   = "#22D3A0";
@@ -54,6 +55,13 @@ export default function EngineChatPanel({
   macros, description, onPatch, seed, isMobile, expanded, onToggleExpanded,
   parsing = false, hasUsedVoice = false,
 }: EngineChatPanelProps) {
+  // Pull from the `log` namespace because every chat-panel string
+  // (intro, placeholder, send button, status chip labels, parser title)
+  // was already curated and translated there for the legacy /log
+  // wizard. Reusing the same keys keeps a single source of truth for
+  // German + English copy across both the old log page and this new
+  // engine chat panel.
+  const t = useTranslations("log");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput]       = useState("");
   const [sending, setSending]   = useState(false);
@@ -148,13 +156,13 @@ export default function EngineChatPanel({
           color:"rgba(255,255,255,0.5)",
           whiteSpace:"nowrap",
         }}>
-          AI FOOD PARSER
+          {t("ai_food_parser_caps")}
         </span>
         <span style={{
           fontSize:11, fontWeight:600, color:ACCENT, letterSpacing:"0.04em",
           whiteSpace:"nowrap",
         }}>
-          GPT reasoning
+          {t("gpt_reasoning_title")}
         </span>
       </div>
       {/* Status precedence: parsing (voice→macros pipeline) > sending
@@ -164,7 +172,11 @@ export default function EngineChatPanel({
           user gets unambiguous "still working" feedback. */}
       {(() => {
         const isBusy = parsing || sending;
-        const label  = parsing ? "PARSING" : sending ? "THINKING" : "READY";
+        const label  = parsing
+          ? t("chat_status_parsing")
+          : sending
+            ? t("chat_status_thinking")
+            : t("chat_status_ready");
         const color  = isBusy ? ORANGE : GREEN;
         return (
           <div style={{
@@ -268,7 +280,7 @@ export default function EngineChatPanel({
               color:"rgba(255,255,255,0.4)",
               fontSize:13, lineHeight:1.65, maxWidth:340,
             }}>
-              Once you log a meal (voice or text), GPT will explain how it broke down the macros here. You can ask follow-ups or push back — corrections you confirm are applied to the form.
+              {t("chat_intro")}
             </div>
           )}
 
@@ -328,7 +340,7 @@ export default function EngineChatPanel({
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={onKey}
-            placeholder="Ask or correct… e.g. 'the banana was bigger'"
+            placeholder={t("chat_placeholder")}
             disabled={sending}
             style={{
               flex:1, minWidth:0,
@@ -356,7 +368,7 @@ export default function EngineChatPanel({
               opacity: ready ? 1 : 0.7,
             }}
           >
-            Send
+            {t("send")}
           </button>
         </div>
       </>

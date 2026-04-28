@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { insertInsulinLog } from "@/lib/insulin";
 import { insertExerciseLog, type ExerciseType } from "@/lib/exercise";
 import { exerciseTypeLabel } from "@/lib/exerciseEval";
@@ -478,6 +479,7 @@ const STARTED_OPTIONS: { value: number; label: string }[] = [
 ];
 
 export function ExerciseForm() {
+  const t = useTranslations("engine");
   const [type, setType] = useState<ExerciseType>("cardio");
   const [startedMinAgo, setStartedMinAgo] = useState<number>(0);
   const [duration, setDuration] = useState("");
@@ -668,9 +670,9 @@ export function ExerciseForm() {
             onChange={setIntensity}
             accent={ORANGE}
             options={[
-              { value: "low",    label: "Low" },
-              { value: "medium", label: "Moderate" },
-              { value: "high",   label: "High" },
+              { value: "low",    label: t("exercise_intensity_low") },
+              { value: "medium", label: t("exercise_intensity_medium") },
+              { value: "high",   label: t("exercise_intensity_high") },
             ]}
           />
         </div>

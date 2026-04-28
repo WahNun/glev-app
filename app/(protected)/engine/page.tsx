@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { fetchMeals, classifyMeal, computeCalories, saveMeal, deleteMeal, updateMeal, type Meal } from "@/lib/meals";
 import { scheduleJobsForLog } from "@/lib/cgmJobs";
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
@@ -139,6 +140,12 @@ function runGlevEngine(
 const CONF_COLOR: Record<string, string> = { HIGH:GREEN, MEDIUM:ORANGE, LOW:PINK };
 
 export default function EnginePage() {
+  // Aliased to tEngine because a local `t` already shadows the
+  // common translation handle inside the searchParams effect below
+  // (it holds the parsed ?tab= value). Keeping both lets the page
+  // pull engine-specific copy without a rename storm in the rest of
+  // the (~1900-line) component.
+  const tEngine = useTranslations("engine");
   const [tab, setTab]         = useState<"engine"|"log"|"bolus"|"exercise"|"fingerstick">("engine");
   // Sync the active sub-tab from the URL ?tab= query so deep-links
   // from the GlevActionSheet ("Glukose messen", "Insulin loggen",
@@ -331,14 +338,14 @@ export default function EnginePage() {
   // resets it on route change to handle edge cases.
   useEffect(() => {
     const labels: Record<typeof tab, string> = {
-      engine:      "Engine",
+      engine:      tEngine("tab_engine"),
       log:         "Log",
-      bolus:       "Insulin",
-      exercise:    "Übung",
-      fingerstick: "Glukose",
+      bolus:       tEngine("tab_insulin"),
+      exercise:    tEngine("tab_exercise"),
+      fingerstick: tEngine("tab_glucose"),
     };
-    engineHdr.setActiveLabel(labels[tab] ?? "Engine");
-  }, [tab, engineHdr]);
+    engineHdr.setActiveLabel(labels[tab] ?? tEngine("tab_engine"));
+  }, [tab, engineHdr, tEngine]);
 
   useEffect(() => {
     engineHdr.setVisible(true);
@@ -1469,31 +1476,31 @@ export default function EnginePage() {
               {/* Section header: Makros — 2x2 grid (Carbs+Fiber, Protein+Fat) */}
               <div style={{ marginBottom: 24 }}>
                 <div style={{ fontSize: 11, color: "#666680", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700, marginBottom: 12 }}>
-                  Makros
+                  {tEngine("macros_section")}
                 </div>
                 {/* Macro grid — auto-fit collapses 4 fields to 2 cols on
                     desktop, 1 col on narrow phones. minmax(180px, 1fr) keeps
-                    "e.g. 60 / opt." labels readable without forcing a fixed
+                    placeholder + opt. labels readable without forcing a fixed
                     2-col that wraps awkwardly on tablets. Mirrors /log's
                     macro-grid pattern. */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, rowGap: 14 }}>
                   <div>
-                    <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>Carbs (g)</label>
-                    <input style={inp} type="number" placeholder="e.g. 60" value={carbs} onChange={(e) => setCarbs(e.target.value)}/>
+                    <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>{tEngine("carbs_label")}</label>
+                    <input style={inp} type="number" placeholder={tEngine("placeholder_carbs")} value={carbs} onChange={(e) => setCarbs(e.target.value)}/>
                   </div>
                   <div>
                     <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>
-                      Fiber (g) <span style={{ textTransform: "none", color: "rgba(255,255,255,0.3)", fontSize: 10, fontWeight: 500 }}>opt.</span>
+                      {tEngine("fiber_label")} <span style={{ textTransform: "none", color: "rgba(255,255,255,0.3)", fontSize: 10, fontWeight: 500 }}>{tEngine("optional_short")}</span>
                     </label>
-                    <input style={inp} type="number" placeholder="e.g. 8" value={fiber} onChange={(e) => setFiber(e.target.value)}/>
+                    <input style={inp} type="number" placeholder={tEngine("placeholder_fiber")} value={fiber} onChange={(e) => setFiber(e.target.value)}/>
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>Protein (g)</label>
-                    <input style={inp} type="number" placeholder="e.g. 30" value={protein} onChange={(e) => setProtein(e.target.value)}/>
+                    <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>{tEngine("protein_label")}</label>
+                    <input style={inp} type="number" placeholder={tEngine("placeholder_protein")} value={protein} onChange={(e) => setProtein(e.target.value)}/>
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>Fat (g)</label>
-                    <input style={inp} type="number" placeholder="e.g. 15" value={fat} onChange={(e) => setFat(e.target.value)}/>
+                    <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>{tEngine("fat_label")}</label>
+                    <input style={inp} type="number" placeholder={tEngine("placeholder_fat")} value={fat} onChange={(e) => setFat(e.target.value)}/>
                   </div>
                 </div>
               </div>
@@ -1501,13 +1508,13 @@ export default function EnginePage() {
               {/* Section header: Glukose & Zeit — glucose + CGM pull pill, meal time */}
               <div style={{ marginBottom: 24 }}>
                 <div style={{ fontSize: 11, color: "#666680", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700, marginBottom: 12 }}>
-                  Glukose & Zeit
+                  {tEngine("glucose_time_section")}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   <div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, gap: 8 }}>
                       <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600 }}>
-                        Glucose Before (mg/dL){lastReading ? ` · Last: ${lastReading}` : ""}
+                        {tEngine("glucose_before_label")}{lastReading ? ` · ${tEngine("glucose_last_prefix")}: ${lastReading}` : ""}
                       </label>
                       <button onClick={handlePullCgm} disabled={cgmPulling} style={{
                         display: "flex", alignItems: "center", gap: 6,
@@ -1516,14 +1523,14 @@ export default function EnginePage() {
                         cursor: cgmPulling ? "wait" : "pointer", flexShrink: 0,
                       }}>
                         <span style={{ width: 7, height: 7, borderRadius: "50%", background: GREEN, boxShadow: `0 0 6px ${GREEN}` }}/>
-                        {cgmPulling ? "Pulling…" : "CGM"}
+                        {cgmPulling ? tEngine("cgm_pulling") : tEngine("cgm_button")}
                       </button>
                     </div>
-                    <input style={inp} type="number" placeholder="e.g. 115" value={glucose} onChange={(e) => setGlucose(e.target.value)}/>
+                    <input style={inp} type="number" placeholder={tEngine("placeholder_glucose")} value={glucose} onChange={(e) => setGlucose(e.target.value)}/>
                   </div>
                   <div>
                     <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>
-                      Meal Time
+                      {tEngine("meal_time_label")}
                     </label>
                     <input
                       style={{ ...inp, fontFamily: "inherit", textAlign: "center" }}
@@ -1806,7 +1813,7 @@ export default function EnginePage() {
                         letterSpacing: "0.08em", textTransform: "uppercase",
                       }}
                     >
-                      <span>GPT Reasoning</span>
+                      <span>{tEngine("gpt_reasoning_title")}</span>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
                         style={{ transition: "transform 0.2s", transform: reasoningExpanded ? "rotate(180deg)" : "rotate(0deg)" }}
                       >
