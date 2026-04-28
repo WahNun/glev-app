@@ -375,9 +375,20 @@ function computeAggregates(
   exercise: ExerciseLog[],
   fingersticks: FingerstickReading[],
 ): Aggregates {
-  const totalBolusUnits = insulin.filter(l => l.insulin_type === "bolus").reduce((s, l) => s + (l.units || 0), 0);
+  // Bolus is stored in two places:
+  //   1. `meals.insulin_units` — bolus given at meal time via the /log
+  //      wizard (the common path; ~99% of entries for active users).
+  //   2. `insulin` rows with insulin_type='bolus' — standalone bolus
+  //      logged via the Engine "Log" tab (correction doses, etc).
+  // Basal only ever lands in `insulin`. Sum both sources for bolus so
+  // the Klinische-Detail-KPIs reflect actual daily insulin use, not
+  // just the rare standalone correction doses.
+  const mealBolusUnits = meals.reduce((s, m) => s + (m.insulin_units ?? 0), 0);
+  const mealBolusCount = meals.filter(m => (m.insulin_units ?? 0) > 0).length;
+  const standaloneBolus = insulin.filter(l => l.insulin_type === "bolus");
+  const totalBolusUnits = mealBolusUnits + standaloneBolus.reduce((s, l) => s + (l.units || 0), 0);
   const totalBasalUnits = insulin.filter(l => l.insulin_type === "basal").reduce((s, l) => s + (l.units || 0), 0);
-  const bolusCount = insulin.filter(l => l.insulin_type === "bolus").length;
+  const bolusCount = mealBolusCount + standaloneBolus.length;
   const basalCount = insulin.filter(l => l.insulin_type === "basal").length;
 
   const totalCarbs = meals.reduce((s, m) => s + (m.carbs_grams ?? 0), 0);
