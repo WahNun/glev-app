@@ -4,8 +4,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { signOut } from "@/lib/auth";
-import GlevLogo from "@/components/GlevLogo";
 import GlevLockup from "@/components/GlevLockup";
+import GlevLogo from "@/components/GlevLogo";
 import AboutGlevModal from "@/components/AboutGlevModal";
 import GlevActionSheet from "@/components/GlevActionSheet";
 import { EngineHeaderProvider, useEngineHeader } from "@/lib/engineHeaderContext";
@@ -40,8 +40,16 @@ const NAV: NavItem[] = [
   { key: "dashboard", path: "/dashboard", icon: (a) => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
   )},
+  // Glev brand mark in the nav rail. Recoloured monochrome (grey when
+  // inactive, ACCENT when active) so its visual weight sits on the same
+  // tier as the other line-icon tabs — the multi-node logo no longer
+  // dominates the row. Active state additionally gets an ACCENT drop-
+  // shadow halo so the selection pops without resorting to a different
+  // shape from the rest.
   { key: "glev", path: "/engine", icon: (a) => (
-    <GlevLogo size={20} color={a ? ACCENT : "rgba(255,255,255,0.55)"} bg="transparent"/>
+    <span style={{ display: "inline-flex", filter: a ? `drop-shadow(0 0 6px ${ACCENT}99)` : undefined, transition: "filter 0.2s" }}>
+      <GlevLogo size={18} color={a ? ACCENT : "rgba(255,255,255,0.45)"} bg="transparent"/>
+    </span>
   )},
   { key: "history", path: "/history", icon: (a) => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 4 3 10 9 10"/><polyline points="12 7 12 12 16 14"/></svg>
@@ -270,9 +278,24 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             </svg>
           )}
         />
-        {/* Spacer — same flex weight as a tab so the four labels remain
-            evenly spaced; the Glev FAB is positioned absolutely above it. */}
-        <div aria-hidden style={{ flex: "1 1 0", minWidth: 0 }} />
+        {/* Glev tab — replaces the previous elevated circular FAB. Visuals
+            now match the other tabs (line icon, grey when inactive,
+            ACCENT + glow when active) so the row reads as a single
+            balanced set instead of "three tabs orbiting one giant blue
+            button". Tap behaviour is unchanged: opens the action sheet
+            with the engine quick-actions; pathname-based active state
+            still highlights it whenever the user is somewhere under
+            /engine. */}
+        <MobileTab
+          label={tNav("glev")}
+          active={pathname.startsWith("/engine")}
+          onClick={() => setActionSheetOpen(true)}
+          icon={(a) => (
+            <span style={{ display: "inline-flex", filter: a ? `drop-shadow(0 0 8px ${ACCENT}aa)` : undefined, transition: "filter 0.2s" }}>
+              <GlevLogo size={22} color={a ? ACCENT : NAV_INACTIVE} bg="transparent"/>
+            </span>
+          )}
+        />
         <MobileTab
           label={tNav("history")}
           active={pathname.startsWith("/history")}
@@ -297,34 +320,6 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           )}
         />
 
-        {/* Glev FAB — circular, elevated. Sits over the spacer slot
-            (slot 2 of the 4-equal-flex grid: Dashboard / Spacer / History
-            / Settings → centers at 12.5% / 37.5% / 62.5% / 87.5%). At
-            left:37.5% the FAB is exactly equidistant from Dashboard
-            (left, 25% gap) and History (right, 25% gap), so the four
-            touch targets read as a balanced row instead of the FAB
-            covering the History label as it did at left:50%. Tap opens
-            the action sheet; never navigates directly. */}
-        <button
-          type="button"
-          onClick={() => setActionSheetOpen(true)}
-          aria-label="Glev Aktionen"
-          aria-haspopup="dialog"
-          aria-expanded={actionSheetOpen}
-          style={{
-            position: "absolute",
-            left: "37.5%", top: -20,
-            transform: "translateX(-50%)",
-            width: 56, height: 56, borderRadius: "50%",
-            background: ACCENT, border: "none", cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            color: "white",
-            boxShadow: "0 6px 18px rgba(79,110,247,0.45), 0 2px 6px rgba(0,0,0,0.4)",
-            transition: "transform 0.15s, box-shadow 0.15s",
-          }}
-        >
-          <GlevLogo size={26} color="white" bg="transparent" />
-        </button>
       </nav>
 
       <GlevActionSheet open={actionSheetOpen} onClose={() => setActionSheetOpen(false)} />

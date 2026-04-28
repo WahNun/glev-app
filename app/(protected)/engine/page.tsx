@@ -1294,29 +1294,55 @@ export default function EnginePage() {
               choose freely between speaking or chatting. ───────── */}
           {stepIndex === 0 && (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, padding: "24px 0 8px" }}>
+              {/* Sprechen / Voice-input button. Now styled as a dark
+                  pill carrying the brand-mark icon (Glev hexagon) instead
+                  of a generic mic glyph, so the primary call-to-action on
+                  Step 1 is unmistakably "Glev listening" rather than just
+                  "another mic". When the recording flag flips on, an
+                  ACCENT halo + pulsing outer glow radiate into the dark
+                  page background to give the user unambiguous "yes, we
+                  are listening" feedback even from a glance. */}
+              <style>{`
+                @keyframes engRecHalo {
+                  0%,100% { box-shadow: 0 0 0 1px ${ACCENT}66, 0 0 22px ${ACCENT}55, 0 0 48px ${ACCENT}22; }
+                  50%     { box-shadow: 0 0 0 1px ${ACCENT}cc, 0 0 36px ${ACCENT}aa, 0 0 80px ${ACCENT}44; }
+                }
+              `}</style>
               <button
                 type="button"
                 onClick={() => recording ? stopRecording() : startRecording()}
                 disabled={parsing || !speechAvail}
                 aria-label={recording ? "Aufnahme stoppen" : "Sprach-Eingabe starten"}
                 style={{
-                  display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 10,
+                  display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 12,
                   width: "100%", maxWidth: 280, height: 56, borderRadius: 28,
-                  background: ACCENT, border: "none", color: "#fff",
+                  background: recording ? `${ACCENT}1f` : SURFACE,
+                  border: `1px solid ${recording ? ACCENT : `${ACCENT}55`}`,
+                  color: "#fff",
                   fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
                   cursor: parsing || !speechAvail ? "not-allowed" : "pointer",
-                  animation: recording ? "engVPulse 0.8s ease-in-out infinite" : undefined,
+                  animation: recording ? "engRecHalo 1.4s ease-in-out infinite" : undefined,
+                  boxShadow: recording ? undefined : `0 0 0 1px ${ACCENT}22`,
                   opacity: parsing || !speechAvail ? 0.55 : 1,
-                  transition: "background 0.2s, opacity 0.2s",
+                  transition: "background 0.2s, border-color 0.2s, opacity 0.2s",
                   WebkitTapHighlightColor: "transparent",
                 }}
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <rect x="9" y="2" width="6" height="11" rx="3" fill="currentColor" stroke="none"/>
-                  <path d="M5 10a7 7 0 0 0 14 0"/>
-                  <line x1="12" y1="19" x2="12" y2="22"/>
-                  <line x1="9" y1="22" x2="15" y2="22"/>
-                </svg>
+                {/* Glev brand mark — same component used in the nav,
+                    rendered in ACCENT so it reads as "Glev is listening"
+                    on the dark pill. Drop-shadow glow strengthens while
+                    the recording flag is on for additional feedback
+                    beyond the outer halo animation. */}
+                <span
+                  aria-hidden="true"
+                  style={{
+                    display: "inline-flex",
+                    filter: `drop-shadow(0 0 ${recording ? 8 : 4}px ${ACCENT}${recording ? "cc" : "55"})`,
+                    transition: "filter 0.25s",
+                  }}
+                >
+                  <GlevLogo size={22} color={ACCENT} bg="transparent"/>
+                </span>
                 {recording ? "Stopp" : parsing ? "Verarbeite…" : "Sprechen"}
               </button>
               {voiceErr && (

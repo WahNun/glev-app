@@ -125,110 +125,43 @@ export default function EngineChatPanel({
 
   const ready = !sending;
 
-  // ---- Mobile chip header (combined "AI FOOD PARSER · GPT-powered" + status)
-  // Acts as the click target to expand/collapse the chat. Replaces the old
-  // standalone parser chip and the old card-style "GPT REASONING" header.
-  const mobileChip = (
+  // ---- Card header (combined title + status pill) -----------------------
+  // The standalone "AI FOOD PARSER · GPT-powered · STATUS" chip that used
+  // to sit between the Sprechen button and the chat card on mobile is
+  // gone — its left-side label is now folded into the chat-card title
+  // itself ("AI FOOD PARSER" in grey + "GPT reasoning" in ACCENT) so
+  // there is one identifier instead of two stacked ones. The status
+  // pill (READY / PARSING / THINKING) moves with the title so the
+  // user still sees the live engine state from the same place.
+  const header = (
     <div
-      onClick={onToggleExpanded}
-      role="button"
-      tabIndex={0}
-      aria-expanded={expanded}
-      aria-label={expanded ? "Collapse GPT reasoning" : "Expand GPT reasoning"}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggleExpanded(); }
-      }}
       style={{
         display:"flex", alignItems:"center", justifyContent:"space-between",
-        gap:12, padding:"12px 18px",
-        background: SURFACE,
-        border: `1px solid ${BORDER}`,
-        borderRadius: 99,
-        cursor:"pointer", userSelect:"none",
-      }}
-    >
-      <div style={{ display:"flex", alignItems:"baseline", gap:8, minWidth:0 }}>
-        <span style={{
-          fontSize:11, fontWeight:700, letterSpacing:"0.08em",
-          color:"rgba(255,255,255,0.5)",
-        }}>
-          AI FOOD PARSER
-        </span>
-        <span style={{
-          fontSize:10, fontWeight:600, color:ACCENT, letterSpacing:"0.02em",
-        }}>
-          GPT-powered
-        </span>
-      </div>
-      <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
-        {/* Status precedence: parsing (voice→macros pipeline) > sending
-            (chat round-trip) > ready. Parsing wins because it's the
-            longest-running and most user-visible op of the three.
-            Busy states render a spinning arc instead of the static dot
-            so the user gets unambiguous "still working" feedback. */}
-        {(() => {
-          const isBusy = parsing || sending;
-          const label  = parsing ? "PARSING" : sending ? "THINKING" : "READY";
-          const color  = isBusy ? ORANGE : GREEN;
-          return (
-            <span style={{
-              display:"inline-flex", alignItems:"center", gap:6,
-              fontSize:10, fontWeight:700, letterSpacing:"0.06em",
-              color,
-            }}>
-              <style>{`@keyframes efpSpin { to { transform: rotate(360deg) } }`}</style>
-              {isBusy ? (
-                <svg
-                  width="11" height="11" viewBox="0 0 24 24"
-                  fill="none" stroke={color} strokeWidth="3" strokeLinecap="round"
-                  style={{ animation: "efpSpin 0.9s linear infinite", flexShrink: 0 }}
-                  aria-hidden="true"
-                >
-                  <path d="M21 12a9 9 0 1 1-6.22-8.56" />
-                </svg>
-              ) : (
-                <span style={{
-                  width:7, height:7, borderRadius:"50%",
-                  background: color,
-                  boxShadow: `0 0 6px ${color}`,
-                }}/>
-              )}
-              {label}
-            </span>
-          );
-        })()}
-        <svg
-          width="16" height="16" viewBox="0 0 24 24" fill="none"
-          stroke="#9999AA" strokeWidth="2"
-          strokeLinecap="round" strokeLinejoin="round"
-          style={{ transform: expanded ? "rotate(180deg)" : "none", transition:"transform 0.25s ease" }}
-        >
-          <polyline points="6 9 12 15 18 9"/>
-        </svg>
-      </div>
-    </div>
-  );
-
-  // ---- Desktop header (kept as the original "GPT REASONING" card header) -
-  const desktopHeader = (
-    <div
-      style={{
-        display:"flex", alignItems:"flex-start", justifyContent:"space-between",
-        gap:12, padding:"18px 20px",
+        gap:12, padding:"14px 18px",
         borderBottom: `1px solid ${BORDER}`,
         userSelect: "none",
       }}
     >
-      <div style={{ minWidth:0, flex:1 }}>
-        <div style={{ fontSize:13, fontWeight:700, letterSpacing:"0.02em", color:"#fff" }}>
-          GPT REASONING
-        </div>
-        <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)", marginTop:3, lineHeight:1.45 }}>
-          See why these macros were chosen — or correct them
-        </div>
+      <div style={{ display:"flex", alignItems:"baseline", gap:8, minWidth:0, flex:1 }}>
+        <span style={{
+          fontSize:12, fontWeight:700, letterSpacing:"0.08em",
+          color:"rgba(255,255,255,0.5)",
+          whiteSpace:"nowrap",
+        }}>
+          AI FOOD PARSER
+        </span>
+        <span style={{
+          fontSize:11, fontWeight:600, color:ACCENT, letterSpacing:"0.04em",
+          whiteSpace:"nowrap",
+        }}>
+          GPT reasoning
+        </span>
       </div>
-      {/* Desktop status pill mirrors the mobile chip: parsing > sending >
-          ready, busy states render a spinning arc instead of a dot. */}
+      {/* Status precedence: parsing (voice→macros pipeline) > sending
+          (chat round-trip) > ready. Parsing wins because it's the
+          longest-running and most user-visible op of the three. Busy
+          states render a spinning arc instead of a static dot so the
+          user gets unambiguous "still working" feedback. */}
       {(() => {
         const isBusy = parsing || sending;
         const label  = parsing ? "PARSING" : sending ? "THINKING" : "READY";
@@ -266,70 +199,42 @@ export default function EngineChatPanel({
     </div>
   );
 
-  // ---- Mobile, collapsed: chip + (one-shot) hint -------------------------
-  // First-run discoverability: until the user has triggered the parser
-  // at least once via voice, render a subtle caption below the chip
-  // pointing at the chevron. Disappears for the rest of the session
-  // once hasUsedVoice flips to true (the auto-expand on parse-success
-  // already demonstrates the affordance, so the hint becomes redundant).
-  if (isMobile && !expanded) {
-    return (
-      <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-        {mobileChip}
-        {!hasUsedVoice && (
-          <div style={{
-            fontSize:10, color:"#666680", letterSpacing:"0.02em",
-            textAlign:"center", paddingLeft:4, paddingRight:4,
-          }}>
-            ▸ Tippe um Details zu sehen
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // ---- Mobile, expanded: chip + body card stacked ------------------------
+  // ---- Mobile: single body card with the new combined header -------------
+  // The expand/collapse chip is gone, so the panel is always rendered as
+  // a single bordered card (matching the desktop layout). `expanded` and
+  // `onToggleExpanded` are still accepted as props for backwards
+  // compatibility with callers but no longer drive the rendering — the
+  // engine page only ever passes expanded={true} anyway, and the chip-
+  // less design has no use for a collapsed state.
+  void expanded; void onToggleExpanded; void hasUsedVoice;
   if (isMobile) {
     return (
-      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-        {mobileChip}
-        <div style={{
-          background: SURFACE,
-          border: `1px solid ${BORDER}`,
-          borderRadius: 16,
-          display:"flex", flexDirection:"column",
-          // Adaptive height so the WHOLE panel (messages + input row)
-          // always fits between the Sprechen button above and the fixed
-          // bottom tab bar below, on every device — even iPhone 13 mini
-          // with the Safari URL bar visible. Earlier revisions used dvh
-          // and a 420px reservation which forced the panel to 220px on
-          // tiny viewports while only ~150px was actually available, so
-          // the input row sat behind the fixed bottom nav.
-          //
-          // svh = "small viewport height" = the viewport with browser
-          // chrome at its tallest (worst case). Using svh instead of
-          // dvh guarantees first-paint correctness; once Safari's URL
-          // bar collapses on scroll the chat just gets a little extra
-          // breathing room (the chat body grows up to the 50dvh cap).
-          //
-          // Reservation 540px = global header (~76) + bottom nav (~110)
-          // + Layout safe-area paddings (subtracted explicitly via env)
-          // + step indicator (~70) + Sprechen button + voice err
-          // (~70) + mobile chip (~52) + Weiter/Zurück row (~70) + flex
-          // gaps (~30). Min 140 keeps input + ~1 message visible even
-          // on the most cramped viewport (iPhone SE 1st-gen / mini in
-          // Safari) instead of letting the input clip below the nav.
-          height:
-            "clamp(140px, calc(100svh - 540px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 50dvh)",
-          overflow:"hidden",
-        }}>
-          {renderBody()}
-        </div>
+      <div style={{
+        background: SURFACE,
+        border: `1px solid ${BORDER}`,
+        borderRadius: 16,
+        display:"flex", flexDirection:"column",
+        // Adaptive height so the WHOLE panel (header + messages + input)
+        // always fits between the Sprechen button above and the fixed
+        // bottom tab bar below, on every device. svh = "small viewport
+        // height" = the viewport with browser chrome at its tallest
+        // (worst case), so first-paint never clips the input row.
+        // Reservation 540px = global header + bottom nav + Layout safe-
+        // area paddings + step indicator + Sprechen + voice err + the
+        // new card header (~52) + Weiter/Zurück + flex gaps. Min 140
+        // keeps input + ~1 message visible on iPhone SE 1st-gen / mini
+        // in Safari instead of letting the input clip below the nav.
+        height:
+          "clamp(140px, calc(100svh - 540px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 50dvh)",
+        overflow:"hidden",
+      }}>
+        {header}
+        {renderBody()}
       </div>
     );
   }
 
-  // ---- Desktop: full card with the original header -----------------------
+  // ---- Desktop: same combined-header card --------------------------------
   return (
     <div style={{
       background: SURFACE,
@@ -339,7 +244,7 @@ export default function EngineChatPanel({
       height: "100%", minHeight: 0,
       overflow:"hidden",
     }}>
-      {desktopHeader}
+      {header}
       {renderBody()}
     </div>
   );
