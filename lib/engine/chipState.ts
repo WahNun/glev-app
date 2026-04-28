@@ -15,19 +15,25 @@ export type ChipState = {
 const PENDING_COLOR     = "#6B7280";
 const PROVISIONAL_COLOR = "#7C3AED";
 
-function fmtTime(ms: number): string {
-  return new Date(ms).toLocaleTimeString("de-DE", {
+function fmtTime(ms: number, locale: string = "de-DE"): string {
+  return new Date(ms).toLocaleTimeString(locale, {
     hour: "2-digit",
     minute: "2-digit",
   });
 }
 
-export function chipForMeal(meal: Meal, now: Date = new Date()): ChipState {
+/**
+ * @param locale BCP-47 tag (e.g. "de-DE", "en-US") used to format the
+ *   "expected 14:32" times that appear in the chip body. Defaults to
+ *   "de-DE" so older callers without the param keep their original look.
+ *   New callers should pass `localeToBcp47(useLocale())` from `@/lib/time`.
+ */
+export function chipForMeal(meal: Meal, now: Date = new Date(), locale: string = "de-DE"): ChipState {
   const lc = lifecycleFor(meal, now);
   const created = parseDbDate(meal.meal_time ?? meal.created_at).getTime();
 
   if (lc.state === "pending") {
-    const expected1h = fmtTime(created + 60 * 60_000);
+    const expected1h = fmtTime(created + 60 * 60_000, locale);
     return {
       state: "pending",
       color: PENDING_COLOR,
