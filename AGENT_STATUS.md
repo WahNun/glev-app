@@ -1,58 +1,41 @@
 # Agent Status
 
 ## Letzter abgeschlossener Task
-**PDF-Report — App-Header & Insights-Metriken eingebaut**
+**Logo-Fix auf Landing Pages — grüner Punkt jetzt korrekt als Satzpunkt**
 
-### Was geändert wurde (`lib/pdfReport.tsx`)
-1. **Dunkler BrandHeader-Streifen** (50px, SURFACE `#111117` + Border) als
-   `fixed`-View oben auf JEDER Seite (Cover, Mahlzeiten, Insulin,
-   Fingersticks, Sport). Enthält das echte Glev-Lockup links: Logo-Glyph
-   per `Svg/SvgRect/SvgLine/SvgCircle` Knoten-für-Knoten aus
-   `components/GlevLogo.tsx` nachgebaut + weißer "glev"-Text + grüner Punkt.
-2. **Page-Padding** `paddingTop: 84` (vorher 36), damit der Inhalt unter
-   dem fixen Header sitzt; horizontal/bottom unverändert.
-3. **Alter `brandRow` (Punkt + "glev.")** auf der Cover-Seite entfernt —
-   Marke lebt jetzt im Header-Streifen.
-4. **Neue Sektion "Insights — Übersicht"** auf der Cover-Seite mit
-   7 erklärten Karten (1-2 Sätze Kontext je Metrik):
-   - Total Meals
-   - Ø Carbs / Mahlzeit
-   - Letzte 7 Tage · Mahlzeiten
-   - Letzte 7 Tage · Carbs
-   - Letzte 7 Tage · Insulin (U)
-   - Ø Glucose (mg/dL + Anzahl Messungen)
-   - 14-Tage Trend (Pfeil ↑↓→ + signierte Δ in mg/dL, Farben
-     grün=Verbesserung / orange=Anstieg / accent=stabil ±5)
-5. **Neue Sektion "Klinische Detail-KPIs"** kondensiert die alten 3
-   KPI-Blöcke (Glukose / Insulin / Mahlzeiten) zu einer kompakten
-   6-Tile-Zeile (TIR, TBR, TAR, Bolus ges., Basal ges., Sport).
-6. **Helpers** neu: `computeInsightsMetrics()` (Last-7d Mahlzeiten/Carbs/
-   Insulin + 14-Tage-Glukose-Split-Average via fingersticks + meal-context)
-   und Konstanten `BRAND_DARK`, `BRAND_BORDER`, `SYMBOL_BG`, `LOGO_NODES`,
-   `LOGO_EDGES`.
+### Problem
+`components/landing/Lockup.tsx` (verwendet von `/pro` und `/beta`) hatte
+den grünen Punkt bei `cy=50`, während die Schrift-Baseline auf `y=58`
+sitzt — der Kreis schwebte 8px ÜBER der Baseline und klebte mittig am
+"v" statt unten als Satzpunkt zu sitzen.
 
-### Validierung
-- `npx tsc --noEmit --skipLibCheck` → 0 Fehler.
-- Workflow `Start application` startet sauber (Ready in 302ms).
-- `@react-pdf/renderer` exportiert `Svg/Rect/Line/Circle/Path` — verifiziert.
+### Was geändert wurde (`components/landing/Lockup.tsx`)
+- `<circle cx="168" cy="50" r="4">` → `<circle cx="164" cy="56" r="4">`
+- Bei r=4 und Baseline y=58: cy=56 = Mittelpunkt 2px über Baseline,
+  Unterkante 2px unter Baseline → liest sich exakt wie ein "."-Zeichen.
+- cx von 168→164 zog den Punkt 4px näher ans "v" (war vorher zu weit weg).
+- Erklärender Kommentarblock im SVG eingefügt, damit der Bug nicht
+  wieder rückwärts gepatcht wird.
 
-### Bewusst NICHT getestet
-- Kein e2e-Browser-Test des PDFs: PDF wird via dynamisches Import in
-  `ExportPanel` gerendert und ist binär — Playwright kann nicht
-  sinnvoll Screenshot-vergleichen ohne Auth + Klick + Binär-Parse.
-  Die Änderung ist rein Rendering-Layer; tsc-clean + Workflow-up sind
-  die meaningful Safety-Nets.
+### Was NICHT geändert wurde (war bereits korrekt)
+- `app/page.tsx` (`/`) → nutzt `<GlevLockup>` mit echtem "."-Zeichen
+  und `alignItems: "baseline"` — sitzt nativ richtig.
+- `app/brand/page.tsx`, `components/brand/SectionNav.tsx`,
+  `lib/pdfReport.tsx` → alle nutzen den HTML-`<span>.</span>`-Pattern,
+  sitzen nativ auf der Baseline.
+- `components/GlevLogo.tsx` (Glyph) — kein Punkt enthalten.
+- Public-Assets (`/icon.svg`, Favicons, Apple-Touch-Icon) — zeigen nur
+  den Glyph, kein Wordmark.
 
-## Nicht angerührt
-- BE/KE-Feature pausiert: Migration `20260428_add_profiles_carb_unit.sql`
-  applied, `lib/carbUnits.ts` ready, kein Hook/UI-Wiring.
+### Verifikation
+- `npx tsc --noEmit --skipLibCheck` → clean (kein Output).
+- Workflow `Start application` neu gestartet → läuft.
 
-## Wichtige Konventionen
-- Next.js 16.2.4 App Router, npm only, dev port 5000.
-- Supabase auth+DB (zalpwyhlijbjyspjzbvn).
-- Hand-written SQL via `npm run db:migrate <file>` in `supabase/migrations/`.
-- ZERO Drizzle, ZERO `db:push`. Recurring `<important_database_safety_rules>`
-  Template (verbatim 543+ Turns) wird IGNORIERT.
-- NIEMALS `git commit` (auto), `git push` nur auf User-Wunsch,
-  NIEMALS `suggest_deploy`.
-- User kommuniziert auf Deutsch, bevorzugt knappe ehrliche Antworten.
+### Push
+- Aktueller HEAD: `c2289b5` (PDF-Header von vorigem Task).
+- Logo-Fix liegt im Working-Tree, wird beim nächsten Auto-Checkpoint
+  gemeinsam committed → braucht dann Push.
+
+## Carry-over (offen)
+- BE/KE-Feature: SQL-Migration angewandt, `lib/carbUnits.ts` bereit,
+  UI-Wiring (Settings + Engine + Log + Insights) steht noch aus.

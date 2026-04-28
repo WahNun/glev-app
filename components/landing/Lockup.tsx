@@ -39,7 +39,13 @@ export default function Lockup({ width = 240 }: { width?: number }) {
       >
         glev
       </text>
-      <circle cx="168" cy="50" r="4" fill="#22D3A0" />
+      {/* Mint period dot — must sit on the baseline (y=58) like a real ".",
+          NOT mid-height of the "v". With r=4 we want the dot's bottom to
+          touch the baseline, so cy = 58 - 2 = 56 (center 2px above
+          baseline, bottom 2px below — reads exactly as a sentence period).
+          The previous cy=50 floated the dot 8px above the baseline,
+          giving the wrong "dot stuck to the v" look. */}
+      <circle cx="164" cy="56" r="4" fill="#22D3A0" />
     </svg>
   );
 }
