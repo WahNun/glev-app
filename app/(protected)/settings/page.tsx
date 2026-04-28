@@ -238,121 +238,72 @@ export default function SettingsPage() {
 
       {tab === "settings" && (
         <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-          {/* LANGUAGE TOGGLE — first card in the Settings tab so it's
-              easy to find. Click stages a pendingLocale and surfaces a
-              confirmation modal; only Confirm triggers setLocale() which
-              persists the choice to Supabase (profiles.language), updates
-              the NEXT_LOCALE cookie, then hard-reloads so the server picks
-              up the new messages bundle. The active button highlight stays
-              on the actual current locale until reload — preview-only flips
-              would mislead the user (the modal already shows the target
-              language in its title/body). */}
+          {/* LANGUAGE PICKER — dropdown + Save button in one row, same
+              card. Dropdown stages a pendingLocale (no immediate effect);
+              Save commits via setLocale() which writes the NEXT_LOCALE
+              cookie + persists to Supabase (profiles.language) + hard-
+              reloads so the server-side messages bundle picks up. Save
+              is disabled when the dropdown matches the active locale —
+              nothing to save. The reload-warning hint sits below the row
+              instead of in a separate modal: dropdown→Save is already a
+              two-step explicit action, so an extra confirm popup would
+              be friction. */}
           <div style={card}>
             <div style={{ fontSize:13, fontWeight:600, marginBottom:14 }}>
               {tSettings("language")} / Sprache / Language
             </div>
-            <div style={{ display:"flex", gap:10 }}>
-              {(["de","en"] as const).map(loc => {
-                const active = currentLocale === loc;
-                const label = loc === "de" ? "Deutsch" : "English";
-                const flag  = loc === "de" ? "🇩🇪" : "🇬🇧";
-                return (
-                  <button
-                    key={loc}
-                    type="button"
-                    onClick={() => {
-                      // No-op when clicking the already-active button —
-                      // no need to confirm a no-change action.
-                      if (loc === currentLocale) return;
-                      setPendingLocale(loc);
-                    }}
-                    style={{
-                      flex:1, padding:"12px 16px", borderRadius:10,
-                      border:`1px solid ${active ? ACCENT : BORDER}`,
-                      background: active ? ACCENT : "transparent",
-                      color: active ? "#fff" : "rgba(255,255,255,0.7)",
-                      fontSize:14, fontWeight:600, cursor:"pointer",
-                      display:"flex", alignItems:"center", justifyContent:"center", gap:8,
-                      transition:"background 120ms ease, color 120ms ease",
-                    }}
-                  >
-                    <span style={{ fontSize:18 }}>{flag}</span>
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* CONFIRM MODAL — appears when user clicks the inactive
-              language button. Backdrop click + Cancel both dismiss
-              without persisting; Confirm calls setLocale (which writes
-              cookie + DB then reloads). z-index 1000 to clear the rest
-              of the settings UI. */}
-          {pendingLocale && (
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="lang-confirm-title"
-              onClick={() => setPendingLocale(null)}
-              style={{
-                position:"fixed", inset:0, zIndex:1000,
-                background:"rgba(0,0,0,0.6)",
-                display:"flex", alignItems:"center", justifyContent:"center",
-                padding:16, backdropFilter:"blur(4px)",
-              }}
-            >
-              <div
-                onClick={e => e.stopPropagation()}
+            <div style={{ display:"flex", gap:10, alignItems:"stretch" }}>
+              <select
+                value={pendingLocale ?? currentLocale}
+                onChange={e => {
+                  const next = e.target.value as Locale;
+                  // Reset pending back to null when user re-picks the
+                  // current locale, so the Save button correctly disables.
+                  setPendingLocale(next === currentLocale ? null : next);
+                }}
                 style={{
-                  background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14,
-                  padding:"22px 22px 18px", maxWidth:420, width:"100%",
-                  display:"flex", flexDirection:"column", gap:14,
-                  boxShadow:"0 20px 60px rgba(0,0,0,0.5)",
+                  flex:1, padding:"12px 14px", borderRadius:10,
+                  border:`1px solid ${BORDER}`, background:SURFACE,
+                  color:"#fff", fontSize:14, fontWeight:500, cursor:"pointer",
+                  appearance:"none", WebkitAppearance:"none",
+                  backgroundImage:"url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path fill='rgba(255,255,255,0.5)' d='M2 4l4 4 4-4z'/></svg>\")",
+                  backgroundRepeat:"no-repeat",
+                  backgroundPosition:"right 14px center",
+                  paddingRight:36,
                 }}
               >
-                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                  <span style={{ fontSize:26 }}>
-                    {pendingLocale === "de" ? "🇩🇪" : "🇬🇧"}
-                  </span>
-                  <h3 id="lang-confirm-title" style={{ fontSize:17, fontWeight:700, margin:0 }}>
-                    {tSettings("language_confirm_title")}
-                  </h3>
-                </div>
-                <p style={{ fontSize:13, lineHeight:1.5, color:"rgba(255,255,255,0.65)", margin:0 }}>
-                  {tSettings("language_confirm_body")}
-                </p>
-                <div style={{ display:"flex", gap:10, marginTop:4 }}>
-                  <button
-                    type="button"
-                    onClick={() => setPendingLocale(null)}
-                    style={{
-                      flex:1, padding:"11px 14px", borderRadius:10,
-                      border:`1px solid ${BORDER}`, background:"transparent",
-                      color:"rgba(255,255,255,0.75)", fontSize:14, fontWeight:600, cursor:"pointer",
-                    }}
-                  >
-                    {tCommon("cancel")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const target = pendingLocale;
-                      setCurrentLocale(target);
-                      void setLocale(target);
-                    }}
-                    style={{
-                      flex:1, padding:"11px 14px", borderRadius:10,
-                      border:`1px solid ${ACCENT}`, background:ACCENT,
-                      color:"#fff", fontSize:14, fontWeight:600, cursor:"pointer",
-                    }}
-                  >
-                    {tCommon("confirm")}
-                  </button>
-                </div>
-              </div>
+                <option value="de" style={{ background:SURFACE, color:"#fff" }}>🇩🇪 Deutsch</option>
+                <option value="en" style={{ background:SURFACE, color:"#fff" }}>🇬🇧 English</option>
+              </select>
+              <button
+                type="button"
+                disabled={!pendingLocale}
+                onClick={() => {
+                  if (!pendingLocale) return;
+                  const target = pendingLocale;
+                  setCurrentLocale(target);
+                  void setLocale(target);
+                }}
+                style={{
+                  padding:"12px 22px", borderRadius:10,
+                  border:`1px solid ${pendingLocale ? ACCENT : BORDER}`,
+                  background: pendingLocale ? ACCENT : "transparent",
+                  color: pendingLocale ? "#fff" : "rgba(255,255,255,0.35)",
+                  fontSize:14, fontWeight:600,
+                  cursor: pendingLocale ? "pointer" : "not-allowed",
+                  whiteSpace:"nowrap",
+                  transition:"background 120ms ease, color 120ms ease, border-color 120ms ease",
+                }}
+              >
+                {tCommon("save")}
+              </button>
             </div>
-          )}
+            {pendingLocale && (
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.45)", marginTop:10, lineHeight:1.5 }}>
+                {tSettings("language_confirm_body")}
+              </div>
+            )}
+          </div>
 
           <div style={card}>
             <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>Glucose Targets</div>
