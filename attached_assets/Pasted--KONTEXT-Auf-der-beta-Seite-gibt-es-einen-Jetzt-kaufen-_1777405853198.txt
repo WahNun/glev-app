@@ -1,0 +1,82 @@
+## KONTEXT
+
+Auf der /beta Seite gibt es einen "Jetzt kaufen" / "Beta-Zugang sichern" / "Early Access sichern" Button, der aktuell eine Stripe Checkout API Route aufruft — und broken ist. Dieser Button soll durch einen einfachen direkten Link zum Stripe Payment Link ersetzt werden. Keine API Route, kein fetch, kein onClick.
+
+---
+
+## STEP 1 — Datei finden
+
+```bash
+find app -name "page.tsx" | xargs grep -l "beta\|checkout\|stripe" -i 2>/dev/null
+```
+
+Die /beta Seite befindet sich wahrscheinlich unter:
+- `app/(public)/beta/page.tsx`
+- `app/beta/page.tsx`
+
+Öffne die gefundene Datei.
+
+---
+
+## STEP 2 — Den Button identifizieren
+
+Suche im Code nach dem primären CTA-Button — er enthält wahrscheinlich:
+- `onClick` Handler der eine API Route aufruft (`/api/checkout`, `/api/stripe`, o.ä.)
+- oder `fetch(...)` / `createCheckoutSession` / `handleCheckout` o.ä.
+- Text wie "Jetzt kaufen", "Beta-Zugang sichern", "Early Access sichern", "Checkout", "Jetzt sichern"
+
+---
+
+## STEP 3 — Button durch direkten Link ersetzen
+
+Ersetze den gefundenen Button durch einen `<a>`-Tag mit identischem Styling.
+
+**Die URL lautet:** `https://buy.stripe.com/14AeVdgPO65abnv3QwbfO00`
+
+**Vorher (Beispiel):**
+```tsx
+<button onClick={handleCheckout} className="...">
+  Jetzt kaufen
+</button>
+```
+
+**Nachher:**
+```tsx
+<a
+  href="https://buy.stripe.com/14AeVdgPO65abnv3QwbfO00"
+  target="_blank"
+  rel="noopener noreferrer"
+  className="..."
+>
+  Jetzt kaufen
+</a>
+```
+
+- Das `className` identisch übernehmen
+- Den Button-Text identisch übernehmen
+- Falls shadcn `<Button>`: `asChild` + `<a>` nutzen
+- Falls `handleCheckout` nur für diesen Button existiert: löschen
+
+---
+
+## STEP 4 — Unused Imports aufräumen
+
+Falls nach dem Entfernen des onClick-Handlers Imports nicht mehr genutzt werden (z.B. `useState`, `useRouter`), entferne sie.
+
+---
+
+## NICHT ÄNDERN
+
+- Hero-Headline, Tagline, alle andere Copy
+- FAQ, Countdown, Preis-Anzeige, Feature-Liste
+- API Routes stehen lassen
+- Auth, Supabase, Nightscout
+
+---
+
+## VERIFY
+
+1. `tsc --noEmit` → kein Fehler
+2. /beta im Browser → Button sieht identisch aus
+3. Button klicken → öffnet stripe.com für €19 in neuem Tab
+4. `git add -A && git commit -m "fix(beta): replace broken stripe checkout with direct payment link" && git push origin main`

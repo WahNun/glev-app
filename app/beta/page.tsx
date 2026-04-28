@@ -1,12 +1,7 @@
 "use client";
 
-import Image from "next/image";
-import { Suspense, useEffect, useRef, useState } from "react";
-import { useFormStatus } from "react-dom";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import AppMockupPhone from "@/components/AppMockupPhone";
-import CTAButton from "@/components/landing/CTAButton";
-import { submitBetaCheckout } from "./actions";
 import FAQ from "@/components/landing/FAQ";
 import FeatureTrio from "@/components/landing/FeatureTrio";
 import FounderSection from "@/components/landing/FounderSection";
@@ -16,16 +11,15 @@ import PricingCard from "@/components/landing/PricingCard";
 import Steps from "@/components/landing/Steps";
 import {
   ACCENT,
+  ACCENT_HOVER,
   BG,
-  BORDER,
   MINT,
-  PINK,
-  SURFACE,
   TEXT_DIM,
   TEXT_FAINT,
 } from "@/components/landing/tokens";
 
 const CAPACITY = 500;
+const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/14AeVdgPO65abnv3QwbfO00";
 
 type CountResponse = { count: number; capacity: number; remaining: number };
 
@@ -33,33 +27,49 @@ const MAILTO_WAITLIST =
   "mailto:hello@glev.app?subject=Glev%20Beta%20Warteliste";
 
 /**
- * Submit button rendered inside the <form> so useFormStatus can read the
- * pending state. Receives `isFull` via prop because the capacity-exhausted
- * label depends on the parent's count poll, which lives outside the form.
+ * Primary CTA — direct link to the Stripe Payment Link. Stripe collects
+ * the email itself at checkout, so no local form/server-action round-trip
+ * is needed. Falls back to the mailto waitlist when capacity is reached.
  */
-function BetaSubmitButton({ isFull }: { isFull: boolean }) {
-  const { pending } = useFormStatus();
-  const label = isFull
-    ? "Auf die Warteliste"
-    : pending
-      ? "Weiterleitung zu Stripe…"
-      : "Platz sichern — €19";
-  return <CTAButton submitting={pending} label={label} />;
+function BetaCTALink({ isFull }: { isFull: boolean }) {
+  const [hover, setHover] = useState(false);
+  const href = isFull ? MAILTO_WAITLIST : STRIPE_PAYMENT_LINK;
+  const label = isFull ? "Auf die Warteliste" : "Platz sichern — €19";
+  return (
+    <a
+      href={href}
+      target={isFull ? undefined : "_blank"}
+      rel={isFull ? undefined : "noopener noreferrer"}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: hover ? ACCENT_HOVER : ACCENT,
+        color: "#fff",
+        textDecoration: "none",
+        border: "none",
+        borderRadius: 12,
+        padding: "16px 32px",
+        fontSize: 18,
+        fontWeight: 600,
+        fontFamily: "inherit",
+        minHeight: 56,
+        cursor: "pointer",
+        boxShadow: hover ? "0 0 0 4px rgba(79,110,247,0.25)" : "0 0 0 0 rgba(79,110,247,0)",
+        transition: "background 120ms ease, box-shadow 120ms ease",
+        outlineColor: "rgba(79,110,247,0.4)",
+        boxSizing: "border-box",
+      }}
+    >
+      {label}
+    </a>
+  );
 }
 
 function BetaContent() {
-  const [email, setEmail] = useState("");
   const [count, setCount] = useState<CountResponse | null>(null);
-  const ctaRef = useRef<HTMLInputElement | null>(null);
-  // The form binds directly to the submitBetaCheckout server action so
-  // Next.js can inject the action URL into the rendered <form> at SSR
-  // time. The previous useActionState wrapper left the form without an
-  // action attribute, so pre-hydration submits did a default GET reload
-  // back to /beta with email in the query string. Errors come back via
-  // ?error=<msg> and capacity exhaustion via ?full=1.
-  const searchParams = useSearchParams();
-  const error = searchParams.get("error");
-  const isFullFromUrl = searchParams.get("full") === "1";
 
   useEffect(() => {
     let cancelled = false;
@@ -76,19 +86,8 @@ function BetaContent() {
     };
   }, []);
 
-  // Capacity exhaustion can race the count poll: if Stripe checkout
-  // responds 409 the server action redirects back to /beta?full=1 —
-  // degrade gracefully to the mailto waitlist so the user isn't stuck on
-  // a red error.
-  useEffect(() => {
-    if (isFullFromUrl) {
-      window.location.href = MAILTO_WAITLIST;
-    }
-  }, [isFullFromUrl]);
-
   const remaining = count?.remaining ?? CAPACITY;
   const isFull = count != null && remaining <= 0;
-  const isLow = !isFull && count != null && remaining < 50;
 
   return (
     <main
@@ -163,44 +162,12 @@ function BetaContent() {
               Glev ist der Meal-Tracker für Typ-1-Diabetiker, der mitdenkt — Spracheingabe, KI-Makros, CGM live.
             </p>
 
-            <form
-              action={submitBetaCheckout}
+            <div
               className="glev-hero-form"
               style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}
             >
-              <input
-                ref={ctaRef}
-                name="email"
-                type="email"
-                required
-                autoComplete="email"
-                placeholder="deine@email.de"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                aria-label="Email-Adresse"
-                style={{
-                  width: "100%",
-                  background: SURFACE,
-                  border: `1px solid ${BORDER}`,
-                  borderRadius: 12,
-                  padding: "14px 16px",
-                  color: "#fff",
-                  fontSize: 16,
-                  fontFamily: "inherit",
-                  outline: "none",
-                  boxSizing: "border-box",
-                  minHeight: 56,
-                }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = ACCENT)}
-                onBlur={(e) => (e.currentTarget.style.borderColor = BORDER)}
-              />
-              <BetaSubmitButton isFull={isFull} />
-              {error && (
-                <div role="alert" style={{ fontSize: 13, color: PINK, textAlign: "left" }}>
-                  {error}
-                </div>
-              )}
-            </form>
+              <BetaCTALink isFull={isFull} />
+            </div>
 
             <div
               className="glev-hero-meta"

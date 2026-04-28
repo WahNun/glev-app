@@ -1,46 +1,47 @@
 # Agent Status
 
 ## Last completed task
-**Beta-Page: Early-Access-Perk klar kommunizieren** (this turn)
+**Beta-Page CTA: Stripe Server-Action → direkter Stripe Payment Link** (this turn)
 
-Edits in `app/beta/page.tsx`:
-- Hero (unter dem Email-CTA): NEUE prominente Meta-Zeile (MINT, fontWeight 600, ★-Icon): _"2 Wochen Early Access vor öffentlichem Launch (Juli 2026)"_ — direkt unter Submit-Button
-- Bestehende Rückerstattungs-Zeile auf TEXT_DIM heruntergedimmt damit die Early-Access-Zeile dominiert
-- PricingCard L299 right-side: `"deine Beta-Reservierung"` → `"Beta-Reservierung + 2 Wochen Early Access vor Launch"`
-- PricingCard footer erweitert: ergänzt _"Early-Access-Link kommt zwei Wochen vor öffentlichem Launch per Email."_
+`app/beta/page.tsx` — komplett umgestellt:
+- **Form weg**: `<form action={submitBetaCheckout}>` mit Email-Input + `BetaSubmitButton` entfernt (38 Zeilen)
+- **Direktlink rein**: neue `BetaCTALink`-Komponente — `<a href="https://buy.stripe.com/14AeVdgPO65abnv3QwbfO00" target="_blank">` mit identischem CTAButton-Styling (Hover, Box-Shadow, Padding, Font)
+- **Capacity-Fallback**: bei `isFull=true` zeigt der Link auf `mailto:hello@glev.app?subject=Glev%20Beta%20Warteliste` mit Label "Auf die Warteliste"
+- **Aufgeräumt**:
+  - Imports raus: `Image`, `useRef`, `useFormStatus`, `useSearchParams`, `submitBetaCheckout`, `CTAButton`, `BORDER`, `PINK`, `SURFACE`, `ACCENT` (ACCENT_HOVER stattdessen rein)
+  - State raus: `email`, `ctaRef`, `searchParams`, `error`, `isFullFromUrl`, mailto-redirect-useEffect
+  - `BetaSubmitButton` Component gelöscht
+  - Unused `isLow` raus
+- **Bleibt unverändert**: Hero-Copy, Mint-Early-Access-Zeile (★), Rückerstattung-Zeile, "Limitiert auf 500 Beta-Plätze.", PricingCard, Steps, FAQ, Founder, Footer, Suspense-Wrapper, count-poll via `/api/beta/count`
+- **`app/beta/actions.ts` bleibt unverändert** — wird jetzt nirgendwo mehr aufgerufen, kann später entfernt werden falls keine andere Verwendung gefunden
 
-`tsc --noEmit --skipLibCheck` → clean. Workflow läuft sauber.
+`tsc --noEmit --skipLibCheck` → clean.
 
-## Stripe-Debug-Plan — NICHT ausgeführt
-User pasted a 86-line Stripe-debug script from another tool/planner. **Nicht ausgeführt** weil:
-- Plan annimmt `app/actions/stripe.ts` existiert — real sind es `app/beta/actions.ts` + `app/pro/actions.ts`
-- Plan annimmt `redirect()`-in-catch-Bug — bereits letzte Runden verifiziert: ALLE redirect-Calls liegen schon AUSSERHALB der try/catch-Blöcke
-- Plan ist Vercel-spezifisch (Vercel Dashboard / Vercel Functions / Vercel Logs auslesen) — wir sind auf Replit
-- User hat keinen klaren Auftrag dazu gegeben (nur am Ende die Beta-Page-Klarstellung explizit)
+## Stripe-Side-Effects der Umstellung
+- **Email-Tracking weg**: vorher hat Server Action Email vor Stripe-Redirect in `beta_signups` (oder ähnlicher Table) gespeichert. Stripe Payment Link sammelt Email selbst, aber unsere DB bekommt sie nur via Webhook (falls konfiguriert)
+- **Capacity-Check weg**: vorher hat Server Action 409 zurückgegeben wenn 500 Plätze voll. Jetzt: nur Frontend-`/api/beta/count` Polling — Race-Condition möglich (User klickt während noch ein Platz da ist, aber während Checkout wird's voll). Stripe Payment Link verkauft trotzdem.
+- **Webhook**: `STRIPE_BETA_WEBHOOK_SECRET` ist gesetzt — vermutlich gibt's `/api/webhooks/stripe` der Beta-Verkäufe trackt. Sollte mit Payment Link weiterhin funktionieren (Stripe sendet `checkout.session.completed` event genauso).
+- **Discount/Pricing**: Payment Link muss in Stripe Dashboard auf €19 / one-time konfiguriert sein. Falls Coupon/Discount via App-spezifischer Logik gegeben wurde, wird das nicht mehr funktionieren.
 
-User muss entscheiden: temporäre Debug-Logs in beide Stripe-Actions einbauen + `?error=` Query-Param-Anzeige auf /pro & /beta? Falls ja, dann in eigenem Turn.
-
-## Push status (UNVERÄNDERT)
+## Pending push (UNVERÄNDERT)
 **Plattformseitig blockiert.** `git push origin main` returns "Destructive git operations are not allowed in the main agent."
 
 Lokal/`gitsafe-backup/main` hat:
 - `ddd063d` Pro-page grid 2x2
-- `54abbc7` /log Wizard layout (Container 680, Step-2 Grid 240px gap 16)
-- (jetzt) Beta-Page Early-Access-Perk
+- `54abbc7` /log Wizard layout
+- `f849fc8` Beta-Page Early-Access perk
+- (jetzt) Beta-Page Stripe Payment Link
 
-`origin/main` = stand vor diesen 3 Edits. User muss selbst pushen oder Hintergrund-Task anfordern.
+User muss selbst pushen oder Hintergrund-Task anfordern.
 
-## Pending follow-ups (queued, not yet started)
-- **Task B — i18n DE/EN ausbauen**: next-intl, messages/de+en.json, i18n/request.ts EXISTIEREN bereits. Fehlt: Settings-DE/EN-Toggle, `LanguageProvider` für `profiles.language`-Persistenz, layout-Wiring, mehr Coverage.
-- **Task C — Broteinheiten-Engine UI wiring**: `lib/carbUnits.ts` ready, `profiles.carb_unit` Migration applied. Fehlt: `hooks/useCarbUnit.ts`, Settings g/BE/KE Selector, dynamic Carbs-Label /log Step 2, Engine ICR-Anzeige, History-Karten.
-- **Locale-aware date pattern**: bisher nur `lib/engine/chipState.ts`. Verbleibend: insulinEval, EngineLogTab, MealEntryCardCollapsed, MealEntryLightExpand, CGM components, entries/page L116/185/1255/1394/1617/1778. Pattern: `localeToBcp47(useLocale())` from `@/lib/time`.
-- **Stripe-Debug** (optional, siehe oben): User-Entscheidung pending.
+## Pending follow-ups
+- **Pro-Page hat denselben Bug**: `app/pro/page.tsx` nutzt vermutlich auch `submitProCheckout` Server Action. Bei Bedarf gleiche Umstellung — dann brauchen wir aber eine separate Pro Payment Link URL (€24,90/Monat subscription). User hat NUR Beta gemeint diese Runde.
+- **Task B — i18n DE/EN ausbauen** (next-intl infra existiert)
+- **Task C — Broteinheiten-Engine UI wiring**
+- **Locale-aware date pattern** (verbleibende Files)
 
 ## Key files
-- `app/beta/page.tsx` — 363 lines, hero+pricing now communicate Early-Access perk prominently
-- `app/pro/page.tsx` — feature grid 2x2 (last turn)
-- `app/(protected)/log/page.tsx` — Container 680, Step-2 Grid auto-fit minmax(240,1fr) gap 16
-- `components/CurrentDayGlucoseCard.tsx` — FS-pill removed
-- `app/beta/actions.ts` + `app/pro/actions.ts` — Stripe server actions, redirect outside try/catch (verified)
-- `messages/de.json`, `messages/en.json`, `i18n/request.ts` — i18n infra exists, partial coverage
-- `lib/carbUnits.ts` — exists, no UI wiring yet
+- `app/beta/page.tsx` — 339 lines (war 380, -41 nach Cleanup), CTA jetzt `<a>` zu Stripe Payment Link
+- `app/beta/actions.ts` — 104 lines, nicht mehr aufgerufen, intakt
+- `app/pro/page.tsx` — gleicher Action-Pattern, noch nicht umgestellt
+- `REPLIT_PROMPT_STRIPE_FIX_V2.md` — letzte Runde erstellt, jetzt teilweise obsolet (User hat sich für Payment-Link-Lösung entschieden statt für Debug)
