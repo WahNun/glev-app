@@ -623,6 +623,14 @@ export default function Home() {
           <GlevLockup size={20} color="rgba(255,255,255,0.7)" />
           <span>
             © 2026 Glev · hello@glev.app
+            {" · "}
+            <Link
+              href="/legal"
+              style={{ color: "inherit", textDecoration: "none" }}
+              aria-label="Datenschutzerklärung und AGB"
+            >
+              Datenschutz · AGB
+            </Link>
             {/* Brand-Book Link, gut versteckt: gleiche Farbe wie Copyright,
                 kein Underline, nur durch dezente Trenn-Mittelpunkt sichtbar.
                 Bleibt für Direktaufruf via /brand erreichbar; SectionNav etc.
