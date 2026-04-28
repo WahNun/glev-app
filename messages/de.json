@@ -74,7 +74,9 @@
     "english": "Englisch",
     "cgm": "CGM Verbindung",
     "account": "Konto",
-    "logout": "Abmelden"
+    "logout": "Abmelden",
+    "language_confirm_title": "Sprache wechseln?",
+    "language_confirm_body": "Die App lädt neu, damit die neue Sprache geladen wird. Nicht gespeicherte Eingaben gehen verloren."
   },
   "common": {
     "loading": "Laden…",

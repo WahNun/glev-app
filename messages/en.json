@@ -74,7 +74,9 @@
     "english": "English",
     "cgm": "CGM Connection",
     "account": "Account",
-    "logout": "Sign out"
+    "logout": "Sign out",
+    "language_confirm_title": "Change language?",
+    "language_confirm_body": "The app will reload to load the new language. Unsaved input will be lost."
   },
   "common": {
     "loading": "Loading…",
