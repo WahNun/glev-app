@@ -1064,11 +1064,11 @@ export default function EnginePage() {
         // app/(protected)/history/page.tsx — pill-shaped container,
         // solid ACCENT fill for the active button, white text on both
         // states, subtle rgba(255,255,255,0.06) container background.
-        // The 4-tab engine row keeps `flex:1 1 0` so it spans the full
-        // app-content width and the labels evenly distribute on phones,
-        // rather than the inline-flex content-sized layout used by the
-        // 2-button history toggle (4 long German labels would shove
-        // past a 375px viewport otherwise).
+        // Pills are content-sized (`flex: 0 0 auto`) and the row uses
+        // `space-around` so each German label stays fully spelled out
+        // even on iPhone 13 mini (truncation reported on the matching
+        // Settings toggle 2026-04-29 — switched both to the same
+        // approach for visual + behavioural consistency).
         return tabsExpanded ? (
           <div style={{ marginBottom: 16 }}>
             <div
@@ -1079,6 +1079,8 @@ export default function EnginePage() {
                 display:"flex", width:"100%", gap:2,
                 padding:4, background:"rgba(255,255,255,0.06)",
                 borderRadius:99, boxSizing:"border-box",
+                justifyContent:"space-around",
+                overflowX:"auto", scrollbarWidth:"none",
               }}
             >
               {tabsCfg.map(t => {
@@ -1090,14 +1092,13 @@ export default function EnginePage() {
                     aria-selected={on}
                     onClick={() => setTab(t.id)}
                     style={{
-                      flex:"1 1 0", minWidth:0,
-                      padding:"8px 6px",
+                      flex:"0 0 auto",
+                      padding:"8px 14px",
                       borderRadius:99, border:"none", cursor:"pointer",
                       background: on ? ACCENT : "transparent",
                       color: "white",
                       fontSize:13, fontWeight: on ? 600 : 500,
                       textAlign:"center", whiteSpace:"nowrap",
-                      overflow:"hidden", textOverflow:"ellipsis",
                       transition:"background 0.15s",
                     }}
                   >

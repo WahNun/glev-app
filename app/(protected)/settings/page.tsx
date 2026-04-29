@@ -137,27 +137,29 @@ export default function SettingsPage() {
       {/* TABS — visually matches the Verlauf (history) page toggle in
           app/(protected)/history/page.tsx: pill-shaped container,
           solid ACCENT fill for the active button, white text on both
-          states. Stays full-width with flex:1 1 0 so the four labels
-          (overview/settings/integrations/data) distribute evenly on
-          mobile rather than overflowing as a content-sized pill. */}
+          states. Pills are content-sized (`flex: 0 0 auto`) and the
+          row uses `space-around` so the four labels stay fully spelled
+          out — the previous `flex: 1 1 0` 25%-slot approach truncated
+          "Integrations" to "Integrati…" on narrow phones (iPhone 13
+          mini, reported 2026-04-29). Wider screens keep the spread-out
+          look because the spare space distributes around the pills. */}
       <div role="tablist" aria-label="Account" style={{
         display:"flex", gap:2, marginBottom:24,
         background:"rgba(255,255,255,0.06)", borderRadius:99,
         padding:4, width:"100%",
+        justifyContent:"space-around",
+        overflowX:"auto", scrollbarWidth:"none",
       }}>
         {(["overview","settings","integrations","data"] as const).map(t => (
           <button key={t} role="tab" aria-selected={tab===t} onClick={() => setTab(t)} style={{
-            flex:"1 1 0",
-            padding:"8px 6px", borderRadius:99, border:"none", cursor:"pointer",
+            flex:"0 0 auto",
+            padding:"8px 14px", borderRadius:99, border:"none", cursor:"pointer",
             background: tab===t ? ACCENT : "transparent",
             color: "white",
             fontSize:13, fontWeight:tab===t?600:500,
             textTransform: "capitalize",
             whiteSpace:"nowrap",
             textAlign:"center",
-            minWidth:0,
-            overflow:"hidden",
-            textOverflow:"ellipsis",
             transition:"background 0.15s",
           }}>{t}</button>
         ))}
