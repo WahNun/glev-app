@@ -232,7 +232,22 @@ export default function EnginePage() {
   // refinements) returns a `nutritionSource` field, and reset alongside
   // the macro fields on every new-meal flow.
   const [nutritionSource, setNutritionSource] =
-    useState<"database" | "mixed" | "estimated" | null>(null);
+    useState<"database" | "mixed" | "estimated" | "unknown" | null>(null);
+  // Per-item nutrition breakdown from the two-stage pipeline
+  // (lib/nutrition/aggregate). Captured from /api/parse-food and
+  // /api/chat-macros so the saved meal preserves PER-ITEM provenance
+  // in meals.parsed_json (jsonb) — auditable later. Empty when the
+  // user typed macros manually with no AI parse, in which case the
+  // save sites fall back to the legacy single-item synthesized shape.
+  const [parsedItems, setParsedItems] = useState<Array<{
+    name: string;
+    grams: number;
+    carbs: number;
+    protein: number;
+    fat: number;
+    fiber: number;
+    source: "open_food_facts" | "usda" | "estimated" | "unknown";
+  }>>([]);
   const [speechAvail, setSpeechAvail] = useState(true);
   const mediaRecRef    = useRef<MediaRecorder | null>(null);
   const recordingStopTsRef = useRef<number | null>(null);
@@ -368,6 +383,10 @@ export default function EnginePage() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunksRef.current = [];
+      // New voice take → drop any prior pipeline state so a stale 'unknown'
+      // badge or stale per-item breakdown can't bleed into this take.
+      setNutritionSource(null);
+      setParsedItems([]);
       const preferred = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/mpeg"]
         .find(t => MediaRecorder.isTypeSupported(t));
       const rec = new MediaRecorder(stream, preferred ? { mimeType: preferred } : undefined);
@@ -435,10 +454,27 @@ export default function EnginePage() {
       // eslint-disable-next-line no-console
       console.log("[PERF voice/engine] /api/parse-food round-trip:", tParseDone - tPfFetch0, "ms");
       const t = pData.totals || {};
-      if (t.carbs   != null) setCarbs(String(t.carbs));
-      if (t.fiber   != null) setFiber(String(t.fiber));
-      if (t.protein != null) setProtein(String(t.protein));
-      if (t.fat     != null) setFat(String(t.fat));
+      // SAFETY: when the aggregator marks the meal as 'unknown' (at
+      // least one ingredient where both DB lookups AND the GPT estimate
+      // failed) we DO NOT auto-fill the macro fields — the totals are
+      // unreliable and dosing insulin from them would be unsafe. The
+      // form keeps its current values; the chat seed below tells the
+      // user to enter macros manually.
+      const safeToAutofill = pData.nutritionSource !== "unknown";
+      if (safeToAutofill) {
+        if (t.carbs   != null) setCarbs(String(t.carbs));
+        if (t.fiber   != null) setFiber(String(t.fiber));
+        if (t.protein != null) setProtein(String(t.protein));
+        if (t.fat     != null) setFat(String(t.fat));
+      }
+      // Capture the per-item breakdown so the saved meal preserves
+      // provenance in meals.parsed_json. Falls back to [] when the
+      // response shape is malformed (older clients shouldn't break).
+      if (Array.isArray(pData.items)) {
+        setParsedItems(pData.items.filter((it: unknown) => it && typeof it === "object"));
+      } else {
+        setParsedItems([]);
+      }
       // eslint-disable-next-line no-console
       console.log("[PERF voice/engine] parse response → form fields filled:", Date.now() - tParseDone, "ms");
       // eslint-disable-next-line no-console
@@ -459,7 +495,7 @@ export default function EnginePage() {
       // (Open Food Facts + USDA + GPT-fallback). Surfaced as a Step 2 badge.
       const ns = pData.nutritionSource;
       setNutritionSource(
-        ns === "database" || ns === "mixed" || ns === "estimated" ? ns : null,
+        ns === "database" || ns === "mixed" || ns === "estimated" || ns === "unknown" ? ns : null,
       );
       // Hand the parsed result to the chat panel so the user sees what the AI
       // captured and can immediately push back ("the banana was bigger") in
@@ -655,7 +691,14 @@ export default function EnginePage() {
     try {
       const saved = await saveMeal({
         inputText: desc.trim() || transcript.trim() || "(manual entry)",
-        parsedJson: [{ name: desc.trim() || "meal", grams: 0, carbs: cNum, protein: pNum, fat: fNum, fiber: fbNum }],
+        // PERSIST PROVENANCE: when the two-stage pipeline produced a
+        // per-item breakdown (voice/chat parse), save its full shape so
+        // meals.parsed_json (jsonb) carries every ingredient's `source`
+        // tag. Manual-entry fallback synthesizes a single legacy item;
+        // there's nothing to attribute, so source stays undefined.
+        parsedJson: parsedItems.length > 0
+          ? parsedItems
+          : [{ name: desc.trim() || "meal", grams: 0, carbs: cNum, protein: pNum, fat: fNum, fiber: fbNum }],
         glucoseBefore: gNum,
         glucoseAfter: null,
         carbsGrams: cNum,
@@ -719,7 +762,14 @@ export default function EnginePage() {
     try {
       const saved = await saveMeal({
         inputText: desc.trim() || transcript.trim() || "(manual entry)",
-        parsedJson: [{ name: desc.trim() || "meal", grams: 0, carbs: cNum, protein: pNum, fat: fNum, fiber: fbNum }],
+        // PERSIST PROVENANCE: when the two-stage pipeline produced a
+        // per-item breakdown (voice/chat parse), save its full shape so
+        // meals.parsed_json (jsonb) carries every ingredient's `source`
+        // tag. Manual-entry fallback synthesizes a single legacy item;
+        // there's nothing to attribute, so source stays undefined.
+        parsedJson: parsedItems.length > 0
+          ? parsedItems
+          : [{ name: desc.trim() || "meal", grams: 0, carbs: cNum, protein: pNum, fat: fNum, fiber: fbNum }],
         glucoseBefore: gNum,
         glucoseAfter: null,
         carbsGrams: cNum,
@@ -778,7 +828,14 @@ export default function EnginePage() {
     try {
       const saved = await saveMeal({
         inputText: desc.trim() || transcript.trim() || "(manual entry)",
-        parsedJson: [{ name: desc.trim() || "meal", grams: 0, carbs: cNum, protein: pNum, fat: fNum, fiber: fbNum }],
+        // PERSIST PROVENANCE: when the two-stage pipeline produced a
+        // per-item breakdown (voice/chat parse), save its full shape so
+        // meals.parsed_json (jsonb) carries every ingredient's `source`
+        // tag. Manual-entry fallback synthesizes a single legacy item;
+        // there's nothing to attribute, so source stays undefined.
+        parsedJson: parsedItems.length > 0
+          ? parsedItems
+          : [{ name: desc.trim() || "meal", grams: 0, carbs: cNum, protein: pNum, fat: fNum, fiber: fbNum }],
         glucoseBefore: gNum,
         glucoseAfter: null,
         carbsGrams: cNum,
@@ -857,7 +914,14 @@ export default function EnginePage() {
     try {
       const saved = await saveMeal({
         inputText: desc.trim() || transcript.trim() || "(manual entry)",
-        parsedJson: [{ name: desc.trim() || "meal", grams: 0, carbs: cNum, protein: pNum, fat: fNum, fiber: fbNum }],
+        // PERSIST PROVENANCE: when the two-stage pipeline produced a
+        // per-item breakdown (voice/chat parse), save its full shape so
+        // meals.parsed_json (jsonb) carries every ingredient's `source`
+        // tag. Manual-entry fallback synthesizes a single legacy item;
+        // there's nothing to attribute, so source stays undefined.
+        parsedJson: parsedItems.length > 0
+          ? parsedItems
+          : [{ name: desc.trim() || "meal", grams: 0, carbs: cNum, protein: pNum, fat: fNum, fiber: fbNum }],
         glucoseBefore: gNum,
         glucoseAfter: null,
         carbsGrams: cNum,
@@ -904,6 +968,7 @@ export default function EnginePage() {
     setDesc(""); setInsulin(""); setResult(null); setTranscript("");
     setAiMealType(null);
     setNutritionSource(null);
+    setParsedItems([]);
     setMealTime(nowLocalDateTime());
     setConfirmErr("");
     setConfirmedMeal(null);
@@ -1372,15 +1437,19 @@ export default function EnginePage() {
                   }}
                   description={desc}
                   onPatch={(patch) => {
-                    // AI returned macros — fill the form silently. We do
-                    // NOT auto-advance: the user explicitly wants to read
-                    // the chat reply and confirm before moving to Step 2.
-                    // The "Weiter →" button below the chat handles the
-                    // hand-off.
-                    setCarbs(String(patch.carbs));
-                    setProtein(String(patch.protein));
-                    setFat(String(patch.fat));
-                    setFiber(String(patch.fiber));
+                    // SAFETY: when the chat re-aggregation came back as
+                    // 'unknown' (at least one ingredient where both DB
+                    // lookups AND the GPT estimate failed) the totals
+                    // can't be trusted for insulin dosing — leave the
+                    // form fields untouched so the user has to enter
+                    // them manually. Description still updates so they
+                    // can see what the AI heard.
+                    if (patch.nutritionSource !== "unknown") {
+                      setCarbs(String(patch.carbs));
+                      setProtein(String(patch.protein));
+                      setFat(String(patch.fat));
+                      setFiber(String(patch.fiber));
+                    }
                     if (patch.description) setDesc(patch.description);
                     // The chat-macros route runs the chat description through
                     // the same DB-backed nutrition pipeline as voice input,
@@ -1389,6 +1458,20 @@ export default function EnginePage() {
                     // current source stays).
                     if (patch.nutritionSource !== undefined && patch.nutritionSource !== null) {
                       setNutritionSource(patch.nutritionSource);
+                    }
+                    // Forward per-item breakdown so the next save persists
+                    // each ingredient's source into meals.parsed_json.
+                    // Three cases:
+                    //  - items === null/undefined (meta-question turn) →
+                    //    KEEP the existing breakdown from the initial parse.
+                    //  - items === []  (re-aggregation produced nothing) →
+                    //    EXPLICITLY clear so the save site falls back to
+                    //    the legacy single-item shape and stale provenance
+                    //    cannot leak into the saved meal.
+                    //  - items.length  > 0 (re-aggregation succeeded)   →
+                    //    overwrite with the fresh per-item breakdown.
+                    if (Array.isArray(patch.items)) {
+                      setParsedItems(patch.items);
                     }
                     const hasMacros =
                       patch.carbs > 0 || patch.protein > 0 ||
@@ -1493,11 +1576,18 @@ export default function EnginePage() {
                       estimation when both DB lookups failed (pink). Hidden when
                       no source has been recorded (manual-entry-only path). */}
                   {nutritionSource && (() => {
+                    // Palette severity: green (DB), orange (mixed), pink
+                    // (full GPT estimate), and a stronger red+pulse for
+                    // 'unknown' — when the pipeline couldn't price even one
+                    // ingredient, the user must see a hard warning before
+                    // dosing. Red is reserved for this case alone.
                     const palette = nutritionSource === "database"
                       ? { bg: "#22D3A015", border: "#22D3A040", color: "#22D3A0" }
                       : nutritionSource === "mixed"
                         ? { bg: "#FF950015", border: "#FF950040", color: "#FF9500" }
-                        : { bg: "#FF2D7815", border: "#FF2D7840", color: "#FF2D78" };
+                        : nutritionSource === "estimated"
+                          ? { bg: "#FF2D7815", border: "#FF2D7840", color: "#FF2D78" }
+                          : { bg: "#FF2D2D22", border: "#FF2D2D80", color: "#FF6B6B" };
                     const label = tEngine(`nutrition_source_${nutritionSource}`);
                     const tip   = tEngine(`nutrition_source_explain_${nutritionSource}`);
                     return (

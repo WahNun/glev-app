@@ -193,9 +193,11 @@
     "nutrition_source_database": "Database ✓",
     "nutrition_source_mixed": "Mixed",
     "nutrition_source_estimated": "Estimated",
+    "nutrition_source_unknown": "Unknown ⚠",
     "nutrition_source_explain_database": "All values sourced from verified food databases (Open Food Facts + USDA).",
     "nutrition_source_explain_mixed": "Mix of database values and AI estimates for ingredients not found in the databases.",
-    "nutrition_source_explain_estimated": "Values are AI estimates — please verify before saving."
+    "nutrition_source_explain_estimated": "Values are AI estimates — please verify before saving.",
+    "nutrition_source_explain_unknown": "At least one ingredient couldn't be matched to a database or estimated. Please review or enter values manually before dosing insulin."
   },
   "history": {
     "title": "History",

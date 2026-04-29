@@ -10,6 +10,8 @@ import type {
   ParsedFoodItem,
 } from "./types";
 
+const ZERO: NutritionPer100 = { carbs_g: 0, protein_g: 0, fat_g: 0, fiber_g: 0 };
+
 /**
  * Smart-routing aggregator: stage 2 of the nutrition pipeline.
  *
@@ -38,7 +40,7 @@ interface ResolvedItem {
 
 async function resolveItem(item: ParsedFoodItem): Promise<ResolvedItem> {
   // Branded → OFF first; generic → USDA first.
-  const offTerm = item.search_term_de || item.name;
+  const offTerm  = item.search_term_de || item.name;
   const usdaTerm = item.search_term_en || item.name;
 
   if (item.is_branded) {
@@ -53,11 +55,19 @@ async function resolveItem(item: ParsedFoodItem): Promise<ResolvedItem> {
     if (off) return { per100: off, source: "open_food_facts" };
   }
 
-  // Both DBs missed → GPT estimate as a tagged fallback. The item is
-  // explicitly marked 'estimated' so the UI can show the user that
-  // these macros are not from a verified source.
-  const est = await estimateItemNutrition(item);
-  return { per100: est, source: "estimated" };
+  // Both DBs missed → GPT estimate. estimateItemNutrition THROWS on
+  // any failure (config, API, all-zero response) per the T1D safety
+  // contract — see lib/nutrition/estimate.ts. We catch here so a
+  // single-item failure doesn't kill the whole meal: the failed item
+  // becomes 'unknown' (zero macros, surfaced to the UI as a refusal
+  // to auto-populate dosing inputs), while items that DID resolve
+  // still flow through normally.
+  try {
+    const est = await estimateItemNutrition(item);
+    return { per100: est, source: "estimated" };
+  } catch {
+    return { per100: ZERO, source: "unknown" };
+  }
 }
 
 function scale(per100: NutritionPer100, grams: number): {
@@ -73,7 +83,11 @@ function scale(per100: NutritionPer100, grams: number): {
 }
 
 function topLevelSource(items: NutritionItem[]): AggregateSource {
-  if (items.length === 0) return "estimated";
+  if (items.length === 0) return "unknown";
+  // 'unknown' is the most severe verdict — even one item where both
+  // DB lookups AND the GPT estimate fell over means the totals can't
+  // be trusted for insulin dosing. The UI MUST surface this clearly.
+  if (items.some((i) => i.source === "unknown")) return "unknown";
   const allEstimated = items.every((i) => i.source === "estimated");
   if (allEstimated) return "estimated";
   const anyEstimated = items.some((i) => i.source === "estimated");
@@ -87,7 +101,7 @@ export async function aggregateNutrition(
     return {
       items: [],
       totals: { carbs: 0, protein: 0, fat: 0, fiber: 0, calories: 0 },
-      nutritionSource: "estimated",
+      nutritionSource: "unknown",
     };
   }
 

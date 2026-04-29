@@ -10,6 +10,21 @@ const PINK    = "#FF2D78";
 const SURFACE = "#111117";
 const BORDER  = "rgba(255,255,255,0.08)";
 
+// Source tag for one ingredient — mirrors lib/nutrition/types.ts.
+// Kept inlined (no import) to avoid pulling server-side type files
+// into the client bundle.
+export type ChatItemSource = "open_food_facts" | "usda" | "estimated" | "unknown";
+
+export interface ChatItem {
+  name:    string;
+  grams:   number;
+  carbs:   number;
+  protein: number;
+  fat:     number;
+  fiber:   number;
+  source:  ChatItemSource;
+}
+
 export interface ChatPatch {
   carbs:    number;
   protein:  number;
@@ -22,12 +37,25 @@ export interface ChatPatch {
   // so the user can see when a chat correction landed in OFF/USDA
   // vs fell back to AI estimation. Null when the chat reply was a
   // pure meta question (no description change → no re-lookup).
-  nutritionSource?: "database" | "mixed" | "estimated" | null;
+  // 'unknown' = at least one ingredient couldn't be resolved even by
+  // GPT estimate; the engine page refuses to auto-populate macros.
+  nutritionSource?: "database" | "mixed" | "estimated" | "unknown" | null;
+  // Per-item breakdown so the engine page can persist provenance into
+  // meals.parsed_json (jsonb). Empty/null when the chat round was a
+  // pure meta question that didn't re-aggregate.
+  items?: ChatItem[] | null;
 }
 
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+  // Provenance pill to render INLINE under this message. Only set on
+  // assistant messages that came from a successful re-aggregation —
+  // null/undefined for greetings, errors, and meta-question replies.
+  // The pill mirrors the Step-2 badge in the engine page so the user
+  // sees the same database/mixed/estimated/unknown verdict at the
+  // exact spot in the conversation where the macros changed.
+  source?: ChatItemSource | "database" | "mixed" | null;
 }
 
 export interface SeedMessage {
@@ -68,6 +96,11 @@ export default function EngineChatPanel({
   // German + English copy across both the old log page and this new
   // engine chat panel.
   const t = useTranslations("log");
+  // Source-pill labels live under the `engine` namespace alongside the
+  // matching Step-2 macros badge, so use a separate translator. Avoids
+  // the missing-key warnings that would otherwise mark the pill as
+  // broken (regression caught in code review).
+  const tEngine = useTranslations("engine");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput]       = useState("");
   const [sending, setSending]   = useState(false);
@@ -112,11 +145,26 @@ export default function EngineChatPanel({
       const reply = typeof data.reply === "string" && data.reply.trim()
         ? data.reply.trim()
         : "(no reply)";
-      setMessages(curr => [...curr, { role: "assistant", content: reply }]);
+      // Source tag for the bot reply — drives the inline pill rendered
+      // beneath this message and the Step-2 badge in the parent page.
+      const ns = data.nutritionSource;
+      const source: ChatPatch["nutritionSource"] =
+        ns === "database" || ns === "mixed" || ns === "estimated" || ns === "unknown" ? ns : null;
+      setMessages(curr => [...curr, {
+        role: "assistant",
+        content: reply,
+        source: source ?? null,
+      }]);
       if (data.macros && typeof data.description === "string") {
-        const ns = data.nutritionSource;
-        const source: ChatPatch["nutritionSource"] =
-          ns === "database" || ns === "mixed" || ns === "estimated" ? ns : null;
+        // Forward both totals AND the per-item breakdown so the engine
+        // page can save provenance into meals.parsed_json. items is
+        // optional in the response — guard against malformed shapes
+        // by filtering anything that isn't a plain object.
+        const items = Array.isArray(data.items)
+          ? (data.items as unknown[]).filter(
+              (it) => it && typeof it === "object",
+            ) as ChatItem[]
+          : null;
         onPatch({
           carbs:    Number(data.macros.carbs)    || 0,
           protein:  Number(data.macros.protein)  || 0,
@@ -125,6 +173,7 @@ export default function EngineChatPanel({
           calories: Number(data.macros.calories) || 0,
           description: String(data.description),
           nutritionSource: source,
+          items,
         });
       }
     } catch (e) {
@@ -299,22 +348,54 @@ export default function EngineChatPanel({
             </div>
           )}
 
-          {messages.map((m, i) => (
-            <div key={i} style={{
-              alignSelf: m.role === "user" ? "flex-end" : "flex-start",
-              maxWidth: "88%",
-              background: m.role === "user" ? `${ACCENT}22` : "rgba(255,255,255,0.04)",
-              border: `1px solid ${m.role === "user" ? `${ACCENT}40` : BORDER}`,
-              borderRadius: 12,
-              padding: "10px 13px",
-              fontSize: 13, lineHeight: 1.55,
-              color: m.role === "user" ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.78)",
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-word",
-            }}>
-              {m.content}
-            </div>
-          ))}
+          {messages.map((m, i) => {
+            // Inline source pill, only for assistant messages that
+            // carried a re-aggregation. Mirrors the Step-2 macros
+            // badge palette so users can correlate at a glance:
+            // green DB, orange mixed, pink estimated, red unknown.
+            const pill = m.role === "assistant" && m.source ? (() => {
+              const palette =
+                m.source === "database" ? { c: GREEN,    label: tEngine("nutrition_source_database") }
+                : m.source === "mixed"   ? { c: ORANGE,   label: tEngine("nutrition_source_mixed") }
+                : m.source === "unknown" ? { c: "#FF6B6B", label: tEngine("nutrition_source_unknown") }
+                                         : { c: PINK,    label: tEngine("nutrition_source_estimated") };
+              return (
+                <div style={{
+                  marginTop: 6,
+                  display: "inline-flex", alignItems: "center", gap: 5,
+                  padding: "2px 8px", borderRadius: 99,
+                  background: `${palette.c}18`,
+                  border: `1px solid ${palette.c}40`,
+                  color: palette.c,
+                  fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
+                }}>
+                  <span style={{
+                    width: 5, height: 5, borderRadius: "50%",
+                    background: palette.c,
+                    boxShadow: `0 0 4px ${palette.c}`,
+                  }}/>
+                  {palette.label}
+                </div>
+              );
+            })() : null;
+            return (
+              <div key={i} style={{
+                alignSelf: m.role === "user" ? "flex-end" : "flex-start",
+                maxWidth: "88%",
+                background: m.role === "user" ? `${ACCENT}22` : "rgba(255,255,255,0.04)",
+                border: `1px solid ${m.role === "user" ? `${ACCENT}40` : BORDER}`,
+                borderRadius: 12,
+                padding: "10px 13px",
+                fontSize: 13, lineHeight: 1.55,
+                color: m.role === "user" ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.78)",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+              }}>
+                {m.content}
+                {pill}
+              </div>
+            );
+          })}
 
           {sending && (
             <div style={{

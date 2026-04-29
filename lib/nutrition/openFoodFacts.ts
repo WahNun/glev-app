@@ -10,11 +10,10 @@ import type { NutritionPer100 } from "./types";
  * https://world.openfoodfacts.org/data
  */
 
-// 5s headroom for cold TLS handshakes; OFF often returns in <500ms when
-// healthy, but its CDN occasionally goes through 503/maintenance windows
-// where the client should fail FAST and let USDA take over rather than
-// keep the user waiting.
-const OFF_TIMEOUT_MS = 5000;
+// 3s hard ceiling per task acceptance budget. OFF p95 is ~1.2s when
+// healthy and times out anyway when their CDN is in 503/maintenance
+// mode. Faster bail = faster USDA fallback when OFF is degraded.
+const OFF_TIMEOUT_MS = 3000;
 const OFF_BASE = "https://world.openfoodfacts.org/cgi/search.pl";
 
 interface OffSearchResponse {

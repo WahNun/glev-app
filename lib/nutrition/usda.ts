@@ -12,10 +12,10 @@ import type { NutritionPer100 } from "./types";
  * https://fdc.nal.usda.gov/api-guide.html
  */
 
-// 5s gives generous headroom for cold TCP/TLS handshakes from a fresh
-// container while still keeping the user-facing parse-food latency under
-// the ~10s mark even when both the OFF and USDA primary attempts timeout.
-const USDA_TIMEOUT_MS = 5000;
+// 3s hard ceiling per task acceptance budget. USDA p95 is ~600ms when
+// not rate-limited; DEMO_KEY 429s come back immediately so no need
+// for a generous timeout.
+const USDA_TIMEOUT_MS = 3000;
 const USDA_BASE = "https://api.nal.usda.gov/fdc/v1/foods/search";
 
 interface UsdaSearchResponse {

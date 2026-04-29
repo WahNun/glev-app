@@ -11,9 +11,17 @@
  *   - top-level `nutritionSource` ('database' | 'mixed' | 'estimated')
  */
 
-export type NutritionSource = "open_food_facts" | "usda" | "estimated";
+// 'unknown' means BOTH database lookups (OFF + USDA) AND the GPT
+// estimate fallback failed for this item. The aggregator still emits
+// the item so the UI can list it, but with carbs/protein/fat/fiber=0
+// and the source flag tells the UI to refuse to populate the form
+// fields automatically — manual entry is required for T1D safety.
+export type NutritionSource = "open_food_facts" | "usda" | "estimated" | "unknown";
 
-export type AggregateSource = "database" | "mixed" | "estimated";
+// 'unknown' means at least one item failed even GPT estimate. The UI
+// must NOT silently use the totals for insulin dosing — it shows a
+// red warning badge so the user knows to enter values manually.
+export type AggregateSource = "database" | "mixed" | "estimated" | "unknown";
 
 /**
  * Structured item produced by the GPT parser. NO macros — those are

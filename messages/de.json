@@ -193,9 +193,11 @@
     "nutrition_source_database": "Datenbank ✓",
     "nutrition_source_mixed": "Gemischt",
     "nutrition_source_estimated": "Geschätzt",
+    "nutrition_source_unknown": "Unbekannt ⚠",
     "nutrition_source_explain_database": "Alle Werte aus geprüften Lebensmittel-Datenbanken (Open Food Facts + USDA).",
     "nutrition_source_explain_mixed": "Mischung aus Datenbank-Werten und KI-Schätzungen für Zutaten, die nicht in der Datenbank waren.",
-    "nutrition_source_explain_estimated": "Werte sind KI-Schätzungen — bitte vor dem Speichern prüfen."
+    "nutrition_source_explain_estimated": "Werte sind KI-Schätzungen — bitte vor dem Speichern prüfen.",
+    "nutrition_source_explain_unknown": "Mindestens eine Zutat konnte weder in den Datenbanken noch geschätzt werden. Bitte Werte vor dem Bolus manuell prüfen oder eingeben."
   },
   "history": {
     "title": "Verlauf",
