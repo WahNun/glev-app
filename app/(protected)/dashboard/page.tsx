@@ -418,7 +418,7 @@ export default function DashboardPage() {
         </div>
       ),
     },
-    { id: "recent-entries", node: <RecentEntries rows={recentRows} locale={dateLocale} onViewAll={() => router.push("/log")} onViewEntry={(id) => router.push(`/entries#${id}`)} onMealUpdated={(m) => setMeals(prev => prev.map(x => x.id === m.id ? m : x))}/> },
+    { id: "recent-entries", node: <RecentEntries rows={recentRows} locale={dateLocale} onViewAll={() => router.push("/history")} onViewEntry={(id) => router.push(`/entries#${id}`)} onMealUpdated={(m) => setMeals(prev => prev.map(x => x.id === m.id ? m : x))}/> },
   ];
 
   return (
@@ -443,7 +443,7 @@ export default function DashboardPage() {
             {totalEntries} entries logged. Hold any card to reorder · click to flip.
           </p>
         </div>
-        <button onClick={() => router.push("/log")} style={{ padding:"10px 20px", borderRadius:10, border:"none", background:ACCENT, color:"#fff", cursor:"pointer", fontSize:14, fontWeight:600, boxShadow:`0 4px 20px ${ACCENT}40` }}>
+        <button onClick={() => router.push("/engine")} style={{ padding:"10px 20px", borderRadius:10, border:"none", background:ACCENT, color:"#fff", cursor:"pointer", fontSize:14, fontWeight:600, boxShadow:`0 4px 20px ${ACCENT}40` }}>
           + Mahlzeit loggen
         </button>
       </div>
