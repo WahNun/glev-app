@@ -7,7 +7,7 @@ import { signOut } from "@/lib/auth";
 import GlevLockup from "@/components/GlevLockup";
 import GlevLogo from "@/components/GlevLogo";
 import AboutGlevModal from "@/components/AboutGlevModal";
-import GlevActionSheet from "@/components/GlevActionSheet";
+import QuickAddMenu from "@/components/QuickAddMenu";
 import { EngineHeaderProvider, useEngineHeader } from "@/lib/engineHeaderContext";
 
 const ACCENT  = "#4F6EF7";
@@ -75,7 +75,6 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   const router   = useRouter();
   const tNav = useTranslations("nav");
   const [aboutOpen, setAboutOpen] = useState(false);
-  const [actionSheetOpen, setActionSheetOpen] = useState(false);
   const engineHdr = useEngineHeader();
 
   useEffect(() => {
@@ -180,6 +179,12 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             </button>
           )}
           <div style={{ fontSize: 11, padding: "5px 12px", borderRadius: 99, background: `${GREEN}18`, color: GREEN, fontWeight: 600 }}>Live</div>
+          {/* QuickAddMenu — secondary logging shortcuts (Glukose /
+              Insulin / Sport) live here in the header now. The old
+              full-width slide-up sheet that hid them behind a
+              "Weiteres" expand was replaced by this 32×32 "+" button
+              with a small dropdown. */}
+          <QuickAddMenu />
           <button
             onClick={() => router.push("/settings")}
             aria-label="Open settings"
@@ -278,18 +283,15 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             </svg>
           )}
         />
-        {/* Glev tab — replaces the previous elevated circular FAB. Visuals
-            now match the other tabs (line icon, grey when inactive,
-            ACCENT + glow when active) so the row reads as a single
-            balanced set instead of "three tabs orbiting one giant blue
-            button". Tap behaviour is unchanged: opens the action sheet
-            with the engine quick-actions; pathname-based active state
-            still highlights it whenever the user is somewhere under
-            /engine. */}
+        {/* Glev tab — primary "Mahlzeit loggen" entry point. Tap navigates
+            directly to /log instead of opening the old slide-up action
+            sheet (which has been removed entirely — the secondary
+            logging shortcuts moved to the header "+" QuickAddMenu).
+            Active state highlights when the user is anywhere under /log. */}
         <MobileTab
           label={tNav("glev")}
-          active={pathname.startsWith("/engine")}
-          onClick={() => setActionSheetOpen(true)}
+          active={pathname.startsWith("/log")}
+          onClick={() => router.push("/log")}
           icon={(a) => (
             <span style={{ display: "inline-flex", filter: a ? `drop-shadow(0 0 8px ${ACCENT}aa)` : undefined, transition: "filter 0.2s" }}>
               <GlevLogo size={22} color={a ? ACCENT : NAV_INACTIVE} bg="transparent"/>
@@ -322,7 +324,6 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 
       </nav>
 
-      <GlevActionSheet open={actionSheetOpen} onClose={() => setActionSheetOpen(false)} />
     </div>
   );
 }

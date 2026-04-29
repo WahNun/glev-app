@@ -148,9 +148,9 @@ export default function EnginePage() {
   const tEngine = useTranslations("engine");
   const [tab, setTab]         = useState<"engine"|"log"|"bolus"|"exercise"|"fingerstick">("engine");
   // Sync the active sub-tab from the URL ?tab= query so deep-links
-  // from the GlevActionSheet ("Glukose messen", "Insulin loggen",
-  // "Exercise loggen") land directly on the right card. We listen to
-  // searchParams (not just []) so re-clicking the FAB while already
+  // from the header QuickAddMenu ("Glukose messen", "Insulin loggen",
+  // "Sport loggen") land directly on the right card. We listen to
+  // searchParams (not just []) so re-picking an item while already
   // on /engine still switches tabs — Next.js does NOT remount the
   // page when only the query string changes.
   const searchParams = useSearchParams();
@@ -319,7 +319,7 @@ export default function EnginePage() {
 
   // Normalize tab when crossing the mobile↔desktop breakpoint. Now that
   // desktop also shows bolus + exercise as dedicated tab buttons (so the
-  // GlevActionSheet deep-links work the same on both viewports), the only
+  // QuickAddMenu deep-links work the same on both viewports), the only
   // tab that needs downgrading is "log" — it's the combined desktop-only
   // meta-view that doesn't exist on mobile. Mobile equivalent of "log"
   // is just "bolus" (Insulin form), since that's the most common entry.
@@ -1038,7 +1038,7 @@ export default function EnginePage() {
           there is no global mobile header, we still render an in-page
           toggle so the tab strip remains reachable. */}
       {(() => {
-        // Same 4 sub-tabs on mobile + desktop so GlevActionSheet deep-links
+        // Same 4 sub-tabs on mobile + desktop so QuickAddMenu deep-links
         // (?tab=bolus|exercise|fingerstick) light up the matching strip
         // button on both viewports. Previously desktop only had
         // engine|log|fingerstick which meant arriving via "Exercise loggen"
