@@ -1,65 +1,68 @@
 # Glev — Agent Status
 
 ## Last completed task
-**Post-Meal Multi-Timepoint Glucose Prompts (30min / 1h / 90min / 2h / 3h)**
+**Floating Post-Meal Banner → dezenter Badge auf Mahlzeit-Karte im Verlauf**
 
 ### Was geändert wurde
-- **Migration** `supabase/migrations/20260429_add_meal_glucose_timepoints.sql`
-  (applied via `npm run db:migrate` to project `zalpwyhlijbjyspjzbvn`):
-  - 5 neue int4 Spalten auf `meals`: `glucose_30min`, `glucose_1h`,
-    `glucose_90min`, `glucose_2h`, `glucose_3h`
-  - + jeweils `_at` timestamptz: `glucose_30min_at`, …
-  - Idempotent (`ADD COLUMN IF NOT EXISTS`)
-- **Hook** `hooks/usePostMealCheck.ts`:
-  - Pollt alle 60s + on window focus
-  - Fenster 0–220min nach Mahlzeit (deckt alle 5 Timepoints + Slack)
-  - Zeigt jeweils EIN PendingMeal: Erstes Timepoint dessen
-    `glucose_<tp>` noch null ist und Zeit-Window aktiv ist
-  - Verwendet existierenden `supabase` Singleton aus `@/lib/supabase`
-    (kein deprecated `createClientComponentClient`)
-- **Komponente** `components/PostMealPrompt.tsx`:
-  - Floating Banner unten zentriert, max-width 480px
-  - Mobile: `bottom: env(safe-area-inset-bottom) + 80px` über Bottom-Nav
-  - Desktop: `bottom: 24px`
-  - Number-Input + „Speichern" Button + „Später eingeben" + ×
-  - Validierung 20–600 mg/dL, Inline-Error-Display
-  - Schickt PATCH mit Authorization-Header (Bearer access_token)
-- **API** `app/api/meals/[id]/glucose/route.ts`:
-  - PATCH-Route, Auth via existierendem `authedClient`
-    (cross-import aus `app/api/insulin/_helpers.ts`)
-  - Body `{ timepoint: '30min'|'1h'|'90min'|'2h'|'3h', value: number }`
-  - Validiert timepoint + value (20–600), schreibt `glucose_<tp>` +
-    `glucose_<tp>_at`, scoped auf user_id
-  - Rückgabe: `{ ok: true, column, timepoint, value }`
-- **Mount** `app/(protected)/layout.tsx`:
-  - `<PostMealPrompt />` global im protected-Layout
-  - Erscheint NICHT auf /, /beta, /pro, /legal (außerhalb protected
-    route group)
+- **Entfernt**: `<PostMealPrompt />` mount aus `app/(protected)/layout.tsx`
+  + zugehöriger Import. Der globale Floating-Banner ploppt nicht mehr
+  ungefragt auf.
+- **Komponenten stehen lassen** (für ggf. spätere Wiederverwendung,
+  per User-Spec): `components/PostMealPrompt.tsx`,
+  `hooks/usePostMealCheck.ts`. Keine aktiven Imports mehr.
+- **Neu**: `components/PendingGlucoseStrip.tsx`
+  - Rendert `null` außer wenn:
+    1. Mahlzeit ist 25–210 min alt (irgendein Timepoint-Fenster aktiv)
+    2. Passendes `glucose_<tp>` Feld ist noch null
+  - Kollabiert: kleiner Badge-Button "● BG nach <Label> eintragen"
+  - Klick → inline Input mit z.B.-130-Placeholder + Speichern + ×
+  - Validierung 20–600 mg/dL, Inline-Error
+  - Tickt alle 30s neu (Window-Übergang ohne Refresh)
+  - PATCH an existierende API `/api/meals/[id]/glucose`
+  - `onSaved(patch)` callback patched parent-state lokal → Strip
+    verschwindet sofort, ohne refetch
+- **`app/(protected)/entries/page.tsx`**:
+  - Import `PendingGlucoseStrip` hinzu
+  - `<PendingGlucoseStrip meal={m} onSaved={...setMeals(...)} />`
+    eingefügt direkt unter dem `entry-row` Container und VOR dem
+    Card/Expand-Header → strip sitzt oben auf der Karte, nur wenn
+    relevant
+- **`lib/meals.ts`**:
+  - 5 neue Felder + jeweils `_at` zum `Meal` Interface
+    (`glucose_30min`, `glucose_1h`, `glucose_90min`, `glucose_2h`,
+    `glucose_3h`) — DB-Spalten existierten schon (gestern angelegt),
+    nur TS war noch nicht synchron
+  - `FULL_COLS` SELECT erweitert um die 10 neuen Spalten, damit
+    `fetchMeals()` sie auch liefert
 
 ### Verifiziert
-- Migration: `✓ Applied 20260429_add_meal_glucose_timepoints.sql`
-- `/engine` → 307 (Auth-Redirect, normal)
+- `/history` → 200
 - `PATCH /api/meals/<uuid>/glucose` (unauth) → 401
-- `npx tsc --noEmit` → clean, kein Output
-- Browser-Console: nur Fast-Refresh „done", keine Errors
+- `npx tsc --noEmit` → clean
+- Workflow restart sauber, kein Compile-Error
 
-### Schema-Konflikt akzeptiert (Variante B)
-- Existierende `bg_1h` / `bg_2h` (+ `_at`) bleiben unverändert
-  parallel bestehen → wird in einem späteren Cleanup-Task migriert
-  (Daten umkopieren, alte Spalten droppen).
+### Noch offen vom letzten Turn
+- **Engine-Header-Toggle entfernen + Tabs static**: User hatte das
+  davor angefragt; ich hatte gelesen aber noch nicht editiert, dann
+  kam die neue Banner→Badge-Anfrage. Der Toggle (kleine Pille in der
+  Mobile-Header-Zeile mit dem aktuellen Tab + Chevron) ist noch da,
+  und die in-page Tab-Toggle in `engine/page.tsx` auch. → Nächster
+  Task wenn der User dran erinnert.
 
 ## Vorherige Tasks
+- Post-Meal Multi-Timepoint Migration (5 neue glucose_* Spalten,
+  Variante B parallel zu bg_1h/bg_2h, applied gestern auf
+  zalpwyhlijbjyspjzbvn).
 - Mobile Glev-Bottom-Tab → /engine (statt /log).
-- /pro CTA → direkter Stripe Payment Link
-  (`https://buy.stripe.com/bJe4gzfLK1OUezHfzebfO01`).
-- GlevActionSheet ersetzt durch Header-`+` (`QuickAddMenu`) +
-  Glev-Tap → /engine. Sheet komplett gelöscht.
+- /pro CTA → direkter Stripe Payment Link.
+- GlevActionSheet ersetzt durch Header-`+` (`QuickAddMenu`).
 
 ## Offen
+- **Engine-Header-Toggle** entfernen, Tabs static im Screen
+  (siehe oben — User-Wunsch aus dem vorherigen Turn).
 - **Cleanup `bg_1h` / `bg_2h`** → in `glucose_1h` / `glucose_2h`
-  migrieren, alte Spalten droppen (low-prio, sobald Doppel-Storage
-  stört).
-- **Performance Dashboard/History** — A+D+E erste Welle
-  (90-Tage-Limit auf `fetchMeals`, Suspense-Boundary, `useMemo`).
+  migrieren, alte Spalten droppen (low-prio).
+- **Performance Dashboard/History** — A+D+E erste Welle (90-Tage-
+  Limit auf `fetchMeals`, Suspense-Boundary, `useMemo`).
 - **`lib/meals.ts`** — kein Limit auf `fetchMeals`, lädt alle Meals
-  des Users → Bottleneck bei Power-Usern.
+  des Users.

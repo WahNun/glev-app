@@ -16,6 +16,7 @@ import CgmSparkline, { type SparklinePoint } from "@/components/CgmSparkline";
 import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, getEvalExplain } from "@/lib/mealTypes";
 import { lifecycleFor, STATE_LABELS, type OutcomeState } from "@/lib/engine/lifecycle";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
+import PendingGlucoseStrip from "@/components/PendingGlucoseStrip";
 import ManualEntryModal from "@/components/ManualEntryModal";
 import { CgmCountdownPair } from "@/components/CgmCountdownChip";
 import { parseDbDate, parseDbTs, parseLluTs } from "@/lib/time";
@@ -735,6 +736,17 @@ export default function EntriesPage() {
 
             return (
               <div key={m.id} id={`entry-${m.id}`} className="entry-row" style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, overflow:"hidden" }}>
+                {/* Pending post-meal BG strip — only renders when this
+                    meal is currently inside a 30min/1h/90min/2h/3h
+                    window AND the matching glucose_* column is still
+                    null. Replaces the old global floating PostMealPrompt
+                    banner with a dezent inline badge directly on the
+                    affected meal card. Patches local state on save so
+                    the strip disappears without refetching the list. */}
+                <PendingGlucoseStrip
+                  meal={m}
+                  onSaved={(patch) => setMeals(ms => ms.map(x => x.id === m.id ? { ...x, ...patch } : x))}
+                />
                 {/* Header — collapsed shows summary; expanded shows only date + time */}
                 {!isOpen ? (
                   <MealEntryCardCollapsed meal={m} onClick={() => expandRow(m.id)}/>

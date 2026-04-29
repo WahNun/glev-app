@@ -21,6 +21,19 @@ export interface Meal {
   bg_1h_at: string | null;
   bg_2h: number | null;
   bg_2h_at: string | null;
+  // Multi-timepoint post-meal glucose readings (Variante B from
+  // 2026-04-29 — coexists with bg_1h/bg_2h until those are deprecated).
+  // Each `_at` is the wall-clock moment the reading was captured.
+  glucose_30min: number | null;
+  glucose_30min_at: string | null;
+  glucose_1h: number | null;
+  glucose_1h_at: string | null;
+  glucose_90min: number | null;
+  glucose_90min_at: string | null;
+  glucose_2h: number | null;
+  glucose_2h_at: string | null;
+  glucose_3h: number | null;
+  glucose_3h_at: string | null;
   outcome_state: "pending" | "provisional" | "final" | null;
   meal_time: string | null;
   carbs_grams: number | null;
@@ -272,7 +285,7 @@ export async function updateMeal(id: string, patch: UpdateMealInput): Promise<Me
   return data as Meal;
 }
 
-const FULL_COLS = "id, user_id, input_text, parsed_json, glucose_before, glucose_after, bg_1h, bg_1h_at, bg_2h, bg_2h_at, outcome_state, meal_time, carbs_grams, protein_grams, fat_grams, fiber_grams, calories, insulin_units, meal_type, evaluation, related_meal_id, created_at";
+const FULL_COLS = "id, user_id, input_text, parsed_json, glucose_before, glucose_after, bg_1h, bg_1h_at, bg_2h, bg_2h_at, glucose_30min, glucose_30min_at, glucose_1h, glucose_1h_at, glucose_90min, glucose_90min_at, glucose_2h, glucose_2h_at, glucose_3h, glucose_3h_at, outcome_state, meal_time, carbs_grams, protein_grams, fat_grams, fiber_grams, calories, insulin_units, meal_type, evaluation, related_meal_id, created_at";
 const MID_COLS  = "id, user_id, input_text, parsed_json, glucose_before, glucose_after, carbs_grams, protein_grams, fat_grams, fiber_grams, calories, insulin_units, meal_type, evaluation, created_at";
 const CORE_COLS = "id, user_id, input_text, parsed_json, glucose_before, carbs_grams, insulin_units, meal_type, evaluation, created_at";
 
