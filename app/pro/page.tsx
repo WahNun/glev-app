@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import AppMockupPhone from "@/components/AppMockupPhone";
 import FAQ from "@/components/landing/FAQ";
 import FeatureTrio from "@/components/landing/FeatureTrio";
@@ -19,43 +20,100 @@ import {
   SURFACE,
   TEXT_DIM,
 } from "@/components/landing/tokens";
+import { submitProCheckout } from "./actions";
 
 /**
- * Primary CTA — routes visitors to the unified /beta reservation funnel
- * during the pre-launch phase, instead of going direct-to-Stripe for the
- * monthly subscription. (Old Stripe payment link kept commented in git
- * history if direct sub purchases need to be re-enabled later.)
+ * Primary CTA — email-first form that POSTs to the existing
+ * `submitProCheckout` server action. The action calls /api/pro/checkout
+ * which creates a Stripe Subscription Checkout Session (price =
+ * STRIPE_PRO_PRICE_ID, the €24,90/Monat plan) with a trial that ends on
+ * the public launch (1 July 2026), then server-redirects to Stripe's
+ * session.url. We collect email here (vs letting Stripe collect it) so
+ * the route can guard against duplicate active subscriptions per email
+ * before opening a checkout.
+ *
+ * Errors are surfaced via ?error= on the URL — `submitProCheckout`
+ * redirects back to /pro?error=… on failure. The Suspense wrapper at
+ * the bottom of this file is what makes useSearchParams() safe to call.
  */
-function ProCTALink() {
+function ProCheckoutForm() {
+  const searchParams = useSearchParams();
+  const error = searchParams?.get("error") ?? null;
   const [hover, setHover] = useState(false);
+  const [pending, setPending] = useState(false);
   return (
-    <a
-      href="/beta"
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: hover ? ACCENT_HOVER : ACCENT,
-        color: "#fff",
-        textDecoration: "none",
-        border: "none",
-        borderRadius: 12,
-        padding: "16px 32px",
-        fontSize: 18,
-        fontWeight: 600,
-        fontFamily: "inherit",
-        minHeight: 56,
-        cursor: "pointer",
-        boxShadow: hover ? "0 0 0 4px rgba(79,110,247,0.25)" : "0 0 0 0 rgba(79,110,247,0)",
-        transition: "background 120ms ease, box-shadow 120ms ease",
-        outlineColor: "rgba(79,110,247,0.4)",
-        boxSizing: "border-box",
-      }}
+    <form
+      action={submitProCheckout}
+      onSubmit={() => setPending(true)}
+      style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%" }}
     >
-      Frühzugang testen
-    </a>
+      <input
+        type="email"
+        name="email"
+        required
+        autoComplete="email"
+        placeholder="deine@email.de"
+        aria-label="Email-Adresse"
+        style={{
+          padding: "14px 18px",
+          fontSize: 16,
+          background: SURFACE,
+          border: `1px solid ${BORDER}`,
+          borderRadius: 12,
+          color: "#fff",
+          outline: "none",
+          fontFamily: "inherit",
+          minHeight: 56,
+          boxSizing: "border-box",
+          width: "100%",
+        }}
+      />
+      <button
+        type="submit"
+        disabled={pending}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: hover && !pending ? ACCENT_HOVER : ACCENT,
+          color: "#fff",
+          textDecoration: "none",
+          border: "none",
+          borderRadius: 12,
+          padding: "16px 32px",
+          fontSize: 18,
+          fontWeight: 600,
+          fontFamily: "inherit",
+          minHeight: 56,
+          cursor: pending ? "wait" : "pointer",
+          opacity: pending ? 0.75 : 1,
+          boxShadow: hover && !pending ? "0 0 0 4px rgba(79,110,247,0.25)" : "0 0 0 0 rgba(79,110,247,0)",
+          transition: "background 120ms ease, box-shadow 120ms ease, opacity 120ms ease",
+          outlineColor: "rgba(79,110,247,0.4)",
+          boxSizing: "border-box",
+        }}
+      >
+        {pending ? "Weiterleitung zu Stripe…" : "Mitgliedschaft starten — €24,90 / Monat"}
+      </button>
+      {error && (
+        <div
+          role="alert"
+          style={{
+            padding: "10px 14px",
+            background: "rgba(255,69,69,0.08)",
+            border: "1px solid rgba(255,69,69,0.25)",
+            borderRadius: 10,
+            color: "#FF8A8A",
+            fontSize: 13,
+            lineHeight: 1.4,
+          }}
+        >
+          {error}
+        </div>
+      )}
+    </form>
   );
 }
 
@@ -154,7 +212,7 @@ function ProContent() {
               className="glev-hero-form"
               style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}
             >
-              <ProCTALink />
+              <ProCheckoutForm />
             </div>
 
             <div
@@ -170,7 +228,7 @@ function ProContent() {
               }}
             >
               <span aria-hidden>↺</span>
-              <span>€19 Reservierung · wird aufs erste Abo angerechnet · jederzeit erstattbar</span>
+              <span>Karte heute hinterlegen · keine Buchung bis {LAUNCH_DATE_LABEL} · jederzeit kündbar</span>
             </div>
           </div>
 
