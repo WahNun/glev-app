@@ -40,6 +40,16 @@ function BetaCTALink({ isFull }: { isFull: boolean }) {
       href={href}
       target={isFull ? undefined : "_blank"}
       rel={isFull ? undefined : "noopener noreferrer"}
+      onClick={() => {
+        // Meta Pixel — Lead conversion event. Fires on every CTA click
+        // that hands the visitor over to Stripe checkout (the
+        // closest signal we have to a "form submit" since the form
+        // itself lives on Stripe's hosted page). Skipped when the
+        // beta is full and the CTA falls back to the mailto waitlist.
+        if (!isFull && typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
+          (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("track", "Lead");
+        }
+      }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{

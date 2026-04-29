@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import AppMockupPhone from "@/components/AppMockupPhone";
 import FAQ from "@/components/landing/FAQ";
 import FeatureTrio from "@/components/landing/FeatureTrio";
@@ -72,6 +72,14 @@ function ProCTALink() {
  * begins on the public launch date (1 July 2026) via a Stripe trial.
  */
 function ProContent() {
+  // Meta Pixel — fires a custom `ViewProPage` event so we can build a
+  // pro-page-visitors retargeting audience separate from the generic
+  // PageView signal that fires on every route via the root layout.
+  useEffect(() => {
+    if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
+      (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("trackCustom", "ViewProPage");
+    }
+  }, []);
 
   return (
     <main
