@@ -308,7 +308,14 @@ export default function Home() {
 
           {/* RIGHT: iPhone with live, clickable app mockup */}
           <div className="glev-phone-stage">
-            <AppMockupPhone hideTopCog />
+            {/* Hero render is fully interactive — bottom nav AND the
+                top-right cog both work, so visitors can poke through
+                every screen including the Einstellungen tab (which
+                exposes its own restricted set of demo-safe toggles).
+                Was previously locked down with hideTopCog out of an
+                abundance of caution; user explicitly asked for the
+                full clickability back 2026-04-29. */}
+            <AppMockupPhone />
           </div>
         </div>
 

@@ -227,7 +227,8 @@ function BetaContent() {
           </div>
 
           <div className="glev-phone-stage">
-            <AppMockupPhone hideTopCog />
+            {/* Fully interactive hero — see homepage note. */}
+            <AppMockupPhone />
           </div>
         </div>
       </section>
