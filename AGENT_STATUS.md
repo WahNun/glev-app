@@ -1,29 +1,61 @@
 # Agent Status
 
-## Last Task: Dexcom Partnership Mockups (PNG)
+**Date:** 2026-04-29
+**Last task:** 3-in-1 Batch — Email-Signatur (HTML+PNG), /beta-Copy-Update, /pro-Copy-Update + Szenario-Block
 
-**Done:**
-- `scripts/generate-mockups.js` — Node-Script, generiert beide PNGs aus reinem Canvas-Code (keine Browser/Puppeteer).
-- `public/mockup-consent-flow.png` — 390×780 (iPhone-Hochformat), Dark UI, Header mit Back-Arrow, glev-Wordmark, Karten „Welche Daten?" (Lock-Icon) und „Deine Rechte" (Clipboard-Icon), Primary-Button „Verbindung erlauben", Ghost-Button „Ablehnen", Footer „Datenschutz · AGB".
-- `public/mockup-data-flow.png` — 900×500 (Querformat), Titel + Subtitle, 4 Boxen Row 1 (Dexcom Sensor → Dexcom Web API → Glev Backend → Supabase) mit beschrifteten Pfeilen, 1 Box Row 2 (Glev App) mit vertikalem Pfeil „WebSocket / Push" von Glev Backend, Legende unten rechts mit Lock-Icon „Alle Verbindungen TLS 1.3 · Daten verlassen die EU nicht".
-- Beide Boxen-Style identisch zum Brief: bg `#1C1C28`, border `#4F6EF7` 2px, radius 10, padding 20.
-- Verifiziert: `file public/mockup-*.png` → korrekte Dimensionen (390×780 + 900×500) und PNG-RGBA.
+## Done in this session
 
-**Technische Abweichung:**
-- User-Brief hat `npm install canvas` vorgegeben — schlug fehl wegen fehlender System-Libs (`libuuid.so.1`) auf NixOS. Switche auf `@napi-rs/canvas` (drop-in API, prebuilt Rust-Binaries, keine cairo/pango Pflicht). Funktional 1:1 äquivalent.
-- Emoji-Icons (🔒, 📋) durch nativ gezeichnete Vektor-Shapes ersetzt — System hat keine Emoji-Fonts (nur DejaVu Sans), Emojis würden als Boxen rendern.
+### Email Signatur
+- `public/email-signature.html` — table-based, 100% inline styles, 600 px wide.
+  - Photo via `https://glev.app/founder.png` (absolute URL für E-Mail-Client-Kompatibilität).
+  - Linke Akzentleiste 4 px `#4F6EF7`, rundes Foto mit 2 px Border, Wordmark "glev" oben rechts.
+  - DE+EN Disclaimer in einer letzten Tabellenzeile.
+- `scripts/generate-email-signature.js` — `@napi-rs/canvas`, lädt `public/founder.png`, rendert mit 2× Pixel-Density.
+- `public/email-signature.png` — **1200 × 486**, identisches Layout wie HTML, B&W-Headshot rund mit blauem Border.
+- Run: `node scripts/generate-email-signature.js`
 
-**DevDep:**
-- `@napi-rs/canvas` als devDependency hinzugefügt (2 Pakete).
+### /beta — Copy-Update
+- Headline: „Bessere Insulinentscheidungen. Jetzt in der Beta testen."
+- Subline: „Wir bauen Glev gemeinsam mit den ersten Nutzer:innen auf. Du bekommst echten Einfluss auf das Produkt — und Zugang, bevor es für alle öffnet."
+- CTA-Button-Label: „Frühzugang sichern" (vorher „Platz sichern — €19").
+- Trust-Signale neu unter dem Formular: „Kein Spam · DSGVO-konform · Nur echte Updates".
+- Platz-Anzeige: „Noch 23 Plätze frei" (statt „Limitiert auf 500 Beta-Plätze.").
+- Stripe-Payment-Link & Form-Logik unverändert (€19 Reservierung läuft weiter).
 
-**Nicht gemacht:**
-- Kein git push, kein Commit (per Brief: „Kein git add / commit nötig").
-- Workflow-Restart hat zwischendurch Port-5000-Konflikt geworfen (alter Prozess hatte Port nicht freigegeben) — beim zweiten Restart sauber durchgelaufen.
+### /pro — Copy-Update + Szenario-Block + CTA-Repoint
+- Imports `SURFACE`, `BORDER` aus tokens hinzugefügt.
+- **Neuer Szenario-Block** (Section 1b, zwischen Hero und Steps):
+  - Setup: „Du bist bei **112 mg/dL**. Du willst gleich **60 g Kohlenhydrate** essen. Dein Wert steigt leicht."
+  - Vorher-Card („Ohne Glev"): „Du spritzt sofort → später 220 mg/dL. Überzucker."
+  - Nachher-Card („Mit Glev", blauer Border): „Du wartest 10 Minuten → stabil bei 140. Fertig."
+  - Responsive: 2-spaltig Desktop, 1-spaltig Mobile via `.glev-scenario-grid`.
+- FeatureTrio mit `items`-Override: Trend erkannt / Mahlzeit einberechnet / Timing angepasst (4. Card Arztbericht-PDF bleibt).
+- **CTA repointed:** „Frühzugang testen" → `/beta` (vorher „Mitgliedschaft starten — €24,90/Monat" → Stripe).
+- `STRIPE_PAYMENT_LINK` Konstante entfernt (war nur in ProCTALink benutzt).
+- ⚠ Anmerkung: „Erste Abbuchung am 1. Juli 2026 · jederzeit kündbar" steht unter dem CTA und passt strenggenommen nicht mehr zum neuen Ziel `/beta`. Per Spec „NICHT ÄNDERN: Preisanzeige" stehen gelassen — sag Bescheid wenn das raus soll.
 
-## Open / Pending (aus früheren Sessions)
-- /insights, /entries, /history Audit
-- PDF i18n review
-- IOB-Berechnung review
-- ICR/CF/targetBg in Postgres `user_settings` migrieren (aktuell nur localStorage)
-- Konsolidierung der zwei Bolus-Engines (`runGlevEngine` vs `recommendDose`)
-- Stripe `STRIPE_BETA_PRICE_ID` in Vercel-Env fehlt
+### FeatureTrio Refactor (`components/landing/FeatureTrio.tsx`)
+- Neuer Export `FeatureItem` Type.
+- Neuer optionaler Prop `items?: readonly FeatureItem[]` — überschreibt die 3 Default-Cards.
+- Default-Cards in `DEFAULT_ITEMS` Konstante extrahiert.
+- /beta nutzt weiterhin Defaults (kein Aufruf-Change), /pro nutzt `items`-Override.
+
+## Verified
+- `npx tsc --noEmit` — clean ✓
+- `curl /beta` → 200 ✓
+- `curl /pro` → 200 ✓
+- PNG visuell geprüft ✓
+
+## Files changed
+- `public/email-signature.html` (NEW)
+- `public/email-signature.png` (NEW)
+- `scripts/generate-email-signature.js` (NEW)
+- `components/landing/FeatureTrio.tsx`
+- `app/beta/page.tsx`
+- `app/pro/page.tsx`
+
+## Conventions reminder
+- Hand-written SQL migrations only (`supabase/migrations/`), NO Drizzle, NO `db:push`.
+- `npm run dev` on port 5000.
+- Never auto git commit / never auto suggest deploy.
+- Never push without explicit user request.

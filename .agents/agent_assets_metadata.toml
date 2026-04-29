@@ -42,3 +42,9 @@ id = "K2oTcQrg9EJOKBQhWsv14"
 uri = "file://public/mockup-data-flow.png"
 type = "image"
 title = "Data Flow Diagram (900×500)"
+
+[[outputs]]
+id = "dD2FJEW_TD05WIS-Ay2rd"
+uri = "file://public/email-signature.png"
+type = "image"
+title = "Glev Email Signatur (PNG, 1200×486, 2×)"

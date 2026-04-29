@@ -34,7 +34,7 @@ const MAILTO_WAITLIST =
 function BetaCTALink({ isFull }: { isFull: boolean }) {
   const [hover, setHover] = useState(false);
   const href = isFull ? MAILTO_WAITLIST : STRIPE_PAYMENT_LINK;
-  const label = isFull ? "Auf die Warteliste" : "Platz sichern — €19";
+  const label = isFull ? "Auf die Warteliste" : "Frühzugang sichern";
   return (
     <a
       href={href}
@@ -156,10 +156,10 @@ function BetaContent() {
                 margin: 0,
               }}
             >
-              Einmal sprechen.<br />Makros berechnet.<br />CGM verknüpft.
+              Bessere Insulinentscheidungen.<br />Jetzt in der Beta testen.
             </h1>
             <p style={{ fontSize: 18, lineHeight: 1.5, color: TEXT_DIM, margin: 0, maxWidth: 520 }}>
-              Glev ist der Meal-Tracker für Typ-1-Diabetiker, der mitdenkt — Spracheingabe, KI-Makros, CGM live.
+              Wir bauen Glev gemeinsam mit den ersten Nutzer:innen auf. Du bekommst echten Einfluss auf das Produkt — und Zugang, bevor es für alle öffnet.
             </p>
 
             <div
@@ -202,6 +202,17 @@ function BetaContent() {
               <span>Rückerstattung jederzeit vor Launch · wird aufs erste Abo angerechnet</span>
             </div>
 
+            <div
+              className="glev-hero-meta"
+              style={{
+                fontSize: 13,
+                color: TEXT_FAINT,
+                marginTop: 2,
+              }}
+            >
+              Kein Spam · DSGVO-konform · Nur echte Updates
+            </div>
+
             {!isFull && (
               <div
                 style={{
@@ -210,7 +221,7 @@ function BetaContent() {
                   marginTop: 4,
                 }}
               >
-                Limitiert auf 500 Beta-Plätze.
+                Noch 23 Plätze frei
               </div>
             )}
           </div>

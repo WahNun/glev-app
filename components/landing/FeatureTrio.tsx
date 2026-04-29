@@ -65,31 +65,44 @@ function FeatureCard({
   );
 }
 
+export type FeatureItem = { color: string; title: string; text: string };
+
+const DEFAULT_ITEMS: readonly FeatureItem[] = [
+  {
+    color: ACCENT,
+    title: "Sprach-Input, kein Formular",
+    text: `Voice-Input, KI-Parser. „Pasta mit Tomatensauce, 80 g Nudeln und ein Apfel." → Makros in 2 s.`,
+  },
+  {
+    color: MINT,
+    title: "CGM live im Loop",
+    text: "FreeStyle Libre 2 ist verbunden. Glukose wird parallel zum Log gespeichert — pre-meal & post-meal.",
+  },
+  {
+    color: ORANGE,
+    title: "Du behältst die Kontrolle",
+    text: "Glev dokumentiert. Du und dein Arzt entscheiden.",
+  },
+];
+
 /**
  * Three (or four) colored feature cards used across /, /beta, /pro.
  * Renders a CSS grid with class `glev-feat-grid` — the parent page
  * is responsible for providing the responsive grid CSS (3-col on
  * desktop, 1-col on mobile). The optional `extra` slot adds a fourth
- * card (used by /pro to show the Arztbericht-PDF feature).
+ * card (used by /pro to show the Arztbericht-PDF feature). The
+ * optional `items` prop overrides the three default cards (used by
+ * /pro to show Trend / Mahlzeit / Timing instead).
  */
-export default function FeatureTrio({ extra }: { extra?: FeatureExtra } = {}) {
+export default function FeatureTrio(
+  { items, extra }: { items?: readonly FeatureItem[]; extra?: FeatureExtra } = {},
+) {
+  const cards = items ?? DEFAULT_ITEMS;
   return (
     <div className="glev-feat-grid">
-      <FeatureCard
-        color={ACCENT}
-        title="Sprach-Input, kein Formular"
-        text={`Voice-Input, KI-Parser. „Pasta mit Tomatensauce, 80 g Nudeln und ein Apfel." → Makros in 2 s.`}
-      />
-      <FeatureCard
-        color={MINT}
-        title="CGM live im Loop"
-        text="FreeStyle Libre 2 ist verbunden. Glukose wird parallel zum Log gespeichert — pre-meal & post-meal."
-      />
-      <FeatureCard
-        color={ORANGE}
-        title="Du behältst die Kontrolle"
-        text="Glev dokumentiert. Du und dein Arzt entscheiden."
-      />
+      {cards.map((c, i) => (
+        <FeatureCard key={i} color={c.color} title={c.title} text={c.text} />
+      ))}
       {extra && <FeatureCard color={extra.color} title={extra.title} text={extra.text} />}
     </div>
   );

@@ -13,25 +13,24 @@ import {
   ACCENT,
   ACCENT_HOVER,
   BG,
+  BORDER,
   LAUNCH_DATE_LABEL,
   MINT,
+  SURFACE,
   TEXT_DIM,
 } from "@/components/landing/tokens";
 
-const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/bJe4gzfLK1OUezHfzebfO01";
-
 /**
- * Primary CTA — direct link to the Stripe Payment Link for the monthly
- * subscription. Stripe collects the email itself at checkout, so no local
- * form/server-action round-trip is needed.
+ * Primary CTA — routes visitors to the unified /beta reservation funnel
+ * during the pre-launch phase, instead of going direct-to-Stripe for the
+ * monthly subscription. (Old Stripe payment link kept commented in git
+ * history if direct sub purchases need to be re-enabled later.)
  */
 function ProCTALink() {
   const [hover, setHover] = useState(false);
   return (
     <a
-      href={STRIPE_PAYMENT_LINK}
-      target="_blank"
-      rel="noopener noreferrer"
+      href="/beta"
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
@@ -55,7 +54,7 @@ function ProCTALink() {
         boxSizing: "border-box",
       }}
     >
-      Mitgliedschaft starten — €24,90/Monat
+      Frühzugang testen
     </a>
   );
 }
@@ -102,8 +101,14 @@ function ProContent() {
           .glev-hero-left { align-items: center !important; text-align: center !important; }
           .glev-hero-meta { justify-content: center !important; }
         }
+        .glev-scenario-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
+        }
         @media (max-width: 640px) {
           .glev-feat-grid { grid-template-columns: 1fr; }
+          .glev-scenario-grid { grid-template-columns: 1fr; }
         }
       `}</style>
 
@@ -175,6 +180,87 @@ function ProContent() {
         </div>
       </section>
 
+      {/* 1b. Scenario — Aha-Moment block (Vorher / Nachher) */}
+      <section
+        style={{
+          width: "100%",
+          maxWidth: 760,
+          margin: "0 auto 56px",
+          padding: "0 20px",
+          boxSizing: "border-box",
+        }}
+      >
+        <div
+          style={{
+            background: SURFACE,
+            border: `1px solid ${BORDER}`,
+            borderRadius: 16,
+            padding: "24px 24px 28px",
+          }}
+        >
+          <p
+            style={{
+              fontSize: 16,
+              lineHeight: 1.55,
+              color: "#fff",
+              margin: "0 0 20px",
+            }}
+          >
+            Du bist bei <strong>112 mg/dL</strong>. Du willst gleich <strong>60 g Kohlenhydrate</strong> essen. Dein Wert steigt leicht.
+          </p>
+          <div className="glev-scenario-grid">
+            <div
+              style={{
+                background: BG,
+                border: `1px solid ${BORDER}`,
+                borderRadius: 12,
+                padding: 16,
+              }}
+            >
+              <strong
+                style={{
+                  display: "block",
+                  fontSize: 12,
+                  color: "rgba(255,255,255,0.55)",
+                  marginBottom: 6,
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Ohne Glev
+              </strong>
+              <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: "rgba(255,255,255,0.85)" }}>
+                Du spritzt sofort → später 220 mg/dL. Überzucker.
+              </p>
+            </div>
+            <div
+              style={{
+                background: BG,
+                border: `1px solid ${ACCENT}55`,
+                borderRadius: 12,
+                padding: 16,
+              }}
+            >
+              <strong
+                style={{
+                  display: "block",
+                  fontSize: 12,
+                  color: ACCENT,
+                  marginBottom: 6,
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Mit Glev
+              </strong>
+              <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: "rgba(255,255,255,0.85)" }}>
+                Du wartest 10 Minuten → stabil bei 140. Fertig.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* 2. Steps */}
       <section
         style={{
@@ -199,6 +285,23 @@ function ProContent() {
         }}
       >
         <FeatureTrio
+          items={[
+            {
+              color: ACCENT,
+              title: "Trend erkannt",
+              text: "Nicht nur der aktuelle Wert — Glev sieht, wohin er geht.",
+            },
+            {
+              color: MINT,
+              title: "Mahlzeit einberechnet",
+              text: "Kohlenhydrate, Protein, Fett — alles fließt in die Empfehlung ein.",
+            },
+            {
+              color: "#FF9500",
+              title: "Timing angepasst",
+              text: "Wann spritzen, nicht nur wie viel — der Unterschied zwischen 140 und 220.",
+            },
+          ]}
           extra={{
             color: "#FF2D78",
             title: "Arztbericht als PDF",
