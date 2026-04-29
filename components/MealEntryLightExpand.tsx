@@ -40,7 +40,14 @@ export default function MealEntryLightExpand({
     ?? (Array.isArray(meal.parsed_json) ? meal.parsed_json.reduce((s, f) => s + (f.fat || 0), 0) : 0);
   const carbs  = meal.carbs_grams ?? 0;
   const before = meal.glucose_before ?? null;
-  const after  = meal.glucose_after  ?? null;
+  // BG AFTER cascades through the same priority as the Verlauf/entries view
+  // so the auto-fetched CGM values (bg_2h / bg_1h) populate the Recent card
+  // without the user having to manually log a post-meal glucose. Prefer 2h
+  // (more authoritative) over 1h over the legacy glucose_after column.
+  const after: number | null =
+    meal.bg_2h ?? meal.bg_1h ?? meal.glucose_after ?? null;
+  const afterTag: "1H" | "2H" | null =
+    meal.bg_2h != null ? "2H" : meal.bg_1h != null ? "1H" : null;
   const delta  = before != null && after != null ? after - before : null;
 
   const beforeColor = before != null
@@ -181,7 +188,22 @@ export default function MealEntryLightExpand({
   const ageMs = Date.now() - parseDbTs(meal.created_at);
   const ageHours = ageMs / 3_600_000;
   const afterValue: React.ReactNode = after != null
-    ? `${after} mg/dL`
+    ? (
+      <span style={{ display:"inline-flex", alignItems:"baseline", gap:6 }}>
+        {`${after} mg/dL`}
+        {afterTag && (
+          <span style={{
+            fontSize:9, fontWeight:700, letterSpacing:"0.06em",
+            padding:"2px 6px", borderRadius:99,
+            background:"rgba(255,255,255,0.06)",
+            color:"rgba(255,255,255,0.55)",
+            fontFamily:"system-ui, -apple-system, sans-serif",
+          }}>
+            {afterTag}
+          </span>
+        )}
+      </span>
+    )
     : (ageHours < 2 ? PendingAfter : "—");
 
   // ─── Edit form view ───────────────────────────────────────────────────────
