@@ -1,0 +1,129 @@
+import { lookupOpenFoodFacts } from "./openFoodFacts";
+import { lookupUSDA } from "./usda";
+import { estimateItemNutrition } from "./estimate";
+import type {
+  AggregatedNutrition,
+  AggregateSource,
+  NutritionItem,
+  NutritionPer100,
+  NutritionSource,
+  ParsedFoodItem,
+} from "./types";
+
+/**
+ * Smart-routing aggregator: stage 2 of the nutrition pipeline.
+ *
+ * For each parsed item:
+ *   1. Pick PRIMARY source from `is_branded` flag:
+ *        branded  → Open Food Facts (then USDA fallback)
+ *        generic  → USDA            (then Open Food Facts fallback)
+ *   2. If both DB lookups return null, fall back to GPT estimation
+ *      and tag the item as `source: 'estimated'`.
+ *   3. Scale per-100g values to the item's actual grams.
+ *
+ * All per-item lookups run in parallel (Promise.all). Each HTTP lookup
+ * has its own 3s timeout enforced inside its client; the aggregator
+ * itself imposes no extra wall-clock budget.
+ *
+ * Top-level `nutritionSource`:
+ *   - "database"  : every item resolved via OFF or USDA
+ *   - "mixed"     : at least one DB hit AND at least one estimate
+ *   - "estimated" : every item fell back to GPT estimate
+ */
+
+interface ResolvedItem {
+  per100: NutritionPer100;
+  source: NutritionSource;
+}
+
+async function resolveItem(item: ParsedFoodItem): Promise<ResolvedItem> {
+  // Branded → OFF first; generic → USDA first.
+  const offTerm = item.search_term_de || item.name;
+  const usdaTerm = item.search_term_en || item.name;
+
+  if (item.is_branded) {
+    const off = await lookupOpenFoodFacts(offTerm);
+    if (off) return { per100: off, source: "open_food_facts" };
+    const usda = await lookupUSDA(usdaTerm);
+    if (usda) return { per100: usda, source: "usda" };
+  } else {
+    const usda = await lookupUSDA(usdaTerm);
+    if (usda) return { per100: usda, source: "usda" };
+    const off = await lookupOpenFoodFacts(offTerm);
+    if (off) return { per100: off, source: "open_food_facts" };
+  }
+
+  // Both DBs missed → GPT estimate as a tagged fallback. The item is
+  // explicitly marked 'estimated' so the UI can show the user that
+  // these macros are not from a verified source.
+  const est = await estimateItemNutrition(item);
+  return { per100: est, source: "estimated" };
+}
+
+function scale(per100: NutritionPer100, grams: number): {
+  carbs: number; protein: number; fat: number; fiber: number;
+} {
+  const factor = grams / 100;
+  return {
+    carbs:   Math.round(per100.carbs_g   * factor),
+    protein: Math.round(per100.protein_g * factor),
+    fat:     Math.round(per100.fat_g     * factor),
+    fiber:   Math.round(per100.fiber_g   * factor),
+  };
+}
+
+function topLevelSource(items: NutritionItem[]): AggregateSource {
+  if (items.length === 0) return "estimated";
+  const allEstimated = items.every((i) => i.source === "estimated");
+  if (allEstimated) return "estimated";
+  const anyEstimated = items.some((i) => i.source === "estimated");
+  return anyEstimated ? "mixed" : "database";
+}
+
+export async function aggregateNutrition(
+  items: ParsedFoodItem[],
+): Promise<AggregatedNutrition> {
+  if (items.length === 0) {
+    return {
+      items: [],
+      totals: { carbs: 0, protein: 0, fat: 0, fiber: 0, calories: 0 },
+      nutritionSource: "estimated",
+    };
+  }
+
+  // Parallel resolve — each item makes at most 2 HTTP calls + 1 GPT call,
+  // each with its own 3-4s timeout. With N items the total wall time is
+  // bounded by the slowest item, not N × budget.
+  const resolved = await Promise.all(items.map((it) => resolveItem(it)));
+
+  const finalItems: NutritionItem[] = items.map((it, i) => {
+    const r = resolved[i];
+    const scaled = scale(r.per100, it.grams);
+    return {
+      name:    it.name,
+      grams:   it.grams,
+      carbs:   scaled.carbs,
+      protein: scaled.protein,
+      fat:     scaled.fat,
+      fiber:   scaled.fiber,
+      source:  r.source,
+    };
+  });
+
+  const totals = finalItems.reduce(
+    (acc, it) => ({
+      carbs:   acc.carbs   + it.carbs,
+      protein: acc.protein + it.protein,
+      fat:     acc.fat     + it.fat,
+      fiber:   acc.fiber   + it.fiber,
+    }),
+    { carbs: 0, protein: 0, fat: 0, fiber: 0 },
+  );
+  const calories = Math.round(totals.carbs * 4 + totals.protein * 4 + totals.fat * 9);
+
+  return {
+    items: finalItems,
+    totals: { ...totals, calories },
+    nutritionSource: topLevelSource(finalItems),
+  };
+}

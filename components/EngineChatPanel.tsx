@@ -17,6 +17,12 @@ export interface ChatPatch {
   fiber:    number;
   calories: number;
   description: string;
+  // Optional provenance from the DB-backed re-aggregation in
+  // /api/chat-macros. Surfaces the source badge in the engine page
+  // so the user can see when a chat correction landed in OFF/USDA
+  // vs fell back to AI estimation. Null when the chat reply was a
+  // pure meta question (no description change → no re-lookup).
+  nutritionSource?: "database" | "mixed" | "estimated" | null;
 }
 
 export interface ChatMessage {
@@ -108,6 +114,9 @@ export default function EngineChatPanel({
         : "(no reply)";
       setMessages(curr => [...curr, { role: "assistant", content: reply }]);
       if (data.macros && typeof data.description === "string") {
+        const ns = data.nutritionSource;
+        const source: ChatPatch["nutritionSource"] =
+          ns === "database" || ns === "mixed" || ns === "estimated" ? ns : null;
         onPatch({
           carbs:    Number(data.macros.carbs)    || 0,
           protein:  Number(data.macros.protein)  || 0,
@@ -115,6 +124,7 @@ export default function EngineChatPanel({
           fiber:    Number(data.macros.fiber)    || 0,
           calories: Number(data.macros.calories) || 0,
           description: String(data.description),
+          nutritionSource: source,
         });
       }
     } catch (e) {

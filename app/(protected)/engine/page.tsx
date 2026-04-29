@@ -226,6 +226,13 @@ export default function EnginePage() {
   // available. Cleared on every new recording so a stale AI label can't
   // bleed into a freshly typed meal. Falls back to classifyMeal() when null.
   const [aiMealType, setAiMealType] = useState<string | null>(null);
+  // Provenance of the macros currently in the form, surfaced as a badge
+  // in Step 2 next to the macros section header. Updated whenever
+  // /api/parse-food (voice + initial chat) or /api/chat-macros (chat
+  // refinements) returns a `nutritionSource` field, and reset alongside
+  // the macro fields on every new-meal flow.
+  const [nutritionSource, setNutritionSource] =
+    useState<"database" | "mixed" | "estimated" | null>(null);
   const [speechAvail, setSpeechAvail] = useState(true);
   const mediaRecRef    = useRef<MediaRecorder | null>(null);
   const recordingStopTsRef = useRef<number | null>(null);
@@ -448,6 +455,12 @@ export default function EnginePage() {
       } else {
         setAiMealType(null);
       }
+      // Capture the macro provenance from the two-stage nutrition pipeline
+      // (Open Food Facts + USDA + GPT-fallback). Surfaced as a Step 2 badge.
+      const ns = pData.nutritionSource;
+      setNutritionSource(
+        ns === "database" || ns === "mixed" || ns === "estimated" ? ns : null,
+      );
       // Hand the parsed result to the chat panel so the user sees what the AI
       // captured and can immediately push back ("the banana was bigger") in
       // the same conversation thread.
@@ -890,6 +903,7 @@ export default function EnginePage() {
     setCarbs(""); setProtein(""); setFat(""); setFiber("");
     setDesc(""); setInsulin(""); setResult(null); setTranscript("");
     setAiMealType(null);
+    setNutritionSource(null);
     setMealTime(nowLocalDateTime());
     setConfirmErr("");
     setConfirmedMeal(null);
@@ -1368,6 +1382,14 @@ export default function EnginePage() {
                     setFat(String(patch.fat));
                     setFiber(String(patch.fiber));
                     if (patch.description) setDesc(patch.description);
+                    // The chat-macros route runs the chat description through
+                    // the same DB-backed nutrition pipeline as voice input,
+                    // so refresh the provenance badge whenever the patch
+                    // includes a fresh source (null = pure meta question,
+                    // current source stays).
+                    if (patch.nutritionSource !== undefined && patch.nutritionSource !== null) {
+                      setNutritionSource(patch.nutritionSource);
+                    }
                     const hasMacros =
                       patch.carbs > 0 || patch.protein > 0 ||
                       patch.fat > 0   || patch.fiber > 0;
@@ -1458,8 +1480,48 @@ export default function EnginePage() {
 
               {/* Section header: Makros — 2x2 grid (Carbs+Fiber, Protein+Fat) */}
               <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 11, color: "#666680", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700, marginBottom: 12 }}>
-                  {tEngine("macros_section")}
+                <div style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  gap: 8, marginBottom: 12,
+                }}>
+                  <div style={{ fontSize: 11, color: "#666680", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700 }}>
+                    {tEngine("macros_section")}
+                  </div>
+                  {/* Provenance badge: shows whether the macros currently in the
+                      form came from the verified Open Food Facts + USDA databases
+                      (green), a mix of DB + AI estimates (orange), or pure AI
+                      estimation when both DB lookups failed (pink). Hidden when
+                      no source has been recorded (manual-entry-only path). */}
+                  {nutritionSource && (() => {
+                    const palette = nutritionSource === "database"
+                      ? { bg: "#22D3A015", border: "#22D3A040", color: "#22D3A0" }
+                      : nutritionSource === "mixed"
+                        ? { bg: "#FF950015", border: "#FF950040", color: "#FF9500" }
+                        : { bg: "#FF2D7815", border: "#FF2D7840", color: "#FF2D78" };
+                    const label = tEngine(`nutrition_source_${nutritionSource}`);
+                    const tip   = tEngine(`nutrition_source_explain_${nutritionSource}`);
+                    return (
+                      <div
+                        title={tip}
+                        style={{
+                          display: "inline-flex", alignItems: "center", gap: 6,
+                          padding: "4px 10px", borderRadius: 99,
+                          background: palette.bg,
+                          border: `1px solid ${palette.border}`,
+                          color: palette.color,
+                          fontSize: 10, fontWeight: 700, letterSpacing: "0.06em",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <span style={{
+                          width: 6, height: 6, borderRadius: "50%",
+                          background: palette.color,
+                          boxShadow: `0 0 6px ${palette.color}`,
+                        }}/>
+                        {tEngine("nutrition_source_label")}: {label}
+                      </div>
+                    );
+                  })()}
                 </div>
                 {/* Macro grid — auto-fit collapses 4 fields to 2 cols on
                     desktop, 1 col on narrow phones. minmax(180px, 1fr) keeps
