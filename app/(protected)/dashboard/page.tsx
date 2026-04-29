@@ -14,7 +14,7 @@ import GlucoseTrendFront from "@/components/GlucoseTrendChart";
 import SortableCardGrid, { type SortableItem } from "@/components/SortableCardGrid";
 import { useCardOrder } from "@/lib/cardOrder";
 import { parseDbDate, parseDbTs, localeToBcp47 } from "@/lib/time";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { isToday, startOfDaysAgo } from "@/lib/utils/datetime";
 
 /** Default top-to-bottom order of dashboard sections. Each ID also appears
@@ -36,7 +36,8 @@ interface CardData {
   formula: string; explanation: string; interpretation: string;
 }
 
-function buildCards(meals: Meal[]): CardData[] {
+type DashT = (key: string, values?: Record<string, string | number>) => string;
+function buildCards(meals: Meal[], t: DashT): CardData[] {
   const total = meals.length;
   const good   = meals.filter(m => m.evaluation === "GOOD").length;
   const spike  = meals.filter(m => m.evaluation === "SPIKE" || m.evaluation === "LOW" || m.evaluation === "UNDERDOSE").length;
@@ -47,46 +48,47 @@ function buildCards(meals: Meal[]): CardData[] {
   const score     = total ? Math.round(goodRate * 0.7 + (100 - spikeRate - hypoRate) * 0.3) : 0;
   return [
     {
-      key:"control", label:"Control Score", color:ACCENT,
+      key:"control", label:t("control_score_label"), color:ACCENT,
       value: total ? score.toString() : "—", unit: "/100",
       bar: score,
-      sub: `${total} entries`,
-      formula: "Score = (Good% × 70) + (Non-extreme% × 30)",
-      explanation: "Control Score measures overall insulin decision quality. It rewards correct dosing and penalizes overdoses and spikes.",
-      interpretation: "80+ = Excellent, 60–79 = Good, 40–59 = Fair, <40 = Needs attention",
+      sub: t("entries_7d", { n: total }),
+      formula: t("control_score_formula"),
+      explanation: t("control_score_explain"),
+      interpretation: "",
     },
     {
-      key:"good", label:"Good Rate", color:GREEN,
+      key:"good", label:t("good_label"), color:GREEN,
       value: total ? goodRate.toFixed(1) : "—", unit: "%",
       bar: goodRate,
-      sub: `${good} good`,
-      formula: "Good Rate = (GOOD outcomes / Total meals) × 100",
-      explanation: "The percentage of meals where your insulin dose was in the optimal range — neither too high nor too low.",
-      interpretation: "Target >70%. Each GOOD outcome means your dose was within ±35% of the ICR-calculated ideal.",
+      sub: t("good_sub", { n: good }),
+      formula: t("good_formula"),
+      explanation: t("good_explanation"),
+      interpretation: t("good_interpretation"),
     },
     {
-      key:"spike", label:"Spike Rate", color:ORANGE,
+      key:"spike", label:t("spike_label"), color:ORANGE,
       value: total ? spikeRate.toFixed(1) : "—", unit: "%",
       bar: spikeRate,
-      sub: "Hyperglycemia",
-      formula: "Spike Rate = (LOW outcomes / Total) × 100",
-      explanation: "Meals where insulin was insufficient. Under-dosing leads to glucose spikes, which increase HbA1c long-term.",
-      interpretation: "Target <15%. Consistent under-dosing suggests your ICR or correction factor needs adjustment.",
+      sub: t("spike_sub"),
+      formula: t("spike_formula"),
+      explanation: t("spike_explanation"),
+      interpretation: t("spike_interpretation"),
     },
     {
-      key:"hypo", label:"Hypo Rate", color:PINK,
+      key:"hypo", label:t("hypo_label"), color:PINK,
       value: total ? hypoRate.toFixed(1) : "—", unit: "%",
       bar: hypoRate,
-      sub: "Hypoglycemia",
-      formula: "Hypo Rate = (HIGH outcomes / Total) × 100",
-      explanation: "Meals where insulin exceeded requirements. Over-dosing risks hypoglycemia, which can be dangerous.",
-      interpretation: "Target <10%. If rising, reduce correction factor or ICR temporarily.",
+      sub: t("hypo_sub"),
+      formula: t("hypo_formula"),
+      explanation: t("hypo_explanation"),
+      interpretation: t("hypo_interpretation"),
     },
   ];
 }
 
 function FlipCard({ card }: { card: CardData }) {
   const [flipped, setFlipped] = useState(false);
+  const t = useTranslations("dashboard");
   return (
     <div onClick={() => setFlipped(f => !f)} className="glev-stat-card" style={{ position:"relative", cursor:"pointer", height:140, perspective:1000 }}>
       <div style={{ position:"absolute", inset:0, transformStyle:"preserve-3d", transition:"transform 0.5s cubic-bezier(0.4,0,0.2,1)", transform:flipped ? "rotateY(180deg)" : "rotateY(0deg)" }}>
@@ -111,7 +113,7 @@ function FlipCard({ card }: { card: CardData }) {
         <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", transform:"rotateY(180deg)", background:`linear-gradient(145deg,${card.color}12,${SURFACE} 65%)`, border:`1px solid ${card.color}33`, borderRadius:14, padding:"12px 16px", boxSizing:"border-box", overflow:"hidden", display:"flex", flexDirection:"column", gap:6, justifyContent:"space-between" }}>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
             <div style={{ fontSize:10, color:card.color, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>{card.label}</div>
-            <span style={{ fontSize:9, color:"rgba(255,255,255,0.18)" }}>↺ back</span>
+            <span style={{ fontSize:9, color:"rgba(255,255,255,0.18)" }}>{t("flip_back")}</span>
           </div>
           <div style={{ fontSize:10, color:"rgba(255,255,255,0.55)", lineHeight:1.45, fontFamily:"var(--font-mono)" }}>{card.formula}</div>
           <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)", lineHeight:1.4 }}>{card.explanation.slice(0,110)}…</div>
@@ -124,6 +126,7 @@ function FlipCard({ card }: { card: CardData }) {
 function TrendChart({ meals }: { meals: Meal[] }) {
   const DAYS = 14;
   const [flipped, setFlipped] = useState(false);
+  const t = useTranslations("dashboard");
   const now = Date.now();
   const buckets: Record<string, number[]> = {};
   for (let i = 0; i < DAYS; i++) {
@@ -147,7 +150,11 @@ function TrendChart({ meals }: { meals: Meal[] }) {
 
   // Back: weekday averages + 7-day trend slope
   const weekdayBuckets: number[][] = Array.from({ length: 7 }, () => []);
-  const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const weekdayLabels = [
+    t("weekday_short_sun"), t("weekday_short_mon"), t("weekday_short_tue"),
+    t("weekday_short_wed"), t("weekday_short_thu"), t("weekday_short_fri"),
+    t("weekday_short_sat"),
+  ];
   meals.forEach(m => {
     if (!m.glucose_before) return;
     const ts = parseDbDate(m.created_at);
@@ -194,17 +201,17 @@ function TrendChart({ meals }: { meals: Meal[] }) {
         {/* BACK */}
         <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", transform:"rotateY(180deg)", background:`linear-gradient(145deg, ${ACCENT}10, ${SURFACE} 65%)`, border:`1px solid ${ACCENT}33`, borderRadius:16, padding:"20px 24px", boxSizing:"border-box", display:"flex", flexDirection:"column", gap:14, overflow:"hidden" }}>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-            <div style={{ fontSize:11, color:ACCENT, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>Trend Breakdown</div>
-            <span style={{ fontSize:9, color:"rgba(255,255,255,0.2)" }}>↺ back</span>
+            <div style={{ fontSize:11, color:ACCENT, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>{t("trend_breakdown")}</div>
+            <span style={{ fontSize:9, color:"rgba(255,255,255,0.2)" }}>{t("flip_back")}</span>
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10 }}>
             {[
-              { l:"Overall avg", v: overallAvg ? `${overallAvg} mg/dL` : "—", c: overallAvg ? (overallAvg>140?ORANGE:overallAvg<80?PINK:GREEN) : undefined },
-              { l:"7-day avg", v: recentAvg ? `${recentAvg} mg/dL` : "—", c: recentAvg ? (recentAvg>140?ORANGE:recentAvg<80?PINK:GREEN) : undefined },
-              { l:"Time in range (80–180)", v: real.length ? `${tirPct}%` : "—", c: tirPct>=70?GREEN:tirPct>=50?ORANGE:PINK },
-              { l:"Highest", v: hiPt ? `${Math.round(hiPt.v)} mg/dL` : "—", c: ORANGE },
-              { l:"Lowest", v: loPt ? `${Math.round(loPt.v)} mg/dL` : "—", c: PINK },
-              { l:"7-day slope", v: last7.length>=2 ? `${slope>0?"+":""}${slope.toFixed(1)}/day` : "—", c: Math.abs(slope)<2 ? GREEN : slope>0 ? ORANGE : ACCENT },
+              { l:t("trend_overall_avg"), v: overallAvg ? `${overallAvg} mg/dL` : "—", c: overallAvg ? (overallAvg>140?ORANGE:overallAvg<80?PINK:GREEN) : undefined },
+              { l:t("trend_7day_avg"), v: recentAvg ? `${recentAvg} mg/dL` : "—", c: recentAvg ? (recentAvg>140?ORANGE:recentAvg<80?PINK:GREEN) : undefined },
+              { l:t("trend_tir_label"), v: real.length ? `${tirPct}%` : "—", c: tirPct>=70?GREEN:tirPct>=50?ORANGE:PINK },
+              { l:t("trend_highest"), v: hiPt ? `${Math.round(hiPt.v)} mg/dL` : "—", c: ORANGE },
+              { l:t("trend_lowest"), v: loPt ? `${Math.round(loPt.v)} mg/dL` : "—", c: PINK },
+              { l:t("trend_7day_slope"), v: last7.length>=2 ? `${slope>0?"+":""}${slope.toFixed(1)}${t("trend_slope_per_day")}` : "—", c: Math.abs(slope)<2 ? GREEN : slope>0 ? ORANGE : ACCENT },
             ].map(s => (
               <div key={s.l} style={{ background:"rgba(255,255,255,0.025)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
                 <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)", letterSpacing:"0.07em", fontWeight:600, marginBottom:4, textTransform:"uppercase" }}>{s.l}</div>
@@ -213,7 +220,7 @@ function TrendChart({ meals }: { meals: Meal[] }) {
             ))}
           </div>
           <div style={{ flex:1, display:"flex", flexDirection:"column" }}>
-            <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)", letterSpacing:"0.07em", fontWeight:600, marginBottom:8, textTransform:"uppercase" }}>By weekday (last 30 days)</div>
+            <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)", letterSpacing:"0.07em", fontWeight:600, marginBottom:8, textTransform:"uppercase" }}>{t("trend_by_weekday")}</div>
             <div style={{ display:"flex", gap:6, flex:1, alignItems:"flex-end" }}>
               {weekdayAvgs.map((v, i) => {
                 const h = v == null ? 8 : Math.max(8, Math.min(100, ((v - 60) / (240 - 60)) * 100));
@@ -236,11 +243,12 @@ function TrendChart({ meals }: { meals: Meal[] }) {
 
 function OutcomeChart({ meals }: { meals: Meal[] }) {
   const [flipped, setFlipped] = useState(false);
+  const t = useTranslations("dashboard");
   const groups: Array<{ key:string; color:string; label:string; description:string; count:number }> = [
-    { key:"GOOD",  color:GREEN,     label:"Good",       description:"Glukose nach 1 h innerhalb +30 mg/dL des Pre-Werts. Das Ziel.", count:0 },
-    { key:"LOW",   color:ORANGE,    label:"Under Dose", description:"Glukose blieb deutlich erhöht — mehr Insulin oder früher spritzen.", count:0 },
-    { key:"HIGH",  color:PINK,      label:"Over Dose",  description:"Glukose fiel unter den Pre-Wert — weniger Insulin oder später spritzen.", count:0 },
-    { key:"SPIKE", color:"#FF9F0A", label:"Spike",      description:"Kurzanstieg über die Schwelle — Pre-Bolus früher setzen.", count:0 },
+    { key:"GOOD",  color:GREEN,     label:t("outcome_good"),      description:t("outcome_good_desc"),  count:0 },
+    { key:"LOW",   color:ORANGE,    label:t("outcome_underdose"), description:t("outcome_under_desc"), count:0 },
+    { key:"HIGH",  color:PINK,      label:t("outcome_overdose"),  description:t("outcome_over_desc"),  count:0 },
+    { key:"SPIKE", color:"#FF9F0A", label:t("outcome_spike"),     description:t("outcome_spike_desc"), count:0 },
   ];
   const idx = Object.fromEntries(groups.map((g, i) => [g.key, i])) as Record<string, number>;
   meals.forEach(m => {
@@ -268,10 +276,10 @@ function OutcomeChart({ meals }: { meals: Meal[] }) {
         <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"20px 24px", boxSizing:"border-box", display:"flex", flexDirection:"column", overflow:"hidden" }}>
           <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between" }}>
             <div>
-              <div style={{ fontSize:13, fontWeight:600, marginBottom:4 }}>Outcome Distribution</div>
-              <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>All-time breakdown</div>
+              <div style={{ fontSize:13, fontWeight:600, marginBottom:4 }}>{t("outcome_dist")}</div>
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>{t("outcome_alltime")}</div>
             </div>
-            <span style={{ fontSize:9, color:"rgba(255,255,255,0.18)" }}>↺</span>
+            <span style={{ fontSize:9, color:"rgba(255,255,255,0.18)" }}>{t("flip_hint_short")}</span>
           </div>
           <div style={{ flex:1, display:"flex", flexDirection:"column", justifyContent:"center", gap:14 }}>
             {groups.map(g => {
@@ -293,8 +301,8 @@ function OutcomeChart({ meals }: { meals: Meal[] }) {
         {/* BACK */}
         <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", transform:"rotateY(180deg)", background:`linear-gradient(145deg, ${ACCENT}10, ${SURFACE} 65%)`, border:`1px solid ${ACCENT}33`, borderRadius:16, padding:"20px 24px", boxSizing:"border-box", display:"flex", flexDirection:"column", gap:12, overflow:"hidden" }}>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-            <div style={{ fontSize:11, color:ACCENT, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>Was die Werte bedeuten</div>
-            <span style={{ fontSize:9, color:"rgba(255,255,255,0.2)" }}>↺ back</span>
+            <div style={{ fontSize:11, color:ACCENT, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>{t("outcome_what_means")}</div>
+            <span style={{ fontSize:9, color:"rgba(255,255,255,0.2)" }}>{t("flip_back")}</span>
           </div>
           <div style={{ flex:1, display:"flex", flexDirection:"column", gap:10, justifyContent:"center" }}>
             {groups.map(g => (
@@ -308,7 +316,7 @@ function OutcomeChart({ meals }: { meals: Meal[] }) {
             ))}
           </div>
           <div style={{ fontSize:9.5, color:"rgba(255,255,255,0.32)", lineHeight:1.4, paddingTop:8, borderTop:`1px solid ${BORDER}` }}>
-            Basis: CGM-Werte 60–90 min nach der Mahlzeit.
+            {t("outcome_basis")}
           </div>
         </div>
       </div>
@@ -319,6 +327,7 @@ function OutcomeChart({ meals }: { meals: Meal[] }) {
 export default function DashboardPage() {
   const router = useRouter();
   const dateLocale = localeToBcp47(useLocale());
+  const t = useTranslations("dashboard");
   const [meals, setMeals]     = useState<Meal[]>([]);
   const [insulin, setInsulin] = useState<InsulinLog[]>([]);
   const [exercise, setExercise] = useState<ExerciseLog[]>([]);
@@ -383,12 +392,12 @@ export default function DashboardPage() {
   if (loading) return (
     <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"60vh", gap:12, color:"rgba(255,255,255,0.3)" }}>
       <div style={{ width:20, height:20, border:`2px solid ${ACCENT}`, borderTopColor:"transparent", borderRadius:99, animation:"spin 0.8s linear infinite" }}/>
-      Loading dashboard…
+      {t("loading")}
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 
-  const cards = buildCards(meals);
+  const cards = buildCards(meals, t);
 
   // Each entry is one draggable section on the dashboard. Long-press any of
   // them to enter edit mode; drag to reorder; tap blank space to save.
@@ -438,13 +447,13 @@ export default function DashboardPage() {
 
       <div className="glev-dash-head" style={{ marginBottom:28, justifyContent:"space-between", alignItems:"flex-end", flexWrap:"wrap", gap:12 }}>
         <div>
-          <h1 style={{ fontSize:24, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>Dashboard</h1>
+          <h1 style={{ fontSize:24, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>{t("title")}</h1>
           <p style={{ color:"rgba(255,255,255,0.35)", fontSize:14 }}>
-            {totalEntries} entries logged. Hold any card to reorder · click to flip.
+            {t("subtitle_count", { n: totalEntries })}
           </p>
         </div>
         <button onClick={() => router.push("/engine")} style={{ padding:"10px 20px", borderRadius:10, border:"none", background:ACCENT, color:"#fff", cursor:"pointer", fontSize:14, fontWeight:600, boxShadow:`0 4px 20px ${ACCENT}40` }}>
-          + Mahlzeit loggen
+          {t("log_meal_cta")}
         </button>
       </div>
 
@@ -489,6 +498,7 @@ function RecentEntries({
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const toggle = (id: string) => setExpanded(prev => (prev === id ? null : id));
+  const t = useTranslations("dashboard");
 
   return (
     <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"16px 20px 8px" }}>
@@ -497,18 +507,18 @@ function RecentEntries({
           label, 13px ACCENT for the link. */}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
         <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:"rgba(255,255,255,0.45)" }}>
-          Recent
+          {t("recent_label")}
         </div>
         <button
           onClick={onViewAll}
           style={{ fontSize:13, color:ACCENT, background:"transparent", border:"none", cursor:"pointer", padding:0, fontWeight:500 }}
         >
-          See all →
+          {t("see_all")}
         </button>
       </div>
       {rows.length === 0 ? (
         <div style={{ padding:"24px 0 16px", textAlign:"center", color:"rgba(255,255,255,0.25)", fontSize:13 }}>
-          Noch keine Einträge. Logge deine erste Mahlzeit.
+          {t("no_entries_yet")}
         </div>
       ) : (
         <div>
@@ -531,10 +541,10 @@ function RecentEntries({
                         ts={r.ts}
                         locale={locale}
                         stats={[
-                          { label:"Duration",  value:`${r.exercise!.duration_minutes} min`, color:KIND_ACCENT.exercise.color },
-                          { label:"Type",      value:r.exercise!.exercise_type === "cardio" ? "Cardio" : "Strength" },
-                          { label:"Intensity", value:r.exercise!.intensity || "—" },
-                          ...(r.exercise!.cgm_glucose_at_log != null ? [{ label:"CGM at log", value:`${r.exercise!.cgm_glucose_at_log} mg/dL` }] : []),
+                          { label:t("stat_duration"),  value:`${r.exercise!.duration_minutes} min`, color:KIND_ACCENT.exercise.color },
+                          { label:t("stat_type"),      value:r.exercise!.exercise_type === "cardio" ? t("ex_cardio") : t("ex_strength") },
+                          { label:t("stat_intensity"), value:r.exercise!.intensity || "—" },
+                          ...(r.exercise!.cgm_glucose_at_log != null ? [{ label:t("stat_cgm_at_log"), value:`${r.exercise!.cgm_glucose_at_log} mg/dL` }] : []),
                         ]}
                         onViewFull={() => onViewEntry(r.id)}
                       />
@@ -543,10 +553,10 @@ function RecentEntries({
                         ts={r.ts}
                         locale={locale}
                         stats={[
-                          { label:"Dose",    value:`${r.insulin!.units} u`, color:KIND_ACCENT[r.kind].color },
-                          { label:"Insulin", value:r.insulin!.insulin_name || (r.kind === "bolus" ? "rapid-acting" : "long-acting") },
-                          { label:"Kind",    value:r.kind === "bolus" ? "Bolus" : "Basal", color:KIND_ACCENT[r.kind].color },
-                          ...(r.insulin!.cgm_glucose_at_log != null ? [{ label:"CGM at log", value:`${r.insulin!.cgm_glucose_at_log} mg/dL` }] : []),
+                          { label:t("stat_dose"),    value:`${r.insulin!.units} u`, color:KIND_ACCENT[r.kind].color },
+                          { label:t("stat_insulin"), value:r.insulin!.insulin_name || (r.kind === "bolus" ? t("ins_rapid") : t("ins_long")) },
+                          { label:t("stat_kind"),    value:r.kind === "bolus" ? t("ins_bolus") : t("ins_basal"), color:KIND_ACCENT[r.kind].color },
+                          ...(r.insulin!.cgm_glucose_at_log != null ? [{ label:t("stat_cgm_at_log"), value:`${r.insulin!.cgm_glucose_at_log} mg/dL` }] : []),
                         ]}
                         onViewFull={() => onViewEntry(r.id)}
                       />
@@ -589,6 +599,7 @@ function RecentChip({ text, color, mono = false }: { text: string; color: string
 //   All chips share the RecentChip component above so the visual rhythm
 //   stays consistent across kinds.
 function UnifiedRecentRow({ row, locale, onClick }: { row: RecentRow; locale: string; onClick: () => void }) {
+  const t = useTranslations("dashboard");
   const accent = KIND_ACCENT[row.kind];
   const letter =
     row.kind === "meal"     ? "M"
@@ -605,7 +616,7 @@ function UnifiedRecentRow({ row, locale, onClick }: { row: RecentRow; locale: st
 
   if (row.kind === "meal") {
     const m = row.meal!;
-    title = (m.meal_type && TYPE_LABELS[m.meal_type]) || "Meal";
+    title = (m.meal_type && TYPE_LABELS[m.meal_type]) || t("meal_singular");
     const macroBits: string[] = [];
     if (m.carbs_grams   != null) macroBits.push(`${m.carbs_grams}g C`);
     if (m.protein_grams != null) macroBits.push(`${m.protein_grams}g P`);
@@ -615,12 +626,12 @@ function UnifiedRecentRow({ row, locale, onClick }: { row: RecentRow; locale: st
     rightSlot = <RecentChip text={getEvalLabel(m.evaluation)} color={evColor} />;
   } else if (row.kind === "exercise") {
     const x = row.exercise!;
-    title = x.exercise_type === "cardio" ? "Cardio" : "Strength";
+    title = x.exercise_type === "cardio" ? t("ex_cardio") : t("ex_strength");
     subtitle = `${timeStr} · ${x.duration_minutes}m`;
     rightSlot = <RecentChip text={`${x.duration_minutes}m`} color={accent.color} mono />;
   } else {
     const i = row.insulin!;
-    title = i.insulin_name || (row.kind === "bolus" ? "Bolus" : "Basal");
+    title = i.insulin_name || (row.kind === "bolus" ? t("ins_bolus") : t("ins_basal"));
     subtitle = `${timeStr} · ${i.units}u`;
     rightSlot = <RecentChip text={`${i.units}u`} color={accent.color} mono />;
   }
@@ -676,6 +687,7 @@ function NonMealLightExpand({
   stats: Array<{ label: string; value: string; color?: string }>;
   onViewFull: () => void;
 }) {
+  const t = useTranslations("dashboard");
   const date = parseDbDate(ts);
   const fullTimestamp = date.toLocaleString(locale, {
     month: "short", day: "numeric", year: "numeric",
@@ -685,7 +697,7 @@ function NonMealLightExpand({
   return (
     <div style={{ padding:"12px 16px 14px", display:"flex", flexDirection:"column", gap:14 }}>
       <div>
-        <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8, textTransform:"uppercase" }}>Details</div>
+        <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8, textTransform:"uppercase" }}>{t("details")}</div>
         <div style={{ display:"flex", gap:24, flexWrap:"wrap" }}>
           {stats.map(s => (
             <div key={s.label} style={{ display:"flex", flexDirection:"column", minWidth:70, gap:3 }}>
@@ -701,7 +713,7 @@ function NonMealLightExpand({
           onClick={(e) => { e.stopPropagation(); onViewFull(); }}
           style={{ background:"transparent", border:"none", color:ACCENT, fontSize:12, fontWeight:600, cursor:"pointer", padding:"4px 0", letterSpacing:"-0.01em" }}
         >
-          View full entry →
+          {t("view_full_entry")}
         </button>
       </div>
     </div>
@@ -753,6 +765,7 @@ function computeControlScore(meals: Meal[], sinceMs: number, untilMs: number = I
 
 function ControlScoreCard({ meals }: { meals: Meal[] }) {
   const [flipped, setFlipped] = useState(false);
+  const t = useTranslations("dashboard");
   const { score, count, delta, badge } = useMemo(() => {
     const now = Date.now();
     // Calendar-aware 7-day windows: current week starts at midnight 6 days
@@ -763,12 +776,15 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
     const cur  = computeControlScore(meals, wkStart, now);
     const prev = computeControlScore(meals, prevStart, wkStart);
     const delta = prev.count > 0 && cur.count > 0 ? cur.score - prev.score : null;
+    // Badge text is resolved at render via `t()` so language switches without
+    // re-running the memo; we just store a stable key + color here.
     const badge =
-      cur.score >= 80 ? { text: "STRONG", color: GREEN }
-      : cur.score >= 60 ? { text: "GOOD",   color: ACCENT }
-      :                   { text: "POOR",   color: PINK };
+      cur.score >= 80 ? { key: "strong", color: GREEN }
+      : cur.score >= 60 ? { key: "good",   color: ACCENT }
+      :                   { key: "poor",   color: PINK };
     return { score: cur.score, count: cur.count, delta, badge };
   }, [meals]);
+  const badgeText = t(`badge_${badge.key}`);
 
   const hasData = count > 0;
   return (
@@ -782,7 +798,7 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
           {/* Header — title left, badge right (hidden when no data). */}
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
             <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:"rgba(255,255,255,0.6)" }}>
-              Control Score · 7D
+              {t("control_score_label")}
             </div>
             {hasData && (
               <div style={{
@@ -791,7 +807,7 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
                 border:`1px solid ${badge.color}55`, background:`${badge.color}18`,
                 letterSpacing:"0.1em",
               }}>
-                {badge.text}
+                {badgeText}
               </div>
             )}
           </div>
@@ -810,10 +826,10 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
                    :                  "rgba(255,255,255,0.5)",
             }}>
               {!hasData
-                ? "no entries · 7d"
+                ? t("no_entries_7d")
                 : delta == null
-                  ? `${count} entries · 7d`
-                  : `${delta > 0 ? "+" : ""}${delta} vs last wk`}
+                  ? t("entries_7d", { n: count })
+                  : `${delta > 0 ? "+" : ""}${delta} ${t("delta_vs_last_week")}`}
             </span>
           </div>
           {/* Gradient progress bar — accent → green. */}
@@ -832,16 +848,15 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
         <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", transform:"rotateY(180deg)", background:`linear-gradient(145deg, ${ACCENT}12, ${SURFACE} 65%)`, border:`1px solid ${ACCENT}33`, borderRadius:16, padding:"18px 24px 22px", boxSizing:"border-box", display:"flex", flexDirection:"column", gap:10 }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:ACCENT }}>
-              How it&apos;s scored
+              {t("control_score_back_title")}
             </div>
-            <span style={{ fontSize:9, color:"rgba(255,255,255,0.18)" }}>↺ back</span>
+            <span style={{ fontSize:9, color:"rgba(255,255,255,0.18)" }}>{t("flip_back")}</span>
           </div>
           <div style={{ fontSize:11, color:"rgba(255,255,255,0.7)", lineHeight:1.5, fontFamily:"var(--font-mono)" }}>
-            Score = Good% × 0.7 + (100 − Spike% − Hypo%) × 0.3, last 7 days.
+            {t("control_score_formula")}
           </div>
           <div style={{ fontSize:10, color:"rgba(255,255,255,0.45)", lineHeight:1.5 }}>
-            Rewards correctly dosed meals, penalises over- and under-doses.
-            Badges: STRONG ≥ 80 · GOOD ≥ 60 · POOR &lt; 60.
+            {t("control_score_explain")}
           </div>
         </div>
       </div>
@@ -856,6 +871,7 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
 // -----------------------------------------------------------------------------
 function DailyMacrosCard({ meals, targets }: { meals: Meal[]; targets: MacroTargets }) {
   const [expanded, setExpanded] = useState(false);
+  const t = useTranslations("dashboard");
   const today = useMemo(() => {
     const todays = meals.filter(m => isToday(m.meal_time ?? m.created_at ?? ""));
 
@@ -889,10 +905,10 @@ function DailyMacrosCard({ meals, targets }: { meals: Meal[]; targets: MacroTarg
   // `calories` is intentionally not shown here — it surfaces in the
   // expanded view.
   const rings: Array<{ label: string; value: number; target: number; color: string; unit: string }> = [
-    { label: "CARBS",   value: Math.round(today.carbs),   target: targets.carbs,   color: TYPE_COLORS.FAST_CARBS,   unit: "g" },
-    { label: "PROTEIN", value: Math.round(today.protein), target: targets.protein, color: TYPE_COLORS.HIGH_PROTEIN, unit: "g" },
-    { label: "FAT",     value: Math.round(today.fat),     target: targets.fat,     color: TYPE_COLORS.HIGH_FAT,     unit: "g" },
-    { label: "FIBER",   value: Math.round(today.fiber),   target: targets.fiber,   color: TYPE_COLORS.BALANCED,     unit: "g" },
+    { label: t("macro_carbs"),   value: Math.round(today.carbs),   target: targets.carbs,   color: TYPE_COLORS.FAST_CARBS,   unit: "g" },
+    { label: t("macro_protein"), value: Math.round(today.protein), target: targets.protein, color: TYPE_COLORS.HIGH_PROTEIN, unit: "g" },
+    { label: t("macro_fat"),     value: Math.round(today.fat),     target: targets.fat,     color: TYPE_COLORS.HIGH_FAT,     unit: "g" },
+    { label: t("macro_fiber"),   value: Math.round(today.fiber),   target: targets.fiber,   color: TYPE_COLORS.BALANCED,     unit: "g" },
   ];
 
   return (
@@ -916,11 +932,11 @@ function DailyMacrosCard({ meals, targets }: { meals: Meal[]; targets: MacroTarg
         }}
       >
         <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:"rgba(255,255,255,0.6)" }}>
-          Today&apos;s Macros
+          {t("daily_macros")}
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <div style={{ fontSize:11, color:"rgba(255,255,255,0.45)", fontWeight:500, fontFamily:"var(--font-mono)" }}>
-            {today.count} {today.count === 1 ? "meal" : "meals"}
+            {today.count} {today.count === 1 ? t("meal_singular") : t("meal_plural")}
           </div>
           <svg
             width="11" height="11" viewBox="0 0 12 12"
@@ -959,13 +975,13 @@ function DailyMacrosCard({ meals, targets }: { meals: Meal[]; targets: MacroTarg
         }));
         let tip: string;
         if (today.count === 0) {
-          tip = "No meals logged yet today — add your first meal to start tracking.";
+          tip = t("tip_no_meals");
         } else {
           const lowest = pcts.reduce((a, b) => (b.pct < a.pct ? b : a));
           const allOnTrack = pcts.every(p => p.pct >= 0.8);
           tip = allOnTrack
-            ? "All macros tracking close to target today — nice work."
-            : `${lowest.label} is at ${Math.round(lowest.pct * 100)}% of target — consider adding more in your next meal.`;
+            ? t("tip_all_on_track")
+            : t("tip_lowest", { label: lowest.label, pct: Math.round(lowest.pct * 100) });
         }
         return (
           <div
@@ -975,20 +991,20 @@ function DailyMacrosCard({ meals, targets }: { meals: Meal[]; targets: MacroTarg
             {/* 1. Calories — prominent kcal total. */}
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
               <div style={{ fontSize:10, color:"rgba(255,255,255,0.5)", letterSpacing:"0.1em", fontWeight:700, textTransform:"uppercase" }}>
-                Calories
+                {t("calories")}
               </div>
               <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
                 <span style={{ fontSize:28, fontWeight:800, color:ACCENT, letterSpacing:"-0.02em", fontFamily:"var(--font-mono)" }}>
                   {Math.round(today.calories).toLocaleString()}
                 </span>
-                <span style={{ fontSize:12, color:"rgba(255,255,255,0.4)", fontWeight:500 }}>kcal</span>
+                <span style={{ fontSize:12, color:"rgba(255,255,255,0.4)", fontWeight:500 }}>{t("kcal")}</span>
               </div>
             </div>
 
             {/* 2. % of daily target — one bar per macro, color-matched to its ring. */}
             <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
               <div style={{ fontSize:10, color:"rgba(255,255,255,0.45)", letterSpacing:"0.1em", fontWeight:700, textTransform:"uppercase", marginBottom:2 }}>
-                % of Daily Target
+                {t("pct_daily_target")}
               </div>
               {pcts.map(p => (
                 <div key={p.label} style={{ display:"flex", alignItems:"center", gap:10 }}>
@@ -1008,7 +1024,7 @@ function DailyMacrosCard({ meals, targets }: { meals: Meal[]; targets: MacroTarg
             {/* 3. Tip — accent label + dynamic body copy. */}
             <div style={{ background:"rgba(255,255,255,0.025)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 14px" }}>
               <div style={{ fontSize:11, lineHeight:1.55, color:"rgba(255,255,255,0.7)" }}>
-                <span style={{ color:ACCENT, fontWeight:800, letterSpacing:"0.08em", marginRight:8, fontSize:10 }}>TIP</span>
+                <span style={{ color:ACCENT, fontWeight:800, letterSpacing:"0.08em", marginRight:8, fontSize:10 }}>{t("tip_label")}</span>
                 {tip}
               </div>
             </div>

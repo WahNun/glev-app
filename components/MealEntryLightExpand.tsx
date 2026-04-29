@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useTranslations } from "next-intl";
 import { updateMeal, type Meal } from "@/lib/meals";
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
 import { chipForMeal } from "@/lib/engine/chipState";
@@ -12,18 +13,11 @@ const PINK   = "#FF2D78";
 const ORANGE = "#FF9500";
 const BORDER = "rgba(255,255,255,0.08)";
 
-const MEAL_TYPES: Array<{ value: string; label: string }> = [
-  { value: "FAST_CARBS",   label: "Fast Carbs"   },
-  { value: "HIGH_PROTEIN", label: "High Protein" },
-  { value: "HIGH_FAT",     label: "High Fat"     },
-  { value: "BALANCED",     label: "Balanced"     },
-];
-
 export default function MealEntryLightExpand({
   meal,
   locale = "de-DE",
   onViewFull,
-  viewFullLabel = "View full entry →",
+  viewFullLabel,
   onUpdated,
 }: {
   meal: Meal;
@@ -31,9 +25,24 @@ export default function MealEntryLightExpand({
    *  from the call site so the format follows the active UI language. */
   locale?: string;
   onViewFull: () => void;
+  /** Optional override; defaults to the localized "view full entry" string. */
   viewFullLabel?: string;
   onUpdated?: (m: Meal) => void;
 }) {
+  const td = useTranslations("dashboard");
+  const tm = useTranslations("mealEdit");
+
+  // Meal-type select options live in the edit form. Derived inline rather
+  // than module-level so they re-evaluate on locale switch (the cookie
+  // reload already remounts, but this stays correct under any future
+  // hot-swap mechanism too).
+  const MEAL_TYPES: Array<{ value: string; label: string }> = [
+    { value: "FAST_CARBS",   label: tm("type_fast_carbs")   },
+    { value: "HIGH_PROTEIN", label: tm("type_high_protein") },
+    { value: "HIGH_FAT",     label: tm("type_high_fat")     },
+    { value: "BALANCED",     label: tm("type_balanced")     },
+  ];
+
   const protein = meal.protein_grams
     ?? (Array.isArray(meal.parsed_json) ? meal.parsed_json.reduce((s, f) => s + (f.protein || 0), 0) : 0);
   const fat = meal.fat_grams
@@ -129,16 +138,21 @@ export default function MealEntryLightExpand({
 
     const cNum = parseNum(eCarbs,    false);
     const iNum = parseNum(eInsulin,  false);
-    if (cNum == null || cNum <= 0) { setErr("Carbs müssen > 0 sein."); return; }
+    if (cNum == null || cNum <= 0) { setErr(tm("err_carbs_required")); return; }
     // Insulin: 0 erlaubt, leer NICHT erlaubt (T1 spec)
-    if (iNum == null || iNum < 0)  { setErr("Insulindosis fehlt (0 ist erlaubt)."); return; }
+    if (iNum == null || iNum < 0)  { setErr(tm("err_insulin_required")); return; }
 
     const bgBefore = parseNum(eBgBefore, true);
     const bg1h     = parseNum(eBg1h,     true);
     const bg2h     = parseNum(eBg2h,     true);
-    for (const [name, v] of [["BG Before", bgBefore], ["BG 1h", bg1h], ["BG 2h", bg2h]] as const) {
+    const bgFields: Array<[string, number | null | undefined]> = [
+      [tm("field_bg_before"), bgBefore],
+      [tm("field_bg_1h"),     bg1h],
+      [tm("field_bg_2h"),     bg2h],
+    ];
+    for (const [name, v] of bgFields) {
       if (v != null && (v < 30 || v > 600)) {
-        setErr(`${name} muss zwischen 30 und 600 mg/dL liegen.`);
+        setErr(tm("err_bg_range", { field: name }));
         return;
       }
     }
@@ -162,7 +176,7 @@ export default function MealEntryLightExpand({
       // Auto-clear the flash after 2s so the row settles back to its normal look.
       setTimeout(() => setSavedFlash(false), 2000);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Speichern fehlgeschlagen.");
+      setErr(e instanceof Error ? e.message : tm("err_save_failed"));
     } finally {
       setBusy(false);
     }
@@ -174,7 +188,7 @@ export default function MealEntryLightExpand({
         <circle cx="12" cy="12" r="10"/>
         <polyline points="12 6 12 12 16 14"/>
       </svg>
-      Pending
+      {td("pending")}
     </span>
   );
 
@@ -227,19 +241,19 @@ export default function MealEntryLightExpand({
     return (
       <div style={{ padding: "12px 16px 14px", display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ fontSize: 9, color: "rgba(255,255,255,0.5)", letterSpacing: "0.1em", fontWeight: 700, textTransform: "uppercase" }}>
-          Eintrag bearbeiten
+          {tm("title")}
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: 12 }}>
-          <Field label="Carbs (g)">    <input type="number" inputMode="decimal" min={0} step="any" value={eCarbs}    onChange={e => setECarbs(e.target.value)}    style={inp} /></Field>
-          <Field label="Protein (g)">  <input type="number" inputMode="decimal" min={0} step="any" value={eProtein}  onChange={e => setEProtein(e.target.value)}  style={inp} /></Field>
-          <Field label="Fat (g)">      <input type="number" inputMode="decimal" min={0} step="any" value={eFat}      onChange={e => setEFat(e.target.value)}      style={inp} /></Field>
-          <Field label="Fiber (g)">    <input type="number" inputMode="decimal" min={0} step="any" value={eFiber}    onChange={e => setEFiber(e.target.value)}    style={inp} /></Field>
-          <Field label="Insulin (u)">  <input type="number" inputMode="decimal" min={0} step="any" value={eInsulin}  onChange={e => setEInsulin(e.target.value)}  style={inp} /></Field>
-          <Field label="BG Before">    <input type="number" inputMode="decimal" min={0} step="any" value={eBgBefore} onChange={e => setEBgBefore(e.target.value)} style={inp} /></Field>
-          <Field label="BG 1h">        <input type="number" inputMode="decimal" min={0} step="any" value={eBg1h}     onChange={e => setEBg1h(e.target.value)}     style={inp} /></Field>
-          <Field label="BG 2h">        <input type="number" inputMode="decimal" min={0} step="any" value={eBg2h}     onChange={e => setEBg2h(e.target.value)}     style={inp} /></Field>
-          <Field label="Meal Type">
+          <Field label={tm("field_carbs")}>     <input type="number" inputMode="decimal" min={0} step="any" value={eCarbs}    onChange={e => setECarbs(e.target.value)}    style={inp} /></Field>
+          <Field label={tm("field_protein")}>   <input type="number" inputMode="decimal" min={0} step="any" value={eProtein}  onChange={e => setEProtein(e.target.value)}  style={inp} /></Field>
+          <Field label={tm("field_fat")}>       <input type="number" inputMode="decimal" min={0} step="any" value={eFat}      onChange={e => setEFat(e.target.value)}      style={inp} /></Field>
+          <Field label={tm("field_fiber")}>     <input type="number" inputMode="decimal" min={0} step="any" value={eFiber}    onChange={e => setEFiber(e.target.value)}    style={inp} /></Field>
+          <Field label={tm("field_insulin")}>   <input type="number" inputMode="decimal" min={0} step="any" value={eInsulin}  onChange={e => setEInsulin(e.target.value)}  style={inp} /></Field>
+          <Field label={tm("field_bg_before")}> <input type="number" inputMode="decimal" min={0} step="any" value={eBgBefore} onChange={e => setEBgBefore(e.target.value)} style={inp} /></Field>
+          <Field label={tm("field_bg_1h")}>     <input type="number" inputMode="decimal" min={0} step="any" value={eBg1h}     onChange={e => setEBg1h(e.target.value)}     style={inp} /></Field>
+          <Field label={tm("field_bg_2h")}>     <input type="number" inputMode="decimal" min={0} step="any" value={eBg2h}     onChange={e => setEBg2h(e.target.value)}     style={inp} /></Field>
+          <Field label={tm("field_meal_type")}>
             <select value={eType} onChange={e => setEType(e.target.value)} style={inp}>
               {MEAL_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
@@ -252,9 +266,9 @@ export default function MealEntryLightExpand({
           </div>
         )}
 
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 8, borderTop: `1px solid ${BORDER}` }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 8, borderTop: `1px solid ${BORDER}`, gap: 12, flexWrap: "wrap" }}>
           <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>
-            meal_type & Outcome werden nach Speichern automatisch neu berechnet.
+            {tm("footer_note")}
           </span>
           <div style={{ display: "flex", gap: 8 }}>
             <button
@@ -262,14 +276,14 @@ export default function MealEntryLightExpand({
               disabled={busy}
               style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 8, color: "rgba(255,255,255,0.7)", fontSize: 12, fontWeight: 600, padding: "8px 14px", cursor: busy ? "default" : "pointer" }}
             >
-              Abbrechen
+              {tm("cancel")}
             </button>
             <button
               onClick={saveEdit}
               disabled={busy}
               style={{ background: ACCENT, border: "none", borderRadius: 8, color: "#fff", fontSize: 12, fontWeight: 700, padding: "8px 16px", cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1 }}
             >
-              {busy ? "Speichern…" : "Speichern"}
+              {busy ? tm("saving") : tm("save")}
             </button>
           </div>
         </div>
@@ -283,7 +297,7 @@ export default function MealEntryLightExpand({
       {/* OUTCOME CHIP — drives off lifecycle state, not stored evaluation alone. */}
       <div style={{ background:`${chip.color}10`, border:`1px solid ${chip.color}30`, borderRadius:10, padding:"10px 12px", display:"flex", flexDirection:"column", gap:6 }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
-          <span style={{ fontSize:9, color:"rgba(255,255,255,0.5)", letterSpacing:"0.1em", fontWeight:700 }}>OUTCOME</span>
+          <span style={{ fontSize:9, color:"rgba(255,255,255,0.5)", letterSpacing:"0.1em", fontWeight:700 }}>{td("outcome")}</span>
           <span style={{ padding:"4px 10px", borderRadius:99, fontSize:10, fontWeight:700, background:chip.color, color:"#0A0A0F", letterSpacing:"0.04em", textTransform:"uppercase" }}>
             {chip.label}
           </span>
@@ -296,27 +310,27 @@ export default function MealEntryLightExpand({
 
       {/* GLUCOSE */}
       <div>
-        <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8, textTransform:"uppercase" }}>Glucose</div>
+        <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8, textTransform:"uppercase" }}>{td("glucose_section")}</div>
         <div style={{ display:"flex", gap:24, flexWrap:"wrap" }}>
-          <Stat label="BG Before" value={before != null ? `${before} mg/dL` : "—"} color={beforeColor}/>
-          <Stat label="BG After"  value={afterValue} color={after != null ? afterColor : undefined}/>
-          <Stat label="Delta"     value={delta != null ? `${delta > 0 ? "+" : ""}${delta} mg/dL` : "—"} color={deltaColor}/>
+          <Stat label={td("bg_before")} value={before != null ? `${before} mg/dL` : "—"} color={beforeColor}/>
+          <Stat label={td("bg_after")}  value={afterValue} color={after != null ? afterColor : undefined}/>
+          <Stat label={td("delta")}     value={delta != null ? `${delta > 0 ? "+" : ""}${delta} mg/dL` : "—"} color={deltaColor}/>
         </div>
       </div>
 
       {/* KEY DETAILS */}
       <div>
-        <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8, textTransform:"uppercase" }}>Key Details</div>
+        <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8, textTransform:"uppercase" }}>{td("key_details")}</div>
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
           {meal.input_text && (
             <div style={{ fontSize:13, color:"rgba(255,255,255,0.75)", lineHeight:1.5 }}>{meal.input_text}</div>
           )}
           <div style={{ display:"flex", gap:18, flexWrap:"wrap" }}>
-            <Stat label="Carbs"   value={`${carbs}g`}   color={ORANGE}/>
-            <Stat label="Protein" value={`${protein}g`} color="#3B82F6"/>
-            <Stat label="Fat"     value={`${fat}g`}     color="#A855F7"/>
+            <Stat label={td("carbs")}   value={`${carbs}g`}   color={ORANGE}/>
+            <Stat label={td("protein")} value={`${protein}g`} color="#3B82F6"/>
+            <Stat label={td("fat")}     value={`${fat}g`}     color="#A855F7"/>
             {meal.insulin_units != null && (
-              <Stat label="Insulin" value={`${meal.insulin_units}u`} color={ACCENT}/>
+              <Stat label={td("insulin")} value={`${meal.insulin_units}u`} color={ACCENT}/>
             )}
           </div>
           {catLabel && catColor && (
@@ -332,7 +346,7 @@ export default function MealEntryLightExpand({
         <span style={{ fontSize:11, color:"rgba(255,255,255,0.45)", fontFamily:"var(--font-mono)" }}>
           {fullTimestamp}
           {savedFlash && (
-            <span style={{ marginLeft: 12, color: GREEN, fontWeight: 700 }}>Gespeichert ✓</span>
+            <span style={{ marginLeft: 12, color: GREEN, fontWeight: 700 }}>{td("saved_flash")}</span>
           )}
         </span>
         <div style={{ display:"flex", gap:14, alignItems:"center" }}>
@@ -341,14 +355,14 @@ export default function MealEntryLightExpand({
               onClick={(e) => { e.stopPropagation(); startEdit(); }}
               style={{ background:"transparent", border:`1px solid ${BORDER}`, borderRadius:8, color:"rgba(255,255,255,0.75)", fontSize:12, fontWeight:600, cursor:"pointer", padding:"6px 12px", letterSpacing:"-0.01em" }}
             >
-              Bearbeiten
+              {td("edit")}
             </button>
           )}
           <button
             onClick={(e) => { e.stopPropagation(); onViewFull(); }}
             style={{ background:"transparent", border:"none", color:ACCENT, fontSize:12, fontWeight:600, cursor:"pointer", padding:"4px 0", letterSpacing:"-0.01em" }}
           >
-            {viewFullLabel}
+            {viewFullLabel ?? td("view_full_entry")}
           </button>
         </div>
       </div>
