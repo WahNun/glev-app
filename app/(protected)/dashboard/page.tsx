@@ -1057,10 +1057,24 @@ function MacroRing({
   const pct = target > 0 ? Math.min(1, value / target) : 0;
 
   return (
-    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:6, width:"100%", maxWidth:96 }}>
-      <svg width="100%" height="auto" viewBox="0 0 80 80" style={{ display:"block" }}>
-        {/* Faint background track */}
-        <circle cx="40" cy="40" r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="8" />
+    <div style={{
+      display:"flex", flexDirection:"column", alignItems:"center", gap:6,
+      // CRITICAL: width:"100%" + aspectRatio:"1" guarantees identical
+      // outer-circle diameter for all 4 rings regardless of macro
+      // value. Without aspectRatio the cell height could vary with
+      // the value text length below the SVG (e.g. "128" vs "17"),
+      // visually shrinking some rings — the bug screenshot from the
+      // user showed exactly that asymmetry.
+      width:"100%", maxWidth:96,
+    }}>
+      <div style={{ width:"100%", aspectRatio:"1" }}>
+        <svg width="100%" height="100%" viewBox="0 0 80 80" style={{ display:"block" }}>
+        {/* Background track — bumped from 0.06 → 0.14 so the FULL outer
+            circle stays clearly visible even when the colored arc covers
+            only a small fraction (e.g. PROTEIN at 24%). Previously the
+            faint track effectively disappeared, making low-fill rings
+            look smaller than full-fill rings. */}
+        <circle cx="40" cy="40" r={r} fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth="8" />
         {/* Progress arc — rotate -90deg so 0% sits at 12 o'clock and the arc
             grows clockwise; rounded cap so the leading edge looks polished. */}
         <circle
@@ -1078,7 +1092,8 @@ function MacroRing({
         >
           {value}
         </text>
-      </svg>
+        </svg>
+      </div>
       <div style={{ fontSize:10, color:"rgba(255,255,255,0.55)", textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700 }}>
         {label}
       </div>

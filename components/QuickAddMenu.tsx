@@ -15,43 +15,52 @@ type Item = {
   icon: React.ReactNode;
 };
 
+const MEAL = (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 8h1a4 4 0 0 1 0 8h-1" />
+    <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z" />
+    <line x1="6" y1="1" x2="6" y2="4" />
+    <line x1="10" y1="1" x2="10" y2="4" />
+    <line x1="14" y1="1" x2="14" y2="4" />
+  </svg>
+);
+
 const DROPLET = (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 2.5s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z" />
   </svg>
 );
 
-const SYRINGE = (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M18 2l4 4" />
-    <path d="M16 4l4 4" />
-    <path d="M19 7l-9 9" />
-    <path d="M11 15l-2 2-3 3-3-3 3-3 2-2" />
-    <path d="M14 10l3 3" />
-  </svg>
-);
-
 const RUN = (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="13" cy="4" r="2" />
-    <path d="M4 22l4-9 5 3v6" />
-    <path d="M13 13l-2-4-3 1-2 5" />
-    <path d="M15 8l3 1 2 4" />
+    <polyline points="13 2 13 9 19 9" />
+    <polyline points="11 22 11 15 5 15" />
+    <path d="M21 13a9 9 0 0 1-15 6.7" />
+    <path d="M3 11a9 9 0 0 1 15-6.7" />
   </svg>
 );
 
+// The dropdown now mirrors the three options that used to live in the
+// bottom-of-screen Glev action sheet (which was deleted with the same
+// change that made the bottom-nav Glev tap route directly to the meal
+// voice screen). Keeping all three reachable from the header keeps a
+// single global affordance for "log something" — Mahlzeit appears
+// here AND under the Glev tab on purpose, so power users can reach
+// the meal flow from any screen via the always-visible header "+"
+// without first jumping to Glev.
 const ITEMS: Item[] = [
-  { label: "Glukose messen", href: "/engine?tab=fingerstick", icon: DROPLET },
-  { label: "Insulin loggen", href: "/engine?tab=bolus",       icon: SYRINGE },
-  { label: "Sport loggen",   href: "/engine?tab=exercise",    icon: RUN },
+  { label: "Mahlzeit loggen",  href: "/engine?tab=log",         icon: MEAL    },
+  { label: "Glukose messen",   href: "/engine?tab=fingerstick", icon: DROPLET },
+  { label: "Aktivität loggen", href: "/engine?tab=exercise",    icon: RUN     },
 ];
 
 /**
- * Compact "+" header button that pops a small dropdown of secondary
- * logging shortcuts (Glukose / Insulin / Sport). Replaces the old
- * full-width slide-up GlevActionSheet for those three options. The
- * primary "Mahlzeit loggen" lives directly on the bottom-nav Glev
- * tap, so this menu is intentionally lightweight.
+ * Compact "+" header button that pops a small dropdown of the three
+ * primary logging shortcuts (Mahlzeit / Glukose / Aktivität). This is
+ * the only home for the Glukose + Aktivität flows on mobile now that
+ * the Glev bottom-nav tap routes straight to the meal voice screen
+ * — see Layout.tsx for the matching tap handler. Mahlzeit also lives
+ * here so the header "+" stays a complete, self-sufficient menu.
  */
 export default function QuickAddMenu() {
   const router = useRouter();
