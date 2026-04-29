@@ -34,7 +34,7 @@ const MAILTO_WAITLIST =
 function BetaCTALink({ isFull }: { isFull: boolean }) {
   const [hover, setHover] = useState(false);
   const href = isFull ? MAILTO_WAITLIST : STRIPE_PAYMENT_LINK;
-  const label = isFull ? "Auf die Warteliste" : "Frühzugang sichern";
+  const label = isFull ? "Auf die Warteliste" : "Frühzugang sichern — €19";
   return (
     <a
       href={href}
@@ -221,7 +221,7 @@ function BetaContent() {
                   marginTop: 4,
                 }}
               >
-                Noch 23 Plätze frei
+                Noch {remaining} {remaining === 1 ? "Platz" : "Plätze"} frei
               </div>
             )}
           </div>

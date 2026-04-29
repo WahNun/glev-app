@@ -170,7 +170,7 @@ function ProContent() {
               }}
             >
               <span aria-hidden>↺</span>
-              <span>Erste Abbuchung am {LAUNCH_DATE_LABEL} · jederzeit kündbar</span>
+              <span>€19 Reservierung · wird aufs erste Abo angerechnet · jederzeit erstattbar</span>
             </div>
           </div>
 
