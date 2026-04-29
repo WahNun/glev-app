@@ -68,19 +68,33 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             queue (`fbq.queue`) catches any track() calls made before
             the script finishes loading, so the per-page Lead /
             ViewProPage events on /beta and /pro are safe even on the
-            first navigation after a cold load. */}
-        <Script id="meta-pixel" strategy="afterInteractive">{`
-          !function(f,b,e,v,n,t,s)
-          {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-          n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-          if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-          n.queue=[];t=b.createElement(e);t.async=!0;
-          t.src=v;s=b.getElementsByTagName(e)[0];
-          s.parentNode.insertBefore(t,s)}(window, document,'script',
-          'https://connect.facebook.net/en_US/fbevents.js');
-          fbq('init', '${META_PIXEL_ID}');
-          fbq('track', 'PageView');
-        `}</Script>
+            first navigation after a cold load.
+
+            Uses `dangerouslySetInnerHTML` rather than JSX children
+            because the App Router build pipeline can mangle inline
+            <Script> children during minification (children become a
+            string-concat `props.children` chain, the IIFE then breaks
+            on the closing brace and `window.fbq` ends up undefined in
+            production). `dangerouslySetInnerHTML` ships the script
+            body verbatim. */}
+        <Script
+          id="meta-pixel"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              !function(f,b,e,v,n,t,s)
+              {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+              n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+              if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+              n.queue=[];t=b.createElement(e);t.async=!0;
+              t.src=v;s=b.getElementsByTagName(e)[0];
+              s.parentNode.insertBefore(t,s)}(window, document,'script',
+              'https://connect.facebook.net/en_US/fbevents.js');
+              fbq('init', '${META_PIXEL_ID}');
+              fbq('track', 'PageView');
+            `,
+          }}
+        />
         <noscript>
           <img
             height="1"
