@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { signOut } from "@/lib/auth";
 import GlevLockup from "@/components/GlevLockup";
@@ -9,6 +9,7 @@ import GlevLogo from "@/components/GlevLogo";
 import AboutGlevModal from "@/components/AboutGlevModal";
 import QuickAddMenu from "@/components/QuickAddMenu";
 import { EngineHeaderProvider, useEngineHeader } from "@/lib/engineHeaderContext";
+import { HistoryHeaderProvider, useHistoryHeader, type HistoryTab } from "@/lib/historyHeaderContext";
 
 const ACCENT  = "#4F6EF7";
 const GREEN   = "#22D3A0";
@@ -60,12 +61,16 @@ const NAV: NavItem[] = [
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-  // Wrap the actual layout body in the EngineHeaderProvider so the
-  // mobile global header (rendered inside LayoutInner) and the engine
-  // page (rendered as `children`) share a single tabs-expanded state.
+  // Wrap the actual layout body in BOTH page-header providers so the
+  // mobile global header (rendered inside LayoutInner) and each page
+  // (rendered as `children`) share state for their respective header
+  // controls. EngineHeaderProvider drives the engine tabs chip;
+  // HistoryHeaderProvider drives the Insights/Einträge dropdown.
   return (
     <EngineHeaderProvider>
-      <LayoutInner>{children}</LayoutInner>
+      <HistoryHeaderProvider>
+        <LayoutInner>{children}</LayoutInner>
+      </HistoryHeaderProvider>
     </EngineHeaderProvider>
   );
 }
@@ -82,7 +87,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // (QuickAddMenu) so the bottom-nav tap stays a single decisive
   // gesture. The old `glevSheetOpen` state + bottom action sheet
   // were removed in this same change.
-  const engineHdr = useEngineHeader();
+  const engineHdr  = useEngineHeader();
+  const historyHdr = useHistoryHeader();
 
   useEffect(() => {
     fetch("/api/debug/state").then(r => r.json()).then(d => console.log("[DEBUG:STATE]", d)).catch(() => {});
@@ -98,6 +104,17 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       engineHdr.setTabsExpanded(false);
     }
   }, [pathname, engineHdr]);
+
+  // Same defensive reset for the history-header dropdown — when the
+  // user leaves /history (or /insights / /entries which the history
+  // page composes internally), the small "Insights ▾ / Einträge ▾"
+  // chip must disappear from the global header even if the page's
+  // own unmount handler hasn't fired yet.
+  useEffect(() => {
+    if (!pathname.startsWith("/history")) {
+      historyHdr.setVisible(false);
+    }
+  }, [pathname, historyHdr]);
 
   async function handleSignOut() {
     await signOut();
@@ -184,6 +201,14 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
                 <polyline points="6 9 12 15 18 9"/>
               </svg>
             </button>
+          )}
+          {/* History-page sub-tab dropdown. Only rendered while the
+              user is on /history; the page registers itself via
+              HistoryHeaderProvider on mount. Replaces the old in-body
+              "Insights / Einträge" pill so /history opens straight to
+              the cards without a row of vertical chrome at the top. */}
+          {historyHdr.visible && (
+            <HistoryHeaderChip tab={historyHdr.tab} setTab={historyHdr.setTab} />
           )}
           <div style={{ fontSize: 11, padding: "5px 12px", borderRadius: 99, background: `${GREEN}18`, color: GREEN, fontWeight: 600 }}>Live</div>
           {/* QuickAddMenu — the three primary logging shortcuts
@@ -384,5 +409,123 @@ function MobileTab({
         overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%",
       }}>{label}</span>
     </button>
+  );
+}
+
+/**
+ * Compact "Insights ▾ / Einträge ▾" chip rendered in the global
+ * mobile header while the user is on /history. Mirrors the visual
+ * shape of the engine tabs chip (same height, padding, fontSize)
+ * so the two coexist cleanly when /engine is unrelated. Tapping
+ * opens a small popover with the two tabs; selecting one writes
+ * back into the shared HistoryHeaderContext, which the /history
+ * page reads to swap its body between Insights and Einträge.
+ */
+function HistoryHeaderChip({
+  tab, setTab,
+}: {
+  tab: HistoryTab;
+  setTab: (t: HistoryTab) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Close on outside pointerdown / Escape — matches QuickAddMenu so
+  // the two header popovers feel identical to muscle memory.
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(e: PointerEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") setOpen(false); }
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const labelFor = (t: HistoryTab) => (t === "insights" ? "Insights" : "Einträge");
+
+  return (
+    <div ref={wrapperRef} style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        aria-label={open ? "Verlauf-Tabs schließen" : "Verlauf-Tabs öffnen"}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 6,
+          padding: "5px 10px", height: 28, borderRadius: 99,
+          background: open ? `${ACCENT}22` : "rgba(255,255,255,0.05)",
+          border: `1px solid ${open ? ACCENT : "rgba(255,255,255,0.1)"}`,
+          color: open ? ACCENT : "rgba(255,255,255,0.7)",
+          fontSize: 11, fontWeight: 700, letterSpacing: "-0.01em",
+          cursor: "pointer", transition: "all 0.15s",
+        }}
+      >
+        <span>{labelFor(tab)}</span>
+        <svg
+          width="12" height="12" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+          aria-hidden="true"
+          style={{ transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "rotate(0deg)" }}
+        >
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          style={{
+            position: "absolute", top: "calc(100% + 8px)", right: 0,
+            width: 180,
+            background: "#1A1A24",
+            border: `1px solid rgba(255,255,255,0.08)`,
+            borderRadius: 14,
+            boxShadow: "0 12px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04)",
+            padding: 6,
+            zIndex: 60,
+          }}
+        >
+          {(["insights", "entries"] as const).map(t => {
+            const isActive = tab === t;
+            return (
+              <button
+                key={t}
+                type="button"
+                role="menuitemradio"
+                aria-checked={isActive}
+                onClick={() => { setTab(t); setOpen(false); }}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  width: "100%", padding: "10px 12px",
+                  background: isActive ? `${ACCENT}22` : "transparent",
+                  border: "none",
+                  color: isActive ? "#fff" : "rgba(255,255,255,0.85)",
+                  fontSize: 13.5, fontWeight: isActive ? 700 : 500,
+                  cursor: "pointer", textAlign: "left",
+                  borderRadius: 10,
+                }}
+              >
+                <span>{labelFor(t)}</span>
+                {isActive && (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                    stroke={ACCENT} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+                    aria-hidden="true">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
