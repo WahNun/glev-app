@@ -235,39 +235,82 @@ function TrendChart({ meals }: { meals: Meal[] }) {
 }
 
 function OutcomeChart({ meals }: { meals: Meal[] }) {
-  const groups: Record<string, { color:string; label:string; count:number }> = {
-    GOOD:     { color:GREEN,  label:"Good",       count:0 },
-    LOW:      { color:ORANGE, label:"Under Dose",  count:0 },
-    HIGH:     { color:PINK,   label:"Over Dose",   count:0 },
-    SPIKE:    { color:"#FF9F0A", label:"Spike",    count:0 },
-  };
+  const [flipped, setFlipped] = useState(false);
+  const groups: Array<{ key:string; color:string; label:string; description:string; count:number }> = [
+    { key:"GOOD",  color:GREEN,     label:"Good",       description:"Glukose nach 1 h innerhalb +30 mg/dL des Pre-Werts. Das Ziel.", count:0 },
+    { key:"LOW",   color:ORANGE,    label:"Under Dose", description:"Glukose blieb deutlich erhöht — mehr Insulin oder früher spritzen.", count:0 },
+    { key:"HIGH",  color:PINK,      label:"Over Dose",  description:"Glukose fiel unter den Pre-Wert — weniger Insulin oder später spritzen.", count:0 },
+    { key:"SPIKE", color:"#FF9F0A", label:"Spike",      description:"Kurzanstieg über die Schwelle — Pre-Bolus früher setzen.", count:0 },
+  ];
+  const idx = Object.fromEntries(groups.map((g, i) => [g.key, i])) as Record<string, number>;
   meals.forEach(m => {
     const ev = m.evaluation || "";
-    if (ev === "OVERDOSE" || ev === "HIGH") groups.HIGH.count++;
-    else if (ev === "UNDERDOSE" || ev === "LOW") groups.LOW.count++;
-    else if (ev === "SPIKE") groups.SPIKE.count++;
-    else if (ev === "GOOD") groups.GOOD.count++;
+    if (ev === "OVERDOSE" || ev === "HIGH") groups[idx.HIGH].count++;
+    else if (ev === "UNDERDOSE" || ev === "LOW") groups[idx.LOW].count++;
+    else if (ev === "SPIKE") groups[idx.SPIKE].count++;
+    else if (ev === "GOOD") groups[idx.GOOD].count++;
   });
   const total = meals.length || 1;
   return (
-    <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"20px 24px" }}>
-      <div style={{ fontSize:13, fontWeight:600, marginBottom:4 }}>Outcome Distribution</div>
-      <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginBottom:18 }}>All-time breakdown</div>
-      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-        {Object.values(groups).map(g => {
-          const pct = Math.round((g.count/total)*100);
-          return (
-            <div key={g.label}>
-              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-                <span style={{ fontSize:12, color:"rgba(255,255,255,0.5)" }}>{g.label}</span>
-                <span style={{ fontSize:12, fontWeight:600, color:g.color }}>{g.count} <span style={{ color:"rgba(255,255,255,0.3)", fontWeight:400 }}>({pct}%)</span></span>
-              </div>
-              <div style={{ height:6, borderRadius:99, background:"rgba(255,255,255,0.06)", overflow:"hidden" }}>
-                <div style={{ height:"100%", width:`${pct}%`, background:g.color, borderRadius:99, transition:"width 0.8s ease" }}/>
-              </div>
+    <div
+      onClick={() => setFlipped(f => !f)}
+      className="glev-outcome-card"
+      style={{ position:"relative", perspective:1200, cursor:"pointer" }}
+    >
+      <style>{`
+        .glev-outcome-card { height: 280px; }
+        @media (max-width: 768px) {
+          .glev-outcome-card { height: 300px; }
+        }
+      `}</style>
+      <div style={{ position:"absolute", inset:0, transformStyle:"preserve-3d", transition:"transform 0.55s cubic-bezier(0.4,0,0.2,1)", transform:flipped ? "rotateY(180deg)" : "rotateY(0deg)" }}>
+        {/* FRONT */}
+        <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"20px 24px", boxSizing:"border-box", display:"flex", flexDirection:"column", overflow:"hidden" }}>
+          <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between" }}>
+            <div>
+              <div style={{ fontSize:13, fontWeight:600, marginBottom:4 }}>Outcome Distribution</div>
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>All-time breakdown</div>
             </div>
-          );
-        })}
+            <span style={{ fontSize:9, color:"rgba(255,255,255,0.18)" }}>↺</span>
+          </div>
+          <div style={{ flex:1, display:"flex", flexDirection:"column", justifyContent:"center", gap:14 }}>
+            {groups.map(g => {
+              const pct = Math.round((g.count/total)*100);
+              return (
+                <div key={g.label}>
+                  <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                    <span style={{ fontSize:12, color:"rgba(255,255,255,0.5)" }}>{g.label}</span>
+                    <span style={{ fontSize:12, fontWeight:600, color:g.color }}>{g.count} <span style={{ color:"rgba(255,255,255,0.3)", fontWeight:400 }}>({pct}%)</span></span>
+                  </div>
+                  <div style={{ height:6, borderRadius:99, background:"rgba(255,255,255,0.06)", overflow:"hidden" }}>
+                    <div style={{ height:"100%", width:`${pct}%`, background:g.color, borderRadius:99, transition:"width 0.8s ease" }}/>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        {/* BACK */}
+        <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", transform:"rotateY(180deg)", background:`linear-gradient(145deg, ${ACCENT}10, ${SURFACE} 65%)`, border:`1px solid ${ACCENT}33`, borderRadius:16, padding:"20px 24px", boxSizing:"border-box", display:"flex", flexDirection:"column", gap:12, overflow:"hidden" }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <div style={{ fontSize:11, color:ACCENT, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>Was die Werte bedeuten</div>
+            <span style={{ fontSize:9, color:"rgba(255,255,255,0.2)" }}>↺ back</span>
+          </div>
+          <div style={{ flex:1, display:"flex", flexDirection:"column", gap:10, justifyContent:"center" }}>
+            {groups.map(g => (
+              <div key={g.key} style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
+                <span style={{ width:8, height:8, borderRadius:99, background:g.color, flexShrink:0, marginTop:5 }}/>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:g.color, lineHeight:1.2, marginBottom:2 }}>{g.label}</div>
+                  <div style={{ fontSize:10.5, color:"rgba(255,255,255,0.55)", lineHeight:1.4 }}>{g.description}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize:9.5, color:"rgba(255,255,255,0.32)", lineHeight:1.4, paddingTop:8, borderTop:`1px solid ${BORDER}` }}>
+            Basis: CGM-Werte 60–90 min nach der Mahlzeit.
+          </div>
+        </div>
       </div>
     </div>
   );
