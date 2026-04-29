@@ -75,6 +75,14 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   const router   = useRouter();
   const tNav = useTranslations("nav");
   const [aboutOpen, setAboutOpen] = useState(false);
+  // Mobile bottom-nav: tapping the Glev slot opens this action sheet
+  // instead of routing. The sheet offers the three primary "log this
+  // event" entry points (meal / glucose fingerstick / activity) and
+  // dispatches each to /engine?tab=… so the engine page slot machine
+  // takes over with the right tab pre-selected (engine accepts the
+  // values "log" | "fingerstick" | "exercise" — see engine/page.tsx
+  // searchParams effect). Tapping the dimmed overlay closes it.
+  const [glevSheetOpen, setGlevSheetOpen] = useState(false);
   const engineHdr = useEngineHeader();
 
   useEffect(() => {
@@ -283,21 +291,22 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             </svg>
           )}
         />
-        {/* Glev tab — primary entry point. Tap navigates to /engine (the
-            multi-tab Engine view with header-dropdown toggle), matching
-            the desktop sidebar behavior. The old /log "Mahlzeit loggen"
-            screen is no longer the Glev landing — Engine is. The
-            secondary logging shortcuts (Glukose / Insulin / Sport) live
-            in the header "+" QuickAddMenu. Active state highlights when
-            the user is anywhere under /engine. */}
+        {/* Glev tab — equal-weight 4th-of-4 slot. Tapping no longer
+            navigates: it opens the bottom action sheet (rendered below
+            the nav as a fixed overlay) so the user picks which "log
+            something" flow they want. Visual rules per spec:
+              - no background bubble / circle / FAB elevation
+              - same icon size + stroke as the other 3 tabs
+              - active = ONLY icon+label colour change to ACCENT
+            Active fires both while the sheet is open and while the
+            user is anywhere under /engine, so the highlight reflects
+            the conceptual "I'm in the Glev flow" state. */}
         <MobileTab
           label={tNav("glev")}
-          active={pathname.startsWith("/engine")}
-          onClick={() => router.push("/engine")}
+          active={glevSheetOpen || pathname.startsWith("/engine")}
+          onClick={() => setGlevSheetOpen(true)}
           icon={(a) => (
-            <span style={{ display: "inline-flex", filter: a ? `drop-shadow(0 0 8px ${ACCENT}aa)` : undefined, transition: "filter 0.2s" }}>
-              <GlevLogo size={22} color={a ? ACCENT : NAV_INACTIVE} bg="transparent"/>
-            </span>
+            <GlevLogo size={22} color={a ? ACCENT : NAV_INACTIVE} bg="transparent"/>
           )}
         />
         <MobileTab
@@ -326,7 +335,136 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 
       </nav>
 
+      {/* ───────── Glev bottom action sheet ─────────
+          Mobile-only overlay that appears when the user taps the Glev
+          slot in the bottom nav. Three slim buttons route to /engine
+          with the matching ?tab= so the engine page opens directly on
+          the chosen sub-flow. Tapping the dimmed overlay or any of
+          the three buttons closes the sheet. The whole thing is
+          gated by `display:none` on screens > 768px so the desktop
+          sidebar (which navigates Glev directly to /engine) is
+          unaffected. */}
+      {glevSheetOpen && (
+        <div
+          className="glev-mobile-nav"
+          aria-hidden={!glevSheetOpen}
+          style={{
+            position: "fixed", inset: 0, zIndex: 200,
+            display: "flex", flexDirection: "column", justifyContent: "flex-end",
+          }}
+          onClick={() => setGlevSheetOpen(false)}
+        >
+          <div
+            style={{
+              position: "absolute", inset: 0,
+              background: "rgba(0,0,0,0.55)",
+              backdropFilter: "blur(2px)",
+              WebkitBackdropFilter: "blur(2px)",
+            }}
+          />
+          <div
+            role="dialog"
+            aria-label={tNav("glev")}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: "relative", zIndex: 1,
+              background: "#1a1a24",
+              borderRadius: "20px 20px 0 0",
+              padding: "10px 16px calc(env(safe-area-inset-bottom, 0px) + 24px)",
+              boxShadow: "0 -8px 30px rgba(0,0,0,0.5)",
+            }}
+          >
+            <div
+              style={{
+                width: 40, height: 4, borderRadius: 2,
+                background: "rgba(255,255,255,0.18)",
+                margin: "6px auto 18px",
+              }}
+            />
+            <SheetItem
+              label="Mahlzeit loggen"
+              accent={ACCENT}
+              onClick={() => { setGlevSheetOpen(false); router.push("/engine?tab=log"); }}
+              icon={(
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 8h1a4 4 0 0 1 0 8h-1" />
+                  <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z" />
+                  <line x1="6" y1="1" x2="6" y2="4" />
+                  <line x1="10" y1="1" x2="10" y2="4" />
+                  <line x1="14" y1="1" x2="14" y2="4" />
+                </svg>
+              )}
+            />
+            <SheetItem
+              label="Glukose messen"
+              accent="#22D3A0"
+              onClick={() => { setGlevSheetOpen(false); router.push("/engine?tab=fingerstick"); }}
+              icon={(
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#22D3A0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2.5C12 2.5 6 9 6 14a6 6 0 0 0 12 0c0-5-6-11.5-6-11.5z" />
+                </svg>
+              )}
+            />
+            <SheetItem
+              label="Aktivität loggen"
+              accent="#FF9500"
+              onClick={() => { setGlevSheetOpen(false); router.push("/engine?tab=exercise"); }}
+              icon={(
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FF9500" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="13 2 13 9 19 9" />
+                  <polyline points="11 22 11 15 5 15" />
+                  <path d="M21 13a9 9 0 0 1-15 6.7" />
+                  <path d="M3 11a9 9 0 0 1 15-6.7" />
+                </svg>
+              )}
+            />
+          </div>
+        </div>
+      )}
+
     </div>
+  );
+}
+
+/**
+ * Single row inside the Glev mobile bottom-sheet. Slim, full-width,
+ * coloured icon on the left + label, no chevron — taps either route
+ * (handled by the parent's onClick) or simply dismiss. Kept local to
+ * Layout.tsx because the sheet is a Layout-level overlay and isn't
+ * reused anywhere else in the app.
+ */
+function SheetItem({
+  label, accent, onClick, icon,
+}: {
+  label: string;
+  accent: string;
+  onClick: () => void;
+  icon: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: "flex", alignItems: "center", gap: 14,
+        width: "100%", padding: "14px 14px",
+        background: "transparent", border: "none", cursor: "pointer",
+        borderRadius: 12, marginBottom: 4,
+        color: "#fff", fontSize: 15, fontWeight: 600,
+        textAlign: "left",
+      }}
+    >
+      <span
+        style={{
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          width: 40, height: 40, borderRadius: 10,
+          background: `${accent}22`,
+          flexShrink: 0,
+        }}
+      >
+        {icon}
+      </span>
+      {label}
+    </button>
   );
 }
 
