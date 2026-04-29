@@ -283,15 +283,17 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             </svg>
           )}
         />
-        {/* Glev tab — primary "Mahlzeit loggen" entry point. Tap navigates
-            directly to /log instead of opening the old slide-up action
-            sheet (which has been removed entirely — the secondary
-            logging shortcuts moved to the header "+" QuickAddMenu).
-            Active state highlights when the user is anywhere under /log. */}
+        {/* Glev tab — primary entry point. Tap navigates to /engine (the
+            multi-tab Engine view with header-dropdown toggle), matching
+            the desktop sidebar behavior. The old /log "Mahlzeit loggen"
+            screen is no longer the Glev landing — Engine is. The
+            secondary logging shortcuts (Glukose / Insulin / Sport) live
+            in the header "+" QuickAddMenu. Active state highlights when
+            the user is anywhere under /engine. */}
         <MobileTab
           label={tNav("glev")}
-          active={pathname.startsWith("/log")}
-          onClick={() => router.push("/log")}
+          active={pathname.startsWith("/engine")}
+          onClick={() => router.push("/engine")}
           icon={(a) => (
             <span style={{ display: "inline-flex", filter: a ? `drop-shadow(0 0 8px ${ACCENT}aa)` : undefined, transition: "filter 0.2s" }}>
               <GlevLogo size={22} color={a ? ACCENT : NAV_INACTIVE} bg="transparent"/>
