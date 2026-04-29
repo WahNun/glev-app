@@ -14,7 +14,6 @@ import EngineLogTab, { InsulinForm, ExerciseForm } from "@/components/EngineLogT
 import FingerstickLogCard from "@/components/FingerstickLogCard";
 import GlevLogo from "@/components/GlevLogo";
 import EngineChatPanel, { type SeedMessage } from "@/components/EngineChatPanel";
-import { useEngineHeader } from "@/lib/engineHeaderContext";
 import { fetchLatestCgm } from "@/components/CgmFetchButton";
 import { fetchLatestFingerstick, FS_OVERRIDE_WINDOW_MS } from "@/lib/fingerstick";
 import { parseDbTs, parseDbDate, parseLluTs } from "@/lib/time";
@@ -200,17 +199,10 @@ export default function EnginePage() {
   // is reset (handleNewMeal) so the next meal starts clean.
   const [directBolusOpen, setDirectBolusOpen] = useState(false);
   const [directBolusValue, setDirectBolusValue] = useState("");
-  // Tabs-expanded state lives in the global EngineHeaderContext so the
-  // chevron control can render in the mobile app header (oben rechts
-  // next to Live + user icon) instead of inside this page body. We
-  // alias the hook return value to keep the rest of the page readable.
-  const engineHdr = useEngineHeader();
-  const tabsExpanded    = engineHdr.tabsExpanded;
-  const setTabsExpanded = engineHdr.setTabsExpanded;
-  // FIX C: Tab strip is collapsed by default to give Step 1's voice/text
-  // input the full vertical real estate. The chevron control itself now
-  // lives in the global mobile app header (see Layout.tsx); this page
-  // only renders the expanded tab buttons row when tabsExpanded === true.
+  // Tab strip is permanently visible — the previous collapsible
+  // dropdown (both the in-page chevron and the global header pill)
+  // were removed per user request 2026-04-29. Tabs always render as
+  // a static pill row at the top of the page body.
   // Step 3 GPT Reasoning section is collapsible to keep the result card
   // scannable; user expands by tapping the chevron.
   const [reasoningExpanded, setReasoningExpanded] = useState(false);
@@ -329,32 +321,6 @@ export default function EnginePage() {
       return prev;
     });
   }, [isMobile]);
-
-  // Register the engine page with the global EngineHeaderContext so the
-  // mobile app header can render the chevron tab toggle in the top-right
-  // bar (next to Live + user icon). The activeLabel mirrors the current
-  // tab so the chip always shows what's selected. visible flips to true
-  // on mount and back to false on unmount; Layout also defensively
-  // resets it on route change to handle edge cases.
-  useEffect(() => {
-    const labels: Record<typeof tab, string> = {
-      engine:      tEngine("tab_engine"),
-      log:         "Log",
-      bolus:       tEngine("tab_insulin"),
-      exercise:    tEngine("tab_exercise"),
-      fingerstick: tEngine("tab_glucose"),
-    };
-    engineHdr.setActiveLabel(labels[tab] ?? tEngine("tab_engine"));
-  }, [tab, engineHdr, tEngine]);
-
-  useEffect(() => {
-    engineHdr.setVisible(true);
-    return () => {
-      engineHdr.setVisible(false);
-      engineHdr.setTabsExpanded(false);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   async function startRecording() {
     setVoiceErr(""); setTranscript("");
@@ -1052,78 +1018,45 @@ export default function EnginePage() {
           { id:"exercise"    as const, label:"Übung" },
           { id:"fingerstick" as const, label:"Glukose" },
         ];
-        const activeLabel = tabsCfg.find(t => t.id === tab)?.label ?? "Engine";
-        // Mobile: the chevron lives in the global header — render only
-        // the expanded tab buttons row when tabsExpanded is true, with
-        // zero top margin so it sits flush below the app header.
-        // Desktop: keep the in-page toggle since the desktop sidebar
-        // doesn't host the chevron.
+        // Tabs always visible per user request (2026-04-29). The
+        // previous collapsible dropdown — both the in-page chevron
+        // pill and the global mobile-header pill — were removed
+        // because users couldn't see at a glance which tab they were
+        // on. Static pill row stays put and matches the desktop look.
         return (
-          <div style={{ marginBottom: tabsExpanded || !isMobile ? 16 : 0 }}>
-            {/* FIX C: In-page tab toggle is now visible on mobile too. The
-                global header chevron stays as a secondary entry point but
-                is small + competes with Live + the user icon, so users
-                miss it. The in-page button is right where the eye lands
-                when the chat panel is collapsed. */}
-            <button
-              type="button"
-              onClick={() => setTabsExpanded(!tabsExpanded)}
-              aria-expanded={tabsExpanded}
-              aria-controls="engine-tabs-body"
+          <div style={{ marginBottom: 16 }}>
+            <div
+              id="engine-tabs-body"
               style={{
-                display:"flex", alignItems:"center", justifyContent:"space-between",
-                width:"100%", padding: isMobile ? "8px 12px" : "10px 14px",
+                display:"flex", width:"100%", gap:4,
                 background:"#0D0D12", border:`1px solid ${BORDER}`,
-                borderRadius:12, cursor:"pointer",
-                color: ACCENT, fontSize: isMobile ? 12 : 13, fontWeight: 700, letterSpacing:"-0.01em",
-                transition:"background 0.15s",
+                borderRadius:12, padding:4, boxSizing:"border-box",
               }}
             >
-              <span>{activeLabel}</span>
-              <svg
-                width="16" height="16" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                aria-hidden="true"
-                style={{ transition:"transform 0.2s", transform: tabsExpanded ? "rotate(180deg)" : "rotate(0deg)" }}
-              >
-                <polyline points="6 9 12 15 18 9"/>
-              </svg>
-            </button>
-            {tabsExpanded && (
-              <div
-                id="engine-tabs-body"
-                style={{
-                  display:"flex", width:"100%", gap:4,
-                  marginTop: isMobile ? 0 : 6,
-                  background:"#0D0D12", border:`1px solid ${BORDER}`,
-                  borderRadius:12, padding:4, boxSizing:"border-box",
-                }}
-              >
-                {tabsCfg.map(t => {
-                  const on = tab === t.id;
-                  return (
-                    <button
-                      key={t.id}
-                      onClick={() => { setTab(t.id); /* keep strip open while a sub-tab card is visible — user requested */ }}
-                      style={{
-                        flex:"1 1 0", minWidth:0,
-                        padding: isMobile ? "8px 6px" : "8px 18px",
-                        borderRadius:8, border:"none",
-                        background: on ? `${ACCENT}22` : "transparent",
-                        color:    on ? ACCENT : "rgba(255,255,255,0.55)",
-                        fontSize: isMobile ? 12 : 13,
-                        fontWeight:700, letterSpacing:"-0.01em",
-                        cursor:"pointer", transition:"all 0.15s",
-                        textAlign:"center", whiteSpace:"nowrap",
-                        overflow:"hidden", textOverflow:"ellipsis",
-                      }}
-                    >
-                      {t.label}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+              {tabsCfg.map(t => {
+                const on = tab === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => setTab(t.id)}
+                    style={{
+                      flex:"1 1 0", minWidth:0,
+                      padding: isMobile ? "8px 6px" : "8px 18px",
+                      borderRadius:8, border:"none",
+                      background: on ? `${ACCENT}22` : "transparent",
+                      color:    on ? ACCENT : "rgba(255,255,255,0.55)",
+                      fontSize: isMobile ? 12 : 13,
+                      fontWeight:700, letterSpacing:"-0.01em",
+                      cursor:"pointer", transition:"all 0.15s",
+                      textAlign:"center", whiteSpace:"nowrap",
+                      overflow:"hidden", textOverflow:"ellipsis",
+                    }}
+                  >
+                    {t.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         );
       })()}
