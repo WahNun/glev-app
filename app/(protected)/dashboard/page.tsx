@@ -953,10 +953,17 @@ function DailyMacrosCard({ meals, targets }: { meals: Meal[]; targets: MacroTarg
       </button>
       {/* 4 rings always in a single row; each cell caps the ring at ~96px so it
           doesn't blow up on wide cards but still scales down cleanly on narrow
-          phones via `width:100%` on the SVG (viewBox handles the rest). */}
-      <div style={{ padding:"22px 16px 24px", display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:8 }}>
+          phones via `width:100%` on the SVG (viewBox handles the rest).
+          CRITICAL: columns use `minmax(0, 1fr)` (NOT `1fr`). A bare `1fr`
+          starts from each cell's min-content size, so longer labels like
+          "PROTEIN /200g" force their column wider than "FIBER /30g", which
+          in turn makes that cell's ring (capped at maxWidth:96 but otherwise
+          width:100%) visually larger than its neighbors. `minmax(0, 1fr)`
+          collapses the min-content floor to 0 so all 4 columns stay
+          mathematically identical and the rings render equal-diameter. */}
+      <div style={{ padding:"22px 16px 24px", display:"grid", gridTemplateColumns:"repeat(4, minmax(0, 1fr))", gap:8 }}>
         {rings.map(r => (
-          <div key={r.label} style={{ display:"flex", justifyContent:"center" }}>
+          <div key={r.label} style={{ display:"flex", justifyContent:"center", minWidth:0 }}>
             <MacroRing {...r} />
           </div>
         ))}
