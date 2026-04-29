@@ -27,6 +27,7 @@ import {
   Rect as SvgRect,
   Line as SvgLine,
   Circle as SvgCircle,
+  Polygon as SvgPolygon,
 } from "@react-pdf/renderer";
 import type { Meal } from "@/lib/meals";
 import type { InsulinLog } from "@/lib/insulin";
@@ -53,6 +54,45 @@ const BG           = "#FFFFFF";
 const BRAND_DARK   = "#111117";
 const BRAND_BORDER = "#1F1F26";   // rgba(255,255,255,0.06) on #111117 ≈ this hex
 const SYMBOL_BG    = "#0F0F14";   // matches the GlevLogo `bg` default
+
+/* TrendArrow — small SVG arrow icon used in the 14-day trend KPI.
+   Helvetica (the only embedded font in this PDF) covers WinAnsi only,
+   which does NOT include U+2191/U+2193 arrows or U+0394 Δ — those
+   characters fall back to placeholder glyphs (a stray apostrophe /
+   quote) in many PDF viewers. Rendering the arrow as real geometry
+   sidesteps the font issue entirely and survives any viewer. */
+function TrendArrow({
+  direction,
+  color,
+}: {
+  direction: "up" | "down" | "flat" | "none";
+  color: string;
+}) {
+  // Em-dash IS in WinAnsi (0x97) so the "no data" placeholder can
+  // safely stay as text — keeps the visual consistent with other "—"
+  // placeholders elsewhere in the report.
+  if (direction === "none") {
+    return (
+      <Text style={{ fontSize: 18, fontFamily: "Helvetica-Bold", color, marginRight: 4 }}>
+        —
+      </Text>
+    );
+  }
+  const size = 18;
+  return (
+    <Svg width={size} height={size} viewBox="0 0 18 18" style={{ marginRight: 4 }}>
+      {direction === "up" && (
+        <SvgPolygon points="9,2 16,15 2,15" fill={color} />
+      )}
+      {direction === "down" && (
+        <SvgPolygon points="9,16 2,3 16,3" fill={color} />
+      )}
+      {direction === "flat" && (
+        <SvgLine x1={2} y1={9} x2={16} y2={9} stroke={color} strokeWidth={2.6} strokeLinecap="round" />
+      )}
+    </Svg>
+  );
+}
 
 /* Glev brand-mark geometry — kept in sync with components/GlevLogo.tsx
    so the lockup that sits in the PDF brand bar is the exact same node
@@ -608,11 +648,16 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks }: Re
   // Stable thresholds (±5 mg/dL) keep noise from registering as a
   // "trend" — anything inside that band reads as ≈stable.
   const trendDelta = ins.trend14Delta;
-  const trendArrow = trendDelta === null
-    ? "—"
-    : trendDelta >  5 ? "↑"
-    : trendDelta < -5 ? "↓"
-    : "→";
+  // Direction drives the SVG arrow icon (see TrendArrow). Helvetica
+  // (the only embedded PDF font) doesn't ship the U+2191/U+2193
+  // arrow glyphs, so a literal "↑"/"↓" Text rendered as a stray
+  // apostrophe/quote in some PDF viewers — we render real geometry
+  // instead.
+  const trendDirection: "up" | "down" | "flat" | "none" =
+      trendDelta === null ? "none"
+    : trendDelta >  5     ? "up"
+    : trendDelta < -5     ? "down"
+    :                       "flat";
   const trendColor = trendDelta === null
     ? MUTED
     : trendDelta >  5 ? ORANGE   // higher avg glucose vs prior week → caution
@@ -724,14 +769,15 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks }: Re
             </View>
             <View style={styles.insightCard}>
               <Text style={styles.insightLabel}>14-Tage Trend</Text>
-              <View style={styles.insightValueRow}>
-                <Text style={[styles.insightValue, { color: trendColor }]}>
-                  {trendArrow}{trendDelta !== null ? ` ${trendDelta >= 0 ? "+" : ""}${fmtNum(trendDelta, 0)}` : ""}
+              <View style={[styles.insightValueRow, { alignItems: "center" }]}>
+                <TrendArrow direction={trendDirection} color={trendColor} />
+                <Text style={[styles.insightValue, { color: trendColor, marginBottom: 0 }]}>
+                  {trendDelta !== null ? `${trendDelta >= 0 ? "+" : ""}${fmtNum(trendDelta, 0)}` : ""}
                 </Text>
-                <Text style={styles.insightUnit}>mg/dL Δ</Text>
+                <Text style={styles.insightUnit}>mg/dL</Text>
               </View>
               <Text style={styles.insightExpl}>
-                Mittelwert-Differenz der vergangenen 7 Tage gegenüber den 7 Tagen davor. Pfeil zeigt Richtung der Verschiebung — ↓ grün = Verbesserung, ↑ orange = Anstieg.
+                Mittelwert-Differenz der vergangenen 7 Tage gegenüber den 7 Tagen davor. Der Pfeil zeigt die Richtung der Verschiebung; grün = Verbesserung, orange = Anstieg.
               </Text>
             </View>
           </View>
