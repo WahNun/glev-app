@@ -1,0 +1,59 @@
+Du arbeitest an einer Next.js + Capacitor iOS App (glev.app). Führe folgende 3 Fixes durch:
+
+---
+
+FIX 1 — Performance: API Caching + Skeleton Screens
+
+1a. Installiere SWR: npm install swr
+
+1b. Alle fetch-Calls in Dashboard-Screen und History/Verlauf-Screen auf useSWR umstellen:
+- import useSWR from 'swr'
+- const fetcher = (url) => fetch(url).then(r => r.json())
+- const { data, isLoading } = useSWR('/api/...', fetcher, { revalidateOnFocus: false, dedupingInterval: 300000 })
+- SWRConfig mit globalem Cache in _app.tsx / layout.tsx wrappen
+
+1c. Skeleton-Komponente für Dashboard + History: Während isLoading === true zeige animierte Platzhalter-Balken (graue Rechtecke mit pulse-Animation) statt leerem Screen.
+
+1d. Kritische Daten (User-Profile, heutige Einträge) im RootLayout prefetchen mit SWR prefetch oder getStaticProps/generateStaticParams wo möglich.
+
+---
+
+FIX 2 — Chat State Persistenz (überlebt Tab-Wechsel)
+
+2a. Erstelle einen globalen ChatContext (src/context/ChatContext.tsx):
+- State: messages: Array<{role, content, id, ts}>
+- Aktionen: addMessage, clearMessages
+- Persistenz: useEffect der messages in localStorage['glev_chat_history'] speichert
+- Beim Mount: aus localStorage laden falls vorhanden (max. letzte 50 Nachrichten)
+
+2b. ChatContext.Provider in _app.tsx / RootLayout wrappen (AUSSERHALB des Tab-Navigations-Wrappers) damit State beim Tab-Wechsel nicht verloren geht.
+
+2c. Chat-Komponente nutzt useContext(ChatContext) statt lokalem useState für messages.
+
+2d. Session-ID: localStorage['glev_chat_session'] = Date + random, wird bei addMessage mitgespeichert.
+
+---
+
+FIX 3 — UI Animationen (iOS-native Feeling)
+
+3a. Installiere Framer Motion: npm install framer-motion
+
+3b. Screen-Transitions: Alle Page-Komponenten in motion.div wrappen:
+<motion.div initial={{opacity:0, y:12}} animate={{opacity:1, y:0}} exit={{opacity:0, y:-8}} transition={{type:'spring', stiffness:300, damping:30}}>
+
+3c. Listen-Items staggered einblenden (z.B. Log-Einträge im History-Screen):
+- parent: variants={{ visible: { transition: { staggerChildren: 0.04 } } }}
+- child: variants={{ hidden: {opacity:0, y:8}, visible: {opacity:1, y:0} }}
+- transition: { type: 'spring', stiffness: 400, damping: 35 }
+
+3d. Dashboard-Cards beim Mount: scale 0.96 → 1.0 + opacity 0 → 1, spring-Easing
+
+3e. Buttons/Tap-Targets: whileTap={{ scale: 0.96 }} auf allen interaktiven Elementen
+
+3f. Chat-Nachrichten: AnimatePresence + jede neue Nachricht slideUp mit spring
+
+3g. Tab-Bar: activeTab-Indikator mit layoutId="tab-indicator" für smooth slide-Transition
+
+---
+
+Nach allen Änderungen: npm run build — falls erfolgreich, kurzen Status ausgeben welche Dateien geändert wurden.
