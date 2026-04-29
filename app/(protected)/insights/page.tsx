@@ -50,11 +50,23 @@ const HIGH_YELLOW = "#FFD166";
 
 const WEEKDAY_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
-const EVAL_NORM = (ev: string|null) => {
-  if (!ev) return "GOOD";
+// Normalises raw evaluation strings from the DB into the simplified
+// {GOOD, HIGH, LOW, SPIKE} buckets used across the insights surface.
+//
+// CRITICAL: returns `null` for unevaluated meals (no follow-up glucose
+// logged yet, evaluation column still NULL). They must NOT be coerced
+// to "GOOD" — that previously inflated the Good rate vs the dashboard
+// (dashboard uses strict `m.evaluation === "GOOD"`, which excludes
+// null evaluations from the numerator). All call sites already do
+// strict `=== "GOOD" | "HIGH" | "LOW" | "SPIKE"` comparisons, so a
+// null return naturally drops out of every counter without further
+// changes (verified at every EVAL_NORM call site 2026-04-29).
+const EVAL_NORM = (ev: string|null): "GOOD"|"HIGH"|"LOW"|"SPIKE"|null => {
+  if (!ev) return null;
   if (ev==="OVERDOSE"||ev==="HIGH") return "HIGH";
   if (ev==="UNDERDOSE"||ev==="LOW") return "LOW";
-  return ev;
+  if (ev==="GOOD"||ev==="SPIKE") return ev;
+  return null;
 };
 
 // ── Clinical thresholds — hardcoded clinical-standard defaults ──
@@ -413,7 +425,14 @@ export default function InsightsPage() {
   // ── Deeper-analysis derivations (used by cards under the hero block) ──
   const normed     = meals.map(m => ({ ...m, ev: EVAL_NORM(m.evaluation) }));
   const goodAll    = normed.filter(m => m.ev==="GOOD").length;
-  const goodRate   = Math.round(goodAll/total*100);
+  // Numerator + denominator + display precision intentionally mirror
+  // dashboard buildCards() (app/(protected)/dashboard/page.tsx) so the
+  // two surfaces always show the identical Good rate over the same
+  // meal set. Strict `=== "GOOD"` (via the fixed EVAL_NORM, which now
+  // returns null for unevaluated meals) → numerator. `total = meals.
+  // length` (everything fetched) → denominator. `.toFixed(1)` →
+  // display, matching dashboard's `goodRate.toFixed(1)`.
+  const goodRate   = total ? goodAll/total*100 : 0;
   const avgGlucose = Math.round(meals.filter(m=>m.glucose_before).reduce((s,m)=>s+(m.glucose_before||0),0) / Math.max(meals.filter(m=>m.glucose_before).length,1));
   const avgCarbs   = Math.round(meals.filter(m=>m.carbs_grams).reduce((s,m)=>s+(m.carbs_grams||0),0) / Math.max(meals.filter(m=>m.carbs_grams).length,1));
   const avgInsulin = (meals.filter(m=>m.insulin_units).reduce((s,m)=>s+(m.insulin_units||0),0) / Math.max(meals.filter(m=>m.insulin_units).length,1)).toFixed(1);
@@ -1338,7 +1357,7 @@ export default function InsightsPage() {
             { label:"Avg glucose",  val:`${avgGlucose}`, sub:"mg/dL pre-meal",           color:ACCENT,
               formula:"Σ glucose_before / count",      explain:"Average pre-meal glucose. Lower reflects better fasting control." },
             // Good rate moved out of slot 0 into Raw ICR's previous position.
-            { label:"Good rate",    val:`${goodRate}%`,  sub:`${goodAll} of ${total}`,   color:GREEN,
+            { label:"Good rate",    val:`${goodRate.toFixed(1)}%`,  sub:`${goodAll} of ${total}`,   color:GREEN,
               formula:"GOOD / Total × 100",            explain:"Share of meals where the dose was within ±35% of the ICR estimate." },
             { label:"Avg insulin",  val:`${avgInsulin}u`, sub:`${avgCarbs}g avg carbs`, color:"#A78BFA",
               formula:"Σ units / count",               explain:"Mean insulin per meal. Track against carbs to validate your ratio." },
