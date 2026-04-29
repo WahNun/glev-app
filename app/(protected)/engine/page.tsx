@@ -1060,14 +1060,25 @@ export default function EnginePage() {
         // renders here, just collapsed by default; opening it from the
         // header pill drops it in below the app header so the user sees
         // the choices without losing context.
+        // Visual style mirrors the Verlauf (history) page toggle in
+        // app/(protected)/history/page.tsx — pill-shaped container,
+        // solid ACCENT fill for the active button, white text on both
+        // states, subtle rgba(255,255,255,0.06) container background.
+        // The 4-tab engine row keeps `flex:1 1 0` so it spans the full
+        // app-content width and the labels evenly distribute on phones,
+        // rather than the inline-flex content-sized layout used by the
+        // 2-button history toggle (4 long German labels would shove
+        // past a 375px viewport otherwise).
         return tabsExpanded ? (
           <div style={{ marginBottom: 16 }}>
             <div
               id="engine-tabs-body"
+              role="tablist"
+              aria-label="Engine"
               style={{
-                display:"flex", width:"100%", gap:4,
-                background:"#0D0D12", border:`1px solid ${BORDER}`,
-                borderRadius:12, padding:4, boxSizing:"border-box",
+                display:"flex", width:"100%", gap:2,
+                padding:4, background:"rgba(255,255,255,0.06)",
+                borderRadius:99, boxSizing:"border-box",
               }}
             >
               {tabsCfg.map(t => {
@@ -1075,18 +1086,19 @@ export default function EnginePage() {
                 return (
                   <button
                     key={t.id}
+                    role="tab"
+                    aria-selected={on}
                     onClick={() => setTab(t.id)}
                     style={{
                       flex:"1 1 0", minWidth:0,
-                      padding: isMobile ? "8px 6px" : "8px 18px",
-                      borderRadius:8, border:"none",
-                      background: on ? `${ACCENT}22` : "transparent",
-                      color:    on ? ACCENT : "rgba(255,255,255,0.55)",
-                      fontSize: isMobile ? 12 : 13,
-                      fontWeight:700, letterSpacing:"-0.01em",
-                      cursor:"pointer", transition:"all 0.15s",
+                      padding:"8px 6px",
+                      borderRadius:99, border:"none", cursor:"pointer",
+                      background: on ? ACCENT : "transparent",
+                      color: "white",
+                      fontSize:13, fontWeight: on ? 600 : 500,
                       textAlign:"center", whiteSpace:"nowrap",
                       overflow:"hidden", textOverflow:"ellipsis",
+                      transition:"background 0.15s",
                     }}
                   >
                     {t.label}
