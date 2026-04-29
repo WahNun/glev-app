@@ -1,7 +1,6 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import AppMockupPhone from "@/components/AppMockupPhone";
 import FAQ from "@/components/landing/FAQ";
 import FeatureTrio from "@/components/landing/FeatureTrio";
@@ -20,100 +19,50 @@ import {
   SURFACE,
   TEXT_DIM,
 } from "@/components/landing/tokens";
-import { submitProCheckout } from "./actions";
 
 /**
- * Primary CTA — email-first form that POSTs to the existing
- * `submitProCheckout` server action. The action calls /api/pro/checkout
- * which creates a Stripe Subscription Checkout Session (price =
- * STRIPE_PRO_PRICE_ID, the €24,90/Monat plan) with a trial that ends on
- * the public launch (1 July 2026), then server-redirects to Stripe's
- * session.url. We collect email here (vs letting Stripe collect it) so
- * the route can guard against duplicate active subscriptions per email
- * before opening a checkout.
- *
- * Errors are surfaced via ?error= on the URL — `submitProCheckout`
- * redirects back to /pro?error=… on failure. The Suspense wrapper at
- * the bottom of this file is what makes useSearchParams() safe to call.
+ * Pro-tier Stripe Payment Link — direct hosted-checkout URL for the
+ * €24,90 / Monat subscription. Mirrors the /beta pattern: Stripe
+ * collects the email itself at checkout, so no local form / server
+ * action / supabase round-trip is needed on this page. The richer
+ * `/api/pro/checkout` flow (with email guard + supabase tracking) is
+ * intentionally not wired to the hero CTA at the moment — it stays in
+ * the repo for future use.
  */
-function ProCheckoutForm() {
-  const searchParams = useSearchParams();
-  const error = searchParams?.get("error") ?? null;
+const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/bJe4gzfLK1OUezHfzebfO01";
+
+function ProCTALink() {
   const [hover, setHover] = useState(false);
-  const [pending, setPending] = useState(false);
   return (
-    <form
-      action={submitProCheckout}
-      onSubmit={() => setPending(true)}
-      style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%" }}
+    <a
+      href={STRIPE_PAYMENT_LINK}
+      target="_blank"
+      rel="noopener noreferrer"
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: hover ? ACCENT_HOVER : ACCENT,
+        color: "#fff",
+        textDecoration: "none",
+        border: "none",
+        borderRadius: 12,
+        padding: "16px 32px",
+        fontSize: 18,
+        fontWeight: 600,
+        fontFamily: "inherit",
+        minHeight: 56,
+        cursor: "pointer",
+        boxShadow: hover ? "0 0 0 4px rgba(79,110,247,0.25)" : "0 0 0 0 rgba(79,110,247,0)",
+        transition: "background 120ms ease, box-shadow 120ms ease",
+        outlineColor: "rgba(79,110,247,0.4)",
+        boxSizing: "border-box",
+      }}
     >
-      <input
-        type="email"
-        name="email"
-        required
-        autoComplete="email"
-        placeholder="deine@email.de"
-        aria-label="Email-Adresse"
-        style={{
-          padding: "14px 18px",
-          fontSize: 16,
-          background: SURFACE,
-          border: `1px solid ${BORDER}`,
-          borderRadius: 12,
-          color: "#fff",
-          outline: "none",
-          fontFamily: "inherit",
-          minHeight: 56,
-          boxSizing: "border-box",
-          width: "100%",
-        }}
-      />
-      <button
-        type="submit"
-        disabled={pending}
-        onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: hover && !pending ? ACCENT_HOVER : ACCENT,
-          color: "#fff",
-          textDecoration: "none",
-          border: "none",
-          borderRadius: 12,
-          padding: "16px 32px",
-          fontSize: 18,
-          fontWeight: 600,
-          fontFamily: "inherit",
-          minHeight: 56,
-          cursor: pending ? "wait" : "pointer",
-          opacity: pending ? 0.75 : 1,
-          boxShadow: hover && !pending ? "0 0 0 4px rgba(79,110,247,0.25)" : "0 0 0 0 rgba(79,110,247,0)",
-          transition: "background 120ms ease, box-shadow 120ms ease, opacity 120ms ease",
-          outlineColor: "rgba(79,110,247,0.4)",
-          boxSizing: "border-box",
-        }}
-      >
-        {pending ? "Weiterleitung zu Stripe…" : "Mitgliedschaft starten — €24,90 / Monat"}
-      </button>
-      {error && (
-        <div
-          role="alert"
-          style={{
-            padding: "10px 14px",
-            background: "rgba(255,69,69,0.08)",
-            border: "1px solid rgba(255,69,69,0.25)",
-            borderRadius: 10,
-            color: "#FF8A8A",
-            fontSize: 13,
-            lineHeight: 1.4,
-          }}
-        >
-          {error}
-        </div>
-      )}
-    </form>
+      Mitgliedschaft starten — €24,90 / Monat
+    </a>
   );
 }
 
@@ -212,7 +161,7 @@ function ProContent() {
               className="glev-hero-form"
               style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}
             >
-              <ProCheckoutForm />
+              <ProCTALink />
             </div>
 
             <div

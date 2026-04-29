@@ -1,46 +1,36 @@
 # Glev — Agent Status
 
 ## Last completed task
-**`/pro` CTA verdrahtet auf eigenen Stripe-Checkout (€24,90 / Monat)**
+**`/pro` CTA → direkter Stripe Payment Link (€24,90 / Monat)**
 
 ### Was geändert wurde
 - `app/pro/page.tsx`:
-  - Alter `ProCTALink` (statisches `<a href="/beta">`) → entfernt.
-  - Neuer `ProCheckoutForm` (Email-Input + Submit-Button) als
-    `<form action={submitProCheckout}>` — nutzt die existierende
-    Server-Action aus `app/pro/actions.ts`.
-  - Server-Action ruft `/api/pro/checkout` (verwendet
-    `STRIPE_PRO_PRICE_ID`) → erstellt Stripe Subscription Checkout
-    Session mit Trial bis 1.7.2026 → server-redirect zu
-    `checkout.stripe.com`.
-  - Pending-State: Button → „Weiterleitung zu Stripe…", opacity
-    0.75, cursor wait.
-  - Error-Display: Rotes Banner unter dem Button wenn `?error=`
-    (z.B. ungültige Email, 409 für bereits aktive Mitgliedschaft).
-  - `useSearchParams()` jetzt aktiv genutzt für Error-Anzeige —
-    der bereits vorhandene Suspense-Wrapper am File-Ende macht
-    das safe.
-  - Meta-Copy unter dem Button von Beta-Wording („€19
-    Reservierung…") → Pro-Wording: „Karte heute hinterlegen ·
-    keine Buchung bis 1. Juli 2026 · jederzeit kündbar".
+  - Email-Form-Variante (vorheriger Task) zurückgedreht → simpler
+    `<a href={STRIPE_PAYMENT_LINK} target="_blank">` Button, exakt
+    nach dem /beta-Pattern.
+  - Hardcoded URL: `https://buy.stripe.com/bJe4gzfLK1OUezHfzebfO01`.
+  - Button-Label: „Mitgliedschaft starten — €24,90 / Monat".
+  - Imports aufgeräumt: `useSearchParams` + `submitProCheckout`
+    entfernt (nicht mehr genutzt).
+  - Meta-Copy bleibt: „Karte heute hinterlegen · keine Buchung
+    bis 1. Juli 2026 · jederzeit kündbar".
+
+### Hinweis
+- Die `/api/pro/checkout` + `submitProCheckout` Server-Action +
+  `pro_subscriptions` Tabelle bleiben im Repo erhalten — nicht mehr
+  vom Hero-CTA verdrahtet, aber für späteren Einsatz vorhanden.
 
 ### Verifiziert
-- Workflow restart durchgelaufen.
-- `curl http://localhost:5000/pro` → HTTP 200 in 127ms.
-- Browser-Console: nur „[HMR] connected" — keine Fehler.
+- `curl /pro` → HTTP 200, neuer Stripe-Link im rendered HTML.
+- Fast Refresh hat Browser-State sauber aktualisiert.
 
-### Voraussetzungen (sollten bereits konfiguriert sein)
-- `STRIPE_SECRET_KEY` + `STRIPE_PRO_PRICE_ID` müssen in den Secrets
-  gesetzt sein. Ohne sie liefert die API 503 mit Generic-Error.
-  (`.env.example` listet beide.)
-
-## Vorheriger Task
-- GlevActionSheet ersetzt durch Header-`+` (`QuickAddMenu`) + Glev-Tap
-  → direkt zu `/log`. Sheet komplett gelöscht.
+## Vorherige Tasks
+- Email-Form Variante (kurz aktiv) → ersetzt durch direkten Link.
+- GlevActionSheet ersetzt durch Header-`+` (`QuickAddMenu`) +
+  Glev-Tap → direkt zu `/log`. Sheet komplett gelöscht.
 
 ## Offen / Diskutiert (noch nicht gestartet)
 - **Performance Dashboard/History** — A+D+E erste Welle
-  (90-Tage-Limit auf `fetchMeals`, Suspense-Boundary, `useMemo` für
-  teure Reductions in `OutcomeChart`/`TrendChart`).
-- **`lib/meals.ts`** — kein Limit auf `fetchMeals` aktuell, lädt
-  alle Meals des Users → Bottleneck bei Power-Usern.
+  (90-Tage-Limit auf `fetchMeals`, Suspense-Boundary, `useMemo`).
+- **`lib/meals.ts`** — kein Limit auf `fetchMeals`, lädt alle Meals
+  des Users → Bottleneck bei Power-Usern.
