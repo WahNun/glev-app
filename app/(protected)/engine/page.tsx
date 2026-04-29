@@ -927,7 +927,7 @@ export default function EnginePage() {
     // to the saved meal's carbs / glucose so the rec is for THIS log.
     const g = confirmedMeal.glucose_before ?? parseFloat(glucose) ?? 110;
     const c = confirmedMeal.carbs_grams ?? parseFloat(carbs) ?? 0;
-    if (!c) { setDecisionToast("Keine Carbs hinterlegt — Empfehlung nicht möglich."); return; }
+    if (!c) { setDecisionToast("Keine Carbs hinterlegt — Einschätzung nicht möglich."); return; }
     setDecisionBusy(true);
     setTimeout(() => {
       const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs, adaptedICR);
@@ -1723,7 +1723,7 @@ export default function EnginePage() {
           {stepIndex === 2 && (
             <div>
               <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 16, color: "#fff" }}>
-                Deine Empfehlung
+                Deine Einschätzung
               </h2>
 
               {!result ? (
@@ -1732,7 +1732,7 @@ export default function EnginePage() {
                 // (e.g. tab switch + reset) give the user a clean way back.
                 <div style={{ ...card, padding: 20, marginBottom: 16 }}>
                   <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 13, lineHeight: 1.5, marginBottom: 14 }}>
-                    Keine Empfehlung verfügbar. Bitte zurück zu Schritt 2 und neu berechnen.
+                    Keine Einschätzung verfügbar. Bitte zurück zu Schritt 2 und neu berechnen.
                   </div>
                   <button
                     onClick={() => setStepIndex(1)}

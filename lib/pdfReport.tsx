@@ -707,7 +707,7 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks }: Re
                 <Text style={styles.insightValue}>{agg.mealsCount}</Text>
               </View>
               <Text style={styles.insightExpl}>
-                Anzahl aller in Glev erfassten Mahlzeiten. Mehr Datenpunkte verbessern die Genauigkeit der adaptiven ICR-Empfehlung und der Muster-Erkennung.
+                Anzahl aller in Glev erfassten Mahlzeiten. Mehr Datenpunkte verbessern die Genauigkeit der adaptiven ICR-Einschätzung und der Muster-Erkennung.
               </Text>
             </View>
             <View style={styles.insightCard}>

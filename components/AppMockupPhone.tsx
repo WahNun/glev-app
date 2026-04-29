@@ -818,7 +818,7 @@ function EngineScreen({ onLogged }: { onLogged: () => void }) {
           color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer",
           boxShadow:`0 4px 18px ${ACCENT}40`,
         }}>
-          Empfehlung berechnen
+          Einschätzung berechnen
         </button>
       ) : (
         <>
@@ -827,7 +827,7 @@ function EngineScreen({ onLogged }: { onLogged: () => void }) {
             background:"rgba(79,110,247,0.25)", color:"rgba(255,255,255,0.55)",
             fontSize:12, fontWeight:700, cursor:"default",
           }}>
-            Empfehlung berechnen
+            Einschätzung berechnen
           </button>
 
           {/* Input summary — two side-by-side cards (Glucose + Carbs) */}

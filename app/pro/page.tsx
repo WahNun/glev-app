@@ -310,7 +310,7 @@ function ProContent() {
             {
               color: MINT,
               title: "Mahlzeit einberechnet",
-              text: "Kohlenhydrate, Protein, Fett — alles fließt in die Empfehlung ein.",
+              text: "Kohlenhydrate, Protein, Fett — alles fließt in die Einschätzung ein.",
             },
             {
               color: "#FF9500",
