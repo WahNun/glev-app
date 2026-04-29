@@ -14,6 +14,7 @@ import EngineLogTab, { InsulinForm, ExerciseForm } from "@/components/EngineLogT
 import FingerstickLogCard from "@/components/FingerstickLogCard";
 import GlevLogo from "@/components/GlevLogo";
 import EngineChatPanel, { type SeedMessage } from "@/components/EngineChatPanel";
+import { useEngineHeader } from "@/lib/engineHeaderContext";
 import { fetchLatestCgm } from "@/components/CgmFetchButton";
 import { fetchLatestFingerstick, FS_OVERRIDE_WINDOW_MS } from "@/lib/fingerstick";
 import { parseDbTs, parseDbDate, parseLluTs } from "@/lib/time";
@@ -199,10 +200,17 @@ export default function EnginePage() {
   // is reset (handleNewMeal) so the next meal starts clean.
   const [directBolusOpen, setDirectBolusOpen] = useState(false);
   const [directBolusValue, setDirectBolusValue] = useState("");
-  // Tab strip is permanently visible — the previous collapsible
-  // dropdown (both the in-page chevron and the global header pill)
-  // were removed per user request 2026-04-29. Tabs always render as
-  // a static pill row at the top of the page body.
+  // Tabs-expanded state lives in the global EngineHeaderContext so the
+  // chevron control can render in the mobile app header (oben rechts
+  // next to Live + user icon) instead of inside this page body. We
+  // alias the hook return value to keep the rest of the page readable.
+  const engineHdr = useEngineHeader();
+  const tabsExpanded    = engineHdr.tabsExpanded;
+  const setTabsExpanded = engineHdr.setTabsExpanded;
+  // FIX C: Tab strip is collapsed by default to give Step 1's voice/text
+  // input the full vertical real estate. The chevron control itself now
+  // lives in the global mobile app header (see Layout.tsx); this page
+  // only renders the expanded tab buttons row when tabsExpanded === true.
   // Step 3 GPT Reasoning section is collapsible to keep the result card
   // scannable; user expands by tapping the chevron.
   const [reasoningExpanded, setReasoningExpanded] = useState(false);
@@ -321,6 +329,32 @@ export default function EnginePage() {
       return prev;
     });
   }, [isMobile]);
+
+  // Register the engine page with the global EngineHeaderContext so the
+  // mobile app header can render the chevron tab toggle in the top-right
+  // bar (next to Live + user icon). The activeLabel mirrors the current
+  // tab so the chip always shows what's selected. visible flips to true
+  // on mount and back to false on unmount; Layout also defensively
+  // resets it on route change to handle edge cases.
+  useEffect(() => {
+    const labels: Record<typeof tab, string> = {
+      engine:      tEngine("tab_engine"),
+      log:         "Log",
+      bolus:       tEngine("tab_insulin"),
+      exercise:    tEngine("tab_exercise"),
+      fingerstick: tEngine("tab_glucose"),
+    };
+    engineHdr.setActiveLabel(labels[tab] ?? tEngine("tab_engine"));
+  }, [tab, engineHdr, tEngine]);
+
+  useEffect(() => {
+    engineHdr.setVisible(true);
+    return () => {
+      engineHdr.setVisible(false);
+      engineHdr.setTabsExpanded(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function startRecording() {
     setVoiceErr(""); setTranscript("");
@@ -1018,12 +1052,15 @@ export default function EnginePage() {
           { id:"exercise"    as const, label:"Übung" },
           { id:"fingerstick" as const, label:"Glukose" },
         ];
-        // Tabs always visible per user request (2026-04-29). The
-        // previous collapsible dropdown — both the in-page chevron
-        // pill and the global mobile-header pill — were removed
-        // because users couldn't see at a glance which tab they were
-        // on. Static pill row stays put and matches the desktop look.
-        return (
+        // Single source of truth for the tab dropdown: the chevron pill
+        // in the global app header (Layout.tsx) — which already shows
+        // the active tab label. The duplicate in-page chevron pill that
+        // used to sit here was removed 2026-04-29 (user feedback: "es
+        // braucht nicht zwei dropdown pills"). The tabs row still
+        // renders here, just collapsed by default; opening it from the
+        // header pill drops it in below the app header so the user sees
+        // the choices without losing context.
+        return tabsExpanded ? (
           <div style={{ marginBottom: 16 }}>
             <div
               id="engine-tabs-body"
@@ -1058,7 +1095,7 @@ export default function EnginePage() {
               })}
             </div>
           </div>
-        );
+        ) : null;
       })()}
 
       {tab === "engine" && (

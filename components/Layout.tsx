@@ -8,6 +8,7 @@ import GlevLockup from "@/components/GlevLockup";
 import GlevLogo from "@/components/GlevLogo";
 import AboutGlevModal from "@/components/AboutGlevModal";
 import QuickAddMenu from "@/components/QuickAddMenu";
+import { EngineHeaderProvider, useEngineHeader } from "@/lib/engineHeaderContext";
 
 const ACCENT  = "#4F6EF7";
 const GREEN   = "#22D3A0";
@@ -59,14 +60,37 @@ const NAV: NavItem[] = [
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
+  // Wrap the actual layout body in the EngineHeaderProvider so the
+  // mobile global header (rendered inside LayoutInner) and the engine
+  // page (rendered as `children`) share a single tabs-expanded state.
+  return (
+    <EngineHeaderProvider>
+      <LayoutInner>{children}</LayoutInner>
+    </EngineHeaderProvider>
+  );
+}
+
+function LayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router   = useRouter();
   const tNav = useTranslations("nav");
   const [aboutOpen, setAboutOpen] = useState(false);
+  const engineHdr = useEngineHeader();
 
   useEffect(() => {
     fetch("/api/debug/state").then(r => r.json()).then(d => console.log("[DEBUG:STATE]", d)).catch(() => {});
   }, []);
+
+  // Auto-clear the engine-header marker whenever we navigate away from
+  // /engine. The engine page itself sets visible=true on mount but
+  // route changes that unmount the page won't always reset it on time
+  // (race with Next's RSC streaming), so reset defensively here too.
+  useEffect(() => {
+    if (!pathname.startsWith("/engine")) {
+      engineHdr.setVisible(false);
+      engineHdr.setTabsExpanded(false);
+    }
+  }, [pathname, engineHdr]);
 
   async function handleSignOut() {
     await signOut();
@@ -121,6 +145,39 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <GlevLockup size={26} />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {/* Engine-page tab toggle. Only rendered when the engine page
+              registers itself via EngineHeaderProvider. Sits oben rechts
+              alongside the Live badge + user icon so the page body can
+              start the chat panel immediately under the global header
+              without any intermediate "Glev Engine" title block. */}
+          {engineHdr.visible && (
+            <button
+              type="button"
+              onClick={engineHdr.toggleTabs}
+              aria-label={engineHdr.tabsExpanded ? "Tabs einklappen" : "Tabs ausklappen"}
+              aria-expanded={engineHdr.tabsExpanded}
+              aria-controls="engine-tabs-body"
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "5px 10px", height: 28, borderRadius: 99,
+                background: engineHdr.tabsExpanded ? `${ACCENT}22` : "rgba(255,255,255,0.05)",
+                border: `1px solid ${engineHdr.tabsExpanded ? ACCENT : "rgba(255,255,255,0.1)"}`,
+                color: engineHdr.tabsExpanded ? ACCENT : "rgba(255,255,255,0.7)",
+                fontSize: 11, fontWeight: 700, letterSpacing: "-0.01em",
+                cursor: "pointer", transition: "all 0.15s",
+              }}
+            >
+              <span>{engineHdr.activeLabel}</span>
+              <svg
+                width="12" height="12" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                aria-hidden="true"
+                style={{ transition: "transform 0.2s", transform: engineHdr.tabsExpanded ? "rotate(180deg)" : "rotate(0deg)" }}
+              >
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+          )}
           <div style={{ fontSize: 11, padding: "5px 12px", borderRadius: 99, background: `${GREEN}18`, color: GREEN, fontWeight: 600 }}>Live</div>
           {/* QuickAddMenu — secondary logging shortcuts (Glukose /
               Insulin / Sport) live here in the header now. The old
