@@ -16,6 +16,12 @@ import { useTheme } from "@/components/ThemeProvider";
 import type { ThemeChoice } from "@/lib/theme";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
 import type { CarbUnit } from "@/lib/carbUnits";
+import {
+  fetchNotificationPrefs,
+  saveNotificationPrefs,
+  DEFAULT_NOTIFICATION_PREFS,
+  type NotificationPrefs,
+} from "@/lib/notificationPrefs";
 
 const ACCENT = "#4F6EF7", GREEN = "#22D3A0", PINK = "#FF2D78", PURPLE = "#A78BFA";
 const BORDER = "var(--border)";
@@ -25,11 +31,9 @@ interface Settings {
   targetMax: number;
   icr: number;
   cf: number;
-  notifySpike: boolean;
-  notifyHypo: boolean;
 }
 
-const DEFAULTS: Settings = { targetMin: 70, targetMax: 180, icr: 15, cf: 50, notifySpike: true, notifyHypo: true };
+const DEFAULTS: Settings = { targetMin: 70, targetMax: 180, icr: 15, cf: 50 };
 
 function loadSettings(): Settings {
   if (typeof window === "undefined") return DEFAULTS;
@@ -116,6 +120,10 @@ export default function SettingsPage() {
   // throughout the engine, entries, and insights surfaces.
   const carbUnit = useCarbUnit();
   const [macroTargets, setMacroTargets] = useState<MacroTargets>(DEFAULT_MACRO_TARGETS);
+  // Notification preferences (DB-backed via user_settings.notif_*). Phase 1
+  // ships the prefs surface; Phase 2 (web push + cron sender) will start
+  // honouring `criticalAlerts` and `quietStart/End`.
+  const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>(DEFAULT_NOTIFICATION_PREFS);
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -125,7 +133,11 @@ export default function SettingsPage() {
   // in-memory state to this snapshot so half-typed values don't leak back
   // into the row subtitles. Successful saves clear this snapshot so the
   // new values become the canonical baseline for the next open.
-  const [draftSnapshot, setDraftSnapshot] = useState<{ settings: Settings; macroTargets: MacroTargets } | null>(null);
+  const [draftSnapshot, setDraftSnapshot] = useState<{
+    settings: Settings;
+    macroTargets: MacroTargets;
+    notifPrefs: NotificationPrefs;
+  } | null>(null);
 
   const cgmConnected = useCgmConnected();
   const nightscoutConnected = useNightscoutConnected();
@@ -134,6 +146,7 @@ export default function SettingsPage() {
     setSettings(loadSettings());
     if (!supabase) return;
     fetchMacroTargets().then(setMacroTargets).catch(() => {});
+    fetchNotificationPrefs().then(setNotifPrefs).catch(() => {});
   }, []);
 
   const openSheetWith = useCallback((id: SheetKey) => {
@@ -142,7 +155,14 @@ export default function SettingsPage() {
     // would just be ceremony for flat primitive structs.
     setSettings((curSettings) => {
       setMacroTargets((curMacros) => {
-        setDraftSnapshot({ settings: { ...curSettings }, macroTargets: { ...curMacros } });
+        setNotifPrefs((curNotif) => {
+          setDraftSnapshot({
+            settings: { ...curSettings },
+            macroTargets: { ...curMacros },
+            notifPrefs: { ...curNotif },
+          });
+          return curNotif;
+        });
         return curMacros;
       });
       return curSettings;
@@ -158,6 +178,7 @@ export default function SettingsPage() {
     if (draftSnapshot) {
       setSettings(draftSnapshot.settings);
       setMacroTargets(draftSnapshot.macroTargets);
+      setNotifPrefs(draftSnapshot.notifPrefs);
       setDraftSnapshot(null);
     }
     setPendingLocale(null);
@@ -165,9 +186,9 @@ export default function SettingsPage() {
     setOpenSheet(null);
   }, [draftSnapshot]);
 
-  /** Persist localStorage settings. Used by the Glucose / ICR / CF /
-   * Notifications sheets. Returns true on success so the footer can decide
-   * whether to dismiss or keep the sheet open with the inline error visible. */
+  /** Persist localStorage settings. Used by the Glucose / ICR / CF sheets.
+   * Returns true on success so the footer can decide whether to dismiss
+   * or keep the sheet open with the inline error visible. */
   const saveLocalSettings = useCallback(async (): Promise<boolean> => {
     setSaving(true);
     setSaveError("");
@@ -204,6 +225,28 @@ export default function SettingsPage() {
       setSaving(false);
     }
   }, [macroTargets, tSettings]);
+
+  /** Persist notification preferences — DB-backed via user_settings.notif_*. */
+  const saveNotifPrefsAction = useCallback(async (): Promise<boolean> => {
+    setSaving(true);
+    setSaveError("");
+    try {
+      await saveNotificationPrefs(notifPrefs);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1800);
+      setDraftSnapshot(null);
+      return true;
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : tSettings("save_failed"));
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }, [notifPrefs, tSettings]);
+
+  function updNotif<K extends keyof NotificationPrefs>(key: K, val: NotificationPrefs[K]) {
+    setNotifPrefs((prev) => ({ ...prev, [key]: val }));
+  }
 
   async function handleReloadHistorical() {
     if (!confirm(tSettings("historical_confirm"))) return;
@@ -266,6 +309,9 @@ export default function SettingsPage() {
     : tSettings("theme_system")
   ), [themeChoice, tSettings]);
   const localeSub = currentLocale === "de" ? tSettings("subtitle_language_de") : tSettings("subtitle_language_en");
+  const notifSub = notifPrefs.criticalAlerts
+    ? tSettings("subtitle_notif_on", { from: notifPrefs.quietStart, to: notifPrefs.quietEnd })
+    : tSettings("subtitle_notif_off");
 
   /* ── shared sheet footers ──────────────────────────────────────── */
   /** Save footer: button calls `onSave()`; sheet only dismisses on a true
@@ -384,31 +430,75 @@ export default function SettingsPage() {
       title: tSettings("notifications"),
       body: (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {[
-            { key: "notifySpike" as const, label: tSettings("notify_spike_label"), desc: tSettings("notify_spike_desc") },
-            { key: "notifyHypo" as const, label: tSettings("notify_hypo_label"), desc: tSettings("notify_hypo_desc") },
-          ].map((n) => (
-            <div key={n.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", background: "var(--surface-soft)", borderRadius: 10, gap: 12 }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 500 }}>{n.label}</div>
-                <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 2 }}>{n.desc}</div>
-              </div>
-              <div
-                onClick={() => upd(n.key, !settings[n.key])}
-                style={{
-                  width: 44, height: 24, borderRadius: 99, cursor: "pointer", flexShrink: 0,
-                  background: settings[n.key] ? ACCENT : "var(--border-strong)",
-                  border: `1px solid ${settings[n.key] ? ACCENT + "60" : BORDER}`,
-                  position: "relative", transition: "background 0.2s",
-                }}
-              >
-                <div style={{ position: "absolute", top: 2, left: settings[n.key] ? 22 : 2, width: 18, height: 18, borderRadius: 99, background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }} />
-              </div>
+          {/* Critical alerts toggle */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", background: "var(--surface-soft)", borderRadius: 10, gap: 12 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 500 }}>{tSettings("notif_critical_label")}</div>
+              <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 2 }}>{tSettings("notif_critical_desc")}</div>
             </div>
-          ))}
+            <div
+              role="switch"
+              aria-checked={notifPrefs.criticalAlerts}
+              onClick={() => updNotif("criticalAlerts", !notifPrefs.criticalAlerts)}
+              style={{
+                width: 44, height: 24, borderRadius: 99, cursor: "pointer", flexShrink: 0,
+                background: notifPrefs.criticalAlerts ? ACCENT : "var(--border-strong)",
+                border: `1px solid ${notifPrefs.criticalAlerts ? ACCENT + "60" : BORDER}`,
+                position: "relative", transition: "background 0.2s",
+              }}
+            >
+              <div style={{ position: "absolute", top: 2, left: notifPrefs.criticalAlerts ? 22 : 2, width: 18, height: 18, borderRadius: 99, background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }} />
+            </div>
+          </div>
+
+          {/* Smart reminders toggle — disabled in Phase 1; learning + delivery
+              ship in Phase 2. Kept visible so users see what's coming and the
+              setting persists across the rollout. Visual state binds to the
+              DB value so Phase 2 only needs to drop the disabled styling. */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", background: "var(--surface-soft)", borderRadius: 10, gap: 12, opacity: 0.55 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 500 }}>{tSettings("notif_smart_label")}</div>
+              <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 2 }}>{tSettings("notif_smart_soon")}</div>
+            </div>
+            <div
+              role="switch"
+              aria-checked={notifPrefs.smartReminders}
+              aria-disabled
+              style={{
+                width: 44, height: 24, borderRadius: 99, cursor: "not-allowed", flexShrink: 0,
+                background: "var(--border-strong)",
+                border: `1px solid ${BORDER}`,
+                position: "relative",
+              }}
+            >
+              <div style={{ position: "absolute", top: 2, left: notifPrefs.smartReminders ? 22 : 2, width: 18, height: 18, borderRadius: 99, background: "#fff", boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }} />
+            </div>
+          </div>
+
+          {/* Quiet hours from–to */}
+          <div style={{ padding: "12px 14px", background: "var(--surface-soft)", borderRadius: 10 }}>
+            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>{tSettings("notif_quiet_label")}</div>
+            <div style={{ fontSize: 11, color: "var(--text-faint)", marginBottom: 10 }}>{tSettings("notif_quiet_desc")}</div>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12, color: "var(--text-body)" }}>{tSettings("notif_quiet_from")}</span>
+              <input
+                type="time"
+                value={notifPrefs.quietStart}
+                onChange={(e) => updNotif("quietStart", e.target.value)}
+                style={{ ...inp, width: "auto", padding: "6px 10px", fontSize: 13 }}
+              />
+              <span style={{ fontSize: 12, color: "var(--text-body)" }}>{tSettings("notif_quiet_to")}</span>
+              <input
+                type="time"
+                value={notifPrefs.quietEnd}
+                onChange={(e) => updNotif("quietEnd", e.target.value)}
+                style={{ ...inp, width: "auto", padding: "6px 10px", fontSize: 13 }}
+              />
+            </div>
+          </div>
         </div>
       ),
-      footer: <SaveFooter onSave={saveLocalSettings} />,
+      footer: <SaveFooter onSave={saveNotifPrefsAction} />,
     },
     language: {
       title: tSettings("language_card_title"),
@@ -743,6 +833,7 @@ export default function SettingsPage() {
           iconColor={ACCENT}
           icon={ICON.bell}
           label={tSettings("notifications")}
+          subtitle={notifSub}
           ariaLabel={tSettings("row_open_aria", { label: tSettings("notifications") })}
           onClick={() => openSheetWith("notifications")}
         />
