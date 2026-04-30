@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticate, errResponse } from "../_helpers";
-import { getHistory } from "@/lib/cgm/llu";
+import { getHistory } from "@/lib/cgm";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
