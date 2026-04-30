@@ -19,7 +19,6 @@ import {
 } from "@/components/landing/tokens";
 
 const CAPACITY = 500;
-const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/14AeVdgPO65abnv3QwbfO00";
 
 type CountResponse = { count: number; capacity: number; remaining: number };
 
@@ -27,54 +26,136 @@ const MAILTO_WAITLIST =
   "mailto:hello@glev.app?subject=Glev%20Beta%20Warteliste";
 
 /**
- * Primary CTA — direct link to the Stripe Payment Link. Stripe collects
- * the email itself at checkout, so no local form/server-action round-trip
- * is needed. Falls back to the mailto waitlist when capacity is reached.
+ * Primary CTA — POSTs to our /api/checkout/beta endpoint, receives a fresh
+ * Stripe Checkout-Session URL und schickt den User dorthin. Damit kontrollieren
+ * WIR welche Price-IDs verwendet werden (statt eines starr verlinkten Stripe
+ * Payment-Links auf ein altes Produkt). Falls die Beta voll ist, fällt der
+ * CTA auf den Mailto-Warteliste-Link zurück.
  */
 function BetaCTALink({ isFull }: { isFull: boolean }) {
   const [hover, setHover] = useState(false);
-  const href = isFull ? MAILTO_WAITLIST : STRIPE_PAYMENT_LINK;
-  const label = isFull ? "Auf die Warteliste" : "Frühzugang sichern — €19";
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (isFull) {
+    // Warteliste-Fallback bleibt ein simpler mailto-Link — kein API-Call nötig.
+    return (
+      <a
+        href={MAILTO_WAITLIST}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: hover ? ACCENT_HOVER : ACCENT,
+          color: "#fff",
+          textDecoration: "none",
+          border: "none",
+          borderRadius: 12,
+          padding: "16px 32px",
+          fontSize: 18,
+          fontWeight: 600,
+          fontFamily: "inherit",
+          minHeight: 56,
+          cursor: "pointer",
+          boxShadow: hover ? "0 0 0 4px rgba(79,110,247,0.25)" : "0 0 0 0 rgba(79,110,247,0)",
+          transition: "background 120ms ease, box-shadow 120ms ease",
+          outlineColor: "rgba(79,110,247,0.4)",
+          boxSizing: "border-box",
+        }}
+      >
+        Auf die Warteliste
+      </a>
+    );
+  }
+
+  async function handleClick() {
+    if (loading) return;
+    setError(null);
+    setLoading(true);
+
+    // Meta Pixel — Lead conversion event. Fires on jedem CTA-Klick der den
+    // Visitor zu Stripe weiterreicht. Wir feuern es VOR dem fetch damit das
+    // Event auch dann ankommt wenn die Navigation den Pixel-Beacon abschneidet.
+    if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
+      (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("track", "Lead");
+    }
+
+    try {
+      const res = await fetch("/api/checkout/beta", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+
+      if (!res.ok || !data.url) {
+        throw new Error(data.error || `Checkout konnte nicht gestartet werden (HTTP ${res.status})`);
+      }
+
+      // Same-Tab-Redirect zu Stripe Checkout (Stripe-Standard — kein neuer Tab,
+      // damit der Browser-Back-Button den User sauber zurück zu /beta bringt
+      // und damit die success_url-Redirect-Chain auf glev.app funktioniert).
+      window.location.href = data.url;
+    } catch (err) {
+      setLoading(false);
+      const message = err instanceof Error ? err.message : "Unbekannter Fehler";
+      setError(message);
+    }
+  }
+
   return (
-    <a
-      href={href}
-      target={isFull ? undefined : "_blank"}
-      rel={isFull ? undefined : "noopener noreferrer"}
-      onClick={() => {
-        // Meta Pixel — Lead conversion event. Fires on every CTA click
-        // that hands the visitor over to Stripe checkout (the
-        // closest signal we have to a "form submit" since the form
-        // itself lives on Stripe's hosted page). Skipped when the
-        // beta is full and the CTA falls back to the mailto waitlist.
-        if (!isFull && typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
-          (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("track", "Lead");
-        }
-      }}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: hover ? ACCENT_HOVER : ACCENT,
-        color: "#fff",
-        textDecoration: "none",
-        border: "none",
-        borderRadius: 12,
-        padding: "16px 32px",
-        fontSize: 18,
-        fontWeight: 600,
-        fontFamily: "inherit",
-        minHeight: 56,
-        cursor: "pointer",
-        boxShadow: hover ? "0 0 0 4px rgba(79,110,247,0.25)" : "0 0 0 0 rgba(79,110,247,0)",
-        transition: "background 120ms ease, box-shadow 120ms ease",
-        outlineColor: "rgba(79,110,247,0.4)",
-        boxSizing: "border-box",
-      }}
-    >
-      {label}
-    </a>
+    <>
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={loading}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: loading ? "rgba(79,110,247,0.6)" : hover ? ACCENT_HOVER : ACCENT,
+          color: "#fff",
+          textDecoration: "none",
+          border: "none",
+          borderRadius: 12,
+          padding: "16px 32px",
+          fontSize: 18,
+          fontWeight: 600,
+          fontFamily: "inherit",
+          minHeight: 56,
+          cursor: loading ? "default" : "pointer",
+          boxShadow: hover && !loading ? "0 0 0 4px rgba(79,110,247,0.25)" : "0 0 0 0 rgba(79,110,247,0)",
+          transition: "background 120ms ease, box-shadow 120ms ease",
+          outlineColor: "rgba(79,110,247,0.4)",
+          boxSizing: "border-box",
+          width: "100%",
+        }}
+      >
+        {loading ? "Weiterleitung zu Stripe …" : "Frühzugang sichern — €19"}
+      </button>
+      {error && (
+        <div
+          role="alert"
+          style={{
+            marginTop: 10,
+            padding: "10px 12px",
+            background: "rgba(255,45,120,0.08)",
+            border: "1px solid rgba(255,45,120,0.3)",
+            borderRadius: 8,
+            color: "#FF7AA8",
+            fontSize: 13,
+            lineHeight: 1.4,
+          }}
+        >
+          {error}
+        </div>
+      )}
+    </>
   );
 }
 
