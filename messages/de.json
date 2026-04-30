@@ -724,7 +724,7 @@
     "tip_no_meals": "Heute noch keine Mahlzeiten geloggt — füge deine erste Mahlzeit hinzu.",
     "tip_all_on_track": "Alle Makros heute nahe am Ziel — gut gemacht.",
     "tip_lowest": "{label} liegt bei {pct}% des Ziels — ergänze beim nächsten Essen mehr davon.",
-    "macro_carbs": "KOHLENHYDRATE",
+    "macro_carbs": "CARBS",
     "macro_protein": "PROTEIN",
     "macro_fat": "FETT",
     "macro_fiber": "BALLASTSTOFFE",
