@@ -1,5 +1,28 @@
-export function betaWelcomeHtml(name?: string | null): string {
+/**
+ * HTML body for the post-Stripe-checkout welcome email.
+ *
+ * The CTA "Registrierung abschließen" is the load-bearing piece: when the
+ * buyer closes the success-tab before setting a password, this is the only
+ * way back into the signup flow. It links to /welcome?session_id=… so that
+ * the page can re-verify the payment via /api/verify-payment regardless of
+ * how much time has passed since checkout.
+ *
+ * @param name      Customer name from Stripe (optional).
+ * @param sessionId Stripe Checkout Session ID — must be the live id, never
+ *                  the literal `{CHECKOUT_SESSION_ID}` placeholder.
+ * @param appUrl    Public app origin without trailing slash. Used to build
+ *                  the resume link. Falls back to https://glev.app if missing.
+ */
+export function betaWelcomeHtml(
+  name?: string | null,
+  sessionId?: string | null,
+  appUrl?: string | null,
+): string {
   const greeting = name ? `Hallo ${name}` : 'Hallo';
+  const baseUrl = (appUrl || 'https://glev.app').replace(/\/$/, '');
+  const resumeUrl = sessionId
+    ? `${baseUrl}/welcome?session_id=${encodeURIComponent(sessionId)}`
+    : `${baseUrl}/welcome`;
 
   return `<!DOCTYPE html>
 <html lang="de">
@@ -30,40 +53,49 @@ export function betaWelcomeHtml(name?: string | null): string {
 
               <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
                 herzlichen Glückwunsch — du bist jetzt offiziell ein Beta-Tester von Glev!
-                Deine erste Zahlung von <strong>€23,50</strong>
-                (€19 einmalige Setup-Gebühr + €4,50 für deinen ersten Monat)
-                wurde erfolgreich verarbeitet und dein Zugang ist <strong>sofort aktiv</strong>.
+                Deine Zahlung wurde erfolgreich verarbeitet und dein Beta-Zugang ist
+                <strong>aktiviert</strong>.
               </p>
 
-              <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
-                Ab Tag 30 läuft dein Abo automatisch weiter für nur
-                <strong>€4,50 pro Monat</strong>. Du musst dafür nichts weiter tun,
-                keine Kreditkarte erneut eingeben — alles läuft im Hintergrund.
-                Kündigen kannst du jederzeit über deinen Account-Bereich.
+              <p style="margin:0 0 24px;font-size:15px;line-height:1.7;color:#374151;">
+                <strong>Letzter Schritt:</strong> Bitte schließe deine Registrierung ab,
+                indem du auf den Button unten klickst und ein Passwort wählst. Dein
+                Account ist erst dann nutzbar.
               </p>
 
-              <p style="margin:0 0 32px;font-size:15px;line-height:1.7;color:#374151;">
-                Ich freue mich wirklich, dass du dabei bist. Dein Feedback als einer der
-                ersten Nutzer ist für mich Gold wert — meld dich einfach direkt bei mir,
-                wenn du Fragen hast oder etwas nicht stimmt.
-              </p>
-
-              <!-- CTA -->
-              <table cellpadding="0" cellspacing="0" style="margin:0 auto 32px;">
+              <!-- Primary CTA — Resume registration -->
+              <table cellpadding="0" cellspacing="0" style="margin:0 auto 16px;">
                 <tr>
-                  <td style="background:#0f172a;border-radius:8px;">
-                    <a href="https://app.glev.app"
-                       style="display:inline-block;padding:14px 32px;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;letter-spacing:0.2px;">
-                      App öffnen →
+                  <td style="background:#4F6EF7;border-radius:8px;">
+                    <a href="${resumeUrl}"
+                       style="display:inline-block;padding:16px 36px;color:#ffffff;font-size:16px;font-weight:700;text-decoration:none;letter-spacing:0.2px;">
+                      Registrierung abschließen →
                     </a>
                   </td>
                 </tr>
               </table>
 
-              <p style="margin:0;font-size:15px;line-height:1.7;color:#374151;">
+              <p style="margin:0 0 32px;font-size:12px;line-height:1.5;color:#6b7280;text-align:center;">
+                Der Link funktioniert auch, wenn du den ursprünglichen Tab geschlossen hast.
+              </p>
+
+              <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
+                Sobald dein Account steht, geht's direkt los: CGM verbinden, erste
+                Mahlzeit loggen, und Glev rechnet deine Insulindosis. Dein Feedback
+                als einer der ersten Nutzer ist für mich Gold wert — meld dich
+                einfach direkt bei mir, wenn etwas nicht stimmt.
+              </p>
+
+              <p style="margin:0 0 24px;font-size:15px;line-height:1.7;color:#374151;">
                 Bis bald,<br />
                 <strong>Lucas</strong><br />
                 <span style="color:#6b7280;">Glev Team</span>
+              </p>
+
+              <!-- Secondary link — App entry once account is set up -->
+              <p style="margin:0;font-size:12px;line-height:1.6;color:#9ca3af;text-align:center;border-top:1px solid #f1f5f9;padding-top:18px;">
+                Account bereits eingerichtet?
+                <a href="${baseUrl}/login" style="color:#4F6EF7;text-decoration:none;font-weight:600;">Zum Login →</a>
               </p>
             </td>
           </tr>
@@ -72,7 +104,7 @@ export function betaWelcomeHtml(name?: string | null): string {
           <tr>
             <td style="padding:20px 40px;border-top:1px solid #f1f5f9;">
               <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;">
-                Glev · info@glev.app · Diese E-Mail wurde an dich geschickt, weil du dich als Beta-Tester angemeldet hast.
+                Glev · <a href="mailto:hello@glev.app" style="color:#9ca3af;">hello@glev.app</a> · Diese E-Mail wurde an dich geschickt, weil du dich als Beta-Tester angemeldet hast.
               </p>
             </td>
           </tr>

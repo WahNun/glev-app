@@ -25,6 +25,21 @@ function getResend() {
   return new Resend(process.env.RESEND_API_KEY);
 }
 
+function resolveAppUrl(req: NextRequest): string {
+  const env =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.NEXT_PUBLIC_SITE_ORIGIN ||
+    '';
+  if (env) return env.replace(/\/$/, '');
+  // Fall back to the request host so the resume link still points at the
+  // correct deployment if env isn't configured.
+  const proto =
+    req.headers.get('x-forwarded-proto') ?? new URL(req.url).protocol.replace(':', '');
+  const host =
+    req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? new URL(req.url).host;
+  return `${proto}://${host}`;
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.text();
   const sig = req.headers.get('stripe-signature');
@@ -50,51 +65,200 @@ export async function POST(req: NextRequest) {
 
     const email = session.customer_email ?? session.customer_details?.email;
     const name = session.customer_details?.name ?? null;
+    const sessionId = session.id;
+    const customerId =
+      typeof session.customer === 'string' ? session.customer : session.customer?.id ?? null;
 
     if (!email) {
       // eslint-disable-next-line no-console
-      console.warn('[webhook] checkout.session.completed — no email found, skipping');
+      console.warn('[webhook] checkout.session.completed — no email found, skipping', {
+        sessionId,
+        eventId: event.id,
+      });
       return NextResponse.json({ received: true });
     }
 
-    // 1. Welcome Email via Resend
+    const appUrl = resolveAppUrl(req);
+
+    // 1. Welcome Email via Resend — INCLUDES the resume link so the buyer
+    //    can come back days later and finish signup even if they closed
+    //    the success-tab.
     try {
       const resend = getResend();
-      await resend.emails.send({
+      const { data, error } = await resend.emails.send({
         from: 'Glev <info@glev.app>',
         to: email,
-        subject: 'Willkommen bei Glev — dein Beta-Zugang ist aktiv 🎉',
-        html: betaWelcomeHtml(name),
+        subject: 'Willkommen bei Glev — bitte schließe deine Registrierung ab',
+        html: betaWelcomeHtml(name, sessionId, appUrl),
       });
-      // eslint-disable-next-line no-console
-      console.log(`[webhook] Welcome email sent to ${email}`);
+
+      if (error) {
+        // Resend SDK returns errors as a structured object on the response,
+        // not as a thrown exception (which only happens for transport-level
+        // failures). Surface the full body — `name`, `message`, and the
+        // statusCode if present — so prod logs actually show *why* delivery
+        // failed (unverified domain, invalid recipient, etc.) instead of
+        // the generic "Failed to send" we used to print.
+        // eslint-disable-next-line no-console
+        console.error('[webhook] Resend send returned error:', {
+          to: email,
+          sessionId,
+          error,
+        });
+      } else if (data?.id) {
+        // Success: log message-id so we can grep for delivery confirmations.
+        // eslint-disable-next-line no-console
+        console.log('[webhook] Welcome email sent:', {
+          to: email,
+          sessionId,
+          messageId: data.id,
+        });
+      } else {
+        // Should not happen — Resend always returns either data or error —
+        // but keep a noisy log so we notice if the contract changes.
+        // eslint-disable-next-line no-console
+        console.warn('[webhook] Resend send returned no data and no error:', {
+          to: email,
+          sessionId,
+        });
+      }
     } catch (err) {
+      // Transport-level / network error — Resend SDK threw. Include the
+      // full error so the operator can see status code + body.
       // eslint-disable-next-line no-console
-      console.error('[webhook] Failed to send welcome email:', err);
-      // Nicht abbrechen — Supabase-Update trotzdem versuchen
+      console.error('[webhook] Resend send threw:', {
+        to: email,
+        sessionId,
+        err,
+      });
+      // Nicht abbrechen — Supabase-Updates trotzdem versuchen
     }
 
-    // 2. Supabase Profile updaten
+    const supabaseAdmin = getSupabaseAdmin();
+
+    // 2. Supabase profile updaten — wenn die Zeile schon existiert (zB. der
+    //    User hatte vor dem Checkout schon einen Account), dann jetzt auf
+    //    Beta hochstufen. Wenn nicht: einfach 0 rows updated, kein Fehler.
+    //    Die Profil-Zeile entsteht erst beim Supabase-Signup auf /welcome,
+    //    dort muss der Trigger / dort muss ein separater Hook nachziehen.
     try {
-      const supabaseAdmin = getSupabaseAdmin();
-      const { error } = await supabaseAdmin
+      const { data: profileUpdated, error } = await supabaseAdmin
         .from('profiles')
         .update({
           subscription_status: 'beta',
           plan: 'beta',
         })
-        .eq('email', email);
+        .eq('email', email)
+        .select('id');
 
       if (error) {
         // eslint-disable-next-line no-console
-        console.error('[webhook] Supabase update failed:', error.message);
+        console.error('[webhook] Supabase profile update failed:', {
+          email,
+          sessionId,
+          code: error.code,
+          message: error.message,
+          details: error.details,
+        });
       } else {
         // eslint-disable-next-line no-console
-        console.log(`[webhook] Supabase profile updated for ${email}`);
+        console.log('[webhook] Supabase profile update:', {
+          email,
+          sessionId,
+          rowsUpdated: profileUpdated?.length ?? 0,
+        });
       }
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.error('[webhook] Supabase update error:', err);
+      console.error('[webhook] Supabase profile update threw:', {
+        email,
+        sessionId,
+        err,
+      });
+    }
+
+    // 3. beta_reservations updaten — defensiv, falls der Käufer über den
+    //    /api/beta/checkout (one-time) Flow gekommen ist, der vorab eine
+    //    `pending`-Zeile anlegt. Bei /api/checkout/beta (subscription)
+    //    existiert keine Reservation — dann läuft das Update einfach ins
+    //    Leere. Idempotent: nur `pending` → `paid`, niemals eine bereits
+    //    paid/refunded/cancelled Zeile überschreiben.
+    try {
+      // Match preferentially by stripe_session_id (gesetzt vom checkout-create),
+      // fallback by email für den Fall dass die session_id nicht persistiert
+      // werden konnte.
+      const nowIso = new Date().toISOString();
+      const { data: bySession, error: sessionUpdErr } = await supabaseAdmin
+        .from('beta_reservations')
+        .update({
+          status: 'paid',
+          fulfilled_at: nowIso,
+          stripe_customer_id: customerId,
+        })
+        .eq('stripe_session_id', sessionId)
+        .eq('status', 'pending')
+        .select('id, email');
+
+      if (sessionUpdErr) {
+        // eslint-disable-next-line no-console
+        console.error('[webhook] beta_reservations update by session_id failed:', {
+          sessionId,
+          code: sessionUpdErr.code,
+          message: sessionUpdErr.message,
+        });
+      } else if (bySession && bySession.length > 0) {
+        // eslint-disable-next-line no-console
+        console.log('[webhook] beta_reservations marked paid by session_id:', {
+          sessionId,
+          email,
+          rows: bySession.length,
+        });
+      } else {
+        // No pending row matched the session_id — try email as fallback.
+        const { data: byEmail, error: emailUpdErr } = await supabaseAdmin
+          .from('beta_reservations')
+          .update({
+            status: 'paid',
+            fulfilled_at: nowIso,
+            stripe_session_id: sessionId,
+            stripe_customer_id: customerId,
+          })
+          .eq('email', email.toLowerCase())
+          .eq('status', 'pending')
+          .select('id');
+
+        if (emailUpdErr) {
+          // eslint-disable-next-line no-console
+          console.error('[webhook] beta_reservations update by email failed:', {
+            email,
+            sessionId,
+            code: emailUpdErr.code,
+            message: emailUpdErr.message,
+          });
+        } else if (byEmail && byEmail.length > 0) {
+          // eslint-disable-next-line no-console
+          console.log('[webhook] beta_reservations marked paid by email:', {
+            email,
+            sessionId,
+            rows: byEmail.length,
+          });
+        } else {
+          // Neither path matched — typical for the subscription /api/checkout/beta
+          // flow which doesn't pre-insert reservations. Not an error.
+          // eslint-disable-next-line no-console
+          console.log('[webhook] no beta_reservations row to update (subscription flow):', {
+            email,
+            sessionId,
+          });
+        }
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[webhook] beta_reservations update threw:', {
+        email,
+        sessionId,
+        err,
+      });
     }
   }
 

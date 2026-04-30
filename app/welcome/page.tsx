@@ -71,6 +71,69 @@ function WelcomeFallback() {
   );
 }
 
+// Per-reason copy for the "invalid session" branch. The default fallback
+// keeps the legacy "kein gültiger Beta-Zugang" text but every other branch
+// surfaces a specific failure mode + a mailto support link instead of just
+// throwing the user back to /beta. This matters because users who arrive
+// via the email resume link days/hours later may hit `not_found` if Stripe
+// purged the session, or `not_paid` if they bookmarked the cancel page.
+function InvalidState({ reason }: { reason: string }) {
+  let title = "Kein gültiger Beta-Zugang gefunden.";
+  let body = "Diese Seite ist nur nach erfolgreicher Beta-Reservierung verfügbar.";
+  let showBetaCta = true;
+
+  if (reason === "no_session_id" || reason === "missing_session_id") {
+    title = "Link unvollständig";
+    body = "Es fehlt die Session-ID in der URL. Klicke noch einmal auf den \"Registrierung abschließen\"-Button in deiner Willkommens-Email.";
+    showBetaCta = false;
+  } else if (reason === "not_found") {
+    title = "Session konnte nicht geladen werden";
+    body = "Stripe kennt diese Checkout-Session nicht (mehr). Das passiert sehr selten, und am schnellsten lösen wir das per Email — meld dich kurz bei hello@glev.app, wir setzen deinen Zugang dann manuell auf.";
+    showBetaCta = false;
+  } else if (reason === "not_paid") {
+    title = "Zahlung noch nicht abgeschlossen";
+    body = "Diese Stripe-Session wurde gestartet, aber die Zahlung ging noch nicht durch. Falls das ein Versehen war, kannst du unten neu starten — oder schreib uns an hello@glev.app, wenn du sicher bist dass du gezahlt hast.";
+  } else if (reason === "retrieve_failed" || reason === "network") {
+    title = "Verbindung zu Stripe hat nicht geklappt";
+    body = "Bitte lade die Seite in ein paar Sekunden neu. Wenn das wiederholt fehlschlägt, melde dich bei hello@glev.app — wir helfen schnell weiter.";
+    showBetaCta = false;
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ fontSize: 18, fontWeight: 700, color: "#fff", textAlign: "center" }}>
+        {title}
+      </div>
+      <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", textAlign: "center", lineHeight: 1.6 }}>
+        {body}
+      </div>
+      <a
+        href="mailto:hello@glev.app?subject=Beta-Zugang%20%E2%80%94%20Welcome-Page%20Problem"
+        style={{
+          marginTop: 6, padding: "12px",
+          border: "1px solid rgba(255,255,255,0.12)",
+          borderRadius: 12,
+          color: "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: 600,
+          textAlign: "center", textDecoration: "none",
+        }}
+      >
+        Support kontaktieren: hello@glev.app
+      </a>
+      {showBetaCta && (
+        <Link href="/beta" style={{
+          padding: "13px",
+          background: `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
+          border: "none", borderRadius: 12,
+          color: "white", fontSize: 14, fontWeight: 700,
+          textAlign: "center", textDecoration: "none",
+        }}>
+          Beta reservieren
+        </Link>
+      )}
+    </div>
+  );
+}
+
 function WelcomeInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -190,23 +253,7 @@ function WelcomeInner() {
           )}
 
           {verify.kind === "invalid" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <div style={{ fontSize: 18, fontWeight: 700, color: "#fff", textAlign: "center" }}>
-                Kein gültiger Beta-Zugang gefunden.
-              </div>
-              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", textAlign: "center", lineHeight: 1.5 }}>
-                Diese Seite ist nur nach erfolgreicher Beta-Reservierung verfügbar.
-              </div>
-              <Link href="/beta" style={{
-                marginTop: 6, padding: "13px",
-                background: `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
-                border: "none", borderRadius: 12,
-                color: "white", fontSize: 14, fontWeight: 700,
-                textAlign: "center", textDecoration: "none",
-              }}>
-                Beta reservieren
-              </Link>
-            </div>
+            <InvalidState reason={verify.reason} />
           )}
 
           {verify.kind === "valid" && (
