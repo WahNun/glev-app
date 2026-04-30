@@ -865,12 +865,12 @@ export default function CgmSettingsCard() {
                 style={inp}
               >
                 <option value="librelinkup">LibreLinkUp</option>
-                <option value="libreview-junction">LibreView (Junction) — Coming Soon</option>
+                <option value="libreview-junction">LibreView (Junction) — Bald verfügbar</option>
                 <option value="nightscout">Nightscout</option>
                 <option value="apple-health" disabled={!isNativePlatform}>
                   Apple Health{isNativePlatform ? "" : " — nur in der iOS-App"}
                 </option>
-                <option value="dexcom" disabled>Dexcom (coming soon)</option>
+                <option value="dexcom" disabled>Dexcom (bald verfügbar)</option>
               </select>
             </div>
 
@@ -1010,7 +1010,7 @@ export default function CgmSettingsCard() {
                       padding: "3px 9px",
                     }}
                   >
-                    Coming Soon
+                    Bald verfügbar
                   </span>
                   <span>
                     Verbinde dein LibreView-Konto über Junction. Du wirst kurz auf
