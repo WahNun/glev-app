@@ -141,7 +141,17 @@ Border:      rgba(255,255,255,0.08)
 pnpm --filter @workspace/glev run dev          # Start Next.js app (port 5000, clears .next cache)
 pnpm --filter @workspace/glev exec tsc --noEmit  # TypeScript check
 pnpm --filter @workspace/api-server run dev    # Start Express API server
+npm test                                        # Playwright e2e suite (auto-reuses dev server on :5000)
 ```
+
+## Testing
+
+End-to-end tests live under `tests/e2e/` and run via Playwright (`npm test`).
+
+- `playwright.config.ts` reuses the running dev server on port 5000 (`reuseExistingServer: true`); if nothing is listening, it boots `npm run dev` itself.
+- On Replit it points Chromium at the Nix-managed binary in `$REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE` (the playwright-bundled `chromium-headless-shell` is missing system libs).
+- `tests/global-setup.ts` provisions a Supabase test user (`playwright-theme@glev.test`) using `SUPABASE_SERVICE_ROLE_KEY`, rotates its password each run, and writes the credentials to `tests/.cache/test-user.json` (gitignored).
+- Specs sign in through the real `/login` form, so middleware + Supabase cookie storage are exercised end-to-end.
 
 ## Notes
 
