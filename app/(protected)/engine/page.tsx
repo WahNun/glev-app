@@ -1017,7 +1017,7 @@ export default function EnginePage() {
       // FIX A: Visible save feedback. The decision panel that pops up below
       // is contextual UI, not a save confirmation, so without this toast
       // users had no signal that the row actually persisted.
-      setDecisionToast("Mahlzeit gespeichert ✓");
+      setDecisionToast(tEngine("toast_meal_saved"));
       setTimeout(() => setDecisionToast(null), 2500);
       logDebug("ENGINE.CONFIRM_LOG", { id: saved.id, carbs: cNum, insulin: iNum, glucose: gNum, mealType: cls });
       // Schedule CGM auto-fetches at +1h / +2h after meal time. Fire-and-forget;
@@ -1631,7 +1631,7 @@ export default function EnginePage() {
           {stepIndex === 1 && wizardSavedDose === null && (
             <div style={{ ...card, padding: 24 }}>
               <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 20, color:"var(--text)" }}>
-                Makros prüfen
+                {tEngine("step_title_macros")}
               </h2>
 
               {/* Section header: Makros — 2x2 grid (Carbs+Fiber, Protein+Fat) */}
@@ -1780,7 +1780,7 @@ export default function EnginePage() {
                     transition: "background 0.2s",
                   }}
                 >
-                  {confirming ? "Speichere…" : "✓ Speichern (ohne Bolus)"}
+                  {confirming ? tEngine("btn_saving") : tEngine("btn_save_without_bolus")}
                 </button>
 
                 {/* SECONDARY ──────────────────────────────────────── */}
@@ -1812,7 +1812,7 @@ export default function EnginePage() {
                           borderRadius: "50%", animation: "engSpin 0.7s linear infinite",
                         }}/>
                       )}
-                      {running ? "Berechne…" : "Bolus berechnen →"}
+                      {running ? tEngine("btn_calculating") : tEngine("btn_calculate_bolus")}
                     </button>
                   );
                 })()}
@@ -1833,7 +1833,7 @@ export default function EnginePage() {
                       textDecorationColor: "var(--text-ghost)",
                     }}
                   >
-                    Bolus direkt eingeben
+                    {tEngine("btn_direct_bolus_open")}
                   </button>
                 ) : (
                   <div
@@ -1846,13 +1846,13 @@ export default function EnginePage() {
                   >
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                       <span style={{ fontSize: 12, fontWeight: 700, color: ACCENT, letterSpacing: "-0.01em" }}>
-                        Direkter Bolus
+                        {tEngine("direct_bolus_label")}
                       </span>
                       <button
                         type="button"
                         onClick={() => { setDirectBolusOpen(false); setDirectBolusValue(""); setConfirmErr(""); }}
                         disabled={confirming}
-                        aria-label="Abbrechen"
+                        aria-label={tEngine("cancel_aria")}
                         style={{
                           background: "transparent", border: "none",
                           color: "var(--text-dim)", fontSize: 18,
@@ -1891,7 +1891,7 @@ export default function EnginePage() {
                           color: "var(--text-dim)", fontSize: 12, fontWeight: 600,
                           pointerEvents: "none",
                         }}>
-                          IE
+                          {tEngine("units_short")}
                         </span>
                       </div>
                       {(() => {
@@ -1916,10 +1916,10 @@ export default function EnginePage() {
                             }}
                           >
                             {confirming
-                              ? "Speichere…"
+                              ? tEngine("btn_saving")
                               : valid
-                                ? `Speichern mit ${iNum} IE`
-                                : "Speichern"}
+                                ? tEngine("btn_save_with_dose", { dose: iNum, units: tEngine("units_short") })
+                                : tEngine("btn_save")}
                           </button>
                         );
                       })()}
@@ -1938,7 +1938,7 @@ export default function EnginePage() {
                     cursor: running || confirming ? "not-allowed" : "pointer",
                   }}
                 >
-                  ← Zurück
+                  {tEngine("btn_back")}
                 </button>
               </div>
             </div>
