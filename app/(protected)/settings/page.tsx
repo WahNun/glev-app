@@ -8,6 +8,7 @@ import { fetchMacroTargets, saveMacroTargets, DEFAULT_MACRO_TARGETS, type MacroT
 import ImportPanel from "@/components/ImportPanel";
 import ExportPanel from "@/components/ExportPanel";
 import CgmSettingsCard from "@/components/CgmSettingsCard";
+import NightscoutSettingsCard from "@/components/NightscoutSettingsCard";
 import { parseDbDate, localeToBcp47 } from "@/lib/time";
 import { setLocale, readLocaleCookie, DEFAULT_LOCALE, type Locale } from "@/lib/locale";
 import { useTheme } from "@/components/ThemeProvider";
@@ -48,7 +49,7 @@ export default function SettingsPage() {
   const [saved, setSaved]     = useState(false);
   const [mealCount, setMealCount] = useState<number>(0);
   const [reloading, setReloading] = useState(false);
-  const [reloadMsg, setReloadMsg] = useState<string>("");
+  const [reloadMsg, setReloadMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   // Reflects the NEXT_LOCALE cookie so the language toggle highlights
   // the correct button immediately on mount. Reads in an effect because
   // document.cookie is browser-only — server render shows DEFAULT.
@@ -97,7 +98,7 @@ export default function SettingsPage() {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : "Save failed");
+      setSaveError(e instanceof Error ? e.message : tSettings("save_failed"));
       setTimeout(() => setSaveError(""), 4000);
     } finally {
       setSaving(false);
@@ -105,19 +106,19 @@ export default function SettingsPage() {
   }
 
   async function handleReloadHistorical() {
-    if (!confirm("This will replace ALL your meal entries with the historical sample data (Apr 17–22, 2026). Continue?")) return;
+    if (!confirm(tSettings("historical_confirm"))) return;
     setReloading(true);
-    setReloadMsg("");
+    setReloadMsg(null);
     try {
       const { inserted } = await reloadHistoricalEntries();
-      setReloadMsg(`Loaded ${inserted} historical entries`);
+      setReloadMsg({ kind: "ok", text: tSettings("historical_loaded", { count: inserted }) });
       const { count } = await supabase!.from("meals").select("id", { count:"exact", head:true });
       setMealCount(count || 0);
     } catch (e) {
-      setReloadMsg(`Error: ${e instanceof Error ? e.message : "failed"}`);
+      setReloadMsg({ kind: "error", text: tSettings("historical_error", { message: e instanceof Error ? e.message : tSettings("historical_failed") }) });
     } finally {
       setReloading(false);
-      setTimeout(() => setReloadMsg(""), 4000);
+      setTimeout(() => setReloadMsg(null), 4000);
     }
   }
 
@@ -135,8 +136,8 @@ export default function SettingsPage() {
   return (
     <div style={{ maxWidth:720, margin:"0 auto" }}>
       <div style={{ marginBottom:28 }}>
-        <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>Account</h1>
-        <p style={{ color:"var(--text-faint)", fontSize:14 }}>Manage your profile and Glev settings.</p>
+        <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>{tSettings("page_title")}</h1>
+        <p style={{ color:"var(--text-faint)", fontSize:14 }}>{tSettings("page_subtitle")}</p>
       </div>
 
       {/* TABS — visually matches the Verlauf (history) page toggle in
@@ -148,25 +149,24 @@ export default function SettingsPage() {
           "Integrations" to "Integrati…" on narrow phones (iPhone 13
           mini, reported 2026-04-29). Wider screens keep the spread-out
           look because the spare space distributes around the pills. */}
-      <div role="tablist" aria-label="Account" style={{
+      <div role="tablist" aria-label={tSettings("tab_aria")} style={{
         display:"flex", gap:2, marginBottom:24,
         background:"var(--border-soft)", borderRadius:99,
         padding:4, width:"100%",
         justifyContent:"space-around",
         overflowX:"auto", scrollbarWidth:"none",
       }}>
-        {(["overview","settings","integrations","data"] as const).map(t => (
-          <button key={t} role="tab" aria-selected={tab===t} onClick={() => setTab(t)} style={{
+        {(["overview","settings","integrations","data"] as const).map(tabKey => (
+          <button key={tabKey} role="tab" aria-selected={tab===tabKey} onClick={() => setTab(tabKey)} style={{
             flex:"0 0 auto",
             padding:"8px 14px", borderRadius:99, border:"none", cursor:"pointer",
-            background: tab===t ? ACCENT : "transparent",
+            background: tab===tabKey ? ACCENT : "transparent",
             color:"var(--text)",
-            fontSize:13, fontWeight:tab===t?600:500,
-            textTransform: "capitalize",
+            fontSize:13, fontWeight:tab===tabKey?600:500,
             whiteSpace:"nowrap",
             textAlign:"center",
             transition:"background 0.15s",
-          }}>{t}</button>
+          }}>{tSettings(`tab_${tabKey}`)}</button>
         ))}
       </div>
 
@@ -174,24 +174,24 @@ export default function SettingsPage() {
         <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
           {/* Profile */}
           <div style={card}>
-            <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>Profile</div>
+            <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>{tSettings("profile")}</div>
             <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:20 }}>
               <div style={{ width:56, height:56, borderRadius:99, background:`linear-gradient(135deg,${ACCENT},#6B8BFF)`, border:`2px solid ${ACCENT}66`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, fontWeight:800, color:"var(--text)", letterSpacing:"-0.02em", textTransform:"uppercase" }}>
                 {(email.split("@")[0] || "U").charAt(0)}
               </div>
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:2 }}>
-                  <div style={{ fontSize:16, fontWeight:700 }}>{email.split("@")[0] || "User"}</div>
-                  <span style={{ fontSize:9, fontWeight:700, padding:"2px 8px", borderRadius:99, background:`${ACCENT}20`, color:ACCENT, letterSpacing:"0.08em" }}>MEMBER</span>
+                  <div style={{ fontSize:16, fontWeight:700 }}>{email.split("@")[0] || tSettings("user_fallback")}</div>
+                  <span style={{ fontSize:9, fontWeight:700, padding:"2px 8px", borderRadius:99, background:`${ACCENT}20`, color:ACCENT, letterSpacing:"0.08em" }}>{tSettings("member_pill")}</span>
                 </div>
                 <div style={{ fontSize:13, color:"var(--text-dim)" }}>{email}</div>
               </div>
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
               {[
-                { label:"Member Since", val:createdAt||"—" },
-                { label:"Meals Logged", val:mealCount.toString() },
-                { label:"Plan", val:"Glev Free" },
+                { label:tSettings("member_since"), val:createdAt||"—" },
+                { label:tSettings("meals_logged"), val:mealCount.toString() },
+                { label:tSettings("plan"), val:tSettings("plan_free") },
               ].map(s => (
                 <div key={s.label} style={{ background:"var(--surface-soft)", borderRadius:10, padding:"12px 14px" }}>
                   <div style={{ fontSize:11, color:"var(--text-faint)", marginBottom:4 }}>{s.label}</div>
@@ -203,11 +203,11 @@ export default function SettingsPage() {
 
           {/* ICR Info */}
           <div style={card}>
-            <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>Deine Insulin-Einstellungen</div>
+            <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>{tSettings("insulin_settings_title")}</div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
               {[
-                { label:"Insulin-to-Carb Ratio", val:`1:${settings.icr}`, sub:"grams per unit", color:ACCENT },
-                { label:"Correction Factor", val:`1:${settings.cf}`, sub:"mg/dL per unit", color:"#A78BFA" },
+                { label:tSettings("insulin_to_carb_ratio"), val:`1:${settings.icr}`, sub:tSettings("icr_unit"), color:ACCENT },
+                { label:tSettings("correction_factor"), val:`1:${settings.cf}`, sub:tSettings("cf_unit"), color:"#A78BFA" },
               ].map(s => (
                 <div key={s.label} style={{ background:`${s.color}08`, border:`1px solid ${s.color}20`, borderRadius:12, padding:"14px 16px" }}>
                   <div style={{ fontSize:11, color:"var(--text-faint)", marginBottom:4 }}>{s.label}</div>
@@ -217,8 +217,8 @@ export default function SettingsPage() {
               ))}
               <div style={{ gridColumn:"1 / -1", background:`${GREEN}08`, border:`1px solid ${GREEN}20`, borderRadius:12, padding:"14px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
                 <div>
-                  <div style={{ fontSize:11, color:"var(--text-faint)", marginBottom:4 }}>Target range</div>
-                  <div style={{ fontSize:11, color:"var(--text-ghost)" }}>safe glucose window</div>
+                  <div style={{ fontSize:11, color:"var(--text-faint)", marginBottom:4 }}>{tSettings("target_range")}</div>
+                  <div style={{ fontSize:11, color:"var(--text-ghost)" }}>{tSettings("target_range_sub")}</div>
                 </div>
                 <div style={{ fontSize:20, fontWeight:800, color:GREEN, letterSpacing:"-0.02em" }}>
                   {settings.targetMin} <span style={{ color:"var(--text-faint)" }}>—</span> {settings.targetMax}
@@ -227,25 +227,25 @@ export default function SettingsPage() {
               </div>
             </div>
             <button onClick={() => setTab("settings")} style={{ marginTop:14, padding:"9px 18px", borderRadius:9, border:`1px solid ${BORDER}`, background:"transparent", color:"var(--text-dim)", fontSize:13, cursor:"pointer" }}>
-              Edit Settings →
+              {tSettings("edit_settings")}
             </button>
           </div>
 
           {/* Historical Data */}
           <div style={card}>
-            <div style={{ fontSize:13, fontWeight:600, marginBottom:6 }}>Historical Data</div>
+            <div style={{ fontSize:13, fontWeight:600, marginBottom:6 }}>{tSettings("historical_data_title")}</div>
             <div style={{ fontSize:12, color:"var(--text-dim)", marginBottom:14, lineHeight:1.5 }}>
-              Replace your meal log with the 15 historical entries from the tracking sheet (Apr 17–22, 2026). Useful for resetting the app to a known demo state.
+              {tSettings("historical_data_desc")}
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:12 }}>
               <button onClick={handleReloadHistorical} disabled={reloading} style={{
                 padding:"10px 18px", borderRadius:10, border:`1px solid ${ACCENT}40`, cursor: reloading ? "wait" : "pointer",
                 background:`${ACCENT}15`, color:ACCENT, fontSize:13, fontWeight:600, opacity: reloading ? 0.6 : 1,
               }}>
-                {reloading ? "Loading…" : "Reload historical entries"}
+                {reloading ? tSettings("historical_loading") : tSettings("historical_reload")}
               </button>
               {reloadMsg && (
-                <span style={{ fontSize:12, color: reloadMsg.startsWith("Error") ? PINK : GREEN }}>{reloadMsg}</span>
+                <span style={{ fontSize:12, color: reloadMsg.kind === "error" ? PINK : GREEN }}>{reloadMsg.text}</span>
               )}
             </div>
           </div>
@@ -266,7 +266,7 @@ export default function SettingsPage() {
               be friction. */}
           <div style={card}>
             <div style={{ fontSize:13, fontWeight:600, marginBottom:14 }}>
-              {tSettings("language")} / Sprache / Language
+              {tSettings("language_card_title")}
             </div>
             <div style={{ display:"flex", gap:10, alignItems:"stretch" }}>
               <select
@@ -376,41 +376,41 @@ export default function SettingsPage() {
           </div>
 
           <div style={card}>
-            <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>Glucose Targets</div>
+            <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>{tSettings("glucose_targets")}</div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
               <div>
-                <label style={{ fontSize:12, color:"var(--text-dim)", display:"block", marginBottom:6 }}>Target Min (mg/dL)</label>
+                <label style={{ fontSize:12, color:"var(--text-dim)", display:"block", marginBottom:6 }}>{tSettings("target_min")}</label>
                 <input style={inp} type="number" value={settings.targetMin} onChange={e => upd("targetMin", parseInt(e.target.value)||70)}/>
               </div>
               <div>
-                <label style={{ fontSize:12, color:"var(--text-dim)", display:"block", marginBottom:6 }}>Target Max (mg/dL)</label>
+                <label style={{ fontSize:12, color:"var(--text-dim)", display:"block", marginBottom:6 }}>{tSettings("target_max")}</label>
                 <input style={inp} type="number" value={settings.targetMax} onChange={e => upd("targetMax", parseInt(e.target.value)||180)}/>
               </div>
             </div>
           </div>
 
           <div style={card}>
-            <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>Insulin Parameters</div>
+            <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>{tSettings("insulin_params")}</div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
               <div>
-                <label style={{ fontSize:12, color:"var(--text-dim)", display:"block", marginBottom:6 }}>Insulin-to-Carb Ratio (g/unit)</label>
+                <label style={{ fontSize:12, color:"var(--text-dim)", display:"block", marginBottom:6 }}>{tSettings("icr_label")}</label>
                 <input style={inp} type="number" value={settings.icr} onChange={e => upd("icr", parseInt(e.target.value)||15)}/>
-                <div style={{ fontSize:11, color:"var(--text-ghost)", marginTop:4 }}>e.g. 15 = 1 unit per 15g carbs</div>
+                <div style={{ fontSize:11, color:"var(--text-ghost)", marginTop:4 }}>{tSettings("icr_hint")}</div>
               </div>
               <div>
-                <label style={{ fontSize:12, color:"var(--text-dim)", display:"block", marginBottom:6 }}>Correction Factor (mg/dL per unit)</label>
+                <label style={{ fontSize:12, color:"var(--text-dim)", display:"block", marginBottom:6 }}>{tSettings("cf_label")}</label>
                 <input style={inp} type="number" value={settings.cf} onChange={e => upd("cf", parseInt(e.target.value)||50)}/>
-                <div style={{ fontSize:11, color:"var(--text-ghost)", marginTop:4 }}>e.g. 50 = 1 unit drops BG by 50</div>
+                <div style={{ fontSize:11, color:"var(--text-ghost)", marginTop:4 }}>{tSettings("cf_hint")}</div>
               </div>
             </div>
           </div>
 
           <div style={card}>
-            <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>Notifications</div>
+            <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>{tSettings("notifications")}</div>
             <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
               {[
-                { key:"notifySpike" as const, label:"Alert on Spike Events", desc:"Notify when a meal results in a LOW evaluation (under-dosed)" },
-                { key:"notifyHypo"  as const, label:"Alert on Hypo Risk",   desc:"Notify when a meal results in a HIGH evaluation (over-dosed)" },
+                { key:"notifySpike" as const, label:tSettings("notify_spike_label"), desc:tSettings("notify_spike_desc") },
+                { key:"notifyHypo"  as const, label:tSettings("notify_hypo_label"),  desc:tSettings("notify_hypo_desc") },
               ].map(n => (
                 <div key={n.key} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 14px", background:"var(--surface-soft)", borderRadius:10 }}>
                   <div>
@@ -431,28 +431,28 @@ export default function SettingsPage() {
           </div>
 
           <div style={card}>
-            <div style={{ fontSize:13, fontWeight:600, marginBottom:6 }}>Daily Macro Targets</div>
+            <div style={{ fontSize:13, fontWeight:600, marginBottom:6 }}>{tSettings("daily_macros_title")}</div>
             <div style={{ fontSize:12, color:"var(--text-dim)", marginBottom:16, lineHeight:1.5 }}>
-              Powers the &quot;Today&apos;s Macros&quot; rings on the dashboard. Defaults are sensible Type-1 starting points — adjust to match your nutrition plan. Saved to your account, syncs across devices.
+              {tSettings("daily_macros_desc")}
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
               {([
-                { key:"carbs",   label:"Carbs (g)",   def:250, max:2000 },
-                { key:"protein", label:"Protein (g)", def:120, max:2000 },
-                { key:"fat",     label:"Fat (g)",     def:80,  max:2000 },
-                { key:"fiber",   label:"Fiber (g)",   def:30,  max:200  },
-              ] as Array<{ key: keyof MacroTargets; label: string; def: number; max: number }>).map(t => (
-                <div key={t.key}>
-                  <label style={{ fontSize:12, color:"var(--text-dim)", display:"block", marginBottom:6 }}>{t.label}</label>
+                { key:"carbs",   label:tSettings("macro_carbs_label"),   def:250, max:2000 },
+                { key:"protein", label:tSettings("macro_protein_label"), def:120, max:2000 },
+                { key:"fat",     label:tSettings("macro_fat_label"),     def:80,  max:2000 },
+                { key:"fiber",   label:tSettings("macro_fiber_label"),   def:30,  max:200  },
+              ] as Array<{ key: keyof MacroTargets; label: string; def: number; max: number }>).map(target => (
+                <div key={target.key}>
+                  <label style={{ fontSize:12, color:"var(--text-dim)", display:"block", marginBottom:6 }}>{target.label}</label>
                   <input
                     style={inp}
                     type="number"
                     min={0}
-                    max={t.max}
-                    value={macroTargets[t.key]}
+                    max={target.max}
+                    value={macroTargets[target.key]}
                     onChange={e => {
                       const n = parseInt(e.target.value);
-                      updMacro(t.key, Number.isFinite(n) ? Math.max(0, Math.min(t.max, n)) : t.def);
+                      updMacro(target.key, Number.isFinite(n) ? Math.max(0, Math.min(target.max, n)) : target.def);
                     }}
                   />
                 </div>
@@ -469,13 +469,13 @@ export default function SettingsPage() {
                 fontSize:15, fontWeight:700, boxShadow:`0 4px 20px ${ACCENT}40`,
                 opacity: saving ? 0.7 : 1,
               }}>
-                {saving ? "Speichere…" : saved ? "✓ Gespeichert!" : "Einstellungen speichern"}
+                {saving ? tSettings("save_button_busy") : saved ? tSettings("save_button_done") : tSettings("save_button_idle")}
               </button>
               <button
                 onClick={() => { setSettings(DEFAULTS); setMacroTargets(DEFAULT_MACRO_TARGETS); }}
                 style={{ padding:"14px 20px", borderRadius:12, border:`1px solid ${BORDER}`, background:"transparent", color:"var(--text-dim)", fontSize:14, cursor:"pointer" }}
               >
-                Zurücksetzen
+                {tSettings("reset_button")}
               </button>
             </div>
             {saveError && (
@@ -490,15 +490,23 @@ export default function SettingsPage() {
           {/* CGM (LibreLinkUp) */}
           <div>
             <div style={{ fontSize:11, fontWeight:700, color:ACCENT, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:10 }}>
-              CGM
+              {tSettings("section_cgm")}
             </div>
             <CgmSettingsCard />
+          </div>
+
+          {/* Nightscout — eigener self-hosted CGM server */}
+          <div>
+            <div style={{ fontSize:11, fontWeight:700, color:ACCENT, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:10 }}>
+              {tSettings("section_nightscout")}
+            </div>
+            <NightscoutSettingsCard />
           </div>
 
           {/* Google Sheets — placeholder until OAuth flow is wired up */}
           <div>
             <div style={{ fontSize:11, fontWeight:700, color:ACCENT, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:10 }}>
-              Google
+              {tSettings("section_google")}
             </div>
             <div style={{
               ...card,
@@ -521,10 +529,10 @@ export default function SettingsPage() {
                 </div>
                 <div style={{ minWidth:0 }}>
                   <div style={{ fontSize:14, fontWeight:600, color:"var(--text-strong)", marginBottom:2 }}>
-                    Google Sheets
+                    {tSettings("google_sheets_title")}
                   </div>
                   <div style={{ fontSize:12, color:"var(--text-dim)" }}>
-                    Mahlzeiten, Insulin und CGM in eine Tabelle synchronisieren.
+                    {tSettings("google_sheets_desc")}
                   </div>
                 </div>
               </div>
@@ -534,11 +542,11 @@ export default function SettingsPage() {
                 border:`1px solid ${BORDER}`, letterSpacing:"0.08em", textTransform:"uppercase",
                 whiteSpace:"nowrap",
               }}>
-                Coming soon
+                {tSettings("coming_soon")}
               </span>
             </div>
             <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:8, lineHeight:1.5 }}>
-              Verknüpfe dein Google-Konto, um deine Glev-Daten automatisch in eine eigene Google-Tabelle zu spiegeln. Folgt nach der CSV/PDF-Export-Funktion.
+              {tSettings("google_sheets_footnote")}
             </div>
           </div>
         </div>
@@ -563,7 +571,7 @@ export default function SettingsPage() {
         color: "var(--text-faint)",
         textAlign: "center",
       }}>
-        Glev ist ein Dokumentations- und Organisations-Tool, kein Medizinprodukt. Therapieentscheidungen triffst du in Absprache mit deinem Arzt.
+        {tSettings("footer_disclaimer")}
       </p>
     </div>
   );

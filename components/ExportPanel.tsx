@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { supabase } from "@/lib/supabase";
 import {
   fetchAllMeals,
@@ -26,8 +27,8 @@ type Kind = "meals" | "insulin" | "exercise" | "fingersticks" | "all" | "pdf";
 
 interface RowSpec {
   kind: Exclude<Kind, "all">;
-  label: string;
-  description: string;
+  labelKey: string;
+  descKey: string;
   icon: React.ReactNode;
   color: string;
 }
@@ -35,8 +36,8 @@ interface RowSpec {
 const ROWS: RowSpec[] = [
   {
     kind: "meals",
-    label: "Mahlzeiten",
-    description: "Alle erfassten Mahlzeiten inkl. Makros, Insulin und Glukose-Verlauf.",
+    labelKey: "row_meals_label",
+    descKey: "row_meals_desc",
     color: ORANGE,
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -46,8 +47,8 @@ const ROWS: RowSpec[] = [
   },
   {
     kind: "insulin",
-    label: "Insulin",
-    description: "Alle Bolus- und Basal-Einträge mit CGM-Folgewerten.",
+    labelKey: "row_insulin_label",
+    descKey: "row_insulin_desc",
     color: ACCENT,
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -57,8 +58,8 @@ const ROWS: RowSpec[] = [
   },
   {
     kind: "exercise",
-    label: "Sport",
-    description: "Alle Bewegungs-Einträge mit Dauer, Intensität und Glukose-Werten.",
+    labelKey: "row_exercise_label",
+    descKey: "row_exercise_desc",
     color: GREEN,
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -68,8 +69,8 @@ const ROWS: RowSpec[] = [
   },
   {
     kind: "fingersticks",
-    label: "Fingersticks",
-    description: "Alle manuell erfassten Glukose-Werte aus dem Fingerstick.",
+    labelKey: "row_fingersticks_label",
+    descKey: "row_fingersticks_desc",
     color: PINK,
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -92,6 +93,7 @@ const ROWS: RowSpec[] = [
  * so other rows stay enabled during a long meals export.
  */
 export default function ExportPanel() {
+  const t = useTranslations("export");
   const [busy, setBusy] = useState<Kind | null>(null);
   const [msg, setMsg]   = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [email, setEmail] = useState<string>("");
@@ -134,9 +136,9 @@ export default function ExportPanel() {
         count = rows.length;
         downloadFile(`glev-fingersticks_${stamp}.csv`, fingersticksToCSV(rows));
       }
-      flash("ok", `${count} ${count === 1 ? "Eintrag" : "Einträge"} exportiert.`);
+      flash("ok", count === 1 ? t("exported_one") : t("exported_many", { n: count }));
     } catch (e) {
-      flash("err", e instanceof Error ? e.message : "Export fehlgeschlagen.");
+      flash("err", e instanceof Error ? e.message : t("csv_failed"));
     } finally {
       setBusy(null);
     }
@@ -166,9 +168,9 @@ export default function ExportPanel() {
         await new Promise((r) => setTimeout(r, 200));
       }
       const total = meals.length + insulin.length + exercise.length + fs.length;
-      flash("ok", `${total} Einträge in 4 Dateien exportiert.`);
+      flash("ok", t("exported_all", { n: total }));
     } catch (e) {
-      flash("err", e instanceof Error ? e.message : "Export fehlgeschlagen.");
+      flash("err", e instanceof Error ? e.message : t("csv_failed"));
     } finally {
       setBusy(null);
     }
@@ -213,9 +215,9 @@ export default function ExportPanel() {
       setTimeout(() => URL.revokeObjectURL(url), 1000);
 
       const total = meals.length + insulin.length + exercise.length + fs.length;
-      flash("ok", `Report erstellt — ${total} Einträge zusammengefasst.`);
+      flash("ok", t("pdf_done", { n: total }));
     } catch (e) {
-      flash("err", e instanceof Error ? e.message : "PDF-Export fehlgeschlagen.");
+      flash("err", e instanceof Error ? e.message : t("pdf_failed"));
     } finally {
       setBusy(null);
     }
@@ -232,11 +234,11 @@ export default function ExportPanel() {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* Header */}
       <div>
-        <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color:"var(--text)" }}>
-          Daten exportieren
+        <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text)" }}>
+          {t("header_title")}
         </div>
         <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 4, lineHeight: 1.5 }}>
-          Lade deine Glev-Daten als CSV herunter. UTF-8 mit BOM, öffnet sauber in Excel, Numbers und Google Sheets.
+          {t("header_subtitle")}
         </div>
       </div>
 
@@ -260,10 +262,10 @@ export default function ExportPanel() {
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)", marginBottom: 2 }}>
-                {row.label}
+                {t(row.labelKey)}
               </div>
               <div style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.4 }}>
-                {row.description}
+                {t(row.descKey)}
               </div>
             </div>
             <button
@@ -279,7 +281,7 @@ export default function ExportPanel() {
                 whiteSpace: "nowrap", flexShrink: 0,
               }}
             >
-              {busy === row.kind ? "…" : "CSV"}
+              {busy === row.kind ? t("csv_busy") : t("csv_btn")}
             </button>
           </div>
         ))}
@@ -301,7 +303,7 @@ export default function ExportPanel() {
             opacity: busy !== null && busy !== "all" ? 0.5 : 1,
           }}
         >
-          {busy === "all" ? "Exportiere alles…" : "Alles als CSV"}
+          {busy === "all" ? t("all_btn_busy") : t("all_btn_idle")}
         </button>
         <button
           onClick={exportPdf}
@@ -325,7 +327,7 @@ export default function ExportPanel() {
             <line x1="9" y1="13" x2="15" y2="13"/>
             <line x1="9" y1="17" x2="13" y2="17"/>
           </svg>
-          {busy === "pdf" ? "Erstelle PDF…" : "PDF-Report"}
+          {busy === "pdf" ? t("pdf_btn_busy") : t("pdf_btn_idle")}
         </button>
       </div>
 
@@ -348,8 +350,7 @@ export default function ExportPanel() {
         background: "var(--surface-soft)", border: `1px dashed ${BORDER}`,
         fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5,
       }}>
-        <strong style={{ color: "var(--text-muted)" }}>PDF-Report</strong>: formatierte Übersicht
-        mit Time-in-Range, Insulin-Summen, Mahlzeiten- und Fingerstick-Historie — geeignet zum Ausdrucken oder als Anhang für deinen Arzt.
+        <strong style={{ color: "var(--text-muted)" }}>{t("pdf_info_label")}</strong>{t("pdf_info_body")}
       </div>
     </div>
   );

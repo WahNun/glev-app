@@ -13,11 +13,11 @@ import { isToday } from "@/lib/utils/datetime";
 // Builds the dropdown label for a meal in the "Zu Mahlzeit verknüpfen"
 // picker — "HH:MM — <first food name or meal_type> (Xg C)". Defensive
 // against parsed_json being null / non-array / lacking a name field.
-function formatMealOption(m: Meal): string {
-  const t = parseDbDate(m.meal_time ?? m.created_at);
-  const time = t.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+function formatMealOption(m: Meal, fallbackLabel: string): string {
+  const dt = parseDbDate(m.meal_time ?? m.created_at);
+  const time = dt.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
   const carbs = Math.round(m.carbs_grams ?? 0);
-  let label: string = "Mahlzeit";
+  let label: string = fallbackLabel;
   if (Array.isArray(m.parsed_json) && m.parsed_json.length > 0) {
     const first = m.parsed_json[0] as { name?: string };
     if (typeof first?.name === "string" && first.name.trim()) label = first.name.trim();
@@ -80,14 +80,15 @@ function parseLocalDt(v: string): Date | null {
 }
 // "vor 3 Std" / "vor 2 Tagen" — short relative-time label for the
 // success banner so users immediately see we honored the back-date.
-function relativeAgo(deltaMs: number): string {
-  if (deltaMs < 60_000)            return "gerade eben";
+type TFn = (key: string, values?: Record<string, string | number | Date>) => string;
+function relativeAgo(deltaMs: number, t: TFn): string {
+  if (deltaMs < 60_000)            return t("rel_just_now");
   const min = Math.round(deltaMs / 60_000);
-  if (min < 60)                    return `vor ${min} Min`;
+  if (min < 60)                    return t("rel_minutes_ago", { n: min });
   const hr  = Math.round(min / 60);
-  if (hr < 24)                     return `vor ${hr} Std`;
+  if (hr < 24)                     return t("rel_hours_ago", { n: hr });
   const day = Math.round(hr / 24);
-  return `vor ${day} ${day === 1 ? "Tag" : "Tagen"}`;
+  return t("rel_days_ago", { n: day });
 }
 
 /**
@@ -98,7 +99,7 @@ function relativeAgo(deltaMs: number): string {
  * manually. Falls back to "Unbekannter Fehler" only when the throw
  * had no usable text at all.
  */
-function extractErrMessage(e: unknown): string {
+function extractErrMessage(e: unknown, t: TFn): string {
   if (e instanceof Error && e.message) return e.message;
   if (e && typeof e === "object") {
     const o = e as { message?: unknown; code?: unknown; details?: unknown; hint?: unknown };
@@ -110,7 +111,7 @@ function extractErrMessage(e: unknown): string {
     if (parts.length) return parts.join(" — ");
   }
   if (typeof e === "string" && e.trim()) return e.trim();
-  return "Unbekannter Fehler";
+  return t("unknown_error");
 }
 
 /** Pull current CGM reading; null on any failure (network, no LLU, 401). */
@@ -179,7 +180,7 @@ type Status =
   | { kind: "ok"; message: string }
   | { kind: "error"; message: string };
 
-function StatusBanner({ status, accent }: { status: Status; accent: string }) {
+function StatusBanner({ status, accent, t }: { status: Status; accent: string; t: TFn }) {
   if (status.kind === "idle") return null;
   if (status.kind === "submitting") {
     return (
@@ -188,7 +189,7 @@ function StatusBanner({ status, accent }: { status: Status; accent: string }) {
         background: "var(--surface-soft)", borderRadius: 10,
         fontSize: 12, color: "var(--text-muted)",
       }}>
-        Wird gespeichert…
+        {t("saving_inline")}
       </div>
     );
   }
@@ -215,6 +216,7 @@ function StatusBanner({ status, accent }: { status: Status; accent: string }) {
 }
 
 export function InsulinForm() {
+  const t = useTranslations("engineLog");
   const [type, setType] = useState<"bolus" | "basal">("bolus");
   const [name, setName] = useState("");
   const [units, setUnits] = useState("");
@@ -294,13 +296,14 @@ export function InsulinForm() {
         logType: type,
         refTimeIso: ref,
       });
-      const typeLabel = type === "bolus" ? "Bolus" : "Basal";
-      const whenLabel = isRetro ? ` (${relativeAgo(deltaMs)})` : "";
+      const typeLabel = type === "bolus" ? t("type_bolus") : t("type_basal");
+      const whenLabel = isRetro ? t("logged_when_suffix", { rel: relativeAgo(deltaMs, t) }) : "";
+      const trimmedName = name.trim();
       setStatus({
         kind: "ok",
         message: cgm != null
-          ? `Geloggt — ${u}u ${typeLabel} (${name.trim()})${whenLabel} bei ${Math.round(cgm)} mg/dL.`
-          : `Geloggt — ${u}u ${typeLabel} (${name.trim()})${whenLabel}. Kein CGM-Wert verfügbar.`,
+          ? t("logged_with_cgm", { units: u, type: typeLabel, name: trimmedName, when: whenLabel, cgm: Math.round(cgm) })
+          : t("logged_no_cgm", { units: u, type: typeLabel, name: trimmedName, when: whenLabel }),
       });
       setUnits("");
       setNotes("");
@@ -314,8 +317,8 @@ export function InsulinForm() {
       // objects with a `.message` field — extract it manually so a
       // missed wrap somewhere upstream doesn't degrade to the generic
       // "Unbekannter Fehler" fallback.
-      const msg = extractErrMessage(e);
-      setStatus({ kind: "error", message: `Speichern fehlgeschlagen: ${msg}` });
+      const msg = extractErrMessage(e, t);
+      setStatus({ kind: "error", message: t("save_failed_prefix", { message: msg }) });
     }
   }
 
@@ -331,24 +334,24 @@ export function InsulinForm() {
             <path d="M12 2v20M2 12h20" />
           </svg>
         </span>
-        Insulin loggen
+        {t("insulin_card_title")}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
-          <label style={labelStyle}>Typ</label>
+          <label style={labelStyle}>{t("type_label")}</label>
           <Segmented<"bolus" | "basal">
             value={type}
             onChange={setType}
             accent={GREEN}
             options={[
-              { value: "bolus", label: "Bolus" },
-              { value: "basal", label: "Basal" },
+              { value: "bolus", label: t("type_bolus") },
+              { value: "basal", label: t("type_basal") },
             ]}
           />
         </div>
         <div>
-          <label style={labelStyle}>Insulin-Name</label>
+          <label style={labelStyle}>{t("insulin_name_label")}</label>
           <input
             style={inp}
             placeholder={placeholder}
@@ -357,7 +360,7 @@ export function InsulinForm() {
           />
         </div>
         <div>
-          <label style={labelStyle}>Einheiten</label>
+          <label style={labelStyle}>{t("units_label")}</label>
           <input
             style={inp}
             type="number"
@@ -365,7 +368,7 @@ export function InsulinForm() {
             step="0.5"
             min="0.5"
             max="100"
-            placeholder="z.B. 6"
+            placeholder={t("units_placeholder")}
             value={units}
             onChange={e => setUnits(e.target.value)}
           />
@@ -377,7 +380,7 @@ export function InsulinForm() {
               Defaults to "now". When the chosen time is > 5 min in the
               past, handleSubmit skips the live CGM pull and lets the
               scheduler fill from history (mirrors the Exercise form). */}
-          <label style={labelStyle}>Zeitpunkt</label>
+          <label style={labelStyle}>{t("moment_label")}</label>
           <input
             style={inp}
             type="datetime-local"
@@ -388,15 +391,15 @@ export function InsulinForm() {
           />
           <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 6 }}>
             {atDate && nowMs - atDate.getTime() > 5 * 60_000
-              ? `Rückdatiert — ${relativeAgo(nowMs - atDate.getTime())}. Kein Live-CGM, Werte werden aus dem Verlauf geholt.`
-              : "Standard: jetzt. Bis zu 365 Tage rückdatierbar."}
+              ? t("backdated_hint", { when: relativeAgo(nowMs - atDate.getTime(), t) })
+              : t("default_now_hint")}
           </div>
         </div>
         <div>
-          <label style={labelStyle}>Notiz (optional)</label>
+          <label style={labelStyle}>{t("note_label")}</label>
           <input
             style={inp}
-            placeholder="z.B. vor Mahlzeit, Korrektur, …"
+            placeholder={t("note_insulin_placeholder")}
             value={notes}
             onChange={e => setNotes(e.target.value)}
           />
@@ -406,25 +409,25 @@ export function InsulinForm() {
             Hidden for basal because basal isn't dosed against a meal. */}
         {type === "bolus" && (
           <div>
-            <label style={labelStyle}>Zu Mahlzeit verknüpfen (optional)</label>
+            <label style={labelStyle}>{t("link_meal_label")}</label>
             <select
               style={{ ...inp, appearance: "none", WebkitAppearance: "none", cursor: todayMeals.length ? "pointer" : "default" }}
               value={relatedMealId}
               onChange={e => setRelatedMealId(e.target.value)}
               disabled={todayMeals.length === 0}
             >
-              <option value="">— keine Verknüpfung —</option>
+              <option value="">{t("no_link")}</option>
               {todayMeals.map(m => (
-                <option key={m.id} value={m.id}>{formatMealOption(m)}</option>
+                <option key={m.id} value={m.id}>{formatMealOption(m, t("meal_fallback"))}</option>
               ))}
             </select>
             {todayMeals.length === 0 ? (
               <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 6 }}>
-                Heute noch keine Mahlzeiten geloggt.
+                {t("no_meals_today")}
               </div>
             ) : (
               <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 6 }}>
-                Heute geloggte Mahlzeiten (max. 10, neueste zuerst).
+                {t("today_meals_hint")}
               </div>
             )}
           </div>
@@ -444,17 +447,17 @@ export function InsulinForm() {
           transition: "all 0.15s",
         }}
       >
-        Log Insulin
+        {t("log_insulin_btn")}
       </button>
 
-      <StatusBanner status={status} accent={GREEN} />
+      <StatusBanner status={status} accent={GREEN} t={t} />
 
       <div style={{
         marginTop: 14, padding: "10px 12px",
         background: "var(--surface-soft)", borderRadius: 10,
         fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5,
       }}>
-        Glev rechnet keine Dosen — du gibst ein, was du gespritzt hast. Der CGM-Wert wird beim Absenden automatisch gezogen.
+        {t("insulin_disclaimer")}
       </div>
     </div>
   );
@@ -479,7 +482,8 @@ const STARTED_OPTIONS: { value: number; label: string }[] = [
 ];
 
 export function ExerciseForm() {
-  const t = useTranslations("engine");
+  const tEng = useTranslations("engine");
+  const t = useTranslations("engineLog");
   const [type, setType] = useState<ExerciseType>("cardio");
   const [startedMinAgo, setStartedMinAgo] = useState<number>(0);
   const [duration, setDuration] = useState("");
@@ -528,16 +532,21 @@ export function ExerciseForm() {
         durationMinutes: d,
       });
       const typeLabel = exerciseTypeLabel(type);
-      const startedLabel = startedMinAgo === 0
+      const startedOpt = STARTED_OPTIONS.find(o => o.value === startedMinAgo);
+      const startedLabel = startedMinAgo === 0 || !startedOpt
         ? ""
-        : ` (gestartet vor ${STARTED_OPTIONS.find(o => o.value === startedMinAgo)?.label})`;
+        : t("exercise_started_suffix", { label: startedOpt.label });
       // Map the stored intensity token to the spec wording for display.
-      const intensityLabel = intensity === "medium" ? "moderate" : intensity;
+      const intensityLabel = intensity === "low"
+        ? tEng("exercise_intensity_low")
+        : intensity === "high"
+          ? tEng("exercise_intensity_high")
+          : tEng("exercise_intensity_medium");
       setStatus({
         kind: "ok",
         message: cgm != null
-          ? `Geloggt — ${d} min ${typeLabel} (${intensityLabel})${startedLabel} bei ${Math.round(cgm)} mg/dL.`
-          : `Geloggt — ${d} min ${typeLabel} (${intensityLabel})${startedLabel}. Kein CGM-Wert verfügbar.`,
+          ? t("exercise_logged_with_cgm", { minutes: d, type: typeLabel, intensity: intensityLabel, when: startedLabel, cgm: Math.round(cgm) })
+          : t("exercise_logged_no_cgm", { minutes: d, type: typeLabel, intensity: intensityLabel, when: startedLabel }),
       });
       setDuration("");
       setNotes("");
@@ -545,8 +554,8 @@ export function ExerciseForm() {
     } catch (e) {
       // See InsulinForm above — extract `.message` from PostgrestError-
       // like plain objects so the banner shows the real cause.
-      const msg = extractErrMessage(e);
-      setStatus({ kind: "error", message: `Speichern fehlgeschlagen: ${msg}` });
+      const msg = extractErrMessage(e, t);
+      setStatus({ kind: "error", message: t("save_failed_prefix", { message: msg }) });
     }
   }
 
@@ -562,12 +571,12 @@ export function ExerciseForm() {
             <path d="M6.5 6.5l11 11M21 21l-1-1M3 3l1 1M18 22l4-4M2 6l4-4M3 10l7-7M14 21l7-7" />
           </svg>
         </span>
-        Exercise loggen
+        {t("exercise_card_title")}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
-          <label style={labelStyle}>Typ</label>
+          <label style={labelStyle}>{t("type_label")}</label>
           {/* 6 options — too wide for one row of equal columns on
               narrow viewports. We render a 3-col grid that wraps to
               2 rows; each cell is its own toggle button. */}
@@ -607,7 +616,7 @@ export function ExerciseForm() {
           </div>
         </div>
         <div>
-          <label style={labelStyle}>Gestartet</label>
+          <label style={labelStyle}>{tEng("exercise_started_label")}</label>
           {/* Retroactive start picker — shifts the CGM scheduler's
               reference time so a workout already finished can still
               be evaluated from CGM history within the 3 h window. */}
@@ -640,14 +649,14 @@ export function ExerciseForm() {
                     transition: "all 0.15s",
                   }}
                 >
-                  {opt.value === 0 ? "Jetzt" : `vor ${opt.label}`}
+                  {opt.value === 0 ? t("started_now_btn") : t("started_ago_btn", { label: opt.label })}
                 </button>
               );
             })}
           </div>
         </div>
         <div>
-          <label style={labelStyle}>Dauer (Minuten)</label>
+          <label style={labelStyle}>{t("duration_label")}</label>
           <input
             style={inp}
             type="number"
@@ -655,13 +664,13 @@ export function ExerciseForm() {
             step="1"
             min="1"
             max="600"
-            placeholder="z.B. 45"
+            placeholder={t("duration_placeholder")}
             value={duration}
             onChange={e => setDuration(e.target.value)}
           />
         </div>
         <div>
-          <label style={labelStyle}>Intensität</label>
+          <label style={labelStyle}>{tEng("exercise_intensity_label")}</label>
           {/* DB stores the legacy `medium` token (matches the existing
               CHECK constraint on insulin_logs/exercise_logs); the
               user-facing label reads "Moderate" per spec. */}
@@ -670,17 +679,17 @@ export function ExerciseForm() {
             onChange={setIntensity}
             accent={ORANGE}
             options={[
-              { value: "low",    label: t("exercise_intensity_low") },
-              { value: "medium", label: t("exercise_intensity_medium") },
-              { value: "high",   label: t("exercise_intensity_high") },
+              { value: "low",    label: tEng("exercise_intensity_low") },
+              { value: "medium", label: tEng("exercise_intensity_medium") },
+              { value: "high",   label: tEng("exercise_intensity_high") },
             ]}
           />
         </div>
         <div>
-          <label style={labelStyle}>Notiz (optional)</label>
+          <label style={labelStyle}>{t("note_label")}</label>
           <input
             style={inp}
-            placeholder="z.B. Beine, Intervalle, …"
+            placeholder={t("note_exercise_placeholder")}
             value={notes}
             onChange={e => setNotes(e.target.value)}
           />
@@ -700,23 +709,24 @@ export function ExerciseForm() {
           transition: "all 0.15s",
         }}
       >
-        Log Exercise
+        {t("log_exercise_btn")}
       </button>
 
-      <StatusBanner status={status} accent={ORANGE} />
+      <StatusBanner status={status} accent={ORANGE} t={t} />
 
       <div style={{
         marginTop: 14, padding: "10px 12px",
         background: "var(--surface-soft)", borderRadius: 10,
         fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5,
       }}>
-        Der CGM-Wert beim Loggen hilft Glev, Bewegung mit Glukose-Reaktionen zu verknüpfen.
+        {t("exercise_disclaimer")}
       </div>
     </div>
   );
 }
 
 export default function EngineLogTab() {
+  const t = useTranslations("engineLog");
   return (
     <div>
       {/* InsulinForm + ExerciseForm sit side-by-side on desktop and stack on
@@ -741,9 +751,8 @@ export default function EngineLogTab() {
         background: "var(--surface-soft)", borderRadius: 12, border: `1px solid ${BORDER}`,
       }}>
         <div style={{ fontSize: 11, color: "var(--text-ghost)", lineHeight: 1.6 }}>
-          <strong style={{ color: "var(--text-dim)" }}>Hinweis:</strong> Insulin- und
-          Exercise-Logs sind reine Dokumentation. Glev berechnet keine Dosen und gibt
-          keine Empfehlungen zur Insulingabe — das ist Sache deines Diabetes-Teams.
+          <strong style={{ color: "var(--text-dim)" }}>{t("footer_note_label")}</strong>{" "}
+          {t("footer_note_body")}
         </div>
       </div>
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 
 const ACCENT = "#4F6EF7";
@@ -8,12 +9,6 @@ const SHEET_BG = "var(--surface-alt)";
 const TEXT = "var(--text-strong)";
 const TEXT_DIM = "var(--text-muted)";
 const BORDER = "var(--border)";
-
-type Item = {
-  label: string;
-  href: string;
-  icon: React.ReactNode;
-};
 
 const MEAL = (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -48,10 +43,11 @@ const RUN = (
 // here AND under the Glev tab on purpose, so power users can reach
 // the meal flow from any screen via the always-visible header "+"
 // without first jumping to Glev.
-const ITEMS: Item[] = [
-  { label: "Mahlzeit loggen",  href: "/engine?tab=log",         icon: MEAL    },
-  { label: "Glukose messen",   href: "/engine?tab=fingerstick", icon: DROPLET },
-  { label: "Aktivität loggen", href: "/engine?tab=exercise",    icon: RUN     },
+type ItemDef = { key: "log_meal" | "measure_glucose" | "log_activity"; href: string; icon: React.ReactNode };
+const ITEM_DEFS: ItemDef[] = [
+  { key: "log_meal",         href: "/engine?tab=log",         icon: MEAL    },
+  { key: "measure_glucose",  href: "/engine?tab=fingerstick", icon: DROPLET },
+  { key: "log_activity",     href: "/engine?tab=exercise",    icon: RUN     },
 ];
 
 /**
@@ -63,6 +59,7 @@ const ITEMS: Item[] = [
  * here so the header "+" stays a complete, self-sufficient menu.
  */
 export default function QuickAddMenu() {
+  const t = useTranslations("quickAdd");
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -105,7 +102,7 @@ export default function QuickAddMenu() {
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        aria-label={open ? "Quick-Add schließen" : "Schnell loggen"}
+        aria-label={open ? t("close_aria") : t("open_aria")}
         aria-expanded={open}
         aria-haspopup="menu"
         style={{
@@ -148,9 +145,9 @@ export default function QuickAddMenu() {
             animation: "glevQuickAddIn 0.18s cubic-bezier(0.32, 0.72, 0, 1)",
           }}
         >
-          {ITEMS.map(it => (
+          {ITEM_DEFS.map(it => (
             <button
-              key={it.label}
+              key={it.key}
               type="button"
               role="menuitem"
               onClick={() => go(it.href)}
@@ -175,7 +172,7 @@ export default function QuickAddMenu() {
               }}>
                 {it.icon}
               </span>
-              <span>{it.label}</span>
+              <span>{t(it.key)}</span>
             </button>
           ))}
         </div>

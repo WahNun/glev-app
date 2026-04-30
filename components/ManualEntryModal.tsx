@@ -19,11 +19,11 @@ const ORANGE = "#FF9500";
 const SURFACE = "var(--surface)";
 const BORDER  = "var(--border)";
 
-const TYPE_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: "FAST_CARBS",   label: "Fast carbs" },
-  { value: "BALANCED",     label: "Balanced" },
-  { value: "HIGH_PROTEIN", label: "High protein" },
-  { value: "HIGH_FAT",     label: "High fat" },
+const TYPE_OPTIONS: ReadonlyArray<{ value: string; key: "type_fast_carbs" | "type_balanced" | "type_high_protein" | "type_high_fat" }> = [
+  { value: "FAST_CARBS",   key: "type_fast_carbs" },
+  { value: "BALANCED",     key: "type_balanced" },
+  { value: "HIGH_PROTEIN", key: "type_high_protein" },
+  { value: "HIGH_FAT",     key: "type_high_fat" },
 ];
 
 function toDatetimeLocal(d: Date): string {
@@ -230,11 +230,11 @@ export default function ManualEntryModal({
 
     // ─── Required field ────────────────────────────────────────────────
     if (!hasAnyMacroFilled) {
-      setError(t("err_macro_required"));
+      setError(t("err_at_least_one_macro"));
       return;
     }
     const mt = parseLocalDt(mealTime);
-    if (!mt) { setError(t("err_meal_time_invalid")); return; }
+    if (!mt) { setError(t("err_invalid_meal_time")); return; }
 
     // ─── Physiological ranges ──────────────────────────────────────────
     // HTML min/max are advisory — typed input can still produce out-of-range
@@ -246,10 +246,10 @@ export default function ManualEntryModal({
     if (proteinN < 0 || proteinN > 500)             { setError(t("err_protein_range")); return; }
     if (fatN     < 0 || fatN     > 500)             { setError(t("err_fat_range")); return; }
     if (fiberN   < 0 || fiberN   > 200)             { setError(t("err_fiber_range")); return; }
-    if (insulinN != null && (insulinN < 0 || insulinN > 50))   { setError("Insulin must be between 0 and 50 units."); return; }
-    if (glucoseN != null && (glucoseN < 30 || glucoseN > 600)) { setError("Glucose before must be between 30 and 600 mg/dL."); return; }
-    if (bg1hN != null && (bg1hN < 30 || bg1hN > 600)) { setError("1h reading must be between 30 and 600 mg/dL."); return; }
-    if (bg2hN != null && (bg2hN < 30 || bg2hN > 600)) { setError("2h reading must be between 30 and 600 mg/dL."); return; }
+    if (insulinN != null && (insulinN < 0 || insulinN > 50))   { setError(t("err_insulin_range")); return; }
+    if (glucoseN != null && (glucoseN < 30 || glucoseN > 600)) { setError(t("err_glucose_range")); return; }
+    if (bg1hN != null && (bg1hN < 30 || bg1hN > 600)) { setError(t("err_bg1h_range")); return; }
+    if (bg2hN != null && (bg2hN < 30 || bg2hN > 600)) { setError(t("err_bg2h_range")); return; }
 
     // Coerce missing values for the persisted row + classifier. carbs=0
     // is legitimate (pure protein/fat snack); the classifier handles it.
@@ -265,7 +265,7 @@ export default function ManualEntryModal({
     try {
       const mealIso = mt.toISOString();
       const meal = await saveMeal({
-        inputText:    desc.trim() || "Manual entry",
+        inputText:    desc.trim() || t("default_input_text"),
         parsedJson:   [],
         glucoseBefore: glucoseN,
         glucoseAfter:  null,
@@ -451,14 +451,14 @@ export default function ManualEntryModal({
           display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
         }}>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: "-0.02em" }}>New manual entry</div>
+            <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: "-0.02em" }}>{t("title")}</div>
             <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}>
-              Backfill a past meal. Glucose-Felder füllen sich aus deinem CGM-Verlauf — eintippen reicht für den Rest.
+              {t("subtitle")}
             </div>
           </div>
           <button
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t("close_aria")}
             style={{
               width: 32, height: 32, borderRadius: 8,
               border: `1px solid ${BORDER}`,
@@ -480,19 +480,19 @@ export default function ManualEntryModal({
         {step === "form" && (<>
           {/* Meal time */}
           <div>
-            <label style={labelStyle}>Meal time</label>
+            <label style={labelStyle}>{t("meal_time_label")}</label>
             <input type="datetime-local" value={mealTime} onChange={(e) => setMealTime(e.target.value)} style={inp}/>
             <div style={{ marginTop: 4, fontSize: 10, color: "var(--text-faint)" }}>
-              Defaults to now — change to log a historical meal.
+              {t("meal_time_hint")}
             </div>
           </div>
 
           {/* Description */}
           <div>
-            <label style={labelStyle}>Meal description</label>
+            <label style={labelStyle}>{t("description_label")}</label>
             <input
               value={desc} onChange={(e) => setDesc(e.target.value)}
-              placeholder="e.g. 100g broccoli, 23g nut mix, 130g banana"
+              placeholder={t("description_placeholder")}
               style={{ ...inp, fontSize: 13 }}
             />
           </div>
@@ -500,34 +500,34 @@ export default function ManualEntryModal({
           {/* Macros 2x2 */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <div>
-              <label style={labelStyle}>Carbs (g)</label>
-              <input value={carbs} onChange={(e) => setCarbs(e.target.value)} type="number" min={0} placeholder="e.g. 60" style={inp}/>
+              <label style={labelStyle}>{t("carbs_label")}</label>
+              <input value={carbs} onChange={(e) => setCarbs(e.target.value)} type="number" min={0} placeholder={t("carbs_placeholder")} style={inp}/>
             </div>
             <div>
-              <label style={labelStyle}>Fiber (g)</label>
-              <input value={fiber} onChange={(e) => setFiber(e.target.value)} type="number" min={0} placeholder="e.g. 8" style={inp}/>
+              <label style={labelStyle}>{t("fiber_label")}</label>
+              <input value={fiber} onChange={(e) => setFiber(e.target.value)} type="number" min={0} placeholder={t("fiber_placeholder")} style={inp}/>
             </div>
             <div>
-              <label style={labelStyle}>Protein (g)</label>
-              <input value={protein} onChange={(e) => setProtein(e.target.value)} type="number" min={0} placeholder="e.g. 30" style={inp}/>
+              <label style={labelStyle}>{t("protein_label")}</label>
+              <input value={protein} onChange={(e) => setProtein(e.target.value)} type="number" min={0} placeholder={t("protein_placeholder")} style={inp}/>
             </div>
             <div>
-              <label style={labelStyle}>Fat (g)</label>
-              <input value={fat} onChange={(e) => setFat(e.target.value)} type="number" min={0} placeholder="e.g. 15" style={inp}/>
+              <label style={labelStyle}>{t("fat_label")}</label>
+              <input value={fat} onChange={(e) => setFat(e.target.value)} type="number" min={0} placeholder={t("fat_placeholder")} style={inp}/>
             </div>
           </div>
 
           {/* Classification */}
           <div>
-            <label style={labelStyle}>Classification</label>
+            <label style={labelStyle}>{t("classification_label")}</label>
             <select
               value={mealType}
               onChange={(e) => setMealType(e.target.value)}
               style={{ ...inp, appearance: "auto" }}
             >
-              <option value="AUTO">Auto from macros</option>
+              <option value="AUTO">{t("auto_from_macros")}</option>
               {TYPE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
+                <option key={o.value} value={o.value}>{t(o.key)}</option>
               ))}
             </select>
           </div>
@@ -535,16 +535,16 @@ export default function ManualEntryModal({
           {/* Insulin + Glucose before */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <div>
-              <label style={labelStyle}>Insulin (u)</label>
-              <input value={insulin} onChange={(e) => setInsulin(e.target.value)} type="number" min={0} step={0.5} placeholder="e.g. 1.5" style={inp}/>
+              <label style={labelStyle}>{t("insulin_label")}</label>
+              <input value={insulin} onChange={(e) => setInsulin(e.target.value)} type="number" min={0} step={0.5} placeholder={t("insulin_placeholder")} style={inp}/>
             </div>
             <div>
-              <label style={labelStyle}>Glucose before (mg/dL)</label>
+              <label style={labelStyle}>{t("glucose_before_label")}</label>
               <input
                 value={glucose}
                 onChange={(e) => { setGlucose(e.target.value); setAutoFilled(s => ({ ...s, glucose: false })); }}
                 type="number" min={30} max={600}
-                placeholder={autoFilled.glucose ? "auto from CGM" : "e.g. 115"}
+                placeholder={autoFilled.glucose ? t("glucose_auto_placeholder") : t("glucose_placeholder")}
                 style={{ ...inp, color: autoFilled.glucose ? ACCENT : "#fff" }}
               />
             </div>
@@ -566,7 +566,8 @@ export default function ManualEntryModal({
           const mtStr = mt ? mt.toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : mealTime;
           const carbsForSave = carbsN ?? 0;
           const cls = mealType === "AUTO" ? classifyMeal(carbsForSave, proteinN, fatN, fiberN) : mealType;
-          const clsLabel = TYPE_OPTIONS.find(o => o.value === cls)?.label ?? cls;
+          const clsKey = TYPE_OPTIONS.find(o => o.value === cls)?.key;
+          const clsLabel = clsKey ? t(clsKey) : cls;
           const at1 = parseLocalDt(bg1hAt);
           const at2 = parseLocalDt(bg2hAt);
           const Row = ({ label, value, accent }: { label: string; value: React.ReactNode; accent?: string }) => (
@@ -580,31 +581,31 @@ export default function ManualEntryModal({
           return (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
-                Prüf bitte alles. Glucose-Werte unten kommen aus deinem CGM — falls etwas fehlt, war keine Messung im Zeitfenster verfügbar.
+                {t("review_intro")}
               </div>
 
               {/* Meal */}
               <div style={{ background: "var(--surface-soft)", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "10px 14px" }}>
-                <Row label="Zeit" value={mtStr} />
-                <Row label="Beschreibung" value={desc.trim() || "—"} />
-                <Row label="Klassifizierung" value={clsLabel} />
+                <Row label={t("row_time")} value={mtStr} />
+                <Row label={t("row_description")} value={desc.trim() || "—"} />
+                <Row label={t("row_classification")} value={clsLabel} />
               </div>
 
               {/* Macros */}
               <div style={{ background: "var(--surface-soft)", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "10px 14px" }}>
-                <Row label="Carbs"   value={`${carbsForSave} g`} />
-                <Row label="Protein" value={`${proteinN} g`} />
-                <Row label="Fat"     value={`${fatN} g`} />
-                <Row label="Fiber"   value={`${fiberN} g`} />
-                <Row label="Calories" value={`${computeCalories(carbsForSave, proteinN, fatN)} kcal`} />
+                <Row label={t("row_carbs")}   value={`${carbsForSave} g`} />
+                <Row label={t("row_protein")} value={`${proteinN} g`} />
+                <Row label={t("row_fat")}     value={`${fatN} g`} />
+                <Row label={t("row_fiber")}   value={`${fiberN} g`} />
+                <Row label={t("row_calories")} value={`${computeCalories(carbsForSave, proteinN, fatN)} kcal`} />
               </div>
 
               {/* Insulin + Glucose */}
               <div style={{ background: "var(--surface-soft)", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "10px 14px" }}>
-                <Row label="Insulin" value={insulinN != null ? `${insulinN} u` : "—"} />
+                <Row label={t("row_insulin")} value={insulinN != null ? `${insulinN} u` : "—"} />
                 <Row
-                  label="Glucose vorher"
-                  value={glucoseN != null ? `${glucoseN} mg/dL${autoFilled.glucose ? " · auto" : ""}` : "—"}
+                  label={t("row_glucose_before")}
+                  value={glucoseN != null ? `${glucoseN} mg/dL${autoFilled.glucose ? t("auto_suffix") : ""}` : "—"}
                   accent={glucoseN != null && autoFilled.glucose ? ACCENT : undefined}
                 />
               </div>
@@ -613,19 +614,19 @@ export default function ManualEntryModal({
               {(bg1hN != null || bg2hN != null) && (
                 <div style={{ background: "var(--surface-soft)", border: `1px dashed ${BORDER}`, borderRadius: 12, padding: "10px 14px" }}>
                   <div style={{ fontSize: 10, color: "var(--text-dim)", letterSpacing: "0.08em", fontWeight: 700, textTransform: "uppercase", marginBottom: 4 }}>
-                    Follow-up <span style={{ opacity: 0.6, textTransform: "none", letterSpacing: 0 }}>· aus CGM</span>
+                    {t("followup_label")} <span style={{ opacity: 0.6, textTransform: "none", letterSpacing: 0 }}>{t("followup_source")}</span>
                   </div>
                   {bg1hN != null && (
                     <Row
-                      label={`1h (${fmtTime(at1)})`}
-                      value={`${bg1hN} mg/dL${autoFilled.bg1h ? " · auto" : ""}`}
+                      label={t("followup_1h", { when: fmtTime(at1) })}
+                      value={`${bg1hN} mg/dL${autoFilled.bg1h ? t("auto_suffix") : ""}`}
                       accent={autoFilled.bg1h ? ACCENT : undefined}
                     />
                   )}
                   {bg2hN != null && (
                     <Row
-                      label={`2h (${fmtTime(at2)})`}
-                      value={`${bg2hN} mg/dL${autoFilled.bg2h ? " · auto" : ""}`}
+                      label={t("followup_2h", { when: fmtTime(at2) })}
+                      value={`${bg2hN} mg/dL${autoFilled.bg2h ? t("auto_suffix") : ""}`}
                       accent={autoFilled.bg2h ? ACCENT : undefined}
                     />
                   )}
@@ -665,20 +666,20 @@ export default function ManualEntryModal({
               cursor: saving ? "not-allowed" : "pointer",
             }}
           >
-            {step === "review" ? "Zurück" : "Abbrechen"}
+            {step === "review" ? t("back_btn") : t("cancel_btn")}
           </button>
           {step === "form" ? (
             <button
               onClick={() => {
                 if (!hasAnyMacroFilled) {
-                  setError(t("err_macro_required"));
+                  setError(t("err_at_least_one_macro"));
                   return;
                 }
                 setError(null);
                 setStep("review");
               }}
               disabled={!canSubmit || cgmLoading}
-              title={cgmLoading ? "CGM-Werte laden…" : undefined}
+              title={cgmLoading ? t("loading_glucose_title") : undefined}
               style={{
                 padding: "10px 18px", borderRadius: 10, border: "none",
                 background: !canSubmit || cgmLoading
@@ -692,7 +693,7 @@ export default function ManualEntryModal({
                 display: "flex", alignItems: "center", gap: 8,
               }}
             >
-              {cgmLoading ? "Glukose laden…" : "Weiter →"}
+              {cgmLoading ? t("loading_glucose_btn") : t("next_btn")}
             </button>
           ) : (
             <button
@@ -717,7 +718,7 @@ export default function ManualEntryModal({
               {saved ? (
                 <>
                   <span style={{ fontSize: 16, lineHeight: 1 }}>✓</span>
-                  Gespeichert
+                  {t("saved_btn")}
                 </>
               ) : saving ? (
                 <>
@@ -729,12 +730,12 @@ export default function ManualEntryModal({
                     borderRadius: "50%",
                     animation: "mem_spin 0.7s linear infinite",
                   }}/>
-                  Saving…
+                  {t("saving_btn")}
                 </>
               ) : (
                 <>
                   <span style={{ fontSize: 14, lineHeight: 1, color: GREEN }}>✓</span>
-                  Bestätigen &amp; speichern
+                  {t("confirm_btn")}
                 </>
               )}
             </button>

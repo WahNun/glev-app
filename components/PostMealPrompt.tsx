@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { usePostMealCheck } from "@/hooks/usePostMealCheck";
 import { supabase } from "@/lib/supabase";
 
@@ -23,6 +24,7 @@ const TEXT_DIM    = "var(--text-muted)";
  * glucose_* column + matching _at timestamp.
  */
 export default function PostMealPrompt() {
+  const t = useTranslations("postMeal");
   const { pendingMeal, dismiss, refetch } = usePostMealCheck();
   const [glucoseValue, setGlucoseValue] = useState("");
   const [saving, setSaving] = useState(false);
@@ -42,7 +44,7 @@ export default function PostMealPrompt() {
   const handleSave = async () => {
     const value = parseInt(glucoseValue, 10);
     if (!Number.isFinite(value) || value < 20 || value > 600) {
-      setError("Bitte einen Wert zwischen 20 und 600 mg/dL eingeben.");
+      setError(t("err_range"));
       return;
     }
     setSaving(true);
@@ -64,7 +66,7 @@ export default function PostMealPrompt() {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({} as { error?: string }));
-        setError(body?.error || `Speichern fehlgeschlagen (${res.status}).`);
+        setError(body?.error || t("err_save_failed", { status: res.status }));
         return;
       }
       setSaved(true);
@@ -73,7 +75,7 @@ export default function PostMealPrompt() {
         refetch();
       }, 1200);
     } catch {
-      setError("Netzwerkfehler. Bitte erneut versuchen.");
+      setError(t("err_network"));
     } finally {
       setSaving(false);
     }
@@ -98,7 +100,7 @@ export default function PostMealPrompt() {
       <div className="glev-postmeal-banner">
         <div
           role="dialog"
-          aria-label={`BG nach ${pendingMeal.label} eintragen`}
+          aria-label={t("dialog_aria", { label: pendingMeal.label })}
           style={{
             width: "100%", maxWidth: 480,
             background: SHEET_BG,
@@ -110,8 +112,8 @@ export default function PostMealPrompt() {
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12, gap: 12 }}>
             <div style={{ minWidth: 0 }}>
-              <div style={{ color:"var(--text)", fontWeight: 600, fontSize: 14, lineHeight: 1.3 }}>
-                BG nach {pendingMeal.label}
+              <div style={{ color: "var(--text)", fontWeight: 600, fontSize: 14, lineHeight: 1.3 }}>
+                {t("title", { label: pendingMeal.label })}
               </div>
               <div style={{ color: TEXT_DIM, fontSize: 12, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {pendingMeal.name}
@@ -119,7 +121,7 @@ export default function PostMealPrompt() {
             </div>
             <button
               onClick={dismiss}
-              aria-label="Schließen"
+              aria-label={t("close_aria")}
               style={{
                 background: "none", border: "none", color: TEXT_DIM,
                 fontSize: 22, cursor: "pointer", padding: 0, lineHeight: 1,
@@ -134,7 +136,7 @@ export default function PostMealPrompt() {
               <input
                 type="number"
                 inputMode="numeric"
-                placeholder="z.B. 130"
+                placeholder={t("input_placeholder")}
                 min={20}
                 max={600}
                 value={glucoseValue}
@@ -172,7 +174,7 @@ export default function PostMealPrompt() {
                 minWidth: 96,
               }}
             >
-              {saving ? "…" : "Speichern"}
+              {saving ? t("save_busy") : t("save_idle")}
             </button>
           </div>
 
@@ -192,7 +194,7 @@ export default function PostMealPrompt() {
               fontFamily: "inherit",
             }}
           >
-            Später eingeben
+            {t("later_btn")}
           </button>
         </div>
       </div>

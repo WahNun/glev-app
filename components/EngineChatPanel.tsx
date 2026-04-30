@@ -141,10 +141,10 @@ export default function EngineChatPanel({
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Chat request failed");
+      if (!res.ok) throw new Error(data?.error || t("chat_request_failed"));
       const reply = typeof data.reply === "string" && data.reply.trim()
         ? data.reply.trim()
-        : "(no reply)";
+        : t("chat_no_reply");
       // Source tag for the bot reply — drives the inline pill rendered
       // beneath this message and the Step-2 badge in the parent page.
       const ns = data.nutritionSource;
@@ -177,7 +177,7 @@ export default function EngineChatPanel({
         });
       }
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Chat error");
+      setErr(e instanceof Error ? e.message : t("chat_error"));
     } finally {
       setSending(false);
     }

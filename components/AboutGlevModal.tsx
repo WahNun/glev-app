@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { signOut, getCurrentUser } from "@/lib/auth";
 import GlevLockup from "@/components/GlevLockup";
@@ -13,6 +14,7 @@ const BORDER = "var(--border)";
 const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || "0.4.0";
 
 export default function AboutGlevModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const t = useTranslations("about");
   const router = useRouter();
   const [email, setEmail] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -74,12 +76,12 @@ export default function AboutGlevModal({ open, onClose }: { open: boolean; onClo
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <Row label="Version" value={`v${APP_VERSION}`} />
-          <Row label="Account" value={email ?? "—"} mono />
+          <Row label={t("row_version")} value={`v${APP_VERSION}`} />
+          <Row label={t("row_account")} value={email ?? "—"} mono />
         </div>
 
         <div style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.55 }}>
-          Glev helps you log meals, track CGM trends, and learn your personal insulin response — turning every meal into better data.
+          {t("description")}
         </div>
 
         <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
@@ -91,7 +93,7 @@ export default function AboutGlevModal({ open, onClose }: { open: boolean; onClo
               color: "var(--text-strong)", fontSize: 13, fontWeight: 600, cursor: "pointer",
             }}
           >
-            Close
+            {t("close_btn")}
           </button>
           <button
             onClick={handleSignOut}
@@ -102,7 +104,7 @@ export default function AboutGlevModal({ open, onClose }: { open: boolean; onClo
               color: PINK, fontSize: 13, fontWeight: 700, cursor: busy ? "wait" : "pointer",
             }}
           >
-            {busy ? "Signing out…" : "Sign out"}
+            {busy ? t("signout_busy") : t("signout_idle")}
           </button>
         </div>
 
@@ -114,7 +116,7 @@ export default function AboutGlevModal({ open, onClose }: { open: boolean; onClo
             padding: "4px 0", cursor: "pointer", textAlign: "center",
           }}
         >
-          Open Settings →
+          {t("open_settings")}
         </button>
       </div>
     </div>

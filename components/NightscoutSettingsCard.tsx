@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 
 const ACCENT = "#4F6EF7";
 const GREEN = "#22D3A0";
@@ -57,6 +58,7 @@ const labelStyle: React.CSSProperties = {
  * upstream first and persists on success; Trennen DELETEs.
  */
 export default function NightscoutSettingsCard() {
+  const t = useTranslations("nightscout");
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
   const [hasToken, setHasToken] = useState(false);
@@ -101,11 +103,11 @@ export default function NightscoutSettingsCard() {
 
     const cleanUrl = url.trim().replace(/\/+$/, "");
     if (!cleanUrl) {
-      setError("Nightscout-URL ist erforderlich.");
+      setError(t("err_url_required"));
       return;
     }
     if (!/^https?:\/\//i.test(cleanUrl)) {
-      setError("Nightscout-URL muss mit http:// oder https:// starten.");
+      setError(t("err_url_protocol"));
       return;
     }
 
@@ -124,10 +126,7 @@ export default function NightscoutSettingsCard() {
       });
       const data = (await res.json().catch(() => ({}))) as SyncPostResponse;
       if (!res.ok) {
-        setError(
-          data.error ??
-            "Verbindung fehlgeschlagen — prüf URL und Token, oder ob deine Nightscout-Instanz erreichbar ist.",
-        );
+        setError(data.error ?? t("err_default"));
         return;
       }
       setConnected(true);
@@ -137,24 +136,18 @@ export default function NightscoutSettingsCard() {
       const reading = data.current?.value;
       setSuccess(
         reading != null
-          ? `Verbunden — letzter Wert: ${reading} mg/dL.`
-          : "Verbunden — bisher keine Werte gefunden.",
+          ? t("ok_with_value", { value: reading })
+          : t("ok_no_value"),
       );
     } catch {
-      setError(
-        "Netzwerkfehler — bitte erneut versuchen.",
-      );
+      setError(t("err_network"));
     } finally {
       setSubmitting(false);
     }
   }
 
   async function handleDisconnect() {
-    if (
-      !confirm(
-        "Nightscout-Verbindung wirklich trennen? Du musst URL und Token erneut eingeben.",
-      )
-    ) {
+    if (!confirm(t("confirm_disconnect"))) {
       return;
     }
     setDisconnecting(true);
@@ -166,16 +159,16 @@ export default function NightscoutSettingsCard() {
         cache: "no-store",
       });
       if (!res.ok) {
-        setError("Trennen fehlgeschlagen — bitte erneut versuchen.");
+        setError(t("err_disconnect"));
         return;
       }
       setConnected(false);
       setHasToken(false);
       setUrl("");
       setToken("");
-      setSuccess("Verbindung getrennt.");
+      setSuccess(t("ok_disconnected"));
     } catch {
-      setError("Netzwerkfehler beim Trennen.");
+      setError(t("err_disconnect_network"));
     } finally {
       setDisconnecting(false);
     }
@@ -230,10 +223,10 @@ export default function NightscoutSettingsCard() {
                 marginBottom: 2,
               }}
             >
-              Nightscout
+              {t("title")}
             </div>
             <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
-              Eigener Nightscout-Server als CGM-Quelle (URL + API-Token).
+              {t("subtitle")}
             </div>
           </div>
         </div>
@@ -251,7 +244,7 @@ export default function NightscoutSettingsCard() {
             whiteSpace: "nowrap",
           }}
         >
-          {loading ? "Lädt…" : connected ? "Verbunden" : "Nicht verbunden"}
+          {loading ? t("status_loading") : connected ? t("status_connected") : t("status_disconnected")}
         </span>
       </div>
 
@@ -261,13 +254,13 @@ export default function NightscoutSettingsCard() {
       >
         <div>
           <label htmlFor="ns-url" style={labelStyle}>
-            Nightscout-URL
+            {t("url_label")}
           </label>
           <input
             id="ns-url"
             type="url"
             inputMode="url"
-            placeholder="https://meinns.example.com"
+            placeholder={t("url_placeholder")}
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             disabled={submitting || disconnecting}
@@ -278,17 +271,17 @@ export default function NightscoutSettingsCard() {
         </div>
         <div>
           <label htmlFor="ns-token" style={labelStyle}>
-            API-Token{" "}
+            {t("token_label")}{" "}
             {hasToken && (
               <span style={{ color: "var(--text-faint)" }}>
-                — gespeichert (leer lassen, um zu behalten)
+                {t("token_saved_hint")}
               </span>
             )}
           </label>
           <input
             id="ns-token"
             type="password"
-            placeholder={hasToken ? "•••••••• (gespeichert)" : "Aus Nightscout Admin"}
+            placeholder={hasToken ? t("token_placeholder_saved") : t("token_placeholder_new")}
             value={token}
             onChange={(e) => setToken(e.target.value)}
             disabled={submitting || disconnecting}
@@ -350,7 +343,7 @@ export default function NightscoutSettingsCard() {
               fontFamily: "inherit",
             }}
           >
-            {submitting ? "Speichere…" : connected ? "Aktualisieren" : "Speichern"}
+            {submitting ? t("save_busy") : connected ? t("update_btn") : t("save_idle")}
           </button>
           {connected && (
             <button
@@ -373,7 +366,7 @@ export default function NightscoutSettingsCard() {
                 fontFamily: "inherit",
               }}
             >
-              {disconnecting ? "Trennt…" : "Trennen"}
+              {disconnecting ? t("disconnect_busy") : t("disconnect_idle")}
             </button>
           )}
         </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   insertFingerstick,
   fetchLatestFingerstick,
@@ -19,17 +20,19 @@ function toLocalInputValue(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-function formatLatestWhen(iso: string): string {
-  if (!iso) return iso;
-  const time = formatLocalTime(iso, "time");
-  if (time === "—") return iso;
-  if (isToday(iso))         return `heute ${time}`;
-  // "gestern" = within last 2 days but not today.
-  if (isWithinDays(iso, 2)) return `gestern ${time}`;
-  return `${formatLocalTime(iso, "date")} ${time}`;
-}
-
 export default function FingerstickLogCard() {
+  const t = useTranslations("fingerstick");
+
+  function formatLatestWhen(iso: string): string {
+    if (!iso) return iso;
+    const time = formatLocalTime(iso, "time");
+    if (time === "—") return iso;
+    if (isToday(iso))         return t("latest_today", { time });
+    // "gestern" = within last 2 days but not today.
+    if (isWithinDays(iso, 2)) return t("latest_yesterday", { time });
+    return t("latest_other", { date: formatLocalTime(iso, "date"), time });
+  }
+
   const [value, setValue]       = useState<string>("");
   const [whenLocal, setWhenLocal] = useState<string>(() => toLocalInputValue(new Date()));
   const [note, setNote]         = useState<string>("");
@@ -51,7 +54,7 @@ export default function FingerstickLogCard() {
 
     const num = Number(value.replace(",", "."));
     if (!Number.isFinite(num) || num < 20 || num > 600) {
-      setFeedback({ kind: "err", msg: "Wert muss zwischen 20 und 600 mg/dL liegen." });
+      setFeedback({ kind: "err", msg: t("err_value_range") });
       return;
     }
 
@@ -59,7 +62,7 @@ export default function FingerstickLogCard() {
     if (whenLocal) {
       const d = new Date(whenLocal);
       if (isNaN(d.getTime())) {
-        setFeedback({ kind: "err", msg: "Ungültiger Zeitpunkt." });
+        setFeedback({ kind: "err", msg: t("err_invalid_when") });
         return;
       }
       measuredAt = d.toISOString();
@@ -76,9 +79,9 @@ export default function FingerstickLogCard() {
       setValue("");
       setNote("");
       setWhenLocal(toLocalInputValue(new Date()));
-      setFeedback({ kind: "ok", msg: "Gespeichert ✓" });
+      setFeedback({ kind: "ok", msg: t("saved_ok") });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Speichern fehlgeschlagen.";
+      const msg = err instanceof Error ? err.message : t("err_save_failed");
       setFeedback({ kind: "err", msg });
     } finally {
       setBusy(false);
@@ -110,12 +113,12 @@ export default function FingerstickLogCard() {
         <div style={{
           fontSize:9, fontWeight:700, letterSpacing:"0.1em",
           color:"var(--text-dim)", textTransform:"uppercase",
-        }}>Finger-Stick Glukose</div>
+        }}>{t("card_eyebrow")}</div>
         <div style={{
           marginTop: 4,
           fontSize: 13, fontWeight: 600, color:"var(--text)", lineHeight: 1.3,
         }}>
-          Manuelle Messung erfassen
+          {t("card_title")}
         </div>
       </div>
 
@@ -127,7 +130,7 @@ export default function FingerstickLogCard() {
         <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 10 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <label htmlFor={valueId} style={{ fontSize: 10, color: "var(--text-dim)", fontWeight: 600, letterSpacing: "0.04em" }}>
-              Wert
+              {t("value_label")}
             </label>
             <input
               id={valueId}
@@ -136,7 +139,7 @@ export default function FingerstickLogCard() {
               min={20}
               max={600}
               step={1}
-              placeholder="mg/dL"
+              placeholder={t("value_placeholder")}
               value={value}
               onChange={(e) => setValue(e.target.value)}
               style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
@@ -145,7 +148,7 @@ export default function FingerstickLogCard() {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <label htmlFor={whenId} style={{ fontSize: 10, color: "var(--text-dim)", fontWeight: 600, letterSpacing: "0.04em" }}>
-              Zeitpunkt
+              {t("when_label")}
             </label>
             <input
               id={whenId}
@@ -159,12 +162,12 @@ export default function FingerstickLogCard() {
 
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <label htmlFor={noteId} style={{ fontSize: 10, color: "var(--text-dim)", fontWeight: 600, letterSpacing: "0.04em" }}>
-            Notiz (optional)
+            {t("note_label")}
           </label>
           <input
             id={noteId}
             type="text"
-            placeholder='z.B. "vor dem Sport"'
+            placeholder={t("note_placeholder")}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             style={inputStyle}
@@ -187,7 +190,7 @@ export default function FingerstickLogCard() {
               transition: "background 120ms ease",
             }}
           >
-            {busy ? "Speichern…" : "Speichern"}
+            {busy ? t("save_busy") : t("save_idle")}
           </button>
           <span
             role="status"
@@ -205,12 +208,12 @@ export default function FingerstickLogCard() {
 
       <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.4 }}>
         {latest
-          ? <>Letzter Wert: <span style={{ color:"var(--text)", fontFamily: "var(--font-mono)", fontWeight: 700 }}>{Math.round(latest.value_mg_dl)} mg/dL</span> · {formatLatestWhen(latest.measured_at)}</>
-          : <>Noch keine manuellen Werte erfasst.</>}
+          ? <>{t("latest_label")}<span style={{ color:"var(--text)", fontFamily: "var(--font-mono)", fontWeight: 700 }}>{t("latest_value", { value: Math.round(latest.value_mg_dl) })}</span> · {formatLatestWhen(latest.measured_at)}</>
+          : <>{t("no_values")}</>}
       </div>
 
       <div style={{ fontSize: 10, color: "var(--text-faint)", lineHeight: 1.4, fontStyle: "italic" }}>
-        Unabhängig vom CGM — nur manuell erfasste Werte.
+        {t("footnote")}
       </div>
     </div>
   );
