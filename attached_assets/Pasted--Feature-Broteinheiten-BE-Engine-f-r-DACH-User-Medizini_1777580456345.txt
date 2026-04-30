@@ -1,0 +1,128 @@
+## Feature: Broteinheiten (BE) Engine für DACH-User
+
+## Medizinischer Kontext
+- 1 BE = 12g Kohlenhydrate (Deutschland & Österreich Standard)
+- 1 KE = 10g Kohlenhydrate (Schweiz)
+- DACH-Diabetologen schreiben ICR als "BE/IE" (z.B. 2 BE/IE = 1 IE pro 24g KH)
+- Die Engine rechnet intern IMMER in Gramm — BE/KE ist nur Display + Input-Umrechnung
+
+## Ziel
+User können in Settings ihre bevorzugte Einheit wählen: g KH / BE / KE
+
+---
+
+## Schritt 1 — Supabase Migration
+
+```sql
+ALTER TABLE profiles
+  ADD COLUMN IF NOT EXISTS carb_unit text DEFAULT 'g';
+  -- Werte: 'g' | 'BE' | 'KE'
+```
+
+---
+
+## Schritt 2 — lib/carbUnits.ts anlegen
+
+```ts
+export type CarbUnit = 'g' | 'BE' | 'KE';
+
+export const CARB_UNITS: Record<CarbUnit, { label: string; gPerUnit: number; description: string }> = {
+  g:  { label: 'g KH', gPerUnit: 1,  description: 'Gramm Kohlenhydrate (international)' },
+  BE: { label: 'BE',   gPerUnit: 12, description: 'Broteinheit — 1 BE = 12g KH (Deutschland, Österreich)' },
+  KE: { label: 'KE',   gPerUnit: 10, description: 'Kohlenhydrateinheit — 1 KE = 10g KH (Schweiz)' }
+};
+
+export function gToUnit(grams: number, unit: CarbUnit): number {
+  return Math.round((grams / CARB_UNITS[unit].gPerUnit) * 10) / 10;
+}
+export function unitToG(value: number, unit: CarbUnit): number {
+  return value * CARB_UNITS[unit].gPerUnit;
+}
+export function icrToUnit(icrGperIE: number, unit: CarbUnit): number {
+  return Math.round((icrGperIE / CARB_UNITS[unit].gPerUnit) * 10) / 10;
+}
+export function icrFromUnit(icrInUnit: number, unit: CarbUnit): number {
+  return icrInUnit * CARB_UNITS[unit].gPerUnit;
+}
+```
+
+---
+
+## Schritt 3 — hooks/useCarbUnit.ts anlegen
+
+```ts
+'use client';
+import { useState, useEffect } from 'react';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { CarbUnit, gToUnit, unitToG, icrToUnit } from '@/lib/carbUnits';
+
+export function useCarbUnit() {
+  const [unit, setUnitState] = useState<CarbUnit>('g');
+  const supabase = createClientComponentClient();
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      supabase.from('profiles').select('carb_unit').eq('id', user.id).single()
+        .then(({ data }) => { if (data?.carb_unit) setUnitState(data.carb_unit as CarbUnit); });
+    });
+  }, []);
+
+  const setUnit = async (u: CarbUnit) => {
+    setUnitState(u);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) await supabase.from('profiles').update({ carb_unit: u }).eq('id', user.id);
+  };
+
+  return {
+    unit,
+    setUnit,
+    display: (grams: number) => `${gToUnit(grams, unit)} ${unit}`,
+    toGrams: (value: number) => unitToG(value, unit),
+    displayICR: (icrGperIE: number) => `${icrToUnit(icrGperIE, unit)} ${unit}/IE`,
+  };
+}
+```
+
+---
+
+## Schritt 4 — Settings: Einheit-Selector einbauen
+
+In Settings-Seite unter einer Sektion "Kohlenhydrate" einen 3-Wege-Toggle einbauen (g / BE / KE). Verwende bestehende Button-Styles der App — kein eigenes Styling. Der aktive Wert kommt aus `useCarbUnit().unit`, Änderung über `setUnit()`.
+
+---
+
+## Schritt 5 — Log-Wizard: Carbs-Input anpassen
+
+In Step 2 des Log-Wizards:
+- Input-Label dynamisch: "Kohlenhydrate (BE)" statt fest "g"
+- Lokaler State in gewählter Einheit, `toGrams()` für DB-Speicherung
+- AI-Parse-Ergebnis (gibt immer g zurück) mit `display()` konvertieren
+- DB schreibt IMMER Gramm (`carbs_grams`) — keine DB-Änderung
+
+---
+
+## Schritt 6 — Engine ICR-Anzeige
+
+Überall wo ICR oder Insulin-Empfehlung angezeigt wird: `displayICR(adaptiveICR)` statt fest "g/IE". BE-User sieht "2 BE/IE", g-User sieht "24 g/IE".
+
+---
+
+## Schritt 7 — History-Cards
+
+In History-Einträgen: `display(entry.carbs_grams)` statt fest "60g KH".
+
+---
+
+## Was NICHT geändert wird
+- DB speichert immer Gramm — kein Breaking Change
+- AI-Parse gibt immer Gramm zurück
+- ICR-Berechnung intern in g/IE
+
+---
+
+## VERIFY
+1. npx tsc --noEmit → kein Fehler
+2. Settings → Einheit auf BE stellen → Log-Wizard zeigt BE → History zeigt BE
+3. DB-Eintrag prüfen: carbs_grams bleibt in Gramm
+4. git add -A && git commit -m "feat: BE/KE/g carb unit selector DACH" && git push origin main

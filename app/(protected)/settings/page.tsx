@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { supabase } from "@/lib/supabase";
 import { reloadHistoricalEntries } from "@/lib/meals";
@@ -9,7 +9,8 @@ import ImportPanel from "@/components/ImportPanel";
 import ExportPanel from "@/components/ExportPanel";
 import CgmSettingsCard from "@/components/CgmSettingsCard";
 import NightscoutSettingsCard from "@/components/NightscoutSettingsCard";
-import { parseDbDate, localeToBcp47 } from "@/lib/time";
+import BottomSheet from "@/components/BottomSheet";
+import { localeToBcp47 } from "@/lib/time";
 import { setLocale, readLocaleCookie, DEFAULT_LOCALE, type Locale } from "@/lib/locale";
 import { useTheme } from "@/components/ThemeProvider";
 import type { ThemeChoice } from "@/lib/theme";
@@ -30,7 +31,7 @@ const DEFAULTS: Settings = { targetMin:70, targetMax:180, icr:15, cf:50, notifyS
 
 function loadSettings(): Settings {
   if (typeof window === "undefined") return DEFAULTS;
-  try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem("glev_settings") || "{}") }; } 
+  try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem("glev_settings") || "{}") }; }
   catch { return DEFAULTS; }
 }
 
@@ -38,58 +39,80 @@ function saveSettings(s: Settings) {
   if (typeof window !== "undefined") localStorage.setItem("glev_settings", JSON.stringify(s));
 }
 
+// All sheet IDs in one union so both the row config and the open-state
+// stay type-checked together. Adding a new row = extend this union and
+// add a matching <BottomSheet> render block at the bottom.
+type SheetId =
+  | "glucose_targets" | "units"
+  | "icr" | "cf"
+  | "cgm_librelinkup" | "cgm_nightscout" | "cgm_dexcom"
+  | "appearance" | "language" | "notifications" | "export"
+  | "macros" | "historical" | "google_sheets" | "import";
+
 export default function SettingsPage() {
   const tSettings = useTranslations("settings");
   const tCommon = useTranslations("common");
   const dateLocale = localeToBcp47(useLocale());
-  const [tab, setTab]         = useState<"overview"|"settings"|"integrations"|"data">("overview");
-  const [email, setEmail]     = useState("");
-  const [createdAt, setCreatedAt] = useState("");
   const [settings, setSettings]   = useState<Settings>(DEFAULTS);
   const [saved, setSaved]     = useState(false);
-  const [mealCount, setMealCount] = useState<number>(0);
   const [reloading, setReloading] = useState(false);
   const [reloadMsg, setReloadMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
-  // Reflects the NEXT_LOCALE cookie so the language toggle highlights
-  // the correct button immediately on mount. Reads in an effect because
-  // document.cookie is browser-only — server render shows DEFAULT.
   const [currentLocale, setCurrentLocale] = useState<Locale>(DEFAULT_LOCALE);
   useEffect(() => {
     const fromCookie = readLocaleCookie();
     if (fromCookie) setCurrentLocale(fromCookie);
   }, []);
-  // Pending locale-switch waiting for confirmation. setLocale() hard-
-  // reloads the page, which would silently nuke any in-progress macro
-  // input, so we gate the call behind a modal: button click sets
-  // pendingLocale -> modal appears -> Confirm calls setLocale (reload),
-  // Cancel just clears pendingLocale.
   const [pendingLocale, setPendingLocale] = useState<Locale | null>(null);
-  // Theme: applies instantly (CSS-variable swap), so unlike the locale
-  // picker we do NOT stage a pending value behind a Save button — every
-  // tap on a segment commits and re-skins immediately.
   const { choice: themeChoice, setChoice: setThemeChoice } = useTheme();
-  // Macro targets live in Supabase (user_settings table) rather than
-  // localStorage so they sync across devices. Their own dedicated Save
-  // button keeps the existing localStorage Save Settings flow untouched.
   const [macroTargets, setMacroTargets] = useState<MacroTargets>(DEFAULT_MACRO_TARGETS);
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving]       = useState(false);
 
+  // Currently-open bottom sheet (or null = section list visible only).
+  // One-at-a-time semantics — opening a row closes any other open sheet.
+  const [openSheet, setOpenSheet] = useState<SheetId | null>(null);
+  // Draft snapshot captured the moment a sheet opens. If the user dismisses
+  // the sheet via backdrop / ESC / drag-down / Schließen-button, we revert
+  // the in-memory state to this snapshot so half-typed values don't leak
+  // back into the row subtitles or get committed on the next global save.
+  // Successful saves clear this snapshot so the new values become canonical.
+  const [draftSnapshot, setDraftSnapshot] = useState<{ settings: Settings; macroTargets: MacroTargets } | null>(null);
+
   useEffect(() => {
     setSettings(loadSettings());
     if (!supabase) return;
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
-      setEmail(user.email || "");
-      setCreatedAt(user.created_at ? parseDbDate(user.created_at).toLocaleDateString(dateLocale,{year:"numeric",month:"long",day:"numeric"}) : "");
-    });
-    supabase.from("meals").select("id", { count:"exact", head:true }).then(({ count }) => setMealCount(count||0));
-    // fetchMacroTargets handles the !supabase / signed-out case internally
-    // by resolving to DEFAULT_MACRO_TARGETS, so it's safe to call here.
     fetchMacroTargets().then(setMacroTargets).catch(() => {});
   }, []);
 
-  async function handleSave() {
+  function openSheetWith(id: SheetId) {
+    // Always snapshot — even info-only sheets do nothing harmful, and
+    // tracking branching by id-type would just be ceremony. Snapshot is
+    // structural-clone-ish (objects are flat primitives).
+    setDraftSnapshot({ settings: { ...settings }, macroTargets: { ...macroTargets } });
+    setSaveError("");
+    setOpenSheet(id);
+  }
+
+  function closeSheet() {
+    // Revert any unsaved edits to the snapshot taken at open-time. Also
+    // discard a staged locale selection so a backdrop-close on the
+    // language sheet doesn't leave a "Save" button armed on next visit.
+    if (draftSnapshot) {
+      setSettings(draftSnapshot.settings);
+      setMacroTargets(draftSnapshot.macroTargets);
+      setDraftSnapshot(null);
+    }
+    setPendingLocale(null);
+    setSaveError("");
+    setOpenSheet(null);
+  }
+
+  // Persist current edits. Returns true on success so the caller (the
+  // sheet footer Save button) can decide whether to dismiss or keep the
+  // sheet open with the error visible. Throws are converted to false +
+  // an inline saveError so the user sees what went wrong without losing
+  // their in-progress values.
+  async function saveAndKeepOpen(): Promise<boolean> {
     setSaving(true);
     setSaveError("");
     try {
@@ -97,9 +120,13 @@ export default function SettingsPage() {
       await saveMacroTargets(macroTargets);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
+      // Commit: the snapshot is now stale because these values ARE the
+      // new baseline, so a subsequent close should not revert.
+      setDraftSnapshot(null);
+      return true;
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : tSettings("save_failed"));
-      setTimeout(() => setSaveError(""), 4000);
+      return false;
     } finally {
       setSaving(false);
     }
@@ -112,8 +139,6 @@ export default function SettingsPage() {
     try {
       const { inserted } = await reloadHistoricalEntries();
       setReloadMsg({ kind: "ok", text: tSettings("historical_loaded", { count: inserted }) });
-      const { count } = await supabase!.from("meals").select("id", { count:"exact", head:true });
-      setMealCount(count || 0);
     } catch (e) {
       setReloadMsg({ kind: "error", text: tSettings("historical_error", { message: e instanceof Error ? e.message : tSettings("historical_failed") }) });
     } finally {
@@ -130,452 +155,439 @@ export default function SettingsPage() {
     setMacroTargets(prev => ({ ...prev, [key]: val }));
   }
 
-  const card: React.CSSProperties = { background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"20px 24px" };
   const inp: React.CSSProperties  = { background:"var(--input-bg)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 14px", color:"var(--text)", fontSize:14, outline:"none", width:"100%" };
+
+  // Subtitles derived from current state — these show under each row label
+  // in the section list so the user sees the active value without opening
+  // the sheet. Memoised because they recompute on every render of inputs
+  // inside open sheets, which is fine but cheap to skip.
+  const themeLabel = useMemo(() => {
+    return themeChoice === "dark" ? tSettings("theme_dark")
+         : themeChoice === "light" ? tSettings("theme_light")
+         : tSettings("theme_system");
+  }, [themeChoice, tSettings]);
+  const languageLabel = currentLocale === "de" ? "Deutsch" : "English";
+
+  // Each section is rendered as an iOS-style grouped card with a small
+  // uppercase header above it. Rows inside are separated by hairlines.
+  const SECTIONS: { id: string; label: string; rows: Array<{ id: SheetId; label: string; sub?: string }> }[] = [
+    {
+      id: "glucose",
+      label: tSettings("group_glucose"),
+      rows: [
+        { id: "glucose_targets", label: tSettings("row_glucose_targets"), sub: `${settings.targetMin} – ${settings.targetMax} mg/dL` },
+        { id: "units",           label: tSettings("row_units"),           sub: tSettings("subtitle_unit_mgdl") },
+      ],
+    },
+    {
+      id: "insulin",
+      label: tSettings("group_insulin"),
+      rows: [
+        { id: "icr", label: tSettings("row_icr"), sub: `1:${settings.icr}` },
+        { id: "cf",  label: tSettings("row_cf"),  sub: `1:${settings.cf}` },
+      ],
+    },
+    {
+      id: "cgm",
+      label: tSettings("group_cgm"),
+      rows: [
+        { id: "cgm_librelinkup", label: tSettings("row_cgm_librelinkup") },
+        { id: "cgm_nightscout",  label: tSettings("row_cgm_nightscout") },
+        { id: "cgm_dexcom",      label: tSettings("row_cgm_dexcom"),     sub: tSettings("subtitle_coming_soon") },
+      ],
+    },
+    {
+      id: "app",
+      label: tSettings("group_app"),
+      rows: [
+        { id: "appearance",    label: tSettings("row_appearance"),    sub: themeLabel },
+        { id: "language",      label: tSettings("row_language"),      sub: languageLabel },
+        { id: "notifications", label: tSettings("row_notifications") },
+        { id: "export",        label: tSettings("row_export") },
+      ],
+    },
+    {
+      id: "advanced",
+      label: tSettings("group_advanced"),
+      rows: [
+        { id: "macros",         label: tSettings("row_macros") },
+        { id: "historical",     label: tSettings("row_historical") },
+        { id: "google_sheets",  label: tSettings("row_google_sheets"), sub: tSettings("subtitle_coming_soon") },
+        { id: "import",         label: tSettings("row_import") },
+      ],
+    },
+  ];
+
+  // Footer used for sheets that contain editable inputs — Save commits via
+  // saveAndKeepOpen() and only dismisses the sheet on success. On failure
+  // the inline `saveError` strip stays visible above the buttons so the
+  // user can read the message without losing their in-progress values.
+  // For info-only sheets we render a "Schließen" footer instead.
+  const saveFooter = (
+    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+      {saveError && (
+        <div style={{ fontSize:12, color:PINK, lineHeight:1.4 }}>{saveError}</div>
+      )}
+      <div style={{ display:"flex", gap:10 }}>
+        <button onClick={closeSheet} style={{
+          flex:"0 0 auto", padding:"12px 18px", borderRadius:12,
+          border:`1px solid ${BORDER}`, background:"transparent",
+          color:"var(--text-strong)", fontSize:13, fontWeight:600, cursor:"pointer",
+        }}>
+          {tSettings("sheet_close")}
+        </button>
+        <button onClick={async () => {
+          const ok = await saveAndKeepOpen();
+          if (ok) setOpenSheet(null);
+        }} disabled={saving} style={{
+          flex:1, padding:"12px 16px", borderRadius:12, border:"none",
+          cursor: saving ? "wait" : "pointer",
+          background:`linear-gradient(135deg, ${ACCENT}, #6B8BFF)`, color:"#fff",
+          fontSize:13, fontWeight:700, opacity: saving ? 0.7 : 1,
+        }}>
+          {saving ? tSettings("save_button_busy") : saved ? tSettings("save_button_done") : tSettings("save_button_idle")}
+        </button>
+      </div>
+    </div>
+  );
+
+  const closeFooter = (
+    <button onClick={closeSheet} style={{
+      width:"100%", padding:"12px 16px", borderRadius:12,
+      border:`1px solid ${BORDER}`, background:"var(--surface-soft)",
+      color:"var(--text-strong)", fontSize:13, fontWeight:600, cursor:"pointer",
+    }}>
+      {tSettings("sheet_close")}
+    </button>
+  );
 
   return (
     <div style={{ maxWidth:720, margin:"0 auto" }}>
-      <div style={{ marginBottom:28 }}>
+      <div style={{ marginBottom:24 }}>
         <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>{tSettings("page_title")}</h1>
         <p style={{ color:"var(--text-faint)", fontSize:14 }}>{tSettings("page_subtitle")}</p>
       </div>
 
-      {/* TABS — pill-shaped track with four content-sized buttons.
-          Earlier iterations used horizontal scroll OR truncating
-          25%-slots; both lost copy on narrow phones (German
-          "Integrationen" overflowed on iPhone 13 mini, reported
-          2026-04-30). The current approach lets the row WRAP to a
-          second line on narrow viewports so all four labels stay
-          fully visible without scrolling. On wider screens
-          (~≥520px) all four still fit on one line and `space-around`
-          gives them the original spread-out look. The container's
-          rounded radius (20) reads as a pill on a single row and as
-          a soft-rounded card on two rows, so the same value works
-          for both states. */}
-      <div role="tablist" aria-label={tSettings("tab_aria")} style={{
-        display:"flex", flexWrap:"wrap", columnGap:2, rowGap:4,
-        marginBottom:24,
-        background:"var(--border-soft)", borderRadius:20,
-        padding:4, width:"100%",
-        justifyContent:"space-around", alignItems:"stretch",
-      }}>
-        {(["overview","settings","integrations","data"] as const).map(tabKey => (
-          <button key={tabKey} role="tab" aria-selected={tab===tabKey} onClick={() => setTab(tabKey)} style={{
-            flex:"0 0 auto",
-            padding:"8px 14px", borderRadius:99, border:"none", cursor:"pointer",
-            background: tab===tabKey ? ACCENT : "transparent",
-            color:"var(--text)",
-            fontSize:13, fontWeight:tab===tabKey?600:500,
-            whiteSpace:"nowrap",
-            textAlign:"center",
-            transition:"background 0.15s",
-          }}>{tSettings(`tab_${tabKey}`)}</button>
+      {/* iOS-style grouped section list. Each group is a card with uppercase
+          header above; rows are stacked with hairline separators between
+          them. Tapping any row opens its bottom sheet. */}
+      <div style={{ display:"flex", flexDirection:"column", gap:24 }}>
+        {SECTIONS.map(section => (
+          <section key={section.id}>
+            <div style={{
+              fontSize:11, fontWeight:700, letterSpacing:"0.1em",
+              color:"var(--text-faint)", textTransform:"uppercase",
+              padding:"0 16px 8px",
+            }}>{section.label}</div>
+            <div style={{
+              background:SURFACE, border:`1px solid ${BORDER}`,
+              borderRadius:14, overflow:"hidden",
+            }}>
+              {section.rows.map((row, idx) => (
+                <button
+                  key={row.id}
+                  onClick={() => openSheetWith(row.id)}
+                  style={{
+                    display:"flex", alignItems:"center", gap:12,
+                    width:"100%", padding:"14px 16px",
+                    background:"transparent", border:"none",
+                    borderTop: idx === 0 ? "none" : `1px solid ${BORDER}`,
+                    textAlign:"left", cursor:"pointer",
+                    color:"var(--text)",
+                  }}
+                >
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:14, fontWeight:500 }}>{row.label}</div>
+                  </div>
+                  {row.sub && (
+                    <div style={{
+                      fontSize:13, color:"var(--text-dim)",
+                      maxWidth:"50%",
+                      overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                    }}>{row.sub}</div>
+                  )}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-faint)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0 }}>
+                    <polyline points="9 18 15 12 9 6"/>
+                  </svg>
+                </button>
+              ))}
+            </div>
+          </section>
         ))}
       </div>
 
-      {tab === "overview" && (
-        <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-          {/* Profile */}
-          <div style={card}>
-            <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>{tSettings("profile")}</div>
-            <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:20 }}>
-              <div style={{ width:56, height:56, borderRadius:99, background:`linear-gradient(135deg,${ACCENT},#6B8BFF)`, border:`2px solid ${ACCENT}66`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24, fontWeight:800, color:"var(--text)", letterSpacing:"-0.02em", textTransform:"uppercase" }}>
-                {(email.split("@")[0] || "U").charAt(0)}
-              </div>
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:2 }}>
-                  <div style={{ fontSize:16, fontWeight:700 }}>{email.split("@")[0] || tSettings("user_fallback")}</div>
-                  <span style={{ fontSize:9, fontWeight:700, padding:"2px 8px", borderRadius:99, background:`${ACCENT}20`, color:ACCENT, letterSpacing:"0.08em" }}>{tSettings("member_pill")}</span>
-                </div>
-                <div style={{ fontSize:13, color:"var(--text-dim)" }}>{email}</div>
-              </div>
-            </div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
-              {[
-                { label:tSettings("member_since"), val:createdAt||"—" },
-                { label:tSettings("meals_logged"), val:mealCount.toString() },
-                { label:tSettings("plan"), val:tSettings("plan_free") },
-              ].map(s => (
-                <div key={s.label} style={{ background:"var(--surface-soft)", borderRadius:10, padding:"12px 14px" }}>
-                  <div style={{ fontSize:11, color:"var(--text-faint)", marginBottom:4 }}>{s.label}</div>
-                  <div style={{ fontSize:15, fontWeight:700 }}>{s.val}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* ICR Info */}
-          <div style={card}>
-            <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>{tSettings("insulin_settings_title")}</div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-              {[
-                { label:tSettings("insulin_to_carb_ratio"), val:`1:${settings.icr}`, sub:tSettings("icr_unit"), color:ACCENT },
-                { label:tSettings("correction_factor"), val:`1:${settings.cf}`, sub:tSettings("cf_unit"), color:"#A78BFA" },
-              ].map(s => (
-                <div key={s.label} style={{ background:`${s.color}08`, border:`1px solid ${s.color}20`, borderRadius:12, padding:"14px 16px" }}>
-                  <div style={{ fontSize:11, color:"var(--text-faint)", marginBottom:4 }}>{s.label}</div>
-                  <div style={{ fontSize:20, fontWeight:800, color:s.color }}>{s.val}</div>
-                  <div style={{ fontSize:11, color:"var(--text-ghost)", marginTop:2 }}>{s.sub}</div>
-                </div>
-              ))}
-              <div style={{ gridColumn:"1 / -1", background:`${GREEN}08`, border:`1px solid ${GREEN}20`, borderRadius:12, padding:"14px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
-                <div>
-                  <div style={{ fontSize:11, color:"var(--text-faint)", marginBottom:4 }}>{tSettings("target_range")}</div>
-                  <div style={{ fontSize:11, color:"var(--text-ghost)" }}>{tSettings("target_range_sub")}</div>
-                </div>
-                <div style={{ fontSize:20, fontWeight:800, color:GREEN, letterSpacing:"-0.02em" }}>
-                  {settings.targetMin} <span style={{ color:"var(--text-faint)" }}>—</span> {settings.targetMax}
-                  <span style={{ fontSize:11, color:"var(--text-faint)", fontWeight:500, marginLeft:6 }}>mg/dL</span>
-                </div>
-              </div>
-            </div>
-            <button onClick={() => setTab("settings")} style={{ marginTop:14, padding:"9px 18px", borderRadius:9, border:`1px solid ${BORDER}`, background:"transparent", color:"var(--text-dim)", fontSize:13, cursor:"pointer" }}>
-              {tSettings("edit_settings")}
-            </button>
-          </div>
-
-          {/* Historical Data */}
-          <div style={card}>
-            <div style={{ fontSize:13, fontWeight:600, marginBottom:6 }}>{tSettings("historical_data_title")}</div>
-            <div style={{ fontSize:12, color:"var(--text-dim)", marginBottom:14, lineHeight:1.5 }}>
-              {tSettings("historical_data_desc")}
-            </div>
-            <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-              <button onClick={handleReloadHistorical} disabled={reloading} style={{
-                padding:"10px 18px", borderRadius:10, border:`1px solid ${ACCENT}40`, cursor: reloading ? "wait" : "pointer",
-                background:`${ACCENT}15`, color:ACCENT, fontSize:13, fontWeight:600, opacity: reloading ? 0.6 : 1,
-              }}>
-                {reloading ? tSettings("historical_loading") : tSettings("historical_reload")}
-              </button>
-              {reloadMsg && (
-                <span style={{ fontSize:12, color: reloadMsg.kind === "error" ? PINK : GREEN }}>{reloadMsg.text}</span>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {tab === "settings" && (
-        <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-          {/* LANGUAGE PICKER — dropdown + Save button in one row, same
-              card. Dropdown stages a pendingLocale (no immediate effect);
-              Save commits via setLocale() which writes the NEXT_LOCALE
-              cookie + persists to Supabase (profiles.language) + hard-
-              reloads so the server-side messages bundle picks up. Save
-              is disabled when the dropdown matches the active locale —
-              nothing to save. The reload-warning hint sits below the row
-              instead of in a separate modal: dropdown→Save is already a
-              two-step explicit action, so an extra confirm popup would
-              be friction. */}
-          <div style={card}>
-            <div style={{ fontSize:13, fontWeight:600, marginBottom:14 }}>
-              {tSettings("language_card_title")}
-            </div>
-            <div style={{ display:"flex", gap:10, alignItems:"stretch" }}>
-              <select
-                value={pendingLocale ?? currentLocale}
-                onChange={e => {
-                  const next = e.target.value as Locale;
-                  // Reset pending back to null when user re-picks the
-                  // current locale, so the Save button correctly disables.
-                  setPendingLocale(next === currentLocale ? null : next);
-                }}
-                style={{
-                  flex:1, padding:"12px 14px", borderRadius:10,
-                  border:`1px solid ${BORDER}`, background:SURFACE,
-                  color:"var(--text)", fontSize:14, fontWeight:500, cursor:"pointer",
-                  appearance:"none", WebkitAppearance:"none",
-                  // Mid-gray fill works in both dark and light themes:
-                  // SVG data-URLs can't read CSS variables, so we pick a
-                  // neutral that's visible against both #FFFFFF and
-                  // #111117 surfaces (~AA against either).
-                  backgroundImage:"url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path fill='%23888' d='M2 4l4 4 4-4z'/></svg>\")",
-                  backgroundRepeat:"no-repeat",
-                  backgroundPosition:"right 14px center",
-                  paddingRight:36,
-                }}
-              >
-                <option value="de" style={{ background:SURFACE, color:"var(--text)" }}>🇩🇪 Deutsch</option>
-                <option value="en" style={{ background:SURFACE, color:"var(--text)" }}>🇬🇧 English</option>
-              </select>
-              <button
-                type="button"
-                disabled={!pendingLocale}
-                onClick={() => {
-                  if (!pendingLocale) return;
-                  const target = pendingLocale;
-                  setCurrentLocale(target);
-                  void setLocale(target);
-                }}
-                style={{
-                  padding:"12px 22px", borderRadius:10,
-                  border:`1px solid ${pendingLocale ? ACCENT : BORDER}`,
-                  background: pendingLocale ? ACCENT : "transparent",
-                  color: pendingLocale ? "#fff" : "var(--text-faint)",
-                  fontSize:14, fontWeight:600,
-                  cursor: pendingLocale ? "pointer" : "not-allowed",
-                  whiteSpace:"nowrap",
-                  transition:"background 120ms ease, color 120ms ease, border-color 120ms ease",
-                }}
-              >
-                {tCommon("save")}
-              </button>
-            </div>
-            {pendingLocale && (
-              <div style={{ fontSize:11, color:"var(--text-dim)", marginTop:10, lineHeight:1.5 }}>
-                {tSettings("language_confirm_body")}
-              </div>
-            )}
-          </div>
-
-          {/* APPEARANCE PICKER — segmented control with three options.
-              Unlike the language picker, theme switching is a pure CSS-
-              variable swap (no server reload needed for messages), so
-              the choice commits immediately on tap. The active segment
-              uses the brand accent fill so users get the same affordance
-              as the tabs above. `system` follows the OS preference live
-              via the matchMedia listener in ThemeProvider. */}
-          <div style={card}>
-            <div style={{ fontSize:13, fontWeight:600, marginBottom:6 }}>
-              {tSettings("appearance")}
-            </div>
-            <div style={{ fontSize:12, color:"var(--text-dim)", marginBottom:14, lineHeight:1.5 }}>
-              {tSettings("appearance_hint")}
-            </div>
-            <div role="radiogroup" aria-label={tSettings("appearance")} style={{
-              display:"flex", gap:2, padding:4, borderRadius:99,
-              background:"var(--surface-soft)", border:`1px solid ${BORDER}`,
-            }}>
-              {([
-                { v: "dark"   as ThemeChoice, label: tSettings("theme_dark") },
-                { v: "light"  as ThemeChoice, label: tSettings("theme_light") },
-                { v: "system" as ThemeChoice, label: tSettings("theme_system") },
-              ]).map(opt => {
-                const active = themeChoice === opt.v;
-                return (
-                  <button
-                    key={opt.v}
-                    role="radio"
-                    aria-checked={active}
-                    onClick={() => setThemeChoice(opt.v)}
-                    style={{
-                      flex: 1,
-                      padding: "9px 12px",
-                      borderRadius: 99,
-                      border: "none",
-                      cursor: "pointer",
-                      background: active ? ACCENT : "transparent",
-                      color: active ? "#fff" : "var(--text-body)",
-                      fontSize: 13,
-                      fontWeight: active ? 600 : 500,
-                      transition: "background 120ms ease, color 120ms ease",
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div style={card}>
-            <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>{tSettings("glucose_targets")}</div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
-              <div>
-                <label style={{ fontSize:12, color:"var(--text-dim)", display:"block", marginBottom:6 }}>{tSettings("target_min")}</label>
-                <input style={inp} type="number" value={settings.targetMin} onChange={e => upd("targetMin", parseInt(e.target.value)||70)}/>
-              </div>
-              <div>
-                <label style={{ fontSize:12, color:"var(--text-dim)", display:"block", marginBottom:6 }}>{tSettings("target_max")}</label>
-                <input style={inp} type="number" value={settings.targetMax} onChange={e => upd("targetMax", parseInt(e.target.value)||180)}/>
-              </div>
-            </div>
-          </div>
-
-          <div style={card}>
-            <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>{tSettings("insulin_params")}</div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
-              <div>
-                <label style={{ fontSize:12, color:"var(--text-dim)", display:"block", marginBottom:6 }}>{tSettings("icr_label")}</label>
-                <input style={inp} type="number" value={settings.icr} onChange={e => upd("icr", parseInt(e.target.value)||15)}/>
-                <div style={{ fontSize:11, color:"var(--text-ghost)", marginTop:4 }}>{tSettings("icr_hint")}</div>
-              </div>
-              <div>
-                <label style={{ fontSize:12, color:"var(--text-dim)", display:"block", marginBottom:6 }}>{tSettings("cf_label")}</label>
-                <input style={inp} type="number" value={settings.cf} onChange={e => upd("cf", parseInt(e.target.value)||50)}/>
-                <div style={{ fontSize:11, color:"var(--text-ghost)", marginTop:4 }}>{tSettings("cf_hint")}</div>
-              </div>
-            </div>
-          </div>
-
-          <div style={card}>
-            <div style={{ fontSize:13, fontWeight:600, marginBottom:16 }}>{tSettings("notifications")}</div>
-            <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-              {[
-                { key:"notifySpike" as const, label:tSettings("notify_spike_label"), desc:tSettings("notify_spike_desc") },
-                { key:"notifyHypo"  as const, label:tSettings("notify_hypo_label"),  desc:tSettings("notify_hypo_desc") },
-              ].map(n => (
-                <div key={n.key} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 14px", background:"var(--surface-soft)", borderRadius:10 }}>
-                  <div>
-                    <div style={{ fontSize:13, fontWeight:500 }}>{n.label}</div>
-                    <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:2 }}>{n.desc}</div>
-                  </div>
-                  <div onClick={() => upd(n.key, !settings[n.key])} style={{
-                    width:44, height:24, borderRadius:99, cursor:"pointer",
-                    background:settings[n.key]?ACCENT:"var(--border-strong)",
-                    border:`1px solid ${settings[n.key]?ACCENT+"60":BORDER}`,
-                    position:"relative", transition:"background 0.2s",
-                  }}>
-                    <div style={{ position:"absolute", top:2, left:settings[n.key]?22:2, width:18, height:18, borderRadius:99, background:"#fff", transition:"left 0.2s", boxShadow:"0 1px 4px rgba(0,0,0,0.4)" }}/>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div style={card}>
-            <div style={{ fontSize:13, fontWeight:600, marginBottom:6 }}>{tSettings("daily_macros_title")}</div>
-            <div style={{ fontSize:12, color:"var(--text-dim)", marginBottom:16, lineHeight:1.5 }}>
-              {tSettings("daily_macros_desc")}
-            </div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
-              {([
-                { key:"carbs",   label:tSettings("macro_carbs_label"),   def:250, max:2000 },
-                { key:"protein", label:tSettings("macro_protein_label"), def:120, max:2000 },
-                { key:"fat",     label:tSettings("macro_fat_label"),     def:80,  max:2000 },
-                { key:"fiber",   label:tSettings("macro_fiber_label"),   def:30,  max:200  },
-              ] as Array<{ key: keyof MacroTargets; label: string; def: number; max: number }>).map(target => (
-                <div key={target.key}>
-                  <label style={{ fontSize:12, color:"var(--text-dim)", display:"block", marginBottom:6 }}>{target.label}</label>
-                  <input
-                    style={inp}
-                    type="number"
-                    min={0}
-                    max={target.max}
-                    value={macroTargets[target.key]}
-                    onChange={e => {
-                      const n = parseInt(e.target.value);
-                      updMacro(target.key, Number.isFinite(n) ? Math.max(0, Math.min(target.max, n)) : target.def);
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-            <div style={{ display:"flex", gap:10 }}>
-              <button onClick={handleSave} disabled={saving} style={{
-                flex:1, padding:"14px", borderRadius:12, border:"none",
-                cursor: saving ? "wait" : "pointer",
-                background:`linear-gradient(135deg, ${ACCENT}, #6B8BFF)`, color:"var(--text)",
-                fontSize:15, fontWeight:700, boxShadow:`0 4px 20px ${ACCENT}40`,
-                opacity: saving ? 0.7 : 1,
-              }}>
-                {saving ? tSettings("save_button_busy") : saved ? tSettings("save_button_done") : tSettings("save_button_idle")}
-              </button>
-              <button
-                onClick={() => { setSettings(DEFAULTS); setMacroTargets(DEFAULT_MACRO_TARGETS); }}
-                style={{ padding:"14px 20px", borderRadius:12, border:`1px solid ${BORDER}`, background:"transparent", color:"var(--text-dim)", fontSize:14, cursor:"pointer" }}
-              >
-                {tSettings("reset_button")}
-              </button>
-            </div>
-            {saveError && (
-              <div style={{ fontSize:12, color:PINK, paddingLeft:4 }}>{saveError}</div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {tab === "integrations" && (
-        <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
-          {/* CGM (LibreLinkUp) */}
-          <div>
-            <div style={{ fontSize:11, fontWeight:700, color:ACCENT, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:10 }}>
-              {tSettings("section_cgm")}
-            </div>
-            <CgmSettingsCard />
-          </div>
-
-          {/* Nightscout — eigener self-hosted CGM server */}
-          <div>
-            <div style={{ fontSize:11, fontWeight:700, color:ACCENT, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:10 }}>
-              {tSettings("section_nightscout")}
-            </div>
-            <NightscoutSettingsCard />
-          </div>
-
-          {/* Google Sheets — placeholder until OAuth flow is wired up */}
-          <div>
-            <div style={{ fontSize:11, fontWeight:700, color:ACCENT, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:10 }}>
-              {tSettings("section_google")}
-            </div>
-            <div style={{
-              ...card,
-              display:"flex", alignItems:"center", justifyContent:"space-between", gap:16, flexWrap:"wrap",
-            }}>
-              <div style={{ display:"flex", alignItems:"center", gap:14, minWidth:0, flex:"1 1 240px" }}>
-                <div style={{
-                  width:40, height:40, borderRadius:10, flexShrink:0,
-                  background:"var(--surface-soft)", border:`1px solid ${BORDER}`,
-                  display:"flex", alignItems:"center", justifyContent:"center",
-                }}>
-                  {/* Sheets glyph */}
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="3" width="18" height="18" rx="2"/>
-                    <line x1="3" y1="9" x2="21" y2="9"/>
-                    <line x1="3" y1="15" x2="21" y2="15"/>
-                    <line x1="9" y1="3" x2="9" y2="21"/>
-                    <line x1="15" y1="3" x2="15" y2="21"/>
-                  </svg>
-                </div>
-                <div style={{ minWidth:0 }}>
-                  <div style={{ fontSize:14, fontWeight:600, color:"var(--text-strong)", marginBottom:2 }}>
-                    {tSettings("google_sheets_title")}
-                  </div>
-                  <div style={{ fontSize:12, color:"var(--text-dim)" }}>
-                    {tSettings("google_sheets_desc")}
-                  </div>
-                </div>
-              </div>
-              <span style={{
-                fontSize:10, fontWeight:700, padding:"4px 10px", borderRadius:99,
-                background:"var(--surface-soft)", color:"var(--text-dim)",
-                border:`1px solid ${BORDER}`, letterSpacing:"0.08em", textTransform:"uppercase",
-                whiteSpace:"nowrap",
-              }}>
-                {tSettings("coming_soon")}
-              </span>
-            </div>
-            <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:8, lineHeight:1.5 }}>
-              {tSettings("google_sheets_footnote")}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {tab === "data" && (
-        <div style={{ display:"flex", flexDirection:"column", gap:32 }}>
-          <ExportPanel />
-          <div style={{ height:1, background:BORDER }}/>
-          <ImportPanel embedded />
-        </div>
-      )}
-
       <p style={{
-        marginTop: 48,
-        marginBottom: 8,
-        marginLeft: "auto",
-        marginRight: "auto",
-        maxWidth: 560,
-        fontSize: 11,
-        lineHeight: 1.55,
-        color: "var(--text-faint)",
-        textAlign: "center",
+        marginTop: 32, marginBottom: 8,
+        marginLeft: "auto", marginRight: "auto",
+        maxWidth: 560, fontSize: 11, lineHeight: 1.55,
+        color: "var(--text-faint)", textAlign: "center",
       }}>
         {tSettings("footer_disclaimer")}
       </p>
+
+      {/* ====================== SHEETS ====================== */}
+
+      {/* GLUCOSE — Zielbereich */}
+      <BottomSheet open={openSheet === "glucose_targets"} onClose={closeSheet} title={tSettings("glucose_targets")} footer={saveFooter}>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+          <div>
+            <label style={{ fontSize:12, color:"var(--text-dim)", display:"block", marginBottom:6 }}>{tSettings("target_min")}</label>
+            <input style={inp} type="number" value={settings.targetMin} onChange={e => upd("targetMin", parseInt(e.target.value)||70)}/>
+          </div>
+          <div>
+            <label style={{ fontSize:12, color:"var(--text-dim)", display:"block", marginBottom:6 }}>{tSettings("target_max")}</label>
+            <input style={inp} type="number" value={settings.targetMax} onChange={e => upd("targetMax", parseInt(e.target.value)||180)}/>
+          </div>
+        </div>
+      </BottomSheet>
+
+      {/* GLUCOSE — Einheiten (info-only, mg/dL is the only supported unit today) */}
+      <BottomSheet open={openSheet === "units"} onClose={closeSheet} title={tSettings("sheet_units_title")} footer={closeFooter}>
+        <p style={{ fontSize:13, color:"var(--text-body)", lineHeight:1.55, margin:0 }}>
+          {tSettings("sheet_units_body")}
+        </p>
+      </BottomSheet>
+
+      {/* INSULIN — ICR + CF share the same sheet content (Insulin-Parameter
+          card from the old layout), but each row opens it focused on its own
+          field. Both inputs render in both sheets so users can tweak
+          related values without re-navigating. */}
+      <BottomSheet open={openSheet === "icr" || openSheet === "cf"} onClose={closeSheet} title={tSettings("insulin_params")} footer={saveFooter}>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+          <div>
+            <label style={{ fontSize:12, color:"var(--text-dim)", display:"block", marginBottom:6 }}>{tSettings("icr_label")}</label>
+            <input style={inp} type="number" autoFocus={openSheet === "icr"} value={settings.icr} onChange={e => upd("icr", parseInt(e.target.value)||15)}/>
+            <div style={{ fontSize:11, color:"var(--text-ghost)", marginTop:4 }}>{tSettings("icr_hint")}</div>
+          </div>
+          <div>
+            <label style={{ fontSize:12, color:"var(--text-dim)", display:"block", marginBottom:6 }}>{tSettings("cf_label")}</label>
+            <input style={inp} type="number" autoFocus={openSheet === "cf"} value={settings.cf} onChange={e => upd("cf", parseInt(e.target.value)||50)}/>
+            <div style={{ fontSize:11, color:"var(--text-ghost)", marginTop:4 }}>{tSettings("cf_hint")}</div>
+          </div>
+        </div>
+      </BottomSheet>
+
+      {/* CGM — LibreLinkUp */}
+      <BottomSheet open={openSheet === "cgm_librelinkup"} onClose={closeSheet} title={tSettings("row_cgm_librelinkup")} footer={closeFooter}>
+        <CgmSettingsCard />
+      </BottomSheet>
+
+      {/* CGM — Nightscout */}
+      <BottomSheet open={openSheet === "cgm_nightscout"} onClose={closeSheet} title={tSettings("row_cgm_nightscout")} footer={closeFooter}>
+        <NightscoutSettingsCard />
+      </BottomSheet>
+
+      {/* CGM — Dexcom (info-only placeholder until native integration ships) */}
+      <BottomSheet open={openSheet === "cgm_dexcom"} onClose={closeSheet} title={tSettings("sheet_dexcom_title")} footer={closeFooter}>
+        <p style={{ fontSize:13, color:"var(--text-body)", lineHeight:1.55, margin:0 }}>
+          {tSettings("sheet_dexcom_body")}
+        </p>
+      </BottomSheet>
+
+      {/* APP — Erscheinungsbild (instant-apply, no save needed) */}
+      <BottomSheet open={openSheet === "appearance"} onClose={closeSheet} title={tSettings("appearance")} footer={closeFooter}>
+        <div style={{ fontSize:12, color:"var(--text-dim)", marginBottom:14, lineHeight:1.5 }}>
+          {tSettings("appearance_hint")}
+        </div>
+        <div role="radiogroup" aria-label={tSettings("appearance")} style={{
+          display:"flex", gap:2, padding:4, borderRadius:99,
+          background:"var(--surface-soft)", border:`1px solid ${BORDER}`,
+        }}>
+          {([
+            { v: "dark"   as ThemeChoice, label: tSettings("theme_dark") },
+            { v: "light"  as ThemeChoice, label: tSettings("theme_light") },
+            { v: "system" as ThemeChoice, label: tSettings("theme_system") },
+          ]).map(opt => {
+            const active = themeChoice === opt.v;
+            return (
+              <button key={opt.v} role="radio" aria-checked={active} onClick={() => setThemeChoice(opt.v)}
+                style={{
+                  flex: 1, padding: "9px 12px", borderRadius: 99, border: "none", cursor: "pointer",
+                  background: active ? ACCENT : "transparent",
+                  color: active ? "#fff" : "var(--text-body)",
+                  fontSize: 13, fontWeight: active ? 600 : 500,
+                  transition: "background 120ms ease, color 120ms ease",
+                }}>
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      </BottomSheet>
+
+      {/* APP — Sprache / Region (own commit logic via Save inside the row) */}
+      <BottomSheet open={openSheet === "language"} onClose={closeSheet} title={tSettings("language_card_title")} footer={closeFooter}>
+        <div style={{ display:"flex", gap:10, alignItems:"stretch" }}>
+          <select
+            value={pendingLocale ?? currentLocale}
+            onChange={e => {
+              const next = e.target.value as Locale;
+              setPendingLocale(next === currentLocale ? null : next);
+            }}
+            style={{
+              flex:1, padding:"12px 14px", borderRadius:10,
+              border:`1px solid ${BORDER}`, background:SURFACE,
+              color:"var(--text)", fontSize:14, fontWeight:500, cursor:"pointer",
+              appearance:"none", WebkitAppearance:"none",
+              backgroundImage:"url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path fill='%23888' d='M2 4l4 4 4-4z'/></svg>\")",
+              backgroundRepeat:"no-repeat",
+              backgroundPosition:"right 14px center",
+              paddingRight:36,
+            }}
+          >
+            <option value="de" style={{ background:SURFACE, color:"var(--text)" }}>🇩🇪 Deutsch</option>
+            <option value="en" style={{ background:SURFACE, color:"var(--text)" }}>🇬🇧 English</option>
+          </select>
+          <button
+            type="button"
+            disabled={!pendingLocale}
+            onClick={() => {
+              if (!pendingLocale) return;
+              const target = pendingLocale;
+              setCurrentLocale(target);
+              void setLocale(target);
+            }}
+            style={{
+              padding:"12px 22px", borderRadius:10,
+              border:`1px solid ${pendingLocale ? ACCENT : BORDER}`,
+              background: pendingLocale ? ACCENT : "transparent",
+              color: pendingLocale ? "#fff" : "var(--text-faint)",
+              fontSize:14, fontWeight:600,
+              cursor: pendingLocale ? "pointer" : "not-allowed",
+              whiteSpace:"nowrap",
+              transition:"background 120ms ease, color 120ms ease, border-color 120ms ease",
+            }}
+          >
+            {tCommon("save")}
+          </button>
+        </div>
+        {pendingLocale && (
+          <div style={{ fontSize:11, color:"var(--text-dim)", marginTop:10, lineHeight:1.5 }}>
+            {tSettings("language_confirm_body")}
+          </div>
+        )}
+      </BottomSheet>
+
+      {/* APP — Benachrichtigungen */}
+      <BottomSheet open={openSheet === "notifications"} onClose={closeSheet} title={tSettings("notifications")} footer={saveFooter}>
+        <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+          {[
+            { key:"notifySpike" as const, label:tSettings("notify_spike_label"), desc:tSettings("notify_spike_desc") },
+            { key:"notifyHypo"  as const, label:tSettings("notify_hypo_label"),  desc:tSettings("notify_hypo_desc") },
+          ].map(n => (
+            <div key={n.key} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 14px", background:"var(--surface-soft)", borderRadius:10 }}>
+              <div>
+                <div style={{ fontSize:13, fontWeight:500 }}>{n.label}</div>
+                <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:2 }}>{n.desc}</div>
+              </div>
+              <div onClick={() => upd(n.key, !settings[n.key])} style={{
+                width:44, height:24, borderRadius:99, cursor:"pointer",
+                background:settings[n.key]?ACCENT:"var(--border-strong)",
+                border:`1px solid ${settings[n.key]?ACCENT+"60":BORDER}`,
+                position:"relative", transition:"background 0.2s",
+              }}>
+                <div style={{ position:"absolute", top:2, left:settings[n.key]?22:2, width:18, height:18, borderRadius:99, background:"#fff", transition:"left 0.2s", boxShadow:"0 1px 4px rgba(0,0,0,0.4)" }}/>
+              </div>
+            </div>
+          ))}
+        </div>
+      </BottomSheet>
+
+      {/* APP — Daten exportieren */}
+      <BottomSheet open={openSheet === "export"} onClose={closeSheet} title={tSettings("row_export")} footer={closeFooter}>
+        <ExportPanel />
+      </BottomSheet>
+
+      {/* ADVANCED — Makro-Ziele */}
+      <BottomSheet open={openSheet === "macros"} onClose={closeSheet} title={tSettings("daily_macros_title")} footer={saveFooter}>
+        <div style={{ fontSize:12, color:"var(--text-dim)", marginBottom:16, lineHeight:1.5 }}>
+          {tSettings("daily_macros_desc")}
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+          {([
+            { key:"carbs",   label:tSettings("macro_carbs_label"),   def:250, max:2000 },
+            { key:"protein", label:tSettings("macro_protein_label"), def:120, max:2000 },
+            { key:"fat",     label:tSettings("macro_fat_label"),     def:80,  max:2000 },
+            { key:"fiber",   label:tSettings("macro_fiber_label"),   def:30,  max:200  },
+          ] as Array<{ key: keyof MacroTargets; label: string; def: number; max: number }>).map(target => (
+            <div key={target.key}>
+              <label style={{ fontSize:12, color:"var(--text-dim)", display:"block", marginBottom:6 }}>{target.label}</label>
+              <input
+                style={inp}
+                type="number"
+                min={0}
+                max={target.max}
+                value={macroTargets[target.key]}
+                onChange={e => {
+                  const n = parseInt(e.target.value);
+                  updMacro(target.key, Number.isFinite(n) ? Math.max(0, Math.min(target.max, n)) : target.def);
+                }}
+              />
+            </div>
+          ))}
+        </div>
+      </BottomSheet>
+
+      {/* ADVANCED — Historische Daten */}
+      <BottomSheet open={openSheet === "historical"} onClose={closeSheet} title={tSettings("historical_data_title")} footer={closeFooter}>
+        <div style={{ fontSize:12, color:"var(--text-dim)", marginBottom:14, lineHeight:1.5 }}>
+          {tSettings("historical_data_desc")}
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
+          <button onClick={handleReloadHistorical} disabled={reloading} style={{
+            padding:"10px 18px", borderRadius:10, border:`1px solid ${ACCENT}40`, cursor: reloading ? "wait" : "pointer",
+            background:`${ACCENT}15`, color:ACCENT, fontSize:13, fontWeight:600, opacity: reloading ? 0.6 : 1,
+          }}>
+            {reloading ? tSettings("historical_loading") : tSettings("historical_reload")}
+          </button>
+          {reloadMsg && (
+            <span style={{ fontSize:12, color: reloadMsg.kind === "error" ? PINK : GREEN }}>{reloadMsg.text}</span>
+          )}
+        </div>
+      </BottomSheet>
+
+      {/* ADVANCED — Google Sheets (placeholder) */}
+      <BottomSheet open={openSheet === "google_sheets"} onClose={closeSheet} title={tSettings("google_sheets_title")} footer={closeFooter}>
+        <div style={{ display:"flex", alignItems:"flex-start", gap:14, marginBottom:12 }}>
+          <div style={{
+            width:40, height:40, borderRadius:10, flexShrink:0,
+            background:"var(--surface-soft)", border:`1px solid ${BORDER}`,
+            display:"flex", alignItems:"center", justifyContent:"center",
+          }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <line x1="3" y1="9" x2="21" y2="9"/>
+              <line x1="3" y1="15" x2="21" y2="15"/>
+              <line x1="9" y1="3" x2="9" y2="21"/>
+              <line x1="15" y1="3" x2="15" y2="21"/>
+            </svg>
+          </div>
+          <div style={{ minWidth:0, flex:1 }}>
+            <div style={{ fontSize:14, fontWeight:600, color:"var(--text-strong)", marginBottom:4 }}>
+              {tSettings("google_sheets_title")}
+            </div>
+            <div style={{ fontSize:12, color:"var(--text-dim)", marginBottom:8 }}>
+              {tSettings("google_sheets_desc")}
+            </div>
+            <span style={{
+              fontSize:10, fontWeight:700, padding:"4px 10px", borderRadius:99,
+              background:"var(--surface-soft)", color:"var(--text-dim)",
+              border:`1px solid ${BORDER}`, letterSpacing:"0.08em", textTransform:"uppercase",
+              whiteSpace:"nowrap",
+            }}>
+              {tSettings("coming_soon")}
+            </span>
+          </div>
+        </div>
+        <div style={{ fontSize:11, color:"var(--text-faint)", lineHeight:1.5 }}>
+          {tSettings("google_sheets_footnote")}
+        </div>
+      </BottomSheet>
+
+      {/* ADVANCED — Daten importieren */}
+      <BottomSheet open={openSheet === "import"} onClose={closeSheet} title={tSettings("row_import")} footer={closeFooter}>
+        <ImportPanel embedded />
+      </BottomSheet>
     </div>
   );
 }

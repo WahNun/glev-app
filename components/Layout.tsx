@@ -7,6 +7,7 @@ import { signOut } from "@/lib/auth";
 import GlevLockup from "@/components/GlevLockup";
 import GlevLogo from "@/components/GlevLogo";
 import AboutGlevModal from "@/components/AboutGlevModal";
+import AccountSheet from "@/components/AccountSheet";
 import QuickAddMenu from "@/components/QuickAddMenu";
 import { EngineHeaderProvider, useEngineHeader } from "@/lib/engineHeaderContext";
 import { HistoryHeaderProvider, useHistoryHeader, type HistoryTab } from "@/lib/historyHeaderContext";
@@ -80,6 +81,12 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   const router   = useRouter();
   const tNav = useTranslations("nav");
   const [aboutOpen, setAboutOpen] = useState(false);
+  // AccountSheet — opened by tapping the avatar/profile chip in the
+  // mobile header. Replaces the previous behaviour of routing straight
+  // to /settings, since "Konto" (profile/stats/upgrade/sign-out) and
+  // "Einstellungen" (preferences) are now visually + conceptually
+  // separated per the iOS-style settings refactor.
+  const [accountOpen, setAccountOpen] = useState(false);
   // Mobile bottom-nav: tapping the Glev slot now goes STRAIGHT to the
   // engine voice screen (the meal log flow) instead of popping a
   // pick-your-flow action sheet. The two secondary flows (Glukose
@@ -225,21 +232,22 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               duplicated here so the header "+" stays self-sufficient. */}
           <QuickAddMenu />
           <button
-            onClick={() => router.push("/settings")}
-            aria-label="Open settings"
+            onClick={() => setAccountOpen(true)}
+            aria-label="Open account"
             style={{
               width: 32, height: 32, borderRadius: 99, padding: 0,
-              background: pathname.startsWith("/settings") ? `${ACCENT}25` : "var(--surface-soft)",
-              border: `1px solid ${pathname.startsWith("/settings") ? ACCENT : "var(--border-strong)"}`,
+              background: accountOpen ? `${ACCENT}25` : "var(--surface-soft)",
+              border: `1px solid ${accountOpen ? ACCENT : "var(--border-strong)"}`,
               display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
             }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={pathname.startsWith("/settings") ? ACCENT : "var(--text-muted)"} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={accountOpen ? ACCENT : "var(--text-muted)"} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
           </button>
         </div>
       </header>
 
       <AboutGlevModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
+      <AccountSheet open={accountOpen} onClose={() => setAccountOpen(false)} />
 
       <aside className="glev-sidebar" style={{
         width: 224, flexShrink: 0, background: SURFACE,
