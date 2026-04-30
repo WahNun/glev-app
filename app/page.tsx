@@ -200,8 +200,7 @@ export default function Home() {
                 color: "#fff",
               }}
             >
-              {t("hero_h1_line1")}<br />
-              {t("hero_h1_line2")}<span style={{ color: GREEN }}>.</span>
+              {t("hero_h1")}<span style={{ color: GREEN }}>.</span>
             </h1>
 
             <p
@@ -335,6 +334,84 @@ export default function Home() {
         {/* FEATURE TRIO */}
         <div style={{ marginTop: 80 }}>
           <FeatureTrio />
+        </div>
+      </section>
+
+      {/* PAIN BLOCK — Problem-Agitation step right after the hero, before
+          the "So funktioniert Glev" solution section. Mirrors the same
+          container max-width and surface tokens as its neighbours so it
+          slots into the dark theme without drifting. The bullets use a
+          small green accent dot (matching the hero badge / headline
+          period) instead of bare hyphens, and the list wraps cleanly
+          on narrow phones — no horizontal scrolling. */}
+      <section
+        id="pain"
+        style={{
+          position: "relative",
+          zIndex: 1,
+          maxWidth: 760,
+          margin: "0 auto",
+          padding: "16px 24px 64px",
+        }}
+      >
+        <div
+          style={{
+            background: SURFACE,
+            border: `1px solid ${BORDER}`,
+            borderRadius: 16,
+            padding: "28px 28px 30px",
+          }}
+        >
+          <h2
+            style={{
+              fontSize: "clamp(22px, 3.2vw, 28px)",
+              fontWeight: 700,
+              letterSpacing: "-0.02em",
+              lineHeight: 1.2,
+              margin: 0,
+              color: "#fff",
+            }}
+          >
+            {t("pain_title")}
+          </h2>
+          <ul
+            style={{
+              listStyle: "none",
+              margin: "20px 0 0",
+              padding: 0,
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+            }}
+          >
+            {[t("pain_b1"), t("pain_b2"), t("pain_b3")].map((bullet, i) => (
+              <li
+                key={i}
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 12,
+                  fontSize: 15,
+                  lineHeight: 1.55,
+                  color: "rgba(255,255,255,0.78)",
+                  overflowWrap: "anywhere",
+                }}
+              >
+                <span
+                  aria-hidden
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: 99,
+                    background: GREEN,
+                    marginTop: 9,
+                    flexShrink: 0,
+                  }}
+                />
+                <span style={{ minWidth: 0 }}>{bullet}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
 
