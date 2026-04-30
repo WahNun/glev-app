@@ -287,12 +287,21 @@ export default function Home() {
               </Link>
             </div>
 
+            {/* CGM-Status-Strip — green dot = jetzt nutzbar (Libre 2 + Libre 3
+                via LibreLinkUp), grey dot = in Arbeit / coming soon. Kept in
+                sync with the FAQ entry "Welche CGMs werden unterstützt?" so
+                a visitor's first hero glance and the deep-dive answer agree.
+                flex-wrap so the 5 chips fold cleanly on narrow phone widths
+                instead of horizontally clipping; rowGap matches gap so a
+                wrapped line stays visually balanced. */}
             <div
               style={{
                 marginTop: 28,
                 display: "inline-flex",
                 alignItems: "center",
+                flexWrap: "wrap",
                 gap: 14,
+                rowGap: 8,
                 fontFamily: "var(--font-mono), JetBrains Mono, monospace",
                 fontSize: 12,
                 color: "rgba(255,255,255,0.45)",
@@ -300,9 +309,13 @@ export default function Home() {
             >
               <span style={{ color: GREEN }}>● Libre 2</span>
               <span>·</span>
+              <span style={{ color: GREEN }}>● Libre 3</span>
+              <span>·</span>
               <span style={{ color: "rgba(255,255,255,0.35)" }}>○ Dexcom</span>
               <span>·</span>
               <span style={{ color: "rgba(255,255,255,0.35)" }}>○ Nightscout</span>
+              <span>·</span>
+              <span style={{ color: "rgba(255,255,255,0.35)" }}>○ Medtronic</span>
             </div>
           </div>
 
