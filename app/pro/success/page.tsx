@@ -78,8 +78,8 @@ export default function ProSuccessPage() {
           </ul>
         </div>
 
-        <a
-          href="mailto:hello@glev.app"
+        <Link
+          href="/contact?source=pro-success"
           style={{
             color: ACCENT,
             fontSize: 14,
@@ -88,8 +88,8 @@ export default function ProSuccessPage() {
             paddingBottom: 1,
           }}
         >
-          Fragen? hello@glev.app
-        </a>
+          Fragen? Schreib uns →
+        </Link>
 
         <Link
           href="/pro"

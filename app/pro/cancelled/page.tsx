@@ -58,8 +58,8 @@ export default function ProCancelledPage() {
           >
             Zurück zur Mitgliedschafts-Seite
           </Link>
-          <a
-            href="mailto:hello@glev.app"
+          <Link
+            href="/contact?source=pro-cancelled"
             style={{
               border: "1px solid rgba(255,255,255,0.15)",
               color: "#fff",
@@ -74,7 +74,7 @@ export default function ProCancelledPage() {
             }}
           >
             Frage stellen
-          </a>
+          </Link>
         </div>
 
         <Link

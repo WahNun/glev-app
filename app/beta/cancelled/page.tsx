@@ -50,8 +50,8 @@ export default function BetaCancelledPage() {
           >
             Zurück zur Beta-Seite
           </Link>
-          <a
-            href="mailto:hello@glev.app"
+          <Link
+            href="/contact?source=beta-cancelled"
             style={{
               border: "1px solid rgba(255,255,255,0.15)",
               color: "#fff",
@@ -66,7 +66,7 @@ export default function BetaCancelledPage() {
             }}
           >
             Frage stellen
-          </a>
+          </Link>
         </div>
       </div>
     </main>

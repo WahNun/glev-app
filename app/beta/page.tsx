@@ -22,8 +22,7 @@ const CAPACITY = 500;
 
 type CountResponse = { count: number; capacity: number; remaining: number };
 
-const MAILTO_WAITLIST =
-  "mailto:hello@glev.app?subject=Glev%20Beta%20Warteliste";
+const WAITLIST_HREF = "/contact?source=beta-waitlist&subject=Glev%20Beta%20Warteliste";
 
 /**
  * Primary CTA — POSTs to our /api/checkout/beta endpoint, receives a fresh
@@ -41,7 +40,7 @@ function BetaCTALink({ isFull }: { isFull: boolean }) {
     // Warteliste-Fallback bleibt ein simpler mailto-Link — kein API-Call nötig.
     return (
       <a
-        href={MAILTO_WAITLIST}
+        href={WAITLIST_HREF}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
         style={{
