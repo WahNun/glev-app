@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 // react hooks no longer needed — homepage is now stateless
 import GlevLockup from "@/components/GlevLockup";
 import AppMockupPhone from "@/components/AppMockupPhone";
@@ -19,6 +20,7 @@ const SURF2   = "#0F0F14";
 const BORDER  = "rgba(255,255,255,0.08)";
 
 export default function Home() {
+  const t = useTranslations("marketing");
   return (
     <main
       style={{
@@ -119,7 +121,7 @@ export default function Home() {
             padding: "14px 24px",
           }}
         >
-          <Link href="/" style={{ textDecoration: "none", color: "inherit" }} aria-label="Glev home">
+          <Link href="/" style={{ textDecoration: "none", color: "inherit" }} aria-label={t("nav_aria_home")}>
             <GlevLockup size={28} />
           </Link>
           <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
@@ -142,7 +144,7 @@ export default function Home() {
               }}
               className="glev-cta-ghost"
             >
-              Sign in
+              {t("nav_signin")}
             </Link>
           </div>
         </div>
@@ -184,7 +186,7 @@ export default function Home() {
                   background: GREEN, animation: "glevPulse 2s ease-out infinite",
                 }}
               />
-              Private Beta · CGM Live
+              {t("hero_badge")}
             </div>
 
             <h1
@@ -198,8 +200,8 @@ export default function Home() {
                 color: "#fff",
               }}
             >
-              Typ 1.<br />
-              Neu gedacht<span style={{ color: GREEN }}>.</span>
+              {t("hero_h1_line1")}<br />
+              {t("hero_h1_line2")}<span style={{ color: GREEN }}>.</span>
             </h1>
 
             <p
@@ -211,9 +213,7 @@ export default function Home() {
                 maxWidth: 520,
               }}
             >
-              Sprich deine Mahlzeit. Glev liefert Makros per KI, vergleicht
-              live mit deinem CGM und dokumentiert alles in einer Sekunde —
-              gebaut von einem T1D, weil bestehende Apps zu langsam waren.
+              {t("hero_subtitle")}
             </p>
 
             <div
@@ -244,7 +244,7 @@ export default function Home() {
                     boxShadow: `0 6px 18px ${ACCENT}40`,
                   }}
                 >
-                  Mitglied werden — €24,90/Monat
+                  {t("hero_cta_primary")}
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="5" y1="12" x2="19" y2="12" />
                     <polyline points="13 6 19 12 13 18" />
@@ -268,7 +268,7 @@ export default function Home() {
                     gap: 8,
                   }}
                 >
-                  App öffnen
+                  {t("hero_cta_secondary")}
                 </Link>
               </div>
 
@@ -283,7 +283,7 @@ export default function Home() {
                   letterSpacing: "-0.005em",
                 }}
               >
-                Oder erstmal Platz reservieren für €19 →
+                {t("hero_cta_tertiary")}
               </Link>
             </div>
 
@@ -358,7 +358,7 @@ export default function Home() {
             color: "#fff",
           }}
         >
-          So funktioniert Glev
+          {t("how_title")}
         </h2>
         <Steps />
       </section>
@@ -397,7 +397,7 @@ export default function Home() {
               color: "#fff",
             }}
           >
-            Founder-Konditionen<span style={{ color: GREEN }}>.</span>
+            {t("pricing_title")}<span style={{ color: GREEN }}>.</span>
           </h2>
           <p
             style={{
@@ -410,8 +410,7 @@ export default function Home() {
               marginRight: "auto",
             }}
           >
-            Vor dem öffentlichen Launch am 1. Juli 2026 — zwei Wege, sichere
-            dir bessere Konditionen als nach Launch verfügbar sein werden.
+            {t("pricing_subtitle")}
           </p>
         </div>
 
@@ -431,20 +430,20 @@ export default function Home() {
           >
             <div>
               <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "#fff" }}>
-                Beta-Reservierung
+                {t("pricing_beta_title")}
               </h3>
               <div style={{ marginTop: 14, display: "flex", alignItems: "baseline", gap: 8 }}>
-                <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff" }}>€19</span>
-                <span style={{ fontSize: 15, color: "rgba(255,255,255,0.6)" }}>einmalig</span>
+                <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff" }}>{t("pricing_beta_price")}</span>
+                <span style={{ fontSize: 15, color: "rgba(255,255,255,0.6)" }}>{t("pricing_beta_period")}</span>
               </div>
             </div>
 
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
               {[
-                "Reservierung wird auf erstes Abo angerechnet",
-                "€4,50/Monat im ersten Jahr nach Launch",
-                "€9/Monat regulärer Preis danach",
-                "Limitiert auf 500 Plätze",
+                t("pricing_beta_b1"),
+                t("pricing_beta_b2"),
+                t("pricing_beta_b3"),
+                t("pricing_beta_b4"),
               ].map((bullet) => (
                 <PricingBullet key={bullet} text={bullet} />
               ))}
@@ -470,7 +469,7 @@ export default function Home() {
                 gap: 8,
               }}
             >
-              Platz sichern
+              {t("pricing_beta_cta")}
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="5" y1="12" x2="19" y2="12" />
                 <polyline points="13 6 19 12 13 18" />
@@ -493,7 +492,7 @@ export default function Home() {
             }}
           >
             <div
-              aria-label="Empfohlen"
+              aria-label={t("pricing_pro_badge")}
               style={{
                 position: "absolute",
                 top: -12,
@@ -509,26 +508,26 @@ export default function Home() {
                 boxShadow: `0 4px 12px ${ACCENT}66`,
               }}
             >
-              Empfohlen
+              {t("pricing_pro_badge")}
             </div>
 
             <div>
               <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "#fff" }}>
-                Pro · Founder-Tier
+                {t("pricing_pro_title")}
               </h3>
               <div style={{ marginTop: 14, display: "flex", alignItems: "baseline", gap: 8 }}>
-                <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff" }}>€24,90</span>
-                <span style={{ fontSize: 15, color: "rgba(255,255,255,0.6)" }}>/Monat</span>
+                <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff" }}>{t("pricing_pro_price")}</span>
+                <span style={{ fontSize: 15, color: "rgba(255,255,255,0.6)" }}>{t("pricing_pro_period")}</span>
               </div>
             </div>
 
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
               {[
-                "Karte heute hinterlegt, erste Buchung am Launch-Tag (1. Juli 2026)",
-                "Direkter Founder-Slack-Zugang für Feedback und Fragen",
-                "Lifetime-Preis-Lock — €24,90/Monat dauerhaft, auch nach späteren Preiserhöhungen",
-                "Früher Access zu neuen CGM-Integrationen (Dexcom, Nightscout) sobald verfügbar",
-                "Stimme bei Feature-Roadmap-Voting",
+                t("pricing_pro_b1"),
+                t("pricing_pro_b2"),
+                t("pricing_pro_b3"),
+                t("pricing_pro_b4"),
+                t("pricing_pro_b5"),
               ].map((bullet) => (
                 <PricingBullet key={bullet} text={bullet} />
               ))}
@@ -554,7 +553,7 @@ export default function Home() {
                 boxShadow: `0 6px 18px ${ACCENT}40`,
               }}
             >
-              Mitglied werden
+              {t("pricing_pro_cta")}
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="5" y1="12" x2="19" y2="12" />
                 <polyline points="13 6 19 12 13 18" />
@@ -584,10 +583,15 @@ export default function Home() {
             color: "#fff",
           }}
         >
-          FAQ
+          {t("faq_title")}
         </h2>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {HOMEPAGE_FAQ.map((item) => (
+          {([
+            { q: t("faq_q1"), a: t("faq_a1") },
+            { q: t("faq_q2"), a: t("faq_a2") },
+            { q: t("faq_q3"), a: t("faq_a3") },
+            { q: t("faq_q4"), a: t("faq_a4") },
+          ] as { q: string; a: string }[]).map((item) => (
             <details
               key={item.q}
               style={{
@@ -642,14 +646,14 @@ export default function Home() {
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <GlevLockup size={20} color="rgba(255,255,255,0.7)" />
           <span>
-            © 2026 Glev · hello@glev.app
+            {t("footer_copyright")}
             {" · "}
             <Link
               href="/legal"
               style={{ color: "inherit", textDecoration: "none" }}
-              aria-label="Datenschutzerklärung und AGB"
+              aria-label={t("footer_legal_aria")}
             >
-              Datenschutz · AGB
+              {t("footer_legal")}
             </Link>
             {/* Brand-Book Link, gut versteckt: gleiche Farbe wie Copyright,
                 kein Underline, nur durch dezente Trenn-Mittelpunkt sichtbar.
@@ -659,16 +663,14 @@ export default function Home() {
             <Link
               href="/brand"
               style={{ color: "inherit", textDecoration: "none" }}
-              aria-label="Glev Brand Book"
+              aria-label={t("footer_brand_aria")}
             >
-              Brand
+              {t("footer_brand")}
             </Link>
           </span>
         </div>
         <div style={{ maxWidth: 560, lineHeight: 1.5 }}>
-          Glev ist ein Dokumentations- und Organisations-Tool, kein
-          Medizinprodukt. Therapieentscheidungen triffst du in Absprache mit
-          deinem Arzt.
+          {t("footer_disclaimer")}
         </div>
       </footer>
     </main>
@@ -703,22 +705,4 @@ function PricingBullet({ text }: { text: string }) {
   );
 }
 
-const HOMEPAGE_FAQ: { q: string; a: string }[] = [
-  {
-    q: "Was kostet Glev nach dem öffentlichen Launch?",
-    a: "Ab 1. Juli 2026 ist Glev als Standard-Abo für €9/Monat verfügbar. Wer vorher reserviert oder als Pro-Mitglied startet, sichert sich Founder-Konditionen, die später nicht mehr verfügbar sein werden — die Beta-Reservierung gibt €4,50/Monat im ersten Jahr (statt €9), die Pro-Mitgliedschaft fixiert €24,90/Monat als Lifetime-Preis-Lock.",
-  },
-  {
-    q: "Welche CGMs werden unterstützt?",
-    a: "Aktuell nutzbar: FreeStyle Libre 2 und 3 via LibreLinkUp. Dexcom G6/G7, Dexcom One+ und Medtronic sind in Arbeit (coming soon).",
-  },
-  {
-    q: "Ist Glev ein Medizinprodukt?",
-    a: "Nein. Glev ist ein Dokumentations- und Organisations-Tool. Therapieentscheidungen triffst du weiter mit deinem Arzt.",
-  },
-  {
-    q: "Wo werden meine Daten gespeichert?",
-    a: "In der EU (Supabase Frankfurt). Deutsche DSGVO. Keine Datenweitergabe, keine Werbung.",
-  },
-];
 

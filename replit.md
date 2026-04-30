@@ -153,6 +153,14 @@ End-to-end tests live under `tests/e2e/` and run via Playwright (`npm test`).
 - `tests/global-setup.ts` provisions a Supabase test user (`playwright-theme@glev.test`) using `SUPABASE_SERVICE_ROLE_KEY`, rotates its password each run, and writes the credentials to `tests/.cache/test-user.json` (gitignored).
 - Specs sign in through the real `/login` form, so middleware + Supabase cookie storage are exercised end-to-end.
 
+## Localization (i18n)
+
+- Library: `next-intl` with locales `de` (default) and `en`. Messages in `messages/de.json` and `messages/en.json`.
+- Locale resolution (`i18n/request.ts`): NEXT_LOCALE cookie → Accept-Language header (q-value parsed) → `de`.
+- `lib/locale.ts` `setLocale` writes the cookie and persists `profiles.language` in Supabase for logged-in users.
+- The `marketing` namespace covers all unauthenticated copy: nav/hero/how-it-works/feature trio/feature deep dive/pricing/FAQ/footer for `app/page.tsx`, plus `app/welcome/page.tsx` (loading/verifying/valid/invalid) and `app/brand/page.tsx` hero subtitle/tagline.
+- Landing components in `components/landing/` are client components using `useTranslations("marketing")`. Brand-page body labels (color roles, hex codes, design-system terms) are deliberately left as-is — they are technical references.
+
 ## Notes
 
 - `dev` script runs `rm -rf .next && next dev --port 5000` to prevent stale cache crashes

@@ -1,3 +1,6 @@
+"use client";
+
+import { useTranslations } from "next-intl";
 import FeatureLiveMockup from "./FeatureLiveMockup";
 import { TEXT_DIM } from "./tokens";
 
@@ -26,36 +29,6 @@ type Feature = {
   mobileTab: MobileTab;
 };
 
-const FEATURES: Feature[] = [
-  {
-    title: "Voice-first Mahlzeit-Logging",
-    body: "Du sprichst deine Mahlzeit, Glev versteht Lebensmittel, Mengen und Zubereitungen. Schneller als jede Tipp-Form.",
-    // The "Glev Engine" page (key: "recommend") shows the voice mic
-    // surface plus the GPT-Reasoning side panel — that's the canonical
-    // voice-first surface in the desktop app.
-    desktopPage: "recommend",
-    mobileTab: "engine",
-  },
-  {
-    title: "KI-Makroberechnung mit deinem Korrektur-Recht",
-    body: "Die KI schätzt Kohlenhydrate, Protein und Fett. Du kannst jeden Wert per Tippen oder Sprache überschreiben — die Atomicität bleibt erhalten.",
-    desktopPage: "entries",
-    mobileTab: "entries",
-  },
-  {
-    title: "CGM live im Dashboard",
-    body: "Glev verbindet sich mit deinem FreeStyle Libre 2 via LibreLinkUp und zeigt deinen aktuellen Glukosewert direkt im Log-Flow. Vor und nach jeder Mahlzeit.",
-    desktopPage: "dashboard",
-    mobileTab: "dashboard",
-  },
-  {
-    title: "Performance & Insights",
-    body: "Alle deine Mahlzeiten, Insulindosen und Glukosewerte über die Zeit — strukturiert, mit gelernter Carb-Ratio, Good-Rate und Trends, die du im Diabetologen-Gespräch teilen kannst.",
-    desktopPage: "insights",
-    mobileTab: "insights",
-  },
-];
-
 /**
  * Four alternating feature rows. Each row pairs a live in-app mockup
  * with marketing copy. The mockup itself swaps presentation per
@@ -66,12 +39,47 @@ const FEATURES: Feature[] = [
  *   other column. Mockup column gets ~60% of row width so the
  *   dark-cockpit layout has room to breathe.
  * Mobile (≤720px): mockup centered above the copy, single column.
+ *
+ * Copy lives in the `marketing` namespace so the section reacts to
+ * the visitor's locale without the parent threading strings through.
+ * The desktopPage / mobileTab routing keys stay hardcoded — they map
+ * to in-app surfaces, not user-facing strings.
  */
 export default function FeatureDeepDive() {
+  const t = useTranslations("marketing");
+  const features: Feature[] = [
+    {
+      title: t("deepdive_voice_title"),
+      body: t("deepdive_voice_body"),
+      // The "Glev Engine" page (key: "recommend") shows the voice mic
+      // surface plus the GPT-Reasoning side panel — that's the canonical
+      // voice-first surface in the desktop app.
+      desktopPage: "recommend",
+      mobileTab: "engine",
+    },
+    {
+      title: t("deepdive_macro_title"),
+      body: t("deepdive_macro_body"),
+      desktopPage: "entries",
+      mobileTab: "entries",
+    },
+    {
+      title: t("deepdive_cgm_title"),
+      body: t("deepdive_cgm_body"),
+      desktopPage: "dashboard",
+      mobileTab: "dashboard",
+    },
+    {
+      title: t("deepdive_insights_title"),
+      body: t("deepdive_insights_body"),
+      desktopPage: "insights",
+      mobileTab: "insights",
+    },
+  ];
   return (
     <section
       id="features"
-      aria-label="Features im Detail"
+      aria-label={t("deepdive_aria")}
       style={{ display: "flex", flexDirection: "column", gap: 96 }}
     >
       <h2
@@ -83,10 +91,10 @@ export default function FeatureDeepDive() {
           color: "#fff",
         }}
       >
-        Features im Detail
+        {t("deepdive_title")}
       </h2>
 
-      {FEATURES.map((f, i) => (
+      {features.map((f, i) => (
         <FeatureRow key={f.title} feature={f} reverse={i % 2 === 1} />
       ))}
     </section>

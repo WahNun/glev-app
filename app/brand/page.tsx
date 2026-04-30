@@ -1,4 +1,5 @@
 import React from "react";
+import { getTranslations } from "next-intl/server";
 import GlevLogo from "@/components/GlevLogo";
 import HexSwatch from "@/components/brand/HexSwatch";
 import LogoCard from "@/components/brand/LogoCard";
@@ -39,7 +40,8 @@ const MEAL_CHART_COLORS = [
   { hex: "#A78BFA", role: "UI sekundär" },
 ];
 
-export default function BrandPage() {
+export default async function BrandPage() {
+  const t = await getTranslations("marketing");
   return (
     <div
       id="top"
@@ -84,7 +86,7 @@ export default function BrandPage() {
             color: "rgba(255,255,255,0.5)",
           }}
         >
-          Brand guidelines · v1 · April 2026
+          {t("brand_subtitle")}
         </div>
         <div
           style={{
@@ -95,7 +97,7 @@ export default function BrandPage() {
             letterSpacing: "-0.01em",
           }}
         >
-          Typ 1. Neu gedacht.
+          {t("brand_tagline")}
         </div>
       </section>
 

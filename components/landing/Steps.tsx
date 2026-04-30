@@ -1,15 +1,22 @@
+"use client";
+
+import { useTranslations } from "next-intl";
 import { BORDER, SURFACE, MINT, TEXT_DIM } from "./tokens";
 
 /**
  * The 3-step "How it works" section, identical across landing pages.
- * Hard-coded copy — both /beta and /pro use the same demo flow.
+ * Copy is pulled from the `marketing` namespace so the section reacts
+ * to the visitor's locale (cookie or Accept-Language fallback) — see
+ * `i18n/request.ts`. Both /beta and /pro use the same demo flow so
+ * the keys live under shared `step{1,2,3}_title|body` slots.
  */
 export default function Steps() {
+  const t = useTranslations("marketing");
   return (
     <section style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <Step n={1} title="Sprich deine Mahlzeit" body={'„zwei Scheiben Vollkornbrot mit Butter und ein Ei"'} />
-      <Step n={2} title="KI liefert Makros und dein CGM-Wert erscheint automatisch" body="Carbs, Protein, Fett — sofort sichtbar, neben deinem aktuellen Glucosewert." />
-      <Step n={3} title="Du korrigierst falls nötig, dosierst, alles dokumentiert" body="Eine Mahlzeit zu loggen dauert nicht länger als ein Atemzug." />
+      <Step n={1} title={t("step1_title")} body={t("step1_body")} />
+      <Step n={2} title={t("step2_title")} body={t("step2_body")} />
+      <Step n={3} title={t("step3_title")} body={t("step3_body")} />
     </section>
   );
 }

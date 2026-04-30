@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { supabase } from "@/lib/supabase";
 import GlevLockup from "@/components/GlevLockup";
 
@@ -46,6 +47,7 @@ export default function WelcomePage() {
 // Lightweight fallback that mirrors the shell of the real page so the
 // transition into the verifying state doesn't flash an empty viewport.
 function WelcomeFallback() {
+  const t = useTranslations("marketing");
   return (
     <main style={{
       minHeight: "100vh", background: BG,
@@ -56,7 +58,7 @@ function WelcomeFallback() {
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, marginBottom: 32 }}>
           <GlevLockup size={44} />
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: "0.12em" }}>
-            INSULIN DECISION SUPPORT
+            {t("welcome_subtitle")}
           </div>
         </div>
         <div style={{
@@ -64,7 +66,7 @@ function WelcomeFallback() {
           border: "1px solid rgba(255,255,255,0.07)", padding: 28,
           textAlign: "center", color: "rgba(255,255,255,0.45)", fontSize: 13,
         }}>
-          Lädt …
+          {t("welcome_loading")}
         </div>
       </div>
     </main>
@@ -78,24 +80,25 @@ function WelcomeFallback() {
 // via the email resume link days/hours later may hit `not_found` if Stripe
 // purged the session, or `not_paid` if they bookmarked the cancel page.
 function InvalidState({ reason }: { reason: string }) {
-  let title = "Kein gültiger Beta-Zugang gefunden.";
-  let body = "Diese Seite ist nur nach erfolgreicher Beta-Reservierung verfügbar.";
+  const t = useTranslations("marketing");
+  let title = t("welcome_invalid_default_title");
+  let body = t("welcome_invalid_default_body");
   let showBetaCta = true;
 
   if (reason === "no_session_id" || reason === "missing_session_id") {
-    title = "Link unvollständig";
-    body = "Es fehlt die Session-ID in der URL. Klicke noch einmal auf den \"Registrierung abschließen\"-Button in deiner Willkommens-Email.";
+    title = t("welcome_invalid_no_session_title");
+    body = t("welcome_invalid_no_session_body");
     showBetaCta = false;
   } else if (reason === "not_found") {
-    title = "Session konnte nicht geladen werden";
-    body = "Stripe kennt diese Checkout-Session nicht (mehr). Das passiert sehr selten, und am schnellsten lösen wir das per Email — meld dich kurz bei hello@glev.app, wir setzen deinen Zugang dann manuell auf.";
+    title = t("welcome_invalid_not_found_title");
+    body = t("welcome_invalid_not_found_body");
     showBetaCta = false;
   } else if (reason === "not_paid") {
-    title = "Zahlung noch nicht abgeschlossen";
-    body = "Diese Stripe-Session wurde gestartet, aber die Zahlung ging noch nicht durch. Falls das ein Versehen war, kannst du unten neu starten — oder schreib uns an hello@glev.app, wenn du sicher bist dass du gezahlt hast.";
+    title = t("welcome_invalid_not_paid_title");
+    body = t("welcome_invalid_not_paid_body");
   } else if (reason === "retrieve_failed" || reason === "network") {
-    title = "Verbindung zu Stripe hat nicht geklappt";
-    body = "Bitte lade die Seite in ein paar Sekunden neu. Wenn das wiederholt fehlschlägt, melde dich bei hello@glev.app — wir helfen schnell weiter.";
+    title = t("welcome_invalid_network_title");
+    body = t("welcome_invalid_network_body");
     showBetaCta = false;
   }
 
@@ -117,7 +120,7 @@ function InvalidState({ reason }: { reason: string }) {
           textAlign: "center", textDecoration: "none",
         }}
       >
-        Support kontaktieren: hello@glev.app
+        {t("welcome_support_cta")}
       </a>
       {showBetaCta && (
         <Link href="/beta" style={{
@@ -127,7 +130,7 @@ function InvalidState({ reason }: { reason: string }) {
           color: "white", fontSize: 14, fontWeight: 700,
           textAlign: "center", textDecoration: "none",
         }}>
-          Beta reservieren
+          {t("welcome_reserve_cta")}
         </Link>
       )}
     </div>
@@ -135,6 +138,7 @@ function InvalidState({ reason }: { reason: string }) {
 }
 
 function WelcomeInner() {
+  const t = useTranslations("marketing");
   const router = useRouter();
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("session_id");
@@ -181,19 +185,19 @@ function WelcomeInner() {
 
     if (verify.kind !== "valid") return;
     if (!verify.email) {
-      setError("Email aus dem Stripe-Vorgang konnte nicht ermittelt werden. Bitte Support kontaktieren.");
+      setError(t("welcome_err_email"));
       return;
     }
     if (!supabase) {
-      setError("Auth-Service nicht konfiguriert. Bitte Support kontaktieren.");
+      setError(t("welcome_err_auth"));
       return;
     }
     if (password.length < 6) {
-      setError("Passwort muss mindestens 6 Zeichen lang sein.");
+      setError(t("welcome_err_password_short"));
       return;
     }
     if (password !== confirm) {
-      setError("Die beiden Passwörter stimmen nicht überein.");
+      setError(t("welcome_err_password_mismatch"));
       return;
     }
 
@@ -212,7 +216,7 @@ function WelcomeInner() {
 
     if (!data.session) {
       // Supabase email-confirmation flow — user must click the link in the inbox.
-      setNotice("Account erstellt! Bitte bestätige deine Email-Adresse über den Link in deinem Posteingang, dann kannst du dich einloggen.");
+      setNotice(t("welcome_notice_check_email"));
       setSubmitting(false);
       return;
     }
@@ -232,7 +236,7 @@ function WelcomeInner() {
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, marginBottom: 32 }}>
           <GlevLockup size={44} />
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: "0.12em" }}>
-            INSULIN DECISION SUPPORT
+            {t("welcome_subtitle")}
           </div>
         </div>
 
@@ -241,7 +245,7 @@ function WelcomeInner() {
           {verify.kind === "verifying" && (
             <div style={{ textAlign: "center", padding: "30px 0", color: "rgba(255,255,255,0.55)", fontSize: 14 }}>
               <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", marginBottom: 8 }}>
-                BETA-ZUGANG WIRD GEPRÜFT…
+                {t("welcome_verifying")}
               </div>
               <svg width="22" height="22" viewBox="0 0 24 24" style={{ marginTop: 4 }} aria-hidden="true">
                 <circle cx="12" cy="12" r="9" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="3"/>
@@ -260,19 +264,19 @@ function WelcomeInner() {
             <>
               <div style={{ marginBottom: 22 }}>
                 <div style={{ fontSize: 11, color: GREEN, letterSpacing: "0.1em", fontWeight: 700, marginBottom: 6 }}>
-                  ✓ ZAHLUNG BESTÄTIGT
+                  {t("welcome_payment_confirmed")}
                 </div>
                 <div style={{ fontSize: 18, fontWeight: 700, color: "#fff", marginBottom: 4 }}>
-                  Account erstellen
+                  {t("welcome_create_account")}
                 </div>
                 <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", lineHeight: 1.5 }}>
-                  Wähle ein Passwort, um deinen Glev-Beta-Zugang abzuschließen.
+                  {t("welcome_choose_password")}
                 </div>
               </div>
 
               <form onSubmit={handleSignup} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 <div>
-                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 6, letterSpacing: "0.08em" }}>EMAIL</div>
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 6, letterSpacing: "0.08em" }}>{t("welcome_email_label")}</div>
                   <input
                     type="email"
                     value={verify.email ?? ""}
@@ -283,12 +287,12 @@ function WelcomeInner() {
                 </div>
 
                 <div>
-                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 6, letterSpacing: "0.08em" }}>PASSWORT</div>
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 6, letterSpacing: "0.08em" }}>{t("welcome_password_label")}</div>
                   <input
                     type="password"
                     value={password}
                     onChange={e => setPassword(e.target.value)}
-                    placeholder="mindestens 6 Zeichen"
+                    placeholder={t("welcome_password_placeholder")}
                     required
                     minLength={6}
                     disabled={submitting}
@@ -298,12 +302,12 @@ function WelcomeInner() {
                 </div>
 
                 <div>
-                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 6, letterSpacing: "0.08em" }}>PASSWORT BESTÄTIGEN</div>
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 6, letterSpacing: "0.08em" }}>{t("welcome_password_confirm_label")}</div>
                   <input
                     type="password"
                     value={confirm}
                     onChange={e => setConfirm(e.target.value)}
-                    placeholder="Passwort wiederholen"
+                    placeholder={t("welcome_password_confirm_placeholder")}
                     required
                     minLength={6}
                     disabled={submitting}
@@ -349,7 +353,7 @@ function WelcomeInner() {
                   cursor: submitting || notice ? "default" : "pointer",
                   transition: "all 0.15s", marginTop: 4,
                 }}>
-                  {submitting ? "Account wird erstellt…" : "Account erstellen"}
+                  {submitting ? t("welcome_submitting") : t("welcome_submit")}
                 </button>
 
                 {notice && (
@@ -360,7 +364,7 @@ function WelcomeInner() {
                     color: "rgba(255,255,255,0.7)", fontSize: 13, fontWeight: 600,
                     textAlign: "center", textDecoration: "none",
                   }}>
-                    Zum Login
+                    {t("welcome_to_login")}
                   </Link>
                 )}
               </form>
@@ -369,7 +373,7 @@ function WelcomeInner() {
         </div>
 
         <div style={{ textAlign: "center", marginTop: 20, fontSize: 10, color: "rgba(255,255,255,0.15)", letterSpacing: "0.06em" }}>
-          MEMBERS ONLY · PRIVATE BETA
+          {t("welcome_members_only")}
         </div>
       </div>
     </main>
