@@ -9,7 +9,7 @@ const ACCENT = "#4F6EF7";
 const GREEN = "#22D3A0";
 const PINK = "#FF2D78";
 const ORANGE = "#FF9500";
-const SURFACE = "#111117";
+const SURFACE = "var(--surface)";
 
 /**
  * Self-contained "Glucose Trend" content (header + chart + crosshair).
@@ -114,7 +114,7 @@ export default function GlucoseTrendFront({
       : recentAvg < 80
       ? PINK
       : GREEN
-    : "rgba(255,255,255,0.5)";
+    : "var(--text-dim)";
 
   return (
     <>
@@ -122,14 +122,14 @@ export default function GlucoseTrendFront({
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 6 }}>
         <div>
           <div style={{ fontSize: 13, fontWeight: 700 }}>Glucose Trend</div>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 2 }}>
+          <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 2 }}>
             Avg pre-meal glucose · last 14 days
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
           {recentAvg && (
             <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: 9, color: "rgba(255,255,255,0.35)", letterSpacing: "0.08em", fontWeight: 600 }}>
+              <div style={{ fontSize: 9, color: "var(--text-faint)", letterSpacing: "0.08em", fontWeight: 600 }}>
                 7-DAY AVG
               </div>
               <div
@@ -146,7 +146,7 @@ export default function GlucoseTrendFront({
             </div>
           )}
           {showFlipHint && (
-            <span style={{ fontSize: 9, color: "rgba(255,255,255,0.2)", marginLeft: 4 }}>↺</span>
+            <span style={{ fontSize: 9, color: "var(--text-ghost)", marginLeft: 4 }}>↺</span>
           )}
         </div>
       </div>
@@ -184,10 +184,10 @@ export default function GlucoseTrendFront({
                   y1={toY(v)}
                   x2={W - padR}
                   y2={toY(v)}
-                  stroke="rgba(255,255,255,0.05)"
+                  stroke="var(--surface-soft)"
                   strokeDasharray="3 4"
                 />
-                <text x={padL - 5} y={toY(v) + 4} textAnchor="end" fontSize="10" fill="rgba(255,255,255,0.25)">
+                <text x={padL - 5} y={toY(v) + 4} textAnchor="end" fontSize="10" fill="var(--text-ghost)">
                   {v}
                 </text>
               </g>
@@ -251,7 +251,7 @@ export default function GlucoseTrendFront({
                   y={H - 10}
                   textAnchor="middle"
                   fontSize="10"
-                  fill="rgba(255,255,255,0.28)"
+                  fill="var(--text-ghost)"
                 >
                   {new Date(d).toLocaleDateString("en", { month: "short", day: "numeric" })}
                 </text>

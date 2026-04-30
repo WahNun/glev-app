@@ -11,7 +11,7 @@ const ACCENT = "#4F6EF7";
 const GREEN  = "#22D3A0";
 const PINK   = "#FF2D78";
 const ORANGE = "#FF9500";
-const BORDER = "rgba(255,255,255,0.08)";
+const BORDER = "var(--border)";
 
 export default function MealEntryLightExpand({
   meal,
@@ -61,13 +61,13 @@ export default function MealEntryLightExpand({
 
   const beforeColor = before != null
     ? (before > 140 ? ORANGE : before < 80 ? PINK : GREEN)
-    : "rgba(255,255,255,0.5)";
+    : "var(--text-dim)";
   const afterColor = after != null
     ? (after > 180 || after < 70 ? PINK : GREEN)
-    : "rgba(255,255,255,0.4)";
+    : "var(--text-dim)";
   const deltaColor = delta != null
     ? (delta > 30 ? PINK : delta > 0 ? ORANGE : GREEN)
-    : "rgba(255,255,255,0.35)";
+    : "var(--text-faint)";
 
   const date = parseDbDate(meal.meal_time ?? meal.created_at);
   const fullTimestamp = date.toLocaleString(locale, {
@@ -183,7 +183,7 @@ export default function MealEntryLightExpand({
   }
 
   const PendingAfter = (
-    <span style={{ display:"inline-flex", alignItems:"center", gap:5, color:"rgba(255,255,255,0.5)" }}>
+    <span style={{ display:"inline-flex", alignItems:"center", gap:5, color:"var(--text-dim)" }}>
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="10"/>
         <polyline points="12 6 12 12 16 14"/>
@@ -194,8 +194,8 @@ export default function MealEntryLightExpand({
 
   const Stat = ({ label, value, color }: { label: string; value: React.ReactNode; color?: string }) => (
     <div style={{ display:"flex", flexDirection:"column", minWidth:70, gap:3 }}>
-      <span style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:600 }}>{label}</span>
-      <span style={{ fontSize:13, fontWeight:700, color: color || "rgba(255,255,255,0.85)", fontFamily:"var(--font-mono)" }}>{value}</span>
+      <span style={{ fontSize:10, color:"var(--text-faint)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:600 }}>{label}</span>
+      <span style={{ fontSize:13, fontWeight:700, color: color || "var(--text-strong)", fontFamily:"var(--font-mono)" }}>{value}</span>
     </div>
   );
 
@@ -209,8 +209,8 @@ export default function MealEntryLightExpand({
           <span style={{
             fontSize:9, fontWeight:700, letterSpacing:"0.06em",
             padding:"2px 6px", borderRadius:99,
-            background:"rgba(255,255,255,0.06)",
-            color:"rgba(255,255,255,0.55)",
+            background:"var(--border-soft)",
+            color:"var(--text-muted)",
             fontFamily:"system-ui, -apple-system, sans-serif",
           }}>
             {afterTag}
@@ -223,12 +223,12 @@ export default function MealEntryLightExpand({
   // ─── Edit form view ───────────────────────────────────────────────────────
   if (isEditing) {
     const inp: React.CSSProperties = {
-      background: "#0D0D12", border: `1px solid ${BORDER}`, borderRadius: 8,
-      padding: "8px 10px", color: "#fff", fontSize: 13, outline: "none",
+      background: "var(--input-bg)", border: `1px solid ${BORDER}`, borderRadius: 8,
+      padding: "8px 10px", color:"var(--text)", fontSize: 13, outline: "none",
       width: "100%", fontFamily: "var(--font-mono)",
     };
     const lbl: React.CSSProperties = {
-      fontSize: 10, color: "rgba(255,255,255,0.4)", letterSpacing: "0.06em",
+      fontSize: 10, color: "var(--text-dim)", letterSpacing: "0.06em",
       textTransform: "uppercase", fontWeight: 600, marginBottom: 4,
     };
     const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
@@ -240,7 +240,7 @@ export default function MealEntryLightExpand({
 
     return (
       <div style={{ padding: "12px 16px 14px", display: "flex", flexDirection: "column", gap: 14 }}>
-        <div style={{ fontSize: 9, color: "rgba(255,255,255,0.5)", letterSpacing: "0.1em", fontWeight: 700, textTransform: "uppercase" }}>
+        <div style={{ fontSize: 9, color: "var(--text-dim)", letterSpacing: "0.1em", fontWeight: 700, textTransform: "uppercase" }}>
           {tm("title")}
         </div>
 
@@ -267,21 +267,21 @@ export default function MealEntryLightExpand({
         )}
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 8, borderTop: `1px solid ${BORDER}`, gap: 12, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>
+          <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
             {tm("footer_note")}
           </span>
           <div style={{ display: "flex", gap: 8 }}>
             <button
               onClick={cancelEdit}
               disabled={busy}
-              style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 8, color: "rgba(255,255,255,0.7)", fontSize: 12, fontWeight: 600, padding: "8px 14px", cursor: busy ? "default" : "pointer" }}
+              style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: 8, color: "var(--text-body)", fontSize: 12, fontWeight: 600, padding: "8px 14px", cursor: busy ? "default" : "pointer" }}
             >
               {tm("cancel")}
             </button>
             <button
               onClick={saveEdit}
               disabled={busy}
-              style={{ background: ACCENT, border: "none", borderRadius: 8, color: "#fff", fontSize: 12, fontWeight: 700, padding: "8px 16px", cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1 }}
+              style={{ background: ACCENT, border: "none", borderRadius: 8, color:"var(--text)", fontSize: 12, fontWeight: 700, padding: "8px 16px", cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1 }}
             >
               {busy ? tm("saving") : tm("save")}
             </button>
@@ -297,20 +297,20 @@ export default function MealEntryLightExpand({
       {/* OUTCOME CHIP — drives off lifecycle state, not stored evaluation alone. */}
       <div style={{ background:`${chip.color}10`, border:`1px solid ${chip.color}30`, borderRadius:10, padding:"10px 12px", display:"flex", flexDirection:"column", gap:6 }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
-          <span style={{ fontSize:9, color:"rgba(255,255,255,0.5)", letterSpacing:"0.1em", fontWeight:700 }}>{td("outcome")}</span>
-          <span style={{ padding:"4px 10px", borderRadius:99, fontSize:10, fontWeight:700, background:chip.color, color:"#0A0A0F", letterSpacing:"0.04em", textTransform:"uppercase" }}>
+          <span style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>{td("outcome")}</span>
+          <span style={{ padding:"4px 10px", borderRadius:99, fontSize:10, fontWeight:700, background:chip.color, color:"var(--on-accent)", letterSpacing:"0.04em", textTransform:"uppercase" }}>
             {chip.label}
           </span>
         </div>
-        <div style={{ fontSize:12, color:"rgba(255,255,255,0.7)", lineHeight:1.5 }}>{chip.body}</div>
+        <div style={{ fontSize:12, color:"var(--text-body)", lineHeight:1.5 }}>{chip.body}</div>
         {chip.trendHint && (
-          <div style={{ fontSize:11, color:"rgba(255,255,255,0.5)", fontStyle:"italic" }}>{chip.trendHint}</div>
+          <div style={{ fontSize:11, color:"var(--text-dim)", fontStyle:"italic" }}>{chip.trendHint}</div>
         )}
       </div>
 
       {/* GLUCOSE */}
       <div>
-        <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8, textTransform:"uppercase" }}>{td("glucose_section")}</div>
+        <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8, textTransform:"uppercase" }}>{td("glucose_section")}</div>
         <div style={{ display:"flex", gap:24, flexWrap:"wrap" }}>
           <Stat label={td("bg_before")} value={before != null ? `${before} mg/dL` : "—"} color={beforeColor}/>
           <Stat label={td("bg_after")}  value={afterValue} color={after != null ? afterColor : undefined}/>
@@ -320,10 +320,10 @@ export default function MealEntryLightExpand({
 
       {/* KEY DETAILS */}
       <div>
-        <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8, textTransform:"uppercase" }}>{td("key_details")}</div>
+        <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8, textTransform:"uppercase" }}>{td("key_details")}</div>
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
           {meal.input_text && (
-            <div style={{ fontSize:13, color:"rgba(255,255,255,0.75)", lineHeight:1.5 }}>{meal.input_text}</div>
+            <div style={{ fontSize:13, color:"var(--text-body)", lineHeight:1.5 }}>{meal.input_text}</div>
           )}
           <div style={{ display:"flex", gap:18, flexWrap:"wrap" }}>
             <Stat label={td("carbs")}   value={`${carbs}g`}   color={ORANGE}/>
@@ -343,7 +343,7 @@ export default function MealEntryLightExpand({
 
       {/* TIMESTAMP + EDIT/LINK */}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap", paddingTop:8, borderTop:`1px solid ${BORDER}` }}>
-        <span style={{ fontSize:11, color:"rgba(255,255,255,0.45)", fontFamily:"var(--font-mono)" }}>
+        <span style={{ fontSize:11, color:"var(--text-dim)", fontFamily:"var(--font-mono)" }}>
           {fullTimestamp}
           {savedFlash && (
             <span style={{ marginLeft: 12, color: GREEN, fontWeight: 700 }}>{td("saved_flash")}</span>
@@ -353,7 +353,7 @@ export default function MealEntryLightExpand({
           {editable && (
             <button
               onClick={(e) => { e.stopPropagation(); startEdit(); }}
-              style={{ background:"transparent", border:`1px solid ${BORDER}`, borderRadius:8, color:"rgba(255,255,255,0.75)", fontSize:12, fontWeight:600, cursor:"pointer", padding:"6px 12px", letterSpacing:"-0.01em" }}
+              style={{ background:"transparent", border:`1px solid ${BORDER}`, borderRadius:8, color:"var(--text-body)", fontSize:12, fontWeight:600, cursor:"pointer", padding:"6px 12px", letterSpacing:"-0.01em" }}
             >
               {td("edit")}
             </button>

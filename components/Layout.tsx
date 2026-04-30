@@ -13,17 +13,17 @@ import { HistoryHeaderProvider, useHistoryHeader, type HistoryTab } from "@/lib/
 
 const ACCENT  = "#4F6EF7";
 const GREEN   = "#22D3A0";
-const SURFACE = "#111117";
-const BORDER  = "rgba(255,255,255,0.06)";
-const BG      = "#09090B";
+const SURFACE = "var(--surface)";
+const BORDER  = "var(--border-soft)";
+const BG      = "var(--bg)";
 
 // Mobile nav uses slightly different surfaces than the rest of the app:
 // the spec asks for #111117 with a 0.08-alpha top border (vs the global
 // 0.06 BORDER), and inactive tabs use a brighter 0.4-alpha white than
 // the desktop sidebar's 0.45 so the 4-tab bar reads cleanly on phones.
-const NAV_SURFACE  = "#111117";
-const NAV_BORDER   = "rgba(255,255,255,0.08)";
-const NAV_INACTIVE = "rgba(255,255,255,0.4)";
+const NAV_SURFACE  = "var(--surface)";
+const NAV_BORDER   = "var(--border)";
+const NAV_INACTIVE = "var(--text-dim)";
 
 // Desktop sidebar items. 4 entries, mirrors the mobile bottom-nav set
 // vertically. The user explicitly requested the order
@@ -39,7 +39,7 @@ type NavKey = "dashboard" | "glev" | "history" | "settings";
 type NavItem = { key: NavKey; path: string; icon: (a: boolean) => React.ReactNode };
 const NAV: NavItem[] = [
   { key: "dashboard", path: "/dashboard", icon: (a) => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "var(--text-dim)"} strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
   )},
   // Glev brand mark in the nav rail. Recoloured monochrome (grey when
   // inactive, ACCENT when active) so its visual weight sits on the same
@@ -49,14 +49,14 @@ const NAV: NavItem[] = [
   // shape from the rest.
   { key: "glev", path: "/engine", icon: (a) => (
     <span style={{ display: "inline-flex", filter: a ? `drop-shadow(0 0 6px ${ACCENT}99)` : undefined, transition: "filter 0.2s" }}>
-      <GlevLogo size={18} color={a ? ACCENT : "rgba(255,255,255,0.45)"} bg="transparent"/>
+      <GlevLogo size={18} color={a ? ACCENT : "var(--text-dim)"} bg="transparent"/>
     </span>
   )},
   { key: "history", path: "/history", icon: (a) => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 4 3 10 9 10"/><polyline points="12 7 12 12 16 14"/></svg>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "var(--text-dim)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 4 3 10 9 10"/><polyline points="12 7 12 12 16 14"/></svg>
   )},
   { key: "settings", path: "/settings", icon: (a) => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "var(--text-dim)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
   )},
 ];
 
@@ -166,7 +166,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           aria-label="Open about Glev"
           style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", flex: 1, minWidth: 0 }}
         >
-          <GlevLockup size={26} />
+          <GlevLockup size={26} color="var(--text)" symbolBg="var(--surface-alt)" />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {/* Engine-page tab toggle. Only rendered when the engine page
@@ -184,9 +184,9 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               style={{
                 display: "inline-flex", alignItems: "center", gap: 6,
                 padding: "5px 10px", height: 28, borderRadius: 99,
-                background: engineHdr.tabsExpanded ? `${ACCENT}22` : "rgba(255,255,255,0.05)",
-                border: `1px solid ${engineHdr.tabsExpanded ? ACCENT : "rgba(255,255,255,0.1)"}`,
-                color: engineHdr.tabsExpanded ? ACCENT : "rgba(255,255,255,0.7)",
+                background: engineHdr.tabsExpanded ? `${ACCENT}22` : "var(--surface-soft)",
+                border: `1px solid ${engineHdr.tabsExpanded ? ACCENT : "var(--border-strong)"}`,
+                color: engineHdr.tabsExpanded ? ACCENT : "var(--text-body)",
                 fontSize: 11, fontWeight: 700, letterSpacing: "-0.01em",
                 cursor: "pointer", transition: "all 0.15s",
               }}
@@ -225,12 +225,12 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             aria-label="Open settings"
             style={{
               width: 32, height: 32, borderRadius: 99, padding: 0,
-              background: pathname.startsWith("/settings") ? `${ACCENT}25` : "rgba(255,255,255,0.05)",
-              border: `1px solid ${pathname.startsWith("/settings") ? ACCENT : "rgba(255,255,255,0.1)"}`,
+              background: pathname.startsWith("/settings") ? `${ACCENT}25` : "var(--surface-soft)",
+              border: `1px solid ${pathname.startsWith("/settings") ? ACCENT : "var(--border-strong)"}`,
               display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
             }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={pathname.startsWith("/settings") ? ACCENT : "rgba(255,255,255,0.6)"} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={pathname.startsWith("/settings") ? ACCENT : "var(--text-muted)"} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
           </button>
         </div>
       </header>
@@ -256,7 +256,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             borderRadius: 10, cursor: "pointer",
           }}
         >
-          <GlevLockup size={28} />
+          <GlevLockup size={28} color="var(--text)" symbolBg="var(--surface-alt)" />
         </div>
 
         <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
@@ -270,7 +270,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
                 display: "flex", alignItems: "center", gap: 10, padding: "10px 12px",
                 borderRadius: 10, border: "none", cursor: "pointer",
                 background: active ? `${ACCENT}18` : "transparent",
-                color: active ? ACCENT : "rgba(255,255,255,0.45)",
+                color: active ? ACCENT : "var(--text-dim)",
                 fontSize: 13, fontWeight: active ? 600 : 400,
                 textAlign: "left", width: "100%",
               }}>
@@ -284,7 +284,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         <button onClick={handleSignOut} style={{
           display: "flex", alignItems: "center", gap: 8, padding: "10px 12px",
           borderRadius: 10, border: "none", cursor: "pointer", background: "transparent",
-          color: "rgba(255,255,255,0.18)", fontSize: 12, textAlign: "left", width: "100%",
+          color: "var(--text-ghost)", fontSize: 12, textAlign: "left", width: "100%",
         }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
           Sign Out
@@ -470,9 +470,9 @@ function HistoryHeaderChip({
         style={{
           display: "inline-flex", alignItems: "center", gap: 6,
           padding: "5px 10px", height: 28, borderRadius: 99,
-          background: open ? `${ACCENT}22` : "rgba(255,255,255,0.05)",
-          border: `1px solid ${open ? ACCENT : "rgba(255,255,255,0.1)"}`,
-          color: open ? ACCENT : "rgba(255,255,255,0.7)",
+          background: open ? `${ACCENT}22` : "var(--surface-soft)",
+          border: `1px solid ${open ? ACCENT : "var(--border-strong)"}`,
+          color: open ? ACCENT : "var(--text-body)",
           fontSize: 11, fontWeight: 700, letterSpacing: "-0.01em",
           cursor: "pointer", transition: "all 0.15s",
         }}
@@ -494,10 +494,10 @@ function HistoryHeaderChip({
           style={{
             position: "absolute", top: "calc(100% + 8px)", right: 0,
             width: 180,
-            background: "#1A1A24",
-            border: `1px solid rgba(255,255,255,0.08)`,
+            background: "var(--surface-alt)",
+            border: `1px solid var(--border)`,
             borderRadius: 14,
-            boxShadow: "0 12px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04)",
+            boxShadow: "var(--shadow-card)",
             padding: 6,
             zIndex: 60,
           }}
@@ -516,7 +516,7 @@ function HistoryHeaderChip({
                   width: "100%", padding: "10px 12px",
                   background: isActive ? `${ACCENT}22` : "transparent",
                   border: "none",
-                  color: isActive ? "#fff" : "rgba(255,255,255,0.85)",
+                  color: isActive ? "#fff" : "var(--text-strong)",
                   fontSize: 13.5, fontWeight: isActive ? 700 : 500,
                   cursor: "pointer", textAlign: "left",
                   borderRadius: 10,

@@ -13,10 +13,98 @@
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
+/* ============================================================================
+   THEME TOKENS
+   ----------------------------------------------------------------------------
+   Two themes — `dark` (default, original look) and `light` (Task #38).
+   Brand accents (ACCENT/GREEN/ORANGE/PINK/YELLOW) are intentionally NOT in
+   the token map: they stay constant across themes per the brand spec. Only
+   chrome surfaces, borders, and text colors invert.
+
+   The pre-hydration inline script in app/layout.tsx sets
+   `<html data-theme="...">` from the THEME cookie before paint, so there is
+   no flash of wrong theme on reload. SSR defaults to `dark` (the historical
+   look) when no cookie is present.
+
+   Migration pattern: components that previously hardcoded surface/border/
+   text colors (e.g. `const SURFACE = "#111117"`) should switch to
+   `var(--surface)`, `var(--border)`, `var(--text)` etc. so they automatically
+   re-skin in light mode without per-file conditionals.
+   ============================================================================ */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --bg:           #09090B;  /* page background */
+  --surface:      #111117;  /* cards / sheets */
+  --surface-alt:  #0F0F14;  /* nested cards / inputs / odd rows */
+  --surface-soft: rgba(255,255,255,0.03); /* very faint inset (e.g. notification rows) */
+  --input-bg:     #0D0D12;  /* form inputs */
+
+  /* Borders (alpha ladder over the surface) */
+  --border:        rgba(255,255,255,0.08);
+  --border-soft:   rgba(255,255,255,0.06);
+  --border-strong: rgba(255,255,255,0.12);
+
+  /* Text colors */
+  --text:        #FFFFFF;            /* primary text */
+  --text-strong: rgba(255,255,255,0.9);
+  --text-body:   rgba(255,255,255,0.7);
+  --text-muted:  rgba(255,255,255,0.6);
+  --text-dim:    rgba(255,255,255,0.45);
+  --text-faint:  rgba(255,255,255,0.3);
+  --text-ghost:  rgba(255,255,255,0.18);
+
+  /* Misc */
+  --shadow-card:  0 1px 4px rgba(0,0,0,0.4);
+  --overlay:      rgba(0,0,0,0.6);
+
+  /* Browser UI tint (matches viewport themeColor; consumed via JS too) */
+  --browser-theme: #0A0A0F;
+
+  /* Foreground color for text/icons placed on top of a brand-accent
+     fill (orange/pink/yellow/green/blue chips, primary CTAs, etc.).
+     Brand colors are bright enough that near-black text reads at AA
+     against all of them in BOTH themes, so this token is intentionally
+     theme-independent — do NOT redefine it under data-theme="light". */
+  --on-accent: #0A0A0F;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg:           #FAFAFB;
+  --surface:      #FFFFFF;
+  --surface-alt:  #F4F4F6;
+  --surface-soft: rgba(15,15,20,0.03);
+  --input-bg:     #FFFFFF;
+
+  --border:        rgba(15,15,20,0.10);
+  --border-soft:   rgba(15,15,20,0.07);
+  --border-strong: rgba(15,15,20,0.16);
+
+  --text:        #0F0F14;
+  --text-strong: rgba(15,15,20,0.92);
+  --text-body:   rgba(15,15,20,0.78);
+  --text-muted:  rgba(15,15,20,0.62);
+  --text-dim:    rgba(15,15,20,0.5);
+  --text-faint:  rgba(15,15,20,0.38);
+  --text-ghost:  rgba(15,15,20,0.22);
+
+  --shadow-card:  0 1px 3px rgba(15,15,20,0.08), 0 1px 2px rgba(15,15,20,0.04);
+  --overlay:      rgba(15,15,20,0.45);
+
+  --browser-theme: #FAFAFB;
+}
+
 html, body {
-  background: #09090B;
-  color: #fff;
+  background: var(--bg);
+  color: var(--text);
   font-family: var(--font-sans);
+  /* Smooth theme switches (background + text only — brand colors stay
+     constant so they don't need transitioning). */
+  transition: background-color 160ms ease, color 160ms ease;
   /* iOS Safari ignores `user-scalable=no` in the viewport meta — combine
      with PreventZoom.tsx (touchend / gesturestart listeners) for a full
      zoom block. `manipulation` here disables double-tap-to-zoom while

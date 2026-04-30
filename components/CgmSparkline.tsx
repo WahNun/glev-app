@@ -92,14 +92,14 @@ export default function CgmSparkline({
       <line
         x1={padX} x2={W - padX}
         y1={targetY2} y2={targetY2}
-        stroke="rgba(255,255,255,0.08)"
+        stroke="var(--border)"
         strokeDasharray="3 3"
       />
       {/* Upper target line. */}
       <line
         x1={padX} x2={W - padX}
         y1={targetY1} y2={targetY1}
-        stroke="rgba(255,255,255,0.08)"
+        stroke="var(--border)"
         strokeDasharray="3 3"
       />
       {/* Injection marker. */}
@@ -142,7 +142,7 @@ export default function CgmSparkline({
           y={H / 2 + 4}
           textAnchor="middle"
           fontSize={11}
-          fill="rgba(255,255,255,0.35)"
+          fill="var(--text-faint)"
         >
           No CGM readings in this window.
         </text>

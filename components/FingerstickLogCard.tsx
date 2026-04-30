@@ -11,8 +11,8 @@ import { isToday, isWithinDays, formatLocalTime } from "@/lib/utils/datetime";
 const ACCENT  = "#4F6EF7";
 const GREEN   = "#22D3A0";
 const PINK    = "#FF2D78";
-const SURFACE = "#111117";
-const BORDER  = "rgba(255,255,255,0.08)";
+const SURFACE = "var(--surface)";
+const BORDER  = "var(--border)";
 
 function toLocalInputValue(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -86,11 +86,11 @@ export default function FingerstickLogCard() {
   }
 
   const inputStyle: React.CSSProperties = {
-    background: "rgba(255,255,255,0.04)",
+    background: "var(--surface-soft)",
     border: `1px solid ${BORDER}`,
     borderRadius: 10,
     padding: "10px 12px",
-    color: "#fff",
+    color:"var(--text)",
     fontSize: 13,
     fontFamily: "inherit",
     outline: "none",
@@ -109,11 +109,11 @@ export default function FingerstickLogCard() {
       <div>
         <div style={{
           fontSize:9, fontWeight:700, letterSpacing:"0.1em",
-          color:"rgba(255,255,255,0.4)", textTransform:"uppercase",
+          color:"var(--text-dim)", textTransform:"uppercase",
         }}>Finger-Stick Glukose</div>
         <div style={{
           marginTop: 4,
-          fontSize: 13, fontWeight: 600, color: "#fff", lineHeight: 1.3,
+          fontSize: 13, fontWeight: 600, color:"var(--text)", lineHeight: 1.3,
         }}>
           Manuelle Messung erfassen
         </div>
@@ -126,7 +126,7 @@ export default function FingerstickLogCard() {
             its display rather than overflow its column. */}
         <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 10 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <label htmlFor={valueId} style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", fontWeight: 600, letterSpacing: "0.04em" }}>
+            <label htmlFor={valueId} style={{ fontSize: 10, color: "var(--text-dim)", fontWeight: 600, letterSpacing: "0.04em" }}>
               Wert
             </label>
             <input
@@ -144,7 +144,7 @@ export default function FingerstickLogCard() {
             />
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <label htmlFor={whenId} style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", fontWeight: 600, letterSpacing: "0.04em" }}>
+            <label htmlFor={whenId} style={{ fontSize: 10, color: "var(--text-dim)", fontWeight: 600, letterSpacing: "0.04em" }}>
               Zeitpunkt
             </label>
             <input
@@ -158,7 +158,7 @@ export default function FingerstickLogCard() {
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <label htmlFor={noteId} style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", fontWeight: 600, letterSpacing: "0.04em" }}>
+          <label htmlFor={noteId} style={{ fontSize: 10, color: "var(--text-dim)", fontWeight: 600, letterSpacing: "0.04em" }}>
             Notiz (optional)
           </label>
           <input
@@ -181,7 +181,7 @@ export default function FingerstickLogCard() {
               borderRadius: 10,
               border: "none",
               background: busy ? `${ACCENT}66` : ACCENT,
-              color: "#fff",
+              color:"var(--text)",
               fontSize: 12, fontWeight: 700, letterSpacing: "0.02em",
               cursor: busy ? "default" : "pointer",
               transition: "background 120ms ease",
@@ -203,13 +203,13 @@ export default function FingerstickLogCard() {
         </div>
       </form>
 
-      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", lineHeight: 1.4 }}>
+      <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.4 }}>
         {latest
-          ? <>Letzter Wert: <span style={{ color: "#fff", fontFamily: "var(--font-mono)", fontWeight: 700 }}>{Math.round(latest.value_mg_dl)} mg/dL</span> · {formatLatestWhen(latest.measured_at)}</>
+          ? <>Letzter Wert: <span style={{ color:"var(--text)", fontFamily: "var(--font-mono)", fontWeight: 700 }}>{Math.round(latest.value_mg_dl)} mg/dL</span> · {formatLatestWhen(latest.measured_at)}</>
           : <>Noch keine manuellen Werte erfasst.</>}
       </div>
 
-      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", lineHeight: 1.4, fontStyle: "italic" }}>
+      <div style={{ fontSize: 10, color: "var(--text-faint)", lineHeight: 1.4, fontStyle: "italic" }}>
         Unabhängig vom CGM — nur manuell erfasste Werte.
       </div>
     </div>

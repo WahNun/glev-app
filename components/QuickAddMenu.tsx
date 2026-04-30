@@ -4,10 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 const ACCENT = "#4F6EF7";
-const SHEET_BG = "#1A1A24";
-const TEXT = "rgba(255,255,255,0.92)";
-const TEXT_DIM = "rgba(255,255,255,0.55)";
-const BORDER = "rgba(255,255,255,0.08)";
+const SHEET_BG = "var(--surface-alt)";
+const TEXT = "var(--text-strong)";
+const TEXT_DIM = "var(--text-muted)";
+const BORDER = "var(--border)";
 
 type Item = {
   label: string;
@@ -110,9 +110,9 @@ export default function QuickAddMenu() {
         aria-haspopup="menu"
         style={{
           width: 32, height: 32, borderRadius: 99, padding: 0,
-          background: open ? `${ACCENT}25` : "rgba(255,255,255,0.05)",
-          border: `1px solid ${open ? ACCENT : "rgba(255,255,255,0.1)"}`,
-          color: open ? ACCENT : "rgba(255,255,255,0.7)",
+          background: open ? `${ACCENT}25` : "var(--surface-soft)",
+          border: `1px solid ${open ? ACCENT : "var(--border-strong)"}`,
+          color: open ? ACCENT : "var(--text-body)",
           display: "flex", alignItems: "center", justifyContent: "center",
           cursor: "pointer",
           transition: "all 0.15s",
@@ -163,12 +163,12 @@ export default function QuickAddMenu() {
                 borderRadius: 10,
                 transition: "background 0.12s",
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.05)")}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-soft)")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
             >
               <span style={{
                 width: 28, height: 28, borderRadius: 8,
-                background: "rgba(255,255,255,0.05)",
+                background: "var(--surface-soft)",
                 color: TEXT_DIM,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 flexShrink: 0,

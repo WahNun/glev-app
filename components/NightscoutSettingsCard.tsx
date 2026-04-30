@@ -5,8 +5,8 @@ import { useEffect, useState } from "react";
 const ACCENT = "#4F6EF7";
 const GREEN = "#22D3A0";
 const PINK = "#FF2D78";
-const SURFACE = "#111117";
-const BORDER = "rgba(255,255,255,0.08)";
+const SURFACE = "var(--surface)";
+const BORDER = "var(--border)";
 
 interface SyncGetResponse {
   connected: boolean;
@@ -30,11 +30,11 @@ const card: React.CSSProperties = {
   gap: 14,
 };
 const inp: React.CSSProperties = {
-  background: "#0D0D12",
+  background: "var(--input-bg)",
   border: `1px solid ${BORDER}`,
   borderRadius: 10,
   padding: "10px 14px",
-  color: "#fff",
+  color:"var(--text)",
   fontSize: 16,
   outline: "none",
   width: "100%",
@@ -43,7 +43,7 @@ const inp: React.CSSProperties = {
 };
 const labelStyle: React.CSSProperties = {
   fontSize: 12,
-  color: "rgba(255,255,255,0.4)",
+  color: "var(--text-dim)",
   display: "block",
   marginBottom: 6,
 };
@@ -199,7 +199,7 @@ export default function NightscoutSettingsCard() {
               height: 40,
               borderRadius: 10,
               flexShrink: 0,
-              background: "rgba(255,255,255,0.05)",
+              background: "var(--surface-soft)",
               border: `1px solid ${BORDER}`,
               display: "flex",
               alignItems: "center",
@@ -226,13 +226,13 @@ export default function NightscoutSettingsCard() {
               style={{
                 fontSize: 14,
                 fontWeight: 600,
-                color: "rgba(255,255,255,0.9)",
+                color: "var(--text-strong)",
                 marginBottom: 2,
               }}
             >
               Nightscout
             </div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>
+            <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
               Eigener Nightscout-Server als CGM-Quelle (URL + API-Token).
             </div>
           </div>
@@ -243,8 +243,8 @@ export default function NightscoutSettingsCard() {
             fontWeight: 700,
             padding: "4px 10px",
             borderRadius: 99,
-            background: connected ? `${GREEN}15` : "rgba(255,255,255,0.05)",
-            color: connected ? GREEN : "rgba(255,255,255,0.5)",
+            background: connected ? `${GREEN}15` : "var(--surface-soft)",
+            color: connected ? GREEN : "var(--text-dim)",
             border: `1px solid ${connected ? `${GREEN}55` : BORDER}`,
             letterSpacing: "0.08em",
             textTransform: "uppercase",
@@ -280,7 +280,7 @@ export default function NightscoutSettingsCard() {
           <label htmlFor="ns-token" style={labelStyle}>
             API-Token{" "}
             {hasToken && (
-              <span style={{ color: "rgba(255,255,255,0.3)" }}>
+              <span style={{ color: "var(--text-faint)" }}>
                 — gespeichert (leer lassen, um zu behalten)
               </span>
             )}
@@ -341,7 +341,7 @@ export default function NightscoutSettingsCard() {
               borderRadius: 10,
               border: "none",
               background: ACCENT,
-              color: "#fff",
+              color:"var(--text)",
               fontSize: 14,
               fontWeight: 600,
               cursor:
@@ -364,7 +364,7 @@ export default function NightscoutSettingsCard() {
                 borderRadius: 10,
                 background: "transparent",
                 border: `1px solid ${BORDER}`,
-                color: "rgba(255,255,255,0.7)",
+                color: "var(--text-body)",
                 fontSize: 14,
                 fontWeight: 500,
                 cursor:

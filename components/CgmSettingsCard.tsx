@@ -5,8 +5,8 @@ import { useState, useEffect, useCallback } from "react";
 const ACCENT = "#4F6EF7";
 const GREEN = "#22D3A0";
 const PINK = "#FF2D78";
-const SURFACE = "#111117";
-const BORDER = "rgba(255,255,255,0.08)";
+const SURFACE = "var(--surface)";
+const BORDER = "var(--border)";
 
 interface StatusResponse {
   connected: boolean;
@@ -39,18 +39,18 @@ const card: React.CSSProperties = {
   padding: "20px 24px",
 };
 const inp: React.CSSProperties = {
-  background: "#0D0D12",
+  background: "var(--input-bg)",
   border: `1px solid ${BORDER}`,
   borderRadius: 10,
   padding: "10px 14px",
-  color: "#fff",
+  color:"var(--text)",
   fontSize: 16,
   outline: "none",
   width: "100%",
 };
 const label: React.CSSProperties = {
   fontSize: 12,
-  color: "rgba(255,255,255,0.4)",
+  color: "var(--text-dim)",
   display: "block",
   marginBottom: 6,
 };
@@ -429,7 +429,7 @@ export default function CgmSettingsCard() {
         </div>
 
         {loadingStatus ? (
-          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>
+          <div style={{ fontSize: 13, color: "var(--text-dim)" }}>
             Status wird geladen…
           </div>
         ) : statusError ? (
@@ -456,7 +456,7 @@ export default function CgmSettingsCard() {
               const h = status?.sessionHealth;
               if (!h || h === "never_tested") {
                 return (
-                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginBottom: 14 }}>
+                  <div style={{ fontSize: 12, color: "var(--text-faint)", marginBottom: 14 }}>
                     Noch nie getestet – klicke "Verbindung testen" um den Status zu prüfen.
                   </div>
                 );
@@ -486,12 +486,12 @@ export default function CgmSettingsCard() {
             })()}
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
-              <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: "12px 14px" }}>
-                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginBottom: 4 }}>E-Mail</div>
+              <div style={{ background: "var(--surface-soft)", borderRadius: 10, padding: "12px 14px" }}>
+                <div style={{ fontSize: 11, color: "var(--text-faint)", marginBottom: 4 }}>E-Mail</div>
                 <div style={{ fontSize: 13, fontWeight: 600, wordBreak: "break-all" }}>{status?.email}</div>
               </div>
-              <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: "12px 14px" }}>
-                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginBottom: 4 }}>Region</div>
+              <div style={{ background: "var(--surface-soft)", borderRadius: 10, padding: "12px 14px" }}>
+                <div style={{ fontSize: 11, color: "var(--text-faint)", marginBottom: 4 }}>Region</div>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{status?.region}</div>
               </div>
             </div>
@@ -543,7 +543,7 @@ export default function CgmSettingsCard() {
                   border: `1px solid ${BORDER}`,
                   cursor: "pointer",
                   background: "transparent",
-                  color: "rgba(255,255,255,0.7)",
+                  color: "var(--text-body)",
                   fontSize: 13,
                   fontWeight: 500,
                 }}
@@ -578,12 +578,12 @@ export default function CgmSettingsCard() {
                   width: 10,
                   height: 10,
                   borderRadius: 99,
-                  background: "rgba(255,255,255,0.25)",
+                  background: "var(--text-ghost)",
                 }}
               />
               <div style={{ fontSize: 14, fontWeight: 600 }}>Nicht verbunden</div>
             </div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", lineHeight: 1.5 }}>
+            <div style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.5 }}>
               Verbinde dein LibreLinkUp-Konto unten, damit Glev deine Glukosewerte
               automatisch abrufen kann.
             </div>
@@ -600,7 +600,7 @@ export default function CgmSettingsCard() {
               fontWeight: 600,
               listStyle: "none",
               cursor: "pointer",
-              color: "rgba(255,255,255,0.85)",
+              color: "var(--text-strong)",
             }}
           >
             Was ist LibreLinkUp und was brauche ich?
@@ -609,7 +609,7 @@ export default function CgmSettingsCard() {
             style={{
               marginTop: 12,
               fontSize: 12,
-              color: "rgba(255,255,255,0.55)",
+              color: "var(--text-muted)",
               lineHeight: 1.6,
               display: "flex",
               flexDirection: "column",
@@ -617,23 +617,23 @@ export default function CgmSettingsCard() {
             }}
           >
             <p style={{ margin: 0 }}>
-              <strong style={{ color: "rgba(255,255,255,0.8)" }}>LibreLinkUp</strong> ist die
+              <strong style={{ color: "var(--text-strong)" }}>LibreLinkUp</strong> ist die
               Follower-App von Abbott. Glev nutzt sie, um deine Glukosewerte
               anzuzeigen.
             </p>
             <p style={{ margin: 0 }}>
-              <strong style={{ color: "rgba(255,255,255,0.8)" }}>Voraussetzung:</strong> Du
+              <strong style={{ color: "var(--text-strong)" }}>Voraussetzung:</strong> Du
               hast die LibreLink-App mit deinem Sensor eingerichtet UND in der
               LibreLink-App eine Verbindung zu einem LibreLinkUp-Konto geteilt
               (Einstellungen → Konten → LibreLinkUp → Follower hinzufügen).
             </p>
             <p style={{ margin: 0 }}>
-              In dieses Formular gibst du die <strong style={{ color: "rgba(255,255,255,0.8)" }}>
+              In dieses Formular gibst du die <strong style={{ color: "var(--text-strong)" }}>
                 E-Mail und das Passwort des LibreLinkUp-Follower-Kontos
               </strong>{" "}
               ein – nicht die deines Haupt-LibreLink-Kontos.
             </p>
-            <p style={{ margin: 0, fontSize: 11, color: "rgba(255,255,255,0.4)" }}>
+            <p style={{ margin: 0, fontSize: 11, color: "var(--text-dim)" }}>
               Hinweis zur Sicherheit: Das Passwort wird serverseitig mit
               AES-256-GCM verschlüsselt gespeichert.
             </p>
@@ -751,7 +751,7 @@ export default function CgmSettingsCard() {
                     border: "none",
                     cursor: submitting ? "wait" : "pointer",
                     background: `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
-                    color: "#fff",
+                    color:"var(--text)",
                     fontSize: 14,
                     fontWeight: 700,
                     boxShadow: `0 4px 20px ${ACCENT}40`,
@@ -775,9 +775,9 @@ export default function CgmSettingsCard() {
                 <div
                   style={{
                     fontSize: 12,
-                    color: "rgba(255,255,255,0.55)",
+                    color: "var(--text-muted)",
                     lineHeight: 1.6,
-                    background: "rgba(255,255,255,0.03)",
+                    background: "var(--surface-soft)",
                     border: `1px solid ${BORDER}`,
                     borderRadius: 10,
                     padding: "12px 14px",
@@ -793,8 +793,8 @@ export default function CgmSettingsCard() {
                       fontWeight: 700,
                       letterSpacing: "0.08em",
                       textTransform: "uppercase",
-                      color: "rgba(255,255,255,0.85)",
-                      background: "rgba(255,255,255,0.08)",
+                      color: "var(--text-strong)",
+                      background: "var(--border)",
                       border: `1px solid ${BORDER}`,
                       borderRadius: 999,
                       padding: "3px 9px",
@@ -842,7 +842,7 @@ export default function CgmSettingsCard() {
                     border: "none",
                     cursor: "not-allowed",
                     background: `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
-                    color: "#fff",
+                    color:"var(--text)",
                     fontSize: 14,
                     fontWeight: 700,
                     boxShadow: `0 4px 20px ${ACCENT}40`,
@@ -871,9 +871,9 @@ export default function CgmSettingsCard() {
                 <div
                   style={{
                     fontSize: 12,
-                    color: "rgba(255,255,255,0.55)",
+                    color: "var(--text-muted)",
                     lineHeight: 1.6,
-                    background: "rgba(255,255,255,0.03)",
+                    background: "var(--surface-soft)",
                     border: `1px solid ${BORDER}`,
                     borderRadius: 10,
                     padding: "12px 14px",
@@ -885,8 +885,8 @@ export default function CgmSettingsCard() {
                   „Authorization → Subjects". Test-Instanz ohne Token:{" "}
                   <code
                     style={{
-                      color: "rgba(255,255,255,0.75)",
-                      background: "rgba(255,255,255,0.05)",
+                      color: "var(--text-body)",
+                      background: "var(--surface-soft)",
                       padding: "1px 6px",
                       borderRadius: 4,
                     }}
@@ -914,11 +914,11 @@ export default function CgmSettingsCard() {
                   <label style={label} htmlFor="ns-token">
                     API Secret / Token{" "}
                     {nightscoutHasToken && nightscoutConnected ? (
-                      <span style={{ color: "rgba(255,255,255,0.4)" }}>
+                      <span style={{ color: "var(--text-dim)" }}>
                         — gespeichert (leer lassen um zu behalten)
                       </span>
                     ) : (
-                      <span style={{ color: "rgba(255,255,255,0.4)" }}>
+                      <span style={{ color: "var(--text-dim)" }}>
                         — optional
                       </span>
                     )}
@@ -964,7 +964,7 @@ export default function CgmSettingsCard() {
                       border: "none",
                       cursor: nightscoutSubmitting ? "wait" : "pointer",
                       background: `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
-                      color: "#fff",
+                      color:"var(--text)",
                       fontSize: 14,
                       fontWeight: 700,
                       boxShadow: `0 4px 20px ${ACCENT}40`,

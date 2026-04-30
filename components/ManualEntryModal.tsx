@@ -16,8 +16,8 @@ const ACCENT = "#4F6EF7";
 const GREEN  = "#22D3A0";
 const PINK   = "#FF2D78";
 const ORANGE = "#FF9500";
-const SURFACE = "#111117";
-const BORDER  = "rgba(255,255,255,0.08)";
+const SURFACE = "var(--surface)";
+const BORDER  = "var(--border)";
 
 const TYPE_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "FAST_CARBS",   label: "Fast carbs" },
@@ -399,11 +399,11 @@ export default function ManualEntryModal({
   }
 
   const inp: React.CSSProperties = {
-    background: "#0D0D12",
+    background: "var(--input-bg)",
     border: `1px solid ${BORDER}`,
     borderRadius: 10,
     padding: "10px 12px",
-    color: "#fff",
+    color:"var(--text)",
     fontSize: 13,
     width: "100%",
     outline: "none",
@@ -411,7 +411,7 @@ export default function ManualEntryModal({
   };
   const labelStyle: React.CSSProperties = {
     fontSize: 10,
-    color: "rgba(255,255,255,0.4)",
+    color: "var(--text-dim)",
     marginBottom: 6,
     letterSpacing: "0.08em",
     textTransform: "uppercase",
@@ -424,7 +424,7 @@ export default function ManualEntryModal({
       onClick={onClose}
       style={{
         position: "fixed", inset: 0, zIndex: 1000,
-        background: "rgba(0,0,0,0.65)",
+        background: "var(--overlay)",
         backdropFilter: "blur(6px)",
         WebkitBackdropFilter: "blur(6px)",
         display: "flex", alignItems: "flex-start", justifyContent: "center",
@@ -452,7 +452,7 @@ export default function ManualEntryModal({
         }}>
           <div>
             <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: "-0.02em" }}>New manual entry</div>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>
+            <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}>
               Backfill a past meal. Glucose-Felder füllen sich aus deinem CGM-Verlauf — eintippen reicht für den Rest.
             </div>
           </div>
@@ -463,7 +463,7 @@ export default function ManualEntryModal({
               width: 32, height: 32, borderRadius: 8,
               border: `1px solid ${BORDER}`,
               background: "transparent",
-              color: "rgba(255,255,255,0.55)",
+              color: "var(--text-muted)",
               cursor: "pointer",
               display: "flex", alignItems: "center", justifyContent: "center",
               flexShrink: 0,
@@ -482,7 +482,7 @@ export default function ManualEntryModal({
           <div>
             <label style={labelStyle}>Meal time</label>
             <input type="datetime-local" value={mealTime} onChange={(e) => setMealTime(e.target.value)} style={inp}/>
-            <div style={{ marginTop: 4, fontSize: 10, color: "rgba(255,255,255,0.3)" }}>
+            <div style={{ marginTop: 4, fontSize: 10, color: "var(--text-faint)" }}>
               Defaults to now — change to log a historical meal.
             </div>
           </div>
@@ -571,7 +571,7 @@ export default function ManualEntryModal({
           const at2 = parseLocalDt(bg2hAt);
           const Row = ({ label, value, accent }: { label: string; value: React.ReactNode; accent?: string }) => (
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, padding: "8px 0", borderBottom: `1px solid ${BORDER}` }}>
-              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", letterSpacing: "0.04em" }}>{label}</span>
+              <span style={{ fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.04em" }}>{label}</span>
               <span style={{ fontSize: 13, fontWeight: 600, color: accent ?? "#fff", textAlign: "right" }}>{value}</span>
             </div>
           );
@@ -579,19 +579,19 @@ export default function ManualEntryModal({
 
           return (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", lineHeight: 1.5 }}>
+              <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
                 Prüf bitte alles. Glucose-Werte unten kommen aus deinem CGM — falls etwas fehlt, war keine Messung im Zeitfenster verfügbar.
               </div>
 
               {/* Meal */}
-              <div style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "10px 14px" }}>
+              <div style={{ background: "var(--surface-soft)", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "10px 14px" }}>
                 <Row label="Zeit" value={mtStr} />
                 <Row label="Beschreibung" value={desc.trim() || "—"} />
                 <Row label="Klassifizierung" value={clsLabel} />
               </div>
 
               {/* Macros */}
-              <div style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "10px 14px" }}>
+              <div style={{ background: "var(--surface-soft)", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "10px 14px" }}>
                 <Row label="Carbs"   value={`${carbsForSave} g`} />
                 <Row label="Protein" value={`${proteinN} g`} />
                 <Row label="Fat"     value={`${fatN} g`} />
@@ -600,7 +600,7 @@ export default function ManualEntryModal({
               </div>
 
               {/* Insulin + Glucose */}
-              <div style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "10px 14px" }}>
+              <div style={{ background: "var(--surface-soft)", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "10px 14px" }}>
                 <Row label="Insulin" value={insulinN != null ? `${insulinN} u` : "—"} />
                 <Row
                   label="Glucose vorher"
@@ -611,8 +611,8 @@ export default function ManualEntryModal({
 
               {/* Follow-ups (CGM-derived) */}
               {(bg1hN != null || bg2hN != null) && (
-                <div style={{ background: "rgba(255,255,255,0.03)", border: `1px dashed ${BORDER}`, borderRadius: 12, padding: "10px 14px" }}>
-                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", letterSpacing: "0.08em", fontWeight: 700, textTransform: "uppercase", marginBottom: 4 }}>
+                <div style={{ background: "var(--surface-soft)", border: `1px dashed ${BORDER}`, borderRadius: 12, padding: "10px 14px" }}>
+                  <div style={{ fontSize: 10, color: "var(--text-dim)", letterSpacing: "0.08em", fontWeight: 700, textTransform: "uppercase", marginBottom: 4 }}>
                     Follow-up <span style={{ opacity: 0.6, textTransform: "none", letterSpacing: 0 }}>· aus CGM</span>
                   </div>
                   {bg1hN != null && (
@@ -651,7 +651,7 @@ export default function ManualEntryModal({
           padding: "14px 20px",
           borderTop: `1px solid ${BORDER}`,
           display: "flex", gap: 10, justifyContent: "flex-end",
-          background: "rgba(255,255,255,0.02)",
+          background: "var(--surface-soft)",
         }}>
           <button
             onClick={() => step === "review" ? setStep("form") : onClose()}
@@ -660,7 +660,7 @@ export default function ManualEntryModal({
               padding: "10px 16px", borderRadius: 10,
               border: `1px solid ${BORDER}`,
               background: "transparent",
-              color: "rgba(255,255,255,0.55)",
+              color: "var(--text-muted)",
               fontSize: 13, fontWeight: 600,
               cursor: saving ? "not-allowed" : "pointer",
             }}
@@ -682,9 +682,9 @@ export default function ManualEntryModal({
               style={{
                 padding: "10px 18px", borderRadius: 10, border: "none",
                 background: !canSubmit || cgmLoading
-                  ? "rgba(255,255,255,0.06)"
+                  ? "var(--border-soft)"
                   : `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
-                color: !canSubmit || cgmLoading ? "rgba(255,255,255,0.3)" : "#fff",
+                color: !canSubmit || cgmLoading ? "var(--text-faint)" : "#fff",
                 fontSize: 13, fontWeight: 700,
                 cursor: !canSubmit || cgmLoading ? "not-allowed" : "pointer",
                 boxShadow: !canSubmit || cgmLoading ? "none" : `0 4px 20px ${ACCENT}40`,
@@ -704,9 +704,9 @@ export default function ManualEntryModal({
                 background: saved
                   ? `${GREEN}22`
                   : saving
-                  ? "rgba(255,255,255,0.06)"
+                  ? "var(--border-soft)"
                   : `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
-                color: saved ? GREEN : saving ? "rgba(255,255,255,0.3)" : "#fff",
+                color: saved ? GREEN : saving ? "var(--text-faint)" : "#fff",
                 fontSize: 13, fontWeight: 700,
                 cursor: saving || saved ? "default" : "pointer",
                 boxShadow: saving || saved ? "none" : `0 4px 20px ${ACCENT}40`,
@@ -724,7 +724,7 @@ export default function ManualEntryModal({
                   <style>{`@keyframes mem_spin{to{transform:rotate(360deg)}}`}</style>
                   <span style={{
                     width: 12, height: 12,
-                    border: `1.5px solid rgba(255,255,255,0.4)`,
+                    border: `1.5px solid var(--text-dim)`,
                     borderTopColor: "#fff",
                     borderRadius: "50%",
                     animation: "mem_spin 0.7s linear infinite",

@@ -7,8 +7,8 @@ import GlevLockup from "@/components/GlevLockup";
 
 const ACCENT = "#4F6EF7";
 const PINK = "#FF2D78";
-const SURFACE = "#111117";
-const BORDER = "rgba(255,255,255,0.08)";
+const SURFACE = "var(--surface)";
+const BORDER = "var(--border)";
 
 const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || "0.4.0";
 
@@ -49,7 +49,7 @@ export default function AboutGlevModal({ open, onClose }: { open: boolean; onClo
       onClick={onClose}
       style={{
         position: "fixed", inset: 0, zIndex: 999,
-        background: "rgba(0,0,0,0.6)", backdropFilter: "blur(6px)",
+        background: "var(--overlay)", backdropFilter: "blur(6px)",
         display: "flex", alignItems: "flex-start", justifyContent: "center",
         padding: 0,
       }}
@@ -78,7 +78,7 @@ export default function AboutGlevModal({ open, onClose }: { open: boolean; onClo
           <Row label="Account" value={email ?? "—"} mono />
         </div>
 
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", lineHeight: 1.55 }}>
+        <div style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.55 }}>
           Glev helps you log meals, track CGM trends, and learn your personal insulin response — turning every meal into better data.
         </div>
 
@@ -88,7 +88,7 @@ export default function AboutGlevModal({ open, onClose }: { open: boolean; onClo
             style={{
               flex: 1, padding: "12px 16px", borderRadius: 12,
               border: `1px solid ${BORDER}`, background: "transparent",
-              color: "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: 600, cursor: "pointer",
+              color: "var(--text-strong)", fontSize: 13, fontWeight: 600, cursor: "pointer",
             }}
           >
             Close
@@ -127,13 +127,13 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
       style={{
         display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12,
         padding: "10px 14px", borderRadius: 10,
-        background: "rgba(255,255,255,0.025)", border: `1px solid ${BORDER}`,
+        background: "var(--surface-soft)", border: `1px solid ${BORDER}`,
       }}
     >
-      <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600 }}>{label}</span>
+      <span style={{ fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600 }}>{label}</span>
       <span
         style={{
-          fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.9)",
+          fontSize: 12, fontWeight: 600, color: "var(--text-strong)",
           fontFamily: mono ? "var(--font-mono)" : undefined,
           maxWidth: "70%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
         }}

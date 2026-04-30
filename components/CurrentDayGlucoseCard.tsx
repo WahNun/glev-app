@@ -15,8 +15,8 @@ const ACCENT = "#4F6EF7";
 const GREEN = "#22D3A0";
 const PINK = "#FF2D78";
 const ORANGE = "#FF9500";
-const SURFACE = "#111117";
-const BORDER = "rgba(255,255,255,0.08)";
+const SURFACE = "var(--surface)";
+const BORDER = "var(--border)";
 
 const RANGE_LOW = 70;
 const RANGE_HIGH = 180;
@@ -208,7 +208,7 @@ function HeroFront({
   const fsOverride = latestFs && (now - latestFs.t) <= FS_OVERRIDE_WINDOW_MS
     ? latestFs : null;
   const current = fsOverride ?? cgmCurrent;
-  const valueColor = current ? colorFor(current.v) : "rgba(255,255,255,0.5)";
+  const valueColor = current ? colorFor(current.v) : "var(--text-dim)";
   const ageLabel = current ? formatAge(now - current.t) : null;
 
   // Trend delta is CGM-derived: fingersticks are too sparse to drive a
@@ -250,7 +250,7 @@ function HeroFront({
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {ageLabel && (
             <span style={{
-              fontSize: 10, color: "rgba(255,255,255,0.4)",
+              fontSize: 10, color: "var(--text-dim)",
               fontFamily: "var(--font-mono)",
             }}>
               {ageLabel}
@@ -260,7 +260,7 @@ function HeroFront({
             <CgmFetchButton variant="ghost" onResult={onCgmRefresh} title="Refresh CGM" />
           )}
           {flippable && (
-            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)" }}>↺</span>
+            <span style={{ fontSize: 10, color: "var(--text-ghost)" }}>↺</span>
           )}
         </div>
       </div>
@@ -274,13 +274,13 @@ function HeroFront({
           }}>
             {Math.round(current.v)}
           </span>
-          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>mg/dL</span>
+          <span style={{ fontSize: 12, color: "var(--text-dim)" }}>mg/dL</span>
           {fsOverride && (
             <span style={{
               padding: "2px 7px", borderRadius: 99,
-              background: "rgba(255,255,255,0.08)",
-              border: "1px solid rgba(255,255,255,0.2)",
-              color: "rgba(255,255,255,0.85)",
+              background: "var(--border)",
+              border: "1px solid var(--text-ghost)",
+              color: "var(--text-strong)",
               fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
               textTransform: "uppercase",
             }}>
@@ -300,7 +300,7 @@ function HeroFront({
       ) : (
         <div style={{
           minHeight: 48, display: "flex", alignItems: "center",
-          color: "rgba(255,255,255,0.45)", fontSize: 12,
+          color: "var(--text-dim)", fontSize: 12,
         }}>
           {state.kind === "loading" ? "Loading CGM data…"
             : state.kind === "no-cgm" ? "Connect a CGM in Settings to see live glucose."
@@ -508,12 +508,12 @@ function RollingChart({ readings }: { readings: ChartPoint[] }) {
           {/* Y axis tick labels (70 / 110 / 180 / 250) — text only,
               no horizontal gridlines unless the user is touching the chart. */}
           {yTicks.map((v) => (
-            <text key={`yl${v}`} x={padL - 5} y={toY(v) + 3} textAnchor="end" fontSize="9" fill="rgba(255,255,255,0.25)">{v}</text>
+            <text key={`yl${v}`} x={padL - 5} y={toY(v) + 3} textAnchor="end" fontSize="9" fill="var(--text-ghost)">{v}</text>
           ))}
           {/* X axis labels (−2h / −1h / now) — text only at bottom,
               no vertical gridlines unless the user is touching the chart. */}
           {xLabels.map((x) => (
-            <text key={`xl${x.label}`} x={toX(x.t)} y={H - 6} textAnchor="middle" fontSize="9" fill="rgba(255,255,255,0.3)">{x.label}</text>
+            <text key={`xl${x.label}`} x={toX(x.t)} y={H - 6} textAnchor="middle" fontSize="9" fill="var(--text-faint)">{x.label}</text>
           ))}
           {/* Touch-revealed grid — appears only while the crosshair is
               active. 1-hour vertical intervals across the elapsed window
@@ -522,12 +522,12 @@ function RollingChart({ readings }: { readings: ChartPoint[] }) {
           {active && (
             <g style={{ pointerEvents: "none" }}>
               {yTicks.map((v) => (
-                <line key={`gh${v}`} x1={padL} y1={toY(v)} x2={W - padR} y2={toY(v)} stroke="rgba(255,255,255,0.09)" strokeDasharray="3 4" />
+                <line key={`gh${v}`} x1={padL} y1={toY(v)} x2={W - padR} y2={toY(v)} stroke="var(--border-strong)" strokeDasharray="3 4" />
               ))}
               {Array.from({ length: Math.floor((now - winStart) / (3600 * 1000)) + 1 }, (_, i) => {
                 const t = winStart + i * 3600 * 1000;
                 return (
-                  <line key={`gv${i}`} x1={toX(t)} y1={padT} x2={toX(t)} y2={H - padB} stroke="rgba(255,255,255,0.09)" strokeWidth="1" strokeDasharray="2 4" />
+                  <line key={`gv${i}`} x1={toX(t)} y1={padT} x2={toX(t)} y2={H - padB} stroke="var(--border-strong)" strokeWidth="1" strokeDasharray="2 4" />
                 );
               })}
             </g>
@@ -546,7 +546,7 @@ function RollingChart({ readings }: { readings: ChartPoint[] }) {
                 key={`fs${i}-${r.t}`}
                 x={cx - 4} y={cy - 4} width={8} height={8}
                 fill={glucoseLineColor(r.v)}
-                stroke="#ffffff" strokeWidth="1.5"
+                stroke="var(--text)" strokeWidth="1.5"
               />
             );
           })}
@@ -567,7 +567,7 @@ function RollingChart({ readings }: { readings: ChartPoint[] }) {
 
 function BackStats({ readings }: { readings: Array<{ t: number; v: number }> }) {
   if (readings.length === 0) {
-    return <div style={{ color: "rgba(255,255,255,0.45)", fontSize: 13 }}>No readings yet today.</div>;
+    return <div style={{ color: "var(--text-dim)", fontSize: 13 }}>No readings yet today.</div>;
   }
   const values = readings.map((r) => r.v);
   const avg = Math.round(values.reduce((a, b) => a + b, 0) / values.length);
@@ -584,8 +584,8 @@ function BackStats({ readings }: { readings: Array<{ t: number; v: number }> }) 
   const stats: Array<{ l: string; v: string; c?: string }> = [
     { l: "Daily avg", v: `${avg} mg/dL`, c: colorFor(avg) },
     { l: "Time in range", v: `${tir}%`, c: tir >= 70 ? GREEN : tir >= 50 ? ORANGE : PINK },
-    { l: "Time above 180", v: `${tar}%`, c: tar > 25 ? ORANGE : "rgba(255,255,255,0.85)" },
-    { l: "Time below 70", v: `${tbr}%`, c: tbr > 4 ? PINK : "rgba(255,255,255,0.85)" },
+    { l: "Time above 180", v: `${tar}%`, c: tar > 25 ? ORANGE : "var(--text-strong)" },
+    { l: "Time below 70", v: `${tbr}%`, c: tbr > 4 ? PINK : "var(--text-strong)" },
     { l: "Highest", v: `${Math.round(max.v)}`, c: ORANGE },
     { l: "Lowest", v: `${Math.round(min.v)}`, c: PINK },
   ];
@@ -596,13 +596,13 @@ function BackStats({ readings }: { readings: Array<{ t: number; v: number }> }) 
         <div style={{ fontSize: 11, color: ACCENT, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
           Today's summary
         </div>
-        <span style={{ fontSize: 9, color: "rgba(255,255,255,0.2)" }}>↺ back</span>
+        <span style={{ fontSize: 9, color: "var(--text-ghost)" }}>↺ back</span>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, flex: 1 }}>
         {stats.map((s) => (
-          <div key={s.l} style={{ background: "rgba(255,255,255,0.025)", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "8px 10px", display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0 }}>
-            <div style={{ fontSize: 9, color: "rgba(255,255,255,0.4)", letterSpacing: "0.07em", fontWeight: 600, marginBottom: 4, textTransform: "uppercase" }}>{s.l}</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: s.c || "rgba(255,255,255,0.9)", letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.v}</div>
+          <div key={s.l} style={{ background: "var(--surface-soft)", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "8px 10px", display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0 }}>
+            <div style={{ fontSize: 9, color: "var(--text-dim)", letterSpacing: "0.07em", fontWeight: 600, marginBottom: 4, textTransform: "uppercase" }}>{s.l}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: s.c || "var(--text-strong)", letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.v}</div>
           </div>
         ))}
       </div>

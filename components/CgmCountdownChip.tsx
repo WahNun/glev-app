@@ -26,7 +26,7 @@
 import { useEffect, useState } from "react";
 import { fetchJobsForLog, type CgmFetchJob, type FetchType } from "@/lib/cgmJobs";
 
-const BORDER = "rgba(255,255,255,0.08)";
+const BORDER = "var(--border)";
 const ACCENT = "#4F6EF7";
 const GREEN  = "#22D3A0";
 const PINK   = "#FF2D78";
@@ -124,7 +124,7 @@ function CgmCountdownChip({
 
   return (
     <div style={{
-      background: "rgba(255,255,255,0.02)",
+      background: "var(--surface-soft)",
       border: `1px solid ${BORDER}`,
       borderRadius: 10,
       padding: "10px 12px",
@@ -132,7 +132,7 @@ function CgmCountdownChip({
       minHeight: 84,
     }}>
       <div style={{
-        fontSize: 9, color: "rgba(255,255,255,0.4)", letterSpacing: "0.08em",
+        fontSize: 9, color: "var(--text-dim)", letterSpacing: "0.08em",
         fontWeight: 600, textTransform: "uppercase",
       }}>
         {label}
@@ -157,7 +157,7 @@ function inRangeColor(mgdl: number): string {
 }
 
 function deltaColor(d: number): string {
-  if (Math.abs(d) < 25) return "rgba(255,255,255,0.55)";
+  if (Math.abs(d) < 25) return "var(--text-muted)";
   if (d > 0) return ORANGE;
   return PINK;
 }
@@ -176,9 +176,9 @@ function FetchedDisplay({ value, baseline, fetchedAtIso }: {
         fontFamily: "var(--font-mono)", letterSpacing: "-0.02em",
         lineHeight: 1.1,
       }}>
-        {v} <span style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", fontWeight: 500 }}>mg/dL</span>
+        {v} <span style={{ fontSize: 10, color: "var(--text-dim)", fontWeight: 500 }}>mg/dL</span>
       </div>
-      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", display: "flex", gap: 6, flexWrap: "wrap" }}>
+      <div style={{ fontSize: 10, color: "var(--text-dim)", display: "flex", gap: 6, flexWrap: "wrap" }}>
         {delta != null && (
           <span style={{ color: deltaColor(delta), fontWeight: 700, fontFamily: "var(--font-mono)" }}>
             {delta > 0 ? "+" : ""}{delta}
@@ -215,7 +215,7 @@ function PendingDisplay({ startAtMs, expectedAtMs, now, themeColor }: {
           {text}
         </div>
       </div>
-      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)" }}>
+      <div style={{ fontSize: 10, color: "var(--text-dim)" }}>
         Erwartet {expectedDate.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
       </div>
     </>
@@ -229,7 +229,7 @@ function MissingDisplay({ expectedAtMs }: { expectedAtMs: number }) {
       <div style={{ fontSize: 14, fontWeight: 700, color: PINK }}>
         Überfällig
       </div>
-      <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)" }}>
+      <div style={{ fontSize: 10, color: "var(--text-dim)" }}>
         Erwartet {expectedDate.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
       </div>
     </>

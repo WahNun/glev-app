@@ -22,7 +22,7 @@ import { isToday, startOfDaysAgo } from "@/lib/utils/datetime";
 const DASHBOARD_DEFAULT_ORDER = ["today-glucose", "today-macros", "stats", "charts", "recent-entries"];
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
-const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
+const SURFACE="var(--surface)", BORDER="var(--border)";
 
 function evalColor(ev: string | null) { return getEvalColor(ev); }
 function evalLabel(ev: string | null) { return getEvalLabel(ev); }
@@ -110,17 +110,17 @@ function FlipCard({ card }: { card: CardData }) {
         {/* Front */}
         <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, padding:"14px 18px", boxSizing:"border-box", display:"flex", flexDirection:"column", justifyContent:"space-between" }}>
           <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between" }}>
-            <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)", letterSpacing:"0.08em", fontWeight:600, textTransform:"uppercase" }}>{card.label}</div>
-            <span style={{ fontSize:9, color:"rgba(255,255,255,0.18)" }}>↺</span>
+            <div style={{ fontSize:10, color:"var(--text-dim)", letterSpacing:"0.08em", fontWeight:600, textTransform:"uppercase" }}>{card.label}</div>
+            <span style={{ fontSize:9, color:"var(--text-ghost)" }}>↺</span>
           </div>
           <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", gap:8 }}>
             <div style={{ display:"flex", alignItems:"flex-end", gap:4 }}>
               <span style={{ fontSize:56, fontWeight:800, color:card.color, letterSpacing:"-0.03em", lineHeight:1, fontFamily:"var(--font-mono)" }}>{card.value}</span>
-              <span style={{ fontSize:13, color:"rgba(255,255,255,0.3)", paddingBottom:3 }}>{card.unit}</span>
+              <span style={{ fontSize:13, color:"var(--text-faint)", paddingBottom:3 }}>{card.unit}</span>
             </div>
-            <span style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>{card.sub}</span>
+            <span style={{ fontSize:11, color:"var(--text-faint)" }}>{card.sub}</span>
           </div>
-          <div style={{ height:4, background:"rgba(255,255,255,0.07)", borderRadius:99, overflow:"hidden" }}>
+          <div style={{ height:4, background:"var(--surface-soft)", borderRadius:99, overflow:"hidden" }}>
             <div style={{ width:`${Math.min(Math.max(card.bar, 0), 100)}%`, height:"100%", background:card.color, borderRadius:99, transition:"width 0.6s ease" }}/>
           </div>
         </div>
@@ -128,10 +128,10 @@ function FlipCard({ card }: { card: CardData }) {
         <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", transform:"rotateY(180deg)", background:`linear-gradient(145deg,${card.color}12,${SURFACE} 65%)`, border:`1px solid ${card.color}33`, borderRadius:14, padding:"12px 16px", boxSizing:"border-box", overflow:"hidden", display:"flex", flexDirection:"column", gap:6, justifyContent:"space-between" }}>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
             <div style={{ fontSize:10, color:card.color, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>{card.label}</div>
-            <span style={{ fontSize:9, color:"rgba(255,255,255,0.18)" }}>{t("flip_back")}</span>
+            <span style={{ fontSize:9, color:"var(--text-ghost)" }}>{t("flip_back")}</span>
           </div>
-          <div style={{ fontSize:10, color:"rgba(255,255,255,0.55)", lineHeight:1.45, fontFamily:"var(--font-mono)" }}>{card.formula}</div>
-          <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)", lineHeight:1.4 }}>{card.explanation.slice(0,110)}…</div>
+          <div style={{ fontSize:10, color:"var(--text-muted)", lineHeight:1.45, fontFamily:"var(--font-mono)" }}>{card.formula}</div>
+          <div style={{ fontSize:10, color:"var(--text-dim)", lineHeight:1.4 }}>{card.explanation.slice(0,110)}…</div>
         </div>
       </div>
     </div>
@@ -217,7 +217,7 @@ function TrendChart({ meals }: { meals: Meal[] }) {
         <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", transform:"rotateY(180deg)", background:`linear-gradient(145deg, ${ACCENT}10, ${SURFACE} 65%)`, border:`1px solid ${ACCENT}33`, borderRadius:16, padding:"20px 24px", boxSizing:"border-box", display:"flex", flexDirection:"column", gap:14, overflow:"hidden" }}>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
             <div style={{ fontSize:11, color:ACCENT, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>{t("trend_breakdown")}</div>
-            <span style={{ fontSize:9, color:"rgba(255,255,255,0.2)" }}>{t("flip_back")}</span>
+            <span style={{ fontSize:9, color:"var(--text-ghost)" }}>{t("flip_back")}</span>
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10 }}>
             {[
@@ -228,23 +228,23 @@ function TrendChart({ meals }: { meals: Meal[] }) {
               { l:t("trend_lowest"), v: loPt ? `${Math.round(loPt.v)} mg/dL` : "—", c: PINK },
               { l:t("trend_7day_slope"), v: last7.length>=2 ? `${slope>0?"+":""}${slope.toFixed(1)}${t("trend_slope_per_day")}` : "—", c: Math.abs(slope)<2 ? GREEN : slope>0 ? ORANGE : ACCENT },
             ].map(s => (
-              <div key={s.l} style={{ background:"rgba(255,255,255,0.025)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
-                <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)", letterSpacing:"0.07em", fontWeight:600, marginBottom:4, textTransform:"uppercase" }}>{s.l}</div>
-                <div style={{ fontSize:14, fontWeight:700, color:s.c || "rgba(255,255,255,0.9)", letterSpacing:"-0.01em" }}>{s.v}</div>
+              <div key={s.l} style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
+                <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.07em", fontWeight:600, marginBottom:4, textTransform:"uppercase" }}>{s.l}</div>
+                <div style={{ fontSize:14, fontWeight:700, color:s.c || "var(--text-strong)", letterSpacing:"-0.01em" }}>{s.v}</div>
               </div>
             ))}
           </div>
           <div style={{ flex:1, display:"flex", flexDirection:"column" }}>
-            <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)", letterSpacing:"0.07em", fontWeight:600, marginBottom:8, textTransform:"uppercase" }}>{t("trend_by_weekday")}</div>
+            <div style={{ fontSize:10, color:"var(--text-dim)", letterSpacing:"0.07em", fontWeight:600, marginBottom:8, textTransform:"uppercase" }}>{t("trend_by_weekday")}</div>
             <div style={{ display:"flex", gap:6, flex:1, alignItems:"flex-end" }}>
               {weekdayAvgs.map((v, i) => {
                 const h = v == null ? 8 : Math.max(8, Math.min(100, ((v - 60) / (240 - 60)) * 100));
-                const c = v == null ? "rgba(255,255,255,0.1)" : v > 140 ? ORANGE : v < 80 ? PINK : GREEN;
+                const c = v == null ? "var(--border-strong)" : v > 140 ? ORANGE : v < 80 ? PINK : GREEN;
                 return (
                   <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4, height:"100%", justifyContent:"flex-end" }}>
-                    <div style={{ fontSize:10, fontWeight:700, color: v == null ? "rgba(255,255,255,0.25)" : c }}>{v ?? "—"}</div>
+                    <div style={{ fontSize:10, fontWeight:700, color: v == null ? "var(--text-ghost)" : c }}>{v ?? "—"}</div>
                     <div style={{ width:"100%", maxWidth:32, height:`${h}%`, background:c, opacity: v == null ? 0.4 : 0.85, borderRadius:6, transition:"height 0.4s ease" }}/>
-                    <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>{weekdayLabels[i]}</div>
+                    <div style={{ fontSize:9, color:"var(--text-dim)" }}>{weekdayLabels[i]}</div>
                   </div>
                 );
               })}
@@ -292,9 +292,9 @@ function OutcomeChart({ meals }: { meals: Meal[] }) {
           <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between" }}>
             <div>
               <div style={{ fontSize:13, fontWeight:600, marginBottom:4 }}>{t("outcome_dist")}</div>
-              <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>{t("outcome_alltime")}</div>
+              <div style={{ fontSize:11, color:"var(--text-faint)" }}>{t("outcome_alltime")}</div>
             </div>
-            <span style={{ fontSize:9, color:"rgba(255,255,255,0.18)" }}>{t("flip_hint_short")}</span>
+            <span style={{ fontSize:9, color:"var(--text-ghost)" }}>{t("flip_hint_short")}</span>
           </div>
           <div style={{ flex:1, display:"flex", flexDirection:"column", justifyContent:"center", gap:14 }}>
             {groups.map(g => {
@@ -302,10 +302,10 @@ function OutcomeChart({ meals }: { meals: Meal[] }) {
               return (
                 <div key={g.label}>
                   <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-                    <span style={{ fontSize:12, color:"rgba(255,255,255,0.5)" }}>{g.label}</span>
-                    <span style={{ fontSize:12, fontWeight:600, color:g.color }}>{g.count} <span style={{ color:"rgba(255,255,255,0.3)", fontWeight:400 }}>({pct}%)</span></span>
+                    <span style={{ fontSize:12, color:"var(--text-dim)" }}>{g.label}</span>
+                    <span style={{ fontSize:12, fontWeight:600, color:g.color }}>{g.count} <span style={{ color:"var(--text-faint)", fontWeight:400 }}>({pct}%)</span></span>
                   </div>
-                  <div style={{ height:6, borderRadius:99, background:"rgba(255,255,255,0.06)", overflow:"hidden" }}>
+                  <div style={{ height:6, borderRadius:99, background:"var(--border-soft)", overflow:"hidden" }}>
                     <div style={{ height:"100%", width:`${pct}%`, background:g.color, borderRadius:99, transition:"width 0.8s ease" }}/>
                   </div>
                 </div>
@@ -317,7 +317,7 @@ function OutcomeChart({ meals }: { meals: Meal[] }) {
         <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", transform:"rotateY(180deg)", background:`linear-gradient(145deg, ${ACCENT}10, ${SURFACE} 65%)`, border:`1px solid ${ACCENT}33`, borderRadius:16, padding:"20px 24px", boxSizing:"border-box", display:"flex", flexDirection:"column", gap:12, overflow:"hidden" }}>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
             <div style={{ fontSize:11, color:ACCENT, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>{t("outcome_what_means")}</div>
-            <span style={{ fontSize:9, color:"rgba(255,255,255,0.2)" }}>{t("flip_back")}</span>
+            <span style={{ fontSize:9, color:"var(--text-ghost)" }}>{t("flip_back")}</span>
           </div>
           <div style={{ flex:1, display:"flex", flexDirection:"column", gap:10, justifyContent:"center" }}>
             {groups.map(g => (
@@ -325,12 +325,12 @@ function OutcomeChart({ meals }: { meals: Meal[] }) {
                 <span style={{ width:8, height:8, borderRadius:99, background:g.color, flexShrink:0, marginTop:5 }}/>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontSize:11, fontWeight:700, color:g.color, lineHeight:1.2, marginBottom:2 }}>{g.label}</div>
-                  <div style={{ fontSize:10.5, color:"rgba(255,255,255,0.55)", lineHeight:1.4 }}>{g.description}</div>
+                  <div style={{ fontSize:10.5, color:"var(--text-muted)", lineHeight:1.4 }}>{g.description}</div>
                 </div>
               </div>
             ))}
           </div>
-          <div style={{ fontSize:9.5, color:"rgba(255,255,255,0.32)", lineHeight:1.4, paddingTop:8, borderTop:`1px solid ${BORDER}` }}>
+          <div style={{ fontSize:9.5, color:"var(--text-faint)", lineHeight:1.4, paddingTop:8, borderTop:`1px solid ${BORDER}` }}>
             {t("outcome_basis")}
           </div>
         </div>
@@ -405,7 +405,7 @@ export default function DashboardPage() {
   const totalEntries = meals.length + insulin.length + exercise.length;
 
   if (loading) return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"60vh", gap:12, color:"rgba(255,255,255,0.3)" }}>
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"60vh", gap:12, color:"var(--text-faint)" }}>
       <div style={{ width:20, height:20, border:`2px solid ${ACCENT}`, borderTopColor:"transparent", borderRadius:99, animation:"spin 0.8s linear infinite" }}/>
       {t("loading")}
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
@@ -463,11 +463,11 @@ export default function DashboardPage() {
       <div className="glev-dash-head" style={{ marginBottom:28, justifyContent:"space-between", alignItems:"flex-end", flexWrap:"wrap", gap:12 }}>
         <div>
           <h1 style={{ fontSize:24, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>{t("title")}</h1>
-          <p style={{ color:"rgba(255,255,255,0.35)", fontSize:14 }}>
+          <p style={{ color:"var(--text-faint)", fontSize:14 }}>
             {t("subtitle_count", { n: totalEntries })}
           </p>
         </div>
-        <button onClick={() => router.push("/engine")} style={{ padding:"10px 20px", borderRadius:10, border:"none", background:ACCENT, color:"#fff", cursor:"pointer", fontSize:14, fontWeight:600, boxShadow:`0 4px 20px ${ACCENT}40` }}>
+        <button onClick={() => router.push("/engine")} style={{ padding:"10px 20px", borderRadius:10, border:"none", background:ACCENT, color:"var(--text)", cursor:"pointer", fontSize:14, fontWeight:600, boxShadow:`0 4px 20px ${ACCENT}40` }}>
           {t("log_meal_cta")}
         </button>
       </div>
@@ -521,7 +521,7 @@ function RecentEntries({
           Spec'd typography: 11px / 0.12em / rgba(255,255,255,0.45) for the
           label, 13px ACCENT for the link. */}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
-        <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:"rgba(255,255,255,0.45)" }}>
+        <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:"var(--text-dim)" }}>
           {t("recent_label")}
         </div>
         <button
@@ -532,7 +532,7 @@ function RecentEntries({
         </button>
       </div>
       {rows.length === 0 ? (
-        <div style={{ padding:"24px 0 16px", textAlign:"center", color:"rgba(255,255,255,0.25)", fontSize:13 }}>
+        <div style={{ padding:"24px 0 16px", textAlign:"center", color:"var(--text-ghost)", fontSize:13 }}>
           {t("no_entries_yet")}
         </div>
       ) : (
@@ -656,7 +656,7 @@ function UnifiedRecentRow({ row, locale, onClick }: { row: RecentRow; locale: st
       onClick={onClick}
       style={{
         display:"flex", gap:12, padding:"12px 0",
-        borderBottom:"1px solid rgba(255,255,255,0.06)",
+        borderBottom:"1px solid var(--border-soft)",
         alignItems:"center", cursor:"pointer",
       }}
     >
@@ -672,10 +672,10 @@ function UnifiedRecentRow({ row, locale, onClick }: { row: RecentRow; locale: st
       </div>
       {/* Middle: title + subtitle */}
       <div style={{ flex:1, minWidth:0 }}>
-        <div style={{ fontSize:14, fontWeight:700, color:"rgba(255,255,255,0.92)", letterSpacing:"-0.01em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+        <div style={{ fontSize:14, fontWeight:700, color:"var(--text-strong)", letterSpacing:"-0.01em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
           {title}
         </div>
-        <div style={{ fontSize:12, color:"rgba(255,255,255,0.45)", fontFamily:"var(--font-mono)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+        <div style={{ fontSize:12, color:"var(--text-dim)", fontFamily:"var(--font-mono)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
           {subtitle}
         </div>
       </div>
@@ -712,18 +712,18 @@ function NonMealLightExpand({
   return (
     <div style={{ padding:"12px 16px 14px", display:"flex", flexDirection:"column", gap:14 }}>
       <div>
-        <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8, textTransform:"uppercase" }}>{t("details")}</div>
+        <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8, textTransform:"uppercase" }}>{t("details")}</div>
         <div style={{ display:"flex", gap:24, flexWrap:"wrap" }}>
           {stats.map(s => (
             <div key={s.label} style={{ display:"flex", flexDirection:"column", minWidth:70, gap:3 }}>
-              <span style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:600 }}>{s.label}</span>
-              <span style={{ fontSize:13, fontWeight:700, color: s.color || "rgba(255,255,255,0.85)", fontFamily:"var(--font-mono)" }}>{s.value}</span>
+              <span style={{ fontSize:10, color:"var(--text-faint)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:600 }}>{s.label}</span>
+              <span style={{ fontSize:13, fontWeight:700, color: s.color || "var(--text-strong)", fontFamily:"var(--font-mono)" }}>{s.value}</span>
             </div>
           ))}
         </div>
       </div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap", paddingTop:8, borderTop:`1px solid ${BORDER}` }}>
-        <span style={{ fontSize:11, color:"rgba(255,255,255,0.45)", fontFamily:"var(--font-mono)" }}>{fullTimestamp}</span>
+        <span style={{ fontSize:11, color:"var(--text-dim)", fontFamily:"var(--font-mono)" }}>{fullTimestamp}</span>
         <button
           onClick={(e) => { e.stopPropagation(); onViewFull(); }}
           style={{ background:"transparent", border:"none", color:ACCENT, fontSize:12, fontWeight:600, cursor:"pointer", padding:"4px 0", letterSpacing:"-0.01em" }}
@@ -824,7 +824,7 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
         <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"18px 24px 22px", boxSizing:"border-box" }}>
           {/* Header — title left, badge right (hidden when no data). */}
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-            <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:"rgba(255,255,255,0.6)" }}>
+            <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:"var(--text-muted)" }}>
               {t("control_score_label")}
             </div>
             {hasData && (
@@ -843,14 +843,14 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
             <span style={{ fontSize:56, fontWeight:800, color:ACCENT, letterSpacing:"-0.03em", fontFamily:"var(--font-mono)", lineHeight:1 }}>
               {hasData ? score : "—"}
             </span>
-            <span style={{ fontSize:13, color:"rgba(255,255,255,0.4)", fontWeight:500 }}>/ 100</span>
+            <span style={{ fontSize:13, color:"var(--text-dim)", fontWeight:500 }}>/ 100</span>
             <span style={{
               marginLeft:"auto",
               fontSize:10, fontWeight:600, fontFamily:"var(--font-mono)",
-              color: delta == null ? "rgba(255,255,255,0.4)"
+              color: delta == null ? "var(--text-dim)"
                    : delta > 0      ? GREEN
                    : delta < 0      ? PINK
-                   :                  "rgba(255,255,255,0.5)",
+                   :                  "var(--text-dim)",
             }}>
               {!hasData
                 ? t("no_entries_7d")
@@ -860,7 +860,7 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
             </span>
           </div>
           {/* Gradient progress bar — accent → green. */}
-          <div style={{ height:6, marginTop:14, background:"rgba(255,255,255,0.06)", borderRadius:99, overflow:"hidden" }}>
+          <div style={{ height:6, marginTop:14, background:"var(--border-soft)", borderRadius:99, overflow:"hidden" }}>
             <div style={{
               height:"100%",
               width:`${hasData ? Math.max(0, Math.min(100, score)) : 0}%`,
@@ -869,7 +869,7 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
               transition:"width 0.6s ease",
             }}/>
           </div>
-          <span style={{ position:"absolute", bottom:8, right:14, fontSize:9, color:"rgba(255,255,255,0.18)" }}>↺</span>
+          <span style={{ position:"absolute", bottom:8, right:14, fontSize:9, color:"var(--text-ghost)" }}>↺</span>
         </div>
         {/* ────────── Back ────────── */}
         <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", transform:"rotateY(180deg)", background:`linear-gradient(145deg, ${ACCENT}12, ${SURFACE} 65%)`, border:`1px solid ${ACCENT}33`, borderRadius:16, padding:"18px 24px 22px", boxSizing:"border-box", display:"flex", flexDirection:"column", gap:10 }}>
@@ -877,12 +877,12 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
             <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:ACCENT }}>
               {t("control_score_back_title")}
             </div>
-            <span style={{ fontSize:9, color:"rgba(255,255,255,0.18)" }}>{t("flip_back")}</span>
+            <span style={{ fontSize:9, color:"var(--text-ghost)" }}>{t("flip_back")}</span>
           </div>
-          <div style={{ fontSize:11, color:"rgba(255,255,255,0.7)", lineHeight:1.5, fontFamily:"var(--font-mono)" }}>
+          <div style={{ fontSize:11, color:"var(--text-body)", lineHeight:1.5, fontFamily:"var(--font-mono)" }}>
             {t("control_score_formula")}
           </div>
-          <div style={{ fontSize:10, color:"rgba(255,255,255,0.45)", lineHeight:1.5 }}>
+          <div style={{ fontSize:10, color:"var(--text-dim)", lineHeight:1.5 }}>
             {t("control_score_explain")}
           </div>
         </div>
@@ -958,11 +958,11 @@ function DailyMacrosCard({ meals, targets }: { meals: Meal[]; targets: MacroTarg
           cursor:"pointer",
         }}
       >
-        <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:"rgba(255,255,255,0.6)" }}>
+        <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:"var(--text-muted)" }}>
           {t("daily_macros")}
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-          <div style={{ fontSize:11, color:"rgba(255,255,255,0.45)", fontWeight:500, fontFamily:"var(--font-mono)" }}>
+          <div style={{ fontSize:11, color:"var(--text-dim)", fontWeight:500, fontFamily:"var(--font-mono)" }}>
             {today.count} {today.count === 1 ? t("meal_singular") : t("meal_plural")}
           </div>
           <svg
@@ -970,7 +970,7 @@ function DailyMacrosCard({ meals, targets }: { meals: Meal[]; targets: MacroTarg
             style={{
               transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
               transition:"transform 200ms ease",
-              color:"rgba(255,255,255,0.4)",
+              color:"var(--text-dim)",
             }}
             aria-hidden="true"
           >
@@ -1024,31 +1024,31 @@ function DailyMacrosCard({ meals, targets }: { meals: Meal[]; targets: MacroTarg
           >
             {/* 1. Calories — prominent kcal total. */}
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
-              <div style={{ fontSize:10, color:"rgba(255,255,255,0.5)", letterSpacing:"0.1em", fontWeight:700, textTransform:"uppercase" }}>
+              <div style={{ fontSize:10, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700, textTransform:"uppercase" }}>
                 {t("calories")}
               </div>
               <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
                 <span style={{ fontSize:28, fontWeight:800, color:ACCENT, letterSpacing:"-0.02em", fontFamily:"var(--font-mono)" }}>
                   {Math.round(today.calories).toLocaleString()}
                 </span>
-                <span style={{ fontSize:12, color:"rgba(255,255,255,0.4)", fontWeight:500 }}>{t("kcal")}</span>
+                <span style={{ fontSize:12, color:"var(--text-dim)", fontWeight:500 }}>{t("kcal")}</span>
               </div>
             </div>
 
             {/* 2. % of daily target — one bar per macro, color-matched to its ring. */}
             <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-              <div style={{ fontSize:10, color:"rgba(255,255,255,0.45)", letterSpacing:"0.1em", fontWeight:700, textTransform:"uppercase", marginBottom:2 }}>
+              <div style={{ fontSize:10, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700, textTransform:"uppercase", marginBottom:2 }}>
                 {t("pct_daily_target")}
               </div>
               {pcts.map(p => (
                 <div key={p.label} style={{ display:"flex", alignItems:"center", gap:10 }}>
-                  <div style={{ flex:"0 0 60px", fontSize:10, color:"rgba(255,255,255,0.6)", letterSpacing:"0.06em", fontWeight:700 }}>
+                  <div style={{ flex:"0 0 60px", fontSize:10, color:"var(--text-muted)", letterSpacing:"0.06em", fontWeight:700 }}>
                     {p.label}
                   </div>
-                  <div style={{ flex:1, height:5, background:"rgba(255,255,255,0.06)", borderRadius:99, overflow:"hidden" }}>
+                  <div style={{ flex:1, height:5, background:"var(--border-soft)", borderRadius:99, overflow:"hidden" }}>
                     <div style={{ height:"100%", width:`${(Math.min(1, p.pct) * 100).toFixed(1)}%`, background:p.color, borderRadius:99 }} />
                   </div>
-                  <div style={{ flex:"0 0 40px", textAlign:"right", fontSize:10, color:"rgba(255,255,255,0.55)", fontFamily:"var(--font-mono)", fontWeight:600 }}>
+                  <div style={{ flex:"0 0 40px", textAlign:"right", fontSize:10, color:"var(--text-muted)", fontFamily:"var(--font-mono)", fontWeight:600 }}>
                     {Math.round(p.pct * 100)}%
                   </div>
                 </div>
@@ -1056,8 +1056,8 @@ function DailyMacrosCard({ meals, targets }: { meals: Meal[]; targets: MacroTarg
             </div>
 
             {/* 3. Tip — accent label + dynamic body copy. */}
-            <div style={{ background:"rgba(255,255,255,0.025)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 14px" }}>
-              <div style={{ fontSize:11, lineHeight:1.55, color:"rgba(255,255,255,0.7)" }}>
+            <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 14px" }}>
+              <div style={{ fontSize:11, lineHeight:1.55, color:"var(--text-body)" }}>
                 <span style={{ color:ACCENT, fontWeight:800, letterSpacing:"0.08em", marginRight:8, fontSize:10 }}>{t("tip_label")}</span>
                 {tip}
               </div>
@@ -1108,7 +1108,7 @@ function MacroRing({
             only a small fraction (e.g. PROTEIN at 24%). Previously the
             faint track effectively disappeared, making low-fill rings
             look smaller than full-fill rings. */}
-        <circle cx="40" cy="40" r={r} fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth="8" />
+        <circle cx="40" cy="40" r={r} fill="none" stroke="var(--border-strong)" strokeWidth="8" />
         {/* Progress arc — rotate -90deg so 0% sits at 12 o'clock and the arc
             grows clockwise; rounded cap so the leading edge looks polished. */}
         <circle
@@ -1117,21 +1117,22 @@ function MacroRing({
           strokeDasharray={`${(circ * pct).toFixed(2)} ${circ.toFixed(2)}`}
           transform="rotate(-90 40 40)"
         />
-        {/* Centre value — bold mono, white regardless of macro color. */}
+        {/* Centre value — bold mono, theme-aware (var(--text)) so it
+            stays legible whether the dashboard is in dark or light mode. */}
         <text
           x="40" y="46"
           textAnchor="middle"
-          fontSize="20" fontWeight="800" fill="#fff"
+          fontSize="20" fontWeight="800" fill="var(--text)"
           fontFamily="var(--font-mono)"
         >
           {value}
         </text>
         </svg>
       </div>
-      <div style={{ fontSize:10, color:"rgba(255,255,255,0.55)", textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700 }}>
+      <div style={{ fontSize:10, color:"var(--text-muted)", textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700 }}>
         {label}
       </div>
-      <div style={{ fontSize:9, color:"rgba(255,255,255,0.32)", fontFamily:"var(--font-mono)" }}>
+      <div style={{ fontSize:9, color:"var(--text-faint)", fontFamily:"var(--font-mono)" }}>
         / {target}{unit}
       </div>
     </div>

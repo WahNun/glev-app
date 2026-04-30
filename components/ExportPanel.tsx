@@ -19,8 +19,8 @@ const ACCENT  = "#4F6EF7";
 const GREEN   = "#22D3A0";
 const ORANGE  = "#FF9500";
 const PINK    = "#FF2D78";
-const SURFACE = "#111117";
-const BORDER  = "rgba(255,255,255,0.08)";
+const SURFACE = "var(--surface)";
+const BORDER  = "var(--border)";
 
 type Kind = "meals" | "insulin" | "exercise" | "fingersticks" | "all" | "pdf";
 
@@ -232,10 +232,10 @@ export default function ExportPanel() {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* Header */}
       <div>
-        <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff" }}>
+        <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color:"var(--text)" }}>
           Daten exportieren
         </div>
-        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.45)", marginTop: 4, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 4, lineHeight: 1.5 }}>
           Lade deine Glev-Daten als CSV herunter. UTF-8 mit BOM, öffnet sauber in Excel, Numbers und Google Sheets.
         </div>
       </div>
@@ -259,10 +259,10 @@ export default function ExportPanel() {
               {row.icon}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.9)", marginBottom: 2 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)", marginBottom: 2 }}>
                 {row.label}
               </div>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", lineHeight: 1.4 }}>
+              <div style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.4 }}>
                 {row.description}
               </div>
             </div>
@@ -271,8 +271,8 @@ export default function ExportPanel() {
               disabled={busy !== null}
               style={{
                 padding: "8px 14px", borderRadius: 9, border: `1px solid ${BORDER}`,
-                background: busy === row.kind ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.03)",
-                color: busy === row.kind ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.85)",
+                background: busy === row.kind ? "var(--surface-soft)" : "var(--surface-soft)",
+                color: busy === row.kind ? "var(--text-dim)" : "var(--text-strong)",
                 fontSize: 12, fontWeight: 600,
                 cursor: busy !== null ? "not-allowed" : "pointer",
                 opacity: busy !== null && busy !== row.kind ? 0.45 : 1,
@@ -294,8 +294,8 @@ export default function ExportPanel() {
             flex: "1 1 200px",
             padding: "14px", borderRadius: 12,
             border: `1px solid ${BORDER}`,
-            background: "rgba(255,255,255,0.04)",
-            color: "rgba(255,255,255,0.9)",
+            background: "var(--surface-soft)",
+            color: "var(--text-strong)",
             fontSize: 13, fontWeight: 600,
             cursor: busy !== null ? "not-allowed" : "pointer",
             opacity: busy !== null && busy !== "all" ? 0.5 : 1,
@@ -312,7 +312,7 @@ export default function ExportPanel() {
             background: busy === "pdf"
               ? `${ACCENT}40`
               : `linear-gradient(135deg, ${ACCENT}, #3B5BE0)`,
-            color: "#fff", fontSize: 14, fontWeight: 700,
+            color:"var(--text)", fontSize: 14, fontWeight: 700,
             cursor: busy !== null ? "not-allowed" : "pointer",
             boxShadow: busy === null ? `0 4px 18px ${ACCENT}30` : "none",
             opacity: busy !== null && busy !== "pdf" ? 0.5 : 1,
@@ -345,10 +345,10 @@ export default function ExportPanel() {
       {/* PDF report info */}
       <div style={{
         marginTop: 4, padding: "12px 14px", borderRadius: 10,
-        background: "rgba(255,255,255,0.03)", border: `1px dashed ${BORDER}`,
-        fontSize: 11, color: "rgba(255,255,255,0.45)", lineHeight: 1.5,
+        background: "var(--surface-soft)", border: `1px dashed ${BORDER}`,
+        fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5,
       }}>
-        <strong style={{ color: "rgba(255,255,255,0.65)" }}>PDF-Report</strong>: formatierte Übersicht
+        <strong style={{ color: "var(--text-muted)" }}>PDF-Report</strong>: formatierte Übersicht
         mit Time-in-Range, Insulin-Summen, Mahlzeiten- und Fingerstick-Historie — geeignet zum Ausdrucken oder als Anhang für deinen Arzt.
       </div>
     </div>

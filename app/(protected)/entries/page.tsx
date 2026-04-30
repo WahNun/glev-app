@@ -23,7 +23,7 @@ import { parseDbDate, parseDbTs, parseLluTs } from "@/lib/time";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const PURPLE="#A78BFA", BLUE="#3B82F6";
-const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
+const SURFACE="var(--surface)", BORDER="var(--border)";
 
 function evC(ev: string|null) { return getEvalColor(ev); }
 function evL(ev: string|null) { return getEvalLabel(ev); }
@@ -424,10 +424,10 @@ export default function EntriesPage() {
     return true;
   });
 
-  const inp: React.CSSProperties = { background:"#0D0D12", border:`1px solid ${BORDER}`, borderRadius:10, padding:"9px 14px", color:"#fff", fontSize:13, outline:"none" };
+  const inp: React.CSSProperties = { background:"var(--input-bg)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"9px 14px", color:"var(--text)", fontSize:13, outline:"none" };
 
   if (loading) return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"60vh", gap:12, color:"rgba(255,255,255,0.3)" }}>
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"60vh", gap:12, color:"var(--text-faint)" }}>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
       <div style={{ width:20, height:20, border:`2px solid ${ACCENT}`, borderTopColor:"transparent", borderRadius:99, animation:"spin 0.8s linear infinite" }}/>
       Loading entries…
@@ -439,7 +439,7 @@ export default function EntriesPage() {
       <style>{``}</style>
       <div style={{ marginBottom:24 }}>
         <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>Einträge</h1>
-        <p style={{ color:"rgba(255,255,255,0.35)", fontSize:14 }}>{filtered.length} von {rows.length} Einträgen. Klicke eine Zeile zum Aufklappen.</p>
+        <p style={{ color:"var(--text-faint)", fontSize:14 }}>{filtered.length} von {rows.length} Einträgen. Klicke eine Zeile zum Aufklappen.</p>
       </div>
 
       {/* MANUAL ENTRY CTA */}
@@ -478,7 +478,7 @@ export default function EntriesPage() {
               borderRadius:99,
               border:`1px solid ${activeCount > 0 ? ACCENT+"60" : BORDER}`,
               background: activeCount > 0 ? `${ACCENT}18` : "transparent",
-              color: activeCount > 0 ? ACCENT : "rgba(255,255,255,0.55)",
+              color: activeCount > 0 ? ACCENT : "var(--text-muted)",
               fontSize:12,
               fontWeight: activeCount > 0 ? 600 : 500,
               cursor:"pointer",
@@ -577,7 +577,7 @@ export default function EntriesPage() {
 
       {/* CARD STACK */}
       {filtered.length === 0 ? (
-        <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"48px 24px", textAlign:"center", color:"rgba(255,255,255,0.2)", fontSize:14 }}>
+        <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"48px 24px", textAlign:"center", color:"var(--text-ghost)", fontSize:14 }}>
           {filters.dateRange !== "all" || search !== "" ? (
             // Show the date-range hint first when both apply — the date filter
             // is usually the bigger reason for an empty list — followed by the
@@ -585,8 +585,8 @@ export default function EntriesPage() {
             <div style={{ display:"flex", flexDirection:"column", gap:18, alignItems:"center" }}>
               {filters.dateRange !== "all" && (
                 <div style={{ display:"flex", flexDirection:"column", gap:10, alignItems:"center" }}>
-                  <div style={{ color:"rgba(255,255,255,0.55)", fontSize:14 }}>
-                    Showing <span style={{ color:"rgba(255,255,255,0.85)", fontWeight:600 }}>{dateRangeSummary(filters.dateRange, filters.dateFrom, filters.dateTo)}</span> · no entries match.
+                  <div style={{ color:"var(--text-muted)", fontSize:14 }}>
+                    Showing <span style={{ color:"var(--text-strong)", fontWeight:600 }}>{dateRangeSummary(filters.dateRange, filters.dateFrom, filters.dateTo)}</span> · no entries match.
                   </div>
                   <button
                     onClick={() => setDateRange("all")}
@@ -606,8 +606,8 @@ export default function EntriesPage() {
               )}
               {search !== "" && (
                 <div style={{ display:"flex", flexDirection:"column", gap:10, alignItems:"center" }}>
-                  <div style={{ color:"rgba(255,255,255,0.55)", fontSize:14, maxWidth:480, overflowWrap:"anywhere" }}>
-                    No entries match <span style={{ color:"rgba(255,255,255,0.85)", fontWeight:600 }}>&ldquo;{search}&rdquo;</span>.
+                  <div style={{ color:"var(--text-muted)", fontSize:14, maxWidth:480, overflowWrap:"anywhere" }}>
+                    No entries match <span style={{ color:"var(--text-strong)", fontWeight:600 }}>&ldquo;{search}&rdquo;</span>.
                   </div>
                   <button
                     onClick={() => setSearch("")}
@@ -718,15 +718,15 @@ export default function EntriesPage() {
               const mm = totalMin % 60;
               return h > 0 ? `${h}h ${String(mm).padStart(2, "0")}m` : `${mm}m`;
             })();
-            const bgC = m.glucose_before ? (m.glucose_before > 140 ? ORANGE : m.glucose_before < 80 ? PINK : GREEN) : "rgba(255,255,255,0.7)";
-            const afterC = afterValue != null ? (afterValue > 180 || afterValue < 70 ? PINK : GREEN) : "rgba(255,255,255,0.3)";
-            const deltaC = glucDelta !== null ? (Math.abs(glucDelta) < 50 ? GREEN : glucDelta > 0 ? ORANGE : PINK) : "rgba(255,255,255,0.3)";
+            const bgC = m.glucose_before ? (m.glucose_before > 140 ? ORANGE : m.glucose_before < 80 ? PINK : GREEN) : "var(--text-body)";
+            const afterC = afterValue != null ? (afterValue > 180 || afterValue < 70 ? PINK : GREEN) : "var(--text-faint)";
+            const deltaC = glucDelta !== null ? (Math.abs(glucDelta) < 50 ? GREEN : glucDelta > 0 ? ORANGE : PINK) : "var(--text-faint)";
             const evColor = evC(ev);
 
             const MiniCard = ({ l, v, c }: { l: string; v: string; c?: string }) => (
-              <div style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
-                <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{l}</div>
-                <div style={{ fontSize:14, fontWeight:700, color:c || "rgba(255,255,255,0.9)", letterSpacing:"-0.01em" }}>{v}</div>
+              <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
+                <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{l}</div>
+                <div style={{ fontSize:14, fontWeight:700, color:c || "var(--text-strong)", letterSpacing:"-0.01em" }}>{v}</div>
               </div>
             );
 
@@ -752,12 +752,12 @@ export default function EntriesPage() {
                   <MealEntryCardCollapsed meal={m} onClick={() => expandRow(m.id)}/>
                 ) : (
                   <div onClick={() => expandRow(null)} style={{ padding:"14px 16px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between", gap:14 }}>
-                    <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)", letterSpacing:"0.02em" }}>
+                    <div style={{ fontSize:12, color:"var(--text-muted)", letterSpacing:"0.02em" }}>
                       {dateStr}
-                      <span style={{ color:"rgba(255,255,255,0.25)", margin:"0 8px" }}>·</span>
+                      <span style={{ color:"var(--text-ghost)", margin:"0 8px" }}>·</span>
                       {date.toLocaleTimeString("en", { hour:"numeric", minute:"2-digit" })}
                     </div>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2.5" strokeLinecap="round" style={{ transform:"rotate(90deg)", transition:"transform 0.2s", flexShrink:0 }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-faint)" strokeWidth="2.5" strokeLinecap="round" style={{ transform:"rotate(90deg)", transition:"transform 0.2s", flexShrink:0 }}>
                       <polyline points="9 6 15 12 9 18"/>
                     </svg>
                   </div>
@@ -768,7 +768,7 @@ export default function EntriesPage() {
                     out for an inline editor so the user can correct macros +
                     bolus after the fact. */}
                 {isOpen && editingId === m.id && (
-                  <div style={{ padding:"4px 16px 16px", borderTop:`1px solid rgba(255,255,255,0.04)` }}>
+                  <div style={{ padding:"4px 16px 16px", borderTop:`1px solid var(--surface-soft)` }}>
                     <MealEditor
                       meal={m}
                       onSaved={(updated) => {
@@ -780,7 +780,7 @@ export default function EntriesPage() {
                   </div>
                 )}
                 {isOpen && editingId !== m.id && (
-                  <div style={{ padding:"4px 16px 16px", borderTop:`1px solid rgba(255,255,255,0.04)`, display:"flex", flexDirection:"column", gap:14 }}>
+                  <div style={{ padding:"4px 16px 16px", borderTop:`1px solid var(--surface-soft)`, display:"flex", flexDirection:"column", gap:14 }}>
                     {/* CGM POST-FETCH COUNTDOWN — visual 1h/2h auto-fetch state */}
                     <CgmCountdownPair
                       logId={m.id}
@@ -814,13 +814,13 @@ export default function EntriesPage() {
                     {ev && (
                       <div style={{ marginTop:14, background:`${evColor}10`, border:`1px solid ${evColor}40`, borderRadius:12, padding:"12px 14px", display:"flex", flexDirection:"column", gap:8 }}>
                         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
-                          <div style={{ fontSize:9, color:"rgba(255,255,255,0.5)", letterSpacing:"0.1em", fontWeight:700 }}>OUTCOME</div>
-                          <span style={{ padding:"6px 14px", borderRadius:99, fontSize:11, fontWeight:700, background:evColor, color:"#0A0A0F", whiteSpace:"nowrap", letterSpacing:"0.04em", textTransform:"uppercase" }}>
+                          <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>OUTCOME</div>
+                          <span style={{ padding:"6px 14px", borderRadius:99, fontSize:11, fontWeight:700, background:evColor, color:"var(--on-accent)", whiteSpace:"nowrap", letterSpacing:"0.04em", textTransform:"uppercase" }}>
                             {evL(ev)}
                           </span>
                         </div>
                         {getEvalExplain(ev) && (
-                          <div style={{ fontSize:12, color:"rgba(255,255,255,0.6)", lineHeight:1.5 }}>{getEvalExplain(ev)}</div>
+                          <div style={{ fontSize:12, color:"var(--text-muted)", lineHeight:1.5 }}>{getEvalExplain(ev)}</div>
                         )}
                       </div>
                     )}
@@ -829,13 +829,13 @@ export default function EntriesPage() {
                     {catLabel && catColor && (
                       <div style={{ background:`${catColor}10`, border:`1px solid ${catColor}40`, borderRadius:12, padding:"12px 14px", display:"flex", flexDirection:"column", gap:8 }}>
                         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
-                          <div style={{ fontSize:9, color:"rgba(255,255,255,0.5)", letterSpacing:"0.1em", fontWeight:700 }}>MEAL CLASSIFICATION</div>
-                          <span style={{ padding:"6px 14px", borderRadius:99, fontSize:11, fontWeight:700, background:catColor, color:"#0A0A0F", whiteSpace:"nowrap", letterSpacing:"0.04em", textTransform:"uppercase" }}>
+                          <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>MEAL CLASSIFICATION</div>
+                          <span style={{ padding:"6px 14px", borderRadius:99, fontSize:11, fontWeight:700, background:catColor, color:"var(--on-accent)", whiteSpace:"nowrap", letterSpacing:"0.04em", textTransform:"uppercase" }}>
                             {catLabel}
                           </span>
                         </div>
                         {catExplain && (
-                          <div style={{ fontSize:12, color:"rgba(255,255,255,0.6)", lineHeight:1.5 }}>{catExplain}</div>
+                          <div style={{ fontSize:12, color:"var(--text-muted)", lineHeight:1.5 }}>{catExplain}</div>
                         )}
                       </div>
                     )}
@@ -843,8 +843,8 @@ export default function EntriesPage() {
                     {/* MEAL */}
                     {m.input_text && (
                       <div>
-                        <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.1em", fontWeight:700, margin:"4px 0 6px" }}>MEAL</div>
-                        <div style={{ fontSize:13, color:"rgba(255,255,255,0.75)", lineHeight:1.55 }}>{m.input_text}</div>
+                        <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.1em", fontWeight:700, margin:"4px 0 6px" }}>MEAL</div>
+                        <div style={{ fontSize:13, color:"var(--text-body)", lineHeight:1.55 }}>{m.input_text}</div>
                       </div>
                     )}
 
@@ -854,12 +854,12 @@ export default function EntriesPage() {
                       return (
                         <div style={{ background:`${ACCENT}10`, border:`1px solid ${ACCENT}40`, borderRadius:12, padding:"10px 12px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
                           <div style={{ display:"flex", flexDirection:"column", gap:2, minWidth:0 }}>
-                            <div style={{ fontSize:9, color:"rgba(255,255,255,0.5)", letterSpacing:"0.1em", fontWeight:700 }}>KORREKTUR-BOLUS</div>
-                            <div style={{ fontSize:12, color:"rgba(255,255,255,0.75)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                            <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>KORREKTUR-BOLUS</div>
+                            <div style={{ fontSize:12, color:"var(--text-body)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                               {parent ? `für: ${parent.input_text.length > 50 ? parent.input_text.slice(0, 50) + "…" : parent.input_text}` : "Original-Mahlzeit gelöscht"}
                             </div>
                           </div>
-                          <span style={{ padding:"4px 10px", borderRadius:99, fontSize:10, fontWeight:700, background:ACCENT, color:"#0A0A0F", whiteSpace:"nowrap", letterSpacing:"0.04em" }}>K</span>
+                          <span style={{ padding:"4px 10px", borderRadius:99, fontSize:10, fontWeight:700, background:ACCENT, color:"var(--on-accent)", whiteSpace:"nowrap", letterSpacing:"0.04em" }}>K</span>
                         </div>
                       );
                     })()}
@@ -872,7 +872,7 @@ export default function EntriesPage() {
                       return (
                         <div style={{ background:`${ACCENT}08`, border:`1px solid ${ACCENT}30`, borderRadius:12, padding:"10px 12px", display:"flex", flexDirection:"column", gap:8 }}>
                           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
-                            <div style={{ fontSize:9, color:"rgba(255,255,255,0.5)", letterSpacing:"0.1em", fontWeight:700 }}>
+                            <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>
                               KORREKTUREN ({corrections.length})
                             </div>
                             <span style={{ padding:"4px 10px", borderRadius:99, fontSize:10, fontWeight:700, background:`${ACCENT}25`, color:ACCENT, border:`1px solid ${ACCENT}50`, whiteSpace:"nowrap" }}>
@@ -884,7 +884,7 @@ export default function EntriesPage() {
                               const t = parseDbDate(c.meal_time ?? c.created_at);
                               const timeStr = t.toLocaleTimeString("en", { hour:"numeric", minute:"2-digit" });
                               return (
-                                <div key={c.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, fontSize:11.5, color:"rgba(255,255,255,0.65)" }}>
+                                <div key={c.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, fontSize:11.5, color:"var(--text-muted)" }}>
                                   <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{timeStr}</span>
                                   <span style={{ color:ACCENT, fontWeight:700, flexShrink:0 }}>{c.insulin_units ?? 0}u</span>
                                 </div>
@@ -897,7 +897,7 @@ export default function EntriesPage() {
 
                     {/* MACROS & DOSING — 3-col grid of mini-cards */}
                     <div>
-                      <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8 }}>MACROS &amp; DOSING</div>
+                      <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8 }}>MACROS &amp; DOSING</div>
                       <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
                         <MiniCard l="CARBS" v={`${carbs}g`} c={ORANGE}/>
                         <MiniCard l="PROTEIN" v={totalProt > 0 ? `${totalProt}g` : "—"} c="#3B82F6"/>
@@ -913,12 +913,12 @@ export default function EntriesPage() {
 
                     {/* GLUCOSE — 2-col grid of mini-cards */}
                     <div>
-                      <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8 }}>GLUCOSE</div>
+                      <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8 }}>GLUCOSE</div>
                       <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8 }}>
                         <MiniCard l="BG BEFORE" v={m.glucose_before ? `${m.glucose_before} mg/dL` : "—"} c={bgC}/>
                         <MiniCard l={afterTag ? `BG AFTER (${afterTag})` : "BG AFTER"} v={afterValue != null ? `${afterValue} mg/dL` : "—"} c={afterC}/>
                         <MiniCard l={afterTag ? `DELTA (${afterTag})` : "DELTA"} v={glucDelta !== null ? `${glucDelta > 0 ? "+" : ""}${glucDelta} mg/dL` : "—"} c={deltaC}/>
-                        <MiniCard l="TIME GAP" v={timeGapStr ?? "—"} c={timeGapStr ? "rgba(255,255,255,0.9)" : undefined}/>
+                        <MiniCard l="TIME GAP" v={timeGapStr ?? "—"} c={timeGapStr ? "var(--text-strong)" : undefined}/>
                       </div>
                     </div>
 
@@ -962,8 +962,8 @@ export default function EntriesPage() {
 function Stat({ label, val, color }: { label: string; val: string; color?: string }) {
   return (
     <div style={{ display:"flex", justifyContent:"space-between" }}>
-      <span style={{ fontSize:12, color:"rgba(255,255,255,0.35)" }}>{label}</span>
-      <span style={{ fontSize:12, fontWeight:500, color:color||"rgba(255,255,255,0.75)" }}>{val}</span>
+      <span style={{ fontSize:12, color:"var(--text-faint)" }}>{label}</span>
+      <span style={{ fontSize:12, fontWeight:500, color:color||"var(--text-body)" }}>{val}</span>
     </div>
   );
 }
@@ -997,26 +997,26 @@ function LifecycleBlock({ meal, onUpdated }: { meal: Meal; onUpdated: (patch: Pa
   return (
     <div style={{ marginTop:14, background:`${c}10`, border:`1px solid ${c}40`, borderRadius:12, padding:"12px 14px", display:"flex", flexDirection:"column", gap:10 }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
-        <div style={{ fontSize:9, color:"rgba(255,255,255,0.5)", letterSpacing:"0.1em", fontWeight:700 }}>OUTCOME STATE</div>
-        <span style={{ padding:"6px 14px", borderRadius:99, fontSize:11, fontWeight:700, background:c, color:"#0A0A0F", letterSpacing:"0.04em", textTransform:"uppercase" }}>
+        <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>OUTCOME STATE</div>
+        <span style={{ padding:"6px 14px", borderRadius:99, fontSize:11, fontWeight:700, background:c, color:"var(--on-accent)", letterSpacing:"0.04em", textTransform:"uppercase" }}>
           {chipLabel}
         </span>
       </div>
-      <div style={{ fontSize:12, color:"rgba(255,255,255,0.65)", lineHeight:1.5 }}>{lc.reasoning}</div>
+      <div style={{ fontSize:12, color:"var(--text-muted)", lineHeight:1.5 }}>{lc.reasoning}</div>
       {(lc.delta1 != null || lc.delta2 != null) && (
         <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8, marginTop:2 }}>
-          <div style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${BORDER}`, borderRadius:8, padding:"8px 10px" }}>
-            <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)", letterSpacing:"0.08em", fontWeight:600 }}>Δ 1H</div>
-            <div style={{ fontSize:13, fontWeight:700, color: lc.delta1 != null ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.3)" }}>
+          <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:8, padding:"8px 10px" }}>
+            <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.08em", fontWeight:600 }}>Δ 1H</div>
+            <div style={{ fontSize:13, fontWeight:700, color: lc.delta1 != null ? "var(--text-strong)" : "var(--text-faint)" }}>
               {lc.delta1 != null ? `${lc.delta1 > 0 ? "+" : ""}${lc.delta1} mg/dL` : "—"}
-              {lc.speed1 != null && <span style={{ fontSize:10, color:"rgba(255,255,255,0.4)", marginLeft:6 }}>({lc.speed1.toFixed(2)}/min)</span>}
+              {lc.speed1 != null && <span style={{ fontSize:10, color:"var(--text-dim)", marginLeft:6 }}>({lc.speed1.toFixed(2)}/min)</span>}
             </div>
           </div>
-          <div style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${BORDER}`, borderRadius:8, padding:"8px 10px" }}>
-            <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)", letterSpacing:"0.08em", fontWeight:600 }}>Δ 2H</div>
-            <div style={{ fontSize:13, fontWeight:700, color: lc.delta2 != null ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.3)" }}>
+          <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:8, padding:"8px 10px" }}>
+            <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.08em", fontWeight:600 }}>Δ 2H</div>
+            <div style={{ fontSize:13, fontWeight:700, color: lc.delta2 != null ? "var(--text-strong)" : "var(--text-faint)" }}>
               {lc.delta2 != null ? `${lc.delta2 > 0 ? "+" : ""}${lc.delta2} mg/dL` : "—"}
-              {lc.speed2 != null && <span style={{ fontSize:10, color:"rgba(255,255,255,0.4)", marginLeft:6 }}>({lc.speed2.toFixed(2)}/min)</span>}
+              {lc.speed2 != null && <span style={{ fontSize:10, color:"var(--text-dim)", marginLeft:6 }}>({lc.speed2.toFixed(2)}/min)</span>}
             </div>
           </div>
         </div>
@@ -1029,15 +1029,15 @@ function ReadingInput({ label, value, onChange, onSave, busy, placeholder }: {
   label: string; value: string; onChange: (v: string) => void; onSave: () => void; busy: boolean; placeholder: string;
 }) {
   return (
-    <div style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${BORDER}`, borderRadius:8, padding:"8px 10px", display:"flex", flexDirection:"column", gap:6 }}>
-      <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)", letterSpacing:"0.08em", fontWeight:600 }}>{label.toUpperCase()}</div>
+    <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:8, padding:"8px 10px", display:"flex", flexDirection:"column", gap:6 }}>
+      <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.08em", fontWeight:600 }}>{label.toUpperCase()}</div>
       <div style={{ display:"flex", gap:6 }}>
         <input
           type="number" inputMode="numeric" min={30} max={600}
           value={value} placeholder={placeholder}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onSave(); } }}
-          style={{ flex:1, minWidth:0, padding:"6px 8px", borderRadius:6, border:`1px solid ${BORDER}`, background:"rgba(0,0,0,0.3)", color:"rgba(255,255,255,0.9)", fontSize:13, fontWeight:600 }}
+          style={{ flex:1, minWidth:0, padding:"6px 8px", borderRadius:6, border:`1px solid ${BORDER}`, background:"var(--surface-soft)", color:"var(--text-strong)", fontSize:13, fontWeight:600 }}
         />
         <button
           onClick={onSave} disabled={busy}
@@ -1105,14 +1105,14 @@ function NonMealRow({
           `}</style>
           {/* Col 1: Date (time shown in expanded detail) */}
           <div style={{ minWidth:0 }}>
-            <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>When</div>
-            <div style={{ fontSize:13, fontWeight:600, color:"rgba(255,255,255,0.85)", letterSpacing:"-0.01em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", fontFamily:"var(--font-mono)" }}>
+            <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>When</div>
+            <div style={{ fontSize:13, fontWeight:600, color:"var(--text-strong)", letterSpacing:"-0.01em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", fontFamily:"var(--font-mono)" }}>
               {dateStr}
             </div>
           </div>
           {/* Col 2: Kind badge */}
           <div style={{ minWidth:0 }}>
-            <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>Type</div>
+            <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>Type</div>
             <div style={{ display:"flex", alignItems:"center", gap:6, minWidth:0 }}>
               <span style={{ width:7, height:7, borderRadius:99, background:accent, opacity:0.85, flexShrink:0 }}/>
               <span style={{ fontSize:12, fontWeight:700, color:accent, letterSpacing:"0.04em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{badge}</span>
@@ -1120,19 +1120,19 @@ function NonMealRow({
           </div>
           {/* Col 3: Primary metric (Dose / Duration) */}
           <div style={{ minWidth:0 }}>
-            <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>{primaryLabel}</div>
+            <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>{primaryLabel}</div>
             <div style={{ fontSize:14, fontWeight:700, color:primaryColor, letterSpacing:"-0.01em", fontFamily:"var(--font-mono)" }}>{primaryValue}</div>
           </div>
           {/* Col 4: Secondary — neutral by default; bolus/basal pass an
               accent + mono override so DOSE keeps its prominent styling. */}
           <div style={{ minWidth:0 }}>
-            <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>{secondaryLabel}</div>
+            <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>{secondaryLabel}</div>
             <div
               title={secondaryValue}
               style={{
                 fontSize: secondaryMono ? 14 : 13,
                 fontWeight: secondaryMono ? 700 : 600,
-                color: secondaryColor || "rgba(255,255,255,0.8)",
+                color: secondaryColor || "var(--text-strong)",
                 letterSpacing: "-0.01em",
                 whiteSpace: "nowrap",
                 overflow: "hidden",
@@ -1152,18 +1152,18 @@ function NonMealRow({
         </div>
       ) : (
         <div onClick={onToggle} style={{ padding:"14px 16px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between", gap:14 }}>
-          <div style={{ fontSize:12, color:"rgba(255,255,255,0.55)", letterSpacing:"0.02em" }}>
+          <div style={{ fontSize:12, color:"var(--text-muted)", letterSpacing:"0.02em" }}>
             {dateStr}
             <span style={{ color:accent, fontWeight:700, marginLeft:10, letterSpacing:"0.04em" }}>{badge}</span>
           </div>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2.5" strokeLinecap="round" style={{ transform:"rotate(90deg)", flexShrink:0 }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-faint)" strokeWidth="2.5" strokeLinecap="round" style={{ transform:"rotate(90deg)", flexShrink:0 }}>
             <polyline points="9 6 15 12 9 18"/>
           </svg>
         </div>
       )}
 
       {isOpen && (
-        <div style={{ padding:"4px 16px 16px", borderTop:`1px solid rgba(255,255,255,0.04)`, display:"flex", flexDirection:"column", gap:12 }}>
+        <div style={{ padding:"4px 16px 16px", borderTop:`1px solid var(--surface-soft)`, display:"flex", flexDirection:"column", gap:12 }}>
           {expandedDetails}
           <button onClick={onDelete} disabled={deleting} style={{
             marginTop:4, padding:"12px", borderRadius:10, border:`1px solid ${PINK}40`,
@@ -1227,7 +1227,7 @@ function InsulinReadingsBackfill({ logId, slots }: {
 
   return (
     <div style={{
-      background: "rgba(255,255,255,0.02)",
+      background: "var(--surface-soft)",
       border: `1px solid ${BORDER}`,
       borderRadius: 10,
       padding: "10px 12px",
@@ -1235,10 +1235,10 @@ function InsulinReadingsBackfill({ logId, slots }: {
       flexDirection: "column",
       gap: 8,
     }}>
-      <div style={{ fontSize:9, color:"rgba(255,255,255,0.45)", letterSpacing:"0.08em", fontWeight:600 }}>
+      <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.08em", fontWeight:600 }}>
         MANUAL OVERRIDE
       </div>
-      <div style={{ fontSize:11, color:"rgba(255,255,255,0.55)", lineHeight:1.5 }}>
+      <div style={{ fontSize:11, color:"var(--text-muted)", lineHeight:1.5 }}>
         Auto-fetch couldn't pull from your CGM. Enter the meter reading and we'll backfill the entry.
       </div>
       <div style={{
@@ -1299,7 +1299,7 @@ function BolusRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
       timeStr={timeStr}
       primaryLabel="Brand"
       primaryValue={log.insulin_name || "rapid-acting"}
-      primaryColor="rgba(255,255,255,0.85)"
+      primaryColor="var(--text-strong)"
       secondaryLabel="Dose"
       secondaryValue={`${log.units}u`}
       secondaryColor={accent}
@@ -1383,14 +1383,14 @@ function BolusRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
           </ExPanel>
 
           {log.notes && (
-            <div style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
-              <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>NOTES</div>
-              <div style={{ fontSize:13, color:"rgba(255,255,255,0.8)", lineHeight:1.5 }}>{log.notes}</div>
+            <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
+              <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>NOTES</div>
+              <div style={{ fontSize:13, color:"var(--text-strong)", lineHeight:1.5 }}>{log.notes}</div>
             </div>
           )}
 
           <div style={{
-            fontSize:11, color:"rgba(255,255,255,0.35)",
+            fontSize:11, color:"var(--text-faint)",
             textAlign:"center", letterSpacing:"0.02em", lineHeight:1.5,
             paddingTop:2,
           }}>
@@ -1478,7 +1478,7 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
       timeStr={timeStr}
       primaryLabel="Brand"
       primaryValue={log.insulin_name || "long-acting"}
-      primaryColor="rgba(255,255,255,0.85)"
+      primaryColor="var(--text-strong)"
       secondaryLabel="Dose"
       secondaryValue={`${log.units}u`}
       secondaryColor={accent}
@@ -1498,17 +1498,17 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
           {/* 2) 6h CGM trend leading up to the injection ----------- */}
           <ExPanel title="6 H GLUCOSE TREND (pre-injection)">
             <div style={{
-              background:"rgba(255,255,255,0.02)",
+              background:"var(--surface-soft)",
               border:`1px solid ${BORDER}`,
               borderRadius:10, padding:"10px 12px",
             }}>
               {trend.state === "loading" && (
-                <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", textAlign:"center", padding:"24px 0" }}>
+                <div style={{ fontSize:12, color:"var(--text-dim)", textAlign:"center", padding:"24px 0" }}>
                   Loading CGM history…
                 </div>
               )}
               {trend.state === "error" && (
-                <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", textAlign:"center", padding:"24px 0" }}>
+                <div style={{ fontSize:12, color:"var(--text-dim)", textAlign:"center", padding:"24px 0" }}>
                   CGM not connected or history unavailable.
                 </div>
               )}
@@ -1524,7 +1524,7 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
               {/* Time-axis labels. */}
               <div style={{
                 display:"flex", justifyContent:"space-between",
-                fontSize:9, color:"rgba(255,255,255,0.3)", letterSpacing:"0.06em",
+                fontSize:9, color:"var(--text-faint)", letterSpacing:"0.06em",
                 marginTop:6,
               }}>
                 <span>−6 h</span>
@@ -1586,14 +1586,14 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
           </ExPanel>
 
           {log.notes && (
-            <div style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
-              <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>NOTES</div>
-              <div style={{ fontSize:13, color:"rgba(255,255,255,0.8)", lineHeight:1.5 }}>{log.notes}</div>
+            <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
+              <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>NOTES</div>
+              <div style={{ fontSize:13, color:"var(--text-strong)", lineHeight:1.5 }}>{log.notes}</div>
             </div>
           )}
 
           <div style={{
-            fontSize:11, color:"rgba(255,255,255,0.35)",
+            fontSize:11, color:"var(--text-faint)",
             textAlign:"center", letterSpacing:"0.02em", lineHeight:1.5,
             paddingTop:2,
           }}>
@@ -1616,11 +1616,11 @@ function BolusDeltaPill({ label, delta }: { label: string; delta: number | null 
       : `${delta > 0 ? "+" : ""}${delta} mg/dL`;
   return (
     <div style={{
-      background:"rgba(255,255,255,0.02)",
+      background:"var(--surface-soft)",
       border:`1px solid ${BORDER}`,
       borderRadius:10, padding:"10px 12px",
     }}>
-      <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{label}</div>
+      <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{label}</div>
       <div style={{ fontSize:14, fontWeight:700, color, letterSpacing:"-0.01em", fontFamily:"var(--font-mono)" }}>{text}</div>
     </div>
   );
@@ -1742,21 +1742,21 @@ function ExerciseRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
 
           {/* 4) Pattern note --------------------------------------- */}
           <ExPanel title="PATTERN NOTE">
-            <div style={{ fontSize:13, color:"rgba(255,255,255,0.78)", lineHeight:1.55 }}>
+            <div style={{ fontSize:13, color:"var(--text-body)", lineHeight:1.55 }}>
               {patternNote(log.exercise_type)}
             </div>
           </ExPanel>
 
           {log.notes && (
-            <div style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
-              <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>NOTES</div>
-              <div style={{ fontSize:13, color:"rgba(255,255,255,0.8)", lineHeight:1.5 }}>{log.notes}</div>
+            <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
+              <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>NOTES</div>
+              <div style={{ fontSize:13, color:"var(--text-strong)", lineHeight:1.5 }}>{log.notes}</div>
             </div>
           )}
 
           {/* Disclaimer — last item before the inherited Delete button. */}
           <div style={{
-            fontSize:11, color:"rgba(255,255,255,0.35)",
+            fontSize:11, color:"var(--text-faint)",
             textAlign:"center", letterSpacing:"0.02em", lineHeight:1.5,
             paddingTop:2,
           }}>
@@ -1802,14 +1802,14 @@ function pendingLabel(expectedAt: Date): string {
 function ExPanel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{
-      background:"rgba(255,255,255,0.015)",
+      background:"var(--surface-soft)",
       border:`1px solid ${BORDER}`,
       borderRadius:12,
       padding:"12px 14px",
     }}>
       <div style={{
         fontSize:10, fontWeight:700, letterSpacing:"0.1em",
-        color:"rgba(255,255,255,0.45)", marginBottom:10,
+        color:"var(--text-dim)", marginBottom:10,
       }}>{title}</div>
       {children}
     </div>
@@ -1825,11 +1825,11 @@ function DeltaPill({ label, delta }: { label: string; delta: number | null }) {
       : `${delta > 0 ? "+" : ""}${delta} mg/dL`;
   return (
     <div style={{
-      background:"rgba(255,255,255,0.02)",
+      background:"var(--surface-soft)",
       border:`1px solid ${BORDER}`,
       borderRadius:10, padding:"10px 12px",
     }}>
-      <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{label}</div>
+      <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{label}</div>
       <div style={{ fontSize:14, fontWeight:700, color, letterSpacing:"-0.01em", fontFamily:"var(--font-mono)" }}>{text}</div>
     </div>
   );
@@ -1843,7 +1843,7 @@ function EvalBlock({ heading, unlocked, body, color, outcomeLabel }: {
   outcomeLabel: string | null;
 }) {
   const border = unlocked ? `${color}40` : BORDER;
-  const bg     = unlocked ? `${color}10` : "rgba(255,255,255,0.02)";
+  const bg     = unlocked ? `${color}10` : "var(--surface-soft)";
   return (
     <div style={{
       background: bg,
@@ -1854,7 +1854,7 @@ function EvalBlock({ heading, unlocked, body, color, outcomeLabel }: {
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:6 }}>
         <span style={{
           fontSize:9, fontWeight:700, letterSpacing:"0.1em",
-          color: unlocked ? color : "rgba(255,255,255,0.35)",
+          color: unlocked ? color : "var(--text-faint)",
         }}>{heading}</span>
         {unlocked && outcomeLabel && (
           <span style={{
@@ -1866,7 +1866,7 @@ function EvalBlock({ heading, unlocked, body, color, outcomeLabel }: {
       </div>
       <div style={{
         fontSize:13, lineHeight:1.5,
-        color: unlocked ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.35)",
+        color: unlocked ? "var(--text-strong)" : "var(--text-faint)",
       }}>{body}</div>
     </div>
   );
@@ -1874,9 +1874,9 @@ function EvalBlock({ heading, unlocked, body, color, outcomeLabel }: {
 
 function Detail({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <div style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
-      <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{label}</div>
-      <div style={{ fontSize:14, fontWeight:700, color: color || "rgba(255,255,255,0.9)", letterSpacing:"-0.01em" }}>{value}</div>
+    <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
+      <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{label}</div>
+      <div style={{ fontSize:14, fontWeight:700, color: color || "var(--text-strong)", letterSpacing:"-0.01em" }}>{value}</div>
     </div>
   );
 }
@@ -1891,7 +1891,7 @@ function FilterSection<T extends string>({
 }) {
   return (
     <div>
-      <div style={{ fontSize:9, color:"rgba(255,255,255,0.45)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8, textTransform:"uppercase" }}>
+      <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8, textTransform:"uppercase" }}>
         {title}
       </div>
       <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
@@ -1909,7 +1909,7 @@ function FilterSection<T extends string>({
                 borderRadius:99,
                 border:`1px solid ${active ? ACCENT+"60" : BORDER}`,
                 background: active ? `${ACCENT}18` : "transparent",
-                color: active ? ACCENT : "rgba(255,255,255,0.55)",
+                color: active ? ACCENT : "var(--text-muted)",
                 fontSize:12,
                 fontWeight: active ? 600 : 500,
                 cursor:"pointer",
@@ -1943,7 +1943,7 @@ function DateRangeSection({
 }) {
   return (
     <div>
-      <div style={{ fontSize:9, color:"rgba(255,255,255,0.45)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8, textTransform:"uppercase" }}>
+      <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8, textTransform:"uppercase" }}>
         Date range
       </div>
       <div role="radiogroup" aria-label="Date range" style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
@@ -1961,7 +1961,7 @@ function DateRangeSection({
                 borderRadius:99,
                 border:`1px solid ${active ? ACCENT+"60" : BORDER}`,
                 background: active ? `${ACCENT}18` : "transparent",
-                color: active ? ACCENT : "rgba(255,255,255,0.55)",
+                color: active ? ACCENT : "var(--text-muted)",
                 fontSize:12,
                 fontWeight: active ? 600 : 500,
                 cursor:"pointer",
@@ -1982,7 +1982,7 @@ function DateRangeSection({
       </div>
       {value === "custom" && (
         <div style={{ display:"flex", gap:8, marginTop:10, flexWrap:"wrap" }}>
-          <label style={{ display:"flex", flexDirection:"column", gap:4, fontSize:10, color:"rgba(255,255,255,0.45)", letterSpacing:"0.06em", fontWeight:600, textTransform:"uppercase", flex:"1 1 140px" }}>
+          <label style={{ display:"flex", flexDirection:"column", gap:4, fontSize:10, color:"var(--text-dim)", letterSpacing:"0.06em", fontWeight:600, textTransform:"uppercase", flex:"1 1 140px" }}>
             From
             <input
               type="date"
@@ -1990,18 +1990,18 @@ function DateRangeSection({
               max={to ?? undefined}
               onChange={(e) => onBoundChange("from", e.target.value)}
               style={{
-                background:"#0D0D12",
+                background:"var(--input-bg)",
                 border:`1px solid ${BORDER}`,
                 borderRadius:8,
                 padding:"7px 10px",
-                color:"#fff",
+                color:"var(--text)",
                 fontSize:12,
                 outline:"none",
                 colorScheme:"dark",
               }}
             />
           </label>
-          <label style={{ display:"flex", flexDirection:"column", gap:4, fontSize:10, color:"rgba(255,255,255,0.45)", letterSpacing:"0.06em", fontWeight:600, textTransform:"uppercase", flex:"1 1 140px" }}>
+          <label style={{ display:"flex", flexDirection:"column", gap:4, fontSize:10, color:"var(--text-dim)", letterSpacing:"0.06em", fontWeight:600, textTransform:"uppercase", flex:"1 1 140px" }}>
             To
             <input
               type="date"
@@ -2009,11 +2009,11 @@ function DateRangeSection({
               min={from ?? undefined}
               onChange={(e) => onBoundChange("to", e.target.value)}
               style={{
-                background:"#0D0D12",
+                background:"var(--input-bg)",
                 border:`1px solid ${BORDER}`,
                 borderRadius:8,
                 padding:"7px 10px",
-                color:"#fff",
+                color:"var(--text)",
                 fontSize:12,
                 outline:"none",
                 colorScheme:"dark",
@@ -2132,7 +2132,7 @@ function MealEditor({ meal, onSaved, onCancel }: {
   return (
     <div ref={rootRef} style={{ display:"flex", flexDirection:"column", gap:14, scrollMarginTop:80 }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
-        <div style={{ fontSize:9, color:"rgba(255,255,255,0.5)", letterSpacing:"0.1em", fontWeight:700 }}>
+        <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>
           EINTRAG BEARBEITEN
         </div>
         <span style={{ padding:"4px 10px", borderRadius:99, fontSize:10, fontWeight:700, background:`${ACCENT}20`, color:ACCENT, border:`1px solid ${ACCENT}40`, letterSpacing:"0.04em", textTransform:"uppercase" }}>
@@ -2140,7 +2140,7 @@ function MealEditor({ meal, onSaved, onCancel }: {
         </span>
       </div>
 
-      <div style={{ fontSize:11, color:"rgba(255,255,255,0.5)", lineHeight:1.5 }}>
+      <div style={{ fontSize:11, color:"var(--text-dim)", lineHeight:1.5 }}>
         Korrigiert Makros + Bolus nachträglich. Outcome-Klassifikation und
         Calories werden automatisch neu berechnet. Glukose-Werte und Uhrzeit
         bleiben unverändert.
@@ -2175,8 +2175,8 @@ function MealEditor({ meal, onSaved, onCancel }: {
             padding:"12px",
             borderRadius:10,
             border:`1px solid ${BORDER}`,
-            background:"rgba(255,255,255,0.03)",
-            color:"rgba(255,255,255,0.7)",
+            background:"var(--surface-soft)",
+            color:"var(--text-body)",
             fontSize:13,
             fontWeight:600,
             cursor:busy ? "not-allowed" : "pointer",
@@ -2193,7 +2193,7 @@ function MealEditor({ meal, onSaved, onCancel }: {
             borderRadius:10,
             border:`1px solid ${ACCENT}`,
             background:ACCENT,
-            color:"#0A0A0F",
+            color:"var(--on-accent)",
             fontSize:13,
             fontWeight:700,
             cursor:busy ? "wait" : "pointer",
@@ -2216,7 +2216,7 @@ function EditField({ label, value, onChange, accent, placeholder }: {
 }) {
   return (
     <label style={{ display:"flex", flexDirection:"column", gap:4 }}>
-      <span style={{ fontSize:9, color:"rgba(255,255,255,0.45)", letterSpacing:"0.1em", fontWeight:700 }}>
+      <span style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>
         {label}
       </span>
       <input
@@ -2226,11 +2226,11 @@ function EditField({ label, value, onChange, accent, placeholder }: {
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         style={{
-          background:"rgba(255,255,255,0.03)",
+          background:"var(--surface-soft)",
           border:`1px solid ${accent ? accent + "40" : BORDER}`,
           borderRadius:8,
           padding:"10px 12px",
-          color:"#fff",
+          color:"var(--text)",
           fontSize:14,
           fontWeight:600,
           fontFamily:"var(--font-mono)",

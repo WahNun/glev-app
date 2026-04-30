@@ -45,7 +45,7 @@ const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 // same blue family as the Adaptive Engine, clearly lighter/less saturated
 // to signal "secondary view of the same metric".
 const ACCENT_SOFT="#93A5FA";
-const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
+const SURFACE="var(--surface)", BORDER="var(--border)";
 const HIGH_YELLOW = "#FFD166";
 
 const WEEKDAY_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -171,7 +171,7 @@ export default function InsightsPage() {
   }, []);
 
   if (loading) return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"60vh", gap:12, color:"rgba(255,255,255,0.3)" }}>
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"60vh", gap:12, color:"var(--text-faint)" }}>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
       <div style={{ width:20, height:20, border:`2px solid ${ACCENT}`, borderTopColor:"transparent", borderRadius:99, animation:"spin 0.8s linear infinite" }}/>
       Loading insights…
@@ -182,7 +182,7 @@ export default function InsightsPage() {
   if (total === 0) return (
     <div style={{ maxWidth:480, margin:"0 auto" }}>
       <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:8 }}>Insights</h1>
-      <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, padding:"48px", textAlign:"center", color:"rgba(255,255,255,0.25)", fontSize:14 }}>Log at least 5 meals to see insights.</div>
+      <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, padding:"48px", textAlign:"center", color:"var(--text-ghost)", fontSize:14 }}>Log at least 5 meals to see insights.</div>
     </div>
   );
 
@@ -271,7 +271,7 @@ export default function InsightsPage() {
     }
   }
   const cvColor = cvPct == null
-    ? "rgba(255,255,255,0.4)"
+    ? "var(--text-dim)"
     : cvPct < CV_STABLE_PCT ? GREEN
     : cvPct <= CV_HIGH_PCT  ? HIGH_YELLOW
     : PINK;
@@ -345,7 +345,7 @@ export default function InsightsPage() {
     SPIKED: "BG-Anstiegen", HYPO_RISK: "Hypo-Risiko", PENDING: "—",
   };
   const OUTCOME_COLOR_DE: Record<ExerciseOutcome, string> = {
-    STABLE: GREEN, DROPPED: HIGH_YELLOW, SPIKED: ORANGE, HYPO_RISK: PINK, PENDING: "rgba(255,255,255,0.4)",
+    STABLE: GREEN, DROPPED: HIGH_YELLOW, SPIKED: ORANGE, HYPO_RISK: PINK, PENDING: "var(--text-dim)",
   };
   const OUTCOME_ICON_DE: Record<ExerciseOutcome, string> = {
     STABLE: "✓", DROPPED: "↓", SPIKED: "↑", HYPO_RISK: "⚠", PENDING: "•",
@@ -501,7 +501,7 @@ export default function InsightsPage() {
   const eveningSucc = timeGroups["Evening (17–21)"];
   if (morningSucc.count >= 3 && morningSucc.good/morningSucc.count < 0.5) patterns.push({ icon:"☀", title:"Morning control issues", desc:"Morning meals have a lower success rate. Dawn phenomenon may be increasing insulin resistance.", color:ORANGE });
   if (eveningSucc.count >= 3 && eveningSucc.good/eveningSucc.count > 0.8) patterns.push({ icon:"🌙", title:"Evening dosing strength", desc:"Evening meal dosing is particularly accurate. Use evening meals as reference for ICR calibration.", color:ACCENT });
-  if (patterns.length === 0) patterns.push({ icon:"→", title:"No strong patterns yet", desc:"Log 15+ meals to activate pattern detection. More data reveals deeper insights.", color:"rgba(255,255,255,0.3)" });
+  if (patterns.length === 0) patterns.push({ icon:"→", title:"No strong patterns yet", desc:"Log 15+ meals to activate pattern detection. More data reveals deeper insights.", color:"var(--text-faint)" });
 
   // Adaptive engine derivations
   const adaptiveICR  = computeAdaptiveICR(meals);
@@ -547,10 +547,10 @@ export default function InsightsPage() {
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
             <CardLabel text="Time in range · 7d"/>
-            <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>70–180 mg/dL</div>
+            <div style={{ fontSize:9, color:"var(--text-dim)" }}>70–180 mg/dL</div>
           </div>
           {b7.n === 0 ? (
-            <div style={{ padding:"18px 0", textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:11 }}>
+            <div style={{ padding:"18px 0", textAlign:"center", color:"var(--text-faint)", fontSize:11 }}>
               Log meals with pre-meal glucose to see your time-in-range.
             </div>
           ) : (
@@ -573,13 +573,13 @@ export default function InsightsPage() {
               <div
                 role="img"
                 aria-label={`Time below range ${tbrPct} percent, in range ${tirPct} percent, above range ${tarPct} percent`}
-                style={{ display:"flex", height:12, borderRadius:99, overflow:"hidden", background:"rgba(255,255,255,0.04)" }}
+                style={{ display:"flex", height:12, borderRadius:99, overflow:"hidden", background:"var(--surface-soft)" }}
               >
                 {tbrPct > 0 && <div style={{ width:`${tbrPct}%`, background:PINK }}/>}
                 {tirPct > 0 && <div style={{ width:`${tirPct}%`, background:GREEN }}/>}
                 {tarPct > 0 && <div style={{ width:`${tarPct}%`, background:HIGH_YELLOW }}/>}
               </div>
-              <div style={{ display:"flex", justifyContent:"space-between", marginTop:6, fontSize:9, color:"rgba(255,255,255,0.5)", flexWrap:"wrap", gap:6 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", marginTop:6, fontSize:9, color:"var(--text-dim)", flexWrap:"wrap", gap:6 }}>
                 <span style={{ color:PINK }}>● TBR &lt;70 · {tbrPct}%</span>
                 <span style={{ color:GREEN }}>● TIR 70–180 · {tirPct}%</span>
                 <span style={{ color:HIGH_YELLOW }}>● TAR &gt;180 · {tarPct}%</span>
@@ -611,17 +611,17 @@ export default function InsightsPage() {
           >
             <CardLabel text="Avg BG"/>
             {last7Avg == null ? (
-              <div style={{ fontSize:24, fontWeight:800, color:"rgba(255,255,255,0.25)", fontFamily:"var(--font-mono)", marginTop:4 }}>—</div>
+              <div style={{ fontSize:24, fontWeight:800, color:"var(--text-ghost)", fontFamily:"var(--font-mono)", marginTop:4 }}>—</div>
             ) : (
               <>
                 <div style={{ display:"flex", alignItems:"baseline", gap:4, marginTop:4 }}>
-                  <div style={{ fontSize:24, fontWeight:800, color:"#fff", fontFamily:"var(--font-mono)", lineHeight:1 }}>
+                  <div style={{ fontSize:24, fontWeight:800, color:"var(--text)", fontFamily:"var(--font-mono)", lineHeight:1 }}>
                     {Math.round(last7Avg)}
                   </div>
-                  <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>mg/dL</div>
+                  <div style={{ fontSize:9, color:"var(--text-dim)" }}>mg/dL</div>
                 </div>
                 {bgDelta != null && (
-                  <div style={{ fontSize:9, color: bgDelta < 0 ? GREEN : bgDelta > 0 ? ORANGE : "rgba(255,255,255,0.4)", marginTop:2, fontWeight:600 }}>
+                  <div style={{ fontSize:9, color: bgDelta < 0 ? GREEN : bgDelta > 0 ? ORANGE : "var(--text-dim)", marginTop:2, fontWeight:600 }}>
                     {bgDelta > 0 ? "+" : bgDelta < 0 ? "−" : ""}{Math.abs(bgDelta)} vs prev
                   </div>
                 )}
@@ -644,17 +644,17 @@ export default function InsightsPage() {
           >
             <CardLabel text="GMI / est. A1C"/>
             {gmi == null ? (
-              <div style={{ fontSize:24, fontWeight:800, color:"rgba(255,255,255,0.25)", fontFamily:"var(--font-mono)", marginTop:4 }}>—</div>
+              <div style={{ fontSize:24, fontWeight:800, color:"var(--text-ghost)", fontFamily:"var(--font-mono)", marginTop:4 }}>—</div>
             ) : (
               <>
                 <div style={{ display:"flex", alignItems:"baseline", gap:4, marginTop:4 }}>
-                  <div style={{ fontSize:24, fontWeight:800, color:"#fff", fontFamily:"var(--font-mono)", lineHeight:1 }}>
+                  <div style={{ fontSize:24, fontWeight:800, color:"var(--text)", fontFamily:"var(--font-mono)", lineHeight:1 }}>
                     {gmi.toFixed(1)}
                   </div>
-                  <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>%</div>
+                  <div style={{ fontSize:9, color:"var(--text-dim)" }}>%</div>
                 </div>
                 {gmiDelta != null && (
-                  <div style={{ fontSize:9, color: gmiDelta < 0 ? GREEN : gmiDelta > 0 ? ORANGE : "rgba(255,255,255,0.4)", marginTop:2, fontWeight:600 }}>
+                  <div style={{ fontSize:9, color: gmiDelta < 0 ? GREEN : gmiDelta > 0 ? ORANGE : "var(--text-dim)", marginTop:2, fontWeight:600 }}>
                     {gmiDelta > 0 ? "+" : gmiDelta < 0 ? "−" : ""}{Math.abs(gmiDelta).toFixed(1)} vs prev
                   </div>
                 )}
@@ -682,10 +682,10 @@ export default function InsightsPage() {
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
             <CardLabel text="7-day trend"/>
-            <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>avg per day</div>
+            <div style={{ fontSize:9, color:"var(--text-dim)" }}>avg per day</div>
           </div>
           <Sparkline values={trendValues} color={ACCENT}/>
-          <div style={{ display:"flex", justifyContent:"space-between", marginTop:4, fontSize:8, color:"rgba(255,255,255,0.35)" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", marginTop:4, fontSize:8, color:"var(--text-faint)" }}>
             {trendDays.map((d, i) => <span key={i}>{d.label}</span>)}
           </div>
         </FlipCard>
@@ -715,12 +715,12 @@ export default function InsightsPage() {
           >
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
               <CardLabel text="Hypo Events · 7d"/>
-              <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>&lt; {HYPO_THRESHOLD_MGDL} mg/dL</div>
+              <div style={{ fontSize:9, color:"var(--text-dim)" }}>&lt; {HYPO_THRESHOLD_MGDL} mg/dL</div>
             </div>
             {!hypoEnough ? (
               <div style={{ padding:"18px 0", textAlign:"center" }}>
-                <div style={{ fontSize:13, color:"rgba(255,255,255,0.45)", fontWeight:600 }}>Nicht genug Daten</div>
-                <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", marginTop:4 }}>≥ {MIN_DATAPOINTS} Messwerte erforderlich</div>
+                <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>Nicht genug Daten</div>
+                <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:4 }}>≥ {MIN_DATAPOINTS} Messwerte erforderlich</div>
               </div>
             ) : (
               <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
@@ -730,7 +730,7 @@ export default function InsightsPage() {
                 <div style={{ fontSize:11, color:accent, fontWeight:600 }}>
                   {hypoCount7d === 0 ? "Keine Hypos" : hypoCount7d === 1 ? "Hypo" : "Hypos"}
                 </div>
-                <div style={{ marginLeft:"auto", fontSize:9, color:"rgba(255,255,255,0.4)" }}>
+                <div style={{ marginLeft:"auto", fontSize:9, color:"var(--text-dim)" }}>
                   {readings7.length} Messwerte
                 </div>
               </div>
@@ -763,12 +763,12 @@ export default function InsightsPage() {
           >
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
               <CardLabel text="Hyper Events · 7d"/>
-              <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>&gt; {HYPER_THRESHOLD_MGDL} mg/dL</div>
+              <div style={{ fontSize:9, color:"var(--text-dim)" }}>&gt; {HYPER_THRESHOLD_MGDL} mg/dL</div>
             </div>
             {!hyperEnough ? (
               <div style={{ padding:"18px 0", textAlign:"center" }}>
-                <div style={{ fontSize:13, color:"rgba(255,255,255,0.45)", fontWeight:600 }}>Nicht genug Daten</div>
-                <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", marginTop:4 }}>≥ {MIN_DATAPOINTS} Messwerte erforderlich</div>
+                <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>Nicht genug Daten</div>
+                <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:4 }}>≥ {MIN_DATAPOINTS} Messwerte erforderlich</div>
               </div>
             ) : (
               <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
@@ -778,7 +778,7 @@ export default function InsightsPage() {
                 <div style={{ fontSize:11, color:accent, fontWeight:600 }}>
                   {hyperCount7d === 0 ? "Keine Hypers" : hyperCount7d === 1 ? "Hyper" : "Hypers"}
                 </div>
-                <div style={{ marginLeft:"auto", fontSize:9, color:"rgba(255,255,255,0.4)" }}>
+                <div style={{ marginLeft:"auto", fontSize:9, color:"var(--text-dim)" }}>
                   {readings7.length} Messwerte
                 </div>
               </div>
@@ -809,12 +809,12 @@ export default function InsightsPage() {
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
             <CardLabel text="Glukose-Variabilität · 14d"/>
-            <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>CV%</div>
+            <div style={{ fontSize:9, color:"var(--text-dim)" }}>CV%</div>
           </div>
           {!cvEnough || cvPct == null ? (
             <div style={{ padding:"18px 0", textAlign:"center" }}>
-              <div style={{ fontSize:13, color:"rgba(255,255,255,0.45)", fontWeight:600 }}>Nicht genug Daten</div>
-              <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", marginTop:4 }}>≥ {MIN_DATAPOINTS} Messwerte erforderlich</div>
+              <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>Nicht genug Daten</div>
+              <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:4 }}>≥ {MIN_DATAPOINTS} Messwerte erforderlich</div>
             </div>
           ) : (
             <>
@@ -828,13 +828,13 @@ export default function InsightsPage() {
                 </div>
               </div>
               {/* Threshold bar: green ≤36, yellow 36–50, red >50 (clamped to 75% for display). */}
-              <div style={{ position:"relative", height:6, borderRadius:99, overflow:"hidden", background:"rgba(255,255,255,0.05)" }}>
+              <div style={{ position:"relative", height:6, borderRadius:99, overflow:"hidden", background:"var(--surface-soft)" }}>
                 <div style={{ position:"absolute", left:0,           top:0, bottom:0, width:`${(CV_STABLE_PCT/75)*100}%`,                              background:GREEN,       opacity:0.55 }}/>
                 <div style={{ position:"absolute", left:`${(CV_STABLE_PCT/75)*100}%`, top:0, bottom:0, width:`${((CV_HIGH_PCT-CV_STABLE_PCT)/75)*100}%`, background:HIGH_YELLOW, opacity:0.55 }}/>
                 <div style={{ position:"absolute", left:`${(CV_HIGH_PCT/75)*100}%`,   top:0, bottom:0, right:0,                                          background:PINK,        opacity:0.55 }}/>
-                <div style={{ position:"absolute", left:`${Math.min(cvPct, 75) / 75 * 100}%`, top:-2, bottom:-2, width:2, background:"#fff", borderRadius:1, transform:"translateX(-1px)" }}/>
+                <div style={{ position:"absolute", left:`${Math.min(cvPct, 75) / 75 * 100}%`, top:-2, bottom:-2, width:2, background:"var(--text)", borderRadius:1, transform:"translateX(-1px)" }}/>
               </div>
-              <div style={{ display:"flex", justifyContent:"space-between", marginTop:6, fontSize:8, color:"rgba(255,255,255,0.4)" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", marginTop:6, fontSize:8, color:"var(--text-dim)" }}>
                 <span style={{ color:GREEN }}>● &lt; 36 stabil</span>
                 <span style={{ color:HIGH_YELLOW }}>● 36–50 mittel</span>
                 <span style={{ color:PINK }}>● &gt; 50 instabil</span>
@@ -863,7 +863,7 @@ export default function InsightsPage() {
         >
           <CardLabel text="Meal evaluation · 7d"/>
           {totalN === 0 ? (
-            <div style={{ padding:"18px 0", textAlign:"center", color:"rgba(255,255,255,0.3)", fontSize:11 }}>
+            <div style={{ padding:"18px 0", textAlign:"center", color:"var(--text-faint)", fontSize:11 }}>
               Log meals with post-meal glucose to see your distribution.
             </div>
           ) : (
@@ -871,12 +871,12 @@ export default function InsightsPage() {
               {evalRows.map(r => (
                 <div key={r.label} style={{ display:"flex", alignItems:"center", gap:8 }}>
                   <div style={{ width:60, fontSize:10, color:r.color }}>{r.label}</div>
-                  <div style={{ flex:1, height:6, background:"rgba(255,255,255,0.04)", borderRadius:99, overflow:"hidden" }}>
+                  <div style={{ flex:1, height:6, background:"var(--surface-soft)", borderRadius:99, overflow:"hidden" }}>
                     <div style={{ height:"100%", width:`${r.pct}%`, background:r.color, borderRadius:99, transition:"width 0.3s" }}/>
                   </div>
                   <div
                     title={`${r.pct}%`}
-                    style={{ width:24, textAlign:"right", fontSize:10, color:"#fff", fontFamily:"var(--font-mono)", fontWeight:600 }}
+                    style={{ width:24, textAlign:"right", fontSize:10, color:"var(--text)", fontFamily:"var(--font-mono)", fontWeight:600 }}
                   >
                     {r.count}
                   </div>
@@ -948,30 +948,30 @@ export default function InsightsPage() {
                 <div style={{
                   display:"flex", alignItems:"baseline", gap:8,
                   padding:"2px 2px 10px", marginBottom:10,
-                  borderBottom:`1px solid rgba(255,255,255,0.05)`,
+                  borderBottom:`1px solid var(--border-soft)`,
                 }}>
-                  <span style={{ fontSize:10, color:"rgba(255,255,255,0.4)", fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase" }}>
+                  <span style={{ fontSize:10, color:"var(--text-dim)", fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase" }}>
                     ICR
                   </span>
                   <span style={{
                     fontSize:24, fontWeight:800,
-                    color: adaptiveICR.global ? ACCENT : "rgba(255,255,255,0.25)",
+                    color: adaptiveICR.global ? ACCENT : "var(--text-ghost)",
                     fontFamily:"var(--font-mono)",
                     lineHeight:1, letterSpacing:"-0.03em",
                   }}>
                     {icrText}
                   </span>
-                  <span style={{ fontSize:10, color:"rgba(255,255,255,0.35)", marginLeft:"auto", textAlign:"right", lineHeight:1.25 }}>
+                  <span style={{ fontSize:10, color:"var(--text-faint)", marginLeft:"auto", textAlign:"right", lineHeight:1.25 }}>
                     outcome-weighted<br/>
                     {enginePattern.sampleSize} final meal{enginePattern.sampleSize === 1 ? "" : "s"}
                   </span>
                 </div>
 
                 {/* Pattern label */}
-                <div style={{ fontSize:12, color:"rgba(255,255,255,0.65)", lineHeight:1.5, marginBottom:6 }}>
-                  <span style={{ color:"#fff", fontWeight:600 }}>{enginePattern.label}</span>
+                <div style={{ fontSize:12, color:"var(--text-muted)", lineHeight:1.5, marginBottom:6 }}>
+                  <span style={{ color:"var(--text)", fontWeight:600 }}>{enginePattern.label}</span>
                 </div>
-                <div style={{ fontSize:11, color:"rgba(255,255,255,0.55)", lineHeight:1.5 }}>
+                <div style={{ fontSize:11, color:"var(--text-muted)", lineHeight:1.5 }}>
                   {enginePattern.explanation}
                 </div>
 
@@ -992,7 +992,7 @@ export default function InsightsPage() {
                       </svg>
                       {suggestion.hasSuggestion ? "Suggested adjustment" : "Advisory"}
                     </div>
-                    <div style={{ fontSize:11, color:"rgba(255,255,255,0.85)", lineHeight:1.5 }}>{suggestion.message}</div>
+                    <div style={{ fontSize:11, color:"var(--text-strong)", lineHeight:1.5 }}>{suggestion.message}</div>
                     <div style={{ marginTop:8 }}>
                       <DisclaimerChip/>
                     </div>
@@ -1026,24 +1026,24 @@ export default function InsightsPage() {
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
             <CardLabel text="Total Daily Dose · 7d"/>
-            <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>U / Tag</div>
+            <div style={{ fontSize:9, color:"var(--text-dim)" }}>U / Tag</div>
           </div>
           {!tddEnough || tddAvg7 == null ? (
             <div style={{ padding:"18px 0", textAlign:"center" }}>
-              <div style={{ fontSize:13, color:"rgba(255,255,255,0.45)", fontWeight:600 }}>Nicht genug Daten</div>
-              <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", marginTop:4 }}>≥ {MIN_DATAPOINTS} Tage mit Insulin-Logs erforderlich</div>
+              <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>Nicht genug Daten</div>
+              <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:4 }}>≥ {MIN_DATAPOINTS} Tage mit Insulin-Logs erforderlich</div>
             </div>
           ) : (
             <>
               <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
-                <div style={{ fontSize:36, fontWeight:800, color:"#fff", letterSpacing:"-0.04em", fontFamily:"var(--font-mono)", lineHeight:1 }}>
+                <div style={{ fontSize:36, fontWeight:800, color:"var(--text)", letterSpacing:"-0.04em", fontFamily:"var(--font-mono)", lineHeight:1 }}>
                   {tddAvg7.toFixed(1)}
                 </div>
-                <div style={{ fontSize:14, color:"rgba(255,255,255,0.5)", fontWeight:700 }}>U/Tag</div>
-                <div style={{ marginLeft:"auto", fontSize:9, color:"rgba(255,255,255,0.4)" }}>Ø 7d</div>
+                <div style={{ fontSize:14, color:"var(--text-dim)", fontWeight:700 }}>U/Tag</div>
+                <div style={{ marginLeft:"auto", fontSize:9, color:"var(--text-dim)" }}>Ø 7d</div>
               </div>
               <div style={{ marginTop:10, display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 10px", background:`${ACCENT}10`, border:`1px solid ${ACCENT}25`, borderRadius:10 }}>
-                <div style={{ fontSize:10, color:"rgba(255,255,255,0.6)", fontWeight:600 }}>Heute</div>
+                <div style={{ fontSize:10, color:"var(--text-muted)", fontWeight:600 }}>Heute</div>
                 <div style={{ display:"flex", alignItems:"baseline", gap:4 }}>
                   <div style={{ fontSize:18, fontWeight:800, color:ACCENT, fontFamily:"var(--font-mono)", lineHeight:1 }}>
                     {tddToday.toFixed(1)}
@@ -1075,7 +1075,7 @@ export default function InsightsPage() {
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
             <CardLabel text="Pattern detection"/>
-            <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>{patterns.length} signal{patterns.length===1?"":"s"}</div>
+            <div style={{ fontSize:9, color:"var(--text-dim)" }}>{patterns.length} signal{patterns.length===1?"":"s"}</div>
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
             {patterns.map((p, i) => (
@@ -1085,7 +1085,7 @@ export default function InsightsPage() {
                 </div>
                 <div style={{ minWidth:0 }}>
                   <div style={{ fontSize:11, fontWeight:600, color:p.color, marginBottom:2 }}>{p.title}</div>
-                  <div style={{ fontSize:10, color:"rgba(255,255,255,0.5)", lineHeight:1.45 }}>{p.desc}</div>
+                  <div style={{ fontSize:10, color:"var(--text-dim)", lineHeight:1.45 }}>{p.desc}</div>
                 </div>
               </div>
             ))}
@@ -1115,20 +1115,20 @@ export default function InsightsPage() {
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
             <CardLabel text="Workout Outcomes · 30d"/>
-            <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>Verteilung</div>
+            <div style={{ fontSize:9, color:"var(--text-dim)" }}>Verteilung</div>
           </div>
           {!workoutOutcomeEnough ? (
             <div style={{ padding:"18px 0", textAlign:"center" }}>
-              <div style={{ fontSize:13, color:"rgba(255,255,255,0.45)", fontWeight:600 }}>Nicht genug Daten</div>
-              <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", marginTop:4 }}>≥ {MIN_DATAPOINTS} Trainings in 30 Tagen erforderlich</div>
+              <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>Nicht genug Daten</div>
+              <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:4 }}>≥ {MIN_DATAPOINTS} Trainings in 30 Tagen erforderlich</div>
             </div>
           ) : (
             <>
               <div style={{ display:"flex", alignItems:"baseline", gap:6, marginBottom:10 }}>
-                <div style={{ fontSize:36, fontWeight:800, color:"#fff", letterSpacing:"-0.04em", fontFamily:"var(--font-mono)", lineHeight:1 }}>
+                <div style={{ fontSize:36, fontWeight:800, color:"var(--text)", letterSpacing:"-0.04em", fontFamily:"var(--font-mono)", lineHeight:1 }}>
                   {workoutTotal30}
                 </div>
-                <div style={{ fontSize:11, color:"rgba(255,255,255,0.5)", fontWeight:600 }}>Trainings letzte 30 Tage</div>
+                <div style={{ fontSize:11, color:"var(--text-dim)", fontWeight:600 }}>Trainings letzte 30 Tage</div>
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                 {RANKED_OUTCOMES.map(oc => {
@@ -1138,17 +1138,17 @@ export default function InsightsPage() {
                   return (
                     <div key={oc} style={{ display:"flex", alignItems:"center", gap:8 }}>
                       <div style={{ width:78, fontSize:10, color, fontWeight:700, letterSpacing:"0.02em" }}>{oc}</div>
-                      <div style={{ flex:1, position:"relative", height:6, borderRadius:99, background:"rgba(255,255,255,0.04)", overflow:"hidden" }}>
+                      <div style={{ flex:1, position:"relative", height:6, borderRadius:99, background:"var(--surface-soft)", overflow:"hidden" }}>
                         <div style={{ width:`${pct}%`, height:"100%", background:color, opacity:0.85 }}/>
                       </div>
-                      <div style={{ width:54, textAlign:"right", fontSize:10, color:"rgba(255,255,255,0.55)", fontFamily:"var(--font-mono)" }}>
+                      <div style={{ width:54, textAlign:"right", fontSize:10, color:"var(--text-muted)", fontFamily:"var(--font-mono)" }}>
                         {pct}% · {n}
                       </div>
                     </div>
                   );
                 })}
                 {workoutOutcomeCounts.PENDING > 0 && (
-                  <div style={{ marginTop:2, fontSize:9, color:"rgba(255,255,255,0.35)" }}>
+                  <div style={{ marginTop:2, fontSize:9, color:"var(--text-faint)" }}>
                     + {workoutOutcomeCounts.PENDING} PENDING (CGM-Werte ausstehend)
                   </div>
                 )}
@@ -1180,31 +1180,31 @@ export default function InsightsPage() {
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
             <CardLabel text="BG-Response · Trainingsart"/>
-            <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>vor → +1h</div>
+            <div style={{ fontSize:9, color:"var(--text-dim)" }}>vor → +1h</div>
           </div>
           {!bgResponseEnough ? (
             <div style={{ padding:"18px 0", textAlign:"center" }}>
-              <div style={{ fontSize:13, color:"rgba(255,255,255,0.45)", fontWeight:600 }}>Nicht genug Daten</div>
-              <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", marginTop:4 }}>≥ {MIN_DATAPOINTS} Sessions pro Trainingsart erforderlich</div>
+              <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>Nicht genug Daten</div>
+              <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:4 }}>≥ {MIN_DATAPOINTS} Sessions pro Trainingsart erforderlich</div>
             </div>
           ) : (
             <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
               {bgResponseRows.map(row => {
                 const positive = row.avgDelta > 0;
                 const negative = row.avgDelta < 0;
-                const color = negative ? GREEN : positive ? ORANGE : "rgba(255,255,255,0.6)";
+                const color = negative ? GREEN : positive ? ORANGE : "var(--text-muted)";
                 const sign = positive ? "+" : negative ? "−" : "±";
                 return (
-                  <div key={row.type} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 10px", background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:10 }}>
+                  <div key={row.type} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 10px", background:"var(--surface-soft)", border:"1px solid var(--border-soft)", borderRadius:10 }}>
                     <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontSize:11, fontWeight:700, color:"#fff", letterSpacing:"0.01em" }}>{row.label}</div>
-                      <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)", marginTop:1 }}>{row.count} Session{row.count === 1 ? "" : "s"}</div>
+                      <div style={{ fontSize:11, fontWeight:700, color:"var(--text)", letterSpacing:"0.01em" }}>{row.label}</div>
+                      <div style={{ fontSize:9, color:"var(--text-dim)", marginTop:1 }}>{row.count} Session{row.count === 1 ? "" : "s"}</div>
                     </div>
                     <div style={{ display:"flex", alignItems:"baseline", gap:3 }}>
                       <div style={{ fontSize:18, fontWeight:800, color, fontFamily:"var(--font-mono)", lineHeight:1 }}>
                         {sign}{Math.abs(row.avgDelta)}
                       </div>
-                      <div style={{ fontSize:9, color:"rgba(255,255,255,0.5)", fontWeight:600 }}>mg/dL</div>
+                      <div style={{ fontSize:9, color:"var(--text-dim)", fontWeight:600 }}>mg/dL</div>
                     </div>
                   </div>
                 );
@@ -1237,7 +1237,7 @@ export default function InsightsPage() {
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
             <CardLabel text="Workout Patterns"/>
-            <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>{workoutPatterns.length} Signal{workoutPatterns.length === 1 ? "" : "e"}</div>
+            <div style={{ fontSize:9, color:"var(--text-dim)" }}>{workoutPatterns.length} Signal{workoutPatterns.length === 1 ? "" : "e"}</div>
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
             {workoutPatterns.map((p, i) => (
@@ -1247,7 +1247,7 @@ export default function InsightsPage() {
                 </div>
                 <div style={{ minWidth:0 }}>
                   <div style={{ fontSize:11, fontWeight:600, color:p.color, marginBottom:2 }}>{p.title}</div>
-                  <div style={{ fontSize:10, color:"rgba(255,255,255,0.5)", lineHeight:1.45 }}>{p.desc}</div>
+                  <div style={{ fontSize:10, color:"var(--text-dim)", lineHeight:1.45 }}>{p.desc}</div>
                 </div>
               </div>
             ))}
@@ -1274,7 +1274,7 @@ export default function InsightsPage() {
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
             <CardLabel text="Meal type · success %"/>
-            <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>by macro profile</div>
+            <div style={{ fontSize:9, color:"var(--text-dim)" }}>by macro profile</div>
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
             {TYPE_ORDER.map(type => {
@@ -1284,19 +1284,19 @@ export default function InsightsPage() {
               const avgC = has ? Math.round(data.totalCarbs/data.count) : 0;
               const avgI = has ? (data.totalInsulin/data.count).toFixed(1) : "0.0";
               const col  = TYPE_COLORS[type];
-              const barCol = !has ? "rgba(255,255,255,0.12)" : successPct>=70?GREEN:successPct>=50?ORANGE:PINK;
+              const barCol = !has ? "var(--border-strong)" : successPct>=70?GREEN:successPct>=50?ORANGE:PINK;
               return (
                 <div key={type} style={{ background:`${col}08`, border:`1px solid ${col}20`, borderRadius:10, padding:"8px 10px", opacity: has ? 1 : 0.55 }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6, gap:4 }}>
                     <div style={{ fontSize:9, fontWeight:700, color:col, letterSpacing:"0.06em", textTransform:"uppercase", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{TYPE_LABELS[type]}</div>
-                    <div style={{ fontSize:11, fontWeight:700, color:has?barCol:"rgba(255,255,255,0.3)", fontFamily:"var(--font-mono)" }}>
+                    <div style={{ fontSize:11, fontWeight:700, color:has?barCol:"var(--text-faint)", fontFamily:"var(--font-mono)" }}>
                       {has ? `${successPct}%` : "—"}
                     </div>
                   </div>
-                  <div style={{ height:4, borderRadius:99, background:"rgba(255,255,255,0.05)", overflow:"hidden", marginBottom:6 }}>
+                  <div style={{ height:4, borderRadius:99, background:"var(--surface-soft)", overflow:"hidden", marginBottom:6 }}>
                     <div style={{ height:"100%", width:`${successPct}%`, background:barCol, borderRadius:99 }}/>
                   </div>
-                  <div style={{ fontSize:9, color:"rgba(255,255,255,0.45)", lineHeight:1.4 }}>
+                  <div style={{ fontSize:9, color:"var(--text-dim)", lineHeight:1.4 }}>
                     {has ? `${data.count} meal${data.count===1?"":"s"} · ${avgC}g · ${avgI}u` : "No data"}
                   </div>
                 </div>
@@ -1325,21 +1325,21 @@ export default function InsightsPage() {
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
             <CardLabel text="Time of day · success %"/>
-            <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>by window</div>
+            <div style={{ fontSize:9, color:"var(--text-dim)" }}>by window</div>
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
             {Object.entries(timeGroups).map(([label, data]) => {
               const has = data.count > 0;
               const pct = has ? Math.round(data.good/data.count*100) : 0;
-              const col = !has ? "rgba(255,255,255,0.12)" : pct>=70?GREEN:pct>=50?ORANGE:PINK;
+              const col = !has ? "var(--border-strong)" : pct>=70?GREEN:pct>=50?ORANGE:PINK;
               return (
                 <div key={label} style={{ display:"grid", gridTemplateColumns:"110px 1fr 32px 32px", gap:8, alignItems:"center" }}>
-                  <div style={{ fontSize:10, color:"rgba(255,255,255,0.55)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{label}</div>
-                  <div style={{ height:6, borderRadius:99, background:"rgba(255,255,255,0.04)", overflow:"hidden" }}>
+                  <div style={{ fontSize:10, color:"var(--text-muted)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{label}</div>
+                  <div style={{ height:6, borderRadius:99, background:"var(--surface-soft)", overflow:"hidden" }}>
                     <div style={{ height:"100%", width:`${pct}%`, background:col, borderRadius:99 }}/>
                   </div>
-                  <div style={{ fontSize:10, fontWeight:700, color: has?col:"rgba(255,255,255,0.3)", textAlign:"right", fontFamily:"var(--font-mono)" }}>{has?`${pct}%`:"—"}</div>
-                  <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", textAlign:"right" }}>{data.count}</div>
+                  <div style={{ fontSize:10, fontWeight:700, color: has?col:"var(--text-faint)", textAlign:"right", fontFamily:"var(--font-mono)" }}>{has?`${pct}%`:"—"}</div>
+                  <div style={{ fontSize:9, color:"var(--text-faint)", textAlign:"right" }}>{data.count}</div>
                 </div>
               );
             })}
@@ -1387,7 +1387,7 @@ export default function InsightsPage() {
     <div style={{ maxWidth:480, margin:"0 auto" }}>
       <div style={{ marginBottom:18 }}>
         <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>Insights</h1>
-        <p style={{ color:"rgba(255,255,255,0.35)", fontSize:12 }}>Tap any card to flip · hold to reorder · {total} meals analyzed</p>
+        <p style={{ color:"var(--text-faint)", fontSize:12 }}>Tap any card to flip · hold to reorder · {total} meals analyzed</p>
       </div>
 
       {/* Filter out items whose node was set to null (e.g. workout-patterns
@@ -1415,7 +1415,7 @@ function CardLabel({ text, color }: { text: string; color?: string }) {
   return (
     <div style={{
       fontSize:9, fontWeight:700, letterSpacing:"0.1em",
-      color: color ?? "rgba(255,255,255,0.4)", textTransform:"uppercase",
+      color: color ?? "var(--text-dim)", textTransform:"uppercase",
     }}>{text}</div>
   );
 }
@@ -1471,9 +1471,9 @@ function DisclaimerChip({ text = DEFAULT_DISCLAIMER_TEXT }: { text?: string } = 
     <div style={{
       display:"inline-flex", alignItems:"flex-start", gap:6,
       padding:"5px 10px", borderRadius:12,
-      background:"rgba(255,255,255,0.04)",
-      border:"1px solid rgba(255,255,255,0.1)",
-      fontSize:10, color:"rgba(255,255,255,0.55)", lineHeight:1.35,
+      background:"var(--surface-soft)",
+      border:"1px solid var(--border-strong)",
+      fontSize:10, color:"var(--text-muted)", lineHeight:1.35,
       maxWidth:"100%",
     }}>
       <span aria-hidden style={{ fontSize:11, lineHeight:1.2 }}>⚕️</span>
@@ -1495,7 +1495,7 @@ function ThresholdBack({
       <div style={{ fontSize:12, color:accent, fontWeight:700, letterSpacing:"0.01em", lineHeight:1.25 }}>
         {title}
       </div>
-      <div style={{ fontSize:10, color:"rgba(255,255,255,0.7)", lineHeight:1.5, display:"flex", flexDirection:"column", gap:6 }}>
+      <div style={{ fontSize:10, color:"var(--text-body)", lineHeight:1.5, display:"flex", flexDirection:"column", gap:6 }}>
         {paragraphs.map((p, i) => <div key={i}>{p}</div>)}
       </div>
       <div style={{ marginTop:"auto", display:"flex", flexDirection:"column", gap:6, alignItems:"flex-start" }}>
@@ -1514,14 +1514,14 @@ function IcrInfoBack({ heading, body, subLine, accent }: {
       <div style={{ fontSize:12, color:accent, fontWeight:700, letterSpacing:"0.01em", lineHeight:1.25 }}>
         {heading}
       </div>
-      <div style={{ fontSize:11, color:"rgba(255,255,255,0.7)", lineHeight:1.55 }}>{body}</div>
-      <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)", letterSpacing:"0.02em", marginTop:2 }}>
+      <div style={{ fontSize:11, color:"var(--text-body)", lineHeight:1.55 }}>{body}</div>
+      <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.02em", marginTop:2 }}>
         {subLine}
       </div>
       {/* Bottom region: disclaimer chip + return hint, both pinned to the bottom. */}
       <div style={{ marginTop:"auto", paddingTop:10, display:"flex", flexDirection:"column", gap:6 }}>
         <DisclaimerChip/>
-        <div style={{ fontSize:9, color:"rgba(255,255,255,0.32)", textAlign:"right", letterSpacing:"0.02em" }}>
+        <div style={{ fontSize:9, color:"var(--text-faint)", textAlign:"right", letterSpacing:"0.02em" }}>
           ← zurück
         </div>
       </div>
@@ -1538,7 +1538,7 @@ function InfoCornerIcon() {
     <span aria-hidden style={{
       position:"absolute", top:3, right:6,
       fontSize:10, lineHeight:1,
-      color:"rgba(255,255,255,0.45)",
+      color:"var(--text-dim)",
       pointerEvents:"none",
     }}>{"\u2139\uFE0E"}</span>
   );
@@ -1627,10 +1627,10 @@ function FlipBack({ title, accent, paragraphs }: { title: string; accent: string
     <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
         <div style={{ fontSize:10, color:accent, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>{title}</div>
-        <span style={{ fontSize:9, color:"rgba(255,255,255,0.3)" }}>↺ tap to flip back</span>
+        <span style={{ fontSize:9, color:"var(--text-faint)" }}>↺ tap to flip back</span>
       </div>
       {paragraphs.map((p, i) => (
-        <div key={i} style={{ fontSize:11, color:"rgba(255,255,255,0.65)", lineHeight:1.5 }}>{p}</div>
+        <div key={i} style={{ fontSize:11, color:"var(--text-muted)", lineHeight:1.5 }}>{p}</div>
       ))}
     </div>
   );
@@ -1668,7 +1668,7 @@ function InsightFlipTile({ tile }: { tile: InsightTile }) {
       <div style={{ fontSize:24, fontWeight:800, color:tile.color, fontFamily:"var(--font-mono)", lineHeight:1, letterSpacing:"-0.03em", marginTop:6 }}>
         {tile.val}
       </div>
-      <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)", marginTop:4 }}>{tile.sub}</div>
+      <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:4 }}>{tile.sub}</div>
       {/* Show ℹ affordance only on tiles that opt-in to a richer back side. */}
       {tile.infoBack && <InfoCornerIcon/>}
     </>
@@ -1680,10 +1680,10 @@ function InsightFlipTile({ tile }: { tile: InsightTile }) {
       <div style={{ fontSize:9, fontWeight:700, color:tile.color, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:4 }}>
         {tile.label}
       </div>
-      <div style={{ fontSize:9, color:"rgba(255,255,255,0.6)", fontFamily:"var(--font-mono)", background:"rgba(0,0,0,0.3)", padding:"4px 6px", borderRadius:5, marginBottom:4, wordBreak:"break-word" }}>
+      <div style={{ fontSize:9, color:"var(--text-muted)", fontFamily:"var(--font-mono)", background:"var(--surface-soft)", padding:"4px 6px", borderRadius:5, marginBottom:4, wordBreak:"break-word" }}>
         {tile.formula}
       </div>
-      <div style={{ fontSize:10, color:"rgba(255,255,255,0.55)", lineHeight:1.4 }}>{tile.explain}</div>
+      <div style={{ fontSize:10, color:"var(--text-muted)", lineHeight:1.4 }}>{tile.explain}</div>
     </>
   );
 

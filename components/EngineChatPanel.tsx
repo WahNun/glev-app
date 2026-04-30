@@ -7,8 +7,8 @@ const ACCENT  = "#4F6EF7";
 const GREEN   = "#22D3A0";
 const ORANGE  = "#FF9500";
 const PINK    = "#FF2D78";
-const SURFACE = "#111117";
-const BORDER  = "rgba(255,255,255,0.08)";
+const SURFACE = "var(--surface)";
+const BORDER  = "var(--border)";
 
 // Source tag for one ingredient — mirrors lib/nutrition/types.ts.
 // Kept inlined (no import) to avoid pulling server-side type files
@@ -212,7 +212,7 @@ export default function EngineChatPanel({
       <div style={{ display:"flex", alignItems:"baseline", gap:8, minWidth:0, flex:1 }}>
         <span style={{
           fontSize:12, fontWeight:700, letterSpacing:"0.08em",
-          color:"rgba(255,255,255,0.5)",
+          color:"var(--text-dim)",
           whiteSpace:"nowrap",
         }}>
           {t("ai_food_parser_caps")}
@@ -341,7 +341,7 @@ export default function EngineChatPanel({
             <div style={{
               margin:"auto",
               textAlign:"center",
-              color:"rgba(255,255,255,0.4)",
+              color:"var(--text-dim)",
               fontSize:13, lineHeight:1.65, maxWidth:340,
             }}>
               {t("chat_intro")}
@@ -382,12 +382,12 @@ export default function EngineChatPanel({
               <div key={i} style={{
                 alignSelf: m.role === "user" ? "flex-end" : "flex-start",
                 maxWidth: "88%",
-                background: m.role === "user" ? `${ACCENT}22` : "rgba(255,255,255,0.04)",
+                background: m.role === "user" ? `${ACCENT}22` : "var(--surface-soft)",
                 border: `1px solid ${m.role === "user" ? `${ACCENT}40` : BORDER}`,
                 borderRadius: 12,
                 padding: "10px 13px",
                 fontSize: 13, lineHeight: 1.55,
-                color: m.role === "user" ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.78)",
+                color: m.role === "user" ? "var(--text)" : "var(--text-body)",
                 whiteSpace: "pre-wrap",
                 wordBreak: "break-word",
               }}>
@@ -400,12 +400,12 @@ export default function EngineChatPanel({
           {sending && (
             <div style={{
               alignSelf:"flex-start", display:"flex", gap:5, padding:"10px 13px",
-              background:"rgba(255,255,255,0.04)", border:`1px solid ${BORDER}`, borderRadius:12,
+              background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:12,
             }}>
               {[0,1,2].map(i => (
                 <span key={i} style={{
                   width:6, height:6, borderRadius:"50%",
-                  background:"rgba(255,255,255,0.45)",
+                  background:"var(--text-dim)",
                   animation:`engChatDot 1.1s ease-in-out ${i*0.15}s infinite`,
                 }}/>
               ))}
@@ -441,10 +441,10 @@ export default function EngineChatPanel({
             style={{
               flex:1, minWidth:0,
               padding:"11px 14px",
-              background:"rgba(255,255,255,0.04)",
+              background:"var(--surface-soft)",
               border:`1px solid ${BORDER}`,
               borderRadius:10,
-              color:"#fff", fontSize:13, outline:"none",
+              color:"var(--text)", fontSize:13, outline:"none",
             }}
           />
           <button
@@ -456,8 +456,8 @@ export default function EngineChatPanel({
               borderRadius:10, border:"none",
               background: input.trim() && !sending
                 ? `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`
-                : "rgba(255,255,255,0.06)",
-              color: input.trim() && !sending ? "#fff" : "rgba(255,255,255,0.35)",
+                : "var(--border-soft)",
+              color: input.trim() && !sending ? "#fff" : "var(--text-faint)",
               fontSize:13, fontWeight:700,
               cursor: input.trim() && !sending ? "pointer" : "not-allowed",
               transition:"all 0.15s",

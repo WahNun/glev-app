@@ -5,7 +5,7 @@ import { saveMeal, classifyMeal, computeCalories } from "@/lib/meals";
 import { logDebug } from "@/lib/debug";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
-const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
+const SURFACE="var(--surface)", BORDER="var(--border)";
 
 interface ParsedRow {
   date: string;
@@ -254,7 +254,7 @@ export default function ImportPanel({ embedded = false }: { embedded?: boolean }
     logDebug("IMPORT", { parsed: rows.length, inserted: count, failed: errs.length, error: errs[0] ?? null });
   }
 
-  const inp: React.CSSProperties = { background:"#0D0D12", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 14px", color:"#fff", fontSize:14, outline:"none", width:"100%" };
+  const inp: React.CSSProperties = { background:"var(--input-bg)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 14px", color:"var(--text)", fontSize:14, outline:"none", width:"100%" };
   const card: React.CSSProperties = { background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"20px 24px" };
 
   const SAMPLE = `date,meal,glucose,carbs,protein,fat,fiber,calories,insulin,evaluation
@@ -267,7 +267,7 @@ export default function ImportPanel({ embedded = false }: { embedded?: boolean }
       {!embedded && (
         <div style={{ marginBottom:28 }}>
           <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>Import Center</h1>
-          <p style={{ color:"rgba(255,255,255,0.35)", fontSize:14 }}>Import historical meal data from CSV. Headers are mapped automatically and dates are preserved.</p>
+          <p style={{ color:"var(--text-faint)", fontSize:14 }}>Import historical meal data from CSV. Headers are mapped automatically and dates are preserved.</p>
         </div>
       )}
 
@@ -276,7 +276,7 @@ export default function ImportPanel({ embedded = false }: { embedded?: boolean }
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10, gap:12, flexWrap:"wrap" }}>
           <div>
             <div style={{ fontSize:13, fontWeight:600, color:GREEN }}>Import from Google Sheets</div>
-            <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginTop:2 }}>
+            <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:2 }}>
               Pull your historical log from the configured Google Spreadsheet.
             </div>
           </div>
@@ -286,7 +286,7 @@ export default function ImportPanel({ embedded = false }: { embedded?: boolean }
             style={{
               padding:"10px 18px", borderRadius:10, border:"none",
               cursor: sheetsRunning ? "wait" : "pointer",
-              background:`linear-gradient(135deg, ${GREEN}, #1BAD80)`, color:"#fff",
+              background:`linear-gradient(135deg, ${GREEN}, #1BAD80)`, color:"var(--text)",
               fontSize:13, fontWeight:700, boxShadow:`0 4px 16px ${GREEN}40`,
               opacity: sheetsRunning ? 0.7 : 1,
             }}
@@ -295,14 +295,14 @@ export default function ImportPanel({ embedded = false }: { embedded?: boolean }
           </button>
         </div>
         {sheetsResult && (
-          <div style={{ marginTop:10, fontSize:12, color: sheetsResult.error ? PINK : "rgba(255,255,255,0.55)" }}>
+          <div style={{ marginTop:10, fontSize:12, color: sheetsResult.error ? PINK : "var(--text-muted)" }}>
             {sheetsResult.error
               ? `Error: ${sheetsResult.error}`
               : `Read ${sheetsResult.read} rows · Inserted ${sheetsResult.inserted}${sheetsResult.errors && sheetsResult.errors.length ? ` · ${sheetsResult.errors.length} errors` : ""}`}
             {sheetsResult.errors && sheetsResult.errors.length > 0 && (
               <div style={{ marginTop:8, maxHeight:120, overflowY:"auto" }}>
                 {sheetsResult.errors.slice(0,5).map((e, i) => (
-                  <div key={i} style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginBottom:2 }}>• {e}</div>
+                  <div key={i} style={{ fontSize:11, color:"var(--text-faint)", marginBottom:2 }}>• {e}</div>
                 ))}
               </div>
             )}
@@ -312,8 +312,8 @@ export default function ImportPanel({ embedded = false }: { embedded?: boolean }
 
       <div style={{ ...card, marginBottom:20, borderColor:`${ACCENT}25` }}>
         <div style={{ fontSize:13, fontWeight:600, color:ACCENT, marginBottom:10 }}>Expected CSV Format</div>
-        <pre style={{ fontFamily:"var(--font-mono)", fontSize:11, color:"rgba(255,255,255,0.5)", background:"rgba(0,0,0,0.3)", padding:"12px 14px", borderRadius:8, overflowX:"auto", lineHeight:1.6, margin:0 }}>{SAMPLE}</pre>
-        <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:10, lineHeight:1.6 }}>
+        <pre style={{ fontFamily:"var(--font-mono)", fontSize:11, color:"var(--text-dim)", background:"var(--surface-soft)", padding:"12px 14px", borderRadius:8, overflowX:"auto", lineHeight:1.6, margin:0 }}>{SAMPLE}</pre>
+        <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:10, lineHeight:1.6 }}>
           Columns auto-detected. Supported: date, meal/food/description, glucose/bg, carbs, protein, fat, fiber, calories, insulin/dose, evaluation/result.
         </div>
       </div>
@@ -329,12 +329,12 @@ export default function ImportPanel({ embedded = false }: { embedded?: boolean }
         <div style={{ marginTop:12, display:"flex", gap:10 }}>
           <button onClick={handleParse} disabled={!csv.trim()} style={{
             padding:"10px 20px", borderRadius:10, border:`1px solid ${csv.trim()?ACCENT+"40":BORDER}`, cursor:csv.trim()?"pointer":"not-allowed",
-            background:csv.trim()?`${ACCENT}22`:"rgba(255,255,255,0.03)", color:csv.trim()?ACCENT:"rgba(255,255,255,0.2)",
+            background:csv.trim()?`${ACCENT}22`:"var(--surface-soft)", color:csv.trim()?ACCENT:"var(--text-ghost)",
             fontSize:13, fontWeight:600,
           }}>
             Preview Import
           </button>
-          <button onClick={() => setCSV(SAMPLE)} style={{ padding:"10px 16px", borderRadius:10, border:`1px solid ${BORDER}`, background:"transparent", color:"rgba(255,255,255,0.3)", fontSize:13, cursor:"pointer" }}>
+          <button onClick={() => setCSV(SAMPLE)} style={{ padding:"10px 16px", borderRadius:10, border:`1px solid ${BORDER}`, background:"transparent", color:"var(--text-faint)", fontSize:13, cursor:"pointer" }}>
             Load Sample
           </button>
         </div>
@@ -345,12 +345,12 @@ export default function ImportPanel({ embedded = false }: { embedded?: boolean }
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
             <div>
               <div style={{ fontSize:13, fontWeight:600 }}>Preview — {rows.length} rows detected</div>
-              <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:2 }}>Dates are preserved on import.</div>
+              <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:2 }}>Dates are preserved on import.</div>
             </div>
             {!done && (
               <button onClick={handleImport} disabled={importing} style={{
                 padding:"10px 22px", borderRadius:10, border:"none", cursor:"pointer",
-                background:`linear-gradient(135deg, ${ACCENT}, #6B8BFF)`, color:"#fff",
+                background:`linear-gradient(135deg, ${ACCENT}, #6B8BFF)`, color:"var(--text)",
                 fontSize:13, fontWeight:700, boxShadow:`0 4px 16px ${ACCENT}40`,
               }}>
                 {importing ? `Importing… ${imported}/${rows.length}` : `Import ${rows.length} Rows`}
@@ -360,7 +360,7 @@ export default function ImportPanel({ embedded = false }: { embedded?: boolean }
           <div style={{ overflowX:"auto" }}>
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead>
-                <tr style={{ fontSize:10, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase" }}>
+                <tr style={{ fontSize:10, color:"var(--text-faint)", letterSpacing:"0.07em", textTransform:"uppercase" }}>
                   {["Date","Meal","Gluc","Carbs","Prot","Fat","Fib","Cal","Ins","Eval"].map(h => (
                     <th key={h} style={{ padding:"8px 10px", textAlign:"left", borderBottom:`1px solid ${BORDER}`, fontWeight:400 }}>{h}</th>
                   ))}
@@ -368,22 +368,22 @@ export default function ImportPanel({ embedded = false }: { embedded?: boolean }
               </thead>
               <tbody>
                 {rows.slice(0,10).map((r,i) => (
-                  <tr key={i} style={{ fontSize:12, borderBottom:`1px solid rgba(255,255,255,0.03)` }}>
-                    <td style={{ padding:"9px 10px", color:"rgba(255,255,255,0.4)" }}>{r.date||"—"}</td>
+                  <tr key={i} style={{ fontSize:12, borderBottom:`1px solid var(--surface-soft)` }}>
+                    <td style={{ padding:"9px 10px", color:"var(--text-dim)" }}>{r.date||"—"}</td>
                     <td style={{ padding:"9px 10px" }}>{r.meal.length>28?r.meal.slice(0,28)+"…":r.meal||"—"}</td>
-                    <td style={{ padding:"9px 10px", color:"rgba(255,255,255,0.5)" }}>{r.glucose||"—"}</td>
-                    <td style={{ padding:"9px 10px", color:"rgba(255,255,255,0.5)" }}>{r.carbs?`${r.carbs}g`:"—"}</td>
-                    <td style={{ padding:"9px 10px", color:"rgba(255,255,255,0.5)" }}>{r.protein?`${r.protein}g`:"—"}</td>
-                    <td style={{ padding:"9px 10px", color:"rgba(255,255,255,0.5)" }}>{r.fat?`${r.fat}g`:"—"}</td>
-                    <td style={{ padding:"9px 10px", color:"rgba(255,255,255,0.5)" }}>{r.fiber?`${r.fiber}g`:"—"}</td>
-                    <td style={{ padding:"9px 10px", color:"rgba(255,255,255,0.5)" }}>{r.calories?`${r.calories}`:"—"}</td>
-                    <td style={{ padding:"9px 10px", color:"rgba(255,255,255,0.5)" }}>{r.insulin?`${r.insulin}u`:"—"}</td>
+                    <td style={{ padding:"9px 10px", color:"var(--text-dim)" }}>{r.glucose||"—"}</td>
+                    <td style={{ padding:"9px 10px", color:"var(--text-dim)" }}>{r.carbs?`${r.carbs}g`:"—"}</td>
+                    <td style={{ padding:"9px 10px", color:"var(--text-dim)" }}>{r.protein?`${r.protein}g`:"—"}</td>
+                    <td style={{ padding:"9px 10px", color:"var(--text-dim)" }}>{r.fat?`${r.fat}g`:"—"}</td>
+                    <td style={{ padding:"9px 10px", color:"var(--text-dim)" }}>{r.fiber?`${r.fiber}g`:"—"}</td>
+                    <td style={{ padding:"9px 10px", color:"var(--text-dim)" }}>{r.calories?`${r.calories}`:"—"}</td>
+                    <td style={{ padding:"9px 10px", color:"var(--text-dim)" }}>{r.insulin?`${r.insulin}u`:"—"}</td>
                     <td style={{ padding:"9px 10px" }}>{r.evaluation||"auto"}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {rows.length > 10 && <div style={{ fontSize:11, color:"rgba(255,255,255,0.2)", padding:"8px 10px" }}>… and {rows.length-10} more rows</div>}
+            {rows.length > 10 && <div style={{ fontSize:11, color:"var(--text-ghost)", padding:"8px 10px" }}>… and {rows.length-10} more rows</div>}
           </div>
         </div>
       )}
@@ -402,7 +402,7 @@ export default function ImportPanel({ embedded = false }: { embedded?: boolean }
           {errors.length > 0 && (
             <div style={{ marginTop:10 }}>
               <div style={{ fontSize:12, color:PINK, marginBottom:6 }}>{errors.length} errors:</div>
-              {errors.map((e,i) => <div key={i} style={{ fontSize:11, color:"rgba(255,255,255,0.4)", marginBottom:2 }}>• {e}</div>)}
+              {errors.map((e,i) => <div key={i} style={{ fontSize:11, color:"var(--text-dim)", marginBottom:2 }}>• {e}</div>)}
             </div>
           )}
         </div>

@@ -8,7 +8,7 @@ import { parseDbDate } from "@/lib/time";
 
 const ACCENT = "#4F6EF7";
 const ORANGE = "#FF9500";
-const BORDER = "rgba(255,255,255,0.08)";
+const BORDER = "var(--border)";
 
 export default function MealEntryCardCollapsed({
   meal,
@@ -24,7 +24,7 @@ export default function MealEntryCardCollapsed({
   const dateStr = d.toLocaleDateString("en", { month: "short", day: "numeric" });
   const timeStr = d.toLocaleTimeString("en", { hour: "numeric", minute: "2-digit" });
 
-  const catColor = meal.meal_type ? TYPE_COLORS[meal.meal_type] || "rgba(255,255,255,0.5)" : null;
+  const catColor = meal.meal_type ? TYPE_COLORS[meal.meal_type] || "var(--text-dim)" : null;
   const catLabel = meal.meal_type ? TYPE_LABELS[meal.meal_type] || meal.meal_type : null;
   const catShort = meal.meal_type ? TYPE_SHORT[meal.meal_type] || meal.meal_type.slice(0, 2) : null;
 
@@ -47,7 +47,7 @@ export default function MealEntryCardCollapsed({
       }}
     >
       <style>{`
-        .glev-mec-cell-label{ font-size:9px; color:rgba(255,255,255,0.35); letter-spacing:0.08em; font-weight:600; margin-bottom:3px; text-transform:uppercase; }
+        .glev-mec-cell-label{ font-size:9px; color:var(--text-faint); letter-spacing:0.08em; font-weight:600; margin-bottom:3px; text-transform:uppercase; }
         /* Default (desktop / >= 720px): 4 equal cols + fixed-width eval pill on the right.
            Fixed eval column ensures the 4 data columns line up vertically across all rows
            regardless of pill text width (GOOD vs UNDER DOSE vs OVER DOSE). */
@@ -71,10 +71,10 @@ export default function MealEntryCardCollapsed({
           date can never be cut off. */}
       <div style={{ minWidth: 0 }}>
         <div className="glev-mec-cell-label">When</div>
-        <div style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.85)", letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "var(--font-mono)" }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-strong)", letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "var(--font-mono)" }}>
           {dateStr}
         </div>
-        <div style={{ fontSize: 11, fontWeight: 500, color: "rgba(255,255,255,0.4)", letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "var(--font-mono)", marginTop: 2 }}>
+        <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text-dim)", letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "var(--font-mono)", marginTop: 2 }}>
           {timeStr}
         </div>
       </div>
@@ -90,16 +90,16 @@ export default function MealEntryCardCollapsed({
             </span>
           </div>
         ) : (
-          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.25)" }}>—</span>
+          <span style={{ fontSize: 12, color: "var(--text-ghost)" }}>—</span>
         )}
       </div>
 
       {/* Col 3: Carbs */}
       <div style={{ minWidth: 0 }}>
         <div className="glev-mec-cell-label">Carbs</div>
-        <div style={{ fontSize: 14, fontWeight: 700, color: meal.carbs_grams ? ORANGE : "rgba(255,255,255,0.3)", letterSpacing: "-0.01em", fontFamily: "var(--font-mono)" }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: meal.carbs_grams ? ORANGE : "var(--text-faint)", letterSpacing: "-0.01em", fontFamily: "var(--font-mono)" }}>
           {meal.carbs_grams != null ? meal.carbs_grams : "—"}
-          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontWeight: 500, marginLeft: 2 }}>g</span>
+          <span style={{ fontSize: 10, color: "var(--text-faint)", fontWeight: 500, marginLeft: 2 }}>g</span>
         </div>
       </div>
 
@@ -110,9 +110,9 @@ export default function MealEntryCardCollapsed({
           zu zeigen. Farbe bleibt für 0/null gedimmt. */}
       <div style={{ minWidth: 0 }}>
         <div className="glev-mec-cell-label">Insulin</div>
-        <div style={{ fontSize: 14, fontWeight: 700, color: meal.insulin_units ? ACCENT : "rgba(255,255,255,0.3)", letterSpacing: "-0.01em", fontFamily: "var(--font-mono)" }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: meal.insulin_units ? ACCENT : "var(--text-faint)", letterSpacing: "-0.01em", fontFamily: "var(--font-mono)" }}>
           {meal.insulin_units ?? 0}
-          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", fontWeight: 500, marginLeft: 2 }}>u</span>
+          <span style={{ fontSize: 10, color: "var(--text-faint)", fontWeight: 500, marginLeft: 2 }}>u</span>
         </div>
       </div>
 

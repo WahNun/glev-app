@@ -16,7 +16,7 @@ export type CrosshairPoint = {
   tooltip: string[];
 };
 
-const SURFACE = "#111117";
+const SURFACE = "var(--surface)";
 
 export function useCrosshair(points: CrosshairPoint[]) {
   const [active, setActive] = useState<CrosshairPoint | null>(null);
@@ -199,7 +199,7 @@ export function CrosshairTooltip({
     top,
     minWidth: TIP_W,
     padding: "6px 10px",
-    background: "rgba(15,15,21,0.96)",
+    background: "var(--surface)",
     border: `1px solid ${active.color}55`,
     borderRadius: 8,
     pointerEvents: "none",
@@ -217,7 +217,7 @@ export function CrosshairTooltip({
           style={{
             fontSize: i === 0 ? 10 : 13,
             fontWeight: i === 0 ? 500 : 800,
-            color: i === 0 ? "rgba(255,255,255,0.5)" : active.color,
+            color: i === 0 ? "var(--text-dim)" : active.color,
             letterSpacing: i === 0 ? "0.04em" : "-0.01em",
             lineHeight: 1.15,
           }}

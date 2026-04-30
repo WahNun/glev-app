@@ -31,15 +31,15 @@ const ACCENT = "#4F6EF7";
 const GREEN  = "#22D3A0";
 const ORANGE = "#FF9500";
 const PINK   = "#FF2D78";
-const SURFACE = "#111117";
-const BORDER  = "rgba(255,255,255,0.08)";
+const SURFACE = "var(--surface)";
+const BORDER  = "var(--border)";
 
 const inp: React.CSSProperties = {
-  background: "#0D0D12",
+  background: "var(--input-bg)",
   border: `1px solid ${BORDER}`,
   borderRadius: 10,
   padding: "11px 14px",
-  color: "#fff",
+  color:"var(--text)",
   fontSize: 14,
   outline: "none",
   width: "100%",
@@ -52,7 +52,7 @@ const card: React.CSSProperties = {
 };
 const labelStyle: React.CSSProperties = {
   fontSize: 12,
-  color: "rgba(255,255,255,0.4)",
+  color: "var(--text-dim)",
   display: "block",
   marginBottom: 6,
 };
@@ -140,7 +140,7 @@ function Segmented<T extends string>({
       display: "grid",
       gridTemplateColumns: `repeat(${options.length},1fr)`,
       gap: 6,
-      background: "#0D0D12",
+      background: "var(--input-bg)",
       border: `1px solid ${BORDER}`,
       borderRadius: 12,
       padding: 4,
@@ -157,7 +157,7 @@ function Segmented<T extends string>({
               borderRadius: 8,
               border: "none",
               background: on ? `${accent}22` : "transparent",
-              color: on ? accent : "rgba(255,255,255,0.55)",
+              color: on ? accent : "var(--text-muted)",
               fontSize: 13,
               fontWeight: 700,
               letterSpacing: "-0.01em",
@@ -185,8 +185,8 @@ function StatusBanner({ status, accent }: { status: Status; accent: string }) {
     return (
       <div style={{
         marginTop: 14, padding: "10px 14px",
-        background: "rgba(255,255,255,0.04)", borderRadius: 10,
-        fontSize: 12, color: "rgba(255,255,255,0.55)",
+        background: "var(--surface-soft)", borderRadius: 10,
+        fontSize: 12, color: "var(--text-muted)",
       }}>
         Wird gespeichert…
       </div>
@@ -386,7 +386,7 @@ export function InsulinForm() {
             max={nowLocalDt()}
             onChange={e => setAt(e.target.value)}
           />
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 6 }}>
+          <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 6 }}>
             {atDate && nowMs - atDate.getTime() > 5 * 60_000
               ? `Rückdatiert — ${relativeAgo(nowMs - atDate.getTime())}. Kein Live-CGM, Werte werden aus dem Verlauf geholt.`
               : "Standard: jetzt. Bis zu 365 Tage rückdatierbar."}
@@ -419,11 +419,11 @@ export function InsulinForm() {
               ))}
             </select>
             {todayMeals.length === 0 ? (
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 6 }}>
+              <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 6 }}>
                 Heute noch keine Mahlzeiten geloggt.
               </div>
             ) : (
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 6 }}>
+              <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 6 }}>
                 Heute geloggte Mahlzeiten (max. 10, neueste zuerst).
               </div>
             )}
@@ -437,8 +437,8 @@ export function InsulinForm() {
         style={{
           marginTop: 18, width: "100%", padding: "13px",
           borderRadius: 12, border: "none",
-          background: valid ? GREEN : "rgba(255,255,255,0.05)",
-          color: valid ? "#0A0A0E" : "rgba(255,255,255,0.25)",
+          background: valid ? GREEN : "var(--surface-soft)",
+          color: valid ? "var(--on-accent)" : "var(--text-ghost)",
           fontSize: 14, fontWeight: 800,
           cursor: valid ? "pointer" : "not-allowed",
           transition: "all 0.15s",
@@ -451,8 +451,8 @@ export function InsulinForm() {
 
       <div style={{
         marginTop: 14, padding: "10px 12px",
-        background: "rgba(255,255,255,0.03)", borderRadius: 10,
-        fontSize: 11, color: "rgba(255,255,255,0.4)", lineHeight: 1.5,
+        background: "var(--surface-soft)", borderRadius: 10,
+        fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5,
       }}>
         Glev rechnet keine Dosen — du gibst ein, was du gespritzt hast. Der CGM-Wert wird beim Absenden automatisch gezogen.
       </div>
@@ -575,7 +575,7 @@ export function ExerciseForm() {
             display: "grid",
             gridTemplateColumns: "repeat(3, 1fr)",
             gap: 6,
-            background: "#0D0D12",
+            background: "var(--input-bg)",
             border: `1px solid ${BORDER}`,
             borderRadius: 12,
             padding: 4,
@@ -592,7 +592,7 @@ export function ExerciseForm() {
                     borderRadius: 8,
                     border: "none",
                     background: on ? `${ORANGE}22` : "transparent",
-                    color: on ? ORANGE : "rgba(255,255,255,0.55)",
+                    color: on ? ORANGE : "var(--text-muted)",
                     fontSize: 13,
                     fontWeight: 700,
                     letterSpacing: "-0.01em",
@@ -615,7 +615,7 @@ export function ExerciseForm() {
             display: "grid",
             gridTemplateColumns: `repeat(${STARTED_OPTIONS.length}, 1fr)`,
             gap: 6,
-            background: "#0D0D12",
+            background: "var(--input-bg)",
             border: `1px solid ${BORDER}`,
             borderRadius: 12,
             padding: 4,
@@ -632,7 +632,7 @@ export function ExerciseForm() {
                     borderRadius: 8,
                     border: "none",
                     background: on ? `${ORANGE}22` : "transparent",
-                    color: on ? ORANGE : "rgba(255,255,255,0.55)",
+                    color: on ? ORANGE : "var(--text-muted)",
                     fontSize: 13,
                     fontWeight: 700,
                     letterSpacing: "-0.01em",
@@ -693,8 +693,8 @@ export function ExerciseForm() {
         style={{
           marginTop: 18, width: "100%", padding: "13px",
           borderRadius: 12, border: "none",
-          background: valid ? ORANGE : "rgba(255,255,255,0.05)",
-          color: valid ? "#0A0A0E" : "rgba(255,255,255,0.25)",
+          background: valid ? ORANGE : "var(--surface-soft)",
+          color: valid ? "var(--on-accent)" : "var(--text-ghost)",
           fontSize: 14, fontWeight: 800,
           cursor: valid ? "pointer" : "not-allowed",
           transition: "all 0.15s",
@@ -707,8 +707,8 @@ export function ExerciseForm() {
 
       <div style={{
         marginTop: 14, padding: "10px 12px",
-        background: "rgba(255,255,255,0.03)", borderRadius: 10,
-        fontSize: 11, color: "rgba(255,255,255,0.4)", lineHeight: 1.5,
+        background: "var(--surface-soft)", borderRadius: 10,
+        fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5,
       }}>
         Der CGM-Wert beim Loggen hilft Glev, Bewegung mit Glukose-Reaktionen zu verknüpfen.
       </div>
@@ -738,10 +738,10 @@ export default function EngineLogTab() {
 
       <div style={{
         marginTop: 20, padding: "14px 18px",
-        background: "rgba(255,255,255,0.03)", borderRadius: 12, border: `1px solid ${BORDER}`,
+        background: "var(--surface-soft)", borderRadius: 12, border: `1px solid ${BORDER}`,
       }}>
-        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", lineHeight: 1.6 }}>
-          <strong style={{ color: "rgba(255,255,255,0.4)" }}>Hinweis:</strong> Insulin- und
+        <div style={{ fontSize: 11, color: "var(--text-ghost)", lineHeight: 1.6 }}>
+          <strong style={{ color: "var(--text-dim)" }}>Hinweis:</strong> Insulin- und
           Exercise-Logs sind reine Dokumentation. Glev berechnet keine Dosen und gibt
           keine Empfehlungen zur Insulingabe — das ist Sache deines Diabetes-Teams.
         </div>

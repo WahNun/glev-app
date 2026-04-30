@@ -223,7 +223,12 @@
     "account": "Konto",
     "logout": "Abmelden",
     "language_confirm_title": "Sprache wechseln?",
-    "language_confirm_body": "Die App lädt neu, damit die neue Sprache geladen wird. Nicht gespeicherte Eingaben gehen verloren."
+    "language_confirm_body": "Die App lädt neu, damit die neue Sprache geladen wird. Nicht gespeicherte Eingaben gehen verloren.",
+    "appearance": "Erscheinungsbild",
+    "appearance_hint": "Lege fest, wie Glev aussieht. „System“ folgt deiner Geräteeinstellung.",
+    "theme_dark": "Dunkel",
+    "theme_light": "Hell",
+    "theme_system": "System"
   },
   "common": {
     "loading": "Laden…",

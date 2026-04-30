@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Meal } from "@/lib/meals";
 
 const ACCENT = "#4F6EF7";
-const BORDER = "rgba(255,255,255,0.08)";
+const BORDER = "var(--border)";
 
 type Timepoint = "30min" | "1h" | "90min" | "2h" | "3h";
 
@@ -143,7 +143,7 @@ export default function PendingGlucoseStrip({
         </button>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", fontWeight: 500 }}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>
             BG nach {activeTp.label}
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
@@ -161,18 +161,18 @@ export default function PendingGlucoseStrip({
                 autoFocus
                 style={{
                   width: "100%", boxSizing: "border-box",
-                  background: "#0D0D12",
-                  border: "1px solid rgba(255,255,255,0.1)",
+                  background: "var(--input-bg)",
+                  border: "1px solid var(--border-strong)",
                   borderRadius: 8,
                   padding: "8px 48px 8px 12px",
-                  color: "#fff", fontSize: 14,
+                  color:"var(--text)", fontSize: 14,
                   fontFamily: "inherit", outline: "none",
                 }}
               />
               <span style={{
                 position: "absolute", right: 10, top: "50%",
                 transform: "translateY(-50%)",
-                color: "rgba(255,255,255,0.4)", fontSize: 11, pointerEvents: "none",
+                color: "var(--text-dim)", fontSize: 11, pointerEvents: "none",
               }}>mg/dL</span>
             </div>
             <button
@@ -181,7 +181,7 @@ export default function PendingGlucoseStrip({
               disabled={saving || !val}
               style={{
                 background: saving || !val ? "#333" : ACCENT,
-                color: "#fff", border: "none", borderRadius: 8,
+                color:"var(--text)", border: "none", borderRadius: 8,
                 padding: "0 14px", fontWeight: 600, fontSize: 12,
                 fontFamily: "inherit",
                 cursor: saving || !val ? "default" : "pointer",
@@ -196,7 +196,7 @@ export default function PendingGlucoseStrip({
               aria-label="Schließen"
               style={{
                 background: "none", border: "none",
-                color: "rgba(255,255,255,0.5)", fontSize: 18,
+                color: "var(--text-dim)", fontSize: 18,
                 cursor: "pointer", padding: "0 4px",
                 fontFamily: "inherit",
               }}

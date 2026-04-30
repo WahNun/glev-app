@@ -223,7 +223,12 @@
     "account": "Account",
     "logout": "Sign out",
     "language_confirm_title": "Change language?",
-    "language_confirm_body": "The app will reload to load the new language. Unsaved input will be lost."
+    "language_confirm_body": "The app will reload to load the new language. Unsaved input will be lost.",
+    "appearance": "Appearance",
+    "appearance_hint": "Choose how Glev looks. System follows your device setting.",
+    "theme_dark": "Dark",
+    "theme_light": "Light",
+    "theme_system": "System"
   },
   "common": {
     "loading": "Loading…",

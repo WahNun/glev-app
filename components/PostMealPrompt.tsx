@@ -5,10 +5,10 @@ import { usePostMealCheck } from "@/hooks/usePostMealCheck";
 import { supabase } from "@/lib/supabase";
 
 const ACCENT      = "#4F6EF7";
-const SHEET_BG    = "#1A1A24";
-const SHEET_BORDER = "rgba(255,255,255,0.1)";
-const INPUT_BG    = "#111117";
-const TEXT_DIM    = "rgba(255,255,255,0.6)";
+const SHEET_BG    = "var(--surface-alt)";
+const SHEET_BORDER = "var(--border-strong)";
+const INPUT_BG    = "var(--surface)";
+const TEXT_DIM    = "var(--text-muted)";
 
 /**
  * Floating bottom banner that asks the user for a post-meal BG reading
@@ -110,7 +110,7 @@ export default function PostMealPrompt() {
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12, gap: 12 }}>
             <div style={{ minWidth: 0 }}>
-              <div style={{ color: "#fff", fontWeight: 600, fontSize: 14, lineHeight: 1.3 }}>
+              <div style={{ color:"var(--text)", fontWeight: 600, fontSize: 14, lineHeight: 1.3 }}>
                 BG nach {pendingMeal.label}
               </div>
               <div style={{ color: TEXT_DIM, fontSize: 12, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -148,7 +148,7 @@ export default function PostMealPrompt() {
                   border: `1px solid ${SHEET_BORDER}`,
                   borderRadius: 10,
                   padding: "12px 56px 12px 14px",
-                  color: "#fff", fontSize: 16,
+                  color:"var(--text)", fontSize: 16,
                   fontFamily: "inherit",
                   outline: "none",
                 }}
@@ -164,7 +164,7 @@ export default function PostMealPrompt() {
               disabled={saving || !glucoseValue}
               style={{
                 background: saving || !glucoseValue ? "#333" : ACCENT,
-                color: "#fff", border: "none", borderRadius: 10,
+                color:"var(--text)", border: "none", borderRadius: 10,
                 padding: "0 20px", fontWeight: 600, fontSize: 14,
                 fontFamily: "inherit",
                 cursor: saving || !glucoseValue ? "default" : "pointer",
@@ -187,7 +187,7 @@ export default function PostMealPrompt() {
             onClick={dismiss}
             style={{
               background: "none", border: "none",
-              color: "rgba(255,255,255,0.4)", fontSize: 12,
+              color: "var(--text-dim)", fontSize: 12,
               cursor: "pointer", marginTop: 10, padding: 0,
               fontFamily: "inherit",
             }}

@@ -5,8 +5,8 @@ import { insertFingerstick, type FingerstickReading } from "@/lib/fingerstick";
 
 const ACCENT  = "#4F6EF7";
 const PINK    = "#FF2D78";
-const SURFACE = "#111117";
-const BORDER  = "rgba(255,255,255,0.08)";
+const SURFACE = "var(--surface)";
+const BORDER  = "var(--border)";
 
 /**
  * Tiny inline modal for logging a manual fingerstick (capillary blood)
@@ -81,7 +81,7 @@ export default function FingerstickQuickInput({
       onClick={onClose}
       style={{
         position: "fixed", inset: 0, zIndex: 100,
-        background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)",
+        background: "var(--overlay)", backdropFilter: "blur(4px)",
         display: "flex", alignItems: "center", justifyContent: "center",
         padding: 20,
       }}
@@ -106,7 +106,7 @@ export default function FingerstickQuickInput({
             }}>
               Fingerstick
             </div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: "#fff", marginTop: 2 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color:"var(--text)", marginTop: 2 }}>
               Manueller Glucose-Wert
             </div>
           </div>
@@ -115,7 +115,7 @@ export default function FingerstickQuickInput({
             aria-label="Close"
             style={{
               background: "transparent", border: "none", cursor: "pointer",
-              color: "rgba(255,255,255,0.5)", fontSize: 18, padding: 4,
+              color: "var(--text-dim)", fontSize: 18, padding: 4,
               lineHeight: 1,
             }}
           >
@@ -127,7 +127,7 @@ export default function FingerstickQuickInput({
         <div>
           <label style={{
             fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
-            color: "rgba(255,255,255,0.4)", textTransform: "uppercase",
+            color: "var(--text-dim)", textTransform: "uppercase",
             display: "block", marginBottom: 6,
           }}>
             mg/dL
@@ -146,10 +146,10 @@ export default function FingerstickQuickInput({
             style={{
               width: "100%", boxSizing: "border-box",
               padding: "14px 16px",
-              background: "rgba(255,255,255,0.04)",
+              background: "var(--surface-soft)",
               border: `1px solid ${BORDER}`,
               borderRadius: 12,
-              color: "#fff",
+              color:"var(--text)",
               fontSize: 28, fontWeight: 700,
               fontFamily: "var(--font-mono)",
               letterSpacing: "-0.02em",
@@ -157,7 +157,7 @@ export default function FingerstickQuickInput({
               outline: "none",
             }}
           />
-          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", marginTop: 6, textAlign: "center" }}>
+          <div style={{ fontSize: 10, color: "var(--text-faint)", marginTop: 6, textAlign: "center" }}>
             Wird mit aktueller Zeit gespeichert. Überschreibt CGM-Wert für 5 Minuten.
           </div>
         </div>
@@ -180,7 +180,7 @@ export default function FingerstickQuickInput({
             style={{
               flex: 1, padding: "12px", borderRadius: 12,
               border: `1px solid ${BORDER}`, background: "transparent",
-              color: "rgba(255,255,255,0.6)", fontSize: 14, fontWeight: 500,
+              color: "var(--text-muted)", fontSize: 14, fontWeight: 500,
               cursor: saving ? "not-allowed" : "pointer",
             }}
           >
@@ -194,7 +194,7 @@ export default function FingerstickQuickInput({
               background: saving || !value
                 ? `${ACCENT}40`
                 : `linear-gradient(135deg, ${ACCENT}, #3B5BE0)`,
-              color: "#fff", fontSize: 14, fontWeight: 700,
+              color:"var(--text)", fontSize: 14, fontWeight: 700,
               cursor: saving || !value ? "not-allowed" : "pointer",
               boxShadow: !saving && value ? `0 4px 18px ${ACCENT}40` : "none",
             }}

@@ -29,7 +29,7 @@ function nowLocalDateTime(): string {
 }
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
-const SURFACE="#111117", BORDER="rgba(255,255,255,0.08)";
+const SURFACE="var(--surface)", BORDER="var(--border)";
 
 interface Recommendation {
   dose: number;
@@ -1103,7 +1103,7 @@ export default function EnginePage() {
     }
   }
 
-  const inp: React.CSSProperties = { background:"#0D0D12", border:`1px solid ${BORDER}`, borderRadius:10, padding:"11px 14px", color:"#fff", fontSize:14, outline:"none", width:"100%" };
+  const inp: React.CSSProperties = { background:"var(--input-bg)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"11px 14px", color:"var(--text)", fontSize:14, outline:"none", width:"100%" };
   const card: React.CSSProperties = { background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"20px 24px" };
 
   return (
@@ -1156,7 +1156,7 @@ export default function EnginePage() {
               aria-label="Engine"
               style={{
                 display:"flex", width:"100%", gap:2,
-                padding:4, background:"rgba(255,255,255,0.06)",
+                padding:4, background:"var(--border-soft)",
                 borderRadius:99, boxSizing:"border-box",
                 justifyContent:"space-around",
                 overflowX:"auto", scrollbarWidth:"none",
@@ -1175,7 +1175,7 @@ export default function EnginePage() {
                       padding:"8px 14px",
                       borderRadius:99, border:"none", cursor:"pointer",
                       background: on ? ACCENT : "transparent",
-                      color: "white",
+                      color:"var(--text)",
                       fontSize:13, fontWeight: on ? 600 : 500,
                       textAlign:"center", whiteSpace:"nowrap",
                       transition:"background 0.15s",
@@ -1249,11 +1249,11 @@ export default function EnginePage() {
                         borderRadius: 18,
                         background: "transparent",
                         border: `1px solid ${
-                          active ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.06)"
+                          active ? "var(--text-ghost)" : "var(--border-soft)"
                         }`,
                         color: active
-                          ? "rgba(255,255,255,0.75)"
-                          : "rgba(255,255,255,0.18)",
+                          ? "var(--text-body)"
+                          : "var(--text-ghost)",
                         cursor: active ? "pointer" : "default",
                         display: "flex",
                         alignItems: "center",
@@ -1308,7 +1308,7 @@ export default function EnginePage() {
                               background: i <= stepIndex ? ACCENT : "#2A2A36",
                               display: "flex", alignItems: "center", justifyContent: "center",
                               fontSize: 13, fontWeight: 700,
-                              color: i <= stepIndex ? "#fff" : "rgba(255,255,255,0.4)",
+                              color: i <= stepIndex ? "#fff" : "var(--text-dim)",
                               transition: "background 0.2s, color 0.2s",
                             }}
                           >
@@ -1334,9 +1334,9 @@ export default function EnginePage() {
               marginTop: 10, fontSize: 12, fontWeight: 600,
               textAlign: "center", letterSpacing: "-0.01em",
             }}>
-              <span style={{ color: stepIndex === 0 ? ACCENT : "rgba(255,255,255,0.45)" }}>Essen</span>
-              <span style={{ color: stepIndex === 1 ? ACCENT : "rgba(255,255,255,0.45)" }}>Makros</span>
-              <span style={{ color: stepIndex === 2 ? ACCENT : "rgba(255,255,255,0.45)" }}>Ergebnis</span>
+              <span style={{ color: stepIndex === 0 ? ACCENT : "var(--text-dim)" }}>Essen</span>
+              <span style={{ color: stepIndex === 1 ? ACCENT : "var(--text-dim)" }}>Makros</span>
+              <span style={{ color: stepIndex === 2 ? ACCENT : "var(--text-dim)" }}>Ergebnis</span>
             </div>
           </div>
 
@@ -1387,7 +1387,7 @@ export default function EnginePage() {
                   width: "100%", maxWidth: 280, height: 56, borderRadius: 28,
                   background: recording ? `${ACCENT}1f` : SURFACE,
                   border: `1px solid ${recording ? ACCENT : `${ACCENT}55`}`,
-                  color: "#fff",
+                  color:"var(--text)",
                   fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
                   cursor: parsing || !speechAvail ? "not-allowed" : "pointer",
                   animation: recording ? "engRecHalo 1.4s ease-in-out infinite" : undefined,
@@ -1423,7 +1423,7 @@ export default function EnginePage() {
                   hint the button just appears greyed out with no recourse,
                   and users don't realise they can fall back to the chat. */}
               {!speechAvail && !voiceErr && (
-                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", textAlign: "center", maxWidth: 360, lineHeight: 1.4 }}>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", maxWidth: 360, lineHeight: 1.4 }}>
                   Sprach-Eingabe in diesem Browser nicht verfügbar — bitte den Chat unten nutzen.
                 </div>
               )}
@@ -1502,7 +1502,7 @@ export default function EnginePage() {
                       display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
                       width: "100%", maxWidth: 360, height: 48, borderRadius: 14,
                       background: `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
-                      border: "none", color: "#fff",
+                      border: "none", color:"var(--text)",
                       fontSize: 14, fontWeight: 700, letterSpacing: "-0.01em",
                       cursor: "pointer",
                       boxShadow: `0 4px 20px ${ACCENT}40`,
@@ -1546,7 +1546,7 @@ export default function EnginePage() {
                 style={{
                   width: "100%", height: 52, borderRadius: 12, border: "none",
                   background: ACCENT,
-                  color: "#fff", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
+                  color:"var(--text)", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
                   cursor: "pointer",
                   transition: "background 0.2s",
                 }}
@@ -1557,7 +1557,7 @@ export default function EnginePage() {
           )}
           {stepIndex === 1 && wizardSavedDose === null && (
             <div style={{ ...card, padding: 24 }}>
-              <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 20, color: "#fff" }}>
+              <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 20, color:"var(--text)" }}>
                 Makros prüfen
               </h2>
 
@@ -1567,7 +1567,7 @@ export default function EnginePage() {
                   display: "flex", alignItems: "center", justifyContent: "space-between",
                   gap: 8, marginBottom: 12,
                 }}>
-                  <div style={{ fontSize: 11, color: "#666680", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700 }}>
+                  <div style={{ fontSize: 11, color: "var(--text-faint)", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700 }}>
                     {tEngine("macros_section")}
                   </div>
                   {/* Provenance badge: shows whether the macros currently in the
@@ -1620,21 +1620,21 @@ export default function EnginePage() {
                     macro-grid pattern. */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, rowGap: 14 }}>
                   <div>
-                    <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>{tEngine("carbs_label")}</label>
+                    <label style={{ fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>{tEngine("carbs_label")}</label>
                     <input style={inp} type="number" placeholder={tEngine("placeholder_carbs")} value={carbs} onChange={(e) => setCarbs(e.target.value)}/>
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>
-                      {tEngine("fiber_label")} <span style={{ textTransform: "none", color: "rgba(255,255,255,0.3)", fontSize: 10, fontWeight: 500 }}>{tEngine("optional_short")}</span>
+                    <label style={{ fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>
+                      {tEngine("fiber_label")} <span style={{ textTransform: "none", color: "var(--text-faint)", fontSize: 10, fontWeight: 500 }}>{tEngine("optional_short")}</span>
                     </label>
                     <input style={inp} type="number" placeholder={tEngine("placeholder_fiber")} value={fiber} onChange={(e) => setFiber(e.target.value)}/>
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>{tEngine("protein_label")}</label>
+                    <label style={{ fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>{tEngine("protein_label")}</label>
                     <input style={inp} type="number" placeholder={tEngine("placeholder_protein")} value={protein} onChange={(e) => setProtein(e.target.value)}/>
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>{tEngine("fat_label")}</label>
+                    <label style={{ fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>{tEngine("fat_label")}</label>
                     <input style={inp} type="number" placeholder={tEngine("placeholder_fat")} value={fat} onChange={(e) => setFat(e.target.value)}/>
                   </div>
                 </div>
@@ -1642,13 +1642,13 @@ export default function EnginePage() {
 
               {/* Section header: Glukose & Zeit — glucose + CGM pull pill, meal time */}
               <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 11, color: "#666680", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700, marginBottom: 12 }}>
+                <div style={{ fontSize: 11, color: "var(--text-faint)", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700, marginBottom: 12 }}>
                   {tEngine("glucose_time_section")}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   <div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, gap: 8 }}>
-                      <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600 }}>
+                      <label style={{ fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600 }}>
                         {tEngine("glucose_before_label")}{lastReading ? ` · ${tEngine("glucose_last_prefix")}: ${lastReading}` : ""}
                       </label>
                       <button onClick={handlePullCgm} disabled={cgmPulling} style={{
@@ -1664,7 +1664,7 @@ export default function EnginePage() {
                     <input style={inp} type="number" placeholder={tEngine("placeholder_glucose")} value={glucose} onChange={(e) => setGlucose(e.target.value)}/>
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>
+                    <label style={{ fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>
                       {tEngine("meal_time_label")}
                     </label>
                     <input
@@ -1702,7 +1702,7 @@ export default function EnginePage() {
                   style={{
                     width: "100%", height: 52, borderRadius: 12, border: "none",
                     background: confirming ? "rgba(79,110,247,0.4)" : ACCENT,
-                    color: "#fff", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
+                    color:"var(--text)", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
                     cursor: confirming ? "wait" : "pointer",
                     transition: "background 0.2s",
                   }}
@@ -1753,11 +1753,11 @@ export default function EnginePage() {
                     style={{
                       width: "100%", height: 32, borderRadius: 6,
                       border: "none", background: "transparent",
-                      color: "rgba(255,255,255,0.55)",
+                      color: "var(--text-muted)",
                       fontSize: 12, fontWeight: 600, letterSpacing: "-0.01em",
                       cursor: running || confirming ? "not-allowed" : "pointer",
                       textDecoration: "underline", textUnderlineOffset: 3,
-                      textDecorationColor: "rgba(255,255,255,0.25)",
+                      textDecorationColor: "var(--text-ghost)",
                     }}
                   >
                     Bolus direkt eingeben
@@ -1782,7 +1782,7 @@ export default function EnginePage() {
                         aria-label="Abbrechen"
                         style={{
                           background: "transparent", border: "none",
-                          color: "rgba(255,255,255,0.45)", fontSize: 18,
+                          color: "var(--text-dim)", fontSize: 18,
                           lineHeight: 1, cursor: confirming ? "not-allowed" : "pointer",
                           padding: "0 4px",
                         }}
@@ -1804,18 +1804,18 @@ export default function EnginePage() {
                           autoFocus
                           style={{
                             width: "100%", height: 44,
-                            background: "#0D0D12",
+                            background: "var(--input-bg)",
                             border: `1px solid ${BORDER}`,
                             borderRadius: 10,
                             padding: "0 36px 0 12px",
-                            color: "#fff", fontSize: 16, fontWeight: 700,
+                            color:"var(--text)", fontSize: 16, fontWeight: 700,
                             outline: "none", textAlign: "right",
                           }}
                         />
                         <span style={{
                           position: "absolute", right: 12, top: "50%",
                           transform: "translateY(-50%)",
-                          color: "rgba(255,255,255,0.45)", fontSize: 12, fontWeight: 600,
+                          color: "var(--text-dim)", fontSize: 12, fontWeight: 600,
                           pointerEvents: "none",
                         }}>
                           IE
@@ -1836,7 +1836,7 @@ export default function EnginePage() {
                               background: confirming
                                 ? "rgba(79,110,247,0.4)"
                                 : valid ? ACCENT : "rgba(79,110,247,0.25)",
-                              color: "#fff",
+                              color:"var(--text)",
                               fontSize: 13, fontWeight: 700, letterSpacing: "-0.01em",
                               cursor: blocked ? (confirming ? "wait" : "not-allowed") : "pointer",
                               transition: "background 0.2s",
@@ -1861,7 +1861,7 @@ export default function EnginePage() {
                   style={{
                     width: "100%", height: 36, borderRadius: 8,
                     border: "none", background: "transparent",
-                    color: "#666680", fontSize: 13, fontWeight: 500,
+                    color: "var(--text-faint)", fontSize: 13, fontWeight: 500,
                     cursor: running || confirming ? "not-allowed" : "pointer",
                   }}
                 >
@@ -1874,7 +1874,7 @@ export default function EnginePage() {
           {/* ───────── STEP 3: Deine Empfehlung ───────── */}
           {stepIndex === 2 && (
             <div>
-              <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 16, color: "#fff" }}>
+              <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 16, color:"var(--text)" }}>
                 Deine Einschätzung
               </h2>
 
@@ -1883,7 +1883,7 @@ export default function EnginePage() {
                 // transition on a successful calc, but if state was lost
                 // (e.g. tab switch + reset) give the user a clean way back.
                 <div style={{ ...card, padding: 20, marginBottom: 16 }}>
-                  <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 13, lineHeight: 1.5, marginBottom: 14 }}>
+                  <div style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.5, marginBottom: 14 }}>
                     Keine Einschätzung verfügbar. Bitte zurück zu Schritt 2 und neu berechnen.
                   </div>
                   <button
@@ -1891,7 +1891,7 @@ export default function EnginePage() {
                     style={{
                       padding: "10px 18px", borderRadius: 10,
                       border: `1px solid ${BORDER}`, background: "transparent",
-                      color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                      color:"var(--text)", fontSize: 13, fontWeight: 600, cursor: "pointer",
                     }}
                   >
                     ← Zurück
@@ -1902,20 +1902,20 @@ export default function EnginePage() {
                   {/* Result card — dose front-and-center, 32px bold white,
                       confidence chip + ICR ratio underneath. */}
                   <div style={{
-                    background: "#0D0D14", border: "1px solid #1C1C28",
+                    background: "var(--surface)", border: "1px solid var(--border)",
                     borderRadius: 16, padding: 20, marginBottom: 14,
                   }}>
-                    <div style={{ fontSize: 11, color: "#666680", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700, marginBottom: 8 }}>
+                    <div style={{ fontSize: 11, color: "var(--text-faint)", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700, marginBottom: 8 }}>
                       Empfohlene Dosis
                     </div>
                     <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 14 }}>
-                      <span style={{ fontSize: 32, fontWeight: 800, color: "#fff", letterSpacing: "-0.03em", lineHeight: 1 }}>
+                      <span style={{ fontSize: 32, fontWeight: 800, color:"var(--text)", letterSpacing: "-0.03em", lineHeight: 1 }}>
                         {result.dose}
                       </span>
-                      <span style={{ fontSize: 14, color: "rgba(255,255,255,0.45)", fontWeight: 600 }}>IE</span>
+                      <span style={{ fontSize: 14, color: "var(--text-dim)", fontWeight: 600 }}>IE</span>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 12, flexWrap: "wrap" }}>
-                      <span style={{ color: "rgba(255,255,255,0.55)" }}>ICR: 1:{adaptedICR}</span>
+                      <span style={{ color: "var(--text-muted)" }}>ICR: 1:{adaptedICR}</span>
                       <span style={{
                         padding: "2px 10px", borderRadius: 99,
                         fontSize: 10, fontWeight: 700, letterSpacing: "0.05em",
@@ -1925,7 +1925,7 @@ export default function EnginePage() {
                       }}>
                         {result.confidence}
                       </span>
-                      <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 11 }}>
+                      <span style={{ color: "var(--text-faint)", fontSize: 11 }}>
                         {result.source === "historical" ? "Historische Daten" : result.source === "blended" ? "Blended Modell" : "ICR Formel"}
                       </span>
                     </div>
@@ -1933,7 +1933,7 @@ export default function EnginePage() {
 
                   {/* Collapsible GPT reasoning — chevron toggles the body. */}
                   <div style={{
-                    background: "#0D0D14", border: "1px solid #1C1C28",
+                    background: "var(--surface)", border: "1px solid var(--border)",
                     borderRadius: 12, marginBottom: 14, overflow: "hidden",
                   }}>
                     <button
@@ -1944,7 +1944,7 @@ export default function EnginePage() {
                         display: "flex", alignItems: "center", justifyContent: "space-between",
                         width: "100%", padding: "12px 16px",
                         background: "transparent", border: "none", cursor: "pointer",
-                        color: "#666680", fontSize: 11, fontWeight: 700,
+                        color: "var(--text-faint)", fontSize: 11, fontWeight: 700,
                         letterSpacing: "0.08em", textTransform: "uppercase",
                       }}
                     >
@@ -1956,14 +1956,14 @@ export default function EnginePage() {
                       </svg>
                     </button>
                     {reasoningExpanded && (
-                      <div id="gpt-reasoning-body" style={{ padding: "0 16px 14px", fontSize: 13, lineHeight: 1.6, color: "#AAAACC" }}>
+                      <div id="gpt-reasoning-body" style={{ padding: "0 16px 14px", fontSize: 13, lineHeight: 1.6, color: "var(--text-body)" }}>
                         {result.reasoning}
                       </div>
                     )}
                   </div>
 
                   {/* Meal summary line — shows what the user is about to save. */}
-                  <div style={{ marginBottom: 18, fontSize: 12, color: "rgba(255,255,255,0.45)", lineHeight: 1.5, padding: "0 4px" }}>
+                  <div style={{ marginBottom: 18, fontSize: 12, color: "var(--text-dim)", lineHeight: 1.5, padding: "0 4px" }}>
                     {(desc.trim() || transcript.trim() || "Mahlzeit")} · {parseFloat(carbs) || 0}g KH
                   </div>
 
@@ -1980,7 +1980,7 @@ export default function EnginePage() {
                         style={{
                           width: "100%", height: 52, borderRadius: 12, border: "none",
                           background: confirming ? "rgba(79,110,247,0.4)" : ACCENT,
-                          color: "#fff", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
+                          color:"var(--text)", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
                           cursor: confirming ? "wait" : "pointer",
                           marginBottom: 8,
                           transition: "background 0.2s",
@@ -1994,7 +1994,7 @@ export default function EnginePage() {
                         style={{
                           width: "100%", height: 36, borderRadius: 8,
                           border: "none", background: "transparent",
-                          color: "#666680", fontSize: 13, fontWeight: 500,
+                          color: "var(--text-faint)", fontSize: 13, fontWeight: 500,
                           cursor: confirming ? "not-allowed" : "pointer",
                         }}
                       >
@@ -2024,7 +2024,7 @@ export default function EnginePage() {
                         style={{
                           width: "100%", height: 52, borderRadius: 12, border: "none",
                           background: ACCENT,
-                          color: "#fff", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
+                          color:"var(--text)", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
                           cursor: "pointer",
                           transition: "background 0.2s",
                         }}
@@ -2035,9 +2035,9 @@ export default function EnginePage() {
                   )}
 
                   {/* Important medical disclaimer — same wording as the legacy result panel. */}
-                  <div style={{ marginTop: 24, padding: "14px 18px", background: "rgba(255,255,255,0.03)", borderRadius: 12, border: `1px solid ${BORDER}` }}>
-                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", lineHeight: 1.6 }}>
-                      <strong style={{ color: "rgba(255,255,255,0.4)" }}>Important:</strong> Glev Engine provides decision support only. Always consult your endocrinologist before adjusting insulin doses. This tool is not a medical device.
+                  <div style={{ marginTop: 24, padding: "14px 18px", background: "var(--surface-soft)", borderRadius: 12, border: `1px solid ${BORDER}` }}>
+                    <div style={{ fontSize: 11, color: "var(--text-ghost)", lineHeight: 1.6 }}>
+                      <strong style={{ color: "var(--text-dim)" }}>Important:</strong> Glev Engine provides decision support only. Always consult your endocrinologist before adjusting insulin doses. This tool is not a medical device.
                     </div>
                   </div>
                 </>
