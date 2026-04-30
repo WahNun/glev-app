@@ -8,6 +8,19 @@ const PINK = "#FF2D78";
 const SURFACE = "var(--surface)";
 const BORDER = "var(--border)";
 
+function formatRelativeAge(iso: string): string {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "unbekannt";
+  const diffSec = Math.max(0, Math.floor((Date.now() - t) / 1000));
+  if (diffSec < 60) return "gerade eben";
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `vor ${diffMin} min`;
+  const diffH = Math.floor(diffMin / 60);
+  if (diffH < 24) return `vor ${diffH} Std.`;
+  const diffD = Math.floor(diffH / 24);
+  return `vor ${diffD} Tagen`;
+}
+
 interface StatusResponse {
   connected: boolean;
   email: string | null;
@@ -103,6 +116,25 @@ export default function CgmSettingsCard() {
   const [nightscoutMessage, setNightscoutMessage] =
     useState<{ kind: "success" | "error"; text: string } | null>(null);
 
+  // Apple Health (HealthKit) — fourth source, iOS only. Unlike LLU /
+  // Nightscout there are NO credentials in `profiles`; the iOS app
+  // pushes samples to apple_health_readings via the Capacitor bridge.
+  // The signal "is the user on Apple Health?" therefore lives in
+  // profiles.cgm_source which we read via /api/cgm/source. We keep the
+  // last sync count + timestamp so the user gets a "x readings · last
+  // sync N min ago" status without us having to actually trigger a
+  // probe sync from the settings card.
+  const [isNativePlatform, setIsNativePlatform] = useState(false);
+  const [appleHealthSelected, setAppleHealthSelected] = useState(false);
+  const [appleHealthStatus, setAppleHealthStatus] = useState<{
+    count: number;
+    lastTimestamp: string | null;
+    lastValueMgDl: number | null;
+  } | null>(null);
+  const [appleHealthSubmitting, setAppleHealthSubmitting] = useState(false);
+  const [appleHealthMessage, setAppleHealthMessage] =
+    useState<{ kind: "success" | "error" | "info"; text: string } | null>(null);
+
   const loadStatus = useCallback(async () => {
     setLoadingStatus(true);
     setStatusError("");
@@ -139,6 +171,59 @@ export default function CgmSettingsCard() {
     }
   }, []);
 
+  // Apple Health state fetcher. Two parallel reads:
+  //   1. /api/cgm/source — is the user pinned to apple_health?
+  //   2. /api/cgm/apple-health/sync (GET) — how many cached readings &
+  //      when was the latest one ingested?
+  // Both are silent-on-error: a 401 / 5xx just means "show as not
+  // connected" rather than blowing up the whole settings card.
+  const loadAppleHealthState = useCallback(async () => {
+    try {
+      const [srcRes, statRes] = await Promise.all([
+        fetch("/api/cgm/source", { cache: "no-store" }),
+        fetch("/api/cgm/apple-health/sync", { cache: "no-store" }),
+      ]);
+      if (srcRes.ok) {
+        const j = (await srcRes.json()) as { source?: string | null };
+        setAppleHealthSelected(j?.source === "apple_health");
+      }
+      if (statRes.ok) {
+        const j = (await statRes.json()) as {
+          count?: number;
+          lastTimestamp?: string | null;
+          lastValueMgDl?: number | null;
+        };
+        setAppleHealthStatus({
+          count: j?.count ?? 0,
+          lastTimestamp: j?.lastTimestamp ?? null,
+          lastValueMgDl: j?.lastValueMgDl ?? null,
+        });
+      }
+    } catch {
+      /* silent */
+    }
+  }, []);
+
+  // Detect whether we're inside the Capacitor iOS shell. The dropdown
+  // option remains visible in the web preview so users know it exists,
+  // but it's disabled with an "iOS-only" hint — same UX pattern as the
+  // Junction "coming soon" treatment.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const mod = (await import("@capacitor/core")) as unknown as {
+          Capacitor?: { isNativePlatform?: () => boolean };
+        };
+        if (cancelled) return;
+        setIsNativePlatform(!!mod.Capacitor?.isNativePlatform?.());
+      } catch {
+        if (!cancelled) setIsNativePlatform(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   // Nightscout state fetcher — same silent-on-error policy as Junction. The
   // GET on the sync route returns { connected, url, hasToken } so the form
   // can pre-fill the URL field without ever exposing the plaintext token.
@@ -165,7 +250,8 @@ export default function CgmSettingsCard() {
     void loadStatus();
     void loadJunctionState();
     void loadNightscoutState();
-  }, [loadStatus, loadJunctionState, loadNightscoutState]);
+    void loadAppleHealthState();
+  }, [loadStatus, loadJunctionState, loadNightscoutState, loadAppleHealthState]);
 
   // Junction OAuth callback handler — when user returns from Junction's hosted
   // Link flow, the redirect lands at /settings?cgm=connected. Refresh state,
@@ -386,6 +472,127 @@ export default function CgmSettingsCard() {
       });
     } finally {
       setNightscoutSubmitting(false);
+    }
+  }
+
+  // Apple Health connect — only meaningful inside the iOS shell. The
+  // flow is:
+  //   1. Ask for HealthKit permission via the dynamic plugin import
+  //      (web bundle stays clean — see lib/cgm/appleHealthClient.ts).
+  //   2. PATCH /api/cgm/source so the dispatcher routes to apple_health.
+  //   3. Trigger an immediate first sync so the user sees the readings
+  //      land within a couple of seconds; then refresh the status panel.
+  // Failures bubble up via appleHealthMessage; we never silently switch
+  // the source preference because that would leave the user with a
+  // "connected" pin pointing at an empty cache.
+  async function handleAppleHealthConnect() {
+    setAppleHealthMessage(null);
+    if (!isNativePlatform) {
+      setAppleHealthMessage({
+        kind: "info",
+        text: "Apple Health ist nur in der iOS-App verfügbar.",
+      });
+      return;
+    }
+    setAppleHealthSubmitting(true);
+    try {
+      const { requestAuthorization, syncRecent } = await import(
+        "@/lib/cgm/appleHealthClient"
+      );
+      const auth = await requestAuthorization();
+      if (!auth.ok) {
+        // iOS only prompts once per install, so a "no-permission" here
+        // typically means the user already denied. Surface the path to
+        // re-enable in the iOS Settings app — Apple does not let us
+        // open Health → Glev directly.
+        setAppleHealthMessage({
+          kind: "error",
+          text:
+            "Berechtigung verweigert. Bitte unter Einstellungen → Datenschutz → Health → Glev erlauben und erneut versuchen.",
+        });
+        return;
+      }
+      const patchRes = await fetch("/api/cgm/source", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ source: "apple_health" }),
+        cache: "no-store",
+      });
+      if (!patchRes.ok) {
+        const body = (await patchRes.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        throw new Error(body?.error || `Fehler ${patchRes.status}`);
+      }
+      setAppleHealthSelected(true);
+      // Notify the auto-fill provider so it re-arms the background
+      // sync interval immediately — without this the user only gets
+      // background syncs after a page reload.
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("glev:cgm-source-changed", {
+            detail: { source: "apple_health" },
+          }),
+        );
+      }
+      const sync = await syncRecent();
+      await loadAppleHealthState();
+      if (sync.ok) {
+        setAppleHealthMessage({
+          kind: "success",
+          text: sync.fetched
+            ? `✓ Verbunden — ${sync.inserted ?? 0} neue Werte synchronisiert.`
+            : "✓ Verbunden — bisher keine Werte in Apple Health gefunden.",
+        });
+      } else {
+        setAppleHealthMessage({
+          kind: "error",
+          text:
+            sync.error ||
+            "Verbunden, aber initiale Synchronisierung ist fehlgeschlagen.",
+        });
+      }
+    } catch (err) {
+      setAppleHealthMessage({
+        kind: "error",
+        text: err instanceof Error ? err.message : "Verbindung fehlgeschlagen",
+      });
+    } finally {
+      setAppleHealthSubmitting(false);
+    }
+  }
+
+  async function handleAppleHealthDisconnect() {
+    if (!confirm("Apple-Health-Verbindung wirklich trennen?")) return;
+    setAppleHealthSubmitting(true);
+    try {
+      // Clearing the source pin reverts the dispatcher to the legacy
+      // URL-presence rule (Nightscout if a URL is saved, else LLU).
+      // We deliberately leave the cached readings in
+      // apple_health_readings so a re-connect is instant — the unique
+      // index makes the next sync a no-op for already-seen UUIDs.
+      const res = await fetch("/api/cgm/source", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ source: null }),
+        cache: "no-store",
+      });
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(body?.error || `Fehler ${res.status}`);
+      setAppleHealthSelected(false);
+      setAppleHealthMessage(null);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("glev:cgm-source-changed", { detail: { source: null } }),
+        );
+      }
+    } catch (err) {
+      setAppleHealthMessage({
+        kind: "error",
+        text: err instanceof Error ? err.message : "Trennen fehlgeschlagen",
+      });
+    } finally {
+      setAppleHealthSubmitting(false);
     }
   }
 
@@ -660,6 +867,9 @@ export default function CgmSettingsCard() {
                 <option value="librelinkup">LibreLinkUp</option>
                 <option value="libreview-junction">LibreView (Junction) — Coming Soon</option>
                 <option value="nightscout">Nightscout</option>
+                <option value="apple-health" disabled={!isNativePlatform}>
+                  Apple Health{isNativePlatform ? "" : " — nur in der iOS-App"}
+                </option>
                 <option value="dexcom" disabled>Dexcom (coming soon)</option>
               </select>
             </div>
@@ -1008,6 +1218,134 @@ export default function CgmSettingsCard() {
                     }}
                   >
                     {nightscoutMessage.text}
+                  </div>
+                )}
+              </>
+            )}
+
+            {cgmType === "apple-health" && (
+              <>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "var(--text-muted)",
+                    lineHeight: 1.6,
+                    background: "var(--surface-soft)",
+                    border: `1px solid ${BORDER}`,
+                    borderRadius: 10,
+                    padding: "12px 14px",
+                  }}
+                >
+                  Lies deine Glukosewerte direkt aus Apple Health — egal welcher
+                  Sensor sie schreibt (Libre 3, Dexcom G7, Accu-Chek …). Beim
+                  ersten Verbinden fragt iOS einmalig die Berechtigung ab.
+                  Danach holt Glev neue Werte automatisch, solange die App
+                  geöffnet ist.
+                </div>
+
+                {!isNativePlatform && (
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "var(--text-dim)",
+                      background: "var(--surface-soft)",
+                      border: `1px solid ${BORDER}`,
+                      borderRadius: 10,
+                      padding: "10px 14px",
+                    }}
+                  >
+                    Apple Health funktioniert nur in der iOS-App von Glev. Im
+                    Web-Vorschau-Modus ist diese Option deaktiviert.
+                  </div>
+                )}
+
+                {appleHealthSelected && appleHealthStatus && (
+                  <div
+                    style={{
+                      fontSize: 13,
+                      color: GREEN,
+                      background: `${GREEN}10`,
+                      border: `1px solid ${GREEN}30`,
+                      borderRadius: 10,
+                      padding: "10px 14px",
+                    }}
+                  >
+                    {appleHealthStatus.lastValueMgDl != null
+                      ? `✓ Verbunden — letzter Wert: ${appleHealthStatus.lastValueMgDl} mg/dL`
+                      : "✓ Verbunden — noch keine Werte synchronisiert."}
+                    <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>
+                      {appleHealthStatus.count} Werte gespeichert
+                      {appleHealthStatus.lastTimestamp
+                        ? ` · zuletzt ${formatRelativeAge(appleHealthStatus.lastTimestamp)}`
+                        : ""}
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: "flex", gap: 10, marginTop: 4, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    onClick={handleAppleHealthConnect}
+                    disabled={!isNativePlatform || appleHealthSubmitting}
+                    title={!isNativePlatform ? "Nur in der iOS-App" : undefined}
+                    style={{
+                      padding: "12px 18px",
+                      borderRadius: 12,
+                      border: "none",
+                      cursor: !isNativePlatform
+                        ? "not-allowed"
+                        : appleHealthSubmitting
+                        ? "wait"
+                        : "pointer",
+                      background: `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
+                      color: "var(--text)",
+                      fontSize: 14,
+                      fontWeight: 700,
+                      boxShadow: `0 4px 20px ${ACCENT}40`,
+                      opacity: !isNativePlatform || appleHealthSubmitting ? 0.5 : 1,
+                    }}
+                  >
+                    {appleHealthSubmitting
+                      ? "Verbinde…"
+                      : appleHealthSelected
+                      ? "Jetzt synchronisieren"
+                      : "Apple Health verbinden"}
+                  </button>
+                  {appleHealthSelected && (
+                    <button
+                      type="button"
+                      onClick={handleAppleHealthDisconnect}
+                      disabled={appleHealthSubmitting}
+                      style={{
+                        padding: "12px 18px",
+                        borderRadius: 12,
+                        border: `1px solid ${PINK}50`,
+                        background: "transparent",
+                        color: PINK,
+                        fontSize: 14,
+                        fontWeight: 600,
+                        cursor: appleHealthSubmitting ? "wait" : "pointer",
+                      }}
+                    >
+                      Trennen
+                    </button>
+                  )}
+                </div>
+
+                {appleHealthMessage && (
+                  <div
+                    style={{
+                      fontSize: 13,
+                      color:
+                        appleHealthMessage.kind === "success"
+                          ? GREEN
+                          : appleHealthMessage.kind === "error"
+                          ? PINK
+                          : "var(--text-dim)",
+                      marginTop: 4,
+                    }}
+                  >
+                    {appleHealthMessage.text}
                   </div>
                 )}
               </>
