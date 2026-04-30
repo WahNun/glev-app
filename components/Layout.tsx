@@ -216,7 +216,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               as a small dropdown behind a 32×32 "+" button. This is
               the only home for the Glukose + Aktivität flows on
               mobile now that the bottom-nav Glev tap routes straight
-              to /engine?tab=log; Mahlzeit is intentionally duplicated
+              to /engine?tab=engine (the recommendation tab); Mahlzeit
+              is intentionally duplicated
               here so the header "+" stays self-sufficient. */}
           <QuickAddMenu />
           <button
@@ -317,11 +318,16 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             </svg>
           )}
         />
-        {/* Glev tab — equal-weight 4th-of-4 slot. Tapping goes DIRECTLY
-            to the engine voice screen (meal-log flow). The three-way
-            "pick a flow" sheet was removed; the two secondary flows
-            (Glukose / Aktivität) live in the header "+" dropdown so
-            this tap remains a single decisive gesture. Visual rules:
+        {/* Glev tab — equal-weight 4th-of-4 slot. Tapping lands DIRECTLY
+            on the engine recommendation screen (the dose-calc / wizard
+            tab). Other engine sub-screens (Log, Bolus, Aktivität,
+            Fingerstick) are reachable from the engine header dropdown
+            chip oben rechts; the bottom-nav tap should be a single
+            decisive gesture into the headline tool, not the log view.
+            The three-way "pick a flow" sheet was removed earlier; the
+            two pure-input flows (Glukose / Aktivität) live in the
+            header "+" dropdown so this tap remains a single gesture.
+            Visual rules:
               - no background bubble / circle / FAB elevation
               - same icon size + stroke as the other 3 tabs
               - active = icon+label colour change to ACCENT whenever
@@ -329,7 +335,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         <MobileTab
           label={tNav("glev")}
           active={pathname.startsWith("/engine")}
-          onClick={() => router.push("/engine?tab=log")}
+          onClick={() => router.push("/engine?tab=engine")}
           icon={(a) => (
             <GlevLogo size={22} color={a ? ACCENT : NAV_INACTIVE} bg="transparent"/>
           )}
@@ -361,10 +367,11 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       </nav>
 
       {/* The mobile Glev action sheet was removed: the bottom-nav Glev
-          tap now routes straight to /engine?tab=log, and the two
-          secondary flows (Glukose / Aktivität) live in the header "+"
-          dropdown (QuickAddMenu). The matching SheetItem helper was
-          deleted along with the overlay. */}
+          tap now routes straight to /engine?tab=engine (the dose-calc
+          recommendation screen). The Mahlzeit / Glukose / Aktivität
+          input flows live in the header "+" dropdown (QuickAddMenu)
+          and in the engine header tabs-chip dropdown. The matching
+          SheetItem helper was deleted along with the overlay. */}
 
     </div>
   );
