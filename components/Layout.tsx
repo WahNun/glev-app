@@ -166,7 +166,11 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           aria-label="Open about Glev"
           style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", flex: 1, minWidth: 0 }}
         >
-          <GlevLockup size={26} color="var(--text)" symbolBg="var(--surface-alt)" />
+          {/* Symbol-BG bewusst hart auf Brand-Dunkel gepinnt (matcht das
+              iOS-Favicon). Wordmark folgt dem Theme via var(--text), aber
+              das Logo-Quadrat soll in Light Mode NICHT mit-aufhellen,
+              sonst löst es sich vom Header optisch auf. */}
+          <GlevLockup size={26} color="var(--text)" symbolBg="#0F0F14" />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {/* Engine-page tab toggle. Only rendered when the engine page
@@ -256,7 +260,9 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             borderRadius: 10, cursor: "pointer",
           }}
         >
-          <GlevLockup size={28} color="var(--text)" symbolBg="var(--surface-alt)" />
+          {/* Same logic as the mobile header — keep the icon square dark
+              in both themes so it always reads as the Glev "favicon". */}
+          <GlevLockup size={28} color="var(--text)" symbolBg="#0F0F14" />
         </div>
 
         <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
