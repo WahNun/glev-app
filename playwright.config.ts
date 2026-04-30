@@ -17,7 +17,13 @@ const PORT = Number(process.env.PORT ?? 5000);
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${PORT}`;
 
 export default defineConfig({
-  testDir: "./tests/e2e",
+  // Widened from `./tests/e2e` so the runner also picks up the
+  // pure-function unit suites under `./tests/unit/*.test.ts` (no
+  // browser involvement, no dev-server dependency). The default
+  // Playwright `testMatch` already covers both `*.spec.ts` and
+  // `*.test.ts`, so no extra config is needed here. Support files
+  // under `./tests/support/` don't match either glob and are ignored.
+  testDir: "./tests",
   globalSetup: "./tests/global-setup.ts",
   // The dev server is single-process / shared state — keep workers serial
   // so Supabase test users don't race each other.
@@ -53,12 +59,18 @@ export default defineConfig({
       },
     },
   ],
-  webServer: {
-    command: "npm run dev",
-    url: BASE_URL,
-    reuseExistingServer: true,
-    timeout: 120_000,
-    stdout: "ignore",
-    stderr: "pipe",
-  },
+  // Boot the dev server (or reuse an existing one) for the e2e specs.
+  // Pure-function unit suites under `tests/unit/` don't need the
+  // server — the `PLAYWRIGHT_SKIP_WEBSERVER=1` escape hatch lets a
+  // unit-only run skip the 60-90s Next.js cold-compile entirely.
+  webServer: process.env.PLAYWRIGHT_SKIP_WEBSERVER === "1"
+    ? undefined
+    : {
+        command: "npm run dev",
+        url: BASE_URL,
+        reuseExistingServer: true,
+        timeout: 120_000,
+        stdout: "ignore",
+        stderr: "pipe",
+      },
 });
