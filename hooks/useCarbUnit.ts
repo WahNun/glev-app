@@ -80,7 +80,7 @@ function ensureFetched(): Promise<void> {
       const { data: profile } = await supabase
         .from("profiles")
         .select("carb_unit")
-        .eq("id", uid)
+        .eq("user_id", uid)
         .maybeSingle();
       cachedForUid = uid;
       if (unitVersion !== startVersion) return;
@@ -148,7 +148,7 @@ export function useCarbUnit(): UseCarbUnitResult {
         await supabase
           .from("profiles")
           .update({ carb_unit: next })
-          .eq("id", uid);
+          .eq("user_id", uid);
       } catch {
         // Persist errors are non-fatal; the local state remains correct
         // for this session and a later setUnit() will retry.
