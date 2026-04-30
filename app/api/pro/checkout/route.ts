@@ -175,6 +175,14 @@ export async function POST(req: NextRequest) {
         success_url: `${origin}/pro/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${origin}/pro/cancelled`,
         locale: "de",
+        custom_fields: [
+          {
+            key: "full_name",
+            label: { type: "custom", custom: "Vollständiger Name" },
+            type: "text",
+            optional: false,
+          },
+        ],
       });
     } catch (stripeErr) {
       // Full Stripe error (with code/param/request_id) is logged for ops.

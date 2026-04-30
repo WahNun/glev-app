@@ -73,6 +73,14 @@ export async function POST(req: NextRequest) {
       success_url: `${appUrl}/pro/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/pro/cancelled`,
       locale: "de",
+      custom_fields: [
+        {
+          key: "full_name",
+          label: { type: "custom", custom: "Vollständiger Name" },
+          type: "text",
+          optional: false,
+        },
+      ],
     };
 
     if (email) {

@@ -42,6 +42,14 @@ export async function POST(req: NextRequest) {
       ],
       success_url: `${process.env.NEXT_PUBLIC_APP_URL}/beta/welcome?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/beta`,
+      custom_fields: [
+        {
+          key: 'full_name',
+          label: { type: 'custom', custom: 'Vollständiger Name' },
+          type: 'text',
+          optional: false,
+        },
+      ],
     };
 
     if (email) {
