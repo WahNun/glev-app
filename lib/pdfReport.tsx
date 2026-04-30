@@ -33,7 +33,7 @@ import type { Meal } from "@/lib/meals";
 import type { InsulinLog } from "@/lib/insulin";
 import type { ExerciseLog } from "@/lib/exercise";
 import type { FingerstickReading } from "@/lib/fingerstick";
-import { formatCarbs, gToUnit, type CarbUnit } from "@/lib/carbUnits";
+import { formatCarbs, formatICR, gToUnit, type CarbUnit } from "@/lib/carbUnits";
 
 /* ──────────────────────────────────────────────────────────────────
    Brand tokens (mirror app brandbook). React-PDF needs hex/rgb only.
@@ -496,6 +496,13 @@ interface ReportProps {
   // Defaults to "g" so any caller that hasn't yet been threaded with
   // the user's preference still produces the legacy gram-only output.
   carbUnit?: CarbUnit;
+  // The user's current insulin-to-carb ratio, in g/IE (the canonical
+  // engine unit). Surfaced on the cover meta block and as a small
+  // annotation on the insulin section so a clinician sees the ratio
+  // alongside the dosed units (e.g. "5 U @ 2 BE/IE"). Optional —
+  // omitted/0/null suppresses the annotation entirely so the report
+  // stays clean for users who haven't yet configured their ICR.
+  icrGperIE?: number | null;
 }
 
 const Footer = ({ email, generatedAt }: { email: string; generatedAt: string }) => (
@@ -632,7 +639,7 @@ function computeInsightsMetrics(
   };
 }
 
-export function GlevReport({ email, meals, insulin, exercise, fingersticks, carbUnit = "g" }: ReportProps) {
+export function GlevReport({ email, meals, insulin, exercise, fingersticks, carbUnit = "g", icrGperIE = null }: ReportProps) {
   // Cache the unit's display label once so we can compose KH column
   // headers (e.g. "KH (BE)") without recomputing. Uses the short form
   // ("g" / "BE" / "KE") rather than the verbose CARB_UNITS label
@@ -655,6 +662,14 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks, carb
     g === null || g === undefined || !Number.isFinite(g)
       ? "—"
       : formatCarbs(g, carbUnit);
+  // ICR is only shown when the caller passes a finite, positive value —
+  // a missing setting (user never opened Settings) would otherwise
+  // surface a misleading "0 BE/IE" line, suggesting an unsafe ratio.
+  const hasICR =
+    typeof icrGperIE === "number" &&
+    Number.isFinite(icrGperIE) &&
+    icrGperIE > 0;
+  const icrLabel = hasICR ? formatICR(icrGperIE as number, carbUnit) : null;
   const agg = computeAggregates(meals, insulin, exercise, fingersticks);
   const ins = computeInsightsMetrics(meals, insulin, fingersticks);
   const range = dateRange(
@@ -720,6 +735,17 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks, carb
             <Text style={styles.metaLabel}>Kohlenhydrat-Einheit</Text>
             <Text style={styles.metaValue}>{carbLabel}</Text>
           </View>
+          {/* ICR snapshot in the user's chosen unit (e.g. "2 BE/IE").
+              DACH clinics often want to read the dosed insulin against
+              the ratio it was calibrated for. Hidden when the user
+              hasn't configured ICR yet (hasICR=false) so the cover
+              never shows a misleading "0 BE/IE". */}
+          {icrLabel !== null && (
+            <View style={styles.metaItem}>
+              <Text style={styles.metaLabel}>ICR (aktuell)</Text>
+              <Text style={styles.metaValue}>{icrLabel}</Text>
+            </View>
+          )}
         </View>
 
         {/* ── Insights — Übersicht ───────────────────────────────────
@@ -915,6 +941,7 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks, carb
         <Text style={styles.sectionHeading}>Insulin-Einträge</Text>
         <Text style={styles.sectionSub}>
           {insulin.length} erfasste Einträge — die {showInsulin.length} jüngsten werden aufgeführt.
+          {icrLabel !== null && ` · Aktueller ICR: ${icrLabel}`}
         </Text>
 
         {showInsulin.length === 0 ? (

@@ -568,7 +568,7 @@
     "pdf_failed": "PDF-Export fehlgeschlagen.",
     "pdf_info_label": "PDF-Report",
     "pdf_info_body": ": formatierte Übersicht mit Time-in-Range, Insulin-Summen, Mahlzeiten- und Fingerstick-Historie — geeignet zum Ausdrucken oder als Anhang für deinen Arzt.",
-    "carb_unit_note": "Kohlenhydrate werden als {unit} exportiert — passend zu deiner Einstellung. Auf der Einstellungen-Seite kannst du zwischen Gramm, BE und KE wechseln."
+    "carb_unit_note": "Kohlenhydrate werden als {unit} exportiert — passend zu deiner Einstellung. Insulin-Exporte enthalten zusätzlich deinen aktuellen ICR in derselben Einheit (z. B. {unit}/IE). Auf der Einstellungen-Seite kannst du zwischen Gramm, BE und KE wechseln."
   },
   "fingerstick": {
     "card_eyebrow": "Finger-Stick Glukose",

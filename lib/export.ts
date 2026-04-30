@@ -13,7 +13,7 @@ import type { Meal } from "@/lib/meals";
 import type { InsulinLog } from "@/lib/insulin";
 import type { ExerciseLog } from "@/lib/exercise";
 import type { FingerstickReading } from "@/lib/fingerstick";
-import { gToUnit, type CarbUnit } from "@/lib/carbUnits";
+import { gToUnit, icrToUnit, type CarbUnit } from "@/lib/carbUnits";
 
 /* ──────────────────────────────────────────────────────────────────
    CSV primitives
@@ -83,13 +83,52 @@ export function mealsToCSV(meals: Meal[], unit: CarbUnit = "g"): string {
   return buildCSV(headers, rows);
 }
 
-export function insulinToCSV(logs: InsulinLog[]): string {
+// Optional second argument lets the caller annotate every row with the
+// user's current ICR converted to their preferred carb-unit (e.g. BE/IE
+// or KE/IE). Some DACH clinics like to read insulin doses alongside the
+// ratio they were dosed against so a quick "U vs ICR" sanity check is
+// possible without flipping back to the patient's settings sheet. The
+// value is a snapshot of the user's *current* setting at export time —
+// not a per-log historic value, since insulin_logs doesn't store one.
+//
+// Defaults preserve the legacy header/row layout byte-for-byte: any
+// caller that hasn't been threaded with the user preference (or any
+// test that asserts on the raw output) keeps working unchanged.
+export function insulinToCSV(
+  logs: InsulinLog[],
+  opts: { carbUnit?: CarbUnit; icrGperIE?: number | null } = {},
+): string {
+  const { carbUnit, icrGperIE } = opts;
+  // Annotate ICR only when both the unit AND a finite positive value
+  // are available — a missing ICR setting (user never opened Settings)
+  // would otherwise show a misleading "0 BE/IE" in every row.
+  const includeICR =
+    carbUnit !== undefined &&
+    typeof icrGperIE === "number" &&
+    Number.isFinite(icrGperIE) &&
+    icrGperIE > 0;
+  // Header column tag mirrors the meals CSV convention: short unit
+  // code in parens (e.g. "icr_be_per_ie (BE/IE)"), so the column is
+  // self-describing for a clinician opening the file standalone.
+  const icrUnitTag = carbUnit === "g" ? "g" : (carbUnit ?? "g");
+  const icrHeaderKey =
+    carbUnit === "g"
+      ? "icr_g_per_ie"
+      : `icr_${(carbUnit ?? "g").toLowerCase()}_per_ie`;
+  const icrHeader = `${icrHeaderKey} (${icrUnitTag}/IE)`;
+  // Pre-compute the converted value once — same for every row, since
+  // the user's current ICR is a single setting at export time.
+  const icrConverted = includeICR
+    ? icrToUnit(icrGperIE as number, carbUnit as CarbUnit)
+    : null;
+
   const headers = [
     "id", "created_at", "insulin_type", "insulin_name", "units",
     "cgm_glucose_at_log",
     "glucose_after_1h", "glucose_after_2h",
     "glucose_after_12h", "glucose_after_24h",
     "related_entry_id", "notes",
+    ...(includeICR ? [icrHeader] : []),
   ];
   const rows = logs.map((l) => [
     l.id, l.created_at, l.insulin_type, l.insulin_name, l.units,
@@ -97,6 +136,7 @@ export function insulinToCSV(logs: InsulinLog[]): string {
     l.glucose_after_1h ?? null, l.glucose_after_2h ?? null,
     l.glucose_after_12h ?? null, l.glucose_after_24h ?? null,
     l.related_entry_id ?? null, l.notes,
+    ...(includeICR ? [icrConverted] : []),
   ]);
   return buildCSV(headers, rows);
 }
