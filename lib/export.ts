@@ -85,20 +85,31 @@ export function mealsToCSV(meals: Meal[], unit: CarbUnit = "g"): string {
 
 // Optional second argument lets the caller annotate every row with the
 // user's current ICR converted to their preferred carb-unit (e.g. BE/IE
-// or KE/IE). Some DACH clinics like to read insulin doses alongside the
-// ratio they were dosed against so a quick "U vs ICR" sanity check is
-// possible without flipping back to the patient's settings sheet. The
-// value is a snapshot of the user's *current* setting at export time —
-// not a per-log historic value, since insulin_logs doesn't store one.
+// or KE/IE) AND/OR their current correction factor (mg/dL drop per 1
+// IE). Some DACH clinics like to read insulin doses alongside the
+// ratio they were dosed against — and the matching CF — so a quick
+// "U vs ICR + CF" sanity check is possible without flipping back to
+// the patient's settings sheet. The values are a snapshot of the
+// user's *current* setting at export time — not per-log historic
+// values, since insulin_logs doesn't store either.
+//
+// CF is always emitted in mg/dL/IE because that is the canonical (and
+// only) unit Glev stores. There is no carb-unit conversion to do — CF
+// is a glucose-per-insulin ratio, not a carb ratio — so the column key
+// stays `cf_mgdl_per_ie` regardless of the user's chosen carb unit.
 //
 // Defaults preserve the legacy header/row layout byte-for-byte: any
 // caller that hasn't been threaded with the user preference (or any
 // test that asserts on the raw output) keeps working unchanged.
 export function insulinToCSV(
   logs: InsulinLog[],
-  opts: { carbUnit?: CarbUnit; icrGperIE?: number | null } = {},
+  opts: {
+    carbUnit?: CarbUnit;
+    icrGperIE?: number | null;
+    cfMgdlPerIE?: number | null;
+  } = {},
 ): string {
-  const { carbUnit, icrGperIE } = opts;
+  const { carbUnit, icrGperIE, cfMgdlPerIE } = opts;
   // Annotate ICR only when both the unit AND a finite positive value
   // are available — a missing ICR setting (user never opened Settings)
   // would otherwise show a misleading "0 BE/IE" in every row.
@@ -107,6 +118,14 @@ export function insulinToCSV(
     typeof icrGperIE === "number" &&
     Number.isFinite(icrGperIE) &&
     icrGperIE > 0;
+  // CF is independent of carbUnit (it's mg/dL per IE), so we can
+  // emit it as soon as a finite positive value is supplied. Same
+  // safeguards as ICR — a missing/zero value would otherwise read
+  // as "0 mg/dL/IE" and suggest an unsafe correction ratio.
+  const includeCF =
+    typeof cfMgdlPerIE === "number" &&
+    Number.isFinite(cfMgdlPerIE) &&
+    cfMgdlPerIE > 0;
   // Header column tag mirrors the meals CSV convention: short unit
   // code in parens (e.g. "icr_be_per_ie (BE/IE)"), so the column is
   // self-describing for a clinician opening the file standalone.
@@ -116,11 +135,13 @@ export function insulinToCSV(
       ? "icr_g_per_ie"
       : `icr_${(carbUnit ?? "g").toLowerCase()}_per_ie`;
   const icrHeader = `${icrHeaderKey} (${icrUnitTag}/IE)`;
+  const cfHeader = "cf_mgdl_per_ie (mg/dL/IE)";
   // Pre-compute the converted value once — same for every row, since
   // the user's current ICR is a single setting at export time.
   const icrConverted = includeICR
     ? icrToUnit(icrGperIE as number, carbUnit as CarbUnit)
     : null;
+  const cfValue = includeCF ? (cfMgdlPerIE as number) : null;
 
   const headers = [
     "id", "created_at", "insulin_type", "insulin_name", "units",
@@ -129,6 +150,7 @@ export function insulinToCSV(
     "glucose_after_12h", "glucose_after_24h",
     "related_entry_id", "notes",
     ...(includeICR ? [icrHeader] : []),
+    ...(includeCF ? [cfHeader] : []),
   ];
   const rows = logs.map((l) => [
     l.id, l.created_at, l.insulin_type, l.insulin_name, l.units,
@@ -137,6 +159,7 @@ export function insulinToCSV(
     l.glucose_after_12h ?? null, l.glucose_after_24h ?? null,
     l.related_entry_id ?? null, l.notes,
     ...(includeICR ? [icrConverted] : []),
+    ...(includeCF ? [cfValue] : []),
   ]);
   return buildCSV(headers, rows);
 }

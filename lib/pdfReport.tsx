@@ -503,6 +503,16 @@ interface ReportProps {
   // omitted/0/null suppresses the annotation entirely so the report
   // stays clean for users who haven't yet configured their ICR.
   icrGperIE?: number | null;
+  // The user's current correction factor — mg/dL drop per 1 IE — as
+  // stored in `user_settings.cf_mgdl_per_unit`. Pairs with the ICR
+  // line on the cover meta block so a DACH clinic can sanity-check
+  // both ratios at a glance (e.g. "ICR 2 BE/IE · CF 50 mg/dL/IE").
+  // CF is intentionally NOT carb-unit-converted: it's a glucose-per-
+  // insulin ratio, so mg/dL/IE is the canonical and only meaningful
+  // unit. Optional — omitted/0/null suppresses the annotation, same
+  // safeguard as ICR so an unconfigured user never sees a misleading
+  // "0 mg/dL/IE".
+  cfMgdlPerIE?: number | null;
 }
 
 const Footer = ({ email, generatedAt }: { email: string; generatedAt: string }) => (
@@ -639,7 +649,7 @@ function computeInsightsMetrics(
   };
 }
 
-export function GlevReport({ email, meals, insulin, exercise, fingersticks, carbUnit = "g", icrGperIE = null }: ReportProps) {
+export function GlevReport({ email, meals, insulin, exercise, fingersticks, carbUnit = "g", icrGperIE = null, cfMgdlPerIE = null }: ReportProps) {
   // Cache the unit's display label once so we can compose KH column
   // headers (e.g. "KH (BE)") without recomputing. Uses the short form
   // ("g" / "BE" / "KE") rather than the verbose CARB_UNITS label
@@ -670,6 +680,19 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks, carb
     Number.isFinite(icrGperIE) &&
     icrGperIE > 0;
   const icrLabel = hasICR ? formatICR(icrGperIE as number, carbUnit) : null;
+  // CF uses the same finite-positive guard as ICR so a never-configured
+  // user (null/0) never sees a misleading "0 mg/dL/IE" line. The unit
+  // is fixed at mg/dL/IE — see ReportProps comment for rationale.
+  const hasCF =
+    typeof cfMgdlPerIE === "number" &&
+    Number.isFinite(cfMgdlPerIE) &&
+    cfMgdlPerIE > 0;
+  // Format with up to 1 decimal so "50" stays "50 mg/dL/IE" but a
+  // half-step value like 47.5 doesn't get rounded silently. Mirrors
+  // the precision used by formatICR via the carbUnits round helper.
+  const cfLabel = hasCF
+    ? `${Number((cfMgdlPerIE as number).toFixed(1))} mg/dL/IE`
+    : null;
   const agg = computeAggregates(meals, insulin, exercise, fingersticks);
   const ins = computeInsightsMetrics(meals, insulin, fingersticks);
   const range = dateRange(
@@ -744,6 +767,17 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks, carb
             <View style={styles.metaItem}>
               <Text style={styles.metaLabel}>ICR (aktuell)</Text>
               <Text style={styles.metaValue}>{icrLabel}</Text>
+            </View>
+          )}
+          {/* Korrekturfaktor — pairs with the ICR line so a DACH
+              clinic can read both ratios side by side (e.g.
+              "Korrekturfaktor: 50 mg/dL/IE"). Same suppression rule
+              as ICR: hidden when not configured to avoid surfacing a
+              misleading "0 mg/dL/IE". */}
+          {cfLabel !== null && (
+            <View style={styles.metaItem}>
+              <Text style={styles.metaLabel}>Korrekturfaktor</Text>
+              <Text style={styles.metaValue}>{cfLabel}</Text>
             </View>
           )}
         </View>

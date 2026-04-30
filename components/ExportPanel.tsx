@@ -99,15 +99,18 @@ export default function ExportPanel() {
   const [busy, setBusy] = useState<Kind | null>(null);
   const [msg, setMsg]   = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [email, setEmail] = useState<string>("");
-  // Snapshot the user's current ICR (g/IE) once on mount so we can
-  // annotate the insulin CSV/PDF with the ratio in their chosen carb
-  // unit (e.g. "2 BE/IE"). Null until the async fetch resolves; we
-  // simply omit the annotation if it stays null (CSV header is skipped
-  // and the PDF cover/insulin section drop the ICR line). Re-fetched
-  // once per panel mount which is fine — the user can't change ICR
-  // from the export page, so a snapshot captured here matches what
-  // they had when they pressed the button.
+  // Snapshot the user's current ICR (g/IE) AND correction factor
+  // (mg/dL drop per 1 IE) once on mount so we can annotate the
+  // insulin CSV/PDF with the ratio in their chosen carb unit
+  // (e.g. "2 BE/IE") and the matching CF (e.g. "50 mg/dL/IE"). Both
+  // start null until the async fetch resolves; we omit each
+  // annotation independently if it stays null (CSV column skipped,
+  // PDF cover meta line dropped). Re-fetched once per panel mount —
+  // fine because neither value can be changed from the export page,
+  // so the snapshot captured here matches what the user had when
+  // they pressed the export button.
   const [icrGperIE, setIcrGperIE] = useState<number | null>(null);
+  const [cfMgdlPerIE, setCfMgdlPerIE] = useState<number | null>(null);
 
   // Pull the signed-in user's email so the PDF report can show it on
   // the cover page. Soft-fail: if supabase is unavailable we just
@@ -119,13 +122,15 @@ export default function ExportPanel() {
     });
   }, []);
 
-  // Read the user's ICR directly from the user_settings row instead
-  // of going through fetchInsulinSettings() — that helper transparently
-  // substitutes DEFAULT_INSULIN_SETTINGS.icr (15 g/IE) when the row or
-  // the column is missing, which would surface a default-derived value
-  // as "Aktueller ICR" on the report and could mislead a clinician
-  // reading the export. Querying the column directly lets us treat
-  // null/missing as "not configured" and suppress the annotation.
+  // Read the user's ICR + CF directly from the user_settings row
+  // instead of going through fetchInsulinSettings() — that helper
+  // transparently substitutes DEFAULT_INSULIN_SETTINGS values (15
+  // g/IE for ICR, 50 mg/dL/IE for CF) when the row or columns are
+  // missing, which would surface default-derived values as "Aktueller
+  // ICR" / "Korrekturfaktor" on the report and could mislead a
+  // clinician reading the export. Querying the columns directly lets
+  // us treat null/missing as "not configured" and suppress each
+  // annotation independently.
   useEffect(() => {
     if (!supabase) return;
     let cancelled = false;
@@ -134,15 +139,26 @@ export default function ExportPanel() {
       if (!user) return;
       const { data } = await supabase
         .from("user_settings")
-        .select("icr_g_per_unit")
+        .select("icr_g_per_unit, cf_mgdl_per_unit")
         .eq("user_id", user.id)
         .maybeSingle();
       if (cancelled) return;
-      const raw = data?.icr_g_per_unit;
-      // Only annotate when the value is explicitly set AND positive —
+      // Only annotate when each value is explicitly set AND positive —
       // a missing row, null column, or non-positive value all collapse
-      // to null so the export omits the ICR cleanly.
-      setIcrGperIE(typeof raw === "number" && Number.isFinite(raw) && raw > 0 ? raw : null);
+      // to null so the export omits that field cleanly. ICR and CF are
+      // independent: one can be configured while the other isn't.
+      const rawIcr = data?.icr_g_per_unit;
+      setIcrGperIE(
+        typeof rawIcr === "number" && Number.isFinite(rawIcr) && rawIcr > 0
+          ? rawIcr
+          : null,
+      );
+      const rawCf = data?.cf_mgdl_per_unit;
+      setCfMgdlPerIE(
+        typeof rawCf === "number" && Number.isFinite(rawCf) && rawCf > 0
+          ? rawCf
+          : null,
+      );
     })();
     return () => {
       cancelled = true;
@@ -169,7 +185,7 @@ export default function ExportPanel() {
         count = rows.length;
         downloadFile(
           `glev-insulin_${stamp}.csv`,
-          insulinToCSV(rows, { carbUnit, icrGperIE }),
+          insulinToCSV(rows, { carbUnit, icrGperIE, cfMgdlPerIE }),
         );
       } else if (kind === "exercise") {
         const rows = await fetchAllExerciseLogs();
@@ -203,7 +219,7 @@ export default function ExportPanel() {
       // drop the rapid-fire save prompts.
       const files: Array<[string, string]> = [
         [`glev-mahlzeiten_${stamp}.csv`,   mealsToCSV(meals, carbUnit)],
-        [`glev-insulin_${stamp}.csv`,      insulinToCSV(insulin, { carbUnit, icrGperIE })],
+        [`glev-insulin_${stamp}.csv`,      insulinToCSV(insulin, { carbUnit, icrGperIE, cfMgdlPerIE })],
         [`glev-sport_${stamp}.csv`,        exerciseToCSV(exercise)],
         [`glev-fingersticks_${stamp}.csv`, fingersticksToCSV(fs)],
       ];
@@ -246,6 +262,7 @@ export default function ExportPanel() {
           fingersticks={fs}
           carbUnit={carbUnit}
           icrGperIE={icrGperIE}
+          cfMgdlPerIE={cfMgdlPerIE}
         />,
       ).toBlob();
 
