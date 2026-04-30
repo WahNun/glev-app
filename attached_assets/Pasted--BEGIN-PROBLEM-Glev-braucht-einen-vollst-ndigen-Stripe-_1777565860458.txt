@@ -1,0 +1,130 @@
+=== BEGIN ===
+
+## PROBLEM
+
+Glev braucht einen vollständigen Stripe-Checkout-Flow für Beta-Tester: einmalige €19 Setup-Fee + automatische €4.50/Monat Subscription. Nach erfolgreichem Checkout soll eine persönliche Welcome Email via Resend verschickt und der Supabase-Profil-Eintrag aktualisiert werden.
+
+Keine bestehende Auth-Logik, kein Supabase-Schema und keine anderen API Routes anfassen.
+
+---
+
+## STEP 1 — Pakete installieren
+
+npm install stripe resend
+
+---
+
+## STEP 2 — Stripe Helper erstellen
+
+Erstelle lib/stripe.ts:
+
+import Stripe from 'stripe';
+if (!process.env.STRIPE_SECRET_KEY) throw new Error('Missing STRIPE_SECRET_KEY');
+export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: '2024-06-20',
+  typescript: true,
+});
+
+---
+
+## STEP 3 — Checkout Session Route erstellen
+
+Erstelle app/api/checkout/beta/route.ts:
+
+import { NextRequest, NextResponse } from 'next/server';
+import { stripe } from '@/lib/stripe';
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json().catch(() => ({}));
+    const email: string | undefined = body.email;
+
+    if (!process.env.STRIPE_BETA_PRICE_ID) throw new Error('Missing STRIPE_BETA_PRICE_ID');
+    if (!process.env.STRIPE_PRICE_SETUP_FEE_ID) throw new Error('Missing STRIPE_PRICE_SETUP_FEE_ID');
+    if (!process.env.NEXT_PUBLIC_APP_URL) throw new Error('Missing NEXT_PUBLIC_APP_URL');
+
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
+      mode: 'subscription',
+      line_items: [{ price: process.env.STRIPE_BETA_PRICE_ID, quantity: 1 }],
+      subscription_data: {
+        add_invoice_items: [{ price: process.env.STRIPE_PRICE_SETUP_FEE_ID }],
+      },
+      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/beta/welcome?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/beta`,
+    };
+
+    if (email) sessionParams.customer_email = email;
+
+    const session = await stripe.checkout.sessions.create(sessionParams);
+    return NextResponse.json({ url: session.url });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Internal Server Error';
+    console.error('[checkout/beta]', message);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+---
+
+## STEP 4 — Welcome Email Template erstellen
+
+Erstelle lib/emails/beta-welcome.ts mit Funktion betaWelcomeHtml(name?):
+- HTML Email auf Deutsch, persönlich
+- Begrüßung mit Name wenn vorhanden
+- Bestätigung €19 Setup-Gebühr verarbeitet, Zugang sofort aktiv
+- €4,50/Monat läuft automatisch, jederzeit kündbar
+- CTA Button "App öffnen →" → https://app.glev.app
+- Absender: Lucas / Glev Team
+- Sender: Glev <info@glev.app>
+
+---
+
+## STEP 5 — Stripe Webhook Handler erstellen
+
+Erstelle app/api/webhooks/stripe/route.ts:
+
+// KRITISCH: Edge Runtime bricht Stripe Signaturprüfung — Node.js zwingend!
+export const runtime = 'nodejs';
+
+- Liest raw body als Text, prüft stripe-signature Header
+- stripe.webhooks.constructEvent(body, sig, process.env.STRIPE_BETA_WEBHOOK_SECRET)
+- Bei checkout.session.completed:
+  1. resend.emails.send() mit betaWelcomeHtml
+  2. supabaseAdmin.from('profiles').update({ subscription_status: 'beta', plan: 'beta' }).eq('email', email)
+- Supabase Admin Client mit SUPABASE_SERVICE_ROLE_KEY (nicht anon key!)
+- Fehler loggen aber nicht abbrechen
+- Gibt { received: true } zurück
+
+---
+
+## STEP 6 — Env Vars sicherstellen
+
+STRIPE_SECRET_KEY ✅
+STRIPE_BETA_WEBHOOK_SECRET ✅ (bereits in Vercel + Replit)
+STRIPE_BETA_PRICE_ID ✅ (€4.50/Monat, bereits vorhanden)
+STRIPE_PRICE_SETUP_FEE_ID (€19 einmalig — neu anlegen!)
+RESEND_API_KEY ✅
+NEXT_PUBLIC_APP_URL=https://glev.app
+NEXT_PUBLIC_SUPABASE_URL ✅
+SUPABASE_SERVICE_ROLE_KEY ✅
+
+---
+
+## NICHT ÄNDERN
+
+- Supabase Schema
+- Auth-Logik (app/api/auth/, lib/auth.ts, middleware.ts)
+- Andere API Routes
+- next.config.ts, tailwind.config.ts, tsconfig.json
+
+---
+
+## VERIFY
+
+1. npx tsc --noEmit → kein Fehler
+2. stripe listen --forward-to localhost:3000/api/webhooks/stripe
+3. stripe trigger checkout.session.completed → Welcome Email prüfen
+4. SELECT email, subscription_status, plan FROM profiles WHERE email = 'test@example.com'
+5. git add -A && git commit -m "feat: stripe checkout beta + webhook + welcome email" && git push origin main
+
+=== END ===
