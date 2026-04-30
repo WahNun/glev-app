@@ -1,0 +1,103 @@
+=== BEGIN ===
+
+## PROBLEM
+
+Glev braucht einen vollständigen Stripe-Checkout-Flow für Beta-Tester: einmalige €19 Setup-Fee + automatische €4.50/Monat Subscription ab 1. Juli 2026 — egal wann sie sich anmelden. Nach erfolgreichem Checkout soll eine persönliche Welcome Email via Resend verschickt und der Supabase-Profil-Eintrag aktualisiert werden.
+
+Keine bestehende Auth-Logik, kein Supabase-Schema und keine anderen API Routes anfassen.
+
+---
+
+## STEP 1 — Pakete installieren
+
+npm install stripe resend
+
+---
+
+## STEP 2 — Stripe Helper erstellen
+
+Erstelle lib/stripe.ts:
+
+import Stripe from 'stripe';
+if (!process.env.STRIPE_SECRET_KEY) throw new Error('Missing STRIPE_SECRET_KEY');
+export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: '2024-06-20',
+  typescript: true,
+});
+
+---
+
+## STEP 3 — Checkout Session Route erstellen
+
+Erstelle app/api/checkout/beta/route.ts:
+
+const BETA_TRIAL_END = 1751328000; // 1. Juli 2026 UTC — fix für ALLE Beta-Tester
+
+POST Endpoint:
+- mode: 'subscription'
+- line_items: [{ price: STRIPE_PRICE_SUBSCRIPTION_ID, quantity: 1 }]
+- subscription_data.trial_end: 1751328000
+- subscription_data.add_invoice_items: [{ price: STRIPE_PRICE_SETUP_FEE_ID }]
+- success_url: NEXT_PUBLIC_APP_URL/beta/welcome?session_id={CHECKOUT_SESSION_ID}
+- cancel_url: NEXT_PUBLIC_APP_URL/beta
+- Optional: customer_email aus req.body.email
+- Gibt { url: session.url } zurück
+
+---
+
+## STEP 4 — Welcome Email Template
+
+Erstelle lib/emails/beta-welcome.ts mit betaWelcomeHtml(name?) Funktion.
+HTML Email auf Deutsch, persönlich, mit:
+- Begrüßung mit Name wenn vorhanden
+- Bestätigung €19 Zahlung, Zugang sofort aktiv
+- Hinweis: Ab 1. Juli automatisch €4.50/Monat, kein weiteres Zutun nötig
+- CTA Button "App öffnen →" → https://app.glev.app
+- Absender: Lucas / Glev Team
+
+---
+
+## STEP 5 — Webhook Handler
+
+Erstelle app/api/webhooks/stripe/route.ts:
+- Liest raw body als Text, prüft stripe-signature Header
+- stripe.webhooks.constructEvent(body, sig, STRIPE_WEBHOOK_SECRET)
+- Bei checkout.session.completed:
+  1. resend.emails.send() mit betaWelcomeHtml
+  2. supabaseAdmin.from('profiles').update({ subscription_status: 'beta', plan: 'beta' }).eq('email', email)
+- Fehler in Email oder Supabase loggen aber nicht abbrechen
+- Gibt { received: true } zurück
+
+---
+
+## STEP 6 — Env Vars sicherstellen
+
+STRIPE_SECRET_KEY
+STRIPE_WEBHOOK_SECRET
+STRIPE_PRICE_SUBSCRIPTION_ID   (€4.50/Monat price_...)
+STRIPE_PRICE_SETUP_FEE_ID      (€19 einmalig price_...)
+RESEND_API_KEY
+NEXT_PUBLIC_APP_URL=https://glev.app
+NEXT_PUBLIC_SUPABASE_URL
+SUPABASE_SERVICE_ROLE_KEY      (Service Role, nicht anon!)
+
+---
+
+## NICHT ÄNDERN
+
+- Supabase Schema (keine Migrations)
+- Auth-Logik (app/api/auth/, lib/auth.ts, middleware.ts)
+- Andere API Routes
+- next.config.ts, tailwind.config.ts, tsconfig.json
+
+---
+
+## VERIFY
+
+1. npx tsc --noEmit → kein Fehler
+2. stripe listen --forward-to localhost:3000/api/webhooks/stripe
+3. stripe trigger checkout.session.completed → Welcome Email prüfen
+4. SELECT email, subscription_status, plan FROM profiles WHERE email = 'test@example.com'
+5. git add -A && git commit -m "feat: stripe checkout beta + webhook + welcome email" && git push origin main
+
+=== END ===
