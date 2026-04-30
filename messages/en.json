@@ -470,7 +470,13 @@
     "subtitle_coming_soon": "Coming soon",
     "sheet_close": "Close",
     "row_status_connected": "Connected",
-    "row_status_disconnected": "Not connected"
+    "row_status_disconnected": "Not connected",
+    "row_carb_unit": "Carb unit",
+    "carb_unit_title": "Carb unit",
+    "carb_unit_hint": "How should carbohydrates be displayed? Calculations and storage stay in grams — only the display changes.",
+    "carb_unit_g": "g carbs",
+    "carb_unit_be": "BE",
+    "carb_unit_ke": "KE"
   },
   "common": {
     "loading": "Loading…",

@@ -5,6 +5,7 @@ import type { Meal } from "@/lib/meals";
 import { TYPE_COLORS, TYPE_SHORT, TYPE_LABELS } from "@/lib/mealTypes";
 import { chipForMeal } from "@/lib/engine/chipState";
 import { parseDbDate } from "@/lib/time";
+import { useCarbUnit } from "@/hooks/useCarbUnit";
 
 const ACCENT = "#4F6EF7";
 const ORANGE = "#FF9500";
@@ -19,6 +20,9 @@ export default function MealEntryCardCollapsed({
   onClick?: () => void;
   showEval?: boolean;
 }) {
+  // Carb-unit display follows the user's profile preference (g/BE/KE).
+  // The DB column stays in grams; only the rendered value swaps.
+  const carbUnit = useCarbUnit();
   const ts = meal.meal_time ?? meal.created_at;
   const d = parseDbDate(ts);
   const dateStr = d.toLocaleDateString("en", { month: "short", day: "numeric" });
@@ -98,8 +102,11 @@ export default function MealEntryCardCollapsed({
       <div style={{ minWidth: 0 }}>
         <div className="glev-mec-cell-label">Carbs</div>
         <div style={{ fontSize: 14, fontWeight: 700, color: meal.carbs_grams ? ORANGE : "var(--text-faint)", letterSpacing: "-0.01em", fontFamily: "var(--font-mono)" }}>
-          {meal.carbs_grams != null ? meal.carbs_grams : "—"}
-          <span style={{ fontSize: 10, color: "var(--text-faint)", fontWeight: 500, marginLeft: 2 }}>g</span>
+          {/* Use the centralized display() helper — keeps formatting
+              rules (rounding, label spacing) in one place rather than
+              hand-stitching numeric + label here. The dimmed weight on
+              the trailing unit is sacrificed for consistency. */}
+          {meal.carbs_grams != null ? carbUnit.display(meal.carbs_grams) : "—"}
         </div>
       </div>
 

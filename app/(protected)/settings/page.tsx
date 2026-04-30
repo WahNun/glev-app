@@ -14,6 +14,8 @@ import { localeToBcp47 } from "@/lib/time";
 import { setLocale, readLocaleCookie, DEFAULT_LOCALE, type Locale } from "@/lib/locale";
 import { useTheme } from "@/components/ThemeProvider";
 import type { ThemeChoice } from "@/lib/theme";
+import { useCarbUnit } from "@/hooks/useCarbUnit";
+import type { CarbUnit } from "@/lib/carbUnits";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78";
 const SURFACE="var(--surface)", BORDER="var(--border)";
@@ -46,7 +48,7 @@ type SheetId =
   | "glucose_targets" | "units"
   | "icr" | "cf"
   | "cgm_librelinkup" | "cgm_nightscout" | "cgm_dexcom"
-  | "appearance" | "language" | "notifications" | "export"
+  | "appearance" | "language" | "carb_unit" | "notifications" | "export"
   | "macros" | "historical" | "google_sheets" | "import";
 
 export default function SettingsPage() {
@@ -64,6 +66,11 @@ export default function SettingsPage() {
   }, []);
   const [pendingLocale, setPendingLocale] = useState<Locale | null>(null);
   const { choice: themeChoice, setChoice: setThemeChoice } = useTheme();
+  // Carb-unit selector (g / BE / KE) — DACH users typically dose in BE
+  // (1 BE = 12g) or KE (1 KE = 10g). Optimistic update + persists to
+  // profiles.carb_unit; the hook exposes display/conversion helpers used
+  // throughout the engine, entries, and insights surfaces.
+  const carbUnit = useCarbUnit();
   const [macroTargets, setMacroTargets] = useState<MacroTargets>(DEFAULT_MACRO_TARGETS);
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving]       = useState(false);
@@ -202,6 +209,7 @@ export default function SettingsPage() {
       rows: [
         { id: "appearance",    label: tSettings("row_appearance"),    sub: themeLabel },
         { id: "language",      label: tSettings("row_language"),      sub: languageLabel },
+        { id: "carb_unit",     label: tSettings("row_carb_unit"),     sub: carbUnit.label },
         { id: "notifications", label: tSettings("row_notifications") },
         { id: "export",        label: tSettings("row_export") },
       ],
@@ -412,6 +420,43 @@ export default function SettingsPage() {
               </button>
             );
           })}
+        </div>
+      </BottomSheet>
+
+      {/* APP — Kohlenhydrate-Einheit (instant-apply, no save needed). DACH
+          users typically rechnen in BE/KE statt Gramm. The hook persists
+          to profiles.carb_unit and the rest of the app reads it via the
+          same useCarbUnit() hook. */}
+      <BottomSheet open={openSheet === "carb_unit"} onClose={closeSheet} title={tSettings("carb_unit_title")} footer={closeFooter}>
+        <div style={{ fontSize:12, color:"var(--text-dim)", marginBottom:14, lineHeight:1.5 }}>
+          {tSettings("carb_unit_hint")}
+        </div>
+        <div role="radiogroup" aria-label={tSettings("carb_unit_title")} style={{
+          display:"flex", gap:2, padding:4, borderRadius:99,
+          background:"var(--surface-soft)", border:`1px solid ${BORDER}`,
+        }}>
+          {([
+            { v: "g"  as CarbUnit, label: tSettings("carb_unit_g") },
+            { v: "BE" as CarbUnit, label: tSettings("carb_unit_be") },
+            { v: "KE" as CarbUnit, label: tSettings("carb_unit_ke") },
+          ]).map(opt => {
+            const active = carbUnit.unit === opt.v;
+            return (
+              <button key={opt.v} role="radio" aria-checked={active} onClick={() => carbUnit.setUnit(opt.v)}
+                style={{
+                  flex: 1, padding: "9px 12px", borderRadius: 99, border: "none", cursor: "pointer",
+                  background: active ? ACCENT : "transparent",
+                  color: active ? "#fff" : "var(--text-body)",
+                  fontSize: 13, fontWeight: active ? 600 : 500,
+                  transition: "background 120ms ease, color 120ms ease",
+                }}>
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ fontSize:11, color:"var(--text-dim)", marginTop:12, lineHeight:1.5 }}>
+          {carbUnit.description}
         </div>
       </BottomSheet>
 

@@ -6,6 +6,7 @@ import { updateMeal, type Meal } from "@/lib/meals";
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
 import { chipForMeal } from "@/lib/engine/chipState";
 import { parseDbDate, parseDbTs } from "@/lib/time";
+import { useCarbUnit } from "@/hooks/useCarbUnit";
 
 const ACCENT = "#4F6EF7";
 const GREEN  = "#22D3A0";
@@ -31,6 +32,10 @@ export default function MealEntryLightExpand({
 }) {
   const td = useTranslations("dashboard");
   const tm = useTranslations("mealEdit");
+  // The carb-unit hook only formats the read-view stats here; the edit
+  // form (eCarbs) stays in grams since this expand panel's edit pipeline
+  // is out-of-scope for the carb-unit selector roll-out.
+  const carbUnit = useCarbUnit();
 
   // Meal-type select options live in the edit form. Derived inline rather
   // than module-level so they re-evaluate on locale switch (the cookie
@@ -326,7 +331,7 @@ export default function MealEntryLightExpand({
             <div style={{ fontSize:13, color:"var(--text-body)", lineHeight:1.5 }}>{meal.input_text}</div>
           )}
           <div style={{ display:"flex", gap:18, flexWrap:"wrap" }}>
-            <Stat label={td("carbs")}   value={`${carbs}g`}   color={ORANGE}/>
+            <Stat label={td("carbs")}   value={carbUnit.display(carbs)}   color={ORANGE}/>
             <Stat label={td("protein")} value={`${protein}g`} color="#3B82F6"/>
             <Stat label={td("fat")}     value={`${fat}g`}     color="#A855F7"/>
             {meal.insulin_units != null && (

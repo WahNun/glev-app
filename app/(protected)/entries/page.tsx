@@ -20,6 +20,7 @@ import PendingGlucoseStrip from "@/components/PendingGlucoseStrip";
 import ManualEntryModal from "@/components/ManualEntryModal";
 import { CgmCountdownPair } from "@/components/CgmCountdownChip";
 import { parseDbDate, parseDbTs, parseLluTs } from "@/lib/time";
+import { useCarbUnit } from "@/hooks/useCarbUnit";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const PURPLE="#A78BFA", BLUE="#3B82F6";
@@ -184,6 +185,11 @@ type Row =
   | { kind: "exercise"; id: string; ts: string; data: ExerciseLog };
 
 export default function EntriesPage() {
+  // Carb-unit selector — converts the stored grams value into the
+  // user's chosen display unit (g/BE/KE) for the MiniCard CARBS / NET
+  // CARBS rows below. The MealEditor edit form is intentionally NOT
+  // converted (out of scope for the rollout).
+  const carbUnit = useCarbUnit();
   const [meals, setMeals]     = useState<Meal[]>([]);
   const [insulin, setInsulin] = useState<InsulinLog[]>([]);
   const [exercise, setExercise] = useState<ExerciseLog[]>([]);
@@ -899,14 +905,20 @@ export default function EntriesPage() {
                     <div>
                       <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8 }}>MACROS &amp; DOSING</div>
                       <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
-                        <MiniCard l="CARBS" v={`${carbs}g`} c={ORANGE}/>
+                        {/* CARBS / NET CARBS render in the user's chosen
+                            unit (g/BE/KE). Other macros stay in grams —
+                            the BE/KE convention is carb-specific. */}
+                        <MiniCard l="CARBS" v={carbUnit.display(carbs)} c={ORANGE}/>
                         <MiniCard l="PROTEIN" v={totalProt > 0 ? `${totalProt}g` : "—"} c="#3B82F6"/>
                         <MiniCard l="FAT" v={totalFat > 0 ? `${totalFat}g` : "—"} c="#A855F7"/>
                         <MiniCard l="FIBER" v={totalFiber > 0 ? `${totalFiber}g` : "—"}/>
-                        <MiniCard l="NET CARBS" v={netCarbs > 0 ? `${netCarbs}g` : "—"} c={GREEN}/>
+                        <MiniCard l="NET CARBS" v={netCarbs > 0 ? carbUnit.display(netCarbs) : "—"} c={GREEN}/>
                         <MiniCard l="CALORIES" v={(() => { const cals = m.calories ?? Math.round(carbs*4 + totalProt*4 + totalFat*9); return cals > 0 ? `${cals} kcal` : "—"; })()} c="#A78BFA"/>
                         <MiniCard l="INSULIN" v={`${m.insulin_units ?? 0}u`} c={ACCENT}/>
-                        <MiniCard l="RATIO" v={icr ? `1u/${icr.toFixed(0)}g` : "—"} c={ACCENT}/>
+                        {/* Per-meal carb-to-insulin ratio. icr is computed
+                            in g/IE; displayICR converts it to the user's
+                            unit (e.g. "2 BE/IE" / "2.4 KE/IE" / "24 g KH/IE"). */}
+                        <MiniCard l="RATIO" v={icr ? carbUnit.displayICR(icr) : "—"} c={ACCENT}/>
                         <MiniCard l="CATEGORY" v={m.meal_type ? m.meal_type.replace("_"," ").toLowerCase() : "—"} c={m.meal_type ? (TYPE_COLORS[m.meal_type] || GREEN) : undefined}/>
                       </div>
                     </div>

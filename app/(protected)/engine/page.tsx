@@ -11,6 +11,7 @@ import { logDebug } from "@/lib/debug";
 import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
 import { computeAdaptiveICR } from "@/lib/engine/adaptiveICR";
+import { useCarbUnit } from "@/hooks/useCarbUnit";
 import EngineLogTab, { InsulinForm, ExerciseForm } from "@/components/EngineLogTab";
 import FingerstickLogCard from "@/components/FingerstickLogCard";
 import GlevLogo from "@/components/GlevLogo";
@@ -194,6 +195,12 @@ export default function EnginePage() {
   // pull engine-specific copy without a rename storm in the rest of
   // the (~1900-line) component.
   const tEngine = useTranslations("engine");
+  // Carb-unit selector (g / BE / KE) — DACH users typically rechnen in
+  // BE/KE statt Gramm. The hook owns conversion at this UI boundary;
+  // everything below the boundary (saveMeal, runGlevEngine, classify*,
+  // compute*) keeps operating in grams. See app/(protected)/settings
+  // for where the unit is chosen.
+  const carbUnit = useCarbUnit();
   // Locale-aware decimal formatter — keeps reasoning bullets natural for
   // the active language ("5,5 IE" in DE, "5.5 u" in EN). Cached against
   // the current locale to avoid rebuilding the Intl.NumberFormat instance
@@ -243,6 +250,12 @@ export default function EnginePage() {
   const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [glucose, setGlucose] = useState("");
+  // The `carbs` form state holds the user-displayed value in their
+  // chosen unit (g / BE / KE) — see useCarbUnit below. All persistence
+  // (saveMeal, runGlevEngine, classifyMeal, computeCalories) operates
+  // in GRAMS, so every read of this state goes through carbUnit.toGrams()
+  // before being handed off. AI-parse results come back in grams and are
+  // converted via carbUnit.fromGrams() before being written back here.
   const [carbs, setCarbs]     = useState("");
   const [protein, setProtein] = useState("");
   const [fat, setFat]         = useState("");
@@ -535,7 +548,10 @@ export default function EnginePage() {
       // user to enter macros manually.
       const safeToAutofill = pData.nutritionSource !== "unknown";
       if (safeToAutofill) {
-        if (t.carbs   != null) setCarbs(String(t.carbs));
+        // /api/parse-food returns macros in GRAMS; the carbs input field
+        // displays the user's chosen unit (g/BE/KE), so convert before
+        // writing it into form state. Other macros stay in grams.
+        if (t.carbs   != null) setCarbs(String(carbUnit.fromGrams(Number(t.carbs))));
         if (t.fiber   != null) setFiber(String(t.fiber));
         if (t.protein != null) setProtein(String(t.protein));
         if (t.fat     != null) setFat(String(t.fat));
@@ -714,7 +730,9 @@ export default function EnginePage() {
   }, []);
 
   function handleRun() {
-    const g = parseFloat(glucose)||110, c = parseFloat(carbs)||0;
+    // carbs input lives in the user's chosen unit (g/BE/KE); engine
+    // operates in grams, so convert at the boundary.
+    const g = parseFloat(glucose)||110, c = carbUnit.toGrams(parseFloat(carbs)||0);
     if (!c) return;
     setRunning(true);
     setTimeout(() => {
@@ -745,11 +763,15 @@ export default function EnginePage() {
   async function handleWizardSave() {
     if (!result) return;
     setConfirmErr("");
-    const cNum = parseFloat(carbs);
-    if (!Number.isFinite(cNum) || cNum < 0) {
+    // The carbs input is in the user's chosen unit (g/BE/KE). Validate
+    // on the displayed value (so "0" still passes) then convert to grams
+    // for everything downstream — DB storage and engine math are grams.
+    const cDisplay = parseFloat(carbs);
+    if (!Number.isFinite(cDisplay) || cDisplay < 0) {
       setConfirmErr("Bitte Kohlenhydrate eintragen (0 ist erlaubt).");
       return;
     }
+    const cNum = carbUnit.toGrams(cDisplay);
     const pNum  = parseFloat(protein) || 0;
     const fNum  = parseFloat(fat)     || 0;
     const fbNum = parseFloat(fiber)   || 0;
@@ -818,11 +840,13 @@ export default function EnginePage() {
   // through the bolus recommendation just to log a meal.
   async function handleSaveWithoutBolus() {
     setConfirmErr("");
-    const cNum = parseFloat(carbs);
-    if (!Number.isFinite(cNum) || cNum < 0) {
+    // Validate displayed value (g/BE/KE), then convert to grams.
+    const cDisplay = parseFloat(carbs);
+    if (!Number.isFinite(cDisplay) || cDisplay < 0) {
       setConfirmErr("Bitte Kohlenhydrate eintragen (0 ist erlaubt).");
       return;
     }
+    const cNum = carbUnit.toGrams(cDisplay);
     const pNum  = parseFloat(protein) || 0;
     const fNum  = parseFloat(fat)     || 0;
     const fbNum = parseFloat(fiber)   || 0;
@@ -879,11 +903,13 @@ export default function EnginePage() {
   // the identical "✓ Gespeichert — N IE geloggt" success state.
   async function handleSaveWithDirectBolus() {
     setConfirmErr("");
-    const cNum = parseFloat(carbs);
-    if (!Number.isFinite(cNum) || cNum < 0) {
+    // Validate displayed value (g/BE/KE), then convert to grams.
+    const cDisplay = parseFloat(carbs);
+    if (!Number.isFinite(cDisplay) || cDisplay < 0) {
       setConfirmErr("Bitte Kohlenhydrate eintragen (0 ist erlaubt).");
       return;
     }
+    const cNum = carbUnit.toGrams(cDisplay);
     const iNum = parseFloat(directBolusValue);
     if (!Number.isFinite(iNum) || iNum < 0) {
       setConfirmErr("Bitte gültige IE eintragen (≥ 0).");
@@ -953,7 +979,9 @@ export default function EnginePage() {
   // quick manual entries that have no associated meal.
   async function handleConfirmLog() {
     setConfirmErr("");
-    const cNum = parseFloat(carbs);
+    // Validate displayed value (g/BE/KE), then convert to grams (see
+    // the conversion comment 3 handlers above for the full rationale).
+    const cDisplay = parseFloat(carbs);
     // Insulin wird im Pre-Confirm-Flow NICHT mehr abgefragt. Falls aus
     // irgendeinem Grund (z.B. alter HMR-State) doch ein Wert im `insulin`
     // State steht, wird er ignoriert — `iNum` ist konsistent null bis der
@@ -964,7 +992,8 @@ export default function EnginePage() {
     // 0g ist eine legitime Eingabe (z.B. reine Protein-/Fett-Mahlzeiten wie
     // Steak, Eier, Käse — können trotzdem über FPU Insulin brauchen). Nur
     // leere Eingabe oder negative Werte ablehnen.
-    if (!Number.isFinite(cNum) || cNum < 0) { setConfirmErr("Bitte Kohlenhydrate eintragen (0 ist erlaubt)."); return; }
+    if (!Number.isFinite(cDisplay) || cDisplay < 0) { setConfirmErr("Bitte Kohlenhydrate eintragen (0 ist erlaubt)."); return; }
+    const cNum = carbUnit.toGrams(cDisplay);
     const pNum  = parseFloat(protein) || 0;
     const fNum  = parseFloat(fat)     || 0;
     const fbNum = parseFloat(fiber)   || 0;
@@ -1078,7 +1107,9 @@ export default function EnginePage() {
     // Run the same engine the Empfehlung-berechnen button uses, but locked
     // to the saved meal's carbs / glucose so the rec is for THIS log.
     const g = confirmedMeal.glucose_before ?? parseFloat(glucose) ?? 110;
-    const c = confirmedMeal.carbs_grams ?? parseFloat(carbs) ?? 0;
+    // confirmedMeal.carbs_grams already in grams; the form fallback is
+    // in the user's display unit so convert before feeding the engine.
+    const c = confirmedMeal.carbs_grams ?? carbUnit.toGrams(parseFloat(carbs) || 0);
     if (!c) { setDecisionToast("Keine Carbs hinterlegt — Einschätzung nicht möglich."); return; }
     setDecisionBusy(true);
     setTimeout(() => {
@@ -1503,7 +1534,10 @@ export default function EnginePage() {
               <div ref={chatPanelRef} style={{ width: "100%", marginTop: 4 }}>
                 <EngineChatPanel
                   macros={{
-                    carbs:   Number(carbs)   || 0,
+                    // EngineChatPanel + /api/chat-macros operate in
+                    // GRAMS end-to-end, so convert the displayed carbs
+                    // value (g/BE/KE) back to grams here.
+                    carbs:   carbUnit.toGrams(Number(carbs) || 0),
                     protein: Number(protein) || 0,
                     fat:     Number(fat)     || 0,
                     fiber:   Number(fiber)   || 0,
@@ -1518,7 +1552,9 @@ export default function EnginePage() {
                     // them manually. Description still updates so they
                     // can see what the AI heard.
                     if (patch.nutritionSource !== "unknown") {
-                      setCarbs(String(patch.carbs));
+                      // patch.carbs comes back in GRAMS — convert to the
+                      // user's display unit before writing back into form.
+                      setCarbs(String(carbUnit.fromGrams(Number(patch.carbs))));
                       setProtein(String(patch.protein));
                       setFat(String(patch.fat));
                       setFiber(String(patch.fiber));
@@ -1693,8 +1729,11 @@ export default function EnginePage() {
                     macro-grid pattern. */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, rowGap: 14 }}>
                   <div>
-                    <label style={{ fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>{tEngine("carbs_label")}</label>
-                    <input style={inp} type="number" placeholder={tEngine("placeholder_carbs")} value={carbs} onChange={(e) => setCarbs(e.target.value)}/>
+                    {/* Label and placeholder swap with the user's chosen
+                        unit (g/BE/KE). step=0.1 for BE/KE so users can
+                        enter typical 0.5/1/1.5 BE values. */}
+                    <label style={{ fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>{tEngine("carbs_label")} ({carbUnit.label})</label>
+                    <input style={inp} type="number" inputMode="decimal" step={carbUnit.step} placeholder={carbUnit.placeholder} value={carbs} onChange={(e) => setCarbs(e.target.value)}/>
                   </div>
                   <div>
                     <label style={{ fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>
@@ -1988,7 +2027,12 @@ export default function EnginePage() {
                       <span style={{ fontSize: 14, color: "var(--text-dim)", fontWeight: 600 }}>{tEngine("units_short")}</span>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 12, flexWrap: "wrap" }}>
-                      <span style={{ color: "var(--text-muted)" }}>{tEngine("icr_label")}: 1:{formatNum(adaptedICR, 1)}</span>
+                      {/* ICR display in the user's chosen unit. displayICR
+                          returns the full formatted string with units
+                          baked in (e.g. "24 g KH/IE", "2 BE/IE", "2.4
+                          KE/IE") so we drop the legacy "1:" prefix —
+                          the unit suffix already conveys the ratio. */}
+                      <span style={{ color: "var(--text-muted)" }}>{tEngine("icr_label")}: {carbUnit.displayICR(adaptedICR)}</span>
                       <span style={{
                         padding: "2px 10px", borderRadius: 99,
                         fontSize: 10, fontWeight: 700, letterSpacing: "0.05em",
@@ -2037,7 +2081,9 @@ export default function EnginePage() {
 
                   {/* Meal summary line — shows what the user is about to save. */}
                   <div style={{ marginBottom: 18, fontSize: 12, color: "var(--text-dim)", lineHeight: 1.5, padding: "0 4px" }}>
-                    {(desc.trim() || transcript.trim() || tEngine("meal_fallback"))} · {formatNum(parseFloat(carbs) || 0, 0)} {tEngine("carbs_short")}
+                    {/* Meal summary line: render carbs in the user's unit
+                        with the matching short label (g / BE / KE). */}
+                    {(desc.trim() || transcript.trim() || tEngine("meal_fallback"))} · {parseFloat(carbs) ? carbUnit.display(carbUnit.toGrams(parseFloat(carbs))) : `0 ${carbUnit.label}`}
                   </div>
 
                   {/* FIX A: Pre-save → show Save + Back. Post-save →

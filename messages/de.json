@@ -470,7 +470,13 @@
     "subtitle_coming_soon": "Bald verfügbar",
     "sheet_close": "Schließen",
     "row_status_connected": "Verbunden",
-    "row_status_disconnected": "Nicht verbunden"
+    "row_status_disconnected": "Nicht verbunden",
+    "row_carb_unit": "Kohlenhydrate-Einheit",
+    "carb_unit_title": "Kohlenhydrate-Einheit",
+    "carb_unit_hint": "Wie sollen Kohlenhydrate angezeigt werden? Berechnungen und Speicherung laufen weiterhin in Gramm — nur die Anzeige ändert sich.",
+    "carb_unit_g": "g KH",
+    "carb_unit_be": "BE",
+    "carb_unit_ke": "KE"
   },
   "common": {
     "loading": "Laden…",

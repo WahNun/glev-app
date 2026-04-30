@@ -17,6 +17,7 @@ import {
 import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, type ExerciseLog, type ExerciseType } from "@/lib/exercise";
 import { evaluateExercise, type ExerciseOutcome } from "@/lib/exerciseEval";
+import { useCarbUnit } from "@/hooks/useCarbUnit";
 
 /** Default top-to-bottom order. Hero block (time-in-range, gmi-a1c,
  *  glucose-trend, meal-evaluation) mirrors the homepage `InsightsScreen()`
@@ -143,6 +144,10 @@ function collectBgReadings(
 }
 
 export default function InsightsPage() {
+  // Carb-unit selector — feeds the per-type "avg carbs" line and the
+  // "Avg insulin" tile sublabel. All aggregates are computed in grams
+  // upstream; only the rendered string switches to BE/KE/g.
+  const carbUnit = useCarbUnit();
   const [meals, setMeals]               = useState<Meal[]>([]);
   const [insulinLogs, setInsulinLogs]   = useState<InsulinLog[]>([]);
   const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([]);
@@ -1297,7 +1302,7 @@ export default function InsightsPage() {
                     <div style={{ height:"100%", width:`${successPct}%`, background:barCol, borderRadius:99 }}/>
                   </div>
                   <div style={{ fontSize:9, color:"var(--text-dim)", lineHeight:1.4 }}>
-                    {has ? `${data.count} meal${data.count===1?"":"s"} · ${avgC}g · ${avgI}u` : "No data"}
+                    {has ? `${data.count} meal${data.count===1?"":"s"} · ${carbUnit.display(avgC)} · ${avgI}u` : "No data"}
                   </div>
                 </div>
               );
@@ -1373,7 +1378,7 @@ export default function InsightsPage() {
             // Good rate moved out of slot 0 into Raw ICR's previous position.
             { label:"Good rate",    val:`${goodRate.toFixed(1)}%`,  sub:`${goodAll} of ${total}`,   color:GREEN,
               formula:"GOOD / Total × 100",            explain:"Share of meals where the dose was within ±35% of the ICR estimate." },
-            { label:"Avg insulin",  val:`${avgInsulin}u`, sub:`${avgCarbs}g avg carbs`, color:"#A78BFA",
+            { label:"Avg insulin",  val:`${avgInsulin}u`, sub:`${carbUnit.display(avgCarbs)} avg carbs`, color:"#A78BFA",
               formula:"Σ units / count",               explain:"Mean insulin per meal. Track against carbs to validate your ratio." },
           ].map((t,i) => <InsightFlipTile key={i} tile={t}/>)}
         </div>
