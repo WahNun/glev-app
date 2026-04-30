@@ -5,13 +5,18 @@ export const PALETTE = {
   PURPLE: "#A855F7",
 } as const;
 
-export type MealType = "FAST_CARBS" | "HIGH_PROTEIN" | "HIGH_FAT" | "HIGH_FIBER" | "BALANCED";
+// Task #15: HIGH_FIBER bucket retired — `classifyMeal` now returns
+// FAST_CARBS / HIGH_PROTEIN / HIGH_FAT / BALANCED only. The legacy
+// HIGH_FIBER colour is kept in the COLORS map below as a defensive
+// fallback so any historical row still rendering with that label
+// keeps its original tint instead of defaulting to grey.
+export type MealType = "FAST_CARBS" | "HIGH_PROTEIN" | "HIGH_FAT" | "BALANCED";
 
 export const TYPE_COLORS: Record<string, string> = {
   FAST_CARBS:   PALETTE.ORANGE,
   HIGH_PROTEIN: PALETTE.BLUE,
   HIGH_FAT:     PALETTE.PURPLE,
-  HIGH_FIBER:   "#4DB6AC",
+  HIGH_FIBER:   "#4DB6AC", // legacy — pre-Task#15 rows
   BALANCED:     PALETTE.GREEN,
 };
 

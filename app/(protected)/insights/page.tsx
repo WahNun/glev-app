@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useId } from "react";
-import { fetchMeals, type Meal } from "@/lib/meals";
+import { fetchMeals, unifiedOutcome, type Meal } from "@/lib/meals";
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
 import { computeAdaptiveICR } from "@/lib/engine/adaptiveICR";
 import { detectPattern } from "@/lib/engine/patterns";
@@ -50,22 +50,28 @@ const HIGH_YELLOW = "#FFD166";
 
 const WEEKDAY_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
-// Normalises raw evaluation strings from the DB into the simplified
-// {GOOD, HIGH, LOW, SPIKE} buckets used across the insights surface.
+// Unified outcome bucketing — single source of truth shared with the
+// dashboard Control Score (app/(protected)/dashboard/page.tsx). Each
+// meal lands in EXACTLY one of GOOD / SPIKE / HYPO / OTHER (the legacy
+// EVAL_NORM used to group SPIKE+HIGH together for the "Spiked"
+// distribution, which double-counted UNDERDOSE-style outcomes against
+// hypo-style ones). The mapping below mirrors the dashboard exactly:
 //
-// CRITICAL: returns `null` for unevaluated meals (no follow-up glucose
-// logged yet, evaluation column still NULL). They must NOT be coerced
-// to "GOOD" — that previously inflated the Good rate vs the dashboard
-// (dashboard uses strict `m.evaluation === "GOOD"`, which excludes
-// null evaluations from the numerator). All call sites already do
-// strict `=== "GOOD" | "HIGH" | "LOW" | "SPIKE"` comparisons, so a
-// null return naturally drops out of every counter without further
-// changes (verified at every EVAL_NORM call site 2026-04-29).
-const EVAL_NORM = (ev: string|null): "GOOD"|"HIGH"|"LOW"|"SPIKE"|null => {
+//   GOOD  → "On target"
+//   SPIKE → SPIKE + UNDERDOSE + LOW (legacy)  — BG ended too high
+//   HYPO  → OVERDOSE + HIGH (legacy)          — BG ended too low
+//   OTHER → null / CHECK_CONTEXT / unknown    — excluded everywhere
+//
+// Returns `null` for unevaluated meals so a pending row never inflates
+// either numerator or denominator. Use this via `unifiedOutcome(meal)`
+// at the call site so the cached `evaluation` column is preferred for
+// finalised rows and `lifecycleFor` recomputes for in-flight ones.
+type EvalBucket = "GOOD" | "SPIKE" | "HYPO" | null;
+const EVAL_NORM = (ev: string|null): EvalBucket => {
   if (!ev) return null;
-  if (ev==="OVERDOSE"||ev==="HIGH") return "HIGH";
-  if (ev==="UNDERDOSE"||ev==="LOW") return "LOW";
-  if (ev==="GOOD"||ev==="SPIKE") return ev;
+  if (ev === "GOOD") return "GOOD";
+  if (ev === "SPIKE" || ev === "UNDERDOSE" || ev === "LOW")  return "SPIKE";
+  if (ev === "OVERDOSE" || ev === "HIGH")                    return "HYPO";
   return null;
 };
 
@@ -408,31 +414,37 @@ export default function InsightsPage() {
   const showWorkoutPatterns = workoutPatterns.length >= 2;
 
   // ── Meal evaluation distribution ──
+  // Each meal lands in EXACTLY one of GOOD / SPIKE / HYPO via the
+  // unified outcome resolver — no double-counting of UNDERDOSE
+  // (previously SPIKE+HIGH were lumped together so an under-dose +
+  // a real glucose spike both inflated the "Spiked" bar). Denominator
+  // is the GOOD+SPIKE+HYPO count, so a pending meal naturally drops
+  // out without skewing the percentages.
   const evals = last7
-    .map(m => EVAL_NORM(m.evaluation))
-    .filter(e => e === "GOOD" || e === "SPIKE" || e === "HIGH" || e === "LOW");
+    .map(m => EVAL_NORM(unifiedOutcome(m)))
+    .filter((e): e is "GOOD" | "SPIKE" | "HYPO" => e !== null);
   const goodN  = evals.filter(e => e === "GOOD").length;
-  const spikeN = evals.filter(e => e === "SPIKE" || e === "HIGH").length;
-  const lowN   = evals.filter(e => e === "LOW").length;
-  const totalN = goodN + spikeN + lowN;
+  const spikeN = evals.filter(e => e === "SPIKE").length;
+  const hypoN  = evals.filter(e => e === "HYPO").length;
+  const totalN = goodN + spikeN + hypoN;
   const evalPct = (n: number) => totalN > 0 ? Math.round((n / totalN) * 100) : 0;
   const evalRows = [
     { label:"On target", count:goodN,  color:GREEN,  pct:evalPct(goodN)  },
     { label:"Spiked",    count:spikeN, color:ORANGE, pct:evalPct(spikeN) },
-    { label:"Low risk",  count:lowN,   color:PINK,   pct:evalPct(lowN)   },
+    { label:"Low risk",  count:hypoN,  color:PINK,   pct:evalPct(hypoN)  },
   ];
 
   // ── Deeper-analysis derivations (used by cards under the hero block) ──
-  const normed     = meals.map(m => ({ ...m, ev: EVAL_NORM(m.evaluation) }));
-  const goodAll    = normed.filter(m => m.ev==="GOOD").length;
   // Numerator + denominator + display precision intentionally mirror
   // dashboard buildCards() (app/(protected)/dashboard/page.tsx) so the
   // two surfaces always show the identical Good rate over the same
-  // meal set. Strict `=== "GOOD"` (via the fixed EVAL_NORM, which now
-  // returns null for unevaluated meals) → numerator. `total = meals.
-  // length` (everything fetched) → denominator. `.toFixed(1)` →
-  // display, matching dashboard's `goodRate.toFixed(1)`.
-  const goodRate   = total ? goodAll/total*100 : 0;
+  // meal set. Numerator counts only the "GOOD" unified bucket;
+  // denominator is `meals.length` (everything fetched), exactly like
+  // dashboard. Pending rows resolve to a `null` bucket via
+  // `unifiedOutcome` so they don't get miscounted as GOOD.
+  const normed   = meals.map(m => ({ ...m, ev: EVAL_NORM(unifiedOutcome(m)) }));
+  const goodAll  = normed.filter(m => m.ev==="GOOD").length;
+  const goodRate = total ? goodAll/total*100 : 0;
   const avgGlucose = Math.round(meals.filter(m=>m.glucose_before).reduce((s,m)=>s+(m.glucose_before||0),0) / Math.max(meals.filter(m=>m.glucose_before).length,1));
   const avgCarbs   = Math.round(meals.filter(m=>m.carbs_grams).reduce((s,m)=>s+(m.carbs_grams||0),0) / Math.max(meals.filter(m=>m.carbs_grams).length,1));
   const avgInsulin = (meals.filter(m=>m.insulin_units).reduce((s,m)=>s+(m.insulin_units||0),0) / Math.max(meals.filter(m=>m.insulin_units).length,1)).toFixed(1);
@@ -452,7 +464,7 @@ export default function InsightsPage() {
       types[t].count++;
       types[t].totalCarbs   += m.carbs_grams   || 0;
       types[t].totalInsulin += m.insulin_units  || 0;
-      if (EVAL_NORM(m.evaluation)==="GOOD") types[t].good++;
+      if (EVAL_NORM(unifiedOutcome(m))==="GOOD") types[t].good++;
     }
   });
   const TYPE_ORDER = ["FAST_CARBS", "HIGH_PROTEIN", "HIGH_FAT", "BALANCED"] as const;
@@ -471,14 +483,16 @@ export default function InsightsPage() {
               : h >= 17 && h < 21 ? "Evening (17–21)"
               : "Night (21–5)";
     timeGroups[key].count++;
-    if (EVAL_NORM(m.evaluation)==="GOOD") timeGroups[key].good++;
+    if (EVAL_NORM(unifiedOutcome(m))==="GOOD") timeGroups[key].good++;
   });
 
-  // Pattern detection (last 10 meals + time-of-day cross-check)
+  // Pattern detection (last 10 meals + time-of-day cross-check).
+  // SPIKE bucket = SPIKE+UNDERDOSE+LOW (BG ended too high → under-dosed).
+  // HYPO  bucket = OVERDOSE+HIGH       (BG ended too low  → over-dosed).
   const recentMeals = meals.slice(0, 10);
-  const recentGood  = recentMeals.filter(m=>EVAL_NORM(m.evaluation)==="GOOD").length;
-  const recentLow   = recentMeals.filter(m=>EVAL_NORM(m.evaluation)==="LOW").length;
-  const recentHigh  = recentMeals.filter(m=>EVAL_NORM(m.evaluation)==="HIGH").length;
+  const recentGood  = recentMeals.filter(m=>EVAL_NORM(unifiedOutcome(m))==="GOOD").length;
+  const recentLow   = recentMeals.filter(m=>EVAL_NORM(unifiedOutcome(m))==="SPIKE").length;
+  const recentHigh  = recentMeals.filter(m=>EVAL_NORM(unifiedOutcome(m))==="HYPO").length;
   const patterns: {icon:string;title:string;desc:string;color:string}[] = [];
   if (recentLow >= 4)  patterns.push({ icon:"↑", title:"Consistent under-dosing", desc:`${recentLow} of last 10 meals were under-dosed. Consider increasing your ICR ratio or checking carb counts.`, color:ORANGE });
   if (recentHigh >= 3) patterns.push({ icon:"↓", title:"Frequent over-dosing", desc:`${recentHigh} of last 10 meals led to over-dose. Review correction factor — it may be too aggressive.`, color:PINK });

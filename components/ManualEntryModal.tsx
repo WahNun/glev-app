@@ -323,6 +323,35 @@ export default function ManualEntryModal({
         // Reflect the *actually persisted* fields on the local Meal so the UI
         // never shows an extra reading the database rejected.
         Object.assign(meal, persisted);
+
+        // Refresh the cached `evaluation` column whenever a 2h reading was
+        // attached — the row may now satisfy lifecycleFor.state === "final"
+        // and the dashboard Control Score reads `evaluation` directly. The
+        // direct supabase update path above bypasses updateMealReadings (so
+        // user-entered timestamps are preserved verbatim), so we run the
+        // same finalize step here. Skips when only bg_1h is set (1h alone
+        // never goes final). Failures are non-fatal — the next read of the
+        // row will still recompute via lifecycleFor.
+        if (persisted.bg_2h !== undefined) {
+          try {
+            // Pull personal ICR/CF/target from the DB-backed user_settings
+            // helper so the lifecycle's no-bgAfter fallback (and its
+            // window classifier) use the user's real ratios — not the
+            // localStorage mirror, which can lag the DB.
+            const [{ lifecycleFor }, { fetchInsulinSettings }] = await Promise.all([
+              import("@/lib/engine/lifecycle"),
+              import("@/lib/userSettings"),
+            ]);
+            const settings = await fetchInsulinSettings();
+            const lc = lifecycleFor(meal, new Date(), settings);
+            const evaluation = lc.state === "final" ? lc.outcome : null;
+            if (evaluation !== meal.evaluation) {
+              const { error: evErr } = await supabase.from("meals")
+                .update({ evaluation }).eq("id", meal.id);
+              if (!evErr) meal.evaluation = evaluation;
+            }
+          } catch { /* non-fatal — lifecycleFor will recompute on next read */ }
+        }
       }
 
       // Auto-fill any missing 1h / 2h slot from CGM history. Past-due slots

@@ -93,7 +93,11 @@ export interface MappedSheetMeal {
   glucoseBefore: number | null;
   glucoseAfter: number | null;
   insulin: number | null;
-  evaluation: string;
+  /** Outcome label from the source sheet — `null` when the column is
+   *  missing or holds a value we don't recognise. We never invent
+   *  "GOOD" any more; the unified evaluator (`lifecycleFor`) fills
+   *  the row in on first read instead. */
+  evaluation: string | null;
   mealType: string;
   createdAt: string | null;
 }
@@ -120,10 +124,13 @@ export async function POST(req: NextRequest) {
       const glucoseBefore = toNumOrNull(pick(r, ["glucosebefore", "bgbefore", "glucose", "bg", "sugar"]));
       const glucoseAfter = toNumOrNull(pick(r, ["glucoseafter", "bgafter", "postglucose"]));
       const insulin = toNumOrNull(pick(r, ["insulin", "dose", "bolus", "bolusunits", "units"]));
-      const evalRaw = pick(r, ["evaluation", "eval", "result", "outcome", "dosequality"]).toUpperCase();
-      const evaluation = ["GOOD", "LOW", "HIGH", "SPIKE", "OVERDOSE", "UNDERDOSE"].includes(evalRaw)
-        ? evalRaw
-        : "GOOD";
+      // Task #15: import never pre-sets `evaluation`. The unified
+      // `lifecycleFor` evaluator is the only legitimate writer of that
+      // column — even sheet-supplied outcome labels would bypass the
+      // ±30 min window guard and the unified resolver, so they are
+      // dropped on the floor. The row goes in as NULL and the lifecycle
+      // assigns its bucket on first read.
+      const evaluation = null;
       const mealType = pick(r, ["mealtype", "type", "category"]) || "BALANCED";
 
       return {

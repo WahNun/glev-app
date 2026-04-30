@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { fetchMeals, computeCalories, type Meal } from "@/lib/meals";
+import { fetchMeals, computeCalories, unifiedOutcome, type Meal } from "@/lib/meals";
 import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
 import { fetchMacroTargets, DEFAULT_MACRO_TARGETS, type MacroTargets } from "@/lib/userSettings";
@@ -38,14 +38,29 @@ interface CardData {
 
 type DashT = (key: string, values?: Record<string, string | number>) => string;
 function buildCards(meals: Meal[], t: DashT): CardData[] {
+  // Unified outcome bucketing — each meal lands in EXACTLY one of
+  // GOOD / SPIKE / HYPO / OTHER (no double-counting). UNDERDOSE used
+  // to leak into both spike AND hypo buckets in older code; the
+  // unified resolver below makes that impossible by giving each row
+  // a single canonical outcome string. OTHER (CHECK_CONTEXT, null,
+  // legacy unknown) is excluded from numerator and denominator so a
+  // pending meal never drags the score down.
   const total = meals.length;
-  const good   = meals.filter(m => m.evaluation === "GOOD").length;
-  const spike  = meals.filter(m => m.evaluation === "SPIKE" || m.evaluation === "LOW" || m.evaluation === "UNDERDOSE").length;
-  const hypo   = meals.filter(m => m.evaluation === "HIGH" || m.evaluation === "OVERDOSE").length;
+  let good = 0, spike = 0, hypo = 0;
+  for (const m of meals) {
+    const ev = unifiedOutcome(m);
+    if      (ev === "GOOD") good++;
+    else if (ev === "SPIKE" || ev === "UNDERDOSE" || ev === "LOW") spike++;
+    else if (ev === "OVERDOSE" || ev === "HIGH") hypo++;
+  }
   const goodRate  = total ? (good / total) * 100 : 0;
   const spikeRate = total ? (spike / total) * 100 : 0;
   const hypoRate  = total ? (hypo / total) * 100 : 0;
-  const score     = total ? Math.round(goodRate * 0.7 + (100 - spikeRate - hypoRate) * 0.3) : 0;
+  // Spec formula: weight the GOOD-rate (0.7) plus the inverse of the
+  // combined spike+hypo rate (0.3), clamped to 0..100. UNDERDOSE only
+  // shows up in `spike`, so it penalises the score exactly once.
+  const rawScore  = goodRate * 0.7 + (100 - spikeRate - hypoRate) * 0.3;
+  const score     = total ? Math.max(0, Math.min(100, Math.round(rawScore))) : 0;
   return [
     {
       key:"control", label:t("control_score_label"), color:ACCENT,
@@ -748,19 +763,31 @@ function computeControlScore(meals: Meal[], sinceMs: number, untilMs: number = I
     const t = parseDbDate(m.created_at).getTime();
     return t >= sinceMs && t < untilMs;
   });
-  let good = 0, spike = 0, overdose = 0;
+  // Unified bucketing — each meal counts in exactly one of
+  // GOOD / SPIKE / HYPO / OTHER. The historical UNDERDOSE → spike +
+  // OVERDOSE → hypo split is preserved, but `unifiedOutcome` ensures
+  // we never double-count a row across both buckets. Denominator is
+  // `total` (matches buildCards) so the badge score and the per-card
+  // rates always agree on what "100% of meals" means.
+  const total = inWindow.length;
+  if (!total) return { score: 0, count: 0 };
+  let good = 0, spike = 0, hypo = 0;
   for (const m of inWindow) {
-    const ev = m.evaluation;
-    if (ev === "GOOD")                                     good++;
-    else if (ev === "SPIKE" || ev === "UNDERDOSE" || ev === "HIGH") spike++;
-    else if (ev === "OVERDOSE" || ev === "LOW")            overdose++;
-    // Anything else (CHECK_CONTEXT, null, unknown) → OTHER, ignored.
+    const ev = unifiedOutcome(m);
+    if      (ev === "GOOD")                                       good++;
+    else if (ev === "SPIKE" || ev === "UNDERDOSE" || ev === "LOW") spike++;
+    else if (ev === "OVERDOSE" || ev === "HIGH")                  hypo++;
+    // Anything else (CHECK_CONTEXT, null, unknown) → OTHER, in
+    // denominator only — a still-pending meal lowers all three
+    // displayed rates equally instead of being silently excluded.
   }
-  const evaluatedCount = good + spike + overdose;
-  if (!evaluatedCount) return { score: 0, count: 0 };
-  const raw = (good / evaluatedCount) * 100;
+  // Spec formula: clamp(good_rate * 0.7 + (100 - spike_rate - hypo_rate) * 0.3, 0, 100).
+  const goodRate  = (good  / total) * 100;
+  const spikeRate = (spike / total) * 100;
+  const hypoRate  = (hypo  / total) * 100;
+  const raw   = goodRate * 0.7 + (100 - spikeRate - hypoRate) * 0.3;
   const score = Math.max(0, Math.min(100, Math.round(raw)));
-  return { score, count: evaluatedCount };
+  return { score, count: total };
 }
 
 function ControlScoreCard({ meals }: { meals: Meal[] }) {

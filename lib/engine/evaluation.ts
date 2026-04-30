@@ -79,16 +79,21 @@ function contextSuffix(
   return notes.length > 0 ? " " + notes.join(" ") : "";
 }
 
-/** Render glucose-velocity notes from the lifecycle's speed1 / speed2. */
+/** Render glucose-velocity notes from the lifecycle's speed1 / speed2,
+ *  e.g. "BG rose at +0.38 mg/dL/min in the first hour." Surfaces the
+ *  numeric speed inside the reasoning string so the entries page and
+ *  insights drawer can show "how fast" without re-deriving it. */
 function speedSuffix(speed1?: number | null, speed2?: number | null): string {
   const parts: string[] = [];
   if (speed1 != null && Number.isFinite(speed1)) {
-    const sign = speed1 > 0 ? "+" : "";
-    parts.push(`Anstiegs-Tempo 1H: ${sign}${speed1.toFixed(2)} mg/dL/min.`);
+    const verb = speed1 >= 0 ? "rose" : "fell";
+    const sign = speed1 >= 0 ? "+" : "";
+    parts.push(`BG ${verb} at ${sign}${speed1.toFixed(2)} mg/dL/min in the first hour.`);
   }
   if (speed2 != null && Number.isFinite(speed2)) {
-    const sign = speed2 > 0 ? "+" : "";
-    parts.push(`Anstiegs-Tempo 2H: ${sign}${speed2.toFixed(2)} mg/dL/min.`);
+    const verb = speed2 >= 0 ? "rose" : "fell";
+    const sign = speed2 >= 0 ? "+" : "";
+    parts.push(`BG ${verb} at ${sign}${speed2.toFixed(2)} mg/dL/min over the 2-hour window.`);
   }
   return parts.length > 0 ? " " + parts.join(" ") : "";
 }

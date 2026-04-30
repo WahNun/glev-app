@@ -160,13 +160,13 @@ export default function ImportPanel({ embedded = false }: { embedded?: boolean }
       for (const r of sheetRows) {
         try {
           const cals = r.calories ?? computeCalories(r.carbs, r.protein, r.fat);
-          // Trust the user-supplied evaluation when it matches a known
-          // outcome label; otherwise leave NULL and let lifecycleFor fill
-          // it on first read (we no longer guess via the legacy
-          // computeEvaluation ICR-ratio shortcut on import).
-          const ev = r.evaluation && ["GOOD","LOW","HIGH","SPIKE","OVERDOSE","UNDERDOSE","CHECK_CONTEXT"].includes(r.evaluation)
-            ? r.evaluation
-            : null;
+          // Task #15: the unified `lifecycleFor` evaluator is the ONLY
+          // legitimate writer of `evaluation`. Even when the source sheet
+          // carries a recognised outcome label, we no longer trust it at
+          // import time — pre-set values silently break the "evaluation
+          // is only `final` when readings + window pass" invariant. The
+          // row goes in with `evaluation: null` and lifecycleFor fills
+          // it on first read once bg_2h (with valid timestamps) lands.
           const mt = r.mealType && r.mealType !== "BALANCED" ? r.mealType : classifyMeal(r.carbs, r.protein, r.fat, r.fiber);
           await saveMeal({
             inputText: r.inputText,
@@ -180,7 +180,7 @@ export default function ImportPanel({ embedded = false }: { embedded?: boolean }
             calories: cals,
             insulinUnits: r.insulin,
             mealType: mt,
-            evaluation: ev,
+            evaluation: null,
             createdAt: r.createdAt,
           });
           inserted++;
@@ -222,11 +222,10 @@ export default function ImportPanel({ embedded = false }: { embedded?: boolean }
         const calories = row.calories
           ? parseFloat(row.calories)
           : computeCalories(carbs, protein, fat);
-        // CSV evaluations are trusted when they map to a known outcome
-        // label; otherwise NULL → lifecycleFor will fill on read.
-        const ev = row.evaluation && ["GOOD","LOW","HIGH","SPIKE","OVERDOSE","UNDERDOSE","CHECK_CONTEXT"].includes(row.evaluation.toUpperCase())
-          ? row.evaluation.toUpperCase()
-          : null;
+        // Task #15: CSV import — like the sheets path above — never
+        // pre-sets `evaluation`. lifecycleFor is the single writer of
+        // that column; pre-supplied outcomes silently bypass the
+        // window-validity guard and the unified resolver.
         const createdAt = toISO(row.date);
         await saveMeal({
           inputText: row.meal || "Imported meal",
@@ -240,7 +239,7 @@ export default function ImportPanel({ embedded = false }: { embedded?: boolean }
           calories,
           insulinUnits: insulin,
           mealType: classifyMeal(carbs, protein, fat, fiber),
-          evaluation: ev,
+          evaluation: null,
           createdAt: createdAt ?? null,
         });
         count++;

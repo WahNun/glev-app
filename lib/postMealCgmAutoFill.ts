@@ -170,6 +170,40 @@ async function fillSlot(
   const rows = (data ?? []).length;
   if (rows === 0) return false;     // already filled (manual entry won the race)
   logDebug("CGM_AUTOFILL", { mealId, slot, value: match.value, ageMin: Math.round(match.ageMin) });
+
+  // When the 2h slot was just populated, give the row a chance to flip
+  // `evaluation` from null → final. Same logic the manual readings path
+  // runs (lib/meals.updateMealReadings + components/ManualEntryModal),
+  // so the dashboard Control Score sees the new outcome on its next
+  // refresh without waiting for an explicit user save. Non-fatal — the
+  // lifecycle recomputes on read so a failure here just delays the
+  // cached column update.
+  if (slot === "2h") {
+    try {
+      const { data: row } = await supabase
+        .from("meals")
+        .select("id, glucose_before, bg_1h, bg_1h_at, bg_2h, bg_2h_at, glucose_after, meal_time, created_at, carbs_grams, protein_grams, fat_grams, fiber_grams, insulin_units, meal_type, evaluation")
+        .eq("id", mealId)
+        .single();
+      if (row) {
+        // Personal ICR/CF/target come from the DB-backed user_settings
+        // helper so the lifecycle's no-bgAfter fallback uses the user's
+        // real ratios — same source as updateMealReadings + manual save.
+        const [{ lifecycleFor }, { fetchInsulinSettings }] = await Promise.all([
+          import("./engine/lifecycle"),
+          import("./userSettings"),
+        ]);
+        const settings = await fetchInsulinSettings();
+        const lc = lifecycleFor(row as unknown as import("./meals").Meal, new Date(), settings);
+        const evaluation = lc.state === "final" ? lc.outcome : null;
+        if (evaluation !== (row as { evaluation: string | null }).evaluation) {
+          await supabase.from("meals").update({ evaluation }).eq("id", mealId);
+        }
+      }
+    } catch (e) {
+      logDebug("CGM_AUTOFILL_EVAL_REFRESH_ERROR", { mealId, message: e instanceof Error ? e.message : String(e) });
+    }
+  }
   return true;
 }
 

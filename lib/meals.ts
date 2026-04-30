@@ -81,28 +81,88 @@ export interface SaveMealInput {
  * with the GPT prompt (lib/ai/systemPrompt.ts) so the AI's classification
  * and the local fallback always agree.
  *
- * Rules (checked in order — first match wins):
- *   FAST_CARBS    → fiber < 5g  AND carbs >= 20g
- *                   (low-fiber carb load: bread, rice, juice, candy, fruit)
+ * Rules (Glev unified spec, checked in order — first match wins):
+ *   FAST_CARBS    → carbs >= 45g  AND  (sugars/carbs > 0.5  OR  fiber < 5g)
+ *                   (sugar-dominant carb load OR low-fiber carb load:
+ *                   bread, rice, juice, candy, fruit)
  *   HIGH_FAT      → fat_kcal / total_kcal > 0.45
  *                   (fat dominates the energy mix: pizza, fried, cheese,
  *                   nuts, avocado, cream — drives the delayed-rise pizza
  *                   effect)
  *   HIGH_PROTEIN  → protein > carbs  AND protein > fat  AND protein >= 25g
  *                   (steak, chicken, fish, eggs, legumes, dairy, shakes)
- *   HIGH_FIBER    → fiber >= 8g
- *                   (vegetables, whole grain, legumes, fiber drinks —
- *                   slows carb absorption so the BG rise is gentler than
- *                   the carb count alone would suggest)
- *   BALANCED      → otherwise (no dominant macro)
+ *   BALANCED      → otherwise (no dominant macro). The legacy HIGH_FIBER
+ *                   bucket has been removed — high-fiber meals now fall
+ *                   through to BALANCED (and the lifecycle absorption
+ *                   curve handles the slower rise on its own).
+ *
+ * `sugars` is optional so existing call sites (historical seeds, Sheets
+ * import) that don't track sugars-of-which keep working — they get the
+ * fiber-only branch of the FAST_CARBS test.
  */
-export function classifyMeal(carbs: number, protein: number, fat: number, fiber: number = 0): string {
-  if (fiber < 5 && carbs >= 20) return "FAST_CARBS";
+export function classifyMeal(
+  carbs: number,
+  protein: number,
+  fat: number,
+  fiber: number = 0,
+  sugars: number | null = null,
+): string {
+  const sugarShare = sugars != null && carbs > 0 ? sugars / carbs : null;
+  if (carbs >= 45 && ((sugarShare != null && sugarShare > 0.5) || fiber < 5)) return "FAST_CARBS";
   const totalKcal = computeCalories(carbs, protein, fat);
   if (totalKcal > 0 && (fat * 9) / totalKcal > 0.45) return "HIGH_FAT";
   if (protein > carbs && protein > fat && protein >= 25) return "HIGH_PROTEIN";
-  if (fiber >= 8) return "HIGH_FIBER";
   return "BALANCED";
+}
+
+/**
+ * @deprecated Use `lifecycleFor(meal).outcome` (or read the cached
+ * `meal.evaluation` column for `outcome_state === "final"` rows) — this
+ * helper is kept only as a typed shim for any external import that
+ * predates the unified evaluator. It now returns `null` so callers
+ * cannot accidentally persist a stale single-snapshot outcome string;
+ * the lifecycle / evaluator pair is the single source of truth.
+ */
+export function computeEvaluation(): null {
+  // eslint-disable-next-line no-console
+  console.warn("[glev] computeEvaluation() is deprecated — use lifecycleFor(meal).outcome instead.");
+  return null;
+}
+
+/**
+ * Unified outcome resolver — the single source of truth for "what is the
+ * outcome of this meal?" used by the dashboard Control Score, the
+ * Insights aggregations, and the entries-list filter.
+ *
+ * Resolution order:
+ *   1. Run `lifecycleFor(meal)`. When it reports `state === "final"`,
+ *      return its `.outcome` directly — this is the only definitively
+ *      trusted bucket.
+ *   2. Otherwise (provisional / pending), if a cached `evaluation`
+ *      string exists on the row, return it as a best-effort historical
+ *      label (covers pre-Task#15 rows whose `evaluation` was written
+ *      by the legacy dose-ratio path before lifecycle finalization
+ *      was the sole writer). Modern rows that aren't final shouldn't
+ *      have `evaluation` set, so this branch effectively never fires
+ *      for new data.
+ *   3. Fall back to the lifecycle's provisional `.outcome` (which may
+ *      itself be `null` for pending or out-of-window rows).
+ *
+ * The previous "trust any non-null `meal.evaluation`" shortcut was
+ * dropped because it would preserve stale legacy labels indefinitely
+ * and silently bypass the new ±30 min window guard for rows that
+ * happened to carry an old outcome string.
+ *
+ * Sync (no DB / network calls) — safe to call inside list .map() loops.
+ */
+export function unifiedOutcome(meal: Meal, now: Date = new Date()): string | null {
+  // Lazy require to avoid circular imports at module load.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { lifecycleFor } = require("./engine/lifecycle") as typeof import("./engine/lifecycle");
+  const lc = lifecycleFor(meal, now);
+  if (lc.state === "final") return lc.outcome;
+  if (meal.evaluation) return meal.evaluation;
+  return lc.outcome ?? null;
 }
 
 export async function saveMeal(input: SaveMealInput): Promise<Meal> {
@@ -226,8 +286,15 @@ export async function updateMeal(id: string, patch: UpdateMealInput): Promise<Me
   //    state === "final" (bg_2h captured in-window AND ageMinutes >= 120).
   //    Pending / provisional rows leave evaluation = null so the dashboard
   //    Control Score never counts a half-baked outcome.
-  //    Lazy import keeps lib/meals.ts free of an engine cycle.
-  const { lifecycleFor } = await import("./engine/lifecycle");
+  //    Lazy import keeps lib/meals.ts free of an engine cycle. Personal
+  //    ICR / CF / target BG come from the DB-backed `user_settings`
+  //    helper so the no-bgAfter fallback inside evaluateEntry uses the
+  //    user's real ratios instead of the localStorage mirror.
+  const [{ lifecycleFor }, { fetchInsulinSettings }] = await Promise.all([
+    import("./engine/lifecycle"),
+    import("./userSettings"),
+  ]);
+  const settings = await fetchInsulinSettings();
   const nowAt = new Date().toISOString();
   const bg1hAtAfter = patch.bg_1h !== undefined ? (patch.bg_1h != null ? nowAt : null) : cur.bg_1h_at;
   const bg2hAtAfter = patch.bg_2h !== undefined ? (patch.bg_2h != null ? nowAt : null) : cur.bg_2h_at;
@@ -245,7 +312,7 @@ export async function updateMeal(id: string, patch: UpdateMealInput): Promise<Me
     bg_2h_at:       bg2hAtAfter,
     meal_type:      newMealType,
   };
-  const lc = lifecycleFor(mergedMeal);
+  const lc = lifecycleFor(mergedMeal, new Date(), settings);
   const finalEvaluation = lc.state === "final" ? lc.outcome : null;
 
   // 4) Build the DB patch — only include fields the caller actually sent,
@@ -328,12 +395,19 @@ export async function updateMealReadings(
     // newly attached — the row may now satisfy lifecycle.state === "final"
     // and the dashboard Control Score reads `evaluation` directly. Skip
     // when only bg_1h is being touched (1h alone never goes final).
+    // We pull personal ICR/CF/target from `user_settings` (DB) instead
+    // of the localStorage mirror so a server-side recompute uses the
+    // freshest values.
     if (readings.bg2h !== undefined) {
       const { data: row } = await supabase
         .from("meals").select(FULL_COLS).eq("id", id).single();
       if (row) {
-        const { lifecycleFor } = await import("./engine/lifecycle");
-        const lc = lifecycleFor(row as Meal);
+        const [{ lifecycleFor }, { fetchInsulinSettings }] = await Promise.all([
+          import("./engine/lifecycle"),
+          import("./userSettings"),
+        ]);
+        const settings = await fetchInsulinSettings();
+        const lc = lifecycleFor(row as Meal, new Date(), settings);
         const evaluation = lc.state === "final" ? lc.outcome : null;
         if (evaluation !== (row as Meal).evaluation) {
           await supabase.from("meals").update({ evaluation }).eq("id", id);

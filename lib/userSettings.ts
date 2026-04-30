@@ -1,12 +1,13 @@
 /**
  * User preferences. Holds:
- *   1. Daily macro targets (Postgres `user_settings` table) — used by
- *      the dashboard "Today's Macros" rings.
- *   2. Insulin parameters (browser `localStorage` key "glev_settings") —
- *      ICR, CF and the target-BG midpoint used by the deterministic
- *      evaluator and the dose recommender. Mirror of the Settings page
- *      UI; both reads and writes use the same key so the values stay
- *      in lock-step.
+ *   1. Daily macro targets + insulin parameters (ICR / CF / target BG)
+ *      in the Postgres `user_settings` table — the single source of
+ *      truth for evaluation, dose recommendation, and the Today's
+ *      Macros rings.
+ *   2. A localStorage mirror (key "glev_settings") for the synchronous
+ *      callers (`getInsulinSettings()`) that cannot await an async DB
+ *      round-trip — kept in lock-step by the Settings page so the two
+ *      stay in sync.
  *
  * All reads gracefully fall back to DEFAULT_* when no row / key exists,
  * the user is signed out, the request is server-side, or Supabase is
@@ -95,9 +96,18 @@ export const DEFAULT_INSULIN_SETTINGS: InsulinSettings = {
 
 const SETTINGS_KEY = "glev_settings";
 
-/** Track whether we already warned about defaults this session, to keep
- *  the console quiet on hot paths (lifecycleFor runs once per row). */
-let warnedDefaultsThisSession = false;
+/** Per-field warning latches so we surface a single console.warn the
+ *  first time each individual field falls back to its hard-coded
+ *  default — without spamming hot paths (lifecycleFor runs once per
+ *  meal row across the dashboard / insights views). */
+const warnedField = { icr: false, cf: false, targetBg: false };
+
+function warnFieldDefault(field: keyof typeof warnedField, value: number): void {
+  if (warnedField[field]) return;
+  warnedField[field] = true;
+  // eslint-disable-next-line no-console
+  console.warn(`[glev] user_settings.${field} missing — falling back to default ${value}. Set it in Settings to silence this warning.`);
+}
 
 function isFiniteNumber(v: unknown): v is number {
   return typeof v === "number" && Number.isFinite(v);
@@ -106,7 +116,9 @@ function isFiniteNumber(v: unknown): v is number {
 /**
  * Read the user's insulin parameters from localStorage. Server-side
  * (no `window`) returns DEFAULT_INSULIN_SETTINGS without a warning —
- * the warning fires only when running in a browser with no saved values.
+ * the warning fires only when running in a browser with no saved values
+ * for a specific field. Each missing field warns at most once per
+ * session via the `warnedField` latch.
  *
  * `targetBg` is derived from the saved targetMin / targetMax range
  * (their midpoint, rounded), since the Settings UI exposes the range
@@ -118,24 +130,68 @@ export function getInsulinSettings(): InsulinSettings {
   try { raw = window.localStorage.getItem(SETTINGS_KEY); }
   catch { /* localStorage disabled / quota — fall through to defaults */ }
   if (!raw) {
-    if (!warnedDefaultsThisSession) {
-      // eslint-disable-next-line no-console
-      console.warn("[glev] No saved insulin settings found — using defaults (ICR=15, CF=50, Target=110). Configure in Settings.");
-      warnedDefaultsThisSession = true;
-    }
+    warnFieldDefault("icr",      DEFAULT_INSULIN_SETTINGS.icr);
+    warnFieldDefault("cf",       DEFAULT_INSULIN_SETTINGS.cf);
+    warnFieldDefault("targetBg", DEFAULT_INSULIN_SETTINGS.targetBg);
     return DEFAULT_INSULIN_SETTINGS;
   }
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const icr = isFiniteNumber(parsed.icr) && parsed.icr > 0 ? parsed.icr : DEFAULT_INSULIN_SETTINGS.icr;
-    const cf  = isFiniteNumber(parsed.cf)  && parsed.cf  > 0 ? parsed.cf  : DEFAULT_INSULIN_SETTINGS.cf;
+    let icr: number;
+    if (isFiniteNumber(parsed.icr) && parsed.icr > 0) icr = parsed.icr;
+    else { warnFieldDefault("icr", DEFAULT_INSULIN_SETTINGS.icr); icr = DEFAULT_INSULIN_SETTINGS.icr; }
+
+    let cf: number;
+    if (isFiniteNumber(parsed.cf)  && parsed.cf  > 0) cf = parsed.cf;
+    else { warnFieldDefault("cf", DEFAULT_INSULIN_SETTINGS.cf); cf = DEFAULT_INSULIN_SETTINGS.cf; }
+
     const tMin = isFiniteNumber(parsed.targetMin) ? parsed.targetMin : null;
     const tMax = isFiniteNumber(parsed.targetMax) ? parsed.targetMax : null;
-    const targetBg = tMin != null && tMax != null && tMax > tMin
-      ? Math.round((tMin + tMax) / 2)
-      : DEFAULT_INSULIN_SETTINGS.targetBg;
+    let targetBg: number;
+    if (tMin != null && tMax != null && tMax > tMin) targetBg = Math.round((tMin + tMax) / 2);
+    else { warnFieldDefault("targetBg", DEFAULT_INSULIN_SETTINGS.targetBg); targetBg = DEFAULT_INSULIN_SETTINGS.targetBg; }
+
     return { icr, cf, targetBg };
   } catch {
     return DEFAULT_INSULIN_SETTINGS;
   }
+}
+
+/**
+ * Async DB-backed read of the user's insulin parameters from the
+ * `user_settings` table. Falls back to DEFAULT_INSULIN_SETTINGS — and
+ * fires a one-shot warning per missing field — when the row is
+ * absent, the user is signed out, or Supabase is unreachable.
+ *
+ * Use this from server contexts (route handlers) or async client
+ * paths where the freshest values matter (post-meal lifecycle
+ * finalize). Synchronous callers should keep using
+ * `getInsulinSettings()` for the localStorage mirror.
+ */
+export async function fetchInsulinSettings(): Promise<InsulinSettings> {
+  if (!supabase) return DEFAULT_INSULIN_SETTINGS;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return DEFAULT_INSULIN_SETTINGS;
+
+  const { data, error } = await supabase
+    .from("user_settings")
+    .select("icr_g_per_unit, cf_mgdl_per_unit, target_bg_mgdl")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (error || !data) return DEFAULT_INSULIN_SETTINGS;
+
+  let icr: number;
+  if (isFiniteNumber(data.icr_g_per_unit) && data.icr_g_per_unit > 0) icr = data.icr_g_per_unit;
+  else { warnFieldDefault("icr", DEFAULT_INSULIN_SETTINGS.icr); icr = DEFAULT_INSULIN_SETTINGS.icr; }
+
+  let cf: number;
+  if (isFiniteNumber(data.cf_mgdl_per_unit) && data.cf_mgdl_per_unit > 0) cf = data.cf_mgdl_per_unit;
+  else { warnFieldDefault("cf", DEFAULT_INSULIN_SETTINGS.cf); cf = DEFAULT_INSULIN_SETTINGS.cf; }
+
+  let targetBg: number;
+  if (isFiniteNumber(data.target_bg_mgdl) && data.target_bg_mgdl > 0) targetBg = data.target_bg_mgdl;
+  else { warnFieldDefault("targetBg", DEFAULT_INSULIN_SETTINGS.targetBg); targetBg = DEFAULT_INSULIN_SETTINGS.targetBg; }
+
+  return { icr, cf, targetBg };
 }
