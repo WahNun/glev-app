@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
+import { localeToBcp47 } from "@/lib/time";
 import { fetchMeals, classifyMeal, computeCalories, saveMeal, deleteMeal, updateMeal, type Meal } from "@/lib/meals";
 import { scheduleJobsForLog } from "@/lib/cgmJobs";
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
@@ -42,28 +43,54 @@ interface Recommendation {
 }
 
 /**
+ * Translator handle compatible with `useTranslations("engine")`. Accepts a
+ * key plus an optional ICU values dict and returns the formatted string.
+ * Kept as a structural type so the helpers below can be unit-tested with
+ * a stub without pulling next-intl into the test runner.
+ */
+type EngineTranslator = (key: string, values?: Record<string, string | number>) => string;
+
+/**
+ * Locale-aware number formatter: returns the decimal-string for `n`
+ * trimmed to at most `digits` fraction digits using BCP-47 rules
+ * (German uses comma decimals). Centralised so the reasoning text
+ * always renders "5,5 IE" in DE and "5.5 u" in EN.
+ */
+type NumFormatter = (n: number, digits?: number) => string;
+
+/**
  * Append safety / context notes derived from recent insulin & exercise logs.
  * Pure documentation — does not change the dose.
  *  - Basal logged in the last 24h is mentioned for context.
  *  - More than 2 boluses in the last 6h triggers a stacking-risk warning.
  *  - Exercise (cardio or any high-intensity) in the last 4h is flagged.
+ *
+ * Strings are emitted via the injected translator so the same engine
+ * runs render in DE or EN depending on the active locale.
  */
 function safetyNotesFromLogs(
   insulinLogs: InsulinLog[],
   exerciseLogs: ExerciseLog[],
+  t: EngineTranslator,
+  fmt: NumFormatter,
 ): string[] {
   const now = Date.now();
   const sixHoursAgo  = now - 6  * 3600_000;
   const fourHoursAgo = now - 4  * 3600_000;
   const dayAgo       = now - 24 * 3600_000;
   const notes: string[] = [];
+  const unitsShort = t("units_short");
 
   const recentBolus = insulinLogs.filter(l =>
     l.insulin_type === "bolus" && parseDbTs(l.created_at) >= sixHoursAgo,
   );
   if (recentBolus.length > 2) {
     const total = Math.round(recentBolus.reduce((s, l) => s + (l.units || 0), 0) * 10) / 10;
-    notes.push(`⚠ Stacking-Risiko: ${recentBolus.length} Bolus-Gaben in den letzten 6h (Σ ${total}u). Aktives Insulin könnte sich überlagern — vorsichtig dosieren.`);
+    notes.push(t("safety_stacking", {
+      count: recentBolus.length,
+      total: fmt(total, 1),
+      units: unitsShort,
+    }));
   }
 
   const recentBasal = insulinLogs.filter(l =>
@@ -72,7 +99,12 @@ function safetyNotesFromLogs(
   if (recentBasal.length > 0) {
     const last = recentBasal[0];
     const hoursAgo = Math.max(0, Math.round((now - parseDbTs(last.created_at)) / 3600_000));
-    notes.push(`Basal-Kontext: zuletzt ${last.units}u ${last.insulin_name || "Basal"} vor ${hoursAgo}h.`);
+    notes.push(t("safety_basal", {
+      amount: fmt(last.units || 0, 1),
+      units: unitsShort,
+      name: last.insulin_name || t("safety_basal_default_name"),
+      hours: hoursAgo,
+    }));
   }
 
   const recentExercise = exerciseLogs.filter(l =>
@@ -80,7 +112,11 @@ function safetyNotesFromLogs(
   );
   if (recentExercise.length > 0) {
     const e = recentExercise[0];
-    notes.push(`Bewegung: ${e.duration_minutes} min ${e.exercise_type} (${e.intensity}) in den letzten 4h — erhöhte Insulin-Empfindlichkeit möglich.`);
+    notes.push(t("safety_exercise", {
+      minutes: e.duration_minutes,
+      type: e.exercise_type,
+      intensity: e.intensity,
+    }));
   }
 
   return notes;
@@ -90,9 +126,11 @@ function runGlevEngine(
   meals: Meal[],
   currentGlucose: number,
   carbs: number,
-  insulinLogs: InsulinLog[] = [],
-  exerciseLogs: ExerciseLog[] = [],
-  icr: number = 15,
+  insulinLogs: InsulinLog[],
+  exerciseLogs: ExerciseLog[],
+  icr: number,
+  t: EngineTranslator,
+  fmt: NumFormatter,
 ): Recommendation {
   const cf = 50, target = 110;
   const carbDose = carbs / icr;
@@ -105,14 +143,19 @@ function runGlevEngine(
     (m.evaluation === "GOOD") && m.insulin_units
   );
 
-  const safetyNotes = safetyNotesFromLogs(insulinLogs, exerciseLogs);
+  const safetyNotes = safetyNotesFromLogs(insulinLogs, exerciseLogs, t, fmt);
   const safetySuffix = safetyNotes.length > 0 ? " " + safetyNotes.join(" ") : "";
+  const unitsShort = t("units_short");
 
   if (similar.length >= 3) {
     const avg = Math.round(similar.reduce((s,m)=>s+(m.insulin_units||0),0)/similar.length * 10)/10;
     return {
       dose: avg, confidence:"HIGH", source:"historical",
-      reasoning: `Based on ${similar.length} similar past meals with GOOD outcomes (±12g carbs, ±35 mg/dL glucose). Historical average insulin: ${avg}u.${safetySuffix}`,
+      reasoning: t("reason_historical", {
+        count: similar.length,
+        avg: fmt(avg, 1),
+        units: unitsShort,
+      }) + safetySuffix,
       carbDose:Math.round(carbDose*10)/10, correctionDose:Math.round(correctionDose*10)/10,
       similarMeals: similar.slice(0,5),
     };
@@ -123,7 +166,7 @@ function runGlevEngine(
     const blended = Math.round(((histAvg + formulaDose)/2)*10)/10;
     return {
       dose: blended, confidence:"MEDIUM", source:"blended",
-      reasoning: `Blended from ${similar.length} similar meal(s) + ICR formula. Limited historical data — log more meals for higher confidence.${safetySuffix}`,
+      reasoning: t("reason_blended", { count: similar.length }) + safetySuffix,
       carbDose:Math.round(carbDose*10)/10, correctionDose:Math.round(correctionDose*10)/10,
       similarMeals: similar,
     };
@@ -131,7 +174,12 @@ function runGlevEngine(
 
   return {
     dose: formulaDose, confidence:"LOW", source:"formula",
-    reasoning: `No similar historical meals found. Using standard ICR formula: ${carbs}g ÷ ${icr} + ${Math.round(correctionDose*10)/10}u correction.${safetySuffix}`,
+    reasoning: t("reason_formula", {
+      carbs,
+      icr,
+      correction: fmt(Math.round(correctionDose*10)/10, 1),
+      units: unitsShort,
+    }) + safetySuffix,
     carbDose:Math.round(carbDose*10)/10, correctionDose:Math.round(correctionDose*10)/10,
     similarMeals:[],
   };
@@ -146,6 +194,31 @@ export default function EnginePage() {
   // pull engine-specific copy without a rename storm in the rest of
   // the (~1900-line) component.
   const tEngine = useTranslations("engine");
+  // Locale-aware decimal formatter — keeps reasoning bullets natural for
+  // the active language ("5,5 IE" in DE, "5.5 u" in EN). Cached against
+  // the current locale to avoid rebuilding the Intl.NumberFormat instance
+  // on every dose calc / re-render.
+  const bcp47 = localeToBcp47(useLocale());
+  const formatNum = useMemo<NumFormatter>(() => {
+    const cache = new Map<number, Intl.NumberFormat>();
+    return (n: number, digits = 1) => {
+      if (!Number.isFinite(n)) return String(n);
+      let nf = cache.get(digits);
+      if (!nf) {
+        nf = new Intl.NumberFormat(bcp47, { maximumFractionDigits: digits });
+        cache.set(digits, nf);
+      }
+      return nf.format(n);
+    };
+  }, [bcp47]);
+  // Adapter: useTranslations returns a callable handle that next-intl
+  // types narrowly per-namespace. We need a structural type so the
+  // helper functions above (declared at module scope) can stay
+  // testable. The wrapper just forwards into the namespaced handle.
+  const tEngineFn: EngineTranslator = useMemo(
+    () => (key, values) => tEngine(key as Parameters<typeof tEngine>[0], values),
+    [tEngine],
+  );
   const [tab, setTab]         = useState<"engine"|"log"|"bolus"|"exercise"|"fingerstick">("engine");
   // Sync the active sub-tab from the URL ?tab= query so deep-links
   // from the header QuickAddMenu ("Glukose messen", "Insulin loggen",
@@ -410,7 +483,7 @@ export default function EnginePage() {
       mediaRecRef.current = rec;
       setRecording(true);
     } catch (e) {
-      setVoiceErr(e instanceof Error ? e.message : "Mikrofon-Zugriff fehlgeschlagen.");
+      setVoiceErr(e instanceof Error ? e.message : tEngine("voice_mic_failed"));
       setRecording(false);
     }
     // Reset the AI-supplied meal label at the START of every new recording
@@ -645,7 +718,7 @@ export default function EnginePage() {
     if (!c) return;
     setRunning(true);
     setTimeout(() => {
-      const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs, adaptedICR);
+      const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs, adaptedICR, tEngineFn, formatNum);
       setResult(rec);
       setRunning(false);
       // Wizard auto-advance: bump from Step 2 ("Makros prüfen") to Step 3
@@ -1009,7 +1082,7 @@ export default function EnginePage() {
     if (!c) { setDecisionToast("Keine Carbs hinterlegt — Einschätzung nicht möglich."); return; }
     setDecisionBusy(true);
     setTimeout(() => {
-      const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs, adaptedICR);
+      const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs, adaptedICR, tEngineFn, formatNum);
       setDecisionRec(rec);
       setDecisionMode("rec");
       setDecisionBusy(false);
@@ -1334,9 +1407,9 @@ export default function EnginePage() {
               marginTop: 10, fontSize: 12, fontWeight: 600,
               textAlign: "center", letterSpacing: "-0.01em",
             }}>
-              <span style={{ color: stepIndex === 0 ? ACCENT : "var(--text-dim)" }}>Essen</span>
-              <span style={{ color: stepIndex === 1 ? ACCENT : "var(--text-dim)" }}>Makros</span>
-              <span style={{ color: stepIndex === 2 ? ACCENT : "var(--text-dim)" }}>Ergebnis</span>
+              <span style={{ color: stepIndex === 0 ? ACCENT : "var(--text-dim)" }}>{tEngine("step_label_food")}</span>
+              <span style={{ color: stepIndex === 1 ? ACCENT : "var(--text-dim)" }}>{tEngine("step_label_macros")}</span>
+              <span style={{ color: stepIndex === 2 ? ACCENT : "var(--text-dim)" }}>{tEngine("step_label_result")}</span>
             </div>
           </div>
 
@@ -1381,7 +1454,7 @@ export default function EnginePage() {
                 type="button"
                 onClick={() => recording ? stopRecording() : startRecording()}
                 disabled={parsing || !speechAvail}
-                aria-label={recording ? "Aufnahme stoppen" : "Sprach-Eingabe starten"}
+                aria-label={recording ? tEngine("voice_aria_stop") : tEngine("voice_aria_start")}
                 style={{
                   display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 12,
                   width: "100%", maxWidth: 280, height: 56, borderRadius: 28,
@@ -1412,7 +1485,7 @@ export default function EnginePage() {
                 >
                   <GlevLogo size={22} color={ACCENT} bg="transparent"/>
                 </span>
-                {recording ? "Stopp" : parsing ? "Verarbeite…" : "Sprechen"}
+                {recording ? tEngine("voice_btn_stop") : parsing ? tEngine("voice_btn_processing") : tEngine("voice_btn_speak")}
               </button>
               {voiceErr && (
                 <div style={{ fontSize: 11, color: PINK, textAlign: "center", maxWidth: 360 }}>{voiceErr}</div>
@@ -1424,7 +1497,7 @@ export default function EnginePage() {
                   and users don't realise they can fall back to the chat. */}
               {!speechAvail && !voiceErr && (
                 <div style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", maxWidth: 360, lineHeight: 1.4 }}>
-                  Sprach-Eingabe in diesem Browser nicht verfügbar — bitte den Chat unten nutzen.
+                  {tEngine("voice_unavailable_hint")}
                 </div>
               )}
               <div ref={chatPanelRef} style={{ width: "100%", marginTop: 4 }}>
@@ -1539,7 +1612,7 @@ export default function EnginePage() {
                 role="status"
                 aria-live="polite"
               >
-                ✓ Gespeichert — {wizardSavedDose} IE geloggt
+                {tEngine("saved_confirmation", { units: formatNum(wizardSavedDose ?? 0, 1) })}
               </div>
               <button
                 onClick={handleNewMeal}
@@ -1551,7 +1624,7 @@ export default function EnginePage() {
                   transition: "background 0.2s",
                 }}
               >
-                Neues Essen
+                {tEngine("btn_new_meal")}
               </button>
             </div>
           )}
@@ -1875,7 +1948,7 @@ export default function EnginePage() {
           {stepIndex === 2 && (
             <div>
               <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 16, color:"var(--text)" }}>
-                Deine Einschätzung
+                {tEngine("step_title_result")}
               </h2>
 
               {!result ? (
@@ -1884,7 +1957,7 @@ export default function EnginePage() {
                 // (e.g. tab switch + reset) give the user a clean way back.
                 <div style={{ ...card, padding: 20, marginBottom: 16 }}>
                   <div style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.5, marginBottom: 14 }}>
-                    Keine Einschätzung verfügbar. Bitte zurück zu Schritt 2 und neu berechnen.
+                    {tEngine("no_estimate_body")}
                   </div>
                   <button
                     onClick={() => setStepIndex(1)}
@@ -1894,7 +1967,7 @@ export default function EnginePage() {
                       color:"var(--text)", fontSize: 13, fontWeight: 600, cursor: "pointer",
                     }}
                   >
-                    ← Zurück
+                    {tEngine("btn_back")}
                   </button>
                 </div>
               ) : (
@@ -1906,16 +1979,16 @@ export default function EnginePage() {
                     borderRadius: 16, padding: 20, marginBottom: 14,
                   }}>
                     <div style={{ fontSize: 11, color: "var(--text-faint)", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700, marginBottom: 8 }}>
-                      Empfohlene Dosis
+                      {tEngine("recommended_dose_label")}
                     </div>
                     <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 14 }}>
                       <span style={{ fontSize: 32, fontWeight: 800, color:"var(--text)", letterSpacing: "-0.03em", lineHeight: 1 }}>
-                        {result.dose}
+                        {formatNum(result.dose, 1)}
                       </span>
-                      <span style={{ fontSize: 14, color: "var(--text-dim)", fontWeight: 600 }}>IE</span>
+                      <span style={{ fontSize: 14, color: "var(--text-dim)", fontWeight: 600 }}>{tEngine("units_short")}</span>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 12, flexWrap: "wrap" }}>
-                      <span style={{ color: "var(--text-muted)" }}>ICR: 1:{adaptedICR}</span>
+                      <span style={{ color: "var(--text-muted)" }}>{tEngine("icr_label")}: 1:{formatNum(adaptedICR, 1)}</span>
                       <span style={{
                         padding: "2px 10px", borderRadius: 99,
                         fontSize: 10, fontWeight: 700, letterSpacing: "0.05em",
@@ -1926,7 +1999,7 @@ export default function EnginePage() {
                         {result.confidence}
                       </span>
                       <span style={{ color: "var(--text-faint)", fontSize: 11 }}>
-                        {result.source === "historical" ? "Historische Daten" : result.source === "blended" ? "Blended Modell" : "ICR Formel"}
+                        {result.source === "historical" ? tEngine("source_historical") : result.source === "blended" ? tEngine("source_blended") : tEngine("source_formula")}
                       </span>
                     </div>
                   </div>
@@ -1964,7 +2037,7 @@ export default function EnginePage() {
 
                   {/* Meal summary line — shows what the user is about to save. */}
                   <div style={{ marginBottom: 18, fontSize: 12, color: "var(--text-dim)", lineHeight: 1.5, padding: "0 4px" }}>
-                    {(desc.trim() || transcript.trim() || "Mahlzeit")} · {parseFloat(carbs) || 0}g KH
+                    {(desc.trim() || transcript.trim() || tEngine("meal_fallback"))} · {formatNum(parseFloat(carbs) || 0, 0)} {tEngine("carbs_short")}
                   </div>
 
                   {/* FIX A: Pre-save → show Save + Back. Post-save →
@@ -1986,7 +2059,7 @@ export default function EnginePage() {
                           transition: "background 0.2s",
                         }}
                       >
-                        {confirming ? "Speichere…" : "✓ Bestätigen & Speichern"}
+                        {confirming ? tEngine("btn_saving") : tEngine("btn_confirm_save")}
                       </button>
                       <button
                         onClick={() => setStepIndex(1)}
@@ -1998,7 +2071,7 @@ export default function EnginePage() {
                           cursor: confirming ? "not-allowed" : "pointer",
                         }}
                       >
-                        ← Nochmal anpassen
+                        {tEngine("btn_adjust_again")}
                       </button>
                     </>
                   ) : (
@@ -2017,7 +2090,7 @@ export default function EnginePage() {
                         role="status"
                         aria-live="polite"
                       >
-                        ✓ Gespeichert — {wizardSavedDose} IE geloggt
+                        {tEngine("saved_confirmation", { units: formatNum(wizardSavedDose ?? 0, 1) })}
                       </div>
                       <button
                         onClick={handleNewMeal}
@@ -2029,7 +2102,7 @@ export default function EnginePage() {
                           transition: "background 0.2s",
                         }}
                       >
-                        Neues Essen
+                        {tEngine("btn_new_meal")}
                       </button>
                     </>
                   )}
@@ -2037,7 +2110,7 @@ export default function EnginePage() {
                   {/* Important medical disclaimer — same wording as the legacy result panel. */}
                   <div style={{ marginTop: 24, padding: "14px 18px", background: "var(--surface-soft)", borderRadius: 12, border: `1px solid ${BORDER}` }}>
                     <div style={{ fontSize: 11, color: "var(--text-ghost)", lineHeight: 1.6 }}>
-                      <strong style={{ color: "var(--text-dim)" }}>Important:</strong> Glev Engine provides decision support only. Always consult your endocrinologist before adjusting insulin doses. This tool is not a medical device.
+                      <strong style={{ color: "var(--text-dim)" }}>{tEngine("disclaimer_label")}</strong> {tEngine("disclaimer_body")}
                     </div>
                   </div>
                 </>
