@@ -18,6 +18,19 @@ const META_PIXEL_ID = "984291337254954";
 // resolveTheme() in lib/theme.ts. If the rules diverge, sync them.
 const NO_FLICKER_THEME_SCRIPT = `
 (function(){try{
+  // ?theme=light|dark URL override — used by canvas mockups / shareable
+  // previews to force a theme without touching the user's persisted
+  // choice. Does NOT write cookie/localStorage so it has no side effect
+  // on the parent session (same-origin canvas iframes share storage).
+  try{
+    var qp=new URL(location.href).searchParams.get('theme');
+    if(qp==='dark'||qp==='light'){
+      document.documentElement.setAttribute('data-theme',qp);
+      var mq=document.querySelector('meta[name="theme-color"]');
+      if(mq)mq.setAttribute('content',qp==='light'?'#FAFAFB':'#0A0A0F');
+      return;
+    }
+  }catch(e){}
   var c=document.cookie.match(/(?:^|;\\s*)THEME=([^;]+)/);
   var v=c?decodeURIComponent(c[1]):null;
   if(v!=='dark'&&v!=='light'&&v!=='system'){

@@ -49,6 +49,19 @@ export function writeThemeCookie(choice: ThemeChoice) {
 }
 
 export function readStoredChoice(): ThemeChoice {
+  // ?theme=light|dark URL override — used by canvas mockups / shareable
+  // previews. Highest priority so the React state matches the
+  // pre-hydration script's data-theme. Intentionally NOT persisted
+  // (no cookie / localStorage write) so it doesn't bleed into the
+  // user's main session via same-origin storage.
+  if (typeof window !== "undefined") {
+    try {
+      const qp = new URL(window.location.href).searchParams.get("theme");
+      if (qp === "dark" || qp === "light") return qp;
+    } catch {
+      // URL parse failure — fall through.
+    }
+  }
   // Cookie wins (it's what the SSR script reads). localStorage is a
   // backwards-compatible fallback if the cookie was lost (e.g. the user
   // wiped cookies but kept site data).
