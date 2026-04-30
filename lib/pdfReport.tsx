@@ -513,6 +513,16 @@ interface ReportProps {
   // safeguard as ICR so an unconfigured user never sees a misleading
   // "0 mg/dL/IE".
   cfMgdlPerIE?: number | null;
+  // Explicit user-chosen export window (ISO timestamps). When set,
+  // the cover "Zeitraum" line shows this range — i.e. the time-slice
+  // the clinician asked for, not the slice that happens to contain
+  // any data. Omitting it falls back to deriving the range from the
+  // data itself (legacy "earliest entry – latest entry" behaviour),
+  // which still applies when the user picks the "all" preset. Either
+  // bound may be omitted for an open-ended window; missing bounds
+  // render as the localized "Anfang"/"heute" placeholders so the
+  // line stays grammatical.
+  range?: { from?: string; to?: string };
 }
 
 const Footer = ({ email, generatedAt }: { email: string; generatedAt: string }) => (
@@ -649,7 +659,7 @@ function computeInsightsMetrics(
   };
 }
 
-export function GlevReport({ email, meals, insulin, exercise, fingersticks, carbUnit = "g", icrGperIE = null, cfMgdlPerIE = null }: ReportProps) {
+export function GlevReport({ email, meals, insulin, exercise, fingersticks, carbUnit = "g", icrGperIE = null, cfMgdlPerIE = null, range: chosenRange }: ReportProps) {
   // Cache the unit's display label once so we can compose KH column
   // headers (e.g. "KH (BE)") without recomputing. Uses the short form
   // ("g" / "BE" / "KE") rather than the verbose CARB_UNITS label
@@ -695,12 +705,26 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks, carb
     : null;
   const agg = computeAggregates(meals, insulin, exercise, fingersticks);
   const ins = computeInsightsMetrics(meals, insulin, fingersticks);
-  const range = dateRange(
+  // Cover "Zeitraum" line: prefer the user-chosen export window when
+  // it was passed explicitly (so the printed slice matches the slice
+  // the clinician asked for, even if it's wider than the actual
+  // data). Falls back to the data-derived earliest/latest pair when
+  // the caller didn't pass a window — the "all" preset and any
+  // legacy caller still behave exactly as before. Open-ended bounds
+  // render as "Anfang" / "heute" placeholders so the line stays
+  // grammatical even for a half-bounded window.
+  const dataRange = dateRange(
     meals.map(m => ({ when: m.created_at })),
     insulin.map(l => ({ when: l.created_at })),
     exercise.map(e => ({ when: e.created_at })),
     fingersticks.map(f => ({ when: f.measured_at })),
   );
+  const range = chosenRange
+    ? {
+        from: chosenRange.from ? fmtDate(chosenRange.from) : "Anfang",
+        to:   chosenRange.to   ? fmtDate(chosenRange.to)   : "heute",
+      }
+    : dataRange;
   const generatedAt = new Date().toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
   // Cap long lists so the PDF stays manageable. Recent first.
@@ -744,7 +768,11 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks, carb
           </View>
           <View style={styles.metaItem}>
             <Text style={styles.metaLabel}>Zeitraum</Text>
-            <Text style={styles.metaValue}>{range.from} – {range.to}</Text>
+            {/* Render as a single concatenated string (template literal)
+                so the Text node has exactly one text leaf — keeps the
+                cover compact AND lets test assertions inspect the
+                metaItem as a tight 2-leaf label/value pair. */}
+            <Text style={styles.metaValue}>{`${range.from} – ${range.to}`}</Text>
           </View>
           <View style={styles.metaItem}>
             <Text style={styles.metaLabel}>Erstellt am</Text>

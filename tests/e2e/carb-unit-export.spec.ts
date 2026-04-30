@@ -291,3 +291,80 @@ test.describe("GlevReport — PDF cover advertises the chosen carb unit", () => 
     expect(hasTightLabelValuePair(tree, "Kohlenhydrat-Einheit", "g")).toBe(true);
   });
 });
+
+/* ──────────────────────────────────────────────────────────────────
+   PDF cover — Zeitraum line reflects the user-chosen export range
+   ──────────────────────────────────────────────────────────────────
+   When the user picks "30d" / "90d" / a custom from–to, the cover's
+   "Zeitraum" line must echo *that* slice — not the slice that
+   happens to span the data. The line is the only place the report
+   surfaces the export window, so a clinician relies on it to know
+   exactly what they're being handed. We assert the rendered string
+   matches the formatted from/to dates and is co-located with the
+   "Zeitraum" label inside the same metaItem container so a stray
+   date elsewhere on the cover can't accidentally satisfy the test.
+   ────────────────────────────────────────────────────────────────── */
+
+test.describe("GlevReport — PDF cover Zeitraum reflects the export range", () => {
+  // A meal at a known date so the data-derived `dateRange()` would
+  // produce a deterministic fallback string. The chosen-range test
+  // *must* override this — that's the whole point of the feature.
+  const meals: Meal[] = [
+    makeMeal({ id: "m1", carbs_grams: 60, created_at: "2026-01-15T12:00:00Z" }),
+  ];
+  const baseProps = {
+    email: "patient@example.com",
+    meals,
+    insulin: [],
+    exercise: [],
+    fingersticks: [],
+  };
+
+  test("uses the chosen window when `range` prop is provided", () => {
+    // Pick a window that does NOT overlap the data so we can tell
+    // unambiguously whether the cover shows the chosen range or
+    // silently fell back to the data-derived one.
+    const tree = GlevReport({
+      ...baseProps,
+      range: {
+        from: "2026-03-01T00:00:00.000Z",
+        to:   "2026-03-31T23:59:59.999Z",
+      },
+    }) as ReactElement;
+    // de-DE date format used by `fmtDate` inside pdfReport.tsx.
+    expect(
+      hasTightLabelValuePair(tree, "Zeitraum", "01.03.2026 – 31.03.2026"),
+    ).toBe(true);
+  });
+
+  test("renders open-ended bounds with Anfang / heute placeholders", () => {
+    // A custom range with only a `from` should still produce a
+    // grammatical line, not an em-dash placeholder. Same for `to`-
+    // only. The placeholders match the German wording used in the
+    // pdfReport.tsx fallback branch.
+    const fromOnly = GlevReport({
+      ...baseProps,
+      range: { from: "2026-02-10T00:00:00.000Z" },
+    }) as ReactElement;
+    expect(
+      hasTightLabelValuePair(fromOnly, "Zeitraum", "10.02.2026 – heute"),
+    ).toBe(true);
+
+    const toOnly = GlevReport({
+      ...baseProps,
+      range: { to: "2026-02-10T23:59:59.999Z" },
+    }) as ReactElement;
+    expect(
+      hasTightLabelValuePair(toOnly, "Zeitraum", "Anfang – 10.02.2026"),
+    ).toBe(true);
+  });
+
+  test("falls back to data-derived earliest/latest when no range prop", () => {
+    // Legacy "all" path: the cover should show the span of the
+    // data itself, just like before this feature landed.
+    const tree = GlevReport(baseProps) as ReactElement;
+    expect(
+      hasTightLabelValuePair(tree, "Zeitraum", "15.01.2026 – 15.01.2026"),
+    ).toBe(true);
+  });
+});

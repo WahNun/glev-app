@@ -574,7 +574,15 @@
     "pdf_failed": "PDF export failed.",
     "pdf_info_label": "PDF Report",
     "pdf_info_body": ": formatted overview with Time-in-Range, insulin sums, meal and fingerstick history — suitable for printing or attaching for your doctor.",
-    "carb_unit_note": "Carbohydrates are exported in {unit}, matching your preference. Insulin exports also include your current ICR in the same unit (e.g. {unit}/IE). You can switch between grams, BE and KE on the Settings page."
+    "carb_unit_note": "Carbohydrates are exported in {unit}, matching your preference. Insulin exports also include your current ICR in the same unit (e.g. {unit}/IE). You can switch between grams, BE and KE on the Settings page.",
+    "range_label": "Time range",
+    "range_help": "Pick the slice of history to export. Useful for e.g. \"since my last appointment\" — keeps the PDF report compact.",
+    "range_all": "All time",
+    "range_30d": "Last 30 days",
+    "range_90d": "Last 90 days",
+    "range_custom": "Custom range",
+    "range_from": "From",
+    "range_to": "To"
   },
   "fingerstick": {
     "card_eyebrow": "Fingerstick glucose",

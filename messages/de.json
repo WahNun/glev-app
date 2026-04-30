@@ -574,7 +574,15 @@
     "pdf_failed": "PDF-Export fehlgeschlagen.",
     "pdf_info_label": "PDF-Report",
     "pdf_info_body": ": formatierte Übersicht mit Time-in-Range, Insulin-Summen, Mahlzeiten- und Fingerstick-Historie — geeignet zum Ausdrucken oder als Anhang für deinen Arzt.",
-    "carb_unit_note": "Kohlenhydrate werden als {unit} exportiert — passend zu deiner Einstellung. Insulin-Exporte enthalten zusätzlich deinen aktuellen ICR in derselben Einheit (z. B. {unit}/IE). Auf der Einstellungen-Seite kannst du zwischen Gramm, BE und KE wechseln."
+    "carb_unit_note": "Kohlenhydrate werden als {unit} exportiert — passend zu deiner Einstellung. Insulin-Exporte enthalten zusätzlich deinen aktuellen ICR in derselben Einheit (z. B. {unit}/IE). Auf der Einstellungen-Seite kannst du zwischen Gramm, BE und KE wechseln.",
+    "range_label": "Zeitraum",
+    "range_help": "Wähle aus, welcher Zeitraum exportiert wird. Praktisch z. B. für „seit dem letzten Arzttermin\" — das hält den PDF-Bericht kompakt.",
+    "range_all": "Alles",
+    "range_30d": "Letzte 30 Tage",
+    "range_90d": "Letzte 90 Tage",
+    "range_custom": "Eigener Zeitraum",
+    "range_from": "Von",
+    "range_to": "Bis"
   },
   "fingerstick": {
     "card_eyebrow": "Finger-Stick Glukose",

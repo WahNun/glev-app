@@ -188,44 +188,85 @@ export function fingersticksToCSV(readings: FingerstickReading[]): string {
 }
 
 /* ──────────────────────────────────────────────────────────────────
-   Fetchers (full history per kind, scoped to the signed-in user via
-   RLS — supabase enforces this server-side). Each catches errors and
-   returns [] so a single broken table doesn't block the other exports.
+   Fetchers (per kind, scoped to the signed-in user via RLS — supabase
+   enforces this server-side). Each catches errors and returns [] so
+   a single broken table doesn't block the other exports.
+
+   Each fetcher accepts an optional `{ from, to }` window (ISO date-
+   time strings). When provided, the values are passed through as
+   `gte` / `lte` filters on the table's primary timestamp column —
+   `created_at` for meals / insulin / exercise (which is when the
+   user logged the entry, and what the in-app feeds order by) and
+   `measured_at` for fingersticks (the actual stick time, not the
+   later sync time). Both bounds are optional individually so a
+   "since X" or "up to Y" query also works; passing neither returns
+   the full history (legacy behaviour).
    ────────────────────────────────────────────────────────────────── */
 
-export async function fetchAllMeals(): Promise<Meal[]> {
+/**
+ * Optional date-range window for the export fetchers. Both ends are
+ * inclusive ISO timestamps; either may be omitted for an open range.
+ *
+ * Default semantics across all four fetchers:
+ *   - undefined window  → full history (no filter applied)
+ *   - { from }          → only rows on/after `from`
+ *   - { to }            → only rows on/before `to`
+ *   - { from, to }      → rows in the closed interval [from, to]
+ */
+export interface DateWindow {
+  from?: string;
+  to?: string;
+}
+
+export async function fetchAllMeals(window?: DateWindow): Promise<Meal[]> {
   if (!supabase) return [];
-  const { data } = await supabase
+  let q = supabase
     .from("meals")
     .select("*")
     .order("created_at", { ascending: false });
+  if (window?.from) q = q.gte("created_at", window.from);
+  if (window?.to)   q = q.lte("created_at", window.to);
+  const { data } = await q;
   return (data ?? []) as Meal[];
 }
 
-export async function fetchAllInsulinLogs(): Promise<InsulinLog[]> {
+export async function fetchAllInsulinLogs(window?: DateWindow): Promise<InsulinLog[]> {
   if (!supabase) return [];
-  const { data } = await supabase
+  let q = supabase
     .from("insulin_logs")
     .select("*")
     .order("created_at", { ascending: false });
+  if (window?.from) q = q.gte("created_at", window.from);
+  if (window?.to)   q = q.lte("created_at", window.to);
+  const { data } = await q;
   return (data ?? []) as InsulinLog[];
 }
 
-export async function fetchAllExerciseLogs(): Promise<ExerciseLog[]> {
+export async function fetchAllExerciseLogs(window?: DateWindow): Promise<ExerciseLog[]> {
   if (!supabase) return [];
-  const { data } = await supabase
+  let q = supabase
     .from("exercise_logs")
     .select("*")
     .order("created_at", { ascending: false });
+  if (window?.from) q = q.gte("created_at", window.from);
+  if (window?.to)   q = q.lte("created_at", window.to);
+  const { data } = await q;
   return (data ?? []) as ExerciseLog[];
 }
 
-export async function fetchAllFingersticks(): Promise<FingerstickReading[]> {
+export async function fetchAllFingersticks(window?: DateWindow): Promise<FingerstickReading[]> {
   if (!supabase) return [];
-  const { data } = await supabase
+  // Filter on `measured_at` rather than `created_at`: a fingerstick
+  // is the time the user pricked their finger, not the later moment
+  // the row was synced. A clinician asking for "the last 90 days of
+  // glucose" expects the bound to be the measurement time.
+  let q = supabase
     .from("fingerstick_readings")
     .select("*")
     .order("measured_at", { ascending: false });
+  if (window?.from) q = q.gte("measured_at", window.from);
+  if (window?.to)   q = q.lte("measured_at", window.to);
+  const { data } = await q;
   return (data ?? []) as FingerstickReading[];
 }
 
