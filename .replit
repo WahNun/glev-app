@@ -95,3 +95,4 @@ packages = ["tree"]
 NEXT_PUBLIC_SUPABASE_URL = "https://zalpwyhlijbjyspjzbvn.supabase.co"
 STRIPE_PRICE_SUBSCRIPTION_ID = "price_1TRt6LHotG1viVv3I9S9UJME"
 STRIPE_PRICE_SETUP_FEE_ID = "price_1TRt6LHotG1viVv3Atv4vj5J"
+NEXT_PUBLIC_APP_URL = "https://1582eb31-8cfb-41c9-8ede-f7c139b9ebd0-00-1dahva746bc3v.kirk.replit.dev"
