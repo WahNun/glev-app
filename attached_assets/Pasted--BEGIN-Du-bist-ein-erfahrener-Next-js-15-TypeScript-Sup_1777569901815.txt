@@ -1,0 +1,95 @@
+=== BEGIN ===
+
+Du bist ein erfahrener Next.js 15 / TypeScript / Supabase Entwickler. Deine Aufgabe ist es, zwei konkrete Bugs in der Glev-App zu fixen, die beim Einladen von Usern über Supabase auftreten.
+
+Stack: Next.js 15, TypeScript strict, Supabase Auth (SSR), App Router
+
+---
+
+## BUG-BESCHREIBUNG
+
+Bug 1: Eingeladene User landen nach Klick auf "Accept Invitation" auf der Homepage (/) statt auf einem Passwort-Setup-Screen.
+
+Bug 2: Manuell angelegte User erhalten keine Email oder sehen "email not confirmed".
+
+---
+
+## SCHRITT 1 — Supabase Dashboard konfigurieren (VOR dem Code!)
+
+A — Supabase → Project Settings → Authentication → SMTP Settings:
+  Enable Custom SMTP: ON
+  Host: smtp.resend.com
+  Port: 465
+  Username: resend
+  Password: [RESEND_API_KEY]
+  Sender name: Glev
+  Sender email: info@glev.app
+→ Speichern + Test Email senden
+
+B — Authentication → URL Configuration:
+  Site URL: https://glev.app
+  Redirect URLs: https://glev.app/auth/confirm, http://localhost:3000/auth/confirm
+→ Speichern
+
+---
+
+## SCHRITT 2 — Sofort-Fix für bereits angelegte User
+
+Supabase Dashboard → Authentication → Users → User finden → "..." → "Confirm email"
+
+---
+
+## SCHRITT 3 — Auth Callback Route
+
+Erstelle app/auth/confirm/route.ts:
+- Liest token_hash und type aus URL-Parametern
+- supabase.auth.verifyOtp({ token_hash, type })
+- Bei type 'invite' oder 'signup' → redirect zu /welcome/setup
+- Bei Fehler → redirect zu /auth/error?message=...
+
+---
+
+## SCHRITT 4 — Passwort-Setup Seite
+
+Erstelle app/welcome/setup/page.tsx:
+- 'use client'
+- Formular: Passwort + Passwort bestätigen (min 8 Zeichen)
+- supabase.auth.updateUser({ password })
+- Nach Erfolg: redirect zu /dashboard
+- Nur Tailwind, keine neuen Libraries
+
+---
+
+## SCHRITT 5 — Admin Invite Route
+
+Erstelle app/api/admin/invite/route.ts:
+- POST mit { email }
+- supabaseAdmin.auth.admin.inviteUserByEmail(email, { redirectTo: process.env.NEXT_PUBLIC_SITE_URL + '/auth/confirm' })
+- Gibt { success: true, userId } zurück
+
+Erstelle lib/supabase/admin.ts falls nicht vorhanden:
+- createClient(url, SUPABASE_SERVICE_ROLE_KEY, { auth: { autoRefreshToken: false, persistSession: false } })
+
+Neue Env Var: NEXT_PUBLIC_SITE_URL=https://glev.app
+
+---
+
+## NICHT ÄNDERN
+
+- middleware.ts und Auth-Middleware
+- Bestehende Login/Logout Routes
+- Supabase Schema und RLS
+- Bestehende createClient Helper
+
+---
+
+## VERIFY
+
+1. npx tsc --noEmit → kein Fehler
+2. curl -X POST http://localhost:3000/api/admin/invite -H "Content-Type: application/json" -d '{"email":"test@example.com"}'
+3. Email kommt an → Klick → landet auf /welcome/setup
+4. Passwort setzen → redirect zum Dashboard
+5. Login mit neuen Credentials funktioniert
+6. git add -A && git commit -m "fix: supabase invite redirect + password setup + admin invite route" && git push origin main
+
+=== END ===
