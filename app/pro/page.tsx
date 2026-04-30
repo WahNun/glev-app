@@ -391,7 +391,7 @@ function ProContent() {
 const PRO_FAQ = [
   {
     q: "Welche CGMs werden unterstützt?",
-    a: "Aktuell FreeStyle Libre 2 via LibreLinkUp. Dexcom G6/G7 sind in Arbeit. Nightscout-Support folgt.",
+    a: "Aktuell nutzbar: FreeStyle Libre 2 und 3 via LibreLinkUp. Dexcom G6/G7, Dexcom One+ und Medtronic sind in Arbeit (coming soon).",
   },
   {
     q: "Was passiert wenn ich vor dem Launch kündige?",
