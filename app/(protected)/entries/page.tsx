@@ -2054,10 +2054,17 @@ function MealEditor({ meal, onSaved, onCancel }: {
   onSaved: (updated: Meal) => void;
   onCancel: () => void;
 }) {
-  // Strings (not numbers) so the user can type freely — including clearing
-  // a field to zero. We coerce on save with the same 0-allowed semantics as
-  // the engine pre-confirm (0g carbs is valid for protein-only meals).
-  const [carbs,   setCarbs]   = useState<string>(String(meal.carbs_grams   ?? 0));
+  // Carbs input now follows the user's chosen display unit (g / BE / KE)
+  // — same pattern as the engine wizard. The value is seeded via
+  // carbUnit.fromGrams() and converted back via carbUnit.toGrams() on
+  // save. The DB column meals.carbs_grams stays in grams as the canonical
+  // storage unit. We snapshot the seed string at mount so we can detect
+  // a no-change roundtrip and write back the original grams unchanged
+  // (avoids BE/KE rounding drift like 25g → 2.1 BE → 25.2g).
+  const carbUnit = useCarbUnit();
+  const initialCarbsDisplay = String(carbUnit.fromGrams(meal.carbs_grams ?? 0));
+  const [carbs,   setCarbs]   = useState<string>(initialCarbsDisplay);
+  const [carbsSeed] = useState<string>(initialCarbsDisplay);
   const [protein, setProtein] = useState<string>(String(meal.protein_grams ?? 0));
   const [fat,     setFat]     = useState<string>(String(meal.fat_grams     ?? 0));
   const [fiber,   setFiber]   = useState<string>(String(meal.fiber_grams   ?? 0));
@@ -2124,10 +2131,19 @@ function MealEditor({ meal, onSaved, onCancel }: {
       }
       i = iv;
     }
+    // Convert displayed carbs back to grams. Skip the conversion on a
+    // pure no-change roundtrip so BE/KE rounding (e.g. 25g → 2.1 BE →
+    // 25.2g) doesn't silently drift the stored value.
+    const carbsUnchanged =
+      meal.carbs_grams != null &&
+      carbs.trim() === carbsSeed.trim();
+    const carbsGramsToWrite = carbsUnchanged
+      ? meal.carbs_grams!
+      : carbUnit.toGrams(c);
     setBusy(true);
     try {
       const updated = await updateMeal(meal.id, {
-        carbs_grams:   c,
+        carbs_grams:   carbsGramsToWrite,
         protein_grams: p,
         fat_grams:     f,
         fiber_grams:   fb,
@@ -2159,7 +2175,7 @@ function MealEditor({ meal, onSaved, onCancel }: {
       </div>
 
       <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8 }}>
-        <EditField label="Carbs (g)"   value={carbs}   onChange={setCarbs}   accent={ORANGE}    placeholder="0" />
+        <EditField label={`Carbs (${carbUnit.label})`}   value={carbs}   onChange={setCarbs}   accent={ORANGE}    placeholder={carbUnit.placeholder} step={carbUnit.step} />
         <EditField label="Protein (g)" value={protein} onChange={setProtein} accent="#3B82F6"   placeholder="0" />
         <EditField label="Fat (g)"     value={fat}     onChange={setFat}     accent="#A855F7"   placeholder="0" />
         <EditField label="Fiber (g)"   value={fiber}   onChange={setFiber}                       placeholder="0" />
@@ -2219,12 +2235,17 @@ function MealEditor({ meal, onSaved, onCancel }: {
   );
 }
 
-function EditField({ label, value, onChange, accent, placeholder }: {
+function EditField({ label, value, onChange, accent, placeholder, step }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   accent?: string;
   placeholder?: string;
+  /** Optional numeric step — primarily a hint that the field is a
+   *  number input (BE/KE typically use 0.5). When set we switch the
+   *  input to type="number" so mobile spinners step in 0.5 increments
+   *  instead of 1. parseNum on the save side still tolerates commas. */
+  step?: number;
 }) {
   return (
     <label style={{ display:"flex", flexDirection:"column", gap:4 }}>
@@ -2232,8 +2253,9 @@ function EditField({ label, value, onChange, accent, placeholder }: {
         {label}
       </span>
       <input
-        type="text"
+        type={step != null ? "number" : "text"}
         inputMode="decimal"
+        step={step}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}

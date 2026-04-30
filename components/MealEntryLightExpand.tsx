@@ -32,9 +32,10 @@ export default function MealEntryLightExpand({
 }) {
   const td = useTranslations("dashboard");
   const tm = useTranslations("mealEdit");
-  // The carb-unit hook only formats the read-view stats here; the edit
-  // form (eCarbs) stays in grams since this expand panel's edit pipeline
-  // is out-of-scope for the carb-unit selector roll-out.
+  // Carb-unit selector now drives both the read-view stats and the edit
+  // form: the eCarbs input is seeded via carbUnit.fromGrams() and saved
+  // via carbUnit.toGrams() so DACH users see BE/KE consistently. The DB
+  // column meals.carbs_grams is still the canonical storage in grams.
   const carbUnit = useCarbUnit();
 
   // Meal-type select options live in the edit form. Derived inline rather
@@ -96,8 +97,21 @@ export default function MealEntryLightExpand({
   const [err,       setErr]       = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
 
-  // Edit form state — strings so empty input -> empty string (not 0)
-  const [eCarbs,    setECarbs]    = useState<string>(String(meal.carbs_grams    ?? ""));
+  // Seed the carbs input in the user's chosen unit. Helper centralises
+  // the null-safe convert so initial state and startEdit() stay aligned.
+  // Returns "" when the meal has no carbs_grams so the input shows the
+  // placeholder rather than a literal "0".
+  function seedCarbsDisplay(grams: number | null | undefined): string {
+    return grams != null ? String(carbUnit.fromGrams(grams)) : "";
+  }
+
+  // Edit form state — strings so empty input -> empty string (not 0).
+  // eCarbs holds the value in the user's display unit (g / BE / KE).
+  const [eCarbs,    setECarbs]    = useState<string>(seedCarbsDisplay(meal.carbs_grams));
+  // Track the seeded display string so we can detect "no change" on save
+  // and write back the original carbs_grams unchanged — otherwise BE/KE
+  // rounding (e.g. 25g → 2.1 BE → 25.2g) would silently drift the value.
+  const [eCarbsSeed, setECarbsSeed] = useState<string>(seedCarbsDisplay(meal.carbs_grams));
   const [eProtein,  setEProtein]  = useState<string>(String(meal.protein_grams  ?? ""));
   const [eFat,      setEFat]      = useState<string>(String(meal.fat_grams      ?? ""));
   const [eFiber,    setEFiber]    = useState<string>(String(meal.fiber_grams    ?? ""));
@@ -109,7 +123,9 @@ export default function MealEntryLightExpand({
 
   function startEdit() {
     // Re-seed from the current row so a stale optimistic update can't bleed in.
-    setECarbs(String(meal.carbs_grams    ?? ""));
+    const carbsSeed = seedCarbsDisplay(meal.carbs_grams);
+    setECarbs(carbsSeed);
+    setECarbsSeed(carbsSeed);
     setEProtein(String(meal.protein_grams  ?? ""));
     setEFat(String(meal.fat_grams      ?? ""));
     setEFiber(String(meal.fiber_grams    ?? ""));
@@ -144,6 +160,17 @@ export default function MealEntryLightExpand({
     const cNum = parseNum(eCarbs,    false);
     const iNum = parseNum(eInsulin,  false);
     if (cNum == null || cNum <= 0) { setErr(tm("err_carbs_required")); return; }
+    // Convert the displayed carbs value back to grams for DB write. If
+    // the user did NOT touch the field (current input string equals the
+    // seeded display string AND we still have the original grams),
+    // reuse the original grams to avoid BE/KE rounding drift on a
+    // pure-roundtrip edit.
+    const carbsUnchanged =
+      meal.carbs_grams != null &&
+      eCarbs.trim() === eCarbsSeed.trim();
+    const carbsGramsToWrite = carbsUnchanged
+      ? meal.carbs_grams!
+      : carbUnit.toGrams(cNum);
     // Insulin: 0 erlaubt, leer NICHT erlaubt (T1 spec)
     if (iNum == null || iNum < 0)  { setErr(tm("err_insulin_required")); return; }
 
@@ -165,7 +192,7 @@ export default function MealEntryLightExpand({
     setBusy(true);
     try {
       const updated = await updateMeal(meal.id, {
-        carbs_grams:    cNum,
+        carbs_grams:    carbsGramsToWrite,
         protein_grams:  parseNum(eProtein, true) ?? 0,
         fat_grams:      parseNum(eFat,     true) ?? 0,
         fiber_grams:    parseNum(eFiber,   true) ?? 0,
@@ -250,7 +277,7 @@ export default function MealEntryLightExpand({
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: 12 }}>
-          <Field label={tm("field_carbs")}>     <input type="number" inputMode="decimal" min={0} step="any" value={eCarbs}    onChange={e => setECarbs(e.target.value)}    style={inp} /></Field>
+          <Field label={`${tm("field_carbs")} (${carbUnit.label})`}>     <input type="number" inputMode="decimal" min={0} step={carbUnit.step} placeholder={carbUnit.placeholder} value={eCarbs}    onChange={e => setECarbs(e.target.value)}    style={inp} /></Field>
           <Field label={tm("field_protein")}>   <input type="number" inputMode="decimal" min={0} step="any" value={eProtein}  onChange={e => setEProtein(e.target.value)}  style={inp} /></Field>
           <Field label={tm("field_fat")}>       <input type="number" inputMode="decimal" min={0} step="any" value={eFat}      onChange={e => setEFat(e.target.value)}      style={inp} /></Field>
           <Field label={tm("field_fiber")}>     <input type="number" inputMode="decimal" min={0} step="any" value={eFiber}    onChange={e => setEFiber(e.target.value)}    style={inp} /></Field>
