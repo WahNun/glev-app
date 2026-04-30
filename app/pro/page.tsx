@@ -21,48 +21,102 @@ import {
 } from "@/components/landing/tokens";
 
 /**
- * Pro-tier Stripe Payment Link — direct hosted-checkout URL for the
- * €24,90 / Monat subscription. Mirrors the /beta pattern: Stripe
- * collects the email itself at checkout, so no local form / server
- * action / supabase round-trip is needed on this page. The richer
- * `/api/pro/checkout` flow (with email guard + supabase tracking) is
- * intentionally not wired to the hero CTA at the moment — it stays in
- * the repo for future use.
+ * Pro-CTA — POSTet auf /api/checkout/pro, bekommt eine fresh Stripe
+ * Subscription-Checkout-Session zurück (mit Trial bis 1. Juli 2026)
+ * und schickt den User dorthin. Damit kontrollieren WIR welche Price-IDs
+ * verwendet werden — kein hardcoded Payment Link mehr.
+ *
+ * Die "reiche" Variante /api/pro/checkout (mit Email-Validierung und
+ * DB-Tracking) bleibt im Repo für späteres Funnel-Tracking.
  */
-const STRIPE_PAYMENT_LINK = "https://buy.stripe.com/bJe4gzfLK1OUezHfzebfO01";
-
 function ProCTALink() {
   const [hover, setHover] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleClick() {
+    if (loading) return;
+    setError(null);
+    setLoading(true);
+
+    // Meta Pixel — InitiateCheckout fires VOR dem fetch damit der Beacon
+    // auch dann ankommt wenn die Navigation den Pixel-Request abschneidet.
+    if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
+      (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("track", "InitiateCheckout");
+    }
+
+    try {
+      const res = await fetch("/api/checkout/pro", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+
+      if (!res.ok || !data.url) {
+        throw new Error(data.error || `Checkout konnte nicht gestartet werden (HTTP ${res.status})`);
+      }
+
+      // Same-Tab-Redirect — Stripe-Checkout-Standard.
+      window.location.href = data.url;
+    } catch (err) {
+      setLoading(false);
+      const message = err instanceof Error ? err.message : "Unbekannter Fehler";
+      setError(message);
+    }
+  }
+
   return (
-    <a
-      href={STRIPE_PAYMENT_LINK}
-      target="_blank"
-      rel="noopener noreferrer"
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: hover ? ACCENT_HOVER : ACCENT,
-        color: "#fff",
-        textDecoration: "none",
-        border: "none",
-        borderRadius: 12,
-        padding: "16px 32px",
-        fontSize: 18,
-        fontWeight: 600,
-        fontFamily: "inherit",
-        minHeight: 56,
-        cursor: "pointer",
-        boxShadow: hover ? "0 0 0 4px rgba(79,110,247,0.25)" : "0 0 0 0 rgba(79,110,247,0)",
-        transition: "background 120ms ease, box-shadow 120ms ease",
-        outlineColor: "rgba(79,110,247,0.4)",
-        boxSizing: "border-box",
-      }}
-    >
-      Mitgliedschaft starten — €24,90 / Monat
-    </a>
+    <>
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={loading}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: loading ? "rgba(79,110,247,0.6)" : hover ? ACCENT_HOVER : ACCENT,
+          color: "#fff",
+          textDecoration: "none",
+          border: "none",
+          borderRadius: 12,
+          padding: "16px 32px",
+          fontSize: 18,
+          fontWeight: 600,
+          fontFamily: "inherit",
+          minHeight: 56,
+          cursor: loading ? "default" : "pointer",
+          boxShadow: hover && !loading ? "0 0 0 4px rgba(79,110,247,0.25)" : "0 0 0 0 rgba(79,110,247,0)",
+          transition: "background 120ms ease, box-shadow 120ms ease",
+          outlineColor: "rgba(79,110,247,0.4)",
+          boxSizing: "border-box",
+          width: "100%",
+        }}
+      >
+        {loading ? "Weiterleitung zu Stripe …" : "Mitgliedschaft starten — €24,90 / Monat"}
+      </button>
+      {error && (
+        <div
+          role="alert"
+          style={{
+            marginTop: 10,
+            padding: "10px 12px",
+            background: "rgba(255,45,120,0.08)",
+            border: "1px solid rgba(255,45,120,0.3)",
+            borderRadius: 8,
+            color: "#FF7AA8",
+            fontSize: 13,
+            lineHeight: 1.4,
+          }}
+        >
+          {error}
+        </div>
+      )}
+    </>
   );
 }
 
