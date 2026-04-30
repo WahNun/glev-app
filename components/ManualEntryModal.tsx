@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { scheduleJobsForLog } from "@/lib/cgmJobs";
 import {
   saveMeal,
@@ -53,6 +54,7 @@ export default function ManualEntryModal({
   onClose: () => void;
   onCreated: (meal: Meal) => void;
 }) {
+  const t = useTranslations("manualEntry");
   const now = new Date();
 
   const [mealTime, setMealTime] = useState<string>(toDatetimeLocal(now));
@@ -201,38 +203,49 @@ export default function ManualEntryModal({
   const bg1hN    = num(bg1h);
   const bg2hN    = num(bg2h);
 
-  // Relaxed save criterion — the only hard requirement is that *some*
-  // macro was entered (otherwise the row carries no nutritional info at
-  // all and breaks downstream evaluation). Insulin, glucose-before and
-  // the 1h/2h follow-ups are now optional: glucose-before auto-fills
-  // from CGM history when a source is linked, and insulin can be a pure
-  // food-only log (e.g. a quick snack the user wants in the diary
-  // without a bolus). This unblocks "Protein Eistee · 24g protein · 0g
-  // carbs · no bolus" style entries the strict version rejected.
-  const hasAnyMacro = (carbsN ?? 0) > 0 || proteinN > 0 || fatN > 0 || fiberN > 0;
-  const canSubmit = hasAnyMacro;
+  // Relaxed save criterion — the only hard requirement is that the user
+  // has actually filled at least one macro field (so the row carries
+  // some nutritional info downstream). Crucially we check the *string*
+  // input, not the parsed number, so an explicit "0" counts as filled
+  // (a pure observation log with carbs=0 / protein=0 is legit). This
+  // also stops the "Weiter →" button from flickering between disabled
+  // and enabled while the user types: the empty intermediate state
+  // (e.g. clearing a digit) is the only thing that disables the button,
+  // not a transient parsed value of 0.
+  // Insulin, glucose-before and the 1h/2h follow-ups stay optional:
+  // glucose-before auto-fills from CGM history when a source is linked,
+  // and insulin can be a pure food-only log (e.g. a quick snack the
+  // user wants in the diary without a bolus). This unblocks both
+  // "Protein Eistee · 24g protein · 0g carbs · no bolus" style entries
+  // *and* the previously-blocked all-zero observation entries.
+  const hasAnyMacroFilled =
+    carbs.trim()   !== "" ||
+    protein.trim() !== "" ||
+    fat.trim()     !== "" ||
+    fiber.trim()   !== "";
+  const canSubmit = hasAnyMacroFilled;
 
   async function handleSubmit() {
     setError(null);
 
     // ─── Required field ────────────────────────────────────────────────
-    if (!hasAnyMacro) {
-      setError("Mindestens ein Makro (Carbs, Protein, Fett oder Faser) eintragen.");
+    if (!hasAnyMacroFilled) {
+      setError(t("err_macro_required"));
       return;
     }
     const mt = parseLocalDt(mealTime);
-    if (!mt) { setError("Please pick a valid meal time."); return; }
+    if (!mt) { setError(t("err_meal_time_invalid")); return; }
 
     // ─── Physiological ranges ──────────────────────────────────────────
     // HTML min/max are advisory — typed input can still produce out-of-range
     // values. We block obviously implausible numbers so the entry log stays
     // analytically clean (negative insulin, BG=10, carbs=999, etc). All
     // checks now skip when the field is empty, since insulin / glucose are
-    // optional.
-    if (carbsN != null && carbsN > 500)             { setError("Carbs look too high — please double-check (max 500g)."); return; }
-    if (proteinN < 0 || proteinN > 500)             { setError("Protein must be between 0 and 500g."); return; }
-    if (fatN     < 0 || fatN     > 500)             { setError("Fat must be between 0 and 500g."); return; }
-    if (fiberN   < 0 || fiberN   > 200)             { setError("Fiber must be between 0 and 200g."); return; }
+    // optional. 0 is a valid value for every macro and stays accepted.
+    if (carbsN != null && (carbsN < 0 || carbsN > 500))        { setError(t("err_carbs_too_high")); return; }
+    if (proteinN < 0 || proteinN > 500)             { setError(t("err_protein_range")); return; }
+    if (fatN     < 0 || fatN     > 500)             { setError(t("err_fat_range")); return; }
+    if (fiberN   < 0 || fiberN   > 200)             { setError(t("err_fiber_range")); return; }
     if (insulinN != null && (insulinN < 0 || insulinN > 50))   { setError("Insulin must be between 0 and 50 units."); return; }
     if (glucoseN != null && (glucoseN < 30 || glucoseN > 600)) { setError("Glucose before must be between 30 and 600 mg/dL."); return; }
     if (bg1hN != null && (bg1hN < 30 || bg1hN > 600)) { setError("1h reading must be between 30 and 600 mg/dL."); return; }
@@ -379,7 +392,7 @@ export default function ManualEntryModal({
       }, 900);
       return;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save the entry.");
+      setError(e instanceof Error ? e.message : t("err_save_failed"));
     } finally {
       setSaving(false);
     }
@@ -657,8 +670,8 @@ export default function ManualEntryModal({
           {step === "form" ? (
             <button
               onClick={() => {
-                if (!hasAnyMacro) {
-                  setError("Mindestens ein Makro (Carbs, Protein, Fett oder Faser) eintragen.");
+                if (!hasAnyMacroFilled) {
+                  setError(t("err_macro_required"));
                   return;
                 }
                 setError(null);

@@ -5,6 +5,15 @@
     "history": "Verlauf",
     "settings": "Einstellungen"
   },
+  "manualEntry": {
+    "err_macro_required": "Mindestens ein Wert (Kohlenhydrate, Protein, Fett oder Ballaststoffe) muss eingetragen sein.",
+    "err_meal_time_invalid": "Bitte eine gültige Mahlzeit-Zeit wählen.",
+    "err_carbs_too_high": "Kohlenhydrate wirken zu hoch — bitte prüfen (max. 500g).",
+    "err_protein_range": "Protein muss zwischen 0 und 500g liegen.",
+    "err_fat_range": "Fett muss zwischen 0 und 500g liegen.",
+    "err_fiber_range": "Ballaststoffe müssen zwischen 0 und 200g liegen.",
+    "err_save_failed": "Eintrag konnte nicht gespeichert werden."
+  },
   "mealEdit": {
     "title": "Eintrag bearbeiten",
     "field_carbs": "Kohlenhydrate (g)",

@@ -5,6 +5,15 @@
     "history": "History",
     "settings": "Settings"
   },
+  "manualEntry": {
+    "err_macro_required": "Enter at least one value (carbs, protein, fat, or fiber).",
+    "err_meal_time_invalid": "Please pick a valid meal time.",
+    "err_carbs_too_high": "Carbs look too high — please double-check (max 500g).",
+    "err_protein_range": "Protein must be between 0 and 500g.",
+    "err_fat_range": "Fat must be between 0 and 500g.",
+    "err_fiber_range": "Fiber must be between 0 and 200g.",
+    "err_save_failed": "Could not save the entry."
+  },
   "mealEdit": {
     "title": "Edit entry",
     "field_carbs": "Carbs (g)",
