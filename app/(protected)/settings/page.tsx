@@ -140,21 +140,24 @@ export default function SettingsPage() {
         <p style={{ color:"var(--text-faint)", fontSize:14 }}>{tSettings("page_subtitle")}</p>
       </div>
 
-      {/* TABS — visually matches the Verlauf (history) page toggle in
-          app/(protected)/history/page.tsx: pill-shaped container,
-          solid ACCENT fill for the active button, white text on both
-          states. Pills are content-sized (`flex: 0 0 auto`) and the
-          row uses `space-around` so the four labels stay fully spelled
-          out — the previous `flex: 1 1 0` 25%-slot approach truncated
-          "Integrations" to "Integrati…" on narrow phones (iPhone 13
-          mini, reported 2026-04-29). Wider screens keep the spread-out
-          look because the spare space distributes around the pills. */}
+      {/* TABS — pill-shaped track with four content-sized buttons.
+          Earlier iterations used horizontal scroll OR truncating
+          25%-slots; both lost copy on narrow phones (German
+          "Integrationen" overflowed on iPhone 13 mini, reported
+          2026-04-30). The current approach lets the row WRAP to a
+          second line on narrow viewports so all four labels stay
+          fully visible without scrolling. On wider screens
+          (~≥520px) all four still fit on one line and `space-around`
+          gives them the original spread-out look. The container's
+          rounded radius (20) reads as a pill on a single row and as
+          a soft-rounded card on two rows, so the same value works
+          for both states. */}
       <div role="tablist" aria-label={tSettings("tab_aria")} style={{
-        display:"flex", gap:2, marginBottom:24,
-        background:"var(--border-soft)", borderRadius:99,
+        display:"flex", flexWrap:"wrap", columnGap:2, rowGap:4,
+        marginBottom:24,
+        background:"var(--border-soft)", borderRadius:20,
         padding:4, width:"100%",
-        justifyContent:"space-around",
-        overflowX:"auto", scrollbarWidth:"none",
+        justifyContent:"space-around", alignItems:"stretch",
       }}>
         {(["overview","settings","integrations","data"] as const).map(tabKey => (
           <button key={tabKey} role="tab" aria-selected={tab===tabKey} onClick={() => setTab(tabKey)} style={{

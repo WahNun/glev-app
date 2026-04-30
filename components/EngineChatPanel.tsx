@@ -209,7 +209,17 @@ export default function EngineChatPanel({
         userSelect: "none",
       }}
     >
-      <div style={{ display:"flex", alignItems:"baseline", gap:8, minWidth:0, flex:1 }}>
+      {/* Title block uses flex-wrap so the secondary "GPT reasoning"
+          label drops onto its own line under "AI FOOD PARSER" when the
+          row would otherwise collide with the status pill on the right
+          (German "GPT-Begründung" + "ANALYSIERT" overflowed on iPhone
+          13 mini, reported 2026-04-30). column-gap stays tight so the
+          two labels read as one unit when they DO fit on one line;
+          row-gap is small so the wrapped variant doesn't look stacked. */}
+      <div style={{
+        display:"flex", alignItems:"baseline", flexWrap:"wrap",
+        columnGap:8, rowGap:2, minWidth:0, flex:1,
+      }}>
         <span style={{
           fontSize:12, fontWeight:700, letterSpacing:"0.08em",
           color:"var(--text-dim)",
