@@ -129,6 +129,43 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; width: 0; heig
 *::-webkit-scrollbar { display: none; width: 0; height: 0; }
 * { scrollbar-width: none; -ms-overflow-style: none; }
 
+/* Tap-flippable cards on Dashboard (`/dashboard`) and Insights (`/insights`)
+   should feel like native buttons: no text selection, no iOS long-press
+   copy/lookup callout, no blue tap-highlight halo. We also disable selection
+   on mouse drag so the numbers can't get accidentally highlighted while the
+   card animates.
+
+   Scoped to the three card marker classes so other screens (Engine, Log,
+   History, Settings, Marketing/Brand/Legal) keep normal text-selection.
+
+   Inputs, textareas, contenteditable regions and any element opted in via
+   `data-allow-select` are exempted in case a card ever embeds a real input
+   or a value the user genuinely needs to copy. */
+.glev-stat-card,
+.glev-trend-card,
+.glev-flip-card {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.glev-stat-card input,
+.glev-stat-card textarea,
+.glev-stat-card [contenteditable],
+.glev-stat-card [data-allow-select],
+.glev-trend-card input,
+.glev-trend-card textarea,
+.glev-trend-card [contenteditable],
+.glev-trend-card [data-allow-select],
+.glev-flip-card input,
+.glev-flip-card textarea,
+.glev-flip-card [contenteditable],
+.glev-flip-card [data-allow-select] {
+  -webkit-user-select: auto;
+  user-select: auto;
+  -webkit-touch-callout: default;
+}
+
 /* iOS-home-screen "edit mode" wiggle. Applied to every sortable card while the
    user is reordering. The two-keyframe rotate creates a subtle jitter without
    shifting layout. */

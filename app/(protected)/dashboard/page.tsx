@@ -277,7 +277,7 @@ function OutcomeChart({ meals }: { meals: Meal[] }) {
   return (
     <div
       onClick={() => setFlipped(f => !f)}
-      className="glev-outcome-card"
+      className="glev-outcome-card glev-flip-card"
       style={{ position:"relative", perspective:1200, cursor:"pointer" }}
     >
       <style>{`
@@ -817,6 +817,7 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
   return (
     <div
       onClick={() => setFlipped(f => !f)}
+      className="glev-flip-card"
       style={{ position:"relative", cursor:"pointer", minHeight:158, perspective:1000 }}
     >
       <div style={{ position:"absolute", inset:0, transformStyle:"preserve-3d", transition:"transform 0.5s cubic-bezier(0.4,0,0.2,1)", transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)" }}>

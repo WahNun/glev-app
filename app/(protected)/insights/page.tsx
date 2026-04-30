@@ -1588,6 +1588,7 @@ function FlipCard({
   return (
     <div
       onClick={() => setFlipped(f => !f)}
+      className="glev-flip-card"
       style={{ position:"relative", cursor:"pointer", perspective:1400 }}
       role="button"
       tabIndex={0}
@@ -1695,6 +1696,7 @@ function InsightFlipTile({ tile }: { tile: InsightTile }) {
   return (
     <div
       onClick={(e) => { e.stopPropagation(); setFlipped(f => !f); }}
+      className="glev-flip-card"
       role="button"
       tabIndex={0}
       aria-pressed={flipped}
