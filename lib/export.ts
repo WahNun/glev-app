@@ -13,6 +13,7 @@ import type { Meal } from "@/lib/meals";
 import type { InsulinLog } from "@/lib/insulin";
 import type { ExerciseLog } from "@/lib/exercise";
 import type { FingerstickReading } from "@/lib/fingerstick";
+import { gToUnit, type CarbUnit } from "@/lib/carbUnits";
 
 /* ──────────────────────────────────────────────────────────────────
    CSV primitives
@@ -41,10 +42,25 @@ function buildCSV(headers: string[], rows: unknown[][]): string {
    Per-table serializers
    ────────────────────────────────────────────────────────────────── */
 
-export function mealsToCSV(meals: Meal[]): string {
+// Default to grams when the caller doesn't pass a unit, so any legacy
+// caller (or test) that doesn't yet thread through the user preference
+// continues to receive byte-for-byte identical output.
+export function mealsToCSV(meals: Meal[], unit: CarbUnit = "g"): string {
+  // Header reflects the active unit so a clinician opening the file
+  // can see at a glance whether a value is grams, BE, or KE. The
+  // column key itself ("carbs_grams" vs "carbs_be" / "carbs_ke") is
+  // unit-suffixed too so a side-by-side BE + g export from two users
+  // won't silently overwrite cells when joined on the header name.
+  // Use the short unit code in parens ("g" / "BE" / "KE") rather than
+  // the verbose "g KH" label so a column reads "carbs_grams (g)" not
+  // the redundant "carbs_grams (g KH)".
+  const carbsHeader =
+    unit === "g" ? "carbs_grams" : `carbs_${unit.toLowerCase()}`;
+  const carbsUnitTag = unit === "g" ? "g" : unit;
   const headers = [
     "id", "created_at", "meal_time", "meal_type", "input_text",
-    "carbs_grams", "protein_grams", "fat_grams", "fiber_grams", "calories",
+    `${carbsHeader} (${carbsUnitTag})`,
+    "protein_grams", "fat_grams", "fiber_grams", "calories",
     "insulin_units",
     "glucose_before", "glucose_after", "bg_1h", "bg_1h_at", "bg_2h", "bg_2h_at",
     "outcome_state", "evaluation", "related_meal_id",
@@ -52,7 +68,13 @@ export function mealsToCSV(meals: Meal[]): string {
   ];
   const rows = meals.map((m) => [
     m.id, m.created_at, m.meal_time, m.meal_type, m.input_text,
-    m.carbs_grams, m.protein_grams, m.fat_grams, m.fiber_grams, m.calories,
+    // Convert at the presentation layer only — the DB still holds grams.
+    // null/undefined survive csvCell as empty cells, so guard so we don't
+    // silently emit "0" for missing values.
+    m.carbs_grams === null || m.carbs_grams === undefined
+      ? null
+      : gToUnit(m.carbs_grams, unit),
+    m.protein_grams, m.fat_grams, m.fiber_grams, m.calories,
     m.insulin_units,
     m.glucose_before, m.glucose_after, m.bg_1h, m.bg_1h_at, m.bg_2h, m.bg_2h_at,
     m.outcome_state, m.evaluation, m.related_meal_id,

@@ -33,6 +33,7 @@ import type { Meal } from "@/lib/meals";
 import type { InsulinLog } from "@/lib/insulin";
 import type { ExerciseLog } from "@/lib/exercise";
 import type { FingerstickReading } from "@/lib/fingerstick";
+import { formatCarbs, gToUnit, type CarbUnit } from "@/lib/carbUnits";
 
 /* ──────────────────────────────────────────────────────────────────
    Brand tokens (mirror app brandbook). React-PDF needs hex/rgb only.
@@ -491,6 +492,10 @@ interface ReportProps {
   insulin: InsulinLog[];
   exercise: ExerciseLog[];
   fingersticks: FingerstickReading[];
+  // Carb display unit for all KH columns and KPIs in the report.
+  // Defaults to "g" so any caller that hasn't yet been threaded with
+  // the user's preference still produces the legacy gram-only output.
+  carbUnit?: CarbUnit;
 }
 
 const Footer = ({ email, generatedAt }: { email: string; generatedAt: string }) => (
@@ -627,7 +632,29 @@ function computeInsightsMetrics(
   };
 }
 
-export function GlevReport({ email, meals, insulin, exercise, fingersticks }: ReportProps) {
+export function GlevReport({ email, meals, insulin, exercise, fingersticks, carbUnit = "g" }: ReportProps) {
+  // Cache the unit's display label once so we can compose KH column
+  // headers (e.g. "KH (BE)") without recomputing. Uses the short form
+  // ("g" / "BE" / "KE") rather than the verbose CARB_UNITS label
+  // ("g KH" / "BE" / "KE") so a column reads "KH (g)" instead of the
+  // redundant "KH (g KH)".
+  const carbLabel = carbUnit === "g" ? "g" : carbUnit;
+  // Bare-number formatter for table cells whose column header already
+  // carries the unit (avoids the redundant "5 BE" inside a "KH (BE)"
+  // column). Pre-`formatCarbs` because that helper appends the unit
+  // suffix unconditionally.
+  const fmtCarbsValue = (g: number | null | undefined): string =>
+    g === null || g === undefined || !Number.isFinite(g)
+      ? "—"
+      : String(gToUnit(g, carbUnit));
+  // Full "value + unit" formatter for the cover insight cards where
+  // the unit is shown alongside the number. Centralised on
+  // `formatCarbs()` so display drift between the engine UI and the
+  // exported report is impossible.
+  const fmtCarbsFull = (g: number | null | undefined): string =>
+    g === null || g === undefined || !Number.isFinite(g)
+      ? "—"
+      : formatCarbs(g, carbUnit);
   const agg = computeAggregates(meals, insulin, exercise, fingersticks);
   const ins = computeInsightsMetrics(meals, insulin, fingersticks);
   const range = dateRange(
@@ -685,6 +712,14 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks }: Re
             <Text style={styles.metaLabel}>Erstellt am</Text>
             <Text style={styles.metaValue}>{generatedAt}</Text>
           </View>
+          {/* Unit confirmation — small note so the receiving clinician
+              knows whether KH columns are grams, BE (12g), or KE (10g).
+              Sits in the meta block (not as a separate banner) so the
+              cover stays compact and the existing layout is preserved. */}
+          <View style={styles.metaItem}>
+            <Text style={styles.metaLabel}>Kohlenhydrat-Einheit</Text>
+            <Text style={styles.metaValue}>{carbLabel}</Text>
+          </View>
         </View>
 
         {/* ── Insights — Übersicht ───────────────────────────────────
@@ -713,8 +748,13 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks }: Re
             <View style={styles.insightCard}>
               <Text style={styles.insightLabel}>Ø Carbs / Mahlzeit</Text>
               <View style={styles.insightValueRow}>
-                <Text style={styles.insightValue}>{fmtNum(agg.avgCarbsPerMeal, 0)}</Text>
-                <Text style={styles.insightUnit}>g/Mahlzeit</Text>
+                {/* `formatCarbs` returns "5 BE" / "60 g KH" — split off
+                    the trailing "/Mahlzeit" qualifier into the muted
+                    unit slot to preserve the existing two-tone styling
+                    while keeping a single source of truth for the
+                    number+unit string. */}
+                <Text style={styles.insightValue}>{fmtCarbsFull(agg.avgCarbsPerMeal)}</Text>
+                <Text style={styles.insightUnit}>/ Mahlzeit</Text>
               </View>
               <Text style={styles.insightExpl}>
                 Durchschnittliche Kohlenhydrate pro Mahlzeit über alle Einträge. Kernparameter für die Bolus-Berechnung — Basis jeder ICR-Anpassung.
@@ -736,8 +776,10 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks }: Re
             <View style={styles.insightCard}>
               <Text style={styles.insightLabel}>Letzte 7 Tage · Carbs</Text>
               <View style={styles.insightValueRow}>
-                <Text style={styles.insightValue}>{fmtNum(ins.carbs7dTotal, 0)}</Text>
-                <Text style={styles.insightUnit}>g</Text>
+                {/* Single `formatCarbs` token (e.g. "60 g KH" / "5 BE")
+                    — the number+unit live together to match how the
+                    in-app insights surface this metric. */}
+                <Text style={styles.insightValue}>{fmtCarbsFull(ins.carbs7dTotal)}</Text>
               </View>
               <Text style={styles.insightExpl}>
                 Summe der Kohlenhydrate aus den letzten 7 Tagen. Hilft, kurzfristige Veränderungen in der Ernährung sichtbar zu machen.
@@ -839,7 +881,7 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks }: Re
               <Text style={[styles.thCell, { width: "16%" }]}>Datum/Zeit</Text>
               <Text style={[styles.thCell, { width: "10%" }]}>Typ</Text>
               <Text style={[styles.thCell, { width: "30%" }]}>Beschreibung</Text>
-              <Text style={[styles.thCell, { width: "9%", textAlign: "right" }]}>KH (g)</Text>
+              <Text style={[styles.thCell, { width: "9%", textAlign: "right" }]}>KH ({carbLabel})</Text>
               <Text style={[styles.thCell, { width: "9%", textAlign: "right" }]}>Insulin (U)</Text>
               <Text style={[styles.thCell, { width: "13%", textAlign: "right" }]}>Glucose vor</Text>
               <Text style={[styles.thCell, { width: "13%", textAlign: "right" }]}>+2h</Text>
@@ -851,7 +893,7 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks }: Re
                 <Text style={[styles.td, { width: "30%" }]} hyphenationCallback={(w) => [w]}>
                   {(m.input_text || "").slice(0, 80)}
                 </Text>
-                <Text style={[styles.td, { width: "9%", textAlign: "right" }]}>{fmtNum(m.carbs_grams, 0)}</Text>
+                <Text style={[styles.td, { width: "9%", textAlign: "right" }]}>{fmtCarbsValue(m.carbs_grams)}</Text>
                 <Text style={[styles.td, { width: "9%", textAlign: "right" }]}>{fmtNum(m.insulin_units, 1)}</Text>
                 <Text style={[styles.td, { width: "13%", textAlign: "right", color: colorForGlucose(m.glucose_before) }]}>
                   {fmtNum(m.glucose_before, 0)}

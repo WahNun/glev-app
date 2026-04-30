@@ -15,6 +15,7 @@ import {
   downloadFile,
   todayStamp,
 } from "@/lib/export";
+import { useCarbUnit } from "@/hooks/useCarbUnit";
 
 const ACCENT  = "#4F6EF7";
 const GREEN   = "#22D3A0";
@@ -94,6 +95,7 @@ const ROWS: RowSpec[] = [
  */
 export default function ExportPanel() {
   const t = useTranslations("export");
+  const { unit: carbUnit, label: carbUnitLabel } = useCarbUnit();
   const [busy, setBusy] = useState<Kind | null>(null);
   const [msg, setMsg]   = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [email, setEmail] = useState<string>("");
@@ -122,7 +124,7 @@ export default function ExportPanel() {
       if (kind === "meals") {
         const rows = await fetchAllMeals();
         count = rows.length;
-        downloadFile(`glev-mahlzeiten_${stamp}.csv`, mealsToCSV(rows));
+        downloadFile(`glev-mahlzeiten_${stamp}.csv`, mealsToCSV(rows, carbUnit));
       } else if (kind === "insulin") {
         const rows = await fetchAllInsulinLogs();
         count = rows.length;
@@ -158,7 +160,7 @@ export default function ExportPanel() {
       // Sequential downloads with small delay so browsers don't merge or
       // drop the rapid-fire save prompts.
       const files: Array<[string, string]> = [
-        [`glev-mahlzeiten_${stamp}.csv`,   mealsToCSV(meals)],
+        [`glev-mahlzeiten_${stamp}.csv`,   mealsToCSV(meals, carbUnit)],
         [`glev-insulin_${stamp}.csv`,      insulinToCSV(insulin)],
         [`glev-sport_${stamp}.csv`,        exerciseToCSV(exercise)],
         [`glev-fingersticks_${stamp}.csv`, fingersticksToCSV(fs)],
@@ -200,6 +202,7 @@ export default function ExportPanel() {
           insulin={insulin}
           exercise={exercise}
           fingersticks={fs}
+          carbUnit={carbUnit}
         />,
       ).toBlob();
 
@@ -351,6 +354,19 @@ export default function ExportPanel() {
         fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5,
       }}>
         <strong style={{ color: "var(--text-muted)" }}>{t("pdf_info_label")}</strong>{t("pdf_info_body")}
+      </div>
+
+      {/* Carb-unit note — confirms which unit the KH columns in the
+          generated CSV / PDF will use. Visually quieter than the PDF
+          info card so it reads as a clarification rather than a
+          separate feature, and updates live when the user toggles
+          their preferred unit on the Einstellungen page. */}
+      <div style={{
+        padding: "8px 12px", borderRadius: 8,
+        background: "var(--surface-soft)",
+        fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5,
+      }}>
+        {t("carb_unit_note", { unit: carbUnitLabel })}
       </div>
     </div>
   );
