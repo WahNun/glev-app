@@ -5,9 +5,6 @@ import { stripe } from '@/lib/stripe';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// 1. Juli 2026 00:00:00 UTC — fix für ALLE Beta-Tester
-const BETA_TRIAL_END = 1751328000;
-
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json().catch(() => ({}))) as { email?: unknown };
@@ -32,7 +29,8 @@ export async function POST(req: NextRequest) {
         },
       ],
       subscription_data: {
-        trial_end: BETA_TRIAL_END, // 1. Juli 2026 — erste echte Abbuchung
+        // Kein trial_end — Abo startet sofort nach Checkout (€19 + erster €4,50 Monat
+        // werden in der ersten Rechnung kombiniert; danach €4,50/Mo recurring).
         // Stripe SDK v22.1.0 types lag behind the REST API: `add_invoice_items`
         // IS a documented field on Checkout.Session.subscription_data
         // (https://stripe.com/docs/api/checkout/sessions/create) but is currently
@@ -40,7 +38,7 @@ export async function POST(req: NextRequest) {
         // @ts-expect-error -- valid REST property, missing from SDK types
         add_invoice_items: [
           {
-            price: process.env.STRIPE_PRICE_SETUP_FEE_ID, // €19 einmalig, sofort
+            price: process.env.STRIPE_PRICE_SETUP_FEE_ID, // €19 einmalig
           },
         ],
       },
