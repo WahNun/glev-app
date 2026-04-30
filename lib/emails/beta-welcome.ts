@@ -30,15 +30,16 @@ export function betaWelcomeHtml(name?: string | null): string {
 
               <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
                 herzlichen Glückwunsch — du bist jetzt offiziell ein Beta-Tester von Glev!
-                Deine einmalige Setup-Gebühr von <strong>€19</strong> wurde erfolgreich verarbeitet
-                und dein Zugang ist <strong>sofort aktiv</strong>.
+                Deine erste Zahlung von <strong>€23,50</strong>
+                (€19 einmalige Setup-Gebühr + €4,50 für deinen ersten Monat)
+                wurde erfolgreich verarbeitet und dein Zugang ist <strong>sofort aktiv</strong>.
               </p>
 
               <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
-                Du kannst Glev ab sofort nutzen — komplett kostenlos bis zum
-                <strong>1. Juli 2026</strong>. Ab dann läuft dein Abo automatisch weiter
-                für nur <strong>€4.50 pro Monat</strong>. Du musst dafür nichts weiter tun,
+                Ab Tag 30 läuft dein Abo automatisch weiter für nur
+                <strong>€4,50 pro Monat</strong>. Du musst dafür nichts weiter tun,
                 keine Kreditkarte erneut eingeben — alles läuft im Hintergrund.
+                Kündigen kannst du jederzeit über deinen Account-Bereich.
               </p>
 
               <p style="margin:0 0 32px;font-size:15px;line-height:1.7;color:#374151;">
