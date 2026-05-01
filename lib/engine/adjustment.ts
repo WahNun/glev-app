@@ -15,12 +15,28 @@ export interface AdjustmentRecord {
   reason: string;
 }
 
+/**
+ * Localizable message descriptor for the suggestion / advisory text.
+ *
+ * `key` is a next-intl key under the `insights` namespace; `params` carries
+ * the interpolation values that the consumer feeds into `t(key, params)`.
+ *
+ * The structured shape lets the UI render the text in the active locale
+ * instead of a hard-coded English string, while keeping `lib/engine` free of
+ * any UI/i18n imports.
+ */
+export interface AdjustmentMessage {
+  key: string;
+  params?: Record<string, string | number>;
+}
+
 export interface AdjustmentSuggestion {
   hasSuggestion: boolean;
   field?: "icr" | "correctionFactor" | "both";
   fromIcr?: number; toIcr?: number;
   fromCf?:  number; toCf?:  number;
-  message: string;
+  /** Localizable message descriptor — render with `t(message.key, message.params)`. */
+  message: AdjustmentMessage;
   pattern: Pattern;
 }
 
@@ -28,10 +44,10 @@ const STEP = 0.05; // ±5%
 
 export function suggestAdjustment(current: AdaptiveSettings, pattern: Pattern): AdjustmentSuggestion {
   if (pattern.type === "balanced" || pattern.type === "insufficient_data") {
-    return { hasSuggestion: false, message: "No adjustment needed.", pattern };
+    return { hasSuggestion: false, message: { key: "engine_msg_no_adjustment_needed" }, pattern };
   }
   if (pattern.confidence === "low" || pattern.sampleSize < 5) {
-    return { hasSuggestion: false, message: "Pattern detected but confidence is too low to suggest changes.", pattern };
+    return { hasSuggestion: false, message: { key: "engine_msg_low_confidence" }, pattern };
   }
 
   if (pattern.type === "overdosing") {
@@ -43,7 +59,10 @@ export function suggestAdjustment(current: AdaptiveSettings, pattern: Pattern): 
       field: "both",
       fromIcr: current.icr, toIcr,
       fromCf:  current.correctionFactor, toCf,
-      message: `Based on recent meals, your carb ratio could move from 1:${current.icr} → 1:${toIcr} and your correction factor from ${current.correctionFactor} → ${toCf} (gentler dosing).`,
+      message: {
+        key: "engine_msg_overdosing",
+        params: { fromIcr: current.icr, toIcr, fromCf: current.correctionFactor, toCf },
+      },
       pattern,
     };
   }
@@ -57,7 +76,10 @@ export function suggestAdjustment(current: AdaptiveSettings, pattern: Pattern): 
       field: "both",
       fromIcr: current.icr, toIcr,
       fromCf:  current.correctionFactor, toCf,
-      message: `Based on recent meals, your carb ratio could move from 1:${current.icr} → 1:${toIcr} and your correction factor from ${current.correctionFactor} → ${toCf} (stronger dosing).`,
+      message: {
+        key: "engine_msg_underdosing",
+        params: { fromIcr: current.icr, toIcr, fromCf: current.correctionFactor, toCf },
+      },
       pattern,
     };
   }
@@ -65,12 +87,12 @@ export function suggestAdjustment(current: AdaptiveSettings, pattern: Pattern): 
   if (pattern.type === "spiking") {
     return {
       hasSuggestion: false,
-      message: "Spike pattern detected — consider pre-bolusing 10–15 min earlier rather than changing your ratios.",
+      message: { key: "engine_msg_spiking" },
       pattern,
     };
   }
 
-  return { hasSuggestion: false, message: "No adjustment.", pattern };
+  return { hasSuggestion: false, message: { key: "engine_msg_no_adjustment" }, pattern };
 }
 
 export function applyAdjustment(s: AdaptiveSettings, sug: AdjustmentSuggestion): AdaptiveSettings {

@@ -1042,7 +1042,9 @@ export default function InsightsPage() {
                       </svg>
                       {suggestion.hasSuggestion ? tInsights("engine_pill_suggested") : tInsights("engine_pill_advisory")}
                     </div>
-                    <div style={{ fontSize:11, color:"var(--text-strong)", lineHeight:1.5 }}>{suggestion.message}</div>
+                    <div style={{ fontSize:11, color:"var(--text-strong)", lineHeight:1.5 }}>
+                      {tInsights(suggestion.message.key, suggestion.message.params)}
+                    </div>
                     <div style={{ marginTop:8 }}>
                       <DisclaimerChip/>
                     </div>

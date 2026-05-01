@@ -498,6 +498,12 @@
     "engine_back_heading": "How is this number calculated?",
     "engine_back_body": "The Adaptive ICR is based on every completed meal (state = final, bg_2h present). Each meal is weighted by outcome: meals with a healthy BG response carry more weight than spikes or underdoses. It shows which carb-to-insulin ratio empirically led to stable readings for you — not what you dosed, but what actually worked.",
     "engine_back_subline": "Source: all finalised meals · outcome-weighted",
+    "engine_msg_no_adjustment_needed": "No adjustment needed.",
+    "engine_msg_no_adjustment": "No adjustment.",
+    "engine_msg_low_confidence": "Pattern detected but confidence is too low to suggest changes.",
+    "engine_msg_overdosing": "Based on recent meals, your carb ratio could move from 1:{fromIcr} → 1:{toIcr} and your correction factor from {fromCf} → {toCf} (gentler dosing).",
+    "engine_msg_underdosing": "Based on recent meals, your carb ratio could move from 1:{fromIcr} → 1:{toIcr} and your correction factor from {fromCf} → {toCf} (stronger dosing).",
+    "engine_msg_spiking": "Spike pattern detected — consider pre-bolusing 10–15 min earlier rather than changing your ratios.",
 
     "tdd_label": "Total Daily Dose · 7d",
     "tdd_unit_per_day": "U / day",
