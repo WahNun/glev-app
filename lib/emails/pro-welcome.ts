@@ -12,7 +12,10 @@
  * /pro/success?session_id=… so that the page can re-verify the session via
  * /api/verify-payment regardless of how much time has passed since checkout.
  *
- * @param name      Customer name from Stripe (optional).
+ * @param name      Customer name from Stripe (optional). The full name as
+ *                  collected by the `full_name` Checkout custom field; the
+ *                  template parses the first token for in-body personal
+ *                  references and falls back to neutral copy when missing.
  * @param sessionId Stripe Checkout Session ID — must be the live id, never
  *                  the literal `{CHECKOUT_SESSION_ID}` placeholder.
  * @param appUrl    Public app origin without trailing slash. Used to build
@@ -27,7 +30,20 @@ export function proWelcomeHtml(
   appUrl?: string | null,
   trialEndsAt?: string | null,
 ): string {
-  const greeting = name ? `Hallo ${name}` : 'Hallo';
+  const first = firstNameFrom(name);
+  const greeting = first ? `Hallo ${first}` : 'Hallo';
+  // First sentence of the post-greeting paragraph. With a known first name
+  // we drop in a comma-set address; without one we keep the original
+  // generic phrasing so the email stays grammatical for legacy buyers
+  // (sessions captured before the `full_name` custom field existed).
+  const postGreetingOpener = first
+    ? `schön, dass du dabei bist, ${first}.`
+    : 'schön dass du dabei bist.';
+  // Caption right under the resume CTA — when we know the buyer's name we
+  // address them directly, otherwise we keep the generic reassurance.
+  const ctaCaption = first
+    ? `${first}, der Link funktioniert auch, wenn du den ursprünglichen Tab geschlossen hast.`
+    : 'Der Link funktioniert auch, wenn du den ursprünglichen Tab geschlossen hast.';
   const baseUrl = (appUrl || 'https://glev.app').replace(/\/$/, '');
   const resumeUrl = sessionId
     ? `${baseUrl}/pro/success?session_id=${encodeURIComponent(sessionId)}`
@@ -66,7 +82,7 @@ export function proWelcomeHtml(
               </p>
 
               <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
-                schön dass du dabei bist. Deine Mitgliedschaft ist
+                ${postGreetingOpener} Deine Mitgliedschaft ist
                 <strong>angelegt</strong> und deine Karte ist sicher bei Stripe
                 hinterlegt — abgebucht wird erst am
                 <strong>${trialEndDisplay}</strong>.
@@ -90,7 +106,7 @@ export function proWelcomeHtml(
               </table>
 
               <p style="margin:0 0 32px;font-size:12px;line-height:1.5;color:#6b7280;text-align:center;">
-                Der Link funktioniert auch, wenn du den ursprünglichen Tab geschlossen hast.
+                ${ctaCaption}
               </p>
 
               <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
@@ -122,6 +138,35 @@ export function proWelcomeHtml(
   </table>
 </body>
 </html>`;
+}
+
+/**
+ * Subject line for the Pro welcome email. When the buyer's first name is
+ * known we lead with it ("Lukas, deine …") so the inbox preview already
+ * feels personal; otherwise we fall back to the original generic subject
+ * so legacy sessions without a captured name stay grammatical.
+ */
+export function proWelcomeSubject(name?: string | null): string {
+  const first = firstNameFrom(name);
+  return first
+    ? `${first}, deine Glev-Mitgliedschaft ist angelegt`
+    : 'Deine Glev-Mitgliedschaft ist angelegt';
+}
+
+/**
+ * Extract the buyer's first name from the full name Stripe captured.
+ *
+ * Stripe's `full_name` custom field is free-form text, so we split on
+ * whitespace and take the first token. Returns `null` for missing,
+ * empty, or whitespace-only input so callers can branch on a single
+ * truthiness check and fall back to neutral copy.
+ */
+function firstNameFrom(name?: string | null): string | null {
+  if (!name) return null;
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+  const [first] = trimmed.split(/\s+/);
+  return first || null;
 }
 
 /**

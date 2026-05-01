@@ -4,7 +4,7 @@ import { Resend } from "resend";
 import { getStripe } from "@/lib/stripeServer";
 import { extractFullNameFromSession } from "@/lib/stripeCheckout";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { proWelcomeHtml } from "@/lib/emails/pro-welcome";
+import { proWelcomeHtml, proWelcomeSubject } from "@/lib/emails/pro-welcome";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -213,7 +213,7 @@ export async function POST(req: NextRequest) {
             const { data, error } = await resend.emails.send({
               from: "Glev <info@glev.app>",
               to: email,
-              subject: "Deine Glev-Mitgliedschaft ist angelegt",
+              subject: proWelcomeSubject(name),
               html: proWelcomeHtml(name, session.id, appUrl, trialEndsAt),
             });
             if (error) {

@@ -19,7 +19,7 @@
 
 import { Resend } from "resend";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { betaWelcomeHtml } from "@/lib/emails/beta-welcome";
+import { betaWelcomeHtml, betaWelcomeSubject } from "@/lib/emails/beta-welcome";
 
 // ---- Tunables -------------------------------------------------------------
 
@@ -114,7 +114,7 @@ function renderTemplate(template: EmailTemplate, payload: EmailPayload): Rendere
       const p = payload as BetaWelcomePayload;
       return {
         from: "Glev <info@glev.app>",
-        subject: "Willkommen bei Glev — bitte schließe deine Registrierung ab",
+        subject: betaWelcomeSubject(p.name ?? null),
         html: betaWelcomeHtml(p.name ?? null, p.sessionId ?? null, p.appUrl ?? null),
       };
     }
