@@ -911,61 +911,99 @@ export default function ExportPanel() {
         })}
       </div>
 
-      {/* Bulk actions: CSV-all + PDF report side by side */}
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <button
-          onClick={exportAll}
-          disabled={busy !== null || isEmptyRange}
-          title={isEmptyRange ? emptyRangeTooltip : undefined}
-          aria-disabled={busy !== null || isEmptyRange}
-          style={{
-            flex: "1 1 200px",
-            padding: "14px", borderRadius: 12,
-            border: `1px solid ${BORDER}`,
-            background: "var(--surface-soft)",
-            color: "var(--text-strong)",
-            fontSize: 13, fontWeight: 600,
-            cursor: busy !== null || isEmptyRange ? "not-allowed" : "pointer",
-            opacity: isEmptyRange ? 0.45 : busy !== null && busy !== "all" ? 0.5 : 1,
-          }}
-        >
-          {busy === "all" ? t("all_btn_busy") : t("all_btn_idle")}
-        </button>
-        <button
-          onClick={exportPdf}
-          disabled={busy !== null || isEmptyRange}
-          title={isEmptyRange ? emptyRangeTooltip : undefined}
-          aria-disabled={busy !== null || isEmptyRange}
-          style={{
-            flex: "1 1 200px",
-            padding: "14px", borderRadius: 12, border: "none",
-            // When the range is empty, drop the gradient + accent shadow
-            // so the button visually reads as inactive (matches the
-            // "Alles als CSV" disabled state). Without this the bright
-            // blue gradient would still scream "press me" even though
-            // the click is a no-op.
-            background: isEmptyRange
-              ? "var(--surface-soft)"
-              : busy === "pdf"
-                ? `${ACCENT}40`
-                : `linear-gradient(135deg, ${ACCENT}, #3B5BE0)`,
-            color: isEmptyRange ? "var(--text-dim)" : "var(--text)",
-            fontSize: 14, fontWeight: 700,
-            cursor: busy !== null || isEmptyRange ? "not-allowed" : "pointer",
-            boxShadow: busy === null && !isEmptyRange ? `0 4px 18px ${ACCENT}30` : "none",
-            opacity: isEmptyRange ? 0.7 : busy !== null && busy !== "pdf" ? 0.5 : 1,
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-          }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-            <line x1="9" y1="13" x2="15" y2="13"/>
-            <line x1="9" y1="17" x2="13" y2="17"/>
-          </svg>
-          {busy === "pdf" ? t("pdf_btn_busy") : t("pdf_btn_idle")}
-        </button>
-      </div>
+      {/* Bulk actions: CSV-all + PDF report side by side.
+          Both buttons surface the *combined* total across all four
+          kinds in parens (same `counts` snapshot the per-kind rows
+          use), so the user can confirm bundle size before triggering
+          four save-as prompts or building a multi-page PDF. We mirror
+          the per-row behaviour: while a fresh count is in flight we
+          drop the suffix instead of showing a stale number, and a
+          known-zero total locks both buttons + dims them so an empty
+          export can't be requested. The busy label keeps replacing
+          the count during an in-flight export, same as the per-kind
+          rows.
+
+          The empty-range protection (disabled + tooltip + neutral
+          styling) reuses the existing `isEmptyRange` / `emptyRangeTooltip`
+          from above so wording and behaviour stay in sync with the
+          count line. `isEmptyRange` already accounts for the loading
+          state, so it serves the same role as a local `bulkEmpty`
+          would. */}
+      {(() => {
+        const bulkTotal = countsLoading || !counts
+          ? null
+          : counts.meals + counts.insulin + counts.exercise + counts.fingersticks;
+        const bulkDisabled = busy !== null || isEmptyRange;
+        const bulkDim      = isEmptyRange && busy === null;
+        const bulkTitle    = isEmptyRange ? emptyRangeTooltip : undefined;
+        const allLabel = busy === "all"
+          ? t("all_btn_busy")
+          : bulkTotal !== null
+            ? `${t("all_btn_idle")} (${bulkTotal})`
+            : t("all_btn_idle");
+        const pdfLabel = busy === "pdf"
+          ? t("pdf_btn_busy")
+          : bulkTotal !== null
+            ? `${t("pdf_btn_idle")} (${bulkTotal})`
+            : t("pdf_btn_idle");
+        return (
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button
+              onClick={exportAll}
+              disabled={bulkDisabled}
+              title={bulkTitle}
+              aria-disabled={bulkDisabled}
+              style={{
+                flex: "1 1 200px",
+                padding: "14px", borderRadius: 12,
+                border: `1px solid ${BORDER}`,
+                background: "var(--surface-soft)",
+                color: busy === "all" || isEmptyRange ? "var(--text-dim)" : "var(--text-strong)",
+                fontSize: 13, fontWeight: 600,
+                cursor: bulkDisabled ? "not-allowed" : "pointer",
+                opacity: bulkDim ? 0.55 : (busy !== null && busy !== "all" ? 0.5 : 1),
+              }}
+            >
+              {allLabel}
+            </button>
+            <button
+              onClick={exportPdf}
+              disabled={bulkDisabled}
+              title={bulkTitle}
+              aria-disabled={bulkDisabled}
+              style={{
+                flex: "1 1 200px",
+                padding: "14px", borderRadius: 12,
+                // When the range is empty, drop the gradient + accent
+                // border-less look so the PDF button visually reads as
+                // inactive (matches the "Alles als CSV" disabled state).
+                // Without this the bright blue gradient would still
+                // scream "press me" even though the click is a no-op.
+                border: isEmptyRange ? `1px solid ${BORDER}` : "none",
+                background: busy === "pdf"
+                  ? `${ACCENT}40`
+                  : isEmptyRange
+                    ? "var(--surface-soft)"
+                    : `linear-gradient(135deg, ${ACCENT}, #3B5BE0)`,
+                color: isEmptyRange ? "var(--text-dim)" : "var(--text)",
+                fontSize: 14, fontWeight: 700,
+                cursor: bulkDisabled ? "not-allowed" : "pointer",
+                boxShadow: busy === null && !isEmptyRange ? `0 4px 18px ${ACCENT}30` : "none",
+                opacity: bulkDim ? 0.55 : (busy !== null && busy !== "pdf" ? 0.5 : 1),
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="9" y1="13" x2="15" y2="13"/>
+                <line x1="9" y1="17" x2="13" y2="17"/>
+              </svg>
+              {pdfLabel}
+            </button>
+          </div>
+        );
+      })()}
 
       {/* Toast */}
       {msg && (
