@@ -1,16 +1,22 @@
 "use client";
 import React from "react";
+import { useTranslations } from "next-intl";
 
-const ITEMS = [
-  { id: "foundation", label: "Foundation" },
-  { id: "color", label: "Color" },
-  { id: "typography", label: "Typography" },
-  { id: "logo", label: "Logo" },
-  { id: "voice", label: "Voice" },
-  { id: "compliance", label: "Compliance" },
-];
+const ITEM_IDS = [
+  "foundation",
+  "color",
+  "typography",
+  "logo",
+  "voice",
+  "compliance",
+] as const;
 
 export default function SectionNav() {
+  const t = useTranslations("marketing");
+  const items = ITEM_IDS.map((id) => ({
+    id,
+    label: t(`brand_section_${id}`),
+  }));
   return (
     <nav
       style={{
@@ -54,7 +60,7 @@ export default function SectionNav() {
               fontSize: 14,
             }}
           >
-            brand
+            {t("brand_nav_label")}
           </span>
         </a>
         <ul
@@ -65,7 +71,7 @@ export default function SectionNav() {
             flexWrap: "wrap",
           }}
         >
-          {ITEMS.map((it) => (
+          {items.map((it) => (
             <li key={it.id}>
               <a
                 href={`#${it.id}`}

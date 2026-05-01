@@ -1,5 +1,6 @@
 "use client";
 import React, { useState } from "react";
+import { useTranslations } from "next-intl";
 
 function isLight(hex: string): boolean {
   const h = hex.replace("#", "");
@@ -19,6 +20,7 @@ export default function HexSwatch({
   hex: string;
   role: string;
 }) {
+  const t = useTranslations("marketing");
   const [copied, setCopied] = useState(false);
   const fg = isLight(hex) ? "#000" : "#fff";
 
@@ -53,7 +55,7 @@ export default function HexSwatch({
         color: fg,
         fontFamily: "var(--font-inter), Inter, system-ui, sans-serif",
       }}
-      aria-label={`Copy ${hex}`}
+      aria-label={t("brand_swatch_copy_aria", { hex })}
     >
       <div
         style={{
@@ -81,7 +83,7 @@ export default function HexSwatch({
             fontSize: 12,
           }}
         >
-          Kopiert: {hex}
+          {t("brand_swatch_copied", { hex })}
         </div>
       )}
     </button>

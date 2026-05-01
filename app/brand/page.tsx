@@ -11,37 +11,43 @@ const CARD_BG = "#111117";
 const BORDER = "1px solid rgba(255,255,255,0.08)";
 const CONTENT_MAX = 1100;
 
-const BRAND_COLORS = [
-  { hex: "#4F6EF7", role: "Primary · CTAs, Links, Logo" },
-  { hex: "#6B8BFF", role: "Hover-State" },
-  { hex: "#4F6EF740", role: "Focus-Ring, Outer-Node-Fill" },
+type SwatchSpec = { hex: string; roleKey: string };
+
+const BRAND_SWATCHES: SwatchSpec[] = [
+  { hex: "#4F6EF7", roleKey: "brand_color_role_primary" },
+  { hex: "#6B8BFF", roleKey: "brand_color_role_hover" },
+  { hex: "#4F6EF740", roleKey: "brand_color_role_focus" },
 ];
-const INK_COLORS = [
-  { hex: "#09090B", role: "Page-Background" },
-  { hex: "#0A0A0F", role: "Body-Background" },
-  { hex: "#0D0D12", role: "Card alternative" },
-  { hex: "#0F0F14", role: "Logo-Background" },
-  { hex: "#111117", role: "Surface · Cards/Modals" },
-  { hex: "#141420", role: "Surface alternative" },
+const INK_SWATCHES: SwatchSpec[] = [
+  { hex: "#09090B", roleKey: "brand_color_role_page_bg" },
+  { hex: "#0A0A0F", roleKey: "brand_color_role_body_bg" },
+  { hex: "#0D0D12", roleKey: "brand_color_role_card_alt" },
+  { hex: "#0F0F14", roleKey: "brand_color_role_logo_bg" },
+  { hex: "#111117", roleKey: "brand_color_role_surface" },
+  { hex: "#141420", roleKey: "brand_color_role_surface_alt" },
 ];
-const STATUS_COLORS = [
-  { hex: "#22D3A0", role: "Green · in-range, success, live" },
-  { hex: "#FF9500", role: "Orange · hyper, warning" },
-  { hex: "#FF2D78", role: "Pink · hypo, error, destructive" },
-  { hex: "#FFD60A", role: "Yellow · spike" },
+const STATUS_SWATCHES: SwatchSpec[] = [
+  { hex: "#22D3A0", roleKey: "brand_color_role_green" },
+  { hex: "#FF9500", roleKey: "brand_color_role_orange" },
+  { hex: "#FF2D78", roleKey: "brand_color_role_pink" },
+  { hex: "#FFD60A", roleKey: "brand_color_role_yellow" },
 ];
-const MEAL_CHART_COLORS = [
-  { hex: "#FF9500", role: "Fast-carbs" },
-  { hex: "#3B82F6", role: "High-protein" },
-  { hex: "#A855F7", role: "High-fat" },
-  { hex: "#22D3A0", role: "Balanced" },
-  { hex: "#60A5FA", role: "Glucose-Chart-Linie" },
-  { hex: "#F472B6", role: "Chart-Highlight (nicht für Errors)" },
-  { hex: "#A78BFA", role: "UI sekundär" },
+const MEAL_CHART_SWATCHES: SwatchSpec[] = [
+  { hex: "#FF9500", roleKey: "brand_color_role_fast_carbs" },
+  { hex: "#3B82F6", roleKey: "brand_color_role_high_protein" },
+  { hex: "#A855F7", roleKey: "brand_color_role_high_fat" },
+  { hex: "#22D3A0", roleKey: "brand_color_role_balanced" },
+  { hex: "#60A5FA", roleKey: "brand_color_role_glucose_line" },
+  { hex: "#F472B6", roleKey: "brand_color_role_chart_highlight" },
+  { hex: "#A78BFA", roleKey: "brand_color_role_ui_secondary" },
 ];
 
 export default async function BrandPage() {
   const t = await getTranslations("marketing");
+
+  const resolveSwatches = (items: SwatchSpec[]) =>
+    items.map(({ hex, roleKey }) => ({ hex, role: t(roleKey) }));
+
   return (
     <div
       id="top"
@@ -102,7 +108,7 @@ export default async function BrandPage() {
       </section>
 
       {/* FOUNDATION */}
-      <Section id="foundation" title="Foundation">
+      <Section id="foundation" title={t("brand_section_foundation")}>
         <div
           style={{
             display: "grid",
@@ -111,16 +117,16 @@ export default async function BrandPage() {
           }}
         >
           <FoundationCard
-            title="Was Glev ist"
-            text="Der sprachgesteuerte Essens-Tracker für Typ-1-Diabetiker. Mahlzeiten in Sekunden loggen, Makros per KI, Glukose live vom CGM."
+            title={t("brand_foundation_what_title")}
+            text={t("brand_foundation_what_text")}
           />
           <FoundationCard
-            title="Was Glev nicht ist"
-            text="Kein Medizinprodukt. Kein Insulinrechner. Kein Diabetes-Coach. Glev ist ein Dokumentations- und Organisations-Tool — Therapieentscheidungen triffst du mit deinem Arzt."
+            title={t("brand_foundation_not_title")}
+            text={t("brand_foundation_not_text")}
           />
           <FoundationCard
-            title="Für wen"
-            text="Typ-1-Diabetiker mit CGM (aktuell FreeStyle Libre 2 via LibreLinkUp; Dexcom und Nightscout in Arbeit). Smartphone-nativ, deutschsprachiger Markt zuerst."
+            title={t("brand_foundation_who_title")}
+            text={t("brand_foundation_who_text")}
           />
         </div>
 
@@ -138,16 +144,28 @@ export default async function BrandPage() {
             fontStyle: "italic",
           }}
         >
-          „Gebaut von Lucas — T1D, weil bestehende Apps mir zu langsam waren.“
+          {t("brand_foundation_quote")}
         </blockquote>
       </Section>
 
       {/* COLOR */}
-      <Section id="color" title="Color">
-        <SwatchGroup label="Brand" swatches={BRAND_COLORS} />
-        <SwatchGroup label="Ink-Layer" swatches={INK_COLORS} />
-        <SwatchGroup label="Status" swatches={STATUS_COLORS} />
-        <SwatchGroup label="Meal-Types & Chart" swatches={MEAL_CHART_COLORS} />
+      <Section id="color" title={t("brand_section_color")}>
+        <SwatchGroup
+          label={t("brand_color_group_brand")}
+          swatches={resolveSwatches(BRAND_SWATCHES)}
+        />
+        <SwatchGroup
+          label={t("brand_color_group_ink")}
+          swatches={resolveSwatches(INK_SWATCHES)}
+        />
+        <SwatchGroup
+          label={t("brand_color_group_status")}
+          swatches={resolveSwatches(STATUS_SWATCHES)}
+        />
+        <SwatchGroup
+          label={t("brand_color_group_meal")}
+          swatches={resolveSwatches(MEAL_CHART_SWATCHES)}
+        />
 
         <div style={{ marginTop: 40 }}>
           <h3
@@ -160,7 +178,7 @@ export default async function BrandPage() {
               letterSpacing: "0.06em",
             }}
           >
-            Glucose-Trend-Gating
+            {t("brand_color_trend_heading")}
           </h3>
           <div
             style={{
@@ -190,10 +208,10 @@ export default async function BrandPage() {
               textAlign: "center",
             }}
           >
-            <span>&lt;70 Hypo</span>
-            <span>70–180 In-Range</span>
-            <span>&gt;180 Hyper</span>
-            <span>Kein Wert</span>
+            <span>{t("brand_color_trend_hypo")}</span>
+            <span>{t("brand_color_trend_in_range")}</span>
+            <span>{t("brand_color_trend_hyper")}</span>
+            <span>{t("brand_color_trend_none")}</span>
           </div>
           <p
             style={{
@@ -203,15 +221,13 @@ export default async function BrandPage() {
               color: "rgba(255,255,255,0.65)",
             }}
           >
-            Live-Glukose-Werte in der App nutzen exakt dieses Farbschema —
-            nie anders mappen. Hypo/Hyper sind Status-Signale, kein Style;
-            für allgemeine Akzente bleibt Brand-Blau (#4F6EF7) zuständig.
+            {t("brand_color_trend_note")}
           </p>
         </div>
       </Section>
 
       {/* TYPOGRAPHY */}
-      <Section id="typography" title="Typography">
+      <Section id="typography" title={t("brand_section_typography")}>
         <div
           style={{
             display: "grid",
@@ -221,25 +237,25 @@ export default async function BrandPage() {
         >
           <TypeCard
             title="Inter"
-            subtitle="Primärfamilie · 400 / 500 / 600 / 700"
-            sample="Aa Gg 0123 — Typ 1 neu gedacht."
+            subtitle={t("brand_type_inter_subtitle")}
+            sample={t("brand_type_inter_sample")}
             sampleStyle={{
               fontSize: 32,
               fontWeight: 700,
               letterSpacing: "-0.02em",
             }}
-            note="Geladen via next/font/google in app/layout.tsx als CSS-Variable --font-inter."
+            note={t("brand_type_inter_note")}
           />
           <TypeCard
             title="JetBrains Mono"
-            subtitle="Web-geladen via next/font/google · 400 / 500"
-            sample="142 mg/dL · 7.9 mmol/L · 1U / 12g KH"
+            subtitle={t("brand_type_mono_subtitle")}
+            sample={t("brand_type_mono_sample")}
             sampleStyle={{
               fontFamily: "var(--font-mono)",
               fontSize: 18,
               fontWeight: 500,
             }}
-            note="Reserviert für: Glukosewerte, Insulineinheiten, Zeitstempel, Hex-Codes, IDs, Tabellenzellen. Exponiert als CSS-Variable --font-jetbrains-mono, abrufbar projektweit über var(--font-mono)."
+            note={t("brand_type_mono_note")}
           />
         </div>
 
@@ -255,36 +271,36 @@ export default async function BrandPage() {
           }}
         >
           <ScaleRow
-            label="Display"
-            note="Hero · 96px / 700 / -0.03em"
+            label={t("brand_scale_display_label")}
+            note={t("brand_scale_display_note")}
             style={{ fontSize: 56, fontWeight: 700, letterSpacing: "-0.03em" }}
           >
-            glev.
+            {t("brand_scale_display_sample")}
           </ScaleRow>
           <ScaleRow
-            label="H1"
-            note="Section · 32px / 700"
+            label={t("brand_scale_h1_label")}
+            note={t("brand_scale_h1_note")}
             style={{ fontSize: 32, fontWeight: 700, letterSpacing: "-0.02em" }}
           >
-            Foundation
+            {t("brand_scale_h1_sample")}
           </ScaleRow>
           <ScaleRow
-            label="H2"
-            note="Subsection · 20px / 600"
+            label={t("brand_scale_h2_label")}
+            note={t("brand_scale_h2_note")}
             style={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.01em" }}
           >
-            Was Glev ist
+            {t("brand_scale_h2_sample")}
           </ScaleRow>
           <ScaleRow
-            label="Body"
-            note="Default · 15px / 400 · line-height 1.6"
+            label={t("brand_scale_body_label")}
+            note={t("brand_scale_body_note")}
             style={{ fontSize: 15, fontWeight: 400, lineHeight: 1.6 }}
           >
-            Mahlzeiten in Sekunden loggen, Makros per KI, Glukose live vom CGM.
+            {t("brand_scale_body_sample")}
           </ScaleRow>
           <ScaleRow
-            label="Caption"
-            note="Meta · 12px / 500 · uppercase 0.06em"
+            label={t("brand_scale_caption_label")}
+            note={t("brand_scale_caption_note")}
             style={{
               fontSize: 12,
               fontWeight: 500,
@@ -293,13 +309,13 @@ export default async function BrandPage() {
               color: "rgba(255,255,255,0.6)",
             }}
           >
-            Brand guidelines · v1
+            {t("brand_scale_caption_sample")}
           </ScaleRow>
         </div>
       </Section>
 
       {/* LOGO */}
-      <Section id="logo" title="Logo">
+      <Section id="logo" title={t("brand_section_logo")}>
         <p
           style={{
             fontSize: 15,
@@ -309,9 +325,7 @@ export default async function BrandPage() {
             maxWidth: 720,
           }}
         >
-          Das Glev-Symbol ist ein Knoten-Graph: 7 Knoten, 10 Kanten, 1 zentrales
-          Insulin-Atom. Die Geometrie ist fix — nur Vordergrund- und
-          Hintergrundfarbe sind anpassbar.
+          {t("brand_logo_intro")}
         </p>
 
         <div
@@ -322,21 +336,21 @@ export default async function BrandPage() {
           }}
         >
           <LogoCard
-            title="Primary · Dark"
-            description="Standardvariante. Für alle dunklen Oberflächen."
+            title={t("brand_logo_primary_title")}
+            description={t("brand_logo_primary_desc")}
             bg="#0F0F14"
             color="#4F6EF7"
           />
           <LogoCard
-            title="On-Brand"
-            description="Auf Brand-Blau für Marketing-Hintergründe."
+            title={t("brand_logo_onbrand_title")}
+            description={t("brand_logo_onbrand_desc")}
             bg="#4F6EF7"
             color="#FFFFFF"
             downloadName="glev-icon-on-brand.svg"
           />
           <LogoCard
-            title="On-Light"
-            description="Für helle Print- oder Web-Oberflächen."
+            title={t("brand_logo_onlight_title")}
+            description={t("brand_logo_onlight_desc")}
             bg="#FFFFFF"
             color="#4F6EF7"
             downloadName="glev-icon-on-light.svg"
@@ -354,7 +368,7 @@ export default async function BrandPage() {
             letterSpacing: "0.06em",
           }}
         >
-          Playground
+          {t("brand_logo_playground")}
         </h3>
         <LogoPlayground />
 
@@ -368,7 +382,7 @@ export default async function BrandPage() {
           }}
         >
           <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>
-            Don&apos;ts
+            {t("brand_logo_donts_title")}
           </h3>
           <ul
             style={{
@@ -380,16 +394,16 @@ export default async function BrandPage() {
               lineHeight: 1.6,
             }}
           >
-            <li>· Geometrie nicht verzerren oder rotieren.</li>
-            <li>· Knoten oder Kanten nicht entfernen / umfärben.</li>
-            <li>· Den mintfarbenen Punkt aus der Wortmarke nicht weglassen.</li>
-            <li>· Kein Drop-Shadow, kein Gradient, kein Outline-Stroke um das Symbol.</li>
+            <li>· {t("brand_logo_dont_1")}</li>
+            <li>· {t("brand_logo_dont_2")}</li>
+            <li>· {t("brand_logo_dont_3")}</li>
+            <li>· {t("brand_logo_dont_4")}</li>
           </ul>
         </div>
       </Section>
 
       {/* VOICE */}
-      <Section id="voice" title="Voice">
+      <Section id="voice" title={t("brand_section_voice")}>
         <p
           style={{
             fontSize: 15,
@@ -399,9 +413,7 @@ export default async function BrandPage() {
             maxWidth: 720,
           }}
         >
-          Glev klingt wie ein erfahrener T1D, der sich kurzhält. Direkt,
-          numerisch, ohne Pathos. Deutsch im Du, Englisch im technischen
-          Kontext (CGM, in-range, hyper, hypo).
+          {t("brand_voice_intro")}
         </p>
 
         <div
@@ -411,20 +423,47 @@ export default async function BrandPage() {
             gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
           }}
         >
-          <VoiceCard kind="do" text="Glukose 142, stabil seit 30 min." />
           <VoiceCard
-            kind="dont"
-            text="Deine Glukose-Werte sind aktuell sehr erfreulich!"
+            kind="do"
+            label={t("brand_voice_do")}
+            text={t("brand_voice_do_1")}
+            quoteOpen={t("brand_voice_quote_open")}
+            quoteClose={t("brand_voice_quote_close")}
           />
-          <VoiceCard kind="do" text="Mahlzeit gespeichert. 48g KH." />
           <VoiceCard
             kind="dont"
-            text="Super, wir haben deine Mahlzeit erfolgreich erfasst! 🎉"
+            label={t("brand_voice_dont")}
+            text={t("brand_voice_dont_1")}
+            quoteOpen={t("brand_voice_quote_open")}
+            quoteClose={t("brand_voice_quote_close")}
           />
-          <VoiceCard kind="do" text="LibreLinkUp neu verbinden." />
+          <VoiceCard
+            kind="do"
+            label={t("brand_voice_do")}
+            text={t("brand_voice_do_2")}
+            quoteOpen={t("brand_voice_quote_open")}
+            quoteClose={t("brand_voice_quote_close")}
+          />
           <VoiceCard
             kind="dont"
-            text="Hoppla! Es scheint ein kleines Problem mit der Verbindung zu geben."
+            label={t("brand_voice_dont")}
+            text={t("brand_voice_dont_2")}
+            quoteOpen={t("brand_voice_quote_open")}
+            quoteClose={t("brand_voice_quote_close")}
+          />
+          <VoiceCard
+            kind="do"
+            label={t("brand_voice_do")}
+            text={t("brand_voice_do_3")}
+            quoteOpen={t("brand_voice_quote_open")}
+            quoteClose={t("brand_voice_quote_close")}
+          />
+          <VoiceCard
+            kind="dont"
+            label={t("brand_voice_dont")}
+            text={t("brand_voice_dont_3")}
+            quoteOpen={t("brand_voice_quote_open")}
+            quoteClose={t("brand_voice_quote_close")}
           />
         </div>
 
@@ -437,26 +476,26 @@ export default async function BrandPage() {
           }}
         >
           <Principle
-            title="Kurz"
-            text="Maximal 2 Zeilen pro UI-String. Verben vor Substantiven."
+            title={t("brand_principle_short_title")}
+            text={t("brand_principle_short_text")}
           />
           <Principle
-            title="Numerisch"
-            text="Werte zuerst, Erklärung danach. mg/dL und g KH ausgeschrieben."
+            title={t("brand_principle_numeric_title")}
+            text={t("brand_principle_numeric_text")}
           />
           <Principle
-            title="Neutral"
-            text="Keine Emojis, keine Ausrufezeichen, kein Coaching-Ton."
+            title={t("brand_principle_neutral_title")}
+            text={t("brand_principle_neutral_text")}
           />
           <Principle
-            title="Medizinisch ehrlich"
-            text="Nie „rechnen“, nie „dosieren“. Glev dokumentiert — Therapie macht der Arzt."
+            title={t("brand_principle_honest_title")}
+            text={t("brand_principle_honest_text")}
           />
         </div>
       </Section>
 
       {/* COMPLIANCE */}
-      <Section id="compliance" title="Compliance">
+      <Section id="compliance" title={t("brand_section_compliance")}>
         <div
           style={{
             background: CARD_BG,
@@ -468,7 +507,7 @@ export default async function BrandPage() {
           }}
         >
           <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>
-            Glev ist kein Medizinprodukt
+            {t("brand_compliance_no_med_title")}
           </h3>
           <p
             style={{
@@ -477,10 +516,7 @@ export default async function BrandPage() {
               color: "rgba(255,255,255,0.75)",
             }}
           >
-            Glev ist ein Dokumentations- und Organisations-Tool für Menschen
-            mit Typ-1-Diabetes. Glev berechnet keine Insulin-Dosen, gibt keine
-            Therapie-Empfehlungen und ist nicht nach MDR/IVDR zertifiziert.
-            Therapieentscheidungen triffst du mit deinem behandelnden Arzt.
+            {t("brand_compliance_no_med_body")}
           </p>
         </div>
 
@@ -492,20 +528,20 @@ export default async function BrandPage() {
           }}
         >
           <ComplianceCard
-            title="Daten"
-            text="Glukose-, Mahlzeiten- und Insulin-Daten liegen in Supabase (EU-Region). Auth via Supabase, AI-Features über Replit AI Integrations."
+            title={t("brand_compliance_data_title")}
+            text={t("brand_compliance_data_text")}
           />
           <ComplianceCard
-            title="CGM-Quellen"
-            text="FreeStyle Libre 2 via LibreLinkUp (Read-Only). Zugangsdaten verschlüsselt in der DB; jederzeit in den Einstellungen widerrufbar."
+            title={t("brand_compliance_cgm_title")}
+            text={t("brand_compliance_cgm_text")}
           />
           <ComplianceCard
-            title="Trademark"
-            text="„Glev“ und das Glev-Symbol sind Wortmarke und Bildmarke. Verwendung in Presse-Kontext ohne Rückfrage erlaubt — bitte Geometrie und Farben nicht verändern."
+            title={t("brand_compliance_trademark_title")}
+            text={t("brand_compliance_trademark_text")}
           />
           <ComplianceCard
-            title="Kontakt"
-            text="Presse, Partnerschaften, Sicherheit: lucas@glev.app"
+            title={t("brand_compliance_contact_title")}
+            text={t("brand_compliance_contact_text")}
           />
         </div>
 
@@ -523,15 +559,15 @@ export default async function BrandPage() {
             color: "rgba(255,255,255,0.5)",
           }}
         >
-          <span>© 2026 Glev. Brand Guidelines v1.</span>
+          <span>{t("brand_footer_copyright")}</span>
           <span>
-            Letzte Aktualisierung: April 2026 ·{" "}
+            {t("brand_footer_updated")} ·{" "}
             <a
               href="/icon.svg"
               download="glev-icon.svg"
               style={{ color: "#6B8BFF", textDecoration: "none" }}
             >
-              Symbol herunterladen
+              {t("brand_footer_download")}
             </a>
           </span>
         </div>
@@ -754,7 +790,19 @@ function ScaleRow({
   );
 }
 
-function VoiceCard({ kind, text }: { kind: "do" | "dont"; text: string }) {
+function VoiceCard({
+  kind,
+  label,
+  text,
+  quoteOpen,
+  quoteClose,
+}: {
+  kind: "do" | "dont";
+  label: string;
+  text: string;
+  quoteOpen: string;
+  quoteClose: string;
+}) {
   const isDo = kind === "do";
   const accent = isDo ? "#22D3A0" : "#FF2D78";
   return (
@@ -781,7 +829,7 @@ function VoiceCard({ kind, text }: { kind: "do" | "dont"; text: string }) {
             "var(--font-mono)",
         }}
       >
-        {isDo ? "Do" : "Don't"}
+        {label}
       </div>
       <div
         style={{
@@ -790,7 +838,7 @@ function VoiceCard({ kind, text }: { kind: "do" | "dont"; text: string }) {
           lineHeight: 1.5,
         }}
       >
-        „{text}"
+        {quoteOpen}{text}{quoteClose}
       </div>
     </div>
   );

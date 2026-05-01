@@ -1,5 +1,6 @@
 "use client";
 import React, { useState } from "react";
+import { useTranslations } from "next-intl";
 import GlevLogo from "@/components/GlevLogo";
 
 const COLOR_PRESETS = [
@@ -22,6 +23,7 @@ const BG_PRESETS = [
 ];
 
 export default function LogoPlayground() {
+  const t = useTranslations("marketing");
   const [size, setSize] = useState(160);
   const [color, setColor] = useState("#4F6EF7");
   const [bg, setBg] = useState("#0F0F14");
@@ -57,7 +59,7 @@ export default function LogoPlayground() {
       </div>
 
       <div style={{ display: "grid", gap: 18 }}>
-        <Control label={`Größe — ${size}px`}>
+        <Control label={t("brand_playground_size_label", { size })}>
           <input
             type="range"
             min={32}
@@ -69,7 +71,7 @@ export default function LogoPlayground() {
           />
         </Control>
 
-        <Control label="Vordergrund">
+        <Control label={t("brand_playground_foreground_label")}>
           <Swatches
             values={COLOR_PRESETS}
             current={color}
@@ -84,7 +86,7 @@ export default function LogoPlayground() {
           />
         </Control>
 
-        <Control label="Hintergrund">
+        <Control label={t("brand_playground_background_label")}>
           <Swatches
             values={BG_PRESETS}
             current={bg}

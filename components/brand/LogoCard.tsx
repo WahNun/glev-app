@@ -1,5 +1,6 @@
 "use client";
 import React from "react";
+import { useTranslations } from "next-intl";
 import GlevLogo from "@/components/GlevLogo";
 
 export default function LogoCard({
@@ -19,6 +20,7 @@ export default function LogoCard({
   downloadHref?: string;
   downloadName?: string;
 }) {
+  const t = useTranslations("marketing");
   return (
     <div
       style={{
@@ -73,7 +75,7 @@ export default function LogoCard({
           textDecoration: "none",
         }}
       >
-        Download SVG
+        {t("brand_logo_download_svg")}
       </a>
     </div>
   );
