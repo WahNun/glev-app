@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { isAdminAuthed, loginAction, logoutAction } from "./actions";
+import BuyersTables, { type BetaRow, type ProRow } from "./BuyersTables";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,48 +20,16 @@ export const dynamic = "force-dynamic";
  * to `/admin`. No Supabase user session involved on purpose: this view uses
  * the service role to read both tables (RLS is intentionally disabled on
  * them) so we cannot piggy-back on the user-facing auth.
+ *
+ * Search (task #151): the most-recent-200 rows from each table are fetched
+ * server-side; the search input itself lives in `BuyersTables` (a client
+ * component) and filters in-memory by case-insensitive substring against
+ * `email` OR `full_name`. The section heading counts reflect the filtered
+ * result. We intentionally keep the fetch capped — search is meant to
+ * narrow down the recent window, not act as a full-table search.
  */
 
-type Beta = {
-  id: string;
-  email: string;
-  full_name: string | null;
-  status: string | null;
-  amount_cents: number | null;
-  currency: string | null;
-  created_at: string | null;
-  fulfilled_at: string | null;
-};
-
-type Pro = {
-  id: string;
-  email: string;
-  full_name: string | null;
-  status: string | null;
-  trial_ends_at: string | null;
-  current_period_end: string | null;
-  created_at: string | null;
-};
-
 const PAGE_LIMIT = 200;
-
-function fmtName(n: string | null | undefined): string {
-  const s = (n ?? "").trim();
-  return s.length > 0 ? s : "—";
-}
-
-function fmtDate(v: string | null | undefined): string {
-  if (!v) return "—";
-  const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toISOString().slice(0, 16).replace("T", " ");
-}
-
-function fmtAmount(cents: number | null | undefined, ccy: string | null | undefined): string {
-  if (cents == null) return "—";
-  const c = (ccy ?? "eur").toUpperCase();
-  return `${(cents / 100).toFixed(2)} ${c}`;
-}
 
 export default async function AdminBuyersPage({
   searchParams,
@@ -120,8 +89,8 @@ export default async function AdminBuyersPage({
 
   const betaErr = betaRes.error?.message ?? null;
   const proErr = proRes.error?.message ?? null;
-  const beta = (betaRes.data ?? []) as Beta[];
-  const pro = (proRes.data ?? []) as Pro[];
+  const beta = (betaRes.data ?? []) as BetaRow[];
+  const pro = (proRes.data ?? []) as ProRow[];
 
   return (
     <main style={pageStyle}>
@@ -134,89 +103,16 @@ export default async function AdminBuyersPage({
         </form>
       </header>
 
-      <section style={{ marginBottom: 32 }}>
-        <h2 style={h2Style}>
-          Beta-Reservierungen{" "}
-          <span style={countStyle}>({beta.length}{beta.length === PAGE_LIMIT ? `+ neueste ${PAGE_LIMIT}` : ""})</span>
-        </h2>
-        {betaErr ? <p style={errStyle}>DB-Fehler: {betaErr}</p> : null}
-        <div style={tableWrapStyle}>
-          <table style={tableStyle}>
-            <thead>
-              <tr>
-                <th style={thStyle}>Name</th>
-                <th style={thStyle}>Email</th>
-                <th style={thStyle}>Status</th>
-                <th style={thStyle}>Betrag</th>
-                <th style={thStyle}>Erstellt</th>
-                <th style={thStyle}>Fulfilled</th>
-              </tr>
-            </thead>
-            <tbody>
-              {beta.length === 0 ? (
-                <tr>
-                  <td colSpan={6} style={{ ...tdStyle, textAlign: "center", color: "#888" }}>
-                    Keine Reservierungen.
-                  </td>
-                </tr>
-              ) : (
-                beta.map((r) => (
-                  <tr key={r.id}>
-                    <td style={tdStyle}>{fmtName(r.full_name)}</td>
-                    <td style={tdStyle}>{r.email}</td>
-                    <td style={tdStyle}>{r.status ?? "—"}</td>
-                    <td style={tdStyle}>{fmtAmount(r.amount_cents, r.currency)}</td>
-                    <td style={tdStyle}>{fmtDate(r.created_at)}</td>
-                    <td style={tdStyle}>{fmtDate(r.fulfilled_at)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      {betaErr ? <p style={errStyle}>Beta DB-Fehler: {betaErr}</p> : null}
+      {proErr ? <p style={errStyle}>Pro DB-Fehler: {proErr}</p> : null}
 
-      <section>
-        <h2 style={h2Style}>
-          Pro-Abos{" "}
-          <span style={countStyle}>({pro.length}{pro.length === PAGE_LIMIT ? `+ neueste ${PAGE_LIMIT}` : ""})</span>
-        </h2>
-        {proErr ? <p style={errStyle}>DB-Fehler: {proErr}</p> : null}
-        <div style={tableWrapStyle}>
-          <table style={tableStyle}>
-            <thead>
-              <tr>
-                <th style={thStyle}>Name</th>
-                <th style={thStyle}>Email</th>
-                <th style={thStyle}>Status</th>
-                <th style={thStyle}>Trial endet</th>
-                <th style={thStyle}>Period endet</th>
-                <th style={thStyle}>Erstellt</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pro.length === 0 ? (
-                <tr>
-                  <td colSpan={6} style={{ ...tdStyle, textAlign: "center", color: "#888" }}>
-                    Keine Pro-Abos.
-                  </td>
-                </tr>
-              ) : (
-                pro.map((r) => (
-                  <tr key={r.id}>
-                    <td style={tdStyle}>{fmtName(r.full_name)}</td>
-                    <td style={tdStyle}>{r.email}</td>
-                    <td style={tdStyle}>{r.status ?? "—"}</td>
-                    <td style={tdStyle}>{fmtDate(r.trial_ends_at)}</td>
-                    <td style={tdStyle}>{fmtDate(r.current_period_end)}</td>
-                    <td style={tdStyle}>{fmtDate(r.created_at)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <BuyersTables
+        beta={beta}
+        pro={pro}
+        pageLimit={PAGE_LIMIT}
+        betaTruncated={beta.length === PAGE_LIMIT}
+        proTruncated={pro.length === PAGE_LIMIT}
+      />
     </main>
   );
 }
@@ -229,44 +125,6 @@ const pageStyle: React.CSSProperties = {
   color: "#111",
   background: "#fff",
   minHeight: "100vh",
-};
-
-const h2Style: React.CSSProperties = {
-  fontSize: 16,
-  margin: "0 0 8px",
-};
-
-const countStyle: React.CSSProperties = {
-  fontWeight: 400,
-  color: "#666",
-  fontSize: 13,
-};
-
-const tableWrapStyle: React.CSSProperties = {
-  overflowX: "auto",
-  border: "1px solid #e5e5e5",
-  borderRadius: 6,
-};
-
-const tableStyle: React.CSSProperties = {
-  width: "100%",
-  borderCollapse: "collapse",
-  fontSize: 13,
-};
-
-const thStyle: React.CSSProperties = {
-  textAlign: "left",
-  padding: "8px 10px",
-  background: "#f7f7f7",
-  borderBottom: "1px solid #e5e5e5",
-  fontWeight: 600,
-  whiteSpace: "nowrap",
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: "8px 10px",
-  borderBottom: "1px solid #f0f0f0",
-  whiteSpace: "nowrap",
 };
 
 const inputStyle: React.CSSProperties = {
