@@ -8,6 +8,7 @@ import { stripe } from '@/lib/stripe';
 import { extractFullNameFromSession } from '@/lib/stripeCheckout';
 import { createClient } from '@supabase/supabase-js';
 import { enqueueEmail } from '@/lib/emails/outbox';
+import { scheduleDripEmails } from '@/lib/emails/drip-scheduler';
 
 // Lazy admin client — constructing it at module load is fine (no
 // network), but the env vars may be missing in certain build contexts.
@@ -112,6 +113,14 @@ export async function POST(req: NextRequest) {
         outboxId,
         deduplicated,
       });
+
+      // Drip-Sequenz Tag 7/14/30 einplanen (Task #160). Direkt nach
+      // dem erfolgreichen Welcome-Enqueue, damit ein fehlgeschlagener
+      // Welcome-Enqueue (oben → 500 + Stripe-Retry) keine Drip-Termine
+      // ohne zugehörige Welcome-Mail hinterlässt. scheduleDripEmails
+      // wirft nicht — bei DB-Fehlern wird nur geloggt, der Stripe-
+      // Retry-Pfad bleibt unverändert.
+      await scheduleDripEmails(email, name, 'beta');
     } catch (err) {
       // Surface the failure to Stripe with a 500 so it retries the
       // delivery (Stripe retries up to 3 days at increasing intervals).

@@ -4,6 +4,7 @@ import { getStripe } from "@/lib/stripeServer";
 import { extractFullNameFromSession } from "@/lib/stripeCheckout";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { enqueueEmail } from "@/lib/emails/outbox";
+import { scheduleDripEmails } from "@/lib/emails/drip-scheduler";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -229,6 +230,14 @@ export async function POST(req: NextRequest) {
               outboxId,
               deduplicated,
             });
+
+            // Drip-Sequenz Tag 7/14/30 einplanen (Task #160). Nur nach
+            // erfolgreichem Welcome-Enqueue, damit ein Stripe-Retry
+            // (durch das 500 unten ausgelöst) nicht Drip-Termine ohne
+            // zugehörige Welcome-Mail hinterlässt. scheduleDripEmails
+            // wirft nicht — DB-Fehler werden geloggt, der Stripe-Retry-
+            // Pfad bleibt unverändert.
+            await scheduleDripEmails(email, name, "pro");
           } catch (err) {
             // eslint-disable-next-line no-console
             console.error("[pro/webhook] Outbox enqueue failed — asking Stripe to retry:", {
