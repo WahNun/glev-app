@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import type Stripe from 'stripe';
 import { stripe } from '@/lib/stripe';
+import { extractFullNameFromSession } from '@/lib/stripeCheckout';
 import { createClient } from '@supabase/supabase-js';
 import { enqueueEmail } from '@/lib/emails/outbox';
 
@@ -57,7 +58,13 @@ export async function POST(req: NextRequest) {
     const session = event.data.object as Stripe.Checkout.Session;
 
     const email = session.customer_email ?? session.customer_details?.email;
-    const name = session.customer_details?.name ?? null;
+    // Prefer the value collected via the mandatory `full_name` custom field
+    // (task #68) — it's the one the buyer typed themselves on the Checkout
+    // page. Fall back to Stripe's auto-collected billing-details name only
+    // when the custom field is missing (e.g. older sessions, or the field
+    // was somehow stripped).
+    const fullName = extractFullNameFromSession(session);
+    const name = fullName ?? session.customer_details?.name ?? null;
     const sessionId = session.id;
     const customerId =
       typeof session.customer === 'string' ? session.customer : session.customer?.id ?? null;
@@ -180,13 +187,19 @@ export async function POST(req: NextRequest) {
       // fallback by email für den Fall dass die session_id nicht persistiert
       // werden konnte.
       const nowIso = new Date().toISOString();
+      // Only stamp full_name when we actually got one — never overwrite a
+      // previously stored name with NULL if Stripe somehow omits the field
+      // on a retry.
+      const betaUpdate: Record<string, unknown> = {
+        status: 'paid',
+        fulfilled_at: nowIso,
+        stripe_customer_id: customerId,
+      };
+      if (fullName) betaUpdate.full_name = fullName;
+
       const { data: bySession, error: sessionUpdErr } = await supabaseAdmin
         .from('beta_reservations')
-        .update({
-          status: 'paid',
-          fulfilled_at: nowIso,
-          stripe_customer_id: customerId,
-        })
+        .update(betaUpdate)
         .eq('stripe_session_id', sessionId)
         .eq('status', 'pending')
         .select('id, email');
@@ -207,14 +220,17 @@ export async function POST(req: NextRequest) {
         });
       } else {
         // No pending row matched the session_id — try email as fallback.
+        const betaUpdateByEmail: Record<string, unknown> = {
+          status: 'paid',
+          fulfilled_at: nowIso,
+          stripe_session_id: sessionId,
+          stripe_customer_id: customerId,
+        };
+        if (fullName) betaUpdateByEmail.full_name = fullName;
+
         const { data: byEmail, error: emailUpdErr } = await supabaseAdmin
           .from('beta_reservations')
-          .update({
-            status: 'paid',
-            fulfilled_at: nowIso,
-            stripe_session_id: sessionId,
-            stripe_customer_id: customerId,
-          })
+          .update(betaUpdateByEmail)
           .eq('email', email.toLowerCase())
           .eq('status', 'pending')
           .select('id');

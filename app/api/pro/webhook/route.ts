@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { Resend } from "resend";
 import { getStripe } from "@/lib/stripeServer";
+import { extractFullNameFromSession } from "@/lib/stripeCheckout";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { proWelcomeHtml } from "@/lib/emails/pro-welcome";
 
@@ -99,6 +100,11 @@ export async function POST(req: NextRequest) {
           session.customer_details?.email?.toLowerCase() ??
           session.customer_email?.toLowerCase() ??
           null;
+        // Pull the buyer's name from the mandatory `full_name` Checkout
+        // custom field (task #68). Persist it on the row so support tooling
+        // and future personalised mails can address the buyer by name
+        // without re-querying Stripe.
+        const fullName = extractFullNameFromSession(session);
         const rowIdFromMeta =
           typeof session.metadata?.subscription_row_id === "string"
             ? session.metadata.subscription_row_id
@@ -129,6 +135,9 @@ export async function POST(req: NextRequest) {
           trial_ends_at: trialEndsAt,
           current_period_end: currentPeriodEnd,
         };
+        // Only stamp full_name when we actually got one — never blank out a
+        // previously stored name on a Stripe retry that omits the field.
+        if (fullName) update.full_name = fullName;
 
         // Three-layer row resolution, most-reliable first:
         //   1. metadata.subscription_row_id — set by /api/pro/checkout, immune
@@ -194,7 +203,10 @@ export async function POST(req: NextRequest) {
         // still ack 200 so Stripe doesn't retry the webhook (the DB write
         // already succeeded above and that's the load-bearing part).
         if (email) {
-          const name = session.customer_details?.name ?? null;
+          // Prefer the explicit `full_name` custom field over Stripe's
+          // auto-collected billing-details name — same precedence as the
+          // beta webhook so both flows greet the buyer identically.
+          const name = fullName ?? session.customer_details?.name ?? null;
           const appUrl = resolveAppUrl(req);
           try {
             const resend = getResend();
