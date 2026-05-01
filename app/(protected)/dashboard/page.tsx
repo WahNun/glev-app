@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { fetchMeals, computeCalories, unifiedOutcome, type Meal } from "@/lib/meals";
 import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
+import { evaluateExercise } from "@/lib/exerciseEval";
 import { fetchMacroTargets, DEFAULT_MACRO_TARGETS, type MacroTargets } from "@/lib/userSettings";
 import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, getEvalExplain } from "@/lib/mealTypes";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
@@ -643,7 +644,8 @@ function UnifiedRecentRow({ row, locale, onClick }: { row: RecentRow; locale: st
     const x = row.exercise!;
     title = x.exercise_type === "cardio" ? t("ex_cardio") : t("ex_strength");
     subtitle = `${timeStr} · ${x.duration_minutes}m`;
-    rightSlot = <RecentChip text={`${x.duration_minutes}m`} color={accent.color} mono />;
+    const evalInfo = evaluateExercise(x);
+    rightSlot = <RecentChip text={evalInfo.label} color={evalInfo.color} />;
   } else {
     const i = row.insulin!;
     title = i.insulin_name || (row.kind === "bolus" ? t("ins_bolus") : t("ins_basal"));
