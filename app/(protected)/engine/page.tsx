@@ -1472,146 +1472,65 @@ export default function EnginePage() {
           <style>{`
             @keyframes engVPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.06)} }
             @keyframes engSpin   { to { transform: rotate(360deg) } }
+            /* Wizard step pills — base size for mobile, larger on desktop.
+               Sizing lives in CSS (not the inline style object) so we can
+               respond to viewport without an isMobile state hook. The 768px
+               threshold matches Layout.tsx's sidebar breakpoint (which uses
+               max-width:768px for the mobile rail). The "min-width:769px"
+               desktop query is the strict complement of Layout's
+               "max-width:768px" rule (no gap, no overlap at the 768/769
+               boundary). Values (12px / 14px font, 8px-22px horizontal
+               padding) are inherited from the previous /log wizard's
+               .wizard-pill CSS — /log itself is now a redirect to /engine,
+               so this is the canonical home of the pattern going forward. */
+            .wizard-pill { font-size: 12px; padding: 8px 12px; }
+            @media (min-width: 769px) {
+              .wizard-pill { font-size: 14px; padding: 10px 22px; }
+            }
           `}</style>
 
-          {/* STEP INDICATOR — three dots + connectors at top, labels below.
-              Active dot = ACCENT (#4F6EF7), past dots filled too, future dots
-              #2A2A36 muted. Connector line between dots fills as user advances.
-              Arrow buttons LEFT and RIGHT of the dots row let the user move
-              between steps manually — appear from Step 2 onwards (i.e. once
-              the AI macro auto-advance has fired) so Step 1 stays a clean
-              "speak / chat" surface with no extra controls. Both arrows are
-              always rendered (visibility:hidden when not applicable) so the
-              dots never shift horizontally when the buttons appear / hide. */}
-          <div style={{ marginBottom: 28 }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 12,
-              }}
-            >
-              {(() => {
-                const showNav = stepIndex >= 1;
-                const canBack = stepIndex > 0;
-                const canFwd = stepIndex < 2;
-                const navBtn = (dir: "back" | "fwd") => {
-                  const active =
-                    showNav && (dir === "back" ? canBack : canFwd);
-                  return (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setStepIndex((prev) => {
-                          if (dir === "back" && prev > 0)
-                            return (prev - 1) as 0 | 1 | 2;
-                          if (dir === "fwd" && prev < 2)
-                            return (prev + 1) as 0 | 1 | 2;
-                          return prev;
-                        })
-                      }
-                      disabled={!active}
-                      aria-label={
-                        dir === "back"
-                          ? tEngine("wizard_step_prev_aria")
-                          : tEngine("wizard_step_next_aria")
-                      }
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 18,
-                        background: "transparent",
-                        border: `1px solid ${
-                          active ? "var(--text-ghost)" : "var(--border-soft)"
-                        }`,
-                        color: active
-                          ? "var(--text-body)"
-                          : "var(--text-ghost)",
-                        cursor: active ? "pointer" : "default",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        visibility: showNav ? "visible" : "hidden",
-                        transition:
-                          "color 0.15s, border-color 0.15s, background 0.15s",
-                        WebkitTapHighlightColor: "transparent",
-                        flexShrink: 0,
-                        padding: 0,
-                      }}
-                    >
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
-                      >
-                        {dir === "back" ? (
-                          <polyline points="15 18 9 12 15 6" />
-                        ) : (
-                          <polyline points="9 18 15 12 9 6" />
-                        )}
-                      </svg>
-                    </button>
-                  );
-                };
-                return (
-                  <>
-                    {navBtn("back")}
-                    <div
-                      style={{ display: "flex", alignItems: "center", gap: 10 }}
-                      role="list"
-                      aria-label={tEngine("wizard_steps_aria")}
-                    >
-                      {[0, 1, 2].map((i) => (
-                        <div
-                          key={i}
-                          style={{ display: "flex", alignItems: "center", gap: 10 }}
-                          role="listitem"
-                        >
-                          <div
-                            aria-current={i === stepIndex ? "step" : undefined}
-                            aria-label={tEngine("wizard_step_index_aria", { index: i + 1, total: 3 })}
-                            style={{
-                              width: 32, height: 32, borderRadius: 16,
-                              background: i <= stepIndex ? ACCENT : "#2A2A36",
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                              fontSize: 13, fontWeight: 700,
-                              color: i <= stepIndex ? "#fff" : "var(--text-dim)",
-                              transition: "background 0.2s, color 0.2s",
-                            }}
-                          >
-                            {i + 1}
-                          </div>
-                          {i < 2 && (
-                            <div style={{
-                              width: 56, height: 2,
-                              background: i < stepIndex ? ACCENT : "#2A2A36",
-                              transition: "background 0.2s",
-                            }}/>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    {navBtn("fwd")}
-                  </>
-                );
-              })()}
-            </div>
-            <div style={{
-              display: "grid", gridTemplateColumns: "1fr 1fr 1fr",
-              marginTop: 10, fontSize: 12, fontWeight: 600,
-              textAlign: "center", letterSpacing: "-0.01em",
-            }}>
-              <span style={{ color: stepIndex === 0 ? ACCENT : "var(--text-dim)" }}>{tEngine("step_label_food")}</span>
-              <span style={{ color: stepIndex === 1 ? ACCENT : "var(--text-dim)" }}>{tEngine("step_label_macros")}</span>
-              <span style={{ color: stepIndex === 2 ? ACCENT : "var(--text-dim)" }}>{tEngine("step_label_result")}</span>
-            </div>
+          {/* PILL TABS — display-only step indicator. They surface
+              progress through the wizard; navigation happens exclusively
+              via the per-step Weiter/Zurück buttons rendered inside each
+              step body below. Active pill: filled with ACCENT. Inactive:
+              transparent background with a translucent ACCENT55 border and
+              ACCENTcc text (alpha-tinted on purpose so the inactive state
+              recedes visually from the active fill). Replaces the previous
+              numbered-circles + connector + label-row indicator. Pattern
+              and styling were lifted from the historical /log wizard
+              (commit 5fc7970, before /log became a redirect) so /engine
+              now owns the canonical pill-tab vocabulary. Uses role="list"
+              / role="listitem" + aria-current="step" rather than
+              tab/tablist because the pills are intentionally not keyboard-
+              interactive — list semantics are honest about that. */}
+          <div role="list" aria-label={tEngine("wizard_steps")} style={{
+            display: "flex", gap: 8, padding: "4px 0", marginBottom: 28,
+          }}>
+            {(["step_label_food", "step_label_macros", "step_label_result"] as const).map((key, i) => {
+              const active = i === stepIndex;
+              return (
+                <div
+                  key={key}
+                  role="listitem"
+                  aria-current={active ? "step" : undefined}
+                  className="wizard-pill"
+                  style={{
+                    flex: "1 1 0",
+                    borderRadius: 99,
+                    border: `1px solid ${active ? ACCENT : `${ACCENT}55`}`,
+                    background: active ? ACCENT : "transparent",
+                    color: active ? "#fff" : `${ACCENT}cc`,
+                    fontWeight: 700,
+                    letterSpacing: "0.04em",
+                    textAlign: "center",
+                    userSelect: "none",
+                  }}
+                >
+                  <span style={{ opacity: 0.7, marginRight: 6 }}>{i + 1}</span>
+                  {tEngine(key)}
+                </div>
+              );
+            })}
           </div>
 
           {/* Page-level success toast (post-save) and error banner. Rendered

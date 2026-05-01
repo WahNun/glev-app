@@ -268,6 +268,7 @@
     "step_label_food": "Food",
     "step_label_macros": "Macros",
     "step_label_result": "Result",
+    "wizard_steps": "Wizard steps",
     "step_title_macros": "Review macros",
     "step_title_result": "Your estimate",
     "no_estimate_body": "No estimate available. Please go back to step 2 and recalculate.",
