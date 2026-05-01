@@ -185,17 +185,28 @@ test.describe("mealsToCSV — carb-unit-aware header and values", () => {
 });
 
 /* ──────────────────────────────────────────────────────────────────
-   PDF cover — Kohlenhydrat-Einheit meta entry
+   PDF cover — Kohlenhydrat-Einheit chip next to the Insights heading
    ──────────────────────────────────────────────────────────────────
    We invoke `GlevReport` as a plain function call (it's a React
    function component) and walk the returned React element tree to
-   find the meta block's "Kohlenhydrat-Einheit" label and its
-   adjacent value. We deliberately do NOT render to PDF bytes:
+   find the chip that sits in the Insights header row. We deliberately
+   do NOT render to PDF bytes:
      * pdf().toBuffer() pulls in font + canvas paths that crash in a
        headless Node test runner.
      * The text we care about lives in plain `<Text>` primitives at
        known positions in the tree, so a JSX walk gives us the same
        guarantee with none of the runtime cost.
+
+   Why the structure is now a chip (not a meta row):
+     The "Kohlenhydrat-Einheit" entry used to be a separate
+     label/value pair in the cover meta block, which pushed the KPI
+     grid down so far that the last KPI cards spilled onto page 2.
+     The unit info now lives as a small chip on the same line as the
+     "Insights — Übersicht" heading, so the meta block stays compact
+     and every KPI card fits on page 1. The contract this spec pins
+     therefore changed: instead of a 2-leaf meta tile the cover now
+     carries a single Text leaf "KH-Einheit: <unit>" alongside the
+     heading.
    ────────────────────────────────────────────────────────────────── */
 
 /**
@@ -252,6 +263,18 @@ function hasTightLabelValuePair(
   return false;
 }
 
+/**
+ * Return true if some Text leaf in the tree reads exactly
+ * "KH-Einheit: <unit>". The chip is rendered as a single Text node
+ * with a template-literal child, so the chip text collects to a
+ * single leaf — checking for that exact leaf (rather than e.g. a
+ * substring search) rejects accidental matches if the same token
+ * appeared in a longer paragraph elsewhere on the page.
+ */
+function hasCarbUnitChip(node: ReactNode, unit: string): boolean {
+  return collectStrings(node).includes(`KH-Einheit: ${unit}`);
+}
+
 test.describe("GlevReport — PDF cover advertises the chosen carb unit", () => {
   const baseProps = {
     email: "patient@example.com",
@@ -266,29 +289,33 @@ test.describe("GlevReport — PDF cover advertises the chosen carb unit", () => 
     { unit: "BE" as const, expectedLabel: "BE" },
     { unit: "KE" as const, expectedLabel: "KE" },
   ]) {
-    test(`includes "Kohlenhydrat-Einheit: ${expectedLabel}" on the cover`, () => {
+    test(`shows a "KH-Einheit: ${expectedLabel}" chip on the cover`, () => {
       // Call the component as a function — returns the React-PDF
       // <Document>...<Page>...</Page></Document> tree.
       const tree = GlevReport({ ...baseProps, carbUnit: unit }) as ReactElement;
 
-      // Tight adjacency check: the meta value must sit alongside the
-      // "Kohlenhydrat-Einheit" label inside the same metaItem View
-      // (a 2-leaf container). This rejects the false-positive case
-      // where the unit token happens to appear elsewhere on the
-      // cover (e.g. inside a "KH (BE)" table header) while the meta
-      // value silently regressed to the wrong unit.
-      expect(
-        hasTightLabelValuePair(tree, "Kohlenhydrat-Einheit", expectedLabel),
-      ).toBe(true);
+      // The chip lives as a single Text leaf "KH-Einheit: <unit>" in
+      // the Insights heading row. Asserting the exact joined leaf
+      // rejects the false-positive case where the unit token happens
+      // to appear elsewhere on the cover (e.g. inside a "KH (BE)"
+      // table header) while the chip silently regressed to the wrong
+      // unit — only an exact "KH-Einheit: <unit>" match counts.
+      expect(hasCarbUnitChip(tree, expectedLabel)).toBe(true);
+
+      // Belt-and-suspenders: the legacy meta-row label must NOT come
+      // back. If a future refactor accidentally restored the meta
+      // tile, the cover would carry the unit info twice and push the
+      // KPIs off page 1 again.
+      expect(collectStrings(tree)).not.toContain("Kohlenhydrat-Einheit");
     });
   }
 
   test("defaults to grams when no carbUnit prop is passed", () => {
     // Backward compatibility: legacy callers haven't been threaded
     // with the user preference yet. The `?? "g"` default in
-    // GlevReport's destructuring must keep them on the gram label.
+    // GlevReport's destructuring must keep them on the gram chip.
     const tree = GlevReport(baseProps) as ReactElement;
-    expect(hasTightLabelValuePair(tree, "Kohlenhydrat-Einheit", "g")).toBe(true);
+    expect(hasCarbUnitChip(tree, "g")).toBe(true);
   });
 });
 

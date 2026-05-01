@@ -594,9 +594,13 @@ test.describe("GlevReport cover — ICR and Korrekturfaktor are independent", ()
     expect(treeContainsLabel(tree, "ICR (aktuell)")).toBe(false);
     expect(treeContainsLabel(tree, "Korrekturfaktor")).toBe(false);
     // Sanity: the always-on meta labels still render so we know the
-    // tree wasn't somehow stripped by an upstream change.
+    // tree wasn't somehow stripped by an upstream change. (The carb-
+    // unit confirmation moved out of the meta block into a chip
+    // next to the Insights heading — see Task #165 — so we can no
+    // longer use "Kohlenhydrat-Einheit" as the always-on canary;
+    // "Erstellt am" is the next always-on meta item.)
     expect(treeContainsLabel(tree, "Patient")).toBe(true);
-    expect(treeContainsLabel(tree, "Kohlenhydrat-Einheit")).toBe(true);
+    expect(treeContainsLabel(tree, "Erstellt am")).toBe(true);
   });
 });
 

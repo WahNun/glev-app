@@ -206,6 +206,31 @@ const styles = StyleSheet.create({
     color: MUTED,
     marginBottom: 12,
   },
+  // Insights heading row — places the section heading on the left and
+  // the carb-unit chip on the right in the same baseline so the cover
+  // stays compact (the unit info no longer needs its own meta row).
+  insightsHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
+  // Small "KH-Einheit: g" / "BE" / "KE" chip rendered next to the
+  // Insights heading. Light pill background + thin border keeps it
+  // visually consistent with the muted KPI/table chrome elsewhere on
+  // the cover.
+  carbUnitChip: {
+    fontSize: 8,
+    fontFamily: "Helvetica-Bold",
+    color: MUTED,
+    backgroundColor: "#F5F5F8",
+    borderWidth: 1,
+    borderColor: LINE,
+    borderRadius: 10,
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    letterSpacing: 0.4,
+  },
   // KPI cards row
   kpiRow: {
     flexDirection: "row",
@@ -801,14 +826,11 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks, carb
             <Text style={styles.metaLabel}>Erstellt am</Text>
             <Text style={styles.metaValue}>{generatedAt}</Text>
           </View>
-          {/* Unit confirmation — small note so the receiving clinician
-              knows whether KH columns are grams, BE (12g), or KE (10g).
-              Sits in the meta block (not as a separate banner) so the
-              cover stays compact and the existing layout is preserved. */}
-          <View style={styles.metaItem}>
-            <Text style={styles.metaLabel}>Kohlenhydrat-Einheit</Text>
-            <Text style={styles.metaValue}>{carbLabel}</Text>
-          </View>
+          {/* The carb-unit confirmation that previously sat as its own
+              meta row has moved next to the "Insights — Übersicht"
+              heading (see the chip in the insightsHeaderRow below).
+              Pulling it out of the meta block keeps the cover compact
+              so all KPI cards fit on page 1. */}
           {/* ICR snapshot in the user's chosen unit (e.g. "2 BE/IE").
               DACH clinics often want to read the dosed insulin against
               the ratio it was calibrated for. Hidden when the user
@@ -840,7 +862,17 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks, carb
             cover; the same numbers still appear in the per-section
             detail tables on subsequent pages. ───────────────────── */}
         <View style={{ marginTop: 24 }}>
-          <Text style={styles.sectionHeading}>Insights — Übersicht</Text>
+          {/* Heading + carb-unit chip share one row: the heading sits
+              left, the chip ("KH-Einheit: g" / "BE" / "KE") sits
+              right-aligned so the receiving clinician immediately sees
+              which unit the KH columns are reported in — without
+              spending a full meta-block row on it. The subtitle stays
+              its own line below so the overall heading hierarchy is
+              unchanged. */}
+          <View style={styles.insightsHeaderRow}>
+            <Text style={[styles.sectionHeading, { marginBottom: 0 }]}>Insights — Übersicht</Text>
+            <Text style={styles.carbUnitChip}>{`KH-Einheit: ${carbLabel}`}</Text>
+          </View>
           <Text style={styles.sectionSub}>
             Die zentralen Therapie-Kennzahlen aus deiner Glev-App, mit kurzer Erläuterung für Arzt oder Diabetes-Team.
           </Text>
