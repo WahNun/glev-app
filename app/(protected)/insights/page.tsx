@@ -180,7 +180,7 @@ export default function InsightsPage() {
     <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"60vh", gap:12, color:"var(--text-faint)" }}>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
       <div style={{ width:20, height:20, border:`2px solid ${ACCENT}`, borderTopColor:"transparent", borderRadius:99, animation:"spin 0.8s linear infinite" }}/>
-      Loading insights…
+      {tInsights("loading_insights")}
     </div>
   );
 
@@ -188,7 +188,7 @@ export default function InsightsPage() {
   if (total === 0) return (
     <div style={{ maxWidth:480, margin:"0 auto" }}>
       <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:8 }}>Insights</h1>
-      <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, padding:"48px", textAlign:"center", color:"var(--text-ghost)", fontSize:14 }}>Log at least 5 meals to see insights.</div>
+      <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, padding:"48px", textAlign:"center", color:"var(--text-ghost)", fontSize:14 }}>{tInsights("empty_state_min_meals")}</div>
     </div>
   );
 
@@ -345,27 +345,35 @@ export default function InsightsPage() {
     cur.deltaSum += Number(after) - Number(before);
     typeAgg.set(k, cur);
   }
-  const EX_TYPE_LABEL_DE: Record<ExerciseType, string> = {
-    run: "Laufen", cycling: "Radfahren", cardio: "Cardio",
-    hiit: "HIIT", strength: "Krafttraining", hypertrophy: "Krafttraining", yoga: "Yoga",
+  // Localized exercise-type label. Hypertrophy is normalized to strength
+  // upstream, so we reuse the strength translation here as well.
+  const exTypeLabel = (k: ExerciseType): string => {
+    const norm = k === "hypertrophy" ? "strength" : k;
+    return tInsights(`exercise_type_${norm}`);
   };
   const bgResponseRows = Array.from(typeAgg.entries())
     .filter(([, s]) => s.count >= MIN_DATAPOINTS)
-    .map(([k, s]) => ({ type: k, label: EX_TYPE_LABEL_DE[k] ?? k, count: s.count, avgDelta: Math.round(s.deltaSum / s.count) }))
+    .map(([k, s]) => ({ type: k, label: exTypeLabel(k), count: s.count, avgDelta: Math.round(s.deltaSum / s.count) }))
     .sort((a, b) => b.count - a.count);
   const bgResponseEnough = bgResponseRows.length > 0;
 
   // Auto-detected workout patterns. Spec: max 3, hide section if < 2.
-  type WorkoutPattern = { title: string; desc: string; color: string; icon: string };
-  const OUTCOME_LABEL_DE: Record<ExerciseOutcome, string> = {
-    STABLE: "stabilem BG", DROPPED: "starkem BG-Abfall",
-    SPIKED: "BG-Anstiegen", HYPO_RISK: "Hypo-Risiko", PENDING: "—",
-  };
-  const OUTCOME_COLOR_DE: Record<ExerciseOutcome, string> = {
+  // `count` is carried separately so sorting doesn't depend on parsing
+  // a localized desc string.
+  type WorkoutPattern = { title: string; desc: string; color: string; icon: string; count: number };
+  const OUTCOME_COLOR: Record<ExerciseOutcome, string> = {
     STABLE: GREEN, DROPPED: HIGH_YELLOW, SPIKED: ORANGE, HYPO_RISK: PINK, PENDING: "var(--text-dim)",
   };
-  const OUTCOME_ICON_DE: Record<ExerciseOutcome, string> = {
+  const OUTCOME_ICON: Record<ExerciseOutcome, string> = {
     STABLE: "✓", DROPPED: "↓", SPIKED: "↑", HYPO_RISK: "⚠", PENDING: "•",
+  };
+  // Localized outcome adjective for the pattern desc template
+  // ("führt häufig zu …" / "often leads to …"). PENDING never reaches
+  // here (filtered above), but we keep a non-empty fallback for safety.
+  const outcomeLabel = (o: ExerciseOutcome): string => {
+    if (o === "PENDING") return "—";
+    const key = o.toLowerCase(); // STABLE → stable, HYPO_RISK → hypo_risk
+    return tInsights(`workout_outcome_${key}`);
   };
   function detectGroup<K extends string>(
     keyFn: (ex: ExerciseLog) => K | null,
@@ -393,26 +401,26 @@ export default function InsightsPage() {
       const pct = Math.round(ratio * 100);
       out.push({
         title: titleFn(k),
-        desc: `führt häufig zu ${OUTCOME_LABEL_DE[bestOutcome]} (${pct} % von ${g.count} Sessions)`,
-        color: OUTCOME_COLOR_DE[bestOutcome],
-        icon: OUTCOME_ICON_DE[bestOutcome],
+        desc: tInsights("workout_pattern_desc", {
+          outcome: outcomeLabel(bestOutcome),
+          pct,
+          n: g.count,
+        }),
+        color: OUTCOME_COLOR[bestOutcome],
+        icon: OUTCOME_ICON[bestOutcome],
+        count: g.count,
       });
     }
     // Largest sample first → more trustworthy patterns float to the top.
-    return out.sort((a, b) => {
-      const an = parseInt(a.desc.match(/von (\d+)/)?.[1] ?? "0", 10);
-      const bn = parseInt(b.desc.match(/von (\d+)/)?.[1] ?? "0", 10);
-      return bn - an;
-    });
+    return out.sort((a, b) => b.count - a.count);
   }
-  const TOD_LABEL_DE = { morning:"Morgentraining", afternoon:"Nachmittagstraining", evening:"Abendtraining", night:"Nachttraining" } as const;
-  type TodKey = keyof typeof TOD_LABEL_DE;
+  type TodKey = "morning" | "afternoon" | "evening" | "night";
   const todKey = (ex: ExerciseLog): TodKey => {
     const h = new Date(parseDbTs(ex.created_at)).getHours();
     return (h >= 5 && h < 11) ? "morning" : (h < 17 ? "afternoon" : (h < 22 ? "evening" : "night"));
   };
-  const DUR_LABEL_DE = { short:"Trainings unter 30 Minuten", medium:"Trainings 30–60 Minuten", long:"Trainings über 60 Minuten" } as const;
-  type DurKey = keyof typeof DUR_LABEL_DE;
+  const todLabel = (k: TodKey): string => tInsights(`workout_tod_${k}`);
+  type DurKey = "short" | "medium" | "long";
   // Returns null for missing / non-finite / non-positive durations so the
   // caller (`detectGroup`) skips legacy rows where `duration_minutes` is
   // null/undefined instead of misbucketing them as "long".
@@ -421,11 +429,12 @@ export default function InsightsPage() {
     if (typeof d !== "number" || !Number.isFinite(d) || d <= 0) return null;
     return d < 30 ? "short" : d <= 60 ? "medium" : "long";
   };
+  const durLabel = (k: DurKey): string => tInsights(`workout_dur_${k}`);
 
   const workoutPatternsAll = [
-    ...detectGroup<TodKey>(todKey, k => TOD_LABEL_DE[k]),
-    ...detectGroup<ExerciseType>(ex => normType(ex.exercise_type), k => EX_TYPE_LABEL_DE[k] ?? k),
-    ...detectGroup<DurKey>(durKey, k => DUR_LABEL_DE[k]),
+    ...detectGroup<TodKey>(todKey, todLabel),
+    ...detectGroup<ExerciseType>(ex => normType(ex.exercise_type), exTypeLabel),
+    ...detectGroup<DurKey>(durKey, durLabel),
   ];
   const workoutPatterns = workoutPatternsAll.slice(0, 3);
   const showWorkoutPatterns = workoutPatterns.length >= 2;
@@ -531,12 +540,6 @@ export default function InsightsPage() {
   };
   const suggestion: AdjustmentSuggestion = suggestAdjustment(settings, enginePattern);
 
-  const TYPE_HELP: Record<string, string> = {
-    FAST_CARBS:   "Quick-digesting carbs. Pre-bolus 10–15 min ahead.",
-    HIGH_PROTEIN: "Slower glucose rise; some users need a small carb-equivalent dose for protein.",
-    HIGH_FAT:     "Fat-heavy meals delay carb absorption — consider a split or extended bolus.",
-    BALANCED:     "Mixed macros at moderate amounts. Most predictable for standard ICR dosing.",
-  };
 
   // ─────────────────────────────────────────────────────────────────
   // HERO cards (mockup 1:1) + DEEPER-ANALYSIS cards underneath.
@@ -814,26 +817,26 @@ export default function InsightsPage() {
           accent={cvColor}
           back={
             <ThresholdBack
-              title="Glukose-Variabilität · 14d"
+              title={tInsights("cv_back_title")}
               accent={cvColor}
               paragraphs={[
-                "Variationskoeffizient (CV%) = (Standardabweichung / Mittelwert) × 100, berechnet aus allen Glukose-Messwerten der letzten 14 Tage. Zeigt, wie stabil oder schwankend deine Glukose verläuft — unabhängig vom Niveau.",
-                "ATTD-Konsensus 2019: < 36 % gilt als stabil (grün), 36–50 % als mittel (gelb), > 50 % als instabil (rot). Höhere CV-Werte korrelieren mit häufigeren Hypos.",
+                tInsights("cv_back_p1"),
+                tInsights("cv_back_p2"),
                 cvEnough
-                  ? `Berechnet aus ${readings14.length} Messwert${readings14.length === 1 ? "" : "en"} der letzten 14 Tage.`
-                  : "Mindestens 3 Messwerte in 14 Tagen nötig, um diese Karte anzuzeigen.",
+                  ? tInsights("cv_back_p3", { n: readings14.length })
+                  : tInsights("cv_back_p3_insufficient", { min: MIN_DATAPOINTS }),
               ]}
             />
           }
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-            <CardLabel text="Glukose-Variabilität · 14d"/>
+            <CardLabel text={tInsights("cv_label")}/>
             <div style={{ fontSize:9, color:"var(--text-dim)" }}>CV%</div>
           </div>
           {!cvEnough || cvPct == null ? (
             <div style={{ padding:"18px 0", textAlign:"center" }}>
-              <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>Nicht genug Daten</div>
-              <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:4 }}>≥ {MIN_DATAPOINTS} Messwerte erforderlich</div>
+              <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>{tInsights("insufficient_data")}</div>
+              <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:4 }}>{tInsights("min_readings_required", { min: MIN_DATAPOINTS })}</div>
             </div>
           ) : (
             <>
@@ -843,7 +846,11 @@ export default function InsightsPage() {
                 </div>
                 <div style={{ fontSize:14, color:cvColor, fontWeight:700 }}>%</div>
                 <div style={{ marginLeft:"auto", fontSize:9, color:cvColor, fontWeight:700 }}>
-                  {cvPct < CV_STABLE_PCT ? "Stabil" : cvPct <= CV_HIGH_PCT ? "Mittel" : "Instabil"}
+                  {cvPct < CV_STABLE_PCT
+                    ? tInsights("cv_status_stable")
+                    : cvPct <= CV_HIGH_PCT
+                      ? tInsights("cv_status_medium")
+                      : tInsights("cv_status_unstable")}
                 </div>
               </div>
               {/* Threshold bar: green ≤36, yellow 36–50, red >50 (clamped to 75% for display). */}
@@ -854,9 +861,9 @@ export default function InsightsPage() {
                 <div style={{ position:"absolute", left:`${Math.min(cvPct, 75) / 75 * 100}%`, top:-2, bottom:-2, width:2, background:"var(--text)", borderRadius:1, transform:"translateX(-1px)" }}/>
               </div>
               <div style={{ display:"flex", justifyContent:"space-between", marginTop:6, fontSize:8, color:"var(--text-dim)" }}>
-                <span style={{ color:GREEN }}>● &lt; 36 stabil</span>
-                <span style={{ color:HIGH_YELLOW }}>● 36–50 mittel</span>
-                <span style={{ color:PINK }}>● &gt; 50 instabil</span>
+                <span style={{ color:GREEN }}>{tInsights("cv_legend_stable")}</span>
+                <span style={{ color:HIGH_YELLOW }}>{tInsights("cv_legend_medium")}</span>
+                <span style={{ color:PINK }}>{tInsights("cv_legend_unstable")}</span>
               </div>
             </>
           )}
@@ -1189,10 +1196,11 @@ export default function InsightsPage() {
                 {RANKED_OUTCOMES.map(oc => {
                   const n = workoutOutcomeCounts[oc];
                   const pct = workoutClassifiedTotal > 0 ? Math.round((n / workoutClassifiedTotal) * 100) : 0;
-                  const color = OUTCOME_COLOR_DE[oc];
+                  const color = OUTCOME_COLOR[oc];
+                  const label = tInsights(`workout_outcome_label_${oc.toLowerCase()}`);
                   return (
                     <div key={oc} style={{ display:"flex", alignItems:"center", gap:8 }}>
-                      <div style={{ width:78, fontSize:10, color, fontWeight:700, letterSpacing:"0.02em" }}>{oc}</div>
+                      <div style={{ width:78, fontSize:10, color, fontWeight:700, letterSpacing:"0.02em" }}>{label}</div>
                       <div style={{ flex:1, position:"relative", height:6, borderRadius:99, background:"var(--surface-soft)", overflow:"hidden" }}>
                         <div style={{ width:`${pct}%`, height:"100%", background:color, opacity:0.85 }}/>
                       </div>
@@ -1423,10 +1431,10 @@ export default function InsightsPage() {
               formula:tInsights("tile_raw_icr_formula"),   explain:tInsights("tile_raw_icr_explain"),
               infoBack: (
                 <IcrInfoBack
-                  heading="Was zeigt dieser Wert?"
+                  heading={tInsights("raw_icr_info_heading")}
                   accent={ACCENT_SOFT}
-                  body="Der Raw ICR ist der einfache Durchschnitt deiner letzten 7 Dosierungen — unabhängig davon ob das Ergebnis gut oder schlecht war. Er spiegelt dein tatsächliches Dosierverhalten der letzten Tage wider. Wenn dieser Wert stark vom Adaptive ICR abweicht, kann das bedeuten dass du zuletzt anders dosiert hast als dein langfristiger Schnitt — das ist eine Beobachtung, keine Empfehlung."
-                  subLine="Datenbasis: letzte 7 Mahlzeiten mit Carbs + Insulin · ungewichtet"
+                  body={tInsights("raw_icr_info_body")}
+                  subLine={tInsights("raw_icr_info_subline")}
                 />
               ),
             },
@@ -1522,13 +1530,10 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
  *
  * Padding / borderRadius defaults match the mockup's `MockCard`.
  */
-/** Small medical-disclaimer pill. Neutral gray — informational, not alarming. */
-/** Default disclaimer text for ICR-context cards. */
-const DEFAULT_DISCLAIMER_TEXT = "ICR-Anpassungen immer mit deinem Diabetologen besprechen.";
-/** Disclaimer text used by every clinical-threshold card (hypo / hyper / CV% / TDD). */
-const THRESHOLD_DISCLAIMER_TEXT = "Schwellenwerte sind klinische Standardwerte. Besprich Abweichungen immer mit deinem Diabetologen.";
-
-function DisclaimerChip({ text = DEFAULT_DISCLAIMER_TEXT }: { text?: string } = {}) {
+/** Small medical-disclaimer pill. Neutral gray — informational, not alarming.
+ *  Falls back to the localized ICR-context disclaimer when no `text` is passed. */
+function DisclaimerChip({ text }: { text?: string } = {}) {
+  const tInsights = useTranslations("insights");
   return (
     <div style={{
       display:"inline-flex", alignItems:"flex-start", gap:6,
@@ -1539,7 +1544,7 @@ function DisclaimerChip({ text = DEFAULT_DISCLAIMER_TEXT }: { text?: string } = 
       maxWidth:"100%",
     }}>
       <span aria-hidden style={{ fontSize:11, lineHeight:1.2 }}>⚕️</span>
-      <span>{text}</span>
+      <span>{text ?? tInsights("disclaimer_default")}</span>
     </div>
   );
 }
@@ -1552,6 +1557,7 @@ function ThresholdBack({
   accent,
   paragraphs,
 }: { title: string; accent: string; paragraphs: string[] }) {
+  const tInsights = useTranslations("insights");
   return (
     <div style={{ display:"flex", flexDirection:"column", height:"100%", gap:8 }}>
       <div style={{ fontSize:12, color:accent, fontWeight:700, letterSpacing:"0.01em", lineHeight:1.25 }}>
@@ -1561,7 +1567,7 @@ function ThresholdBack({
         {paragraphs.map((p, i) => <div key={i}>{p}</div>)}
       </div>
       <div style={{ marginTop:"auto", display:"flex", flexDirection:"column", gap:6, alignItems:"flex-start" }}>
-        <DisclaimerChip text={THRESHOLD_DISCLAIMER_TEXT}/>
+        <DisclaimerChip text={tInsights("disclaimer_threshold")}/>
       </div>
     </div>
   );

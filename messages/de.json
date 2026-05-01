@@ -554,10 +554,10 @@
     "workout_outcomes_distribution": "Verteilung",
     "workout_outcomes_total_30d": "Trainings letzte 30 Tage",
     "workout_outcomes_min_required": "≥ {min} Trainings in 30 Tagen erforderlich",
-    "workout_outcomes_pending_suffix": "+ {n} PENDING (CGM-Werte ausstehend)",
+    "workout_outcomes_pending_suffix": "+ {n} AUSSTEHEND (CGM-Werte fehlen noch)",
     "workout_outcomes_back_title": "Verteilung der Trainings-Ergebnisse",
-    "workout_outcomes_back_p1": "Glev klassifiziert jeden Workout anhand deines Glukoseverlaufs: STABLE = BG blieb im Zielbereich. DROPPED = BG fiel deutlich, aber kein Hypo-Risiko. SPIKED = BG stieg unerwartet an. HYPO_RISK = BG fiel unter 70 mg/dL oder näherte sich kritisch.",
-    "workout_outcomes_back_p2": "PENDING-Sessions (CGM-Werte noch nicht eingetroffen) werden nicht gewertet. Der Hauptzähler zeigt alle Trainings inklusive PENDING — die Verteilung darunter nur die ausgewerteten.",
+    "workout_outcomes_back_p1": "Glev klassifiziert jeden Workout anhand deines Glukoseverlaufs: STABIL = BG blieb im Zielbereich. ABFALL = BG fiel deutlich, aber kein Hypo-Risiko. ANSTIEG = BG stieg unerwartet an. HYPO-RISIKO = BG fiel unter 70 mg/dL oder näherte sich kritisch.",
+    "workout_outcomes_back_p2": "Sessions mit AUSSTEHENDER Auswertung (CGM-Werte noch nicht eingetroffen) werden nicht gewertet. Der Hauptzähler zeigt alle Trainings inklusive ausstehender — die Verteilung darunter nur die ausgewerteten.",
     "workout_outcomes_back_p3": "{total} Trainings in den letzten 30 Tagen, davon {classified} ausgewertet.",
     "workout_outcomes_back_p3_insufficient": "Mindestens {min} Trainings in 30 Tagen nötig, um diese Karte anzuzeigen.",
 
@@ -575,7 +575,7 @@
     "workout_patterns_signal_count": "{n, plural, one {# Signal} other {# Signale}}",
     "workout_patterns_back_title": "Trainings-Muster",
     "workout_patterns_back_p1": "Automatisch erkannte Muster aus deinen Workout-Daten. Mindestens 3 Sessions pro Gruppe (Tageszeit, Trainingsart, Dauer) erforderlich. Muster aktualisieren sich mit jedem neuen Workout.",
-    "workout_patterns_back_p2": "Ein Muster erscheint nur, wenn ein Outcome (STABLE / DROPPED / SPIKED / HYPO_RISK) in mindestens 60 % der Sessions einer Gruppe dominiert. PENDING-Sessions zählen nicht mit.",
+    "workout_patterns_back_p2": "Ein Muster erscheint nur, wenn ein Ergebnis (STABIL / ABFALL / ANSTIEG / HYPO-RISIKO) in mindestens 60 % der Sessions einer Gruppe dominiert. Sessions mit ausstehender CGM-Auswertung zählen nicht mit.",
     "workout_patterns_back_p3": "Aktuell {patterns} Muster aus {evaluated} ausgewerteten Trainings der letzten 30 Tage.",
 
     "meal_type_label": "Mahlzeit-Typ · Erfolg %",
@@ -596,7 +596,57 @@
     "time_of_day_morning": "Morgens (5–11)",
     "time_of_day_afternoon": "Nachmittags (11–17)",
     "time_of_day_evening": "Abends (17–21)",
-    "time_of_day_night": "Nachts (21–5)"
+    "time_of_day_night": "Nachts (21–5)",
+
+    "loading_insights": "Insights werden geladen…",
+    "empty_state_min_meals": "Logge mindestens 5 Mahlzeiten, um Insights zu sehen.",
+
+    "cv_label": "Glukose-Variabilität · 14T",
+    "cv_back_title": "Glukose-Variabilität (CV %)",
+    "cv_back_p1": "Variationskoeffizient (CV %) = (Standardabweichung / Mittelwert) × 100, berechnet aus allen Glukose-Messwerten der letzten 14 Tage. Zeigt, wie stabil oder schwankend deine Glukose verläuft — unabhängig vom Niveau.",
+    "cv_back_p2": "ATTD-Konsensus 2019: < 36 % gilt als stabil (grün), 36–50 % als mittel (gelb), > 50 % als instabil (rot). Höhere CV-Werte korrelieren mit häufigeren Hypos.",
+    "cv_back_p3": "Berechnet aus {n, plural, one {# Messwert} other {# Messwerten}} der letzten 14 Tage.",
+    "cv_back_p3_insufficient": "Mindestens {min} Messwerte in 14 Tagen nötig, um diese Karte anzuzeigen.",
+    "cv_status_stable": "Stabil",
+    "cv_status_medium": "Mittel",
+    "cv_status_unstable": "Instabil",
+    "cv_legend_stable": "● < 36 stabil",
+    "cv_legend_medium": "● 36–50 mittel",
+    "cv_legend_unstable": "● > 50 instabil",
+
+    "disclaimer_default": "ICR-Anpassungen immer mit deinem Diabetologen besprechen.",
+    "disclaimer_threshold": "Schwellenwerte sind klinische Standardwerte. Besprich Abweichungen immer mit deinem Diabetologen.",
+
+    "raw_icr_info_heading": "Was zeigt dieser Wert?",
+    "raw_icr_info_body": "Der Raw ICR ist der einfache Durchschnitt deiner letzten 7 Dosierungen — unabhängig davon, ob das Ergebnis gut oder schlecht war. Er spiegelt dein tatsächliches Dosierverhalten der letzten Tage wider. Wenn dieser Wert stark vom Adaptive ICR abweicht, kann das bedeuten, dass du zuletzt anders dosiert hast als dein langfristiger Schnitt — eine Beobachtung, keine Empfehlung.",
+    "raw_icr_info_subline": "Datenbasis: letzte 7 Mahlzeiten mit Carbs + Insulin · ungewichtet",
+
+    "exercise_type_run": "Laufen",
+    "exercise_type_cycling": "Radfahren",
+    "exercise_type_cardio": "Cardio",
+    "exercise_type_hiit": "HIIT",
+    "exercise_type_strength": "Krafttraining",
+    "exercise_type_yoga": "Yoga",
+
+    "workout_outcome_stable": "stabilem BG",
+    "workout_outcome_dropped": "starkem BG-Abfall",
+    "workout_outcome_spiked": "BG-Anstiegen",
+    "workout_outcome_hypo_risk": "Hypo-Risiko",
+
+    "workout_outcome_label_stable": "STABIL",
+    "workout_outcome_label_dropped": "ABFALL",
+    "workout_outcome_label_spiked": "ANSTIEG",
+    "workout_outcome_label_hypo_risk": "HYPO-RISIKO",
+
+    "workout_pattern_desc": "führt häufig zu {outcome} ({pct} % von {n, plural, one {# Session} other {# Sessions}})",
+
+    "workout_tod_morning": "Morgentraining",
+    "workout_tod_afternoon": "Nachmittagstraining",
+    "workout_tod_evening": "Abendtraining",
+    "workout_tod_night": "Nachttraining",
+    "workout_dur_short": "Trainings unter 30 Minuten",
+    "workout_dur_medium": "Trainings 30–60 Minuten",
+    "workout_dur_long": "Trainings über 60 Minuten"
   },
   "settings": {
     "title": "Einstellungen",
