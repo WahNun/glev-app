@@ -366,7 +366,15 @@
   },
   "insights": {
     "pattern_balanced_label": "Ausgewogene Dosierung",
-    "pattern_balanced_explanation": "{pct}% deiner letzten {n, plural, one {Mahlzeit lag} other {# Mahlzeiten lagen}} im Zielbereich — weiter so."
+    "pattern_balanced_explanation": "{pct}% deiner letzten {n, plural, one {Mahlzeit lag} other {# Mahlzeiten lagen}} im Zielbereich — weiter so.",
+    "pattern_overdosing_label": "Häufige Überdosierung",
+    "pattern_overdosing_explanation": "{pct}% deiner letzten {n, plural, one {Mahlzeit endete} other {# Mahlzeiten endeten}} unter dem Zielbereich — das Insulin ist für deine Mahlzeiten dauerhaft zu stark.",
+    "pattern_underdosing_label": "Konstante Unterdosierung",
+    "pattern_underdosing_explanation": "{pct}% deiner letzten {n, plural, one {Mahlzeit endete} other {# Mahlzeiten endeten}} zu hoch — das Insulin ist für deine Kohlenhydrate dauerhaft zu schwach.",
+    "pattern_spiking_label": "Häufige Spitzen nach dem Essen",
+    "pattern_spiking_explanation": "Bei {pct}% deiner letzten {n, plural, one {Mahlzeit kam es} other {# Mahlzeiten kam es}} zu einem schnellen Anstieg. Erwäge einen Vorab-Bolus oder weniger schnelle Kohlenhydrate.",
+    "pattern_insufficient_data_label": "Nicht genug Daten",
+    "pattern_insufficient_data_explanation": "Mindestens 5 Mahlzeiten mit einem Wert nach dem Essen sind nötig, um ein Muster zu erkennen (aktuell {n, plural, one {# Mahlzeit} other {# Mahlzeiten}})."
   },
   "settings": {
     "title": "Einstellungen",

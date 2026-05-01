@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useId } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { fetchMeals, unifiedOutcome, type Meal } from "@/lib/meals";
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
 import { computeAdaptiveICR } from "@/lib/engine/adaptiveICR";
@@ -150,6 +150,7 @@ export default function InsightsPage() {
   // upstream; only the rendered string switches to BE/KE/g.
   const carbUnit = useCarbUnit();
   const tInsights = useTranslations("insights");
+  const locale = useLocale();
   const [meals, setMeals]               = useState<Meal[]>([]);
   const [insulinLogs, setInsulinLogs]   = useState<InsulinLog[]>([]);
   const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([]);
@@ -974,24 +975,40 @@ export default function InsightsPage() {
                   </span>
                 </div>
 
-                {/* Pattern label */}
-                <div style={{ fontSize:12, color:"var(--text-muted)", lineHeight:1.5, marginBottom:6 }}>
-                  <span style={{ color:"var(--text)", fontWeight:600 }}>
-                    {enginePattern.type === "balanced"
-                      ? tInsights("pattern_balanced_label")
-                      : enginePattern.label}
-                  </span>
-                </div>
-                <div style={{ fontSize:11, color:"var(--text-muted)", lineHeight:1.5 }}>
-                  {enginePattern.type === "balanced"
-                    ? tInsights("pattern_balanced_explanation", {
-                        pct: enginePattern.sampleSize > 0
-                          ? Math.round((enginePattern.counts.good / enginePattern.sampleSize) * 100)
-                          : 0,
-                        n: enginePattern.sampleSize,
+                {/* Pattern label — German renders localized strings; English
+                    keeps the engine defaults from lib/engine/patterns.ts as
+                    the single source of truth. */}
+                {(() => {
+                  const n = enginePattern.sampleSize;
+                  const safe = n > 0 ? n : 1;
+                  const pctFor: Record<typeof enginePattern.type, number> = {
+                    balanced: n > 0 ? Math.round((enginePattern.counts.good / safe) * 100) : 0,
+                    overdosing: n > 0 ? Math.round((enginePattern.counts.overdose / safe) * 100) : 0,
+                    underdosing: n > 0 ? Math.round((enginePattern.counts.underdose / safe) * 100) : 0,
+                    spiking: n > 0 ? Math.round((enginePattern.counts.spike / safe) * 100) : 0,
+                    insufficient_data: 0,
+                  };
+                  const isDe = locale === "de";
+                  const label = isDe
+                    ? tInsights(`pattern_${enginePattern.type}_label` as const)
+                    : enginePattern.label;
+                  const explanation = isDe
+                    ? tInsights(`pattern_${enginePattern.type}_explanation` as const, {
+                        pct: pctFor[enginePattern.type],
+                        n,
                       })
-                    : enginePattern.explanation}
-                </div>
+                    : enginePattern.explanation;
+                  return (
+                    <>
+                      <div style={{ fontSize:12, color:"var(--text-muted)", lineHeight:1.5, marginBottom:6 }}>
+                        <span style={{ color:"var(--text)", fontWeight:600 }}>{label}</span>
+                      </div>
+                      <div style={{ fontSize:11, color:"var(--text-muted)", lineHeight:1.5 }}>
+                        {explanation}
+                      </div>
+                    </>
+                  );
+                })()}
 
                 {/* Suggestion / advisory block */}
                 {(suggestion.hasSuggestion || enginePattern.type === "spiking" || enginePattern.type === "overdosing" || enginePattern.type === "underdosing") && (
