@@ -40,6 +40,7 @@ import {
   insulinToCSV,
   exerciseToCSV,
   fingersticksToCSV,
+  buildCSVZip,
 } from "@/lib/export";
 import { icrToUnit } from "@/lib/carbUnits";
 import { GlevReport } from "@/lib/pdfReport";
@@ -596,5 +597,42 @@ test.describe("GlevReport cover — ICR and Korrekturfaktor are independent", ()
     // tree wasn't somehow stripped by an upstream change.
     expect(treeContainsLabel(tree, "Patient")).toBe(true);
     expect(treeContainsLabel(tree, "Kohlenhydrat-Einheit")).toBe(true);
+  });
+});
+
+// buildCSVZip — bulk "All as CSV" bundling. Verifies each input file
+// becomes a separate zip entry under its given filename, with the
+// UTF-8 BOM intact so an extracted CSV opens cleanly in Excel.
+
+test.describe("buildCSVZip", () => {
+  test("bundles every input file under its given filename, preserving content + BOM", async () => {
+    const files: Array<[string, string]> = [
+      ["a.csv", "header1,header2\r\n1,2"],
+      ["b.csv", "x,y\r\nÄpfel,€"],
+      ["empty.csv", ""],
+    ];
+    const bytes = await buildCSVZip(files);
+    expect(bytes).toBeInstanceOf(Uint8Array);
+    expect(bytes.byteLength).toBeGreaterThan(0);
+
+    const { default: JSZip } = await import("jszip");
+    const reopened = await JSZip.loadAsync(bytes);
+    const names = Object.keys(reopened.files).sort();
+    expect(names).toEqual(["a.csv", "b.csv", "empty.csv"]);
+
+    for (const [name, content] of files) {
+      const entry = reopened.file(name);
+      expect(entry, `missing zip entry ${name}`).not.toBeNull();
+      const text = await entry!.async("string");
+      expect(text.charCodeAt(0)).toBe(0xfeff);
+      expect(text.slice(1)).toBe(content);
+    }
+  });
+
+  test("empty file list still produces a valid (empty) archive", async () => {
+    const bytes = await buildCSVZip([]);
+    const { default: JSZip } = await import("jszip");
+    const reopened = await JSZip.loadAsync(bytes);
+    expect(Object.keys(reopened.files)).toEqual([]);
   });
 });

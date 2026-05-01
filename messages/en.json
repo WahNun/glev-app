@@ -796,7 +796,7 @@
     "pdf_btn_busy": "Building PDF…",
     "exported_one": "1 entry exported.",
     "exported_many": "{n} entries exported.",
-    "exported_all": "{n} entries exported in 4 files.",
+    "exported_all": "{n} entries exported as ZIP.",
     "pdf_done": "Report built — {n} entries summarized.",
     "csv_failed": "Export failed.",
     "pdf_failed": "PDF export failed.",

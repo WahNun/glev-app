@@ -804,7 +804,7 @@
     "pdf_btn_busy": "Erstelle PDF…",
     "exported_one": "1 Eintrag exportiert.",
     "exported_many": "{n} Einträge exportiert.",
-    "exported_all": "{n} Einträge in 4 Dateien exportiert.",
+    "exported_all": "{n} Einträge als ZIP exportiert.",
     "pdf_done": "Report erstellt — {n} Einträge zusammengefasst.",
     "csv_failed": "Export fehlgeschlagen.",
     "pdf_failed": "PDF-Export fehlgeschlagen.",

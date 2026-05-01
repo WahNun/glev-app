@@ -368,6 +368,39 @@ export function downloadFile(filename: string, content: string, mimeType: string
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// Bundle CSV files into a zip. Prepends the same UTF-8 BOM as
+// downloadFile so Excel opens extracted CSVs without garbled umlauts.
+// Returns Uint8Array so the helper is usable outside the DOM (tests).
+export async function buildCSVZip(
+  files: Array<[filename: string, content: string]>,
+): Promise<Uint8Array> {
+  const { default: JSZip } = await import("jszip");
+  const zip = new JSZip();
+  for (const [name, content] of files) {
+    zip.file(name, "\uFEFF" + content);
+  }
+  return zip.generateAsync({ type: "uint8array" });
+}
+
+// Browser download of a CSV bundle as a single .zip.
+export async function downloadZipOfCSVs(
+  zipFilename: string,
+  files: Array<[filename: string, content: string]>,
+): Promise<void> {
+  const bytes = await buildCSVZip(files);
+  // Copy into a fresh Uint8Array so the Blob owns a tightly-sized
+  // ArrayBuffer (avoids the wider ArrayBufferLike type from jszip).
+  const blob = new Blob([new Uint8Array(bytes)], { type: "application/zip" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = zipFilename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 /** ISO date string for filenames: YYYY-MM-DD. */
 export function todayStamp(): string {
   const d = new Date();

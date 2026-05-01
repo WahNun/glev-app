@@ -14,6 +14,7 @@ import {
   exerciseToCSV,
   fingersticksToCSV,
   downloadFile,
+  downloadZipOfCSVs,
   todayStamp,
   type DateWindow,
   type RangeCounts,
@@ -265,9 +266,8 @@ const ROWS: RowSpec[] = [
  *
  * Each kind exports independently (separate CSV per data type) so the
  * user can grab just one type if that's all they need. The "Alles
- * herunterladen" action triggers all four downloads in sequence so
- * the browser fires four save-as prompts (or four files into the
- * default Downloads folder, depending on browser settings).
+ * herunterladen" action bundles all four CSVs into a single .zip so
+ * the user gets one save-as prompt instead of four.
  *
  * Row-level loading state isolates feedback to the kind being fetched
  * so other rows stay enabled during a long meals export.
@@ -562,18 +562,16 @@ export default function ExportPanel() {
         flash("err", t("count_empty"));
         return;
       }
-      // Sequential downloads with small delay so browsers don't merge or
-      // drop the rapid-fire save prompts.
+      // Bundle all four CSVs into a single .zip so the user gets one
+      // save-as prompt instead of four. Empty kinds get a header-only
+      // CSV inside the zip — same as the per-kind button behaviour.
       const files: Array<[string, string]> = [
         [`glev-mahlzeiten_${stamp}${suffix}.csv`,   mealsToCSV(meals, carbUnit)],
         [`glev-insulin_${stamp}${suffix}.csv`,      insulinToCSV(insulin, { carbUnit, icrGperIE, cfMgdlPerIE })],
         [`glev-sport_${stamp}${suffix}.csv`,        exerciseToCSV(exercise)],
         [`glev-fingersticks_${stamp}${suffix}.csv`, fingersticksToCSV(fs)],
       ];
-      for (const [name, content] of files) {
-        downloadFile(name, content);
-        await new Promise((r) => setTimeout(r, 200));
-      }
+      await downloadZipOfCSVs(`glev-export_${stamp}${suffix}.zip`, files);
       const total = meals.length + insulin.length + exercise.length + fs.length;
       flash("ok", t("exported_all", { n: total }));
     } catch (e) {
