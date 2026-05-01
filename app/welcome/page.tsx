@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { supabase } from "@/lib/supabase";
 import GlevLockup from "@/components/GlevLockup";
+import LocaleSwitcher from "@/components/LocaleSwitcher";
 
 // Brand accents stay constant across themes (per the brand spec) — surface,
 // border and text colors point at the theme CSS variables in
@@ -63,6 +64,7 @@ function WelcomeFallback() {
           <div style={{ fontSize: 11, color: "var(--text-faint)", letterSpacing: "0.12em" }}>
             {t("welcome_subtitle")}
           </div>
+          <LocaleSwitcher size="xs" ariaLabel={t("nav_aria_locale")} />
         </div>
         <div style={{
           background: SURFACE, borderRadius: 18,
@@ -252,6 +254,7 @@ function WelcomeInner() {
           <div style={{ fontSize: 11, color: "var(--text-faint)", letterSpacing: "0.12em" }}>
             {t("welcome_subtitle")}
           </div>
+          <LocaleSwitcher size="xs" ariaLabel={t("nav_aria_locale")} />
         </div>
 
         <div style={{ background: SURFACE, borderRadius: 18, border: "1px solid var(--border-soft)", padding: 28 }}>

@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import { useTranslations } from "next-intl";
+import LocaleSwitcher from "@/components/LocaleSwitcher";
 
 const ITEM_IDS = [
   "foundation",
@@ -65,32 +66,42 @@ export default function SectionNav() {
             {t("brand_nav_label")}
           </span>
         </a>
-        <ul
+        <div
           style={{
-            listStyle: "none",
             display: "flex",
-            gap: 4,
+            alignItems: "center",
+            gap: 12,
             flexWrap: "wrap",
           }}
         >
-          {items.map((it) => (
-            <li key={it.id}>
-              <a
-                href={`#${it.id}`}
-                style={{
-                  color: "var(--text-body)",
-                  textDecoration: "none",
-                  fontSize: 14,
-                  padding: "6px 10px",
-                  borderRadius: 6,
-                  display: "inline-block",
-                }}
-              >
-                {it.label}
-              </a>
-            </li>
-          ))}
-        </ul>
+          <ul
+            style={{
+              listStyle: "none",
+              display: "flex",
+              gap: 4,
+              flexWrap: "wrap",
+            }}
+          >
+            {items.map((it) => (
+              <li key={it.id}>
+                <a
+                  href={`#${it.id}`}
+                  style={{
+                    color: "var(--text-body)",
+                    textDecoration: "none",
+                    fontSize: 14,
+                    padding: "6px 10px",
+                    borderRadius: 6,
+                    display: "inline-block",
+                  }}
+                >
+                  {it.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+          <LocaleSwitcher size="xs" ariaLabel={t("nav_aria_locale")} />
+        </div>
       </div>
     </nav>
   );

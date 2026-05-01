@@ -1029,6 +1029,7 @@
   "marketing": {
     "nav_signin": "Sign in",
     "nav_aria_home": "Glev home",
+    "nav_aria_locale": "Choose language",
     "hero_badge": "Private Beta · CGM Live",
     "hero_h1": "Stop guessing your glucose",
     "hero_subtitle": "Glev reads your glucose, spots the trend, and shows you the pattern — so you and your diabetologist can decide with confidence.",

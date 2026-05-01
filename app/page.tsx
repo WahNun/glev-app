@@ -8,6 +8,7 @@ import AppMockupPhone from "@/components/AppMockupPhone";
 import FeatureTrio from "@/components/landing/FeatureTrio";
 import Steps from "@/components/landing/Steps";
 import FeatureDeepDive from "@/components/landing/FeatureDeepDive";
+import LocaleSwitcher from "@/components/LocaleSwitcher";
 
 // Brand accents stay constant across themes (per the brand spec) — surface,
 // border and text colors point at the theme CSS variables in
@@ -133,12 +134,13 @@ export default function Home() {
           <Link href="/" style={{ textDecoration: "none", color: "inherit" }} aria-label={t("nav_aria_home")}>
             <GlevLockup size={28} />
           </Link>
-          <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             {/* Brand-Link bewusst aus dem Header entfernt — nur noch
                 versteckt im Footer als Copyright-Tail erreichbar.
                 Begründung: das Brand-Book ist Marketing-/Dev-Material,
                 kein User-Pfad — soll im öffentlichen Header keinen
                 Slot belegen. */}
+            <LocaleSwitcher ariaLabel={t("nav_aria_locale")} />
             <Link
               href="/login"
               style={{
@@ -769,8 +771,11 @@ export default function Home() {
             </Link>
           </span>
         </div>
-        <div style={{ maxWidth: 560, lineHeight: 1.5 }}>
-          {t("footer_disclaimer")}
+        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <LocaleSwitcher size="xs" ariaLabel={t("nav_aria_locale")} />
+          <div style={{ maxWidth: 560, lineHeight: 1.5 }}>
+            {t("footer_disclaimer")}
+          </div>
         </div>
       </footer>
     </main>
