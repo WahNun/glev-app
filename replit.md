@@ -163,6 +163,21 @@ pnpm --filter @workspace/api-server run dev    # Start Express API server
 npm test                                        # Playwright e2e suite (auto-reuses dev server on :5000)
 ```
 
+### One-shot maintenance scripts
+
+```bash
+# Re-run the unified `lifecycleFor` evaluator (lib/engine/lifecycle.ts)
+# over every row in the `meals` table and rewrite `evaluation` so the
+# Dashboard's Control Score / Good Rate / Spike Rate / Hypo Rate
+# reflect the post-Task #15 logic across the user's full history.
+# Idempotent — safe to re-run; prints a per-bucket old→new diff matrix.
+# Requires SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (bypasses RLS).
+SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… npx tsx \
+  scripts/backfillMealEvaluations.ts            # apply
+SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… npx tsx \
+  scripts/backfillMealEvaluations.ts --dry-run  # preview only, no writes
+```
+
 ## Testing
 
 End-to-end tests live under `tests/e2e/` and pure-function unit suites
