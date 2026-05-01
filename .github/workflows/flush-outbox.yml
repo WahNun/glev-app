@@ -1,0 +1,78 @@
+name: Flush email outbox
+
+# Drains the email_outbox table by hitting /api/cron/flush-outbox in
+# production. The endpoint is idempotent — calling it more often is
+# safe (atomic pending → sending claim prevents double-sends).
+#
+# Setup (one-time):
+#   1. GitHub repo → Settings → Secrets and variables → Actions
+#      Add repo secret `CRON_SECRET` with the SAME value as the
+#      Replit Secret of the same name.
+#   2. Optional: add a repo *variable* (not secret) `PROD_APP_URL` if
+#      the production origin ever differs from `https://glev.app`.
+#
+# Notes:
+#   - GitHub Actions cron is best-effort: scheduled `*/2` typically
+#     fires every 3-7 min in practice (longer during platform load).
+#     The outbox tolerates that — pending mails are retried on every
+#     flush, and Stripe gives buyers their resume link via the email
+#     itself, not via a tight SLA.
+#   - `workflow_dispatch` lets you trigger a flush manually from the
+#     Actions tab when you need an immediate drain.
+
+on:
+  schedule:
+    - cron: "*/2 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+# Never run two flushes in parallel — the outbox claim is atomic but
+# overlapping cron runs would just waste GitHub-Actions minutes.
+concurrency:
+  group: flush-outbox
+  cancel-in-progress: false
+
+jobs:
+  flush:
+    name: Flush
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Hit /api/cron/flush-outbox
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          PROD_APP_URL: ${{ vars.PROD_APP_URL || 'https://glev.app' }}
+        run: |
+          set -u
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "::error::Repo secret CRON_SECRET not set — see workflow header for setup."
+            exit 1
+          fi
+
+          url="${PROD_APP_URL%/}/api/cron/flush-outbox"
+          echo "POST -> ${url}"
+
+          # -sS: silent but show errors. -w: append HTTP status on its own line.
+          # We POST (handler accepts both GET and POST; POST avoids any edge
+          # caching layer that might cache GETs).
+          response_file="$(mktemp)"
+          status=$(curl -sS -X POST \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "Accept: application/json" \
+            -o "${response_file}" \
+            -w "%{http_code}" \
+            --max-time 60 \
+            "${url}" || echo "000")
+
+          echo "HTTP ${status}"
+          echo "--- response body ---"
+          cat "${response_file}" || true
+          echo
+          echo "--- end response ---"
+
+          if [ "${status}" != "200" ]; then
+            echo "::error::flush-outbox returned HTTP ${status}"
+            exit 1
+          fi

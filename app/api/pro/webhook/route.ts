@@ -1,24 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
-import { Resend } from "resend";
 import { getStripe } from "@/lib/stripeServer";
 import { extractFullNameFromSession } from "@/lib/stripeCheckout";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { proWelcomeHtml, proWelcomeSubject } from "@/lib/emails/pro-welcome";
+import { enqueueEmail } from "@/lib/emails/outbox";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-/**
- * Lazy Resend client — constructing it at module load throws if RESEND_API_KEY
- * is missing or contains weird chars (e.g. an accidentally-pasted placeholder),
- * which would 500 every webhook delivery before we even reach the DB write.
- * Defer to first use so a bad key only fails the email send (logged + swallowed)
- * instead of the whole route.
- */
-function getResend(): Resend {
-  return new Resend(process.env.RESEND_API_KEY);
-}
 
 /**
  * Resolve the public app origin used in the Resume-Link inside the welcome
@@ -197,12 +185,25 @@ export async function POST(req: NextRequest) {
         // eslint-disable-next-line no-console
         console.log("[pro/webhook] subscription created:", { email, customerId, subscriptionId, trialEndsAt });
 
-        // Send the post-checkout welcome email via Resend. Critically this
-        // includes a Resume-Link to /pro/success?session_id=… so the buyer
-        // can come back days later and confirm the subscription even if they
-        // closed the success-tab. Send is best-effort: if Resend fails we
-        // still ack 200 so Stripe doesn't retry the webhook (the DB write
-        // already succeeded above and that's the load-bearing part).
+        // Enqueue the post-checkout welcome email into the durable outbox
+        // (lib/emails/outbox.ts). The cron worker (/api/cron/flush-outbox,
+        // hit by .github/workflows/flush-outbox.yml every ~2 min) drains
+        // the queue with retry + dead-letter, so a Resend outage or server
+        // crash between Stripe-Ack and send no longer drops the buyer's
+        // welcome mail. Mirrors the beta webhook (Task #35).
+        //
+        // The mail carries the load-bearing Resume-Link to
+        // /pro/success?session_id=… so the buyer can come back days later
+        // and confirm the subscription even if they closed the success-tab.
+        // If the enqueue itself fails (Supabase down etc.) we MUST return a
+        // non-2xx so Stripe retries the whole webhook — otherwise the buyer
+        // pays and never gets the link. The DB updates above are
+        // idempotent (status guards, upsert) so re-running them is safe.
+        //
+        // The Stripe session id is the dedupe key: a partial unique index
+        // on (template, dedupe_key) means a retried webhook delivery
+        // returns the existing outbox row id instead of enqueueing a
+        // second mail.
         if (email) {
           // Prefer the explicit `full_name` custom field over Stripe's
           // auto-collected billing-details name — same precedence as the
@@ -210,52 +211,36 @@ export async function POST(req: NextRequest) {
           const name = fullName ?? session.customer_details?.name ?? null;
           const appUrl = resolveAppUrl(req);
           try {
-            const resend = getResend();
-            const { data, error } = await resend.emails.send({
-              from: "Glev <info@glev.app>",
-              to: email,
-              subject: proWelcomeSubject(name),
-              html: proWelcomeHtml(name, session.id, appUrl, trialEndsAt),
+            const { id: outboxId, deduplicated } = await enqueueEmail({
+              recipient: email,
+              template: "pro-welcome",
+              payload: {
+                name,
+                sessionId: session.id,
+                appUrl,
+                trialEndsAt,
+              },
+              dedupeKey: session.id,
             });
-            if (error) {
-              // Resend SDK returns errors as a structured object on the
-              // response — not as a thrown exception (only transport-level
-              // failures throw). Surface the FULL body — name, message,
-              // statusCode if present — so prod logs actually show *why*
-              // delivery failed (unverified domain, invalid recipient, etc.)
-              // instead of the generic "Failed to send".
-              // eslint-disable-next-line no-console
-              console.error("[pro/webhook] Resend send returned error:", {
-                to: email,
-                sessionId: session.id,
-                error,
-              });
-            } else if (data?.id) {
-              // Success: log message-id so we can grep delivery confirmations.
-              // eslint-disable-next-line no-console
-              console.log("[pro/webhook] welcome email sent:", {
-                to: email,
-                sessionId: session.id,
-                messageId: data.id,
-              });
-            } else {
-              // Should not happen — Resend always returns either data or
-              // error — but log noisily so we notice if the contract changes.
-              // eslint-disable-next-line no-console
-              console.warn("[pro/webhook] Resend send returned no data and no error:", {
-                to: email,
-                sessionId: session.id,
-              });
-            }
-          } catch (err) {
-            // Transport-level / network error — Resend SDK threw. Include
-            // the full error so the operator can see status code + body.
             // eslint-disable-next-line no-console
-            console.error("[pro/webhook] Resend send threw:", {
+            console.log("[pro/webhook] welcome email enqueued:", {
               to: email,
               sessionId: session.id,
-              err,
+              outboxId,
+              deduplicated,
             });
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.error("[pro/webhook] Outbox enqueue failed — asking Stripe to retry:", {
+              to: email,
+              sessionId: session.id,
+              eventId: event.id,
+              err: err instanceof Error ? err.message : String(err),
+            });
+            return NextResponse.json(
+              { error: "outbox enqueue failed, please retry" },
+              { status: 500 },
+            );
           }
         } else {
           // No email on the session — we already logged this loudly above

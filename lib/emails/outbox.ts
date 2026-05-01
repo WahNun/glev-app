@@ -20,6 +20,7 @@
 import { Resend } from "resend";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { betaWelcomeHtml, betaWelcomeSubject } from "@/lib/emails/beta-welcome";
+import { proWelcomeHtml, proWelcomeSubject } from "@/lib/emails/pro-welcome";
 
 // ---- Tunables -------------------------------------------------------------
 
@@ -87,7 +88,7 @@ const FINALIZE_RETRY_DELAY_MS = 250;
  * `renderTemplate()` below means TS will fail the build if a new
  * template is added but the renderer isn't updated.
  */
-export type EmailTemplate = "beta-welcome";
+export type EmailTemplate = "beta-welcome" | "pro-welcome";
 
 /**
  * Payload shape per template. Stored as jsonb in the outbox so the
@@ -100,7 +101,38 @@ export interface BetaWelcomePayload {
   appUrl?: string | null;
 }
 
-export type EmailPayload = BetaWelcomePayload;
+/**
+ * Pro adds `trialEndsAt` (ISO date string) on top of the beta payload.
+ * The Pro welcome email tells the buyer when the trial ends and the
+ * first charge happens — see `proWelcomeHtml` in lib/emails/pro-welcome.ts.
+ */
+export interface ProWelcomePayload {
+  name?: string | null;
+  sessionId?: string | null;
+  appUrl?: string | null;
+  trialEndsAt?: string | null;
+}
+
+export type EmailPayload = BetaWelcomePayload | ProWelcomePayload;
+
+/**
+ * Compile-time mapping from template name → payload shape. The
+ * generic `enqueueEmail<T>()` signature uses this to *enforce* that
+ * callers pass the right payload for the template they choose — a
+ * `template: "pro-welcome"` with a `BetaWelcomePayload` becomes a
+ * type error at the call site instead of a runtime cast surprise
+ * inside `renderTemplate()`. Adding a new template requires:
+ *   1. Extend `EmailTemplate` union.
+ *   2. Add `MyPayload` interface above.
+ *   3. Add `"my-template": MyPayload` here.
+ *   4. Add a `case "my-template":` arm in `renderTemplate()`.
+ * Steps 1+4 are enforced by the exhaustive switch; step 3 is what
+ * keeps callers honest.
+ */
+export interface PayloadByTemplate {
+  "beta-welcome": BetaWelcomePayload;
+  "pro-welcome": ProWelcomePayload;
+}
 
 interface RenderedEmail {
   from: string;
@@ -116,6 +148,19 @@ function renderTemplate(template: EmailTemplate, payload: EmailPayload): Rendere
         from: "Glev <info@glev.app>",
         subject: betaWelcomeSubject(p.name ?? null),
         html: betaWelcomeHtml(p.name ?? null, p.sessionId ?? null, p.appUrl ?? null),
+      };
+    }
+    case "pro-welcome": {
+      const p = payload as ProWelcomePayload;
+      return {
+        from: "Glev <info@glev.app>",
+        subject: proWelcomeSubject(p.name ?? null),
+        html: proWelcomeHtml(
+          p.name ?? null,
+          p.sessionId ?? null,
+          p.appUrl ?? null,
+          p.trialEndsAt ?? null,
+        ),
       };
     }
     default: {
@@ -162,10 +207,10 @@ function getResend(): Resend {
  * existing row was returned because the dedupe key matched — the
  * caller usually doesn't need to care, but it's exposed for logs.
  */
-export async function enqueueEmail(args: {
+export async function enqueueEmail<T extends EmailTemplate>(args: {
   recipient: string;
-  template: EmailTemplate;
-  payload: EmailPayload;
+  template: T;
+  payload: PayloadByTemplate[T];
   /**
    * Per-(template) idempotency key. Strongly recommended for any
    * caller wired to a system that retries the same logical event
