@@ -5,6 +5,13 @@
  * inside an iPhone frame. Used on the public marketing pages so
  * visitors can try the app without logging in.
  *
+ * INTENTIONALLY DARK — DO NOT THEME (Task #42). The screens inside the
+ * iPhone frame must keep the product's dark cockpit appearance even
+ * when the surrounding marketing page renders in Light Mode, otherwise
+ * the device-frame preview would no longer represent the real app.
+ * Color literals here are deliberate and must NOT be replaced with
+ * `var(--bg)`/`var(--surface)`/etc.
+ *
  * NOT the real app. Five hand-built screens with deterministic seed
  * data, brand-correct styling, and a clickable bottom nav. The real
  * pages live under app/(protected)/* and are gated by auth.
@@ -260,7 +267,9 @@ function TopHeader({ onAccount }: { onAccount?: () => void }) {
       display:"flex", alignItems:"center", justifyContent:"space-between",
     }}>
       <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
-        <GlevLockup size={20}/>
+        {/* Explicit white color: this header is intentionally dark and
+            must not theme-shift with the surrounding marketing page. */}
+        <GlevLockup size={20} color="#fff"/>
       </div>
       <div style={{ display:"flex", alignItems:"center", gap:6 }}>
         <div style={{ fontSize:9, padding:"3px 9px", borderRadius:99, background:`${GREEN}1F`, color:GREEN, fontWeight:600, letterSpacing:"0.04em" }}>● Live</div>

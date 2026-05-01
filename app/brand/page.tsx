@@ -6,9 +6,16 @@ import LogoCard from "@/components/brand/LogoCard";
 import LogoPlayground from "@/components/brand/LogoPlayground";
 import SectionNav from "@/components/brand/SectionNav";
 
-const PAGE_BG = "#09090B";
-const CARD_BG = "#111117";
-const BORDER = "1px solid rgba(255,255,255,0.08)";
+// Theme-aware tokens — surface, border and text colors come from the
+// CSS custom properties defined in `app/globals.css` so the brand page
+// re-skins automatically when `<html data-theme="light">` is set
+// (Task #42 — Light Mode for marketing surfaces). Brand accent hexes
+// (#4F6EF7, #22D3A0, #FF9500, #FF2D78, …) stay constant per the brand
+// spec and are still rendered as literals where they appear inside
+// swatches and demo gradients below.
+const PAGE_BG = "var(--bg)";
+const CARD_BG = "var(--surface)";
+const BORDER = "1px solid var(--border)";
 const CONTENT_MAX = 1100;
 
 type SwatchSpec = { hex: string; roleKey: string };
@@ -53,7 +60,7 @@ export default async function BrandPage() {
       id="top"
       style={{
         background: PAGE_BG,
-        color: "#fff",
+        color: "var(--text)",
         minHeight: "100dvh",
         fontFamily: "var(--font-inter), Inter, system-ui, sans-serif",
       }}
@@ -80,7 +87,7 @@ export default async function BrandPage() {
             fontWeight: 700,
             letterSpacing: "-0.03em",
             lineHeight: 1,
-            color: "#fff",
+            color: "var(--text)",
           }}
         >
           glev<span style={{ color: "#22D3A0" }}>.</span>
@@ -89,7 +96,7 @@ export default async function BrandPage() {
           style={{
             marginTop: 24,
             fontSize: 16,
-            color: "rgba(255,255,255,0.5)",
+            color: "var(--text-dim)",
           }}
         >
           {t("brand_subtitle")}
@@ -98,7 +105,7 @@ export default async function BrandPage() {
           style={{
             marginTop: 12,
             fontSize: 24,
-            color: "rgba(255,255,255,0.75)",
+            color: "var(--text-body)",
             fontWeight: 500,
             letterSpacing: "-0.01em",
           }}
@@ -140,7 +147,7 @@ export default async function BrandPage() {
             padding: "20px 24px",
             fontSize: 18,
             lineHeight: 1.6,
-            color: "rgba(255,255,255,0.85)",
+            color: "var(--text-strong)",
             fontStyle: "italic",
           }}
         >
@@ -172,7 +179,7 @@ export default async function BrandPage() {
             style={{
               fontSize: 16,
               fontWeight: 600,
-              color: "rgba(255,255,255,0.85)",
+              color: "var(--text-strong)",
               marginBottom: 16,
               textTransform: "uppercase",
               letterSpacing: "0.06em",
@@ -193,7 +200,11 @@ export default async function BrandPage() {
             <div style={{ flex: 1, background: "#FF2D78" }} />
             <div style={{ flex: 3, background: "#22D3A0" }} />
             <div style={{ flex: 2, background: "#FF9500" }} />
-            <div style={{ flex: 1, background: "rgba(255,255,255,0.5)" }} />
+            {/* "Kein Wert" sliver — semantically a missing reading, so we
+                render it as a faint chrome strip rather than a brand
+                accent. var(--text-ghost) reads as light-grey on the dark
+                gradient and dim-grey on light surfaces. */}
+            <div style={{ flex: 1, background: "var(--text-ghost)" }} />
           </div>
           <div
             style={{
@@ -202,7 +213,7 @@ export default async function BrandPage() {
               gap: 8,
               marginTop: 10,
               fontSize: 12,
-              color: "rgba(255,255,255,0.7)",
+              color: "var(--text-body)",
               fontFamily:
                 "var(--font-mono)",
               textAlign: "center",
@@ -218,7 +229,7 @@ export default async function BrandPage() {
               marginTop: 16,
               fontSize: 14,
               lineHeight: 1.6,
-              color: "rgba(255,255,255,0.65)",
+              color: "var(--text-muted)",
             }}
           >
             {t("brand_color_trend_note")}
@@ -306,7 +317,7 @@ export default async function BrandPage() {
               fontWeight: 500,
               textTransform: "uppercase",
               letterSpacing: "0.06em",
-              color: "rgba(255,255,255,0.6)",
+              color: "var(--text-muted)",
             }}
           >
             {t("brand_scale_caption_sample")}
@@ -319,7 +330,7 @@ export default async function BrandPage() {
         <p
           style={{
             fontSize: 15,
-            color: "rgba(255,255,255,0.7)",
+            color: "var(--text-body)",
             lineHeight: 1.6,
             marginBottom: 24,
             maxWidth: 720,
@@ -363,7 +374,7 @@ export default async function BrandPage() {
             marginBottom: 16,
             fontSize: 16,
             fontWeight: 600,
-            color: "rgba(255,255,255,0.85)",
+            color: "var(--text-strong)",
             textTransform: "uppercase",
             letterSpacing: "0.06em",
           }}
@@ -390,7 +401,7 @@ export default async function BrandPage() {
               display: "grid",
               gap: 8,
               fontSize: 14,
-              color: "rgba(255,255,255,0.7)",
+              color: "var(--text-body)",
               lineHeight: 1.6,
             }}
           >
@@ -407,7 +418,7 @@ export default async function BrandPage() {
         <p
           style={{
             fontSize: 15,
-            color: "rgba(255,255,255,0.7)",
+            color: "var(--text-body)",
             lineHeight: 1.6,
             marginBottom: 24,
             maxWidth: 720,
@@ -513,7 +524,7 @@ export default async function BrandPage() {
             style={{
               fontSize: 14,
               lineHeight: 1.6,
-              color: "rgba(255,255,255,0.75)",
+              color: "var(--text-body)",
             }}
           >
             {t("brand_compliance_no_med_body")}
@@ -556,7 +567,7 @@ export default async function BrandPage() {
             flexWrap: "wrap",
             gap: 12,
             fontSize: 13,
-            color: "rgba(255,255,255,0.5)",
+            color: "var(--text-dim)",
           }}
         >
           <span>{t("brand_footer_copyright")}</span>
@@ -638,7 +649,7 @@ function FoundationCard({ title, text }: { title: string; text: string }) {
         style={{
           fontSize: 14,
           lineHeight: 1.6,
-          color: "rgba(255,255,255,0.7)",
+          color: "var(--text-body)",
         }}
       >
         {text}
@@ -660,7 +671,7 @@ function SwatchGroup({
         style={{
           fontSize: 16,
           fontWeight: 600,
-          color: "rgba(255,255,255,0.85)",
+          color: "var(--text-strong)",
           marginBottom: 14,
           textTransform: "uppercase",
           letterSpacing: "0.06em",
@@ -707,7 +718,7 @@ function TypeCard({
         <div
           style={{
             fontSize: 12,
-            color: "rgba(255,255,255,0.55)",
+            color: "var(--text-muted)",
             marginTop: 4,
             fontFamily:
               "var(--font-mono)",
@@ -721,7 +732,7 @@ function TypeCard({
           padding: "20px 0",
           borderTop: BORDER,
           borderBottom: BORDER,
-          color: "#fff",
+          color: "var(--text)",
           ...sampleStyle,
         }}
       >
@@ -730,7 +741,7 @@ function TypeCard({
       <div
         style={{
           fontSize: 13,
-          color: "rgba(255,255,255,0.6)",
+          color: "var(--text-muted)",
           lineHeight: 1.5,
         }}
       >
@@ -759,13 +770,13 @@ function ScaleRow({
         gap: 18,
         alignItems: "baseline",
         paddingBottom: 14,
-        borderBottom: "1px dashed rgba(255,255,255,0.06)",
+        borderBottom: "1px dashed var(--border-soft)",
       }}
     >
       <div
         style={{
           fontSize: 11,
-          color: "rgba(255,255,255,0.5)",
+          color: "var(--text-dim)",
           textTransform: "uppercase",
           letterSpacing: "0.06em",
           fontFamily:
@@ -778,7 +789,7 @@ function ScaleRow({
       <div
         style={{
           fontSize: 11,
-          color: "rgba(255,255,255,0.4)",
+          color: "var(--text-faint)",
           fontFamily:
             "var(--font-mono)",
           textAlign: "right",
@@ -834,7 +845,7 @@ function VoiceCard({
       <div
         style={{
           fontSize: 15,
-          color: "rgba(255,255,255,0.9)",
+          color: "var(--text-strong)",
           lineHeight: 1.5,
         }}
       >
@@ -860,7 +871,7 @@ function Principle({ title, text }: { title: string; text: string }) {
       <div
         style={{
           fontSize: 13,
-          color: "rgba(255,255,255,0.65)",
+          color: "var(--text-muted)",
           lineHeight: 1.5,
         }}
       >
@@ -888,7 +899,7 @@ function ComplianceCard({ title, text }: { title: string; text: string }) {
         style={{
           fontSize: 14,
           lineHeight: 1.6,
-          color: "rgba(255,255,255,0.7)",
+          color: "var(--text-body)",
         }}
       >
         {text}

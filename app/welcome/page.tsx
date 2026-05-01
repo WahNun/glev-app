@@ -7,18 +7,21 @@ import { useTranslations } from "next-intl";
 import { supabase } from "@/lib/supabase";
 import GlevLockup from "@/components/GlevLockup";
 
+// Brand accents stay constant across themes (per the brand spec) — surface,
+// border and text colors point at the theme CSS variables in
+// `app/globals.css` so this page automatically follows Light Mode (Task #42).
 const ACCENT   = "#4F6EF7";
 const GREEN    = "#22D3A0";
 const PINK     = "#FF2D78";
-const BG       = "#09090B";
-const SURFACE  = "#111117";
+const BG       = "var(--bg)";
+const SURFACE  = "var(--surface)";
 
 const inp: React.CSSProperties = {
-  background: "rgba(255,255,255,0.05)",
-  border: "1px solid rgba(255,255,255,0.1)",
+  background: "var(--input-bg)",
+  border: "1px solid var(--border-strong)",
   borderRadius: 10,
   padding: "11px 14px",
-  color: "white",
+  color: "var(--text)",
   fontSize: 14,
   width: "100%",
   boxSizing: "border-box",
@@ -57,14 +60,14 @@ function WelcomeFallback() {
       <div style={{ width: "100%", maxWidth: 440 }}>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, marginBottom: 32 }}>
           <GlevLockup size={44} />
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: "0.12em" }}>
+          <div style={{ fontSize: 11, color: "var(--text-faint)", letterSpacing: "0.12em" }}>
             {t("welcome_subtitle")}
           </div>
         </div>
         <div style={{
           background: SURFACE, borderRadius: 18,
-          border: "1px solid rgba(255,255,255,0.07)", padding: 28,
-          textAlign: "center", color: "rgba(255,255,255,0.45)", fontSize: 13,
+          border: "1px solid var(--border-soft)", padding: 28,
+          textAlign: "center", color: "var(--text-dim)", fontSize: 13,
         }}>
           {t("welcome_loading")}
         </div>
@@ -104,19 +107,19 @@ function InvalidState({ reason }: { reason: string }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ fontSize: 18, fontWeight: 700, color: "#fff", textAlign: "center" }}>
+      <div style={{ fontSize: 18, fontWeight: 700, color: "var(--text)", textAlign: "center" }}>
         {title}
       </div>
-      <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", textAlign: "center", lineHeight: 1.6 }}>
+      <div style={{ fontSize: 13, color: "var(--text-muted)", textAlign: "center", lineHeight: 1.6 }}>
         {body}
       </div>
       <a
         href="mailto:hello@glev.app?subject=Beta-Zugang%20%E2%80%94%20Welcome-Page%20Problem"
         style={{
           marginTop: 6, padding: "12px",
-          border: "1px solid rgba(255,255,255,0.12)",
+          border: "1px solid var(--border-strong)",
           borderRadius: 12,
-          color: "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: 600,
+          color: "var(--text-strong)", fontSize: 13, fontWeight: 600,
           textAlign: "center", textDecoration: "none",
         }}
       >
@@ -246,20 +249,20 @@ function WelcomeInner() {
 
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, marginBottom: 32 }}>
           <GlevLockup size={44} />
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: "0.12em" }}>
+          <div style={{ fontSize: 11, color: "var(--text-faint)", letterSpacing: "0.12em" }}>
             {t("welcome_subtitle")}
           </div>
         </div>
 
-        <div style={{ background: SURFACE, borderRadius: 18, border: "1px solid rgba(255,255,255,0.07)", padding: 28 }}>
+        <div style={{ background: SURFACE, borderRadius: 18, border: "1px solid var(--border-soft)", padding: 28 }}>
 
           {verify.kind === "verifying" && (
-            <div style={{ textAlign: "center", padding: "30px 0", color: "rgba(255,255,255,0.55)", fontSize: 14 }}>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", marginBottom: 8 }}>
+            <div style={{ textAlign: "center", padding: "30px 0", color: "var(--text-muted)", fontSize: 14 }}>
+              <div style={{ fontSize: 11, color: "var(--text-faint)", letterSpacing: "0.1em", marginBottom: 8 }}>
                 {t("welcome_verifying")}
               </div>
               <svg width="22" height="22" viewBox="0 0 24 24" style={{ marginTop: 4 }} aria-hidden="true">
-                <circle cx="12" cy="12" r="9" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="3"/>
+                <circle cx="12" cy="12" r="9" fill="none" stroke="var(--border-strong)" strokeWidth="3"/>
                 <path d="M21 12a9 9 0 0 0-9-9" fill="none" stroke={ACCENT} strokeWidth="3" strokeLinecap="round">
                   <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.8s" repeatCount="indefinite"/>
                 </path>
@@ -277,17 +280,17 @@ function WelcomeInner() {
                 <div style={{ fontSize: 11, color: GREEN, letterSpacing: "0.1em", fontWeight: 700, marginBottom: 6 }}>
                   {t("welcome_payment_confirmed")}
                 </div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: "#fff", marginBottom: 4 }}>
+                <div style={{ fontSize: 18, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>
                   {t("welcome_create_account")}
                 </div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", lineHeight: 1.5 }}>
+                <div style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.5 }}>
                   {t("welcome_choose_password")}
                 </div>
               </div>
 
               <form onSubmit={handleSignup} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 <div>
-                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 6, letterSpacing: "0.08em" }}>{t("welcome_email_label")}</div>
+                  <div style={{ fontSize: 10, color: "var(--text-faint)", marginBottom: 6, letterSpacing: "0.08em" }}>{t("welcome_email_label")}</div>
                   <input
                     type="email"
                     value={verify.email ?? ""}
@@ -298,7 +301,7 @@ function WelcomeInner() {
                 </div>
 
                 <div>
-                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 6, letterSpacing: "0.08em" }}>{t("welcome_password_label")}</div>
+                  <div style={{ fontSize: 10, color: "var(--text-faint)", marginBottom: 6, letterSpacing: "0.08em" }}>{t("welcome_password_label")}</div>
                   <input
                     type="password"
                     value={password}
@@ -313,7 +316,7 @@ function WelcomeInner() {
                 </div>
 
                 <div>
-                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 6, letterSpacing: "0.08em" }}>{t("welcome_password_confirm_label")}</div>
+                  <div style={{ fontSize: 10, color: "var(--text-faint)", marginBottom: 6, letterSpacing: "0.08em" }}>{t("welcome_password_confirm_label")}</div>
                   <input
                     type="password"
                     value={confirm}
@@ -356,10 +359,13 @@ function WelcomeInner() {
                 <button type="submit" disabled={submitting || !!notice} style={{
                   padding: "13px",
                   background: submitting || notice
-                    ? "rgba(255,255,255,0.06)"
+                    ? "var(--surface-soft)"
                     : `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
                   border: "none", borderRadius: 12,
-                  color: submitting || notice ? "rgba(255,255,255,0.35)" : "white",
+                  // Active button keeps white text (readable on accent
+                  // gradient in both themes); disabled state borrows the
+                  // muted token so it greys-out correctly in Light Mode.
+                  color: submitting || notice ? "var(--text-faint)" : "white",
                   fontSize: 14, fontWeight: 700,
                   cursor: submitting || notice ? "default" : "pointer",
                   transition: "all 0.15s", marginTop: 4,
@@ -370,9 +376,9 @@ function WelcomeInner() {
                 {notice && (
                   <Link href="/login" style={{
                     padding: "12px",
-                    border: "1px solid rgba(255,255,255,0.1)",
+                    border: "1px solid var(--border-strong)",
                     borderRadius: 12,
-                    color: "rgba(255,255,255,0.7)", fontSize: 13, fontWeight: 600,
+                    color: "var(--text-body)", fontSize: 13, fontWeight: 600,
                     textAlign: "center", textDecoration: "none",
                   }}>
                     {t("welcome_to_login")}
@@ -383,7 +389,7 @@ function WelcomeInner() {
           )}
         </div>
 
-        <div style={{ textAlign: "center", marginTop: 20, fontSize: 10, color: "rgba(255,255,255,0.15)", letterSpacing: "0.06em" }}>
+        <div style={{ textAlign: "center", marginTop: 20, fontSize: 10, color: "var(--text-ghost)", letterSpacing: "0.06em" }}>
           {t("welcome_members_only")}
         </div>
       </div>

@@ -42,7 +42,7 @@ export default function HexSwatch({
         width: 160,
         height: 160,
         background: hex,
-        border: "1px solid rgba(255,255,255,0.08)",
+        border: "1px solid var(--border)",
         borderRadius: 12,
         padding: 14,
         display: "flex",

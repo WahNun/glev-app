@@ -126,15 +126,33 @@ All protected routes live under `src/app/(protected)/` and require Supabase auth
 
 ## Design Tokens
 
+The full theme contract lives in `app/globals.css` and is keyed off
+`<html data-theme="dark|light">`. Always reference theme via CSS variables —
+do not hard-code surface/text/border literals.
+
 ```
-Background:  #09090B
-Surface:     #111117
-Accent:      #4F6EF7
-Green:       #22D3A0
-Pink:        #FF2D78
-Orange:      #FF9500
-Border:      rgba(255,255,255,0.08)
+Theme variables (Dark / Light values defined in app/globals.css):
+  --bg, --surface, --surface-alt, --surface-soft
+  --input-bg
+  --border, --border-soft, --border-strong
+  --text, --text-strong, --text-body, --text-muted, --text-dim, --text-faint, --text-ghost
+  --shadow-card, --overlay, --browser-theme, --on-accent
+
+Brand accents (constant across themes — per brand spec):
+  Accent / Brand Blue:  #4F6EF7
+  Green:                #22D3A0
+  Orange:               #FF9500
+  Pink:                 #FF2D78
+  Yellow:               #FFD60A
 ```
+
+Pages that follow the theme: `/` (landing), `/login`, `/welcome`, `/brand`, all
+`(protected)/*` routes, `Layout.tsx`. White text on brand-blue buttons stays
+`#fff` intentionally — it is readable on the accent color in both modes.
+
+Pages intentionally **kept dark** regardless of theme (documented in source):
+- `app/mockups/dark-cockpit/page.tsx` — fixed product mockup
+- `components/AppMockupPhone.tsx` — iPhone-frame demo on marketing pages
 
 ## Dev Commands
 

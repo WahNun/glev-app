@@ -4,7 +4,11 @@ import GlevLogo from "@/components/GlevLogo";
 
 export default function GlevLockup({
   size = 32,
-  color = "#fff",
+  // Defaults to the theme-aware text token so the wordmark inverts on
+  // light surfaces (Task #42 — Light Mode for marketing pages). Callers
+  // can still pass an explicit color (e.g. "rgba(255,255,255,0.7)") for
+  // permanently-dark contexts like the AppMockupPhone chrome.
+  color = "var(--text)",
   symbolColor = "#4F6EF7",
   symbolBg = "#0F0F14",
   showDot = true,

@@ -24,8 +24,8 @@ export default function LogoCard({
   return (
     <div
       style={{
-        background: "#111117",
-        border: "1px solid rgba(255,255,255,0.08)",
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
         borderRadius: 14,
         padding: 24,
         display: "flex",
@@ -36,7 +36,7 @@ export default function LogoCard({
       <div
         style={{
           background: bg,
-          border: "1px solid rgba(255,255,255,0.06)",
+          border: "1px solid var(--border-soft)",
           borderRadius: 12,
           padding: 32,
           display: "flex",
@@ -48,12 +48,12 @@ export default function LogoCard({
         <GlevLogo size={size} color={color} bg={bg} />
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <div style={{ fontSize: 15, fontWeight: 600 }}>{title}</div>
+        <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text)" }}>{title}</div>
         {description && (
           <div
             style={{
               fontSize: 13,
-              color: "rgba(255,255,255,0.6)",
+              color: "var(--text-muted)",
               lineHeight: 1.5,
             }}
           >

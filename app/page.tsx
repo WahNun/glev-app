@@ -9,15 +9,19 @@ import FeatureTrio from "@/components/landing/FeatureTrio";
 import Steps from "@/components/landing/Steps";
 import FeatureDeepDive from "@/components/landing/FeatureDeepDive";
 
+// Brand accents stay constant across themes (per the brand spec) — surface,
+// border and text colors point at the theme CSS variables in
+// `app/globals.css` so the landing page automatically follows Light Mode
+// when `<html data-theme="light">` is set (Task #42).
 const ACCENT  = "#4F6EF7";
 const HOVER   = "#6B8BFF";
 const GREEN   = "#22D3A0";
 const ORANGE  = "#FF9500";
 const PINK    = "#FF2D78";
-const BG      = "#09090B";
-const SURFACE = "#111117";
-const SURF2   = "#0F0F14";
-const BORDER  = "rgba(255,255,255,0.08)";
+const BG      = "var(--bg)";
+const SURFACE = "var(--surface)";
+const SURF2   = "var(--surface-alt)";
+const BORDER  = "var(--border)";
 
 export default function Home() {
   const t = useTranslations("marketing");
@@ -25,7 +29,7 @@ export default function Home() {
     <main
       style={{
         background: BG,
-        color: "#fff",
+        color: "var(--text)",
         minHeight: "100dvh",
         fontFamily: "var(--font-inter), Inter, system-ui, sans-serif",
         position: "relative",
@@ -58,11 +62,13 @@ export default function Home() {
         .glev-cta-primary { transition: transform 0.15s, box-shadow 0.15s, background 0.15s; }
         .glev-cta-primary:hover { transform: translateY(-1px); background: ${HOVER}; box-shadow: 0 8px 24px ${ACCENT}55; }
         .glev-cta-ghost { transition: background 0.15s, border-color 0.15s; }
-        .glev-cta-ghost:hover { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.18); }
+        /* Hover tint pulled from the theme tokens so ghost buttons land on
+           a faint surface inset in both Dark and Light Mode (Task #42). */
+        .glev-cta-ghost:hover { background: var(--surface-soft); border-color: var(--border-strong); }
         .glev-link { transition: color 0.15s; }
         .glev-link:hover { color: ${HOVER} !important; }
         .glev-secondary-link { transition: color 0.15s; }
-        .glev-secondary-link:hover { color: rgba(255,255,255,0.9) !important; text-decoration: underline; text-underline-offset: 3px; }
+        .glev-secondary-link:hover { color: var(--text-strong) !important; text-decoration: underline; text-underline-offset: 3px; }
         .glev-pricing-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
@@ -104,7 +110,10 @@ export default function Home() {
           left: 0,
           right: 0,
           zIndex: 50,
-          background: "rgba(9,9,11,0.72)",
+          // color-mix tints the page bg so the same rule reads as a dark
+          // translucent slab in Dark Mode and a light translucent slab
+          // in Light Mode (Task #42).
+          background: "color-mix(in srgb, var(--bg) 72%, transparent)",
           backdropFilter: "saturate(180%) blur(14px)",
           WebkitBackdropFilter: "saturate(180%) blur(14px)",
           borderBottom: `1px solid ${BORDER}`,
@@ -135,12 +144,12 @@ export default function Home() {
               style={{
                 fontSize: 13,
                 fontWeight: 600,
-                color: "#fff",
+                color: "var(--text)",
                 textDecoration: "none",
                 padding: "9px 16px",
                 borderRadius: 999,
                 border: `1px solid ${BORDER}`,
-                background: "rgba(255,255,255,0.03)",
+                background: "var(--surface-soft)",
               }}
               className="glev-cta-ghost"
             >
@@ -197,7 +206,7 @@ export default function Home() {
                 letterSpacing: "-0.035em",
                 lineHeight: 1.02,
                 margin: 0,
-                color: "#fff",
+                color: "var(--text)",
               }}
             >
               {t("hero_h1")}<span style={{ color: GREEN }}>.</span>
@@ -208,7 +217,7 @@ export default function Home() {
                 marginTop: 24,
                 fontSize: 18,
                 lineHeight: 1.55,
-                color: "rgba(255,255,255,0.7)",
+                color: "var(--text-body)",
                 maxWidth: 520,
               }}
             >
@@ -232,6 +241,8 @@ export default function Home() {
                     padding: "14px 22px",
                     borderRadius: 12,
                     background: ACCENT,
+                    // White stays constant in both themes — readable on
+                    // the brand-blue button regardless of mode.
                     color: "#fff",
                     fontSize: 14,
                     fontWeight: 700,
@@ -257,7 +268,7 @@ export default function Home() {
                     padding: "14px 22px",
                     borderRadius: 12,
                     background: "transparent",
-                    color: "rgba(255,255,255,0.85)",
+                    color: "var(--text-strong)",
                     fontSize: 14,
                     fontWeight: 600,
                     textDecoration: "none",
@@ -276,7 +287,7 @@ export default function Home() {
                 className="glev-secondary-link"
                 style={{
                   fontSize: 13,
-                  color: "rgba(255,255,255,0.6)",
+                  color: "var(--text-muted)",
                   textDecoration: "none",
                   fontWeight: 500,
                   letterSpacing: "-0.005em",
@@ -303,18 +314,18 @@ export default function Home() {
                 rowGap: 8,
                 fontFamily: "var(--font-mono), JetBrains Mono, monospace",
                 fontSize: 12,
-                color: "rgba(255,255,255,0.45)",
+                color: "var(--text-dim)",
               }}
             >
               <span style={{ color: GREEN }}>● Libre 2</span>
               <span>·</span>
               <span style={{ color: GREEN }}>● Libre 3</span>
               <span>·</span>
-              <span style={{ color: "rgba(255,255,255,0.35)" }}>○ Dexcom</span>
+              <span style={{ color: "var(--text-faint)" }}>○ Dexcom</span>
               <span>·</span>
               <span style={{ color: GREEN }}>● Nightscout</span>
               <span>·</span>
-              <span style={{ color: "rgba(255,255,255,0.35)" }}>○ Medtronic</span>
+              <span style={{ color: "var(--text-faint)" }}>○ Medtronic</span>
             </div>
           </div>
 
@@ -366,7 +377,7 @@ export default function Home() {
               letterSpacing: "-0.02em",
               lineHeight: 1.2,
               margin: 0,
-              color: "#fff",
+              color: "var(--text)",
             }}
           >
             {t("pain_title")}
@@ -390,7 +401,7 @@ export default function Home() {
                   gap: 12,
                   fontSize: 15,
                   lineHeight: 1.55,
-                  color: "rgba(255,255,255,0.78)",
+                  color: "var(--text-body)",
                   overflowWrap: "anywhere",
                 }}
               >
@@ -444,7 +455,7 @@ export default function Home() {
             fontWeight: 700,
             letterSpacing: "-0.03em",
             margin: "0 0 28px",
-            color: "#fff",
+            color: "var(--text)",
           }}
         >
           {t("how_title")}
@@ -483,7 +494,7 @@ export default function Home() {
               fontWeight: 700,
               letterSpacing: "-0.02em",
               margin: 0,
-              color: "#fff",
+              color: "var(--text)",
             }}
           >
             {t("pricing_title")}<span style={{ color: GREEN }}>.</span>
@@ -493,7 +504,7 @@ export default function Home() {
               marginTop: 12,
               fontSize: 15,
               lineHeight: 1.55,
-              color: "rgba(255,255,255,0.6)",
+              color: "var(--text-muted)",
               maxWidth: 520,
               marginLeft: "auto",
               marginRight: "auto",
@@ -518,12 +529,12 @@ export default function Home() {
             }}
           >
             <div>
-              <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "#fff" }}>
+              <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--text)" }}>
                 {t("pricing_beta_title")}
               </h3>
               <div style={{ marginTop: 14, display: "flex", alignItems: "baseline", gap: 8 }}>
-                <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff" }}>{t("pricing_beta_price")}</span>
-                <span style={{ fontSize: 15, color: "rgba(255,255,255,0.6)" }}>{t("pricing_beta_period")}</span>
+                <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text)" }}>{t("pricing_beta_price")}</span>
+                <span style={{ fontSize: 15, color: "var(--text-muted)" }}>{t("pricing_beta_period")}</span>
               </div>
             </div>
 
@@ -546,7 +557,7 @@ export default function Home() {
                 padding: "13px 22px",
                 borderRadius: 12,
                 background: "transparent",
-                color: "#fff",
+                color: "var(--text)",
                 fontSize: 14,
                 fontWeight: 600,
                 letterSpacing: "-0.005em",
@@ -601,12 +612,12 @@ export default function Home() {
             </div>
 
             <div>
-              <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "#fff" }}>
+              <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--text)" }}>
                 {t("pricing_pro_title")}
               </h3>
               <div style={{ marginTop: 14, display: "flex", alignItems: "baseline", gap: 8 }}>
-                <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff" }}>{t("pricing_pro_price")}</span>
-                <span style={{ fontSize: 15, color: "rgba(255,255,255,0.6)" }}>{t("pricing_pro_period")}</span>
+                <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text)" }}>{t("pricing_pro_price")}</span>
+                <span style={{ fontSize: 15, color: "var(--text-muted)" }}>{t("pricing_pro_period")}</span>
               </div>
             </div>
 
@@ -669,7 +680,7 @@ export default function Home() {
             fontWeight: 700,
             letterSpacing: "-0.01em",
             margin: "0 0 16px",
-            color: "#fff",
+            color: "var(--text)",
           }}
         >
           {t("faq_title")}
@@ -696,7 +707,7 @@ export default function Home() {
                   cursor: "pointer",
                   fontSize: 15,
                   fontWeight: 600,
-                  color: "#fff",
+                  color: "var(--text)",
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
@@ -704,9 +715,9 @@ export default function Home() {
                 }}
               >
                 <span>{item.q}</span>
-                <span aria-hidden style={{ color: "rgba(255,255,255,0.5)", fontFamily: "var(--font-mono), JetBrains Mono, monospace" }}>+</span>
+                <span aria-hidden style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono), JetBrains Mono, monospace" }}>+</span>
               </summary>
-              <div style={{ fontSize: 14, color: "rgba(255,255,255,0.75)", lineHeight: 1.55, marginTop: 10 }}>
+              <div style={{ fontSize: 14, color: "var(--text-body)", lineHeight: 1.55, marginTop: 10 }}>
                 {item.a}
               </div>
             </details>
@@ -729,11 +740,11 @@ export default function Home() {
           alignItems: "center",
           justifyContent: "space-between",
           fontSize: 12,
-          color: "rgba(255,255,255,0.4)",
+          color: "var(--text-faint)",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <GlevLockup size={20} color="rgba(255,255,255,0.7)" />
+          <GlevLockup size={20} color="var(--text-body)" />
           <span>
             {t("footer_copyright")}
             {" · "}
@@ -769,7 +780,7 @@ export default function Home() {
 
 function PricingBullet({ text }: { text: string }) {
   return (
-    <li style={{ display: "flex", gap: 10, fontSize: 14, lineHeight: 1.5, color: "rgba(255,255,255,0.85)" }}>
+    <li style={{ display: "flex", gap: 10, fontSize: 14, lineHeight: 1.5, color: "var(--text-strong)" }}>
       <span
         aria-hidden
         style={{

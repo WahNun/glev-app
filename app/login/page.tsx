@@ -9,15 +9,18 @@ import GlevLockup from "@/components/GlevLockup";
 const ACCENT   = "#4F6EF7";
 const GREEN    = "#22D3A0";
 const PINK     = "#FF2D78";
-const BG       = "#09090B";
-const SURFACE  = "#111117";
+// Brand accents stay constant across themes (per the brand spec) — surface,
+// border and text colors point at the theme CSS variables in
+// `app/globals.css` so this page automatically follows Light Mode (Task #42).
+const BG       = "var(--bg)";
+const SURFACE  = "var(--surface)";
 
 const inp: React.CSSProperties = {
-  background: "rgba(255,255,255,0.05)",
-  border: "1px solid rgba(255,255,255,0.1)",
+  background: "var(--input-bg)",
+  border: "1px solid var(--border-strong)",
   borderRadius: 10,
   padding: "11px 14px",
-  color: "white",
+  color: "var(--text)",
   fontSize: 14,
   width: "100%",
   boxSizing: "border-box",
@@ -129,16 +132,16 @@ export default function LoginPage() {
 
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, marginBottom: 32 }}>
           <GlevLockup size={44} />
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: "0.12em" }}>
+          <div style={{ fontSize: 11, color: "var(--text-faint)", letterSpacing: "0.12em" }}>
             INSULIN DECISION SUPPORT
           </div>
         </div>
 
-        <div style={{ background: SURFACE, borderRadius: 18, border: "1px solid rgba(255,255,255,0.07)", padding: 28 }}>
+        <div style={{ background: SURFACE, borderRadius: 18, border: "1px solid var(--border-soft)", padding: 28 }}>
 
           <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 6, letterSpacing: "0.08em" }}>EMAIL</div>
+              <div style={{ fontSize: 10, color: "var(--text-faint)", marginBottom: 6, letterSpacing: "0.08em" }}>EMAIL</div>
               <input
                 type="email"
                 value={email}
@@ -152,7 +155,7 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 6, letterSpacing: "0.08em" }}>PASSWORD</div>
+              <div style={{ fontSize: 10, color: "var(--text-faint)", marginBottom: 6, letterSpacing: "0.08em" }}>PASSWORD</div>
               <input
                 type="password"
                 value={password}
@@ -182,10 +185,13 @@ export default function LoginPage() {
             <button type="submit" disabled={loading} style={{
               padding: "13px",
               background: loading
-                ? "rgba(255,255,255,0.06)"
+                ? "var(--surface-soft)"
                 : `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
               border: "none", borderRadius: 12,
-              color: loading ? "rgba(255,255,255,0.35)" : "white",
+              // Active button keeps white text (readable on accent
+              // gradient in both themes); disabled state borrows the
+              // muted token so it greys-out correctly in Light Mode.
+              color: loading ? "var(--text-faint)" : "white",
               fontSize: 14, fontWeight: 700,
               cursor: loading ? "default" : "pointer",
               transition: "all 0.15s", marginTop: 4,
@@ -200,7 +206,7 @@ export default function LoginPage() {
               zurück auf /auth/confirm wo der Recovery-Link verarbeitet wird. */}
           <div style={{
             marginTop: 18, paddingTop: 16,
-            borderTop: "1px solid rgba(255,255,255,0.06)",
+            borderTop: "1px solid var(--border-soft)",
           }}>
             {!showReset ? (
               <button
@@ -208,10 +214,10 @@ export default function LoginPage() {
                 onClick={() => { setShowReset(true); setResetError(null); setResetNotice(null); }}
                 style={{
                   background: "transparent", border: "none", padding: 0,
-                  color: "rgba(255,255,255,0.55)", fontSize: 13,
+                  color: "var(--text-muted)", fontSize: 13,
                   cursor: "pointer", fontFamily: "inherit",
                   textDecoration: "underline",
-                  textDecorationColor: "rgba(255,255,255,0.2)",
+                  textDecorationColor: "var(--text-ghost)",
                   textUnderlineOffset: 3,
                   width: "100%", textAlign: "center",
                 }}
@@ -220,7 +226,7 @@ export default function LoginPage() {
               </button>
             ) : (
               <form onSubmit={handleResetRequest} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <div style={{ fontSize: 13, color: "rgba(255,255,255,0.65)", lineHeight: 1.5 }}>
+                <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5 }}>
                   Gib deine Email ein — wir schicken dir einen Link zum Setzen eines neuen Passworts.
                 </div>
 
@@ -275,10 +281,10 @@ export default function LoginPage() {
                     style={{
                       flex: "0 0 auto",
                       padding: "10px 14px",
-                      background: "rgba(255,255,255,0.05)",
-                      border: "1px solid rgba(255,255,255,0.08)",
+                      background: "var(--surface-soft)",
+                      border: "1px solid var(--border)",
                       borderRadius: 9,
-                      color: "rgba(255,255,255,0.65)",
+                      color: "var(--text-muted)",
                       fontSize: 13, fontWeight: 500,
                       cursor: resetLoading ? "default" : "pointer",
                       fontFamily: "inherit",
@@ -293,10 +299,12 @@ export default function LoginPage() {
                       flex: 1,
                       padding: "10px 14px",
                       background: (resetLoading || !!resetNotice)
-                        ? "rgba(255,255,255,0.06)"
+                        ? "var(--surface-soft)"
                         : `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
                       border: "none", borderRadius: 9,
-                      color: (resetLoading || !!resetNotice) ? "rgba(255,255,255,0.35)" : "white",
+                      // White stays constant on the active accent gradient;
+                      // disabled state borrows the muted token.
+                      color: (resetLoading || !!resetNotice) ? "var(--text-faint)" : "white",
                       fontSize: 13, fontWeight: 700,
                       cursor: (resetLoading || !!resetNotice) ? "default" : "pointer",
                       fontFamily: "inherit",
@@ -315,16 +323,16 @@ export default function LoginPage() {
             Account-Erstellung läuft über den bezahlten Beta-/Pro-Flow auf
             der Startseite — daher hier KEIN „Sign up"-CTA. Stattdessen ein
             neutraler Rückweg, falls jemand versehentlich auf /login landet. */}
-        <div style={{ textAlign: "center", marginTop: 18, fontSize: 12, color: "rgba(255,255,255,0.35)" }}>
+        <div style={{ textAlign: "center", marginTop: 18, fontSize: 12, color: "var(--text-faint)" }}>
           <Link
             href="/"
-            style={{ color: "rgba(255,255,255,0.55)", textDecoration: "none", fontWeight: 500 }}
+            style={{ color: "var(--text-muted)", textDecoration: "none", fontWeight: 500 }}
           >
             ← Zurück zur Startseite
           </Link>
         </div>
 
-        <div style={{ textAlign: "center", marginTop: 14, fontSize: 10, color: "rgba(255,255,255,0.15)", letterSpacing: "0.06em" }}>
+        <div style={{ textAlign: "center", marginTop: 14, fontSize: 10, color: "var(--text-ghost)", letterSpacing: "0.06em" }}>
           MEMBERS ONLY · PRIVATE BETA
         </div>
       </div>

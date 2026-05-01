@@ -31,8 +31,8 @@ export default function LogoPlayground() {
   return (
     <div
       style={{
-        background: "#111117",
-        border: "1px solid rgba(255,255,255,0.08)",
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
         borderRadius: 14,
         padding: 24,
         display: "grid",
@@ -46,7 +46,7 @@ export default function LogoPlayground() {
             bg === "transparent"
               ? "repeating-conic-gradient(#1a1a22 0% 25%, #0d0d12 25% 50%) 50% / 24px 24px"
               : bg,
-          border: "1px solid rgba(255,255,255,0.06)",
+          border: "1px solid var(--border-soft)",
           borderRadius: 12,
           minHeight: 320,
           display: "flex",
@@ -107,11 +107,11 @@ export default function LogoPlayground() {
 }
 
 const inputStyle: React.CSSProperties = {
-  background: "#0A0A0F",
-  border: "1px solid rgba(255,255,255,0.12)",
+  background: "var(--input-bg)",
+  border: "1px solid var(--border-strong)",
   borderRadius: 8,
   padding: "8px 12px",
-  color: "#fff",
+  color: "var(--text)",
   fontFamily: "var(--font-mono)",
   fontSize: 13,
   width: "100%",
@@ -129,7 +129,7 @@ function Control({
       <div
         style={{
           fontSize: 12,
-          color: "rgba(255,255,255,0.55)",
+          color: "var(--text-muted)",
           textTransform: "uppercase",
           letterSpacing: "0.08em",
         }}
@@ -168,8 +168,8 @@ function Swatches({
               height: 32,
               borderRadius: 8,
               border: active
-                ? "2px solid #fff"
-                : "1px solid rgba(255,255,255,0.18)",
+                ? "2px solid var(--text)"
+                : "1px solid var(--border-strong)",
               background: isTransparent
                 ? "repeating-conic-gradient(#1a1a22 0% 25%, #0d0d12 25% 50%) 50% / 10px 10px"
                 : v,

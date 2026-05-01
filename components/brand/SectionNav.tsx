@@ -23,10 +23,12 @@ export default function SectionNav() {
         position: "sticky",
         top: 0,
         zIndex: 50,
-        background: "rgba(9,9,11,0.85)",
+        // Tinted blur over the page bg — color-mix lets the same rule
+        // serve dark and light themes (Task #42).
+        background: "color-mix(in srgb, var(--bg) 85%, transparent)",
         backdropFilter: "saturate(160%) blur(10px)",
         WebkitBackdropFilter: "saturate(160%) blur(10px)",
-        borderBottom: "1px solid rgba(255,255,255,0.08)",
+        borderBottom: "1px solid var(--border)",
       }}
     >
       <div
@@ -44,7 +46,7 @@ export default function SectionNav() {
         <a
           href="#top"
           style={{
-            color: "#fff",
+            color: "var(--text)",
             textDecoration: "none",
             fontWeight: 700,
             fontSize: 16,
@@ -76,7 +78,7 @@ export default function SectionNav() {
               <a
                 href={`#${it.id}`}
                 style={{
-                  color: "rgba(255,255,255,0.7)",
+                  color: "var(--text-body)",
                   textDecoration: "none",
                   fontSize: 14,
                   padding: "6px 10px",

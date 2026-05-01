@@ -1,5 +1,19 @@
 "use client";
 
+/**
+ * INTENTIONALLY DARK — DO NOT THEME (Task #42).
+ *
+ * This page is a fixed-mockup of the Glev "dark cockpit" product surface
+ * as it ships inside the iOS shell of the marketing app. It is shown
+ * embedded inside `AppMockupPhone` (also intentionally dark) on the
+ * Light-Mode landing/brand pages and must keep its dark appearance
+ * regardless of the user's theme preference, otherwise the device-frame
+ * preview would no longer represent the real product.
+ *
+ * For that reason the constants below are hardcoded color literals —
+ * they purposely do NOT read from `var(--bg)` etc.
+ */
+
 import { Suspense, useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import React from "react";
@@ -11,6 +25,7 @@ const ACCENT = "#4F6EF7";
 const PINK = "#FF2D78";
 const GREEN = "#22D3A0";
 const ORANGE = "#FF9500";
+// Hardcoded dark tokens — intentional, see file header.
 const BG = "#09090B";
 const SURFACE = "#111117";
 const BORDER = "rgba(255,255,255,0.06)";
