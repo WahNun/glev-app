@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { fetchMeals, computeCalories, unifiedOutcome, type Meal } from "@/lib/meals";
+import { computeControlScore } from "@/lib/controlScore";
 import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
 import { evaluateExercise } from "@/lib/exerciseEval";
@@ -738,60 +739,12 @@ function NonMealLightExpand({
 }
 
 // -----------------------------------------------------------------------------
-// Control Score helpers + hero card.
-//   Score formula matches the legacy `buildCards` math (Good% × 0.7 +
-//   (100 − Spike% − Hypo%) × 0.3) but is windowable so the hero card can
-//   render the rolling 7-day score and a delta vs the previous 7 days.
-//   Badge thresholds are the user-facing 3-tier mapping spec'd by product
-//   (STRONG ≥ 80 · GOOD ≥ 60 · POOR < 60), derived from the existing
-//   "80+ Excellent / 60–79 Good / 40–59 Fair / <40 Needs attention" text.
+// Control Score hero card.
+//   The score formula + bucketing live in `lib/controlScore.ts` so they
+//   can be unit-tested without dragging this React tree into the test
+//   runner (Task #41). Badge thresholds (STRONG ≥ 80 · GOOD ≥ 60 ·
+//   POOR < 60) are the user-facing 3-tier mapping spec'd by product.
 // -----------------------------------------------------------------------------
-// Four mutually-exclusive buckets aligned with the deterministic
-// evaluator's outcome labels (lib/engine/evaluation.ts):
-//   GOOD       — dose matched the meal (Δ within ±30 mg/dL)
-//   SPIKE      — post-meal high (rapid spike OR slow underdose); incl. legacy "HIGH"
-//   OVERDOSE   — post-meal low (insulin overshot); incl. legacy "LOW"
-//   OTHER      — CHECK_CONTEXT, null, or anything we can't categorise yet
-//                (pending / provisional rows whose lifecycleFor hasn't
-//                cached an evaluation, plus the diagnostic CHECK_CONTEXT
-//                outcome). Excluded from BOTH numerator and denominator
-//                so a fresh untracked meal doesn't drag the score down.
-//
-// Score = % of evaluated meals that landed in GOOD, clamped to 0..100.
-// `count` returns the denominator (evaluated meals only) so the card's
-// "not enough data" branch still triggers correctly.
-function computeControlScore(meals: Meal[], sinceMs: number, untilMs: number = Infinity): { score: number; count: number } {
-  const inWindow = meals.filter(m => {
-    const t = parseDbDate(m.created_at).getTime();
-    return t >= sinceMs && t < untilMs;
-  });
-  // Unified bucketing — each meal counts in exactly one of
-  // GOOD / SPIKE / HYPO / OTHER. The historical UNDERDOSE → spike +
-  // OVERDOSE → hypo split is preserved, but `unifiedOutcome` ensures
-  // we never double-count a row across both buckets. Denominator is
-  // `total` (matches buildCards) so the badge score and the per-card
-  // rates always agree on what "100% of meals" means.
-  const total = inWindow.length;
-  if (!total) return { score: 0, count: 0 };
-  let good = 0, spike = 0, hypo = 0;
-  for (const m of inWindow) {
-    const ev = unifiedOutcome(m);
-    if      (ev === "GOOD")                                       good++;
-    else if (ev === "SPIKE" || ev === "UNDERDOSE" || ev === "LOW") spike++;
-    else if (ev === "OVERDOSE" || ev === "HIGH")                  hypo++;
-    // Anything else (CHECK_CONTEXT, null, unknown) → OTHER, in
-    // denominator only — a still-pending meal lowers all three
-    // displayed rates equally instead of being silently excluded.
-  }
-  // Spec formula: clamp(good_rate * 0.7 + (100 - spike_rate - hypo_rate) * 0.3, 0, 100).
-  const goodRate  = (good  / total) * 100;
-  const spikeRate = (spike / total) * 100;
-  const hypoRate  = (hypo  / total) * 100;
-  const raw   = goodRate * 0.7 + (100 - spikeRate - hypoRate) * 0.3;
-  const score = Math.max(0, Math.min(100, Math.round(raw)));
-  return { score, count: total };
-}
-
 function ControlScoreCard({ meals }: { meals: Meal[] }) {
   const [flipped, setFlipped] = useState(false);
   const t = useTranslations("dashboard");
