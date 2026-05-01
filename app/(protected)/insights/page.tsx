@@ -50,8 +50,6 @@ const ACCENT_SOFT="#93A5FA";
 const SURFACE="var(--surface)", BORDER="var(--border)";
 const HIGH_YELLOW = "#FFD166";
 
-const WEEKDAY_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-
 // Unified outcome bucketing — single source of truth shared with the
 // dashboard Control Score (app/(protected)/dashboard/page.tsx). Each
 // meal lands in EXACTLY one of GOOD / SPIKE / HYPO / OTHER (the legacy
@@ -233,6 +231,17 @@ export default function InsightsPage() {
   const gmiDelta = (gmi != null && prevGmi != null) ? +(gmi - prevGmi).toFixed(1) : null;
 
   // ── 7-day trend: daily avg pre-meal glucose, oldest → newest ──
+  // Localised weekday short labels (Sun..Sat / So..Sa) come from the
+  // `insights` namespace so the trend axis follows the active locale.
+  const weekdayShortLabels = [
+    tInsights("weekday_short_sun"),
+    tInsights("weekday_short_mon"),
+    tInsights("weekday_short_tue"),
+    tInsights("weekday_short_wed"),
+    tInsights("weekday_short_thu"),
+    tInsights("weekday_short_fri"),
+    tInsights("weekday_short_sat"),
+  ];
   const trendDays: { label: string; avg: number | null }[] = [];
   for (let i = 6; i >= 0; i--) {
     const dayStart = startOfDaysAgo(i);
@@ -244,7 +253,7 @@ export default function InsightsPage() {
       })
       .map(m => m.glucose_before as number);
     trendDays.push({
-      label: WEEKDAY_SHORT[dayStart.getDay()],
+      label: weekdayShortLabels[dayStart.getDay()],
       avg: dayBgs.length ? dayBgs.reduce((a, b) => a + b, 0) / dayBgs.length : null,
     });
   }
@@ -437,9 +446,9 @@ export default function InsightsPage() {
   const totalN = goodN + spikeN + hypoN;
   const evalPct = (n: number) => totalN > 0 ? Math.round((n / totalN) * 100) : 0;
   const evalRows = [
-    { label:"On target", count:goodN,  color:GREEN,  pct:evalPct(goodN)  },
-    { label:"Spiked",    count:spikeN, color:ORANGE, pct:evalPct(spikeN) },
-    { label:"Low risk",  count:hypoN,  color:PINK,   pct:evalPct(hypoN)  },
+    { label:tInsights("eval_label_on_target"), count:goodN,  color:GREEN,  pct:evalPct(goodN)  },
+    { label:tInsights("eval_label_spiked"),    count:spikeN, color:ORANGE, pct:evalPct(spikeN) },
+    { label:tInsights("eval_label_low_risk"),  count:hypoN,  color:PINK,   pct:evalPct(hypoN)  },
   ];
 
   // ── Deeper-analysis derivations (used by cards under the hero block) ──
@@ -588,9 +597,9 @@ export default function InsightsPage() {
                 {tarPct > 0 && <div style={{ width:`${tarPct}%`, background:HIGH_YELLOW }}/>}
               </div>
               <div style={{ display:"flex", justifyContent:"space-between", marginTop:6, fontSize:9, color:"var(--text-dim)", flexWrap:"wrap", gap:6 }}>
-                <span style={{ color:PINK }}>● TBR &lt;70 · {tbrPct}%</span>
-                <span style={{ color:GREEN }}>● TIR 70–180 · {tirPct}%</span>
-                <span style={{ color:HIGH_YELLOW }}>● TAR &gt;180 · {tarPct}%</span>
+                <span style={{ color:PINK }}>● {tInsights("tir_legend_below")} · {tbrPct}%</span>
+                <span style={{ color:GREEN }}>● {tInsights("tir_legend_in")} · {tirPct}%</span>
+                <span style={{ color:HIGH_YELLOW }}>● {tInsights("tir_legend_above")} · {tarPct}%</span>
               </div>
             </>
           )}
@@ -959,7 +968,7 @@ export default function InsightsPage() {
                   borderBottom:`1px solid var(--border-soft)`,
                 }}>
                   <span style={{ fontSize:10, color:"var(--text-dim)", fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase" }}>
-                    ICR
+                    {tInsights("engine_label_icr")}
                   </span>
                   <span style={{
                     fontSize:24, fontWeight:800,
@@ -1025,7 +1034,7 @@ export default function InsightsPage() {
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.7.6 1 1.5 1 2.3v1h6v-1c0-.8.3-1.7 1-2.3A7 7 0 0 0 12 2z"/>
                       </svg>
-                      {suggestion.hasSuggestion ? "Suggested adjustment" : "Advisory"}
+                      {suggestion.hasSuggestion ? tInsights("engine_pill_suggested") : tInsights("engine_pill_advisory")}
                     </div>
                     <div style={{ fontSize:11, color:"var(--text-strong)", lineHeight:1.5 }}>{suggestion.message}</div>
                     <div style={{ marginTop:8 }}>
