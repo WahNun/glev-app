@@ -272,6 +272,39 @@ export default function EntriesPage() {
   }
   const activeCount = totalActive(filters);
 
+  // Flatten the FilterState into a list of removable chips rendered next to
+  // the Filters trigger. Each chip carries a stable key, a human label, and a
+  // single-filter removal callback so users can dismiss one selection at a
+  // time without opening the panel.
+  type ActiveChip = { key: string; label: string; remove: () => void };
+  const activeChips: ActiveChip[] = useMemo(() => {
+    const chips: ActiveChip[] = [];
+    if (filters.dateRange !== "all") {
+      chips.push({
+        key: "dateRange",
+        label: dateRangeSummary(filters.dateRange, filters.dateFrom, filters.dateTo),
+        remove: () => setDateRange("all"),
+      });
+    }
+    for (const v of filters.entryType) {
+      const opt = ENTRY_TYPE_OPTIONS.find(o => o.value === v);
+      if (opt) chips.push({ key: `entryType:${v}`, label: opt.label, remove: () => toggleFilter("entryType", v) });
+    }
+    for (const v of filters.mealKind) {
+      const opt = MEAL_KIND_OPTIONS.find(o => o.value === v);
+      if (opt) chips.push({ key: `mealKind:${v}`, label: opt.label, remove: () => toggleFilter("mealKind", v) });
+    }
+    for (const v of filters.exerciseKind) {
+      const opt = EXERCISE_KIND_OPTIONS.find(o => o.value === v);
+      if (opt) chips.push({ key: `exerciseKind:${v}`, label: opt.label, remove: () => toggleFilter("exerciseKind", v) });
+    }
+    for (const v of filters.outcome) {
+      const opt = OUTCOME_OPTIONS.find(o => o.value === v);
+      if (opt) chips.push({ key: `outcome:${v}`, label: opt.label, remove: () => toggleFilter("outcome", v) });
+    }
+    return chips;
+  }, [filters]);
+
   // Meal rows expand directly into the full detail body (no intermediate
   // "light" summary). Bolus / basal / exercise rows have their own
   // collapsed→expanded body rendered by their respective row components.
@@ -474,6 +507,7 @@ export default function EntriesPage() {
 
       {/* FILTERS + SEARCH */}
       <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:20 }}>
+        <div style={{ display:"flex", flexWrap:"wrap", alignItems:"center", gap:6, minWidth:0 }}>
         <div ref={filtersWrapRef} style={{ position:"relative" }}>
           <button
             onClick={() => setFiltersOpen(v => !v)}
@@ -495,7 +529,7 @@ export default function EntriesPage() {
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
             </svg>
-            <span>Filters{activeCount > 0 ? ` · ${activeCount}` : ""}</span>
+            <span>Filters</span>
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ transform: filtersOpen ? "rotate(180deg)" : "rotate(0deg)", transition:"transform 0.15s" }}>
               <polyline points="6 9 12 15 18 9"/>
             </svg>
@@ -577,6 +611,33 @@ export default function EntriesPage() {
               )}
             </div>
           )}
+        </div>
+        {activeChips.map(chip => (
+          <button
+            key={chip.key}
+            onClick={chip.remove}
+            aria-label={`Remove filter: ${chip.label}`}
+            title={`Remove filter: ${chip.label}`}
+            style={{
+              padding:"4px 6px 4px 10px",
+              borderRadius:99,
+              border:`1px solid ${ACCENT}40`,
+              background:`${ACCENT}10`,
+              color:ACCENT,
+              fontSize:11,
+              fontWeight:600,
+              cursor:"pointer",
+              display:"inline-flex", alignItems:"center", gap:4,
+              maxWidth:"100%",
+              minWidth:0,
+            }}
+          >
+            <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", minWidth:0 }}>{chip.label}</span>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink:0 }}>
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        ))}
         </div>
         <input style={{ ...inp, width:"100%", boxSizing:"border-box" }} placeholder="Search entries…" value={search} onChange={e => setSearch(e.target.value)}/>
       </div>
