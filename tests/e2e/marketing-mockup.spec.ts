@@ -35,6 +35,14 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const PHONE = '[data-testid="app-mockup-phone"]';
 
+// Pin every spec in this file to the German locale. The marketing
+// page's default render locale follows the browser's Accept-Language
+// header (next-intl negotiation), and Playwright's "Desktop Chrome"
+// device defaults to "en-US" — which would otherwise flip every
+// asserted string to its English translation. Pinning here keeps the
+// assertions co-located with the German copy they target.
+test.use({ locale: "de-DE" });
+
 /** Bottom-nav buttons render as <button> with an UPPERCASE label
  *  ("DASHBOARD", "GLEV", "VERLAUF", "EINSTELLUNGEN"). The same
  *  uppercase form is the accessible name, so we can target each
@@ -98,8 +106,12 @@ test.describe("Marketing AppMockupPhone — interactive bottom nav", () => {
     // ("Aktuell"). One label per card so a single broken card pins
     // the failure cleanly.
     await expectAllVisible(phone, [
-      /Glucose · live/,
+      /Glukose · live/,
       /Heutige Makros/,
+      // Dashboard macro card now renders 4 rings — proving the
+      // fourth Ballaststoffe ring landed without breaking the
+      // Carbs/Protein/Fett trio.
+      /BALLASTSTOFFE/,
       /Control Score · 7T/,
       /Treffer-Quote/,
       /Spike-Quote/,
@@ -109,20 +121,35 @@ test.describe("Marketing AppMockupPhone — interactive bottom nav", () => {
     ]);
 
     // ── Glev Engine — Step 1 (Essen) ─────────────────────────────────
+    // The mic-button + "Stattdessen tippen" chip have been replaced
+    // by a wide "Sprechen" pill plus a static AI Food Parser chat
+    // panel (mirroring the real /engine page after the Voice/Chat
+    // redesign). Assert the new chrome is present.
     await navButton(phone, NAV.glev).click();
     await expectAllVisible(phone, [
       /Glev Engine/,
       /1 · Essen/,
       /2 · Makros/,
       /3 · Ergebnis/,
-      /TIPPEN ZUM SPRECHEN/,
       /Aktueller Glukosewert/,
+      /AI FOOD PARSER/,
+      /GPT-Begründung/,
+      /BEREIT/,
     ]);
+    // The "Sprechen" pill is a <button>, but its accessible name is
+    // the German aria-label "Sprach-Eingabe starten" rather than the
+    // visible label, so we target it by visible text content the same
+    // way navButton() does for the bottom nav.
+    const speakPill = phone.locator("button").filter({ hasText: /^Sprechen$/ });
+    await expect(speakPill).toBeVisible();
 
-    // ── Step 2 (Makros) — reachable via "Stattdessen tippen →" ───────
-    // Tap the manual fallback so step 2 hydrates without sitting
-    // through the 2.6s mic→parse animation.
-    await phone.getByRole("button", { name: /Stattdessen tippen/ }).click();
+    // ── Step 2 (Makros) — reachable by tapping the "Sprechen" pill ───
+    // tapMic() fakes a 1.5s listening + 1.1s parsing animation
+    // before flipping to step 2, so allow up to ~5s for step-2
+    // content to materialize. We don't poll on intermediate states
+    // (the "Stopp"/"Verarbeite…" labels) — they're cosmetic and
+    // the only contract that matters is "step 2 eventually shows".
+    await speakPill.click();
     await expectAllVisible(phone, [
       /Makros prüfen/,
       /Quelle · Datenbank/,
@@ -220,11 +247,16 @@ test.describe("Marketing AppMockupPhone — locked-tab variants on mobile", () =
     }
 
     // Locked engine phone — Glev Engine wizard, step 1 by default.
+    // Step 1 now shows the Voice/Chat redesign: a "Sprechen" pill +
+    // a static AI Food Parser chat panel. Assert one stable label
+    // from each so a regression in either pins the failure cleanly.
     await lockedEngine.scrollIntoViewIfNeeded();
     await expectAllVisible(lockedEngine, [
       /Glev Engine/,
-      /TIPPEN ZUM SPRECHEN/,
       /Aktueller Glukosewert/,
+      /^Sprechen$/,
+      /AI FOOD PARSER/,
+      /BEREIT/,
     ]);
 
     // Locked entries phone — chronological log. Sub-toggle is
@@ -240,7 +272,7 @@ test.describe("Marketing AppMockupPhone — locked-tab variants on mobile", () =
     // Locked dashboard phone — live glucose hero + Heutige Makros.
     await lockedDashboard.scrollIntoViewIfNeeded();
     await expectAllVisible(lockedDashboard, [
-      /Glucose · live/,
+      /Glukose · live/,
       /Heutige Makros/,
       /Control Score · 7T/,
     ]);

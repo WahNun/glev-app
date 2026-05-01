@@ -313,18 +313,15 @@ function BottomNav({ tab, onTab, excludeTabs }: {
       activeTab: "engine",
       isActive: tab === "engine",
       hidden: excludeTabs.includes("engine"),
+      // Match the real Layout.tsx after the Glev-tab redesign — no
+      // gradient pill, no center-button highlight. The Glev nav item
+      // renders just the hexagon brand-mark inside a standard
+      // NavIconBox so it's visually consistent with Dashboard /
+      // Verlauf / Einstellungen. ACCENT when active, dimmed otherwise.
       render: a => (
-        <span style={{
-          width:30, height:30, borderRadius:99,
-          background: a
-            ? `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`
-            : `radial-gradient(circle at 36% 32%, #1e1e2e 0%, #141420 45%, ${BG} 100%)`,
-          border: a ? "none" : `1px solid rgba(255,255,255,0.12)`,
-          display:"flex", alignItems:"center", justifyContent:"center",
-          boxShadow: a ? `0 2px 12px ${ACCENT}55` : "0 2px 6px rgba(0,0,0,0.4)",
-        }}>
-          <GlevLogo size={17} color={a ? "#fff" : ACCENT} bg="transparent"/>
-        </span>
+        <NavIconBox>
+          <GlevLogo size={16} color={a ? ACCENT : "rgba(255,255,255,0.4)"} bg="transparent"/>
+        </NavIconBox>
       ),
     },
     {
@@ -425,9 +422,13 @@ function DashboardScreen({ onLogMeal }: { onLogMeal: () => void }) {
   const ago1h       = pickCopy(locale, { de: "−1 h",            en: "−1 h" });
   const nowLabel    = pickCopy(locale, { de: "jetzt",           en: "now" });
   const fourMeals   = pickCopy(locale, { de: "4 Mahlzeiten",    en: "4 meals" });
-  const carbsLabel  = pickCopy(locale, { de: "Carbs",           en: "Carbs" });
-  const proteinLab  = pickCopy(locale, { de: "Protein",         en: "Protein" });
-  const fatLabel    = pickCopy(locale, { de: "Fett",            en: "Fat" });
+  // Macro labels mirror the i18n keys used in the real DailyMacrosCard
+  // (`dashboard.macro_carbs` / `_protein` / `_fat` / `_fiber`) so the
+  // mockup labels stay in lock-step with the production dashboard.
+  const carbsLabel  = tDash("macro_carbs");
+  const proteinLab  = tDash("macro_protein");
+  const fatLabel    = tDash("macro_fat");
+  const fiberLabel  = tDash("macro_fiber");
   const deltaWk     = tDash("delta_vs_last_week");
 
   const recent: Array<{
@@ -500,10 +501,18 @@ function DashboardScreen({ onLogMeal }: { onLogMeal: () => void }) {
           <CardLabel text={tDash("daily_macros")}/>
           <div style={{ fontSize:9, color:"rgba(255,255,255,0.45)" }}>{fourMeals}</div>
         </div>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:10 }}>
-          <MacroRing label={carbsLabel} value={186} target={250} color={ORANGE} unit="g"/>
+        {/* 4 rings in a single row, matching the real DailyMacrosCard
+            after the fiber addition. Colors mirror the production
+            TYPE_COLORS palette: orange (fast carbs), blue (high
+            protein), purple (high fat), green/Balanced-Token (fiber).
+            `minmax(0, 1fr)` collapses the min-content floor so the
+            longer "BALLASTSTOFFE" label can't push its column wider
+            than the other three. */}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4, minmax(0, 1fr))", gap:6 }}>
+          <MacroRing label={carbsLabel} value={186} target={250} color={ORANGE}    unit="g"/>
           <MacroRing label={proteinLab} value={94}  target={120} color={"#3B82F6"} unit="g"/>
-          <MacroRing label={fatLabel}   value={62}  target={80}  color={PURPLE} unit="g"/>
+          <MacroRing label={fatLabel}   value={62}  target={80}  color={PURPLE}    unit="g"/>
+          <MacroRing label={fiberLabel} value={18}  target={30}  color={GREEN}     unit="g"/>
         </div>
       </MockCard>
 
@@ -573,16 +582,23 @@ function RateTile({ label, value, sub, color }: { label: string; value: number; 
 function MacroRing({ label, value, target, color, unit }: { label: string; value: number; target: number; color: string; unit: string }) {
   const pct = Math.min(1, value / target);
   const r = 18, c = 2 * Math.PI * r;
+  // minWidth:0 lets long labels (e.g. "BALLASTSTOFFE") wrap or
+  // truncate inside the parent grid cell instead of pushing the
+  // column wider than its 4-up share.
   return (
-    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4, minWidth:0, width:"100%" }}>
       <svg width="48" height="48" viewBox="0 0 48 48">
         <circle cx="24" cy="24" r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="4"/>
         <circle cx="24" cy="24" r={r} fill="none" stroke={color} strokeWidth="4" strokeLinecap="round"
           strokeDasharray={`${c * pct} ${c}`} transform="rotate(-90 24 24)"/>
         <text x="24" y="27" textAnchor="middle" fontSize="11" fill="#fff" fontWeight="700" fontFamily="var(--font-mono)">{value}</text>
       </svg>
-      <div style={{ fontSize:9, color:"rgba(255,255,255,0.5)", textTransform:"uppercase", letterSpacing:"0.06em" }}>{label}</div>
-      <div style={{ fontSize:8, color:"rgba(255,255,255,0.3)" }}>/ {target}{unit}</div>
+      <div style={{
+        fontSize:7.5, color:"rgba(255,255,255,0.5)", textTransform:"uppercase", letterSpacing:"0.04em",
+        textAlign:"center", lineHeight:1.15, maxWidth:"100%",
+        whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis",
+      }}>{label}</div>
+      <div style={{ fontSize:7.5, color:"rgba(255,255,255,0.3)" }}>/ {target}{unit}</div>
     </div>
   );
 }
@@ -919,34 +935,37 @@ function EngineScreen({ onLogged }: { onLogged: () => void }) {
         })}
       </div>
 
-      {step === 1 && <EngineStepFood meal={meal} micState={micState} onMic={tapMic} onSkip={() => setStep(2)}/>}
+      {step === 1 && <EngineStepFood meal={meal} micState={micState} onMic={tapMic}/>}
       {step === 2 && <EngineStepMacros meal={meal} onBack={() => setStep(1)} onContinue={() => setStep(3)}/>}
       {step === 3 && <EngineStepResult meal={meal} confirmed={confirmed} onBack={() => setStep(2)} onConfirm={handleConfirm}/>}
     </div>
   );
 }
 
-function EngineStepFood({ meal, micState, onMic, onSkip }: {
+function EngineStepFood({ meal, micState, onMic }: {
   meal: { desc: string; glucose: number };
   micState: "idle" | "listening" | "parsing";
   onMic: () => void;
-  onSkip: () => void;
 }) {
-  const locale = useLocale();
-  const tEng = useTranslations("engine");
-  const micLabel = micState === "listening"
-    ? pickCopy(locale, { de: "HÖRE ZU…",            en: "LISTENING…" })
-    : micState === "parsing"
-    ? pickCopy(locale, { de: "VERARBEITE…",         en: "PROCESSING…" })
-    : pickCopy(locale, { de: "TIPPEN ZUM SPRECHEN", en: "TAP TO SPEAK" });
-  const micAria = pickCopy(locale, { de: "Sprach-Eingabe starten", en: "Start voice input" });
-  const skipLabel = pickCopy(locale, { de: "Stattdessen tippen →", en: "Type instead →" });
-  const example = locale === "en"
-    ? <>e.g. &ldquo;Pasta with tomato sauce,<br/>80g pasta and an apple&rdquo;</>
-    : <>z.&nbsp;B. „Pasta mit Tomatensauce,<br/>80g Nudeln und Apfel"</>;
+  const tEng     = useTranslations("engine");
+  const tLog     = useTranslations("log");
+  const recording = micState === "listening";
+  const parsing   = micState === "parsing";
+  // Speak-pill label flips with the active mic state, mirroring the
+  // real /engine page's voice button.
+  const speakLabel = recording
+    ? tEng("voice_btn_stop")
+    : parsing
+    ? tEng("voice_btn_processing")
+    : tEng("voice_btn_speak");
+  // Status precedence in the chat-panel header: parsing > ready
+  // (mockup never simulates a chat round-trip, so no THINKING state).
+  const statusLabel = parsing ? tLog("chat_status_parsing") : tLog("chat_status_ready");
+  const statusColor = parsing ? ORANGE : GREEN;
+
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-      {/* Aktueller Glukosewert chip */}
+      {/* Aktueller Glukosewert chip — unchanged */}
       <div style={{
         display:"flex", justifyContent:"space-between", alignItems:"center",
         padding:"8px 12px", borderRadius:99,
@@ -963,73 +982,135 @@ function EngineStepFood({ meal, micState, onMic, onSkip }: {
         </div>
       </div>
 
-      {/* Mic card */}
+      {/* Sprechen-Pill — mirrors app/(protected)/engine/page.tsx
+          ~Z.1484-1520. Wide pill, GlevLogo (ACCENT) on the left,
+          "Sprechen" / "Speak" label on the right. ACCENT halo pulse
+          while "recording" (mockup-only fake state). */}
       <style>{`
-        @keyframes engVPulseM { 0%,100%{opacity:0.35;transform:scale(1)} 50%{opacity:1;transform:scale(1.05)} }
+        @keyframes mockEngRecHalo {
+          0%,100% { box-shadow: 0 0 0 1px ${ACCENT}66, 0 0 12px ${ACCENT}55, 0 0 26px ${ACCENT}22; }
+          50%     { box-shadow: 0 0 0 1px ${ACCENT}cc, 0 0 22px ${ACCENT}aa, 0 0 42px ${ACCENT}44; }
+        }
       `}</style>
+      <button
+        type="button"
+        onClick={onMic}
+        disabled={parsing}
+        aria-label={recording ? tEng("voice_aria_stop") : tEng("voice_aria_start")}
+        style={{
+          display:"inline-flex", alignItems:"center", justifyContent:"center", gap:8,
+          width:"100%", height:44, borderRadius:24,
+          background: recording ? `${ACCENT}1f` : SURFACE,
+          border: `1px solid ${recording ? ACCENT : `${ACCENT}55`}`,
+          color:"#fff", fontSize:12, fontWeight:700, letterSpacing:"-0.01em",
+          cursor: parsing ? "default" : "pointer",
+          animation: recording ? "mockEngRecHalo 1.4s ease-in-out infinite" : undefined,
+          boxShadow: recording ? undefined : `0 0 0 1px ${ACCENT}22`,
+          opacity: parsing ? 0.55 : 1,
+          transition:"background 0.2s, border-color 0.2s, opacity 0.2s",
+        }}
+      >
+        <span aria-hidden style={{
+          display:"inline-flex",
+          filter: `drop-shadow(0 0 ${recording ? 6 : 3}px ${ACCENT}${recording ? "cc" : "55"})`,
+          transition:"filter 0.25s",
+        }}>
+          <GlevLogo size={16} color={ACCENT} bg="transparent"/>
+        </span>
+        {speakLabel}
+      </button>
+
+      {/* AI Food Parser chat panel — purely visual mock of the real
+          EngineChatPanel. Header = "AI FOOD PARSER" + "GPT-Begründung"
+          + status pill. Body = the same intro copy ("Sobald du eine
+          Mahlzeit loggst…" / "Once you log a meal…"). Footer = the
+          real placeholder + a disabled Send button. No round-trip,
+          no API. */}
       <div style={{
         background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14,
-        padding:"18px 12px 14px", display:"flex", flexDirection:"column",
-        alignItems:"center", gap:8,
+        display:"flex", flexDirection:"column", overflow:"hidden",
       }}>
-        <div style={{ position:"relative", width:72, height:72 }}>
-          {micState === "listening" && (
-            <div style={{
-              position:"absolute", inset:-10, borderRadius:"50%",
-              background:`radial-gradient(circle,${ACCENT}24 0%,transparent 70%)`,
-              animation:"engVPulseM 2s ease-in-out infinite", pointerEvents:"none",
+        {/* Header */}
+        <div style={{
+          display:"flex", alignItems:"center", justifyContent:"space-between",
+          gap:8, padding:"10px 12px", borderBottom:`1px solid ${BORDER}`,
+        }}>
+          <div style={{
+            display:"flex", alignItems:"baseline", flexWrap:"wrap",
+            columnGap:6, rowGap:2, minWidth:0, flex:1,
+          }}>
+            <span style={{
+              fontSize:9, fontWeight:700, letterSpacing:"0.08em",
+              color:"rgba(255,255,255,0.5)", whiteSpace:"nowrap",
+            }}>
+              {tLog("ai_food_parser_caps")}
+            </span>
+            <span style={{
+              fontSize:8.5, fontWeight:600, color:ACCENT, letterSpacing:"0.04em",
+              whiteSpace:"nowrap",
+            }}>
+              {tLog("gpt_reasoning_title")}
+            </span>
+          </div>
+          <div style={{
+            display:"inline-flex", alignItems:"center", gap:5,
+            padding:"3px 8px", borderRadius:99,
+            background:`${statusColor}18`, border:`1px solid ${statusColor}40`,
+            fontSize:8.5, fontWeight:700, letterSpacing:"0.06em",
+            color:statusColor, flexShrink:0,
+          }}>
+            <span style={{
+              width:5, height:5, borderRadius:"50%",
+              background:statusColor, boxShadow:`0 0 5px ${statusColor}`,
             }}/>
-          )}
-          <button
-            onClick={onMic}
-            aria-label={micAria}
+            {statusLabel}
+          </div>
+        </div>
+
+        {/* Body — intro copy */}
+        <div style={{
+          padding:"18px 16px",
+          fontSize:9.5, lineHeight:1.55, color:"rgba(255,255,255,0.55)",
+          textAlign:"center", minHeight:84,
+          display:"flex", alignItems:"center", justifyContent:"center",
+        }}>
+          {tLog("chat_intro")}
+        </div>
+
+        {/* Footer — disabled input + send */}
+        <div style={{
+          display:"flex", alignItems:"center", gap:6,
+          padding:"8px 10px", borderTop:`1px solid ${BORDER}`,
+        }}>
+          <input
+            readOnly
+            placeholder={tLog("chat_placeholder")}
             style={{
-              position:"absolute", inset:0, borderRadius:"50%", padding:0,
-              border: micState === "listening"
-                ? `1px solid ${ACCENT}88`
-                : `1px solid rgba(255,255,255,0.08)`,
-              cursor: micState === "idle" ? "pointer" : "default",
-              background: `radial-gradient(circle at 36% 32%, #1e1e2e 0%, #141420 45%, #09090B 100%)`,
-              boxShadow: micState === "listening"
-                ? `0 0 0 1px ${ACCENT}55, 0 0 22px ${ACCENT}55, inset 0 0 14px rgba(79,110,247,0.15)`
-                : `0 4px 16px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06)`,
-              display:"flex", alignItems:"center", justifyContent:"center",
-              transition:"all 0.2s",
+              flex:1, minWidth:0,
+              padding:"8px 10px",
+              background:"#0D0D12",
+              border:`1px solid ${BORDER}`,
+              borderRadius:8,
+              color:"rgba(255,255,255,0.5)", fontSize:10, outline:"none",
+            }}
+          />
+          <button
+            type="button"
+            disabled
+            aria-disabled
+            style={{
+              padding:"8px 12px",
+              borderRadius:8, border:"none",
+              background:"rgba(255,255,255,0.06)",
+              color:"rgba(255,255,255,0.3)",
+              fontSize:10, fontWeight:700,
+              cursor:"not-allowed",
             }}
           >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-              stroke={micState === "listening" ? ACCENT : "rgba(255,255,255,0.85)"}
-              strokeWidth="2" strokeLinecap="round">
-              <rect x="9" y="2" width="6" height="11" rx="3"
-                fill={micState === "listening" ? ACCENT : "rgba(255,255,255,0.85)"} stroke="none"/>
-              <path d="M5 10a7 7 0 0 0 14 0"/>
-              <line x1="12" y1="19" x2="12" y2="22"/>
-              <line x1="9"  y1="22" x2="15" y2="22"/>
-            </svg>
+            {tLog("send")}
           </button>
         </div>
-        <div style={{
-          fontSize:9, fontWeight:700, letterSpacing:"0.12em",
-          color: micState === "listening" ? ACCENT
-               : micState === "parsing"   ? ORANGE
-               : "rgba(255,255,255,0.55)",
-        }}>
-          {micLabel}
-        </div>
-        <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", letterSpacing:"0.04em", textAlign:"center", lineHeight:1.5 }}>
-          {example}
-        </div>
       </div>
-
-      {/* Manual fallback chip */}
-      <button onClick={onSkip} style={{
-        padding:"8px", borderRadius:10,
-        background:"transparent", border:`1px solid ${BORDER}`,
-        color:"rgba(255,255,255,0.55)", fontSize:10, fontWeight:600,
-        cursor:"pointer", letterSpacing:"-0.005em",
-      }}>
-        {skipLabel}
-      </button>
     </div>
   );
 }
