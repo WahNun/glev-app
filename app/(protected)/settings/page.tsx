@@ -140,6 +140,14 @@ export default function SettingsPage() {
   // `saveLastAppointment`. The bcp47 locale is used to render the
   // current value as a localized string in the row subtitle.
   const [lastAppointment, setLastAppointment] = useState<string>("");
+  // Optional one-line free-text note attached to the appointment date
+  // (Task #92). Doctor name, clinic, key result — anything that turns
+  // the saved date into self-explanatory metadata for the next visit.
+  // Empty string means "no note" and is persisted as null in
+  // user_settings.last_appointment_note. Tied to the same Save / Clear
+  // affordances as the date so the two stay in lock-step (clearing the
+  // date wipes the note, and the upsert writes both columns).
+  const [lastAppointmentNote, setLastAppointmentNote] = useState<string>("");
   const bcp47 = localeToBcp47(useLocale());
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -155,6 +163,7 @@ export default function SettingsPage() {
     macroTargets: MacroTargets;
     notifPrefs: NotificationPrefs;
     lastAppointment: string;
+    lastAppointmentNote: string;
   } | null>(null);
 
   const cgmConnected = useCgmConnected();
@@ -165,10 +174,16 @@ export default function SettingsPage() {
     if (!supabase) return;
     fetchMacroTargets().then(setMacroTargets).catch(() => {});
     fetchNotificationPrefs().then(setNotifPrefs).catch(() => {});
-    // Load the saved appointment date — `null` from the DB collapses
-    // to "" so the date input renders as empty (which is what the
-    // user sees when nothing's configured).
-    fetchLastAppointment().then((v) => setLastAppointment(v ?? "")).catch(() => {});
+    // Load the saved appointment date AND note — both DB nulls collapse
+    // to "" so the inputs render empty (which is what the user sees
+    // when nothing's configured). Single fetch returns both fields so
+    // the two state slots can never disagree on the same paint.
+    fetchLastAppointment()
+      .then(({ date, note }) => {
+        setLastAppointment(date ?? "");
+        setLastAppointmentNote(note ?? "");
+      })
+      .catch(() => {});
   }, []);
 
   const openSheetWith = useCallback((id: SheetKey) => {
@@ -179,11 +194,15 @@ export default function SettingsPage() {
       setMacroTargets((curMacros) => {
         setNotifPrefs((curNotif) => {
           setLastAppointment((curAppt) => {
-            setDraftSnapshot({
-              settings: { ...curSettings },
-              macroTargets: { ...curMacros },
-              notifPrefs: { ...curNotif },
-              lastAppointment: curAppt,
+            setLastAppointmentNote((curNote) => {
+              setDraftSnapshot({
+                settings: { ...curSettings },
+                macroTargets: { ...curMacros },
+                notifPrefs: { ...curNotif },
+                lastAppointment: curAppt,
+                lastAppointmentNote: curNote,
+              });
+              return curNote;
             });
             return curAppt;
           });
@@ -206,6 +225,7 @@ export default function SettingsPage() {
       setMacroTargets(draftSnapshot.macroTargets);
       setNotifPrefs(draftSnapshot.notifPrefs);
       setLastAppointment(draftSnapshot.lastAppointment);
+      setLastAppointmentNote(draftSnapshot.lastAppointmentNote);
       setDraftSnapshot(null);
     }
     setPendingLocale(null);
@@ -253,15 +273,21 @@ export default function SettingsPage() {
     }
   }, [macroTargets, tSettings]);
 
-  /** Persist the "last appointment" date — DB-backed via
-   *  user_settings.last_appointment_at. Empty string is normalized to
-   *  null so the column gets cleared (and the export panel hides the
-   *  preset chip). */
+  /** Persist the "last appointment" date AND note — DB-backed via
+   *  user_settings.last_appointment_at + last_appointment_note. Empty
+   *  date string normalizes to null so the column gets cleared (and
+   *  the export panel hides the preset chip + the PDF cover meta line).
+   *  The lib layer also force-clears the note when the date is null,
+   *  so a user who types a note and then wipes the date never leaves
+   *  a dangling note in storage. */
   const saveLastAppointmentAction = useCallback(async (): Promise<boolean> => {
     setSaving(true);
     setSaveError("");
     try {
-      await saveLastAppointment(lastAppointment === "" ? null : lastAppointment);
+      await saveLastAppointment({
+        date: lastAppointment === "" ? null : lastAppointment,
+        note: lastAppointmentNote === "" ? null : lastAppointmentNote,
+      });
       setSaved(true);
       setTimeout(() => setSaved(false), 1800);
       setDraftSnapshot(null);
@@ -272,7 +298,7 @@ export default function SettingsPage() {
     } finally {
       setSaving(false);
     }
-  }, [lastAppointment, tSettings]);
+  }, [lastAppointment, lastAppointmentNote, tSettings]);
 
   /** Persist notification preferences — DB-backed via user_settings.notif_*. */
   const saveNotifPrefsAction = useCallback(async (): Promise<boolean> => {
@@ -351,15 +377,25 @@ export default function SettingsPage() {
   const cfSub = tSettings("subtitle_cf", { value: settings.cf });
   // Format the saved appointment date in the user's UI locale for the
   // row subtitle (e.g. "12.01.2026" in DE, "Jan 12, 2026" in EN). When
-  // the date is unset we show a "noch nicht gesetzt" subtitle so the
-  // row's purpose stays discoverable from the closed state. The empty-
-  // string check matches both unset (loaded as "") and cleared inputs.
+  // a note is also set we append it ("12.01.2026 · Dr. Müller, A1c 7.2")
+  // so the user can verify both pieces from the closed row without
+  // re-opening the sheet. When the date is unset we show a "noch nicht
+  // gesetzt" subtitle so the row's purpose stays discoverable. The
+  // empty-string check matches both unset (loaded as "") and cleared
+  // inputs.
   const lastAppointmentSub = lastAppointment
-    ? tSettings("subtitle_last_appointment_set", {
-        date: new Date(`${lastAppointment}T00:00:00`).toLocaleDateString(bcp47, {
-          year: "numeric", month: "2-digit", day: "2-digit",
-        }),
-      })
+    ? (lastAppointmentNote
+        ? tSettings("subtitle_last_appointment_set_with_note", {
+            date: new Date(`${lastAppointment}T00:00:00`).toLocaleDateString(bcp47, {
+              year: "numeric", month: "2-digit", day: "2-digit",
+            }),
+            note: lastAppointmentNote,
+          })
+        : tSettings("subtitle_last_appointment_set", {
+            date: new Date(`${lastAppointment}T00:00:00`).toLocaleDateString(bcp47, {
+              year: "numeric", month: "2-digit", day: "2-digit",
+            }),
+          }))
     : tSettings("subtitle_last_appointment_unset");
   const macroSub = tSettings("subtitle_macros", {
     carbs: macroTargets.carbs, protein: macroTargets.protein, fat: macroTargets.fat, fiber: macroTargets.fiber,
@@ -469,11 +505,14 @@ export default function SettingsPage() {
       footer: <SaveFooter onSave={saveLocalSettings} />,
     },
     lastAppointment: {
-      // Single-field sheet that lets the user record (or clear) the
-      // date of their last doctor appointment. The Export panel reads
-      // this value via fetchLastAppointment() to show a "Seit letztem
-      // Arzttermin (DD.MM.YYYY)" preset chip — clearing the date here
-      // hides that chip again.
+      // Two-field sheet that lets the user record (or clear) the date
+      // of their last doctor appointment AND a short doctor-friendly
+      // note (e.g. "Dr. Müller, A1c 7.2"). The Export panel reads both
+      // via fetchLastAppointment(): the date drives the "Seit letztem
+      // Arzttermin (DD.MM.YYYY)" preset chip, and the note (when set)
+      // is rendered alongside the date on the PDF cover so the export
+      // is self-explanatory for the next visit. Clearing the date
+      // wipes the note too — one button, both columns.
       title: tSettings("last_appointment_title"),
       body: (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -490,24 +529,59 @@ export default function SettingsPage() {
               onChange={(e) => setLastAppointment(e.target.value)}
             />
           </label>
+          {/* Optional one-line note. We keep it as a plain text input
+              (not a textarea) on purpose: the value renders on the
+              PDF cover meta block, where wrapping a multi-line note
+              would push the rest of the meta down and look messy.
+              maxLength matches the lib-layer NOTE_MAX_LEN cap so the
+              field's behaviour stays in sync with what gets persisted.
+              Disabled when no date is set — a note without a date has
+              no surface to attach to (the PDF meta line is anchored to
+              the date) and the lib layer would force-clear it on
+              save anyway, so disabling here surfaces that contract
+              upfront instead of letting the user type into a field
+              that would silently get wiped on Save. */}
+          <label style={{ fontSize: 12, color: "var(--text-dim)", display: "block" }}>
+            {tSettings("last_appointment_note_label")}
+            <input
+              style={{
+                ...inp,
+                marginTop: 6,
+                opacity: lastAppointment ? 1 : 0.6,
+              }}
+              type="text"
+              value={lastAppointmentNote}
+              onChange={(e) => setLastAppointmentNote(e.target.value)}
+              placeholder={tSettings("last_appointment_note_placeholder")}
+              maxLength={200}
+              disabled={!lastAppointment}
+            />
+          </label>
           {/* Inline "Clear" affordance — the user can also pick a date
               and then wipe it via the native input, but iOS Safari
               doesn't always expose a clear button on date inputs, so
-              we ship our own. Disabled when nothing's set so the
-              button doesn't look pressable when it's a no-op. */}
+              we ship our own. Wipes BOTH the date and the note in one
+              press (the note is meaningless without a date and the
+              save layer would null it out anyway, so do it visibly
+              here to keep the UI honest). Disabled when both fields
+              are already empty so the button doesn't look pressable
+              when it's a no-op. */}
           <button
             type="button"
-            onClick={() => setLastAppointment("")}
-            disabled={!lastAppointment}
+            onClick={() => {
+              setLastAppointment("");
+              setLastAppointmentNote("");
+            }}
+            disabled={!lastAppointment && !lastAppointmentNote}
             style={{
               alignSelf: "flex-start",
               padding: "8px 14px", borderRadius: 9,
               border: `1px solid ${BORDER}`,
               background: "var(--surface-soft)",
-              color: lastAppointment ? "var(--text-strong)" : "var(--text-faint)",
+              color: (lastAppointment || lastAppointmentNote) ? "var(--text-strong)" : "var(--text-faint)",
               fontSize: 12, fontWeight: 600,
-              cursor: lastAppointment ? "pointer" : "not-allowed",
-              opacity: lastAppointment ? 1 : 0.6,
+              cursor: (lastAppointment || lastAppointmentNote) ? "pointer" : "not-allowed",
+              opacity: (lastAppointment || lastAppointmentNote) ? 1 : 0.6,
             }}
           >
             {tSettings("last_appointment_clear")}

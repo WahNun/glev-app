@@ -733,8 +733,11 @@
     "last_appointment_title": "Letzter Arzttermin",
     "last_appointment_label": "Datum",
     "last_appointment_hint": "Speichere das Datum deines letzten Termins. Im Export-Bereich erscheint dann ein „Seit letztem Arzttermin\"-Knopf, der genau diesen Zeitraum auswählt.",
+    "last_appointment_note_label": "Notiz / Klinik (optional)",
+    "last_appointment_note_placeholder": "z.B. Dr. Müller, A1c 7.2",
     "last_appointment_clear": "Datum löschen",
     "subtitle_last_appointment_set": "{date}",
+    "subtitle_last_appointment_set_with_note": "{date} · {note}",
     "subtitle_last_appointment_unset": "Noch nicht gesetzt"
   },
   "common": {

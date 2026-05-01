@@ -523,6 +523,16 @@ interface ReportProps {
   // render as the localized "Anfang"/"heute" placeholders so the
   // line stays grammatical.
   range?: { from?: string; to?: string };
+  // Optional user-provided note for the saved "last appointment" date
+  // (Task #92). Caller passes the trimmed string when the user picked
+  // the "Seit letztem Arzttermin" preset chip AND has a note saved;
+  // omits / passes undefined otherwise. When present, surfaces as a
+  // "Letzter Termin" meta entry on the cover so the receiving
+  // clinician sees doctor / clinic / key result in the same block as
+  // the Zeitraum, turning a context-free date into self-explanatory
+  // metadata. Omitted/empty hides the meta line entirely so a user
+  // who never set a note never sees a stray empty row.
+  appointmentNote?: string;
 }
 
 const Footer = ({ email, generatedAt }: { email: string; generatedAt: string }) => (
@@ -659,7 +669,7 @@ function computeInsightsMetrics(
   };
 }
 
-export function GlevReport({ email, meals, insulin, exercise, fingersticks, carbUnit = "g", icrGperIE = null, cfMgdlPerIE = null, range: chosenRange }: ReportProps) {
+export function GlevReport({ email, meals, insulin, exercise, fingersticks, carbUnit = "g", icrGperIE = null, cfMgdlPerIE = null, range: chosenRange, appointmentNote }: ReportProps) {
   // Cache the unit's display label once so we can compose KH column
   // headers (e.g. "KH (BE)") without recomputing. Uses the short form
   // ("g" / "BE" / "KE") rather than the verbose CARB_UNITS label
@@ -774,6 +784,19 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks, carb
                 metaItem as a tight 2-leaf label/value pair. */}
             <Text style={styles.metaValue}>{`${range.from} – ${range.to}`}</Text>
           </View>
+          {/* "Letzter Termin" meta line — only rendered when the caller
+              passed a note (i.e. the user picked the saved-appointment
+              preset AND has a note saved in Settings). Sits directly
+              below Zeitraum so the clinician reads the time-window and
+              the doctor / clinic / key-result note as one logical block.
+              Suppressed when the note is missing/empty so an unconfigured
+              user never sees a stray empty row. */}
+          {appointmentNote && appointmentNote.trim() !== "" && (
+            <View style={styles.metaItem}>
+              <Text style={styles.metaLabel}>Letzter Termin</Text>
+              <Text style={styles.metaValue}>{appointmentNote}</Text>
+            </View>
+          )}
           <View style={styles.metaItem}>
             <Text style={styles.metaLabel}>Erstellt am</Text>
             <Text style={styles.metaValue}>{generatedAt}</Text>

@@ -328,6 +328,12 @@ export default function ExportPanel() {
   // (the Settings sheet re-opens this component), so we don't need
   // live invalidation here.
   const [lastAppointment, setLastAppointment] = useState<string | null>(null);
+  // Optional one-line free-text note attached to the saved appointment
+  // date (Task #92). null when the user hasn't entered one — in which
+  // case the PDF cover simply omits the meta line. Only meaningful in
+  // tandem with `lastAppointment`; the lib layer guarantees the note
+  // is null whenever the date is null, so we don't double-check here.
+  const [lastAppointmentNote, setLastAppointmentNote] = useState<string | null>(null);
   // Tracks whether the async fetchLastAppointment() call has resolved
   // yet. We can't use `lastAppointment === null` for that — null is
   // also the legitimate "no date saved" value, and conflating the two
@@ -366,9 +372,10 @@ export default function ExportPanel() {
   useEffect(() => {
     let cancelled = false;
     fetchLastAppointment()
-      .then((value) => {
+      .then(({ date, note }) => {
         if (cancelled) return;
-        setLastAppointment(value);
+        setLastAppointment(date);
+        setLastAppointmentNote(note);
         setLastAppointmentLoaded(true);
       })
       .catch(() => {
@@ -605,6 +612,19 @@ export default function ExportPanel() {
         import("@react-pdf/renderer"),
         import("@/lib/pdfReport"),
       ]);
+      // Surface the saved appointment note on the PDF cover ONLY when
+      // the user picked the "Seit letztem Arzttermin" chip — that's the
+      // export shape where a "Letzter Termin" meta line makes sense
+      // (the printed Zeitraum literally starts at the saved date, so
+      // the note describes the same anchor). Picking 30d / 90d / Custom
+      // / All would surface the note next to a window the note has
+      // nothing to do with, so we suppress it. Falls back to undefined
+      // when the user has no note saved (lib already collapses "" to
+      // null), so the PDF treats it the same as an unconfigured user.
+      const appointmentNote =
+        rangePreset === "lastAppointment" && lastAppointmentNote
+          ? lastAppointmentNote
+          : undefined;
       const blob = await pdf(
         <GlevReport
           email={email}
@@ -616,6 +636,7 @@ export default function ExportPanel() {
           icrGperIE={icrGperIE}
           cfMgdlPerIE={cfMgdlPerIE}
           range={display}
+          appointmentNote={appointmentNote}
         />,
       ).toBlob();
 

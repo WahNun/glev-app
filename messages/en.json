@@ -725,8 +725,11 @@
     "last_appointment_title": "Last appointment",
     "last_appointment_label": "Date",
     "last_appointment_hint": "Save the date of your last appointment. The Export panel will then show a one-click \"Since last appointment\" preset for exactly that window.",
+    "last_appointment_note_label": "Note / clinic (optional)",
+    "last_appointment_note_placeholder": "e.g. Dr. Müller, A1c 7.2",
     "last_appointment_clear": "Clear date",
     "subtitle_last_appointment_set": "{date}",
+    "subtitle_last_appointment_set_with_note": "{date} · {note}",
     "subtitle_last_appointment_unset": "Not set"
   },
   "common": {
