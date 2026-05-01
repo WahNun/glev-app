@@ -144,6 +144,14 @@ function ProContent() {
         padding: "48px 0 64px",
         display: "flex",
         flexDirection: "column",
+        // Mobile horizontal-scroll guard: the PhoneShell mockup has
+        // absolute side-buttons at left:-2px / right:-2px and a soft
+        // 80px box-shadow that can poke past the iPhone 13 mini's
+        // 375px viewport. Clip the page to its own width so the body
+        // never scrolls horizontally — vertical scroll is unaffected
+        // because we don't touch overflow-y.
+        overflowX: "hidden",
+        width: "100%",
       }}
     >
       <style>{`
@@ -205,12 +213,18 @@ function ProContent() {
             <Lockup width={200} />
             <h1
               style={{
-                fontSize: "clamp(40px, 6.4vw, 64px)",
+                fontSize: "clamp(32px, 6.4vw, 64px)",
                 lineHeight: 1.04,
                 letterSpacing: "-0.03em",
                 fontWeight: 700,
                 color: "#fff",
                 margin: 0,
+                // Same mobile-overflow guard as /beta: lower the clamp
+                // floor and let German compounds break instead of
+                // pushing the page wider than the viewport.
+                overflowWrap: "anywhere",
+                hyphens: "auto",
+                WebkitHyphens: "auto",
               }}
             >
               Einmal sprechen.<br />Makros berechnet.<br />CGM verknüpft.

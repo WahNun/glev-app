@@ -1,0 +1,235 @@
+=== BEGIN ===
+CONTEXT
+Der Stripe Webhook (Beta + Pro) verschickt bereits Welcome-Emails über eine Outbox-Architektur (enqueueEmail() → email_outbox → GitHub Actions Cron flush). Jetzt sollen automatisch drei weitere Emails in den Tagen danach folgen:
+
+Tag 7 — Insights-Tab Feature-Highlight
+Tag 14 — Persönliches Feedback-Request von Lucas
+Tag 30 — Trustpilot Bewertungsanfrage
+
+Ein eigener Cron Endpoint (täglich 09:00 UTC via Vercel Cron) arbeitet eine separate Queue-Tabelle email_drip_schedule in Supabase ab.
+
+STEP 1 — Bestehenden Code lesen
+bashcat lib/emails/outbox.ts
+cat app/api/webhooks/stripe/route.ts
+cat app/api/pro/webhook/route.ts
+cat vercel.json 2>/dev/null || echo "vercel.json does not exist yet"
+Verstehe:
+
+Wie enqueueEmail() aufgerufen wird (Parameter: template, to, payload, dedupeKey)
+Welche Templates bereits in outbox.ts existieren (beta-welcome, pro-welcome)
+Ob vercel.json schon eine "crons"-Sektion hat (dann mergen, nicht ersetzen)
+
+
+STEP 2 — Supabase Migration
+Im Supabase SQL Editor ausführen:
+sqlCREATE TABLE IF NOT EXISTS email_drip_schedule (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  email         text NOT NULL,
+  first_name    text,
+  tier          text NOT NULL CHECK (tier IN ('beta', 'pro')),
+  email_type    text NOT NULL CHECK (
+                  email_type IN ('day7_insights', 'day14_feedback', 'day30_trustpilot')
+                ),
+  scheduled_at  timestamptz NOT NULL,
+  sent_at       timestamptz,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS email_drip_schedule_email_type_unique
+  ON email_drip_schedule(email, email_type);
+
+CREATE INDEX IF NOT EXISTS email_drip_schedule_pending_idx
+  ON email_drip_schedule(scheduled_at)
+  WHERE sent_at IS NULL;
+
+ALTER TABLE email_drip_schedule ENABLE ROW LEVEL SECURITY;
+
+STEP 3 — Drei neue Email-Funktionen
+Erstelle lib/emails/drip.ts (neue Datei, nicht bestehende anfassen):
+typescriptimport { Resend } from 'resend'
+
+const resend = new Resend(process.env.RESEND_API_KEY)
+const FROM = 'Lucas von Glev <lucas@glev.app>'
+
+const wrap = (content: string) => `
+<!DOCTYPE html>
+<html lang="de">
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f9f9f9;margin:0;padding:0;">
+  <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:12px;padding:40px;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+    ${content}
+    <hr style="border:none;border-top:1px solid #eee;margin:32px 0;" />
+    <p style="color:#999;font-size:12px;line-height:1.6;margin:0;">
+      Glev ist ein Dokumentations- und Organisations-Tool, kein Medizinprodukt.<br />
+      Therapieentscheidungen triffst du in Absprache mit deinem Arzt.
+    </p>
+  </div>
+</body>
+</html>`.trim()
+
+export async function sendDay7InsightsEmail(to: string, firstName: string) {
+  const name = firstName || 'du'
+  await resend.emails.send({
+    from: FROM, to,
+    subject: 'Dein erster Wochenbericht wartet',
+    html: wrap(`
+      <h1 style="font-size:20px;font-weight:700;color:#111;margin:0 0 20px;">Hey ${name},</h1>
+      <p style="color:#444;line-height:1.8;margin:0 0 16px;">du nutzt Glev jetzt seit einer Woche — das ist der Moment wo es anfängt, interessant zu werden.</p>
+      <p style="color:#444;line-height:1.8;margin:0 0 16px;"><strong>Ein Tipp für heute:</strong> öffne den Insights-Tab.</p>
+      <p style="color:#444;line-height:1.8;margin:0 0 16px;">Dort siehst du wie dein Blutzucker auf verschiedene Mahlzeiten reagiert hat. Welche Mahlzeit hat bei dir zuverlässig zu einem flachen Verlauf geführt? Wo gab's Ausreißer?</p>
+      <p style="color:#444;line-height:1.8;margin:0 0 24px;">Je mehr Mahlzeiten du dokumentierst, desto mehr Muster erkennt die App — und desto gezielter zeigt sie dir, was bei dir persönlich funktioniert und was nicht. Nach einer Woche fängt das an. Nach einem Monat merkst du den Unterschied.</p>
+      <p style="color:#444;line-height:1.8;margin:0 0 24px;">Das ist kein Bericht der dir sagt was du tun sollst — eine Übersicht damit du und dein Arzt fundierter entscheiden können.</p>
+      <a href="https://glev.app/app" style="display:inline-block;background:#4F6EF7;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:600;font-size:15px;margin-bottom:28px;">Insights öffnen →</a>
+      <p style="color:#666;font-size:14px;line-height:1.6;margin:0;">Lucas<br />Gründer, Glev</p>
+    `),
+  })
+}
+
+export async function sendDay14FeedbackEmail(to: string, firstName: string) {
+  const name = firstName || 'du'
+  await resend.emails.send({
+    from: FROM, to,
+    subject: 'Kurze Frage — Lucas hier',
+    html: wrap(`
+      <h1 style="font-size:20px;font-weight:700;color:#111;margin:0 0 20px;">Hey ${name},</h1>
+      <p style="color:#444;line-height:1.8;margin:0 0 16px;">du nutzt Glev jetzt zwei Wochen — ich wollte kurz fragen wie's läuft.</p>
+      <p style="color:#444;line-height:1.8;margin:0 0 16px;">Nicht als automatische Survey. Ich frag wirklich.</p>
+      <p style="color:#444;line-height:1.8;margin:0 0 16px;">Was funktioniert für dich gut? Und was nervt dich oder fehlt noch?</p>
+      <p style="color:#444;line-height:1.8;margin:0 0 24px;">Ich lese jeden Reply selbst und dein Feedback fließt direkt in die Entwicklung ein. Wir sind in der Beta — was du mir jetzt sagst hat eine echte Chance, in den nächsten Wochen gebaut zu werden.</p>
+      <p style="color:#444;line-height:1.8;margin:0 0 28px;">Einfach auf diese Email antworten reicht. Kann ein Satz sein.</p>
+      <p style="color:#666;font-size:14px;line-height:1.6;margin:0;">Lucas<br />Gründer, Glev — selbst T1D seit April 2026</p>
+    `),
+  })
+}
+
+export async function sendDay30TrustpilotEmail(to: string, firstName: string) {
+  const name = firstName || 'du'
+  await resend.emails.send({
+    from: FROM, to,
+    subject: '30 Tage Glev — danke. Und eine Bitte.',
+    html: wrap(`
+      <h1 style="font-size:20px;font-weight:700;color:#111;margin:0 0 20px;">Hey ${name},</h1>
+      <p style="color:#444;line-height:1.8;margin:0 0 16px;">du nutzt Glev jetzt seit einem Monat. Das bedeutet mir wirklich etwas — danke.</p>
+      <p style="color:#444;line-height:1.8;margin:0 0 16px;">Eine ehrliche Bitte: wenn du 2 Minuten hast und Glev dir geholfen hat, würde ich mich sehr über eine kurze Bewertung auf Trustpilot freuen.</p>
+      <p style="margin:0 0 8px;"><strong style="color:#444;">Keine langen Texte nötig — ein Satz reicht.</strong></p>
+      <a href="https://www.trustpilot.com/review/glev.app" style="display:inline-block;background:#00B67A;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:600;font-size:15px;margin:16px 0 28px;">Hier klicken und bewerten →</a>
+      <p style="color:#444;line-height:1.8;margin:0 0 28px;">Falls du gemischte Erfahrungen gemacht hast: reply direkt auf diese Email. Ich les das selbst und antworte.</p>
+      <p style="color:#666;font-size:14px;line-height:1.6;margin:0;">Danke,<br />Lucas</p>
+    `),
+  })
+}
+
+STEP 4 — Stripe Webhooks um Drip-Scheduling erweitern
+Öffne app/api/webhooks/stripe/route.ts und app/api/pro/webhook/route.ts.
+Füge diese Hilfsfunktion in beiden Dateien hinzu (oder in eine gemeinsame lib/emails/drip-scheduler.ts auslagern):
+typescriptimport { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
+
+async function scheduleDripEmails(email: string, name: string, tier: 'beta' | 'pro') {
+  const firstName = name?.split(' ')[0] ?? null
+  const now = new Date()
+  const rows = [
+    { email, first_name: firstName, tier, email_type: 'day7_insights',
+      scheduled_at: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString() },
+    { email, first_name: firstName, tier, email_type: 'day14_feedback',
+      scheduled_at: new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString() },
+    { email, first_name: firstName, tier, email_type: 'day30_trustpilot',
+      scheduled_at: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString() },
+  ]
+  const { error } = await supabase
+    .from('email_drip_schedule')
+    .upsert(rows, { onConflict: 'email,email_type', ignoreDuplicates: true })
+  if (error) console.error('[Drip] scheduleDripEmails failed:', error.message)
+  else console.log(`[Drip] Scheduled for ${email} (${tier})`)
+}
+Platzierung: Ruf scheduleDripEmails() direkt nach dem enqueueEmail({ template: "beta-welcome", … }) bzw. enqueueEmail({ template: "pro-welcome", … }) Aufruf auf — nicht nach einem alten direkten resend.emails.send().
+typescript// Beta Webhook — nach enqueueEmail beta-welcome:
+await scheduleDripEmails(email, name, 'beta')
+
+// Pro Webhook — nach enqueueEmail pro-welcome:
+await scheduleDripEmails(email, name, 'pro')
+
+STEP 5 — Cron Endpoint
+Erstelle app/api/email/drip/cron/route.ts:
+typescriptimport { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
+import { sendDay7InsightsEmail, sendDay14FeedbackEmail, sendDay30TrustpilotEmail } from '@/lib/emails/drip'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
+
+export const runtime = 'nodejs'
+
+export async function GET(req: NextRequest) {
+  if (req.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const { data: due, error } = await supabase
+    .from('email_drip_schedule')
+    .select('id, email, first_name, email_type')
+    .is('sent_at', null)
+    .lte('scheduled_at', new Date().toISOString())
+    .order('scheduled_at', { ascending: true })
+    .limit(50)
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  const results = { sent: 0, failed: 0 }
+
+  for (const row of due ?? []) {
+    try {
+      const fn = row.email_type === 'day7_insights' ? sendDay7InsightsEmail
+               : row.email_type === 'day14_feedback' ? sendDay14FeedbackEmail
+               : row.email_type === 'day30_trustpilot' ? sendDay30TrustpilotEmail
+               : null
+      if (!fn) continue
+      await fn(row.email, row.first_name ?? '')
+      await supabase.from('email_drip_schedule').update({ sent_at: new Date().toISOString() }).eq('id', row.id)
+      results.sent++
+    } catch (e: any) {
+      console.error(`[Drip Cron] Failed for ${row.email}:`, e.message)
+      results.failed++
+    }
+  }
+
+  return NextResponse.json({ ok: true, ...results })
+}
+
+STEP 6 — vercel.json
+Füge zur bestehenden "crons"-Sektion hinzu (mergen, nicht ersetzen):
+json{
+  "path": "/api/email/drip/cron",
+  "schedule": "0 9 * * *"
+}
+
+STEP 7 — Verify
+bash# Cron-Endpoint testen
+curl -X GET http://localhost:5000/api/email/drip/cron \
+  -H "Authorization: Bearer <CRON_SECRET>"
+# Erwartet: {"ok":true,"sent":0,"failed":0}
+Im Supabase SQL Editor einen sofort fälligen Test-Eintrag anlegen:
+sqlINSERT INTO email_drip_schedule (email, first_name, tier, email_type, scheduled_at)
+VALUES ('lucas@wahnon-connect.com', 'Lucas', 'beta', 'day7_insights', NOW() - INTERVAL '1 minute')
+ON CONFLICT (email, email_type) DO NOTHING;
+Cron erneut aufrufen → {"ok":true,"sent":1,"failed":0} + Email in Resend Dashboard sichtbar.
+
+STEP 8 — Commit
+bashtsc --noEmit
+git add -A && git commit -m "feat(email): drip sequence day 7/14/30 via vercel cron" && git push origin main
+
+DO NOT change
+
+lib/emails/outbox.ts und die Outbox-Architektur
+enqueueEmail() Aufrufe in den Stripe Webhooks
+Bestehende Vercel Cron Jobs (Nightscout, flush-outbox)
+Stripe Webhook Signaturprüfung
+Supabase Auth und RLS auf profiles
+
+=== END ===

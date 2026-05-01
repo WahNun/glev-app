@@ -188,6 +188,14 @@ function BetaContent() {
         padding: "48px 0 64px",
         display: "flex",
         flexDirection: "column",
+        // Mobile horizontal-scroll guard: the PhoneShell mockup has
+        // absolute side-buttons at left:-2px / right:-2px and a soft
+        // 80px box-shadow that can poke past the iPhone 13 mini's
+        // 375px viewport. Clip the page to its own width so the body
+        // never scrolls horizontally — vertical scroll is unaffected
+        // because we don't touch overflow-y.
+        overflowX: "hidden",
+        width: "100%",
       }}
     >
       <style>{`
@@ -238,12 +246,23 @@ function BetaContent() {
             <Lockup width={200} />
             <h1
               style={{
-                fontSize: "clamp(40px, 6.4vw, 64px)",
+                fontSize: "clamp(32px, 6.4vw, 64px)",
                 lineHeight: 1.04,
                 letterSpacing: "-0.03em",
                 fontWeight: 700,
                 color: "#fff",
                 margin: 0,
+                // German compounds like "Insulinentscheidungen" don't
+                // break by default; without these two the headline
+                // overflows the 335px content area on iPhone 13 mini
+                // and triggers horizontal scroll. `overflowWrap:
+                // anywhere` is the modern, well-supported way to break
+                // overlong tokens; `hyphens: auto` (with lang="de" set
+                // by app/layout.tsx) lets the browser hyphenate at
+                // syllable boundaries when a break is needed.
+                overflowWrap: "anywhere",
+                hyphens: "auto",
+                WebkitHyphens: "auto",
               }}
             >
               Bessere Insulinentscheidungen.<br />Jetzt in der Beta testen.
