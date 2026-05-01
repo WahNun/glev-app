@@ -1230,10 +1230,10 @@ export default function EnginePage() {
         // navigation broke. The "log" combined view is dropped; users
         // now click the dedicated tab they want.
         const tabsCfg = [
-          { id:"engine"      as const, label:"Engine" },
-          { id:"bolus"       as const, label:"Insulin" },
-          { id:"exercise"    as const, label:"Übung" },
-          { id:"fingerstick" as const, label:"Glukose" },
+          { id:"engine"      as const, label: tEngine("tab_engine") },
+          { id:"bolus"       as const, label: tEngine("tab_insulin") },
+          { id:"exercise"    as const, label: tEngine("tab_exercise") },
+          { id:"fingerstick" as const, label: tEngine("tab_glucose") },
         ];
         // Single source of truth for the tab dropdown: the chevron pill
         // in the global app header (Layout.tsx) — which already shows
@@ -1345,7 +1345,9 @@ export default function EnginePage() {
                       }
                       disabled={!active}
                       aria-label={
-                        dir === "back" ? "Vorheriger Schritt" : "Nächster Schritt"
+                        dir === "back"
+                          ? tEngine("wizard_step_prev_aria")
+                          : tEngine("wizard_step_next_aria")
                       }
                       style={{
                         width: 36,
@@ -1396,7 +1398,7 @@ export default function EnginePage() {
                     <div
                       style={{ display: "flex", alignItems: "center", gap: 10 }}
                       role="list"
-                      aria-label="Wizard-Schritte"
+                      aria-label={tEngine("wizard_steps_aria")}
                     >
                       {[0, 1, 2].map((i) => (
                         <div
@@ -1406,7 +1408,7 @@ export default function EnginePage() {
                         >
                           <div
                             aria-current={i === stepIndex ? "step" : undefined}
-                            aria-label={`Schritt ${i + 1} von 3`}
+                            aria-label={tEngine("wizard_step_index_aria", { index: i + 1, total: 3 })}
                             style={{
                               width: 32, height: 32, borderRadius: 16,
                               background: i <= stepIndex ? ACCENT : "#2A2A36",
@@ -1618,9 +1620,9 @@ export default function EnginePage() {
                       WebkitTapHighlightColor: "transparent",
                       marginTop: 6,
                     }}
-                    aria-label="Weiter zu Schritt 2: Makros prüfen"
+                    aria-label={tEngine("btn_advance_to_macros_aria")}
                   >
-                    Weiter zu Makros prüfen
+                    {tEngine("btn_advance_to_macros")}
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <line x1="5" y1="12" x2="19" y2="12"/>
                       <polyline points="12 5 19 12 12 19"/>
