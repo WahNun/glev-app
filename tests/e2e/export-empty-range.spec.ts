@@ -64,8 +64,8 @@ function getAdminClient() {
 // accessible name reads "Open Export data" / "Daten exportieren öffnen".
 // Matching both ordering cases keeps the spec locale-agnostic.
 const EXPORT_ROW_NAME  = /^(Open Export data|Daten exportieren öffnen)$/i;
-const ALL_BTN_NAME     = /^(All as CSV|Alles als CSV|Exporting all…|Exportiere alles…)$/i;
-const PDF_BTN_NAME     = /^(PDF Report|PDF-Report|Building PDF…|Erstelle PDF…)$/i;
+const ALL_BTN_NAME     = /^(All as CSV|Alles als CSV|Exporting all…|Exportiere alles…)( \(\d+\))?$/i;
+const PDF_BTN_NAME     = /^(PDF Report|PDF-Report|Building PDF…|Erstelle PDF…)( \(\d+\))?$/i;
 const CUSTOM_CHIP_NAME = /^(Custom range|Eigener Zeitraum)$/i;
 const ALL_CHIP_NAME    = /^(All time|Alles)$/i;
 // The empty-range copy is identical between the count line and the
