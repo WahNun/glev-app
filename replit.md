@@ -32,6 +32,7 @@ Glev is a Type 1 Diabetes insulin decision-support system designed to provide pe
 - **Localization:** Uses `next-intl` with `de` (default) and `en` locales, resolving locale preferences from cookies or `Accept-Language` headers.
 - **Insulin & Exercise Logging:** New tables (`insulin_logs`, `exercise_logs`) and API routes support logging and retrieving insulin dosages and exercise activities, which the Engine considers for recommendations (safety hooks provide warnings without altering dosage).
 - **Native Shells (Capacitor):** iOS and Android apps are thin Capacitor 8.x webview shells loading `https://glev.app`, allowing instant content updates.
+- **Operator-Tools (`/admin/*`):** Drei `ADMIN_API_SECRET`-gegateete Tabs, die sich ein gemeinsames `glev_admin_token`-Cookie teilen: `/admin/buyers` (Käufer:innen-Liste), `/admin/drip` (Drip-Mail-Pipeline-Status & manuelle Aktionen) und `/admin/emails` (Live-Preview aller Mail-Templates inkl. Welcome + Drip — rendert direkt aus `lib/emails/*` damit „was du siehst" garantiert „was Resend schickt" ist; Variablen via `?name=` und `?email=` per URL).
 
 **Data Models:**
 - `meals` table stores meal details, including `input_text`, `parsed_json`, glucose levels, carbs, insulin, meal type, and evaluation.
