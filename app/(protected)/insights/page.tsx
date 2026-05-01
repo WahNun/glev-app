@@ -554,7 +554,7 @@ export default function InsightsPage() {
           }
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-            <CardLabel text="Time in range · 7d"/>
+            <CardLabel text={tInsights("card_time_in_range_title")}/>
             <div style={{ fontSize:9, color:"var(--text-dim)" }}>70–180 mg/dL</div>
           </div>
           {b7.n === 0 ? (
@@ -570,7 +570,7 @@ export default function InsightsPage() {
                 <div style={{ fontSize:14, color:GREEN, fontWeight:700 }}>%</div>
                 {prev7Bg.length > 0 && (
                   <div style={{ marginLeft:"auto", fontSize:9, color: tirDelta >= 0 ? GREEN : ORANGE, fontWeight:600 }}>
-                    {tirDelta >= 0 ? "+" : ""}{tirDelta} vs prev wk
+                    {tirDelta >= 0 ? "+" : ""}{tirDelta} {tInsights("delta_vs_prev_week")}
                   </div>
                 )}
               </div>
@@ -617,7 +617,7 @@ export default function InsightsPage() {
               />
             }
           >
-            <CardLabel text="Avg BG"/>
+            <CardLabel text={tInsights("card_avg_bg_title")}/>
             {last7Avg == null ? (
               <div style={{ fontSize:24, fontWeight:800, color:"var(--text-ghost)", fontFamily:"var(--font-mono)", marginTop:4 }}>—</div>
             ) : (
@@ -630,7 +630,7 @@ export default function InsightsPage() {
                 </div>
                 {bgDelta != null && (
                   <div style={{ fontSize:9, color: bgDelta < 0 ? GREEN : bgDelta > 0 ? ORANGE : "var(--text-dim)", marginTop:2, fontWeight:600 }}>
-                    {bgDelta > 0 ? "+" : bgDelta < 0 ? "−" : ""}{Math.abs(bgDelta)} vs prev
+                    {bgDelta > 0 ? "+" : bgDelta < 0 ? "−" : ""}{Math.abs(bgDelta)} {tInsights("delta_vs_prev")}
                   </div>
                 )}
               </>
@@ -650,7 +650,7 @@ export default function InsightsPage() {
               />
             }
           >
-            <CardLabel text="GMI / est. A1C"/>
+            <CardLabel text={tInsights("card_gmi_title")}/>
             {gmi == null ? (
               <div style={{ fontSize:24, fontWeight:800, color:"var(--text-ghost)", fontFamily:"var(--font-mono)", marginTop:4 }}>—</div>
             ) : (
@@ -663,7 +663,7 @@ export default function InsightsPage() {
                 </div>
                 {gmiDelta != null && (
                   <div style={{ fontSize:9, color: gmiDelta < 0 ? GREEN : gmiDelta > 0 ? ORANGE : "var(--text-dim)", marginTop:2, fontWeight:600 }}>
-                    {gmiDelta > 0 ? "+" : gmiDelta < 0 ? "−" : ""}{Math.abs(gmiDelta).toFixed(1)} vs prev
+                    {gmiDelta > 0 ? "+" : gmiDelta < 0 ? "−" : ""}{Math.abs(gmiDelta).toFixed(1)} {tInsights("delta_vs_prev")}
                   </div>
                 )}
               </>
@@ -689,8 +689,8 @@ export default function InsightsPage() {
           }
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-            <CardLabel text="7-day trend"/>
-            <div style={{ fontSize:9, color:"var(--text-dim)" }}>avg per day</div>
+            <CardLabel text={tInsights("card_glucose_trend_title")}/>
+            <div style={{ fontSize:9, color:"var(--text-dim)" }}>{tInsights("card_glucose_trend_sub")}</div>
           </div>
           <Sparkline values={trendValues} color={ACCENT}/>
           <div style={{ display:"flex", justifyContent:"space-between", marginTop:4, fontSize:8, color:"var(--text-faint)" }}>
@@ -722,7 +722,7 @@ export default function InsightsPage() {
             }
           >
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-              <CardLabel text="Hypo Events · 7d"/>
+              <CardLabel text={tInsights("card_hypo_events_title")}/>
               <div style={{ fontSize:9, color:"var(--text-dim)" }}>&lt; {HYPO_THRESHOLD_MGDL} mg/dL</div>
             </div>
             {!hypoEnough ? (
@@ -770,7 +770,7 @@ export default function InsightsPage() {
             }
           >
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-              <CardLabel text="Hyper Events · 7d"/>
+              <CardLabel text={tInsights("card_hyper_events_title")}/>
               <div style={{ fontSize:9, color:"var(--text-dim)" }}>&gt; {HYPER_THRESHOLD_MGDL} mg/dL</div>
             </div>
             {!hyperEnough ? (
@@ -869,7 +869,7 @@ export default function InsightsPage() {
             />
           }
         >
-          <CardLabel text="Meal evaluation · 7d"/>
+          <CardLabel text={tInsights("card_meal_evaluation_title")}/>
           {totalN === 0 ? (
             <div style={{ padding:"18px 0", textAlign:"center", color:"var(--text-faint)", fontSize:11 }}>
               Log meals with post-meal glucose to see your distribution.
@@ -1060,8 +1060,8 @@ export default function InsightsPage() {
           }
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-            <CardLabel text="Total Daily Dose · 7d"/>
-            <div style={{ fontSize:9, color:"var(--text-dim)" }}>U / Tag</div>
+            <CardLabel text={tInsights("card_tdd_title")}/>
+            <div style={{ fontSize:9, color:"var(--text-dim)" }}>{tInsights("card_tdd_sub")}</div>
           </div>
           {!tddEnough || tddAvg7 == null ? (
             <div style={{ padding:"18px 0", textAlign:"center" }}>
@@ -1109,8 +1109,8 @@ export default function InsightsPage() {
           }
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-            <CardLabel text="Pattern detection"/>
-            <div style={{ fontSize:9, color:"var(--text-dim)" }}>{patterns.length} signal{patterns.length===1?"":"s"}</div>
+            <CardLabel text={tInsights("card_patterns_title")}/>
+            <div style={{ fontSize:9, color:"var(--text-dim)" }}>{tInsights("card_patterns_signal_count", { n: patterns.length })}</div>
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
             {patterns.map((p, i) => (
@@ -1149,8 +1149,8 @@ export default function InsightsPage() {
           }
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-            <CardLabel text="Workout Outcomes · 30d"/>
-            <div style={{ fontSize:9, color:"var(--text-dim)" }}>Verteilung</div>
+            <CardLabel text={tInsights("card_workout_outcomes_title")}/>
+            <div style={{ fontSize:9, color:"var(--text-dim)" }}>{tInsights("card_workout_outcomes_sub")}</div>
           </div>
           {!workoutOutcomeEnough ? (
             <div style={{ padding:"18px 0", textAlign:"center" }}>
@@ -1271,8 +1271,8 @@ export default function InsightsPage() {
           }
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-            <CardLabel text="Workout Patterns"/>
-            <div style={{ fontSize:9, color:"var(--text-dim)" }}>{workoutPatterns.length} Signal{workoutPatterns.length === 1 ? "" : "e"}</div>
+            <CardLabel text={tInsights("card_workout_patterns_title")}/>
+            <div style={{ fontSize:9, color:"var(--text-dim)" }}>{tInsights("card_workout_patterns_signal_count", { n: workoutPatterns.length })}</div>
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
             {workoutPatterns.map((p, i) => (
@@ -1308,8 +1308,8 @@ export default function InsightsPage() {
           }
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-            <CardLabel text="Meal type · success %"/>
-            <div style={{ fontSize:9, color:"var(--text-dim)" }}>by macro profile</div>
+            <CardLabel text={tInsights("card_meal_type_title")}/>
+            <div style={{ fontSize:9, color:"var(--text-dim)" }}>{tInsights("card_meal_type_sub")}</div>
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
             {TYPE_ORDER.map(type => {
@@ -1359,8 +1359,8 @@ export default function InsightsPage() {
           }
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-            <CardLabel text="Time of day · success %"/>
-            <div style={{ fontSize:9, color:"var(--text-dim)" }}>by window</div>
+            <CardLabel text={tInsights("card_time_of_day_title")}/>
+            <div style={{ fontSize:9, color:"var(--text-dim)" }}>{tInsights("card_time_of_day_sub")}</div>
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
             {Object.entries(timeGroups).map(([label, data]) => {
