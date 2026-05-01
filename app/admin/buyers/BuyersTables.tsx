@@ -9,6 +9,7 @@ export type BetaRow = {
   status: string | null;
   amount_cents: number | null;
   currency: string | null;
+  stripe_session_id: string | null;
   created_at: string | null;
   fulfilled_at: string | null;
 };
@@ -20,6 +21,7 @@ export type ProRow = {
   status: string | null;
   trial_ends_at: string | null;
   current_period_end: string | null;
+  stripe_session_id: string | null;
   created_at: string | null;
 };
 
@@ -47,6 +49,16 @@ function fmtAmount(cents: number | null | undefined, ccy: string | null | undefi
   if (cents == null) return "—";
   const c = (ccy ?? "eur").toUpperCase();
   return `${(cents / 100).toFixed(2)} ${c}`;
+}
+
+function fmtSessionId(id: string | null | undefined): string {
+  const s = (id ?? "").trim();
+  if (!s) return "—";
+  // Stripe session ids look like `cs_test_a1B2c3...` (~66 chars). Show the
+  // first 16 chars so the column doesn't blow up the table width; the full
+  // value is still copyable from the cell's `title` tooltip.
+  if (s.length <= 18) return s;
+  return `${s.slice(0, 16)}…`;
 }
 
 function matches(row: { email: string; full_name: string | null }, needle: string): boolean {
@@ -95,6 +107,7 @@ export default function BuyersTables({ beta, pro, pageLimit, betaTruncated, proT
                 <th style={thStyle}>Email</th>
                 <th style={thStyle}>Status</th>
                 <th style={thStyle}>Betrag</th>
+                <th style={thStyle}>Session-ID</th>
                 <th style={thStyle}>Erstellt</th>
                 <th style={thStyle}>Fulfilled</th>
               </tr>
@@ -102,7 +115,7 @@ export default function BuyersTables({ beta, pro, pageLimit, betaTruncated, proT
             <tbody>
               {filteredBeta.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ ...tdStyle, textAlign: "center", color: "#888" }}>
+                  <td colSpan={7} style={{ ...tdStyle, textAlign: "center", color: "#888" }}>
                     {needle ? "Keine Treffer." : "Keine Reservierungen."}
                   </td>
                 </tr>
@@ -113,6 +126,9 @@ export default function BuyersTables({ beta, pro, pageLimit, betaTruncated, proT
                     <td style={tdStyle}>{r.email}</td>
                     <td style={tdStyle}>{r.status ?? "—"}</td>
                     <td style={tdStyle}>{fmtAmount(r.amount_cents, r.currency)}</td>
+                    <td style={monoTdStyle} title={r.stripe_session_id ?? undefined}>
+                      {fmtSessionId(r.stripe_session_id)}
+                    </td>
                     <td style={tdStyle}>{fmtDate(r.created_at)}</td>
                     <td style={tdStyle}>{fmtDate(r.fulfilled_at)}</td>
                   </tr>
@@ -141,13 +157,14 @@ export default function BuyersTables({ beta, pro, pageLimit, betaTruncated, proT
                 <th style={thStyle}>Status</th>
                 <th style={thStyle}>Trial endet</th>
                 <th style={thStyle}>Period endet</th>
+                <th style={thStyle}>Session-ID</th>
                 <th style={thStyle}>Erstellt</th>
               </tr>
             </thead>
             <tbody>
               {filteredPro.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ ...tdStyle, textAlign: "center", color: "#888" }}>
+                  <td colSpan={7} style={{ ...tdStyle, textAlign: "center", color: "#888" }}>
                     {needle ? "Keine Treffer." : "Keine Pro-Abos."}
                   </td>
                 </tr>
@@ -159,6 +176,9 @@ export default function BuyersTables({ beta, pro, pageLimit, betaTruncated, proT
                     <td style={tdStyle}>{r.status ?? "—"}</td>
                     <td style={tdStyle}>{fmtDate(r.trial_ends_at)}</td>
                     <td style={tdStyle}>{fmtDate(r.current_period_end)}</td>
+                    <td style={monoTdStyle} title={r.stripe_session_id ?? undefined}>
+                      {fmtSessionId(r.stripe_session_id)}
+                    </td>
                     <td style={tdStyle}>{fmtDate(r.created_at)}</td>
                   </tr>
                 ))
@@ -207,6 +227,14 @@ const tdStyle: React.CSSProperties = {
   padding: "8px 10px",
   borderBottom: "1px solid #f0f0f0",
   whiteSpace: "nowrap",
+};
+
+const monoTdStyle: React.CSSProperties = {
+  ...tdStyle,
+  fontFamily:
+    "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+  fontSize: 12,
+  color: "#444",
 };
 
 const searchStyle: React.CSSProperties = {

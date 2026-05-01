@@ -131,6 +131,7 @@ export async function POST(req: NextRequest) {
           status: mapStripeStatus(stripeStatus) ?? "trialing",
           stripe_customer_id: customerId,
           stripe_subscription_id: subscriptionId,
+          stripe_session_id: session.id,
           stripe_price_id: priceId,
           trial_ends_at: trialEndsAt,
           current_period_end: currentPeriodEnd,

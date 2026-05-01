@@ -77,12 +77,12 @@ export default async function AdminBuyersPage({
   const [betaRes, proRes] = await Promise.all([
     sb
       .from("beta_reservations")
-      .select("id, email, full_name, status, amount_cents, currency, created_at, fulfilled_at")
+      .select("id, email, full_name, status, amount_cents, currency, stripe_session_id, created_at, fulfilled_at")
       .order("created_at", { ascending: false })
       .limit(PAGE_LIMIT),
     sb
       .from("pro_subscriptions")
-      .select("id, email, full_name, status, trial_ends_at, current_period_end, created_at")
+      .select("id, email, full_name, status, trial_ends_at, current_period_end, stripe_session_id, created_at")
       .order("created_at", { ascending: false })
       .limit(PAGE_LIMIT),
   ]);
