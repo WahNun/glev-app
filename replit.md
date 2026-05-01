@@ -332,10 +332,69 @@ accounts, set bundle identifiers / signing certs, generate icons +
 splash assets, fill in `Info.plist` privacy strings (mic, etc.) for
 features the web app uses, and submit for review.
 
+### iOS release pipeline (push-button TestFlight)
+
+The old "open Xcode → bump versions → Product → Archive → Distribute App"
+dance is gone. There are now three ways to ship an iOS build, all
+non-interactive:
+
+1. **From a Mac (Xcode 15+ installed, signed into the dev team):**
+   ```bash
+   bundle install                              # one-time
+   bundle exec fastlane install_plugins        # one-time
+   bundle exec fastlane ios beta               # bump build, archive, upload to TestFlight
+   bundle exec fastlane ios beta bump:patch    # also bump MARKETING_VERSION x.y -> x.(y+1).0
+   bundle exec fastlane ios release            # promote latest TestFlight build to App Store
+   ```
+   The `App Store Connect API key` env vars (`APP_STORE_CONNECT_API_KEY_ID`,
+   `APP_STORE_CONNECT_API_ISSUER_ID`, `APP_STORE_CONNECT_API_KEY_BASE64`)
+   live in `~/.fastlane/.env` — never commit them. Full setup docs are in
+   [`fastlane/README.md`](fastlane/README.md).
+
+2. **From GitHub (no Mac required):** Open the *Actions* tab, pick
+   **iOS release**, click **Run workflow**, choose a bump strategy
+   (`build` / `patch` / `minor` / `major` / `skip`) and a lane
+   (`beta` / `release`). The workflow runs on a `macos-14` GitHub-hosted
+   runner, executes the same Fastlane lanes, and pushes the bumped
+   `project.pbxproj` back to the branch as `chore(ios): release X.Y.Z(N)
+   [skip ci]`. Same secrets as above must exist in the repo's
+   *Settings → Secrets and variables → Actions*.
+
+3. **From a git push:** Push a tag matching `ios-v*` (e.g.
+   `git tag ios-v1.2.0 && git push --tags`) and the same workflow
+   triggers automatically with a build-number bump.
+
+**Versioning.** Both `MARKETING_VERSION` (the user-visible `1.2.0`) and
+`CURRENT_PROJECT_VERSION` (the integer build number TestFlight
+uniqueness-checks against) live in `ios/App/App.xcodeproj/project.pbxproj`
+and must match across the Debug + Release configs. Bumping is implemented
+in pure Node at [`scripts/bump-ios-version.mjs`](scripts/bump-ios-version.mjs)
+so the same logic runs on Replit (where Xcode is unavailable):
+
+```bash
+npm run ios:version          # show current versions
+npm run ios:bump:build       # CURRENT_PROJECT_VERSION + 1
+npm run ios:bump:patch       # MARKETING_VERSION patch + reset build to 1
+node scripts/bump-ios-version.mjs build --set 42
+node scripts/bump-ios-version.mjs marketing --set 2.0.0
+```
+
+The `fastlane ios beta` lane calls into this script and additionally
+queries TestFlight via `latest_testflight_build_number` so it never
+collides with an already-uploaded build for the current marketing version.
+
+**Code signing.** The Xcode project uses automatic signing
+(`CODE_SIGN_STYLE = Automatic`), which works out of the box on a developer
+Mac that's signed into the team. For a fresh GitHub-hosted macOS runner,
+add [`fastlane match`](https://docs.fastlane.tools/actions/match/) with a
+private certificates repo + `MATCH_PASSWORD` secret — that step is
+intentionally not committed because it requires team-specific config.
+
 ### Apple Health (HealthKit) — current state
 
-The Capacitor side is fully wired and committed; the only remaining
-work is a Mac-only archive + TestFlight upload step.
+The Capacitor side is fully wired and committed; releasing a HealthKit
+binary to TestFlight is now a single `fastlane ios beta` (or one click in
+GitHub Actions) — see *iOS release pipeline* above.
 
 Already done in the repo:
 - `@capgo/capacitor-health@8.4.x` installed and synced into
@@ -351,17 +410,15 @@ Already done in the repo:
   `NSHealthShareUsageDescription` and `NSHealthUpdateUsageDescription`
   (German copy).
 
-Mac-only steps still required to actually ship a HealthKit-capable
-binary to real iPhones:
-1. `npx cap open ios` and bump `MARKETING_VERSION` /
-   `CURRENT_PROJECT_VERSION` so TestFlight accepts a fresh build.
-2. In Xcode: Product → Archive, then Distribute App →
-   App Store Connect → Upload (or use Transporter with the resulting
-   `.ipa`).
-3. In App Store Connect → TestFlight: add the new build to a tester
+Releasing a HealthKit-capable binary to real iPhones is now:
+1. `bundle exec fastlane ios beta` (locally on a Mac) **or** click
+   *Run workflow* on the **iOS release** GitHub Action. Both bump
+   versions, archive, and upload to TestFlight in one shot.
+2. In App Store Connect → TestFlight: add the new build to a tester
    group, have a tester open Settings → Apple Health and confirm the
    permission prompt + glucose sync work.
-4. Promote that build to App Store production.
+3. `bundle exec fastlane ios release` (or run the GitHub Action with
+   `lane = release`) to promote that build to App Store production
+   and finish submission for review in App Store Connect.
 
-There is no Fastlane / Xcode Cloud / GitHub Actions macOS runner set
-up yet, so these four steps are manual on a developer Mac.
+See the *iOS release pipeline* section above for full setup details.

@@ -1,0 +1,3 @@
+# Plugins required by fastlane/Fastfile.
+# Re-run `bundle exec fastlane install_plugins` after editing.
+gem "fastlane-plugin-versioning"

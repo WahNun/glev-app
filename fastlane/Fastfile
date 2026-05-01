@@ -1,0 +1,172 @@
+# Fastfile — iOS release automation for Glev.
+#
+# This replaces the old "open Xcode, bump version by hand, Product > Archive,
+# Distribute App > App Store Connect > Upload" dance with single-command lanes:
+#
+#   bundle exec fastlane ios beta            # auto-bump build, archive, upload to TestFlight
+#   bundle exec fastlane ios beta bump:patch # also bump MARKETING_VERSION x.y -> x.(y+1).0
+#   bundle exec fastlane ios release         # promote latest TestFlight build to App Store
+#   bundle exec fastlane ios bump build      # just bump CURRENT_PROJECT_VERSION (no build)
+#   bundle exec fastlane ios bump marketing kind:patch
+#
+# All lanes assume macOS + Xcode 15+. They use the App Store Connect API key
+# for auth (no 2FA prompts), driven by these env vars (export them or put them
+# in `~/.fastlane/.env` — never commit them):
+#
+#   APP_STORE_CONNECT_API_KEY_ID         e.g. ABCD1234EF
+#   APP_STORE_CONNECT_API_ISSUER_ID      Issuer UUID from App Store Connect
+#   APP_STORE_CONNECT_API_KEY_BASE64     base64(`cat AuthKey_<id>.p8`)
+#                                        (or use APP_STORE_CONNECT_API_KEY_PATH
+#                                        to point at the .p8 file directly)
+#
+# Optional:
+#   APP_IDENTIFIER, FASTLANE_APPLE_ID, FASTLANE_TEAM_ID, FASTLANE_ITC_TEAM_ID
+#   GYM_EXPORT_METHOD (defaults to "app-store")
+#
+# The version-bump step shells out to `node scripts/bump-ios-version.mjs` so
+# the same logic is testable on Linux/Replit (where Xcode is unavailable).
+
+default_platform(:ios)
+
+XCODEPROJ = File.expand_path("../ios/App/App.xcodeproj", __dir__)
+WORKSPACE = File.expand_path("../ios/App/App.xcworkspace", __dir__)
+SCHEME    = "App"
+REPO_ROOT = File.expand_path("..", __dir__)
+
+def app_store_connect_key
+  if ENV["APP_STORE_CONNECT_API_KEY_ID"].to_s.empty? ||
+     ENV["APP_STORE_CONNECT_API_ISSUER_ID"].to_s.empty?
+    UI.user_error!(
+      "App Store Connect API key not configured. Set APP_STORE_CONNECT_API_KEY_ID, " \
+      "APP_STORE_CONNECT_API_ISSUER_ID and either APP_STORE_CONNECT_API_KEY_BASE64 " \
+      "or APP_STORE_CONNECT_API_KEY_PATH. See fastlane/README.md.",
+    )
+  end
+
+  params = {
+    key_id: ENV.fetch("APP_STORE_CONNECT_API_KEY_ID"),
+    issuer_id: ENV.fetch("APP_STORE_CONNECT_API_ISSUER_ID"),
+    in_house: false,
+  }
+  if ENV["APP_STORE_CONNECT_API_KEY_BASE64"]
+    params[:key_content] = ENV.fetch("APP_STORE_CONNECT_API_KEY_BASE64")
+    params[:is_key_content_base64] = true
+  elsif ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+    params[:key_filepath] = ENV.fetch("APP_STORE_CONNECT_API_KEY_PATH")
+  else
+    UI.user_error!(
+      "Provide either APP_STORE_CONNECT_API_KEY_BASE64 or APP_STORE_CONNECT_API_KEY_PATH",
+    )
+  end
+  app_store_connect_api_key(**params)
+end
+
+def bump_via_node(*args)
+  Dir.chdir(REPO_ROOT) do
+    sh("node", "scripts/bump-ios-version.mjs", *args)
+  end
+end
+
+def current_versions
+  marketing = get_version_number_from_xcodeproj(xcodeproj: XCODEPROJ, target: SCHEME)
+  build     = get_build_number_from_xcodeproj(xcodeproj: XCODEPROJ, target: SCHEME)
+  { marketing: marketing, build: build }
+end
+
+platform :ios do
+  before_all do
+    unless File.exist?(File.join(XCODEPROJ, "project.pbxproj"))
+      UI.user_error!("Cannot find #{XCODEPROJ}. Run `npx cap sync ios` first.")
+    end
+  end
+
+  desc "Print MARKETING_VERSION + CURRENT_PROJECT_VERSION as currently committed"
+  lane :versions do
+    v = current_versions
+    UI.message("MARKETING_VERSION = #{v[:marketing]}")
+    UI.message("CURRENT_PROJECT_VERSION = #{v[:build]}")
+  end
+
+  desc "Bump versions only. Examples: `fastlane ios bump build`, `fastlane ios bump marketing kind:patch`"
+  lane :bump do |options|
+    case options[:type] || ARGV.last
+    when "marketing"
+      kind = options[:kind] || "patch"
+      bump_via_node("marketing", kind)
+    when "release"
+      kind = options[:kind] || "patch"
+      bump_via_node("release", kind)
+    else
+      bump_via_node("build")
+    end
+  end
+
+  desc "Build a release archive and upload to TestFlight."
+  desc "Options:"
+  desc "  bump:patch|minor|major  — also bump MARKETING_VERSION (resets build to 1)"
+  desc "  bump:build (default)    — just increment CURRENT_PROJECT_VERSION"
+  desc "  skip_bump:true          — don't touch versions at all (use what's committed)"
+  lane :beta do |options|
+    api_key = app_store_connect_key
+
+    unless options[:skip_bump]
+      kind = options[:bump] || "build"
+      if %w[patch minor major].include?(kind)
+        bump_via_node("release", kind)
+      else
+        # Sync to TestFlight first so we never collide with an already-uploaded
+        # build number for the current marketing version.
+        marketing = get_version_number_from_xcodeproj(xcodeproj: XCODEPROJ, target: SCHEME)
+        latest = latest_testflight_build_number(
+          api_key: api_key,
+          version: marketing,
+          initial_build_number: 0,
+          live: false,
+        )
+        bump_via_node("build", "--set", (latest.to_i + 1).to_s)
+      end
+    end
+
+    UI.success("Building #{current_versions[:marketing]} (#{current_versions[:build]})")
+
+    # Capacitor copies webDir + plugin manifest into ios/App/App/public.
+    # Run this from REPO_ROOT so the local @capacitor/cli is found.
+    Dir.chdir(REPO_ROOT) { sh("npx", "cap", "sync", "ios") }
+
+    build_app(
+      project: XCODEPROJ,
+      scheme: SCHEME,
+      configuration: "Release",
+      export_method: ENV.fetch("GYM_EXPORT_METHOD", "app-store"),
+      output_directory: File.join(REPO_ROOT, "build", "ios"),
+      clean: true,
+      include_symbols: true,
+      include_bitcode: false,
+    )
+
+    upload_to_testflight(
+      api_key: api_key,
+      skip_waiting_for_build_processing: true,
+      changelog: ENV["TESTFLIGHT_CHANGELOG"] ||
+                 "Automated build #{current_versions[:marketing]} (#{current_versions[:build]})",
+    )
+
+    UI.success("Uploaded to TestFlight: #{current_versions[:marketing]} (#{current_versions[:build]})")
+  end
+
+  desc "Promote the latest TestFlight build to App Store production (no rebuild)."
+  lane :release do
+    api_key = app_store_connect_key
+    deliver(
+      api_key: api_key,
+      submit_for_review: false,
+      automatic_release: false,
+      force: true,
+      skip_metadata: true,
+      skip_screenshots: true,
+      skip_binary_upload: true,
+      precheck_include_in_app_purchases: false,
+    )
+    UI.success("Promoted latest TestFlight build to App Store. Submit for review in App Store Connect.")
+  end
+end
