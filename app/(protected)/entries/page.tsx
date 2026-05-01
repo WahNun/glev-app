@@ -21,6 +21,7 @@ import ManualEntryModal from "@/components/ManualEntryModal";
 import { CgmCountdownPair } from "@/components/CgmCountdownChip";
 import { parseDbDate, parseDbTs, parseLluTs } from "@/lib/time";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
+import { formatICR } from "@/lib/carbUnits";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const PURPLE="#A78BFA", BLUE="#3B82F6";
@@ -1138,6 +1139,7 @@ function NonMealRow({
   isOpen, onToggle, onDelete, deleting, accent, badge, dateStr, timeStr,
   primaryLabel, primaryValue, primaryColor,
   secondaryLabel, secondaryValue, secondaryColor, secondaryMono,
+  secondarySubtitle,
   expandedDetails,
 }: {
   isOpen: boolean;
@@ -1158,6 +1160,10 @@ function NonMealRow({
    *  accent + mono treatment after the BRAND/DOSE swap. */
   secondaryColor?: string;
   secondaryMono?: boolean;
+  /** Optional second line under the secondary value — used by bolus rows
+   *  to surface the historic ICR snapshot (e.g. "@ 2 BE/IE"). Rendered
+   *  in muted text and elided on small screens to avoid layout shifts. */
+  secondarySubtitle?: string;
   expandedDetails: React.ReactNode;
 }) {
   return (
@@ -1198,11 +1204,13 @@ function NonMealRow({
             <div style={{ fontSize:14, fontWeight:700, color:primaryColor, letterSpacing:"-0.01em", fontFamily:"var(--font-mono)" }}>{primaryValue}</div>
           </div>
           {/* Col 4: Secondary — neutral by default; bolus/basal pass an
-              accent + mono override so DOSE keeps its prominent styling. */}
+              accent + mono override so DOSE keeps its prominent styling.
+              Optional `secondarySubtitle` adds a muted second line (used
+              by bolus rows for the historic ICR snapshot). */}
           <div style={{ minWidth:0 }}>
             <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>{secondaryLabel}</div>
             <div
-              title={secondaryValue}
+              title={secondarySubtitle ? `${secondaryValue} ${secondarySubtitle}` : secondaryValue}
               style={{
                 fontSize: secondaryMono ? 14 : 13,
                 fontWeight: secondaryMono ? 700 : 600,
@@ -1216,6 +1224,23 @@ function NonMealRow({
             >
               {secondaryValue}
             </div>
+            {secondarySubtitle && (
+              <div
+                style={{
+                  fontSize: 10,
+                  fontWeight: 500,
+                  color: "var(--text-muted)",
+                  letterSpacing: "0.01em",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  fontFamily: "var(--font-mono)",
+                  marginTop: 2,
+                }}
+              >
+                {secondarySubtitle}
+              </div>
+            )}
           </div>
           {/* Col 5: chevron */}
           <span className="glev-mec-eval" style={{
@@ -1350,6 +1375,22 @@ function BolusRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
   const evalInfo = evaluateBolus(log);
   const badgeColor = evalInfo.color;
 
+  // Historic ICR snapshot (frozen at the moment the dose was logged).
+  // Shown alongside the dose so a later "U vs carbs" review uses the
+  // ratio that actually applied — current settings may have drifted
+  // since. Falls back to no annotation when the snapshot is missing
+  // (legacy rows pre-dating the snapshot column, or entries logged
+  // before the user configured an ICR).
+  const { unit: carbUnit } = useCarbUnit();
+  const icrSnapshot =
+    typeof log.icr_g_per_ie_at_log === "number" &&
+    Number.isFinite(log.icr_g_per_ie_at_log) &&
+    log.icr_g_per_ie_at_log > 0
+      ? log.icr_g_per_ie_at_log
+      : null;
+  const icrLabel = icrSnapshot != null ? formatICR(icrSnapshot, carbUnit) : null;
+  const icrSubtitle = icrLabel != null ? `@ ${icrLabel}` : undefined;
+
   // Glucose deltas vs the at-log baseline.
   const before = numOrNull(log.cgm_glucose_at_log);
   const at1h   = numOrNull(log.glucose_after_1h);
@@ -1378,6 +1419,7 @@ function BolusRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
       secondaryValue={`${log.units}u`}
       secondaryColor={accent}
       secondaryMono
+      secondarySubtitle={icrSubtitle}
       expandedDetails={
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
           {/* 1) Session details ------------------------------------ */}
@@ -1387,6 +1429,10 @@ function BolusRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
               <Detail label="INSULIN" value={log.insulin_name || "—"}/>
               <Detail label="WHEN" value={`${dateStr} · ${timeStr}`}/>
               <Detail label="TYPE" value="Bolus"/>
+              {/* Historic ICR snapshot (frozen at log time). Shows "—"
+                  for legacy rows or pre-ICR-config entries so a doctor
+                  reviewing the log can tell "no snapshot" from "0". */}
+              <Detail label="ICR AT LOG" value={icrLabel ?? "—"}/>
             </div>
           </ExPanel>
 

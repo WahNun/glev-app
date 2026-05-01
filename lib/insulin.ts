@@ -26,6 +26,13 @@ export interface InsulinLog {
   // dialog. Null for basal entries and un-tagged boluses. Engine ICR
   // pairing (lib/engine/pairing.ts) prefers this over time-window matches.
   related_entry_id?: string | null;
+  // Snapshot of the user's ICR (g carb / IE) at the moment this dose
+  // was logged. Mutable settings change over time, so the historic
+  // ratio is the only honest context for a later "U vs carbs" review
+  // by the user or their doctor. Null for legacy rows, for entries
+  // logged before the user had configured an ICR, and for basal
+  // entries (where ICR doesn't apply).
+  icr_g_per_ie_at_log?: number | null;
 }
 
 export interface InsulinLogInput {
@@ -44,7 +51,7 @@ export interface InsulinLogInput {
 }
 
 const COLS =
-  "id,user_id,created_at,insulin_type,insulin_name,units,cgm_glucose_at_log,notes,related_entry_id";
+  "id,user_id,created_at,insulin_type,insulin_name,units,cgm_glucose_at_log,notes,related_entry_id,icr_g_per_ie_at_log";
 
 export async function insertInsulinLog(input: InsulinLogInput): Promise<InsulinLog> {
   if (!supabase) throw new Error("Supabase is not configured");
@@ -60,6 +67,32 @@ export async function insertInsulinLog(input: InsulinLogInput): Promise<InsulinL
     throw new Error(m);
   }
 
+  // Snapshot the user's current ICR for bolus rows so the historic
+  // ratio survives later settings changes. Reads the raw
+  // `user_settings.icr_g_per_unit` value directly — we explicitly do
+  // NOT route through `fetchInsulinSettings()` because that helper
+  // substitutes the hard-coded fallback (15 g/IE) when the column is
+  // missing, and persisting that fallback as a "historic" snapshot
+  // would mislead a doctor reviewing the log months later. Failure
+  // to read or an unconfigured value (NULL / 0 / negative) leaves
+  // the snapshot at NULL, and the UI renders no annotation.
+  let icrSnapshot: number | null = null;
+  if (input.insulin_type === "bolus") {
+    try {
+      const { data: settingsRow } = await supabase
+        .from("user_settings")
+        .select("icr_g_per_unit")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      const raw = settingsRow?.icr_g_per_unit;
+      if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
+        icrSnapshot = raw;
+      }
+    } catch {
+      icrSnapshot = null;
+    }
+  }
+
   const row: Record<string, unknown> = {
     user_id: user.id,
     insulin_type: input.insulin_type,
@@ -69,6 +102,8 @@ export async function insertInsulinLog(input: InsulinLogInput): Promise<InsulinL
     notes: input.notes?.trim() || null,
     // Only meaningful for bolus entries; basal always passes null.
     related_entry_id: input.insulin_type === "bolus" ? (input.related_entry_id ?? null) : null,
+    // Only meaningful for bolus entries; basal stores null.
+    icr_g_per_ie_at_log: icrSnapshot,
   };
   // Override created_at only for back-dated logs. Live submissions
   // omit `at` and let the DB default `now()` fire.
