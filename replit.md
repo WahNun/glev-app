@@ -328,3 +328,37 @@ the developer still has to: configure Apple Developer / Play Console
 accounts, set bundle identifiers / signing certs, generate icons +
 splash assets, fill in `Info.plist` privacy strings (mic, etc.) for
 features the web app uses, and submit for review.
+
+### Apple Health (HealthKit) — current state
+
+The Capacitor side is fully wired and committed; the only remaining
+work is a Mac-only archive + TestFlight upload step.
+
+Already done in the repo:
+- `@capgo/capacitor-health@8.4.x` installed and synced into
+  `ios/App/CapApp-SPM/Package.swift` via `npx cap sync ios`.
+- `ios/App/App/App.entitlements` declares
+  `com.apple.developer.healthkit = true` and an empty
+  `com.apple.developer.healthkit.access` array.
+- `ios/App/App.xcodeproj/project.pbxproj` has
+  `SystemCapabilities → com.apple.HealthKit = { enabled = 1 }` on the
+  primary target, and both Debug + Release build configs reference
+  `App/App.entitlements` via `CODE_SIGN_ENTITLEMENTS`.
+- `ios/App/App/Info.plist` carries both
+  `NSHealthShareUsageDescription` and `NSHealthUpdateUsageDescription`
+  (German copy).
+
+Mac-only steps still required to actually ship a HealthKit-capable
+binary to real iPhones:
+1. `npx cap open ios` and bump `MARKETING_VERSION` /
+   `CURRENT_PROJECT_VERSION` so TestFlight accepts a fresh build.
+2. In Xcode: Product → Archive, then Distribute App →
+   App Store Connect → Upload (or use Transporter with the resulting
+   `.ipa`).
+3. In App Store Connect → TestFlight: add the new build to a tester
+   group, have a tester open Settings → Apple Health and confirm the
+   permission prompt + glucose sync work.
+4. Promote that build to App Store production.
+
+There is no Fastlane / Xcode Cloud / GitHub Actions macOS runner set
+up yet, so these four steps are manual on a developer Mac.
