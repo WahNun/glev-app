@@ -511,14 +511,14 @@ export default function InsightsPage() {
   const recentLow   = recentMeals.filter(m=>EVAL_NORM(unifiedOutcome(m))==="SPIKE").length;
   const recentHigh  = recentMeals.filter(m=>EVAL_NORM(unifiedOutcome(m))==="HYPO").length;
   const patterns: {icon:string;title:string;desc:string;color:string}[] = [];
-  if (recentLow >= 4)  patterns.push({ icon:"↑", title:"Consistent under-dosing", desc:`${recentLow} of last 10 meals were under-dosed. Consider increasing your ICR ratio or checking carb counts.`, color:ORANGE });
-  if (recentHigh >= 3) patterns.push({ icon:"↓", title:"Frequent over-dosing", desc:`${recentHigh} of last 10 meals led to over-dose. Review correction factor — it may be too aggressive.`, color:PINK });
-  if (recentGood >= 7) patterns.push({ icon:"✓", title:"Strong recent control", desc:`${recentGood} of your last 10 meals were well-dosed. Your current insulin strategy is working.`, color:GREEN });
+  if (recentLow >= 4)  patterns.push({ icon:"↑", title:tInsights("pattern_under_dosing_title"),     desc:tInsights("pattern_under_dosing_desc",    { n: recentLow  }), color:ORANGE });
+  if (recentHigh >= 3) patterns.push({ icon:"↓", title:tInsights("pattern_over_dosing_title"),      desc:tInsights("pattern_over_dosing_desc",     { n: recentHigh }), color:PINK   });
+  if (recentGood >= 7) patterns.push({ icon:"✓", title:tInsights("pattern_strong_control_title"),   desc:tInsights("pattern_strong_control_desc",  { n: recentGood }), color:GREEN  });
   const morningSucc = timeGroups["Morning (5–11)"];
   const eveningSucc = timeGroups["Evening (17–21)"];
-  if (morningSucc.count >= 3 && morningSucc.good/morningSucc.count < 0.5) patterns.push({ icon:"☀", title:"Morning control issues", desc:"Morning meals have a lower success rate. Dawn phenomenon may be increasing insulin resistance.", color:ORANGE });
-  if (eveningSucc.count >= 3 && eveningSucc.good/eveningSucc.count > 0.8) patterns.push({ icon:"🌙", title:"Evening dosing strength", desc:"Evening meal dosing is particularly accurate. Use evening meals as reference for ICR calibration.", color:ACCENT });
-  if (patterns.length === 0) patterns.push({ icon:"→", title:"No strong patterns yet", desc:"Log 15+ meals to activate pattern detection. More data reveals deeper insights.", color:"var(--text-faint)" });
+  if (morningSucc.count >= 3 && morningSucc.good/morningSucc.count < 0.5) patterns.push({ icon:"☀", title:tInsights("pattern_morning_issues_title"),    desc:tInsights("pattern_morning_issues_desc"),    color:ORANGE });
+  if (eveningSucc.count >= 3 && eveningSucc.good/eveningSucc.count > 0.8) patterns.push({ icon:"🌙", title:tInsights("pattern_evening_strength_title"), desc:tInsights("pattern_evening_strength_desc"), color:ACCENT });
+  if (patterns.length === 0) patterns.push({ icon:"→", title:tInsights("pattern_no_signals_title"), desc:tInsights("pattern_no_signals_desc"), color:"var(--text-faint)" });
 
   // Adaptive engine derivations
   const adaptiveICR  = computeAdaptiveICR(meals);
@@ -552,12 +552,12 @@ export default function InsightsPage() {
           accent={GREEN}
           back={
             <FlipBack
-              title="Time in Range"
+              title={tInsights("tir_back_title")}
               accent={GREEN}
               paragraphs={[
-                "Time in Range is the share of pre-meal glucose readings inside the 70–180 mg/dL consensus target band for adults with type 1 diabetes.",
-                "Buckets follow the consensus recommendations: Very low (<54), Low (54–69), In range (70–180), High (>180). Spending more time in range is consistently linked to better long-term outcomes.",
-                `Computed from ${b7.n} pre-meal reading${b7.n === 1 ? "" : "s"} in the last 7 days. The delta vs the prior 7 days reflects week-over-week movement.`,
+                tInsights("tir_back_p1"),
+                tInsights("tir_back_p2"),
+                tInsights("tir_back_p3", { n: b7.n }),
               ]}
             />
           }
@@ -616,12 +616,12 @@ export default function InsightsPage() {
             accent={ACCENT}
             back={
               <FlipBack
-                title="Average Glucose"
+                title={tInsights("avg_bg_back_title")}
                 accent={ACCENT}
                 paragraphs={[
-                  "Mean pre-meal glucose across the last 7 days, calculated only from meals with a logged pre-meal reading.",
-                  "Lower values reflect better fasting and overnight control. The delta vs the prior 7 days surfaces week-over-week movement.",
-                  `Computed from ${last7Bg.length} reading${last7Bg.length === 1 ? "" : "s"} in the last 7 days.`,
+                  tInsights("avg_bg_back_p1"),
+                  tInsights("avg_bg_back_p2"),
+                  tInsights("avg_bg_back_p3", { n: last7Bg.length }),
                 ]}
               />
             }
@@ -649,12 +649,14 @@ export default function InsightsPage() {
             accent={ACCENT}
             back={
               <FlipBack
-                title="GMI / Estimated A1C"
+                title={tInsights("gmi_back_title")}
                 accent={ACCENT}
                 paragraphs={[
-                  "GMI (Glucose Management Indicator) approximates lab A1C from your average glucose. Formula: GMI(%) = 3.31 + 0.02392 × avg BG (mg/dL) — Bergenstal et al., Diabetes Care 2018.",
-                  "A useful interim signal between clinic A1C draws — but not a substitute. Real A1C captures longer-term glycation that GMI cannot, and individual differences in red-blood-cell turnover can shift the two apart.",
-                  `Computed from your last 7 days of pre-meal readings${last7Avg != null ? ` (avg ${Math.round(last7Avg)} mg/dL across ${last7Bg.length})` : ""}.`,
+                  tInsights("gmi_back_p1"),
+                  tInsights("gmi_back_p2"),
+                  last7Avg != null
+                    ? tInsights("gmi_back_p3_with_avg", { avg: Math.round(last7Avg), n: last7Bg.length })
+                    : tInsights("gmi_back_p3_no_avg"),
                 ]}
               />
             }
@@ -688,11 +690,11 @@ export default function InsightsPage() {
           accent={ACCENT}
           back={
             <FlipBack
-              title="7-Day Trend"
+              title={tInsights("trend_back_title")}
               accent={ACCENT}
               paragraphs={[
-                "Average pre-meal glucose for each of the last 7 days. Days without data inherit the previous day's value so the line stays continuous.",
-                "Look for a flat line in your target range (70–180 mg/dL) and steady morning values. A rising slope over multiple days suggests it's time to revisit your basal or ICR.",
+                tInsights("trend_back_p1"),
+                tInsights("trend_back_p2"),
               ]}
             />
           }
@@ -718,14 +720,14 @@ export default function InsightsPage() {
             accent={accent}
             back={
               <ThresholdBack
-                title="Hypo Events · 7d"
+                title={tInsights("hypo_label")}
                 accent={accent}
                 paragraphs={[
-                  "Anzahl Glukose-Messwerte unter 70 mg/dL in den letzten 7 Tagen. Gepoolt aus Mahlzeiten, Insulin- und Bewegungs-Logs sowie manuellen Fingersticks.",
-                  "70 mg/dL ist die klinische Grenze für Hypoglykämie (ATTD-Konsensus 2019). Häufige Hypos können auf zu hohe Bolus-Dosen, zu hohes Basal oder ein zu niedriges ICR hindeuten.",
+                  tInsights("hypo_back_p1"),
+                  tInsights("hypo_back_p2"),
                   hypoEnough
-                    ? `Berechnet aus ${readings7.length} Messwert${readings7.length === 1 ? "" : "en"} der letzten 7 Tage.`
-                    : "Mindestens 3 Messwerte in 7 Tagen nötig, um diese Karte anzuzeigen.",
+                    ? tInsights("readings_window_p3", { n: readings7.length })
+                    : tInsights("min_readings_window_required", { min: MIN_DATAPOINTS }),
                 ]}
               />
             }
@@ -736,8 +738,8 @@ export default function InsightsPage() {
             </div>
             {!hypoEnough ? (
               <div style={{ padding:"18px 0", textAlign:"center" }}>
-                <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>Nicht genug Daten</div>
-                <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:4 }}>≥ {MIN_DATAPOINTS} Messwerte erforderlich</div>
+                <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>{tInsights("insufficient_data")}</div>
+                <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:4 }}>{tInsights("min_readings_required", { min: MIN_DATAPOINTS })}</div>
               </div>
             ) : (
               <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
@@ -745,10 +747,10 @@ export default function InsightsPage() {
                   {hypoCount7d}
                 </div>
                 <div style={{ fontSize:11, color:accent, fontWeight:600 }}>
-                  {hypoCount7d === 0 ? "Keine Hypos" : hypoCount7d === 1 ? "Hypo" : "Hypos"}
+                  {hypoCount7d === 0 ? tInsights("hypo_count_zero") : hypoCount7d === 1 ? tInsights("hypo_count_one") : tInsights("hypo_count_many")}
                 </div>
                 <div style={{ marginLeft:"auto", fontSize:9, color:"var(--text-dim)" }}>
-                  {readings7.length} Messwerte
+                  {tInsights("readings_count", { n: readings7.length })}
                 </div>
               </div>
             )}
@@ -766,14 +768,14 @@ export default function InsightsPage() {
             accent={accent}
             back={
               <ThresholdBack
-                title="Hyper Events · 7d"
+                title={tInsights("hyper_label")}
                 accent={accent}
                 paragraphs={[
-                  "Anzahl Glukose-Messwerte über 250 mg/dL in den letzten 7 Tagen. Gepoolt aus Mahlzeiten, Insulin- und Bewegungs-Logs sowie manuellen Fingersticks.",
-                  "Werte über 250 mg/dL gelten als deutliche Hyperglykämie (ATTD-Konsensus 2019). Häufige Hyper-Events können auf ein zu hohes ICR, einen zu niedrigen Bolus oder ein zu niedriges Basal hindeuten.",
+                  tInsights("hyper_back_p1"),
+                  tInsights("hyper_back_p2"),
                   hyperEnough
-                    ? `Berechnet aus ${readings7.length} Messwert${readings7.length === 1 ? "" : "en"} der letzten 7 Tage.`
-                    : "Mindestens 3 Messwerte in 7 Tagen nötig, um diese Karte anzuzeigen.",
+                    ? tInsights("readings_window_p3", { n: readings7.length })
+                    : tInsights("min_readings_window_required", { min: MIN_DATAPOINTS }),
                 ]}
               />
             }
@@ -784,8 +786,8 @@ export default function InsightsPage() {
             </div>
             {!hyperEnough ? (
               <div style={{ padding:"18px 0", textAlign:"center" }}>
-                <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>Nicht genug Daten</div>
-                <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:4 }}>≥ {MIN_DATAPOINTS} Messwerte erforderlich</div>
+                <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>{tInsights("insufficient_data")}</div>
+                <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:4 }}>{tInsights("min_readings_required", { min: MIN_DATAPOINTS })}</div>
               </div>
             ) : (
               <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
@@ -793,10 +795,10 @@ export default function InsightsPage() {
                   {hyperCount7d}
                 </div>
                 <div style={{ fontSize:11, color:accent, fontWeight:600 }}>
-                  {hyperCount7d === 0 ? "Keine Hypers" : hyperCount7d === 1 ? "Hyper" : "Hypers"}
+                  {hyperCount7d === 0 ? tInsights("hyper_count_zero") : hyperCount7d === 1 ? tInsights("hyper_count_one") : tInsights("hyper_count_many")}
                 </div>
                 <div style={{ marginLeft:"auto", fontSize:9, color:"var(--text-dim)" }}>
-                  {readings7.length} Messwerte
+                  {tInsights("readings_count", { n: readings7.length })}
                 </div>
               </div>
             )}
@@ -868,12 +870,12 @@ export default function InsightsPage() {
           accent={ORANGE}
           back={
             <FlipBack
-              title="Meal Evaluation"
+              title={tInsights("meal_eval_back_title")}
               accent={ORANGE}
               paragraphs={[
-                "Each logged meal is bucketed into one of three outcome bands once the post-meal glucose lands: On target (within ±35% of the ICR estimate), Spiked (post-meal high), and Low risk (post-meal low).",
-                "Spike-heavy weeks often signal under-dosing or pre-bolus timing issues. Low-risk-heavy weeks often signal over-dosing — review your correction factor with your clinician.",
-                `Computed from ${totalN} evaluated meal${totalN === 1 ? "" : "s"} in the last 7 days.`,
+                tInsights("meal_eval_back_p1"),
+                tInsights("meal_eval_back_p2"),
+                tInsights("meal_eval_back_p3", { n: totalN }),
               ]}
             />
           }
@@ -912,10 +914,10 @@ export default function InsightsPage() {
           accent={ACCENT}
           back={
             <IcrInfoBack
-              heading="Wie wird dieser Wert berechnet?"
+              heading={tInsights("engine_back_heading")}
               accent={ACCENT}
-              body="Der Adaptive ICR basiert auf allen abgeschlossenen Mahlzeiten (state = final, bg_2h vorhanden). Jede Mahlzeit wird nach Outcome gewichtet: Mahlzeiten mit gutem BG-Verlauf zählen stärker als Spikes oder Underdoses. Er zeigt, welche Carb-Insulin-Quote bei dir empirisch zu stabilen Werten geführt hat — nicht was du dosiert hast, sondern was tatsächlich gewirkt hat."
-              subLine="Datenbasis: alle finalisierten Mahlzeiten · outcome-gewichtet"
+              body={tInsights("engine_back_body")}
+              subLine={tInsights("engine_back_subline")}
             />
           }
         >
@@ -924,7 +926,11 @@ export default function InsightsPage() {
             // medium → LEARNING (accent), low → WARMING UP (orange).
             // Mirrors the "AI FOOD PARSER · GPT-powered · READY" chip vibe.
             const conf = enginePattern.confidence;
-            const statusLabel = conf === "high" ? "TUNED" : conf === "medium" ? "LEARNING" : "WARMING UP";
+            const statusLabel = conf === "high"
+              ? tInsights("engine_status_tuned")
+              : conf === "medium"
+                ? tInsights("engine_status_learning")
+                : tInsights("engine_status_warming_up");
             const statusColor = conf === "high" ? GREEN : conf === "medium" ? ACCENT : ORANGE;
             const icrText = adaptiveICR.global
               ? `1:${(Math.round(adaptiveICR.global * 10) / 10)}`
@@ -941,7 +947,7 @@ export default function InsightsPage() {
                   display:"flex", alignItems:"center", justifyContent:"space-between",
                   gap:10, marginBottom:12,
                 }}>
-                  <CardLabel text="Adaptive Engine"/>
+                  <CardLabel text={tInsights("engine_label")}/>
                   <span style={{
                     display:"inline-flex", alignItems:"center", gap:6,
                     fontSize:9, fontWeight:700, letterSpacing:"0.1em",
@@ -979,8 +985,8 @@ export default function InsightsPage() {
                     {icrText}
                   </span>
                   <span style={{ fontSize:10, color:"var(--text-faint)", marginLeft:"auto", textAlign:"right", lineHeight:1.25 }}>
-                    outcome-weighted<br/>
-                    {enginePattern.sampleSize} final meal{enginePattern.sampleSize === 1 ? "" : "s"}
+                    {tInsights("engine_outcome_weighted")}<br/>
+                    {tInsights("engine_final_meals", { n: enginePattern.sampleSize })}
                   </span>
                 </div>
 
@@ -1056,14 +1062,14 @@ export default function InsightsPage() {
           accent={ACCENT}
           back={
             <ThresholdBack
-              title="Total Daily Dose · 7d"
+              title={tInsights("tdd_label")}
               accent={ACCENT}
               paragraphs={[
-                "Total Daily Dose (TDD) ist die Summe aller protokollierten Insulin-Einheiten pro Tag — Bolus + Basal aus dem Engine-Log.",
-                "Hauptzahl: Tagesdurchschnitt der letzten 7 Tage (Summe ÷ 7). Heutige Tagessumme separat darunter. Eine konstante TDD signalisiert stabile Stoffwechseleinstellung; Schwankungen > 20 % können auf veränderten Insulinbedarf hindeuten.",
+                tInsights("tdd_back_p1"),
+                tInsights("tdd_back_p2"),
                 tddEnough
-                  ? `Berechnet aus ${insulinLogs.filter(il => parseDbTs(il.created_at) >= wkAgo).length} Insulin-Logs an ${tddDayCount} Tagen der letzten 7 Tage.`
-                  : "Mindestens 3 Tage mit Insulin-Logs in 7 Tagen nötig, um diese Karte anzuzeigen.",
+                  ? tInsights("tdd_back_p3", { logs: insulinLogs.filter(il => parseDbTs(il.created_at) >= wkAgo).length, days: tddDayCount })
+                  : tInsights("tdd_back_p3_insufficient", { min: MIN_DATAPOINTS }),
               ]}
             />
           }
@@ -1074,8 +1080,8 @@ export default function InsightsPage() {
           </div>
           {!tddEnough || tddAvg7 == null ? (
             <div style={{ padding:"18px 0", textAlign:"center" }}>
-              <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>Nicht genug Daten</div>
-              <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:4 }}>≥ {MIN_DATAPOINTS} Tage mit Insulin-Logs erforderlich</div>
+              <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>{tInsights("insufficient_data")}</div>
+              <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:4 }}>{tInsights("tdd_min_required", { min: MIN_DATAPOINTS })}</div>
             </div>
           ) : (
             <>
@@ -1083,11 +1089,11 @@ export default function InsightsPage() {
                 <div style={{ fontSize:36, fontWeight:800, color:"var(--text)", letterSpacing:"-0.04em", fontFamily:"var(--font-mono)", lineHeight:1 }}>
                   {tddAvg7.toFixed(1)}
                 </div>
-                <div style={{ fontSize:14, color:"var(--text-dim)", fontWeight:700 }}>U/Tag</div>
-                <div style={{ marginLeft:"auto", fontSize:9, color:"var(--text-dim)" }}>Ø 7d</div>
+                <div style={{ fontSize:14, color:"var(--text-dim)", fontWeight:700 }}>{tInsights("tdd_unit_main")}</div>
+                <div style={{ marginLeft:"auto", fontSize:9, color:"var(--text-dim)" }}>{tInsights("tdd_avg_7d")}</div>
               </div>
               <div style={{ marginTop:10, display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 10px", background:`${ACCENT}10`, border:`1px solid ${ACCENT}25`, borderRadius:10 }}>
-                <div style={{ fontSize:10, color:"var(--text-muted)", fontWeight:600 }}>Heute</div>
+                <div style={{ fontSize:10, color:"var(--text-muted)", fontWeight:600 }}>{tInsights("tdd_today")}</div>
                 <div style={{ display:"flex", alignItems:"baseline", gap:4 }}>
                   <div style={{ fontSize:18, fontWeight:800, color:ACCENT, fontFamily:"var(--font-mono)", lineHeight:1 }}>
                     {tddToday.toFixed(1)}
@@ -1107,12 +1113,12 @@ export default function InsightsPage() {
           accent={PINK}
           back={
             <FlipBack
-              title="Pattern Detection"
+              title={tInsights("patterns_back_title")}
               accent={PINK}
               paragraphs={[
-                "Glev scans the most recent 10 meals plus your time-of-day breakdown looking for repeating signals: consistent under-dosing, frequent over-dosing, strong recent control, weak mornings or strong evenings.",
-                "Patterns only fire when there's enough recent data — log 15+ meals to unlock the full set of detectors.",
-                "These flags are heuristics, not diagnoses. Use them as starting points for conversations with your clinician.",
+                tInsights("patterns_back_p1"),
+                tInsights("patterns_back_p2"),
+                tInsights("patterns_back_p3"),
               ]}
             />
           }
@@ -1145,14 +1151,14 @@ export default function InsightsPage() {
           accent={ACCENT}
           back={
             <ThresholdBack
-              title="Workout Outcome Distribution"
+              title={tInsights("workout_outcomes_back_title")}
               accent={ACCENT}
               paragraphs={[
-                "Glev klassifiziert jeden Workout anhand deines Glukoseverlaufs: STABLE = BG blieb im Zielbereich. DROPPED = BG fiel deutlich, aber kein Hypo-Risiko. SPIKED = BG stieg unerwartet an. HYPO_RISK = BG fiel unter 70 mg/dL oder näherte sich kritisch.",
-                "PENDING-Sessions (CGM-Werte noch nicht eingetroffen) werden nicht gewertet. Der Hauptzähler zeigt alle Trainings inklusive PENDING — die Verteilung darunter nur die ausgewerteten.",
+                tInsights("workout_outcomes_back_p1"),
+                tInsights("workout_outcomes_back_p2"),
                 workoutOutcomeEnough
-                  ? `${workoutTotal30} Trainings in den letzten 30 Tagen, davon ${workoutClassifiedTotal} ausgewertet.`
-                  : "Mindestens 3 Trainings in 30 Tagen nötig, um diese Karte anzuzeigen.",
+                  ? tInsights("workout_outcomes_back_p3", { total: workoutTotal30, classified: workoutClassifiedTotal })
+                  : tInsights("workout_outcomes_back_p3_insufficient", { min: MIN_DATAPOINTS }),
               ]}
             />
           }
@@ -1163,8 +1169,8 @@ export default function InsightsPage() {
           </div>
           {!workoutOutcomeEnough ? (
             <div style={{ padding:"18px 0", textAlign:"center" }}>
-              <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>Nicht genug Daten</div>
-              <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:4 }}>≥ {MIN_DATAPOINTS} Trainings in 30 Tagen erforderlich</div>
+              <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>{tInsights("insufficient_data")}</div>
+              <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:4 }}>{tInsights("workout_outcomes_min_required", { min: MIN_DATAPOINTS })}</div>
             </div>
           ) : (
             <>
@@ -1172,7 +1178,7 @@ export default function InsightsPage() {
                 <div style={{ fontSize:36, fontWeight:800, color:"var(--text)", letterSpacing:"-0.04em", fontFamily:"var(--font-mono)", lineHeight:1 }}>
                   {workoutTotal30}
                 </div>
-                <div style={{ fontSize:11, color:"var(--text-dim)", fontWeight:600 }}>Trainings letzte 30 Tage</div>
+                <div style={{ fontSize:11, color:"var(--text-dim)", fontWeight:600 }}>{tInsights("workout_outcomes_total_30d")}</div>
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                 {RANKED_OUTCOMES.map(oc => {
@@ -1193,7 +1199,7 @@ export default function InsightsPage() {
                 })}
                 {workoutOutcomeCounts.PENDING > 0 && (
                   <div style={{ marginTop:2, fontSize:9, color:"var(--text-faint)" }}>
-                    + {workoutOutcomeCounts.PENDING} PENDING (CGM-Werte ausstehend)
+                    {tInsights("workout_outcomes_pending_suffix", { n: workoutOutcomeCounts.PENDING })}
                   </div>
                 )}
               </div>
@@ -1210,26 +1216,26 @@ export default function InsightsPage() {
           accent={ACCENT}
           back={
             <ThresholdBack
-              title="BG Response nach Trainingsart"
+              title={tInsights("workout_bg_response_back_title")}
               accent={ACCENT}
               paragraphs={[
-                "Zeigt wie verschiedene Trainingsarten deinen Blutzucker im Durchschnitt beeinflussen — gemessen von vor dem Training bis eine Stunde danach. Hilft Muster zu erkennen, welche Aktivitäten BG-Anpassungen erfordern.",
-                "Pro Trainingsart sind mindestens 3 Sessions mit vollständigen CGM-Werten (vor und +1h) nötig, sonst wird die Zeile ausgeblendet.",
+                tInsights("workout_bg_response_back_p1"),
+                tInsights("workout_bg_response_back_p2"),
                 bgResponseEnough
-                  ? `${bgResponseRows.length} Trainingsart${bgResponseRows.length === 1 ? "" : "en"} mit ausreichend Daten.`
-                  : "Noch keine Trainingsart erreicht 3 Sessions mit vollständigen CGM-Werten.",
+                  ? tInsights("workout_bg_response_back_p3", { n: bgResponseRows.length })
+                  : tInsights("workout_bg_response_back_p3_insufficient"),
               ]}
             />
           }
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-            <CardLabel text="BG-Response · Trainingsart"/>
-            <div style={{ fontSize:9, color:"var(--text-dim)" }}>vor → +1h</div>
+            <CardLabel text={tInsights("workout_bg_response_label")}/>
+            <div style={{ fontSize:9, color:"var(--text-dim)" }}>{tInsights("workout_bg_response_sub")}</div>
           </div>
           {!bgResponseEnough ? (
             <div style={{ padding:"18px 0", textAlign:"center" }}>
-              <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>Nicht genug Daten</div>
-              <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:4 }}>≥ {MIN_DATAPOINTS} Sessions pro Trainingsart erforderlich</div>
+              <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>{tInsights("insufficient_data")}</div>
+              <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:4 }}>{tInsights("workout_bg_response_min_required", { min: MIN_DATAPOINTS })}</div>
             </div>
           ) : (
             <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
@@ -1242,7 +1248,7 @@ export default function InsightsPage() {
                   <div key={row.type} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 10px", background:"var(--surface-soft)", border:"1px solid var(--border-soft)", borderRadius:10 }}>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontSize:11, fontWeight:700, color:"var(--text)", letterSpacing:"0.01em" }}>{row.label}</div>
-                      <div style={{ fontSize:9, color:"var(--text-dim)", marginTop:1 }}>{row.count} Session{row.count === 1 ? "" : "s"}</div>
+                      <div style={{ fontSize:9, color:"var(--text-dim)", marginTop:1 }}>{tInsights("workout_bg_response_session_count", { n: row.count })}</div>
                     </div>
                     <div style={{ display:"flex", alignItems:"baseline", gap:3 }}>
                       <div style={{ fontSize:18, fontWeight:800, color, fontFamily:"var(--font-mono)", lineHeight:1 }}>
@@ -1269,12 +1275,12 @@ export default function InsightsPage() {
           accent={ACCENT}
           back={
             <ThresholdBack
-              title="Workout Patterns"
+              title={tInsights("workout_patterns_back_title")}
               accent={ACCENT}
               paragraphs={[
-                "Automatisch erkannte Muster aus deinen Workout-Daten. Mindestens 3 Sessions pro Gruppe (Tageszeit, Trainingsart, Dauer) erforderlich. Muster aktualisieren sich mit jedem neuen Workout.",
-                "Ein Muster erscheint nur, wenn ein Outcome (STABLE / DROPPED / SPIKED / HYPO_RISK) in mindestens 60 % der Sessions einer Gruppe dominiert. PENDING-Sessions zählen nicht mit.",
-                `Aktuell ${workoutPatterns.length} Muster aus ${exerciseEvaluated.length} ausgewerteten Trainings der letzten 30 Tage.`,
+                tInsights("workout_patterns_back_p1"),
+                tInsights("workout_patterns_back_p2"),
+                tInsights("workout_patterns_back_p3", { patterns: workoutPatterns.length, evaluated: exerciseEvaluated.length }),
               ]}
             />
           }
@@ -1306,12 +1312,12 @@ export default function InsightsPage() {
           accent={ORANGE}
           back={
             <FlipBack
-              title="Meal Type Analysis"
+              title={tInsights("meal_type_back_title")}
               accent={ORANGE}
               paragraphs={[
-                "Glev classifies every meal into one of four macro profiles — Fast Carbs, High Protein, High Fat, or Balanced — based on the ratio of carbs, protein and fat.",
-                "Success % is the share of meals in that category that landed in the GOOD outcome band. Categories with low success often need a different bolus strategy (timing, split dose, extended bolus).",
-                "Categories with no logged meals are shown empty — log at least one meal of that type to see numbers.",
+                tInsights("meal_type_back_p1"),
+                tInsights("meal_type_back_p2"),
+                tInsights("meal_type_back_p3"),
               ]}
             />
           }
@@ -1341,7 +1347,9 @@ export default function InsightsPage() {
                     <div style={{ height:"100%", width:`${successPct}%`, background:barCol, borderRadius:99 }}/>
                   </div>
                   <div style={{ fontSize:9, color:"var(--text-dim)", lineHeight:1.4 }}>
-                    {has ? `${data.count} meal${data.count===1?"":"s"} · ${carbUnit.display(avgC)} · ${avgI}u` : "No data"}
+                    {has
+                      ? tInsights("meal_type_card_summary", { n: data.count, carbs: carbUnit.display(avgC), insulin: avgI })
+                      : tInsights("meal_type_card_no_data")}
                   </div>
                 </div>
               );
@@ -1357,12 +1365,12 @@ export default function InsightsPage() {
           accent={GREEN}
           back={
             <FlipBack
-              title="Time-of-Day Analysis"
+              title={tInsights("time_of_day_back_title")}
               accent={GREEN}
               paragraphs={[
-                "Meals are grouped by the hour of day they were logged: Morning (5–11), Afternoon (11–17), Evening (17–21), Night (21–5).",
-                "Success % is the share of meals in that window that landed GOOD. A weak window (e.g. mornings <50%) often points at the dawn phenomenon, where insulin sensitivity is lower and you may need a higher morning ICR.",
-                "Strong windows (>80%) are reliable references when you're calibrating your dosing for new foods.",
+                tInsights("time_of_day_back_p1"),
+                tInsights("time_of_day_back_p2"),
+                tInsights("time_of_day_back_p3"),
               ]}
             />
           }
@@ -1376,9 +1384,14 @@ export default function InsightsPage() {
               const has = data.count > 0;
               const pct = has ? Math.round(data.good/data.count*100) : 0;
               const col = !has ? "var(--border-strong)" : pct>=70?GREEN:pct>=50?ORANGE:PINK;
+              const i18nKey =
+                label === "Morning (5–11)"    ? "time_of_day_morning"   :
+                label === "Afternoon (11–17)" ? "time_of_day_afternoon" :
+                label === "Evening (17–21)"   ? "time_of_day_evening"   :
+                                                "time_of_day_night";
               return (
                 <div key={label} style={{ display:"grid", gridTemplateColumns:"110px 1fr 32px 32px", gap:8, alignItems:"center" }}>
-                  <div style={{ fontSize:10, color:"var(--text-muted)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{label}</div>
+                  <div style={{ fontSize:10, color:"var(--text-muted)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{tInsights(i18nKey)}</div>
                   <div style={{ height:6, borderRadius:99, background:"var(--surface-soft)", overflow:"hidden" }}>
                     <div style={{ height:"100%", width:`${pct}%`, background:col, borderRadius:99 }}/>
                   </div>
@@ -1431,7 +1444,7 @@ export default function InsightsPage() {
     <div style={{ maxWidth:480, margin:"0 auto" }}>
       <div style={{ marginBottom:18 }}>
         <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>Insights</h1>
-        <p style={{ color:"var(--text-faint)", fontSize:12 }}>Tap any card to flip · hold to reorder · {total} meals analyzed</p>
+        <p style={{ color:"var(--text-faint)", fontSize:12 }}>{tInsights("header_subtitle", { n: total })}</p>
       </div>
 
       {/* Filter out items whose node was set to null (e.g. workout-patterns
@@ -1553,6 +1566,7 @@ function ThresholdBack({
 function IcrInfoBack({ heading, body, subLine, accent }: {
   heading: string; body: string; subLine: string; accent: string;
 }) {
+  const tInsights = useTranslations("insights");
   return (
     <div style={{ display:"flex", flexDirection:"column", height:"100%", gap:8 }}>
       <div style={{ fontSize:12, color:accent, fontWeight:700, letterSpacing:"0.01em", lineHeight:1.25 }}>
@@ -1566,7 +1580,7 @@ function IcrInfoBack({ heading, body, subLine, accent }: {
       <div style={{ marginTop:"auto", paddingTop:10, display:"flex", flexDirection:"column", gap:6 }}>
         <DisclaimerChip/>
         <div style={{ fontSize:9, color:"var(--text-faint)", textAlign:"right", letterSpacing:"0.02em" }}>
-          ← zurück
+          {tInsights("flip_hint_back")}
         </div>
       </div>
     </div>
@@ -1668,11 +1682,12 @@ function FlipCard({
 }
 
 function FlipBack({ title, accent, paragraphs }: { title: string; accent: string; paragraphs: string[] }) {
+  const tInsights = useTranslations("insights");
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
         <div style={{ fontSize:10, color:accent, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>{title}</div>
-        <span style={{ fontSize:9, color:"var(--text-faint)" }}>↺ tap to flip back</span>
+        <span style={{ fontSize:9, color:"var(--text-faint)" }}>{tInsights("flip_hint_back")}</span>
       </div>
       {paragraphs.map((p, i) => (
         <div key={i} style={{ fontSize:11, color:"var(--text-muted)", lineHeight:1.5 }}>{p}</div>
