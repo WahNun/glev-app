@@ -1,4 +1,14 @@
 /* eslint-disable jsx-a11y/alt-text */
+/** @jsxImportSource react */
+// `@jsxImportSource react` pin: `tests/unit/pdfReport-cover-pages.test.tsx`
+// renders this component to actual PDF bytes via @react-pdf/renderer to
+// catch a future cover-overflow regression. The Playwright test runner
+// hard-codes its own JSX runtime (which wraps elements in `__pw_type`
+// markers) when transforming any `.tsx` file — that runtime confuses
+// react-pdf's reconciler ("Objects are not valid as a React child").
+// The pragma forces the standard `react/jsx-runtime` for this file
+// during transform, which matches what Next.js already uses, so the
+// app behaviour is unchanged.
 // Glev — patient PDF report.
 //
 // Built with @react-pdf/renderer because we want a polished, brand-true
@@ -122,10 +132,16 @@ const styles = StyleSheet.create({
   page: {
     // paddingTop bumped to 84 (was 36) so the fixed dark BrandHeader
     // strip (height 50 + bottom border) sits above all body content
-    // without overlapping. Horizontal/bottom padding unchanged so the
-    // existing tables still align with their previous left/right edges.
+    // without overlapping. Horizontal padding unchanged so the
+    // existing tables still align with their previous left/right
+    // edges. paddingBottom trimmed from 36 to 28 so the cover page
+    // has a slightly larger usable area; the absolutely-positioned
+    // Footer sits at `bottom: 18` and is unaffected — the trim only
+    // shrinks the empty whitespace strip that previously sat between
+    // the last KPI row and the footer line, just enough to keep the
+    // kitchen-sink cover variant on a single page.
     paddingTop: 84,
-    paddingBottom: 36,
+    paddingBottom: 28,
     paddingHorizontal: 36,
     fontSize: 10,
     fontFamily: "Helvetica",
@@ -204,7 +220,14 @@ const styles = StyleSheet.create({
   sectionSub: {
     fontSize: 9,
     color: MUTED,
-    marginBottom: 12,
+    // Trimmed from 12 to 6 — the cover uses two `sectionSub` lines
+    // (one before Insights, one before Klinische Detail-KPIs), so
+    // halving the bottom margin frees ~12 pt of vertical budget,
+    // which is what the kitchen-sink variant (appointmentNote +
+    // ICR + CF) needs to keep its KPI grid on page 1. Detail-page
+    // section subs (Mahlzeiten / Insulin / Sport / Fingerstick) are
+    // the only other consumers and read fine with the tighter gap.
+    marginBottom: 6,
   },
   // Insights heading row — places the section heading on the left and
   // the carb-unit chip on the right in the same baseline so the cover
@@ -235,13 +258,21 @@ const styles = StyleSheet.create({
   kpiRow: {
     flexDirection: "row",
     gap: 8,
-    marginBottom: 16,
+    // Trimmed from 16 to 8 to free vertical space on the cover so the
+    // optional ICR/CF and appointmentNote meta rows don't push the
+    // second KPI row (Bolus/Basal/Sport) onto page 2 — the Klinische
+    // Detail-KPIs is the last block before the footer, so the bottom
+    // margin only adds whitespace, never content.
+    marginBottom: 8,
     flexWrap: "wrap",
   },
   kpi: {
     flexBasis: "31%",
     flexGrow: 1,
-    padding: 10,
+    // Trimmed from 10 to 6 (saves ~8pt per row × 2 rows = 16pt) so
+    // the 2-row KPI grid still fits on page 1 when the optional
+    // meta rows (ICR/CF, appointmentNote) inflate the cover.
+    padding: 6,
     borderRadius: 6,
     borderWidth: 1,
     borderColor: LINE,
@@ -253,7 +284,12 @@ const styles = StyleSheet.create({
     color: MUTED,
     textTransform: "uppercase",
     letterSpacing: 0.6,
-    marginBottom: 4,
+    // Trimmed from 4 to 2 so each KPI tile is visually slightly
+    // tighter; combined with the padding/marginBottom trims above,
+    // the cover budget now accommodates every configured variant
+    // (standard, ICR+CF, appointmentNote, kitchen sink) without
+    // visually crowding the values.
+    marginBottom: 2,
   },
   kpiValue: {
     fontSize: 18,
@@ -328,16 +364,27 @@ const styles = StyleSheet.create({
   insightRow: {
     flexDirection: "row",
     gap: 8,
-    marginBottom: 8,
+    // Trimmed from 8 to 4 (saves 12 pt across the 3 insight rows) to
+    // free additional cover budget so the Klinische Detail-KPIs grid
+    // still fits on page 1 alongside the optional ICR / CF /
+    // appointmentNote meta rows.
+    marginBottom: 4,
   },
   insightCard: {
     flex: 1,
-    padding: 11,
+    // Trimmed from 11 to 9 (saves ~12 pt across the 3 insight rows)
+    // so the kitchen-sink cover variant (appointmentNote + ICR + CF
+    // meta rows) still fits the Klinische Detail-KPIs on page 1.
+    padding: 9,
     borderRadius: 6,
     borderWidth: 1,
     borderColor: LINE,
     backgroundColor: "#FAFAFC",
-    minHeight: 96,
+    // Trimmed from 96 to 88 — the empty-data card content already
+    // sits comfortably under this floor; the smaller minimum lets
+    // the cover absorb the extra meta rows in the kitchen-sink
+    // variant without overflowing.
+    minHeight: 88,
   },
   insightLabel: {
     fontSize: 8,
@@ -971,8 +1018,12 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks, carb
         {/* ── Klinische Detail-KPIs (TIR-Verteilung, Insulin-Split) ──
             Bleiben aus dem alten Cover-Layout erhalten, weil sie für
             das ärztliche Gespräch wichtig sind und in den Insight-
-            Karten oben bewusst aggregiert dargestellt werden. ──── */}
-        <View style={{ marginTop: 18 }}>
+            Karten oben bewusst aggregiert dargestellt werden. The
+            top margin is intentionally tight (10 pt — was 18) so the
+            6 KPI tiles still fit on the cover when the optional ICR /
+            CF / appointmentNote meta rows expand the meta block.
+            ──── */}
+        <View style={{ marginTop: 10 }}>
           <Text style={styles.sectionHeading}>Klinische Detail-KPIs</Text>
           <Text style={styles.sectionSub}>
             Verteilung der Glukose-Messungen und Insulin-Split (Bolus/Basal) über den gesamten Erfassungszeitraum.
