@@ -669,11 +669,6 @@ export default function ExportPanel() {
         flash("err", t("count_empty"));
         return;
       }
-      // Lazy imports keep this expensive code out of the main bundle.
-      const [{ pdf }, { GlevReport }] = await Promise.all([
-        import("@react-pdf/renderer"),
-        import("@/lib/pdfReport"),
-      ]);
       // Surface the saved appointment note on the PDF cover ONLY when
       // the user picked the "Seit letztem Arzttermin" chip — that's the
       // export shape where a "Letzter Termin" meta line makes sense
@@ -687,6 +682,45 @@ export default function ExportPanel() {
         rangePreset === "lastAppointment" && lastAppointmentNote
           ? lastAppointmentNote
           : undefined;
+      // Test-only probe (Task #79): when an instrumented Playwright
+      // session sets `globalThis.__GLEV_CAPTURE_PDF_PROPS__` it gets
+      // called with the exact bag of props the wiring layer would
+      // hand to <GlevReport>, then the real renderer is short-
+      // circuited. This lets the wiring spec assert that the user's
+      // settings (carb unit, ICR, correction factor) reach the report
+      // without needing to parse PDF bytes — the bug class we're
+      // guarding against ("ExportPanel passes null instead of
+      // undefined", "wrong unit", "forgot to forward CF") is entirely
+      // observable at this seam. Has no effect in production: the
+      // global is never set there, so the heavy ~400KB renderer path
+      // runs unchanged.
+      const probe = (
+        globalThis as unknown as {
+          __GLEV_CAPTURE_PDF_PROPS__?: (props: unknown) => void;
+        }
+      ).__GLEV_CAPTURE_PDF_PROPS__;
+      if (typeof probe === "function") {
+        probe({
+          email,
+          carbUnit,
+          icrGperIE,
+          cfMgdlPerIE,
+          range: display,
+          appointmentNote,
+          mealsCount: meals.length,
+          insulinCount: insulin.length,
+          exerciseCount: exercise.length,
+          fingersticksCount: fs.length,
+        });
+        const totalProbed = meals.length + insulin.length + exercise.length + fs.length;
+        flash("ok", t("pdf_done", { n: totalProbed }));
+        return;
+      }
+      // Lazy imports keep this expensive code out of the main bundle.
+      const [{ pdf }, { GlevReport }] = await Promise.all([
+        import("@react-pdf/renderer"),
+        import("@/lib/pdfReport"),
+      ]);
       const blob = await pdf(
         <GlevReport
           email={email}
