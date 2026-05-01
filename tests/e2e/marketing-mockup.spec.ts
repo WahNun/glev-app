@@ -33,15 +33,17 @@
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-const PHONE = '[data-testid="app-mockup-phone"]';
-
-// Pin every spec in this file to the German locale. The marketing
-// page's default render locale follows the browser's Accept-Language
-// header (next-intl negotiation), and Playwright's "Desktop Chrome"
-// device defaults to "en-US" — which would otherwise flip every
-// asserted string to its English translation. Pinning here keeps the
-// assertions co-located with the German copy they target.
+// Pin every spec in this file to the German locale. Marketing pages
+// render in whichever locale `i18n/request.ts` resolves from (1) the
+// `NEXT_LOCALE` cookie, or (2) the request's `Accept-Language` header
+// (next-intl negotiation). Playwright's "Desktop Chrome" device defaults
+// to "en-US", which would flip the demo phone to English copy and break
+// every German label assertion in this file. Pinning here keeps both
+// the label test and the pixel-snapshot test on the same German build
+// of the mockup that real German visitors see.
 test.use({ locale: "de-DE" });
+
+const PHONE = '[data-testid="app-mockup-phone"]';
 
 /** Bottom-nav buttons render as <button> with an UPPERCASE label
  *  ("DASHBOARD", "GLEV", "VERLAUF", "EINSTELLUNGEN"). The same
@@ -94,6 +96,27 @@ async function gotoHomeAndFindPhone(page: Page): Promise<Locator> {
   const phone = page.locator(PHONE).first();
   await expect(phone).toBeVisible();
   return phone;
+}
+
+/** Prepare the page for a deterministic pixel snapshot:
+ *
+ *   • Wait for `document.fonts.ready` so the Inter / JetBrains-Mono
+ *     fallbacks have been replaced with the actual web fonts. Without
+ *     this the very first screen often captures with system fallbacks
+ *     and every subsequent run differs by ~thousands of pixels around
+ *     each glyph.
+ *   • Move the mouse off the phone so no element gets a `:hover`
+ *     style (the bottom-nav buttons and the Verlauf sub-toggle both
+ *     react to hover).
+ *   • Blur whatever element Playwright last clicked so the focus
+ *     ring on a nav button doesn't leak into the screenshot. */
+async function prepareForSnapshot(page: Page): Promise<void> {
+  await page.evaluate(() => document.fonts.ready);
+  await page.mouse.move(0, 0);
+  await page.evaluate(() => {
+    const el = document.activeElement;
+    if (el && el instanceof HTMLElement) el.blur();
+  });
 }
 
 test.describe("Marketing AppMockupPhone — interactive bottom nav", () => {
@@ -207,6 +230,75 @@ test.describe("Marketing AppMockupPhone — interactive bottom nav", () => {
       /Erscheinungsbild/,
       /^Konto$/,
     ]);
+  });
+});
+
+test.describe("Marketing AppMockupPhone — pixel snapshots per screen", () => {
+  // The label test above proves each screen renders the right text.
+  // It does NOT catch purely visual regressions: a wrong color, a
+  // misaligned card, a clipped sparkline, or a broken bottom-nav
+  // icon would all slip through silently because the labels would
+  // still be present. Visual regressions on the hero mockup directly
+  // hurt sign-up conversions, so we add a pixel-level guard for each
+  // of the five demo screens (Dashboard · Glev Engine · Verlauf
+  // Insights · Verlauf Einträge · Einstellungen).
+  //
+  // Snapshots are scoped to the `[data-testid="app-mockup-phone"]`
+  // element, so the surrounding marketing copy (hero headline, CTAs,
+  // FeatureDeepDive cards) can change freely without invalidating
+  // them. Determinism comes from playwright.config.ts's
+  // `expect.toHaveScreenshot` defaults (animations disabled, css
+  // scale, threshold 0.05 for per-pixel YIQ tolerance, 1%
+  // maxDiffPixelRatio for sub-pixel anti-aliasing) plus
+  // `prepareForSnapshot` (fonts ready, no hover, no focus).
+  test("snapshots Dashboard / Glev Engine / Verlauf Insights / Verlauf Einträge / Einstellungen", async ({ page }) => {
+    const phone = await gotoHomeAndFindPhone(page);
+
+    // ── Dashboard ────────────────────────────────────────────────────
+    // Anchor on a stable label first so we don't snapshot an in-flight
+    // hydration frame. `Mahlzeit loggen` is the dashboard CTA, only
+    // present on this screen.
+    await expect(phone.getByText(/Mahlzeit loggen/)).toBeVisible();
+    await prepareForSnapshot(page);
+    await expect(phone).toHaveScreenshot("phone-dashboard.png");
+
+    // ── Glev Engine — Step 1 (Essen) ─────────────────────────────────
+    // The pill tabs at the top are the highest-leverage thing to
+    // catch a regression on (mentioned explicitly in the task spec).
+    // Anchor on the "Sprechen" voice pill: it's the only button on
+    // the engine step-1 screen with that exact text, so finding it
+    // proves we're past hydration and on the right step.
+    await navButton(phone, NAV.glev).click();
+    await expect(
+      phone.locator("button").filter({ hasText: /^Sprechen$/ }),
+    ).toBeVisible();
+    await prepareForSnapshot(page);
+    await expect(phone).toHaveScreenshot("phone-engine.png");
+
+    // ── Verlauf · Insights (default sub-tab) ─────────────────────────
+    // Tapping the Verlauf nav button always lands on Insights first
+    // (matches the real /history default + the label test above).
+    // The 7-Tage-Trend sparkline is one of the things the task spec
+    // calls out as a "clipped sparkline" risk to catch.
+    await navButton(phone, NAV.verlauf).click();
+    await expect(phone.getByText(/7-Tage-Trend/)).toBeVisible();
+    await prepareForSnapshot(page);
+    await expect(phone).toHaveScreenshot("phone-verlauf-insights.png");
+
+    // ── Verlauf · Einträge (sub-toggle) ──────────────────────────────
+    // The Filters · 2 chip + the meal cards are a layout-heavy area
+    // where a CSS regression (e.g. wrong gap, broken collapse arrow)
+    // would otherwise be invisible to the label test.
+    await phone.getByRole("button", { name: "Einträge" }).click();
+    await expect(phone.getByText(/Klicke eine Zeile zum Aufklappen/)).toBeVisible();
+    await prepareForSnapshot(page);
+    await expect(phone).toHaveScreenshot("phone-verlauf-entries.png");
+
+    // ── Einstellungen ────────────────────────────────────────────────
+    await navButton(phone, NAV.settings).click();
+    await expect(phone.getByText(/CGM Verbindung/)).toBeVisible();
+    await prepareForSnapshot(page);
+    await expect(phone).toHaveScreenshot("phone-settings.png");
   });
 });
 

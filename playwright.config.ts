@@ -32,7 +32,37 @@ export default defineConfig({
   // The first Next.js compile of /settings can take 30+ seconds in dev
   // mode under Turbopack; bump the per-test timeout accordingly.
   timeout: 120_000,
-  expect: { timeout: 15_000 },
+  expect: {
+    timeout: 15_000,
+    // Defaults for `toHaveScreenshot` so the marketing-mockup pixel
+    // snapshots are stable across local + CI runs.
+    //
+    //   • `animations: "disabled"` pauses CSS animations + transitions
+    //     and freezes them on the first frame, so e.g. the engine
+    //     mic pulse (`@keyframes engVPulseM`) and the Verlauf row
+    //     expand/collapse don't introduce per-run jitter.
+    //   • `scale: "css"` captures at logical CSS pixels regardless of
+    //     the host's devicePixelRatio (Replit dev container vs CI).
+    //   • `threshold: 0.05` tightens the per-pixel YIQ color tolerance
+    //     well below Playwright's lax 0.2 default. The default is so
+    //     forgiving that a full red↔blue accent swap (#4F6EF7 → #FF0000)
+    //     produces zero "different" pixels because the two colors have
+    //     similar luminance in YIQ. 0.05 is strict enough to catch a
+    //     real color regression while still tolerating the tiny YIQ
+    //     wobble of identical pixels rendered through different
+    //     compositor paths (Replit dev container vs CI).
+    //   • `maxDiffPixelRatio: 0.01` then bounds the overall budget for
+    //     sub-pixel anti-aliasing noise (gradient edges, text
+    //     rasterization). A meaningful regression — a wrong gradient
+    //     color, a layout shift, a clipped sparkline — touches far
+    //     more than 1% of pixels (the broken-color experiment hit 21%).
+    toHaveScreenshot: {
+      animations: "disabled",
+      scale: "css",
+      threshold: 0.05,
+      maxDiffPixelRatio: 0.01,
+    },
+  },
   reporter: process.env.CI ? "github" : [["list"]],
   use: {
     baseURL: BASE_URL,
