@@ -29,7 +29,13 @@ const PINK    = "#FF2D78";
 const SURFACE = "var(--surface)";
 const BORDER  = "var(--border)";
 
-type Kind = "meals" | "insulin" | "exercise" | "fingersticks" | "all" | "pdf";
+// The four real data kinds the user can export individually. Keep
+// this distinct from `Kind` (which also covers the bulk "all" and
+// "pdf" actions) so that row-level state — the per-kind button label,
+// the `counts` lookup, etc. — is provably constrained to the four
+// keys that actually exist on `RangeCounts`.
+type ExportRowKind = "meals" | "insulin" | "exercise" | "fingersticks";
+type Kind = ExportRowKind | "all" | "pdf";
 
 // Range presets the user can pick in the export panel. "all" preserves
 // the legacy full-history behaviour; "30d" / "90d" cover the two
@@ -130,7 +136,7 @@ function rangeFilenameSuffix(display?: { from?: string; to?: string }): string {
 }
 
 interface RowSpec {
-  kind: Exclude<Kind, "all">;
+  kind: ExportRowKind;
   labelKey: string;
   descKey: string;
   icon: React.ReactNode;
@@ -370,7 +376,7 @@ export default function ExportPanel() {
     setTimeout(() => setMsg(null), 4000);
   }
 
-  async function exportKind(kind: Exclude<Kind, "all">) {
+  async function exportKind(kind: ExportRowKind) {
     setBusy(kind);
     setMsg(null);
     try {
@@ -672,47 +678,79 @@ export default function ExportPanel() {
 
       {/* Per-kind rows */}
       <div style={{ ...card, padding: 0, overflow: "hidden" }}>
-        {ROWS.map((row, i) => (
-          <div
-            key={row.kind}
-            style={{
-              display: "flex", alignItems: "center", gap: 14,
-              padding: "16px 18px",
-              borderTop: i === 0 ? "none" : `1px solid ${BORDER}`,
-            }}
-          >
-            <div style={{
-              width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-              background: `${row.color}15`, color: row.color,
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              {row.icon}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)", marginBottom: 2 }}>
-                {t(row.labelKey)}
-              </div>
-              <div style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.4 }}>
-                {t(row.descKey)}
-              </div>
-            </div>
-            <button
-              onClick={() => exportKind(row.kind)}
-              disabled={busy !== null}
+        {ROWS.map((row, i) => {
+          // Per-row count from the same `counts` snapshot that drives
+          // the summary line above. Treat both the initial-load case
+          // (`counts === null`) AND any in-flight refresh after a
+          // picker change (`countsLoading === true`) as "unknown" —
+          // we keep the previous `counts` value around between
+          // fetches so the summary line above doesn't blink, but
+          // surfacing it down here as a button label/disabled state
+          // would mean the row could briefly claim "(8)" / be
+          // clickable while the *new* range is actually empty (or
+          // vice-versa). Falling back to the bare "CSV" label until
+          // the new count lands keeps the per-row UI honest.
+          const rowCount = countsLoading || !counts ? null : counts[row.kind];
+          const isBusy   = busy === row.kind;
+          // Treat a known-zero count as "nothing to export" and lock
+          // the button so a click can't produce an empty CSV. Rows
+          // whose count is still loading stay enabled — same UX as
+          // before the count was wired in.
+          const isEmpty  = rowCount === 0;
+          const disabled = busy !== null || isEmpty;
+          // Dim the whole row (icon + label + button) when its count
+          // is zero so the user can scan the list and immediately see
+          // which kinds are worth a click. Skipped while any export
+          // is running so the global busy-state styling on the button
+          // stays the visually dominant signal.
+          const rowDim   = isEmpty && busy === null;
+          return (
+            <div
+              key={row.kind}
               style={{
-                padding: "8px 14px", borderRadius: 9, border: `1px solid ${BORDER}`,
-                background: busy === row.kind ? "var(--surface-soft)" : "var(--surface-soft)",
-                color: busy === row.kind ? "var(--text-dim)" : "var(--text-strong)",
-                fontSize: 12, fontWeight: 600,
-                cursor: busy !== null ? "not-allowed" : "pointer",
-                opacity: busy !== null && busy !== row.kind ? 0.45 : 1,
-                whiteSpace: "nowrap", flexShrink: 0,
+                display: "flex", alignItems: "center", gap: 14,
+                padding: "16px 18px",
+                borderTop: i === 0 ? "none" : `1px solid ${BORDER}`,
+                opacity: rowDim ? 0.55 : 1,
               }}
             >
-              {busy === row.kind ? t("csv_busy") : t("csv_btn")}
-            </button>
-          </div>
-        ))}
+              <div style={{
+                width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                background: `${row.color}15`, color: row.color,
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                {row.icon}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)", marginBottom: 2 }}>
+                  {t(row.labelKey)}
+                </div>
+                <div style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.4 }}>
+                  {t(row.descKey)}
+                </div>
+              </div>
+              <button
+                onClick={() => exportKind(row.kind)}
+                disabled={disabled}
+                style={{
+                  padding: "8px 14px", borderRadius: 9, border: `1px solid ${BORDER}`,
+                  background: "var(--surface-soft)",
+                  color: isBusy || isEmpty ? "var(--text-dim)" : "var(--text-strong)",
+                  fontSize: 12, fontWeight: 600,
+                  cursor: disabled ? "not-allowed" : "pointer",
+                  opacity: busy !== null && !isBusy ? 0.45 : 1,
+                  whiteSpace: "nowrap", flexShrink: 0,
+                }}
+              >
+                {isBusy
+                  ? t("csv_busy")
+                  : rowCount !== null
+                    ? `${t("csv_btn")} (${rowCount})`
+                    : t("csv_btn")}
+              </button>
+            </div>
+          );
+        })}
       </div>
 
       {/* Bulk actions: CSV-all + PDF report side by side */}
