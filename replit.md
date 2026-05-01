@@ -2,51 +2,54 @@
 
 ## Overview
 
-Glev is a Type 1 Diabetes insulin decision-support system. The **Next.js 15 App Router** (`src/`) is the primary production frontend running on port 5000. Authentication and data storage are handled by **Supabase**.
+Glev is a Type 1 Diabetes insulin decision-support system. It aims to provide personalized insulin recommendations by analyzing historical meal data, glucose levels, and insulin dosages. The project integrates with Supabase for authentication and data storage, and leverages AI for meal parsing and recommendation logic. The primary goal is to empower users with better control over their diabetes management through data-driven insights and decision support.
 
-## Stack
+## User Preferences
 
-- **Monorepo tool**: pnpm workspaces
-- **Node.js version**: 24
-- **Package manager**: pnpm
-- **TypeScript version**: 5.9
-- **Production frontend**: Next.js 15 App Router (`src/`) — port 5000
-- **Database + Auth**: Supabase (PostgreSQL + Auth)
-- **AI**: OpenAI GPT-5 via Replit AI Integrations (`AI_INTEGRATIONS_OPENAI_BASE_URL`, `AI_INTEGRATIONS_OPENAI_API_KEY`)
-- **API server (dev support)**: Express 5 (`artifacts/api-server`)
-- **Design sandbox**: React + Vite (`artifacts/mockup-sandbox`)
+- I prefer simple language.
+- I want iterative development.
+- Ask before making major changes.
+- I prefer detailed explanations.
 
-## Authentication
+## System Architecture
 
-- Supabase Auth (email + password)
-- Client: `src/lib/supabase.ts` using `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- Session stored in Supabase cookies; `src/middleware.ts` protects all `/(protected)` routes
-- `src/lib/auth.ts` — `signIn`, `signUp`, `signOut`, `getCurrentUser`
+**Frontend:**
+- Built with Next.js 15 App Router, running on port 5000.
+- UI/UX utilizes a theming system defined in `app/globals.css`, with both dark and light modes. Brand accents are constant.
+- Mobile-first design with responsive layouts, including a sidebar navigation for desktop and bottom navigation for mobile.
+- Specific pages are intentionally kept dark for fixed product mockups (e.g., `app/mockups/dark-cockpit/page.tsx`).
 
-## Database: Supabase `meals` Table
+**Backend/API:**
+- Supabase handles user authentication (email/password) and PostgreSQL database operations.
+- `src/middleware.ts` protects all authenticated routes.
+- An Express 5 API server (`artifacts/api-server`) is available for development support.
 
-Required columns:
-```sql
-id           uuid DEFAULT gen_random_uuid() PRIMARY KEY
-user_id      uuid REFERENCES auth.users(id)
-input_text   text
-parsed_json  jsonb  -- array of {name, grams, carbs, protein, fat, fiber}
-glucose_before integer
-glucose_after  integer        -- NEW: add if missing
-carbs_grams  integer
-insulin_units decimal(5,2)
-meal_type    text             -- NEW: FAST_CARBS | HIGH_PROTEIN | HIGH_FAT | BALANCED
-evaluation   text             -- GOOD | LOW | HIGH | SPIKE
-created_at   timestamptz DEFAULT now()
-```
+**Core Logic & Features:**
+- **Meal Classification:** Meals are categorized into `FAST_CARBS`, `HIGH_PROTEIN`, `HIGH_FAT`, or `BALANCED` based on macro-nutrient content.
+- **Dose Evaluation:** Insulin doses are evaluated as `GOOD`, `HIGH` (overdose), or `LOW` (underdose) using an ICR formula based on carbs and glucose levels.
+- **Glev Engine:** Provides AI-driven insulin recommendations by finding similar historical meals and classifying confidence levels (HIGH, MEDIUM, LOW). The Engine page features a dynamic layout for chat interaction based on device size.
+- **Data Seeding:** On dashboard load, `seedMealsIfEmpty` inserts realistic T1D meals for new users.
+- **Localization:** Uses `next-intl` with `de` (default) and `en` locales. Locale resolution prioritizes cookies, then `Accept-Language` headers.
+- **Insulin & Exercise Logging (v0.5):** New tables (`insulin_logs`, `exercise_logs`) and associated API routes and helper functions for recording and retrieving insulin dosages and exercise activities. The Engine now considers these logs for recommendations. Safety hooks provide warnings but do not alter dosage.
+- **Native Shells (Capacitor):** iOS and Android apps are thin Capacitor 8.x webview shells loading the live web app (`https://glev.app`), enabling instant content updates without app store resubmission.
 
-**Migration SQL** (run once in Supabase SQL editor):
-```sql
-ALTER TABLE meals ADD COLUMN IF NOT EXISTS glucose_after INTEGER;
-ALTER TABLE meals ADD COLUMN IF NOT EXISTS meal_type TEXT;
-```
+**Data Models:**
+- `meals` table stores meal entries with details like `input_text`, `parsed_json` (food breakdown), `glucose_before`, `glucose_after`, `carbs_grams`, `insulin_units`, `meal_type`, and `evaluation`.
+- `user_preferences` table stores per-user UI preferences, such as dashboard and insights card order.
 
-(glucose_before, carbs_grams, insulin_units, evaluation were added in an earlier migration)
+## External Dependencies
+
+- **Supabase:** PostgreSQL database and authentication service. Handles user authentication (email/password) and database operations. Includes a `user_preferences` table for per-user UI settings.
+- **OpenAI GPT-5:** Used for AI functionalities like meal parsing, accessed via Replit AI Integrations.
+- **Next.js 15:** Frontend framework (App Router) running on port 5000.
+- **React:** UI library.
+- **Vite:** Frontend tooling for design sandbox.
+- **Express 5:** API server framework (`artifacts/api-server`) for development support.
+- **next-intl:** Localization library supporting `de` (default) and `en` locales.
+- **Playwright:** End-to-end and unit testing framework.
+- **Capacitor 8.x:** Used for wrapping the web application into native iOS and Android shells for `https://glev.app`.
+- **Web Speech API:** For voice input functionality.
+- **HealthKit (iOS):** For background blood glucose synchronization.
 
 ## Database: Supabase `user_preferences` Table
 
