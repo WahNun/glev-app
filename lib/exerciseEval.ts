@@ -182,3 +182,148 @@ export function exerciseTypeLabel(t: ExerciseType): string {
     case "run":       return "Run";
   }
 }
+
+// ────────────────────────────────────────────────────────────────────
+// Cross-entry aggregation: per-exercise-type personal pattern stats.
+//
+// Turns the per-row outcome from `evaluateExercise()` into THIS user's
+// historical baseline — "your runs usually drop glucose ~40". Pure,
+// stateless, and computed client-side from already-fetched
+// `exercise_logs` rows so no schema change or new fetch is required.
+//
+// Conventions:
+//   - The `hypertrophy` legacy type is collapsed into `strength`
+//     before grouping so the rename in `lib/exercise.ts` doesn't
+//     split a user's history into two adjacent buckets.
+//   - "Δ before → at-end" / "Δ before → +1 h" require BOTH endpoints
+//     to be present on the row; rows missing either are skipped for
+//     the corresponding median (but still counted in `count`).
+//   - Hypo-risk share counts only sessions where the at-end reading
+//     has landed (so PENDING rows never inflate either numerator or
+//     denominator). This mirrors `evaluateExercise()`'s precedence
+//     rule that PENDING wins until at-end exists.
+// ────────────────────────────────────────────────────────────────────
+
+/** Median of a non-empty numeric array. Returns null for empty input
+ *  so callers can short-circuit without a divide-by-zero guard. */
+export function median(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? (sorted[mid - 1] + sorted[mid]) / 2
+    : sorted[mid];
+}
+
+/** Normalise the legacy `hypertrophy` alias to `strength` so grouping
+ *  stays stable across the type rename in `lib/exercise.ts`. */
+export function normalizeExerciseType(t: ExerciseType): ExerciseType {
+  return t === "hypertrophy" ? "strength" : t;
+}
+
+export interface ExerciseTypeStats {
+  /** Canonical (post-normalisation) exercise type key. */
+  type: ExerciseType;
+  /** Total sessions of this type in the input window. */
+  count: number;
+  /** Sessions with a Δ before → at-end value available. */
+  atEndSampleSize: number;
+  /** Sessions with a Δ before → +1 h value available. */
+  oneHourSampleSize: number;
+  /** Median Δ (mg/dL) from baseline → workout-end reading, rounded. */
+  medianDeltaAtEnd: number | null;
+  /** Median Δ (mg/dL) from baseline → +1 h reading, rounded. */
+  medianDelta1h: number | null;
+  /** Sessions classified by `evaluateExercise()` (i.e. at-end has
+   *  landed). PENDING rows are excluded so the share is meaningful. */
+  classifiedCount: number;
+  /** Sessions whose outcome was HYPO_RISK. */
+  hypoRiskCount: number;
+  /** hypoRiskCount / classifiedCount, in the [0, 1] range, or null
+   *  when classifiedCount is 0. */
+  hypoRiskShare: number | null;
+}
+
+/**
+ * Aggregate every log of a single exercise type into a personal
+ * pattern summary. `logs` is the full pool — this helper does its
+ * own filter so callers don't need to pre-slice. Returns `null` only
+ * when no row of that type exists in the pool (cheap signal for
+ * "hide the card entirely").
+ */
+export function aggregateExerciseTypeStats(
+  logs: ExerciseLog[],
+  type: ExerciseType,
+): ExerciseTypeStats | null {
+  const target = normalizeExerciseType(type);
+  const ofType = logs.filter(l => normalizeExerciseType(l.exercise_type) === target);
+  if (ofType.length === 0) return null;
+
+  const deltasAtEnd: number[] = [];
+  const deltas1h: number[]    = [];
+  let classifiedCount = 0;
+  let hypoRiskCount   = 0;
+
+  for (const log of ofType) {
+    const before  = numOrNull(log.cgm_glucose_at_log);
+    const atEnd   = numOrNull(log.glucose_at_end);
+    const after1h = numOrNull(log.glucose_after_1h);
+
+    if (before != null && atEnd   != null) deltasAtEnd.push(atEnd   - before);
+    if (before != null && after1h != null) deltas1h.push(after1h - before);
+
+    // Outcome-based stats — only count sessions that have actually
+    // been classified (at-end reading exists). PENDING rows are
+    // excluded from BOTH numerator and denominator, mirroring the
+    // workout-outcomes distribution card.
+    const outcome = evaluateExercise(log).outcome;
+    if (outcome !== "PENDING") {
+      classifiedCount++;
+      if (outcome === "HYPO_RISK") hypoRiskCount++;
+    }
+  }
+
+  const medianAtEndRaw = median(deltasAtEnd);
+  const median1hRaw    = median(deltas1h);
+
+  return {
+    type: target,
+    count: ofType.length,
+    atEndSampleSize: deltasAtEnd.length,
+    oneHourSampleSize: deltas1h.length,
+    medianDeltaAtEnd: medianAtEndRaw == null ? null : Math.round(medianAtEndRaw),
+    medianDelta1h:    median1hRaw    == null ? null : Math.round(median1hRaw),
+    classifiedCount,
+    hypoRiskCount,
+    hypoRiskShare: classifiedCount === 0 ? null : hypoRiskCount / classifiedCount,
+  };
+}
+
+/**
+ * Short, observational one-line summary of a personal pattern. Mirrors
+ * the tone of `patternNote()` (neutral, never prescriptive) but speaks
+ * about THIS user's data. Returns `null` when there isn't enough data
+ * to make a meaningful statement (caller should hide the line).
+ *
+ * Threshold: at least 3 sessions of the same type with at least one
+ * usable Δ measurement. Below that we don't have a personal pattern
+ * worth surfacing yet.
+ */
+export const PATTERN_MIN_SESSIONS = 3;
+
+export function personalPatternHeadline(stats: ExerciseTypeStats): string | null {
+  if (stats.count < PATTERN_MIN_SESSIONS) return null;
+  // Prefer the +1 h delta if we have it (captures the delayed-hypo
+  // window), fall back to the at-end value otherwise.
+  const delta = stats.medianDelta1h ?? stats.medianDeltaAtEnd;
+  const sample = stats.medianDelta1h != null
+    ? stats.oneHourSampleSize
+    : stats.atEndSampleSize;
+  if (delta == null || sample < PATTERN_MIN_SESSIONS) return null;
+  const abs = Math.abs(delta);
+  const direction = delta < 0 ? "drop" : delta > 0 ? "raise" : "hold";
+  if (direction === "hold" || abs < 5) {
+    return `Your ${exerciseTypeLabel(stats.type).toLowerCase()} sessions usually leave glucose roughly unchanged (median ${delta >= 0 ? "+" : "−"}${abs} mg/dL across ${sample} sessions).`;
+  }
+  return `Your ${exerciseTypeLabel(stats.type).toLowerCase()} sessions usually ${direction} glucose by ~${abs} mg/dL (median across ${sample} sessions).`;
+}

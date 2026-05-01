@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { fetchMeals, deleteMeal, updateMeal, type Meal } from "@/lib/meals";
 import { fetchRecentInsulinLogs, deleteInsulinLog, updateInsulinReadings, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, deleteExerciseLog, type ExerciseLog } from "@/lib/exercise";
-import { evaluateExercise, exerciseTypeLabel, patternNote, interimMessage, finalMessage, deltaColor } from "@/lib/exerciseEval";
+import { evaluateExercise, exerciseTypeLabel, patternNote, interimMessage, finalMessage, deltaColor, aggregateExerciseTypeStats, personalPatternHeadline, PATTERN_MIN_SESSIONS } from "@/lib/exerciseEval";
 import {
   evaluateBolus,
   bolusInterimMessage,
@@ -677,6 +677,7 @@ export default function EntriesPage() {
                 <ExerciseRowCard
                   key={x.id}
                   log={x}
+                  allLogs={exercise}
                   isOpen={isOpen}
                   onToggle={() => expandRow(isOpen ? null : x.id)}
                   onDelete={() => handleDeleteExercise(x.id)}
@@ -1638,8 +1639,12 @@ function BolusDeltaPill({ label, delta }: { label: string; delta: number | null 
   );
 }
 
-function ExerciseRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
+function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting }: {
   log: ExerciseLog;
+  /** Full pool of recently fetched exercise logs. Powers the
+   *  PERSONAL PATTERN panel — needs cross-row context, not just the
+   *  current row. */
+  allLogs: ExerciseLog[];
   isOpen: boolean; onToggle: () => void; onDelete: () => void; deleting: boolean;
 }) {
   const start = parseDbDate(log.created_at);
@@ -1758,6 +1763,12 @@ function ExerciseRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
               {patternNote(log.exercise_type)}
             </div>
           </ExPanel>
+
+          {/* 4b) Personal pattern — cross-entry stats for THIS user
+                  on the same exercise type. Sits visually under the
+                  static PATTERN NOTE so the educational copy and the
+                  observed reality are read together. */}
+          <PersonalPatternPanel log={log} allLogs={allLogs}/>
 
           {log.notes && (
             <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
@@ -1889,6 +1900,114 @@ function Detail({ label, value, color }: { label: string; value: string; color?:
     <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
       <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{label}</div>
       <div style={{ fontSize:14, fontWeight:700, color: color || "var(--text-strong)", letterSpacing:"-0.01em" }}>{value}</div>
+    </div>
+  );
+}
+
+/**
+ * Cross-entry summary tile rendered under PATTERN NOTE in the
+ * exercise expanded view. Shows THIS user's median glucose response
+ * (before → at-end and before → +1 h) plus the share of sessions
+ * that triggered HYPO RISK, all scoped to the same exercise type as
+ * the row being viewed. Hidden entirely when the type doesn't have
+ * `PATTERN_MIN_SESSIONS` rows in the recent window — there's nothing
+ * useful to say with one or two data points.
+ *
+ * Copy stays neutral and observational ("usually drop ~40 mg/dL"),
+ * never prescriptive — matches the static `patternNote()` tone.
+ */
+function PersonalPatternPanel({ log, allLogs }: { log: ExerciseLog; allLogs: ExerciseLog[] }) {
+  const stats = aggregateExerciseTypeStats(allLogs, log.exercise_type);
+  if (!stats || stats.count < PATTERN_MIN_SESSIONS) return null;
+
+  const headline = personalPatternHeadline(stats);
+  const typeLbl  = exerciseTypeLabel(stats.type);
+
+  return (
+    <ExPanel title="PERSONAL PATTERN">
+      <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.06em", fontWeight:600, marginBottom:8 }}>
+        Based on your last {stats.count} {typeLbl.toLowerCase()} {stats.count === 1 ? "session" : "sessions"}
+      </div>
+      {headline && (
+        <div style={{ fontSize:13, color:"var(--text-body)", lineHeight:1.55, marginBottom:10 }}>
+          {headline}
+        </div>
+      )}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8 }}>
+        <PatternStatTile
+          label="MEDIAN Δ BEFORE → AT END"
+          delta={stats.medianDeltaAtEnd}
+          sample={stats.atEndSampleSize}
+        />
+        <PatternStatTile
+          label="MEDIAN Δ BEFORE → +1H"
+          delta={stats.medianDelta1h}
+          sample={stats.oneHourSampleSize}
+        />
+      </div>
+      <div style={{ marginTop:8 }}>
+        <HypoShareTile
+          hypoCount={stats.hypoRiskCount}
+          classifiedCount={stats.classifiedCount}
+          share={stats.hypoRiskShare}
+        />
+      </div>
+    </ExPanel>
+  );
+}
+
+function PatternStatTile({ label, delta, sample }: { label: string; delta: number | null; sample: number }) {
+  const enough = delta != null && sample >= PATTERN_MIN_SESSIONS;
+  const color = enough ? deltaColor(delta) : "var(--text-faint)";
+  const text = !enough
+    ? "—"
+    : delta === 0
+      ? "0 mg/dL"
+      : `${delta! > 0 ? "+" : ""}${delta} mg/dL`;
+  return (
+    <div style={{
+      background:"var(--surface-soft)",
+      border:`1px solid ${BORDER}`,
+      borderRadius:10, padding:"10px 12px",
+    }}>
+      <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{label}</div>
+      <div style={{ fontSize:14, fontWeight:700, color, letterSpacing:"-0.01em", fontFamily:"var(--font-mono)" }}>{text}</div>
+      <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:3 }}>
+        {enough ? `n = ${sample}` : `n = ${sample} · need ${PATTERN_MIN_SESSIONS}+`}
+      </div>
+    </div>
+  );
+}
+
+function HypoShareTile({ hypoCount, classifiedCount, share }: {
+  hypoCount: number; classifiedCount: number; share: number | null;
+}) {
+  const enough = share != null && classifiedCount >= PATTERN_MIN_SESSIONS;
+  // Pink (HYPO_RISK colour from exerciseEval) once any hypo turned up,
+  // muted faint text otherwise. Pure observation — no thresholding
+  // language like "high risk" / "safe".
+  const color = !enough
+    ? "var(--text-faint)"
+    : hypoCount > 0
+      ? "#EF4444"
+      : "var(--text-strong)";
+  const pct = enough ? Math.round(share! * 100) : null;
+  const text = !enough
+    ? "—"
+    : `${pct}% · ${hypoCount} of ${classifiedCount}`;
+  return (
+    <div style={{
+      background:"var(--surface-soft)",
+      border:`1px solid ${BORDER}`,
+      borderRadius:10, padding:"10px 12px",
+    }}>
+      <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>HYPO RISK SHARE</div>
+      <div style={{ fontSize:14, fontWeight:700, color, letterSpacing:"-0.01em", fontFamily:"var(--font-mono)" }}>{text}</div>
+      <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:3 }}>
+        {enough
+          ? "of classified sessions ended in HYPO RISK"
+          : `n = ${classifiedCount} classified · need ${PATTERN_MIN_SESSIONS}+`}
+      </div>
     </div>
   );
 }
