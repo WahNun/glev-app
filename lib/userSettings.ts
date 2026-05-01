@@ -197,16 +197,26 @@ export async function fetchInsulinSettings(): Promise<InsulinSettings> {
 }
 
 /* ── Last appointment date ─────────────────────────────────────────── */
-
-/** YYYY-MM-DD calendar date matching what `<input type="date">` emits and
- *  what Postgres stores in a `date` column. We deliberately keep this as
- *  a plain string (not Date) because the value has no time-of-day or
- *  timezone meaning — it's a calendar date the user selected. */
-const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-function isValidIsoDate(v: unknown): v is string {
-  return typeof v === "string" && ISO_DATE_RE.test(v);
-}
+//
+// Task #93 moved the per-user appointment record from a single
+// `user_settings.last_appointment_at` column into a proper list-shaped
+// `appointments` table (so the Export panel can offer "since the visit
+// before last", etc). The single-field helper exported here is kept as
+// a thin derived view over the new table so callers that only need
+// "the latest visit" (Export panel default chip, PDF cover meta line)
+// don't have to learn a new shape. New callers should use the richer
+// helpers in `lib/appointments.ts` directly.
+//
+// Task #92 added an optional one-line note alongside the date. The
+// note now lives on each individual appointment row in the new table
+// (`appointments.note`), but the public `LastAppointment` shape kept
+// here still bundles `{ date, note }` because the PDF cover binds
+// the two together — surfacing the note independently of the date
+// would be meaningless.
+//
+// The legacy `user_settings.last_appointment_at` column stays in the
+// database for one release as a safety net; a follow-up task drops it
+// once nothing reads it directly.
 
 /**
  * Saved metadata for the user's most recent doctor visit. Both fields
@@ -218,9 +228,14 @@ function isValidIsoDate(v: unknown): v is string {
  * lock-step (the Export panel renders the chip from the date and the
  * PDF cover meta from the note), and a single round-trip avoids a
  * partial-state UI flicker between the two reads.
+ *
+ * Sourced from the latest row in the `appointments` table (Task #93)
+ * — i.e. the entry with the highest `appointment_at`. Older entries
+ * are not surfaced here; consumers that need them should call
+ * `fetchAppointments()` from `lib/appointments.ts` directly.
  */
 export interface LastAppointment {
-  /** ISO YYYY-MM-DD calendar date, or null when not set. */
+  /** ISO YYYY-MM-DD calendar date, or null when no appointments saved. */
   date: string | null;
   /** Free-text note (e.g. doctor name, A1c, key result). null when
    *  unset or — defensively — when the user only saved a date and no
@@ -229,109 +244,33 @@ export interface LastAppointment {
   note: string | null;
 }
 
-/** Defensive cap on the note length so a paste-bombed input can't
- *  blow up the PDF cover layout (the meta value column wraps but
- *  long single-line strings still look ugly) or balloon the row
- *  size. 200 chars is enough for "Dr. Müller, Praxis Schwabing,
- *  HbA1c 7.2 %, nächster Termin Juli" — well over the realistic
- *  use case the task spec describes. */
-const NOTE_MAX_LEN = 200;
-
 /**
- * Normalize a free-text note for storage: trim whitespace, collapse
- * empty strings to `null` (so the column gets cleared rather than
- * holding a meaningless "" that would show as a blank PDF meta line),
- * and clip to NOTE_MAX_LEN.
- */
-function normalizeNote(note: string | null | undefined): string | null {
-  if (typeof note !== "string") return null;
-  const trimmed = note.trim();
-  if (trimmed === "") return null;
-  return trimmed.slice(0, NOTE_MAX_LEN);
-}
-
-/**
- * Read the user's saved "last appointment" date (YYYY-MM-DD calendar
- * date) AND optional one-line note from the `user_settings` table.
- * Returns `{ date: null, note: null }` when no row / column value
- * exists, the user is signed out, or Supabase is unreachable — every
- * caller treats both nulls as "no preset chip, nothing to surface",
- * so the fallback is a clean no-op rather than a misleading default.
+ * Read the user's most-recent appointment as `{ date, note }` from the
+ * new `appointments` table. Returns `{ date: null, note: null }` when
+ * the user has no appointments saved, is signed out, or Supabase is
+ * unreachable — every caller treats both nulls as "no preset chip,
+ * nothing to surface", so the fallback is a clean no-op rather than a
+ * misleading default.
  *
- * Used by both the Settings sheet (to show the current values in the
- * date + note inputs) and the Export panel (to decide whether to
- * render the "Seit letztem Arzttermin" preset chip and pass the note
- * through to the PDF cover).
+ * Used by the Export panel to decide whether to render the "Seit
+ * letztem Arzttermin" preset chip and to pass the note through to
+ * the PDF cover. The Settings sheet does NOT use this helper — it
+ * needs the full list and goes straight to `fetchAppointments()`.
  */
 export async function fetchLastAppointment(): Promise<LastAppointment> {
-  if (!supabase) return { date: null, note: null };
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { date: null, note: null };
-
-  const { data, error } = await supabase
-    .from("user_settings")
-    .select("last_appointment_at, last_appointment_note")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (error || !data) return { date: null, note: null };
-  // Postgres returns `date` columns as ISO `YYYY-MM-DD` strings via
-  // PostgREST. Defensive isValidIsoDate guards against an unexpected
-  // server-side coercion (e.g. timestamptz cast) that would otherwise
-  // produce an unparseable value downstream. The note round-trips
-  // through normalizeNote so a stale "" stored before the column got
-  // its trim treatment surfaces as null to the UI.
-  const date = isValidIsoDate(data.last_appointment_at)
-    ? data.last_appointment_at
-    : null;
-  const note = normalizeNote(
-    typeof data.last_appointment_note === "string"
-      ? data.last_appointment_note
-      : null,
-  );
-  return { date, note };
-}
-
-/**
- * Upsert the user's "last appointment" date + optional note. Pass
- * `{ date: null, note: null }` to clear both (which hides the preset
- * chip from the Export panel and the meta line from the PDF cover);
- * the Settings "Clear" button does exactly that. Throws on auth or
- * DB error so the Settings sheet can show an inline error and keep
- * the user's input visible.
- *
- * The date MUST be a YYYY-MM-DD string (the format `<input type="date">`
- * emits) or null — anything else throws synchronously instead of
- * silently writing garbage. The note is normalized (trimmed, "" →
- * null, capped at NOTE_MAX_LEN) before write so storage stays clean
- * regardless of input quirks.
- *
- * If the date is null but the note is non-null the note is force-
- * cleared too: a note without a date has nowhere to show up on the
- * cover (the meta line is anchored to the date) and the Settings
- * "Clear" button collapses both together — keeping the storage
- * invariant matches the UI invariant.
- */
-export async function saveLastAppointment(value: LastAppointment): Promise<void> {
-  if (!supabase) throw new Error("Supabase not configured");
-  if (value.date !== null && !isValidIsoDate(value.date)) {
-    throw new Error(`Invalid date format (expected YYYY-MM-DD): ${value.date}`);
+  // Lazy import keeps the module-level dependency graph acyclic
+  // (`lib/appointments.ts` does not import from this file, but a
+  // top-level import here would still surface in bundle traces as a
+  // round-trip and complicates tree-shaking when only one of the two
+  // is used).
+  const { fetchAppointments } = await import("./appointments");
+  try {
+    const rows = await fetchAppointments();
+    if (rows.length === 0) return { date: null, note: null };
+    const latest = rows[0]!;
+    return { date: latest.appointmentAt, note: latest.note ?? null };
+  } catch {
+    return { date: null, note: null };
   }
-  const { data: { user }, error: userError } = await supabase.auth.getUser();
-  if (userError || !user) throw new Error("Not signed in");
-
-  // Force-clear the note when the date is null so a "cleared"
-  // appointment can never leave a dangling note in the column —
-  // matches the Settings clear-button UX (one button wipes both).
-  const noteToWrite = value.date === null ? null : normalizeNote(value.note);
-
-  const { error } = await supabase
-    .from("user_settings")
-    .upsert({
-      user_id: user.id,
-      last_appointment_at: value.date,
-      last_appointment_note: noteToWrite,
-    }, { onConflict: "user_id" });
-
-  if (error) throw new Error(error.message);
 }
+

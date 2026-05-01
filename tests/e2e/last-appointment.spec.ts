@@ -1,40 +1,45 @@
-// End-to-end coverage for the "Letzter Arzttermin" feature (Task #75).
+// End-to-end coverage for the "Arzttermine" feature (Task #75 → #93).
 //
 // Why this exists:
-//   Task #75 grew two coupled UI surfaces: a date picker on /settings
-//   and a conditional 5th preset chip on /export. The two pieces share
-//   one source of truth (`user_settings.last_appointment_at`), so the
-//   only way to prove the round-trip works is to drive the real flow
-//   end-to-end:
-//     1. Set a date in Settings → DB row updates.
+//   Task #75 grew two coupled UI surfaces: a date control on /settings
+//   and a conditional 5th preset chip on /export. Task #93 then
+//   replaced the single `user_settings.last_appointment_at` scalar
+//   with a full `appointments` list, so the Settings sheet now drives
+//   add/edit/delete CRUD against a separate table while the Export
+//   chip continues to surface only the most-recent entry. The two
+//   sides share one source of truth (the `appointments` table), so
+//   the only way to prove the round-trip works is to drive the real
+//   flow end-to-end:
+//     1. Add an appointment in Settings → row inserted into `appointments`.
 //     2. Visit /export → the new chip appears with the saved date.
-//     3. Clear the date in Settings → DB row goes back to NULL.
+//     3. Delete the appointment in Settings → row gone again.
 //     4. Visit /export → the chip is gone again.
-//   A unit test on `saveLastAppointment` would catch (1) only, and
-//   would silently miss the conditional-render contract on the chip
-//   row that's actually the user-facing payoff of the task.
+//   A unit test on `addAppointment` would catch (1) only, and would
+//   silently miss the conditional-render contract on the chip row
+//   that's actually the user-facing payoff of the feature.
 //
 // What this asserts (and why each piece matters):
-//   * Default state: a fresh user has no `last_appointment_at`, and
-//     the Export chip row therefore renders exactly the original four
-//     chips — Alles / 30d / 90d / Custom — with no fifth chip leaking
-//     into the row before the user opts in.
-//   * Setting a date persists to `user_settings.last_appointment_at`
-//     (verified via the service-role admin client — the same channel
-//     the carb-unit-picker spec uses).
+//   * Default state: a fresh user has no appointments, and the Export
+//     chip row therefore renders exactly the original four chips —
+//     Alles / 30d / 90d / Custom — with no fifth chip leaking into
+//     the row before the user opts in.
+//   * Adding an appointment persists into `appointments` (verified
+//     via the service-role admin client — same channel as the
+//     carb-unit-picker spec).
 //   * The Export chip row gains a new chip whose label embeds the
 //     saved date in the user's locale. We do NOT assert the exact
 //     translation string — only that the chip exists and contains
 //     the formatted date — so the spec is stable across English /
 //     German runs of Playwright (Accept-Language varies by env).
-//   * Clearing the date in Settings writes NULL back to the row AND
-//     removes the chip from the Export panel. This is the strongest
-//     check — a regression that left a stale chip visible after a
-//     clear would silently re-prefill exports with the wrong window.
+//   * Deleting the appointment in Settings removes the row from the
+//     table AND removes the chip from the Export panel. This is the
+//     strongest check — a regression that left a stale chip visible
+//     after a delete would silently re-prefill exports with the
+//     wrong window.
 //
 // We deliberately drive the picker through the real login flow rather
 // than seeding cookies, so the test catches regressions in any layer
-// between login → middleware → settings page → date input → upsert →
+// between login → middleware → settings page → add/delete handler →
 // PostgREST → Export panel fetch effect.
 
 import { expect, test, type Page } from "@playwright/test";
@@ -69,40 +74,55 @@ function getAdminClient() {
 }
 
 /**
- * Read the persisted date directly from PostgREST. We return a `string`
- * because the column is a Postgres `date`, which PostgREST serializes
- * as `YYYY-MM-DD` — and a `null` because the column is nullable and
- * the "cleared" state is the most important thing this spec asserts.
+ * Read the most-recent persisted appointment date directly from
+ * PostgREST. We return a `string` because `appointment_at` is a
+ * Postgres `date`, which PostgREST serializes as `YYYY-MM-DD`, and a
+ * `null` because the "no appointments yet" baseline is the most
+ * important thing this spec asserts.
  */
-async function readPersistedAppointment(userId: string): Promise<string | null> {
+async function readLatestAppointment(userId: string): Promise<string | null> {
   const admin = getAdminClient();
   const { data, error } = await admin
-    .from("user_settings")
-    .select("last_appointment_at")
+    .from("appointments")
+    .select("appointment_at")
     .eq("user_id", userId)
+    .order("appointment_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
   if (error) {
-    throw new Error(`user_settings.last_appointment_at read failed: ${error.message}`);
+    throw new Error(`appointments read failed: ${error.message}`);
   }
-  return (data?.last_appointment_at ?? null) as string | null;
+  return (data?.appointment_at ?? null) as string | null;
 }
 
 /**
- * Reset the persisted date back to NULL so each test starts from a
- * pristine baseline regardless of how a previous run left the row.
- * Uses upsert so a brand-new user (no row yet) is handled the same
- * way as an existing user (row present, value non-null).
+ * Reset the test user back to "no appointments" so each test starts
+ * from a pristine baseline regardless of how a previous run left the
+ * row. Also clears `user_settings.last_appointment_at` so the
+ * idempotent migration backfill can't silently reintroduce a stale
+ * appointment if the test re-runs against the same user.
  */
-async function clearAppointment(userId: string) {
+async function resetAppointments(userId: string) {
   const admin = getAdminClient();
-  const { error } = await admin
+  const { error: delErr } = await admin
+    .from("appointments")
+    .delete()
+    .eq("user_id", userId);
+  if (delErr) {
+    throw new Error(`appointments clear failed: ${delErr.message}`);
+  }
+  // Also wipe the legacy scalar so the migration's backfill (which is
+  // idempotent on the SQL level — `INSERT … ON CONFLICT DO NOTHING`
+  // — and the still-readable column on `user_settings`) can't sneak
+  // a row back in if someone re-runs the migration mid-suite.
+  const { error: upErr } = await admin
     .from("user_settings")
     .upsert(
       { user_id: userId, last_appointment_at: null },
       { onConflict: "user_id" },
     );
-  if (error) {
-    throw new Error(`user_settings.last_appointment_at clear failed: ${error.message}`);
+  if (upErr) {
+    throw new Error(`user_settings reset failed: ${upErr.message}`);
   }
 }
 
@@ -112,8 +132,10 @@ async function clearAppointment(userId: string) {
 // locale at runtime can flip either way depending on the environment.
 //
 // SettingsRow ariaLabel = "Open <label>" / "<label> öffnen". The
-// localized label is "Letzter Arzttermin" / "Last appointment".
-const LAST_APPT_ROW_ARIA = /(Open Last appointment|Last appointment öffnen|Open Letzter Arzttermin|Letzter Arzttermin öffnen)/i;
+// localized label is "Doctor appointments" / "Arzttermine" (the row
+// title key changed from `last_appointment_title` to
+// `appointments_title` in Task #93).
+const APPTS_ROW_ARIA = /(Open Doctor appointments|Doctor appointments öffnen|Open Arzttermine|Arzttermine öffnen)/i;
 // ExportPanel is rendered inside the "Daten exportieren" / "Export data"
 // row's bottom sheet, NOT as its own /export route. We open it the
 // same way a user would: navigate to /settings and tap that row.
@@ -147,7 +169,7 @@ async function loginAsTestUser(page: Page) {
   ]);
 }
 
-test.describe("Settings → Letzter Arzttermin → Export chip", () => {
+test.describe("Settings → Arzttermine → Export chip", () => {
   let testUser: TestUser;
 
   test.beforeAll(() => {
@@ -155,38 +177,38 @@ test.describe("Settings → Letzter Arzttermin → Export chip", () => {
   });
 
   test.beforeEach(async ({ context }) => {
-    // Pristine baseline: clear cookies + reset the row so the initial-
+    // Pristine baseline: clear cookies + reset rows so the initial-
     // state assertion ("no chip") doesn't depend on how a previous
     // spec left the user.
     await context.clearCookies();
-    await clearAppointment(testUser.userId);
+    await resetAppointments(testUser.userId);
   });
 
   test.afterAll(async () => {
-    // Defensive: leave the test user with no appointment date, so
-    // any subsequent spec that asserts on the chip row's default
-    // shape isn't surprised by a stale value.
-    await clearAppointment(testUser.userId);
+    // Defensive: leave the test user with no appointments, so any
+    // subsequent spec that asserts on the chip row's default shape
+    // isn't surprised by a stale value.
+    await resetAppointments(testUser.userId);
   });
 
-  test("setting a date renders the chip; clearing the date hides it", async ({ page }) => {
+  test("adding an appointment renders the chip; deleting it hides it", async ({ page }) => {
     await loginAsTestUser(page);
 
     // ---- INITIAL STATE: no chip in the Export sheet ------------------
-    // The chip is conditionally rendered only when the saved date is
-    // non-null, so a fresh user must see exactly the original four
+    // The chip is conditionally rendered only when the saved list is
+    // non-empty, so a fresh user must see exactly the original four
     // chips (Alles / 30d / 90d / Custom). We assert the chip count
     // rather than the absence of a specific label so that a regression
     // adding a *different* fifth chip (e.g. flipped condition) would
     // also fail this guard.
-    expect(await readPersistedAppointment(testUser.userId)).toBeNull();
+    expect(await readLatestAppointment(testUser.userId)).toBeNull();
 
     await page.goto("/settings");
     const exportRow = page.getByRole("button", { name: EXPORT_ROW_ARIA });
     await expect(exportRow).toBeVisible();
     await exportRow.click();
 
-    // Wait for the panel's lastAppointment fetch effect to settle —
+    // Wait for the panel's appointments fetch effect to settle —
     // otherwise the chip count could race with the initial render
     // and produce a flaky 4 vs 5 read. The simplest deterministic
     // signal is the "All time" / "Alles" chip, which is always in
@@ -194,43 +216,42 @@ test.describe("Settings → Letzter Arzttermin → Export chip", () => {
     await expect(page.getByRole("button", { name: /^(All time|Alles)$/ })).toBeVisible();
     await expect(page.getByRole("button", { name: ANY_CHIP_LABEL })).toHaveCount(4);
 
-    // Close the export sheet so we can open the lastAppointment one
+    // Close the export sheet so we can open the appointments one
     // (BottomSheet renders one sheet at a time — opening a second
     // would replace the first, but Escape is the cleaner contract).
     await page.keyboard.press("Escape");
 
-    // ---- SET DATE IN SETTINGS ---------------------------------------
-    const lastApptRow = page.getByRole("button", { name: LAST_APPT_ROW_ARIA });
-    await expect(lastApptRow).toBeVisible();
-    await lastApptRow.click();
+    // ---- ADD APPOINTMENT IN SETTINGS --------------------------------
+    const apptsRow = page.getByRole("button", { name: APPTS_ROW_ARIA });
+    await expect(apptsRow).toBeVisible();
+    await apptsRow.click();
 
-    // Drive the native date input directly. `<input type="date">`
-    // accepts a YYYY-MM-DD string via .fill() in Chromium without
-    // needing the picker UI.
-    const dateInput = page.locator('input[type="date"]');
+    // Drive the native date input directly. The add form lives at the
+    // top of the sheet body, so the first visible `input[type="date"]`
+    // is its date field. `<input type="date">` accepts a YYYY-MM-DD
+    // string via .fill() in Chromium without needing the picker UI.
+    const dateInput = page.locator('input[type="date"]').first();
     await expect(dateInput).toBeVisible();
     await dateInput.fill("2026-01-15");
 
-    // Click "Save" in the sheet footer. There may be other "Save"
-    // buttons elsewhere on /settings, but only the open sheet's
-    // footer button is visible at this moment, so .first() is safe.
-    await page.getByRole("button", { name: /^(Save|Speichern)$/ }).first().click();
+    // Click the "Add" / "Hinzufügen" button to commit the new
+    // appointment. The handler awaits `addAppointment()` and then
+    // re-fetches the list, so by the time the button's busy state
+    // clears the row should already be in the DB.
+    await page.getByRole("button", { name: /^(Add|Hinzufügen)$/ }).click();
 
     // ---- DB PERSISTENCE ---------------------------------------------
-    // saveLastAppointment() is awaited synchronously inside the save
-    // handler (it returns a Promise<boolean>), so by the time the
-    // sheet closes the row should already reflect the new value.
-    // Poll defensively in case the sheet-close animation runs ahead
-    // of the Supabase round-trip.
+    // Poll defensively in case the optimistic UI update runs ahead of
+    // the Supabase round-trip.
     await expect.poll(
-      () => readPersistedAppointment(testUser.userId),
+      () => readLatestAppointment(testUser.userId),
       { timeout: 10_000 },
     ).toBe("2026-01-15");
 
     // ---- EXPORT PANEL: chip appears ---------------------------------
     // Re-open the export sheet. The ExportPanel mounts fresh each
     // open (since BottomSheet conditionally renders body), so its
-    // fetchLastAppointment effect will pick up the new value.
+    // fetchAppointments effect will pick up the new value.
     await page.keyboard.press("Escape");
     await exportRow.click();
     await expect(page.getByRole("button", { name: /^(All time|Alles)$/ })).toBeVisible();
@@ -242,21 +263,25 @@ test.describe("Settings → Letzter Arzttermin → Export chip", () => {
       .or(page.getByRole("button", { name: LAST_APPT_CHIP_DATE_US }));
     await expect(apptChip).toBeVisible({ timeout: 10_000 });
     // Chip row count: exactly 5 (the original 4 + the new lastAppointment chip).
+    // Note: with only one appointment saved, the "..." picker trigger
+    // is suppressed (it only renders for 2+ appointments), so the chip
+    // count remains a clean 5 here.
     await expect(page.getByRole("button", { name: ANY_CHIP_LABEL })).toHaveCount(5);
 
-    // ---- CLEAR DATE IN SETTINGS -------------------------------------
+    // ---- DELETE APPOINTMENT IN SETTINGS -----------------------------
     await page.keyboard.press("Escape");
-    await lastApptRow.click();
-    // The sheet's "Clear date" button wipes the input value back to "".
-    // Localized label: "Clear date" / "Datum löschen".
-    await page.getByRole("button", { name: /^(Clear date|Datum löschen)$/ }).click();
-    await expect(dateInput).toHaveValue("");
-    await page.getByRole("button", { name: /^(Save|Speichern)$/ }).first().click();
+    await apptsRow.click();
+    // The list renders one "Delete" / "Löschen" button per row. With
+    // exactly one appointment saved there is exactly one such button.
+    // The handler shows a confirm() dialog before deleting; auto-accept
+    // it so the test doesn't hang on the native modal.
+    page.once("dialog", (d) => { void d.accept(); });
+    await page.getByRole("button", { name: /^(Delete|Löschen)$/ }).click();
 
-    // DB now back to NULL — the upsert path passes `null` through
-    // when the input value is the empty string (see saveLastAppointmentAction).
+    // DB now back to "no appointments" — the row was hard-deleted, so
+    // the latest-row helper returns null again.
     await expect.poll(
-      () => readPersistedAppointment(testUser.userId),
+      () => readLatestAppointment(testUser.userId),
       { timeout: 10_000 },
     ).toBeNull();
 

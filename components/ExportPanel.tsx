@@ -20,7 +20,7 @@ import {
   type RangeCounts,
 } from "@/lib/export";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
-import { fetchLastAppointment } from "@/lib/userSettings";
+import { fetchAppointments, type Appointment } from "@/lib/appointments";
 import { localeToBcp47 } from "@/lib/time";
 
 const ACCENT  = "#4F6EF7";
@@ -319,28 +319,59 @@ export default function ExportPanel() {
   // the currently chosen range.
   const [counts, setCounts] = useState<RangeCounts | null>(null);
   const [countsLoading, setCountsLoading] = useState<boolean>(true);
-  // Saved "last appointment" date from user_settings — drives the
-  // optional 5th preset chip ("Seit letztem Arzttermin"). `null` means
-  // either the user hasn't set one yet, or we haven't loaded it; in
-  // both cases we hide the chip and behave exactly like the legacy
-  // 4-preset panel. Loaded once on mount; the Settings page is the
-  // only writer, and a user editing it triggers a full panel re-mount
-  // (the Settings sheet re-opens this component), so we don't need
-  // live invalidation here.
-  const [lastAppointment, setLastAppointment] = useState<string | null>(null);
-  // Optional one-line free-text note attached to the saved appointment
-  // date (Task #92). null when the user hasn't entered one — in which
-  // case the PDF cover simply omits the meta line. Only meaningful in
-  // tandem with `lastAppointment`; the lib layer guarantees the note
-  // is null whenever the date is null, so we don't double-check here.
-  const [lastAppointmentNote, setLastAppointmentNote] = useState<string | null>(null);
-  // Tracks whether the async fetchLastAppointment() call has resolved
-  // yet. We can't use `lastAppointment === null` for that — null is
-  // also the legitimate "no date saved" value, and conflating the two
-  // would let the auto-deselect effect below race the fetch and
-  // silently downgrade a restored "lastAppointment" preset to "all"
-  // before we know whether the user actually has a saved date (Task #98).
+  // Saved appointment list from the `appointments` table (Task #93).
+  // The most recent entry drives the default "Seit letztem Arzttermin"
+  // preset chip; the full list is exposed through a small "..." menu
+  // next to the chip so the user can pick an older appointment as the
+  // start date without losing the chip's one-click default. Empty list
+  // means "no appointments saved yet" and the chip stays hidden — same
+  // behaviour as before, just sourced from the new table. Loaded once
+  // on mount; the Settings page is the only writer, and editing it
+  // remounts this panel via the BottomSheet, so we don't need live
+  // invalidation here.
+  //
+  // Each row also carries Task #92's optional note, which we forward
+  // to the PDF cover when the lastAppointment chip is active — see
+  // the `activeAppointment` derivation below for how the picker's
+  // selected entry feeds both the chip's date AND the cover's note.
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  // Which appointment id is currently selected as the "lastAppointment"
+  // chip's start date. `null` = use the most-recent entry (the
+  // default), so the chip behaves exactly like the legacy single-date
+  // panel for users who never open the picker. A non-null id pins the
+  // chip to a specific older appointment — the user's explicit
+  // override survives picker-state writes but is wiped if the
+  // referenced row is deleted (see effect below).
+  const [pickedAppointmentId, setPickedAppointmentId] = useState<string | null>(null);
+  // Whether the inline picker dropdown is open. Closed by default so
+  // the chip row stays compact for the most common case of "use the
+  // latest visit". Opened via the small "..." trigger next to the
+  // chip; click-outside / Escape close it.
+  const [appointmentMenuOpen, setAppointmentMenuOpen] = useState<boolean>(false);
+  // Tracks whether the async fetchAppointments() call has resolved
+  // yet. We can't use `appointments.length === 0` for that — empty is
+  // also the legitimate "no appointments saved" value, and conflating
+  // the two would let the auto-deselect effect below race the fetch
+  // and silently downgrade a restored "lastAppointment" preset to
+  // "all" before we know whether the user has any (Task #98).
   const [lastAppointmentLoaded, setLastAppointmentLoaded] = useState<boolean>(false);
+  // Computed "active appointment date" — the resolved YYYY-MM-DD that
+  // the chip currently means. Falls back to the latest appointment
+  // when the user hasn't picked one explicitly. `null` when the list
+  // is empty, which is the signal to hide the chip entirely.
+  const activeAppointment: Appointment | null =
+    (pickedAppointmentId
+      ? appointments.find((a) => a.id === pickedAppointmentId)
+      : appointments[0]) ?? null;
+  const lastAppointment: string | null = activeAppointment?.appointmentAt ?? null;
+  // Optional one-line free-text note attached to the active
+  // appointment (Task #92). Forwarded to the PDF cover ONLY when the
+  // user picked the "Seit letztem Arzttermin" chip — see the PDF
+  // generation block below for the gating rationale. Picking an older
+  // entry via the "..." menu (Task #93) automatically pulls in that
+  // entry's note here, so the cover always describes the same anchor
+  // the printed Zeitraum starts at.
+  const lastAppointmentNote: string | null = activeAppointment?.note ?? null;
   // Snapshot the user's current ICR (g/IE) AND correction factor
   // (mg/dL drop per 1 IE) once on mount so we can annotate the
   // insulin CSV/PDF with the ratio in their chosen carb unit
@@ -364,22 +395,22 @@ export default function ExportPanel() {
     });
   }, []);
 
-  // Load the saved "last appointment" date so we can decide whether
-  // to render the 5th preset chip. Failures (no row, signed out,
-  // network) collapse to `null` → chip hidden, which is the same
-  // behaviour as the user not having set a date yet, so there's no
-  // separate error state to surface here.
+  // Load the saved appointment list so we can decide whether to render
+  // the 5th preset chip and what to put in the "older appointments"
+  // dropdown. Failures (no rows, signed out, network) collapse to an
+  // empty array → chip hidden, which is the same behaviour as the
+  // user not having any appointments yet, so there's no separate
+  // error state to surface here.
   useEffect(() => {
     let cancelled = false;
-    fetchLastAppointment()
-      .then(({ date, note }) => {
+    fetchAppointments()
+      .then((rows) => {
         if (cancelled) return;
-        setLastAppointment(date);
-        setLastAppointmentNote(note);
+        setAppointments(rows);
         setLastAppointmentLoaded(true);
       })
       .catch(() => {
-        // Leave value null — chip stays hidden — but still mark the
+        // Leave list empty — chip stays hidden — but still mark the
         // load as resolved so the auto-deselect effect below can
         // safely run (otherwise a transient fetch failure would pin
         // a restored "lastAppointment" preset on screen forever).
@@ -387,6 +418,39 @@ export default function ExportPanel() {
       });
     return () => { cancelled = true; };
   }, []);
+
+  // Close the older-appointment popover on Escape so the keyboard
+  // experience matches the surrounding modal/sheet idiom (the
+  // BottomSheet itself also closes on Escape — handling this first
+  // and stopping propagation would be too invasive, but a plain
+  // close-on-Escape with no preventDefault is the lightest match for
+  // the "click-outside / Escape close it" contract documented above).
+  // Listener only attached while the menu is open so we don't pay for
+  // a global keydown subscription on every render.
+  useEffect(() => {
+    if (!appointmentMenuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setAppointmentMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [appointmentMenuOpen]);
+
+  // Wipe the user's explicit appointment pick if the underlying row
+  // disappears (e.g. they deleted it in another tab). Without this
+  // the chip would stay visually "pinned to <gone>" but silently
+  // resolve to the latest appointment via the fallback in
+  // `activeAppointment` — surprising UX. Snapping back to the default
+  // (latest) keeps the visible state honest.
+  useEffect(() => {
+    if (!lastAppointmentLoaded) return;
+    if (
+      pickedAppointmentId &&
+      !appointments.some((a) => a.id === pickedAppointmentId)
+    ) {
+      setPickedAppointmentId(null);
+    }
+  }, [appointments, pickedAppointmentId, lastAppointmentLoaded]);
 
   // Auto-deselect the lastAppointment chip if the underlying date
   // disappears (e.g. user clears it in another tab and re-opens the
@@ -719,36 +783,55 @@ export default function ExportPanel() {
             chip's label reads "Seit letztem Arzttermin (12.01.2026)"
             so the user can see at a glance which date the export
             will start from. */}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {(() => {
-            const presets: Array<{ key: RangePreset; label: string }> = [
-              { key: "all", label: t("range_all") },
-              { key: "30d", label: t("range_30d") },
-              { key: "90d", label: t("range_90d") },
-            ];
-            if (lastAppointment) {
-              // Format the saved date in the user's UI locale so a
-              // German user sees "12.01.2026" and an English user
-              // sees "Jan 12, 2026" — same value, no time component.
-              // Append (date) to the chip label so the user can
-              // verify it before clicking.
-              const formatted = new Date(`${lastAppointment}T00:00:00`).toLocaleDateString(
-                bcp47,
-                { year: "numeric", month: "2-digit", day: "2-digit" },
-              );
-              presets.push({
-                key: "lastAppointment",
-                label: t("range_last_appointment", { date: formatted }),
-              });
-            }
-            presets.push({ key: "custom", label: t("range_custom") });
-            return presets.map((p) => {
-              const active = rangePreset === p.key;
-              return (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+          {(["all", "30d", "90d"] as const).map((key) => {
+            const active = rangePreset === key;
+            const label = key === "all"
+              ? t("range_all")
+              : key === "30d" ? t("range_30d") : t("range_90d");
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setRangePreset(key)}
+                disabled={busy !== null}
+                style={{
+                  padding: "7px 13px",
+                  borderRadius: 999,
+                  border: `1px solid ${active ? ACCENT : BORDER}`,
+                  background: active ? `${ACCENT}20` : "var(--surface-soft)",
+                  color: active ? ACCENT : "var(--text-strong)",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: busy !== null ? "not-allowed" : "pointer",
+                  opacity: busy !== null ? 0.6 : 1,
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+
+          {/* Last-appointment chip + optional "..." picker for older
+              entries (Task #93). The chip itself behaves exactly like
+              the legacy single-date implementation — clicking it
+              activates the preset and uses the most-recent (or
+              user-picked) appointment as the start date. The "..."
+              trigger only appears when the user has 2+ saved
+              appointments, so a single-appointment user sees the same
+              compact chip row as before; the picker is purely
+              additive for power users with a longer log. */}
+          {lastAppointment && (() => {
+            const active = rangePreset === "lastAppointment";
+            const formatted = new Date(`${lastAppointment}T00:00:00`).toLocaleDateString(
+              bcp47,
+              { year: "numeric", month: "2-digit", day: "2-digit" },
+            );
+            return (
+              <div style={{ position: "relative", display: "inline-flex", gap: 4 }}>
                 <button
-                  key={p.key}
                   type="button"
-                  onClick={() => setRangePreset(p.key)}
+                  onClick={() => setRangePreset("lastAppointment")}
                   disabled={busy !== null}
                   style={{
                     padding: "7px 13px",
@@ -762,10 +845,147 @@ export default function ExportPanel() {
                     opacity: busy !== null ? 0.6 : 1,
                   }}
                 >
-                  {p.label}
+                  {t("range_last_appointment", { date: formatted })}
                 </button>
-              );
-            });
+                {appointments.length > 1 && (
+                  <button
+                    type="button"
+                    aria-label={t("appointments_picker_label")}
+                    aria-haspopup="listbox"
+                    aria-expanded={appointmentMenuOpen}
+                    onClick={() => setAppointmentMenuOpen((v) => !v)}
+                    disabled={busy !== null}
+                    style={{
+                      padding: "7px 10px",
+                      borderRadius: 999,
+                      border: `1px solid ${BORDER}`,
+                      background: "var(--surface-soft)",
+                      color: "var(--text-strong)",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: busy !== null ? "not-allowed" : "pointer",
+                      opacity: busy !== null ? 0.6 : 1,
+                      lineHeight: 1,
+                    }}
+                  >
+                    …
+                  </button>
+                )}
+                {appointmentMenuOpen && appointments.length > 1 && (
+                  <>
+                    {/* Click-catcher backdrop closes the menu when the
+                        user taps outside. Sits below the popover via
+                        a lower z-index so the popover stays interactive. */}
+                    <div
+                      onClick={() => setAppointmentMenuOpen(false)}
+                      style={{
+                        position: "fixed", inset: 0, zIndex: 10,
+                        background: "transparent",
+                      }}
+                    />
+                    <div
+                      role="listbox"
+                      aria-label={t("appointments_picker_label")}
+                      style={{
+                        position: "absolute",
+                        top: "calc(100% + 6px)",
+                        right: 0,
+                        zIndex: 11,
+                        minWidth: 240,
+                        maxHeight: 280,
+                        overflowY: "auto",
+                        background: SURFACE,
+                        border: `1px solid ${BORDER}`,
+                        borderRadius: 10,
+                        boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
+                        padding: 6,
+                        display: "flex", flexDirection: "column", gap: 2,
+                      }}
+                    >
+                      <div style={{
+                        fontSize: 10, fontWeight: 700, letterSpacing: "0.06em",
+                        textTransform: "uppercase", color: "var(--text-faint)",
+                        padding: "6px 10px 4px",
+                      }}>
+                        {t("appointments_picker_label")}
+                      </div>
+                      {appointments.map((appt, idx) => {
+                        const isActive = (pickedAppointmentId ?? appointments[0]?.id) === appt.id;
+                        const apptFormatted = new Date(`${appt.appointmentAt}T00:00:00`).toLocaleDateString(
+                          bcp47,
+                          { year: "numeric", month: "2-digit", day: "2-digit" },
+                        );
+                        return (
+                          <button
+                            key={appt.id}
+                            type="button"
+                            role="option"
+                            aria-selected={isActive}
+                            onClick={() => {
+                              // Selecting the latest entry is identical
+                              // to clearing the override — keep the
+                              // pickedId null so a future "add newer
+                              // appointment" automatically slides into
+                              // the chip. Anything else gets pinned by id.
+                              setPickedAppointmentId(idx === 0 ? null : appt.id);
+                              setRangePreset("lastAppointment");
+                              setAppointmentMenuOpen(false);
+                            }}
+                            style={{
+                              display: "flex", flexDirection: "column",
+                              alignItems: "flex-start", gap: 2,
+                              padding: "8px 10px", borderRadius: 8, border: "none",
+                              background: isActive ? `${ACCENT}15` : "transparent",
+                              color: isActive ? ACCENT : "var(--text-strong)",
+                              fontSize: 12, fontWeight: 600,
+                              cursor: "pointer",
+                              textAlign: "left",
+                            }}
+                          >
+                            <span>{apptFormatted}</span>
+                            {appt.note && (
+                              <span style={{
+                                fontSize: 11, fontWeight: 500,
+                                color: isActive ? ACCENT : "var(--text-dim)",
+                                opacity: 0.85,
+                                overflow: "hidden", textOverflow: "ellipsis",
+                                whiteSpace: "nowrap", maxWidth: 220,
+                              }}>
+                                {appt.note}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })()}
+
+          {(() => {
+            const active = rangePreset === "custom";
+            return (
+              <button
+                type="button"
+                onClick={() => setRangePreset("custom")}
+                disabled={busy !== null}
+                style={{
+                  padding: "7px 13px",
+                  borderRadius: 999,
+                  border: `1px solid ${active ? ACCENT : BORDER}`,
+                  background: active ? `${ACCENT}20` : "var(--surface-soft)",
+                  color: active ? ACCENT : "var(--text-strong)",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: busy !== null ? "not-allowed" : "pointer",
+                  opacity: busy !== null ? 0.6 : 1,
+                }}
+              >
+                {t("range_custom")}
+              </button>
+            );
           })()}
         </div>
 

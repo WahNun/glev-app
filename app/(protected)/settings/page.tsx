@@ -8,10 +8,15 @@ import {
   fetchMacroTargets,
   saveMacroTargets,
   DEFAULT_MACRO_TARGETS,
-  fetchLastAppointment,
-  saveLastAppointment,
   type MacroTargets,
 } from "@/lib/userSettings";
+import {
+  fetchAppointments,
+  addAppointment,
+  updateAppointment,
+  deleteAppointment,
+  type Appointment,
+} from "@/lib/appointments";
 import { localeToBcp47 } from "@/lib/time";
 import ImportPanel from "@/components/ImportPanel";
 import ExportPanel from "@/components/ExportPanel";
@@ -133,21 +138,32 @@ export default function SettingsPage() {
   // ships the prefs surface; Phase 2 (web push + cron sender) will start
   // honouring `criticalAlerts` and `quietStart/End`.
   const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>(DEFAULT_NOTIFICATION_PREFS);
-  // Last doctor appointment date (YYYY-MM-DD) — drives the optional
-  // "Seit letztem Arzttermin" preset chip in the Export panel. Empty
-  // string means "not set" (matches what an empty <input type="date">
-  // emits) and gets stored as `null` in user_settings; persisted via
-  // `saveLastAppointment`. The bcp47 locale is used to render the
-  // current value as a localized string in the row subtitle.
-  const [lastAppointment, setLastAppointment] = useState<string>("");
-  // Optional one-line free-text note attached to the appointment date
-  // (Task #92). Doctor name, clinic, key result — anything that turns
-  // the saved date into self-explanatory metadata for the next visit.
-  // Empty string means "no note" and is persisted as null in
-  // user_settings.last_appointment_note. Tied to the same Save / Clear
-  // affordances as the date so the two stay in lock-step (clearing the
-  // date wipes the note, and the upsert writes both columns).
-  const [lastAppointmentNote, setLastAppointmentNote] = useState<string>("");
+  // List of doctor appointments (Task #93). The most recent entry by
+  // date drives the Export panel's "Seit letztem Arzttermin" preset
+  // chip the same way the legacy single-date setting did; older
+  // entries are also surfaced through an optional dropdown in the
+  // Export panel and an add/edit/delete list in the Settings sheet
+  // below. Empty list = "no appointments yet" → no chip shown.
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  // Per-row inline-edit drafts (date + note) for the lastAppointment
+  // sheet. Keyed by appointment id; presence in the map means the row
+  // is in edit mode, absence means it's in read mode. Stored alongside
+  // `appointments` rather than inside each row so cancelling an edit
+  // doesn't have to mutate the list and risk re-ordering.
+  const [apptEdits, setApptEdits] = useState<Record<string, { date: string; note: string }>>({});
+  // Draft state for the "add new appointment" form at the top of the
+  // sheet. Defaults to today so the common "I just got back from a
+  // visit" flow is one click; the user can pick another date if they
+  // want to record an older one.
+  const [newApptDate, setNewApptDate] = useState<string>(() =>
+    new Date().toISOString().slice(0, 10),
+  );
+  const [newApptNote, setNewApptNote] = useState<string>("");
+  // Distinguish in-flight save from idle. Only enables a single
+  // pending op at a time (add OR edit OR delete) — multiple
+  // concurrent writes against the same row would race the optimistic
+  // local-state update and could leave the list out of sync.
+  const [apptBusy, setApptBusy] = useState<string | null>(null);
   const bcp47 = localeToBcp47(useLocale());
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -162,8 +178,6 @@ export default function SettingsPage() {
     settings: Settings;
     macroTargets: MacroTargets;
     notifPrefs: NotificationPrefs;
-    lastAppointment: string;
-    lastAppointmentNote: string;
   } | null>(null);
 
   const cgmConnected = useCgmConnected();
@@ -174,16 +188,10 @@ export default function SettingsPage() {
     if (!supabase) return;
     fetchMacroTargets().then(setMacroTargets).catch(() => {});
     fetchNotificationPrefs().then(setNotifPrefs).catch(() => {});
-    // Load the saved appointment date AND note — both DB nulls collapse
-    // to "" so the inputs render empty (which is what the user sees
-    // when nothing's configured). Single fetch returns both fields so
-    // the two state slots can never disagree on the same paint.
-    fetchLastAppointment()
-      .then(({ date, note }) => {
-        setLastAppointment(date ?? "");
-        setLastAppointmentNote(note ?? "");
-      })
-      .catch(() => {});
+    // Load the appointment list. Errors collapse to an empty list,
+    // which is the same UI as "no appointments saved yet" — no need
+    // to surface a separate error state on the row subtitle.
+    fetchAppointments().then(setAppointments).catch(() => {});
   }, []);
 
   const openSheetWith = useCallback((id: SheetKey) => {
@@ -193,18 +201,10 @@ export default function SettingsPage() {
     setSettings((curSettings) => {
       setMacroTargets((curMacros) => {
         setNotifPrefs((curNotif) => {
-          setLastAppointment((curAppt) => {
-            setLastAppointmentNote((curNote) => {
-              setDraftSnapshot({
-                settings: { ...curSettings },
-                macroTargets: { ...curMacros },
-                notifPrefs: { ...curNotif },
-                lastAppointment: curAppt,
-                lastAppointmentNote: curNote,
-              });
-              return curNote;
-            });
-            return curAppt;
+          setDraftSnapshot({
+            settings: { ...curSettings },
+            macroTargets: { ...curMacros },
+            notifPrefs: { ...curNotif },
           });
           return curNotif;
         });
@@ -212,6 +212,14 @@ export default function SettingsPage() {
       });
       return curSettings;
     });
+    // Reset the appointment-sheet's transient draft state every time a
+    // sheet opens — even non-appointment sheets — so the user always
+    // sees the "add" form pre-filled to today and any abandoned inline
+    // edit from a previous open is discarded.
+    setApptEdits({});
+    setNewApptDate(new Date().toISOString().slice(0, 10));
+    setNewApptNote("");
+    setApptBusy(null);
     setSaveError("");
     setOpenSheet(id);
   }, []);
@@ -224,10 +232,14 @@ export default function SettingsPage() {
       setSettings(draftSnapshot.settings);
       setMacroTargets(draftSnapshot.macroTargets);
       setNotifPrefs(draftSnapshot.notifPrefs);
-      setLastAppointment(draftSnapshot.lastAppointment);
-      setLastAppointmentNote(draftSnapshot.lastAppointmentNote);
       setDraftSnapshot(null);
     }
+    // Clear any in-progress inline edits in the appointments sheet
+    // so re-opening it shows the canonical (server-state) list. We
+    // don't snapshot/restore the list itself: every list mutation
+    // is committed straight to the DB via add/update/delete, so
+    // there's no in-memory "draft list" to revert.
+    setApptEdits({});
     setPendingLocale(null);
     setSaveError("");
     setOpenSheet(null);
@@ -273,32 +285,106 @@ export default function SettingsPage() {
     }
   }, [macroTargets, tSettings]);
 
-  /** Persist the "last appointment" date AND note — DB-backed via
-   *  user_settings.last_appointment_at + last_appointment_note. Empty
-   *  date string normalizes to null so the column gets cleared (and
-   *  the export panel hides the preset chip + the PDF cover meta line).
-   *  The lib layer also force-clears the note when the date is null,
-   *  so a user who types a note and then wipes the date never leaves
-   *  a dangling note in storage. */
-  const saveLastAppointmentAction = useCallback(async (): Promise<boolean> => {
-    setSaving(true);
+  /** Append a new appointment to the list. Optimistic-ish: we wait for
+   *  the insert to land (so the row gets its server-issued id and we
+   *  can offer per-row edit/delete immediately) but the busy state
+   *  keeps the form locked so the user can't double-submit during the
+   *  round-trip. The list is re-sorted after insert because the new
+   *  date may not be the latest one — the user might be backfilling
+   *  an older visit. */
+  const addAppointmentAction = useCallback(async (): Promise<void> => {
+    if (!newApptDate) {
+      setSaveError(tSettings("appointments_date_required"));
+      return;
+    }
+    setApptBusy("__add__");
     setSaveError("");
     try {
-      await saveLastAppointment({
-        date: lastAppointment === "" ? null : lastAppointment,
-        note: lastAppointmentNote === "" ? null : lastAppointmentNote,
-      });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 1800);
-      setDraftSnapshot(null);
-      return true;
+      const inserted = await addAppointment(newApptDate, newApptNote);
+      setAppointments((prev) =>
+        [inserted, ...prev].sort(
+          (a, b) => b.appointmentAt.localeCompare(a.appointmentAt),
+        ),
+      );
+      // Reset the form so a quick "log another" flow stays fluid.
+      setNewApptDate(new Date().toISOString().slice(0, 10));
+      setNewApptNote("");
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : tSettings("save_failed"));
-      return false;
     } finally {
-      setSaving(false);
+      setApptBusy(null);
     }
-  }, [lastAppointment, lastAppointmentNote, tSettings]);
+  }, [newApptDate, newApptNote, tSettings]);
+
+  /** Commit an inline-edit draft for an existing appointment. Local
+   *  state is updated only after the DB write succeeds so a failed
+   *  update doesn't leave the row out of sync with the server.
+   *  Removes the draft from `apptEdits` on success so the row pops
+   *  back into read mode. */
+  const updateAppointmentAction = useCallback(
+    async (id: string): Promise<void> => {
+      const draft = apptEdits[id];
+      if (!draft) return;
+      if (!draft.date) {
+        setSaveError(tSettings("appointments_date_required"));
+        return;
+      }
+      setApptBusy(id);
+      setSaveError("");
+      try {
+        await updateAppointment(id, draft.date, draft.note);
+        setAppointments((prev) =>
+          prev
+            .map((a) =>
+              a.id === id
+                ? {
+                    ...a,
+                    appointmentAt: draft.date,
+                    note: draft.note.trim() === "" ? null : draft.note.trim(),
+                  }
+                : a,
+            )
+            .sort((a, b) => b.appointmentAt.localeCompare(a.appointmentAt)),
+        );
+        setApptEdits((prev) => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
+      } catch (e) {
+        setSaveError(e instanceof Error ? e.message : tSettings("save_failed"));
+      } finally {
+        setApptBusy(null);
+      }
+    },
+    [apptEdits, tSettings],
+  );
+
+  /** Delete a single appointment after a native confirm. Confirm
+   *  before delete because the row carries the user's appointment
+   *  date — which they may have referenced in an export — and an
+   *  accidental tap on a small icon would otherwise lose data. */
+  const deleteAppointmentAction = useCallback(
+    async (id: string): Promise<void> => {
+      if (!confirm(tSettings("appointments_delete_confirm"))) return;
+      setApptBusy(id);
+      setSaveError("");
+      try {
+        await deleteAppointment(id);
+        setAppointments((prev) => prev.filter((a) => a.id !== id));
+        setApptEdits((prev) => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
+      } catch (e) {
+        setSaveError(e instanceof Error ? e.message : tSettings("save_failed"));
+      } finally {
+        setApptBusy(null);
+      }
+    },
+    [tSettings],
+  );
 
   /** Persist notification preferences — DB-backed via user_settings.notif_*. */
   const saveNotifPrefsAction = useCallback(async (): Promise<boolean> => {
@@ -375,27 +461,26 @@ export default function SettingsPage() {
   const targetRangeSub = tSettings("subtitle_target_range", { min: settings.targetMin, max: settings.targetMax });
   const icrSub = tSettings("subtitle_icr", { value: settings.icr });
   const cfSub = tSettings("subtitle_cf", { value: settings.cf });
-  // Format the saved appointment date in the user's UI locale for the
-  // row subtitle (e.g. "12.01.2026" in DE, "Jan 12, 2026" in EN). When
-  // a note is also set we append it ("12.01.2026 · Dr. Müller, A1c 7.2")
-  // so the user can verify both pieces from the closed row without
-  // re-opening the sheet. When the date is unset we show a "noch nicht
-  // gesetzt" subtitle so the row's purpose stays discoverable. The
-  // empty-string check matches both unset (loaded as "") and cleared
-  // inputs.
-  const lastAppointmentSub = lastAppointment
-    ? (lastAppointmentNote
-        ? tSettings("subtitle_last_appointment_set_with_note", {
-            date: new Date(`${lastAppointment}T00:00:00`).toLocaleDateString(bcp47, {
-              year: "numeric", month: "2-digit", day: "2-digit",
-            }),
-            note: lastAppointmentNote,
-          })
-        : tSettings("subtitle_last_appointment_set", {
-            date: new Date(`${lastAppointment}T00:00:00`).toLocaleDateString(bcp47, {
-              year: "numeric", month: "2-digit", day: "2-digit",
-            }),
-          }))
+  // Row subtitle: most-recent appointment date + total count when more
+  // than one is on file ("12.01.2026 · 4 saved"), or just the date for
+  // a single entry, or a "not set" placeholder when the list is empty.
+  // The closed-row state surfaces both "what does the export use by
+  // default" and "how many do I have on record" without requiring the
+  // user to open the sheet.
+  const latestAppointment = appointments[0] ?? null;
+  const lastAppointmentSub = latestAppointment
+    ? appointments.length > 1
+      ? tSettings("subtitle_appointments_many", {
+          date: new Date(`${latestAppointment.appointmentAt}T00:00:00`).toLocaleDateString(bcp47, {
+            year: "numeric", month: "2-digit", day: "2-digit",
+          }),
+          count: appointments.length,
+        })
+      : tSettings("subtitle_last_appointment_set", {
+          date: new Date(`${latestAppointment.appointmentAt}T00:00:00`).toLocaleDateString(bcp47, {
+            year: "numeric", month: "2-digit", day: "2-digit",
+          }),
+        })
     : tSettings("subtitle_last_appointment_unset");
   const macroSub = tSettings("subtitle_macros", {
     carbs: macroTargets.carbs, protein: macroTargets.protein, fat: macroTargets.fat, fiber: macroTargets.fiber,
@@ -505,90 +590,251 @@ export default function SettingsPage() {
       footer: <SaveFooter onSave={saveLocalSettings} />,
     },
     lastAppointment: {
-      // Two-field sheet that lets the user record (or clear) the date
-      // of their last doctor appointment AND a short doctor-friendly
-      // note (e.g. "Dr. Müller, A1c 7.2"). The Export panel reads both
-      // via fetchLastAppointment(): the date drives the "Seit letztem
-      // Arzttermin (DD.MM.YYYY)" preset chip, and the note (when set)
-      // is rendered alongside the date on the PDF cover so the export
-      // is self-explanatory for the next visit. Clearing the date
-      // wipes the note too — one button, both columns.
-      title: tSettings("last_appointment_title"),
+      // List-shaped sheet (Task #93) that lets the user keep a small
+      // log of doctor appointments instead of just one. The Export
+      // panel reads `appointments` via fetchLatestAppointmentDate()
+      // for its default chip and via fetchAppointments() for the "..."
+      // dropdown of older entries — adding/removing rows here updates
+      // both surfaces on the next panel mount.
+      title: tSettings("appointments_title"),
       body: (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.5 }}>
-            {tSettings("last_appointment_hint")}
+            {tSettings("appointments_hint")}
           </div>
-          <label style={{ fontSize: 12, color: "var(--text-dim)", display: "block" }}>
-            {tSettings("last_appointment_label")}
-            <input
-              style={{ ...inp, marginTop: 6 }}
-              type="date"
-              value={lastAppointment}
-              max={new Date().toISOString().slice(0, 10)}
-              onChange={(e) => setLastAppointment(e.target.value)}
-            />
-          </label>
-          {/* Optional one-line note. We keep it as a plain text input
-              (not a textarea) on purpose: the value renders on the
-              PDF cover meta block, where wrapping a multi-line note
-              would push the rest of the meta down and look messy.
-              maxLength matches the lib-layer NOTE_MAX_LEN cap so the
-              field's behaviour stays in sync with what gets persisted.
-              Disabled when no date is set — a note without a date has
-              no surface to attach to (the PDF meta line is anchored to
-              the date) and the lib layer would force-clear it on
-              save anyway, so disabling here surfaces that contract
-              upfront instead of letting the user type into a field
-              that would silently get wiped on Save. */}
-          <label style={{ fontSize: 12, color: "var(--text-dim)", display: "block" }}>
-            {tSettings("last_appointment_note_label")}
-            <input
+
+          {/* Add form — sits at the top so adding a fresh entry is the
+              default action when the sheet opens. Date pre-fills to
+              today; note is optional and freeform so the user can
+              tag visits ("Endo Q1") for the dropdown later. */}
+          <div style={{
+            display: "flex", flexDirection: "column", gap: 10,
+            padding: "12px 14px", borderRadius: 12,
+            background: "var(--surface-soft)", border: `1px solid ${BORDER}`,
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-strong)" }}>
+              {tSettings("appointments_add_title")}
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <input
+                style={{ ...inp, flex: "1 1 140px", minWidth: 130 }}
+                type="date"
+                value={newApptDate}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setNewApptDate(e.target.value)}
+                aria-label={tSettings("appointments_date_label")}
+                disabled={apptBusy !== null}
+              />
+              <input
+                style={{ ...inp, flex: "2 1 180px" }}
+                type="text"
+                value={newApptNote}
+                placeholder={tSettings("appointments_note_placeholder")}
+                onChange={(e) => setNewApptNote(e.target.value)}
+                aria-label={tSettings("appointments_note_label")}
+                disabled={apptBusy !== null}
+                maxLength={200}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={addAppointmentAction}
+              disabled={apptBusy !== null || !newApptDate}
               style={{
-                ...inp,
-                marginTop: 6,
-                opacity: lastAppointment ? 1 : 0.6,
+                alignSelf: "flex-start",
+                padding: "8px 16px", borderRadius: 9, border: "none",
+                background: `${ACCENT}`, color: "#fff",
+                fontSize: 12, fontWeight: 700,
+                cursor: apptBusy !== null || !newApptDate ? "not-allowed" : "pointer",
+                opacity: apptBusy !== null || !newApptDate ? 0.6 : 1,
               }}
-              type="text"
-              value={lastAppointmentNote}
-              onChange={(e) => setLastAppointmentNote(e.target.value)}
-              placeholder={tSettings("last_appointment_note_placeholder")}
-              maxLength={200}
-              disabled={!lastAppointment}
-            />
-          </label>
-          {/* Inline "Clear" affordance — the user can also pick a date
-              and then wipe it via the native input, but iOS Safari
-              doesn't always expose a clear button on date inputs, so
-              we ship our own. Wipes BOTH the date and the note in one
-              press (the note is meaningless without a date and the
-              save layer would null it out anyway, so do it visibly
-              here to keep the UI honest). Disabled when both fields
-              are already empty so the button doesn't look pressable
-              when it's a no-op. */}
-          <button
-            type="button"
-            onClick={() => {
-              setLastAppointment("");
-              setLastAppointmentNote("");
-            }}
-            disabled={!lastAppointment && !lastAppointmentNote}
-            style={{
-              alignSelf: "flex-start",
-              padding: "8px 14px", borderRadius: 9,
-              border: `1px solid ${BORDER}`,
-              background: "var(--surface-soft)",
-              color: (lastAppointment || lastAppointmentNote) ? "var(--text-strong)" : "var(--text-faint)",
-              fontSize: 12, fontWeight: 600,
-              cursor: (lastAppointment || lastAppointmentNote) ? "pointer" : "not-allowed",
-              opacity: (lastAppointment || lastAppointmentNote) ? 1 : 0.6,
-            }}
-          >
-            {tSettings("last_appointment_clear")}
-          </button>
+            >
+              {apptBusy === "__add__"
+                ? tSettings("appointments_add_busy")
+                : tSettings("appointments_add_button")}
+            </button>
+          </div>
+
+          {/* List of saved appointments. Empty state explains the
+              feature so the user knows what to do when there's
+              nothing to show yet. */}
+          {appointments.length === 0 ? (
+            <div style={{
+              padding: "16px 14px", borderRadius: 12,
+              border: `1px dashed ${BORDER}`,
+              fontSize: 12, color: "var(--text-faint)",
+              textAlign: "center", lineHeight: 1.5,
+            }}>
+              {tSettings("appointments_empty")}
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {appointments.map((appt) => {
+                const editing = apptEdits[appt.id];
+                const rowBusy = apptBusy === appt.id;
+                const formatted = new Date(`${appt.appointmentAt}T00:00:00`)
+                  .toLocaleDateString(bcp47, {
+                    year: "numeric", month: "2-digit", day: "2-digit",
+                  });
+                return (
+                  <div
+                    key={appt.id}
+                    style={{
+                      padding: "10px 12px", borderRadius: 10,
+                      border: `1px solid ${BORDER}`,
+                      background: "var(--surface)",
+                      display: "flex", flexDirection: "column", gap: 8,
+                    }}
+                  >
+                    {editing ? (
+                      <>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          <input
+                            style={{ ...inp, flex: "1 1 140px", minWidth: 130 }}
+                            type="date"
+                            value={editing.date}
+                            max={new Date().toISOString().slice(0, 10)}
+                            onChange={(e) =>
+                              setApptEdits((prev) => ({
+                                ...prev,
+                                [appt.id]: { ...editing, date: e.target.value },
+                              }))
+                            }
+                            aria-label={tSettings("appointments_date_label")}
+                            disabled={rowBusy}
+                          />
+                          <input
+                            style={{ ...inp, flex: "2 1 180px" }}
+                            type="text"
+                            value={editing.note}
+                            placeholder={tSettings("appointments_note_placeholder")}
+                            onChange={(e) =>
+                              setApptEdits((prev) => ({
+                                ...prev,
+                                [appt.id]: { ...editing, note: e.target.value },
+                              }))
+                            }
+                            aria-label={tSettings("appointments_note_label")}
+                            disabled={rowBusy}
+                            maxLength={200}
+                          />
+                        </div>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button
+                            type="button"
+                            onClick={() => updateAppointmentAction(appt.id)}
+                            disabled={rowBusy}
+                            style={{
+                              padding: "6px 14px", borderRadius: 8, border: "none",
+                              background: ACCENT, color: "#fff",
+                              fontSize: 12, fontWeight: 600,
+                              cursor: rowBusy ? "wait" : "pointer",
+                              opacity: rowBusy ? 0.6 : 1,
+                            }}
+                          >
+                            {rowBusy
+                              ? tSettings("save_button_busy")
+                              : tCommon("save")}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setApptEdits((prev) => {
+                                const next = { ...prev };
+                                delete next[appt.id];
+                                return next;
+                              })
+                            }
+                            disabled={rowBusy}
+                            style={{
+                              padding: "6px 14px", borderRadius: 8,
+                              border: `1px solid ${BORDER}`,
+                              background: "transparent",
+                              color: "var(--text-body)",
+                              fontSize: 12, fontWeight: 600,
+                              cursor: rowBusy ? "not-allowed" : "pointer",
+                            }}
+                          >
+                            {tSettings("appointments_cancel")}
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{
+                        display: "flex", alignItems: "center", gap: 12,
+                      }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)" }}>
+                            {formatted}
+                          </div>
+                          {appt.note && (
+                            <div style={{
+                              fontSize: 12, color: "var(--text-dim)",
+                              marginTop: 2, lineHeight: 1.4,
+                              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                            }}>
+                              {appt.note}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setApptEdits((prev) => ({
+                              ...prev,
+                              [appt.id]: {
+                                date: appt.appointmentAt,
+                                note: appt.note ?? "",
+                              },
+                            }))
+                          }
+                          disabled={apptBusy !== null}
+                          aria-label={tSettings("appointments_edit")}
+                          style={{
+                            padding: "6px 12px", borderRadius: 8,
+                            border: `1px solid ${BORDER}`,
+                            background: "var(--surface-soft)",
+                            color: "var(--text-body)",
+                            fontSize: 12, fontWeight: 600,
+                            cursor: apptBusy !== null ? "not-allowed" : "pointer",
+                            opacity: apptBusy !== null ? 0.5 : 1,
+                          }}
+                        >
+                          {tSettings("appointments_edit")}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteAppointmentAction(appt.id)}
+                          disabled={apptBusy !== null}
+                          aria-label={tSettings("appointments_delete")}
+                          style={{
+                            padding: "6px 12px", borderRadius: 8,
+                            border: `1px solid ${PINK}40`,
+                            background: `${PINK}10`,
+                            color: PINK,
+                            fontSize: 12, fontWeight: 600,
+                            cursor: apptBusy !== null ? "not-allowed" : "pointer",
+                            opacity: apptBusy !== null ? 0.5 : 1,
+                          }}
+                        >
+                          {rowBusy
+                            ? tSettings("save_button_busy")
+                            : tSettings("appointments_delete")}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {saveError && (
+            <div style={{ fontSize: 12, color: PINK, lineHeight: 1.4 }}>{saveError}</div>
+          )}
         </div>
       ),
-      footer: <SaveFooter onSave={saveLastAppointmentAction} />,
+      footer: closeFooter,
     },
     libre2: {
       title: tSettings("row_libre2"),
@@ -983,9 +1229,9 @@ export default function SettingsPage() {
         <SettingsRow
           iconColor={ACCENT}
           icon={ICON.calendar}
-          label={tSettings("last_appointment_title")}
+          label={tSettings("appointments_title")}
           subtitle={lastAppointmentSub}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("last_appointment_title") })}
+          ariaLabel={tSettings("row_open_aria", { label: tSettings("appointments_title") })}
           onClick={() => openSheetWith("lastAppointment")}
         />
       </SettingsSection>
