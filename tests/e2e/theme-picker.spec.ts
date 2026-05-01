@@ -33,28 +33,17 @@ function loadTestUser(): TestUser {
 }
 
 /**
- * The /settings page mounts a tablist with overview/settings/integrations/data.
- * The Appearance picker lives under the "settings" tab — overview is the
- * default. Click into the right tab and wait for it to be active so the
- * picker is in the DOM before assertions run.
- *
- * The visible label is localized via `tSettings("tab_settings")` (English
- * "Settings", German "Einstellungen"), so we match both with a single
- * case-insensitive regex. We pull the active radiogroup label from the
- * same locale family to keep the rest of the spec consistent.
+ * The /settings page is a flat list of SettingsSection / SettingsRow
+ * components — no internal tablist — so the Appearance radiogroup is
+ * always in the DOM after navigation. Match labels against both the
+ * German default ("Erscheinungsbild") and the English variant so the
+ * spec stays stable regardless of the active locale at runtime. See
+ * `tests/e2e/carb-unit-picker.spec.ts` for the same flat-page pattern.
  */
-const SETTINGS_TAB_NAME = /^(Settings|Einstellungen)$/i;
 const APPEARANCE_LABEL = /^(Appearance|Erscheinungsbild)$/i;
 const DARK_LABEL = /^(Dark|Dunkel)$/i;
 const LIGHT_LABEL = /^(Light|Hell)$/i;
 const SYSTEM_LABEL = /^System$/i;
-
-async function openSettingsTab(page: Page) {
-  const settingsTab = page.getByRole("tab", { name: SETTINGS_TAB_NAME });
-  await expect(settingsTab).toBeVisible();
-  await settingsTab.click();
-  await expect(settingsTab).toHaveAttribute("aria-selected", "true");
-}
 
 async function loginAsTestUser(page: Page) {
   const { email, password } = loadTestUser();
@@ -97,7 +86,6 @@ test.describe("Settings → Appearance theme picker", () => {
 
   test("switches dark / light / system live and persists each choice", async ({ page }) => {
     await page.goto("/settings");
-    await openSettingsTab(page);
 
     // The radiogroup is labelled by the localized "Appearance" string —
     // we don't want this test to depend on the active locale, so we
@@ -139,7 +127,6 @@ test.describe("Settings → Appearance theme picker", () => {
 
   test("preserves chosen theme across a full reload with no FOUC", async ({ page, request }) => {
     await page.goto("/settings");
-    await openSettingsTab(page);
 
     const radiogroup = page.getByRole("radiogroup", { name: APPEARANCE_LABEL });
     const lightBtn = radiogroup.getByRole("radio", { name: LIGHT_LABEL });
