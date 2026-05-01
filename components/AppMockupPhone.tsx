@@ -29,8 +29,36 @@
  */
 
 import { useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import GlevLogo from "@/components/GlevLogo";
 import GlevLockup from "@/components/GlevLockup";
+
+/* ────────────────────────────────────────────────────────────────
+   i18n helpers — the mockup mirrors the real Glev app so most copy
+   lives in `messages/{de,en}.json` (nav / dashboard / engine /
+   history / settings namespaces). For mockup-only chrome (sample
+   meal names, "Live demo" caption, demo footer, etc.) we use a
+   tiny inline DE/EN picker so the marketing phone reads in the
+   visitor's language without polluting the production message
+   bundles.
+   ──────────────────────────────────────────────────────────────── */
+type DeEn = { de: string; en: string };
+function pickCopy(locale: string, copy: DeEn): string {
+  return locale === "en" ? copy.en : copy.de;
+}
+/** Format a number using "," as decimal separator. Numbers/units stay
+ *  locale-neutral per the task spec — only labels translate. We standardize
+ *  on the German "," format to match the rest of the marketing demo and
+ *  what the actual production app shows on /dashboard. */
+function fmtNum(_locale: string, value: number, fractionDigits = 1): string {
+  return value.toFixed(fractionDigits).replace(".", ",");
+}
+/** Locale-neutral insulin unit shown in the mockup. The real app's
+ *  `engine.units_short` flips IE↔u between locales, but for this static
+ *  marketing mockup the task requires the unit to stay neutral. */
+const UNITS_SHORT = "IE";
+/** Locale-neutral carb gram label. */
+const CARBS_SHORT = "g KH";
 
 const ACCENT  = "#4F6EF7";
 const GREEN   = "#22D3A0";
@@ -52,21 +80,40 @@ const FRAME_W = 320;
 const FRAME_H = 660;
 const BEZEL   = 12;
 
-const TAB_LABEL: Record<Tab, string> = {
-  dashboard: "Dashboard",
-  entries:   "Verlauf · Einträge",
-  engine:    "Glev",
-  insights:  "Verlauf · Insights",
-  settings:  "Einstellungen",
-};
+function tabLabel(tab: Tab, locale: string): string {
+  switch (tab) {
+    case "dashboard": return pickCopy(locale, { de: "Dashboard",                en: "Dashboard"             });
+    case "entries":   return pickCopy(locale, { de: "Verlauf · Einträge",       en: "History · Entries"     });
+    case "engine":    return pickCopy(locale, { de: "Glev",                     en: "Glev"                  });
+    case "insights":  return pickCopy(locale, { de: "Verlauf · Insights",       en: "History · Insights"    });
+    case "settings":  return pickCopy(locale, { de: "Einstellungen",            en: "Settings"              });
+  }
+}
 
-const TAB_CAPTION: Record<Tab, string> = {
-  dashboard: "Glukose live, heutige Makros, Control Score.",
-  entries:   "Chronologisches Log — jede Mahlzeit ein Tap.",
-  engine:    "Sprich deine Mahlzeit — Glev parst Makros per KI.",
-  insights:  "Time-in-Range, Trend, Mahlzeiten-Bewertung.",
-  settings:  "ICR, Korrekturfaktor, CGM, Sprache — alles in deiner Hand.",
-};
+function tabCaption(tab: Tab, locale: string): string {
+  switch (tab) {
+    case "dashboard": return pickCopy(locale, {
+      de: "Glukose live, heutige Makros, Control Score.",
+      en: "Live glucose, today's macros, Control Score.",
+    });
+    case "entries":   return pickCopy(locale, {
+      de: "Chronologisches Log — jede Mahlzeit ein Tap.",
+      en: "Chronological log — every meal one tap away.",
+    });
+    case "engine":    return pickCopy(locale, {
+      de: "Sprich deine Mahlzeit — Glev parst Makros per KI.",
+      en: "Speak your meal — Glev parses macros with AI.",
+    });
+    case "insights":  return pickCopy(locale, {
+      de: "Time-in-Range, Trend, Mahlzeiten-Bewertung.",
+      en: "Time-in-range, trend, meal scoring.",
+    });
+    case "settings":  return pickCopy(locale, {
+      de: "ICR, Korrekturfaktor, CGM, Sprache — alles in deiner Hand.",
+      en: "ICR, correction factor, CGM, language — all in your hands.",
+    });
+  }
+}
 
 /** Bottom-nav buttons rendered to the visitor (4 buttons, like the
  *  real mobile Layout.tsx). "verlauf" is a virtual button that maps
@@ -98,10 +145,13 @@ export default function AppMockupPhone({
   hideTopCog = false,
 }: AppMockupPhoneProps = {}) {
   const [tab, setTab] = useState<Tab>(lockTab ?? "dashboard");
+  const locale = useLocale();
 
   // When locked we ignore tab changes — within-tab interactions still
   // mutate their own state inside DashboardScreen / EngineScreen / etc.
   const onTab = lockTab ? () => {} : setTab;
+
+  const liveDemoSuffix = pickCopy(locale, { de: "Live demo", en: "Live demo" });
 
   return (
     <div data-testid="app-mockup-phone" style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:22 }}>
@@ -120,10 +170,10 @@ export default function AppMockupPhone({
       {!lockTab && (
         <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:12 }}>
           <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.16em", color:ACCENT, textTransform:"uppercase" }}>
-            {TAB_LABEL[tab]} · Live demo
+            {tabLabel(tab, locale)} · {liveDemoSuffix}
           </div>
           <div style={{ fontSize:13, color:"rgba(255,255,255,0.55)", textAlign:"center", maxWidth:280, lineHeight:1.5, minHeight:36 }}>
-            {TAB_CAPTION[tab]}
+            {tabCaption(tab, locale)}
           </div>
         </div>
       )}
@@ -201,6 +251,8 @@ function ScreenInner({ tab, onTab, showBottomNav, excludeTabs, hideTopCog }: {
 }
 
 function TopHeader({ onAccount }: { onAccount?: () => void }) {
+  const locale = useLocale();
+  const ariaSettings = pickCopy(locale, { de: "Einstellungen öffnen", en: "Open settings" });
   return (
     <header style={{
       paddingTop: 46, paddingLeft: 14, paddingRight: 14, paddingBottom: 10,
@@ -215,7 +267,7 @@ function TopHeader({ onAccount }: { onAccount?: () => void }) {
         {onAccount && (
           <button
             onClick={onAccount}
-            aria-label="Einstellungen öffnen"
+            aria-label={ariaSettings}
             style={{
               width:26, height:26, borderRadius:99, padding:0,
               background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)",
@@ -240,6 +292,7 @@ function BottomNav({ tab, onTab, excludeTabs }: {
   onTab: (t: Tab) => void;
   excludeTabs: Tab[];
 }) {
+  const tNav = useTranslations("nav");
   // Map a NavId to which Tab it activates and whether it should
   // be highlighted given the currently-active Tab. Verlauf wraps
   // both `entries` and `insights` so the button is highlighted
@@ -248,7 +301,7 @@ function BottomNav({ tab, onTab, excludeTabs }: {
   const items: { id: NavId; label: string; activeTab: Tab; isActive: boolean; hidden: boolean; render: (active: boolean) => React.ReactNode }[] = [
     {
       id: "dashboard",
-      label: "DASHBOARD",
+      label: tNav("dashboard").toUpperCase(),
       activeTab: "dashboard",
       isActive: tab === "dashboard",
       hidden: excludeTabs.includes("dashboard"),
@@ -256,7 +309,7 @@ function BottomNav({ tab, onTab, excludeTabs }: {
     },
     {
       id: "glev",
-      label: "GLEV",
+      label: tNav("glev").toUpperCase(),
       activeTab: "engine",
       isActive: tab === "engine",
       hidden: excludeTabs.includes("engine"),
@@ -276,7 +329,7 @@ function BottomNav({ tab, onTab, excludeTabs }: {
     },
     {
       id: "verlauf",
-      label: "VERLAUF",
+      label: tNav("history").toUpperCase(),
       activeTab: "insights",
       isActive: tab === "insights" || tab === "entries",
       hidden: excludeTabs.includes("insights") && excludeTabs.includes("entries"),
@@ -284,7 +337,7 @@ function BottomNav({ tab, onTab, excludeTabs }: {
     },
     {
       id: "settings",
-      label: "EINSTELLUNGEN",
+      label: tNav("settings").toUpperCase(),
       activeTab: "settings",
       isActive: tab === "settings",
       hidden: excludeTabs.includes("settings"),
@@ -360,13 +413,57 @@ function Pill({ text, color }: { text: string; color: string }) {
    (with Treffer-/Spike-/Hypo-Quote tiles), Aktuell.
    ════════════════════════════════════════════════════════════════ */
 function DashboardScreen({ onLogMeal }: { onLogMeal: () => void }) {
+  const locale = useLocale();
+  const tDash = useTranslations("dashboard");
+
+  const carbsShort = CARBS_SHORT;
+  const unitsShort = UNITS_SHORT;
+
+  const ago1m       = pickCopy(locale, { de: "vor 1m",          en: "1m ago" });
+  const liveLabel   = pickCopy(locale, { de: "Glukose · live",  en: "Glucose · live" });
+  const ago2h       = pickCopy(locale, { de: "−2 h",            en: "−2 h" });
+  const ago1h       = pickCopy(locale, { de: "−1 h",            en: "−1 h" });
+  const nowLabel    = pickCopy(locale, { de: "jetzt",           en: "now" });
+  const fourMeals   = pickCopy(locale, { de: "4 Mahlzeiten",    en: "4 meals" });
+  const carbsLabel  = pickCopy(locale, { de: "Carbs",           en: "Carbs" });
+  const proteinLab  = pickCopy(locale, { de: "Protein",         en: "Protein" });
+  const fatLabel    = pickCopy(locale, { de: "Fett",            en: "Fat" });
+  const deltaWk     = tDash("delta_vs_last_week");
+
+  const recent: Array<{
+    icon: "meal" | "bolus" | "exercise";
+    title: string;
+    time: string;
+    carbs: number | null;
+    badge: string;
+    badgeColor: string;
+  }> = [
+    {
+      icon: "meal",
+      title: pickCopy(locale, { de: "Pasta mit Pesto", en: "Pasta with pesto" }),
+      time: "12:24", carbs: 62,
+      badge: tDash("outcome_good").toUpperCase(),
+      badgeColor: GREEN,
+    },
+    {
+      icon: "bolus",
+      title: `${fmtNum(locale, 4.2)} ${unitsShort} ${pickCopy(locale, { de: "Bolus", en: "bolus" })}`,
+      time: "12:20", carbs: null, badge: "+1H 138", badgeColor: GREEN,
+    },
+    {
+      icon: "exercise",
+      title: pickCopy(locale, { de: "Lauf · 32 min", en: "Run · 32 min" }),
+      time: "11:10", carbs: null, badge: "−24 mg/dL", badgeColor: ACCENT,
+    },
+  ];
+
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
       {/* Live glucose hero */}
       <MockCard style={{ background:`linear-gradient(135deg, ${ACCENT}10, ${SURFACE})`, borderColor:`${ACCENT}30` }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
-          <CardLabel text="Glucose · live" color={ACCENT}/>
-          <div style={{ fontSize:8, color:"rgba(255,255,255,0.4)" }}>vor 1m</div>
+          <CardLabel text={liveLabel} color={ACCENT}/>
+          <div style={{ fontSize:8, color:"rgba(255,255,255,0.4)" }}>{ago1m}</div>
         </div>
         <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
           <div style={{ fontSize:42, fontWeight:800, letterSpacing:"-0.04em", color:GREEN, fontFamily:"var(--font-mono)" }}>142</div>
@@ -379,7 +476,7 @@ function DashboardScreen({ onLogMeal }: { onLogMeal: () => void }) {
         {/* Inline mini sparkline */}
         <Sparkline values={[88,92,95,99,108,118,126,134,142]} color={GREEN}/>
         <div style={{ display:"flex", justifyContent:"space-between", fontSize:8, color:"rgba(255,255,255,0.3)", marginTop:4 }}>
-          <span>−2 h</span><span>−1 h</span><span>jetzt</span>
+          <span>{ago2h}</span><span>{ago1h}</span><span>{nowLabel}</span>
         </div>
       </MockCard>
 
@@ -394,32 +491,32 @@ function DashboardScreen({ onLogMeal }: { onLogMeal: () => void }) {
           cursor:"pointer",
         }}
       >
-        + Mahlzeit loggen
+        {tDash("log_meal_cta")}
       </button>
 
       {/* Heutige Makros */}
       <MockCard>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-          <CardLabel text="Heutige Makros"/>
-          <div style={{ fontSize:9, color:"rgba(255,255,255,0.45)" }}>4 Mahlzeiten</div>
+          <CardLabel text={tDash("daily_macros")}/>
+          <div style={{ fontSize:9, color:"rgba(255,255,255,0.45)" }}>{fourMeals}</div>
         </div>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:10 }}>
-          <MacroRing label="Carbs"   value={186} target={250} color={ORANGE} unit="g"/>
-          <MacroRing label="Protein" value={94}  target={120} color={"#3B82F6"} unit="g"/>
-          <MacroRing label="Fett"    value={62}  target={80}  color={PURPLE} unit="g"/>
+          <MacroRing label={carbsLabel} value={186} target={250} color={ORANGE} unit="g"/>
+          <MacroRing label={proteinLab} value={94}  target={120} color={"#3B82F6"} unit="g"/>
+          <MacroRing label={fatLabel}   value={62}  target={80}  color={PURPLE} unit="g"/>
         </div>
       </MockCard>
 
       {/* Control Score · 7T — hero card with STARK badge */}
       <MockCard>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-          <CardLabel text="Control Score · 7T"/>
-          <Pill text="STARK" color={GREEN}/>
+          <CardLabel text={tDash("control_score_label")}/>
+          <Pill text={tDash("badge_strong")} color={GREEN}/>
         </div>
         <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
           <div style={{ fontSize:32, fontWeight:800, letterSpacing:"-0.03em", color:"#fff", fontFamily:"var(--font-mono)" }}>87</div>
           <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)" }}>/ 100</div>
-          <div style={{ marginLeft:"auto", fontSize:9, color:GREEN }}>+4 ggü. Vorwoche</div>
+          <div style={{ marginLeft:"auto", fontSize:9, color:GREEN }}>+4 {deltaWk}</div>
         </div>
         <div style={{ height:5, marginTop:8, background:"rgba(255,255,255,0.06)", borderRadius:99, overflow:"hidden" }}>
           <div style={{ height:"100%", width:"87%", background:`linear-gradient(90deg, ${ACCENT}, ${GREEN})`, borderRadius:99 }}/>
@@ -429,28 +526,24 @@ function DashboardScreen({ onLogMeal }: { onLogMeal: () => void }) {
       {/* Treffer / Spike / Hypo tiles — matches buildCards() in
           app/(protected)/dashboard/page.tsx */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:8 }}>
-        <RateTile label="Treffer-Quote" value={78} sub="14 gut" color={GREEN}/>
-        <RateTile label="Spike-Quote"   value={12} sub="Hyperglykämie" color={ORANGE}/>
-        <RateTile label="Hypo-Quote"    value={6}  sub="Hypoglykämie" color={PINK}/>
+        <RateTile label={tDash("good_label")}  value={78} sub={tDash("good_sub", { n: 14 })}  color={GREEN}/>
+        <RateTile label={tDash("spike_label")} value={12} sub={tDash("spike_sub")} color={ORANGE}/>
+        <RateTile label={tDash("hypo_label")}  value={6}  sub={tDash("hypo_sub")}  color={PINK}/>
       </div>
 
       {/* Aktuell — recent log */}
       <MockCard style={{ padding:"10px 0 4px" }}>
         <div style={{ padding:"0 14px 8px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-          <CardLabel text="Aktuell"/>
-          <div style={{ fontSize:9, color:ACCENT, fontWeight:600 }}>Alle ansehen →</div>
+          <CardLabel text={tDash("recent_label")}/>
+          <div style={{ fontSize:9, color:ACCENT, fontWeight:600 }}>{tDash("see_all")}</div>
         </div>
-        {[
-          { icon:"meal" as const,     title:"Pasta mit Pesto",    time:"12:24", carbs:62, badge:"GUT",        badgeColor:GREEN },
-          { icon:"bolus" as const,    title:"4,2 IE Bolus",       time:"12:20", carbs:null, badge:"+1H 138",  badgeColor:GREEN },
-          { icon:"exercise" as const, title:"Lauf · 32 min",      time:"11:10", carbs:null, badge:"−24 mg/dL", badgeColor:ACCENT },
-        ].map((r, i) => (
+        {recent.map((r, i) => (
           <div key={i} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 14px", borderTop:`1px solid ${BORDER}` }}>
             <EntryIcon kind={r.icon}/>
             <div style={{ flex:1, minWidth:0 }}>
               <div style={{ fontSize:11, fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{r.title}</div>
               <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>
-                {r.time}{r.carbs != null ? ` · ${r.carbs}g KH` : ""}
+                {r.time}{r.carbs != null ? ` · ${r.carbs}${carbsShort}` : ""}
               </div>
             </div>
             <Pill text={r.badge} color={r.badgeColor}/>
@@ -540,6 +633,7 @@ function EntryIcon({ kind }: { kind: "meal" | "bolus" | "exercise" | "basal" }) 
    components/Layout.tsx.
    ════════════════════════════════════════════════════════════════ */
 function VerlaufScreen({ tab, onSubTab, showSubToggle }: { tab: "insights" | "entries"; onSubTab: (t: Tab) => void; showSubToggle: boolean }) {
+  const tHist = useTranslations("history");
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
       {showSubToggle && (
@@ -550,8 +644,8 @@ function VerlaufScreen({ tab, onSubTab, showSubToggle }: { tab: "insights" | "en
           borderRadius:9,
         }}>
           {([
-            { id:"insights" as const, label:"Insights" },
-            { id:"entries"  as const, label:"Einträge" },
+            { id:"insights" as const, label: tHist("insights") },
+            { id:"entries"  as const, label: tHist("entries") },
           ]).map(s => {
             const active = tab === s.id;
             return (
@@ -577,9 +671,20 @@ function VerlaufScreen({ tab, onSubTab, showSubToggle }: { tab: "insights" | "en
    ──────────────────────────────────────────────────────────────── */
 function EntriesScreen() {
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+  const locale = useLocale();
+  const tHist = useTranslations("history");
+  const tDash = useTranslations("dashboard");
+  const tIns  = useTranslations("engineLog");
 
   type EvalKind = "GUT" | "SPIKE" | "HYPO";
   const evalColor: Record<EvalKind, string> = { GUT: GREEN, SPIKE: ORANGE, HYPO: PINK };
+  // Always-uppercase outcome glyph — language-agnostic at marketing
+  // surface like the real Pill component, but still flips DE→EN.
+  const evalLabel: Record<EvalKind, string> = {
+    GUT:   tDash("outcome_good").toUpperCase(),
+    SPIKE: tDash("outcome_spike").toUpperCase(),
+    HYPO:  pickCopy(locale, { de: "HYPO", en: "HYPO" }),
+  };
 
   const meals: Array<{
     meal: string; time: string;
@@ -587,10 +692,40 @@ function EntriesScreen() {
     glucose: number; insulin: number;
     evaluation: EvalKind;
   }> = [
-    { meal:"Haferflocken, Blaubeeren, Mandelmilch", time:"08:14", carbs:52, protein:12, fat:8,  fiber:6, calories:328, glucose:108, insulin:3.5, evaluation:"GUT" },
-    { meal:"Chicken Bowl mit Reis und Avocado",     time:"12:41", carbs:68, protein:38, fat:18, fiber:5, calories:590, glucose:124, insulin:4.8, evaluation:"SPIKE" },
-    { meal:"Linsencurry mit Naan",                  time:"19:22", carbs:74, protein:22, fat:12, fiber:9, calories:490, glucose:115, insulin:5.2, evaluation:"GUT" },
+    {
+      meal: pickCopy(locale, { de: "Haferflocken, Blaubeeren, Mandelmilch", en: "Oatmeal, blueberries, almond milk" }),
+      time:"08:14", carbs:52, protein:12, fat:8,  fiber:6, calories:328, glucose:108, insulin:3.5, evaluation:"GUT",
+    },
+    {
+      meal: pickCopy(locale, { de: "Chicken Bowl mit Reis und Avocado", en: "Chicken bowl with rice and avocado" }),
+      time:"12:41", carbs:68, protein:38, fat:18, fiber:5, calories:590, glucose:124, insulin:4.8, evaluation:"SPIKE",
+    },
+    {
+      meal: pickCopy(locale, { de: "Linsencurry mit Naan", en: "Lentil curry with naan" }),
+      time:"19:22", carbs:74, protein:22, fat:12, fiber:9, calories:490, glucose:115, insulin:5.2, evaluation:"GUT",
+    },
   ];
+
+  const carbsShort = CARBS_SHORT;
+  const unitsShort = UNITS_SHORT;
+  const bolusLabel = tIns("type_bolus");         // "Bolus"
+  const bgBefore   = tDash("bg_before");
+  const carbsLab   = tDash("carbs");
+  const proteinLab = tDash("protein");
+  const fatLab     = tDash("fat");
+  const fiberLab   = pickCopy(locale, { de: "Ballaststoffe", en: "Fiber" });
+  const caloriesLb = tDash("calories");
+  const insulinLab = tDash("insulin");
+
+  const headerCount = pickCopy(locale, { de: `3 von 47`, en: `3 of 47` });
+  const expandHint  = pickCopy(locale, {
+    de: "Klicke eine Zeile zum Aufklappen.",
+    en: "Click a row to expand.",
+  });
+  const addMealCta  = pickCopy(locale, { de: "+ Mahlzeit", en: "+ Meal" });
+  const filtersChip = pickCopy(locale, { de: "Filters · 2", en: "Filters · 2" });
+  const searchPh    = pickCopy(locale, { de: "Suchen…", en: "Search…" });
+  const yesterdayHr = pickCopy(locale, { de: "─ Gestern ─", en: "─ Yesterday ─" });
 
   const MealStat = ({ l, v, c }: { l: string; v: string; c?: string }) => (
     <div style={{ background:"rgba(255,255,255,0.03)", border:`1px solid ${BORDER}`, borderRadius:8, padding:"6px 8px" }}>
@@ -602,11 +737,11 @@ function EntriesScreen() {
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
       <div style={{ padding:"4px 2px 2px", display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
-        <div style={{ fontSize:13, fontWeight:700, letterSpacing:"-0.02em" }}>Einträge</div>
-        <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)" }}>3 von 47</div>
+        <div style={{ fontSize:13, fontWeight:700, letterSpacing:"-0.02em" }}>{tHist("entries")}</div>
+        <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)" }}>{headerCount}</div>
       </div>
       <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)", padding:"0 2px 4px" }}>
-        Klicke eine Zeile zum Aufklappen.
+        {expandHint}
       </div>
 
       {/* + Mahlzeit dashed CTA */}
@@ -616,7 +751,7 @@ function EntriesScreen() {
         color:ACCENT, fontSize:10, fontWeight:700,
         cursor:"pointer", letterSpacing:"-0.01em",
       }}>
-        + Mahlzeit
+        {addMealCta}
       </button>
 
       {/* Filters + search row */}
@@ -628,7 +763,7 @@ function EntriesScreen() {
           color:"rgba(255,255,255,0.55)", fontSize:9, fontWeight:600,
         }}>
           <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
-          Filters · 2
+          {filtersChip}
         </div>
         <div style={{
           flex:1, display:"flex", alignItems:"center", gap:5,
@@ -637,7 +772,7 @@ function EntriesScreen() {
           color:"rgba(255,255,255,0.4)", fontSize:9,
         }}>
           <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          Suchen…
+          {searchPh}
         </div>
       </div>
 
@@ -657,8 +792,8 @@ function EntriesScreen() {
                   <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)", fontFamily:"var(--font-mono)", flexShrink:0 }}>{m.time}</div>
                 </div>
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:6, marginTop:3 }}>
-                  <div style={{ fontSize:9.5, color:"rgba(255,255,255,0.5)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{m.carbs}g KH · {m.insulin} IE Bolus</div>
-                  <Pill text={m.evaluation} color={evColor}/>
+                  <div style={{ fontSize:9.5, color:"rgba(255,255,255,0.5)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{m.carbs}{carbsShort} · {fmtNum(locale, m.insulin)} {unitsShort} {bolusLabel}</div>
+                  <Pill text={evalLabel[m.evaluation]} color={evColor}/>
                 </div>
               </div>
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0, transform: isOpen ? "rotate(180deg)" : "rotate(0deg)", transition:"transform 0.2s" }}>
@@ -669,15 +804,15 @@ function EntriesScreen() {
             <div style={{ maxHeight: isOpen ? 220 : 0, overflow:"hidden", transition:"max-height 0.25s ease" }}>
               <div style={{ marginTop:10, paddingTop:10, borderTop:`1px solid rgba(255,255,255,0.06)`, display:"flex", flexDirection:"column", gap:8 }}>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
-                  <MealStat l="Carbs"         v={`${m.carbs}g`}        c={ORANGE}/>
-                  <MealStat l="Protein"       v={`${m.protein}g`}      c={PURPLE}/>
-                  <MealStat l="Fett"          v={`${m.fat}g`}          c={ACCENT}/>
-                  <MealStat l="Ballaststoffe" v={`${m.fiber}g`}/>
-                  <MealStat l="Kalorien"      v={`${m.calories} kcal`} c={GREEN}/>
+                  <MealStat l={carbsLab}   v={`${m.carbs}g`}        c={ORANGE}/>
+                  <MealStat l={proteinLab} v={`${m.protein}g`}      c={PURPLE}/>
+                  <MealStat l={fatLab}     v={`${m.fat}g`}          c={ACCENT}/>
+                  <MealStat l={fiberLab}   v={`${m.fiber}g`}/>
+                  <MealStat l={caloriesLb} v={`${m.calories} kcal`} c={GREEN}/>
                 </div>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, fontSize:10, color:"rgba(255,255,255,0.55)", padding:"4px 2px" }}>
-                  <span>BG vorher: <strong style={{ color:"#fff", fontWeight:700 }}>{m.glucose}</strong> mg/dL</span>
-                  <span>Bolus: <strong style={{ color:"#fff", fontWeight:700 }}>{m.insulin}</strong> IE</span>
+                  <span>{bgBefore}: <strong style={{ color:"#fff", fontWeight:700 }}>{m.glucose}</strong> mg/dL</span>
+                  <span>{insulinLab}: <strong style={{ color:"#fff", fontWeight:700 }}>{fmtNum(locale, m.insulin)}</strong> {unitsShort}</span>
                 </div>
               </div>
             </div>
@@ -686,7 +821,7 @@ function EntriesScreen() {
       })}
 
       <div style={{ textAlign:"center", fontSize:9, color:"rgba(255,255,255,0.3)", padding:"12px 0 4px" }}>
-        ─ Gestern ─
+        {yesterdayHr}
       </div>
     </div>
   );
@@ -703,17 +838,24 @@ function EngineScreen({ onLogged }: { onLogged: () => void }) {
   const [step, setStep] = useState<EngineStep>(1);
   const [micState, setMicState] = useState<"idle" | "listening" | "parsing">("idle");
   const [confirmed, setConfirmed] = useState(false);
+  const locale = useLocale();
+  const tEng = useTranslations("engine");
 
   // Pre-filled deterministic seed data so step 2 + step 3 render full
   // content without the visitor having to actually speak / type.
   const meal = {
-    desc:    "Pasta mit Pesto, 250g",
+    desc:    pickCopy(locale, { de: "Pasta mit Pesto, 250g", en: "Pasta with pesto, 250g" }),
     glucose: 115,
     carbs:   62,
     protein: 18,
     fat:     22,
     fiber:   4,
   };
+
+  const subtitleEng = pickCopy(locale, {
+    de: "Sprich deine Mahlzeit — Glev parst Makros und schlägt eine Insulin-Dosis vor.",
+    en: "Speak your meal — Glev parses macros and suggests an insulin dose.",
+  });
 
   function tapMic() {
     if (micState !== "idle") return;
@@ -738,10 +880,10 @@ function EngineScreen({ onLogged }: { onLogged: () => void }) {
       <div>
         <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
           <GlevLogo size={18}/>
-          <h1 style={{ fontSize:14, fontWeight:800, letterSpacing:"-0.03em", margin:0 }}>Glev Engine</h1>
+          <h1 style={{ fontSize:14, fontWeight:800, letterSpacing:"-0.03em", margin:0 }}>{tEng("title")}</h1>
         </div>
         <p style={{ color:"rgba(255,255,255,0.35)", fontSize:9.5, margin:0, lineHeight:1.4 }}>
-          Sprich deine Mahlzeit — Glev parst Makros und schlägt eine Insulin-Dosis vor.
+          {subtitleEng}
         </p>
       </div>
 
@@ -753,9 +895,9 @@ function EngineScreen({ onLogged }: { onLogged: () => void }) {
         borderRadius:10, padding:4,
       }}>
         {([
-          { id:1 as EngineStep, label:"1 · Essen" },
-          { id:2 as EngineStep, label:"2 · Makros" },
-          { id:3 as EngineStep, label:"3 · Ergebnis" },
+          { id:1 as EngineStep, label:`1 · ${tEng("step_label_food")}` },
+          { id:2 as EngineStep, label:`2 · ${tEng("step_label_macros")}` },
+          { id:3 as EngineStep, label:`3 · ${tEng("step_label_result")}` },
         ]).map(s => {
           const active = step === s.id;
           const reachable = s.id <= step;
@@ -790,6 +932,18 @@ function EngineStepFood({ meal, micState, onMic, onSkip }: {
   onMic: () => void;
   onSkip: () => void;
 }) {
+  const locale = useLocale();
+  const tEng = useTranslations("engine");
+  const micLabel = micState === "listening"
+    ? pickCopy(locale, { de: "HÖRE ZU…",            en: "LISTENING…" })
+    : micState === "parsing"
+    ? pickCopy(locale, { de: "VERARBEITE…",         en: "PROCESSING…" })
+    : pickCopy(locale, { de: "TIPPEN ZUM SPRECHEN", en: "TAP TO SPEAK" });
+  const micAria = pickCopy(locale, { de: "Sprach-Eingabe starten", en: "Start voice input" });
+  const skipLabel = pickCopy(locale, { de: "Stattdessen tippen →", en: "Type instead →" });
+  const example = locale === "en"
+    ? <>e.g. &ldquo;Pasta with tomato sauce,<br/>80g pasta and an apple&rdquo;</>
+    : <>z.&nbsp;B. „Pasta mit Tomatensauce,<br/>80g Nudeln und Apfel"</>;
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
       {/* Aktueller Glukosewert chip */}
@@ -801,7 +955,7 @@ function EngineStepFood({ meal, micState, onMic, onSkip }: {
         <div style={{ display:"flex", alignItems:"center", gap:6 }}>
           <span style={{ width:6, height:6, borderRadius:99, background:GREEN, boxShadow:`0 0 6px ${GREEN}` }}/>
           <span style={{ fontSize:9, fontWeight:700, color:"rgba(255,255,255,0.65)", letterSpacing:"0.06em", textTransform:"uppercase" }}>
-            Aktueller Glukosewert
+            {tEng("current_glucose")}
           </span>
         </div>
         <div style={{ fontSize:13, fontWeight:800, color:GREEN, fontFamily:"var(--font-mono)" }}>
@@ -828,7 +982,7 @@ function EngineStepFood({ meal, micState, onMic, onSkip }: {
           )}
           <button
             onClick={onMic}
-            aria-label="Sprach-Eingabe starten"
+            aria-label={micAria}
             style={{
               position:"absolute", inset:0, borderRadius:"50%", padding:0,
               border: micState === "listening"
@@ -860,12 +1014,10 @@ function EngineStepFood({ meal, micState, onMic, onSkip }: {
                : micState === "parsing"   ? ORANGE
                : "rgba(255,255,255,0.55)",
         }}>
-          {micState === "listening" ? "HÖRE ZU…"
-            : micState === "parsing" ? "VERARBEITE…"
-            : "TIPPEN ZUM SPRECHEN"}
+          {micLabel}
         </div>
         <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", letterSpacing:"0.04em", textAlign:"center", lineHeight:1.5 }}>
-          z. B. „Pasta mit Tomatensauce,<br/>80g Nudeln und Apfel"
+          {example}
         </div>
       </div>
 
@@ -876,7 +1028,7 @@ function EngineStepFood({ meal, micState, onMic, onSkip }: {
         color:"rgba(255,255,255,0.55)", fontSize:10, fontWeight:600,
         cursor:"pointer", letterSpacing:"-0.005em",
       }}>
-        Stattdessen tippen →
+        {skipLabel}
       </button>
     </div>
   );
@@ -887,6 +1039,19 @@ function EngineStepMacros({ meal, onBack, onContinue }: {
   onBack: () => void;
   onContinue: () => void;
 }) {
+  const locale = useLocale();
+  const tEng = useTranslations("engine");
+  const stepTitle = pickCopy(locale, { de: "Makros prüfen", en: "Check macros" });
+  const stepHint  = pickCopy(locale, {
+    de: "Glev hat die Werte aus deiner Mahlzeit geschätzt. Du kannst alles überschreiben.",
+    en: "Glev estimated the values from your meal. You can override anything.",
+  });
+  const sourceChip   = pickCopy(locale, { de: "Quelle · Datenbank ✓", en: "Source · Database ✓" });
+  const sourceCredit = pickCopy(locale, { de: "Open Food Facts + USDA", en: "Open Food Facts + USDA" });
+  const mealLabel = pickCopy(locale, { de: "Mahlzeit", en: "Meal" });
+  const classifyLabel = pickCopy(locale, { de: "Klassifizierung", en: "Classification" });
+  const balanced  = pickCopy(locale, { de: "Ausgewogen", en: "Balanced" });
+
   const inp: React.CSSProperties = {
     background:"#0D0D12", border:`1px solid ${BORDER}`, borderRadius:8,
     padding:"7px 10px", color:"#fff", fontSize:11, outline:"none", width:"100%",
@@ -900,9 +1065,9 @@ function EngineStepMacros({ meal, onBack, onContinue }: {
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
       <div style={{ padding:"2px 2px" }}>
-        <div style={{ fontSize:13, fontWeight:800, letterSpacing:"-0.02em", color:"#fff", marginBottom:2 }}>Makros prüfen</div>
+        <div style={{ fontSize:13, fontWeight:800, letterSpacing:"-0.02em", color:"#fff", marginBottom:2 }}>{stepTitle}</div>
         <div style={{ fontSize:9.5, color:"rgba(255,255,255,0.5)", lineHeight:1.4 }}>
-          Glev hat die Werte aus deiner Mahlzeit geschätzt. Du kannst alles überschreiben.
+          {stepHint}
         </div>
       </div>
 
@@ -915,10 +1080,10 @@ function EngineStepMacros({ meal, onBack, onContinue }: {
         <div style={{ display:"flex", alignItems:"center", gap:6 }}>
           <span style={{ width:5, height:5, borderRadius:99, background:GREEN, boxShadow:`0 0 5px ${GREEN}` }}/>
           <span style={{ fontSize:9, color:"rgba(255,255,255,0.6)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:700 }}>
-            Quelle · Datenbank ✓
+            {sourceChip}
           </span>
         </div>
-        <span style={{ fontSize:8, color:"rgba(255,255,255,0.35)" }}>Open Food Facts + USDA</span>
+        <span style={{ fontSize:8, color:"rgba(255,255,255,0.35)" }}>{sourceCredit}</span>
       </div>
 
       <div style={{
@@ -926,39 +1091,39 @@ function EngineStepMacros({ meal, onBack, onContinue }: {
         padding:"12px", display:"flex", flexDirection:"column", gap:9,
       }}>
         <div>
-          <label style={labelStyle}>Mahlzeit</label>
+          <label style={labelStyle}>{mealLabel}</label>
           <input style={inp} value={meal.desc} readOnly/>
         </div>
 
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, rowGap:9 }}>
           <div>
-            <label style={labelStyle}>Kohlenhydrate (g)</label>
+            <label style={labelStyle}>{tEng("carbs_label")}</label>
             <input style={inp} value={meal.carbs} readOnly/>
           </div>
           <div>
             <label style={labelStyle}>
-              Ballaststoffe <span style={{ textTransform:"none", color:"rgba(255,255,255,0.3)", fontSize:8, fontWeight:500 }}>opt.</span>
+              {tEng("fiber_label")} <span style={{ textTransform:"none", color:"rgba(255,255,255,0.3)", fontSize:8, fontWeight:500 }}>{tEng("optional_short")}</span>
             </label>
             <input style={inp} value={meal.fiber} readOnly/>
           </div>
           <div>
-            <label style={labelStyle}>Protein (g)</label>
+            <label style={labelStyle}>{tEng("protein_label")}</label>
             <input style={inp} value={meal.protein} readOnly/>
           </div>
           <div>
-            <label style={labelStyle}>Fett (g)</label>
+            <label style={labelStyle}>{tEng("fat_label")}</label>
             <input style={inp} value={meal.fat} readOnly/>
           </div>
         </div>
 
         <div>
-          <label style={labelStyle}>Klassifizierung</label>
+          <label style={labelStyle}>{classifyLabel}</label>
           <div style={{
             ...inp, display:"flex", alignItems:"center", gap:7,
             color:"#fff", fontWeight:600,
           }}>
             <span style={{ width:7, height:7, borderRadius:"50%", background:ACCENT, boxShadow:`0 0 5px ${ACCENT}`, flexShrink:0 }}/>
-            Ausgewogen
+            {balanced}
           </div>
         </div>
       </div>
@@ -968,14 +1133,14 @@ function EngineStepMacros({ meal, onBack, onContinue }: {
           flex:"0 0 auto", padding:"10px 14px", borderRadius:10, border:`1px solid ${BORDER}`,
           background:"transparent", color:"rgba(255,255,255,0.7)", fontSize:11, fontWeight:600,
           cursor:"pointer",
-        }}>← Zurück</button>
+        }}>{tEng("btn_back")}</button>
         <button onClick={onContinue} style={{
           flex:1, padding:"10px", borderRadius:10, border:"none",
           background:`linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
           color:"#fff", fontSize:11, fontWeight:700, cursor:"pointer",
           boxShadow:`0 4px 18px ${ACCENT}40`,
         }}>
-          Bolus berechnen →
+          {tEng("btn_calculate_bolus")}
         </button>
       </div>
     </div>
@@ -988,32 +1153,67 @@ function EngineStepResult({ meal, confirmed, onBack, onConfirm }: {
   onBack: () => void;
   onConfirm: () => void;
 }) {
+  const locale = useLocale();
+  const tEng = useTranslations("engine");
+
+  const stepTitle = pickCopy(locale, { de: "Deine Einschätzung", en: "Your recommendation" });
+  const stepHint  = pickCopy(locale, {
+    de: "Empfehlung basierend auf historischen Mahlzeiten + ICR-Formel.",
+    en: "Recommendation based on historical meals + ICR formula.",
+  });
+  const glucoseBefore = pickCopy(locale, { de: "Glukose vorher", en: "Glucose before" });
+  const inRange      = pickCopy(locale, { de: "im Zielbereich", en: "in range" });
+  const carbsLabel   = pickCopy(locale, { de: "Carbs", en: "Carbs" });
+  const moderate     = pickCopy(locale, { de: "moderat", en: "moderate" });
+  const confidenceHigh = pickCopy(locale, { de: "HOCH", en: "HIGH" });
+  const reasonLabel  = pickCopy(locale, { de: "Begründung", en: "Reasoning" });
+  const reasonBody   = pickCopy(locale, {
+    de: `Basierend auf 4 ähnlichen früheren Mahlzeiten mit GUTEM Ergebnis (±12 ${CARBS_SHORT}, ±35 mg/dL). Historischer Durchschnitt: ${fmtNum(locale, 4.2)} ${UNITS_SHORT}.`,
+    en: `Based on 4 similar past meals with GOOD outcome (±12 ${CARBS_SHORT}, ±35 mg/dL). Historical average: ${fmtNum(locale, 4.2)} ${UNITS_SHORT}.`,
+  });
+  const cellCarb     = pickCopy(locale, { de: "Carb", en: "Carb" });
+  const cellCorr     = pickCopy(locale, { de: "Korrektur", en: "Correction" });
+  const cellTotal    = pickCopy(locale, { de: "Gesamt", en: "Total" });
+  const recommended  = pickCopy(locale, { de: "empfohlen", en: "recommended" });
+  const unitsShort   = UNITS_SHORT;
+  const dose         = fmtNum(locale, 4.2);
+  const carbDose     = fmtNum(locale, 4.1);
+  const corrDose     = fmtNum(locale, 0.1);
+  const disclaimerBody = pickCopy(locale, {
+    de: "Glev Engine ist nur eine Entscheidungshilfe. Bitte konsultiere immer deinen Diabetologen.",
+    en: "Glev Engine provides decision support only. Always consult your diabetologist.",
+  });
+  const savedLabel = pickCopy(locale, {
+    de: "✓ Gespeichert — öffne Einträge…",
+    en: "✓ Saved — opening entries…",
+  });
+
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
       <div style={{ padding:"2px 2px" }}>
-        <div style={{ fontSize:13, fontWeight:800, letterSpacing:"-0.02em", color:"#fff", marginBottom:2 }}>Deine Einschätzung</div>
+        <div style={{ fontSize:13, fontWeight:800, letterSpacing:"-0.02em", color:"#fff", marginBottom:2 }}>{stepTitle}</div>
         <div style={{ fontSize:9.5, color:"rgba(255,255,255,0.5)", lineHeight:1.4 }}>
-          Empfehlung basierend auf historischen Mahlzeiten + ICR-Formel.
+          {stepHint}
         </div>
       </div>
 
       {/* Input summary — Glukose + Carbs */}
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
         <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:12, padding:"10px 12px" }}>
-          <div style={{ fontSize:8, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase", marginBottom:3 }}>Glukose vorher</div>
+          <div style={{ fontSize:8, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase", marginBottom:3 }}>{glucoseBefore}</div>
           <div style={{ display:"flex", alignItems:"baseline", gap:4 }}>
             <span style={{ fontSize:18, fontWeight:800, color:"#60A5FA", letterSpacing:"-0.02em", fontFamily:"var(--font-mono)" }}>{meal.glucose}</span>
             <span style={{ fontSize:8, color:"rgba(255,255,255,0.35)" }}>mg/dL</span>
           </div>
-          <div style={{ fontSize:8, color:"rgba(255,255,255,0.25)", marginTop:2 }}>im Zielbereich</div>
+          <div style={{ fontSize:8, color:"rgba(255,255,255,0.25)", marginTop:2 }}>{inRange}</div>
         </div>
         <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:12, padding:"10px 12px" }}>
-          <div style={{ fontSize:8, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase", marginBottom:3 }}>Carbs</div>
+          <div style={{ fontSize:8, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase", marginBottom:3 }}>{carbsLabel}</div>
           <div style={{ display:"flex", alignItems:"baseline", gap:4 }}>
             <span style={{ fontSize:18, fontWeight:800, color:ORANGE, letterSpacing:"-0.02em", fontFamily:"var(--font-mono)" }}>{meal.carbs}</span>
             <span style={{ fontSize:8, color:"rgba(255,255,255,0.35)" }}>g</span>
           </div>
-          <div style={{ fontSize:8, color:"rgba(255,255,255,0.25)", marginTop:2 }}>moderat</div>
+          <div style={{ fontSize:8, color:"rgba(255,255,255,0.25)", marginTop:2 }}>{moderate}</div>
         </div>
       </div>
 
@@ -1021,28 +1221,28 @@ function EngineStepResult({ meal, confirmed, onBack, onConfirm }: {
       <div style={{ background:SURFACE, border:`1px solid ${GREEN}30`, borderRadius:14, padding:"14px" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10 }}>
           <div>
-            <div style={{ fontSize:8, color:"rgba(255,255,255,0.35)", letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:4 }}>Empfohlene Dosis</div>
+            <div style={{ fontSize:8, color:"rgba(255,255,255,0.35)", letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:4 }}>{tEng("recommended_dose_label")}</div>
             <div style={{ fontSize:36, fontWeight:900, letterSpacing:"-0.04em", lineHeight:1, color:"#fff", fontFamily:"var(--font-mono)" }}>
-              4,2<span style={{ fontSize:11, fontWeight:400, color:"rgba(255,255,255,0.4)", marginLeft:4, fontFamily:"var(--font-inter), Inter, system-ui, sans-serif" }}>IE</span>
+              {dose}<span style={{ fontSize:11, fontWeight:400, color:"rgba(255,255,255,0.4)", marginLeft:4, fontFamily:"var(--font-inter), Inter, system-ui, sans-serif" }}>{unitsShort}</span>
             </div>
           </div>
           <div style={{ textAlign:"right" }}>
-            <div style={{ fontSize:8, color:"rgba(255,255,255,0.35)", marginBottom:3 }}>Konfidenz</div>
-            <span style={{ padding:"4px 10px", borderRadius:99, fontSize:9, fontWeight:700, background:`${GREEN}18`, color:GREEN, border:`1px solid ${GREEN}40` }}>HOCH</span>
-            <div style={{ fontSize:8, color:"rgba(255,255,255,0.3)", marginTop:3 }}>Historische Daten</div>
+            <div style={{ fontSize:8, color:"rgba(255,255,255,0.35)", marginBottom:3 }}>{tEng("confidence")}</div>
+            <span style={{ padding:"4px 10px", borderRadius:99, fontSize:9, fontWeight:700, background:`${GREEN}18`, color:GREEN, border:`1px solid ${GREEN}40` }}>{confidenceHigh}</span>
+            <div style={{ fontSize:8, color:"rgba(255,255,255,0.3)", marginTop:3 }}>{tEng("source_historical")}</div>
           </div>
         </div>
         <div style={{ marginTop:10, padding:"8px 10px", background:"rgba(0,0,0,0.3)", borderRadius:8 }}>
-          <div style={{ fontSize:7.5, color:"rgba(255,255,255,0.3)", marginBottom:2, letterSpacing:"0.05em", textTransform:"uppercase" }}>Begründung</div>
+          <div style={{ fontSize:7.5, color:"rgba(255,255,255,0.3)", marginBottom:2, letterSpacing:"0.05em", textTransform:"uppercase" }}>{reasonLabel}</div>
           <div style={{ fontSize:9.5, color:"rgba(255,255,255,0.65)", lineHeight:1.45 }}>
-            Basierend auf 4 ähnlichen früheren Mahlzeiten mit GUTEM Ergebnis (±12g KH, ±35 mg/dL). Historischer Durchschnitt: 4,2 IE.
+            {reasonBody}
           </div>
         </div>
         <div style={{ marginTop:8, display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6 }}>
           {[
-            { label:"Carb",       val:"4,1 IE",  sub:"62g ÷ 15",      c:ORANGE },
-            { label:"Korrektur",  val:"+0,1 IE", sub:"(115−110)/50",  c:ACCENT },
-            { label:"Gesamt",     val:"4,2 IE",  sub:"empfohlen",     c:GREEN  },
+            { label:cellCarb,  val:`${carbDose} ${unitsShort}`,  sub:`${meal.carbs}g ÷ 15`,    c:ORANGE },
+            { label:cellCorr,  val:`+${corrDose} ${unitsShort}`, sub:`(${meal.glucose}−110)/50`, c:ACCENT },
+            { label:cellTotal, val:`${dose} ${unitsShort}`,      sub:recommended,              c:GREEN  },
           ].map(d => (
             <div key={d.label} style={{ background:"rgba(255,255,255,0.03)", borderRadius:7, padding:"6px 4px", textAlign:"center" }}>
               <div style={{ fontSize:7.5, color:"rgba(255,255,255,0.3)", marginBottom:2 }}>{d.label}</div>
@@ -1059,8 +1259,8 @@ function EngineStepResult({ meal, confirmed, onBack, onConfirm }: {
         padding:"7px 10px", borderRadius:8, background:"rgba(255,255,255,0.02)",
         border:`1px solid ${BORDER}`,
       }}>
-        <strong style={{ color:"rgba(255,255,255,0.65)" }}>Wichtig:</strong>{" "}
-        Glev Engine ist nur eine Entscheidungshilfe. Bitte konsultiere immer deinen Diabetologen.
+        <strong style={{ color:"rgba(255,255,255,0.65)" }}>{tEng("disclaimer_label")}</strong>{" "}
+        {disclaimerBody}
       </div>
 
       <div style={{ display:"flex", gap:6 }}>
@@ -1068,7 +1268,7 @@ function EngineStepResult({ meal, confirmed, onBack, onConfirm }: {
           flex:"0 0 auto", padding:"10px 14px", borderRadius:10, border:`1px solid ${BORDER}`,
           background:"transparent", color:"rgba(255,255,255,0.7)", fontSize:11, fontWeight:600,
           cursor: confirmed ? "default" : "pointer", opacity: confirmed ? 0.4 : 1,
-        }}>← Nochmal anpassen</button>
+        }}>{tEng("btn_adjust_again")}</button>
         <button
           onClick={onConfirm}
           disabled={confirmed}
@@ -1082,7 +1282,7 @@ function EngineStepResult({ meal, confirmed, onBack, onConfirm }: {
             boxShadow: confirmed ? "none" : `0 4px 18px ${ACCENT}40`,
           }}
         >
-          {confirmed ? "✓ Gespeichert — öffne Einträge…" : "✓ Bestätigen & Speichern"}
+          {confirmed ? savedLabel : tEng("btn_confirm_save")}
         </button>
       </div>
     </div>
@@ -1093,18 +1293,45 @@ function EngineStepResult({ meal, confirmed, onBack, onConfirm }: {
    INSIGHTS — Time in Range, GMI/A1c, 7-Tage-Trend, Mahlzeiten-Bewertung.
    ════════════════════════════════════════════════════════════════ */
 function InsightsScreen() {
+  const locale = useLocale();
+  const tDash = useTranslations("dashboard");
+  const deltaWk = tDash("delta_vs_last_week");
+  const tirLabel = pickCopy(locale, { de: "Time in Range · 7T", en: "Time in Range · 7d" });
+  const veryLow  = pickCopy(locale, { de: "Sehr tief", en: "Very low" });
+  const low      = pickCopy(locale, { de: "Tief",      en: "Low" });
+  const inTarget = pickCopy(locale, { de: "Im Ziel",   en: "In range" });
+  const high     = pickCopy(locale, { de: "Hoch",      en: "High" });
+  const avgGluc  = pickCopy(locale, { de: "Ø Glukose", en: "Avg. glucose" });
+  const gmiLabel = pickCopy(locale, { de: "GMI · gesch. A1c", en: "GMI · est. A1c" });
+  const trend7   = pickCopy(locale, { de: "7-Tage-Trend", en: "7-day trend" });
+  const perDay   = pickCopy(locale, { de: "Ø pro Tag", en: "Avg. / day" });
+  const mealRate = pickCopy(locale, { de: "Mahlzeiten-Bewertung · 7T", en: "Meal rating · 7d" });
+  const spike    = pickCopy(locale, { de: "Spike",       en: "Spike" });
+  const hypoRisk = pickCopy(locale, { de: "Hypo-Risiko", en: "Hypo risk" });
+  // Visual minus sign (U+2212) to match the original styling.
+  const minus0p2 = `−${fmtNum(locale, 0.2)}`;
+
+  // Weekday short labels (Sat..Fri) — order is fixed in the demo data.
+  const wkSat = tDash("weekday_short_sat");
+  const wkSun = tDash("weekday_short_sun");
+  const wkMon = tDash("weekday_short_mon");
+  const wkTue = tDash("weekday_short_tue");
+  const wkWed = tDash("weekday_short_wed");
+  const wkThu = tDash("weekday_short_thu");
+  const wkFri = tDash("weekday_short_fri");
+
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
       {/* Time in Range */}
       <MockCard>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-          <CardLabel text="Time in Range · 7T"/>
+          <CardLabel text={tirLabel}/>
           <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>70–180 mg/dL</div>
         </div>
         <div style={{ display:"flex", alignItems:"baseline", gap:6, marginBottom:10 }}>
           <div style={{ fontSize:36, fontWeight:800, color:GREEN, letterSpacing:"-0.04em", fontFamily:"var(--font-mono)" }}>78</div>
           <div style={{ fontSize:14, color:GREEN, fontWeight:700 }}>%</div>
-          <div style={{ marginLeft:"auto", fontSize:9, color:GREEN }}>+6 ggü. Vorwoche</div>
+          <div style={{ marginLeft:"auto", fontSize:9, color:GREEN }}>+6 {deltaWk}</div>
         </div>
         {/* Stacked bar: 78 in range, 14 high, 6 low, 2 v.low */}
         <div style={{ display:"flex", height:12, borderRadius:99, overflow:"hidden", background:"rgba(255,255,255,0.04)" }}>
@@ -1114,53 +1341,53 @@ function InsightsScreen() {
           <div style={{ width:"14%", background:"#FFD166" }}/>
         </div>
         <div style={{ display:"flex", justifyContent:"space-between", marginTop:6, fontSize:8, color:"rgba(255,255,255,0.4)" }}>
-          <span style={{ color:PINK }}>● Sehr tief 2%</span>
-          <span style={{ color:ORANGE }}>● Tief 6%</span>
-          <span style={{ color:GREEN }}>● Im Ziel 78%</span>
-          <span style={{ color:"#FFD166" }}>● Hoch 14%</span>
+          <span style={{ color:PINK }}>● {veryLow} 2%</span>
+          <span style={{ color:ORANGE }}>● {low} 6%</span>
+          <span style={{ color:GREEN }}>● {inTarget} 78%</span>
+          <span style={{ color:"#FFD166" }}>● {high} 14%</span>
         </div>
       </MockCard>
 
       {/* Two-up stats */}
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
         <MockCard>
-          <CardLabel text="Ø Glukose"/>
+          <CardLabel text={avgGluc}/>
           <div style={{ display:"flex", alignItems:"baseline", gap:4, marginTop:4 }}>
             <div style={{ fontSize:24, fontWeight:800, color:"#fff", fontFamily:"var(--font-mono)" }}>132</div>
             <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>mg/dL</div>
           </div>
-          <div style={{ fontSize:9, color:GREEN, marginTop:2 }}>−7 ggü. Vorwoche</div>
+          <div style={{ fontSize:9, color:GREEN, marginTop:2 }}>−7 {deltaWk}</div>
         </MockCard>
         <MockCard>
-          <CardLabel text="GMI · gesch. A1c"/>
+          <CardLabel text={gmiLabel}/>
           <div style={{ display:"flex", alignItems:"baseline", gap:4, marginTop:4 }}>
-            <div style={{ fontSize:24, fontWeight:800, color:"#fff", fontFamily:"var(--font-mono)" }}>6,4</div>
+            <div style={{ fontSize:24, fontWeight:800, color:"#fff", fontFamily:"var(--font-mono)" }}>{fmtNum(locale, 6.4)}</div>
             <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>%</div>
           </div>
-          <div style={{ fontSize:9, color:GREEN, marginTop:2 }}>−0,2 ggü. Vorwoche</div>
+          <div style={{ fontSize:9, color:GREEN, marginTop:2 }}>{minus0p2} {deltaWk}</div>
         </MockCard>
       </div>
 
       {/* 7-Tage-Trend */}
       <MockCard>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-          <CardLabel text="7-Tage-Trend"/>
-          <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>Ø pro Tag</div>
+          <CardLabel text={trend7}/>
+          <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>{perDay}</div>
         </div>
         <Sparkline values={[148,142,138,135,140,128,132]} color={ACCENT}/>
         <div style={{ display:"flex", justifyContent:"space-between", marginTop:4, fontSize:8, color:"rgba(255,255,255,0.35)" }}>
-          {["Sa","So","Mo","Di","Mi","Do","Fr"].map(d => <span key={d}>{d}</span>)}
+          {[wkSat, wkSun, wkMon, wkTue, wkWed, wkThu, wkFri].map((d, i) => <span key={`${d}-${i}`}>{d}</span>)}
         </div>
       </MockCard>
 
       {/* Mahlzeiten-Bewertung */}
       <MockCard>
-        <CardLabel text="Mahlzeiten-Bewertung · 7T"/>
+        <CardLabel text={mealRate}/>
         <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:8 }}>
           {[
-            { label:"Im Ziel",     count:13, color:GREEN,  pct:65 },
-            { label:"Spike",       count:5,  color:ORANGE, pct:25 },
-            { label:"Hypo-Risiko", count:2,  color:PINK,   pct:10 },
+            { label: inTarget, count:13, color:GREEN,  pct:65 },
+            { label: spike,    count:5,  color:ORANGE, pct:25 },
+            { label: hypoRisk, count:2,  color:PINK,   pct:10 },
           ].map(r => (
             <div key={r.label} style={{ display:"flex", alignItems:"center", gap:8 }}>
               <div style={{ width:72, fontSize:10, color:r.color }}>{r.label}</div>
@@ -1182,46 +1409,58 @@ function InsightsScreen() {
    Benachrichtigungen, Insulin, Makro-Ziele).
    ════════════════════════════════════════════════════════════════ */
 function SettingsScreen() {
+  const locale = useLocale();
+  const tSet  = useTranslations("settings");
   type Row = { label: string; sub: string; rightLabel?: string; rightColor?: string; iconColor: string; icon: React.ReactNode };
+
+  const editLabel = pickCopy(locale, { de: "Bearbeiten", en: "Edit" });
+
   const rows: Row[] = [
     {
-      label: "Sprache", sub: "Deutsch · DE",
-      rightLabel: "DE", rightColor: ACCENT,
-      iconColor: ACCENT,
+      label: pickCopy(locale, { de: "Sprache", en: "Language" }),
+      sub:   pickCopy(locale, { de: "Deutsch · DE", en: "English · EN" }),
+      rightLabel: pickCopy(locale, { de: "DE", en: "EN" }),
+      rightColor: ACCENT, iconColor: ACCENT,
       icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>,
     },
     {
-      label: "CGM Verbindung", sub: "FreeStyle Libre 3 · LibreLinkUp",
-      rightLabel: "● Verbunden", rightColor: GREEN,
-      iconColor: GREEN,
+      label: pickCopy(locale, { de: "CGM Verbindung", en: "CGM Connection" }),
+      sub:   "FreeStyle Libre 3 · LibreLinkUp",
+      rightLabel: pickCopy(locale, { de: "● Verbunden", en: "● Connected" }),
+      rightColor: GREEN, iconColor: GREEN,
       icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>,
     },
     {
-      label: "Insulin", sub: "ICR 1:15 · Korrektur 1:50",
-      rightLabel: "Bearbeiten", rightColor: "rgba(255,255,255,0.5)",
+      label: pickCopy(locale, { de: "Insulin", en: "Insulin" }),
+      sub:   pickCopy(locale, { de: "ICR 1:15 · Korrektur 1:50", en: "ICR 1:15 · Correction 1:50" }),
+      rightLabel: editLabel, rightColor: "rgba(255,255,255,0.5)",
       iconColor: PURPLE,
       icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
     },
     {
-      label: "Makro-Ziele", sub: "Carbs 250g · Protein 120g · Fett 80g",
-      rightLabel: "Bearbeiten", rightColor: "rgba(255,255,255,0.5)",
+      label: pickCopy(locale, { de: "Makro-Ziele", en: "Macro Targets" }),
+      sub:   pickCopy(locale, { de: "Carbs 250g · Protein 120g · Fett 80g", en: "Carbs 250g · Protein 120g · Fat 80g" }),
+      rightLabel: editLabel, rightColor: "rgba(255,255,255,0.5)",
       iconColor: ORANGE,
       icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>,
     },
     {
-      label: "Benachrichtigungen", sub: "Aktiv · Ruhig 22–07",
-      rightLabel: "An", rightColor: GREEN,
-      iconColor: PINK,
+      label: pickCopy(locale, { de: "Benachrichtigungen", en: "Notifications" }),
+      sub:   pickCopy(locale, { de: "Aktiv · Ruhig 22–07", en: "Active · Quiet 22–07" }),
+      rightLabel: pickCopy(locale, { de: "An", en: "On" }),
+      rightColor: GREEN, iconColor: PINK,
       icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>,
     },
     {
-      label: "Erscheinungsbild", sub: "Dunkel",
-      rightLabel: "Dark", rightColor: "rgba(255,255,255,0.5)",
-      iconColor: "#60A5FA",
+      label: pickCopy(locale, { de: "Erscheinungsbild", en: "Appearance" }),
+      sub:   pickCopy(locale, { de: "Dunkel", en: "Dark" }),
+      rightLabel: pickCopy(locale, { de: "Dark", en: "Dark" }),
+      rightColor: "rgba(255,255,255,0.5)", iconColor: "#60A5FA",
       icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>,
     },
     {
-      label: "Konto", sub: "demo@glev.app · seit Jan 2026",
+      label: pickCopy(locale, { de: "Konto", en: "Account" }),
+      sub:   pickCopy(locale, { de: "demo@glev.app · seit Jan 2026", en: "demo@glev.app · since Jan 2026" }),
       rightLabel: "Pro", rightColor: GREEN,
       iconColor: "#fff",
       icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
@@ -1231,8 +1470,13 @@ function SettingsScreen() {
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
       <div style={{ padding:"4px 2px 4px" }}>
-        <div style={{ fontSize:14, fontWeight:800, letterSpacing:"-0.02em" }}>Einstellungen</div>
-        <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)" }}>Profil, CGM und alle Therapie-Werte.</div>
+        <div style={{ fontSize:14, fontWeight:800, letterSpacing:"-0.02em" }}>{tSet("title")}</div>
+        <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)" }}>
+          {pickCopy(locale, {
+            de: "Profil, CGM und alle Therapie-Werte.",
+            en: "Profile, CGM and all therapy settings.",
+          })}
+        </div>
       </div>
 
       <div style={{
@@ -1271,7 +1515,10 @@ function SettingsScreen() {
       </div>
 
       <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", textAlign:"center", padding:"8px 0", lineHeight:1.6 }}>
-        Demo · auf der echten App auch Sprache wechseln, CGM neu verbinden u. v. m.
+        {pickCopy(locale, {
+          de: "Demo · auf der echten App auch Sprache wechseln, CGM neu verbinden u. v. m.",
+          en: "Demo · in the real app you can also change language, reconnect CGM, and more.",
+        })}
       </div>
     </div>
   );
