@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -12,6 +12,9 @@ import {
   saveMacroTargets,
   DEFAULT_MACRO_TARGETS,
   type MacroTargets,
+  fetchInsulinSettings,
+  saveInsulinSettings,
+  DEFAULT_INSULIN_SETTINGS,
 } from "@/lib/userSettings";
 import {
   fetchAppointments,
@@ -47,9 +50,19 @@ interface Settings {
   targetMax: number;
   icr: number;
   cf: number;
+  /** Target BG for the dose recommender (mg/dL). Mirrors
+   *  `user_settings.target_bg_mgdl` so the sync `getInsulinSettings()`
+   *  caller stays in lock-step with the DB source of truth. */
+  targetBg: number;
 }
 
-const DEFAULTS: Settings = { targetMin: 70, targetMax: 180, icr: 15, cf: 50 };
+const DEFAULTS: Settings = {
+  targetMin: 70,
+  targetMax: 180,
+  icr: DEFAULT_INSULIN_SETTINGS.icr,
+  cf: DEFAULT_INSULIN_SETTINGS.cf,
+  targetBg: DEFAULT_INSULIN_SETTINGS.targetBg,
+};
 
 function loadSettings(): Settings {
   if (typeof window === "undefined") return DEFAULTS;
@@ -70,6 +83,7 @@ type SheetKey =
   | "units"
   | "icr"
   | "cf"
+  | "targetBg"
   | "lastAppointment"
   | "libre2"
   | "nightscout"
@@ -119,6 +133,14 @@ export default function SettingsPage() {
   const tCommon = useTranslations("common");
   const router = useRouter();
   const [settings, setSettings] = useState<Settings>(DEFAULTS);
+  // Tracks whether the user has manually touched any insulin field
+  // (icr / cf / targetBg) before the async `fetchInsulinSettings` round
+  // trip resolves. Without this gate the late DB-load callback would
+  // race with — and clobber — an in-flight edit, e.g. opening the ICR
+  // sheet right after navigation, typing 12, hitting Save, but having
+  // the fetched 15 land between the keystroke and the save handler
+  // reading from state. See Task #40 e2e regression for details.
+  const insulinTouchedRef = useRef(false);
   const [saved, setSaved] = useState(false);
   const [reloading, setReloading] = useState(false);
   const [reloadMsg, setReloadMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
@@ -204,6 +226,33 @@ export default function SettingsPage() {
     if (!supabase) return;
     fetchMacroTargets().then(setMacroTargets).catch(() => {});
     fetchNotificationPrefs().then(setNotifPrefs).catch(() => {});
+    // Insulin parameters (ICR / CF / target BG) live in `user_settings`
+    // — the DB row is the source of truth. We merge it into the local
+    // Settings state so the row subtitles reflect the real saved
+    // values on first paint, and also write the merged values back to
+    // localStorage so the sync `getInsulinSettings()` mirror stays in
+    // lock-step. The saved targetMin/targetMax range is not touched
+    // here because it isn't yet DB-backed.
+    fetchInsulinSettings()
+      .then((ins) => {
+        // Bail out if the user has already started editing — they would
+        // see their typed value silently snap back to the fetched one.
+        if (insulinTouchedRef.current) return;
+        setSettings((prev) => {
+          const next = { ...prev, icr: ins.icr, cf: ins.cf, targetBg: ins.targetBg };
+          saveSettings(next);
+          return next;
+        });
+      })
+      .catch(() => {})
+      .finally(() => {
+        // Once the load has settled (applied or skipped), the ref has
+        // served its purpose. Clearing it lets a future re-fetch (if
+        // we ever add one) behave normally instead of being permanently
+        // suppressed by a stale "touched" marker from earlier in the
+        // session.
+        insulinTouchedRef.current = false;
+      });
     // Load the appointment list. Errors collapse to an empty list,
     // which is the same UI as "no appointments saved yet" — no need
     // to surface a separate error state on the row subtitle.
@@ -313,6 +362,41 @@ export default function SettingsPage() {
       setTimeout(() => setSaved(false), 1800);
       // Commit: this baseline IS the new canonical state — clear the snapshot
       // so a subsequent close doesn't revert the just-saved values.
+      setDraftSnapshot(null);
+      return true;
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : tSettings("save_failed"));
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }, [settings, tSettings]);
+
+  /** Persist insulin parameters (ICR / CF / target BG) to the
+   *  `user_settings` row so the lifecycle / dose recommender pick them
+   *  up on the next async read, AND mirror them into localStorage so
+   *  the sync `getInsulinSettings()` caller stays in lock-step. Inputs
+   *  are clamped to the migration's CHECK ranges (ICR 1–100, CF 1–500,
+   *  target BG 60–200) before the upsert so a Postgres rejection only
+   *  fires for a truly malformed write. */
+  const saveInsulinAction = useCallback(async (): Promise<boolean> => {
+    setSaving(true);
+    setSaveError("");
+    try {
+      const clamped = {
+        icr:      Math.min(100, Math.max(1, Math.round(settings.icr))),
+        cf:       Math.min(500, Math.max(1, Math.round(settings.cf))),
+        targetBg: Math.min(200, Math.max(60, Math.round(settings.targetBg))),
+      };
+      await saveInsulinSettings(clamped);
+      // Mirror the clamped values back into local state + localStorage
+      // so the sync `getInsulinSettings()` caller (engine evaluation
+      // path) and the row subtitles see exactly what we just wrote.
+      const next = { ...settings, ...clamped };
+      setSettings(next);
+      saveSettings(next);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1800);
       setDraftSnapshot(null);
       return true;
     } catch (e) {
@@ -480,6 +564,11 @@ export default function SettingsPage() {
   }
 
   function upd<K extends keyof Settings>(key: K, val: Settings[K]) {
+    // Mark insulin fields as "user-touched" so the in-flight load
+    // effect does not race in and overwrite the typed value.
+    if (key === "icr" || key === "cf" || key === "targetBg") {
+      insulinTouchedRef.current = true;
+    }
     setSettings((prev) => ({ ...prev, [key]: val }));
   }
 
@@ -518,6 +607,7 @@ export default function SettingsPage() {
   const targetRangeSub = tSettings("subtitle_target_range", { min: settings.targetMin, max: settings.targetMax });
   const icrSub = tSettings("subtitle_icr", { value: settings.icr });
   const cfSub = tSettings("subtitle_cf", { value: settings.cf });
+  const targetBgSub = tSettings("subtitle_target_bg", { value: settings.targetBg });
   // Row subtitle: most-recent appointment date + total count when more
   // than one is on file ("12.01.2026 · 4 saved"), or just the date for
   // a single entry, or a "not set" placeholder when the list is empty.
@@ -699,22 +789,57 @@ export default function SettingsPage() {
       body: (
         <div>
           <label style={{ fontSize: 12, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>{tSettings("icr_label")}</label>
-          <input style={inp} type="number" value={settings.icr} onChange={(e) => upd("icr", parseInt(e.target.value) || 15)} />
+          <input
+            style={inp}
+            type="number"
+            min={1}
+            max={100}
+            step={1}
+            value={settings.icr}
+            onChange={(e) => upd("icr", parseInt(e.target.value) || DEFAULT_INSULIN_SETTINGS.icr)}
+          />
           <div style={{ fontSize: 11, color: "var(--text-ghost)", marginTop: 6 }}>{tSettings("icr_hint")}</div>
         </div>
       ),
-      footer: <SaveFooter onSave={saveLocalSettings} />,
+      footer: <SaveFooter onSave={saveInsulinAction} />,
     },
     cf: {
       title: tSettings("correction_factor"),
       body: (
         <div>
           <label style={{ fontSize: 12, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>{tSettings("cf_label")}</label>
-          <input style={inp} type="number" value={settings.cf} onChange={(e) => upd("cf", parseInt(e.target.value) || 50)} />
+          <input
+            style={inp}
+            type="number"
+            min={1}
+            max={500}
+            step={1}
+            value={settings.cf}
+            onChange={(e) => upd("cf", parseInt(e.target.value) || DEFAULT_INSULIN_SETTINGS.cf)}
+          />
           <div style={{ fontSize: 11, color: "var(--text-ghost)", marginTop: 6 }}>{tSettings("cf_hint")}</div>
         </div>
       ),
-      footer: <SaveFooter onSave={saveLocalSettings} />,
+      footer: <SaveFooter onSave={saveInsulinAction} />,
+    },
+    targetBg: {
+      title: tSettings("row_target_bg"),
+      body: (
+        <div>
+          <label style={{ fontSize: 12, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>{tSettings("target_bg_label")}</label>
+          <input
+            style={inp}
+            type="number"
+            min={60}
+            max={200}
+            step={1}
+            value={settings.targetBg}
+            onChange={(e) => upd("targetBg", parseInt(e.target.value) || DEFAULT_INSULIN_SETTINGS.targetBg)}
+          />
+          <div style={{ fontSize: 11, color: "var(--text-ghost)", marginTop: 6 }}>{tSettings("target_bg_hint")}</div>
+        </div>
+      ),
+      footer: <SaveFooter onSave={saveInsulinAction} />,
     },
     lastAppointment: {
       // List-shaped sheet (Task #93) that lets the user keep a small
@@ -1364,6 +1489,14 @@ export default function SettingsPage() {
           subtitle={cfSub}
           ariaLabel={tSettings("row_open_aria", { label: tSettings("correction_factor") })}
           onClick={() => openSheetWith("cf")}
+        />
+        <SettingsRow
+          iconColor={ACCENT}
+          icon={ICON.glucose}
+          label={tSettings("row_target_bg")}
+          subtitle={targetBgSub}
+          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_target_bg") })}
+          onClick={() => openSheetWith("targetBg")}
         />
         <SettingsRow
           iconColor={ACCENT}

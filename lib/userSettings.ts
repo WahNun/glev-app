@@ -145,11 +145,20 @@ export function getInsulinSettings(): InsulinSettings {
     if (isFiniteNumber(parsed.cf)  && parsed.cf  > 0) cf = parsed.cf;
     else { warnFieldDefault("cf", DEFAULT_INSULIN_SETTINGS.cf); cf = DEFAULT_INSULIN_SETTINGS.cf; }
 
-    const tMin = isFiniteNumber(parsed.targetMin) ? parsed.targetMin : null;
-    const tMax = isFiniteNumber(parsed.targetMax) ? parsed.targetMax : null;
+    // Prefer an explicitly saved targetBg (Task #40 lets the user edit it
+    // directly in Settings → that value is mirrored to localStorage so this
+    // sync caller stays in lock-step with the DB row). Fall back to the
+    // midpoint of the saved targetMin/targetMax range for older clients
+    // that only persisted the range, then to the hardcoded default.
     let targetBg: number;
-    if (tMin != null && tMax != null && tMax > tMin) targetBg = Math.round((tMin + tMax) / 2);
-    else { warnFieldDefault("targetBg", DEFAULT_INSULIN_SETTINGS.targetBg); targetBg = DEFAULT_INSULIN_SETTINGS.targetBg; }
+    if (isFiniteNumber(parsed.targetBg) && parsed.targetBg > 0) {
+      targetBg = parsed.targetBg;
+    } else {
+      const tMin = isFiniteNumber(parsed.targetMin) ? parsed.targetMin : null;
+      const tMax = isFiniteNumber(parsed.targetMax) ? parsed.targetMax : null;
+      if (tMin != null && tMax != null && tMax > tMin) targetBg = Math.round((tMin + tMax) / 2);
+      else { warnFieldDefault("targetBg", DEFAULT_INSULIN_SETTINGS.targetBg); targetBg = DEFAULT_INSULIN_SETTINGS.targetBg; }
+    }
 
     return { icr, cf, targetBg };
   } catch {
@@ -194,6 +203,32 @@ export async function fetchInsulinSettings(): Promise<InsulinSettings> {
   else { warnFieldDefault("targetBg", DEFAULT_INSULIN_SETTINGS.targetBg); targetBg = DEFAULT_INSULIN_SETTINGS.targetBg; }
 
   return { icr, cf, targetBg };
+}
+
+/**
+ * Upsert the user's insulin parameters (ICR, CF, target BG) into the
+ * `user_settings` row that already holds their macro targets. Throws on
+ * auth or DB error so the Settings UI can surface a save-failed state.
+ *
+ * Validation matches the migration's CHECK constraints (ICR 1–100,
+ * CF 1–500, target BG 60–200) so a Postgres rejection only fires for a
+ * truly malformed write — the UI clamps inputs into range first.
+ */
+export async function saveInsulinSettings(settings: InsulinSettings): Promise<void> {
+  if (!supabase) throw new Error("Supabase not configured");
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) throw new Error("Not signed in");
+
+  const { error } = await supabase
+    .from("user_settings")
+    .upsert({
+      user_id:          user.id,
+      icr_g_per_unit:   Math.round(settings.icr),
+      cf_mgdl_per_unit: Math.round(settings.cf),
+      target_bg_mgdl:   Math.round(settings.targetBg),
+    }, { onConflict: "user_id" });
+
+  if (error) throw new Error(error.message);
 }
 
 /* ── Last appointment date ─────────────────────────────────────────── */
