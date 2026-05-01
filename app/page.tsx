@@ -141,6 +141,23 @@ export default function Home() {
                 kein User-Pfad — soll im öffentlichen Header keinen
                 Slot belegen. */}
             <LocaleSwitcher ariaLabel={t("nav_aria_locale")} />
+            {/* Blog-Einstieg ins öffentliche Soro-Widget unter /blog —
+                bewusst als textueller Sekundär-Link gestaltet (nicht als
+                Pill-Button), damit der primäre Login-CTA visuell weiterhin
+                heraussticht. Header-Slot ist mobil eng, daher absichtlich
+                knappes Wort. */}
+            <Link
+              href="/blog"
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: "var(--text)",
+                textDecoration: "none",
+              }}
+              className="glev-link"
+            >
+              {t("nav_blog")}
+            </Link>
             <Link
               href="/login"
               style={{

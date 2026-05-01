@@ -1102,6 +1102,7 @@
   },
   "marketing": {
     "nav_signin": "Anmelden",
+    "nav_blog": "Blog",
     "nav_aria_home": "Glev Startseite",
     "nav_aria_locale": "Sprache wählen",
     "hero_badge": "Private Beta · CGM Live",
