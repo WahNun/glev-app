@@ -2,7 +2,10 @@
 
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import { useTranslations, useLocale } from "next-intl";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { signOut, getCurrentUser } from "@/lib/auth";
+import { parseDbDate } from "@/lib/time";
 import { reloadHistoricalEntries } from "@/lib/meals";
 import {
   fetchMacroTargets,
@@ -62,6 +65,7 @@ function saveSettings(s: Settings) {
 // stay type-checked together. Adding a new row = extend this union and
 // add an entry to `sheetContent` below.
 type SheetKey =
+  | "account"
   | "targetRange"
   | "units"
   | "icr"
@@ -113,6 +117,7 @@ function useNightscoutConnected(): boolean {
 export default function SettingsPage() {
   const tSettings = useTranslations("settings");
   const tCommon = useTranslations("common");
+  const router = useRouter();
   const [settings, setSettings] = useState<Settings>(DEFAULTS);
   const [saved, setSaved] = useState(false);
   const [reloading, setReloading] = useState(false);
@@ -168,6 +173,17 @@ export default function SettingsPage() {
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Account info for the new "Account" row + sheet (Task #54). Lives on the
+  // settings page itself rather than in a separate component because the spec
+  // calls for new i18n keys under the `settings` namespace and reuse of the
+  // existing SettingsRow/BottomSheet patterns. Loaded once on mount; failures
+  // collapse to empty placeholders so the sheet still renders a usable
+  // Sign Out button when offline.
+  const [accountEmail, setAccountEmail] = useState<string>("");
+  const [accountCreatedAt, setAccountCreatedAt] = useState<string>("");
+  const [accountMealCount, setAccountMealCount] = useState<number>(0);
+  const [signingOut, setSigningOut] = useState(false);
+
   const [openSheet, setOpenSheet] = useState<SheetKey | null>(null);
   // Draft snapshot captured the moment a sheet opens. If the user dismisses
   // the sheet via backdrop / ESC / drag-down without saving, we revert the
@@ -192,7 +208,47 @@ export default function SettingsPage() {
     // which is the same UI as "no appointments saved yet" — no need
     // to surface a separate error state on the row subtitle.
     fetchAppointments().then(setAppointments).catch(() => {});
-  }, []);
+    // Load account info (email + sign-up date + total meal count) for the
+    // Account row subtitle and sheet. Each piece is best-effort: failures
+    // leave the placeholder ("—") in place rather than blocking the row.
+    let cancelled = false;
+    (async () => {
+      try {
+        const user = await getCurrentUser();
+        if (cancelled) return;
+        setAccountEmail(user?.email ?? "");
+        setAccountCreatedAt(
+          user?.created_at
+            ? parseDbDate(user.created_at).toLocaleDateString(bcp47, {
+                year: "numeric", month: "long", day: "numeric",
+              })
+            : "",
+        );
+      } catch { /* leave email/createdAt empty */ }
+      try {
+        if (!supabase) return;
+        const { count } = await supabase
+          .from("meals")
+          .select("id", { count: "exact", head: true });
+        if (!cancelled) setAccountMealCount(count ?? 0);
+      } catch { /* leave count at 0 */ }
+    })();
+    return () => { cancelled = true; };
+  }, [bcp47]);
+
+  /** Sign the current user out and bounce them to /login. The sheet is
+   * closed first so the post-redirect render doesn't briefly show the
+   * still-open backdrop on top of the login page. */
+  const handleSignOut = useCallback(async () => {
+    setSigningOut(true);
+    try {
+      await signOut();
+      setOpenSheet(null);
+      router.push("/login");
+    } finally {
+      setSigningOut(false);
+    }
+  }, [router]);
 
   const openSheetWith = useCallback((id: SheetKey) => {
     // Snapshot before opening any sheet — even info-only sheets get one,
@@ -455,6 +511,7 @@ export default function SettingsPage() {
     sheets: <svg {...iconProps}><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="3" y1="15" x2="21" y2="15" /><line x1="9" y1="3" x2="9" y2="21" /><line x1="15" y1="3" x2="15" y2="21" /></svg>,
     carbs: <svg {...iconProps}><path d="M12 2v6" /><path d="M9 5l3 3 3-3" /><path d="M5 12c0-3 3-5 7-5s7 2 7 5c0 5-3 9-7 9s-7-4-7-9z" /></svg>,
     calendar: <svg {...iconProps}><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>,
+    account: <svg {...iconProps}><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-7 8-7s8 3 8 7" /></svg>,
   };
 
   /* ── subtitles derived from current state ──────────────────────── */
@@ -542,6 +599,76 @@ export default function SettingsPage() {
 
   /* ── sheet content blocks ──────────────────────────────────────── */
   const sheetContent: Record<SheetKey, { title: string; body: ReactNode; footer?: ReactNode }> = {
+    account: {
+      // Re-introduces the profile/stats block (email · sign-up date · total
+      // meals · sign out) that lived on the old tabbed settings page.
+      // Per Task #54 it gets its own dedicated row + sheet so the rest of
+      // the iOS-style list stays focused on per-feature settings.
+      title: tSettings("account_sheet_title"),
+      body: (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {/* Email row — primary identity, shown at top */}
+          <div style={{
+            padding: "12px 14px", borderRadius: 12,
+            background: "var(--surface-soft)", border: `1px solid ${BORDER}`,
+          }}>
+            <div style={{ fontSize: 11, color: "var(--text-faint)", marginBottom: 4 }}>
+              {tSettings("account_email_label")}
+            </div>
+            <div style={{
+              fontSize: 14, fontWeight: 600, color: "var(--text-strong)",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>
+              {accountEmail || "—"}
+            </div>
+          </div>
+
+          {/* Two stat tiles: sign-up date + total meal count */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div style={{
+              padding: "12px 14px", borderRadius: 12,
+              background: "var(--surface-soft)", border: `1px solid ${BORDER}`,
+            }}>
+              <div style={{ fontSize: 11, color: "var(--text-faint)", marginBottom: 4 }}>
+                {tSettings("account_member_since_label")}
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-strong)" }}>
+                {accountCreatedAt || "—"}
+              </div>
+            </div>
+            <div style={{
+              padding: "12px 14px", borderRadius: 12,
+              background: "var(--surface-soft)", border: `1px solid ${BORDER}`,
+            }}>
+              <div style={{ fontSize: 11, color: "var(--text-faint)", marginBottom: 4 }}>
+                {tSettings("account_meals_logged_label")}
+              </div>
+              <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.02em" }}>
+                {accountMealCount}
+              </div>
+            </div>
+          </div>
+
+          {/* Sign-out CTA — destructive styling so it's visually distinct
+              from the neutral info tiles above. */}
+          <button
+            type="button"
+            onClick={handleSignOut}
+            disabled={signingOut}
+            style={{
+              width: "100%", padding: "13px 16px", borderRadius: 12,
+              border: `1px solid ${PINK}40`, background: `${PINK}15`,
+              color: PINK, fontSize: 14, fontWeight: 700,
+              cursor: signingOut ? "wait" : "pointer",
+              marginTop: 4,
+            }}
+          >
+            {signingOut ? tSettings("account_signing_out") : tSettings("account_sign_out")}
+          </button>
+        </div>
+      ),
+      footer: closeFooter,
+    },
     targetRange: {
       title: tSettings("row_target_range"),
       body: (
@@ -1187,6 +1314,18 @@ export default function SettingsPage() {
         </h1>
         <p style={{ color: "var(--text-faint)", fontSize: 14 }}>{tSettings("page_subtitle")}</p>
       </div>
+
+      <SettingsSection title={tSettings("section_account")}>
+        <SettingsRow
+          first
+          iconColor={ACCENT}
+          icon={ICON.account}
+          label={tSettings("row_account")}
+          subtitle={accountEmail || tSettings("account_subtitle_placeholder")}
+          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_account") })}
+          onClick={() => openSheetWith("account")}
+        />
+      </SettingsSection>
 
       <SettingsSection title={tSettings("section_glucose")}>
         <SettingsRow

@@ -762,7 +762,16 @@
     "appointments_cancel": "Abbrechen",
     "appointments_delete_confirm": "Diesen Termin wirklich löschen?",
     "appointments_picker_label": "Älteren Termin wählen",
-    "appointments_picker_hint": "Wähle einen früheren Arzttermin als Startdatum für den Export."
+    "appointments_picker_hint": "Wähle einen früheren Arzttermin als Startdatum für den Export.",
+    "section_account": "Konto",
+    "row_account": "Konto",
+    "account_subtitle_placeholder": "Profil, Statistik, abmelden",
+    "account_sheet_title": "Konto",
+    "account_email_label": "E-Mail",
+    "account_member_since_label": "Mitglied seit",
+    "account_meals_logged_label": "Mahlzeiten erfasst",
+    "account_sign_out": "Abmelden",
+    "account_signing_out": "Abmelden…"
   },
   "common": {
     "loading": "Laden…",

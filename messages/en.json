@@ -754,7 +754,16 @@
     "appointments_cancel": "Cancel",
     "appointments_delete_confirm": "Delete this appointment?",
     "appointments_picker_label": "Pick an older appointment",
-    "appointments_picker_hint": "Choose an earlier doctor appointment as the start date for your export."
+    "appointments_picker_hint": "Choose an earlier doctor appointment as the start date for your export.",
+    "section_account": "Account",
+    "row_account": "Account",
+    "account_subtitle_placeholder": "Profile, stats, sign out",
+    "account_sheet_title": "Account",
+    "account_email_label": "Email",
+    "account_member_since_label": "Member since",
+    "account_meals_logged_label": "Meals logged",
+    "account_sign_out": "Sign out",
+    "account_signing_out": "Signing out…"
   },
   "common": {
     "loading": "Loading…",
