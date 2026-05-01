@@ -364,6 +364,10 @@
     "entries": "Entries",
     "no_entries": "No entries yet"
   },
+  "insights": {
+    "pattern_balanced_label": "Balanced dosing",
+    "pattern_balanced_explanation": "{pct}% of your last {n} meals landed in target — keep it up."
+  },
   "settings": {
     "title": "Settings",
     "language": "Language",

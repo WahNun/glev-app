@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useId } from "react";
+import { useTranslations } from "next-intl";
 import { fetchMeals, unifiedOutcome, type Meal } from "@/lib/meals";
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
 import { computeAdaptiveICR } from "@/lib/engine/adaptiveICR";
@@ -148,6 +149,7 @@ export default function InsightsPage() {
   // "Avg insulin" tile sublabel. All aggregates are computed in grams
   // upstream; only the rendered string switches to BE/KE/g.
   const carbUnit = useCarbUnit();
+  const tInsights = useTranslations("insights");
   const [meals, setMeals]               = useState<Meal[]>([]);
   const [insulinLogs, setInsulinLogs]   = useState<InsulinLog[]>([]);
   const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([]);
@@ -974,10 +976,21 @@ export default function InsightsPage() {
 
                 {/* Pattern label */}
                 <div style={{ fontSize:12, color:"var(--text-muted)", lineHeight:1.5, marginBottom:6 }}>
-                  <span style={{ color:"var(--text)", fontWeight:600 }}>{enginePattern.label}</span>
+                  <span style={{ color:"var(--text)", fontWeight:600 }}>
+                    {enginePattern.type === "balanced"
+                      ? tInsights("pattern_balanced_label")
+                      : enginePattern.label}
+                  </span>
                 </div>
                 <div style={{ fontSize:11, color:"var(--text-muted)", lineHeight:1.5 }}>
-                  {enginePattern.explanation}
+                  {enginePattern.type === "balanced"
+                    ? tInsights("pattern_balanced_explanation", {
+                        pct: enginePattern.sampleSize > 0
+                          ? Math.round((enginePattern.counts.good / enginePattern.sampleSize) * 100)
+                          : 0,
+                        n: enginePattern.sampleSize,
+                      })
+                    : enginePattern.explanation}
                 </div>
 
                 {/* Suggestion / advisory block */}

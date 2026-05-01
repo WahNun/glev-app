@@ -48,3 +48,9 @@ id = "dD2FJEW_TD05WIS-Ay2rd"
 uri = "file://public/email-signature.png"
 type = "image"
 title = "Glev Email Signatur (PNG, 1200×486, 2×)"
+
+[[outputs]]
+id = "oSC2rRkpIyy-qhbBQ_pl1"
+uri = "file://.local/insights_de_translation_report.md"
+type = "text"
+title = "Insights DE — Übersetzungs-Audit"

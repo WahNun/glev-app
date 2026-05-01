@@ -364,6 +364,10 @@
     "entries": "Einträge",
     "no_entries": "Noch keine Einträge"
   },
+  "insights": {
+    "pattern_balanced_label": "Ausgewogene Dosierung",
+    "pattern_balanced_explanation": "{pct}% deiner letzten {n, plural, one {Mahlzeit lag} other {# Mahlzeiten lagen}} im Zielbereich — weiter so."
+  },
   "settings": {
     "title": "Einstellungen",
     "language": "Sprache",
