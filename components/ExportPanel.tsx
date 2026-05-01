@@ -427,6 +427,17 @@ export default function ExportPanel() {
         fetchAllExerciseLogs(window),
         fetchAllFingersticks(window),
       ]);
+      // Defense-in-depth against the race window between the picker
+      // changing and the count preview re-resolving: the disabled
+      // attribute on the button blocks the common case, but a
+      // programmatic trigger (test, devtools, screen-reader shortcut
+      // bypassing visual state) could still slip through and produce
+      // four empty CSVs. Re-check using the actual fetched data and
+      // bail with a friendly message in that case.
+      if (meals.length + insulin.length + exercise.length + fs.length === 0) {
+        flash("err", t("count_empty"));
+        return;
+      }
       // Sequential downloads with small delay so browsers don't merge or
       // drop the rapid-fire save prompts.
       const files: Array<[string, string]> = [
@@ -462,6 +473,16 @@ export default function ExportPanel() {
         fetchAllExerciseLogs(window),
         fetchAllFingersticks(window),
       ]);
+      // Defense-in-depth (see exportAll above): even with the disabled
+      // button as the primary guard, a race between picker change and
+      // count refresh — or a programmatic invocation that bypassed
+      // visual state — could still trigger this handler with an empty
+      // window. Bail before paying the ~400KB renderer import cost
+      // and handing the user a one-page PDF with no content.
+      if (meals.length + insulin.length + exercise.length + fs.length === 0) {
+        flash("err", t("count_empty"));
+        return;
+      }
       // Lazy imports keep this expensive code out of the main bundle.
       const [{ pdf }, { GlevReport }] = await Promise.all([
         import("@react-pdf/renderer"),
@@ -507,6 +528,26 @@ export default function ExportPanel() {
     borderRadius: 16,
     padding: "20px 22px",
   };
+
+  // Whether the currently chosen range resolves to *zero* total entries
+  // across all four kinds. We only treat the range as empty once the
+  // count preview has actually loaded — otherwise a fresh page render
+  // (counts === null while the first request is in flight) would briefly
+  // disable the bulk buttons and look broken. The picker's count line
+  // already tells the user the slice is empty; this flag closes the loop
+  // by also disabling the bulk export actions so a user who ignores that
+  // small note can't hand a doctor a one-page PDF (or four blank CSVs)
+  // with no data. Per-kind rows stay enabled — exporting a single empty
+  // CSV is a niche but valid action (e.g. "I want a header-only file as
+  // a template"), and the count line right above already shows zero.
+  const isEmptyRange =
+    counts !== null &&
+    !countsLoading &&
+    counts.meals + counts.insulin + counts.exercise + counts.fingersticks === 0;
+  // Tooltip text shown on the disabled bulk-export buttons. Reuses the
+  // same translation as the count line above so the wording stays in
+  // sync between the two empty-state surfaces.
+  const emptyRangeTooltip = t("count_empty");
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -757,7 +798,9 @@ export default function ExportPanel() {
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         <button
           onClick={exportAll}
-          disabled={busy !== null}
+          disabled={busy !== null || isEmptyRange}
+          title={isEmptyRange ? emptyRangeTooltip : undefined}
+          aria-disabled={busy !== null || isEmptyRange}
           style={{
             flex: "1 1 200px",
             padding: "14px", borderRadius: 12,
@@ -765,25 +808,35 @@ export default function ExportPanel() {
             background: "var(--surface-soft)",
             color: "var(--text-strong)",
             fontSize: 13, fontWeight: 600,
-            cursor: busy !== null ? "not-allowed" : "pointer",
-            opacity: busy !== null && busy !== "all" ? 0.5 : 1,
+            cursor: busy !== null || isEmptyRange ? "not-allowed" : "pointer",
+            opacity: isEmptyRange ? 0.45 : busy !== null && busy !== "all" ? 0.5 : 1,
           }}
         >
           {busy === "all" ? t("all_btn_busy") : t("all_btn_idle")}
         </button>
         <button
           onClick={exportPdf}
-          disabled={busy !== null}
+          disabled={busy !== null || isEmptyRange}
+          title={isEmptyRange ? emptyRangeTooltip : undefined}
+          aria-disabled={busy !== null || isEmptyRange}
           style={{
             flex: "1 1 200px",
             padding: "14px", borderRadius: 12, border: "none",
-            background: busy === "pdf"
-              ? `${ACCENT}40`
-              : `linear-gradient(135deg, ${ACCENT}, #3B5BE0)`,
-            color:"var(--text)", fontSize: 14, fontWeight: 700,
-            cursor: busy !== null ? "not-allowed" : "pointer",
-            boxShadow: busy === null ? `0 4px 18px ${ACCENT}30` : "none",
-            opacity: busy !== null && busy !== "pdf" ? 0.5 : 1,
+            // When the range is empty, drop the gradient + accent shadow
+            // so the button visually reads as inactive (matches the
+            // "Alles als CSV" disabled state). Without this the bright
+            // blue gradient would still scream "press me" even though
+            // the click is a no-op.
+            background: isEmptyRange
+              ? "var(--surface-soft)"
+              : busy === "pdf"
+                ? `${ACCENT}40`
+                : `linear-gradient(135deg, ${ACCENT}, #3B5BE0)`,
+            color: isEmptyRange ? "var(--text-dim)" : "var(--text)",
+            fontSize: 14, fontWeight: 700,
+            cursor: busy !== null || isEmptyRange ? "not-allowed" : "pointer",
+            boxShadow: busy === null && !isEmptyRange ? `0 4px 18px ${ACCENT}30` : "none",
+            opacity: isEmptyRange ? 0.7 : busy !== null && busy !== "pdf" ? 0.5 : 1,
             display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
           }}
         >
