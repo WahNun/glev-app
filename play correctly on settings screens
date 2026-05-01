@@ -1,0 +1,127 @@
+[33mf8e46d7[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Add new section to explain the pain points of managing glucose levels
+[33ma7d40d6[m Update German text to display correctly on settings screens
+[33m249ec08[m Show correction factor (CF) on insulin exports
+[33m584a051[m Stripe-Checkout: add mandatory "Vollständiger Name" custom field
+[33m29a2536[m Add Apple Health (HealthKit) as a third CGM source
+[33m4d6295a[m Update CGM settings to include Libre 3 support
+[33m3aa7480[m[33m ([m[1;32msubrepl-2ry15uut[m[33m)[m Add carb-unit-aware export tests (Task #60)
+[33m0dd00a6[m Add notification preferences to user settings and the app
+[33m4fc41c7[m Convert insulin export columns to the user's chosen unit too
+[33mfae88b5[m Add smart notification system with meal pattern detection
+[33m5c71aa4[m Use the chosen carb unit in CSV and PDF exports (Task #56)
+[33m321bc1a[m Show carbs in BE/KE inside the entry editor too (Task #55)
+[33m950a05b[m Make dashboard + insights cards unselectable
+[33m69c4567[m Refactor settings page to iOS-style sectioned list
+[33ma5a604b[m Task #53: BE/KE Carb-Unit-Selector for DACH users
+[33m387b269[m Organize settings into distinct sections and improve account management
+[33mca5ed9b[m Translate Step 2 (macro review) on the Engine page
+[33ma86b884[m Localize marketing/landing pages for German visitors (Task #45)
+[33me0aedde[m Improve text wrapping and layout for smaller screens
+[33mda578bc[m Keep logo background dark in light mode
+[33mf949a00[m Localize Engine page reasoning and result UI (task #44)
+[33m5ce5821[m Task #43: e2e test for the Appearance theme picker
+[33m4b3a19e[m Git commit prior to merge
+[33m156ba6b[m Keep the logo square dark in all themes
+[33m3eb03ce[m Add a dark favicon for the app header
+[33m7c54715[m i18n: Close bilingual gaps on cards & modals (task #36)
+[33m4273b33[m Add static screenshots of the app in light mode to the interface
+[33m0ab07f1[m Prioritize URL theme parameter for mockups
+[33mfb318c2[m Git commit prior to merge
+[33mf27b91c[m Add a way to force a light or dark theme via URL parameters
+[33m85e0aa7[m Add full Light Mode to Glev's mobile app (Task #38)
+[33m1c52204[m Update how user history is retrieved and simplify settings
+[33m3919f83[m Manual entry modal: allow 0 macros, stabilize input, localize errors
+[33m381177a[m Task #15: Unify Glev meal evaluation around lifecycleFor
+[33mc09231a[m Restore Glev-Tab → /engine + equal macro rings (Task #32)
+[33med74ff8[m Task #33: Bestätigungsmail nach Stripe-Checkout + Resume-Link für Registrierung
+[33m321b8b6[m Update pro checkout to use a fixed trial end date
+[33m4a006e5[m Add ability for administrators to invite new users via email
+[33mf5b2365[m Add a contact form and integrate it across the application
+[33m6e626c9[m Replace email links with a contact form for better user experience
+[33me2ef3de[m Add button to email support directly from the cancellation page
+[33m1f2f5ba[m Add new Stripe checkout flow for pro tier subscriptions
+[33mff089f4[m Replace hardcoded payment links with dynamic checkout endpoints
+[33mf65eb82[m Update product page to use the correct early access Stripe product
+[33mf561b91[m Add password reset functionality to the login screen
+[33ma156289[m Add a complete Stripe checkout flow for beta testers with subscription and email confirmation
+[33m2f73c92[m Update image for Stripe webhook setup instructions
+[33m322a508[m Saved progress at the end of the loop
+[33m6dfeca5[m Saved progress at the end of the loop
+[33m1ee6ed8[m Update email content to reflect new subscription payment terms
+[33mbfbf397[m Update checkout to charge immediately and remove trial period
+[33m073fde9[m Add Stripe checkout and email confirmation for beta testers
+[33m86628a6[m Add a complete Stripe checkout flow for beta testers
+[33m9e1e3d7[m Fix incorrect food classification when AI misidentifies high-protein items
+[33mfe70772[m Update homepage display to reflect current and upcoming CGM support
+[33mc5273e7[m Update supported CGM information across landing pages
+[33ma57c5c5[m Update navigation to go directly to the engine recommendations screen
+[33m52ebae1[m Make dashboard macro circles the same size
+[33m9330a0e[m Move the insights and entries toggle to the header
+[33mdad5dc3[m Update dashboard display and navigation for logging meals and glucose
+[33m6172421[m engine: refuse to autofill macros when nutrition source is 'unknown'
+[33m2d1c7c9[m feat(nutrition): two-stage DB-backed lookup (Task #31)
+[33m9aa5531[m Transitioned from Plan to Build mode
+[33m37a0b46[m Add internationalization support for meal logging and dashboard
+[33m6b7ec76[m Update meal entry display to show 1H or 2H post-meal glucose values
+[33m296a152[m Add persistent chat and performance improvements to the application
+[33m3b46c3b[m Update mobile navigation to open an action sheet for logging events
+[33md508a4a[m Update terminology from "recommendation" to "estimate" across the application
+[33m74fc583[m Update app navigation to point to the correct logging and history screens
+[33m5fc7970[m Align good rate calculation and display for consistency
+[33mdff6e21[m Add diagnostic script to check email delivery issues
+[33m701cc64[m Ensure all text labels fully display on device screens
+[33m5de2d1e[m Update navigation toggles to match the insights tab design
+[33me20f66b[m Update Meta Pixel script for reliable loading on production
+[33m070df9a[m Add Meta Pixel tracking for website analytics and conversions
+[33mf5f07da[m Make hero sections fully clickable on multiple pages
+[33m41d3c0e[m Restore header toggle and consolidate tab controls
+[33m5f4ad96[m Improve PDF report by replacing text arrows with SVG icons
+[33m86b888c[m Make engine tabs static and remove collapsible dropdown functionality
+[33m7f43efa[m Replace floating banner with inline glucose entry badge
+[33mabb2be5[m Remove unnecessary toggle from the header and keep tabs visible
+[33m312bcc7[m Add post-meal glucose measurement prompts and tracking
+[33maa4c5f4[m Update mobile navigation to use engine screen as primary entry point
+[33mad6176d[m Add a prompt to record glucose levels after meals
+[33m811d333[m Update the pro page to use a direct Stripe payment link
+[33mf3067e5[m Update the pro page to redirect to Stripe checkout
+[33m67c1d22[m Add quick-add menu for logging and update navigation
+[33m7f03a09[m Make the outcome distribution card on the dashboard rotatable
+[33m02ac0b8[m Update page content to reflect new pricing and availability information
+[33m719abc4[m Update website copy and add an email signature generator
+[33m2dec552[m Update website copy and create an email signature
+[33mf34df01[m Add mockups for Dexcom partnership questionnaire
+[33maa07557[m Add legal compliance pages and footer links
+[33m111d921[m Make chat panel fill available screen space on mobile
+[33m51bb445[m Add internationalization to the engine page and related components
+[33m33ad2ea[m Update the targeted element image
+[33m4b36fba[m Update the screenshot showing how to log meals
+[33m7dbea12[m Fix total bolus units displayed in the report
+[33me6b5a08[m Update pro page to use direct Stripe payment link
+[33me909009[m Update beta page to use direct Stripe payment link
+[33m76f35a2[m Create a Stripe checkout debugging guide for Replit
+[33mf849fc8[m Update beta page to clarify early access benefits
+[33m54abbc7[m Adjust the layout and styling for the logging wizard
+[33mddd063d[m Adjust the layout of feature tiles on the pro page
+[33m947b00d[m Remove manual fingerstick entry from glucose card
+[33m05cb7e1[m Add glowing Glev icon feedback to the microphone button
+[33mf4e8c70[m Update dashboard macro rings to match chip color scheme
+[33med8cc4b[m Update date and time formats to use consistent language settings
+[33m7b1161c[m Correct logo placement on landing pages
+[33mc2289b5[m Add a new brand header and insights section to the PDF report
+[33m34f2aa1[m Mahlzeit-Zeiten je nach Spracheinstellung formatieren (Task #25)
+[33macf9c78[m Task #26: Localize the Glev-Engine reasoning string in the /log result card
+[33m3dfa842[m Restore brand logo to navigation and buttons
+[33m0a7ae55[m Add support for multiple carbohydrate unit preferences
+[33m81b18f3[m i18n: translate full /log wizard + restore settings keys
+[33m9f34222[m Keep the engine tab strip expanded when related content is visible
+[33me0c88b2[m Task #19: Verlauf-Eintrag in die Desktop-Sidebar aufnehmen
+[33m74a07e8[m Engine-Seite an /log-Desktop-Layout-Pattern angleichen (Task #20)
+[33m1dcaa8a[m Update dashboard chips to match visual mockups
+[33m32168b1[m Make exercise log screen consistently accessible on all devices
+[33m78cd351[m Update navigation links and routing for improved user experience
+[33m0bf568d[m Replace language selection buttons with a dropdown menu and save button
+[33mfe00eeb[m Add confirmation modal for language changes in settings
+[33ma6277b5[m fix: desktop responsive layout for /log wizard + sidebar nav sync
+[33m23af110[m Transitioned from Plan to Build mode
+[33ma971615[m Add bilingual support for German and English to the application
+[33m8ec5191[m Improve mobile chat layout and spacing
