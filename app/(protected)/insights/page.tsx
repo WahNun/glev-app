@@ -1025,7 +1025,10 @@ export default function InsightsPage() {
                   );
                 })()}
 
-                {/* Suggestion / advisory block */}
+                {/* Suggestion / advisory block — the engine returns a
+                    structured i18n descriptor (message.key + message.params)
+                    so the UI can render it in whichever locale is active
+                    without leaking any UI/i18n imports into lib/engine. */}
                 {(suggestion.hasSuggestion || enginePattern.type === "spiking" || enginePattern.type === "overdosing" || enginePattern.type === "underdosing") && (
                   <div style={{
                     marginTop:12, padding:"10px 12px", borderRadius:10,
