@@ -1,0 +1,56 @@
+~/workspace$ git log --oneline d986295..f8e46d7
+f8e46d7 (origin/main, origin/HEAD) Add new section to explain the pain points of managing glucose levels
+a7d40d6 Update German text to display correctly on settings screens
+249ec08 Show correction factor (CF) on insulin exports
+584a051 Stripe-Checkout: add mandatory "Vollständiger Name" custom field
+29a2536 Add Apple Health (HealthKit) as a third CGM source
+4d6295a Update CGM settings to include Libre 3 support
+3aa7480 (subrepl-2ry15uut) Add carb-unit-aware export tests (Task #60)
+0dd00a6 Add notification preferences to user settings and the app
+4fc41c7 Convert insulin export columns to the user's chosen unit too
+fae88b5 Add smart notification system with meal pattern detection
+5c71aa4 Use the chosen carb unit in CSV and PDF exports (Task #56)
+321bc1a Show carbs in BE/KE inside the entry editor too (Task #55)
+950a05b Make dashboard + insights cards unselectable
+69c4567 Refactor settings page to iOS-style sectioned list
+a5a604b Task #53: BE/KE Carb-Unit-Selector for DACH users
+387b269 Organize settings into distinct sections and improve account management
+ca5ed9b Translate Step 2 (macro review) on the Engine page
+a86b884 Localize marketing/landing pages for German visitors (Task #45)
+e0aedde Improve text wrapping and layout for smaller screens
+da578bc Keep logo background dark in light mode
+f949a00 Localize Engine page reasoning and result UI (task #44)
+5ce5821 Task #43: e2e test for the Appearance theme picker
+4b3a19e Git commit prior to merge
+156ba6b Keep the logo square dark in all themes
+3eb03ce Add a dark favicon for the app header
+7c54715 i18n: Close bilingual gaps on cards & modals (task #36)
+4273b33 Add static screenshots of the app in light mode to the interface
+0ab07f1 Prioritize URL theme parameter for mockups
+fb318c2 Git commit prior to merge
+f27b91c Add a way to force a light or dark theme via URL parameters
+85e0aa7 Add full Light Mode to Glev's mobile app (Task #38)
+1c52204 Update how user history is retrieved and simplify settings
+3919f83 Manual entry modal: allow 0 macros, stabilize input, localize errors
+381177a Task #15: Unify Glev meal evaluation around lifecycleFor
+c09231a Restore Glev-Tab → /engine + equal macro rings (Task #32)
+ed74ff8 Task #33: Bestätigungsmail nach Stripe-Checkout + Resume-Link für Registrierung
+321b8b6 Update pro checkout to use a fixed trial end date
+4a006e5 Add ability for administrators to invite new users via email
+f5b2365 Add a contact form and integrate it across the application
+6e626c9 Replace email links with a contact form for better user experience
+e2ef3de Add button to email support directly from the cancellation page
+1f2f5ba Add new Stripe checkout flow for pro tier subscriptions
+ff089f4 Replace hardcoded payment links with dynamic checkout endpoints
+f65eb82 Update product page to use the correct early access Stripe product
+f561b91 Add password reset functionality to the login screen
+a156289 Add a complete Stripe checkout flow for beta testers with subscription and email confirmation
+2f73c92 Update image for Stripe webhook setup instructions
+322a508 Saved progress at the end of the loop
+6dfeca5 Saved progress at the end of the loop
+1ee6ed8 Update email content to reflect new subscription payment terms
+bfbf397 Update checkout to charge immediately and remove trial period
+073fde9 Add Stripe checkout and email confirmation for beta testers
+86628a6 Add a complete Stripe checkout flow for beta testers
+9e1e3d7 Fix incorrect food classification when AI misidentifies high-protein items
+:
