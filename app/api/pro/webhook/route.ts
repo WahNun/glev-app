@@ -1,10 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
+import { Resend } from "resend";
 import { getStripe } from "@/lib/stripeServer";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { proWelcomeHtml } from "@/lib/emails/pro-welcome";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+/**
+ * Lazy Resend client — constructing it at module load throws if RESEND_API_KEY
+ * is missing or contains weird chars (e.g. an accidentally-pasted placeholder),
+ * which would 500 every webhook delivery before we even reach the DB write.
+ * Defer to first use so a bad key only fails the email send (logged + swallowed)
+ * instead of the whole route.
+ */
+function getResend(): Resend {
+  return new Resend(process.env.RESEND_API_KEY);
+}
+
+/**
+ * Resolve the public app origin used in the Resume-Link inside the welcome
+ * email. Prefer the explicit env vars; fall back to the request host so the
+ * link still points at the *correct* deployment if env isn't configured
+ * (otherwise we'd email people a glev.app link from a preview deploy).
+ */
+function resolveAppUrl(req: NextRequest): string {
+  const env =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.NEXT_PUBLIC_SITE_ORIGIN ||
+    "";
+  if (env) return env.replace(/\/$/, "");
+  const proto =
+    req.headers.get("x-forwarded-proto") ?? new URL(req.url).protocol.replace(":", "");
+  const host =
+    req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? new URL(req.url).host;
+  return `${proto}://${host}`;
+}
 
 /**
  * POST /api/pro/webhook
@@ -152,24 +184,74 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ received: true, error: "no_binding_key" });
         }
 
-        // TODO(email): wire transactional sender (Resend / Postmark) and send:
-        //   Subject: Deine Glev-Mitgliedschaft wartet auf dich
-        //   Body:    "Hey [Vorname],
-        //
-        //            Schön dass du dabei bist. Deine Mitgliedschaft ist angelegt,
-        //            wir buchen am 1. Juli 2026 zum ersten Mal ab.
-        //
-        //            Bis dahin: nichts. Kein Newsletter-Spam, keine Reminder.
-        //            Wir melden uns zwei Wochen vor Launch mit deinem App-Zugang.
-        //
-        //            Falls du vor Launch doch kündigen möchtest, einfach auf diese
-        //            Email antworten oder im Stripe-Customer-Portal.
-        //
-        //            Bis im Juli,
-        //            Lucas
-        //            hello@glev.app"
         // eslint-disable-next-line no-console
         console.log("[pro/webhook] subscription created:", { email, customerId, subscriptionId, trialEndsAt });
+
+        // Send the post-checkout welcome email via Resend. Critically this
+        // includes a Resume-Link to /pro/success?session_id=… so the buyer
+        // can come back days later and confirm the subscription even if they
+        // closed the success-tab. Send is best-effort: if Resend fails we
+        // still ack 200 so Stripe doesn't retry the webhook (the DB write
+        // already succeeded above and that's the load-bearing part).
+        if (email) {
+          const name = session.customer_details?.name ?? null;
+          const appUrl = resolveAppUrl(req);
+          try {
+            const resend = getResend();
+            const { data, error } = await resend.emails.send({
+              from: "Glev <info@glev.app>",
+              to: email,
+              subject: "Deine Glev-Mitgliedschaft ist angelegt",
+              html: proWelcomeHtml(name, session.id, appUrl, trialEndsAt),
+            });
+            if (error) {
+              // Resend SDK returns errors as a structured object on the
+              // response — not as a thrown exception (only transport-level
+              // failures throw). Surface the FULL body — name, message,
+              // statusCode if present — so prod logs actually show *why*
+              // delivery failed (unverified domain, invalid recipient, etc.)
+              // instead of the generic "Failed to send".
+              // eslint-disable-next-line no-console
+              console.error("[pro/webhook] Resend send returned error:", {
+                to: email,
+                sessionId: session.id,
+                error,
+              });
+            } else if (data?.id) {
+              // Success: log message-id so we can grep delivery confirmations.
+              // eslint-disable-next-line no-console
+              console.log("[pro/webhook] welcome email sent:", {
+                to: email,
+                sessionId: session.id,
+                messageId: data.id,
+              });
+            } else {
+              // Should not happen — Resend always returns either data or
+              // error — but log noisily so we notice if the contract changes.
+              // eslint-disable-next-line no-console
+              console.warn("[pro/webhook] Resend send returned no data and no error:", {
+                to: email,
+                sessionId: session.id,
+              });
+            }
+          } catch (err) {
+            // Transport-level / network error — Resend SDK threw. Include
+            // the full error so the operator can see status code + body.
+            // eslint-disable-next-line no-console
+            console.error("[pro/webhook] Resend send threw:", {
+              to: email,
+              sessionId: session.id,
+              err,
+            });
+          }
+        } else {
+          // No email on the session — we already logged this loudly above
+          // for the binding-key path; repeat here so the email failure mode
+          // is also visible.
+          // eslint-disable-next-line no-console
+          console.warn("[pro/webhook] no email on completed session — skipping welcome mail", session.id);
+        }
+
         return NextResponse.json({ received: true });
       }
 

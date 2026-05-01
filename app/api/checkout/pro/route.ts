@@ -69,7 +69,17 @@ export async function POST(req: NextRequest) {
       // "Karte heute hinterlegen, keine Buchung bis Launch" — payment_method
       // wird IMMER eingesammelt (Default bei Trials wäre "if_required").
       payment_method_collection: "always",
-      subscription_data: trialIsViable ? { trial_end: PRO_TRIAL_END } : undefined,
+      subscription_data: {
+        // Trial only when launch is far enough out (Stripe constraint).
+        ...(trialIsViable ? { trial_end: PRO_TRIAL_END } : {}),
+        // Stamp the subscription so the webhook + downstream tooling can
+        // tell apart Pro from Beta even without looking at the price id.
+        metadata: { feature: "pro_subscription" },
+      },
+      // Top-level metadata mirrors subscription_data.metadata so the
+      // session itself (used by /api/verify-payment) carries the feature
+      // tag — that's how /pro/success refuses Beta sessions and vice-versa.
+      metadata: { feature: "pro_subscription" },
       success_url: `${appUrl}/pro/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/pro/cancelled`,
       locale: "de",

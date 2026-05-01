@@ -165,7 +165,18 @@ function WelcomeInner() {
         });
         const data = await res.json().catch(() => ({}));
         if (cancelled) return;
-        if (res.ok && data.valid) {
+        // /welcome is the Beta signup flow — accept paid sessions that
+        // are NOT explicitly tagged as Pro. The kind === "paid" gate keeps
+        // out Pro trial sessions (which are valid but un-charged), and the
+        // feature !== "pro_subscription" gate keeps out post-launch Pro
+        // immediate-charge subscriptions. Beta sessions don't stamp a
+        // feature tag, so `feature` will be null for legitimate Beta.
+        if (
+          res.ok &&
+          data.valid &&
+          data.kind === "paid" &&
+          data.feature !== "pro_subscription"
+        ) {
           setVerify({ kind: "valid", email: typeof data.email === "string" ? data.email : null });
         } else {
           setVerify({ kind: "invalid", reason: data?.reason ?? "not_paid" });

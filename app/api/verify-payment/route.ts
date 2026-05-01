@@ -63,7 +63,30 @@ export async function GET(req: NextRequest) {
       session.customer_details.email) ||
     null;
 
-  if (session.payment_status !== "paid") {
+  // Two valid shapes — both emit a `kind` so consumers can narrow:
+  //
+  //   1. "paid" — immediate charge succeeded. Beta uses this (setup-fee
+  //      line item charges day 1). A post-launch Pro subscription with no
+  //      trial would also land here.
+  //
+  //   2. "subscription_trial" — mode === "subscription", payment_status
+  //      "no_payment_required", and a subscription was created. Pro pre-
+  //      launch trial uses this (card on file, no charge until trial end).
+  //
+  // We *also* surface `feature` (read from session.metadata.feature, which
+  // /api/checkout/pro and /api/pro/checkout both stamp as "pro_subscription").
+  // That tag — not just `kind` — is how /pro/success and /welcome refuse the
+  // other flow's session. `kind` alone is ambiguous post-launch: a paid Pro
+  // sub and a paid Beta sub both look like "paid".
+  //
+  // Anything else (open / unpaid / expired) → `not_paid`.
+  const paid = session.payment_status === "paid";
+  const subscriptionTrial =
+    session.mode === "subscription" &&
+    session.payment_status === "no_payment_required" &&
+    Boolean(session.subscription);
+
+  if (!paid && !subscriptionTrial) {
     return NextResponse.json(
       {
         valid: false,
@@ -75,5 +98,9 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  return NextResponse.json({ valid: true, email });
+  const kind: "paid" | "subscription_trial" = paid ? "paid" : "subscription_trial";
+  const feature =
+    typeof session.metadata?.feature === "string" ? session.metadata.feature : null;
+
+  return NextResponse.json({ valid: true, email, kind, feature });
 }
