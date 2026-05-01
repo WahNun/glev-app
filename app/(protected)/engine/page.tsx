@@ -33,11 +33,26 @@ function nowLocalDateTime(): string {
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="var(--surface)", BORDER="var(--border)";
 
+/**
+ * Structured payload for the recommendation's reasoning line. The
+ * engine returns the *shape* of the explanation, not a pre-rendered
+ * string, so the render site can translate it under the active locale
+ * (with proper ICU plural forms for `count`). This mirrors the same
+ * pattern the meal-wizard view uses on /log.
+ */
+type ReasoningPayload =
+  | { kind: "historical"; count: number; avg: number }
+  | { kind: "blended"; count: number }
+  | { kind: "formula"; carbs: number; icr: number; correction: number };
+
 interface Recommendation {
   dose: number;
   confidence: "HIGH"|"MEDIUM"|"LOW";
   source: string;
-  reasoning: string;
+  /** Structured reason — translate at render time, not engine-run time. */
+  reasoning: ReasoningPayload;
+  /** Already-translated safety / context bullets (basal, stacking, exercise). */
+  safetyNotes: string[];
   carbDose: number;
   correctionDose: number;
   similarMeals: Meal[];
@@ -144,19 +159,19 @@ function runGlevEngine(
     (m.evaluation === "GOOD") && m.insulin_units
   );
 
+  // Safety notes are still emitted as already-translated strings — they
+  // pull live timing data from the recent-logs window and don't benefit
+  // from being re-rendered on locale flip (the engine re-runs on dose
+  // input changes anyway). The reason payload, on the other hand, stays
+  // raw so the render site can apply ICU plural forms per locale.
   const safetyNotes = safetyNotesFromLogs(insulinLogs, exerciseLogs, t, fmt);
-  const safetySuffix = safetyNotes.length > 0 ? " " + safetyNotes.join(" ") : "";
-  const unitsShort = t("units_short");
 
   if (similar.length >= 3) {
     const avg = Math.round(similar.reduce((s,m)=>s+(m.insulin_units||0),0)/similar.length * 10)/10;
     return {
       dose: avg, confidence:"HIGH", source:"historical",
-      reasoning: t("reason_historical", {
-        count: similar.length,
-        avg: fmt(avg, 1),
-        units: unitsShort,
-      }) + safetySuffix,
+      reasoning: { kind: "historical", count: similar.length, avg },
+      safetyNotes,
       carbDose:Math.round(carbDose*10)/10, correctionDose:Math.round(correctionDose*10)/10,
       similarMeals: similar.slice(0,5),
     };
@@ -167,7 +182,8 @@ function runGlevEngine(
     const blended = Math.round(((histAvg + formulaDose)/2)*10)/10;
     return {
       dose: blended, confidence:"MEDIUM", source:"blended",
-      reasoning: t("reason_blended", { count: similar.length }) + safetySuffix,
+      reasoning: { kind: "blended", count: similar.length },
+      safetyNotes,
       carbDose:Math.round(carbDose*10)/10, correctionDose:Math.round(correctionDose*10)/10,
       similarMeals: similar,
     };
@@ -175,15 +191,53 @@ function runGlevEngine(
 
   return {
     dose: formulaDose, confidence:"LOW", source:"formula",
-    reasoning: t("reason_formula", {
+    reasoning: {
+      kind: "formula",
       carbs,
       icr,
-      correction: fmt(Math.round(correctionDose*10)/10, 1),
-      units: unitsShort,
-    }) + safetySuffix,
+      correction: Math.round(correctionDose*10)/10,
+    },
+    safetyNotes,
     carbDose:Math.round(carbDose*10)/10, correctionDose:Math.round(correctionDose*10)/10,
     similarMeals:[],
   };
+}
+
+/**
+ * Turn a structured {@link ReasoningPayload} into the user-facing string
+ * for the active locale, then append any safety bullets. Lives next to
+ * the engine so the rendering rule for each `kind` stays close to the
+ * payload that produced it.
+ */
+function renderReasoning(
+  reasoning: ReasoningPayload,
+  safetyNotes: string[],
+  t: EngineTranslator,
+  fmt: NumFormatter,
+): string {
+  const unitsShort = t("units_short");
+  let main: string;
+  switch (reasoning.kind) {
+    case "historical":
+      main = t("reason_historical", {
+        count: reasoning.count,
+        avg: fmt(reasoning.avg, 1),
+        units: unitsShort,
+      });
+      break;
+    case "blended":
+      main = t("reason_blended", { count: reasoning.count });
+      break;
+    case "formula":
+      main = t("reason_formula", {
+        carbs: reasoning.carbs,
+        icr: reasoning.icr,
+        correction: fmt(reasoning.correction, 1),
+        units: unitsShort,
+      });
+      break;
+  }
+  return safetyNotes.length > 0 ? `${main} ${safetyNotes.join(" ")}` : main;
 }
 
 const CONF_COLOR: Record<string, string> = { HIGH:GREEN, MEDIUM:ORANGE, LOW:PINK };
@@ -2132,7 +2186,7 @@ export default function EnginePage() {
                     </button>
                     {reasoningExpanded && (
                       <div id="gpt-reasoning-body" style={{ padding: "0 16px 14px", fontSize: 13, lineHeight: 1.6, color: "var(--text-body)" }}>
-                        {result.reasoning}
+                        {renderReasoning(result.reasoning, result.safetyNotes, tEngineFn, formatNum)}
                       </div>
                     )}
                   </div>
