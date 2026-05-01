@@ -5,24 +5,17 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import type Stripe from 'stripe';
 import { stripe } from '@/lib/stripe';
-import { Resend } from 'resend';
 import { createClient } from '@supabase/supabase-js';
-import { betaWelcomeHtml } from '@/lib/emails/beta-welcome';
+import { enqueueEmail } from '@/lib/emails/outbox';
 
-// Lazy clients — constructing Resend at module load throws if the API key
-// contains non-ASCII chars (e.g. accidentally pasted "re_••••" placeholder),
-// which would 500 every webhook delivery. Defer to first use so a bad key
-// only fails the email send (logged + swallowed per spec) instead of the
-// whole route.
+// Lazy admin client — constructing it at module load is fine (no
+// network), but the env vars may be missing in certain build contexts.
+// Keeping it lazy mirrors the rest of the codebase.
 function getSupabaseAdmin() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
-}
-
-function getResend() {
-  return new Resend(process.env.RESEND_API_KEY);
 }
 
 function resolveAppUrl(req: NextRequest): string {
@@ -80,58 +73,57 @@ export async function POST(req: NextRequest) {
 
     const appUrl = resolveAppUrl(req);
 
-    // 1. Welcome Email via Resend — INCLUDES the resume link so the buyer
-    //    can come back days later and finish signup even if they closed
-    //    the success-tab.
+    // 1. Welcome Email — enqueue into the durable outbox instead of
+    //    calling Resend synchronously here. The cron worker
+    //    (/api/cron/flush-outbox) picks it up within ~1-2 min and
+    //    handles retries with exponential backoff up to 5 attempts.
+    //
+    //    Why this MUST happen *first*, before any other work: if the
+    //    outbox insert fails (Supabase unreachable, etc.) we want
+    //    Stripe to retry the *entire* webhook, otherwise the buyer
+    //    pays and never gets their welcome mail with the resume link
+    //    — exactly the bug this task closes. Returning a non-2xx
+    //    here is the trigger that asks Stripe to come back. The
+    //    downstream profile/reservation updates are idempotent
+    //    (status='pending' guards) so re-running them is safe.
+    //
+    //    The dedupe key (Stripe session id) makes that retry
+    //    duplicate-proof: a partial unique index on
+    //    (template, dedupe_key) means the second attempt returns the
+    //    existing row id instead of creating a second mail.
     try {
-      const resend = getResend();
-      const { data, error } = await resend.emails.send({
-        from: 'Glev <info@glev.app>',
-        to: email,
-        subject: 'Willkommen bei Glev — bitte schließe deine Registrierung ab',
-        html: betaWelcomeHtml(name, sessionId, appUrl),
+      const { id: outboxId, deduplicated } = await enqueueEmail({
+        recipient: email,
+        template: 'beta-welcome',
+        payload: { name, sessionId, appUrl },
+        dedupeKey: sessionId,
       });
-
-      if (error) {
-        // Resend SDK returns errors as a structured object on the response,
-        // not as a thrown exception (which only happens for transport-level
-        // failures). Surface the full body — `name`, `message`, and the
-        // statusCode if present — so prod logs actually show *why* delivery
-        // failed (unverified domain, invalid recipient, etc.) instead of
-        // the generic "Failed to send" we used to print.
-        // eslint-disable-next-line no-console
-        console.error('[webhook] Resend send returned error:', {
-          to: email,
-          sessionId,
-          error,
-        });
-      } else if (data?.id) {
-        // Success: log message-id so we can grep for delivery confirmations.
-        // eslint-disable-next-line no-console
-        console.log('[webhook] Welcome email sent:', {
-          to: email,
-          sessionId,
-          messageId: data.id,
-        });
-      } else {
-        // Should not happen — Resend always returns either data or error —
-        // but keep a noisy log so we notice if the contract changes.
-        // eslint-disable-next-line no-console
-        console.warn('[webhook] Resend send returned no data and no error:', {
-          to: email,
-          sessionId,
-        });
-      }
-    } catch (err) {
-      // Transport-level / network error — Resend SDK threw. Include the
-      // full error so the operator can see status code + body.
       // eslint-disable-next-line no-console
-      console.error('[webhook] Resend send threw:', {
+      console.log('[webhook] Welcome email enqueued:', {
         to: email,
         sessionId,
-        err,
+        outboxId,
+        deduplicated,
       });
-      // Nicht abbrechen — Supabase-Updates trotzdem versuchen
+    } catch (err) {
+      // Surface the failure to Stripe with a 500 so it retries the
+      // delivery (Stripe retries up to 3 days at increasing intervals).
+      // We bail out *before* the profile/reservation updates so the
+      // retry runs the whole pipeline coherently — the email is the
+      // load-bearing piece (it carries the resume link the buyer
+      // needs to complete signup), so without it nothing else should
+      // happen either.
+      // eslint-disable-next-line no-console
+      console.error('[webhook] Outbox enqueue failed — asking Stripe to retry:', {
+        to: email,
+        sessionId,
+        eventId: event.id,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      return NextResponse.json(
+        { error: 'outbox enqueue failed, please retry' },
+        { status: 500 },
+      );
     }
 
     const supabaseAdmin = getSupabaseAdmin();
