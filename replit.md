@@ -118,6 +118,7 @@ All protected routes live under `src/app/(protected)/` and require Supabase auth
 - 3+ GOOD matches → HIGH confidence (historical average)
 - 1–2 matches → MEDIUM confidence (blended)
 - 0 matches → LOW confidence (ICR formula only)
+- Desktop wizard layout (>768px): 2-column grid with `minmax(0, 1fr) 400px`, wizard left + sticky `EngineChatPanel` sidebar right. Mobile (<=768px) keeps the chat stacked inside Step 1's body. Single `chatPanelNode` const is rendered in exactly one location based on `isMobile`. Covered by `tests/e2e/engine-chat-sidebar.spec.ts`.
 
 ### Seed Data (`seedMealsIfEmpty`)
 - Called on dashboard load; inserts 31 realistic T1D meals if user has 0 entries

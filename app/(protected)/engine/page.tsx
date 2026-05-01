@@ -1210,6 +1210,96 @@ export default function EnginePage() {
   const inp: React.CSSProperties = { background:"var(--input-bg)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"11px 14px", color:"var(--text)", fontSize:14, outline:"none", width:"100%" };
   const card: React.CSSProperties = { background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"20px 24px" };
 
+  // Single source of truth for the EngineChatPanel JSX — mounted in
+  // exactly one location depending on viewport. On mobile (<=768px) it
+  // sits inside Step 1's body, between the Sprechen pill and the
+  // "Weiter zu Makros prüfen" button (legacy stacked layout). On
+  // desktop (>768px) it lives in the sticky right sidebar next to the
+  // wizard so users can keep chatting/refining macros while reviewing
+  // Step 2 + Step 3 — mirroring /log's `minmax(0, 1fr) 400px` pattern.
+  // The chatPanelRef is attached to the wrapper so the existing
+  // scroll-into-view after voice parse still works on mobile; on
+  // desktop the panel is always visible so the scroll is a no-op.
+  const chatPanelNode = (
+    <div
+      ref={chatPanelRef}
+      style={{
+        width: "100%",
+        // On desktop the wrapper sits inside a sticky <aside> with a
+        // fixed viewport-derived height — `height: 100%` lets the
+        // EngineChatPanel's own `height: 100%` desktop branch fill
+        // that available space. On mobile the panel sets its own
+        // `100svh - 340px` calc, so we leave the wrapper as auto to
+        // avoid collapsing inside the Step 1 flex column.
+        height: isMobile ? "auto" : "100%",
+        marginTop: isMobile ? 4 : 0,
+      }}
+    >
+      <EngineChatPanel
+        macros={{
+          // EngineChatPanel + /api/chat-macros operate in
+          // GRAMS end-to-end, so convert the displayed carbs
+          // value (g/BE/KE) back to grams here.
+          carbs:   carbUnit.toGrams(Number(carbs) || 0),
+          protein: Number(protein) || 0,
+          fat:     Number(fat)     || 0,
+          fiber:   Number(fiber)   || 0,
+        }}
+        description={desc}
+        onPatch={(patch) => {
+          // SAFETY: when the chat re-aggregation came back as
+          // 'unknown' (at least one ingredient where both DB
+          // lookups AND the GPT estimate failed) the totals
+          // can't be trusted for insulin dosing — leave the
+          // form fields untouched so the user has to enter
+          // them manually. Description still updates so they
+          // can see what the AI heard.
+          if (patch.nutritionSource !== "unknown") {
+            // patch.carbs comes back in GRAMS — convert to the
+            // user's display unit before writing back into form.
+            setCarbs(String(carbUnit.fromGrams(Number(patch.carbs))));
+            setProtein(String(patch.protein));
+            setFat(String(patch.fat));
+            setFiber(String(patch.fiber));
+          }
+          if (patch.description) setDesc(patch.description);
+          // The chat-macros route runs the chat description through
+          // the same DB-backed nutrition pipeline as voice input,
+          // so refresh the provenance badge whenever the patch
+          // includes a fresh source (null = pure meta question,
+          // current source stays).
+          if (patch.nutritionSource !== undefined && patch.nutritionSource !== null) {
+            setNutritionSource(patch.nutritionSource);
+          }
+          // Forward per-item breakdown so the next save persists
+          // each ingredient's source into meals.parsed_json.
+          // Three cases:
+          //  - items === null/undefined (meta-question turn) →
+          //    KEEP the existing breakdown from the initial parse.
+          //  - items === []  (re-aggregation produced nothing) →
+          //    EXPLICITLY clear so the save site falls back to
+          //    the legacy single-item shape and stale provenance
+          //    cannot leak into the saved meal.
+          //  - items.length  > 0 (re-aggregation succeeded)   →
+          //    overwrite with the fresh per-item breakdown.
+          if (Array.isArray(patch.items)) {
+            setParsedItems(patch.items);
+          }
+          const hasMacros =
+            patch.carbs > 0 || patch.protein > 0 ||
+            patch.fat > 0   || patch.fiber > 0;
+          if (hasMacros) void handlePullCgm();
+        }}
+        seed={chatSeed}
+        isMobile={isMobile}
+        expanded={true}
+        onToggleExpanded={() => { /* always expanded */ }}
+        parsing={parsing}
+        hasUsedVoice={hasUsedVoice}
+      />
+    </div>
+  );
+
   return (
     <div style={{ maxWidth: 1100, margin:"0 auto" }}>
       {/* The previous "Glev Engine" h1 + subtitle block was removed per
@@ -1295,12 +1385,36 @@ export default function EnginePage() {
       })()}
 
       {tab === "engine" && (
-        <div style={{ maxWidth: 720, margin: "0 auto" }}>
-          {/* Wizard form is single-column by design (chat lives inside Step 1's
-              body), so we cap the inner column at 720 — wide enough to feel
-              generous on desktop but narrow enough that long input rows stay
-              comfortable to scan. The outer container at 1100 keeps the page
-              centered and matches /log's desktop pattern. */}
+        <div
+          style={
+            isMobile
+              ? { maxWidth: 720, margin: "0 auto" }
+              : {
+                  // Desktop 2-column layout mirrors /log's old
+                  // `minmax(0, 1fr) 400px` grid: wizard left, sticky
+                  // EngineChatPanel sidebar right. Aligning items at
+                  // `start` lets the sidebar's position:sticky anchor
+                  // independently of the wizard's intrinsic height,
+                  // so the chat stays glued under the app header
+                  // while the user scrolls Steps 2 and 3. The
+                  // `minmax(0, 1fr)` floor on the wizard column
+                  // collapses any min-content overflow so children
+                  // with long inline content (chips, badges) don't
+                  // stretch the column past its intended share.
+                  display: "grid",
+                  gridTemplateColumns: "minmax(0, 1fr) 400px",
+                  gap: 24,
+                  alignItems: "start",
+                }
+          }
+        >
+          <div style={{ maxWidth: 720, margin: "0 auto", width: "100%", minWidth: 0 }}>
+          {/* Wizard form is single-column by design — on mobile the chat
+              panel sits inside Step 1's body (legacy stacked layout), on
+              desktop it lives in the sticky right sidebar declared after
+              this column. We still cap the wizard's inner content at 720
+              so input rows stay comfortable to scan even when the wider
+              outer grid gives the column extra breathing room. */}
           <style>{`
             @keyframes engVPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.06)} }
             @keyframes engSpin   { to { transform: rotate(360deg) } }
@@ -1533,70 +1647,12 @@ export default function EnginePage() {
                   {tEngine("voice_unavailable_hint")}
                 </div>
               )}
-              <div ref={chatPanelRef} style={{ width: "100%", marginTop: 4 }}>
-                <EngineChatPanel
-                  macros={{
-                    // EngineChatPanel + /api/chat-macros operate in
-                    // GRAMS end-to-end, so convert the displayed carbs
-                    // value (g/BE/KE) back to grams here.
-                    carbs:   carbUnit.toGrams(Number(carbs) || 0),
-                    protein: Number(protein) || 0,
-                    fat:     Number(fat)     || 0,
-                    fiber:   Number(fiber)   || 0,
-                  }}
-                  description={desc}
-                  onPatch={(patch) => {
-                    // SAFETY: when the chat re-aggregation came back as
-                    // 'unknown' (at least one ingredient where both DB
-                    // lookups AND the GPT estimate failed) the totals
-                    // can't be trusted for insulin dosing — leave the
-                    // form fields untouched so the user has to enter
-                    // them manually. Description still updates so they
-                    // can see what the AI heard.
-                    if (patch.nutritionSource !== "unknown") {
-                      // patch.carbs comes back in GRAMS — convert to the
-                      // user's display unit before writing back into form.
-                      setCarbs(String(carbUnit.fromGrams(Number(patch.carbs))));
-                      setProtein(String(patch.protein));
-                      setFat(String(patch.fat));
-                      setFiber(String(patch.fiber));
-                    }
-                    if (patch.description) setDesc(patch.description);
-                    // The chat-macros route runs the chat description through
-                    // the same DB-backed nutrition pipeline as voice input,
-                    // so refresh the provenance badge whenever the patch
-                    // includes a fresh source (null = pure meta question,
-                    // current source stays).
-                    if (patch.nutritionSource !== undefined && patch.nutritionSource !== null) {
-                      setNutritionSource(patch.nutritionSource);
-                    }
-                    // Forward per-item breakdown so the next save persists
-                    // each ingredient's source into meals.parsed_json.
-                    // Three cases:
-                    //  - items === null/undefined (meta-question turn) →
-                    //    KEEP the existing breakdown from the initial parse.
-                    //  - items === []  (re-aggregation produced nothing) →
-                    //    EXPLICITLY clear so the save site falls back to
-                    //    the legacy single-item shape and stale provenance
-                    //    cannot leak into the saved meal.
-                    //  - items.length  > 0 (re-aggregation succeeded)   →
-                    //    overwrite with the fresh per-item breakdown.
-                    if (Array.isArray(patch.items)) {
-                      setParsedItems(patch.items);
-                    }
-                    const hasMacros =
-                      patch.carbs > 0 || patch.protein > 0 ||
-                      patch.fat > 0   || patch.fiber > 0;
-                    if (hasMacros) void handlePullCgm();
-                  }}
-                  seed={chatSeed}
-                  isMobile={isMobile}
-                  expanded={true}
-                  onToggleExpanded={() => { /* always expanded in Step 1 */ }}
-                  parsing={parsing}
-                  hasUsedVoice={hasUsedVoice}
-                />
-              </div>
+              {/* Mobile-only mount of the chat panel. On desktop the same
+                  chatPanelNode lives in the sticky right sidebar (rendered
+                  next to this wizard column) so the chat stays visible
+                  while the user moves through Steps 2 and 3 — see the
+                  outer 2-column grid below. */}
+              {isMobile && chatPanelNode}
               {(() => {
                 const anyMacro =
                   (Number(carbs)   || 0) > 0 ||
@@ -2164,6 +2220,30 @@ export default function EnginePage() {
                 </>
               )}
             </div>
+          )}
+          </div>
+          {/* Desktop-only sticky chat sidebar. Mounts the SAME chatPanelNode
+              that mobile renders inside Step 1, so all wizard steps share
+              one chat session — no remount, no message reset when the user
+              advances Step 1 → 2 → 3. position:sticky pins the panel below
+              the global app header (~64px) plus a small breathing gap; the
+              capped height keeps the panel within the viewport so its
+              internal message scroller works as expected and the input row
+              never disappears below the fold. minHeight 480 protects the
+              experience on shorter viewports (e.g. landscape laptops). */}
+          {!isMobile && (
+            <aside
+              style={{
+                position: "sticky",
+                top: 16,
+                height: "calc(100vh - 32px)",
+                minHeight: 480,
+                alignSelf: "start",
+                display: "flex",
+              }}
+            >
+              {chatPanelNode}
+            </aside>
           )}
         </div>
         )}
