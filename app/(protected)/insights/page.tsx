@@ -1392,8 +1392,8 @@ export default function InsightsPage() {
             // grouping both ICR-related views into one cluster. Color switched
             // from ORANGE to ACCENT_SOFT (lighter sibling of the Adaptive
             // Engine's ACCENT) to signal "same metric family, lower hierarchy".
-            { label:"Raw ICR",      val:`1:${estICR}`,   sub:"raw 7d avg · ignores outcome", color:ACCENT_SOFT,
-              formula:"carbs / insulin (last 7)",      explain:"Naive average of carbs ÷ insulin over the last 7 meals. Ignores whether the dose actually landed in target — spikes and overdoses count the same as good outcomes. The Adaptive Engine ICR above is the smarter, outcome-weighted version.",
+            { label:tInsights("tile_raw_icr_label"),      val:`1:${estICR}`,   sub:tInsights("tile_raw_icr_sub"), color:ACCENT_SOFT,
+              formula:tInsights("tile_raw_icr_formula"),   explain:tInsights("tile_raw_icr_explain"),
               infoBack: (
                 <IcrInfoBack
                   heading="Was zeigt dieser Wert?"
@@ -1403,13 +1403,13 @@ export default function InsightsPage() {
                 />
               ),
             },
-            { label:"Avg glucose",  val:`${avgGlucose}`, sub:"mg/dL pre-meal",           color:ACCENT,
-              formula:"Σ glucose_before / count",      explain:"Average pre-meal glucose. Lower reflects better fasting control." },
+            { label:tInsights("tile_avg_glucose_label"),  val:`${avgGlucose}`, sub:tInsights("tile_avg_glucose_sub"),           color:ACCENT,
+              formula:tInsights("tile_avg_glucose_formula"),      explain:tInsights("tile_avg_glucose_explain") },
             // Good rate moved out of slot 0 into Raw ICR's previous position.
-            { label:"Good rate",    val:`${goodRate.toFixed(1)}%`,  sub:`${goodAll} of ${total}`,   color:GREEN,
-              formula:"GOOD / Total × 100",            explain:"Share of meals where the dose was within ±35% of the ICR estimate." },
-            { label:"Avg insulin",  val:`${avgInsulin}u`, sub:`${carbUnit.display(avgCarbs)} avg carbs`, color:"#A78BFA",
-              formula:"Σ units / count",               explain:"Mean insulin per meal. Track against carbs to validate your ratio." },
+            { label:tInsights("tile_good_rate_label"),    val:`${goodRate.toFixed(1)}%`,  sub:tInsights("tile_good_rate_sub", { good: goodAll, total }),   color:GREEN,
+              formula:tInsights("tile_good_rate_formula"),            explain:tInsights("tile_good_rate_explain") },
+            { label:tInsights("tile_avg_insulin_label"),  val:`${avgInsulin}u`, sub:tInsights("tile_avg_insulin_sub", { carbs: carbUnit.display(avgCarbs) }), color:"#A78BFA",
+              formula:tInsights("tile_avg_insulin_formula"),               explain:tInsights("tile_avg_insulin_explain") },
           ].map((t,i) => <InsightFlipTile key={i} tile={t}/>)}
         </div>
       ),

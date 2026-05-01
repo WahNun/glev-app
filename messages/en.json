@@ -364,7 +364,24 @@
     "entries": "Entries",
     "no_entries": "No entries yet"
   },
-  "insights": {},
+  "insights": {
+    "tile_raw_icr_label": "Raw ICR",
+    "tile_raw_icr_sub": "raw 7d avg · ignores outcome",
+    "tile_raw_icr_formula": "carbs / insulin (last 7)",
+    "tile_raw_icr_explain": "Naive average of carbs ÷ insulin over the last 7 meals. Ignores whether the dose actually landed in target — spikes and overdoses count the same as good outcomes. The Adaptive Engine ICR above is the smarter, outcome-weighted version.",
+    "tile_avg_glucose_label": "Avg glucose",
+    "tile_avg_glucose_sub": "mg/dL pre-meal",
+    "tile_avg_glucose_formula": "Σ glucose_before / count",
+    "tile_avg_glucose_explain": "Average pre-meal glucose. Lower reflects better fasting control.",
+    "tile_good_rate_label": "Good rate",
+    "tile_good_rate_sub": "{good} of {total}",
+    "tile_good_rate_formula": "GOOD / Total × 100",
+    "tile_good_rate_explain": "Share of meals where the dose was within ±35% of the ICR estimate.",
+    "tile_avg_insulin_label": "Avg insulin",
+    "tile_avg_insulin_sub": "{carbs} avg carbs",
+    "tile_avg_insulin_formula": "Σ units / count",
+    "tile_avg_insulin_explain": "Mean insulin per meal. Track against carbs to validate your ratio."
+  },
   "settings": {
     "title": "Settings",
     "language": "Language",
