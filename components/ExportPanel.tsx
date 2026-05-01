@@ -8,6 +8,7 @@ import {
   fetchAllInsulinLogs,
   fetchAllExerciseLogs,
   fetchAllFingersticks,
+  countAllInWindow,
   mealsToCSV,
   insulinToCSV,
   exerciseToCSV,
@@ -15,6 +16,7 @@ import {
   downloadFile,
   todayStamp,
   type DateWindow,
+  type RangeCounts,
 } from "@/lib/export";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
 
@@ -181,6 +183,14 @@ export default function ExportPanel() {
   const [rangePreset, setRangePreset] = useState<RangePreset>("all");
   const [customFrom, setCustomFrom]   = useState<string>("");
   const [customTo, setCustomTo]       = useState<string>("");
+  // Live preview of how many rows the chosen range will pull. Drives
+  // the count line under the picker so the user can confirm the slice
+  // before clicking export — and avoid handing a doctor a blank PDF.
+  // `null` = not yet loaded (initial render or in-flight refresh after
+  // a picker change); a populated `RangeCounts` = latest result for
+  // the currently chosen range.
+  const [counts, setCounts] = useState<RangeCounts | null>(null);
+  const [countsLoading, setCountsLoading] = useState<boolean>(true);
   // Snapshot the user's current ICR (g/IE) AND correction factor
   // (mg/dL drop per 1 IE) once on mount so we can annotate the
   // insulin CSV/PDF with the ratio in their chosen carb unit
@@ -246,6 +256,46 @@ export default function ExportPanel() {
       cancelled = true;
     };
   }, []);
+
+  // Re-count whenever the picker changes. Uses the same `resolveRange`
+  // helper as the export buttons, so the preview cannot drift from
+  // what the export actually produces (same `from`/`to` window, same
+  // per-table column bound). The `cancelled` guard drops stale
+  // responses if the user clicks through several presets in quick
+  // succession before the previous count finishes — only the most
+  // recent picker state survives.
+  //
+  // Errors swallow to a 0/0/0/0 result via the count helpers themselves;
+  // we don't surface a separate error state for the preview because a
+  // missing count line is much less alarming than a red banner under
+  // a perfectly working export panel. The actual export still throws
+  // and flashes if it fails.
+  useEffect(() => {
+    let cancelled = false;
+    setCountsLoading(true);
+    const { window } = resolveRange(rangePreset, customFrom, customTo);
+    countAllInWindow(window)
+      .then((next) => {
+        if (cancelled) return;
+        setCounts(next);
+      })
+      .catch(() => {
+        // The count helpers already collapse Supabase errors to 0, so
+        // a real throw here would be an unexpected runtime failure
+        // (e.g. network rejection before reaching supabase). Fall back
+        // to a zero-count snapshot so the UI shows the empty-state hint
+        // rather than getting stuck on the "Zähle…" spinner forever.
+        if (cancelled) return;
+        setCounts({ meals: 0, insulin: 0, exercise: 0, fingersticks: 0 });
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setCountsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [rangePreset, customFrom, customTo]);
 
   function flash(kind: "ok" | "err", text: string) {
     setMsg({ kind, text });
@@ -493,6 +543,41 @@ export default function ExportPanel() {
             </label>
           </div>
         )}
+
+        {/* Live count preview — shows how many rows the chosen range
+            will pull (per kind), so the user can confirm the slice
+            before clicking export. Updates whenever the preset or
+            custom dates change. Stays inside the picker card so it
+            visually reads as a confirmation of the controls above
+            rather than a separate widget. */}
+        <div
+          aria-live="polite"
+          style={{
+            marginTop: 12,
+            fontSize: 11,
+            color: "var(--text-dim)",
+            lineHeight: 1.5,
+            minHeight: 16,
+          }}
+        >
+          {countsLoading || counts === null ? (
+            <span style={{ opacity: 0.7 }}>{t("count_loading")}</span>
+          ) : counts.meals + counts.insulin + counts.exercise + counts.fingersticks === 0 ? (
+            <span style={{ color: "var(--text-muted)" }}>{t("count_empty")}</span>
+          ) : (
+            <span>
+              {[
+                counts.meals        > 0 ? t("count_meals",        { n: counts.meals })        : null,
+                counts.insulin      > 0 ? t("count_insulin",      { n: counts.insulin })      : null,
+                counts.exercise     > 0 ? t("count_exercise",     { n: counts.exercise })     : null,
+                counts.fingersticks > 0 ? t("count_fingersticks", { n: counts.fingersticks }) : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+              {t("count_summary_suffix")}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Per-kind rows */}

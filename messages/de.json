@@ -586,7 +586,14 @@
     "range_90d": "Letzte 90 Tage",
     "range_custom": "Eigener Zeitraum",
     "range_from": "Von",
-    "range_to": "Bis"
+    "range_to": "Bis",
+    "count_loading": "Zähle Einträge im gewählten Zeitraum…",
+    "count_empty": "Keine Einträge im gewählten Zeitraum.",
+    "count_summary_suffix": " im gewählten Zeitraum",
+    "count_meals": "{n, plural, one {# Mahlzeit} other {# Mahlzeiten}}",
+    "count_insulin": "{n, plural, one {# Insulin-Eintrag} other {# Insulin-Einträge}}",
+    "count_exercise": "{n, plural, one {# Sport-Eintrag} other {# Sport-Einträge}}",
+    "count_fingersticks": "{n, plural, one {# Fingerstick} other {# Fingersticks}}"
   },
   "fingerstick": {
     "card_eyebrow": "Finger-Stick Glukose",

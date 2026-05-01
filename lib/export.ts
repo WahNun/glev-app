@@ -271,6 +271,84 @@ export async function fetchAllFingersticks(window?: DateWindow): Promise<Fingers
 }
 
 /* ──────────────────────────────────────────────────────────────────
+   Count helpers — mirror the four `fetchAll*` helpers above but use
+   Supabase's `{ count: 'exact', head: true }` so we get just the row
+   count (no payload). Used by `ExportPanel` to render a live preview
+   line ("12 Mahlzeiten · 8 Insulin · …") under the date-range picker
+   so the user can confirm their slice before clicking export.
+
+   The filter logic mirrors the matching `fetchAll*` helper exactly
+   (same column for the bound — `created_at` for meals/insulin/
+   exercise, `measured_at` for fingersticks — same gte/lte direction)
+   so the preview cannot drift from the actual file contents.
+
+   On error / missing supabase client, each helper returns 0 instead
+   of throwing — a missing count line is preferable to blocking the
+   panel render or showing a scary error for a soft preview.
+   ────────────────────────────────────────────────────────────────── */
+
+async function countCreatedAtTable(
+  table: "meals" | "insulin_logs" | "exercise_logs",
+  window?: DateWindow,
+): Promise<number> {
+  if (!supabase) return 0;
+  let q = supabase.from(table).select("id", { count: "exact", head: true });
+  if (window?.from) q = q.gte("created_at", window.from);
+  if (window?.to)   q = q.lte("created_at", window.to);
+  const { count, error } = await q;
+  if (error) return 0;
+  return count ?? 0;
+}
+
+export async function countMealsInWindow(window?: DateWindow): Promise<number> {
+  return countCreatedAtTable("meals", window);
+}
+
+export async function countInsulinLogsInWindow(window?: DateWindow): Promise<number> {
+  return countCreatedAtTable("insulin_logs", window);
+}
+
+export async function countExerciseLogsInWindow(window?: DateWindow): Promise<number> {
+  return countCreatedAtTable("exercise_logs", window);
+}
+
+export async function countFingersticksInWindow(window?: DateWindow): Promise<number> {
+  if (!supabase) return 0;
+  // Same `measured_at` (not `created_at`) bound as `fetchAllFingersticks`,
+  // so the preview cannot drift from what the export actually contains.
+  let q = supabase
+    .from("fingerstick_readings")
+    .select("id", { count: "exact", head: true });
+  if (window?.from) q = q.gte("measured_at", window.from);
+  if (window?.to)   q = q.lte("measured_at", window.to);
+  const { count, error } = await q;
+  if (error) return 0;
+  return count ?? 0;
+}
+
+/**
+ * Per-kind row counts for a given window — convenience wrapper that
+ * runs all four count queries in parallel. Used by `ExportPanel` for
+ * the preview line under the date-range picker.
+ */
+export interface RangeCounts {
+  meals: number;
+  insulin: number;
+  exercise: number;
+  fingersticks: number;
+}
+
+export async function countAllInWindow(window?: DateWindow): Promise<RangeCounts> {
+  const [meals, insulin, exercise, fingersticks] = await Promise.all([
+    countMealsInWindow(window),
+    countInsulinLogsInWindow(window),
+    countExerciseLogsInWindow(window),
+    countFingersticksInWindow(window),
+  ]);
+  return { meals, insulin, exercise, fingersticks };
+}
+
+/* ──────────────────────────────────────────────────────────────────
    Browser download helper. We use a Blob + object URL because that
    keeps memory usage low for large CSVs (no base64 inflation) and
    plays nicely with the browser's native filename suggestion.
