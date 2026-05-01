@@ -4,7 +4,7 @@ import {
   type DripCounts,
   type DripScheduleRow,
 } from "@/lib/emails/drip-status";
-import { isAdminAuthed, loginAction, logoutAction } from "./actions";
+import { isAdminAuthed, loginAction } from "./actions";
 import DripDashboard from "./DripDashboard";
 
 export const runtime = "nodejs";
@@ -232,21 +232,9 @@ export default async function AdminDripPage({
 
   return (
     <main style={pageStyle}>
-      <header
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 16,
-        }}
-      >
-        <h1 style={{ fontSize: 22, margin: 0 }}>Glev Operator — Drip-Mails</h1>
-        <form action={logoutAction}>
-          <button type="submit" style={{ ...btnStyle, background: "#666" }}>
-            Logout
-          </button>
-        </form>
-      </header>
+      <h1 style={{ fontSize: 22, margin: "0 0 16px" }}>
+        Glev Operator — Drip-Mails
+      </h1>
 
       {fetchErrors.length > 0 ? (
         <div style={{ marginBottom: 12 }}>

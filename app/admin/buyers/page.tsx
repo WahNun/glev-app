@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { isAdminAuthed, loginAction, logoutAction } from "./actions";
+import { isAdminAuthed, loginAction } from "./actions";
 import BuyersTables, { type BetaRow, type ProRow } from "./BuyersTables";
 
 export const runtime = "nodejs";
@@ -94,14 +94,9 @@ export default async function AdminBuyersPage({
 
   return (
     <main style={pageStyle}>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h1 style={{ fontSize: 22, margin: 0 }}>Glev Support — Käuferübersicht</h1>
-        <form action={logoutAction}>
-          <button type="submit" style={{ ...btnStyle, background: "#666" }}>
-            Logout
-          </button>
-        </form>
-      </header>
+      <h1 style={{ fontSize: 22, margin: "0 0 16px" }}>
+        Glev Support — Käuferübersicht
+      </h1>
 
       {betaErr ? <p style={errStyle}>Beta DB-Fehler: {betaErr}</p> : null}
       {proErr ? <p style={errStyle}>Pro DB-Fehler: {proErr}</p> : null}

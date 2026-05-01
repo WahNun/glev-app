@@ -5,7 +5,7 @@ import {
   day14FeedbackEmail,
   day30TrustpilotEmail,
 } from "@/lib/emails/drip-templates";
-import { isAdminAuthed, loginAction, logoutAction } from "./actions";
+import { isAdminAuthed, loginAction } from "./actions";
 import EmailPreview, { type TemplateOption } from "./EmailPreview";
 
 export const runtime = "nodejs";
@@ -153,21 +153,7 @@ export default async function AdminEmailsPage({
 
   return (
     <main style={pageStyle}>
-      <header
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 16,
-        }}
-      >
-        <h1 style={{ fontSize: 22, margin: 0 }}>Glev — Mail-Preview</h1>
-        <form action={logoutAction}>
-          <button type="submit" style={{ ...btnStyle, background: "#666" }}>
-            Logout
-          </button>
-        </form>
-      </header>
+      <h1 style={{ fontSize: 22, margin: "0 0 16px" }}>Glev — Mail-Preview</h1>
 
       <p style={{ margin: "0 0 16px", color: "#555", fontSize: 13 }}>
         Live-Render aus <code>lib/emails/*</code> — was du siehst ist exakt was

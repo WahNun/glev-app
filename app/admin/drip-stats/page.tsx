@@ -1,6 +1,6 @@
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { isAdminAuthed } from "@/app/admin/buyers/actions";
-import { loginAction, logoutAction } from "./actions";
+import { loginAction } from "./actions";
 import {
   aggregateDripStats,
   formatRate,
@@ -117,21 +117,9 @@ export default async function AdminDripStatsPage({
 
   return (
     <main style={pageStyle}>
-      <header
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 16,
-        }}
-      >
-        <h1 style={{ fontSize: 22, margin: 0 }}>Glev Support — Drip-Statistik</h1>
-        <form action={logoutAction}>
-          <button type="submit" style={{ ...btnStyle, background: "#666" }}>
-            Logout
-          </button>
-        </form>
-      </header>
+      <h1 style={{ fontSize: 22, margin: "0 0 16px" }}>
+        Glev Support — Drip-Statistik
+      </h1>
 
       <p style={{ color: "#555", margin: "0 0 16px", fontSize: 14 }}>
         Zeigt pro Drip-Mail an, wie viele tatsächlich versendet wurden und wie viele
