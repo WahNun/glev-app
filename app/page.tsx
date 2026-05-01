@@ -312,7 +312,7 @@ export default function Home() {
               <span>·</span>
               <span style={{ color: "rgba(255,255,255,0.35)" }}>○ Dexcom</span>
               <span>·</span>
-              <span style={{ color: "rgba(255,255,255,0.35)" }}>○ Nightscout</span>
+              <span style={{ color: GREEN }}>● Nightscout</span>
               <span>·</span>
               <span style={{ color: "rgba(255,255,255,0.35)" }}>○ Medtronic</span>
             </div>
