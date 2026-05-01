@@ -47,6 +47,76 @@ type Kind = ExportRowKind | "all" | "pdf";
 // from/to date inputs for everything else.
 type RangePreset = "all" | "30d" | "90d" | "lastAppointment" | "custom";
 
+// localStorage key for the last-used picker state. Keyed under the
+// `glev_` prefix used elsewhere (see `glev_theme` in lib/theme.ts) so
+// it shows up alongside the rest of the app's client-side prefs in
+// devtools. Bumping the schema (e.g. adding a new preset that should
+// invalidate older saves) means renaming this key.
+const RANGE_STORAGE_KEY = "glev_export_range";
+
+// Shape of the persisted picker state. Kept as a plain object instead
+// of three separate keys so a single read/write atomically captures
+// the preset + custom dates together — there's no window where a
+// stale `customFrom` could pair with a fresh preset on the next mount.
+interface StoredRange {
+  preset: RangePreset;
+  customFrom: string;
+  customTo: string;
+}
+
+const DEFAULT_STORED_RANGE: StoredRange = {
+  preset: "all",
+  customFrom: "",
+  customTo: "",
+};
+
+function isRangePreset(v: unknown): v is RangePreset {
+  return v === "all" || v === "30d" || v === "90d"
+      || v === "lastAppointment" || v === "custom";
+}
+
+/**
+ * Read the persisted picker state from localStorage, defaulting to
+ * the legacy "all time" behaviour if anything is missing or malformed
+ * (e.g. a hand-edited entry, a bumped schema, or the user wiping site
+ * data). Custom-date strings are validated as `YYYY-MM-DD` so a junk
+ * value can't slip into the date <input>'s `value` and break it
+ * silently. SSR-safe: returns the default when `window` is unavailable.
+ */
+function readStoredRange(): StoredRange {
+  if (typeof window === "undefined") return DEFAULT_STORED_RANGE;
+  try {
+    const raw = window.localStorage.getItem(RANGE_STORAGE_KEY);
+    if (!raw) return DEFAULT_STORED_RANGE;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object") return DEFAULT_STORED_RANGE;
+    const obj = parsed as Record<string, unknown>;
+    const preset = isRangePreset(obj.preset) ? obj.preset : "all";
+    const isDateString = (v: unknown): v is string =>
+      typeof v === "string" && (v === "" || /^\d{4}-\d{2}-\d{2}$/.test(v));
+    const customFrom = isDateString(obj.customFrom) ? obj.customFrom : "";
+    const customTo   = isDateString(obj.customTo)   ? obj.customTo   : "";
+    return { preset, customFrom, customTo };
+  } catch {
+    // Storage disabled (Safari private mode), JSON parse failure, etc.
+    return DEFAULT_STORED_RANGE;
+  }
+}
+
+/**
+ * Write the current picker state to localStorage. Soft-fail on storage
+ * errors (private mode, quota exceeded) since the picker still works
+ * in-memory — we just lose the next-visit shortcut, not the export.
+ */
+function writeStoredRange(value: StoredRange) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(RANGE_STORAGE_KEY, JSON.stringify(value));
+  } catch {
+    // Ignore — persistence is best-effort.
+  }
+}
+
 /**
  * Resolve a preset (+ optional custom from/to dates as `YYYY-MM-DD`
  * strings from the date inputs, plus the saved last-appointment date
@@ -214,9 +284,33 @@ export default function ExportPanel() {
   // surprise for users who just want everything). Custom inputs hold
   // raw `YYYY-MM-DD` strings — the format the native <input type="date">
   // emits — and only get parsed into a window inside `resolveRange`.
-  const [rangePreset, setRangePreset] = useState<RangePreset>("all");
-  const [customFrom, setCustomFrom]   = useState<string>("");
-  const [customTo, setCustomTo]       = useState<string>("");
+  //
+  // Lazy initializer rehydrates the user's last-used pick from
+  // localStorage so a recurring-export flow (e.g. quarterly endo
+  // appointments) becomes a one-click action instead of forcing the
+  // user to re-pick "Last 90 days" every visit (Task #98). The panel
+  // is mounted on the client (it lives inside a settings sheet that
+  // opens on user click), so the lazy initializer can read storage
+  // directly without risking a hydration mismatch.
+  const [rangePreset, setRangePreset] = useState<RangePreset>(
+    () => readStoredRange().preset,
+  );
+  const [customFrom, setCustomFrom] = useState<string>(
+    () => readStoredRange().customFrom,
+  );
+  const [customTo, setCustomTo] = useState<string>(
+    () => readStoredRange().customTo,
+  );
+
+  // Persist the picker state on every change so the next mount picks
+  // up exactly where the user left off — including across reloads,
+  // tabs, and browser sessions on the same device. Single effect
+  // covers all three fields because they're stored together as one
+  // JSON blob (atomic read/write — see StoredRange).
+  useEffect(() => {
+    writeStoredRange({ preset: rangePreset, customFrom, customTo });
+  }, [rangePreset, customFrom, customTo]);
+
   // Live preview of how many rows the chosen range will pull. Drives
   // the count line under the picker so the user can confirm the slice
   // before clicking export — and avoid handing a doctor a blank PDF.
@@ -234,6 +328,13 @@ export default function ExportPanel() {
   // (the Settings sheet re-opens this component), so we don't need
   // live invalidation here.
   const [lastAppointment, setLastAppointment] = useState<string | null>(null);
+  // Tracks whether the async fetchLastAppointment() call has resolved
+  // yet. We can't use `lastAppointment === null` for that — null is
+  // also the legitimate "no date saved" value, and conflating the two
+  // would let the auto-deselect effect below race the fetch and
+  // silently downgrade a restored "lastAppointment" preset to "all"
+  // before we know whether the user actually has a saved date (Task #98).
+  const [lastAppointmentLoaded, setLastAppointmentLoaded] = useState<boolean>(false);
   // Snapshot the user's current ICR (g/IE) AND correction factor
   // (mg/dL drop per 1 IE) once on mount so we can annotate the
   // insulin CSV/PDF with the ratio in their chosen carb unit
@@ -265,23 +366,39 @@ export default function ExportPanel() {
   useEffect(() => {
     let cancelled = false;
     fetchLastAppointment()
-      .then((value) => { if (!cancelled) setLastAppointment(value); })
-      .catch(() => { /* leave null — chip stays hidden */ });
+      .then((value) => {
+        if (cancelled) return;
+        setLastAppointment(value);
+        setLastAppointmentLoaded(true);
+      })
+      .catch(() => {
+        // Leave value null — chip stays hidden — but still mark the
+        // load as resolved so the auto-deselect effect below can
+        // safely run (otherwise a transient fetch failure would pin
+        // a restored "lastAppointment" preset on screen forever).
+        if (!cancelled) setLastAppointmentLoaded(true);
+      });
     return () => { cancelled = true; };
   }, []);
 
   // Auto-deselect the lastAppointment chip if the underlying date
   // disappears (e.g. user clears it in another tab and re-opens the
-  // panel). Without this, the chip would stay visually active but
-  // resolve to "no filter" via the defensive fallback in
-  // `resolveRange` — which would silently flip the user back to a
-  // full-history export. Snapping the preset back to "all" keeps
-  // the visible state honest.
+  // panel, OR the user's last-used preset was restored from storage
+  // but they've since cleared the date in Settings). Without this,
+  // the chip would stay visually active but resolve to "no filter"
+  // via the defensive fallback in `resolveRange` — which would
+  // silently flip the user back to a full-history export. Snapping
+  // the preset back to "all" keeps the visible state honest.
+  //
+  // Gated on `lastAppointmentLoaded` so we don't race the async
+  // fetch on mount and downgrade a freshly-restored "lastAppointment"
+  // preset before we even know whether the date is set (Task #98).
   useEffect(() => {
+    if (!lastAppointmentLoaded) return;
     if (rangePreset === "lastAppointment" && !lastAppointment) {
       setRangePreset("all");
     }
-  }, [rangePreset, lastAppointment]);
+  }, [rangePreset, lastAppointment, lastAppointmentLoaded]);
 
   // Read the user's ICR + CF directly from the user_settings row
   // instead of going through fetchInsulinSettings() — that helper
