@@ -271,6 +271,14 @@ binary).
   before the webview loads it. Required because Capacitor's CLI
   insists on a `webDir` even when `server.url` is set.
 - `ios/` — Xcode project skeleton (Swift Package Manager, no Pods).
+  Note: `ios/App/App/AppDelegate.swift` registers an `HKObserverQuery`
+  + `enableBackgroundDelivery(.immediate)` for blood glucose so iOS
+  silently wakes the app whenever a new HealthKit sample is written
+  (even with Glev fully closed) and POSTs the delta to
+  `/api/cgm/apple-health/sync`. Cookies are bridged from
+  `WKWebsiteDataStore` to share the WebView session. `Info.plist`
+  includes `UIBackgroundModes: [fetch]` to give the wake handler its
+  network budget.
 - `android/` — Gradle project skeleton.
 - `.gitignore` — excludes per-platform build outputs (`build/`,
   `.gradle/`, `DerivedData/`, `Pods/`, the regenerated synced

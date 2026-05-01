@@ -28,6 +28,19 @@
  * UI can stay simple. The Settings card surfaces the last-sync time;
  * silent failure is preferable to popping a red toast every 5 min if
  * the user is offline.
+ *
+ * Background delivery (iOS-only, native shell):
+ *   The Capacitor shell ALSO registers an `HKObserverQuery` +
+ *   `enableBackgroundDelivery(.immediate)` for blood glucose in
+ *   `ios/App/App/AppDelegate.swift` (see `HealthKitGlucoseBackgroundSync`).
+ *   When a new sample is written to HealthKit while Glev is closed,
+ *   iOS silently wakes the app process, runs an anchored query, and
+ *   POSTs the delta to `/api/cgm/apple-health/sync` using cookies
+ *   bridged from `WKWebsiteDataStore`. That keeps the server cache
+ *   fresh for the post-meal CGM follow-up worker without requiring
+ *   the user to open the app — the foreground sync below remains the
+ *   user-visible "last sync" status and the safety net for the first
+ *   24 h after install (before the observer has been armed).
  */
 
 const LAST_SYNC_KEY = "glev:apple-health:last-sync-iso";

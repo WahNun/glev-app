@@ -51,5 +51,9 @@
         <string>Glev liest deine Glukosewerte aus Apple Health, damit du sie in der App sehen und für die Insulin-Empfehlung nutzen kannst.</string>
         <key>NSHealthUpdateUsageDescription</key>
         <string>Glev nutzt diesen Zugriff aktuell nicht zum Schreiben — die Berechtigung wird nur als Voraussetzung der HealthKit-Plattform angefragt.</string>
+        <key>UIBackgroundModes</key>
+        <array>
+                <string>fetch</string>
+        </array>
 </dict>
 </plist>
