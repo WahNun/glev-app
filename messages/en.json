@@ -391,6 +391,8 @@
     "card_hypo_events_title": "Hypo Events · 7d",
     "card_hyper_events_title": "Hyper Events · 7d",
     "card_meal_evaluation_title": "Meal evaluation · 7d",
+    "card_time_in_range_empty": "Log meals with pre-meal glucose to see your time-in-range.",
+    "card_meal_evaluation_empty": "Log meals with post-meal glucose to see your distribution.",
     "card_tdd_title": "Total Daily Dose · 7d",
     "card_tdd_sub": "U / Tag",
     "card_patterns_title": "Pattern detection",

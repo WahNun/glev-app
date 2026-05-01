@@ -399,6 +399,8 @@
     "card_hypo_events_title": "Hypo-Events · 7T",
     "card_hyper_events_title": "Hyper-Events · 7T",
     "card_meal_evaluation_title": "Mahlzeiten-Bewertung · 7T",
+    "card_time_in_range_empty": "Erfasse Mahlzeiten mit Glukose vor dem Essen, um deine Zeit im Zielbereich zu sehen.",
+    "card_meal_evaluation_empty": "Erfasse Mahlzeiten mit Glukose nach dem Essen, um deine Verteilung zu sehen.",
     "card_tdd_title": "Tagesgesamtdosis · 7T",
     "card_tdd_sub": "E / Tag",
     "card_patterns_title": "Mustererkennung",

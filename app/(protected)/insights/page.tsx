@@ -559,7 +559,7 @@ export default function InsightsPage() {
           </div>
           {b7.n === 0 ? (
             <div style={{ padding:"18px 0", textAlign:"center", color:"var(--text-faint)", fontSize:11 }}>
-              Log meals with pre-meal glucose to see your time-in-range.
+              {tInsights("card_time_in_range_empty")}
             </div>
           ) : (
             <>
@@ -872,7 +872,7 @@ export default function InsightsPage() {
           <CardLabel text={tInsights("card_meal_evaluation_title")}/>
           {totalN === 0 ? (
             <div style={{ padding:"18px 0", textAlign:"center", color:"var(--text-faint)", fontSize:11 }}>
-              Log meals with post-meal glucose to see your distribution.
+              {tInsights("card_meal_evaluation_empty")}
             </div>
           ) : (
             <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:8 }}>
