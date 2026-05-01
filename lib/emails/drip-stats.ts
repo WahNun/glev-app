@@ -148,3 +148,103 @@ export const DRIP_TYPE_LABEL: Record<DripEmailType, string> = {
   day14_feedback: "Tag 14 — Feedback",
   day30_trustpilot: "Tag 30 — Trustpilot",
 };
+
+/** A single calendar day's bucket of sent + opt-out counts. */
+export interface DailyBucket {
+  /** ISO date "YYYY-MM-DD" (UTC), so reads stable across operator timezones. */
+  day: string;
+  sent: number;
+  unsubscribed: number;
+}
+
+/** Default sparkline window length, in days. */
+export const DAILY_SERIES_DEFAULT_DAYS = 30;
+
+function dayKeyUTC(ts: number): string {
+  const d = new Date(ts);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+/**
+ * Build a per-drip-type, per-day series of sent + opt-out counts over
+ * the trailing `days` calendar days ending with the day containing
+ * `now` (inclusive). Days with no activity are present with zeroes so
+ * the chart has a stable x-axis.
+ *
+ * Bucketing rules — kept consistent with `aggregateDripStats` so the
+ * sparkline cannot disagree with the table totals:
+ *
+ *   • A row contributes to `sent` on the UTC day of `sent_at`.
+ *   • A row contributes to `unsubscribed` on the UTC day of the
+ *     recipient's earliest `unsubscribed_at`, but only when that
+ *     timestamp is on or after `sent_at` (same "after the send"
+ *     attribution as the totals — see file header).
+ *   • Unsubscribes are bucketed on the day the user clicked, not the
+ *     day the mail went out. That's the signal an operator scans for
+ *     — "did Tuesday's broadcast cause a spike?" lines up with the
+ *     bar on Tuesday, not the bar on the Friday the mail was sent.
+ *
+ * Days are returned oldest-first so the chart can iterate left-to-right.
+ */
+export function aggregateDailyDripSeries(
+  sent: ReadonlyArray<SentRow>,
+  unsubs: ReadonlyArray<UnsubRow>,
+  now: number = Date.now(),
+  days: number = DAILY_SERIES_DEFAULT_DAYS,
+): Record<DripEmailType, DailyBucket[]> {
+  // Anchor the axis to the start of "today" in UTC so successive
+  // calls within the same day produce identical day keys regardless
+  // of when in the day they fired.
+  const nowDate = new Date(now);
+  const todayStart = Date.UTC(
+    nowDate.getUTCFullYear(),
+    nowDate.getUTCMonth(),
+    nowDate.getUTCDate(),
+  );
+
+  const axis: string[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    axis.push(dayKeyUTC(todayStart - i * DAY_MS));
+  }
+  const axisIndex = new Map<string, number>(axis.map((k, i) => [k, i]));
+
+  const out = {} as Record<DripEmailType, DailyBucket[]>;
+  for (const t of DRIP_TYPES) {
+    out[t] = axis.map((day) => ({ day, sent: 0, unsubscribed: 0 }));
+  }
+
+  // Same earliest-unsubscribe-per-email reduction as aggregateDripStats,
+  // so the two helpers can never disagree about whether a particular
+  // recipient was opted out.
+  const unsubByEmail = new Map<string, number>();
+  for (const u of unsubs) {
+    if (!u.email) continue;
+    const ts = Date.parse(u.unsubscribed_at);
+    if (!Number.isFinite(ts)) continue;
+    const prev = unsubByEmail.get(u.email);
+    if (prev === undefined || ts < prev) unsubByEmail.set(u.email, ts);
+  }
+
+  for (const row of sent) {
+    if (!row.sent_at) continue;
+    const buckets = out[row.email_type];
+    if (!buckets) continue;
+
+    const sentAt = Date.parse(row.sent_at);
+    if (!Number.isFinite(sentAt)) continue;
+
+    const sentIdx = axisIndex.get(dayKeyUTC(sentAt));
+    if (sentIdx !== undefined) buckets[sentIdx].sent += 1;
+
+    const unsubAt = unsubByEmail.get(row.email);
+    if (unsubAt !== undefined && unsubAt >= sentAt) {
+      const unsubIdx = axisIndex.get(dayKeyUTC(unsubAt));
+      if (unsubIdx !== undefined) buckets[unsubIdx].unsubscribed += 1;
+    }
+  }
+
+  return out;
+}

@@ -3,8 +3,11 @@ import { isAdminAuthed } from "@/app/admin/buyers/actions";
 import { loginAction } from "./actions";
 import {
   aggregateDripStats,
+  aggregateDailyDripSeries,
+  DAILY_SERIES_DEFAULT_DAYS,
   formatRate,
   DRIP_TYPE_LABEL,
+  type DailyBucket,
   type SentRow,
   type UnsubRow,
 } from "@/lib/emails/drip-stats";
@@ -113,6 +116,7 @@ export default async function AdminDripStatsPage({
   const truncated = sent.length === ROW_LIMIT || unsubs.length === ROW_LIMIT;
 
   const stats = aggregateDripStats(sent, unsubs);
+  const series = aggregateDailyDripSeries(sent, unsubs);
   const totalUnsubs = unsubs.length;
 
   return (
@@ -151,6 +155,10 @@ export default async function AdminDripStatsPage({
                 <th style={thNumStyle}>Abgemeldet (7T)</th>
                 <th style={thNumStyle}>Versendet (30T)</th>
                 <th style={thNumStyle}>Abgemeldet (30T)</th>
+                <th style={thChartStyle}>
+                  Verlauf ({DAILY_SERIES_DEFAULT_DAYS}T)
+                  <SparkLegend />
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -171,6 +179,12 @@ export default async function AdminDripStatsPage({
                   <td style={tdNumStyle}>{s.last30d.sent.toLocaleString("de-DE")}</td>
                   <td style={tdNumStyle}>
                     {s.last30d.unsubscribed.toLocaleString("de-DE")}
+                  </td>
+                  <td style={tdChartStyle}>
+                    <DailySpark
+                      buckets={series[s.type]}
+                      label={DRIP_TYPE_LABEL[s.type]}
+                    />
                   </td>
                 </tr>
               ))}
@@ -277,3 +291,171 @@ const tdNumStyle: React.CSSProperties = {
   textAlign: "right",
   fontVariantNumeric: "tabular-nums",
 };
+
+const thChartStyle: React.CSSProperties = {
+  ...thStyle,
+  textAlign: "left",
+  whiteSpace: "nowrap",
+};
+
+const tdChartStyle: React.CSSProperties = {
+  ...tdStyle,
+  // Vertically center the SVG against the numeric cells in the same row.
+  verticalAlign: "middle",
+};
+
+// Inline sparkline colors. Sent uses a low-contrast neutral so the
+// red opt-out bars are the part that pops out for "spike spotting".
+const SPARK_SENT_COLOR = "#9aa0a6";
+const SPARK_UNSUB_COLOR = "#c0392b";
+
+/**
+ * Tiny per-day bar chart for the drip-stats table.
+ *
+ * Two thin bars per day: sent (gray, left) and unsubscribed (red,
+ * right). Both are scaled to the same per-row maximum so a "Tag 14
+ * opt-outs jumped on a Tuesday" pattern is immediately visible as a
+ * tall red bar standing above its day's gray neighbor.
+ *
+ * Why an SVG and not a chart library:
+ *   • Pure server render — no client JS, no hydration, no extra
+ *     dependency in the admin bundle.
+ *   • <title> children give a free native browser tooltip on hover
+ *     so an operator can read exact counts for a suspicious day
+ *     without us shipping a custom popover.
+ *
+ * The width is sized so 30 days × 5px slots = 150px, which fits the
+ * existing table without forcing the layout to expand.
+ */
+function DailySpark({
+  buckets,
+  label,
+  width = 150,
+  height = 32,
+}: {
+  buckets: ReadonlyArray<DailyBucket>;
+  label: string;
+  width?: number;
+  height?: number;
+}) {
+  const n = buckets.length;
+  if (n === 0) {
+    return <span style={{ color: "#999", fontSize: 12 }}>—</span>;
+  }
+
+  // Scale both metrics to the same axis so the chart's vertical
+  // dimension means the same thing for sent and opt-outs. Using
+  // max(1) avoids a 0/0 division and keeps an empty row's bars at 0.
+  let max = 0;
+  for (const b of buckets) {
+    if (b.sent > max) max = b.sent;
+    if (b.unsubscribed > max) max = b.unsubscribed;
+  }
+  if (max === 0) max = 1;
+
+  const padTop = 2;
+  const padBottom = 2;
+  const innerH = Math.max(1, height - padTop - padBottom);
+  const slot = width / n;
+  // Reserve 1px between bars in the same slot and a 1px gap to the
+  // next slot. That keeps the two bars distinguishable down to ~2px
+  // per slot before they merge visually.
+  const barW = Math.max(1, (slot - 1) / 2);
+  const baseY = height - padBottom;
+
+  // Sum sent / opt-outs for the aria-label. Spelling out the totals
+  // gives screen-reader users the same "is this row notable?" signal
+  // a sighted user gets from the bar heights.
+  let sumSent = 0;
+  let sumUnsub = 0;
+  for (const b of buckets) {
+    sumSent += b.sent;
+    sumUnsub += b.unsubscribed;
+  }
+
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      role="img"
+      aria-label={`${label}: ${sumSent} versendet und ${sumUnsub} Abmeldungen in den letzten ${n} Tagen`}
+      style={{ display: "block", background: "#fafafa", borderRadius: 3 }}
+    >
+      {buckets.map((b, i) => {
+        const x = i * slot;
+        const sentH = (b.sent / max) * innerH;
+        const unsubH = (b.unsubscribed / max) * innerH;
+        return (
+          <g key={b.day}>
+            {/* Native browser tooltip — no client JS required. */}
+            <title>{`${b.day}: ${b.sent} versendet, ${b.unsubscribed} abgemeldet`}</title>
+            {b.sent > 0 ? (
+              <rect
+                x={x}
+                y={baseY - sentH}
+                width={barW}
+                height={sentH}
+                fill={SPARK_SENT_COLOR}
+              />
+            ) : null}
+            {b.unsubscribed > 0 ? (
+              <rect
+                x={x + barW + 1}
+                y={baseY - unsubH}
+                width={barW}
+                // Render at least 1px so a single opt-out is still
+                // visible — otherwise a "1 of 200" spike would round
+                // to a 0-height invisible rect.
+                height={Math.max(1, unsubH)}
+                fill={SPARK_UNSUB_COLOR}
+              />
+            ) : null}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+/** Small inline legend that tells the operator what the bar colors mean. */
+function SparkLegend() {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        gap: 10,
+        marginLeft: 10,
+        fontWeight: 400,
+        color: "#555",
+        fontSize: 12,
+        verticalAlign: "middle",
+      }}
+    >
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+        <span
+          aria-hidden
+          style={{
+            display: "inline-block",
+            width: 8,
+            height: 8,
+            background: SPARK_SENT_COLOR,
+          }}
+        />
+        Versendet
+      </span>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+        <span
+          aria-hidden
+          style={{
+            display: "inline-block",
+            width: 8,
+            height: 8,
+            background: SPARK_UNSUB_COLOR,
+          }}
+        />
+        Abgemeldet
+      </span>
+    </span>
+  );
+}
