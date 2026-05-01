@@ -11,6 +11,7 @@ import {
 } from "@/lib/meals";
 import { scheduleAutoFillForMeal, findCgmReadingNearTime } from "@/lib/postMealCgmAutoFill";
 import { supabase } from "@/lib/supabase";
+import { useCarbUnit } from "@/hooks/useCarbUnit";
 
 const ACCENT = "#4F6EF7";
 const GREEN  = "#22D3A0";
@@ -55,6 +56,15 @@ export default function ManualEntryModal({
   onCreated: (meal: Meal) => void;
 }) {
   const t = useTranslations("manualEntry");
+  // Carb-unit selector — DACH users (BE/KE) type and review carbs in their
+  // chosen unit while the DB still receives canonical grams via toGrams().
+  // Mirrors the inline expand-card editor and the Verlauf MealEditor so all
+  // three entry-creation surfaces stay consistent (Task #55 → Task #58).
+  const carbUnit = useCarbUnit();
+  // Strip any trailing "(unit)" suffix from the translated label so we can
+  // append the active unit cleanly. Default carbs_label translations end
+  // with "(g)"; this yields "Kohlenhydrate (BE)" / "Carbs (KE)" etc.
+  const carbsLabel = `${t("carbs_label").replace(/\s*\([^)]*\)\s*$/, "").trim()} (${carbUnit.label})`;
   const now = new Date();
 
   const [mealTime, setMealTime] = useState<string>(toDatetimeLocal(now));
@@ -194,7 +204,12 @@ export default function ManualEntryModal({
 
   if (!open) return null;
 
-  const carbsN   = num(carbs);
+  // `carbs` holds the value in the user's chosen display unit (g / BE / KE).
+  // Convert to grams once so validation, classification, calorie math and the
+  // persisted row all operate on the canonical unit. The DB column
+  // meals.carbs_grams stays in grams as Task #55's editors do.
+  const carbsN      = num(carbs);
+  const carbsGramsN = carbsN != null ? carbUnit.toGrams(carbsN) : null;
   const proteinN = num(protein) ?? 0;
   const fatN     = num(fat) ?? 0;
   const fiberN   = num(fiber) ?? 0;
@@ -242,7 +257,10 @@ export default function ManualEntryModal({
     // analytically clean (negative insulin, BG=10, carbs=999, etc). All
     // checks now skip when the field is empty, since insulin / glucose are
     // optional. 0 is a valid value for every macro and stays accepted.
-    if (carbsN != null && (carbsN < 0 || carbsN > 500))        { setError(t("err_carbs_too_high")); return; }
+    // Range check runs against the converted grams value so the existing
+    // "max 500g" copy in err_carbs_too_high stays accurate regardless of
+    // whether the user typed in g, BE, or KE.
+    if (carbsGramsN != null && (carbsGramsN < 0 || carbsGramsN > 500)) { setError(t("err_carbs_too_high")); return; }
     if (proteinN < 0 || proteinN > 500)             { setError(t("err_protein_range")); return; }
     if (fatN     < 0 || fatN     > 500)             { setError(t("err_fat_range")); return; }
     if (fiberN   < 0 || fiberN   > 200)             { setError(t("err_fiber_range")); return; }
@@ -253,7 +271,9 @@ export default function ManualEntryModal({
 
     // Coerce missing values for the persisted row + classifier. carbs=0
     // is legitimate (pure protein/fat snack); the classifier handles it.
-    const carbsForSave = carbsN ?? 0;
+    // carbsForSave is always grams — the engine math (carbs / icr) and the
+    // DB column meals.carbs_grams both expect grams as the canonical unit.
+    const carbsForSave = carbsGramsN ?? 0;
     const cls = mealType === "AUTO" ? classifyMeal(carbsForSave, proteinN, fatN, fiberN) : mealType;
     // Evaluation is no longer pre-computed at save time — the deterministic
     // lifecycleFor pipeline (lib/engine/lifecycle.ts) decides when a row
@@ -500,8 +520,17 @@ export default function ManualEntryModal({
           {/* Macros 2x2 */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <div>
-              <label style={labelStyle}>{t("carbs_label")}</label>
-              <input value={carbs} onChange={(e) => setCarbs(e.target.value)} type="number" min={0} placeholder={t("carbs_placeholder")} style={inp}/>
+              <label style={labelStyle}>{carbsLabel}</label>
+              <input
+                value={carbs}
+                onChange={(e) => setCarbs(e.target.value)}
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step={carbUnit.step}
+                placeholder={carbUnit.placeholder}
+                style={inp}
+              />
             </div>
             <div>
               <label style={labelStyle}>{t("fiber_label")}</label>
@@ -564,7 +593,9 @@ export default function ManualEntryModal({
         {step === "review" && (() => {
           const mt = parseLocalDt(mealTime);
           const mtStr = mt ? mt.toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : mealTime;
-          const carbsForSave = carbsN ?? 0;
+          // Review-step preview operates in grams (same as save) so the
+          // classifier and calorie math match what the DB will receive.
+          const carbsForSave = carbsGramsN ?? 0;
           const cls = mealType === "AUTO" ? classifyMeal(carbsForSave, proteinN, fatN, fiberN) : mealType;
           const clsKey = TYPE_OPTIONS.find(o => o.value === cls)?.key;
           const clsLabel = clsKey ? t(clsKey) : cls;
@@ -593,7 +624,7 @@ export default function ManualEntryModal({
 
               {/* Macros */}
               <div style={{ background: "var(--surface-soft)", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "10px 14px" }}>
-                <Row label={t("row_carbs")}   value={`${carbsForSave} g`} />
+                <Row label={t("row_carbs")}   value={carbUnit.display(carbsForSave)} />
                 <Row label={t("row_protein")} value={`${proteinN} g`} />
                 <Row label={t("row_fat")}     value={`${fatN} g`} />
                 <Row label={t("row_fiber")}   value={`${fiberN} g`} />
