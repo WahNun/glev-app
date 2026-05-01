@@ -1,10 +1,18 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { supabase } from "@/lib/supabase";
 import { reloadHistoricalEntries } from "@/lib/meals";
-import { fetchMacroTargets, saveMacroTargets, DEFAULT_MACRO_TARGETS, type MacroTargets } from "@/lib/userSettings";
+import {
+  fetchMacroTargets,
+  saveMacroTargets,
+  DEFAULT_MACRO_TARGETS,
+  fetchLastAppointment,
+  saveLastAppointment,
+  type MacroTargets,
+} from "@/lib/userSettings";
+import { localeToBcp47 } from "@/lib/time";
 import ImportPanel from "@/components/ImportPanel";
 import ExportPanel from "@/components/ExportPanel";
 import CgmSettingsCard from "@/components/CgmSettingsCard";
@@ -53,6 +61,7 @@ type SheetKey =
   | "units"
   | "icr"
   | "cf"
+  | "lastAppointment"
   | "libre2"
   | "nightscout"
   | "dexcom"
@@ -124,6 +133,14 @@ export default function SettingsPage() {
   // ships the prefs surface; Phase 2 (web push + cron sender) will start
   // honouring `criticalAlerts` and `quietStart/End`.
   const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>(DEFAULT_NOTIFICATION_PREFS);
+  // Last doctor appointment date (YYYY-MM-DD) — drives the optional
+  // "Seit letztem Arzttermin" preset chip in the Export panel. Empty
+  // string means "not set" (matches what an empty <input type="date">
+  // emits) and gets stored as `null` in user_settings; persisted via
+  // `saveLastAppointment`. The bcp47 locale is used to render the
+  // current value as a localized string in the row subtitle.
+  const [lastAppointment, setLastAppointment] = useState<string>("");
+  const bcp47 = localeToBcp47(useLocale());
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -137,6 +154,7 @@ export default function SettingsPage() {
     settings: Settings;
     macroTargets: MacroTargets;
     notifPrefs: NotificationPrefs;
+    lastAppointment: string;
   } | null>(null);
 
   const cgmConnected = useCgmConnected();
@@ -147,6 +165,10 @@ export default function SettingsPage() {
     if (!supabase) return;
     fetchMacroTargets().then(setMacroTargets).catch(() => {});
     fetchNotificationPrefs().then(setNotifPrefs).catch(() => {});
+    // Load the saved appointment date — `null` from the DB collapses
+    // to "" so the date input renders as empty (which is what the
+    // user sees when nothing's configured).
+    fetchLastAppointment().then((v) => setLastAppointment(v ?? "")).catch(() => {});
   }, []);
 
   const openSheetWith = useCallback((id: SheetKey) => {
@@ -156,10 +178,14 @@ export default function SettingsPage() {
     setSettings((curSettings) => {
       setMacroTargets((curMacros) => {
         setNotifPrefs((curNotif) => {
-          setDraftSnapshot({
-            settings: { ...curSettings },
-            macroTargets: { ...curMacros },
-            notifPrefs: { ...curNotif },
+          setLastAppointment((curAppt) => {
+            setDraftSnapshot({
+              settings: { ...curSettings },
+              macroTargets: { ...curMacros },
+              notifPrefs: { ...curNotif },
+              lastAppointment: curAppt,
+            });
+            return curAppt;
           });
           return curNotif;
         });
@@ -179,6 +205,7 @@ export default function SettingsPage() {
       setSettings(draftSnapshot.settings);
       setMacroTargets(draftSnapshot.macroTargets);
       setNotifPrefs(draftSnapshot.notifPrefs);
+      setLastAppointment(draftSnapshot.lastAppointment);
       setDraftSnapshot(null);
     }
     setPendingLocale(null);
@@ -225,6 +252,27 @@ export default function SettingsPage() {
       setSaving(false);
     }
   }, [macroTargets, tSettings]);
+
+  /** Persist the "last appointment" date — DB-backed via
+   *  user_settings.last_appointment_at. Empty string is normalized to
+   *  null so the column gets cleared (and the export panel hides the
+   *  preset chip). */
+  const saveLastAppointmentAction = useCallback(async (): Promise<boolean> => {
+    setSaving(true);
+    setSaveError("");
+    try {
+      await saveLastAppointment(lastAppointment === "" ? null : lastAppointment);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1800);
+      setDraftSnapshot(null);
+      return true;
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : tSettings("save_failed"));
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }, [lastAppointment, tSettings]);
 
   /** Persist notification preferences — DB-backed via user_settings.notif_*. */
   const saveNotifPrefsAction = useCallback(async (): Promise<boolean> => {
@@ -294,12 +342,25 @@ export default function SettingsPage() {
     refresh: <svg {...iconProps}><path d="M21 12a9 9 0 1 1-3-6.7" /><path d="M21 4v5h-5" /></svg>,
     sheets: <svg {...iconProps}><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="3" y1="15" x2="21" y2="15" /><line x1="9" y1="3" x2="9" y2="21" /><line x1="15" y1="3" x2="15" y2="21" /></svg>,
     carbs: <svg {...iconProps}><path d="M12 2v6" /><path d="M9 5l3 3 3-3" /><path d="M5 12c0-3 3-5 7-5s7 2 7 5c0 5-3 9-7 9s-7-4-7-9z" /></svg>,
+    calendar: <svg {...iconProps}><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>,
   };
 
   /* ── subtitles derived from current state ──────────────────────── */
   const targetRangeSub = tSettings("subtitle_target_range", { min: settings.targetMin, max: settings.targetMax });
   const icrSub = tSettings("subtitle_icr", { value: settings.icr });
   const cfSub = tSettings("subtitle_cf", { value: settings.cf });
+  // Format the saved appointment date in the user's UI locale for the
+  // row subtitle (e.g. "12.01.2026" in DE, "Jan 12, 2026" in EN). When
+  // the date is unset we show a "noch nicht gesetzt" subtitle so the
+  // row's purpose stays discoverable from the closed state. The empty-
+  // string check matches both unset (loaded as "") and cleared inputs.
+  const lastAppointmentSub = lastAppointment
+    ? tSettings("subtitle_last_appointment_set", {
+        date: new Date(`${lastAppointment}T00:00:00`).toLocaleDateString(bcp47, {
+          year: "numeric", month: "2-digit", day: "2-digit",
+        }),
+      })
+    : tSettings("subtitle_last_appointment_unset");
   const macroSub = tSettings("subtitle_macros", {
     carbs: macroTargets.carbs, protein: macroTargets.protein, fat: macroTargets.fat, fiber: macroTargets.fiber,
   });
@@ -406,6 +467,54 @@ export default function SettingsPage() {
         </div>
       ),
       footer: <SaveFooter onSave={saveLocalSettings} />,
+    },
+    lastAppointment: {
+      // Single-field sheet that lets the user record (or clear) the
+      // date of their last doctor appointment. The Export panel reads
+      // this value via fetchLastAppointment() to show a "Seit letztem
+      // Arzttermin (DD.MM.YYYY)" preset chip — clearing the date here
+      // hides that chip again.
+      title: tSettings("last_appointment_title"),
+      body: (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.5 }}>
+            {tSettings("last_appointment_hint")}
+          </div>
+          <label style={{ fontSize: 12, color: "var(--text-dim)", display: "block" }}>
+            {tSettings("last_appointment_label")}
+            <input
+              style={{ ...inp, marginTop: 6 }}
+              type="date"
+              value={lastAppointment}
+              max={new Date().toISOString().slice(0, 10)}
+              onChange={(e) => setLastAppointment(e.target.value)}
+            />
+          </label>
+          {/* Inline "Clear" affordance — the user can also pick a date
+              and then wipe it via the native input, but iOS Safari
+              doesn't always expose a clear button on date inputs, so
+              we ship our own. Disabled when nothing's set so the
+              button doesn't look pressable when it's a no-op. */}
+          <button
+            type="button"
+            onClick={() => setLastAppointment("")}
+            disabled={!lastAppointment}
+            style={{
+              alignSelf: "flex-start",
+              padding: "8px 14px", borderRadius: 9,
+              border: `1px solid ${BORDER}`,
+              background: "var(--surface-soft)",
+              color: lastAppointment ? "var(--text-strong)" : "var(--text-faint)",
+              fontSize: 12, fontWeight: 600,
+              cursor: lastAppointment ? "pointer" : "not-allowed",
+              opacity: lastAppointment ? 1 : 0.6,
+            }}
+          >
+            {tSettings("last_appointment_clear")}
+          </button>
+        </div>
+      ),
+      footer: <SaveFooter onSave={saveLastAppointmentAction} />,
     },
     libre2: {
       title: tSettings("row_libre2"),
@@ -796,6 +905,14 @@ export default function SettingsPage() {
           subtitle={cfSub}
           ariaLabel={tSettings("row_open_aria", { label: tSettings("correction_factor") })}
           onClick={() => openSheetWith("cf")}
+        />
+        <SettingsRow
+          iconColor={ACCENT}
+          icon={ICON.calendar}
+          label={tSettings("last_appointment_title")}
+          subtitle={lastAppointmentSub}
+          ariaLabel={tSettings("row_open_aria", { label: tSettings("last_appointment_title") })}
+          onClick={() => openSheetWith("lastAppointment")}
         />
       </SettingsSection>
 

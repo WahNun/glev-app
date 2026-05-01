@@ -195,3 +195,72 @@ export async function fetchInsulinSettings(): Promise<InsulinSettings> {
 
   return { icr, cf, targetBg };
 }
+
+/* ── Last appointment date ─────────────────────────────────────────── */
+
+/** YYYY-MM-DD calendar date matching what `<input type="date">` emits and
+ *  what Postgres stores in a `date` column. We deliberately keep this as
+ *  a plain string (not Date) because the value has no time-of-day or
+ *  timezone meaning — it's a calendar date the user selected. */
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function isValidIsoDate(v: unknown): v is string {
+  return typeof v === "string" && ISO_DATE_RE.test(v);
+}
+
+/**
+ * Read the user's saved "last appointment" date (a YYYY-MM-DD calendar
+ * date) from the `user_settings` table. Returns `null` when no row /
+ * column value exists, the user is signed out, or Supabase is
+ * unreachable — every caller treats `null` as "no preset chip,
+ * nothing to surface", so the fallback is a clean no-op rather than a
+ * misleading default.
+ *
+ * Used by both the Settings sheet (to show the current value in the
+ * date input) and the Export panel (to decide whether to render the
+ * "Seit letztem Arzttermin" preset chip).
+ */
+export async function fetchLastAppointment(): Promise<string | null> {
+  if (!supabase) return null;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data, error } = await supabase
+    .from("user_settings")
+    .select("last_appointment_at")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  // Postgres returns `date` columns as ISO `YYYY-MM-DD` strings via
+  // PostgREST. Defensive isValidIsoDate guards against an unexpected
+  // server-side coercion (e.g. timestamptz cast) that would otherwise
+  // produce an unparseable value downstream.
+  return isValidIsoDate(data.last_appointment_at) ? data.last_appointment_at : null;
+}
+
+/**
+ * Upsert the user's "last appointment" date. Pass `null` to clear the
+ * value (which hides the preset chip from the Export panel). Throws
+ * on auth or DB error so the Settings sheet can show an inline error
+ * and keep the user's input visible. The input MUST be a YYYY-MM-DD
+ * string (the format `<input type="date">` emits) — anything else
+ * throws synchronously instead of silently writing garbage.
+ */
+export async function saveLastAppointment(value: string | null): Promise<void> {
+  if (!supabase) throw new Error("Supabase not configured");
+  if (value !== null && !isValidIsoDate(value)) {
+    throw new Error(`Invalid date format (expected YYYY-MM-DD): ${value}`);
+  }
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) throw new Error("Not signed in");
+
+  const { error } = await supabase
+    .from("user_settings")
+    .upsert({
+      user_id: user.id,
+      last_appointment_at: value,
+    }, { onConflict: "user_id" });
+
+  if (error) throw new Error(error.message);
+}

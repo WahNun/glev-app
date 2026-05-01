@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { supabase } from "@/lib/supabase";
 import {
   fetchAllMeals,
@@ -19,6 +19,8 @@ import {
   type RangeCounts,
 } from "@/lib/export";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
+import { fetchLastAppointment } from "@/lib/userSettings";
+import { localeToBcp47 } from "@/lib/time";
 
 const ACCENT  = "#4F6EF7";
 const GREEN   = "#22D3A0";
@@ -32,14 +34,18 @@ type Kind = "meals" | "insulin" | "exercise" | "fingersticks" | "all" | "pdf";
 // Range presets the user can pick in the export panel. "all" preserves
 // the legacy full-history behaviour; "30d" / "90d" cover the two
 // canonical clinician windows ("last month-ish" and "last quarter-ish");
-// "custom" exposes raw from/to date inputs for everything else
-// ("since my last appointment", "during the holidays", …).
-type RangePreset = "all" | "30d" | "90d" | "custom";
+// "lastAppointment" pulls the saved date out of user_settings and pre-
+// fills the same window as if the user had typed it into Custom — only
+// rendered when the user has set a date in Settings, so the chip
+// disappears cleanly when cleared (Task #75); "custom" exposes raw
+// from/to date inputs for everything else.
+type RangePreset = "all" | "30d" | "90d" | "lastAppointment" | "custom";
 
 /**
  * Resolve a preset (+ optional custom from/to dates as `YYYY-MM-DD`
- * strings from the date inputs) into a Supabase fetch window AND the
- * matching display range to print on the PDF cover.
+ * strings from the date inputs, plus the saved last-appointment date
+ * for the "lastAppointment" preset) into a Supabase fetch window AND
+ * the matching display range to print on the PDF cover.
  *
  * Returns `{ window: undefined, display: undefined }` when no filter
  * should be applied (preset = "all", or "custom" with empty inputs);
@@ -51,11 +57,18 @@ type RangePreset = "all" | "30d" | "90d" | "custom";
  * of the "from" day, end of the "to" day) so a clinician asking for
  * "the whole 31st" actually gets all entries from that calendar day,
  * not just the ones logged before midnight UTC.
+ *
+ * The "lastAppointment" branch reuses the same start-of-day / now
+ * conversion as a custom "from = lastAppointment, to = today" pick,
+ * so the resulting window is byte-for-byte identical to the user
+ * typing the date into the Custom inputs — the picker is purely a
+ * one-click shortcut, not a different code path.
  */
 function resolveRange(
   preset: RangePreset,
   customFrom: string,
   customTo: string,
+  lastAppointment: string | null,
 ): { window?: DateWindow; display?: { from?: string; to?: string } } {
   if (preset === "all") return {};
   const now = new Date();
@@ -63,6 +76,20 @@ function resolveRange(
     const days = preset === "30d" ? 30 : 90;
     const from = new Date(now.getTime() - days * 86_400_000);
     const fromIso = from.toISOString();
+    const toIso   = now.toISOString();
+    return {
+      window:  { from: fromIso, to: toIso },
+      display: { from: fromIso, to: toIso },
+    };
+  }
+  if (preset === "lastAppointment") {
+    // Defensive fallback: if the chip somehow ends up active without a
+    // saved date (race between the settings clear and the panel's
+    // cached state), behave like "all" rather than crashing on a null
+    // Date parse. The chip auto-deselects via the effect in the
+    // component, so this branch should be unreachable in practice.
+    if (!lastAppointment) return {};
+    const fromIso = new Date(`${lastAppointment}T00:00:00`).toISOString();
     const toIso   = now.toISOString();
     return {
       window:  { from: fromIso, to: toIso },
@@ -171,6 +198,7 @@ const ROWS: RowSpec[] = [
  */
 export default function ExportPanel() {
   const t = useTranslations("export");
+  const bcp47 = localeToBcp47(useLocale());
   const { unit: carbUnit, label: carbUnitLabel } = useCarbUnit();
   const [busy, setBusy] = useState<Kind | null>(null);
   const [msg, setMsg]   = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -191,6 +219,15 @@ export default function ExportPanel() {
   // the currently chosen range.
   const [counts, setCounts] = useState<RangeCounts | null>(null);
   const [countsLoading, setCountsLoading] = useState<boolean>(true);
+  // Saved "last appointment" date from user_settings — drives the
+  // optional 5th preset chip ("Seit letztem Arzttermin"). `null` means
+  // either the user hasn't set one yet, or we haven't loaded it; in
+  // both cases we hide the chip and behave exactly like the legacy
+  // 4-preset panel. Loaded once on mount; the Settings page is the
+  // only writer, and a user editing it triggers a full panel re-mount
+  // (the Settings sheet re-opens this component), so we don't need
+  // live invalidation here.
+  const [lastAppointment, setLastAppointment] = useState<string | null>(null);
   // Snapshot the user's current ICR (g/IE) AND correction factor
   // (mg/dL drop per 1 IE) once on mount so we can annotate the
   // insulin CSV/PDF with the ratio in their chosen carb unit
@@ -213,6 +250,32 @@ export default function ExportPanel() {
       setEmail(data.user?.email ?? "");
     });
   }, []);
+
+  // Load the saved "last appointment" date so we can decide whether
+  // to render the 5th preset chip. Failures (no row, signed out,
+  // network) collapse to `null` → chip hidden, which is the same
+  // behaviour as the user not having set a date yet, so there's no
+  // separate error state to surface here.
+  useEffect(() => {
+    let cancelled = false;
+    fetchLastAppointment()
+      .then((value) => { if (!cancelled) setLastAppointment(value); })
+      .catch(() => { /* leave null — chip stays hidden */ });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Auto-deselect the lastAppointment chip if the underlying date
+  // disappears (e.g. user clears it in another tab and re-opens the
+  // panel). Without this, the chip would stay visually active but
+  // resolve to "no filter" via the defensive fallback in
+  // `resolveRange` — which would silently flip the user back to a
+  // full-history export. Snapping the preset back to "all" keeps
+  // the visible state honest.
+  useEffect(() => {
+    if (rangePreset === "lastAppointment" && !lastAppointment) {
+      setRangePreset("all");
+    }
+  }, [rangePreset, lastAppointment]);
 
   // Read the user's ICR + CF directly from the user_settings row
   // instead of going through fetchInsulinSettings() — that helper
@@ -273,7 +336,12 @@ export default function ExportPanel() {
   useEffect(() => {
     let cancelled = false;
     setCountsLoading(true);
-    const { window } = resolveRange(rangePreset, customFrom, customTo);
+    // Thread `lastAppointment` into resolveRange so the live count
+    // reflects the saved-appointment chip too — without it the chip
+    // would silently fall through resolveRange's "lastAppointment"
+    // branch with a `null` argument and degrade to "all", showing
+    // an inflated count vs what the export would actually emit.
+    const { window } = resolveRange(rangePreset, customFrom, customTo, lastAppointment);
     countAllInWindow(window)
       .then((next) => {
         if (cancelled) return;
@@ -295,7 +363,7 @@ export default function ExportPanel() {
     return () => {
       cancelled = true;
     };
-  }, [rangePreset, customFrom, customTo]);
+  }, [rangePreset, customFrom, customTo, lastAppointment]);
 
   function flash(kind: "ok" | "err", text: string) {
     setMsg({ kind, text });
@@ -309,7 +377,7 @@ export default function ExportPanel() {
       const stamp = todayStamp();
       // Resolve the picker once per export so a single user click
       // produces one consistent window across the fetch + filename.
-      const { window } = resolveRange(rangePreset, customFrom, customTo);
+      const { window } = resolveRange(rangePreset, customFrom, customTo, lastAppointment);
       const suffix = rangeFilenameSuffix(window);
       let count = 0;
       if (kind === "meals") {
@@ -345,7 +413,7 @@ export default function ExportPanel() {
     setMsg(null);
     try {
       const stamp = todayStamp();
-      const { window } = resolveRange(rangePreset, customFrom, customTo);
+      const { window } = resolveRange(rangePreset, customFrom, customTo, lastAppointment);
       const suffix = rangeFilenameSuffix(window);
       const [meals, insulin, exercise, fs] = await Promise.all([
         fetchAllMeals(window),
@@ -380,7 +448,7 @@ export default function ExportPanel() {
     setBusy("pdf");
     setMsg(null);
     try {
-      const { window, display } = resolveRange(rangePreset, customFrom, customTo);
+      const { window, display } = resolveRange(rangePreset, customFrom, customTo, lastAppointment);
       const suffix = rangeFilenameSuffix(window);
       const [meals, insulin, exercise, fs] = await Promise.all([
         fetchAllMeals(window),
@@ -461,39 +529,61 @@ export default function ExportPanel() {
         {/* Preset chips. Render with the same chip pattern used
             elsewhere in the app (rounded pill, accent-on-active,
             quiet border-only otherwise) so the picker reads as a
-            familiar control instead of a one-off. */}
+            familiar control instead of a one-off.
+            The "lastAppointment" chip only renders when the user has
+            saved a date in Settings — keeps the chip row compact for
+            the most common case (no appointment date set), and the
+            chip's label reads "Seit letztem Arzttermin (12.01.2026)"
+            so the user can see at a glance which date the export
+            will start from. */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {(
-            [
-              { key: "all",    labelKey: "range_all"    },
-              { key: "30d",    labelKey: "range_30d"    },
-              { key: "90d",    labelKey: "range_90d"    },
-              { key: "custom", labelKey: "range_custom" },
-            ] as const
-          ).map((p) => {
-            const active = rangePreset === p.key;
-            return (
-              <button
-                key={p.key}
-                type="button"
-                onClick={() => setRangePreset(p.key)}
-                disabled={busy !== null}
-                style={{
-                  padding: "7px 13px",
-                  borderRadius: 999,
-                  border: `1px solid ${active ? ACCENT : BORDER}`,
-                  background: active ? `${ACCENT}20` : "var(--surface-soft)",
-                  color: active ? ACCENT : "var(--text-strong)",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: busy !== null ? "not-allowed" : "pointer",
-                  opacity: busy !== null ? 0.6 : 1,
-                }}
-              >
-                {t(p.labelKey)}
-              </button>
-            );
-          })}
+          {(() => {
+            const presets: Array<{ key: RangePreset; label: string }> = [
+              { key: "all", label: t("range_all") },
+              { key: "30d", label: t("range_30d") },
+              { key: "90d", label: t("range_90d") },
+            ];
+            if (lastAppointment) {
+              // Format the saved date in the user's UI locale so a
+              // German user sees "12.01.2026" and an English user
+              // sees "Jan 12, 2026" — same value, no time component.
+              // Append (date) to the chip label so the user can
+              // verify it before clicking.
+              const formatted = new Date(`${lastAppointment}T00:00:00`).toLocaleDateString(
+                bcp47,
+                { year: "numeric", month: "2-digit", day: "2-digit" },
+              );
+              presets.push({
+                key: "lastAppointment",
+                label: t("range_last_appointment", { date: formatted }),
+              });
+            }
+            presets.push({ key: "custom", label: t("range_custom") });
+            return presets.map((p) => {
+              const active = rangePreset === p.key;
+              return (
+                <button
+                  key={p.key}
+                  type="button"
+                  onClick={() => setRangePreset(p.key)}
+                  disabled={busy !== null}
+                  style={{
+                    padding: "7px 13px",
+                    borderRadius: 999,
+                    border: `1px solid ${active ? ACCENT : BORDER}`,
+                    background: active ? `${ACCENT}20` : "var(--surface-soft)",
+                    color: active ? ACCENT : "var(--text-strong)",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: busy !== null ? "not-allowed" : "pointer",
+                    opacity: busy !== null ? 0.6 : 1,
+                  }}
+                >
+                  {p.label}
+                </button>
+              );
+            });
+          })()}
         </div>
 
         {/* Custom from/to inputs — only shown when the picker is in

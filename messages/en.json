@@ -544,7 +544,13 @@
     "subtitle_language_de": "Deutsch",
     "subtitle_language_en": "English",
     "historical_intro": "Resets your meal log to the historical demo entries (Apr 17–22, 2026). Useful for bringing Glev back to a known state.",
-    "row_open_aria": "Open {label}"
+    "row_open_aria": "Open {label}",
+    "last_appointment_title": "Last appointment",
+    "last_appointment_label": "Date",
+    "last_appointment_hint": "Save the date of your last appointment. The Export panel will then show a one-click \"Since last appointment\" preset for exactly that window.",
+    "last_appointment_clear": "Clear date",
+    "subtitle_last_appointment_set": "{date}",
+    "subtitle_last_appointment_unset": "Not set"
   },
   "common": {
     "loading": "Loading…",
@@ -623,6 +629,7 @@
     "range_30d": "Last 30 days",
     "range_90d": "Last 90 days",
     "range_custom": "Custom range",
+    "range_last_appointment": "Since last appointment ({date})",
     "range_from": "From",
     "range_to": "To",
     "count_loading": "Counting entries in the selected range…",
