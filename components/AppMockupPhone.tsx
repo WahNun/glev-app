@@ -2,12 +2,30 @@
 
 /**
  * AppMockupPhone — Interactive demo of the Glev mobile UI rendered
- * inside an iPhone frame. Used on the public marketing homepage so
+ * inside an iPhone frame. Used on the public marketing pages so
  * visitors can try the app without logging in.
  *
  * NOT the real app. Five hand-built screens with deterministic seed
  * data, brand-correct styling, and a clickable bottom nav. The real
  * pages live under app/(protected)/* and are gated by auth.
+ *
+ * Mirrors the current build of the real app (April 2026):
+ *  - 4-tab bottom nav: Dashboard · Glev · Verlauf · Einstellungen
+ *    (Verlauf is a single tab with an Insights/Einträge sub-toggle,
+ *     matching `app/(protected)/history/page.tsx` + the mobile chip
+ *     in components/Layout.tsx).
+ *  - Glev tab is the center button and routes to the Engine wizard
+ *    (Step 1 Essen → Step 2 Makros → Step 3 Ergebnis with pill tabs
+ *    at the top, matching the real /engine page after the backlog
+ *    item "Engine-Step-Indikator durch /log-Pill-Tabs ersetzen").
+ *  - German-first copy throughout, lifted from the real
+ *    `messages/de.json` namespaces.
+ *
+ * The Tab union still includes `entries` and `insights` so that
+ * existing marketing call-sites that lock the phone to one of those
+ * (FeatureLiveMockup via FeatureDeepDive) keep working — they just
+ * render the underlying Verlauf sub-screen directly without the
+ * sub-toggle chrome.
  */
 
 import { useState } from "react";
@@ -18,12 +36,17 @@ const ACCENT  = "#4F6EF7";
 const GREEN   = "#22D3A0";
 const ORANGE  = "#FF9500";
 const PINK    = "#FF2D78";
+const PURPLE  = "#A78BFA";
 const BG      = "#09090B";
 const SURFACE = "#111117";
-const SURF2   = "#0F0F14";
 const BORDER  = "rgba(255,255,255,0.06)";
 
-type Tab = "dashboard" | "entries" | "engine" | "insights" | "settings";
+export type Tab =
+  | "dashboard"
+  | "entries"
+  | "engine"
+  | "insights"
+  | "settings";
 
 const FRAME_W = 320;
 const FRAME_H = 660;
@@ -31,19 +54,25 @@ const BEZEL   = 12;
 
 const TAB_LABEL: Record<Tab, string> = {
   dashboard: "Dashboard",
-  entries:   "Einträge",
-  engine:    "Glev Engine",
-  insights:  "Auswertungen",
+  entries:   "Verlauf · Einträge",
+  engine:    "Glev",
+  insights:  "Verlauf · Insights",
   settings:  "Einstellungen",
 };
 
 const TAB_CAPTION: Record<Tab, string> = {
-  dashboard: "Glukose live, Today's Macros, Control-Score.",
+  dashboard: "Glukose live, heutige Makros, Control Score.",
   entries:   "Chronologisches Log — jede Mahlzeit ein Tap.",
   engine:    "Sprich deine Mahlzeit — Glev parst Makros per KI.",
-  insights:  "Time-in-Range, 7-Tage-Trend, Mahlzeiten-Heatmap.",
-  settings:  "ICR, Korrekturfaktor, Target-Range — alles in deiner Hand.",
+  insights:  "Time-in-Range, Trend, Mahlzeiten-Bewertung.",
+  settings:  "ICR, Korrekturfaktor, CGM, Sprache — alles in deiner Hand.",
 };
+
+/** Bottom-nav buttons rendered to the visitor (4 buttons, like the
+ *  real mobile Layout.tsx). "verlauf" is a virtual button that maps
+ *  to either the insights or entries Tab depending on the in-screen
+ *  Verlauf sub-toggle. */
+type NavId = "dashboard" | "glev" | "verlauf" | "settings";
 
 type AppMockupPhoneProps = {
   /** Lock the phone to a single tab. Hides the bottom nav and the
@@ -52,40 +81,41 @@ type AppMockupPhoneProps = {
    *  visitors just can't switch tabs. Used by feature cards on the
    *  marketing landing page so each card focuses on one screen. */
   lockTab?: Tab;
-  /** Tabs to exclude from the bottom nav. Does NOT affect the
-   *  top-right cog (use `hideTopCog` for that — they're independent
-   *  so the hero can keep the settings tab visible while still
-   *  blocking accidental settings-on-banner-tap). Ignored when
-   *  `lockTab` is set. */
+  /** Tabs to exclude from the bottom nav. Mapped to NavIds:
+   *  - "engine"   hides the Glev center button
+   *  - "entries"  AND "insights" together hide the Verlauf button
+   *  - "dashboard"/"settings" hide their own buttons.
+   *  Ignored when `lockTab` is set. */
   excludeTabs?: Tab[];
-  /** Hide the top-right cog button. The hero uses this so a tap on
-   *  the header banner doesn't deep-link visitors into settings —
-   *  settings is still reachable via the bottom nav. */
+  /** Hide the top-right cog button. The hero uses this if a tap on
+   *  the header banner shouldn't deep-link visitors into settings. */
   hideTopCog?: boolean;
 };
 
-export default function AppMockupPhone({ lockTab, excludeTabs = [], hideTopCog = false }: AppMockupPhoneProps = {}) {
+export default function AppMockupPhone({
+  lockTab,
+  excludeTabs = [],
+  hideTopCog = false,
+}: AppMockupPhoneProps = {}) {
   const [tab, setTab] = useState<Tab>(lockTab ?? "dashboard");
 
   // When locked we ignore tab changes — within-tab interactions still
   // mutate their own state inside DashboardScreen / EngineScreen / etc.
   const onTab = lockTab ? () => {} : setTab;
 
-  const visibleTabs: Tab[] = (Object.keys(TAB_LABEL) as Tab[]).filter(t => !excludeTabs.includes(t));
-
   return (
-    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:22 }}>
+    <div data-testid="app-mockup-phone" style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:22 }}>
       <PhoneShell>
         <ScreenInner
           tab={tab}
           onTab={onTab}
           showBottomNav={!lockTab}
-          visibleTabs={visibleTabs}
+          excludeTabs={excludeTabs}
           hideTopCog={hideTopCog}
         />
       </PhoneShell>
 
-      {/* Caption + tab pill row — only when nav is interactive. Locked
+      {/* Caption + label row — only when nav is interactive. Locked
           phones rely on the surrounding feature card's own copy. */}
       {!lockTab && (
         <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:12 }}>
@@ -134,24 +164,38 @@ function PhoneShell({ children }: { children: React.ReactNode }) {
 /* ════════════════════════════════════════════════════════════════
    Screen inner — top header + scrollable content + bottom nav.
    ════════════════════════════════════════════════════════════════ */
-function ScreenInner({ tab, onTab, showBottomNav, visibleTabs, hideTopCog }: {
+function ScreenInner({ tab, onTab, showBottomNav, excludeTabs, hideTopCog }: {
   tab: Tab;
   onTab: (t: Tab) => void;
   showBottomNav: boolean;
-  visibleTabs: Tab[];
+  excludeTabs: Tab[];
   hideTopCog: boolean;
 }) {
   return (
     <div style={{ display:"flex", flexDirection:"column", height:"100%", background:BG, color:"#fff", fontFamily:"var(--font-inter), Inter, system-ui, sans-serif" }}>
       <TopHeader onAccount={hideTopCog ? undefined : () => onTab("settings")} />
       <div style={{ flex:1, minHeight:0, overflowY:"auto", overflowX:"hidden", padding:"12px 14px 14px" }}>
-        {tab === "dashboard" && <DashboardScreen />}
-        {tab === "entries"   && <EntriesScreen />}
-        {tab === "engine"    && <EngineScreen   onLogged={() => onTab("entries")} />}
-        {tab === "insights"  && <InsightsScreen />}
+        {tab === "dashboard" && <DashboardScreen onLogMeal={() => onTab("engine")}/>}
+        {(tab === "entries" || tab === "insights") && (
+          <VerlaufScreen
+            tab={tab}
+            onSubTab={onTab}
+            // Hide the Insights/Einträge sub-toggle when locked — locked
+            // feature cards focus on one specific screen, so the toggle
+            // would be a no-op confusion.
+            showSubToggle={showBottomNav}
+          />
+        )}
+        {tab === "engine"    && <EngineScreen onLogged={() => onTab("entries")} />}
         {tab === "settings"  && <SettingsScreen />}
       </div>
-      {showBottomNav && <BottomNav tab={tab} onTab={onTab} visibleTabs={visibleTabs} />}
+      {showBottomNav && (
+        <BottomNav
+          tab={tab}
+          onTab={onTab}
+          excludeTabs={excludeTabs}
+        />
+      )}
     </div>
   );
 }
@@ -171,7 +215,7 @@ function TopHeader({ onAccount }: { onAccount?: () => void }) {
         {onAccount && (
           <button
             onClick={onAccount}
-            aria-label="Open settings"
+            aria-label="Einstellungen öffnen"
             style={{
               width:26, height:26, borderRadius:99, padding:0,
               background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)",
@@ -186,63 +230,102 @@ function TopHeader({ onAccount }: { onAccount?: () => void }) {
   );
 }
 
-function BottomNav({ tab, onTab, visibleTabs }: { tab: Tab; onTab: (t: Tab) => void; visibleTabs: Tab[] }) {
-  const allItems: { id: Tab; label: string; icon: (active: boolean) => React.ReactNode }[] = [
-    { id:"dashboard", label:"DASHBOARD",
-      icon: a => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={a?ACCENT:"rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> },
-    { id:"entries",   label:"ENTRY LOG",
-      icon: a => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={a?ACCENT:"rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1.5" fill={a?ACCENT:"rgba(255,255,255,0.4)"}/><circle cx="4" cy="12" r="1.5" fill={a?ACCENT:"rgba(255,255,255,0.4)"}/><circle cx="4" cy="18" r="1.5" fill={a?ACCENT:"rgba(255,255,255,0.4)"}/></svg> },
-    { id:"engine",    label:"GLEV",
-      icon: a => <GlevLogo size={18} color={a?"#fff":ACCENT} bg="transparent"/>, },
-    { id:"insights",  label:"INSIGHTS",
-      icon: a => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={a?ACCENT:"rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a7 7 0 0 1 4 12.8V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.2A7 7 0 0 1 12 2z"/><path d="M9 21h6"/><path d="M9 18h6"/></svg> },
-    { id:"settings",  label:"SETTINGS",
-      icon: a => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={a?ACCENT:"rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> },
+/* ────────────────────────────────────────────────────────────────
+   Bottom nav — 4 buttons matching the real mobile Layout.tsx:
+   Dashboard · Glev (center, button-style) · Verlauf · Einstellungen.
+   The Glev button is bigger and uses the GlevLogo, like the real app.
+   ──────────────────────────────────────────────────────────────── */
+function BottomNav({ tab, onTab, excludeTabs }: {
+  tab: Tab;
+  onTab: (t: Tab) => void;
+  excludeTabs: Tab[];
+}) {
+  // Map a NavId to which Tab it activates and whether it should
+  // be highlighted given the currently-active Tab. Verlauf wraps
+  // both `entries` and `insights` so the button is highlighted
+  // for both sub-views; clicking it always lands on insights first
+  // (the real app's default for /history).
+  const items: { id: NavId; label: string; activeTab: Tab; isActive: boolean; hidden: boolean; render: (active: boolean) => React.ReactNode }[] = [
+    {
+      id: "dashboard",
+      label: "DASHBOARD",
+      activeTab: "dashboard",
+      isActive: tab === "dashboard",
+      hidden: excludeTabs.includes("dashboard"),
+      render: a => <NavIconBox><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={a?ACCENT:"rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></NavIconBox>,
+    },
+    {
+      id: "glev",
+      label: "GLEV",
+      activeTab: "engine",
+      isActive: tab === "engine",
+      hidden: excludeTabs.includes("engine"),
+      render: a => (
+        <span style={{
+          width:30, height:30, borderRadius:99,
+          background: a
+            ? `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`
+            : `radial-gradient(circle at 36% 32%, #1e1e2e 0%, #141420 45%, ${BG} 100%)`,
+          border: a ? "none" : `1px solid rgba(255,255,255,0.12)`,
+          display:"flex", alignItems:"center", justifyContent:"center",
+          boxShadow: a ? `0 2px 12px ${ACCENT}55` : "0 2px 6px rgba(0,0,0,0.4)",
+        }}>
+          <GlevLogo size={17} color={a ? "#fff" : ACCENT} bg="transparent"/>
+        </span>
+      ),
+    },
+    {
+      id: "verlauf",
+      label: "VERLAUF",
+      activeTab: "insights",
+      isActive: tab === "insights" || tab === "entries",
+      hidden: excludeTabs.includes("insights") && excludeTabs.includes("entries"),
+      render: a => <NavIconBox><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={a?ACCENT:"rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 4 3 9 8 9"/><line x1="12" y1="7" x2="12" y2="12"/><line x1="12" y1="12" x2="15" y2="14"/></svg></NavIconBox>,
+    },
+    {
+      id: "settings",
+      label: "EINSTELLUNGEN",
+      activeTab: "settings",
+      isActive: tab === "settings",
+      hidden: excludeTabs.includes("settings"),
+      render: a => <NavIconBox><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={a?ACCENT:"rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></NavIconBox>,
+    },
   ];
-  // Filter the visible nav items per `excludeTabs`. Width is computed
-  // from the resulting count so 4-tab navs don't leave a gap where the
-  // settings button used to sit.
-  const items = allItems.filter(it => visibleTabs.includes(it.id));
-  const itemWidth = `${100 / Math.max(items.length, 1)}%`;
+
+  const visible = items.filter(it => !it.hidden);
+  const itemWidth = `${100 / Math.max(visible.length, 1)}%`;
+
   return (
     <nav style={{
       background: SURFACE, borderTop:`1px solid ${BORDER}`,
       display:"flex", justifyContent:"space-around", alignItems:"stretch",
       padding:"8px 8px 12px",
     }}>
-      {items.map(({ id, label, icon }) => {
-        const active = tab === id;
-        const isCenter = id === "engine";
-        return (
-          <button key={id} onClick={() => onTab(id)} style={{
+      {visible.map(it => (
+        <button
+          key={it.id}
+          onClick={() => onTab(it.activeTab)}
+          style={{
             display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"flex-end",
             gap:3, padding:0, height:42, width:itemWidth,
             border:"none", background:"transparent", cursor:"pointer",
-            color: active ? ACCENT : "rgba(255,255,255,0.3)",
+            color: it.isActive ? ACCENT : "rgba(255,255,255,0.3)",
             fontSize:8, fontWeight:600, letterSpacing:"0.04em",
-          }}>
-            {isCenter ? (
-              <span style={{
-                width:26, height:26, borderRadius:99,
-                background: active
-                  ? `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`
-                  : `radial-gradient(circle at 36% 32%, #1e1e2e 0%, #141420 45%, ${BG} 100%)`,
-                border: active ? "none" : `1px solid rgba(255,255,255,0.12)`,
-                display:"flex", alignItems:"center", justifyContent:"center",
-                boxShadow: active ? `0 2px 10px ${ACCENT}55` : "0 2px 6px rgba(0,0,0,0.4)",
-              }}>
-                <GlevLogo size={15} color={active ? "#fff" : ACCENT} bg="transparent"/>
-              </span>
-            ) : (
-              <span style={{ display:"flex", alignItems:"center", justifyContent:"center", height:20 }}>
-                {icon(active)}
-              </span>
-            )}
-            <span style={{ lineHeight:1, fontSize:7.5 }}>{label}</span>
-          </button>
-        );
-      })}
+          }}
+        >
+          {it.render(it.isActive)}
+          <span style={{ lineHeight:1, fontSize:7.5 }}>{it.label}</span>
+        </button>
+      ))}
     </nav>
+  );
+}
+
+function NavIconBox({ children }: { children: React.ReactNode }) {
+  return (
+    <span style={{ display:"flex", alignItems:"center", justifyContent:"center", height:20 }}>
+      {children}
+    </span>
   );
 }
 
@@ -273,16 +356,17 @@ function Pill({ text, color }: { text: string; color: string }) {
 }
 
 /* ════════════════════════════════════════════════════════════════
-   DASHBOARD — live BG card + macros + control score + recent log.
+   DASHBOARD — Glukose live, Heutige Makros, Control Score · 7T
+   (with Treffer-/Spike-/Hypo-Quote tiles), Aktuell.
    ════════════════════════════════════════════════════════════════ */
-function DashboardScreen() {
+function DashboardScreen({ onLogMeal }: { onLogMeal: () => void }) {
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
       {/* Live glucose hero */}
       <MockCard style={{ background:`linear-gradient(135deg, ${ACCENT}10, ${SURFACE})`, borderColor:`${ACCENT}30` }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
           <CardLabel text="Glucose · live" color={ACCENT}/>
-          <div style={{ fontSize:8, color:"rgba(255,255,255,0.4)" }}>1m ago</div>
+          <div style={{ fontSize:8, color:"rgba(255,255,255,0.4)" }}>vor 1m</div>
         </div>
         <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
           <div style={{ fontSize:42, fontWeight:800, letterSpacing:"-0.04em", color:GREEN, fontFamily:"var(--font-mono)" }}>142</div>
@@ -295,62 +379,100 @@ function DashboardScreen() {
         {/* Inline mini sparkline */}
         <Sparkline values={[88,92,95,99,108,118,126,134,142]} color={GREEN}/>
         <div style={{ display:"flex", justifyContent:"space-between", fontSize:8, color:"rgba(255,255,255,0.3)", marginTop:4 }}>
-          <span>−2 h</span><span>−1 h</span><span>now</span>
+          <span>−2 h</span><span>−1 h</span><span>jetzt</span>
         </div>
       </MockCard>
 
-      {/* Today's macros */}
+      {/* Log-Mahlzeit CTA — matches the real /dashboard CTA styling */}
+      <button
+        onClick={onLogMeal}
+        style={{
+          width:"100%", padding:"10px 12px", borderRadius:12,
+          border:`1px dashed ${ACCENT}55`, background:`${ACCENT}10`,
+          color:ACCENT, fontSize:11, fontWeight:700, letterSpacing:"-0.01em",
+          display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+          cursor:"pointer",
+        }}
+      >
+        + Mahlzeit loggen
+      </button>
+
+      {/* Heutige Makros */}
       <MockCard>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-          <CardLabel text="Today's macros"/>
-          <div style={{ fontSize:9, color:"rgba(255,255,255,0.45)" }}>4 meals</div>
+          <CardLabel text="Heutige Makros"/>
+          <div style={{ fontSize:9, color:"rgba(255,255,255,0.45)" }}>4 Mahlzeiten</div>
         </div>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:10 }}>
-          <MacroRing label="Carbs" value={186} target={250} color={ACCENT} unit="g"/>
-          <MacroRing label="Protein" value={94} target={120} color={"#3B82F6"} unit="g"/>
-          <MacroRing label="Fat" value={62} target={80} color={"#A855F7"} unit="g"/>
+          <MacroRing label="Carbs"   value={186} target={250} color={ORANGE} unit="g"/>
+          <MacroRing label="Protein" value={94}  target={120} color={"#3B82F6"} unit="g"/>
+          <MacroRing label="Fett"    value={62}  target={80}  color={PURPLE} unit="g"/>
         </div>
       </MockCard>
 
-      {/* Control score */}
+      {/* Control Score · 7T — hero card with STARK badge */}
       <MockCard>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-          <CardLabel text="Control score · 7d"/>
-          <Pill text="Strong" color={GREEN}/>
+          <CardLabel text="Control Score · 7T"/>
+          <Pill text="STARK" color={GREEN}/>
         </div>
         <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
           <div style={{ fontSize:32, fontWeight:800, letterSpacing:"-0.03em", color:"#fff", fontFamily:"var(--font-mono)" }}>87</div>
           <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)" }}>/ 100</div>
-          <div style={{ marginLeft:"auto", fontSize:9, color:GREEN }}>+4 vs last wk</div>
+          <div style={{ marginLeft:"auto", fontSize:9, color:GREEN }}>+4 ggü. Vorwoche</div>
         </div>
         <div style={{ height:5, marginTop:8, background:"rgba(255,255,255,0.06)", borderRadius:99, overflow:"hidden" }}>
           <div style={{ height:"100%", width:"87%", background:`linear-gradient(90deg, ${ACCENT}, ${GREEN})`, borderRadius:99 }}/>
         </div>
       </MockCard>
 
-      {/* Recent log */}
+      {/* Treffer / Spike / Hypo tiles — matches buildCards() in
+          app/(protected)/dashboard/page.tsx */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:8 }}>
+        <RateTile label="Treffer-Quote" value={78} sub="14 gut" color={GREEN}/>
+        <RateTile label="Spike-Quote"   value={12} sub="Hyperglykämie" color={ORANGE}/>
+        <RateTile label="Hypo-Quote"    value={6}  sub="Hypoglykämie" color={PINK}/>
+      </div>
+
+      {/* Aktuell — recent log */}
       <MockCard style={{ padding:"10px 0 4px" }}>
         <div style={{ padding:"0 14px 8px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-          <CardLabel text="Recent"/>
-          <div style={{ fontSize:9, color:ACCENT, fontWeight:600 }}>See all →</div>
+          <CardLabel text="Aktuell"/>
+          <div style={{ fontSize:9, color:ACCENT, fontWeight:600 }}>Alle ansehen →</div>
         </div>
         {[
-          { icon:"meal", title:"Pasta with pesto", time:"12:24", carbs:62, badge:"ON TARGET", badgeColor:GREEN },
-          { icon:"bolus", title:"4.2 U bolus", time:"12:20", carbs:null, badge:"+1H 138", badgeColor:GREEN },
-          { icon:"exercise", title:"Run · 32 min", time:"11:10", carbs:null, badge:"−24 mg/dL", badgeColor:ACCENT },
+          { icon:"meal" as const,     title:"Pasta mit Pesto",    time:"12:24", carbs:62, badge:"GUT",        badgeColor:GREEN },
+          { icon:"bolus" as const,    title:"4,2 IE Bolus",       time:"12:20", carbs:null, badge:"+1H 138",  badgeColor:GREEN },
+          { icon:"exercise" as const, title:"Lauf · 32 min",      time:"11:10", carbs:null, badge:"−24 mg/dL", badgeColor:ACCENT },
         ].map((r, i) => (
           <div key={i} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 14px", borderTop:`1px solid ${BORDER}` }}>
-            <EntryIcon kind={r.icon as "meal"|"bolus"|"exercise"|"basal"}/>
+            <EntryIcon kind={r.icon}/>
             <div style={{ flex:1, minWidth:0 }}>
               <div style={{ fontSize:11, fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{r.title}</div>
               <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>
-                {r.time}{r.carbs != null ? ` · ${r.carbs}g carbs` : ""}
+                {r.time}{r.carbs != null ? ` · ${r.carbs}g KH` : ""}
               </div>
             </div>
             <Pill text={r.badge} color={r.badgeColor}/>
           </div>
         ))}
       </MockCard>
+    </div>
+  );
+}
+
+function RateTile({ label, value, sub, color }: { label: string; value: number; sub: string; color: string }) {
+  return (
+    <div style={{
+      background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:12,
+      padding:"10px 10px", display:"flex", flexDirection:"column", gap:4,
+    }}>
+      <div style={{ fontSize:8, fontWeight:700, letterSpacing:"0.08em", color:"rgba(255,255,255,0.45)", textTransform:"uppercase" }}>{label}</div>
+      <div style={{ display:"flex", alignItems:"baseline", gap:3 }}>
+        <span style={{ fontSize:20, fontWeight:800, color, fontFamily:"var(--font-mono)", letterSpacing:"-0.03em" }}>{value}</span>
+        <span style={{ fontSize:10, color, fontWeight:700 }}>%</span>
+      </div>
+      <div style={{ fontSize:8, color:"rgba(255,255,255,0.35)" }}>{sub}</div>
     </div>
   );
 }
@@ -400,7 +522,7 @@ function EntryIcon({ kind }: { kind: "meal" | "bolus" | "exercise" | "basal" }) 
     meal:     { color:ORANGE, glyph:"M" },
     bolus:    { color:ACCENT, glyph:"B" },
     exercise: { color:GREEN,  glyph:"E" },
-    basal:    { color:"#A78BFA", glyph:"L" },
+    basal:    { color:PURPLE, glyph:"L" },
   }[kind];
   return (
     <div style={{
@@ -413,13 +535,51 @@ function EntryIcon({ kind }: { kind: "meal" | "bolus" | "exercise" | "basal" }) 
 }
 
 /* ════════════════════════════════════════════════════════════════
-   ENTRIES — chronological log with mixed event types.
+   VERLAUF — wraps Insights + Einträge with a sub-toggle chip,
+   matching app/(protected)/history + the HistoryHeaderChip in
+   components/Layout.tsx.
    ════════════════════════════════════════════════════════════════ */
+function VerlaufScreen({ tab, onSubTab, showSubToggle }: { tab: "insights" | "entries"; onSubTab: (t: Tab) => void; showSubToggle: boolean }) {
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+      {showSubToggle && (
+        <div style={{
+          alignSelf:"flex-start",
+          display:"inline-flex", gap:3, padding:3,
+          background:"#0D0D12", border:`1px solid ${BORDER}`,
+          borderRadius:9,
+        }}>
+          {([
+            { id:"insights" as const, label:"Insights" },
+            { id:"entries"  as const, label:"Einträge" },
+          ]).map(s => {
+            const active = tab === s.id;
+            return (
+              <button key={s.id} onClick={() => onSubTab(s.id)} style={{
+                padding:"4px 12px", borderRadius:6,
+                background: active ? `${ACCENT}22` : "transparent",
+                color:    active ? ACCENT : "rgba(255,255,255,0.55)",
+                fontSize:10, fontWeight:700, letterSpacing:"-0.01em",
+                border:"none", cursor:"pointer",
+              }}>{s.label}</button>
+            );
+          })}
+        </div>
+      )}
+
+      {tab === "insights" ? <InsightsScreen/> : <EntriesScreen/>}
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────
+   EINTRÄGE — chronological log with mixed event types.
+   ──────────────────────────────────────────────────────────────── */
 function EntriesScreen() {
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
 
-  type EvalKind = "GOOD" | "HIGH" | "LOW";
-  const evalColor: Record<EvalKind, string> = { GOOD: GREEN, HIGH: PINK, LOW: ACCENT };
+  type EvalKind = "GUT" | "SPIKE" | "HYPO";
+  const evalColor: Record<EvalKind, string> = { GUT: GREEN, SPIKE: ORANGE, HYPO: PINK };
 
   const meals: Array<{
     meal: string; time: string;
@@ -427,9 +587,9 @@ function EntriesScreen() {
     glucose: number; insulin: number;
     evaluation: EvalKind;
   }> = [
-    { meal:"Haferflocken, Blaubeeren, Mandelmilch", time:"08:14", carbs:52, protein:12, fat:8,  fiber:6, calories:328, glucose:108, insulin:3.5, evaluation:"GOOD" },
-    { meal:"Chicken Bowl mit Reis und Avocado",     time:"12:41", carbs:68, protein:38, fat:18, fiber:5, calories:590, glucose:124, insulin:4.8, evaluation:"HIGH" },
-    { meal:"Linsencurry mit Naan",                  time:"19:22", carbs:74, protein:22, fat:12, fiber:9, calories:490, glucose:115, insulin:5.2, evaluation:"GOOD" },
+    { meal:"Haferflocken, Blaubeeren, Mandelmilch", time:"08:14", carbs:52, protein:12, fat:8,  fiber:6, calories:328, glucose:108, insulin:3.5, evaluation:"GUT" },
+    { meal:"Chicken Bowl mit Reis und Avocado",     time:"12:41", carbs:68, protein:38, fat:18, fiber:5, calories:590, glucose:124, insulin:4.8, evaluation:"SPIKE" },
+    { meal:"Linsencurry mit Naan",                  time:"19:22", carbs:74, protein:22, fat:12, fiber:9, calories:490, glucose:115, insulin:5.2, evaluation:"GUT" },
   ];
 
   const MealStat = ({ l, v, c }: { l: string; v: string; c?: string }) => (
@@ -441,21 +601,44 @@ function EntriesScreen() {
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-      <div style={{ padding:"4px 2px 6px", display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
-        <div style={{ fontSize:13, fontWeight:700, letterSpacing:"-0.02em" }}>Heute, 25. Apr</div>
-        <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)" }}>3 Mahlzeiten</div>
+      <div style={{ padding:"4px 2px 2px", display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
+        <div style={{ fontSize:13, fontWeight:700, letterSpacing:"-0.02em" }}>Einträge</div>
+        <div style={{ fontSize:9, color:"rgba(255,255,255,0.35)" }}>3 von 47</div>
+      </div>
+      <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)", padding:"0 2px 4px" }}>
+        Klicke eine Zeile zum Aufklappen.
       </div>
 
-      {/* Filter pills */}
-      <div style={{ display:"flex", gap:5, paddingBottom:4 }}>
-        {["Alle","Mahlzeiten","Bolus","Basal","Sport"].map((l, i) => (
-          <div key={l} style={{
-            fontSize:9, fontWeight:600, padding:"4px 9px", borderRadius:99,
-            background: i === 0 ? `${ACCENT}20` : "rgba(255,255,255,0.04)",
-            color: i === 0 ? ACCENT : "rgba(255,255,255,0.5)",
-            border: i === 0 ? `1px solid ${ACCENT}40` : `1px solid ${BORDER}`,
-          }}>{l}</div>
-        ))}
+      {/* + Mahlzeit dashed CTA */}
+      <button style={{
+        width:"100%", padding:"9px", borderRadius:10,
+        border:`1px dashed ${ACCENT}55`, background:`${ACCENT}10`,
+        color:ACCENT, fontSize:10, fontWeight:700,
+        cursor:"pointer", letterSpacing:"-0.01em",
+      }}>
+        + Mahlzeit
+      </button>
+
+      {/* Filters + search row */}
+      <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+        <div style={{
+          display:"inline-flex", alignItems:"center", gap:5,
+          padding:"5px 10px", borderRadius:99,
+          background:"rgba(255,255,255,0.04)", border:`1px solid ${BORDER}`,
+          color:"rgba(255,255,255,0.55)", fontSize:9, fontWeight:600,
+        }}>
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+          Filters · 2
+        </div>
+        <div style={{
+          flex:1, display:"flex", alignItems:"center", gap:5,
+          padding:"5px 10px", borderRadius:99,
+          background:"rgba(255,255,255,0.03)", border:`1px solid ${BORDER}`,
+          color:"rgba(255,255,255,0.4)", fontSize:9,
+        }}>
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          Suchen…
+        </div>
       </div>
 
       {meals.map((m, i) => {
@@ -474,7 +657,7 @@ function EntriesScreen() {
                   <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)", fontFamily:"var(--font-mono)", flexShrink:0 }}>{m.time}</div>
                 </div>
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:6, marginTop:3 }}>
-                  <div style={{ fontSize:9.5, color:"rgba(255,255,255,0.5)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{m.carbs}g KH · {m.insulin}u Bolus</div>
+                  <div style={{ fontSize:9.5, color:"rgba(255,255,255,0.5)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{m.carbs}g KH · {m.insulin} IE Bolus</div>
                   <Pill text={m.evaluation} color={evColor}/>
                 </div>
               </div>
@@ -483,18 +666,18 @@ function EntriesScreen() {
               </svg>
             </div>
 
-            <div style={{ maxHeight: isOpen ? 200 : 0, overflow:"hidden", transition:"max-height 0.25s ease" }}>
+            <div style={{ maxHeight: isOpen ? 220 : 0, overflow:"hidden", transition:"max-height 0.25s ease" }}>
               <div style={{ marginTop:10, paddingTop:10, borderTop:`1px solid rgba(255,255,255,0.06)`, display:"flex", flexDirection:"column", gap:8 }}>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
-                  <MealStat l="Carbs"        v={`${m.carbs}g`}        c={ORANGE}/>
-                  <MealStat l="Protein"      v={`${m.protein}g`}      c="#A78BFA"/>
-                  <MealStat l="Fett"         v={`${m.fat}g`}          c={ACCENT}/>
+                  <MealStat l="Carbs"         v={`${m.carbs}g`}        c={ORANGE}/>
+                  <MealStat l="Protein"       v={`${m.protein}g`}      c={PURPLE}/>
+                  <MealStat l="Fett"          v={`${m.fat}g`}          c={ACCENT}/>
                   <MealStat l="Ballaststoffe" v={`${m.fiber}g`}/>
-                  <MealStat l="Kalorien"     v={`${m.calories} kcal`} c={GREEN}/>
+                  <MealStat l="Kalorien"      v={`${m.calories} kcal`} c={GREEN}/>
                 </div>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, fontSize:10, color:"rgba(255,255,255,0.55)", padding:"4px 2px" }}>
-                  <span>Glukose vor Essen: <strong style={{ color:"#fff", fontWeight:700 }}>{m.glucose}</strong> mg/dL</span>
-                  <span>Bolus: <strong style={{ color:"#fff", fontWeight:700 }}>{m.insulin}</strong>u</span>
+                  <span>BG vorher: <strong style={{ color:"#fff", fontWeight:700 }}>{m.glucose}</strong> mg/dL</span>
+                  <span>Bolus: <strong style={{ color:"#fff", fontWeight:700 }}>{m.insulin}</strong> IE</span>
                 </div>
               </div>
             </div>
@@ -510,38 +693,38 @@ function EntriesScreen() {
 }
 
 /* ════════════════════════════════════════════════════════════════
-   GLEV ENGINE — 1:1 mirror of the real app's mobile Engine page.
-   Same metallic dark mic, same single-card form, same Meal
-   Classification banner, same Recommendation result block. Pre-
-   filled with deterministic demo data so visitors can see the full
-   flow without an account.
+   GLEV ENGINE — 3-step wizard with pill tabs at the top
+   (Essen → Makros → Ergebnis). Mirrors the real /engine page after
+   the "Engine-Step-Indikator durch /log-Pill-Tabs ersetzen" change.
    ════════════════════════════════════════════════════════════════ */
+type EngineStep = 1 | 2 | 3;
+
 function EngineScreen({ onLogged }: { onLogged: () => void }) {
-  // Mic state mirrors the real page: idle → listening → parsing → idle.
-  // No real recording; we just animate through the states on tap.
+  const [step, setStep] = useState<EngineStep>(1);
   const [micState, setMicState] = useState<"idle" | "listening" | "parsing">("idle");
-  const [showResult, setShowResult] = useState(false);
-  const [glucose] = useState("115");
-  const [carbs]   = useState("62");
-  const [protein] = useState("18");
-  const [fat]     = useState("22");
-  const [fiber]   = useState("4");
-  const [desc]    = useState("Pasta with pesto, 250g");
-  const [insulin, setInsulin] = useState("");
   const [confirmed, setConfirmed] = useState(false);
+
+  // Pre-filled deterministic seed data so step 2 + step 3 render full
+  // content without the visitor having to actually speak / type.
+  const meal = {
+    desc:    "Pasta mit Pesto, 250g",
+    glucose: 115,
+    carbs:   62,
+    protein: 18,
+    fat:     22,
+    fiber:   4,
+  };
 
   function tapMic() {
     if (micState !== "idle") return;
     setMicState("listening");
     setTimeout(() => {
       setMicState("parsing");
-      setTimeout(() => setMicState("idle"), 1100);
+      setTimeout(() => {
+        setMicState("idle");
+        setStep(2);
+      }, 1100);
     }, 1500);
-  }
-
-  function getRec() {
-    setShowResult(true);
-    setInsulin("4.2");
   }
 
   function handleConfirm() {
@@ -549,8 +732,161 @@ function EngineScreen({ onLogged }: { onLogged: () => void }) {
     setTimeout(() => onLogged(), 700);
   }
 
-  // Form/input styles cloned from the real Engine page (`inp`, `card`,
-  // labelStyle), scaled down a notch so they fit the 290px phone width.
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+      {/* Header — GlevLogo + title */}
+      <div>
+        <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
+          <GlevLogo size={18}/>
+          <h1 style={{ fontSize:14, fontWeight:800, letterSpacing:"-0.03em", margin:0 }}>Glev Engine</h1>
+        </div>
+        <p style={{ color:"rgba(255,255,255,0.35)", fontSize:9.5, margin:0, lineHeight:1.4 }}>
+          Sprich deine Mahlzeit — Glev parst Makros und schlägt eine Insulin-Dosis vor.
+        </p>
+      </div>
+
+      {/* Pill tabs — Essen · Makros · Ergebnis (matches the real /log
+          pill-tab pattern after the redesign) */}
+      <div style={{
+        display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:4,
+        background:"#0D0D12", border:`1px solid ${BORDER}`,
+        borderRadius:10, padding:4,
+      }}>
+        {([
+          { id:1 as EngineStep, label:"1 · Essen" },
+          { id:2 as EngineStep, label:"2 · Makros" },
+          { id:3 as EngineStep, label:"3 · Ergebnis" },
+        ]).map(s => {
+          const active = step === s.id;
+          const reachable = s.id <= step;
+          return (
+            <button
+              key={s.id}
+              onClick={() => reachable && setStep(s.id)}
+              disabled={!reachable}
+              style={{
+                padding:"6px 8px", borderRadius:7,
+                background: active ? `${ACCENT}22` : "transparent",
+                color:    active ? ACCENT : reachable ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.25)",
+                fontSize:9.5, fontWeight:700, letterSpacing:"-0.01em",
+                border:"none", cursor: reachable ? "pointer" : "default",
+                textAlign:"center",
+              }}
+            >{s.label}</button>
+          );
+        })}
+      </div>
+
+      {step === 1 && <EngineStepFood meal={meal} micState={micState} onMic={tapMic} onSkip={() => setStep(2)}/>}
+      {step === 2 && <EngineStepMacros meal={meal} onBack={() => setStep(1)} onContinue={() => setStep(3)}/>}
+      {step === 3 && <EngineStepResult meal={meal} confirmed={confirmed} onBack={() => setStep(2)} onConfirm={handleConfirm}/>}
+    </div>
+  );
+}
+
+function EngineStepFood({ meal, micState, onMic, onSkip }: {
+  meal: { desc: string; glucose: number };
+  micState: "idle" | "listening" | "parsing";
+  onMic: () => void;
+  onSkip: () => void;
+}) {
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+      {/* Aktueller Glukosewert chip */}
+      <div style={{
+        display:"flex", justifyContent:"space-between", alignItems:"center",
+        padding:"8px 12px", borderRadius:99,
+        background:`${ACCENT}10`, border:`1px solid ${ACCENT}30`,
+      }}>
+        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+          <span style={{ width:6, height:6, borderRadius:99, background:GREEN, boxShadow:`0 0 6px ${GREEN}` }}/>
+          <span style={{ fontSize:9, fontWeight:700, color:"rgba(255,255,255,0.65)", letterSpacing:"0.06em", textTransform:"uppercase" }}>
+            Aktueller Glukosewert
+          </span>
+        </div>
+        <div style={{ fontSize:13, fontWeight:800, color:GREEN, fontFamily:"var(--font-mono)" }}>
+          {meal.glucose} <span style={{ fontSize:8, color:"rgba(255,255,255,0.4)", fontWeight:500 }}>mg/dL</span>
+        </div>
+      </div>
+
+      {/* Mic card */}
+      <style>{`
+        @keyframes engVPulseM { 0%,100%{opacity:0.35;transform:scale(1)} 50%{opacity:1;transform:scale(1.05)} }
+      `}</style>
+      <div style={{
+        background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14,
+        padding:"18px 12px 14px", display:"flex", flexDirection:"column",
+        alignItems:"center", gap:8,
+      }}>
+        <div style={{ position:"relative", width:72, height:72 }}>
+          {micState === "listening" && (
+            <div style={{
+              position:"absolute", inset:-10, borderRadius:"50%",
+              background:`radial-gradient(circle,${ACCENT}24 0%,transparent 70%)`,
+              animation:"engVPulseM 2s ease-in-out infinite", pointerEvents:"none",
+            }}/>
+          )}
+          <button
+            onClick={onMic}
+            aria-label="Sprach-Eingabe starten"
+            style={{
+              position:"absolute", inset:0, borderRadius:"50%", padding:0,
+              border: micState === "listening"
+                ? `1px solid ${ACCENT}88`
+                : `1px solid rgba(255,255,255,0.08)`,
+              cursor: micState === "idle" ? "pointer" : "default",
+              background: `radial-gradient(circle at 36% 32%, #1e1e2e 0%, #141420 45%, #09090B 100%)`,
+              boxShadow: micState === "listening"
+                ? `0 0 0 1px ${ACCENT}55, 0 0 22px ${ACCENT}55, inset 0 0 14px rgba(79,110,247,0.15)`
+                : `0 4px 16px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06)`,
+              display:"flex", alignItems:"center", justifyContent:"center",
+              transition:"all 0.2s",
+            }}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+              stroke={micState === "listening" ? ACCENT : "rgba(255,255,255,0.85)"}
+              strokeWidth="2" strokeLinecap="round">
+              <rect x="9" y="2" width="6" height="11" rx="3"
+                fill={micState === "listening" ? ACCENT : "rgba(255,255,255,0.85)"} stroke="none"/>
+              <path d="M5 10a7 7 0 0 0 14 0"/>
+              <line x1="12" y1="19" x2="12" y2="22"/>
+              <line x1="9"  y1="22" x2="15" y2="22"/>
+            </svg>
+          </button>
+        </div>
+        <div style={{
+          fontSize:9, fontWeight:700, letterSpacing:"0.12em",
+          color: micState === "listening" ? ACCENT
+               : micState === "parsing"   ? ORANGE
+               : "rgba(255,255,255,0.55)",
+        }}>
+          {micState === "listening" ? "HÖRE ZU…"
+            : micState === "parsing" ? "VERARBEITE…"
+            : "TIPPEN ZUM SPRECHEN"}
+        </div>
+        <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", letterSpacing:"0.04em", textAlign:"center", lineHeight:1.5 }}>
+          z. B. „Pasta mit Tomatensauce,<br/>80g Nudeln und Apfel"
+        </div>
+      </div>
+
+      {/* Manual fallback chip */}
+      <button onClick={onSkip} style={{
+        padding:"8px", borderRadius:10,
+        background:"transparent", border:`1px solid ${BORDER}`,
+        color:"rgba(255,255,255,0.55)", fontSize:10, fontWeight:600,
+        cursor:"pointer", letterSpacing:"-0.005em",
+      }}>
+        Stattdessen tippen →
+      </button>
+    </div>
+  );
+}
+
+function EngineStepMacros({ meal, onBack, onContinue }: {
+  meal: { desc: string; carbs: number; protein: number; fat: number; fiber: number; glucose: number };
+  onBack: () => void;
+  onContinue: () => void;
+}) {
   const inp: React.CSSProperties = {
     background:"#0D0D12", border:`1px solid ${BORDER}`, borderRadius:8,
     padding:"7px 10px", color:"#fff", fontSize:11, outline:"none", width:"100%",
@@ -560,361 +896,201 @@ function EngineScreen({ onLogged }: { onLogged: () => void }) {
     fontSize:9, color:"rgba(255,255,255,0.4)", letterSpacing:"0.06em",
     textTransform:"uppercase", fontWeight:600, display:"block", marginBottom:4,
   };
-  const formCard: React.CSSProperties = {
-    background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14,
-    padding:"12px 12px",
-  };
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-      {/* Header — GlevLogo + title + subtitle (1:1 from real) */}
-      <div>
-        <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
-          <GlevLogo size={18}/>
-          <h1 style={{ fontSize:14, fontWeight:800, letterSpacing:"-0.03em", margin:0 }}>Glev Engine</h1>
-        </div>
-        <p style={{ color:"rgba(255,255,255,0.35)", fontSize:9.5, margin:0, lineHeight:1.4 }}>
-          AI-powered insulin recommendations from your dosing history.
-        </p>
-      </div>
-
-      {/* Tabs — Engine | Insulin Log | Exercise (Engine active, others visual) */}
-      <div style={{
-        display:"inline-flex", gap:3, alignSelf:"flex-start",
-        background:"#0D0D12", border:`1px solid ${BORDER}`,
-        borderRadius:9, padding:3,
-      }}>
-        {[
-          { id:"engine", label:"Engine",   active:true  },
-          { id:"bolus",  label:"Insulin Log", active:false },
-          { id:"exer",   label:"Exercise", active:false },
-        ].map(t => (
-          <div key={t.id} style={{
-            padding:"4px 10px", borderRadius:6,
-            background: t.active ? `${ACCENT}22` : "transparent",
-            color:    t.active ? ACCENT : "rgba(255,255,255,0.55)",
-            fontSize:9, fontWeight:700, letterSpacing:"-0.01em",
-          }}>{t.label}</div>
-        ))}
-      </div>
-
-      {/* Mic card — REAL styling: dark radial-gradient circle, ACCENT
-          ring + radial pulse on listening, 12% letter-spacing label */}
-      <style>{`
-        @keyframes engVPulseM { 0%,100%{opacity:0.35;transform:scale(1)} 50%{opacity:1;transform:scale(1.05)} }
-      `}</style>
-      <div style={{ ...formCard, padding:"14px 12px 12px" }}>
-        <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:7 }}>
-          <div style={{ position:"relative", width:64, height:64 }}>
-            {micState === "listening" && (
-              <div style={{
-                position:"absolute", inset:-10, borderRadius:"50%",
-                background:`radial-gradient(circle,${ACCENT}24 0%,transparent 70%)`,
-                animation:"engVPulseM 2s ease-in-out infinite", pointerEvents:"none",
-              }}/>
-            )}
-            <button
-              onClick={tapMic}
-              aria-label="Tap to speak"
-              style={{
-                position:"absolute", inset:0, borderRadius:"50%", padding:0,
-                border: micState === "listening"
-                  ? `1px solid ${ACCENT}88`
-                  : `1px solid rgba(255,255,255,0.08)`,
-                cursor: micState === "idle" ? "pointer" : "default",
-                background: `radial-gradient(circle at 36% 32%, #1e1e2e 0%, #141420 45%, #09090B 100%)`,
-                boxShadow: micState === "listening"
-                  ? `0 0 0 1px ${ACCENT}55, 0 0 22px ${ACCENT}55, inset 0 0 14px rgba(79,110,247,0.15)`
-                  : `0 4px 16px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06)`,
-                display:"flex", alignItems:"center", justifyContent:"center",
-                transition:"all 0.2s",
-              }}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-                stroke={micState === "listening" ? ACCENT : "rgba(255,255,255,0.85)"}
-                strokeWidth="2" strokeLinecap="round">
-                <rect x="9" y="2" width="6" height="11" rx="3"
-                  fill={micState === "listening" ? ACCENT : "rgba(255,255,255,0.85)"} stroke="none"/>
-                <path d="M5 10a7 7 0 0 0 14 0"/>
-                <line x1="12" y1="19" x2="12" y2="22"/>
-                <line x1="9"  y1="22" x2="15" y2="22"/>
-              </svg>
-            </button>
-          </div>
-          <div style={{
-            fontSize:9, fontWeight:600, letterSpacing:"0.12em",
-            color: micState === "listening" ? ACCENT
-                 : micState === "parsing"   ? ORANGE
-                 : "rgba(255,255,255,0.45)",
-          }}>
-            {micState === "listening" ? "LISTENING…"
-              : micState === "parsing" ? "PARSING…"
-              : "TAP TO SPEAK"}
-          </div>
-          <div style={{ fontSize:8, color:"rgba(255,255,255,0.22)", letterSpacing:"0.06em", textAlign:"center" }}>
-            z. B. „Pasta mit Tomatensauce, 80g Nudeln und Apfel"
-          </div>
+      <div style={{ padding:"2px 2px" }}>
+        <div style={{ fontSize:13, fontWeight:800, letterSpacing:"-0.02em", color:"#fff", marginBottom:2 }}>Makros prüfen</div>
+        <div style={{ fontSize:9.5, color:"rgba(255,255,255,0.5)", lineHeight:1.4 }}>
+          Glev hat die Werte aus deiner Mahlzeit geschätzt. Du kannst alles überschreiben.
         </div>
       </div>
 
-      {/* AI Food Parser chip — collapsed state of EngineChatPanel on mobile.
-          Renders between mic card and form card, exactly like the real
-          mobile engine page (`app/(protected)/engine/page.tsx` line 504+
-          → `components/EngineChatPanel.tsx` mobileChip). Scaled down for
-          the 290px phone width. */}
+      {/* Quelle chip */}
       <div style={{
         display:"flex", alignItems:"center", justifyContent:"space-between",
-        gap:8, padding:"8px 12px",
-        background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 99,
+        padding:"7px 11px", borderRadius:99,
+        background:`${GREEN}10`, border:`1px solid ${GREEN}30`,
       }}>
-        <div style={{ display:"flex", alignItems:"baseline", gap:6, minWidth:0 }}>
-          <span style={{
-            fontSize:8.5, fontWeight:700, letterSpacing:"0.08em",
-            color:"rgba(255,255,255,0.5)",
-          }}>
-            AI FOOD PARSER
-          </span>
-          <span style={{
-            fontSize:7.5, fontWeight:600, color:ACCENT, letterSpacing:"0.02em",
-          }}>
-            GPT-powered
+        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+          <span style={{ width:5, height:5, borderRadius:99, background:GREEN, boxShadow:`0 0 5px ${GREEN}` }}/>
+          <span style={{ fontSize:9, color:"rgba(255,255,255,0.6)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:700 }}>
+            Quelle · Datenbank ✓
           </span>
         </div>
-        <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
-          <span style={{
-            display:"inline-flex", alignItems:"center", gap:4,
-            fontSize:7.5, fontWeight:700, letterSpacing:"0.06em", color:GREEN,
-          }}>
-            <span style={{
-              width:5, height:5, borderRadius:"50%",
-              background:GREEN, boxShadow:`0 0 4px ${GREEN}`,
-            }}/>
-            READY
-          </span>
-          <svg
-            width="10" height="10" viewBox="0 0 24 24" fill="none"
-            stroke="rgba(255,255,255,0.45)" strokeWidth="2.2"
-            strokeLinecap="round" strokeLinejoin="round"
-          >
-            <polyline points="6 9 12 15 18 9"/>
-          </svg>
-        </div>
+        <span style={{ fontSize:8, color:"rgba(255,255,255,0.35)" }}>Open Food Facts + USDA</span>
       </div>
 
-      {/* Single-card form — Glucose+CGM, Meal Time, Macros 2x2,
-          Description, inline Classification (1:1 mobile real layout) */}
-      <div style={formCard}>
-        <div style={{ display:"flex", flexDirection:"column", gap:9 }}>
-          <div>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4, gap:6 }}>
-              <label style={labelStyle}>Glucose Before · 12:23</label>
-              <div style={{
-                display:"flex", alignItems:"center", gap:4,
-                padding:"2px 7px", borderRadius:99, border:`1px solid ${ACCENT}40`,
-                background:`${ACCENT}15`, color:ACCENT, fontSize:8.5, fontWeight:600,
-              }}>
-                <span style={{ width:5, height:5, borderRadius:"50%", background:GREEN, boxShadow:`0 0 4px ${GREEN}` }}/>
-                CGM
-              </div>
-            </div>
-            <input style={inp} value={glucose} readOnly/>
-          </div>
-
-          <div>
-            <label style={labelStyle}>Meal Time</label>
-            <div style={{ ...inp, textAlign:"center", color:"rgba(255,255,255,0.7)", fontFamily:"var(--font-mono)" }}>
-              2026-04-25 12:24
-            </div>
-          </div>
-
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, rowGap:9 }}>
-            <div>
-              <label style={labelStyle}>Carbs (g)</label>
-              <input style={inp} value={carbs} readOnly/>
-            </div>
-            <div>
-              <label style={labelStyle}>
-                Fiber (g) <span style={{ textTransform:"none", color:"rgba(255,255,255,0.3)", fontSize:8, fontWeight:500 }}>opt.</span>
-              </label>
-              <input style={inp} value={fiber} readOnly/>
-            </div>
-            <div>
-              <label style={labelStyle}>Protein (g)</label>
-              <input style={inp} value={protein} readOnly/>
-            </div>
-            <div>
-              <label style={labelStyle}>Fat (g)</label>
-              <input style={inp} value={fat} readOnly/>
-            </div>
-          </div>
-
-          <div>
-            <label style={labelStyle}>Meal Description</label>
-            <input style={inp} value={desc} readOnly/>
-          </div>
-
-          <div>
-            <label style={labelStyle}>Meal Classification</label>
-            <div style={{
-              ...inp, display:"flex", alignItems:"center", gap:7,
-              color:"#fff", fontWeight:600,
-            }}>
-              <span style={{ width:7, height:7, borderRadius:"50%", background:ACCENT, boxShadow:`0 0 5px ${ACCENT}`, flexShrink:0 }}/>
-              Balanced Meal
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Meal Classification banner — auto-fired when all macros present
-          (1:1 real app: gradient, icon tile, badge, description, inline
-          stats row). Always shown here since the form is pre-filled. */}
       <div style={{
-        background:`linear-gradient(135deg, ${ACCENT}10, ${ACCENT}04)`,
-        border:`1px solid ${ACCENT}35`, borderRadius:12,
-        padding:"11px 12px",
-        display:"flex", gap:9, alignItems:"flex-start",
+        background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14,
+        padding:"12px", display:"flex", flexDirection:"column", gap:9,
       }}>
-        <div style={{
-          width:28, height:28, borderRadius:8, flexShrink:0,
-          background:`${ACCENT}20`, border:`1px solid ${ACCENT}40`,
-          display:"flex", alignItems:"center", justifyContent:"center",
-        }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 2v6"/><path d="M5 8h14"/><path d="M5 8l2 13h10l2-13"/>
-          </svg>
+        <div>
+          <label style={labelStyle}>Mahlzeit</label>
+          <input style={inp} value={meal.desc} readOnly/>
         </div>
-        <div style={{ flex:1, minWidth:0 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:5, flexWrap:"wrap", marginBottom:3 }}>
-            <span style={{ fontSize:7.5, color:"rgba(255,255,255,0.4)", letterSpacing:"0.08em", textTransform:"uppercase", fontWeight:600 }}>
-              Classification
-            </span>
-            <span style={{
-              padding:"2px 7px", borderRadius:99, fontSize:8, fontWeight:700,
-              background:`${ACCENT}25`, color:ACCENT, border:`1px solid ${ACCENT}45`,
-              letterSpacing:"0.04em", textTransform:"uppercase",
-            }}>
-              Balanced
-            </span>
+
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, rowGap:9 }}>
+          <div>
+            <label style={labelStyle}>Kohlenhydrate (g)</label>
+            <input style={inp} value={meal.carbs} readOnly/>
           </div>
-          <div style={{ fontSize:9.5, color:"rgba(255,255,255,0.7)", lineHeight:1.4, marginBottom:5 }}>
-            Macros are well-balanced — predictable absorption curve. Standard ICR usually works.
+          <div>
+            <label style={labelStyle}>
+              Ballaststoffe <span style={{ textTransform:"none", color:"rgba(255,255,255,0.3)", fontSize:8, fontWeight:500 }}>opt.</span>
+            </label>
+            <input style={inp} value={meal.fiber} readOnly/>
           </div>
-          <div style={{ display:"flex", gap:8, flexWrap:"wrap", fontSize:8, color:"rgba(255,255,255,0.4)" }}>
-            <span>Carbs <strong style={{ color:"rgba(255,255,255,0.75)" }}>62g</strong></span>
-            <span>Protein <strong style={{ color:"rgba(255,255,255,0.75)" }}>18g</strong></span>
-            <span>Fat <strong style={{ color:"rgba(255,255,255,0.75)" }}>22g</strong></span>
-            <span>Net <strong style={{ color:"rgba(255,255,255,0.75)" }}>58g</strong></span>
+          <div>
+            <label style={labelStyle}>Protein (g)</label>
+            <input style={inp} value={meal.protein} readOnly/>
+          </div>
+          <div>
+            <label style={labelStyle}>Fett (g)</label>
+            <input style={inp} value={meal.fat} readOnly/>
+          </div>
+        </div>
+
+        <div>
+          <label style={labelStyle}>Klassifizierung</label>
+          <div style={{
+            ...inp, display:"flex", alignItems:"center", gap:7,
+            color:"#fff", fontWeight:600,
+          }}>
+            <span style={{ width:7, height:7, borderRadius:"50%", background:ACCENT, boxShadow:`0 0 5px ${ACCENT}`, flexShrink:0 }}/>
+            Ausgewogen
           </div>
         </div>
       </div>
 
-      {/* Empfehlung berechnen OR (after tap) the full result block. The
-          real app reveals the result inline below the button — same here. */}
-      {!showResult ? (
-        <button onClick={getRec} style={{
-          width:"100%", padding:"12px", borderRadius:12, border:"none",
+      <div style={{ display:"flex", gap:6 }}>
+        <button onClick={onBack} style={{
+          flex:"0 0 auto", padding:"10px 14px", borderRadius:10, border:`1px solid ${BORDER}`,
+          background:"transparent", color:"rgba(255,255,255,0.7)", fontSize:11, fontWeight:600,
+          cursor:"pointer",
+        }}>← Zurück</button>
+        <button onClick={onContinue} style={{
+          flex:1, padding:"10px", borderRadius:10, border:"none",
           background:`linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
-          color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer",
+          color:"#fff", fontSize:11, fontWeight:700, cursor:"pointer",
           boxShadow:`0 4px 18px ${ACCENT}40`,
         }}>
-          Einschätzung berechnen
+          Bolus berechnen →
         </button>
-      ) : (
-        <>
-          <button disabled style={{
-            width:"100%", padding:"12px", borderRadius:12, border:"none",
-            background:"rgba(79,110,247,0.25)", color:"rgba(255,255,255,0.55)",
-            fontSize:12, fontWeight:700, cursor:"default",
-          }}>
-            Einschätzung berechnen
-          </button>
+      </div>
+    </div>
+  );
+}
 
-          {/* Input summary — two side-by-side cards (Glucose + Carbs) */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-            <div style={{ ...formCard, padding:"10px 12px" }}>
-              <div style={{ fontSize:8, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase", marginBottom:3 }}>Input Glucose</div>
-              <div style={{ display:"flex", alignItems:"baseline", gap:4 }}>
-                <span style={{ fontSize:18, fontWeight:800, color:"#60A5FA", letterSpacing:"-0.02em" }}>{glucose}</span>
-                <span style={{ fontSize:8, color:"rgba(255,255,255,0.35)" }}>mg/dL</span>
-              </div>
-              <div style={{ fontSize:8, color:"rgba(255,255,255,0.25)", marginTop:2 }}>in target</div>
-            </div>
-            <div style={{ ...formCard, padding:"10px 12px" }}>
-              <div style={{ fontSize:8, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase", marginBottom:3 }}>Input Carbs</div>
-              <div style={{ display:"flex", alignItems:"baseline", gap:4 }}>
-                <span style={{ fontSize:18, fontWeight:800, color:ORANGE, letterSpacing:"-0.02em" }}>{carbs}</span>
-                <span style={{ fontSize:8, color:"rgba(255,255,255,0.35)" }}>g</span>
-              </div>
-              <div style={{ fontSize:8, color:"rgba(255,255,255,0.25)", marginTop:2 }}>moderate</div>
-            </div>
+function EngineStepResult({ meal, confirmed, onBack, onConfirm }: {
+  meal: { carbs: number; glucose: number };
+  confirmed: boolean;
+  onBack: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+      <div style={{ padding:"2px 2px" }}>
+        <div style={{ fontSize:13, fontWeight:800, letterSpacing:"-0.02em", color:"#fff", marginBottom:2 }}>Deine Einschätzung</div>
+        <div style={{ fontSize:9.5, color:"rgba(255,255,255,0.5)", lineHeight:1.4 }}>
+          Empfehlung basierend auf historischen Mahlzeiten + ICR-Formel.
+        </div>
+      </div>
+
+      {/* Input summary — Glukose + Carbs */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+        <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:12, padding:"10px 12px" }}>
+          <div style={{ fontSize:8, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase", marginBottom:3 }}>Glukose vorher</div>
+          <div style={{ display:"flex", alignItems:"baseline", gap:4 }}>
+            <span style={{ fontSize:18, fontWeight:800, color:"#60A5FA", letterSpacing:"-0.02em", fontFamily:"var(--font-mono)" }}>{meal.glucose}</span>
+            <span style={{ fontSize:8, color:"rgba(255,255,255,0.35)" }}>mg/dL</span>
           </div>
-
-          {/* Main Result block — dose hero + confidence pill + reasoning
-              + 3-up breakdown (Carb / Correction / Total) */}
-          <div style={{ background:SURFACE, border:`1px solid ${GREEN}30`, borderRadius:14, padding:"14px 14px" }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10 }}>
-              <div>
-                <div style={{ fontSize:8, color:"rgba(255,255,255,0.35)", letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:4 }}>Recommended Dose</div>
-                <div style={{ fontSize:36, fontWeight:900, letterSpacing:"-0.04em", lineHeight:1, color:"#fff" }}>
-                  4.2<span style={{ fontSize:11, fontWeight:400, color:"rgba(255,255,255,0.4)", marginLeft:4 }}>units</span>
-                </div>
-              </div>
-              <div style={{ textAlign:"right" }}>
-                <div style={{ fontSize:8, color:"rgba(255,255,255,0.35)", marginBottom:3 }}>Confidence</div>
-                <span style={{ padding:"4px 10px", borderRadius:99, fontSize:9, fontWeight:700, background:`${GREEN}18`, color:GREEN, border:`1px solid ${GREEN}40` }}>HIGH</span>
-                <div style={{ fontSize:8, color:"rgba(255,255,255,0.3)", marginTop:3 }}>Historical data</div>
-              </div>
-            </div>
-            <div style={{ marginTop:10, padding:"8px 10px", background:"rgba(0,0,0,0.3)", borderRadius:8 }}>
-              <div style={{ fontSize:7.5, color:"rgba(255,255,255,0.3)", marginBottom:2, letterSpacing:"0.05em", textTransform:"uppercase" }}>Reasoning</div>
-              <div style={{ fontSize:9.5, color:"rgba(255,255,255,0.65)", lineHeight:1.45 }}>
-                Based on 4 similar past meals with GOOD outcomes (±12g carbs, ±35 mg/dL glucose). Historical avg: 4.2u.
-              </div>
-            </div>
-            <div style={{ marginTop:8, display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6 }}>
-              {[
-                { label:"Carb",       val:"4.1u",  sub:"62g ÷ 15",       c:ORANGE },
-                { label:"Correction", val:"+0.1u", sub:"(115−110)/50",   c:ACCENT },
-                { label:"Total",      val:"4.2u",  sub:"recommended",    c:GREEN  },
-              ].map(d => (
-                <div key={d.label} style={{ background:"rgba(255,255,255,0.03)", borderRadius:7, padding:"6px 4px", textAlign:"center" }}>
-                  <div style={{ fontSize:7.5, color:"rgba(255,255,255,0.3)", marginBottom:2 }}>{d.label}</div>
-                  <div style={{ fontSize:13, fontWeight:800, color:d.c }}>{d.val}</div>
-                  <div style={{ fontSize:7, color:"rgba(255,255,255,0.2)", marginTop:1 }}>{d.sub}</div>
-                </div>
-              ))}
-            </div>
+          <div style={{ fontSize:8, color:"rgba(255,255,255,0.25)", marginTop:2 }}>im Zielbereich</div>
+        </div>
+        <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:12, padding:"10px 12px" }}>
+          <div style={{ fontSize:8, color:"rgba(255,255,255,0.3)", letterSpacing:"0.07em", textTransform:"uppercase", marginBottom:3 }}>Carbs</div>
+          <div style={{ display:"flex", alignItems:"baseline", gap:4 }}>
+            <span style={{ fontSize:18, fontWeight:800, color:ORANGE, letterSpacing:"-0.02em", fontFamily:"var(--font-mono)" }}>{meal.carbs}</span>
+            <span style={{ fontSize:8, color:"rgba(255,255,255,0.35)" }}>g</span>
           </div>
+          <div style={{ fontSize:8, color:"rgba(255,255,255,0.25)", marginTop:2 }}>moderat</div>
+        </div>
+      </div>
 
-          {/* Insulin (U) input + Confirm Log + Cancel — 1:1 real */}
+      {/* Hero result block — Empfohlene Dosis */}
+      <div style={{ background:SURFACE, border:`1px solid ${GREEN}30`, borderRadius:14, padding:"14px" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10 }}>
           <div>
-            <label style={labelStyle}>Insulin (U)</label>
-            <input style={inp} value={insulin} onChange={(e) => setInsulin(e.target.value)}/>
+            <div style={{ fontSize:8, color:"rgba(255,255,255,0.35)", letterSpacing:"0.06em", textTransform:"uppercase", marginBottom:4 }}>Empfohlene Dosis</div>
+            <div style={{ fontSize:36, fontWeight:900, letterSpacing:"-0.04em", lineHeight:1, color:"#fff", fontFamily:"var(--font-mono)" }}>
+              4,2<span style={{ fontSize:11, fontWeight:400, color:"rgba(255,255,255,0.4)", marginLeft:4, fontFamily:"var(--font-inter), Inter, system-ui, sans-serif" }}>IE</span>
+            </div>
           </div>
-          <button
-            onClick={handleConfirm}
-            disabled={confirmed}
-            style={{
-              width:"100%", padding:"11px", borderRadius:12, border:"none",
-              background: confirmed
-                ? `${GREEN}30`
-                : `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
-              color:"#fff", fontSize:11, fontWeight:700,
-              cursor: confirmed ? "default" : "pointer",
-              boxShadow: confirmed ? "none" : `0 4px 18px ${ACCENT}40`,
-            }}
-          >
-            {confirmed ? "✓ Geloggt — öffne Einträge…" : "✓ Eintrag bestätigen"}
-          </button>
-        </>
-      )}
+          <div style={{ textAlign:"right" }}>
+            <div style={{ fontSize:8, color:"rgba(255,255,255,0.35)", marginBottom:3 }}>Konfidenz</div>
+            <span style={{ padding:"4px 10px", borderRadius:99, fontSize:9, fontWeight:700, background:`${GREEN}18`, color:GREEN, border:`1px solid ${GREEN}40` }}>HOCH</span>
+            <div style={{ fontSize:8, color:"rgba(255,255,255,0.3)", marginTop:3 }}>Historische Daten</div>
+          </div>
+        </div>
+        <div style={{ marginTop:10, padding:"8px 10px", background:"rgba(0,0,0,0.3)", borderRadius:8 }}>
+          <div style={{ fontSize:7.5, color:"rgba(255,255,255,0.3)", marginBottom:2, letterSpacing:"0.05em", textTransform:"uppercase" }}>Begründung</div>
+          <div style={{ fontSize:9.5, color:"rgba(255,255,255,0.65)", lineHeight:1.45 }}>
+            Basierend auf 4 ähnlichen früheren Mahlzeiten mit GUTEM Ergebnis (±12g KH, ±35 mg/dL). Historischer Durchschnitt: 4,2 IE.
+          </div>
+        </div>
+        <div style={{ marginTop:8, display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6 }}>
+          {[
+            { label:"Carb",       val:"4,1 IE",  sub:"62g ÷ 15",      c:ORANGE },
+            { label:"Korrektur",  val:"+0,1 IE", sub:"(115−110)/50",  c:ACCENT },
+            { label:"Gesamt",     val:"4,2 IE",  sub:"empfohlen",     c:GREEN  },
+          ].map(d => (
+            <div key={d.label} style={{ background:"rgba(255,255,255,0.03)", borderRadius:7, padding:"6px 4px", textAlign:"center" }}>
+              <div style={{ fontSize:7.5, color:"rgba(255,255,255,0.3)", marginBottom:2 }}>{d.label}</div>
+              <div style={{ fontSize:13, fontWeight:800, color:d.c, fontFamily:"var(--font-mono)" }}>{d.val}</div>
+              <div style={{ fontSize:7, color:"rgba(255,255,255,0.2)", marginTop:1 }}>{d.sub}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Disclaimer */}
+      <div style={{
+        fontSize:8.5, color:"rgba(255,255,255,0.4)", lineHeight:1.45,
+        padding:"7px 10px", borderRadius:8, background:"rgba(255,255,255,0.02)",
+        border:`1px solid ${BORDER}`,
+      }}>
+        <strong style={{ color:"rgba(255,255,255,0.65)" }}>Wichtig:</strong>{" "}
+        Glev Engine ist nur eine Entscheidungshilfe. Bitte konsultiere immer deinen Diabetologen.
+      </div>
+
+      <div style={{ display:"flex", gap:6 }}>
+        <button onClick={onBack} disabled={confirmed} style={{
+          flex:"0 0 auto", padding:"10px 14px", borderRadius:10, border:`1px solid ${BORDER}`,
+          background:"transparent", color:"rgba(255,255,255,0.7)", fontSize:11, fontWeight:600,
+          cursor: confirmed ? "default" : "pointer", opacity: confirmed ? 0.4 : 1,
+        }}>← Nochmal anpassen</button>
+        <button
+          onClick={onConfirm}
+          disabled={confirmed}
+          style={{
+            flex:1, padding:"10px", borderRadius:10, border:"none",
+            background: confirmed
+              ? `${GREEN}30`
+              : `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
+            color:"#fff", fontSize:11, fontWeight:700,
+            cursor: confirmed ? "default" : "pointer",
+            boxShadow: confirmed ? "none" : `0 4px 18px ${ACCENT}40`,
+          }}
+        >
+          {confirmed ? "✓ Gespeichert — öffne Einträge…" : "✓ Bestätigen & Speichern"}
+        </button>
+      </div>
     </div>
   );
 }
 
 /* ════════════════════════════════════════════════════════════════
-   INSIGHTS — TIR, average BG, weekly trend, meal categories.
+   INSIGHTS — Time in Range, GMI/A1c, 7-Tage-Trend, Mahlzeiten-Bewertung.
    ════════════════════════════════════════════════════════════════ */
 function InsightsScreen() {
   return (
@@ -922,13 +1098,13 @@ function InsightsScreen() {
       {/* Time in Range */}
       <MockCard>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-          <CardLabel text="Time in range · 7d"/>
+          <CardLabel text="Time in Range · 7T"/>
           <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>70–180 mg/dL</div>
         </div>
         <div style={{ display:"flex", alignItems:"baseline", gap:6, marginBottom:10 }}>
           <div style={{ fontSize:36, fontWeight:800, color:GREEN, letterSpacing:"-0.04em", fontFamily:"var(--font-mono)" }}>78</div>
           <div style={{ fontSize:14, color:GREEN, fontWeight:700 }}>%</div>
-          <div style={{ marginLeft:"auto", fontSize:9, color:GREEN }}>+6 vs prev wk</div>
+          <div style={{ marginLeft:"auto", fontSize:9, color:GREEN }}>+6 ggü. Vorwoche</div>
         </div>
         {/* Stacked bar: 78 in range, 14 high, 6 low, 2 v.low */}
         <div style={{ display:"flex", height:12, borderRadius:99, overflow:"hidden", background:"rgba(255,255,255,0.04)" }}>
@@ -938,56 +1114,56 @@ function InsightsScreen() {
           <div style={{ width:"14%", background:"#FFD166" }}/>
         </div>
         <div style={{ display:"flex", justifyContent:"space-between", marginTop:6, fontSize:8, color:"rgba(255,255,255,0.4)" }}>
-          <span style={{ color:PINK }}>● V.low 2%</span>
-          <span style={{ color:ORANGE }}>● Low 6%</span>
-          <span style={{ color:GREEN }}>● In 78%</span>
-          <span style={{ color:"#FFD166" }}>● High 14%</span>
+          <span style={{ color:PINK }}>● Sehr tief 2%</span>
+          <span style={{ color:ORANGE }}>● Tief 6%</span>
+          <span style={{ color:GREEN }}>● Im Ziel 78%</span>
+          <span style={{ color:"#FFD166" }}>● Hoch 14%</span>
         </div>
       </MockCard>
 
       {/* Two-up stats */}
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
         <MockCard>
-          <CardLabel text="Avg BG"/>
+          <CardLabel text="Ø Glukose"/>
           <div style={{ display:"flex", alignItems:"baseline", gap:4, marginTop:4 }}>
             <div style={{ fontSize:24, fontWeight:800, color:"#fff", fontFamily:"var(--font-mono)" }}>132</div>
             <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>mg/dL</div>
           </div>
-          <div style={{ fontSize:9, color:GREEN, marginTop:2 }}>−7 vs prev</div>
+          <div style={{ fontSize:9, color:GREEN, marginTop:2 }}>−7 ggü. Vorwoche</div>
         </MockCard>
         <MockCard>
-          <CardLabel text="GMI / est. A1C"/>
+          <CardLabel text="GMI · gesch. A1c"/>
           <div style={{ display:"flex", alignItems:"baseline", gap:4, marginTop:4 }}>
-            <div style={{ fontSize:24, fontWeight:800, color:"#fff", fontFamily:"var(--font-mono)" }}>6.4</div>
+            <div style={{ fontSize:24, fontWeight:800, color:"#fff", fontFamily:"var(--font-mono)" }}>6,4</div>
             <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>%</div>
           </div>
-          <div style={{ fontSize:9, color:GREEN, marginTop:2 }}>−0.2 vs prev</div>
+          <div style={{ fontSize:9, color:GREEN, marginTop:2 }}>−0,2 ggü. Vorwoche</div>
         </MockCard>
       </div>
 
-      {/* Weekly trend */}
+      {/* 7-Tage-Trend */}
       <MockCard>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-          <CardLabel text="7-day trend"/>
-          <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>avg per day</div>
+          <CardLabel text="7-Tage-Trend"/>
+          <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)" }}>Ø pro Tag</div>
         </div>
         <Sparkline values={[148,142,138,135,140,128,132]} color={ACCENT}/>
         <div style={{ display:"flex", justifyContent:"space-between", marginTop:4, fontSize:8, color:"rgba(255,255,255,0.35)" }}>
-          {["Sat","Sun","Mon","Tue","Wed","Thu","Fri"].map(d => <span key={d}>{d}</span>)}
+          {["Sa","So","Mo","Di","Mi","Do","Fr"].map(d => <span key={d}>{d}</span>)}
         </div>
       </MockCard>
 
-      {/* Meal performance */}
+      {/* Mahlzeiten-Bewertung */}
       <MockCard>
-        <CardLabel text="Meal evaluation · 7d"/>
+        <CardLabel text="Mahlzeiten-Bewertung · 7T"/>
         <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:8 }}>
           {[
-            { label:"On target", count:13, color:GREEN, pct:65 },
-            { label:"Spiked",    count:5,  color:ORANGE, pct:25 },
-            { label:"Low risk",  count:2,  color:PINK, pct:10 },
+            { label:"Im Ziel",     count:13, color:GREEN,  pct:65 },
+            { label:"Spike",       count:5,  color:ORANGE, pct:25 },
+            { label:"Hypo-Risiko", count:2,  color:PINK,   pct:10 },
           ].map(r => (
             <div key={r.label} style={{ display:"flex", alignItems:"center", gap:8 }}>
-              <div style={{ width:60, fontSize:10, color:r.color }}>{r.label}</div>
+              <div style={{ width:72, fontSize:10, color:r.color }}>{r.label}</div>
               <div style={{ flex:1, height:6, background:"rgba(255,255,255,0.04)", borderRadius:99, overflow:"hidden" }}>
                 <div style={{ height:"100%", width:`${r.pct}%`, background:r.color, borderRadius:99 }}/>
               </div>
@@ -1001,112 +1177,101 @@ function InsightsScreen() {
 }
 
 /* ════════════════════════════════════════════════════════════════
-   SETTINGS — generic email + Glev — Smart plan, mirrors real Account
+   EINSTELLUNGEN — bottom-sheet style row list, mirroring the real
+   Settings page (Sprache, CGM Verbindung, Konto, Erscheinungsbild,
+   Benachrichtigungen, Insulin, Makro-Ziele).
    ════════════════════════════════════════════════════════════════ */
 function SettingsScreen() {
+  type Row = { label: string; sub: string; rightLabel?: string; rightColor?: string; iconColor: string; icon: React.ReactNode };
+  const rows: Row[] = [
+    {
+      label: "Sprache", sub: "Deutsch · DE",
+      rightLabel: "DE", rightColor: ACCENT,
+      iconColor: ACCENT,
+      icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>,
+    },
+    {
+      label: "CGM Verbindung", sub: "FreeStyle Libre 3 · LibreLinkUp",
+      rightLabel: "● Verbunden", rightColor: GREEN,
+      iconColor: GREEN,
+      icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>,
+    },
+    {
+      label: "Insulin", sub: "ICR 1:15 · Korrektur 1:50",
+      rightLabel: "Bearbeiten", rightColor: "rgba(255,255,255,0.5)",
+      iconColor: PURPLE,
+      icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
+    },
+    {
+      label: "Makro-Ziele", sub: "Carbs 250g · Protein 120g · Fett 80g",
+      rightLabel: "Bearbeiten", rightColor: "rgba(255,255,255,0.5)",
+      iconColor: ORANGE,
+      icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>,
+    },
+    {
+      label: "Benachrichtigungen", sub: "Aktiv · Ruhig 22–07",
+      rightLabel: "An", rightColor: GREEN,
+      iconColor: PINK,
+      icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>,
+    },
+    {
+      label: "Erscheinungsbild", sub: "Dunkel",
+      rightLabel: "Dark", rightColor: "rgba(255,255,255,0.5)",
+      iconColor: "#60A5FA",
+      icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>,
+    },
+    {
+      label: "Konto", sub: "demo@glev.app · seit Jan 2026",
+      rightLabel: "Pro", rightColor: GREEN,
+      iconColor: "#fff",
+      icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+    },
+  ];
+
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
       <div style={{ padding:"4px 2px 4px" }}>
-        <div style={{ fontSize:14, fontWeight:800, letterSpacing:"-0.02em" }}>Account</div>
-        <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)" }}>Manage your profile and Glev settings.</div>
+        <div style={{ fontSize:14, fontWeight:800, letterSpacing:"-0.02em" }}>Einstellungen</div>
+        <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)" }}>Profil, CGM und alle Therapie-Werte.</div>
       </div>
 
-      {/* Sub-tabs (visual only — overview always shown) */}
-      <div style={{ display:"flex", gap:3, padding:3, background:"rgba(255,255,255,0.04)", borderRadius:9, width:"fit-content" }}>
-        {(["overview","settings","cgm","import"] as const).map((t, i) => (
-          <div key={t} style={{
-            padding:"5px 11px", borderRadius:7, fontSize:9,
-            background: i === 0 ? SURFACE : "transparent",
-            color: i === 0 ? "#fff" : "rgba(255,255,255,0.4)",
-            fontWeight: i === 0 ? 600 : 400,
-            textTransform: t === "cgm" ? "uppercase" : "capitalize",
-            boxShadow: i === 0 ? "0 1px 4px rgba(0,0,0,0.4)" : "none",
-          }}>{t}</div>
+      <div style={{
+        background:SURFACE, border:`1px solid ${BORDER}`,
+        borderRadius:12, overflow:"hidden",
+      }}>
+        {rows.map((row, i) => (
+          <button
+            key={row.label}
+            style={{
+              width:"100%", padding:"12px 12px", border:"none",
+              background:"transparent", cursor:"pointer", textAlign:"left",
+              borderTop: i === 0 ? "none" : `1px solid ${BORDER}`,
+              display:"flex", alignItems:"center", gap:10,
+            }}
+          >
+            <span style={{
+              width:28, height:28, borderRadius:8,
+              background:`${row.iconColor}15`, border:`1px solid ${row.iconColor}30`,
+              color:row.iconColor,
+              display:"flex", alignItems:"center", justifyContent:"center",
+              flexShrink:0,
+            }}>{row.icon}</span>
+            <span style={{ flex:1, minWidth:0 }}>
+              <span style={{ display:"block", fontSize:11.5, fontWeight:700, color:"#fff", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.label}</span>
+              <span style={{ display:"block", fontSize:9.5, color:"rgba(255,255,255,0.45)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.sub}</span>
+            </span>
+            {row.rightLabel && (
+              <span style={{ fontSize:9, fontWeight:700, color:row.rightColor, letterSpacing:"-0.005em", flexShrink:0 }}>{row.rightLabel}</span>
+            )}
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink:0 }}>
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </button>
         ))}
       </div>
 
-      {/* Profile card */}
-      <MockCard>
-        <div style={{ fontSize:10, fontWeight:700, marginBottom:10, letterSpacing:"-0.01em" }}>Profile</div>
-        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
-          <div style={{
-            width:40, height:40, borderRadius:99,
-            background:`linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
-            border:`2px solid ${ACCENT}66`,
-            display:"flex", alignItems:"center", justifyContent:"center",
-            fontSize:16, fontWeight:800, color:"#fff",
-          }}>D</div>
-          <div style={{ flex:1, minWidth:0 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-              <div style={{ fontSize:12, fontWeight:700 }}>demo</div>
-              <Pill text="Member" color={ACCENT}/>
-            </div>
-            <div style={{ fontSize:10, color:"rgba(255,255,255,0.4)" }}>demo@glev.app</div>
-          </div>
-        </div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6 }}>
-          {[
-            { l:"Member since", v:"Jan 2026" },
-            { l:"Meals logged", v:"47" },
-            { l:"Plan",         v:"Glev — Smart", accent:true },
-          ].map(s => (
-            <div key={s.l} style={{
-              background: s.accent ? `${GREEN}10` : "rgba(255,255,255,0.03)",
-              border: s.accent ? `1px solid ${GREEN}30` : "none",
-              borderRadius:8, padding:"7px 8px",
-            }}>
-              <div style={{ fontSize:8, color:"rgba(255,255,255,0.35)", marginBottom:2, textTransform:"uppercase", letterSpacing:"0.05em" }}>{s.l}</div>
-              <div style={{ fontSize:10, fontWeight:700, color: s.accent ? GREEN : "#fff", whiteSpace:"nowrap" }}>{s.v}</div>
-            </div>
-          ))}
-        </div>
-      </MockCard>
-
-      {/* Insulin settings */}
-      <MockCard>
-        <div style={{ fontSize:10, fontWeight:700, marginBottom:10, letterSpacing:"-0.01em" }}>Your insulin settings</div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
-          {[
-            { l:"Insulin-to-Carb",   v:"1:15", sub:"g per unit",     c:ACCENT },
-            { l:"Correction Factor", v:"1:50", sub:"mg/dL per unit", c:"#A78BFA" },
-          ].map(s => (
-            <div key={s.l} style={{ background:`${s.c}10`, border:`1px solid ${s.c}30`, borderRadius:9, padding:"8px 10px" }}>
-              <div style={{ fontSize:8, color:"rgba(255,255,255,0.4)", marginBottom:2 }}>{s.l}</div>
-              <div style={{ fontSize:15, fontWeight:800, color:s.c, fontFamily:"var(--font-mono)" }}>{s.v}</div>
-              <div style={{ fontSize:8, color:"rgba(255,255,255,0.3)" }}>{s.sub}</div>
-            </div>
-          ))}
-        </div>
-        <div style={{
-          marginTop:8, background:`${GREEN}10`, border:`1px solid ${GREEN}30`,
-          borderRadius:9, padding:"8px 10px",
-          display:"flex", alignItems:"center", justifyContent:"space-between",
-        }}>
-          <div>
-            <div style={{ fontSize:8, color:"rgba(255,255,255,0.4)", marginBottom:2 }}>Target range</div>
-            <div style={{ fontSize:8, color:"rgba(255,255,255,0.3)" }}>safe glucose window</div>
-          </div>
-          <div style={{ fontSize:14, fontWeight:800, color:GREEN, letterSpacing:"-0.02em", fontFamily:"var(--font-mono)" }}>
-            70 <span style={{ color:"rgba(255,255,255,0.3)" }}>—</span> 180
-            <span style={{ fontSize:8, color:"rgba(255,255,255,0.3)", fontWeight:500, marginLeft:4 }}>mg/dL</span>
-          </div>
-        </div>
-      </MockCard>
-
-      {/* CGM connection */}
-      <MockCard>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-          <div>
-            <div style={{ fontSize:10, fontWeight:700 }}>CGM connection</div>
-            <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)", marginTop:2 }}>FreeStyle Libre 3 · LibreLinkUp</div>
-          </div>
-          <Pill text="Connected" color={GREEN}/>
-        </div>
-      </MockCard>
-
-      {/* Demo notice */}
       <div style={{ fontSize:9, color:"rgba(255,255,255,0.3)", textAlign:"center", padding:"8px 0", lineHeight:1.6 }}>
-        This is a demo. Tap the bottom nav to explore.
+        Demo · auf der echten App auch Sprache wechseln, CGM neu verbinden u. v. m.
       </div>
     </div>
   );
