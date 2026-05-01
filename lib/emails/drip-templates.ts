@@ -17,6 +17,8 @@
 
 import { Resend } from "resend";
 
+import { buildUnsubscribeUrl } from "@/lib/emails/unsubscribeToken";
+
 export type DripEmailType =
   | "day7_insights"
   | "day14_feedback"
@@ -56,9 +58,14 @@ export function getDripResend(): Resend {
 /**
  * Gemeinsamer HTML-Wrapper für alle drei Drip-Mails. Erwartet bereits
  * fertig formatiertes Body-HTML (Absätze, evtl. CTA-Button) und packt
- * es in das Glev-Layout inklusive Disclaimer-Footer.
+ * es in das Glev-Layout inklusive Disclaimer-Footer und Abmelde-Link.
+ *
+ * `unsubscribeUrl` ist Pflicht — die Drip-Mails dürfen rechtlich
+ * (DSGVO/CAN-SPAM) nicht ohne One-Click-Opt-out rausgehen, deshalb
+ * gibt es bewusst keinen Default. Wenn das Token-Secret fehlt, wirft
+ * `buildUnsubscribeUrl` und die Mail wird gar nicht erst gerendert.
  */
-function wrap(title: string, bodyHtml: string): string {
+function wrap(title: string, bodyHtml: string, unsubscribeUrl: string): string {
   return `<!DOCTYPE html>
 <html lang="de">
 <head>
@@ -97,6 +104,9 @@ function wrap(title: string, bodyHtml: string): string {
             <td style="padding:14px 40px 20px;">
               <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;">
                 Glev · <a href="mailto:hello@glev.app" style="color:#9ca3af;">hello@glev.app</a>
+              </p>
+              <p style="margin:8px 0 0;font-size:12px;color:#9ca3af;text-align:center;">
+                <a href="${unsubscribeUrl}" style="color:#9ca3af;text-decoration:underline;">Aus dieser Onboarding-Serie abmelden</a>
               </p>
             </td>
           </tr>
@@ -153,11 +163,15 @@ function day7Body(firstName: string | null): string {
   `;
 }
 
-export function day7InsightsEmail(firstName: string | null): DripRendered {
+export function day7InsightsEmail(
+  firstName: string | null,
+  email: string,
+): DripRendered {
+  const unsubscribeUrl = buildUnsubscribeUrl(APP_URL, email);
   return {
     from: FROM,
     subject: "Deine erste Woche mit Glev — schau in die Insights",
-    html: wrap("Deine erste Woche mit Glev", day7Body(firstName)),
+    html: wrap("Deine erste Woche mit Glev", day7Body(firstName), unsubscribeUrl),
   };
 }
 
@@ -199,13 +213,17 @@ function day14Body(firstName: string | null): string {
   `;
 }
 
-export function day14FeedbackEmail(firstName: string | null): DripRendered {
+export function day14FeedbackEmail(
+  firstName: string | null,
+  email: string,
+): DripRendered {
+  const unsubscribeUrl = buildUnsubscribeUrl(APP_URL, email);
   return {
     from: FROM,
     subject: firstName
       ? `${firstName}, wie läuft Glev für dich?`
       : "Wie läuft Glev für dich?",
-    html: wrap("Wie läuft Glev für dich?", day14Body(firstName)),
+    html: wrap("Wie läuft Glev für dich?", day14Body(firstName), unsubscribeUrl),
   };
 }
 
@@ -249,11 +267,15 @@ function day30Body(firstName: string | null): string {
   `;
 }
 
-export function day30TrustpilotEmail(firstName: string | null): DripRendered {
+export function day30TrustpilotEmail(
+  firstName: string | null,
+  email: string,
+): DripRendered {
+  const unsubscribeUrl = buildUnsubscribeUrl(APP_URL, email);
   return {
     from: FROM,
     subject: "Ein Monat Glev — magst du uns bewerten?",
-    html: wrap("Ein Monat Glev", day30Body(firstName)),
+    html: wrap("Ein Monat Glev", day30Body(firstName), unsubscribeUrl),
   };
 }
 
@@ -266,14 +288,15 @@ export function day30TrustpilotEmail(firstName: string | null): DripRendered {
 export function renderDripEmail(
   emailType: DripEmailType,
   firstName: string | null,
+  email: string,
 ): DripRendered {
   switch (emailType) {
     case "day7_insights":
-      return day7InsightsEmail(firstName);
+      return day7InsightsEmail(firstName, email);
     case "day14_feedback":
-      return day14FeedbackEmail(firstName);
+      return day14FeedbackEmail(firstName, email);
     case "day30_trustpilot":
-      return day30TrustpilotEmail(firstName);
+      return day30TrustpilotEmail(firstName, email);
     default: {
       // Compile-time exhaustiveness — fügt jemand einen neuen Drip-Typ
       // zur Union hinzu, ohne hier einen Case zu ergänzen, scheitert

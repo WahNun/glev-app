@@ -109,13 +109,61 @@ async function handle(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ok: true, sent: 0, failed: 0 });
   }
 
+  // 2. Abgemeldete Adressen aus dem Batch herausfiltern. Wir holen
+  //    gezielt nur die Unsubscribes für die Adressen, die in diesem
+  //    Batch vorkommen — das hält die Query klein, auch wenn die
+  //    Unsubscribe-Tabelle irgendwann tausend Einträge hat.
+  const batchEmails = Array.from(new Set((due as DripRow[]).map((r) => r.email)));
+  const { data: unsubs, error: unsubErr } = await admin
+    .from("email_drip_unsubscribes")
+    .select("email")
+    .in("email", batchEmails);
+
+  if (unsubErr) {
+    // eslint-disable-next-line no-console
+    console.error("[cron/drip] unsubscribes lookup failed:", unsubErr);
+    return NextResponse.json(
+      { error: `unsubscribes lookup failed: ${unsubErr.message}` },
+      { status: 500 },
+    );
+  }
+
+  const unsubscribed = new Set((unsubs ?? []).map((u) => u.email as string));
+
+  // Abgemeldete Schedule-Rows räumen wir gleich mit auf: einmal als
+  // "sent" markieren, dann übergeht das nächste SELECT sie automatisch.
+  // Ohne diesen Schritt würde der Cron sie jeden Tag erneut aus der DB
+  // holen, nur um sie wieder zu überspringen — verschwendete Round-Trips.
+  const skippedIds = (due as DripRow[])
+    .filter((r) => unsubscribed.has(r.email))
+    .map((r) => r.id);
+
+  let skipped = 0;
+  if (skippedIds.length > 0) {
+    const { error: skipErr } = await admin
+      .from("email_drip_schedule")
+      .update({ sent_at: new Date().toISOString() })
+      .in("id", skippedIds)
+      .is("sent_at", null);
+    if (skipErr) {
+      // eslint-disable-next-line no-console
+      console.error("[cron/drip] skip-mark failed (will retry tomorrow):", skipErr);
+    } else {
+      skipped = skippedIds.length;
+      // eslint-disable-next-line no-console
+      console.log("[cron/drip] skipped unsubscribed:", { count: skipped });
+    }
+  }
+
+  const sendable = (due as DripRow[]).filter((r) => !unsubscribed.has(r.email));
+
   let sent = 0;
   let failed = 0;
   const resend = getDripResend();
 
-  for (const raw of due as DripRow[]) {
+  for (const raw of sendable) {
     try {
-      const rendered = renderDripEmail(raw.email_type, raw.first_name);
+      const rendered = renderDripEmail(raw.email_type, raw.first_name, raw.email);
       const { data, error } = await resend.emails.send({
         from: rendered.from,
         to: raw.email,
@@ -196,9 +244,9 @@ async function handle(req: NextRequest): Promise<NextResponse> {
   }
 
   // eslint-disable-next-line no-console
-  console.log("[cron/drip] done:", { sent, failed, total: due.length });
+  console.log("[cron/drip] done:", { sent, failed, skipped, total: due.length });
 
-  return NextResponse.json({ ok: true, sent, failed });
+  return NextResponse.json({ ok: true, sent, failed, skipped });
 }
 
 export async function GET(req: NextRequest) {

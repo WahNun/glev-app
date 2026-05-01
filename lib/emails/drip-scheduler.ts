@@ -90,6 +90,36 @@ export async function scheduleDripEmails(
 
   try {
     const admin = getSupabaseAdmin();
+
+    // Hat sich diese Adresse bereits aus der Drip-Serie abgemeldet?
+    // Dann gar nichts einplanen — sonst stehen die Termine sieben Tage
+    // lang in der Tabelle, der Cron findet sie täglich, filtert sie
+    // aus und markiert sie als skipped. Das ist zwar korrekt, aber
+    // unnötig laut in den Logs. Ein erneuter Kauf nach einer
+    // Abmeldung soll nicht überraschend wieder Drip-Mails auslösen —
+    // wenn jemand das wieder will, muss die Row in
+    // email_drip_unsubscribes aktiv entfernt werden.
+    const { data: existingUnsub, error: unsubLookupErr } = await admin
+      .from("email_drip_unsubscribes")
+      .select("email")
+      .eq("email", email)
+      .maybeSingle();
+
+    if (unsubLookupErr) {
+      // eslint-disable-next-line no-console
+      console.warn("[drip-scheduler] unsubscribes lookup failed, scheduling anyway:", {
+        email,
+        message: unsubLookupErr.message,
+      });
+    } else if (existingUnsub) {
+      // eslint-disable-next-line no-console
+      console.log("[drip-scheduler] skipped — recipient already unsubscribed:", {
+        email,
+        tier,
+      });
+      return;
+    }
+
     const { error } = await admin
       .from("email_drip_schedule")
       .upsert(rows, {
