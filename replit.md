@@ -147,12 +147,39 @@ npm test                                        # Playwright e2e suite (auto-reu
 
 ## Testing
 
-End-to-end tests live under `tests/e2e/` and run via Playwright (`npm test`).
+End-to-end tests live under `tests/e2e/` and pure-function unit suites
+under `tests/unit/`. Both are driven by Playwright's runner via
+`npm test` (the runner's default `testMatch` picks up `*.spec.ts` and
+`*.test.ts`).
 
 - `playwright.config.ts` reuses the running dev server on port 5000 (`reuseExistingServer: true`); if nothing is listening, it boots `npm run dev` itself.
 - On Replit it points Chromium at the Nix-managed binary in `$REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE` (the playwright-bundled `chromium-headless-shell` is missing system libs).
 - `tests/global-setup.ts` provisions a Supabase test user (`playwright-theme@glev.test`) using `SUPABASE_SERVICE_ROLE_KEY`, rotates its password each run, and writes the credentials to `tests/.cache/test-user.json` (gitignored).
 - Specs sign in through the real `/login` form, so middleware + Supabase cookie storage are exercised end-to-end.
+
+### Automated check pipeline
+
+`npm test` is registered with the Replit agent as the `test` validation
+command, so it runs automatically on every code change before a task can
+be merged. A failing test blocks the change and surfaces in the agent UI
+with the failed spec name and a link to the full Playwright log.
+
+- The check runs in the same Replit environment the agent develops in, so
+  `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`,
+  `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+  `ENCRYPTION_KEY`, and `REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE` are
+  already available as secrets — nothing extra is hard-coded in the repo.
+- The same `tests/global-setup.ts` flow provisions the
+  `playwright-theme@glev.test` Supabase user with a fresh per-run
+  password, so we never check a real credential in.
+- The check is wired in via a `[[workflows.workflow]]` block named
+  `test` in `.replit` with `metadata.isValidation = true`. To re-register
+  or change the command, edit that block (or call
+  `setValidationCommand({ name: "test", command: "npm test" })` via the
+  validation skill, which writes the same block).
+- To run the same check locally / on demand outside the agent, just
+  invoke `npm test` directly — it shells out to the same Playwright
+  config.
 
 ## Localization (i18n)
 
