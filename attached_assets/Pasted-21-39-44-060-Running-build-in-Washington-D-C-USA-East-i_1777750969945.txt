@@ -1,0 +1,127 @@
+21:39:44.060 Running build in Washington, D.C., USA (East) – iad1
+21:39:44.061 Build machine configuration: 2 cores, 8 GB
+21:39:44.269 Cloning github.com/WahNun/glev-app (Branch: main, Commit: 2b55875)
+21:39:46.884 Cloning completed: 2.615s
+21:39:47.048 Restored build cache from previous deployment (D3mT22Tic3JSCkDcFdpse71VsuB9)
+21:39:47.271 Running "vercel build"
+21:39:48.300 Vercel CLI 51.6.1
+21:39:48.630 Installing dependencies...
+21:39:49.724 
+21:39:49.724 up to date in 733ms
+21:39:49.725 
+21:39:49.725 50 packages are looking for funding
+21:39:49.725   run `npm fund` for details
+21:39:49.752 Detected Next.js version: 16.2.4
+21:39:49.756 Running "npm run build"
+21:39:49.876 
+21:39:49.876 > glev-app@0.4.0 build
+21:39:49.876 > next build
+21:39:49.876 
+21:39:50.895   Applying modifyConfig from Vercel
+21:39:50.910 ▲ Next.js 16.2.4 (Turbopack)
+21:39:50.911 
+21:39:50.920 ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+21:39:50.962   Creating an optimized production build ...
+21:40:28.761 ✓ Compiled successfully in 37.4s
+21:40:28.766   Running TypeScript ...
+21:40:56.460   Finished TypeScript in 27.7s ...
+21:40:56.465   Collecting page data using 1 worker ...
+21:40:57.974   Generating static pages using 1 worker (0/41) ...
+21:40:58.183   Generating static pages using 1 worker (10/41) 
+21:40:58.207   Generating static pages using 1 worker (20/41) 
+21:40:58.259   Generating static pages using 1 worker (30/41) 
+21:40:58.321 ✓ Generating static pages using 1 worker (41/41) in 348ms
+21:40:58.327   Finalizing page optimization ...
+21:40:58.425   Running onBuildComplete from Vercel
+21:40:58.487 Detected .env file, it is strongly recommended to use Vercel's env handling instead
+21:40:58.618 
+21:40:58.621 Route (app)
+21:40:58.622 ┌ ƒ /
+21:40:58.622 ├ ƒ /_not-found
+21:40:58.622 ├ ƒ /admin
+21:40:58.622 ├ ƒ /admin/buyers
+21:40:58.622 ├ ƒ /admin/drip
+21:40:58.622 ├ ƒ /admin/drip-stats
+21:40:58.623 ├ ƒ /admin/emails
+21:40:58.623 ├ ƒ /api/admin/invite
+21:40:58.623 ├ ƒ /api/beta/checkout
+21:40:58.623 ├ ƒ /api/beta/count
+21:40:58.623 ├ ƒ /api/beta/webhook
+21:40:58.623 ├ ƒ /api/cgm-jobs/process
+21:40:58.623 ├ ƒ /api/cgm-jobs/schedule
+21:40:58.623 ├ ƒ /api/cgm/apple-health/sync
+21:40:58.623 ├ ƒ /api/cgm/connect
+21:40:58.623 ├ ƒ /api/cgm/credentials
+21:40:58.623 ├ ƒ /api/cgm/glucose
+21:40:58.623 ├ ƒ /api/cgm/history
+21:40:58.624 ├ ƒ /api/cgm/latest
+21:40:58.625 ├ ƒ /api/cgm/nightscout/sync
+21:40:58.625 ├ ƒ /api/cgm/source
+21:40:58.625 ├ ƒ /api/cgm/status
+21:40:58.625 ├ ƒ /api/chat-macros
+21:40:58.625 ├ ƒ /api/checkout/beta
+21:40:58.625 ├ ƒ /api/checkout/pro
+21:40:58.625 ├ ƒ /api/contact
+21:40:58.626 ├ ƒ /api/cron/drip
+21:40:58.626 ├ ƒ /api/cron/flush-outbox
+21:40:58.626 ├ ƒ /api/debug/auth
+21:40:58.626 ├ ƒ /api/debug/engine
+21:40:58.626 ├ ƒ /api/debug/env
+21:40:58.626 ├ ƒ /api/debug/import
+21:40:58.626 ├ ƒ /api/debug/state
+21:40:58.626 ├ ƒ /api/email/drip/unsubscribe
+21:40:58.626 ├ ƒ /api/exercise
+21:40:58.626 ├ ƒ /api/exercise/[id]
+21:40:58.626 ├ ƒ /api/import/sheets
+21:40:58.627 ├ ƒ /api/insulin
+21:40:58.627 ├ ƒ /api/insulin/[id]
+21:40:58.627 ├ ƒ /api/log
+21:40:58.627 ├ ƒ /api/meals/[id]/glucose
+21:40:58.627 ├ ƒ /api/parse-food
+21:40:58.627 ├ ƒ /api/preferences
+21:40:58.627 ├ ƒ /api/pro/checkout
+21:40:58.627 ├ ƒ /api/pro/webhook
+21:40:58.627 ├ ƒ /api/sheets/sync
+21:40:58.627 ├ ƒ /api/transcribe
+21:40:58.627 ├ ƒ /api/verify-payment
+21:40:58.628 ├ ƒ /api/webhooks/stripe
+21:40:58.628 ├ ƒ /api/whoami
+21:40:58.628 ├ ƒ /auth/auth-error
+21:40:58.628 ├ ƒ /auth/callback
+21:40:58.628 ├ ƒ /auth/confirm
+21:40:58.628 ├ ƒ /beta
+21:40:58.628 ├ ƒ /beta/cancelled
+21:40:58.628 ├ ƒ /beta/success
+21:40:58.628 ├ ƒ /beta/welcome
+21:40:58.628 ├ ƒ /blog
+21:40:58.629 ├ ƒ /brand
+21:40:58.629 ├ ƒ /contact
+21:40:58.629 ├ ƒ /dashboard
+21:40:58.629 ├ ƒ /engine
+21:40:58.629 ├ ƒ /entries
+21:40:58.629 ├ ƒ /history
+21:40:58.629 ├ ƒ /import
+21:40:58.629 ├ ƒ /insights
+21:40:58.629 ├ ƒ /legal
+21:40:58.629 ├ ƒ /log
+21:40:58.629 ├ ƒ /login
+21:40:58.629 ├ ƒ /mockups/dark-cockpit
+21:40:58.630 ├ ƒ /pro
+21:40:58.630 ├ ƒ /pro/cancelled
+21:40:58.630 ├ ƒ /pro/success
+21:40:58.630 ├ ƒ /settings
+21:40:58.630 ├ ƒ /signin
+21:40:58.630 └ ƒ /welcome
+21:40:58.630 
+21:40:58.630 
+21:40:58.630 ƒ Proxy (Middleware)
+21:40:58.631 
+21:40:58.631 ƒ  (Dynamic)  server-rendered on demand
+21:40:58.631 
+21:40:59.139 Build Completed in /vercel/output [1m]
+21:40:59.775 Deploying outputs...
+21:41:07.547 Deployment completed
+21:41:07.671 Creating build cache...
+21:41:24.745 Created build cache: 17s
+21:41:24.745 Uploading build cache [224.23 MB]
+21:41:27.337 Build cache uploaded: 2.592s
