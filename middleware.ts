@@ -40,7 +40,7 @@ function getSessionFromCookies(req: NextRequest): boolean {
 // on public, cookie-less surfaces (e.g. cross-origin canvas iframes that
 // can't share NEXT_LOCALE). Inside the authenticated app we keep the
 // existing cookie-driven language picker behaviour untouched.
-const LANG_OVERRIDE_PATHS = ["/pro", "/beta"];
+const LANG_OVERRIDE_PATHS = ["/pro", "/beta", "/setup"];
 const LANG_OVERRIDE_HEADER = "x-glev-locale-override";
 const SUPPORTED_LANG = new Set(["de", "en"]);
 
@@ -92,5 +92,7 @@ export const config = {
     "/pro",
     "/beta/:path*",
     "/beta",
+    "/setup/:path*",
+    "/setup",
   ],
 };
