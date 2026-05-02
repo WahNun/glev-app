@@ -708,9 +708,33 @@ export default function Home() {
           {([
             { q: t("faq_q1"), a: t("faq_a1") },
             { q: t("faq_q2"), a: t("faq_a2") },
+            // q5 = "Wo finde ich Setup-Anleitungen?" — sits directly
+            // after q2 (CGM compatibility) so the natural follow-up
+            // question lands next to its parent rather than at the
+            // end of the list. Render the answer with a clickable
+            // <Link> to /setup since the answer is essentially
+            // "open this page" — plain-text URLs in a FAQ feel
+            // unfinished.
+            {
+              q: t("faq_q5"),
+              a: (
+                <>
+                  {t("faq_a5").split("/setup")[0]}
+                  <Link
+                    href="/setup"
+                    style={{ color: ACCENT, textDecoration: "underline", textUnderlineOffset: 2 }}
+                  >
+                    /setup
+                  </Link>
+                  {t("faq_a5").split("/setup")[1] ?? ""}
+                </>
+              ),
+            },
+            { q: t("faq_q6"), a: t("faq_a6") },
+            { q: t("faq_q7"), a: t("faq_a7") },
             { q: t("faq_q3"), a: t("faq_a3") },
             { q: t("faq_q4"), a: t("faq_a4") },
-          ] as { q: string; a: string }[]).map((item) => (
+          ] as { q: string; a: React.ReactNode }[]).map((item) => (
             <details
               key={item.q}
               style={{
