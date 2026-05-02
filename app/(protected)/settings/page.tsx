@@ -1283,6 +1283,9 @@ export default function SettingsPage() {
           <div style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.5 }}>
             {tSettings("appearance_hint")}
           </div>
+          <div style={{ fontSize: 11, color: "var(--text-faint)", lineHeight: 1.5 }}>
+            {tSettings("appearance_app_only_hint")}
+          </div>
           <div role="radiogroup" aria-label={tSettings("appearance")} style={{
             display: "flex", gap: 2, padding: 4, borderRadius: 99,
             background: "var(--surface-soft)", border: `1px solid ${BORDER}`,

@@ -16,8 +16,17 @@
 // The provider also owns the matchMedia subscription so the `system`
 // option keeps tracking the OS preference live without each consumer
 // having to re-implement it.
+//
+// Marketing routing rule: the user's theme choice ONLY applies inside
+// the in-app surface (see lib/appRoutes.ts). On every other pathname
+// the document is clamped to dark — many landing components hardcode
+// dark hex values, so a global Light Mode would render white-on-white.
+// The clamp is reapplied on every pathname change so navigating from
+// /settings (light) → / (marketing) flips back to dark, and back again
+// re-applies the user's pick.
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import {
   type ResolvedTheme,
   type ThemeChoice,
@@ -29,6 +38,7 @@ import {
   resolveTheme,
   setTheme as persistTheme,
 } from "@/lib/theme";
+import { isAppRoute } from "@/lib/appRoutes";
 
 interface ThemeContextValue {
   /** What the user picked: dark | light | system. */
@@ -42,6 +52,9 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const onAppRoute = isAppRoute(pathname);
+
   // SSR / first paint: trust the pre-hydration script. We seed with the
   // defaults so the server render is stable; an effect synchronises to
   // the real cookie/localStorage value once we're on the client. The
@@ -57,8 +70,24 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setResolved(resolveTheme(stored));
   }, []);
 
-  // Keep `system` choice live with the OS preference.
+  // Re-apply the right theme whenever the route or the user's stored
+  // choice changes. On marketing pages we hard-clamp to dark; on app
+  // pages we honour the stored choice. This is what flips the document
+  // back to dark when the user navigates away from /settings.
   useEffect(() => {
+    if (onAppRoute) {
+      applyTheme(resolved);
+    } else {
+      applyTheme("dark");
+    }
+  }, [onAppRoute, resolved]);
+
+  // Keep `system` choice live with the OS preference — but only while
+  // the user is actually inside the app. On marketing routes the
+  // resolved theme is clamped to dark, so an OS-pref change has no
+  // visible effect; subscribing there would just be wasted work.
+  useEffect(() => {
+    if (!onAppRoute) return;
     if (choice !== "system") return;
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
     const mql = window.matchMedia("(prefers-color-scheme: light)");
@@ -74,7 +103,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
     mql.addListener(onChange);
     return () => mql.removeListener(onChange);
-  }, [choice]);
+  }, [choice, onAppRoute]);
 
   const setChoice = useCallback((next: ThemeChoice) => {
     persistTheme(next);

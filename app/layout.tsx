@@ -3,30 +3,40 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import Script from "next/script";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import "./globals.css";
 import { PreventZoom } from "@/components/PreventZoom";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { APP_ROUTE_REGEX_SOURCE, isAppRoute, PATHNAME_HEADER } from "@/lib/appRoutes";
 
 const META_PIXEL_ID = "984291337254954";
 
-// Inline script that runs BEFORE React hydrates. Reads the THEME cookie
-// (and falls back to localStorage / OS preference) to set
-// `<html data-theme="...">` so the first painted frame already has the
-// correct CSS variables — no flash of dark theme on a light-mode reload.
-// Kept tiny and dependency-free so it can ship in <head>; mirrors
-// resolveTheme() in lib/theme.ts. If the rules diverge, sync them.
+// Inline script that runs BEFORE React hydrates. On in-app routes it
+// reads the THEME cookie (with localStorage / OS-preference fallback)
+// and sets `<html data-theme="...">` so the first painted frame already
+// has the correct CSS variables — no flash of dark theme on a
+// light-mode reload. On marketing / public routes it ALWAYS forces
+// dark, regardless of the persisted preference, because those pages
+// hardcode dark hex values and would render white-on-white otherwise.
+// The set of in-app paths comes from `lib/appRoutes.ts`; the regex
+// source is interpolated below so the two stay in sync. Kept tiny and
+// dependency-free so it can ship inline in <head>.
 const NO_FLICKER_THEME_SCRIPT = `
 (function(){try{
-  var c=document.cookie.match(/(?:^|;\\s*)THEME=([^;]+)/);
-  var v=c?decodeURIComponent(c[1]):null;
-  if(v!=='dark'&&v!=='light'&&v!=='system'){
-    try{var ls=localStorage.getItem('glev_theme');if(ls==='dark'||ls==='light'||ls==='system')v=ls;}catch(e){}
-  }
-  if(!v)v='system';
-  var resolved=v;
-  if(v==='system'){
-    resolved=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark';
+  var APP_RE=${JSON.stringify(APP_ROUTE_REGEX_SOURCE)};
+  var isApp=new RegExp(APP_RE).test(location.pathname);
+  var resolved='dark';
+  if(isApp){
+    var c=document.cookie.match(/(?:^|;\\s*)THEME=([^;]+)/);
+    var v=c?decodeURIComponent(c[1]):null;
+    if(v!=='dark'&&v!=='light'&&v!=='system'){
+      try{var ls=localStorage.getItem('glev_theme');if(ls==='dark'||ls==='light'||ls==='system')v=ls;}catch(e){}
+    }
+    if(!v)v='system';
+    resolved=v;
+    if(v==='system'){
+      resolved=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark';
+    }
   }
   document.documentElement.setAttribute('data-theme',resolved);
   var m=document.querySelector('meta[name="theme-color"]');
@@ -88,15 +98,20 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const locale = await getLocale();
   const messages = await getMessages();
 
-  // Theme: read the THEME cookie server-side so the SSR HTML already
-  // carries the right `data-theme` attribute. The pre-hydration inline
-  // script then handles the `system` choice (which depends on
-  // matchMedia, only available client-side) and the no-cookie case.
-  // Falling back to `dark` here matches the historical look so existing
-  // users see no change on first paint after the upgrade.
+  // Theme: marketing / public routes are always dark (their components
+  // hardcode dark hex values, so flipping them to light produces
+  // white-on-white text). Only in-app routes honour the THEME cookie
+  // for SSR. The pre-hydration inline script applies the same rule on
+  // the client, then takes care of the `system` choice (matchMedia is
+  // only available client-side). The pathname is forwarded by
+  // middleware via PATHNAME_HEADER so this server component can branch
+  // on it without reading the URL directly.
+  const headerStore = await headers();
+  const reqPath = headerStore.get(PATHNAME_HEADER) ?? "";
   const cookieStore = await cookies();
   const themeCookie = cookieStore.get("THEME")?.value;
-  const initialTheme: "dark" | "light" = themeCookie === "light" ? "light" : "dark";
+  const initialTheme: "dark" | "light" =
+    isAppRoute(reqPath) && themeCookie === "light" ? "light" : "dark";
 
   return (
     <html

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { PATHNAME_HEADER } from "@/lib/appRoutes";
 
 const PROTECTED = ["/dashboard", "/log", "/entries", "/insights", "/import", "/engine", "/onboarding"];
 const MAX_CHUNKS = 16;
@@ -54,6 +55,12 @@ export function middleware(req: NextRequest) {
   const { pathname, searchParams } = req.nextUrl;
   const isAuthed = getSessionFromCookies(req);
 
+  // Always forward the pathname so layout.tsx can branch on it. Cloned
+  // headers travel with the rewritten request only — the response
+  // headers are untouched, so this never leaks to the client.
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set(PATHNAME_HEADER, pathname);
+
   // `/` is the public marketing homepage — let it render for everyone.
   if (PROTECTED.some(p => pathname === p || pathname.startsWith(p + "/")) && !isAuthed) {
     return NextResponse.redirect(new URL("/login", req.url));
@@ -73,7 +80,6 @@ export function middleware(req: NextRequest) {
   if (localeOverridePath(pathname)) {
     const lang = (searchParams.get("lang") ?? "").toLowerCase();
     if (SUPPORTED_LANG.has(lang)) {
-      const requestHeaders = new Headers(req.headers);
       requestHeaders.set(LANG_OVERRIDE_HEADER, lang);
       const res = NextResponse.next({ request: { headers: requestHeaders } });
       res.cookies.set({
@@ -88,25 +94,15 @@ export function middleware(req: NextRequest) {
     }
   }
 
-  return NextResponse.next();
+  return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = {
+  // Match every page request so the PATHNAME_HEADER is always set for
+  // SSR theme decisions. Excludes static assets, the Next.js internals,
+  // API routes, and files with extensions (favicon, images, etc.) so
+  // we don't pay the middleware cost for assets that don't render HTML.
   matcher: [
-    "/",
-    "/dashboard/:path*",
-    "/log/:path*",
-    "/entries/:path*",
-    "/insights/:path*",
-    "/import/:path*",
-    "/engine/:path*",
-    "/onboarding/:path*",
-    "/login",
-    "/pro/:path*",
-    "/pro",
-    "/beta/:path*",
-    "/beta",
-    "/setup/:path*",
-    "/setup",
+    "/((?!_next/static|_next/image|api/|favicon\\.ico|.*\\..*).*)",
   ],
 };

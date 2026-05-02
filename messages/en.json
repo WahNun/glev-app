@@ -627,6 +627,7 @@
     "language_confirm_body": "The app will reload to load the new language. Unsaved input will be lost.",
     "appearance": "Appearance",
     "appearance_hint": "Choose how Glev looks. System follows your device setting.",
+    "appearance_app_only_hint": "Applies to the app only — marketing pages stay dark.",
     "theme_dark": "Dark",
     "theme_light": "Light",
     "theme_system": "System",

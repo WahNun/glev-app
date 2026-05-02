@@ -635,6 +635,7 @@
     "language_confirm_body": "Die App lädt neu, damit die neue Sprache geladen wird. Nicht gespeicherte Eingaben gehen verloren.",
     "appearance": "Erscheinungsbild",
     "appearance_hint": "Lege fest, wie Glev aussieht. „System“ folgt deiner Geräteeinstellung.",
+    "appearance_app_only_hint": "Gilt nur für den App-Bereich — Marketingseiten bleiben dunkel.",
     "theme_dark": "Dunkel",
     "theme_light": "Hell",
     "theme_system": "System",
