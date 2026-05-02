@@ -277,6 +277,13 @@ function BetaContent() {
                 overflowWrap: locale === "de" ? "anywhere" : "normal",
                 hyphens: locale === "de" ? "auto" : "manual",
                 WebkitHyphens: locale === "de" ? "auto" : "manual",
+                // Belt-and-suspenders: even with `hyphens: manual`,
+                // some browsers/dev caches still hyphenated short EN
+                // words ("deci-sions"). `wordBreak: keep-all` forbids
+                // any break inside a word — paired with overflow-wrap
+                // normal it lets short EN words stay intact, while DE
+                // still breaks via the `hyphens: auto` rule above.
+                wordBreak: locale === "de" ? "normal" : "keep-all",
               }}
               lang={locale}
             >
