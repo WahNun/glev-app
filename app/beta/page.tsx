@@ -166,6 +166,7 @@ function BetaCTALink({ isFull }: { isFull: boolean }) {
 
 function BetaContent() {
   const t = useTranslations("betaPage");
+  const locale = useLocale();
   const [count, setCount] = useState<CountResponse | null>(null);
 
   useEffect(() => {
@@ -265,17 +266,19 @@ function BetaContent() {
                 color: "#fff",
                 margin: 0,
                 // German compounds like "Insulinentscheidungen" don't
-                // break by default; without these two the headline
-                // overflows the 335px content area on iPhone 13 mini
-                // and triggers horizontal scroll. `overflowWrap:
-                // anywhere` is the modern, well-supported way to break
-                // overlong tokens; `hyphens: auto` (with lang="de" set
-                // by app/layout.tsx) lets the browser hyphenate at
-                // syllable boundaries when a break is needed.
-                overflowWrap: "anywhere",
-                hyphens: "auto",
-                WebkitHyphens: "auto",
+                // break by default and overflow the 335px content area
+                // on iPhone 13 mini → horizontal scroll. We gate the
+                // hyphenation hints on locale=de so EN words like
+                // "decisions" don't render as "deci-sions" (which
+                // happened because <html lang="de"> is set globally
+                // and the browser was free to hyphenate any English
+                // text on this page). EN keeps `overflowWrap: normal`
+                // → no intra-word breaks, so short words stay intact.
+                overflowWrap: locale === "de" ? "anywhere" : "normal",
+                hyphens: locale === "de" ? "auto" : "manual",
+                WebkitHyphens: locale === "de" ? "auto" : "manual",
               }}
+              lang={locale}
             >
               {t("hero_title_line1")}<br />{t("hero_title_line2")}
             </h1>
