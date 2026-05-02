@@ -5,7 +5,7 @@
  *
  * Walks the user through the meal-log flow with a 3-step list,
  * a parsed-recommendation example chip set, and a mini bottom-nav
- * mockup with the Glev FAB pulsing. Reads `?locale=de|en`.
+ * mockup with the static Glev FAB highlighted. Reads `?locale=de|en`.
  */
 
 import { Suspense } from "react";
@@ -41,7 +41,7 @@ function LogMealMockup() {
             {
               num: "1",
               title: "Tap den Glev-Button",
-              body: "Unten in der Mitte der Navigation — der pulsierende Punkt.",
+              body: "Unten in der Mitte der Navigation — der hervorgehobene Glev-Button.",
             },
             {
               num: "2",
@@ -67,7 +67,7 @@ function LogMealMockup() {
             {
               num: "1",
               title: "Tap the Glev button",
-              body: "Bottom-center of the navigation — the pulsing dot.",
+              body: "Bottom-center of the navigation — the highlighted Glev button.",
             },
             {
               num: "2",
@@ -247,6 +247,9 @@ function LogMealMockup() {
           }}
         >
           <NavIconStub variant="dashboard" />
+          {/* Glev FAB — static (matches real Layout.tsx; the real
+              tab icon does NOT pulse). The subtle glow simply
+              elevates it visually without implying motion. */}
           <div
             style={{
               width: 48,
@@ -256,7 +259,7 @@ function LogMealMockup() {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              animation: "obPulse 1.6s ease-in-out infinite",
+              boxShadow: `0 4px 14px ${ACCENT}66`,
             }}
           >
             <GlevLogo size={22} color="#fff" bg="transparent" />
@@ -265,13 +268,6 @@ function LogMealMockup() {
           <NavIconStub variant="settings" />
         </div>
       </div>
-
-      <style>{`
-        @keyframes obPulse {
-          0%, 100% { box-shadow: 0 0 18px ${ACCENT}77; }
-          50%      { box-shadow: 0 0 30px ${ACCENT}cc, 0 0 48px ${ACCENT}55; }
-        }
-      `}</style>
     </Shell>
   );
 }
