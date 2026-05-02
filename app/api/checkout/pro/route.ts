@@ -25,9 +25,15 @@ const STRIPE_TRIAL_MIN_LEAD_MS = 48 * 60 * 60 * 1000 + 60 * 60 * 1000;
  * POST /api/checkout/pro
  *
  * Schlanker Pro-Checkout-Endpoint analog zu /api/checkout/beta.
- * Erstellt eine Stripe-Subscription-Session für STRIPE_PRO_PRICE_ID
- * (€24,90 / Monat) mit fixem Trial-End am Launch-Tag (1. Juli 2026):
+ * Erstellt eine Stripe-Subscription-Session für den Pro-Price (€24,90 bzw.
+ * $24.90 / Monat) mit fixem Trial-End am Launch-Tag (1. Juli 2026):
  * Karte wird heute hinterlegt, erste Buchung am Launch-Tag.
+ *
+ * Currency wird per Locale aus dem Request-Body gewählt:
+ *   `locale: "en"` → USD-Charge ($24.90/Monat) via STRIPE_PRICE_PRO_USD_ID
+ *   `locale: "de"` (Default + Fallback) → EUR-Charge (€24,90/Monat) via
+ *     STRIPE_PRICE_PRO_EUR_ID, mit backward-compat Fallback auf den alten
+ *     Namen STRIPE_PRO_PRICE_ID damit Production weiterläuft.
  *
  * Falls die Route nach Launch (oder weniger als ~49h davor) aufgerufen wird,
  * wird kein Trial gesetzt — Stripe würde sonst mit "trial_end must be at
@@ -41,11 +47,25 @@ const STRIPE_TRIAL_MIN_LEAD_MS = 48 * 60 * 60 * 1000 + 60 * 60 * 1000;
  */
 export async function POST(req: NextRequest) {
   try {
-    const body = (await req.json().catch(() => ({}))) as { email?: unknown };
+    const body = (await req.json().catch(() => ({}))) as {
+      email?: unknown;
+      locale?: unknown;
+    };
     const email = typeof body.email === "string" ? body.email : undefined;
+    const locale = body.locale === "en" ? "en" : "de";
+    const useUsd = locale === "en";
 
-    if (!process.env.STRIPE_PRO_PRICE_ID) {
-      throw new Error("Missing STRIPE_PRO_PRICE_ID");
+    const priceId = useUsd
+      ? process.env.STRIPE_PRICE_PRO_USD_ID
+      : process.env.STRIPE_PRICE_PRO_EUR_ID
+        ?? process.env.STRIPE_PRO_PRICE_ID;
+
+    if (!priceId) {
+      throw new Error(
+        useUsd
+          ? "Missing STRIPE_PRICE_PRO_USD_ID"
+          : "Missing STRIPE_PRICE_PRO_EUR_ID (or legacy STRIPE_PRO_PRICE_ID)",
+      );
     }
     if (!process.env.NEXT_PUBLIC_APP_URL) {
       throw new Error("Missing NEXT_PUBLIC_APP_URL");
@@ -62,7 +82,7 @@ export async function POST(req: NextRequest) {
       mode: "subscription",
       line_items: [
         {
-          price: process.env.STRIPE_PRO_PRICE_ID,
+          price: priceId,
           quantity: 1,
         },
       ],
@@ -82,11 +102,15 @@ export async function POST(req: NextRequest) {
       metadata: { feature: "pro_subscription" },
       success_url: `${appUrl}/pro/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/pro/cancelled`,
-      locale: "de",
+      // Stripe-Hosted-Checkout-UI in passender Sprache anzeigen.
+      locale,
       custom_fields: [
         {
           key: "full_name",
-          label: { type: "custom", custom: "Vollständiger Name" },
+          label: {
+            type: "custom",
+            custom: useUsd ? "Full name" : "Vollständiger Name",
+          },
           type: "text",
           optional: false,
         },
