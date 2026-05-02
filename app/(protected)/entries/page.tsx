@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
+import { useTranslations } from "next-intl";
 import { fetchMeals, deleteMeal, updateMeal, type Meal } from "@/lib/meals";
 import { fetchRecentInsulinLogs, deleteInsulinLog, updateInsulinReadings, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, deleteExerciseLog, type ExerciseLog } from "@/lib/exercise";
@@ -13,7 +14,7 @@ import {
   bolusPendingLabel,
 } from "@/lib/insulinEval";
 import CgmSparkline, { type SparklinePoint } from "@/components/CgmSparkline";
-import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, getEvalExplain } from "@/lib/mealTypes";
+import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel } from "@/lib/mealTypes";
 import { lifecycleFor, STATE_LABELS, type OutcomeState } from "@/lib/engine/lifecycle";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
 import PendingGlucoseStrip from "@/components/PendingGlucoseStrip";
@@ -191,6 +192,19 @@ export default function EntriesPage() {
   // CARBS rows below. The MealEditor edit form is intentionally NOT
   // converted (out of scope for the rollout).
   const carbUnit = useCarbUnit();
+  // i18n for the meal-expanded view (section labels, mini-card labels,
+  // type/eval pills, lifecycle state). Keys live in messages/{de,en}.json
+  // under "entriesExpand". Helpers below fall back to the lib/mealTypes
+  // hardcoded English when a key is unknown so legacy outcomes (e.g. an
+  // unexpected eval string) still render something readable.
+  const tx = useTranslations("entriesExpand");
+  const txSafe = (key: string, fallback: string): string => {
+    try { return tx(key); } catch { return fallback; }
+  };
+  const txEvalLabel   = (ev: string | null): string => ev ? txSafe(`eval_${ev}`, getEvalLabel(ev)) : "—";
+  const txEvalExplain = (ev: string | null): string => ev ? txSafe(`eval_explain_${ev}`, "") : "";
+  const txTypeLabel   = (t: string | null): string | null => t ? txSafe(`type_${t}`, TYPE_LABELS[t] || t.replace("_"," ")) : null;
+  const txTypeExplain = (t: string | null): string => t ? txSafe(`type_explain_${t}`, TYPE_EXPLAIN[t] || "") : "";
   const [meals, setMeals]     = useState<Meal[]>([]);
   const [insulin, setInsulin] = useState<InsulinLog[]>([]);
   const [exercise, setExercise] = useState<ExerciseLog[]>([]);
@@ -800,8 +814,8 @@ export default function EntriesPage() {
             );
 
             const catColor = m.meal_type ? (TYPE_COLORS[m.meal_type] || GREEN) : null;
-            const catLabel = m.meal_type ? (TYPE_LABELS[m.meal_type] || m.meal_type.replace("_"," ")) : null;
-            const catExplain = m.meal_type ? (TYPE_EXPLAIN[m.meal_type] || "") : "";
+            const catLabel = txTypeLabel(m.meal_type ?? null);
+            const catExplain = txTypeExplain(m.meal_type ?? null);
 
             return (
               <div key={m.id} id={`entry-${m.id}`} className="entry-row" style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, overflow:"hidden" }}>
@@ -883,13 +897,13 @@ export default function EntriesPage() {
                     {ev && (
                       <div style={{ marginTop:14, background:`${evColor}10`, border:`1px solid ${evColor}40`, borderRadius:12, padding:"12px 14px", display:"flex", flexDirection:"column", gap:8 }}>
                         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
-                          <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>OUTCOME</div>
+                          <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>{tx("outcome_section").toUpperCase()}</div>
                           <span style={{ padding:"6px 14px", borderRadius:99, fontSize:11, fontWeight:700, background:evColor, color:"var(--on-accent)", whiteSpace:"nowrap", letterSpacing:"0.04em", textTransform:"uppercase" }}>
-                            {evL(ev)}
+                            {txEvalLabel(ev)}
                           </span>
                         </div>
-                        {getEvalExplain(ev) && (
-                          <div style={{ fontSize:12, color:"var(--text-muted)", lineHeight:1.5 }}>{getEvalExplain(ev)}</div>
+                        {txEvalExplain(ev) && (
+                          <div style={{ fontSize:12, color:"var(--text-muted)", lineHeight:1.5 }}>{txEvalExplain(ev)}</div>
                         )}
                       </div>
                     )}
@@ -898,7 +912,7 @@ export default function EntriesPage() {
                     {catLabel && catColor && (
                       <div style={{ background:`${catColor}10`, border:`1px solid ${catColor}40`, borderRadius:12, padding:"12px 14px", display:"flex", flexDirection:"column", gap:8 }}>
                         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
-                          <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>MEAL CLASSIFICATION</div>
+                          <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>{tx("meal_classification").toUpperCase()}</div>
                           <span style={{ padding:"6px 14px", borderRadius:99, fontSize:11, fontWeight:700, background:catColor, color:"var(--on-accent)", whiteSpace:"nowrap", letterSpacing:"0.04em", textTransform:"uppercase" }}>
                             {catLabel}
                           </span>
@@ -912,7 +926,7 @@ export default function EntriesPage() {
                     {/* MEAL */}
                     {m.input_text && (
                       <div>
-                        <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.1em", fontWeight:700, margin:"4px 0 6px" }}>MEAL</div>
+                        <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.1em", fontWeight:700, margin:"4px 0 6px" }}>{tx("meal_section").toUpperCase()}</div>
                         <div style={{ fontSize:13, color:"var(--text-body)", lineHeight:1.55 }}>{m.input_text}</div>
                       </div>
                     )}
@@ -923,9 +937,9 @@ export default function EntriesPage() {
                       return (
                         <div style={{ background:`${ACCENT}10`, border:`1px solid ${ACCENT}40`, borderRadius:12, padding:"10px 12px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
                           <div style={{ display:"flex", flexDirection:"column", gap:2, minWidth:0 }}>
-                            <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>KORREKTUR-BOLUS</div>
+                            <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>{tx("korrektur_bolus").toUpperCase()}</div>
                             <div style={{ fontSize:12, color:"var(--text-body)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                              {parent ? `für: ${parent.input_text.length > 50 ? parent.input_text.slice(0, 50) + "…" : parent.input_text}` : "Original-Mahlzeit gelöscht"}
+                              {parent ? tx("korrektur_for", { text: parent.input_text.length > 50 ? parent.input_text.slice(0, 50) + "…" : parent.input_text }) : tx("original_deleted")}
                             </div>
                           </div>
                           <span style={{ padding:"4px 10px", borderRadius:99, fontSize:10, fontWeight:700, background:ACCENT, color:"var(--on-accent)", whiteSpace:"nowrap", letterSpacing:"0.04em" }}>K</span>
@@ -942,10 +956,10 @@ export default function EntriesPage() {
                         <div style={{ background:`${ACCENT}08`, border:`1px solid ${ACCENT}30`, borderRadius:12, padding:"10px 12px", display:"flex", flexDirection:"column", gap:8 }}>
                           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
                             <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>
-                              KORREKTUREN ({corrections.length})
+                              {tx("korrekturen", { n: corrections.length }).toUpperCase()}
                             </div>
                             <span style={{ padding:"4px 10px", borderRadius:99, fontSize:10, fontWeight:700, background:`${ACCENT}25`, color:ACCENT, border:`1px solid ${ACCENT}50`, whiteSpace:"nowrap" }}>
-                              +{totalCorrInsulin.toFixed(1)}u gesamt
+                              {tx("total_suffix", { total: totalCorrInsulin.toFixed(1) })}
                             </span>
                           </div>
                           <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
@@ -966,34 +980,34 @@ export default function EntriesPage() {
 
                     {/* MACROS & DOSING — 3-col grid of mini-cards */}
                     <div>
-                      <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8 }}>MACROS &amp; DOSING</div>
+                      <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8 }}>{tx("macros_dosing").toUpperCase()}</div>
                       <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
                         {/* CARBS / NET CARBS render in the user's chosen
                             unit (g/BE/KE). Other macros stay in grams —
                             the BE/KE convention is carb-specific. */}
-                        <MiniCard l="CARBS" v={carbUnit.display(carbs)} c={ORANGE}/>
-                        <MiniCard l="PROTEIN" v={totalProt > 0 ? `${totalProt}g` : "—"} c="#3B82F6"/>
-                        <MiniCard l="FAT" v={totalFat > 0 ? `${totalFat}g` : "—"} c="#A855F7"/>
-                        <MiniCard l="FIBER" v={totalFiber > 0 ? `${totalFiber}g` : "—"}/>
-                        <MiniCard l="NET CARBS" v={netCarbs > 0 ? carbUnit.display(netCarbs) : "—"} c={GREEN}/>
-                        <MiniCard l="CALORIES" v={(() => { const cals = m.calories ?? Math.round(carbs*4 + totalProt*4 + totalFat*9); return cals > 0 ? `${cals} kcal` : "—"; })()} c="#A78BFA"/>
-                        <MiniCard l="INSULIN" v={`${m.insulin_units ?? 0}u`} c={ACCENT}/>
+                        <MiniCard l={tx("mini_carbs")} v={carbUnit.display(carbs)} c={ORANGE}/>
+                        <MiniCard l={tx("mini_protein")} v={totalProt > 0 ? `${totalProt}g` : "—"} c="#3B82F6"/>
+                        <MiniCard l={tx("mini_fat")} v={totalFat > 0 ? `${totalFat}g` : "—"} c="#A855F7"/>
+                        <MiniCard l={tx("mini_fiber")} v={totalFiber > 0 ? `${totalFiber}g` : "—"}/>
+                        <MiniCard l={tx("mini_net_carbs")} v={netCarbs > 0 ? carbUnit.display(netCarbs) : "—"} c={GREEN}/>
+                        <MiniCard l={tx("mini_calories")} v={(() => { const cals = m.calories ?? Math.round(carbs*4 + totalProt*4 + totalFat*9); return cals > 0 ? `${cals} kcal` : "—"; })()} c="#A78BFA"/>
+                        <MiniCard l={tx("mini_insulin")} v={`${m.insulin_units ?? 0}u`} c={ACCENT}/>
                         {/* Per-meal carb-to-insulin ratio. icr is computed
                             in g/IE; displayICR converts it to the user's
                             unit (e.g. "2 BE/IE" / "2.4 KE/IE" / "24 g KH/IE"). */}
-                        <MiniCard l="RATIO" v={icr ? carbUnit.displayICR(icr) : "—"} c={ACCENT}/>
-                        <MiniCard l="CATEGORY" v={m.meal_type ? m.meal_type.replace("_"," ").toLowerCase() : "—"} c={m.meal_type ? (TYPE_COLORS[m.meal_type] || GREEN) : undefined}/>
+                        <MiniCard l={tx("mini_ratio")} v={icr ? carbUnit.displayICR(icr) : "—"} c={ACCENT}/>
+                        <MiniCard l={tx("mini_category")} v={catLabel ?? "—"} c={m.meal_type ? (TYPE_COLORS[m.meal_type] || GREEN) : undefined}/>
                       </div>
                     </div>
 
                     {/* GLUCOSE — 2-col grid of mini-cards */}
                     <div>
-                      <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8 }}>GLUCOSE</div>
+                      <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8 }}>{tx("glucose_section").toUpperCase()}</div>
                       <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8 }}>
-                        <MiniCard l="BG BEFORE" v={m.glucose_before ? `${m.glucose_before} mg/dL` : "—"} c={bgC}/>
-                        <MiniCard l={afterTag ? `BG AFTER (${afterTag})` : "BG AFTER"} v={afterValue != null ? `${afterValue} mg/dL` : "—"} c={afterC}/>
-                        <MiniCard l={afterTag ? `DELTA (${afterTag})` : "DELTA"} v={glucDelta !== null ? `${glucDelta > 0 ? "+" : ""}${glucDelta} mg/dL` : "—"} c={deltaC}/>
-                        <MiniCard l="TIME GAP" v={timeGapStr ?? "—"} c={timeGapStr ? "var(--text-strong)" : undefined}/>
+                        <MiniCard l={tx("mini_bg_before")} v={m.glucose_before ? `${m.glucose_before} mg/dL` : "—"} c={bgC}/>
+                        <MiniCard l={afterTag ? `${tx("mini_bg_after")} (${afterTag})` : tx("mini_bg_after")} v={afterValue != null ? `${afterValue} mg/dL` : "—"} c={afterC}/>
+                        <MiniCard l={afterTag ? `${tx("mini_delta")} (${afterTag})` : tx("mini_delta")} v={glucDelta !== null ? `${glucDelta > 0 ? "+" : ""}${glucDelta} mg/dL` : "—"} c={deltaC}/>
+                        <MiniCard l={tx("mini_time_gap")} v={timeGapStr ?? "—"} c={timeGapStr ? "var(--text-strong)" : undefined}/>
                       </div>
                     </div>
 
@@ -1002,11 +1016,11 @@ export default function EntriesPage() {
                     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginTop:4 }}>
                       <button onClick={() => setEditingId(m.id)} style={{ padding:"12px", borderRadius:10, border:`1px solid ${ACCENT}40`, background:`${ACCENT}08`, color:ACCENT, fontSize:13, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, letterSpacing:"0.02em" }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
-                        Bearbeiten
+                        {tx("edit")}
                       </button>
                       <button onClick={() => handleDelete(m.id)} disabled={deleting === m.id} style={{ padding:"12px", borderRadius:10, border:`1px solid ${PINK}40`, background:`${PINK}08`, color:PINK, fontSize:13, fontWeight:600, cursor:deleting === m.id ? "wait" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, letterSpacing:"0.02em" }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
-                        {deleting === m.id ? "Deleting…" : "Löschen"}
+                        {deleting === m.id ? tx("deleting") : tx("delete")}
                       </button>
                     </div>
                   </div>
@@ -1054,12 +1068,21 @@ function stateColor(s: OutcomeState) {
 
 function LifecycleBlock({ meal, onUpdated }: { meal: Meal; onUpdated: (patch: Partial<Meal>) => void }) {
   const lc = lifecycleFor(meal);
+  // i18n for the lifecycle chip label + section heading. Falls back to
+  // the lib's hardcoded English strings when a key is missing so a future
+  // outcome value still renders something readable.
+  const tx = useTranslations("entriesExpand");
+  const txSafe = (key: string, fallback: string): string => {
+    try { return tx(key); } catch { return fallback; }
+  };
   // When the lifecycle has reached "final" with a real outcome, swap the
   // generic "Final outcome" chip for the actual evaluation result (Good /
   // Spike / Over Dose / …) and color-code it via the outcome palette so
   // the user sees the verdict at a glance instead of a meta-state label.
   const showOutcomeChip = lc.state === "final" && lc.outcome != null;
-  const chipLabel = showOutcomeChip ? getEvalLabel(lc.outcome) : STATE_LABELS[lc.state];
+  const chipLabel = showOutcomeChip
+    ? txSafe(`eval_${lc.outcome}`, getEvalLabel(lc.outcome))
+    : txSafe(`state_${lc.state}`, STATE_LABELS[lc.state]);
   const c = showOutcomeChip ? getEvalColor(lc.outcome) : stateColor(lc.state);
 
   // 1h/2h reading inputs intentionally live ONLY in the row-level
@@ -1072,7 +1095,7 @@ function LifecycleBlock({ meal, onUpdated }: { meal: Meal; onUpdated: (patch: Pa
   return (
     <div style={{ marginTop:14, background:`${c}10`, border:`1px solid ${c}40`, borderRadius:12, padding:"12px 14px", display:"flex", flexDirection:"column", gap:10 }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
-        <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>OUTCOME STATE</div>
+        <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>{tx("outcome_state").toUpperCase()}</div>
         <span style={{ padding:"6px 14px", borderRadius:99, fontSize:11, fontWeight:700, background:c, color:"var(--on-accent)", letterSpacing:"0.04em", textTransform:"uppercase" }}>
           {chipLabel}
         </span>
