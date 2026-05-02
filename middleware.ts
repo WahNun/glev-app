@@ -35,8 +35,23 @@ function getSessionFromCookies(req: NextRequest): boolean {
   }
 }
 
+// Marketing landing pages where `?lang=de` / `?lang=en` may force the
+// rendered locale. Kept narrow on purpose — the override only makes sense
+// on public, cookie-less surfaces (e.g. cross-origin canvas iframes that
+// can't share NEXT_LOCALE). Inside the authenticated app we keep the
+// existing cookie-driven language picker behaviour untouched.
+const LANG_OVERRIDE_PATHS = ["/pro", "/beta"];
+const LANG_OVERRIDE_HEADER = "x-glev-locale-override";
+const SUPPORTED_LANG = new Set(["de", "en"]);
+
+function localeOverridePath(pathname: string): boolean {
+  return LANG_OVERRIDE_PATHS.some(
+    (p) => pathname === p || pathname.startsWith(p + "/"),
+  );
+}
+
 export function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl;
+  const { pathname, searchParams } = req.nextUrl;
   const isAuthed = getSessionFromCookies(req);
 
   // `/` is the public marketing homepage — let it render for everyone.
@@ -46,6 +61,20 @@ export function middleware(req: NextRequest) {
   if (pathname === "/login" && isAuthed) {
     return NextResponse.redirect(new URL("/dashboard", req.url));
   }
+
+  // `?lang=` URL override on marketing pages — forwarded to the
+  // next-intl request config via a request header. The header travels
+  // with this single request only (no cookie is set), so the override is
+  // not persisted, exactly as the task scope requires.
+  if (localeOverridePath(pathname)) {
+    const lang = (searchParams.get("lang") ?? "").toLowerCase();
+    if (SUPPORTED_LANG.has(lang)) {
+      const requestHeaders = new Headers(req.headers);
+      requestHeaders.set(LANG_OVERRIDE_HEADER, lang);
+      return NextResponse.next({ request: { headers: requestHeaders } });
+    }
+  }
+
   return NextResponse.next();
 }
 
@@ -59,5 +88,9 @@ export const config = {
     "/engine/:path*",
     "/onboarding/:path*",
     "/login",
+    "/pro/:path*",
+    "/pro",
+    "/beta/:path*",
+    "/beta",
   ],
 };

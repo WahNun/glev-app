@@ -65,6 +65,23 @@ function parseAcceptLanguage(header: string | null): Locale | null {
 }
 
 export default getRequestConfig(async () => {
+  const hdrs = await headers();
+
+  // 0) `?lang=de` / `?lang=en` URL override — set by middleware on the
+  //    public marketing pages (/pro, /beta). Highest precedence so the
+  //    canvas iframes (which can't share cookies cross-origin) and any
+  //    deep-linked share URL render in the requested language regardless
+  //    of cookie / IP-country / Accept-Language. Invalid values are
+  //    ignored — the request falls through to the normal cookie/geo path
+  //    so existing behaviour is preserved everywhere else.
+  const localeOverride = hdrs.get("x-glev-locale-override");
+  if (isSupported(localeOverride)) {
+    return {
+      locale: localeOverride,
+      messages: (await import(`../messages/${localeOverride}.json`)).default,
+    };
+  }
+
   // 1) Explicit cookie wins — set by the in-app language picker and by
   //    LanguageSync after a logged-in user signs in. This guarantees a
   //    visitor who flipped to the other language stays on it even when
@@ -77,8 +94,6 @@ export default getRequestConfig(async () => {
       messages: (await import(`../messages/${cookieValue}.json`)).default,
     };
   }
-
-  const hdrs = await headers();
 
   // 2) Country-based: visitors from DE/AT/CH/LU/LI default to the German
   //    site (with EUR pricing); everyone else to the English site (with
