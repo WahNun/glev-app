@@ -300,6 +300,38 @@ export default function SettingsPage() {
     }
   }, [router]);
 
+  // Deep-link from /onboarding step 5 (CGM-Setup picker). The
+  // onboarding flow appends ?cgmSetup=librelinkup|nightscout|
+  // apple_health and we auto-open the matching sheet so the user
+  // lands directly inside the relevant connect form. We strip the
+  // param off the URL so a refresh doesn't re-open the sheet.
+  // Apple Health lives inside the libre2 sheet (CgmSettingsCard
+  // renders the AH section there on iOS), hence the shared key.
+  const cgmSetupHandledRef = useRef(false);
+  useEffect(() => {
+    if (cgmSetupHandledRef.current) return;
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    const setup = url.searchParams.get("cgmSetup");
+    if (!setup) return;
+    cgmSetupHandledRef.current = true;
+    const sheet: SheetKey | null =
+      setup === "librelinkup"  ? "libre2"     :
+      setup === "apple_health" ? "libre2"     :
+      setup === "nightscout"   ? "nightscout" :
+      null;
+    url.searchParams.delete("cgmSetup");
+    window.history.replaceState({}, "", url.toString());
+    if (sheet) {
+      // Defer so openSheetWith is fully wired (it captures the
+      // current draft snapshot from state at call time).
+      setTimeout(() => openSheetWith(sheet), 0);
+    }
+  // openSheetWith is intentionally not a dep — we only want this to
+  // fire once on mount per page load, guarded by the ref.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const openSheetWith = useCallback((id: SheetKey) => {
     // Snapshot before opening any sheet — even info-only sheets get one,
     // because tracking "is this sheet editable?" branching by id-type

@@ -1465,7 +1465,38 @@
       "bullet_1": "Time in Range, GMI, hypo/hyper events, glucose variability (CV %).",
       "bullet_2": "Workout outcomes show how exercise affects your glucose.",
       "bullet_3": "Cards can be dragged & dropped into your favorite order.",
-      "primary": "Start using Glev"
+      "primary": "Continue"
+    },
+    "cgm": {
+      "headline": "Connect your CGM",
+      "sub": "Pick your CGM brand — or set it up later in Settings.",
+      "method_sub": "Choose how to get your readings into Glev.",
+      "skip_later": "Skip — set up later in Settings",
+      "recommended": "Recommended",
+      "vendor_dexcom_title": "Dexcom",
+      "vendor_dexcom_devices": "G6, G7, One+",
+      "vendor_dexcom_headline": "Connect Dexcom",
+      "vendor_libre_title": "FreeStyle Libre",
+      "vendor_libre_devices": "Libre 2, Libre 3, Libre 3 Plus",
+      "vendor_libre_headline": "Connect FreeStyle Libre",
+      "vendor_medtronic_title": "Medtronic",
+      "vendor_medtronic_devices": "MiniMed Guardian, Simplera",
+      "vendor_medtronic_headline": "Connect Medtronic",
+      "vendor_other_title": "Other or Apple Health",
+      "vendor_other_devices": "Eversense, Sibionics, etc. via Apple Health or Nightscout",
+      "vendor_other_headline": "Connect another CGM",
+      "method_apple_health_title": "Apple Health",
+      "method_librelinkup_title": "LibreLinkUp",
+      "method_nightscout_title": "Nightscout",
+      "method_dexcom_apple_health_body": "Uses your Dexcom iOS app. Grant Health permission once in the Glev iOS app.",
+      "method_dexcom_nightscout_body": "Via the Dexcom Share bridge into your Nightscout instance. For power users with their own setup.",
+      "method_libre_librelinkup_body": "Direct connection with your LibreLinkUp follower account. Just email + password.",
+      "method_libre_apple_health_body": "If your Libre app syncs to Apple Health (iOS).",
+      "method_libre_nightscout_body": "Via LibreLink uploader into your Nightscout instance.",
+      "method_medtronic_apple_health_body": "If the MiniMed Mobile app syncs to Apple Health (iOS).",
+      "method_medtronic_nightscout_body": "Via CareLink uploader into your Nightscout instance.",
+      "method_other_apple_health_body": "Works with any CGM that syncs to Apple Health (iOS).",
+      "method_other_nightscout_body": "If your CGM writes readings into a Nightscout instance."
     }
   }
 }

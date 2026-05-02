@@ -1,12 +1,14 @@
 "use client";
 
 /**
- * Onboarding flow — Step 4 of 4: Insights & history.
+ * Onboarding flow — Step 4 of 5: Insights & history.
  * Graduated from `app/mockups/onboarding/insights/page.tsx`.
  *
- * This is the FINAL step — primary CTA "Glev starten" / "Start using
- * Glev" calls the parent's onNext, which submits completion to the
- * API and redirects to /dashboard. Skip is hidden here on purpose.
+ * Primary CTA "Weiter" / "Continue" advances to the final step (CGM-
+ * Setup). Skip is hidden here on purpose because the CGM step has
+ * its own well-labelled "skip — set up later" path; offering a
+ * second skip option here would let users bypass the CGM-Setup
+ * choice architecture entirely.
  */
 
 import { useTranslations } from "next-intl";
@@ -23,11 +25,9 @@ import {
 export default function InsightsStep({
   onNext,
   onBack,
-  primaryDisabled,
 }: {
   onNext: () => void;
   onBack: () => void;
-  primaryDisabled?: boolean;
 }) {
   const t = useTranslations("onboarding.insights");
   const cards = [
@@ -43,8 +43,7 @@ export default function InsightsStep({
       onNext={onNext}
       onBack={onBack}
       primaryLabel={t("primary")}
-      primaryWithArrow={false}
-      primaryDisabled={primaryDisabled}
+      primaryWithArrow
       showSkip={false}
     >
       <div>

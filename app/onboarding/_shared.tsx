@@ -31,10 +31,15 @@ export const TEXT_DIM   = "rgba(255,255,255,0.55)";
 export const TEXT_FAINT = "rgba(255,255,255,0.32)";
 
 // ─── Progress dots ──────────────────────────────────────────────
-export function ProgressDots({ active }: { active: 0 | 1 | 2 | 3 }) {
+// Onboarding is a 5-step flow: welcome → log-meal → engine → insights → cgm.
+// If we ever add or drop a step, change this single literal to keep the
+// dot count in sync everywhere automatically.
+export type Step = 0 | 1 | 2 | 3 | 4;
+export const STEP_COUNT = 5;
+export function ProgressDots({ active }: { active: Step }) {
   return (
     <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
-      {[0, 1, 2, 3].map((i) => (
+      {Array.from({ length: STEP_COUNT }, (_, i) => i).map((i) => (
         <div
           key={i}
           style={{
@@ -127,9 +132,10 @@ export function Shell({
   primaryWithArrow = true,
   primaryDisabled = false,
   showSkip = true,
+  hidePrimary = false,
   children,
 }: {
-  step: 0 | 1 | 2 | 3;
+  step: Step;
   onNext: () => void;
   onBack?: () => void;
   onSkip?: () => void;
@@ -137,6 +143,11 @@ export function Shell({
   primaryWithArrow?: boolean;
   primaryDisabled?: boolean;
   showSkip?: boolean;
+  /** Hide the primary footer button entirely. Used by the CGM step
+   *  where the vendor / method cards in the body ARE the primary
+   *  actions — adding a duplicate "Continue" footer button would
+   *  just confuse the choice architecture. */
+  hidePrimary?: boolean;
   children: React.ReactNode;
 }) {
   const t = useTranslations("onboarding");
@@ -207,13 +218,17 @@ export function Shell({
           ) : (
             <span />
           )}
-          <PrimaryButton
-            onClick={onNext}
-            withArrow={primaryWithArrow}
-            disabled={primaryDisabled}
-          >
-            {nextLabel}
-          </PrimaryButton>
+          {hidePrimary ? (
+            <span />
+          ) : (
+            <PrimaryButton
+              onClick={onNext}
+              withArrow={primaryWithArrow}
+              disabled={primaryDisabled}
+            >
+              {nextLabel}
+            </PrimaryButton>
+          )}
         </div>
       </div>
     </div>
