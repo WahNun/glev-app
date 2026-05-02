@@ -134,7 +134,7 @@ export async function sendNowAction(formData: FormData): Promise<void> {
   }
 
   try {
-    const rendered = renderDripEmail(row.email_type, row.first_name);
+    const rendered = renderDripEmail(row.email_type, row.first_name, row.email);
     const resend = getDripResend();
     const { data, error } = await resend.emails.send({
       from: rendered.from,
