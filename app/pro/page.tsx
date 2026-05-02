@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import AppMockupPhone from "@/components/AppMockupPhone";
 import FAQ from "@/components/landing/FAQ";
 import FeatureTrio from "@/components/landing/FeatureTrio";
@@ -14,7 +15,6 @@ import {
   ACCENT_HOVER,
   BG,
   BORDER,
-  LAUNCH_DATE_LABEL,
   MINT,
   SURFACE,
   TEXT_DIM,
@@ -26,10 +26,15 @@ import {
  * und schickt den User dorthin. Damit kontrollieren WIR welche Price-IDs
  * verwendet werden — kein hardcoded Payment Link mehr.
  *
+ * Locale wird im Body mitgeschickt, damit der Backend-Endpoint die richtigen
+ * Stripe-Price-IDs (EUR oder USD) auswählt.
+ *
  * Die "reiche" Variante /api/pro/checkout (mit Email-Validierung und
  * DB-Tracking) bleibt im Repo für späteres Funnel-Tracking.
  */
 function ProCTALink() {
+  const t = useTranslations("proPage");
+  const locale = useLocale();
   const [hover, setHover] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,20 +54,20 @@ function ProCTALink() {
       const res = await fetch("/api/checkout/pro", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ locale }),
       });
 
       const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
 
       if (!res.ok || !data.url) {
-        throw new Error(data.error || `Checkout konnte nicht gestartet werden (HTTP ${res.status})`);
+        throw new Error(data.error || t("error_checkout_http", { status: res.status }));
       }
 
       // Same-Tab-Redirect — Stripe-Checkout-Standard.
       window.location.href = data.url;
     } catch (err) {
       setLoading(false);
-      const message = err instanceof Error ? err.message : "Unbekannter Fehler";
+      const message = err instanceof Error ? err.message : t("error_unknown");
       setError(message);
     }
   }
@@ -97,7 +102,7 @@ function ProCTALink() {
           width: "100%",
         }}
       >
-        {loading ? "Weiterleitung zu Stripe …" : "Mitgliedschaft starten — €24,90 / Monat"}
+        {loading ? t("cta_loading") : t("cta_default")}
       </button>
       {error && (
         <div
@@ -126,6 +131,10 @@ function ProCTALink() {
  * begins on the public launch date (1 July 2026) via a Stripe trial.
  */
 function ProContent() {
+  const t = useTranslations("proPage");
+  const tMarketing = useTranslations("marketing");
+  const launchDateLabel = tMarketing("landing_launch_date_label");
+
   // Meta Pixel — fires a custom `ViewProPage` event so we can build a
   // pro-page-visitors retargeting audience separate from the generic
   // PageView signal that fires on every route via the root layout.
@@ -134,6 +143,11 @@ function ProContent() {
       (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("trackCustom", "ViewProPage");
     }
   }, []);
+
+  const faqItems = [1, 2, 3, 4, 5].map((i) => ({
+    q: t(`faq_q${i}`),
+    a: t(`faq_a${i}`),
+  }));
 
   return (
     <main
@@ -227,10 +241,10 @@ function ProContent() {
                 WebkitHyphens: "auto",
               }}
             >
-              Einmal sprechen.<br />Makros berechnet.<br />CGM verknüpft.
+              {t("hero_title_line1")}<br />{t("hero_title_line2")}<br />{t("hero_title_line3")}
             </h1>
             <p style={{ fontSize: 18, lineHeight: 1.5, color: TEXT_DIM, margin: 0, maxWidth: 520 }}>
-              Sprach-Log. KI-Makros. CGM live. In unter 10 Sekunden dokumentiert.
+              {t("hero_subtitle")}
             </p>
 
             <div
@@ -253,7 +267,7 @@ function ProContent() {
               }}
             >
               <span aria-hidden>↺</span>
-              <span>Karte heute hinterlegen · keine Buchung bis {LAUNCH_DATE_LABEL} · jederzeit kündbar</span>
+              <span>{t("meta_card", { date: launchDateLabel })}</span>
             </div>
           </div>
 
@@ -290,7 +304,9 @@ function ProContent() {
               margin: "0 0 20px",
             }}
           >
-            Du bist bei <strong>112 mg/dL</strong>. Du willst gleich <strong>60 g Kohlenhydrate</strong> essen. Dein Wert steigt leicht.
+            {t.rich("scenario_intro", {
+              strong: (chunks) => <strong>{chunks}</strong>,
+            })}
           </p>
           <div className="glev-scenario-grid">
             <div
@@ -311,10 +327,10 @@ function ProContent() {
                   textTransform: "uppercase",
                 }}
               >
-                Ohne Glev
+                {t("scenario_without_label")}
               </strong>
               <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: "rgba(255,255,255,0.85)" }}>
-                Du spritzt sofort → später 220 mg/dL. Überzucker.
+                {t("scenario_without_text")}
               </p>
             </div>
             <div
@@ -335,10 +351,10 @@ function ProContent() {
                   textTransform: "uppercase",
                 }}
               >
-                Mit Glev
+                {t("scenario_with_label")}
               </strong>
               <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: "rgba(255,255,255,0.85)" }}>
-                Du wartest 10 Minuten → stabil bei 140. Fertig.
+                {t("scenario_with_text")}
               </p>
             </div>
           </div>
@@ -372,24 +388,24 @@ function ProContent() {
           items={[
             {
               color: ACCENT,
-              title: "Trend erkannt",
-              text: "Nicht nur der aktuelle Wert — Glev sieht, wohin er geht.",
+              title: t("trio_trend_title"),
+              text: t("trio_trend_text"),
             },
             {
               color: MINT,
-              title: "Mahlzeit einberechnet",
-              text: "Kohlenhydrate, Protein, Fett — alles fließt in die Einschätzung ein.",
+              title: t("trio_meal_title"),
+              text: t("trio_meal_text"),
             },
             {
               color: "#FF9500",
-              title: "Timing angepasst",
-              text: "Wann spritzen, nicht nur wie viel — der Unterschied zwischen 140 und 220.",
+              title: t("trio_timing_title"),
+              text: t("trio_timing_text"),
             },
           ]}
           extra={{
             color: "#FF2D78",
-            title: "Arztbericht als PDF",
-            text: "Dein Tracking — fertig aufbereitet für das nächste Arztgespräch. Automatisch generiert.",
+            title: t("trio_extra_title"),
+            text: t("trio_extra_text"),
           }}
         />
       </section>
@@ -405,11 +421,11 @@ function ProContent() {
         }}
       >
         <PricingCard
-          heading="Was du bekommst"
+          heading={t("pricing_heading")}
           lines={[
-            { left: `€24,90 / Monat — ab dem ${LAUNCH_DATE_LABEL}`, right: "kein Aufschlag, kein Versteckspiel" },
-            { left: "Karte wird heute hinterlegt — heute keine Buchung", right: "erste Abbuchung am Launch-Tag" },
-            { left: "Jederzeit kündbar", right: "im Account-Bereich oder per Email an hello@glev.app" },
+            { left: t("pricing_l1_left", { date: launchDateLabel }), right: t("pricing_l1_right") },
+            { left: t("pricing_l2_left"), right: t("pricing_l2_right") },
+            { left: t("pricing_l3_left"), right: t("pricing_l3_right") },
           ]}
         />
       </section>
@@ -437,7 +453,7 @@ function ProContent() {
           boxSizing: "border-box",
         }}
       >
-        <FAQ items={PRO_FAQ} />
+        <FAQ items={faqItems} />
       </section>
 
       {/* 7. Footer */}
@@ -455,29 +471,6 @@ function ProContent() {
     </main>
   );
 }
-
-const PRO_FAQ = [
-  {
-    q: "Welche CGMs werden unterstützt?",
-    a: "Aktuell nutzbar: FreeStyle Libre 2 und 3 via LibreLinkUp. Dexcom G6/G7, Dexcom One+ und Medtronic sind in Arbeit (coming soon).",
-  },
-  {
-    q: "Was passiert wenn ich vor dem Launch kündige?",
-    a: "Du kannst die Mitgliedschaft jederzeit vor dem 1. Juli 2026 ohne Folgen beenden. Es wird dann nichts abgebucht.",
-  },
-  {
-    q: "Ist Glev ein Medizinprodukt?",
-    a: "Nein. Glev ist ein Dokumentations- und Organisations-Tool. Therapieentscheidungen triffst du weiter mit deinem Arzt.",
-  },
-  {
-    q: "Was unterscheidet diese Mitgliedschaft von der Beta-Reservierung?",
-    a: "Die /beta-Variante ist eine €19 Einmalreservierung mit Beta-Discount im ersten Jahr. /pro ist eine direkte Monats-Mitgliedschaft ohne Reservierungseinsatz, dafür zum vollen Preis. Beide bekommen Zugang am 1. Juli 2026.",
-  },
-  {
-    q: "Wo werden meine Daten gespeichert?",
-    a: "In der EU (Supabase Frankfurt). Deutsche DSGVO. Keine Datenweitergabe, keine Werbung.",
-  },
-];
 
 /**
  * Suspense wrapper required by Next.js 14+ when a client component uses

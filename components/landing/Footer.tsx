@@ -1,7 +1,15 @@
+"use client";
+
+import { useTranslations } from "next-intl";
 import { TEXT_FAINT } from "./tokens";
 
-/** Minimal legal footer, identical across landing pages. */
+/**
+ * Minimal legal footer, identical across landing pages.
+ * Labels are localized — links keep their German slugs (`/legal`)
+ * because the legal pages are German-only by content.
+ */
 export default function LandingFooter() {
+  const t = useTranslations("marketing");
   return (
     <footer
       style={{
@@ -14,12 +22,12 @@ export default function LandingFooter() {
         marginTop: 24,
       }}
     >
-      <a href="/impressum" style={{ color: TEXT_FAINT, textDecoration: "none" }}>
-        Impressum
+      <a href="/legal" style={{ color: TEXT_FAINT, textDecoration: "none" }}>
+        {t("landing_footer_imprint")}
       </a>
       <span aria-hidden>·</span>
-      <a href="/datenschutz" style={{ color: TEXT_FAINT, textDecoration: "none" }}>
-        Datenschutz
+      <a href="/legal" style={{ color: TEXT_FAINT, textDecoration: "none" }}>
+        {t("landing_footer_privacy")}
       </a>
       <span aria-hidden>·</span>
       <a href="mailto:hello@glev.app" style={{ color: TEXT_FAINT, textDecoration: "none" }}>

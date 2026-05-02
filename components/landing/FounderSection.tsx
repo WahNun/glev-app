@@ -1,12 +1,19 @@
+"use client";
+
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 import { ACCENT, MINT } from "./tokens";
 
 /**
  * Founder portrait + quote section.
  * Same content on /beta and /pro — Lucas's diagnosis story is the through-line
  * for both pages, so this is intentionally identical.
+ *
+ * Strings live in the `marketing` namespace under `landing_founder_*` so
+ * the section automatically follows the visitor's locale (DE/EN).
  */
 export default function FounderSection() {
+  const t = useTranslations("marketing");
   return (
     <section style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 16 }}>
       <div
@@ -22,7 +29,7 @@ export default function FounderSection() {
       >
         <Image
           src="/founder.png"
-          alt="Lucas, Founder von Glev"
+          alt={t("landing_founder_alt")}
           fill
           sizes="96px"
           priority
@@ -35,12 +42,10 @@ export default function FounderSection() {
         />
       </div>
       <p style={{ fontSize: 16, lineHeight: 1.55, color: "rgba(255,255,255,0.9)", margin: 0, maxWidth: 540 }}>
-        „Im April 2026 wurde bei mir Typ 1 diagnostiziert. In den ersten Wochen habe ich jede gängige T1D-App getestet —
-        und keine fühlt sich an, als wäre sie für den Alltag gemacht. Glev ist die App, die ich vom ersten Tag an
-        gebraucht hätte."
+        {t("landing_founder_quote")}
       </p>
       <div style={{ fontSize: 14, fontWeight: 500, color: MINT }}>
-        Lucas, Founder · Typ 1 seit April 2026
+        {t("landing_founder_caption")}
       </div>
     </section>
   );

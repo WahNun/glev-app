@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import AppMockupPhone from "@/components/AppMockupPhone";
 import FAQ from "@/components/landing/FAQ";
 import FeatureTrio from "@/components/landing/FeatureTrio";
@@ -30,8 +31,13 @@ const WAITLIST_HREF = "/contact?source=beta-waitlist&subject=Glev%20Beta%20Warte
  * WIR welche Price-IDs verwendet werden (statt eines starr verlinkten Stripe
  * Payment-Links auf ein altes Produkt). Falls die Beta voll ist, fällt der
  * CTA auf den Mailto-Warteliste-Link zurück.
+ *
+ * Locale wird im Body mitgeschickt, damit der Backend-Endpoint die richtigen
+ * Stripe-Price-IDs (EUR oder USD) auswählt.
  */
 function BetaCTALink({ isFull }: { isFull: boolean }) {
+  const t = useTranslations("betaPage");
+  const locale = useLocale();
   const [hover, setHover] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,7 +70,7 @@ function BetaCTALink({ isFull }: { isFull: boolean }) {
           boxSizing: "border-box",
         }}
       >
-        Auf die Warteliste
+        {t("cta_waitlist")}
       </a>
     );
   }
@@ -85,13 +91,13 @@ function BetaCTALink({ isFull }: { isFull: boolean }) {
       const res = await fetch("/api/checkout/beta", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ locale }),
       });
 
       const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
 
       if (!res.ok || !data.url) {
-        throw new Error(data.error || `Checkout konnte nicht gestartet werden (HTTP ${res.status})`);
+        throw new Error(data.error || t("error_checkout_http", { status: res.status }));
       }
 
       // Same-Tab-Redirect zu Stripe Checkout (Stripe-Standard — kein neuer Tab,
@@ -100,7 +106,7 @@ function BetaCTALink({ isFull }: { isFull: boolean }) {
       window.location.href = data.url;
     } catch (err) {
       setLoading(false);
-      const message = err instanceof Error ? err.message : "Unbekannter Fehler";
+      const message = err instanceof Error ? err.message : t("error_unknown");
       setError(message);
     }
   }
@@ -135,7 +141,7 @@ function BetaCTALink({ isFull }: { isFull: boolean }) {
           width: "100%",
         }}
       >
-        {loading ? "Weiterleitung zu Stripe …" : "Frühzugang sichern — €19"}
+        {loading ? t("cta_loading") : t("cta_default")}
       </button>
       {error && (
         <div
@@ -159,6 +165,7 @@ function BetaCTALink({ isFull }: { isFull: boolean }) {
 }
 
 function BetaContent() {
+  const t = useTranslations("betaPage");
   const [count, setCount] = useState<CountResponse | null>(null);
 
   useEffect(() => {
@@ -178,6 +185,11 @@ function BetaContent() {
 
   const remaining = count?.remaining ?? CAPACITY;
   const isFull = count != null && remaining <= 0;
+
+  const faqItems = [1, 2, 3, 4, 5].map((i) => ({
+    q: t(`faq_q${i}`),
+    a: t(`faq_a${i}`),
+  }));
 
   return (
     <main
@@ -265,10 +277,10 @@ function BetaContent() {
                 WebkitHyphens: "auto",
               }}
             >
-              Bessere Insulinentscheidungen.<br />Jetzt in der Beta testen.
+              {t("hero_title_line1")}<br />{t("hero_title_line2")}
             </h1>
             <p style={{ fontSize: 18, lineHeight: 1.5, color: TEXT_DIM, margin: 0, maxWidth: 520 }}>
-              Wir bauen Glev gemeinsam mit den ersten Nutzer:innen auf. Du bekommst echten Einfluss auf das Produkt — und Zugang, bevor es für alle öffnet.
+              {t("hero_subtitle")}
             </p>
 
             <div
@@ -292,7 +304,7 @@ function BetaContent() {
               }}
             >
               <span aria-hidden>★</span>
-              <span>2 Wochen Early Access vor öffentlichem Launch (Juli 2026)</span>
+              <span>{t("meta_early_access")}</span>
             </div>
 
             <div
@@ -308,7 +320,7 @@ function BetaContent() {
               }}
             >
               <span aria-hidden>↺</span>
-              <span>Rückerstattung jederzeit vor Launch · wird aufs erste Abo angerechnet</span>
+              <span>{t("meta_refund")}</span>
             </div>
 
             <div
@@ -319,7 +331,7 @@ function BetaContent() {
                 marginTop: 2,
               }}
             >
-              Kein Spam · DSGVO-konform · Nur echte Updates
+              {t("meta_privacy")}
             </div>
 
             {!isFull && (
@@ -330,7 +342,7 @@ function BetaContent() {
                   marginTop: 4,
                 }}
               >
-                Noch {remaining} {remaining === 1 ? "Platz" : "Plätze"} frei
+                {t("meta_seats", { count: remaining })}
               </div>
             )}
           </div>
@@ -379,13 +391,13 @@ function BetaContent() {
         }}
       >
         <PricingCard
-          heading="Was du bekommst"
+          heading={t("pricing_heading")}
           lines={[
-            { left: "€19 heute", right: "Beta-Reservierung + 2 Wochen Early Access vor Launch" },
-            { left: "€4,50 / Monat im ersten Jahr", right: "nach Launch, als Beta-Tester" },
-            { left: "€9 / Monat danach", right: "regulärer Preis" },
+            { left: t("pricing_l1_left"), right: t("pricing_l1_right") },
+            { left: t("pricing_l2_left"), right: t("pricing_l2_right") },
+            { left: t("pricing_l3_left"), right: t("pricing_l3_right") },
           ]}
-          footer="Reservierung wird auf dein erstes Monatsabo angerechnet. Early-Access-Link kommt zwei Wochen vor öffentlichem Launch per Email."
+          footer={t("pricing_footer")}
         />
       </section>
 
@@ -412,7 +424,7 @@ function BetaContent() {
           boxSizing: "border-box",
         }}
       >
-        <FAQ items={BETA_FAQ} />
+        <FAQ items={faqItems} />
       </section>
 
       {/* 7. Footer */}
@@ -430,29 +442,6 @@ function BetaContent() {
     </main>
   );
 }
-
-const BETA_FAQ = [
-  {
-    q: "Welche CGMs werden unterstützt?",
-    a: "Aktuell nutzbar: FreeStyle Libre 2 und 3 via LibreLinkUp. Dexcom G6/G7, Dexcom One+ und Medtronic sind in Arbeit (coming soon).",
-  },
-  {
-    q: "Bekomme ich mein Geld zurück wenn die App nicht für mich ist?",
-    a: "Ja, jederzeit vor öffentlichem Launch. Nach Launch gilt die reguläre Kündigungsfrist des Monatsabos.",
-  },
-  {
-    q: "Ist Glev ein Medizinprodukt?",
-    a: "Nein. Glev ist ein Dokumentations- und Organisations-Tool. Therapieentscheidungen triffst du weiter mit deinem Arzt.",
-  },
-  {
-    q: "Wann startet die Beta?",
-    a: "Juli 2026. Beta-Tester bekommen den Zugangslink per Email zwei Wochen vor dem öffentlichen Launch.",
-  },
-  {
-    q: "Wo werden meine Daten gespeichert?",
-    a: "In der EU (Supabase Frankfurt). Deutsche DSGVO. Keine Datenweitergabe, keine Werbung.",
-  },
-];
 
 /**
  * Suspense wrapper required by Next.js 14+ when a client component uses
