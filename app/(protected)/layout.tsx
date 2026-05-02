@@ -58,10 +58,12 @@ async function runOnboardingGate(): Promise<void> {
     const user = userRes?.user;
     if (!user) return;
 
+    // profiles is keyed on user_id (FK to auth.users.id), not id —
+    // see supabase/migrations/20260427_add_junction_user_id.sql.
     const { data: profile, error } = await sb
       .from("profiles")
       .select("onboarding_completed_at")
-      .eq("id", user.id)
+      .eq("user_id", user.id)
       .maybeSingle();
 
     // If the column doesn't exist yet (migration not applied in this

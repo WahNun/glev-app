@@ -69,22 +69,42 @@ export async function provisionTestUser(): Promise<TestUserCredentials> {
 
   const existingId = await findUserId();
 
+  let userId: string;
   if (existingId) {
     const { error } = await admin.auth.admin.updateUserById(existingId, {
       password,
       email_confirm: true,
     });
     if (error) throw new Error(`updateUserById failed: ${error.message}`);
-    return { email: TEST_USER_EMAIL, password, userId: existingId };
+    userId = existingId;
+  } else {
+    const { data, error } = await admin.auth.admin.createUser({
+      email: TEST_USER_EMAIL,
+      password,
+      email_confirm: true,
+    });
+    if (error || !data.user) {
+      throw new Error(`createUser failed: ${error?.message ?? "no user returned"}`);
+    }
+    userId = data.user.id;
   }
 
-  const { data, error } = await admin.auth.admin.createUser({
-    email: TEST_USER_EMAIL,
-    password,
-    email_confirm: true,
-  });
-  if (error || !data.user) {
-    throw new Error(`createUser failed: ${error?.message ?? "no user returned"}`);
+  // Pre-clear the onboarding gate for the test user. Without this, the
+  // protected-layout gate added on 2026-05-02 redirects every newly
+  // provisioned playwright user to /onboarding before they can reach
+  // /dashboard or /settings — breaking specs that drive through real
+  // login. Service-role client bypasses RLS so this works even when
+  // the profiles row doesn't exist yet (insert on conflict do update).
+  // Soft-fails: if the migration hasn't been applied in the test env
+  // we still let the run proceed (the gate itself is also soft-fail).
+  try {
+    await admin.from("profiles").upsert(
+      { user_id: userId, onboarding_completed_at: new Date().toISOString() },
+      { onConflict: "user_id" },
+    );
+  } catch {
+    /* ignore — see comment above */
   }
-  return { email: TEST_USER_EMAIL, password, userId: data.user.id };
+
+  return { email: TEST_USER_EMAIL, password, userId };
 }

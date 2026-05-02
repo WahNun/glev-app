@@ -15,7 +15,9 @@ ALTER TABLE profiles
 
 -- Partial index — we only ever query for "is it null?" inside the
 -- protected-layout gate, so the partial index keeps writes cheap and
--- the lookup O(1) for users who still need to onboard.
+-- the lookup O(1) for users who still need to onboard. The `profiles`
+-- table is keyed on `user_id` (FK to auth.users.id), not `id` — see
+-- 20260427_add_junction_user_id.sql for the canonical shape.
 CREATE INDEX IF NOT EXISTS profiles_onboarding_pending_idx
-  ON profiles (id)
+  ON profiles (user_id)
   WHERE onboarding_completed_at IS NULL;

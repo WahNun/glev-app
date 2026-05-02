@@ -68,10 +68,12 @@ export async function POST(req: NextRequest) {
     else if (action === "reset")  timestamp = null;
     else return NextResponse.json({ error: "invalid action — expected 'complete' or 'reset'" }, { status: 400 });
 
+    // profiles is keyed on user_id (FK to auth.users.id), not id —
+    // see supabase/migrations/20260427_add_junction_user_id.sql.
     const { error: dbErr } = await auth.sb
       .from("profiles")
       .update({ onboarding_completed_at: timestamp })
-      .eq("id", auth.user.id);
+      .eq("user_id", auth.user.id);
 
     if (dbErr) {
       // 42703 = undefined_column — surfaces if the migration hasn't run
