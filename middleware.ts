@@ -63,15 +63,28 @@ export function middleware(req: NextRequest) {
   }
 
   // `?lang=` URL override on marketing pages — forwarded to the
-  // next-intl request config via a request header. The header travels
-  // with this single request only (no cookie is set), so the override is
-  // not persisted, exactly as the task scope requires.
+  // next-intl request config via a request header so the current
+  // response renders in the chosen language. We *also* persist the
+  // choice to the `NEXT_LOCALE` cookie (same path/SameSite/max-age as
+  // the in-app language picker in `lib/locale.ts`) so the language
+  // carries through the funnel when the visitor clicks on to /login or
+  // into the authenticated app. The in-app picker keeps full control
+  // afterwards — it overwrites the same cookie on change.
   if (localeOverridePath(pathname)) {
     const lang = (searchParams.get("lang") ?? "").toLowerCase();
     if (SUPPORTED_LANG.has(lang)) {
       const requestHeaders = new Headers(req.headers);
       requestHeaders.set(LANG_OVERRIDE_HEADER, lang);
-      return NextResponse.next({ request: { headers: requestHeaders } });
+      const res = NextResponse.next({ request: { headers: requestHeaders } });
+      res.cookies.set({
+        name: "NEXT_LOCALE",
+        value: lang,
+        path: "/",
+        maxAge: 60 * 60 * 24 * 365,
+        sameSite: "lax",
+        secure: req.nextUrl.protocol === "https:",
+      });
+      return res;
     }
   }
 
