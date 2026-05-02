@@ -96,7 +96,8 @@ type SheetKey =
   | "macros"
   | "import"
   | "historical"
-  | "googleSheets";
+  | "googleSheets"
+  | "onboarding";
 
 /** Lightweight CGM status hook — fetches /api/cgm/status once on mount.
  * Silent on error (treats as disconnected). The full CgmSettingsCard owns
@@ -1393,6 +1394,54 @@ export default function SettingsPage() {
       ),
       footer: closeFooter,
     },
+    onboarding: {
+      // Replays the 4-step intro flow. POSTs `action: "reset"` to
+      // clear `profiles.onboarding_completed_at`, then hard-redirects
+      // to /onboarding so the protected-layout gate picks up the
+      // null state. Confirm dialog is intentional — Lucas chose
+      // "Skip = endgültig durch" in the gate-design discussion, so
+      // replay is opt-in and shouldn't fire by accident.
+      title: tSettings("onboarding_replay_title"),
+      body: (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.55 }}>
+            {tSettings("onboarding_replay_desc")}
+          </div>
+          <button
+            onClick={async () => {
+              if (!window.confirm(tSettings("onboarding_replay_confirm"))) return;
+              try {
+                const res = await fetch("/api/onboarding", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ action: "reset" }),
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                window.location.href = "/onboarding";
+              } catch {
+                window.alert(tSettings("onboarding_replay_error"));
+              }
+            }}
+            style={{
+              alignSelf: "flex-start",
+              padding: "12px 22px",
+              borderRadius: 12,
+              border: "none",
+              background: ACCENT,
+              color: "#fff",
+              fontWeight: 700,
+              fontSize: 14,
+              fontFamily: "inherit",
+              cursor: "pointer",
+              boxShadow: `0 4px 14px ${ACCENT}55`,
+            }}
+          >
+            {tSettings("onboarding_replay_btn")}
+          </button>
+        </div>
+      ),
+      footer: closeFooter,
+    },
     googleSheets: {
       title: tSettings("google_sheets_title"),
       body: (
@@ -1568,6 +1617,14 @@ export default function SettingsPage() {
           label={tSettings("row_export")}
           ariaLabel={tSettings("row_open_aria", { label: tSettings("row_export") })}
           onClick={() => openSheetWith("export")}
+        />
+        <SettingsRow
+          iconColor={ACCENT}
+          icon={ICON.sheets}
+          label={tSettings("onboarding_replay_title")}
+          subtitle={tSettings("onboarding_replay_desc")}
+          ariaLabel={tSettings("row_open_aria", { label: tSettings("onboarding_replay_title") })}
+          onClick={() => openSheetWith("onboarding")}
         />
       </SettingsSection>
 

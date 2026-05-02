@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const PROTECTED = ["/dashboard", "/log", "/entries", "/insights", "/import", "/engine"];
+const PROTECTED = ["/dashboard", "/log", "/entries", "/insights", "/import", "/engine", "/onboarding"];
 const MAX_CHUNKS = 16;
 
 function readSessionRaw(req: NextRequest, cookieName: string): string | null {
@@ -50,5 +50,14 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/log/:path*", "/entries/:path*", "/insights/:path*", "/import/:path*", "/engine/:path*", "/login"],
+  matcher: [
+    "/dashboard/:path*",
+    "/log/:path*",
+    "/entries/:path*",
+    "/insights/:path*",
+    "/import/:path*",
+    "/engine/:path*",
+    "/onboarding/:path*",
+    "/login",
+  ],
 };
