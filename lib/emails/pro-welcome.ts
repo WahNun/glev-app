@@ -69,8 +69,10 @@ export function proWelcomeHtml(
 
           <!-- Header -->
           <tr>
-            <td style="background:#0f172a;padding:32px 40px;text-align:center;">
-              <span style="color:#ffffff;font-size:26px;font-weight:700;letter-spacing:-0.5px;">Glev</span>
+            <td style="background:#0f172a;padding:28px 40px;text-align:center;">
+              <img src="https://glev.app/glev-wordmark-white.png" alt="Glev"
+                   width="140" height="47"
+                   style="display:inline-block;border:0;outline:none;text-decoration:none;width:140px;height:47px;max-width:140px;" />
             </td>
           </tr>
 
@@ -82,15 +84,16 @@ export function proWelcomeHtml(
               </p>
 
               <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
-                ${postGreetingOpener} Deine Mitgliedschaft ist
-                <strong>angelegt</strong> und deine Karte ist sicher bei Stripe
-                hinterlegt — abgebucht wird erst am
-                <strong>${trialEndDisplay}</strong>.
+                ${postGreetingOpener} Deine Glev-Pro-Mitgliedschaft ist
+                <strong>angelegt</strong> — und du kannst Glev ab sofort
+                <strong>komplett kostenlos</strong> nutzen.
               </p>
 
               <p style="margin:0 0 24px;font-size:15px;line-height:1.7;color:#374151;">
-                Bis dahin: nichts. Kein Newsletter-Spam, keine Reminder.
-                Wir melden uns zwei Wochen vor Launch mit deinem App-Zugang.
+                Ab dem <strong>${trialEndDisplay}</strong> startet dann deine
+                reguläre Mitgliedschaft für <strong>24,90&nbsp;€/Monat</strong>,
+                automatisch über die hinterlegte Karte. Bis dahin: keine
+                Abbuchung, keine Reminder.
               </p>
 
               <!-- Primary CTA — Resume / confirm registration -->
@@ -110,13 +113,20 @@ export function proWelcomeHtml(
               </p>
 
               <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
-                Falls du vor Launch doch kündigen möchtest, einfach auf diese
-                Email antworten oder im Stripe-Customer-Portal — kein Stress,
-                keine Fragen.
+                Sobald dein Account steht, geht's direkt los: CGM verbinden,
+                erste Mahlzeit loggen, und Glev rechnet deine Insulindosis.
+                Wenn etwas hakt oder du ein Feature vermisst, antworte
+                einfach direkt auf diese Mail — sie geht an mich persönlich.
+              </p>
+
+              <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#374151;">
+                Falls du vor dem ${trialEndDisplay} doch kündigen möchtest,
+                einfach kurz hier antworten oder im Stripe-Customer-Portal —
+                kein Stress, keine Fragen.
               </p>
 
               <p style="margin:0 0 24px;font-size:15px;line-height:1.7;color:#374151;">
-                Bis im Juli,<br />
+                Viel Spaß beim Ausprobieren,<br />
                 <strong>Lucas</strong><br />
                 <span style="color:#6b7280;">Glev Team</span>
               </p>

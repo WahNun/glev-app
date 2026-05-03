@@ -80,8 +80,10 @@ function wrap(title: string, bodyHtml: string, unsubscribeUrl: string): string {
         <table width="580" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
 
           <tr>
-            <td style="background:#0f172a;padding:32px 40px;text-align:center;">
-              <span style="color:#ffffff;font-size:26px;font-weight:700;letter-spacing:-0.5px;">Glev</span>
+            <td style="background:#0f172a;padding:28px 40px;text-align:center;">
+              <img src="https://glev.app/glev-wordmark-white.png" alt="Glev"
+                   width="140" height="47"
+                   style="display:inline-block;border:0;outline:none;text-decoration:none;width:140px;height:47px;max-width:140px;" />
             </td>
           </tr>
 

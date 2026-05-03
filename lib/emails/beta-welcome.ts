@@ -55,8 +55,10 @@ export function betaWelcomeHtml(
 
           <!-- Header -->
           <tr>
-            <td style="background:#0f172a;padding:32px 40px;text-align:center;">
-              <span style="color:#ffffff;font-size:26px;font-weight:700;letter-spacing:-0.5px;">Glev</span>
+            <td style="background:#0f172a;padding:28px 40px;text-align:center;">
+              <img src="https://glev.app/glev-wordmark-white.png" alt="Glev"
+                   width="140" height="47"
+                   style="display:inline-block;border:0;outline:none;text-decoration:none;width:140px;height:47px;max-width:140px;" />
             </td>
           </tr>
 
