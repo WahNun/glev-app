@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useId } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { fetchMeals, unifiedOutcome, type Meal } from "@/lib/meals";
+import { fetchMeals, fetchMealsForEngine, unifiedOutcome, type Meal } from "@/lib/meals";
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
 import { computeAdaptiveICR } from "@/lib/engine/adaptiveICR";
 import { detectPattern } from "@/lib/engine/patterns";
@@ -150,6 +150,13 @@ export default function InsightsPage() {
   const tInsights = useTranslations("insights");
   const locale = useLocale();
   const [meals, setMeals]               = useState<Meal[]>([]);
+  // Engine-only meals subset (last 90 days) — feeds `computeAdaptiveICR`
+  // and `detectPattern` so old rows from "the user a year ago" don't
+  // distort the adaptive ICR's morning/afternoon/evening averages or
+  // the pattern detector's recent-window classification. The full
+  // `meals` array (365-day default cap) still drives the long-term
+  // trend tiles (TIR, GMI, meal-type breakdown, etc.).
+  const [engineMeals, setEngineMeals]   = useState<Meal[]>([]);
   const [insulinLogs, setInsulinLogs]   = useState<InsulinLog[]>([]);
   const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([]);
   const [fingersticks, setFingersticks] = useState<FingerstickReading[]>([]);
@@ -162,12 +169,14 @@ export default function InsightsPage() {
     const fingerstickFromIso = startOfDaysAgo(13).toISOString();
     Promise.all([
       fetchMeals().catch(() => [] as Meal[]),
+      fetchMealsForEngine().catch(() => [] as Meal[]),
       fetchRecentInsulinLogs(14).catch(() => [] as InsulinLog[]),
       fetchRecentExerciseLogs(30).catch(() => [] as ExerciseLog[]),
       fetchFingersticks(fingerstickFromIso).catch(() => [] as FingerstickReading[]),
     ])
-      .then(([m, il, ex, fs]) => {
+      .then(([m, em, il, ex, fs]) => {
         setMeals(m);
+        setEngineMeals(em);
         setInsulinLogs(il);
         setExerciseLogs(ex);
         setFingersticks(fs);
@@ -529,9 +538,12 @@ export default function InsightsPage() {
   if (eveningSucc.count >= 3 && eveningSucc.good/eveningSucc.count > 0.8) patterns.push({ icon:"🌙", title:tInsights("pattern_evening_strength_title"), desc:tInsights("pattern_evening_strength_desc"), color:ACCENT });
   if (patterns.length === 0) patterns.push({ icon:"→", title:tInsights("pattern_no_signals_title"), desc:tInsights("pattern_no_signals_desc"), color:"var(--text-faint)" });
 
-  // Adaptive engine derivations
-  const adaptiveICR  = computeAdaptiveICR(meals);
-  const enginePattern = detectPattern(meals);
+  // Adaptive engine derivations — driven by the engine-only 90-day pull
+  // (`engineMeals`) so the morning/afternoon/evening ICR buckets and the
+  // pattern detector's recent-window stats aren't dragged off course by
+  // year-old rows. Long-term tiles below continue to read from `meals`.
+  const adaptiveICR  = computeAdaptiveICR(engineMeals);
+  const enginePattern = detectPattern(engineMeals);
   const settings: AdaptiveSettings = {
     icr: adaptiveICR.global ? Math.round(adaptiveICR.global * 10) / 10 : 15,
     correctionFactor: 50,

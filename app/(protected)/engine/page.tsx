@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTranslations, useLocale } from "next-intl";
 import { localeToBcp47 } from "@/lib/time";
-import { fetchMeals, classifyMeal, computeCalories, saveMeal, deleteMeal, updateMeal, type Meal } from "@/lib/meals";
+import { fetchMealsForEngine, classifyMeal, computeCalories, saveMeal, deleteMeal, updateMeal, type Meal } from "@/lib/meals";
 import { scheduleJobsForLog } from "@/lib/cgmJobs";
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
 import { logDebug } from "@/lib/debug";
@@ -746,7 +746,7 @@ export default function EnginePage() {
   }
 
   useEffect(() => {
-    fetchMeals()
+    fetchMealsForEngine()
       .then(fetched => {
         setMeals(fetched);
         // Adaptive ICR — single source of truth shared with the Insights
@@ -871,7 +871,7 @@ export default function EnginePage() {
       // failures (e.g. no CGM connected) are silent.
       void scheduleJobsForLog({ logId: saved.id, logType: "meal", refTimeIso: mealIso });
       // Refresh meals so the next recommendation immediately benefits.
-      fetchMeals().then(setMeals).catch(() => {});
+      fetchMealsForEngine().then(setMeals).catch(() => {});
       logDebug("ENGINE.WIZARD_SAVE", { id: saved.id, carbs: cNum, insulin: result.dose, glucose: gNum, mealType: cls });
       // FIX A: Hold on Step 3 with a green confirmation. No auto-reset, no
       // auto-navigate — the user explicitly clicks "Neues Essen" below to
@@ -936,7 +936,7 @@ export default function EnginePage() {
         mealTime: mealIso,
       });
       void scheduleJobsForLog({ logId: saved.id, logType: "meal", refTimeIso: mealIso });
-      fetchMeals().then(setMeals).catch(() => {});
+      fetchMealsForEngine().then(setMeals).catch(() => {});
       logDebug("ENGINE.SAVE_NO_BOLUS", { id: saved.id, carbs: cNum, glucose: gNum, mealType: cls });
       // Same post-save state as handleWizardSave so both paths converge
       // on the identical "✓ Gespeichert — N IE geloggt" confirmation.
@@ -1003,7 +1003,7 @@ export default function EnginePage() {
         mealTime: mealIso,
       });
       void scheduleJobsForLog({ logId: saved.id, logType: "meal", refTimeIso: mealIso });
-      fetchMeals().then(setMeals).catch(() => {});
+      fetchMealsForEngine().then(setMeals).catch(() => {});
       logDebug("ENGINE.SAVE_DIRECT_BOLUS", { id: saved.id, carbs: cNum, glucose: gNum, mealType: cls, insulinUnits: iNum });
       setWizardSavedDose(iNum);
     } catch (e) {
@@ -1107,7 +1107,7 @@ export default function EnginePage() {
       // failures (e.g. no CGM connected) are silent.
       void scheduleJobsForLog({ logId: saved.id, logType: "meal", refTimeIso: mealIso });
       // Refresh meals so the next recommendation immediately benefits.
-      fetchMeals().then(setMeals).catch(() => {});
+      fetchMealsForEngine().then(setMeals).catch(() => {});
     } catch (e) {
       setConfirmErr(e instanceof Error ? e.message : "Save failed");
     } finally {
@@ -1201,7 +1201,7 @@ export default function EnginePage() {
     try {
       const updated = await updateMeal(confirmedMeal.id, { insulin_units: iNum });
       // Refresh the in-memory list so the next rec uses the updated dose.
-      fetchMeals().then(setMeals).catch(() => {});
+      fetchMealsForEngine().then(setMeals).catch(() => {});
       setDecisionToast(`Dosis ${iNum}u gespeichert.`);
       logDebug("ENGINE.DECISION.INSULIN_CONFIRM", {
         id: confirmedMeal.id,
@@ -1231,7 +1231,7 @@ export default function EnginePage() {
     setDecisionBusy(true);
     try {
       await deleteMeal(confirmedMeal.id);
-      fetchMeals().then(setMeals).catch(() => {});
+      fetchMealsForEngine().then(setMeals).catch(() => {});
       setDecisionToast("Log gelöscht.");
       logDebug("ENGINE.DECISION.DELETE", { id: confirmedMeal.id });
       resetForm({ keepGlucose: true });
@@ -1250,7 +1250,7 @@ export default function EnginePage() {
     setDecisionBusy(true);
     try {
       await updateMeal(confirmedMeal.id, { insulin_units: 0 });
-      fetchMeals().then(setMeals).catch(() => {});
+      fetchMealsForEngine().then(setMeals).catch(() => {});
       setDecisionToast("Gespeichert ✓ — 0u Bolus");
       logDebug("ENGINE.DECISION.NO_BOLUS", { id: confirmedMeal.id });
       resetForm({ keepGlucose: true });

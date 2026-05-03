@@ -6,7 +6,7 @@ import { insertInsulinLog } from "@/lib/insulin";
 import { insertExerciseLog, type ExerciseType } from "@/lib/exercise";
 import { exerciseTypeLabel } from "@/lib/exerciseEval";
 import { scheduleJobsForLog } from "@/lib/cgmJobs";
-import { fetchMeals, type Meal } from "@/lib/meals";
+import { fetchMealsForEngine, type Meal } from "@/lib/meals";
 import { parseDbDate } from "@/lib/time";
 import { isToday } from "@/lib/utils/datetime";
 
@@ -237,7 +237,7 @@ export function InsulinForm() {
   useEffect(() => {
     if (type !== "bolus") return;
     let cancelled = false;
-    fetchMeals().then(all => {
+    fetchMealsForEngine().then(all => {
       if (cancelled) return;
       const todays = all
         .filter(m => isToday(m.meal_time ?? m.created_at ?? ""))

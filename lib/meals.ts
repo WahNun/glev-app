@@ -433,13 +433,64 @@ export async function updateMealReadings(
   return { applied, warnings };
 }
 
-export async function fetchMeals(): Promise<Meal[]> {
-  if (!supabase) throw new Error("Supabase is not configured");
+/**
+ * Hard upper bound for any meals pull. Power-users with 1–2 years of
+ * tracking data otherwise drag thousands of rows into every render of
+ * the engine / insights / history pages, and the adaptive ICR loop
+ * iterates over all of them. Capping the default at 365 keeps the
+ * "long-term trend" surfaces (history, insights TIR/GMI tiles, export)
+ * meaningful while keeping the wire payload bounded.
+ */
+export const FETCH_MEALS_DEFAULT_SINCE_DAYS = 365;
 
-  let { data, error } = await supabase
-    .from("meals")
-    .select(FULL_COLS)
-    .order("created_at", { ascending: false });
+/**
+ * Engine-only window. The pattern detector and the adaptive ICR run
+ * over a 20-meal sliding window anyway, but old rows from "the user a
+ * year ago" still distort the weighted average and the
+ * morning/afternoon/evening buckets. 90 days matches the
+ * pattern-time-window-consistency we promise users in the Insights
+ * copy ("last 3 months of dosing behaviour") and is comfortably
+ * larger than the WINDOW=20 the pattern detector consumes.
+ */
+export const FETCH_MEALS_ENGINE_SINCE_DAYS = 90;
+
+export interface FetchMealsOptions {
+  /**
+   * Maximum age (in days) of meals to return. Hard-capped at the
+   * 365-day default for general callers; the engine helper
+   * (`fetchMealsForEngine`) passes 90 explicitly. Pass `Infinity` to
+   * skip the filter entirely (only used by tests / one-off exports
+   * that explicitly opt out).
+   */
+  sinceDays?: number;
+  /**
+   * Test seam — lets unit tests inject a stub Supabase client
+   * (`tests/unit/meals.test.ts`) without going through the module
+   * singleton. Production callers should never pass this.
+   */
+  client?: typeof supabase;
+}
+
+export async function fetchMeals(opts: FetchMealsOptions = {}): Promise<Meal[]> {
+  const sinceDays = opts.sinceDays ?? FETCH_MEALS_DEFAULT_SINCE_DAYS;
+  const client = opts.client ?? supabase;
+  if (!client) throw new Error("Supabase is not configured");
+
+  // Cutoff is computed once per call and applied via PostgREST `gte`
+  // on `created_at`. Using `Infinity` (or any non-finite value) skips
+  // the filter so callers can intentionally pull everything.
+  const cutoffIso = Number.isFinite(sinceDays)
+    ? new Date(Date.now() - sinceDays * 86_400_000).toISOString()
+    : null;
+
+  const applyCutoff = <T extends { gte: (col: string, val: string) => T }>(q: T): T =>
+    cutoffIso ? q.gte("created_at", cutoffIso) : q;
+
+  let { data, error } = await applyCutoff(
+    client
+      .from("meals")
+      .select(FULL_COLS)
+  ).order("created_at", { ascending: false });
 
   // Fall back when the new bg_1h/bg_2h/outcome_state columns are missing.
   // Supabase / PostgREST returns several phrasings for missing columns —
@@ -450,15 +501,13 @@ export async function fetchMeals(): Promise<Meal[]> {
       || /could not find (the )?column/i.test(e.message ?? "")
       || /column .* does not exist/i.test(e.message ?? ""));
   if (isMissingCol(error)) {
-    const mid = await supabase
-      .from("meals")
-      .select(MID_COLS)
-      .order("created_at", { ascending: false });
+    const mid = await applyCutoff(
+      client.from("meals").select(MID_COLS)
+    ).order("created_at", { ascending: false });
     if (mid.error && mid.error.message?.toLowerCase().includes("does not exist")) {
-      const core = await supabase
-        .from("meals")
-        .select(CORE_COLS)
-        .order("created_at", { ascending: false });
+      const core = await applyCutoff(
+        client.from("meals").select(CORE_COLS)
+      ).order("created_at", { ascending: false });
       if (core.error) throw new Error(core.error.message);
       data = (core.data ?? []).map((r: Record<string, unknown>) => ({
         ...r, glucose_after: null, protein_grams: null, fat_grams: null, fiber_grams: null, calories: null,
@@ -479,6 +528,21 @@ export async function fetchMeals(): Promise<Meal[]> {
 
   if (error) throw new Error(error.message);
   return (data ?? []) as Meal[];
+}
+
+/**
+ * Engine-specific meals fetch — limited to the last
+ * {@link FETCH_MEALS_ENGINE_SINCE_DAYS} (90) days. The pattern detector
+ * (`lib/engine/patterns.ts`) and adaptive ICR
+ * (`lib/engine/adaptiveICR.ts`) only ever look at the most recent
+ * 20 finalized meals, so anything older is dead weight that distorts
+ * morning/afternoon/evening averages without changing the recommendation.
+ * Caps the wire payload for power-users with 1–2 years of history.
+ */
+export function fetchMealsForEngine(
+  opts: Omit<FetchMealsOptions, "sinceDays"> = {},
+): Promise<Meal[]> {
+  return fetchMeals({ ...opts, sinceDays: FETCH_MEALS_ENGINE_SINCE_DAYS });
 }
 
 // Splits a meal description like "95g döner bread, 120g veal döner meat" into
