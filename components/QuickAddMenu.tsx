@@ -43,11 +43,26 @@ const RUN = (
 // here AND under the Glev tab on purpose, so power users can reach
 // the meal flow from any screen via the always-visible header "+"
 // without first jumping to Glev.
-type ItemDef = { key: "log_meal" | "measure_glucose" | "log_activity"; href: string; icon: React.ReactNode };
+const CYCLE_ICON = (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 3a9 9 0 0 1 0 18" />
+  </svg>
+);
+
+const SYMPTOM_ICON = (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2l2.39 6.96H22l-6.18 4.49L18.18 22 12 17.27 5.82 22l2.36-8.55L2 8.96h7.61L12 2z" />
+  </svg>
+);
+
+type ItemDef = { key: "log_meal" | "measure_glucose" | "log_activity" | "log_cycle" | "log_symptoms"; href: string; icon: React.ReactNode };
 const ITEM_DEFS: ItemDef[] = [
   { key: "log_meal",         href: "/engine?tab=log",         icon: MEAL    },
   { key: "measure_glucose",  href: "/engine?tab=fingerstick", icon: DROPLET },
   { key: "log_activity",     href: "/engine?tab=exercise",    icon: RUN     },
+  { key: "log_cycle",        href: "/engine?tab=cycle",       icon: CYCLE_ICON },
+  { key: "log_symptoms",     href: "/engine?tab=symptoms",    icon: SYMPTOM_ICON },
 ];
 
 /**

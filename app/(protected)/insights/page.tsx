@@ -20,6 +20,8 @@ import {
 import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, type ExerciseLog, type ExerciseType } from "@/lib/exercise";
 import { evaluateExercise, type ExerciseOutcome } from "@/lib/exerciseEval";
+import { fetchRecentMenstrualLogs, type MenstrualLog } from "@/lib/menstrual";
+import { fetchRecentSymptomLogs, type SymptomLog, type SymptomType } from "@/lib/symptoms";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
 
 /** Default top-to-bottom order. Hero block (time-in-range, gmi-a1c,
@@ -41,6 +43,7 @@ const INSIGHTS_DEFAULT_ORDER = [
   "workout-patterns",
   "meal-type",
   "time-of-day",
+  "cycle-symptoms",
   "performance-tiles",
 ];
 
@@ -170,6 +173,8 @@ export default function InsightsPage() {
   const [engineBoluses, setEngineBoluses] = useState<InsulinLog[]>([]);
   const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([]);
   const [fingersticks, setFingersticks] = useState<FingerstickReading[]>([]);
+  const [menstrualLogs, setMenstrualLogs] = useState<MenstrualLog[]>([]);
+  const [symptomLogs, setSymptomLogs]     = useState<SymptomLog[]>([]);
   const [loading, setLoading]           = useState(true);
 
   useEffect(() => {
@@ -184,14 +189,18 @@ export default function InsightsPage() {
       fetchRecentInsulinLogs(90).catch(() => [] as InsulinLog[]),
       fetchRecentExerciseLogs(30).catch(() => [] as ExerciseLog[]),
       fetchFingersticks(fingerstickFromIso).catch(() => [] as FingerstickReading[]),
+      fetchRecentMenstrualLogs(60).catch(() => [] as MenstrualLog[]),
+      fetchRecentSymptomLogs(30).catch(() => [] as SymptomLog[]),
     ])
-      .then(([m, em, il, ilEngine, ex, fs]) => {
+      .then(([m, em, il, ilEngine, ex, fs, ml, sl]) => {
         setMeals(m);
         setEngineMeals(em);
         setInsulinLogs(il);
         setEngineBoluses(ilEngine);
         setExerciseLogs(ex);
         setFingersticks(fs);
+        setMenstrualLogs(ml);
+        setSymptomLogs(sl);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -1463,6 +1472,145 @@ export default function InsightsPage() {
         </FlipCard>
       ),
     },
+    // ── Cycle & Symptoms snapshot — last 30d aggregate ──
+    // Pure documentation surface: counts bleeding days from menstrual_logs
+    // (clamped to a 30d window so an open-ended row doesn't dominate) and
+    // ranks the user's three most-frequent symptoms with avg severity.
+    // Hidden when there's no data so users without cycle/symptom logging
+    // don't see an empty placeholder.
+    (() => {
+      const WINDOW_MS = 30 * 86400 * 1000;
+      const nowMs = Date.now();
+      const windowStartMs = nowMs - WINDOW_MS;
+      const windowStartDay = new Date(windowStartMs);
+      const ws = windowStartDay.toISOString().slice(0, 10);
+
+      // Bleeding days = sum of (end_date ?? today) - max(start_date, window_start)
+      // for each row that has a flow_intensity, capped to today.
+      const todayStr = new Date().toISOString().slice(0, 10);
+      let bleedingDays = 0;
+      const phaseCounts: Record<string, number> = {};
+      for (const r of menstrualLogs) {
+        if (r.start_date < ws && (r.end_date ?? r.start_date) < ws) continue;
+        if (r.flow_intensity) {
+          const s = r.start_date < ws ? ws : r.start_date;
+          const eRaw = r.end_date ?? r.start_date;
+          const e = eRaw > todayStr ? todayStr : eRaw;
+          const sMs = new Date(`${s}T00:00:00`).getTime();
+          const eMs = new Date(`${e}T00:00:00`).getTime();
+          if (eMs >= sMs) bleedingDays += Math.round((eMs - sMs) / 86400000) + 1;
+        }
+        if (r.phase_marker) {
+          phaseCounts[r.phase_marker] = (phaseCounts[r.phase_marker] || 0) + 1;
+        }
+      }
+
+      // Symptom ranking: count occurrences and track running severity sum.
+      const symStats: Record<string, { count: number; sevSum: number }> = {};
+      let totalSymptomEntries = 0;
+      for (const s of symptomLogs) {
+        const occ = new Date(s.occurred_at).getTime();
+        if (occ < windowStartMs) continue;
+        totalSymptomEntries += 1;
+        for (const sym of s.symptom_types || []) {
+          const cur = symStats[sym] ||= { count: 0, sevSum: 0 };
+          cur.count += 1;
+          cur.sevSum += s.severity;
+        }
+      }
+      const topSymptoms = Object.entries(symStats)
+        .map(([k, v]) => ({ key: k as SymptomType, count: v.count, avgSev: v.sevSum / v.count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 3);
+
+      const hasAny = bleedingDays > 0 || Object.keys(phaseCounts).length > 0 || totalSymptomEntries > 0;
+      if (!hasAny) return { id: "cycle-symptoms", node: null };
+
+      return {
+        id: "cycle-symptoms",
+        node: (
+          <FlipCard
+            accent={PINK}
+            back={
+              <FlipBack
+                title={tInsights("cycle_symptoms_back_title")}
+                accent={PINK}
+                paragraphs={[
+                  tInsights("cycle_symptoms_back_p1"),
+                  tInsights("cycle_symptoms_back_p2"),
+                ]}
+              />
+            }
+          >
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+              <CardLabel text={tInsights("card_cycle_symptoms_title")}/>
+              <div style={{ fontSize:9, color:"var(--text-dim)" }}>
+                {tInsights("card_cycle_symptoms_window")}
+              </div>
+            </div>
+
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:10 }}>
+              <div style={{ background:`${PINK}10`, border:`1px solid ${PINK}24`, borderRadius:10, padding:"10px 12px" }}>
+                <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.06em", fontWeight:700, textTransform:"uppercase" }}>
+                  {tInsights("cycle_bleeding_days_label")}
+                </div>
+                <div style={{ fontSize:22, fontWeight:800, color:PINK, fontFamily:"var(--font-mono)", lineHeight:1.1, marginTop:4 }}>
+                  {bleedingDays}
+                </div>
+                {Object.keys(phaseCounts).length > 0 && (
+                  <div style={{ fontSize:10, color:"var(--text-dim)", marginTop:6, lineHeight:1.4 }}>
+                    {Object.entries(phaseCounts).map(([k, n]) => `${tInsights(`cycle_phase_${k}` as never)} ×${n}`).join(" · ")}
+                  </div>
+                )}
+              </div>
+              <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
+                <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.06em", fontWeight:700, textTransform:"uppercase" }}>
+                  {tInsights("symptom_entries_label")}
+                </div>
+                <div style={{ fontSize:22, fontWeight:800, color:"var(--text-strong)", fontFamily:"var(--font-mono)", lineHeight:1.1, marginTop:4 }}>
+                  {totalSymptomEntries}
+                </div>
+                <div style={{ fontSize:10, color:"var(--text-dim)", marginTop:6 }}>
+                  {tInsights("symptom_entries_sub")}
+                </div>
+              </div>
+            </div>
+
+            {topSymptoms.length > 0 ? (
+              <div>
+                <div style={{ fontSize:10, color:"var(--text-dim)", fontWeight:700, marginBottom:6, letterSpacing:"0.04em" }}>
+                  {tInsights("symptom_top_label")}
+                </div>
+                <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                  {topSymptoms.map(s => (
+                    <div key={s.key} style={{ display:"grid", gridTemplateColumns:"1fr auto auto", gap:8, alignItems:"center", padding:"6px 10px", background:"var(--surface-soft)", borderRadius:8 }}>
+                      <div style={{ fontSize:11, fontWeight:600, color:"var(--text)" }}>
+                        {tInsights(`symptom_${s.key}` as never)}
+                      </div>
+                      <div style={{ fontSize:10, color:"var(--text-dim)", fontFamily:"var(--font-mono)" }}>
+                        ×{s.count}
+                      </div>
+                      <div style={{ display:"flex", gap:2 }} aria-label={`avg ${s.avgSev.toFixed(1)} of 5`}>
+                        {[1,2,3,4,5].map(n => (
+                          <span key={n} style={{
+                            width:5, height:5, borderRadius:99,
+                            background: n <= Math.round(s.avgSev) ? "#A78BFA" : "var(--border-strong)",
+                          }}/>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div style={{ fontSize:11, color:"var(--text-faint)", fontStyle:"italic" }}>
+                {tInsights("symptom_top_empty")}
+              </div>
+            )}
+          </FlipCard>
+        ),
+      };
+    })(),
     {
       id: "performance-tiles",
       node: (

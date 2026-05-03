@@ -17,6 +17,7 @@ import { applyAdjustmentToSettings, getInsulinSettings } from "@/lib/userSetting
 import { useCarbUnit } from "@/hooks/useCarbUnit";
 import EngineLogTab, { InsulinForm, ExerciseForm } from "@/components/EngineLogTab";
 import FingerstickLogCard from "@/components/FingerstickLogCard";
+import { CycleForm, SymptomForm } from "@/components/CycleSymptomForms";
 import GlevLogo from "@/components/GlevLogo";
 import EngineChatPanel, { type SeedMessage } from "@/components/EngineChatPanel";
 import { useEngineHeader } from "@/lib/engineHeaderContext";
@@ -341,7 +342,7 @@ export default function EnginePage() {
     () => (key, values) => tEngine(key as Parameters<typeof tEngine>[0], values),
     [tEngine],
   );
-  const [tab, setTab]         = useState<"engine"|"log"|"bolus"|"exercise"|"fingerstick">("engine");
+  const [tab, setTab]         = useState<"engine"|"log"|"bolus"|"exercise"|"fingerstick"|"cycle"|"symptoms">("engine");
   // Sync the active sub-tab from the URL ?tab= query so deep-links
   // from the header QuickAddMenu ("Glukose messen", "Insulin loggen",
   // "Sport loggen") land directly on the right card. We listen to
@@ -352,7 +353,7 @@ export default function EnginePage() {
   useEffect(() => {
     if (!searchParams) return;
     const t = searchParams.get("tab");
-    if (t === "log" || t === "bolus" || t === "exercise" || t === "fingerstick" || t === "engine") {
+    if (t === "log" || t === "bolus" || t === "exercise" || t === "fingerstick" || t === "engine" || t === "cycle" || t === "symptoms") {
       setTab(t);
     }
   }, [searchParams]);
@@ -743,6 +744,8 @@ export default function EnginePage() {
       bolus:       tEngine("tab_insulin"),
       exercise:    tEngine("tab_exercise"),
       fingerstick: tEngine("tab_glucose"),
+      cycle:       tEngine("tab_cycle"),
+      symptoms:    tEngine("tab_symptoms"),
     };
     engineHdr.setActiveLabel(labels[tab] ?? tEngine("tab_engine"));
   }, [tab, engineHdr, tEngine]);
@@ -1649,6 +1652,8 @@ export default function EnginePage() {
           { id:"bolus"       as const, label: tEngine("tab_insulin") },
           { id:"exercise"    as const, label: tEngine("tab_exercise") },
           { id:"fingerstick" as const, label: tEngine("tab_glucose") },
+          { id:"cycle"       as const, label: tEngine("tab_cycle") },
+          { id:"symptoms"    as const, label: tEngine("tab_symptoms") },
         ];
         // Single source of truth for the tab dropdown: the chevron pill
         // in the global app header (Layout.tsx) — which already shows
@@ -2585,6 +2590,8 @@ export default function EnginePage() {
       {tab === "bolus"       && <InsulinForm />}
       {tab === "exercise"    && <ExerciseForm />}
       {tab === "fingerstick" && <FingerstickLogCard />}
+      {tab === "cycle"       && <CycleForm />}
+      {tab === "symptoms"    && <SymptomForm />}
     </div>
   );
 }

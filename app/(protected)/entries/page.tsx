@@ -5,6 +5,8 @@ import { useTranslations } from "next-intl";
 import { fetchMeals, deleteMeal, updateMeal, type Meal } from "@/lib/meals";
 import { fetchRecentInsulinLogs, deleteInsulinLog, updateInsulinReadings, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, deleteExerciseLog, type ExerciseLog } from "@/lib/exercise";
+import { fetchRecentMenstrualLogs, deleteMenstrualLog, type MenstrualLog } from "@/lib/menstrual";
+import { fetchRecentSymptomLogs, deleteSymptomLog, type SymptomLog } from "@/lib/symptoms";
 import { evaluateExercise, exerciseTypeLabel, exerciseTypeLabelI18n, patternNote, interimMessage, finalMessage, deltaColor, aggregateExerciseTypeStats, personalPatternHeadline, PATTERN_MIN_SESSIONS } from "@/lib/exerciseEval";
 import {
   evaluateBolus,
@@ -35,7 +37,7 @@ function evL(ev: string|null) { return getEvalLabel(ev); }
 // Multi-select filter sections. Selections are AND-ed across sections; OR-ed
 // within a section. Meal-kind / outcome implicitly restrict to meal rows;
 // exercise-kind implicitly restricts to exercise rows.
-type EntryTypeKey   = "meal" | "bolus" | "basal" | "exercise";
+type EntryTypeKey   = "meal" | "bolus" | "basal" | "exercise" | "cycle" | "symptoms";
 type MealKindKey    = "FAST_CARBS" | "HIGH_PROTEIN" | "HIGH_FAT" | "BALANCED";
 type ExerciseKindKey = "cardio" | "hypertrophy";
 type OutcomeKey     = "GOOD" | "UNDERDOSE" | "OVERDOSE" | "SPIKE";
@@ -61,6 +63,8 @@ const ENTRY_TYPE_OPTIONS: { value: EntryTypeKey; label: string }[] = [
   { value: "bolus",    label: "Bolus" },
   { value: "basal",    label: "Basal" },
   { value: "exercise", label: "Exercise" },
+  { value: "cycle",    label: "Cycle" },
+  { value: "symptoms", label: "Symptoms" },
 ];
 const MEAL_KIND_OPTIONS: { value: MealKindKey; label: string }[] = [
   { value: "FAST_CARBS",   label: "Fast Carbs" },
@@ -185,7 +189,9 @@ type Row =
   | { kind: "meal"; id: string; ts: string; data: Meal }
   | { kind: "bolus"; id: string; ts: string; data: InsulinLog }
   | { kind: "basal"; id: string; ts: string; data: InsulinLog }
-  | { kind: "exercise"; id: string; ts: string; data: ExerciseLog };
+  | { kind: "exercise"; id: string; ts: string; data: ExerciseLog }
+  | { kind: "cycle"; id: string; ts: string; data: MenstrualLog }
+  | { kind: "symptoms"; id: string; ts: string; data: SymptomLog };
 
 export default function EntriesPage() {
   // Carb-unit selector — converts the stored grams value into the
@@ -209,6 +215,8 @@ export default function EntriesPage() {
   const [meals, setMeals]     = useState<Meal[]>([]);
   const [insulin, setInsulin] = useState<InsulinLog[]>([]);
   const [exercise, setExercise] = useState<ExerciseLog[]>([]);
+  const [cycle, setCycle]       = useState<MenstrualLog[]>([]);
+  const [symptoms, setSymptoms] = useState<SymptomLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -332,15 +340,19 @@ export default function EntriesPage() {
     let cancelled = false;
     async function load(initial: boolean) {
       try {
-        const [m, ins, ex] = await Promise.all([
+        const [m, ins, ex, cy, sy] = await Promise.all([
           fetchMeals(),
           fetchRecentInsulinLogs(60).catch(() => []),
           fetchRecentExerciseLogs(60).catch(() => []),
+          fetchRecentMenstrualLogs(120).catch(() => [] as MenstrualLog[]),
+          fetchRecentSymptomLogs(120).catch(() => [] as SymptomLog[]),
         ]);
         if (!cancelled) {
           setMeals(m);
           setInsulin(ins);
           setExercise(ex);
+          setCycle(cy);
+          setSymptoms(sy);
         }
       } catch (e) { console.error(e); }
       finally { if (!cancelled && initial) setLoading(false); }
@@ -350,11 +362,15 @@ export default function EntriesPage() {
     window.addEventListener("glev:meals-updated", onUpdated);
     window.addEventListener("glev:insulin-updated", onUpdated);
     window.addEventListener("glev:exercise-updated", onUpdated);
+    window.addEventListener("glev:menstrual-updated", onUpdated);
+    window.addEventListener("glev:symptom-updated", onUpdated);
     return () => {
       cancelled = true;
       window.removeEventListener("glev:meals-updated", onUpdated);
       window.removeEventListener("glev:insulin-updated", onUpdated);
       window.removeEventListener("glev:exercise-updated", onUpdated);
+      window.removeEventListener("glev:menstrual-updated", onUpdated);
+      window.removeEventListener("glev:symptom-updated", onUpdated);
     };
   }, []);
 
@@ -412,16 +428,46 @@ export default function EntriesPage() {
     } finally { setDeleting(null); }
   }
 
-  // Merge meal/bolus/basal/exercise into a single timeline (newest first).
+  async function handleDeleteCycle(id: string) {
+    if (!confirm("Delete this cycle entry? This cannot be undone.")) return;
+    setDeleting(id);
+    try {
+      await deleteMenstrualLog(id);
+      setCycle(xs => xs.filter(x => x.id !== id));
+      setExpanded(null);
+    } catch (e) {
+      console.error(e);
+      alert("Could not delete entry.");
+    } finally { setDeleting(null); }
+  }
+
+  async function handleDeleteSymptom(id: string) {
+    if (!confirm("Delete this symptom entry? This cannot be undone.")) return;
+    setDeleting(id);
+    try {
+      await deleteSymptomLog(id);
+      setSymptoms(xs => xs.filter(x => x.id !== id));
+      setExpanded(null);
+    } catch (e) {
+      console.error(e);
+      alert("Could not delete entry.");
+    } finally { setDeleting(null); }
+  }
+
+  // Merge meal/bolus/basal/exercise/cycle/symptoms into a single timeline.
+  // Cycle rows sort by start_date (00:00 local) since they don't carry a
+  // wall-clock time; symptom rows sort by their explicit occurred_at.
   const rows: Row[] = useMemo(() => {
     const all: Row[] = [
       ...meals.map<Row>(m => ({ kind: "meal", id: m.id, ts: m.meal_time ?? m.created_at, data: m })),
       ...insulin.map<Row>(i => ({ kind: i.insulin_type, id: i.id, ts: i.created_at, data: i })),
       ...exercise.map<Row>(x => ({ kind: "exercise", id: x.id, ts: x.created_at, data: x })),
+      ...cycle.map<Row>(c => ({ kind: "cycle", id: c.id, ts: `${c.start_date}T00:00:00`, data: c })),
+      ...symptoms.map<Row>(s => ({ kind: "symptoms", id: s.id, ts: s.occurred_at, data: s })),
     ];
     all.sort((a, b) => parseDbTs(b.ts) - parseDbTs(a.ts));
     return all;
-  }, [meals, insulin, exercise]);
+  }, [meals, insulin, exercise, cycle, symptoms]);
 
   // Memoize to keep the bounds stable across re-renders within the same render
   // cycle and to recompute when the user changes the date filter.
@@ -474,6 +520,8 @@ export default function EntriesPage() {
       if (r.kind === "meal") txt = r.data.input_text ?? "";
       else if (r.kind === "bolus" || r.kind === "basal") txt = `${r.data.insulin_name} ${r.data.notes ?? ""}`;
       else if (r.kind === "exercise") txt = `${r.data.exercise_type} ${r.data.notes ?? ""}`;
+      else if (r.kind === "cycle") txt = `${r.data.flow_intensity ?? ""} ${r.data.phase_marker ?? ""} ${r.data.notes ?? ""}`;
+      else if (r.kind === "symptoms") txt = `${(r.data.symptom_types || []).join(" ")} ${r.data.notes ?? ""}`;
       if (!txt.toLowerCase().includes(q)) return false;
     }
     return true;
@@ -743,6 +791,30 @@ export default function EntriesPage() {
                   onToggle={() => expandRow(isOpen ? null : i.id)}
                   onDelete={() => handleDeleteInsulin(i.id)}
                   deleting={deleting === i.id}
+                />
+              );
+            }
+            // CYCLE row — single-line summary card. No expandable body.
+            if (r.kind === "cycle") {
+              const c = r.data;
+              return (
+                <CycleRowCard
+                  key={c.id}
+                  log={c}
+                  onDelete={() => handleDeleteCycle(c.id)}
+                  deleting={deleting === c.id}
+                />
+              );
+            }
+            // SYMPTOM row — chips of the logged symptoms + severity dots.
+            if (r.kind === "symptoms") {
+              const s = r.data;
+              return (
+                <SymptomRowCard
+                  key={s.id}
+                  log={s}
+                  onDelete={() => handleDeleteSymptom(s.id)}
+                  deleting={deleting === s.id}
                 />
               );
             }
@@ -2527,5 +2599,141 @@ function EditField({ label, value, onChange, accent, placeholder, step }: {
         }}
       />
     </label>
+  );
+}
+
+// ── CYCLE / SYMPTOM ROW CARDS ───────────────────────────────────────
+// Both rows are visually compact, single-state cards (no expand body)
+// because the underlying records carry a small, fixed payload — there
+// is nothing extra to reveal beyond what fits on one line. They use the
+// same hover/border-shadow pattern as ExerciseRowCard so they slot
+// naturally into the entry stream.
+
+function fmtDateShort(s: string): string {
+  // Date-only string ("YYYY-MM-DD") — render as "27. Apr." avoiding TZ shifts.
+  const d = new Date(`${s}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return s;
+  return d.toLocaleDateString("de", { day: "numeric", month: "short" });
+}
+
+function fmtDateTimeShort(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString("de", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+function CycleRowCard({ log, onDelete, deleting }: {
+  log: MenstrualLog;
+  onDelete: () => void;
+  deleting: boolean;
+}) {
+  const t = useTranslations("engineLog");
+  const isBleeding = log.flow_intensity != null;
+  const accent = "#FF2D78";
+  const heading = isBleeding
+    ? `${t("cycle_row_bleeding")} · ${t(`cycle_flow_${log.flow_intensity}` as never)}`
+    : `${t("cycle_row_marker")} · ${log.phase_marker ? t(`cycle_marker_${log.phase_marker}` as never) : ""}`;
+  const dateLine = log.end_date && log.end_date !== log.start_date
+    ? `${fmtDateShort(log.start_date)} – ${fmtDateShort(log.end_date)}`
+    : fmtDateShort(log.start_date);
+  return (
+    <div style={{
+      background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:12,
+      padding:"12px 14px", display:"flex", alignItems:"center", gap:12,
+    }}>
+      <div style={{
+        width:30, height:30, borderRadius:8,
+        background:`${accent}18`, color:accent,
+        display:"flex", alignItems:"center", justifyContent:"center",
+        fontWeight:800, fontSize:14, flexShrink:0,
+      }}>♀</div>
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ fontSize:13, fontWeight:700, color:"var(--text-strong)", letterSpacing:"-0.01em" }}>
+          {heading}
+        </div>
+        <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:2, display:"flex", gap:8, flexWrap:"wrap" }}>
+          <span>{dateLine}</span>
+          {log.notes && <span style={{ color:"var(--text-dim)" }}>· {log.notes}</span>}
+        </div>
+      </div>
+      <button
+        onClick={onDelete}
+        disabled={deleting}
+        aria-label={t("row_delete_aria")}
+        style={{
+          background:"transparent", border:"none", cursor:deleting?"wait":"pointer",
+          color:"var(--text-faint)", padding:6, borderRadius:6,
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="3 6 5 6 21 6"/>
+          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+        </svg>
+      </button>
+    </div>
+  );
+}
+
+function SymptomRowCard({ log, onDelete, deleting }: {
+  log: SymptomLog;
+  onDelete: () => void;
+  deleting: boolean;
+}) {
+  const t = useTranslations("engineLog");
+  const accent = "#A78BFA";
+  return (
+    <div style={{
+      background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:12,
+      padding:"12px 14px", display:"flex", alignItems:"flex-start", gap:12,
+    }}>
+      <div style={{
+        width:30, height:30, borderRadius:8,
+        background:`${accent}18`, color:accent,
+        display:"flex", alignItems:"center", justifyContent:"center",
+        fontWeight:800, fontSize:14, flexShrink:0,
+      }}>★</div>
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+          <div style={{ fontSize:13, fontWeight:700, color:"var(--text-strong)" }}>
+            {t("symptom_row_title")}
+          </div>
+          <div style={{ display:"flex", gap:2 }} aria-label={`Severity ${log.severity} of 5`}>
+            {[1,2,3,4,5].map(n => (
+              <span key={n} style={{
+                width:6, height:6, borderRadius:99,
+                background: n <= log.severity ? accent : "var(--border-strong)",
+              }}/>
+            ))}
+          </div>
+        </div>
+        <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:6 }}>
+          {(log.symptom_types || []).map(s => (
+            <span key={s} style={{
+              fontSize:10, fontWeight:600, padding:"2px 8px",
+              borderRadius:99, background:`${accent}14`, color:accent,
+              border:`1px solid ${accent}28`,
+            }}>{t(`symptom_${s}` as never)}</span>
+          ))}
+        </div>
+        <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:6, display:"flex", gap:8, flexWrap:"wrap" }}>
+          <span>{fmtDateTimeShort(log.occurred_at)}</span>
+          {log.notes && <span style={{ color:"var(--text-dim)" }}>· {log.notes}</span>}
+        </div>
+      </div>
+      <button
+        onClick={onDelete}
+        disabled={deleting}
+        aria-label={t("row_delete_aria")}
+        style={{
+          background:"transparent", border:"none", cursor:deleting?"wait":"pointer",
+          color:"var(--text-faint)", padding:6, borderRadius:6,
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="3 6 5 6 21 6"/>
+          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+        </svg>
+      </button>
+    </div>
   );
 }
