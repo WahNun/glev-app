@@ -54,7 +54,7 @@ function proWelcomeHtmlDe(
         <table width="100%" cellpadding="0" cellspacing="0" style="max-width:580px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
 
           <tr>
-            <td style="background:#0f172a;padding:28px 40px;text-align:center;">
+            <td style="background:#09090b;padding:28px 40px;text-align:center;">
               <img src="https://glev.app/glev-wordmark-white.png" alt="Glev"
                    width="140" height="47"
                    style="display:inline-block;border:0;outline:none;text-decoration:none;width:140px;height:47px;max-width:140px;" />
@@ -160,7 +160,7 @@ function proWelcomeHtmlEn(
         <table width="100%" cellpadding="0" cellspacing="0" style="max-width:580px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
 
           <tr>
-            <td style="background:#0f172a;padding:28px 40px;text-align:center;">
+            <td style="background:#09090b;padding:28px 40px;text-align:center;">
               <img src="https://glev.app/glev-wordmark-white.png" alt="Glev"
                    width="140" height="47"
                    style="display:inline-block;border:0;outline:none;text-decoration:none;width:140px;height:47px;max-width:140px;" />
