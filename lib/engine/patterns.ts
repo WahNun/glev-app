@@ -13,19 +13,35 @@ export interface Pattern {
 }
 
 const WINDOW = 20;
+const WINDOW_DAYS = 30;
+const WINDOW_MS = WINDOW_DAYS * 24 * 60 * 60 * 1000;
 
-export function detectPattern(meals: Meal[]): Pattern {
+export function detectPattern(meals: Meal[], now: Date = new Date()): Pattern {
+  const cutoffMs = now.getTime() - WINDOW_MS;
+
   const finals = meals
-    .map(m => ({ m, lc: lifecycleFor(m) }))
-    .filter(x => x.lc.state === "final" && x.lc.outcome)
+    .map(m => ({
+      m,
+      lc: lifecycleFor(m),
+      t: Date.parse(m.meal_time ?? m.created_at ?? ""),
+    }))
+    .filter(x => x.lc.state === "final" && x.lc.outcome && isFinite(x.t) && x.t >= cutoffMs)
     .slice(0, WINDOW);
 
   const counts = { good: 0, underdose: 0, overdose: 0, spike: 0 };
+  const weighted = { good: 0, underdose: 0, overdose: 0, spike: 0 };
+  let weightSum = 0;
+
   for (const x of finals) {
-    if (x.lc.outcome === "GOOD") counts.good++;
-    else if (x.lc.outcome === "UNDERDOSE") counts.underdose++;
-    else if (x.lc.outcome === "OVERDOSE") counts.overdose++;
-    else if (x.lc.outcome === "SPIKE") counts.spike++;
+    const ageMs = Math.max(0, now.getTime() - x.t);
+    const ageRatio = Math.min(1, ageMs / WINDOW_MS);
+    const w = 1 - 0.5 * ageRatio;
+    weightSum += w;
+
+    if (x.lc.outcome === "GOOD")           { counts.good++;      weighted.good      += w; }
+    else if (x.lc.outcome === "UNDERDOSE") { counts.underdose++; weighted.underdose += w; }
+    else if (x.lc.outcome === "OVERDOSE")  { counts.overdose++;  weighted.overdose  += w; }
+    else if (x.lc.outcome === "SPIKE")     { counts.spike++;     weighted.spike     += w; }
   }
 
   const n = finals.length;
@@ -33,17 +49,17 @@ export function detectPattern(meals: Meal[]): Pattern {
     return {
       type: "insufficient_data",
       label: "Not enough data",
-      explanation: `Need at least 5 meals with a post-meal reading to detect a pattern (currently ${n}).`,
+      explanation: `Need at least 5 meals with a post-meal reading in the last ${WINDOW_DAYS} days to detect a pattern (currently ${n}).`,
       confidence: "low",
       sampleSize: n,
       counts,
     };
   }
 
-  const overdoseRate  = counts.overdose / n;
-  const underdoseRate = counts.underdose / n;
-  const spikeRate     = counts.spike / n;
-  const goodRate      = counts.good / n;
+  const overdoseRate  = weighted.overdose  / weightSum;
+  const underdoseRate = weighted.underdose / weightSum;
+  const spikeRate     = weighted.spike     / weightSum;
+  const goodRate      = weighted.good      / weightSum;
 
   const confidence: Pattern["confidence"] = n >= 15 ? "high" : n >= 10 ? "medium" : "low";
 
