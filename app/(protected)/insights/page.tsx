@@ -5,6 +5,8 @@ import { useLocale, useTranslations } from "next-intl";
 import { fetchMeals, fetchMealsForEngine, unifiedOutcome, type Meal } from "@/lib/meals";
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
 import { computeAdaptiveICR } from "@/lib/engine/adaptiveICR";
+import { pairBolusesToMeals } from "@/lib/engine/pairing";
+import { updateInsulinLogLink } from "@/lib/insulin";
 import { detectPattern } from "@/lib/engine/patterns";
 import { suggestAdjustment, type AdaptiveSettings, type AdjustmentSuggestion } from "@/lib/engine/adjustment";
 import SortableCardGrid, { type SortableItem } from "@/components/SortableCardGrid";
@@ -1023,23 +1025,22 @@ export default function InsightsPage() {
                     adaptive ICR is being driven by separately-logged
                     bolus shots (paired via related_entry_id or ±30-min
                     time-window) or by the legacy meal.insulin_units
-                    column. Hidden when there are zero contributing
+                    column. When at least one pair came in via the
+                    time-window heuristic, the line becomes a tap
+                    target that opens an inline relink panel — the user
+                    can upgrade those heuristic pairs to explicit tags
+                    (Task #211). Hidden when there are zero contributing
                     meals (warming-up state already says so). */}
                 {adaptiveICR.sampleSize > 0 && (
-                  <div
-                    title={tInsights("engine_icr_source_tooltip")}
-                    style={{
-                      fontSize:10, color:"var(--text-faint)",
-                      lineHeight:1.4, marginTop:-4, marginBottom:10,
+                  <RelinkSourceLine
+                    adaptiveICR={adaptiveICR}
+                    engineMeals={engineMeals}
+                    engineBoluses={engineBoluses}
+                    onLinked={(bolusId, mealId) => {
+                      setEngineBoluses(prev => prev.map(b => b.id === bolusId ? { ...b, related_entry_id: mealId } : b));
+                      setInsulinLogs(prev => prev.map(b => b.id === bolusId ? { ...b, related_entry_id: mealId } : b));
                     }}
-                  >
-                    {tInsights("engine_icr_source", {
-                      explicit:    adaptiveICR.pairedExplicitCount,
-                      timeWindow:  adaptiveICR.pairedTimeWindowCount,
-                      mealColumn:  Math.max(0, adaptiveICR.sampleSize - adaptiveICR.pairedCount),
-                      total:       adaptiveICR.sampleSize,
-                    })}
-                  </div>
+                  />
                 )}
 
                 {/* Pattern label — German renders localized strings; English
@@ -1513,6 +1514,148 @@ export default function InsightsPage() {
 }
 
 /** Wrapper so we don't re-instantiate useCardOrder on every parent render. */
+/**
+ * Tappable replacement for the engine ICR source-breakdown line.
+ *
+ * When the user has any time-window pairs, the line becomes clickable
+ * and reveals an inline panel listing each ±30-min pair with a
+ * "Bestätigen" button. Confirming sends a PATCH to /api/insulin/[id]
+ * to set `related_entry_id`, which upgrades that meal from
+ * "zeitnah gepaart" to "explizit getaggt" on the very next render
+ * (the parent `onLinked` callback patches the local state so the
+ * counts update without a full refetch). Task #211.
+ */
+function RelinkSourceLine({
+  adaptiveICR,
+  engineMeals,
+  engineBoluses,
+  onLinked,
+}: {
+  adaptiveICR: ReturnType<typeof computeAdaptiveICR>;
+  engineMeals: Meal[];
+  engineBoluses: InsulinLog[];
+  onLinked: (bolusId: string, mealId: string) => void;
+}) {
+  const tInsights = useTranslations("insights");
+  const [open, setOpen] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [errorId, setErrorId] = useState<string | null>(null);
+
+  // Recompute the time-window pairs from the same primitives the
+  // engine uses, then keep only the ones whose pairing came from the
+  // heuristic (explicit ones don't need the user's attention).
+  const allPairs = pairBolusesToMeals(engineBoluses, engineMeals);
+  const timeWindowPairs = allPairs.filter(p => p.source === "time-window");
+  const hasTimeWindow = timeWindowPairs.length > 0;
+  const mealColumn = Math.max(0, adaptiveICR.sampleSize - adaptiveICR.pairedCount);
+
+  return (
+    <div style={{ marginTop: -4, marginBottom: 10 }}>
+      <button
+        type="button"
+        onClick={() => hasTimeWindow && setOpen(o => !o)}
+        title={tInsights("engine_icr_source_tooltip")}
+        disabled={!hasTimeWindow}
+        style={{
+          width: "100%", textAlign: "left",
+          background: "transparent", border: "none", padding: 0,
+          fontSize: 10, color: "var(--text-faint)", lineHeight: 1.4,
+          cursor: hasTimeWindow ? "pointer" : "default",
+          font: "inherit",
+        }}
+      >
+        {tInsights("engine_icr_source", {
+          explicit:    adaptiveICR.pairedExplicitCount,
+          timeWindow:  adaptiveICR.pairedTimeWindowCount,
+          mealColumn,
+          total:       adaptiveICR.sampleSize,
+        })}
+        {hasTimeWindow && (
+          <span style={{ marginLeft: 6, color: "var(--accent)", fontWeight: 700 }}>
+            {open ? tInsights("engine_icr_relink_close") : tInsights("engine_icr_relink_open")}
+          </span>
+        )}
+      </button>
+      {open && hasTimeWindow && (
+        <div style={{
+          marginTop: 8, padding: "10px 12px", borderRadius: 10,
+          background: "var(--surface-soft)", border: `1px solid var(--border)`,
+          display: "flex", flexDirection: "column", gap: 8,
+        }}>
+          <div style={{ fontSize: 10, color: "var(--text-dim)", lineHeight: 1.5 }}>
+            {tInsights("engine_icr_relink_intro")}
+          </div>
+          {timeWindowPairs.map(p => {
+            const bolusTime = parseDbDate(p.bolus.created_at);
+            const mealTime = parseDbDate(p.meal.meal_time ?? p.meal.created_at);
+            const mealLabel: string = (() => {
+              if (Array.isArray(p.meal.parsed_json) && p.meal.parsed_json.length > 0) {
+                const first = p.meal.parsed_json[0] as { name?: string };
+                if (typeof first?.name === "string" && first.name.trim()) return first.name.trim();
+              }
+              if (p.meal.meal_type) return p.meal.meal_type;
+              return tInsights("engine_icr_relink_meal_fallback");
+            })();
+            const dtFmt = (d: Date) => d.toLocaleString(undefined, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+            const isBusy = busyId === p.bolus.id;
+            const isErr = errorId === p.bolus.id;
+            return (
+              <div key={p.bolus.id} style={{
+                display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+                padding: "8px 10px", borderRadius: 8,
+                background: "var(--surface)", border: `1px solid var(--border-soft)`,
+              }}>
+                <div style={{ flex: 1, minWidth: 160, fontSize: 11, color: "var(--text-strong)", lineHeight: 1.45 }}>
+                  <div style={{ fontWeight: 700 }}>{p.bolus.units}u {p.bolus.insulin_name || ""}</div>
+                  <div style={{ fontSize: 10, color: "var(--text-dim)" }}>
+                    {tInsights("engine_icr_relink_pair_line", {
+                      bolusAt: dtFmt(bolusTime),
+                      meal: mealLabel,
+                      mealAt: dtFmt(mealTime),
+                      deltaMin: Math.round(p.deltaMs / 60_000),
+                    })}
+                  </div>
+                  {isErr && (
+                    <div style={{ fontSize: 10, color: PINK, marginTop: 4 }}>
+                      {tInsights("engine_icr_relink_failed")}
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  disabled={isBusy}
+                  onClick={async () => {
+                    setBusyId(p.bolus.id);
+                    setErrorId(null);
+                    try {
+                      await updateInsulinLogLink(p.bolus.id, p.meal.id);
+                      onLinked(p.bolus.id, p.meal.id);
+                    } catch {
+                      setErrorId(p.bolus.id);
+                    } finally {
+                      setBusyId(null);
+                    }
+                  }}
+                  style={{
+                    padding: "6px 12px", borderRadius: 8, border: "none",
+                    background: ACCENT, color: "var(--on-accent)",
+                    fontSize: 11, fontWeight: 700,
+                    cursor: isBusy ? "wait" : "pointer",
+                    opacity: isBusy ? 0.7 : 1,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {isBusy ? tInsights("engine_icr_relink_busy") : tInsights("engine_icr_relink_confirm")}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function InsightsSortable({ items }: { items: SortableItem[] }) {
   const { order, setOrder } = useCardOrder("insights", INSIGHTS_DEFAULT_ORDER);
   return (

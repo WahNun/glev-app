@@ -165,6 +165,40 @@ export async function deleteInsulinLog(id: string): Promise<void> {
 }
 
 /**
+ * Update the explicit `related_entry_id` link on a bolus log.
+ *
+ * Used by:
+ *   - the bolus form's one-tap "Vorschlag" suggestion (Task #211),
+ *     which proposes the closest meal in the ±30-min window and lets
+ *     the user accept it without re-typing anything; and
+ *   - the Insights/ICR card relink panel, which lets the user upgrade
+ *     a "zeitnah gepaart" pair to an explicit tag retroactively.
+ *
+ * Pass `relatedEntryId = null` to unlink. Routes through the API
+ * (instead of supabase-js directly) so the server can refuse the
+ * mutation on a basal log and validate the FK uniformly across the
+ * web app and any future mobile shells.
+ */
+export async function updateInsulinLogLink(
+  logId: string,
+  relatedEntryId: string | null,
+): Promise<void> {
+  const r = await fetch(`/api/insulin/${encodeURIComponent(logId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ related_entry_id: relatedEntryId }),
+  });
+  if (!r.ok) {
+    let msg = `HTTP ${r.status}`;
+    try {
+      const j = await r.json();
+      if (j && typeof j.error === "string") msg = j.error;
+    } catch { /* ignore */ }
+    throw new Error(msg);
+  }
+}
+
+/**
  * Manual backfill for the post-fetch CGM readings on a Bolus or Basal log.
  *
  * Used by the entries-page expand views when the auto-fetch worker

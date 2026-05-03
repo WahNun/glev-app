@@ -7,8 +7,9 @@ import { insertExerciseLog, type ExerciseType } from "@/lib/exercise";
 import { exerciseTypeLabel } from "@/lib/exerciseEval";
 import { scheduleJobsForLog } from "@/lib/cgmJobs";
 import { fetchMealsForEngine, type Meal } from "@/lib/meals";
-import { parseDbDate } from "@/lib/time";
+import { parseDbDate, parseDbTs } from "@/lib/time";
 import { isToday } from "@/lib/utils/datetime";
+import { BOLUS_MEAL_WINDOW_MS } from "@/lib/engine/pairing";
 
 // Builds the dropdown label for a meal in the "Zu Mahlzeit verknüpfen"
 // picker — "HH:MM — <first food name or meal_type> (Xg C)". Defensive
@@ -406,32 +407,83 @@ export function InsulinForm() {
         </div>
         {/* Bolus-only: explicit link to a meal logged today. Engine ICR
             pairing prefers this over the ±30min time-window heuristic.
-            Hidden for basal because basal isn't dosed against a meal. */}
-        {type === "bolus" && (
-          <div>
-            <label style={labelStyle}>{t("link_meal_label")}</label>
-            <select
-              style={{ ...inp, appearance: "none", WebkitAppearance: "none", cursor: todayMeals.length ? "pointer" : "default" }}
-              value={relatedMealId}
-              onChange={e => setRelatedMealId(e.target.value)}
-              disabled={todayMeals.length === 0}
-            >
-              <option value="">{t("no_link")}</option>
-              {todayMeals.map(m => (
-                <option key={m.id} value={m.id}>{formatMealOption(m, t("meal_fallback"))}</option>
-              ))}
-            </select>
-            {todayMeals.length === 0 ? (
-              <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 6 }}>
-                {t("no_meals_today")}
-              </div>
-            ) : (
-              <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 6 }}>
-                {t("today_meals_hint")}
-              </div>
-            )}
-          </div>
-        )}
+            Hidden for basal because basal isn't dosed against a meal.
+            When a meal sits within ±30min of the chosen `at` and the
+            user hasn't picked anything yet, surface a one-tap "Vorschlag"
+            banner so an explicit tag becomes the default behaviour
+            (Task #211 — reduce reliance on the loose time-window match). */}
+        {type === "bolus" && (() => {
+          // Find the closest meal whose meal_time / created_at is within
+          // ±30min of `at`. Mirrors lib/engine/pairing.ts so the form's
+          // suggestion lines up exactly with what the engine would
+          // otherwise pair via the heuristic.
+          let suggestion: Meal | null = null;
+          if (atDate && todayMeals.length > 0) {
+            const atMs = atDate.getTime();
+            let bestDelta = Infinity;
+            for (const m of todayMeals) {
+              const ts = parseDbTs(m.meal_time ?? m.created_at);
+              if (!Number.isFinite(ts)) continue;
+              const delta = Math.abs(ts - atMs);
+              if (delta <= BOLUS_MEAL_WINDOW_MS && delta < bestDelta) {
+                bestDelta = delta;
+                suggestion = m;
+              }
+            }
+          }
+          const showSuggestion = !!suggestion && relatedMealId !== suggestion.id;
+          return (
+            <div>
+              <label style={labelStyle}>{t("link_meal_label")}</label>
+              {showSuggestion && suggestion && (
+                <div style={{
+                  marginBottom: 8, padding: "10px 12px", borderRadius: 10,
+                  background: `${ACCENT}10`, border: `1px solid ${ACCENT}33`,
+                  display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+                }}>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.4, flex: 1, minWidth: 140 }}>
+                    <div style={{ fontWeight: 700, color: ACCENT, fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 2 }}>
+                      {t("link_suggestion_label")}
+                    </div>
+                    {t("link_suggestion_body", { meal: formatMealOption(suggestion, t("meal_fallback")) })}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => suggestion && setRelatedMealId(suggestion.id)}
+                    style={{
+                      padding: "8px 14px", borderRadius: 8, border: "none",
+                      background: ACCENT, color: "var(--on-accent)",
+                      fontSize: 12, fontWeight: 700, cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {t("link_suggestion_accept")}
+                  </button>
+                </div>
+              )}
+              <select
+                style={{ ...inp, appearance: "none", WebkitAppearance: "none", cursor: todayMeals.length ? "pointer" : "default" }}
+                value={relatedMealId}
+                onChange={e => setRelatedMealId(e.target.value)}
+                disabled={todayMeals.length === 0}
+              >
+                <option value="">{t("no_link")}</option>
+                {todayMeals.map(m => (
+                  <option key={m.id} value={m.id}>{formatMealOption(m, t("meal_fallback"))}</option>
+                ))}
+              </select>
+              {todayMeals.length === 0 ? (
+                <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 6 }}>
+                  {t("no_meals_today")}
+                </div>
+              ) : (
+                <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 6 }}>
+                  {t("today_meals_hint")}
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       <button
