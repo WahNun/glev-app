@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTranslations, useLocale } from "next-intl";
 import { localeToBcp47 } from "@/lib/time";
@@ -257,6 +257,47 @@ function renderReasoning(
 }
 
 const CONF_COLOR: Record<string, string> = { HIGH:GREEN, MEDIUM:ORANGE, LOW:PINK };
+
+/**
+ * Small inline arrow next to the current glucose value (Task #204).
+ * Renders the classified pre-meal trend (rising_fast / rising / stable
+ * / falling / falling_fast) as a single-character glyph with a
+ * trend-appropriate accent color and a `title` tooltip carrying the
+ * existing localised explanation (`engine_rec_trend_<class>`). Pure
+ * presentational — does not affect the dose calculation.
+ *
+ * Color rationale: sharp moves (rising_fast / falling_fast) use the
+ * warning palette (orange / pink) since they're the ones the user
+ * should *react* to; gentle moves stay accent-blue; stable goes to
+ * the dimmed text color so it visually recedes.
+ */
+function TrendArrow({ trend, t }: { trend: TrendClass; t: EngineTranslator }): React.ReactElement {
+  const META: Record<TrendClass, { glyph: string; color: string }> = {
+    rising_fast:  { glyph: "↑", color: ORANGE },
+    rising:       { glyph: "↗", color: ACCENT },
+    stable:       { glyph: "→", color: "var(--text-dim)" },
+    falling:      { glyph: "↘", color: ACCENT },
+    falling_fast: { glyph: "↓", color: PINK },
+  };
+  const m = META[trend];
+  const tooltip = t(`engine_rec_trend_${trend}` as never);
+  return (
+    <span
+      role="img"
+      aria-label={tooltip}
+      title={tooltip}
+      data-testid={`engine-trend-arrow-${trend}`}
+      style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        minWidth: 18, height: 18, borderRadius: 4, padding: "0 4px",
+        fontSize: 14, lineHeight: 1, fontWeight: 800,
+        color: m.color, background: `${m.color === "var(--text-dim)" ? "var(--surface-2, rgba(255,255,255,0.06))" : m.color + "1f"}`,
+      }}
+    >
+      {m.glyph}
+    </span>
+  );
+}
 
 export default function EnginePage() {
   // Aliased to tEngine because a local `t` already shadows the
@@ -547,6 +588,20 @@ export default function EnginePage() {
     const r = classifyPreReferenceTrend(samples, refMs);
     return r?.trend;
   };
+
+  // Live pre-meal trend for the *current* meal time, used by the small
+  // arrow next to the glucose label (Task #204). Memoised on the cached
+  // CGM samples + the active mealTime so it updates immediately when the
+  // user shifts the meal time, taps "CGM Pull" (which writes new
+  // samples), or new readings stream in. `mealTime` is a local
+  // datetime-local string ("YYYY-MM-DDTHH:mm") — `Date.parse` interprets
+  // it in the browser's wall-clock TZ, which is the user's intent.
+  const currentTrend = useMemo<TrendClass | undefined>(() => {
+    if (trendSamples.length === 0) return undefined;
+    const refMs = mealTime ? Date.parse(mealTime) || Date.now() : Date.now();
+    const r = classifyPreReferenceTrend(trendSamples, refMs);
+    return r?.trend;
+  }, [trendSamples, mealTime]);
 
   // Hydrate the dismissed-suggestion cooldown map from localStorage. Each
   // entry is `{ [patternSignature]: epochMs of dismissal }` and we cull
@@ -2070,8 +2125,9 @@ export default function EnginePage() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   <div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, gap: 8 }}>
-                      <label style={{ fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600 }}>
-                        {tEngine("glucose_before_label")}{lastReading ? ` · ${tEngine("glucose_last_prefix")}: ${lastReading}` : ""}
+                      <label style={{ fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        <span>{tEngine("glucose_before_label")}{lastReading ? ` · ${tEngine("glucose_last_prefix")}: ${lastReading}` : ""}</span>
+                        {currentTrend ? <TrendArrow trend={currentTrend} t={tEngine}/> : null}
                       </label>
                       <button onClick={handlePullCgm} disabled={cgmPulling} style={{
                         display: "flex", alignItems: "center", gap: 6,
