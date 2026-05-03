@@ -67,6 +67,34 @@ export default function BlogPage() {
            und der Hinweis verschwindet automatisch. */
         #soro-blog:empty + .soro-blog-fallback { display: block; }
         .soro-blog-fallback { display: none; }
+
+        /* Soros Default-Stylesheet rendert auf dunklem Hintergrund mit
+           niedrigem Kontrast. Wir überschreiben Schrift- und Linkfarben
+           hart, damit der Inhalt auf #09090b les bleibt. !important
+           weil Soro Inline-Styles + eigene Klassen mitliefert. */
+        #soro-blog, #soro-blog * {
+          color: var(--text) !important;
+          background: transparent !important;
+          border-color: var(--border) !important;
+        }
+        #soro-blog h1, #soro-blog h2, #soro-blog h3, #soro-blog h4 {
+          color: var(--text) !important;
+          font-weight: 700 !important;
+        }
+        #soro-blog a { color: #6B8BFF !important; text-decoration: underline; }
+        #soro-blog a:hover { color: #9DB3FF !important; }
+        #soro-blog code, #soro-blog pre {
+          background: var(--surface-soft) !important;
+          color: var(--text) !important;
+          border: 1px solid var(--border) !important;
+          border-radius: 6px;
+        }
+        #soro-blog blockquote {
+          border-left: 3px solid var(--border-strong, #444) !important;
+          color: var(--text-dim, #c7c7c7) !important;
+          padding-left: 14px;
+        }
+        #soro-blog img { border-radius: 8px; }
       `}</style>
 
       {/* Top nav — gespiegelt vom Home-Page-Header (`app/page.tsx`).
@@ -178,7 +206,7 @@ export default function BlogPage() {
       </section>
 
       <Script
-        src="https://app.trysoro.com/api/embed/3e94583a-baad-4296-a2ef-e7d445982516?theme=dark"
+        src="https://app.trysoro.com/api/embed/3e94583a-baad-4296-a2ef-e7d445982516"
         strategy="afterInteractive"
       />
     </main>
