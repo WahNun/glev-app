@@ -44,9 +44,6 @@ author = "agent"
 task = "shell.exec"
 args = "npm test"
 
-[workflows.workflow.metadata]
-isValidation = true
-
 [agent]
 stack = "PNPM_WORKSPACE"
 expertMode = true
