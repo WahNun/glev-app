@@ -11,6 +11,20 @@ Glev is a Type 1 Diabetes insulin decision-support system designed to provide pe
 - Ask before making major changes.
 - I prefer detailed explanations.
 
+## Deployment & Infrastructure (CRITICAL)
+
+**Production runs on Vercel, NOT on Replit.**
+
+- **Deploy flow:** local `git push origin main` → GitHub `WahNun/glev-app` → Vercel auto-deploys to `https://glev.app`
+- **Replit is dev-only:** the workspace here is for coding/preview only. Replit Secrets are NOT read by production. Production env vars live in **Vercel Project Settings → Environment Variables**.
+- **After changing any env var in Vercel:** the change only takes effect after a fresh deployment (Vercel caches env vars in serverless functions at build time). Trigger a redeploy via Vercel Dashboard → Deployments → "Redeploy" on the latest build, OR push an empty commit.
+- **Two Stripe webhook endpoints (both on Vercel):**
+  - `Glev_Production_Pro` → `https://glev.app/api/pro/webhook` → reads `STRIPE_PRO_WEBHOOK_SECRET`
+  - `Glev_Production_Beta` → `https://glev.app/api/webhooks/stripe` → reads `STRIPE_BETA_WEBHOOK_SECRET`
+- **Email outbox cron:** GitHub Actions workflow `.github/workflows/flush-outbox.yml` runs `*/2 * * * *` and calls `https://glev.app/api/cron/flush-outbox` with `Bearer $CRON_SECRET`. CRON_SECRET must match between GitHub Repo Secrets AND Vercel Environment Variables.
+- **Production logs:** Vercel Dashboard → Project → Logs (real-time) OR Deployments → individual deploy → Functions tab → per-route logs.
+- **Production database queries:** prod data lives in Supabase (not the Replit-attached Postgres which is dev-only with stale test rows). Use the Supabase Dashboard SQL Editor for live queries.
+
 ## System Architecture
 
 **Frontend:**
