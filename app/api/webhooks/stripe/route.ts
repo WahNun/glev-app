@@ -58,6 +58,30 @@ export async function POST(req: NextRequest) {
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object as Stripe.Checkout.Session;
 
+    // Guard: ignore Pro-subscription sessions. Both the Beta and Pro
+    // Stripe webhook endpoints subscribe to checkout.session.completed,
+    // and Stripe delivers the same event to every endpoint subscribed
+    // to that type. Without this filter, paying for Pro would also
+    // enqueue a `beta-welcome` mail and (worse) flip the buyer's
+    // profile/reservation rows into the Beta plan. The Pro flow has
+    // its own dedicated handler at /api/pro/webhook which writes the
+    // pro_subscriptions row + enqueues `pro-welcome`.
+    //
+    // Detection is metadata-based because /api/pro/checkout sets
+    // `metadata: { feature: 'pro_subscription' }` on every Pro
+    // Checkout Session it creates. Subscription-mode sessions also
+    // carry `mode: 'subscription'` but Beta has both subscription and
+    // one-time variants, so we can't filter on `mode` alone.
+    const feature = session.metadata?.feature;
+    if (feature === 'pro_subscription') {
+      // eslint-disable-next-line no-console
+      console.log('[webhook] ignoring Pro session — handled by /api/pro/webhook:', {
+        sessionId: session.id,
+        eventId: event.id,
+      });
+      return NextResponse.json({ received: true, ignored: 'pro_subscription' });
+    }
+
     const email = session.customer_email ?? session.customer_details?.email;
     // Prefer the value collected via the mandatory `full_name` custom field
     // (task #68) — it's the one the buyer typed themselves on the Checkout
