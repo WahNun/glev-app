@@ -1,0 +1,134 @@
+You are building a visual mockup file for the Glev app landing pages.
+
+CREATE a new file: /public/gpt-redo.html
+
+This is a standalone HTML file (no framework, no build step) that shows a design canvas with 8 frames:
+- Row 1: Desktop versions (320px wide each) of: DE Homepage, EN Homepage, Beta page, Pro page
+- Row 2: Mobile versions (180px wide each) of the same 4 pages
+
+DESIGN SYSTEM:
+- Canvas background: #0f0f17
+- Frame background (app screens): #08080f
+- Frame border: 1.5px solid #1c1c28
+- Heading text: #f0f0f0
+- Body text: #9090aa
+- Muted text: #44445e
+- Section divider: 1px solid #141420
+- Desktop border-radius: 8px, Mobile border-radius: 14px
+
+ACCENT COLORS (one per page type):
+- Homepage (DE + EN): #818cf8 (indigo)
+- Beta: #4ade80 (green)
+- Pro: #c084fc (purple)
+
+---
+
+FRAME STRUCTURE (each frame has these sections top to bottom):
+
+1. NAV BAR
+   - Left: "GLEV" in white, bold, letter-spacing: 2px
+   - Right: nav links in muted text
+
+2. TOP BANNER (Beta + Pro only)
+   - Beta: background #0c2010, text #4ade80 — "Beta — Limitierte Plätze verfügbar"
+   - Pro: background #1a0f2e, text #c084fc — "Pro — Die vollständige Entscheidungsebene"
+
+3. HERO
+   - H1 (large, bold, white)
+   - Subheadline (muted)
+   - Support tags line (very small, very muted)
+   - CTAs: primary button (accent color fill) + optional secondary (ghost button)
+
+4. VALUE SECTION
+   - Small heading + body text
+
+5. PROBLEM SECTION
+   - Small heading + 3 bullet points (em dash style, accent colored dash)
+
+6. FLOW BAR
+   - Horizontal pill steps connected by → arrows
+   - Pills: accent color text on #141428 background
+
+7. POSITIONING BLOCK
+   - Small heading + 2-line body
+
+8. COMPLIANCE FOOTER
+   - Very small, very muted (#3a3a55), dark background (#05050c)
+
+---
+
+COPY PER PAGE:
+
+### DE Homepage
+Nav: GLEV · Beta sichern · App ansehen
+Hero H1: "Hör auf zu raten."
+Sub: "Logge deine Mahlzeit. Sieh, was wirklich passiert ist. Triff bessere Entscheidungen."
+Tags: "Voice-first Logging · CGM-basierte Insights · Outcome-getriebenes Lernen"
+CTA1: "Beta sichern" | CTA2: "App ansehen"
+Value title: "Jede Mahlzeit zeigt dir etwas."
+Value body: "Glev verbindet Mahlzeit, Insulin und Glukosewerte — damit du erkennst, wann du unterdosiert, überdosiert oder richtig gelegen hast."
+Problem title: "Du entscheidest mit zu wenig Daten."
+Bullets: "Ein einzelner Glukosewert sagt nichts" / "Gleiche Mahlzeit ≠ gleiches Ergebnis" / "Muster bleiben unsichtbar"
+Flow: Sprechen → Essen → Verstehen → Verbessern
+Position title: "Die Entscheidungsebene für CGM-Nutzer."
+Position body: "Nicht nur Tracking. Nicht Hardware. Sondern das System dazwischen."
+Footer: "Glev ist ein Tool zur Dokumentation und ersetzt keine medizinische Beratung. Entscheidungen zur Therapie sollten in Absprache mit medizinischem Fachpersonal getroffen werden."
+
+### EN Homepage
+Nav: GLEV · Join beta · View app
+Hero H1: "Stop guessing your insulin."
+Sub: "Log your meal, see what actually happened, and improve your next decision."
+Tags: "Voice-first logging · CGM-based insights · Outcome-driven learning"
+CTA1: "Join beta" | CTA2: "View app"
+Value title: "Every meal teaches you something."
+Value body: "Glev connects your food, insulin and glucose — so you can see when you underdosed, overdosed or got it right."
+Problem title: "You're making decisions with incomplete data."
+Bullets: "A single glucose value doesn't tell the full story" / "The same meal doesn't behave the same way" / "Patterns stay hidden"
+Flow: Speak → Eat → Learn → Improve
+Position title: "The decision layer for CGM users."
+Position body: "Not just tracking. Not hardware. But the system in between."
+Footer: "Glev is a documentation and organisation tool and does not replace professional medical advice. Treatment decisions should be made in consultation with a healthcare professional."
+
+### Beta
+Nav: GLEV · Anmelden
+Hero H1: "Früher Zugang. Echter Einfluss."
+Sub: "Als Beta-Nutzer formst du Glev mit. Dein Feedback geht direkt ins Produkt."
+Tags: "Kostenloser Zugang · Direkter Einfluss · Frühzeitiger Start"
+CTA1: "Beta sichern" (no secondary CTA)
+Value title: "Was Beta-Nutzer bekommen:"
+Value body: "Vollständige App kostenlos · Direktes Feedback-Kanal · Frühzeitiger Pro-Zugang"
+Problem title: "Dein Platz ist limitiert."
+Bullets: "Vollzugang — kein Kreditkarte nötig" / "Direkte Kommunikation mit dem Team" / "Limitierte Spots — jetzt sichern"
+Flow: Anmelden → App testen → Feedback geben → Pro werden
+Position title: "Werde Teil der ersten Nutzergruppe."
+Position body: "Du hilfst uns Glev besser zu machen — und bekommst dafür frühen, kostenlosen Zugang."
+Footer: "Glev Beta ist kostenlos. Kein Abo. Kein Risiko. Jederzeit kündbar."
+
+### Pro
+Nav: GLEV · Upgrade to Pro
+Hero H1: "Glev Pro."
+Sub: "Tiefere Insights. Mehr Kontext. Die vollständige Entscheidungsebene für ernsthafte CGM-Nutzer."
+Tags: "Erweiterte Analytics · Unbegrenzte Historie · Priority Support"
+CTA1: "Pro starten" | CTA2: "Vergleich ansehen"
+Value title: "Was Pro dazugibt:"
+Value body: "Unbegrenzte Mahlzeit-Historie, erweiterte CGM-Korrelationen, Muster über Wochen und Monate."
+Problem title: "Pro vs. Free"
+Bullets: "Mahlzeiten: Unbegrenzt vs. 30/Monat" / "Analytics: Erweitert vs. Basis" / "Export: CSV + PDF vs. —"
+Flow: Mehr Daten → Tiefere Analyse → Bessere Muster → Sicherere Entscheidungen
+Position title: "Für alle, die es ernst meinen."
+Position body: "Glev Pro gibt dir den vollen Überblick über deine Glukosedynamik."
+Footer: "Monatlich kündbar. Keine versteckten Kosten. Keine medizinischen Versprechen."
+
+---
+
+LAYOUT:
+- Page title at top: "Reworked Landing & Homepages" in white, font-size 14px
+- Subtitle: "4 pages · Desktop + Mobile · Glev Design System"
+- Canvas is horizontally scrollable if needed
+- Row label "DESKTOP" and "MOBILE" on the left side of each row (rotated vertical text)
+- 28px gap between frames, 36px gap between rows
+- Each frame has a small label above it: e.g. "DE Homepage · Desktop"
+
+DO NOT use any framework. Pure HTML + CSS + vanilla JS only.
+DO NOT add a build system or package.json changes.
+JUST create the single file /public/gpt-redo.html and confirm it is done.

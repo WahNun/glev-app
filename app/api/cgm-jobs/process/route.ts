@@ -371,8 +371,11 @@ async function backfillCurveJobsGeneric(args: {
   fetchType: FetchType;
   /** Columns to load from the log table for anchor computation. */
   selectCols: string;
-  /** Optional row-level filter (e.g. only `bolus` rows from insulin_logs). */
-  extraFilter?: (q: ReturnType<AdminClient["from"]>) => ReturnType<AdminClient["from"]>;
+  /** Optional row-level filter (e.g. only `bolus` rows from insulin_logs).
+   *  Typed loosely because the Postgrest builder generics don't survive
+   *  being passed through a callback — callsites get full chainable API. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  extraFilter?: (q: any) => any;
   /** Compute the +180 min fetch_time from a loaded log row. */
   fetchTimeForRow: (row: Record<string, unknown>) => number;
 }): Promise<void> {
@@ -380,7 +383,7 @@ async function backfillCurveJobsGeneric(args: {
   const sinceIso = new Date(Date.parse(nowIso) - 24 * 60 * 60 * 1000).toISOString();
   try {
     let q = admin.from(logTable).select(selectCols).eq("user_id", userId).gte("created_at", sinceIso);
-    if (extraFilter) q = extraFilter(q) as typeof q;
+    if (extraFilter) q = extraFilter(q);
     const { data: rowsRaw } = await q;
     const rows = (rowsRaw as Record<string, unknown>[] | null) || [];
     if (rows.length === 0) return;
