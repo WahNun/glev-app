@@ -21,6 +21,19 @@ export interface InsulinLog {
   glucose_after_2h?: number | null;
   glucose_after_12h?: number | null;
   glucose_after_24h?: number | null;
+  // Task #194: window-level aggregates over the dense 0–180 min CGM
+  // curve captured for every bolus injection. Populated by the
+  // `bolus_curve_180` job in /api/cgm-jobs/process. Null for basal
+  // logs, for legacy rows, and while the +3h job is still pending.
+  // The engine reads `had_hypo_window` to surface a hypo that
+  // happened BETWEEN the +1h and +2h slots — invisible to the
+  // legacy point-value scoring.
+  min_bg_180?: number | null;
+  max_bg_180?: number | null;
+  time_to_peak_min?: number | null;
+  auc_180?: number | null;
+  had_hypo_window?: boolean | null;
+  min_bg_60_180?: number | null;
   // Optional explicit link to the meal this bolus was dosed for. Set by
   // the user via the "Zu Mahlzeit verknüpfen" dropdown in the Bolus log
   // dialog. Null for basal entries and un-tagged boluses. Engine ICR

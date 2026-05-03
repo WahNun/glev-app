@@ -39,6 +39,7 @@
 import { test, expect } from "@playwright/test";
 
 import {
+  evaluateExercise,
   median,
   normalizeExerciseType,
   aggregateExerciseTypeStats,
@@ -97,6 +98,43 @@ test("normalizeExerciseType() collapses 'hypertrophy' to 'strength'", () => {
 test("normalizeExerciseType() leaves every other type untouched", () => {
   const others: ExerciseType[] = ["strength", "cardio", "hiit", "yoga", "cycling", "run"];
   for (const t of others) expect(normalizeExerciseType(t)).toBe(t);
+});
+
+// ── evaluateExercise() — Task #194 dense-curve hypo path ────────────
+
+test("evaluateExercise: had_hypo_window=true forces HYPO_RISK even while PENDING (no at-end yet)", () => {
+  // Sparse evaluator would call this PENDING (atEnd null). The dense
+  // 0–180 min curve already proved a sub-70 dip happened — reflect
+  // it on the badge immediately instead of waiting for the slot.
+  const log = makeExerciseLog({
+    id: "x", exercise_type: "run",
+    cgm_glucose_at_log: 130, glucose_at_end: null, glucose_after_1h: null,
+    had_hypo_window: true,
+  });
+  expect(evaluateExercise(log).outcome).toBe("HYPO_RISK");
+});
+
+test("evaluateExercise: had_hypo_window=true forces HYPO_RISK even when both endpoints look fine", () => {
+  // Endpoints would otherwise classify STABLE — the curve caught a
+  // delayed hypo BETWEEN at-end and +1h that the sparse evaluator
+  // missed.
+  const log = makeExerciseLog({
+    id: "x", exercise_type: "cardio",
+    cgm_glucose_at_log: 130, glucose_at_end: 110, glucose_after_1h: 105,
+    had_hypo_window: true,
+  });
+  expect(evaluateExercise(log).outcome).toBe("HYPO_RISK");
+});
+
+test("evaluateExercise: had_hypo_window=false leaves the legacy rules in charge", () => {
+  // Curve resolved with no hypo — the explicit `false` must not be
+  // confused with `true`; the badge stays STABLE.
+  const log = makeExerciseLog({
+    id: "x", exercise_type: "yoga",
+    cgm_glucose_at_log: 120, glucose_at_end: 122, glucose_after_1h: 121,
+    had_hypo_window: false,
+  });
+  expect(evaluateExercise(log).outcome).toBe("STABLE");
 });
 
 // ── aggregateExerciseTypeStats() ────────────────────────────────────
@@ -171,6 +209,27 @@ test("aggregateExerciseTypeStats() excludes PENDING rows from the hypo-risk nume
   expect(stats.classifiedCount).toBe(2);
   expect(stats.hypoRiskCount).toBe(1);
   expect(stats.hypoRiskShare).toBeCloseTo(0.5, 5);
+});
+
+// Task #194: when the dense 0–180 min curve has resolved (`min_bg_180`
+// is set), aggregateExerciseTypeStats prefers it over the per-row
+// evaluator for the hypo signal — catching dips between the at-end
+// and +1h slots that the sparse evaluator would otherwise miss.
+test("aggregateExerciseTypeStats() honours min_bg_180 for the hypo-risk-share even when at-end is null", () => {
+  const logs: ExerciseLog[] = [
+    // Curve resolved, min stayed safely above 70 → counts as classified, no hypo.
+    makeExerciseLog({ id: "1", exercise_type: "cycling", cgm_glucose_at_log: 130, glucose_at_end: null, min_bg_180: 95, had_hypo_window: false }),
+    // Curve resolved with a dip below 70 → classified as hypo even
+    // though at-end is null (legacy evaluator would have called this
+    // PENDING and excluded it entirely).
+    makeExerciseLog({ id: "2", exercise_type: "cycling", cgm_glucose_at_log: 130, glucose_at_end: null, min_bg_180: 62, had_hypo_window: true }),
+    // Curve resolved, no hypo, endpoints landed → STABLE.
+    makeExerciseLog({ id: "3", exercise_type: "cycling", cgm_glucose_at_log: 120, glucose_at_end: 118, min_bg_180: 100, had_hypo_window: false }),
+  ];
+  const stats = aggregateExerciseTypeStats(logs, "cycling")!;
+  expect(stats.classifiedCount).toBe(3);
+  expect(stats.hypoRiskCount).toBe(1);
+  expect(stats.hypoRiskShare).toBeCloseTo(1 / 3, 5);
 });
 
 test("aggregateExerciseTypeStats() returns hypoRiskShare = null when no row is classified yet", () => {

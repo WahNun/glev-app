@@ -54,6 +54,43 @@ test("evaluateBolus: hypo at +2h forces OVER_CORRECTED regardless of baseline", 
   expect(r.outcome).toBe("OVER_CORRECTED");
 });
 
+// Task #194: dense-curve hypo wins over PENDING and the legacy
+// point-value rules — a hypo BETWEEN the +1h and +2h slots is otherwise
+// invisible to the sparse evaluator.
+test("evaluateBolus: had_hypo_window=true forces OVER_CORRECTED even while PENDING (no +2h yet)", () => {
+  const r = evaluateBolus(makeInsulinLog({
+    cgm_glucose_at_log: 200,
+    glucose_after_1h: 150,
+    glucose_after_2h: null,        // would normally → PENDING
+    had_hypo_window: true,         // dense curve caught a sub-70 dip
+  }));
+  expect(r.outcome).toBe("OVER_CORRECTED");
+});
+
+test("evaluateBolus: had_hypo_window=true forces OVER_CORRECTED even when both endpoints look fine", () => {
+  // Endpoints would otherwise classify ON_TARGET — the curve caught a
+  // dip BETWEEN them that the sparse evaluator missed.
+  const r = evaluateBolus(makeInsulinLog({
+    cgm_glucose_at_log: 130,
+    glucose_after_1h: 110,
+    glucose_after_2h: 120,
+    had_hypo_window: true,
+  }));
+  expect(r.outcome).toBe("OVER_CORRECTED");
+});
+
+test("evaluateBolus: had_hypo_window=false leaves the legacy rules in charge", () => {
+  // had_hypo_window explicitly false (curve resolved with no hypo) must
+  // not be confused with `true` — endpoints stay ON_TARGET.
+  const r = evaluateBolus(makeInsulinLog({
+    cgm_glucose_at_log: 130,
+    glucose_after_1h: 120,
+    glucose_after_2h: 130,
+    had_hypo_window: false,
+  }));
+  expect(r.outcome).toBe("ON_TARGET");
+});
+
 test("evaluateBolus: hypo at +1h (with safe +2h) still forces OVER_CORRECTED", () => {
   const r = evaluateBolus(makeInsulinLog({
     cgm_glucose_at_log: 150,

@@ -72,6 +72,13 @@ export function evaluateBolus(log: InsulinLog): BolusOutcomeInfo {
     outcome: o, label: LABELS[o], color: COLORS[o],
   });
 
+  // Task #194: dense-curve hypo wins over PENDING and the legacy
+  // point-value rules — a hypo BETWEEN the +1h and +2h slots would
+  // otherwise stay invisible until (or even after) the +2h reading
+  // lands. The `had_hypo_window` flag is set by the +3h
+  // bolus_curve_180 job from the full 0–180 min CGM time series.
+  if (log.had_hypo_window === true) return mk("OVER_CORRECTED");
+
   if (at2h == null) return mk("PENDING");
 
   if (at2h < HYPO_THRESHOLD) return mk("OVER_CORRECTED");

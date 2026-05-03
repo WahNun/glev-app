@@ -88,6 +88,12 @@ export async function POST(req: NextRequest) {
   // backfills meals logged BEFORE the feature shipped without needing
   // a separate cron.
   await backfillMealCurveJobs(admin, user.id, nowIso);
+  // Task #194: same pattern for bolus and exercise curve jobs — the
+  // feature shipped after some users already had logs in flight, so
+  // we self-heal by enqueueing the +3h backfill jobs for any
+  // bolus / exercise log from the last 24h that doesn't have one.
+  await backfillBolusCurveJobs(admin, user.id, nowIso);
+  await backfillExerciseCurveJobs(admin, user.id, nowIso);
   // Throttle re-attempts: a job that already failed once this pass
   // shouldn't be retried again until RETRY_DELAY_MS has elapsed.
   // We compare against `updated_at` (which is bumped on every retry)
@@ -143,12 +149,14 @@ export async function POST(req: NextRequest) {
     const fetchTimeMs = parseDbTs(job.fetch_time);
     const ageMs = nowMs - fetchTimeMs;
 
-    // Task #187: meal_curve_180 has its own resolution path — fetch the
-    // full 0–180 min slice from CGM history, upsert into
-    // `meal_glucose_samples`, and write the derived window aggregates
-    // (and back-fill bg_1h/bg_2h from the curve) on the meals row.
-    if (job.log_type === "meal" && job.fetch_type === "meal_curve_180") {
-      const r = await processMealCurveJob(admin, job, history, nowIso);
+    // Task #187 / #194: dense-curve jobs have their own resolution
+    // path — fetch the full 0–180 min slice from CGM history, upsert
+    // into the matching samples table, and write the derived window
+    // aggregates (plus back-fill the legacy point-value slot columns)
+    // on the parent log row. Handles meals, bolus, and exercise.
+    const curveCfg = curveConfigFor(job.log_type, job.fetch_type);
+    if (curveCfg) {
+      const r = await processCurveJob(admin, job, history, nowIso, curveCfg);
       if (r === "fetched") fetched++;
       else if (r === "skipped") skipped++;
       else if (r === "failed") failed++;
@@ -241,120 +249,253 @@ export async function POST(req: NextRequest) {
 }
 
 // ---------------------------------------------------------------------------
-// Task #187: process a `meal_curve_180` job.
+// Task #187 + #194: dense CGM curve jobs.
 //
-// Slices the CGM history to the 0–180 min window after `meal.meal_time`,
-// upserts each sample into `meal_glucose_samples` (idempotent on the
-// `(meal_id, t_offset_min)` UNIQUE), and writes the window-level
-// aggregates (min/max/peak/AUC/hypo/min_60_180) plus legacy bg_1h/bg_2h
-// back to the meals row. Marks the job 'fetched' on success, 'skipped'
-// when the meal row is gone or the window is empty after the abandon
-// horizon, otherwise leaves the job pending for the next pass.
+// One generic processor handles three parallel curve flavours:
+//   - meal_curve_180     → meal_glucose_samples, anchored on meal_time
+//   - bolus_curve_180    → bolus_glucose_samples, anchored on the bolus
+//                          log's created_at (injection instant)
+//   - exercise_curve_180 → exercise_glucose_samples, anchored on the
+//                          workout END (created_at + duration_minutes)
+//
+// Per pass it slices the CGM history to (anchor, anchor+180min],
+// upserts each sample into the matching parallel table (idempotent on
+// the `(log-fk, t_offset_min)` UNIQUE), writes the derived window
+// aggregates onto the parent log row, and back-fills the LEGACY point
+// slot columns (bg_1h/bg_2h for meals, glucose_after_1h/2h for bolus,
+// glucose_at_end/after_1h for exercise) so the existing UI / PDF /
+// export paths keep working without per-row migrations.
 // ---------------------------------------------------------------------------
 type AdminClient = ReturnType<typeof adminClient>;
 
-// One-time deploy backfill: enqueue `meal_curve_180` jobs for the
-// caller's meals in the last 24h that don't already have one. Cheap
-// idempotent insert — UNIQUE constraint isn't strictly needed because
-// we filter on existing jobs first, but the call is small enough to
-// run on every /process tick and self-heal mis-aligned states.
-async function backfillMealCurveJobs(
-  admin: AdminClient,
-  userId: string,
-  nowIso: string,
-): Promise<void> {
+interface CurveSlot {
+  /** Legacy point column on the parent log row (e.g. "bg_1h"). */
+  valueCol: string;
+  /** Optional `_at` column (only meals carry one — insulin_logs and
+   *  exercise_logs don't). */
+  atCol: string | null;
+  /** Target offset from the window anchor in minutes. */
+  targetMin: number;
+  /** ± tolerance in minutes for picking the nearest sample. */
+  toleranceMin: number;
+}
+
+interface CurveConfig {
+  /** Parent log table — `meals`, `insulin_logs`, `exercise_logs`. */
+  logTable: string;
+  /** Parallel samples table. */
+  samplesTable: string;
+  /** Foreign-key column in the samples table back to the log row. */
+  sampleFkCol: string;
+  /** Conflict target for the idempotent upsert. */
+  upsertOnConflict: string;
+  /** Resolves the 0-min anchor for a given parent row + job. */
+  windowStart: (row: Record<string, unknown>, job: CgmFetchJob) => number;
+  /** Legacy point-slot back-fills (each only fired when the column is
+   *  currently NULL — manual entries are never overwritten). */
+  legacySlots: CurveSlot[];
+  /** Extra columns to load from the parent row (always includes id +
+   *  user_id). Used to read existing slot values + the anchor column. */
+  loadCols: string[];
+}
+
+const CURVE_CONFIGS: Partial<Record<LogType, Partial<Record<FetchType, CurveConfig>>>> = {
+  meal: {
+    meal_curve_180: {
+      logTable:        "meals",
+      samplesTable:    "meal_glucose_samples",
+      sampleFkCol:     "meal_id",
+      upsertOnConflict: "meal_id,t_offset_min",
+      // Meals anchor on `meal_time` (with created_at as a legacy
+      // fallback) so a back-edited meal_time still drives the curve.
+      windowStart: (row) => parseDbTs(
+        (row.meal_time as string | null) ?? (row.created_at as string),
+      ),
+      legacySlots: [
+        { valueCol: "bg_1h", atCol: "bg_1h_at", targetMin:  60, toleranceMin: 15 },
+        { valueCol: "bg_2h", atCol: "bg_2h_at", targetMin: 120, toleranceMin: 15 },
+      ],
+      loadCols: ["meal_time", "created_at", "bg_1h", "bg_2h", "bg_1h_at", "bg_2h_at"],
+    },
+  },
+  bolus: {
+    bolus_curve_180: {
+      logTable:        "insulin_logs",
+      samplesTable:    "bolus_glucose_samples",
+      sampleFkCol:     "log_id",
+      upsertOnConflict: "log_id,t_offset_min",
+      // Bolus anchors on the injection instant (`created_at`).
+      windowStart: (row) => parseDbTs(row.created_at as string),
+      legacySlots: [
+        { valueCol: "glucose_after_1h", atCol: null, targetMin:  60, toleranceMin: 15 },
+        { valueCol: "glucose_after_2h", atCol: null, targetMin: 120, toleranceMin: 15 },
+      ],
+      loadCols: ["created_at", "glucose_after_1h", "glucose_after_2h"],
+    },
+  },
+  exercise: {
+    exercise_curve_180: {
+      logTable:        "exercise_logs",
+      samplesTable:    "exercise_glucose_samples",
+      sampleFkCol:     "log_id",
+      upsertOnConflict: "log_id,t_offset_min",
+      // Exercise anchors on workout END = created_at + duration_minutes.
+      windowStart: (row) => {
+        const start = parseDbTs(row.created_at as string);
+        const dur = Number(row.duration_minutes ?? 0);
+        return start + (Number.isFinite(dur) ? dur : 0) * 60_000;
+      },
+      legacySlots: [
+        { valueCol: "glucose_at_end",   atCol: null, targetMin:  0, toleranceMin: 15 },
+        { valueCol: "glucose_after_1h", atCol: null, targetMin: 60, toleranceMin: 15 },
+      ],
+      loadCols: ["created_at", "duration_minutes", "glucose_at_end", "glucose_after_1h"],
+    },
+  },
+};
+
+function curveConfigFor(logType: LogType, fetchType: FetchType): CurveConfig | null {
+  return CURVE_CONFIGS[logType]?.[fetchType] ?? null;
+}
+
+// One-time deploy backfill: enqueue curve jobs for the caller's
+// recent logs that don't already have one. Cheap idempotent inserts —
+// the call is small enough to run on every /process tick and
+// self-heal mis-aligned states.
+async function backfillCurveJobsGeneric(args: {
+  admin: AdminClient;
+  userId: string;
+  nowIso: string;
+  logTable: string;
+  logType: LogType;
+  fetchType: FetchType;
+  /** Columns to load from the log table for anchor computation. */
+  selectCols: string;
+  /** Optional row-level filter (e.g. only `bolus` rows from insulin_logs). */
+  extraFilter?: (q: ReturnType<AdminClient["from"]>) => ReturnType<AdminClient["from"]>;
+  /** Compute the +180 min fetch_time from a loaded log row. */
+  fetchTimeForRow: (row: Record<string, unknown>) => number;
+}): Promise<void> {
+  const { admin, userId, nowIso, logTable, logType, fetchType, selectCols, extraFilter, fetchTimeForRow } = args;
   const sinceIso = new Date(Date.parse(nowIso) - 24 * 60 * 60 * 1000).toISOString();
   try {
-    const { data: meals } = await admin
-      .from("meals")
-      .select("id, meal_time, created_at")
-      .eq("user_id", userId)
-      .gte("created_at", sinceIso);
-    const mealList = (meals as { id: string; meal_time: string | null; created_at: string }[] | null) || [];
-    if (mealList.length === 0) return;
+    let q = admin.from(logTable).select(selectCols).eq("user_id", userId).gte("created_at", sinceIso);
+    if (extraFilter) q = extraFilter(q) as typeof q;
+    const { data: rowsRaw } = await q;
+    const rows = (rowsRaw as Record<string, unknown>[] | null) || [];
+    if (rows.length === 0) return;
 
-    const ids = mealList.map(m => m.id);
+    const ids = rows.map(r => r.id as string);
     const { data: existing } = await admin
       .from("cgm_fetch_jobs")
       .select("log_id")
       .eq("user_id", userId)
-      .eq("fetch_type", "meal_curve_180")
+      .eq("fetch_type", fetchType)
       .in("log_id", ids);
     const have = new Set((existing as { log_id: string }[] | null || []).map(r => r.log_id));
 
-    const rows = mealList
-      .filter(m => !have.has(m.id))
-      .map(m => {
-        const refMs = parseDbTs(m.meal_time ?? m.created_at);
-        return {
-          user_id:    userId,
-          log_id:     m.id,
-          log_type:   "meal" as const,
-          fetch_type: "meal_curve_180" as const,
-          fetch_time: new Date(refMs + 180 * 60_000).toISOString(),
-          status:     "pending" as const,
-        };
-      });
-    if (rows.length === 0) return;
-    await admin.from("cgm_fetch_jobs").insert(rows);
+    const inserts = rows
+      .filter(r => !have.has(r.id as string))
+      .map(r => ({
+        user_id:    userId,
+        log_id:     r.id as string,
+        log_type:   logType,
+        fetch_type: fetchType,
+        fetch_time: new Date(fetchTimeForRow(r)).toISOString(),
+        status:     "pending" as const,
+      }));
+    if (inserts.length === 0) return;
+    await admin.from("cgm_fetch_jobs").insert(inserts);
   } catch (e) {
-    console.warn("[cgm-jobs/process] backfill meal_curve_180 failed:", (e as Error)?.message || e);
+    console.warn(`[cgm-jobs/process] backfill ${fetchType} failed:`, (e as Error)?.message || e);
   }
 }
 
-const MEAL_CURVE_ABANDON_AFTER_MS = 12 * 60 * 60 * 1000; // 12h
+async function backfillMealCurveJobs(admin: AdminClient, userId: string, nowIso: string): Promise<void> {
+  await backfillCurveJobsGeneric({
+    admin, userId, nowIso,
+    logTable: "meals", logType: "meal", fetchType: "meal_curve_180",
+    selectCols: "id, meal_time, created_at",
+    fetchTimeForRow: r => parseDbTs(((r.meal_time as string | null) ?? (r.created_at as string))) + 180 * 60_000,
+  });
+}
 
-async function processMealCurveJob(
+async function backfillBolusCurveJobs(admin: AdminClient, userId: string, nowIso: string): Promise<void> {
+  await backfillCurveJobsGeneric({
+    admin, userId, nowIso,
+    logTable: "insulin_logs", logType: "bolus", fetchType: "bolus_curve_180",
+    selectCols: "id, created_at, insulin_type",
+    // Basal logs are not scored — only enqueue curves for bolus rows.
+    extraFilter: q => q.eq("insulin_type", "bolus"),
+    fetchTimeForRow: r => parseDbTs(r.created_at as string) + 180 * 60_000,
+  });
+}
+
+async function backfillExerciseCurveJobs(admin: AdminClient, userId: string, nowIso: string): Promise<void> {
+  await backfillCurveJobsGeneric({
+    admin, userId, nowIso,
+    logTable: "exercise_logs", logType: "exercise", fetchType: "exercise_curve_180",
+    selectCols: "id, created_at, duration_minutes",
+    fetchTimeForRow: r => {
+      const start = parseDbTs(r.created_at as string);
+      const dur = Number(r.duration_minutes ?? 0);
+      const end = start + (Number.isFinite(dur) ? dur : 0) * 60_000;
+      return end + 180 * 60_000;
+    },
+  });
+}
+
+const CURVE_ABANDON_AFTER_MS = 12 * 60 * 60 * 1000; // 12h
+
+async function processCurveJob(
   admin: AdminClient,
   job: CgmFetchJob,
   history: Reading[],
   nowIso: string,
+  cfg: CurveConfig,
 ): Promise<"fetched" | "skipped" | "failed" | "pending"> {
   const fetchTimeMs = parseDbTs(job.fetch_time);
   const nowMs = Date.parse(nowIso);
   const ageMs = nowMs - fetchTimeMs;
-  const overAge = ageMs >= MEAL_CURVE_ABANDON_AFTER_MS;
+  const overAge = ageMs >= CURVE_ABANDON_AFTER_MS;
 
-  // Load the meal row to anchor the window on `meal_time` (falls back
-  // to created_at if meal_time is absent on legacy rows).
-  const { data: mealRowRaw } = await admin
-    .from("meals")
-    .select("id, user_id, meal_time, created_at, bg_1h, bg_2h, bg_1h_at, bg_2h_at")
+  // Load the parent log row so we can resolve the window anchor and
+  // know which legacy slot columns still need back-filling.
+  const cols = ["id", "user_id", ...cfg.loadCols].join(", ");
+  const { data: rowRaw } = await admin
+    .from(cfg.logTable)
+    .select(cols)
     .eq("id", job.log_id)
     .maybeSingle();
-  const mealRow = mealRowRaw as {
-    id: string; user_id: string; meal_time: string | null; created_at: string;
-    bg_1h: number | null; bg_2h: number | null;
-    bg_1h_at: string | null; bg_2h_at: string | null;
-  } | null;
-  if (!mealRow) {
+  const row = rowRaw as Record<string, unknown> | null;
+  if (!row) {
     await admin.from("cgm_fetch_jobs")
-      .update({ status: "skipped", error_msg: "meal row missing", updated_at: nowIso })
+      .update({ status: "skipped", error_msg: `${cfg.logTable} row missing`, updated_at: nowIso })
       .eq("id", job.id);
     return "skipped";
   }
-  const mealTimeMs = parseDbTs(mealRow.meal_time ?? mealRow.created_at);
+  const anchorMs = cfg.windowStart(row, job);
 
-  // Slice the CGM history to (mealTime, mealTime + 180min].
+  // Slice the CGM history to (anchor, anchor + 180min].
   const WINDOW_MS = 180 * 60_000;
   const samples: MealSample[] = [];
-  type SampleRow = { meal_id: string; user_id: string; t_offset_min: number; value_mgdl: number; source: string; captured_at: string };
+  type SampleRow = Record<string, string | number>;
   const sampleRows: SampleRow[] = [];
   for (const r of history) {
     if (!r.timestamp || r.value == null) continue;
     const t = parseLluTs(r.timestamp);
     if (t == null) continue;
-    const off = t - mealTimeMs;
+    const off = t - anchorMs;
     if (off < 0 || off > WINDOW_MS) continue;
     const tMin = Math.round(off / 60_000);
     samples.push({ t_offset_min: tMin, value_mgdl: r.value });
     sampleRows.push({
-      meal_id:      mealRow.id,
-      user_id:      mealRow.user_id,
-      t_offset_min: tMin,
-      value_mgdl:   r.value,
-      source:       (r as Reading & { source?: string }).source || "llu",
-      captured_at:  new Date(t).toISOString(),
+      [cfg.sampleFkCol]: row.id as string,
+      user_id:           row.user_id as string,
+      t_offset_min:      tMin,
+      value_mgdl:        r.value,
+      source:            (r as Reading & { source?: string }).source || "llu",
+      captured_at:       new Date(t).toISOString(),
     });
   }
 
@@ -365,50 +506,45 @@ async function processMealCurveJob(
         .eq("id", job.id);
       return "skipped";
     }
-    // Bump retry; CGM may simply not have refreshed yet.
     await admin.from("cgm_fetch_jobs")
       .update({ retry_count: job.retry_count + 1, updated_at: nowIso })
       .eq("id", job.id);
     return "pending";
   }
 
-  // Idempotent upsert on (meal_id, t_offset_min).
+  // Idempotent upsert on (fk-col, t_offset_min).
   const { error: upErr } = await admin
-    .from("meal_glucose_samples")
-    .upsert(sampleRows, { onConflict: "meal_id,t_offset_min" });
+    .from(cfg.samplesTable)
+    .upsert(sampleRows, { onConflict: cfg.upsertOnConflict });
   if (upErr) {
-    console.warn("[cgm-jobs/process] meal_glucose_samples upsert failed:", upErr.message);
+    console.warn(`[cgm-jobs/process] ${cfg.samplesTable} upsert failed:`, upErr.message);
     await admin.from("cgm_fetch_jobs")
       .update({ retry_count: job.retry_count + 1, error_msg: upErr.message, updated_at: nowIso })
       .eq("id", job.id);
     return "pending";
   }
 
-  // Compute derived fields + back-fill legacy bg_1h/bg_2h from samples
-  // when those columns are still NULL (don't overwrite manual entries).
+  // Compute derived window fields + back-fill legacy point slots from
+  // the curve when those columns are still NULL (never overwrite a
+  // manual entry).
   const derived = computeDerivedCurveFields(samples);
   const update: Record<string, unknown> = { ...derived };
 
-  if (mealRow.bg_1h == null) {
-    const s60 = pickSlotValue(samples, 60, 15);
-    if (s60) {
-      update.bg_1h = s60.value_mgdl;
-      update.bg_1h_at = new Date(mealTimeMs + s60.t_offset_min * 60_000).toISOString();
-    }
-  }
-  if (mealRow.bg_2h == null) {
-    const s120 = pickSlotValue(samples, 120, 15);
-    if (s120) {
-      update.bg_2h = s120.value_mgdl;
-      update.bg_2h_at = new Date(mealTimeMs + s120.t_offset_min * 60_000).toISOString();
+  for (const slot of cfg.legacySlots) {
+    if (row[slot.valueCol] != null && row[slot.valueCol] !== "") continue;
+    const s = pickSlotValue(samples, slot.targetMin, slot.toleranceMin);
+    if (!s) continue;
+    update[slot.valueCol] = s.value_mgdl;
+    if (slot.atCol) {
+      update[slot.atCol] = new Date(anchorMs + s.t_offset_min * 60_000).toISOString();
     }
   }
 
-  const { error: mErr } = await admin.from("meals").update(update).eq("id", mealRow.id);
-  if (mErr) {
-    console.warn("[cgm-jobs/process] meals update failed:", mErr.message);
+  const { error: lErr } = await admin.from(cfg.logTable).update(update).eq("id", row.id as string);
+  if (lErr) {
+    console.warn(`[cgm-jobs/process] ${cfg.logTable} update failed:`, lErr.message);
     await admin.from("cgm_fetch_jobs")
-      .update({ retry_count: job.retry_count + 1, error_msg: mErr.message, updated_at: nowIso })
+      .update({ retry_count: job.retry_count + 1, error_msg: lErr.message, updated_at: nowIso })
       .eq("id", job.id);
     return "pending";
   }

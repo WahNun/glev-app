@@ -34,6 +34,10 @@ function offsetsForLogType(t: LogType, durationMinutes?: number): { type: FetchT
       return [
         { type: "after_1h", ms: 60 * MIN },
         { type: "after_2h", ms: 120 * MIN },
+        // Task #194: dense post-bolus curve. Fires once at +180 min
+        // and backfills the full 0–180 min sample set + window
+        // aggregates (min/max/AUC/hypo) on the insulin_logs row.
+        { type: "bolus_curve_180", ms: 180 * MIN },
       ];
     case "basal":
       return [
@@ -45,6 +49,11 @@ function offsetsForLogType(t: LogType, durationMinutes?: number): { type: FetchT
       return [
         { type: "at_end",        ms: d * MIN },
         { type: "exer_after_1h", ms: (d + 60) * MIN },
+        // Task #194: dense post-workout curve. The 0–180 min window
+        // starts at workout END (created_at + duration_minutes), so
+        // the +3h backfill fires `d + 180` min after the workout
+        // start instant.
+        { type: "exercise_curve_180", ms: (d + 180) * MIN },
       ];
     }
   }

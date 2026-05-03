@@ -10,7 +10,9 @@ export type FetchType =
   | "after_1h" | "after_2h"
   | "after_12h" | "after_24h"
   | "at_end" | "exer_after_1h"
-  | "meal_curve_180";
+  | "meal_curve_180"
+  | "bolus_curve_180"
+  | "exercise_curve_180";
 
 export type JobStatus = "pending" | "fetched" | "failed" | "skipped";
 
@@ -45,7 +47,9 @@ export function fetchTypeLabel(t: FetchType): string {
     case "after_12h":      return "12H POST";
     case "after_24h":      return "24H POST";
     case "at_end":         return "AT END";
-    case "meal_curve_180": return "3H CURVE";
+    case "meal_curve_180":
+    case "bolus_curve_180":
+    case "exercise_curve_180": return "3H CURVE";
   }
 }
 

@@ -64,6 +64,13 @@ export function evaluateExercise(log: ExerciseLog): ExerciseOutcomeInfo {
   // 3 h CGM job cutoff — the spec lists exactly 5 outcomes. The
   // overdue "No data" hint is surfaced inside the Glucose tracking
   // panel via pendingLabel(), not on the badge.
+  // Task #194: dense-curve hypo wins over PENDING and the legacy
+  // point-value rules — a delayed hypo BETWEEN the at-end and +1h
+  // slots would otherwise stay invisible. The `had_hypo_window`
+  // flag is set by the +3h exercise_curve_180 job from the full
+  // 0–180 min post-workout CGM time series.
+  if (log.had_hypo_window === true) return mk("HYPO_RISK");
+
   if (atEnd == null) return mk("PENDING");
 
   // Hypo risk wins over delta-based outcomes once at-end exists.
@@ -273,13 +280,30 @@ export function aggregateExerciseTypeStats(
     if (before != null && after1h != null) deltas1h.push(after1h - before);
 
     // Outcome-based stats — only count sessions that have actually
-    // been classified (at-end reading exists). PENDING rows are
-    // excluded from BOTH numerator and denominator, mirroring the
-    // workout-outcomes distribution card.
-    const outcome = evaluateExercise(log).outcome;
-    if (outcome !== "PENDING") {
+    // been classified (at-end reading exists OR the dense-curve job
+    // has resolved with a hypo). PENDING rows are excluded from
+    // BOTH numerator and denominator, mirroring the workout-outcomes
+    // distribution card.
+    //
+    // Task #194: when the dense 0–180 min curve has landed
+    // (`min_bg_180 != null`), prefer it over the per-row evaluator
+    // for the hypo signal. This is a more honest hypo-risk-share —
+    // it catches dips between the at-end and +1h slots that the
+    // sparse evaluator would otherwise miss (and also classifies
+    // sessions where at-end / +1h are still null but the curve
+    // already proves no hypo occurred).
+    const minWindow = numOrNull(log.min_bg_180 ?? null);
+    if (minWindow != null) {
       classifiedCount++;
-      if (outcome === "HYPO_RISK") hypoRiskCount++;
+      if (minWindow < HYPO_THRESHOLD || log.had_hypo_window === true) {
+        hypoRiskCount++;
+      }
+    } else {
+      const outcome = evaluateExercise(log).outcome;
+      if (outcome !== "PENDING") {
+        classifiedCount++;
+        if (outcome === "HYPO_RISK") hypoRiskCount++;
+      }
     }
   }
 

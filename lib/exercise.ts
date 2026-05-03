@@ -31,6 +31,17 @@ export interface ExerciseLog {
   // CGM auto-fetch results: at workout end, and +1h after end.
   glucose_at_end?: number | null;
   glucose_after_1h?: number | null;
+  // Task #194: window-level aggregates over the dense 0–180 min CGM
+  // curve captured starting at workout end (created_at + duration).
+  // Populated by the `exercise_curve_180` job. The engine reads
+  // `had_hypo_window` to surface a delayed hypo BETWEEN the at-end
+  // and +1h slots — invisible to the legacy point-value scoring.
+  min_bg_180?: number | null;
+  max_bg_180?: number | null;
+  time_to_peak_min?: number | null;
+  auc_180?: number | null;
+  had_hypo_window?: boolean | null;
+  min_bg_60_180?: number | null;
 }
 
 export interface ExerciseLogInput {
