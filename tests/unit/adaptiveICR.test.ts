@@ -38,7 +38,7 @@ function mealAt(hour: number, carbs: number, insulin: number, delta = 10, id = `
 
 test("computeAdaptiveICR: empty input returns all nulls", () => {
   const r = computeAdaptiveICR([]);
-  expect(r).toEqual({ global: null, morning: null, afternoon: null, evening: null, sampleSize: 0 });
+  expect(r).toEqual({ global: null, morning: null, afternoon: null, evening: null, sampleSize: 0, pairedCount: 0 });
 });
 
 test("computeAdaptiveICR: skips non-final meals", () => {
@@ -229,6 +229,31 @@ test("computeAdaptiveICR: empty boluses array preserves legacy meal.insulin_unit
   const a = computeAdaptiveICR([m1, m2]);
   const b = computeAdaptiveICR([m1, m2], []);
   expect(b).toEqual(a);
+});
+
+test("computeAdaptiveICR: pairedCount reflects how many meals used a bolus pair vs meal.insulin_units", () => {
+  // Three meals: one explicit-tag pair, one time-window pair,
+  // one fallback to meal.insulin_units. pairedCount must be 2.
+  const m1 = mealAt(10, 50, 4, 10, "m1");                              // explicit-tag → paired
+  const m2 = makeFinalMeal("m2", 10, {
+    carbs_grams: 60, insulin_units: 3,
+    meal_time: new Date(FIXTURE_BASE_MS).toISOString(),
+    created_at: new Date(FIXTURE_BASE_MS).toISOString(),
+  });                                                                  // time-window → paired
+  const m3 = mealAt(10, 50, 5, 10, "m3");                              // no bolus → fallback
+  const b1 = bolusAt(0,  6, { id: "b1", relatedTo: "m1" });
+  const b2 = bolusAt(10, 5, { id: "b2" });
+  const r = computeAdaptiveICR([m1, m2, m3], [b1, b2]);
+  expect(r.sampleSize).toBe(3);
+  expect(r.pairedCount).toBe(2);
+});
+
+test("computeAdaptiveICR: pairedCount is 0 when no boluses are provided", () => {
+  const m1 = mealAt(10, 50, 5, 10, "m1");
+  const m2 = mealAt(10, 60, 4, 10, "m2");
+  const r = computeAdaptiveICR([m1, m2]);
+  expect(r.sampleSize).toBe(2);
+  expect(r.pairedCount).toBe(0);
 });
 
 test("computeAdaptiveICR: basal logs in the bolus list are ignored by pairing", () => {

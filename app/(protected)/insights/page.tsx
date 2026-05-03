@@ -1019,6 +1019,27 @@ export default function InsightsPage() {
                   </span>
                 </div>
 
+                {/* ICR source breakdown — makes it visible whether the
+                    adaptive ICR is being driven by separately-logged
+                    bolus shots (paired via related_entry_id or ±30-min
+                    time-window) or by the legacy meal.insulin_units
+                    column. Hidden when there are zero contributing
+                    meals (warming-up state already says so). */}
+                {adaptiveICR.sampleSize > 0 && (
+                  <div
+                    title={tInsights("engine_icr_source_tooltip")}
+                    style={{
+                      fontSize:10, color:"var(--text-faint)",
+                      lineHeight:1.4, marginTop:-4, marginBottom:10,
+                    }}
+                  >
+                    {tInsights("engine_icr_source", {
+                      paired: adaptiveICR.pairedCount,
+                      total:  adaptiveICR.sampleSize,
+                    })}
+                  </div>
+                )}
+
                 {/* Pattern label — German renders localized strings; English
                     keeps the engine defaults from lib/engine/patterns.ts as
                     the single source of truth. */}

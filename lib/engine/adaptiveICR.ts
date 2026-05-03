@@ -19,6 +19,13 @@ export interface AdaptiveICR {
   afternoon: number | null;
   evening: number | null;
   sampleSize: number;
+  /** How many of the contributing meals took their insulin value from a
+   *  paired bolus log (explicit `related_entry_id` tag OR ±30-min
+   *  time-window pair). The remainder (`sampleSize - pairedCount`) used
+   *  the legacy `meal.insulin_units` column. Surfaced in the UI so the
+   *  user can see whether their ICR is driven by separately-logged
+   *  bolus shots or by the meal's own insulin field. */
+  pairedCount: number;
 }
 
 function timeOfDay(d: Date): TimeOfDay {
@@ -103,6 +110,7 @@ export function computeAdaptiveICR(meals: Meal[], boluses?: InsulinLog[]): Adapt
     }
   }
 
+  let pairedCount = 0;
   for (const m of meals) {
     const lc = lifecycleFor(m);
     if (lc.state !== "final") continue;
@@ -111,11 +119,13 @@ export function computeAdaptiveICR(meals: Meal[], boluses?: InsulinLog[]): Adapt
 
     const pairedInsulin = bolusUnitsByMealId.get(m.id);
     let insulin: number;
+    let usedPair = false;
     if (pairedInsulin !== undefined && pairedInsulin > 0) {
       // Meal has at least one paired bolus — use the sum, ignoring
       // meal.insulin_units (the user's standalone bolus log is the
       // source of truth for what they actually injected).
       insulin = pairedInsulin;
+      usedPair = true;
     } else {
       // No bolus pair → fall back to the legacy meal.insulin_units.
       // Per spec, a meal with no pair only contributes when its own
@@ -129,6 +139,7 @@ export function computeAdaptiveICR(meals: Meal[], boluses?: InsulinLog[]): Adapt
     const ratio = carbs / insulin;
     buckets.all.push({ value: ratio, weight: w });
     buckets[timeOfDay(parseDbDate(m.meal_time ?? m.created_at))].push({ value: ratio, weight: w });
+    if (usedPair) pairedCount++;
   }
 
   return {
@@ -137,5 +148,6 @@ export function computeAdaptiveICR(meals: Meal[], boluses?: InsulinLog[]): Adapt
     afternoon: buckets.afternoon.length >= 3 ? weightedAverage(buckets.afternoon) : null,
     evening:   buckets.evening.length   >= 3 ? weightedAverage(buckets.evening)   : null,
     sampleSize: buckets.all.length,
+    pairedCount,
   };
 }

@@ -320,6 +320,11 @@ export default function EnginePage() {
   const [adaptedICR, setAdaptedICR] = useState(15);
   const [icrConfidence, setIcrConfidence] = useState<"low" | "medium" | "high">("low");
   const [icrSampleSize, setIcrSampleSize] = useState(0);
+  // How many of the contributing meals took their insulin value from a
+  // paired bolus log (vs falling back to meal.insulin_units). Surfaced
+  // in the recommendation card so the user can see whether the ICR is
+  // being driven by separately-logged shots or the meal column.
+  const [icrPairedCount, setIcrPairedCount] = useState(0);
   const [insulinLogs, setInsulinLogs] = useState<InsulinLog[]>([]);
   const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([]);
   // Adaptive engine adjustment banner state. `dismissedSig` is hydrated
@@ -957,6 +962,7 @@ export default function EnginePage() {
           setAdaptedICR(newICR);
           setIcrConfidence(adaptive.sampleSize >= 10 ? "high" : adaptive.sampleSize >= 5 ? "medium" : "low");
           setIcrSampleSize(adaptive.sampleSize);
+          setIcrPairedCount(adaptive.pairedCount);
           logDebug("ENGINE.ADAPTIVE_ICR", { newICR, sampleSize: adaptive.sampleSize, source: "computeAdaptiveICR.global" });
         }
       })
@@ -2350,6 +2356,25 @@ export default function EnginePage() {
                         {result.source === "historical" ? tEngine("source_historical") : result.source === "blended" ? tEngine("source_blended") : tEngine("source_formula")}
                       </span>
                     </div>
+                    {/* ICR source breakdown — tells the user how many of
+                        the meals feeding the adaptive ICR took insulin
+                        from a paired bolus log vs. the legacy
+                        meal.insulin_units column. Only shown once we
+                        actually have contributing meals. */}
+                    {icrSampleSize > 0 && (
+                      <div
+                        title={tEngine("icr_source_tooltip")}
+                        style={{
+                          marginTop: 8, fontSize: 11,
+                          color: "var(--text-faint)", lineHeight: 1.4,
+                        }}
+                      >
+                        {tEngine("icr_source", {
+                          paired: icrPairedCount,
+                          total:  icrSampleSize,
+                        })}
+                      </div>
+                    )}
                   </div>
 
                   {/* Collapsible GPT reasoning — chevron toggles the body. */}

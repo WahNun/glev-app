@@ -118,6 +118,7 @@ export function makeAdaptiveICR(overrides: Partial<AdaptiveICR> = {}): AdaptiveI
   return {
     global: null, morning: null, afternoon: null, evening: null,
     sampleSize: 0,
+    pairedCount: 0,
     ...overrides,
   };
 }
