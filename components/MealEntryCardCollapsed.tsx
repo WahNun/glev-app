@@ -4,8 +4,10 @@ import React from "react";
 import type { Meal } from "@/lib/meals";
 import { TYPE_COLORS, TYPE_SHORT, TYPE_LABELS } from "@/lib/mealTypes";
 import { chipForMeal } from "@/lib/engine/chipState";
+import { renderEngineMessage, renderEngineMessages } from "@/lib/engineMessages";
 import { parseDbDate } from "@/lib/time";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
+import { useTranslations } from "next-intl";
 
 const ACCENT = "#4F6EF7";
 const ORANGE = "#FF9500";
@@ -23,6 +25,7 @@ export default function MealEntryCardCollapsed({
   // Carb-unit display follows the user's profile preference (g/BE/KE).
   // The DB column stays in grams; only the rendered value swaps.
   const carbUnit = useCarbUnit();
+  const tEngine = useTranslations("engine");
   const ts = meal.meal_time ?? meal.created_at;
   const d = parseDbDate(ts);
   const dateStr = d.toLocaleDateString("en", { month: "short", day: "numeric" });
@@ -129,7 +132,7 @@ export default function MealEntryCardCollapsed({
       {showEval && (
         <span
           className="glev-mec-eval"
-          title={chip.body}
+          title={renderEngineMessages(tEngine, chip.body)}
           style={{
             padding: "5px 10px",
             borderRadius: 99,
@@ -143,7 +146,7 @@ export default function MealEntryCardCollapsed({
             textTransform: "uppercase",
           }}
         >
-          {chip.label}
+          {chip.finalOutcomeLabel ?? renderEngineMessage(tEngine, chip.label)}
         </span>
       )}
     </div>

@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { updateMeal, type Meal } from "@/lib/meals";
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
 import { chipForMeal } from "@/lib/engine/chipState";
+import { renderEngineMessage, renderEngineMessages } from "@/lib/engineMessages";
 import { parseDbDate, parseDbTs } from "@/lib/time";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
 
@@ -32,6 +33,7 @@ export default function MealEntryLightExpand({
 }) {
   const td = useTranslations("dashboard");
   const tm = useTranslations("mealEdit");
+  const tEngine = useTranslations("engine");
   // Carb-unit selector now drives both the read-view stats and the edit
   // form: the eCarbs input is seeded via carbUnit.fromGrams() and saved
   // via carbUnit.toGrams() so DACH users see BE/KE consistently. The DB
@@ -331,12 +333,12 @@ export default function MealEntryLightExpand({
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
           <span style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>{td("outcome")}</span>
           <span style={{ padding:"4px 10px", borderRadius:99, fontSize:10, fontWeight:700, background:chip.color, color:"var(--on-accent)", letterSpacing:"0.04em", textTransform:"uppercase" }}>
-            {chip.label}
+            {chip.finalOutcomeLabel ?? renderEngineMessage(tEngine, chip.label)}
           </span>
         </div>
-        <div style={{ fontSize:12, color:"var(--text-body)", lineHeight:1.5 }}>{chip.body}</div>
+        <div style={{ fontSize:12, color:"var(--text-body)", lineHeight:1.5 }}>{renderEngineMessages(tEngine, chip.body)}</div>
         {chip.trendHint && (
-          <div style={{ fontSize:11, color:"var(--text-dim)", fontStyle:"italic" }}>{chip.trendHint}</div>
+          <div style={{ fontSize:11, color:"var(--text-dim)", fontStyle:"italic" }}>{renderEngineMessage(tEngine, chip.trendHint)}</div>
         )}
       </div>
 

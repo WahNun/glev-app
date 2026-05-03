@@ -1,14 +1,20 @@
 import type { Meal } from "@/lib/meals";
 import { lifecycleFor, type LifecycleResult } from "./lifecycle";
+import type { AdjustmentMessage } from "./adjustment";
 import { getEvalColor, getEvalLabel } from "@/lib/mealTypes";
 import { parseDbDate } from "@/lib/time";
 
 export type ChipState = {
   state: "pending" | "provisional" | "final";
   color: string;
-  label: string;
-  body: string;
-  trendHint?: string;
+  /** Localizable label — the engine emits a key, the UI calls `t(label.key)`. */
+  label: AdjustmentMessage;
+  /** Localizable body (one or more sentences). */
+  body: AdjustmentMessage[];
+  /** Localizable trend hint (provisional only). */
+  trendHint?: AdjustmentMessage;
+  /** Cached final-state outcome label (already localized via getEvalLabel). */
+  finalOutcomeLabel?: string;
   lc: LifecycleResult;
 };
 
@@ -23,10 +29,10 @@ function fmtTime(ms: number, locale: string = "de-DE"): string {
 }
 
 /**
- * @param locale BCP-47 tag (e.g. "de-DE", "en-US") used to format the
- *   "expected 14:32" times that appear in the chip body. Defaults to
- *   "de-DE" so older callers without the param keep their original look.
- *   New callers should pass `localeToBcp47(useLocale())` from `@/lib/time`.
+ * Returns chip metadata for a meal. The chip's textual content is exposed
+ * as {@link AdjustmentMessage} entries so the UI can render them with the
+ * active locale via next-intl. Time strings are pre-formatted with the
+ * supplied BCP-47 locale to keep `lib/engine` free of i18n imports.
  */
 export function chipForMeal(meal: Meal, now: Date = new Date(), locale: string = "de-DE"): ChipState {
   const lc = lifecycleFor(meal, now);
@@ -37,52 +43,54 @@ export function chipForMeal(meal: Meal, now: Date = new Date(), locale: string =
     return {
       state: "pending",
       color: PENDING_COLOR,
-      label: "WARTET AUF WERTE",
-      body: `Wartet auf 1H-Glukosewert (erwartet ${expected1h}).`,
+      label: { key: "engine_chip_pending_label" },
+      body: [{ key: "engine_chip_pending_body", params: { expected: expected1h } }],
       lc,
     };
   }
 
   if (lc.state === "provisional") {
-    const expected2h = fmtTime(created + 120 * 60_000);
+    const expected2h = fmtTime(created + 120 * 60_000, locale);
     const d1 = lc.delta1;
-    const lines: string[] = [];
+    const body: AdjustmentMessage[] = [];
 
     if (d1 != null && meal.bg_1h != null) {
-      const sign = d1 > 0 ? "+" : "";
-      lines.push(`1H-Wert: ${meal.bg_1h} mg/dL (Δ ${sign}${d1} mg/dL).`);
+      body.push({
+        key: "engine_chip_provisional_1h",
+        params: { bg1h: meal.bg_1h, delta: `${d1 > 0 ? "+" : ""}${d1}` },
+      });
     }
-    lines.push(`Wartet auf 2H-Glukosewert (erwartet ${expected2h}).`);
-    lines.push("Hinweis: Der 2H-Wert ist der abschließende Outcome-Indikator.");
+    body.push({ key: "engine_chip_provisional_wait_2h", params: { expected: expected2h } });
+    body.push({ key: "engine_chip_provisional_note" });
 
-    let trendHint = "Tendenz: BG stabil im ersten Verlauf.";
+    let trendHint: AdjustmentMessage = { key: "engine_chip_trend_stable" };
     if (d1 != null) {
-      if (d1 > 30) trendHint = "Tendenz: BG steigt — vorläufig erhöht.";
-      else if (d1 < -30) trendHint = "Tendenz: BG fällt — vorläufig stabil oder fallend.";
+      if (d1 > 30) trendHint = { key: "engine_chip_trend_rising" };
+      else if (d1 < -30) trendHint = { key: "engine_chip_trend_falling" };
     }
 
     return {
       state: "provisional",
       color: PROVISIONAL_COLOR,
-      label: "VORLÄUFIG",
-      body: lines.join(" "),
+      label: { key: "engine_chip_provisional_label" },
+      body,
       trendHint,
       lc,
     };
   }
 
-  // Final: prefer the freshly computed lc.outcome over the cached
-  // meal.evaluation column. The cache is only refreshed on saveMeal,
-  // so existing rows whose 2h reading came in outside the legacy
-  // ±30 min window still have evaluation=null in the DB. Reading
-  // lc.outcome here makes the chip flip to GOOD / HIGH / LOW the
-  // moment a 2h value is present, without requiring a re-save.
+  // Final: prefer freshly computed lc.outcome over cached meal.evaluation.
   const outcome = lc.outcome ?? meal.evaluation;
   return {
     state: "final",
     color: getEvalColor(outcome),
-    label: getEvalLabel(outcome),
-    body: lc.reasoning,
+    // Final state still surfaces the localized outcome label via
+    // `finalOutcomeLabel` for callers that want a quick string; the
+    // `label` message is a marker key consumers can ignore in favour of
+    // the cached label.
+    label: { key: "engine_chip_final_label" },
+    finalOutcomeLabel: getEvalLabel(outcome),
+    body: lc.messages,
     lc,
   };
 }

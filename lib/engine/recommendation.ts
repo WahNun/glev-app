@@ -1,6 +1,7 @@
 import type { AdaptiveICR, TimeOfDay } from "./adaptiveICR";
 import type { InsulinLog } from "../insulin";
 import type { ExerciseLog } from "../exercise";
+import type { AdjustmentMessage } from "./adjustment";
 import { parseDbTs } from "@/lib/time";
 
 export interface RecommendInput {
@@ -10,11 +11,6 @@ export interface RecommendInput {
   adaptiveICR: AdaptiveICR;
   correctionFactor?: number;
   timeOfDay?: TimeOfDay;
-  /**
-   * Optional standalone insulin / exercise logs — used to surface stacking
-   * warnings and basal-context notes in the reasoning string. Pure
-   * documentation: never mutates the recommended dose.
-   */
   recentInsulinLogs?: InsulinLog[];
   recentExerciseLogs?: ExerciseLog[];
 }
@@ -24,17 +20,18 @@ export interface RecommendOutput {
   carbDose: number;
   correctionDose: number;
   blocked: boolean;
-  reasoning: string;
+  /** Localizable reasoning — render each entry with `t(m.key, m.params)`. */
+  messages: AdjustmentMessage[];
   confidence: "high" | "medium" | "low";
   icrUsed: number;
   icrSource: "morning" | "afternoon" | "evening" | "global" | "default";
 }
 
-const DEFAULT_ICR = 15; // grams per unit
-const DEFAULT_CF  = 50; // mg/dL drop per unit
+const DEFAULT_ICR = 15;
+const DEFAULT_CF  = 50;
 const DEFAULT_TARGET = 100;
 const SAFETY_BG_MIN = 80;
-const MAX_DOSE_UNITS = 25; // hard ceiling — anything above is clamped + flagged
+const MAX_DOSE_UNITS = 25;
 
 function safePositive(n: number | null | undefined, fallback: number): number {
   return n != null && Number.isFinite(n) && n > 0 ? n : fallback;
@@ -45,7 +42,6 @@ export function recommendDose(input: RecommendInput): RecommendOutput {
   const targetBG = safePositive(input.targetBG, DEFAULT_TARGET);
   const cf       = safePositive(input.correctionFactor, DEFAULT_CF);
 
-  // Pick the most specific ICR available — ignore non-positive/NaN learned values.
   let icrUsed = DEFAULT_ICR;
   let icrSource: RecommendOutput["icrSource"] = "default";
   const a = input.adaptiveICR;
@@ -62,7 +58,7 @@ export function recommendDose(input: RecommendInput): RecommendOutput {
     return {
       recommendedUnits: 0, carbDose: 0, correctionDose: 0,
       blocked: true,
-      reasoning: `Current glucose ${input.currentBG} mg/dL is below the safety floor (${SAFETY_BG_MIN}). Treat the low first; do not dose.`,
+      messages: [{ key: "engine_rec_below_safety", params: { bg: input.currentBG, floor: SAFETY_BG_MIN } }],
       confidence: "high", icrUsed, icrSource,
     };
   }
@@ -80,13 +76,26 @@ export function recommendDose(input: RecommendInput): RecommendOutput {
     a.sampleSize >= 10 ? "high" :
     a.sampleSize >= 5  ? "medium" : "low";
 
-  const parts: string[] = [];
-  if (carbs > 0)  parts.push(`${carbs}g ÷ 1u/${icrUsed.toFixed(1)}g (${icrSource}) = ${carbDose.toFixed(2)}u`);
-  if (correctionDose > 0) parts.push(`(${input.currentBG} − ${targetBG}) ÷ ${cf} = +${correctionDose.toFixed(2)}u`);
-  if (parts.length === 0) parts.push("No carbs and BG within target — no dose recommended.");
-  if (clamped) parts.push(`Clamped to safety ceiling of ${MAX_DOSE_UNITS}u — verify carb count or consult clinician.`);
+  const messages: AdjustmentMessage[] = [];
+  if (carbs > 0) {
+    messages.push({
+      key: "engine_rec_carb_dose",
+      params: { carbs, icr: icrUsed.toFixed(1), source: icrSource, dose: carbDose.toFixed(2) },
+    });
+  }
+  if (correctionDose > 0 && input.currentBG != null) {
+    messages.push({
+      key: "engine_rec_correction",
+      params: { bg: input.currentBG, target: targetBG, cf, dose: correctionDose.toFixed(2) },
+    });
+  }
+  if (messages.length === 0) {
+    messages.push({ key: "engine_rec_no_dose" });
+  }
+  if (clamped) {
+    messages.push({ key: "engine_rec_clamped", params: { max: MAX_DOSE_UNITS } });
+  }
 
-  // Safety hooks from standalone logs — documentation only, no dose change.
   const nowMs = Date.now();
   const sixHoursAgo = nowMs - 6 * 3600_000;
   const oneDayAgo   = nowMs - 24 * 3600_000;
@@ -95,7 +104,7 @@ export function recommendDose(input: RecommendInput): RecommendOutput {
     .filter(l => l.insulin_type === "bolus" && parseDbTs(l.created_at) >= sixHoursAgo)
     .length;
   if (recentBolusCount > 2) {
-    parts.push(`⚠ ${recentBolusCount} Bolus-Dosen in den letzten 6h — Active Insulin könnte noch wirken.`);
+    messages.push({ key: "engine_rec_stacking", params: { count: recentBolusCount } });
   }
 
   const lastBasal = (input.recentInsulinLogs ?? [])
@@ -103,25 +112,35 @@ export function recommendDose(input: RecommendInput): RecommendOutput {
     .sort((x, y) => parseDbTs(y.created_at) - parseDbTs(x.created_at))[0];
   if (lastBasal) {
     const hAgo = Math.max(0, Math.round((nowMs - parseDbTs(lastBasal.created_at)) / 3600_000));
-    parts.push(`Basal: ${lastBasal.units}u ${lastBasal.insulin_name || "Basal"} vor ${hAgo}h.`);
+    messages.push({
+      key: "engine_rec_basal",
+      params: { units: lastBasal.units, name: lastBasal.insulin_name || "", hours: hAgo },
+    });
   }
 
-  // Exercise sensitivity hint — last 4h, documentation only.
   const fourHoursAgo = nowMs - 4 * 3600_000;
   const recentExercise = (input.recentExerciseLogs ?? [])
     .filter(l => parseDbTs(l.created_at) >= fourHoursAgo)
     .sort((x, y) => parseDbTs(y.created_at) - parseDbTs(x.created_at))[0];
   if (recentExercise) {
     const hAgo = Math.max(0, Math.round((nowMs - parseDbTs(recentExercise.created_at)) / 3600_000));
-    parts.push(`⚠ ${recentExercise.duration_minutes} min ${recentExercise.exercise_type} (${recentExercise.intensity}) vor ${hAgo}h — erhöhte Insulin-Sensitivität möglich.`);
+    messages.push({
+      key: "engine_rec_exercise",
+      params: {
+        minutes: recentExercise.duration_minutes,
+        type: recentExercise.exercise_type,
+        intensity: recentExercise.intensity,
+        hours: hAgo,
+      },
+    });
   }
 
   return {
-    recommendedUnits: Math.round(total * 2) / 2, // half-unit rounding
+    recommendedUnits: Math.round(total * 2) / 2,
     carbDose: Math.round(carbDose * 10) / 10,
     correctionDose: Math.round(correctionDose * 10) / 10,
     blocked: false,
-    reasoning: parts.join(" · "),
+    messages,
     confidence,
     icrUsed,
     icrSource,
