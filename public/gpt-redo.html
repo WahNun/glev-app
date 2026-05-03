@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Reworked Landing &amp; Homepages</title>
+<style>
+  :root {
+    --canvas-bg: #0f0f17;
+    --frame-bg: #08080f;
+    --frame-border: #1c1c28;
+    --heading: #f0f0f0;
+    --body: #9090aa;
+    --muted: #44445e;
+    --divider: #141420;
+    --footer-bg: #05050c;
+    --footer-text: #3a3a55;
+    --pill-bg: #141428;
+    --accent: #818cf8;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--canvas-bg); color: var(--heading); font-family: -apple-system, BlinkMacSystemFont, "Inter", "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+
+  .page-header { padding: 32px 56px 16px; }
+  .page-header h1 { margin: 0 0 6px; font-size: 14px; font-weight: 600; color: var(--heading); letter-spacing: 0.01em; }
+  .page-header p { margin: 0; font-size: 12px; color: var(--muted); }
+
+  .canvas {
+    padding: 16px 56px 80px;
+    overflow-x: auto;
+  }
+
+  .row {
+    display: flex;
+    align-items: flex-start;
+    gap: 28px;
+    margin-bottom: 36px;
+    position: relative;
+    padding-left: 56px;
+  }
+  .row:last-child { margin-bottom: 0; }
+
+  .row-label {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%) rotate(-90deg);
+    transform-origin: left center;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    color: var(--muted);
+    font-weight: 600;
+  }
+
+  .frame-wrap { display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
+  .frame-label { font-size: 10px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
+
+  .frame {
+    background: var(--frame-bg);
+    border: 1.5px solid var(--frame-border);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .frame.desktop { width: 320px; border-radius: 8px; }
+  .frame.mobile { width: 180px; border-radius: 14px; }
+
+  /* Per-page accent */
+  .frame.home-de, .frame.home-en { --accent: #818cf8; }
+  .frame.beta { --accent: #4ade80; }
+  .frame.pro { --accent: #c084fc; }
+
+  /* Sections */
+  .nav, .banner, .hero, .value, .problem, .flow, .positioning, .footer {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--divider);
+  }
+  .frame.mobile .nav,
+  .frame.mobile .banner,
+  .frame.mobile .hero,
+  .frame.mobile .value,
+  .frame.mobile .problem,
+  .frame.mobile .flow,
+  .frame.mobile .positioning,
+  .frame.mobile .footer {
+    padding: 8px 10px;
+  }
+
+  .nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .nav .brand { color: var(--heading); font-weight: 700; font-size: 11px; letter-spacing: 2px; }
+  .nav .links { color: var(--muted); font-size: 9px; letter-spacing: 0.02em; }
+  .frame.mobile .nav .brand { font-size: 9px; letter-spacing: 1.5px; }
+  .frame.mobile .nav .links { font-size: 7px; }
+
+  .banner { font-size: 9px; padding: 6px 14px; text-align: center; letter-spacing: 0.04em; border-bottom: 1px solid var(--divider); font-weight: 600; }
+  .frame.mobile .banner { padding: 5px 10px; font-size: 7px; }
+  .frame.beta .banner { background: #0c2010; color: #4ade80; }
+  .frame.pro .banner { background: #1a0f2e; color: #c084fc; }
+
+  .hero h1 { margin: 0 0 6px; font-size: 16px; line-height: 1.2; color: var(--heading); font-weight: 700; letter-spacing: -0.01em; }
+  .hero .sub { margin: 0 0 8px; font-size: 10px; color: var(--body); line-height: 1.45; }
+  .hero .tags { margin: 0 0 10px; font-size: 8px; color: var(--muted); line-height: 1.4; }
+  .hero .ctas { display: flex; gap: 6px; flex-wrap: wrap; }
+  .hero .cta { font-size: 9px; padding: 6px 10px; border-radius: 4px; font-weight: 600; }
+  .hero .cta.primary { background: var(--accent); color: #08080f; }
+  .hero .cta.secondary { background: transparent; color: var(--body); border: 1px solid var(--frame-border); }
+
+  .frame.mobile .hero h1 { font-size: 12px; }
+  .frame.mobile .hero .sub { font-size: 8px; }
+  .frame.mobile .hero .tags { font-size: 6px; }
+  .frame.mobile .hero .cta { font-size: 7px; padding: 4px 7px; }
+
+  .section-title { font-size: 9px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; margin: 0 0 6px; font-weight: 600; }
+  .section-body { font-size: 10px; color: var(--body); line-height: 1.45; margin: 0; }
+  .frame.mobile .section-title { font-size: 7px; }
+  .frame.mobile .section-body { font-size: 8px; }
+
+  .value h3, .problem h3, .positioning h3 { margin: 0 0 4px; font-size: 11px; color: var(--heading); font-weight: 600; }
+  .frame.mobile .value h3, .frame.mobile .problem h3, .frame.mobile .positioning h3 { font-size: 9px; }
+
+  .problem ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .problem li { font-size: 10px; color: var(--body); line-height: 1.4; padding-left: 14px; position: relative; }
+  .problem li::before { content: "—"; color: var(--accent); position: absolute; left: 0; }
+  .frame.mobile .problem li { font-size: 8px; padding-left: 11px; }
+
+  .flow { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .flow .pill { background: var(--pill-bg); color: var(--accent); font-size: 8px; padding: 3px 7px; border-radius: 999px; font-weight: 600; letter-spacing: 0.02em; }
+  .flow .arrow { color: var(--muted); font-size: 9px; }
+  .frame.mobile .flow .pill { font-size: 6px; padding: 2px 5px; }
+  .frame.mobile .flow .arrow { font-size: 7px; }
+
+  .footer {
+    background: var(--footer-bg);
+    color: var(--footer-text);
+    font-size: 8px;
+    line-height: 1.4;
+    border-bottom: none;
+  }
+  .frame.mobile .footer { font-size: 6px; }
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <h1>Reworked Landing &amp; Homepages</h1>
+  <p>4 pages · Desktop + Mobile · Glev Design System</p>
+</header>
+
+<div class="canvas">
+
+  <!-- Desktop row -->
+  <div class="row">
+    <div class="row-label">DESKTOP</div>
+
+    <!-- DE Homepage Desktop -->
+    <div class="frame-wrap">
+      <div class="frame-label">DE Homepage · Desktop</div>
+      <div class="frame desktop home-de">
+        <div class="nav"><span class="brand">GLEV</span><span class="links">Beta sichern · App ansehen</span></div>
+        <div class="hero">
+          <h1>Hör auf zu raten.</h1>
+          <p class="sub">Logge deine Mahlzeit. Sieh, was wirklich passiert ist. Triff bessere Entscheidungen.</p>
+          <p class="tags">Voice-first Logging · CGM-basierte Insights · Outcome-getriebenes Lernen</p>
+          <div class="ctas"><span class="cta primary">Beta sichern</span><span class="cta secondary">App ansehen</span></div>
+        </div>
+        <div class="value">
+          <h3>Jede Mahlzeit zeigt dir etwas.</h3>
+          <p class="section-body">Glev verbindet Mahlzeit, Insulin und Glukosewerte — damit du erkennst, wann du unterdosiert, überdosiert oder richtig gelegen hast.</p>
+        </div>
+        <div class="problem">
+          <h3>Du entscheidest mit zu wenig Daten.</h3>
+          <ul>
+            <li>Ein einzelner Glukosewert sagt nichts</li>
+            <li>Gleiche Mahlzeit ≠ gleiches Ergebnis</li>
+            <li>Muster bleiben unsichtbar</li>
+          </ul>
+        </div>
+        <div class="flow">
+          <span class="pill">Sprechen</span><span class="arrow">→</span>
+          <span class="pill">Essen</span><span class="arrow">→</span>
+          <span class="pill">Verstehen</span><span class="arrow">→</span>
+          <span class="pill">Verbessern</span>
+        </div>
+        <div class="positioning">
+          <h3>Die Entscheidungsebene für CGM-Nutzer.</h3>
+          <p class="section-body">Nicht nur Tracking. Nicht Hardware. Sondern das System dazwischen.</p>
+        </div>
+        <div class="footer">Glev ist ein Tool zur Dokumentation und ersetzt keine medizinische Beratung. Entscheidungen zur Therapie sollten in Absprache mit medizinischem Fachpersonal getroffen werden.</div>
+      </div>
+    </div>
+
+    <!-- EN Homepage Desktop -->
+    <div class="frame-wrap">
+      <div class="frame-label">EN Homepage · Desktop</div>
+      <div class="frame desktop home-en">
+        <div class="nav"><span class="brand">GLEV</span><span class="links">Join beta · View app</span></div>
+        <div class="hero">
+          <h1>Stop guessing your insulin.</h1>
+          <p class="sub">Log your meal, see what actually happened, and improve your next decision.</p>
+          <p class="tags">Voice-first logging · CGM-based insights · Outcome-driven learning</p>
+          <div class="ctas"><span class="cta primary">Join beta</span><span class="cta secondary">View app</span></div>
+        </div>
+        <div class="value">
+          <h3>Every meal teaches you something.</h3>
+          <p class="section-body">Glev connects your food, insulin and glucose — so you can see when you underdosed, overdosed or got it right.</p>
+        </div>
+        <div class="problem">
+          <h3>You're making decisions with incomplete data.</h3>
+          <ul>
+            <li>A single glucose value doesn't tell the full story</li>
+            <li>The same meal doesn't behave the same way</li>
+            <li>Patterns stay hidden</li>
+          </ul>
+        </div>
+        <div class="flow">
+          <span class="pill">Speak</span><span class="arrow">→</span>
+          <span class="pill">Eat</span><span class="arrow">→</span>
+          <span class="pill">Learn</span><span class="arrow">→</span>
+          <span class="pill">Improve</span>
+        </div>
+        <div class="positioning">
+          <h3>The decision layer for CGM users.</h3>
+          <p class="section-body">Not just tracking. Not hardware. But the system in between.</p>
+        </div>
+        <div class="footer">Glev is a documentation and organisation tool and does not replace professional medical advice. Treatment decisions should be made in consultation with a healthcare professional.</div>
+      </div>
+    </div>
+
+    <!-- Beta Desktop -->
+    <div class="frame-wrap">
+      <div class="frame-label">Beta · Desktop</div>
+      <div class="frame desktop beta">
+        <div class="nav"><span class="brand">GLEV</span><span class="links">Anmelden</span></div>
+        <div class="banner">Beta — Limitierte Plätze verfügbar</div>
+        <div class="hero">
+          <h1>Früher Zugang. Echter Einfluss.</h1>
+          <p class="sub">Als Beta-Nutzer formst du Glev mit. Dein Feedback geht direkt ins Produkt.</p>
+          <p class="tags">Kostenloser Zugang · Direkter Einfluss · Frühzeitiger Start</p>
+          <div class="ctas"><span class="cta primary">Beta sichern</span></div>
+        </div>
+        <div class="value">
+          <h3>Was Beta-Nutzer bekommen:</h3>
+          <p class="section-body">Vollständige App kostenlos · Direktes Feedback-Kanal · Frühzeitiger Pro-Zugang</p>
+        </div>
+        <div class="problem">
+          <h3>Dein Platz ist limitiert.</h3>
+          <ul>
+            <li>Vollzugang — kein Kreditkarte nötig</li>
+            <li>Direkte Kommunikation mit dem Team</li>
+            <li>Limitierte Spots — jetzt sichern</li>
+          </ul>
+        </div>
+        <div class="flow">
+          <span class="pill">Anmelden</span><span class="arrow">→</span>
+          <span class="pill">App testen</span><span class="arrow">→</span>
+          <span class="pill">Feedback geben</span><span class="arrow">→</span>
+          <span class="pill">Pro werden</span>
+        </div>
+        <div class="positioning">
+          <h3>Werde Teil der ersten Nutzergruppe.</h3>
+          <p class="section-body">Du hilfst uns Glev besser zu machen — und bekommst dafür frühen, kostenlosen Zugang.</p>
+        </div>
+        <div class="footer">Glev Beta ist kostenlos. Kein Abo. Kein Risiko. Jederzeit kündbar.</div>
+      </div>
+    </div>
+
+    <!-- Pro Desktop -->
+    <div class="frame-wrap">
+      <div class="frame-label">Pro · Desktop</div>
+      <div class="frame desktop pro">
+        <div class="nav"><span class="brand">GLEV</span><span class="links">Upgrade to Pro</span></div>
+        <div class="banner">Pro — Die vollständige Entscheidungsebene</div>
+        <div class="hero">
+          <h1>Glev Pro.</h1>
+          <p class="sub">Tiefere Insights. Mehr Kontext. Die vollständige Entscheidungsebene für ernsthafte CGM-Nutzer.</p>
+          <p class="tags">Erweiterte Analytics · Unbegrenzte Historie · Priority Support</p>
+          <div class="ctas"><span class="cta primary">Pro starten</span><span class="cta secondary">Vergleich ansehen</span></div>
+        </div>
+        <div class="value">
+          <h3>Was Pro dazugibt:</h3>
+          <p class="section-body">Unbegrenzte Mahlzeit-Historie, erweiterte CGM-Korrelationen, Muster über Wochen und Monate.</p>
+        </div>
+        <div class="problem">
+          <h3>Pro vs. Free</h3>
+          <ul>
+            <li>Mahlzeiten: Unbegrenzt vs. 30/Monat</li>
+            <li>Analytics: Erweitert vs. Basis</li>
+            <li>Export: CSV + PDF vs. —</li>
+          </ul>
+        </div>
+        <div class="flow">
+          <span class="pill">Mehr Daten</span><span class="arrow">→</span>
+          <span class="pill">Tiefere Analyse</span><span class="arrow">→</span>
+          <span class="pill">Bessere Muster</span><span class="arrow">→</span>
+          <span class="pill">Sicherere Entscheidungen</span>
+        </div>
+        <div class="positioning">
+          <h3>Für alle, die es ernst meinen.</h3>
+          <p class="section-body">Glev Pro gibt dir den vollen Überblick über deine Glukosedynamik.</p>
+        </div>
+        <div class="footer">Monatlich kündbar. Keine versteckten Kosten. Keine medizinischen Versprechen.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Mobile row -->
+  <div class="row">
+    <div class="row-label">MOBILE</div>
+
+    <!-- DE Homepage Mobile -->
+    <div class="frame-wrap">
+      <div class="frame-label">DE Homepage · Mobile</div>
+      <div class="frame mobile home-de">
+        <div class="nav"><span class="brand">GLEV</span><span class="links">Beta sichern · App ansehen</span></div>
+        <div class="hero">
+          <h1>Hör auf zu raten.</h1>
+          <p class="sub">Logge deine Mahlzeit. Sieh, was wirklich passiert ist. Triff bessere Entscheidungen.</p>
+          <p class="tags">Voice-first Logging · CGM-basierte Insights · Outcome-getriebenes Lernen</p>
+          <div class="ctas"><span class="cta primary">Beta sichern</span><span class="cta secondary">App ansehen</span></div>
+        </div>
+        <div class="value">
+          <h3>Jede Mahlzeit zeigt dir etwas.</h3>
+          <p class="section-body">Glev verbindet Mahlzeit, Insulin und Glukosewerte — damit du erkennst, wann du unterdosiert, überdosiert oder richtig gelegen hast.</p>
+        </div>
+        <div class="problem">
+          <h3>Du entscheidest mit zu wenig Daten.</h3>
+          <ul>
+            <li>Ein einzelner Glukosewert sagt nichts</li>
+            <li>Gleiche Mahlzeit ≠ gleiches Ergebnis</li>
+            <li>Muster bleiben unsichtbar</li>
+          </ul>
+        </div>
+        <div class="flow">
+          <span class="pill">Sprechen</span><span class="arrow">→</span>
+          <span class="pill">Essen</span><span class="arrow">→</span>
+          <span class="pill">Verstehen</span><span class="arrow">→</span>
+          <span class="pill">Verbessern</span>
+        </div>
+        <div class="positioning">
+          <h3>Die Entscheidungsebene für CGM-Nutzer.</h3>
+          <p class="section-body">Nicht nur Tracking. Nicht Hardware. Sondern das System dazwischen.</p>
+        </div>
+        <div class="footer">Glev ist ein Tool zur Dokumentation und ersetzt keine medizinische Beratung. Entscheidungen zur Therapie sollten in Absprache mit medizinischem Fachpersonal getroffen werden.</div>
+      </div>
+    </div>
+
+    <!-- EN Homepage Mobile -->
+    <div class="frame-wrap">
+      <div class="frame-label">EN Homepage · Mobile</div>
+      <div class="frame mobile home-en">
+        <div class="nav"><span class="brand">GLEV</span><span class="links">Join beta · View app</span></div>
+        <div class="hero">
+          <h1>Stop guessing your insulin.</h1>
+          <p class="sub">Log your meal, see what actually happened, and improve your next decision.</p>
+          <p class="tags">Voice-first logging · CGM-based insights · Outcome-driven learning</p>
+          <div class="ctas"><span class="cta primary">Join beta</span><span class="cta secondary">View app</span></div>
+        </div>
+        <div class="value">
+          <h3>Every meal teaches you something.</h3>
+          <p class="section-body">Glev connects your food, insulin and glucose — so you can see when you underdosed, overdosed or got it right.</p>
+        </div>
+        <div class="problem">
+          <h3>You're making decisions with incomplete data.</h3>
+          <ul>
+            <li>A single glucose value doesn't tell the full story</li>
+            <li>The same meal doesn't behave the same way</li>
+            <li>Patterns stay hidden</li>
+          </ul>
+        </div>
+        <div class="flow">
+          <span class="pill">Speak</span><span class="arrow">→</span>
+          <span class="pill">Eat</span><span class="arrow">→</span>
+          <span class="pill">Learn</span><span class="arrow">→</span>
+          <span class="pill">Improve</span>
+        </div>
+        <div class="positioning">
+          <h3>The decision layer for CGM users.</h3>
+          <p class="section-body">Not just tracking. Not hardware. But the system in between.</p>
+        </div>
+        <div class="footer">Glev is a documentation and organisation tool and does not replace professional medical advice. Treatment decisions should be made in consultation with a healthcare professional.</div>
+      </div>
+    </div>
+
+    <!-- Beta Mobile -->
+    <div class="frame-wrap">
+      <div class="frame-label">Beta · Mobile</div>
+      <div class="frame mobile beta">
+        <div class="nav"><span class="brand">GLEV</span><span class="links">Anmelden</span></div>
+        <div class="banner">Beta — Limitierte Plätze verfügbar</div>
+        <div class="hero">
+          <h1>Früher Zugang. Echter Einfluss.</h1>
+          <p class="sub">Als Beta-Nutzer formst du Glev mit. Dein Feedback geht direkt ins Produkt.</p>
+          <p class="tags">Kostenloser Zugang · Direkter Einfluss · Frühzeitiger Start</p>
+          <div class="ctas"><span class="cta primary">Beta sichern</span></div>
+        </div>
+        <div class="value">
+          <h3>Was Beta-Nutzer bekommen:</h3>
+          <p class="section-body">Vollständige App kostenlos · Direktes Feedback-Kanal · Frühzeitiger Pro-Zugang</p>
+        </div>
+        <div class="problem">
+          <h3>Dein Platz ist limitiert.</h3>
+          <ul>
+            <li>Vollzugang — kein Kreditkarte nötig</li>
+            <li>Direkte Kommunikation mit dem Team</li>
+            <li>Limitierte Spots — jetzt sichern</li>
+          </ul>
+        </div>
+        <div class="flow">
+          <span class="pill">Anmelden</span><span class="arrow">→</span>
+          <span class="pill">App testen</span><span class="arrow">→</span>
+          <span class="pill">Feedback geben</span><span class="arrow">→</span>
+          <span class="pill">Pro werden</span>
+        </div>
+        <div class="positioning">
+          <h3>Werde Teil der ersten Nutzergruppe.</h3>
+          <p class="section-body">Du hilfst uns Glev besser zu machen — und bekommst dafür frühen, kostenlosen Zugang.</p>
+        </div>
+        <div class="footer">Glev Beta ist kostenlos. Kein Abo. Kein Risiko. Jederzeit kündbar.</div>
+      </div>
+    </div>
+
+    <!-- Pro Mobile -->
+    <div class="frame-wrap">
+      <div class="frame-label">Pro · Mobile</div>
+      <div class="frame mobile pro">
+        <div class="nav"><span class="brand">GLEV</span><span class="links">Upgrade to Pro</span></div>
+        <div class="banner">Pro — Die vollständige Entscheidungsebene</div>
+        <div class="hero">
+          <h1>Glev Pro.</h1>
+          <p class="sub">Tiefere Insights. Mehr Kontext. Die vollständige Entscheidungsebene für ernsthafte CGM-Nutzer.</p>
+          <p class="tags">Erweiterte Analytics · Unbegrenzte Historie · Priority Support</p>
+          <div class="ctas"><span class="cta primary">Pro starten</span><span class="cta secondary">Vergleich ansehen</span></div>
+        </div>
+        <div class="value">
+          <h3>Was Pro dazugibt:</h3>
+          <p class="section-body">Unbegrenzte Mahlzeit-Historie, erweiterte CGM-Korrelationen, Muster über Wochen und Monate.</p>
+        </div>
+        <div class="problem">
+          <h3>Pro vs. Free</h3>
+          <ul>
+            <li>Mahlzeiten: Unbegrenzt vs. 30/Monat</li>
+            <li>Analytics: Erweitert vs. Basis</li>
+            <li>Export: CSV + PDF vs. —</li>
+          </ul>
+        </div>
+        <div class="flow">
+          <span class="pill">Mehr Daten</span><span class="arrow">→</span>
+          <span class="pill">Tiefere Analyse</span><span class="arrow">→</span>
+          <span class="pill">Bessere Muster</span><span class="arrow">→</span>
+          <span class="pill">Sicherere Entscheidungen</span>
+        </div>
+        <div class="positioning">
+          <h3>Für alle, die es ernst meinen.</h3>
+          <p class="section-body">Glev Pro gibt dir den vollen Überblick über deine Glukosedynamik.</p>
+        </div>
+        <div class="footer">Monatlich kündbar. Keine versteckten Kosten. Keine medizinischen Versprechen.</div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+</body>
+</html>
