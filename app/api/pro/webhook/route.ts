@@ -94,6 +94,28 @@ export async function POST(req: NextRequest) {
         // and future personalised mails can address the buyer by name
         // without re-querying Stripe.
         const fullName = extractFullNameFromSession(session);
+
+        // Mirror the buyer's full_name onto the Stripe Customer object so it
+        // surfaces in the Stripe Dashboard (Customer detail view, Customers
+        // list, mobile app). The custom_field value normally lives only on
+        // the Session — without this patch every Customer shows up nameless
+        // even though we collected the name in Checkout.
+        // Best-effort: any failure is logged but never blocks the critical
+        // path. Stripe's retry logic for the webhook itself depends on us
+        // returning 2xx after the DB upsert + outbox enqueue — a transient
+        // customers.update failure would needlessly trigger a full retry.
+        if (fullName && customerId) {
+          stripe.customers
+            .update(customerId, { name: fullName })
+            .catch((err) => {
+              // eslint-disable-next-line no-console
+              console.warn("[pro/webhook] customers.update name failed (non-fatal):", {
+                customerId,
+                err: err instanceof Error ? err.message : String(err),
+              });
+            });
+        }
+
         const rowIdFromMeta =
           typeof session.metadata?.subscription_row_id === "string"
             ? session.metadata.subscription_row_id

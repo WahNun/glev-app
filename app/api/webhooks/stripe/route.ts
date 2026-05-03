@@ -94,6 +94,28 @@ export async function POST(req: NextRequest) {
     const customerId =
       typeof session.customer === 'string' ? session.customer : session.customer?.id ?? null;
 
+    // Mirror the buyer's full_name onto the Stripe Customer object so it
+    // surfaces in the Stripe Dashboard (Customer detail view, Customers
+    // list, mobile app). The custom_field value normally lives only on
+    // the Session — without this patch every Customer shows up nameless
+    // even though we collected the name in Checkout.
+    // Best-effort: any failure is logged but never blocks the critical
+    // path. Stripe's retry logic for the webhook itself depends on us
+    // returning 2xx after the outbox enqueue + reservation update — a
+    // transient customers.update failure would needlessly trigger a full
+    // retry of those side effects.
+    if (fullName && customerId) {
+      stripe.customers
+        .update(customerId, { name: fullName })
+        .catch((err) => {
+          // eslint-disable-next-line no-console
+          console.warn('[webhook] customers.update name failed (non-fatal):', {
+            customerId,
+            err: err instanceof Error ? err.message : String(err),
+          });
+        });
+    }
+
     if (!email) {
       // eslint-disable-next-line no-console
       console.warn('[webhook] checkout.session.completed — no email found, skipping', {
