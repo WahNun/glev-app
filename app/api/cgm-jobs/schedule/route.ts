@@ -25,6 +25,10 @@ function offsetsForLogType(t: LogType, durationMinutes?: number): { type: FetchT
       return [
         { type: "bg_1h", ms: 60 * MIN },
         { type: "bg_2h", ms: 120 * MIN },
+        // Task #187: dense post-meal curve. Fires once at +180 min and
+        // backfills the full 0–180 min sample set + window aggregates
+        // (min/max/peak/AUC/hypo) on the meals row in one pass.
+        { type: "meal_curve_180", ms: 180 * MIN },
       ];
     case "bolus":
       return [

@@ -4,7 +4,7 @@ import type { AdjustmentMessage } from "./adjustment";
 import { parseDbTs } from "@/lib/time";
 import { getInsulinSettings, type InsulinSettings } from "@/lib/userSettings";
 
-export type Outcome = "GOOD" | "UNDERDOSE" | "OVERDOSE" | "SPIKE";
+export type Outcome = "GOOD" | "UNDERDOSE" | "OVERDOSE" | "SPIKE" | "HYPO_DURING" | "CHECK_CONTEXT";
 
 export type Classification = "FAST_CARBS" | "HIGH_PROTEIN" | "HIGH_FAT" | "BALANCED" | null | undefined;
 
@@ -21,6 +21,27 @@ export interface EvaluateEntryInput {
   speed2?: number | null;
   recentInsulinLogs?: InsulinLog[];
   recentExerciseLogs?: ExerciseLog[];
+  /**
+   * Window-level aggregates from the per-meal CGM curve
+   * (`meal_glucose_samples`, Task #187). When provided, the evaluator
+   * switches to curve-aware decisions:
+   *   • `hadHypoWindow === true`        → HYPO_DURING wins
+   *   • `maxBg180 - bgBefore > spike`   → SPIKE (peak-based instead of
+   *                                         the legacy bg_2h-Δ check)
+   * Falls back to the bg_2h-delta path when not supplied (older meals
+   * that pre-date the +3h backfill job).
+   */
+  minBg180?: number | null;
+  maxBg180?: number | null;
+  timeToPeakMin?: number | null;
+  hadHypoWindow?: boolean | null;
+  /**
+   * Personal insulin parameters (ICR / CF / target BG). When omitted,
+   * we fall back to getInsulinSettings() — which reads localStorage on
+   * the client and returns sensible defaults (15/50/110) on the server
+   * with a one-time console warning. Pass an explicit value to bypass
+   * the fallback (e.g. server-side recompute paths).
+   */
   settings?: InsulinSettings;
 }
 
@@ -115,6 +136,40 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
     cls === "HIGH_FAT"   ? 40 :
     cls === "HIGH_PROTEIN" ? 50 :
     55;
+
+  // Curve-aware decisions (Task #187). When the +3h backfill job has
+  // populated the window aggregates we can detect hypos that happened
+  // BETWEEN the bg_1h / bg_2h snapshots and use the peak rise (not the
+  // bg_2h-Δ) for SPIKE — both are invisible to the legacy two-point path.
+  if (input.hadHypoWindow === true && bgBefore != null) {
+    const minBg = input.minBg180 != null ? Math.round(input.minBg180) : null;
+    const messages: AdjustmentMessage[] = [
+      { key: "engine_eval_hypo_during", params: { minBg: minBg ?? "<70" } },
+      ...speedMessages(input.speed1, input.speed2),
+      ...contextMessages(input.recentInsulinLogs, input.recentExerciseLogs),
+    ];
+    return { outcome: "HYPO_DURING", messages, confidence: "high", delta, netCarbs };
+  }
+
+  if (input.maxBg180 != null && bgBefore != null) {
+    const peakRise = Math.round(input.maxBg180 - bgBefore);
+    if (peakRise > spikeCutoff) {
+      const messages: AdjustmentMessage[] = [
+        {
+          key: "engine_eval_spike_peak",
+          params: {
+            rise: peakRise,
+            peakAt: input.timeToPeakMin ?? "?",
+            threshold: spikeCutoff,
+            classKey: classKey(cls),
+          },
+        },
+        ...speedMessages(input.speed1, input.speed2),
+        ...contextMessages(input.recentInsulinLogs, input.recentExerciseLogs),
+      ];
+      return { outcome: "SPIKE", messages, confidence: "high", delta, netCarbs };
+    }
+  }
 
   if (delta != null) {
     let outcome: Outcome;

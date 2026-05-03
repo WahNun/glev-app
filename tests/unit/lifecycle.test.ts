@@ -65,6 +65,8 @@ function makeMeal(overrides: Partial<Meal>): Meal {
     glucose_3h: null,
     glucose_3h_at: null,
     outcome_state: null,
+    min_bg_180: null, max_bg_180: null, time_to_peak_min: null,
+    auc_180: null, had_hypo_window: null, min_bg_60_180: null,
     meal_time: MEAL_TIME,
     carbs_grams: 60,
     protein_grams: 10,

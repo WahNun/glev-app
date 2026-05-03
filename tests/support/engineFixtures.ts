@@ -38,6 +38,8 @@ export function makeMeal(overrides: Partial<Meal> & { id?: string } = {}): Meal 
     glucose_2h: null, glucose_2h_at: null,
     glucose_3h: null, glucose_3h_at: null,
     outcome_state: null,
+    min_bg_180: null, max_bg_180: null, time_to_peak_min: null,
+    auc_180: null, had_hypo_window: null, min_bg_60_180: null,
     meal_time: new Date(mealMs).toISOString(),
     carbs_grams: 50,
     protein_grams: 10,

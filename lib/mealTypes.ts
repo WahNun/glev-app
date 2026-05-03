@@ -63,6 +63,12 @@ export const EVAL_COLORS: Record<string, string> = {
   SPIKE: "#FFD60A",
   OVERDOSE: "#FF2D78",
   UNDERDOSE: PALETTE.ORANGE,
+  // Task #187: hypos detected anywhere inside the 3h post-meal window
+  // share the same magenta as OVERDOSE — both are "post-meal low" from
+  // the user's perspective and we want them to read identically on the
+  // entries chip / dashboard / insights.
+  HYPO_DURING: "#FF2D78",
+  CHECK_CONTEXT: PALETTE.ORANGE,
 };
 
 export const EVAL_LABELS: Record<string, string> = {
@@ -72,6 +78,8 @@ export const EVAL_LABELS: Record<string, string> = {
   SPIKE: "Spike",
   OVERDOSE: "Over Dose",
   UNDERDOSE: "Under Dose",
+  HYPO_DURING: "Hypo im Verlauf",
+  CHECK_CONTEXT: "Review",
 };
 
 export const EVAL_EXPLAIN: Record<string, string> = {
@@ -81,6 +89,8 @@ export const EVAL_EXPLAIN: Record<string, string> = {
   LOW: "Insulin insufficient → glucose increased after meal.",
   UNDERDOSE: "Insulin insufficient → glucose increased after meal.",
   SPIKE: "Rapid glucose increase detected post meal.",
+  HYPO_DURING: "Glucose dropped below 70 mg/dL somewhere inside the 3h post-meal window — even if the 2h reading was back in range.",
+  CHECK_CONTEXT: "Outcome unclear — review context before adjusting.",
 };
 
 export function getEvalColor(ev?: string | null) {

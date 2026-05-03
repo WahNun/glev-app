@@ -74,7 +74,27 @@ export function lifecycleFor(m: Meal, now: Date = new Date(), settings?: Insulin
     speed1,
     speed2,
     settings,
+    // Curve-derived aggregates (Task #187) — enables HYPO_DURING and
+    // peak-based SPIKE detection inside `evaluateEntry`. Null on rows
+    // that pre-date the +3h backfill job, in which case the evaluator
+    // silently falls back to the bg_2h-delta path.
+    minBg180:      m.min_bg_180,
+    maxBg180:      m.max_bg_180,
+    timeToPeakMin: m.time_to_peak_min,
+    hadHypoWindow: m.had_hypo_window,
   });
+
+  // Curve-finality (Task #187): if the +3h backfill job has populated
+  // the window aggregates, the row is final regardless of whether the
+  // bg_2h capture-at sits inside the legacy ±30 min window — the curve
+  // is ground truth. HYPO_DURING in particular MUST win even when bg_2h
+  // happens to be back inside the target band.
+  const hasCurve = m.had_hypo_window != null || m.max_bg_180 != null || m.min_bg_180 != null;
+  if (hasCurve && bgBefore != null) {
+    const after = bg2hRaw ?? bg1h ?? null;
+    const ev = baseEval(after);
+    return { state: "final", outcome: ev.outcome, messages: ev.messages, delta1, delta2, speed1, speed2, ageMinutes, outOfWindow: false };
+  }
 
   if (bg2hRaw != null && bgBefore != null) {
     if (out2h) {

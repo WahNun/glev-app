@@ -47,7 +47,7 @@ export function computeControlScore(
     const ev = unifiedOutcome(m, now);
     if      (ev === "GOOD")                                       good++;
     else if (ev === "SPIKE" || ev === "UNDERDOSE" || ev === "LOW") spike++;
-    else if (ev === "OVERDOSE" || ev === "HIGH")                  hypo++;
+    else if (ev === "OVERDOSE" || ev === "HIGH" || ev === "HYPO_DURING") hypo++;
   }
   const goodRate  = (good  / total) * 100;
   const spikeRate = (spike / total) * 100;

@@ -41,6 +41,15 @@ export interface Meal {
   glucose_3h: number | null;
   glucose_3h_at: string | null;
   outcome_state: "pending" | "provisional" | "final" | null;
+  // Window-level aggregates persisted by the +3h `meal_curve_180`
+  // backfill job (Task #187). Null until the job has run; the engine
+  // falls back to the bg_2h-delta path in that case.
+  min_bg_180: number | null;
+  max_bg_180: number | null;
+  time_to_peak_min: number | null;
+  auc_180: number | null;
+  had_hypo_window: boolean | null;
+  min_bg_60_180: number | null;
   meal_time: string | null;
   carbs_grams: number | null;
   protein_grams: number | null;
@@ -358,7 +367,7 @@ export async function updateMeal(id: string, patch: UpdateMealInput): Promise<Me
   return data as Meal;
 }
 
-const FULL_COLS = "id, user_id, input_text, parsed_json, glucose_before, glucose_after, bg_1h, bg_1h_at, bg_2h, bg_2h_at, glucose_30min, glucose_30min_at, glucose_1h, glucose_1h_at, glucose_90min, glucose_90min_at, glucose_2h, glucose_2h_at, glucose_3h, glucose_3h_at, outcome_state, meal_time, carbs_grams, protein_grams, fat_grams, fiber_grams, calories, insulin_units, meal_type, evaluation, related_meal_id, created_at";
+const FULL_COLS = "id, user_id, input_text, parsed_json, glucose_before, glucose_after, bg_1h, bg_1h_at, bg_2h, bg_2h_at, glucose_30min, glucose_30min_at, glucose_1h, glucose_1h_at, glucose_90min, glucose_90min_at, glucose_2h, glucose_2h_at, glucose_3h, glucose_3h_at, outcome_state, min_bg_180, max_bg_180, time_to_peak_min, auc_180, had_hypo_window, min_bg_60_180, meal_time, carbs_grams, protein_grams, fat_grams, fiber_grams, calories, insulin_units, meal_type, evaluation, related_meal_id, created_at";
 const MID_COLS  = "id, user_id, input_text, parsed_json, glucose_before, glucose_after, carbs_grams, protein_grams, fat_grams, fiber_grams, calories, insulin_units, meal_type, evaluation, created_at";
 const CORE_COLS = "id, user_id, input_text, parsed_json, glucose_before, carbs_grams, insulin_units, meal_type, evaluation, created_at";
 
@@ -512,6 +521,8 @@ export async function fetchMeals(opts: FetchMealsOptions = {}): Promise<Meal[]> 
       data = (core.data ?? []).map((r: Record<string, unknown>) => ({
         ...r, glucose_after: null, protein_grams: null, fat_grams: null, fiber_grams: null, calories: null,
         bg_1h: null, bg_1h_at: null, bg_2h: null, bg_2h_at: null, outcome_state: null, meal_time: null,
+        min_bg_180: null, max_bg_180: null, time_to_peak_min: null, auc_180: null,
+        had_hypo_window: null, min_bg_60_180: null,
         related_meal_id: null,
       })) as unknown as typeof data;
       error = null;
@@ -520,6 +531,8 @@ export async function fetchMeals(opts: FetchMealsOptions = {}): Promise<Meal[]> 
     } else {
       data = (mid.data ?? []).map((r: Record<string, unknown>) => ({
         ...r, bg_1h: null, bg_1h_at: null, bg_2h: null, bg_2h_at: null, outcome_state: null, meal_time: null,
+        min_bg_180: null, max_bg_180: null, time_to_peak_min: null, auc_180: null,
+        had_hypo_window: null, min_bg_60_180: null,
         related_meal_id: null,
       })) as unknown as typeof data;
       error = null;
