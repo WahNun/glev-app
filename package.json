@@ -8,6 +8,7 @@
     "start": "next start -p 5000",
     "db:migrate": "node scripts/apply-migration.mjs",
     "test": "playwright test",
+    "test:unit": "playwright test tests/unit",
     "test:e2e": "playwright test",
     "ios:version": "node scripts/bump-ios-version.mjs show",
     "ios:bump:build": "node scripts/bump-ios-version.mjs build",
