@@ -178,7 +178,7 @@ export default function BlogPage() {
       </section>
 
       <Script
-        src="https://app.trysoro.com/api/embed/3e94583a-baad-4296-a2ef-e7d445982516"
+        src="https://app.trysoro.com/api/embed/3e94583a-baad-4296-a2ef-e7d445982516?theme=dark"
         strategy="afterInteractive"
       />
     </main>
