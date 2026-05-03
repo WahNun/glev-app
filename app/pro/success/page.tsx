@@ -2,9 +2,10 @@
 
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Lockup from "@/components/landing/Lockup";
 import { ACCENT, BORDER, MINT, SURFACE, TEXT_DIM } from "@/components/landing/tokens";
+import { supabase } from "@/lib/supabase";
 
 // Pro flow note: this page replaces the previously-static success screen so
 // it can verify the Stripe Checkout Session before promising the user that
@@ -282,7 +283,103 @@ function InvalidCard({ reason }: { reason: string }) {
   );
 }
 
+// AuthState models the three sub-states inside the "valid Stripe session"
+// branch:
+//   - "checking"      — we don't yet know if the buyer has a Supabase Auth
+//                       row for this email. Renders a slim spinner so we
+//                       don't flash the wrong UI.
+//   - "needs_signup"  — no Supabase user exists for this email yet → show
+//                       the password-setup form so the buyer can finish
+//                       account creation. This is the load-bearing state
+//                       reached via the "Registrierung abschließen"-CTA in
+//                       the pro-welcome email.
+//   - "signed_in"     — buyer already completed registration (either just
+//                       now in this tab, or in an earlier session). Show a
+//                       "back to dashboard" CTA instead of the form.
+type AuthState = "checking" | "needs_signup" | "signed_in";
+
 function ValidCard({ email }: { email: string | null }) {
+  const router = useRouter();
+  const [authState, setAuthState] = useState<AuthState>("checking");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  // On mount: ask Supabase whether this browser already carries a session
+  // for the buyer's email. If yes → skip the signup form. If no (or the
+  // session belongs to a different email) → show the form so they can set
+  // a password and link this Stripe purchase to a Supabase Auth user.
+  useEffect(() => {
+    if (!supabase) {
+      setAuthState("needs_signup");
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      if (cancelled) return;
+      const sameEmail =
+        data?.user?.email && email
+          ? data.user.email.toLowerCase() === email.toLowerCase()
+          : false;
+      setAuthState(sameEmail ? "signed_in" : "needs_signup");
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [email]);
+
+  async function handleSignup(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setNotice(null);
+    if (!supabase) {
+      setError("Auth-System ist gerade nicht erreichbar. Bitte später erneut versuchen.");
+      return;
+    }
+    if (!email) {
+      setError("Keine Email zur Stripe-Session gefunden. Schreib uns an hello@glev.app.");
+      return;
+    }
+    if (password.length < 6) {
+      setError("Bitte mindestens 6 Zeichen wählen.");
+      return;
+    }
+    if (password !== confirm) {
+      setError("Die Passwörter stimmen nicht überein.");
+      return;
+    }
+    setSubmitting(true);
+    const { data, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+    });
+    if (authError) {
+      // "User already registered" → friendlier message + login pointer.
+      if (/already/i.test(authError.message)) {
+        setError(
+          "Diese Email ist bereits registriert. Bitte logge dich auf /login mit deinem bestehenden Passwort ein.",
+        );
+      } else {
+        setError(authError.message);
+      }
+      setSubmitting(false);
+      return;
+    }
+    if (!data.session) {
+      // Supabase project may require email confirmation before auto-login.
+      setNotice(
+        "Fast geschafft — bitte prüfe dein Email-Postfach und klicke auf den Bestätigungslink, um die Registrierung abzuschließen.",
+      );
+      setSubmitting(false);
+      return;
+    }
+    router.refresh();
+    router.replace("/dashboard");
+  }
+
   return (
     <>
       <div
@@ -324,6 +421,117 @@ function ValidCard({ email }: { email: string | null }) {
           Bestätigung geht an <strong style={{ color: "#fff" }}>{email}</strong>.
         </p>
       )}
+
+      {/* Registration / dashboard sub-card — the load-bearing piece linked
+          from the pro-welcome email. Three render branches keep the buyer
+          oriented no matter when they click the email. */}
+      <div
+        style={{
+          background: SURFACE,
+          border: `1px solid ${BORDER}`,
+          borderRadius: 16,
+          padding: 24,
+          width: "100%",
+          display: "flex",
+          flexDirection: "column",
+          gap: 14,
+        }}
+      >
+        {authState === "checking" && (
+          <div style={{ fontSize: 13, color: TEXT_DIM, textAlign: "center" }}>
+            Status wird geprüft …
+          </div>
+        )}
+
+        {authState === "signed_in" && (
+          <>
+            <div style={{ fontSize: 15, fontWeight: 600, color: "#fff", textAlign: "center" }}>
+              Du bist bereits angemeldet.
+            </div>
+            <Link
+              href="/dashboard"
+              style={{
+                padding: "13px",
+                background: `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
+                border: "none",
+                borderRadius: 12,
+                color: "white",
+                fontSize: 14,
+                fontWeight: 700,
+                textAlign: "center",
+                textDecoration: "none",
+              }}
+            >
+              Zum Dashboard →
+            </Link>
+          </>
+        )}
+
+        {authState === "needs_signup" && (
+          <form onSubmit={handleSignup} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ fontSize: 15, fontWeight: 600, color: "#fff", textAlign: "center" }}>
+              Passwort wählen, um die Registrierung abzuschließen
+            </div>
+            <div style={{ fontSize: 12, color: TEXT_DIM, textAlign: "center", lineHeight: 1.5 }}>
+              Mindestens 6 Zeichen. Du loggst dich später mit{" "}
+              <strong style={{ color: "#fff" }}>{email ?? "deiner Email"}</strong> ein.
+            </div>
+            <input
+              type="password"
+              autoComplete="new-password"
+              placeholder="Passwort"
+              value={password}
+              onChange={(ev) => setPassword(ev.target.value)}
+              disabled={submitting}
+              style={inp}
+            />
+            <input
+              type="password"
+              autoComplete="new-password"
+              placeholder="Passwort wiederholen"
+              value={confirm}
+              onChange={(ev) => setConfirm(ev.target.value)}
+              disabled={submitting}
+              style={inp}
+            />
+            {error && (
+              <div style={{ fontSize: 12, color: PINK, textAlign: "center", lineHeight: 1.5 }}>
+                {error}
+              </div>
+            )}
+            {notice && (
+              <div style={{ fontSize: 12, color: MINT, textAlign: "center", lineHeight: 1.5 }}>
+                {notice}
+              </div>
+            )}
+            <button
+              type="submit"
+              disabled={submitting}
+              style={{
+                padding: "13px",
+                background: submitting
+                  ? "rgba(79,110,247,0.5)"
+                  : `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
+                border: "none",
+                borderRadius: 12,
+                color: "white",
+                fontSize: 14,
+                fontWeight: 700,
+                cursor: submitting ? "default" : "pointer",
+                fontFamily: "inherit",
+              }}
+            >
+              {submitting ? "Wird gespeichert …" : "Registrierung abschließen"}
+            </button>
+            <div style={{ fontSize: 11, color: TEXT_DIM, textAlign: "center" }}>
+              Schon registriert?{" "}
+              <Link href="/login" style={{ color: ACCENT, textDecoration: "none" }}>
+                Hier einloggen
+              </Link>
+            </div>
+          </form>
+        )}
+      </div>
 
       <div
         style={{
@@ -376,3 +584,16 @@ function ValidCard({ email }: { email: string | null }) {
     </>
   );
 }
+
+const inp: React.CSSProperties = {
+  background: "rgba(255,255,255,0.04)",
+  border: "1px solid rgba(255,255,255,0.12)",
+  borderRadius: 10,
+  padding: "11px 14px",
+  color: "#fff",
+  fontSize: 14,
+  width: "100%",
+  boxSizing: "border-box",
+  outline: "none",
+  fontFamily: "inherit",
+};
