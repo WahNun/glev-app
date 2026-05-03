@@ -158,6 +158,14 @@ export default function InsightsPage() {
   // trend tiles (TIR, GMI, meal-type breakdown, etc.).
   const [engineMeals, setEngineMeals]   = useState<Meal[]>([]);
   const [insulinLogs, setInsulinLogs]   = useState<InsulinLog[]>([]);
+  // 90-day bolus window — feeds `computeAdaptiveICR` so user-logged
+  // boluses (incl. those split across multiple shots or logged
+  // separately from the meal) get paired to meals via
+  // `pairBolusesToMeals` and folded into the ICR average. Wider window
+  // than the 14-day `insulinLogs` set above because the engine meal
+  // window is also 90 days; using 14d here would silently drop pairs
+  // for meals 15..90 days old.
+  const [engineBoluses, setEngineBoluses] = useState<InsulinLog[]>([]);
   const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([]);
   const [fingersticks, setFingersticks] = useState<FingerstickReading[]>([]);
   const [loading, setLoading]           = useState(true);
@@ -171,13 +179,15 @@ export default function InsightsPage() {
       fetchMeals().catch(() => [] as Meal[]),
       fetchMealsForEngine().catch(() => [] as Meal[]),
       fetchRecentInsulinLogs(14).catch(() => [] as InsulinLog[]),
+      fetchRecentInsulinLogs(90).catch(() => [] as InsulinLog[]),
       fetchRecentExerciseLogs(30).catch(() => [] as ExerciseLog[]),
       fetchFingersticks(fingerstickFromIso).catch(() => [] as FingerstickReading[]),
     ])
-      .then(([m, em, il, ex, fs]) => {
+      .then(([m, em, il, ilEngine, ex, fs]) => {
         setMeals(m);
         setEngineMeals(em);
         setInsulinLogs(il);
+        setEngineBoluses(ilEngine);
         setExerciseLogs(ex);
         setFingersticks(fs);
       })
@@ -542,7 +552,7 @@ export default function InsightsPage() {
   // (`engineMeals`) so the morning/afternoon/evening ICR buckets and the
   // pattern detector's recent-window stats aren't dragged off course by
   // year-old rows. Long-term tiles below continue to read from `meals`.
-  const adaptiveICR  = computeAdaptiveICR(engineMeals);
+  const adaptiveICR  = computeAdaptiveICR(engineMeals, engineBoluses);
   const enginePattern = detectPattern(engineMeals);
   const settings: AdaptiveSettings = {
     icr: adaptiveICR.global ? Math.round(adaptiveICR.global * 10) / 10 : 15,

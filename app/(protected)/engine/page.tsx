@@ -862,8 +862,18 @@ export default function EnginePage() {
   }
 
   useEffect(() => {
-    fetchMealsForEngine()
-      .then(fetched => {
+    // Fetch meals AND the recent bolus logs in parallel so the adaptive
+    // ICR computation can pair user-logged boluses to meals (see
+    // lib/engine/pairing.ts). Users who log boluses separately from
+    // meals (or split a single meal across multiple shots) get their
+    // real dosing folded into the ICR average — without pairing they
+    // were invisible to the engine. Falls back to meal.insulin_units
+    // when fetching boluses fails so the engine still runs.
+    Promise.all([
+      fetchMealsForEngine(),
+      fetchRecentInsulinLogs(90).catch(() => [] as InsulinLog[]),
+    ])
+      .then(([fetched, bolusesForPairing]) => {
         setMeals(fetched);
         // Adaptive ICR — single source of truth shared with the Insights
         // page (lib/engine/adaptiveICR.ts). Outcome-weighted average of
@@ -879,7 +889,7 @@ export default function EnginePage() {
         //      carbs), not down. The old formula pushed ICR DOWN on LOW.
         //   2. Hard cap at 25 made it impossible to converge on the
         //      empirical 1:37.5 some users actually need.
-        const adaptive = computeAdaptiveICR(fetched);
+        const adaptive = computeAdaptiveICR(fetched, bolusesForPairing);
         if (adaptive.global !== null && adaptive.sampleSize >= 3) {
           // Round to 1 decimal — matches Insights display precision and
           // keeps `runGlevEngine`'s `carbs / icr` math stable.
