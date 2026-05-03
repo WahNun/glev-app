@@ -59,7 +59,7 @@ interface DashboardStats {
   goodRate: number;
   avgGlucoseBefore: number | null;
   recentEntries: Entry[];
-  evaluationBreakdown: { GOOD: number; OVERDOSE: number; UNDERDOSE: number; CHECK_CONTEXT: number };
+  evaluationBreakdown: { GOOD: number; OVERDOSE: number; UNDERDOSE: number };
 }
 
 interface TrendPoint {
@@ -166,7 +166,7 @@ async function apiFetch<T>(path: string, _opts?: RequestInit): Promise<T> {
   await new Promise(r => setTimeout(r, 50));
   if (path.startsWith("/insights/dashboard")) {
     const total = MOCKUP_ENTRIES.length;
-    const eb = { GOOD: 0, OVERDOSE: 0, UNDERDOSE: 0, CHECK_CONTEXT: 0 };
+    const eb = { GOOD: 0, OVERDOSE: 0, UNDERDOSE: 0 };
     let bgSum = 0, bgCount = 0, hypo = 0, spike = 0;
     for (const e of MOCKUP_ENTRIES) {
       if (e.evaluation && e.evaluation in eb) eb[e.evaluation as keyof typeof eb]++;
@@ -387,7 +387,7 @@ function Dashboard({ onInsights }: { onInsights?: (stat: string) => void }) {
         <Card style={{padding:"18px 20px"}}>
           <div style={{fontSize:13,fontWeight:600,marginBottom:4}}>Outcomes</div>
           <div style={{fontSize:11,color:"rgba(255,255,255,0.35)",marginBottom:14}}>Evaluation split</div>
-          {[{label:"GOOD",count:eb.GOOD,color:GREEN},{label:"UNDERDOSE",count:eb.UNDERDOSE,color:ORANGE},{label:"OVERDOSE",count:eb.OVERDOSE,color:PINK},{label:"CHECK",count:eb.CHECK_CONTEXT,color:"#4B5070"}].map(r=>(
+          {[{label:"GOOD",count:eb.GOOD,color:GREEN},{label:"UNDERDOSE",count:eb.UNDERDOSE,color:ORANGE},{label:"OVERDOSE",count:eb.OVERDOSE,color:PINK}].map(r=>(
             <div key={r.label} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
               <div style={{width:7,height:7,borderRadius:99,background:r.color,flexShrink:0}}/>
               <div style={{flex:1}}>
@@ -2163,7 +2163,7 @@ function MobileDashboard({email,name:memberName,onSignOut}:{email?:string;name?:
             {eb&&(
               <div style={{background:SURFACE,border:`1px solid ${BORDER}`,borderRadius:14,padding:"16px 18px"}}>
                 <div style={{fontSize:14,fontWeight:600,marginBottom:14}}>Outcomes</div>
-                {[{label:"GOOD",count:eb.GOOD,color:GREEN},{label:"UNDERDOSE",count:eb.UNDERDOSE,color:ORANGE},{label:"OVERDOSE",count:eb.OVERDOSE,color:PINK},{label:"CHECK",count:eb.CHECK_CONTEXT,color:"#4B5070"}].map(r=>(
+                {[{label:"GOOD",count:eb.GOOD,color:GREEN},{label:"UNDERDOSE",count:eb.UNDERDOSE,color:ORANGE},{label:"OVERDOSE",count:eb.OVERDOSE,color:PINK}].map(r=>(
                   <div key={r.label} style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
                     <div style={{width:8,height:8,borderRadius:99,background:r.color,flexShrink:0}}/>
                     <div style={{flex:1}}>

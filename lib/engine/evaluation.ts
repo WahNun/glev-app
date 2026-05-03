@@ -4,7 +4,7 @@ import type { AdjustmentMessage } from "./adjustment";
 import { parseDbTs } from "@/lib/time";
 import { getInsulinSettings, type InsulinSettings } from "@/lib/userSettings";
 
-export type Outcome = "GOOD" | "UNDERDOSE" | "OVERDOSE" | "SPIKE" | "CHECK_CONTEXT";
+export type Outcome = "GOOD" | "UNDERDOSE" | "OVERDOSE" | "SPIKE";
 
 export type Classification = "FAST_CARBS" | "HIGH_PROTEIN" | "HIGH_FAT" | "BALANCED" | null | undefined;
 

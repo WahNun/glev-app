@@ -14,10 +14,9 @@ import { parseDbDate } from "./time";
  *   GOOD       — dose matched the meal (Δ within ±30 mg/dL)
  *   SPIKE      — post-meal high (rapid spike OR slow underdose); incl. legacy "HIGH"
  *   OVERDOSE   — post-meal low (insulin overshot); incl. legacy "LOW"
- *   OTHER      — CHECK_CONTEXT, null, or anything we can't categorise yet
- *                (pending / provisional rows whose lifecycleFor hasn't
- *                cached an evaluation, plus the diagnostic CHECK_CONTEXT
- *                outcome). Stays in the denominator — a still-pending
+ *   OTHER      — null or anything we can't categorise yet (pending /
+ *                provisional rows whose lifecycleFor hasn't cached an
+ *                evaluation). Stays in the denominator — a still-pending
  *                meal lowers all three displayed rates equally instead
  *                of being silently excluded.
  *

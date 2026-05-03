@@ -63,7 +63,6 @@ export const EVAL_COLORS: Record<string, string> = {
   SPIKE: "#FFD60A",
   OVERDOSE: "#FF2D78",
   UNDERDOSE: PALETTE.ORANGE,
-  CHECK_CONTEXT: PALETTE.ORANGE,
 };
 
 export const EVAL_LABELS: Record<string, string> = {
@@ -73,7 +72,6 @@ export const EVAL_LABELS: Record<string, string> = {
   SPIKE: "Spike",
   OVERDOSE: "Over Dose",
   UNDERDOSE: "Under Dose",
-  CHECK_CONTEXT: "Review",
 };
 
 export const EVAL_EXPLAIN: Record<string, string> = {
@@ -83,7 +81,6 @@ export const EVAL_EXPLAIN: Record<string, string> = {
   LOW: "Insulin insufficient → glucose increased after meal.",
   UNDERDOSE: "Insulin insufficient → glucose increased after meal.",
   SPIKE: "Rapid glucose increase detected post meal.",
-  CHECK_CONTEXT: "Outcome unclear — review context before adjusting.",
 };
 
 export function getEvalColor(ev?: string | null) {

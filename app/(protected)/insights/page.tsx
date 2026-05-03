@@ -60,7 +60,7 @@ const HIGH_YELLOW = "#FFD166";
 //   GOOD  → "On target"
 //   SPIKE → SPIKE + UNDERDOSE + LOW (legacy)  — BG ended too high
 //   HYPO  → OVERDOSE + HIGH (legacy)          — BG ended too low
-//   OTHER → null / CHECK_CONTEXT / unknown    — excluded everywhere
+//   OTHER → null / unknown                    — excluded everywhere
 //
 // Returns `null` for unevaluated meals so a pending row never inflates
 // either numerator or denominator. Use this via `unifiedOutcome(meal)`

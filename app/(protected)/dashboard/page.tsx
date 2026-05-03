@@ -44,8 +44,8 @@ function buildCards(meals: Meal[], t: DashT): CardData[] {
   // GOOD / SPIKE / HYPO / OTHER (no double-counting). UNDERDOSE used
   // to leak into both spike AND hypo buckets in older code; the
   // unified resolver below makes that impossible by giving each row
-  // a single canonical outcome string. OTHER (CHECK_CONTEXT, null,
-  // legacy unknown) is excluded from numerator and denominator so a
+  // a single canonical outcome string. OTHER (null, legacy unknown)
+  // is excluded from numerator and denominator so a
   // pending meal never drags the score down.
   const total = meals.length;
   let good = 0, spike = 0, hypo = 0;

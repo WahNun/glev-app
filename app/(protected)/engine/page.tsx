@@ -868,7 +868,7 @@ export default function EnginePage() {
         // Adaptive ICR — single source of truth shared with the Insights
         // page (lib/engine/adaptiveICR.ts). Outcome-weighted average of
         // carbs/insulin across all FINALIZED meals (state==="final"):
-        // GOOD weight 1.0, SPIKE 0.7, UNDER/OVERDOSE 0.3, CHECK_CONTEXT 0.5.
+        // GOOD weight 1.0, SPIKE 0.7, UNDER/OVERDOSE 0.3.
         // Read-only: never written to DB.
         //
         // Why this matters: the previous inline formula

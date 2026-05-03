@@ -7,7 +7,6 @@ const OUTCOME_WEIGHT: Record<string, number> = {
   SPIKE: 0.7,
   UNDERDOSE: 0.3,
   OVERDOSE: 0.3,
-  CHECK_CONTEXT: 0.5,
 };
 
 export type TimeOfDay = "morning" | "afternoon" | "evening";
