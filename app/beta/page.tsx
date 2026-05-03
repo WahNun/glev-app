@@ -267,27 +267,41 @@ function BetaContent() {
                 margin: 0,
                 // German compounds like "Insulinentscheidungen" don't
                 // break by default and overflow the 335px content area
-                // on iPhone 13 mini → horizontal scroll. We gate the
-                // hyphenation hints on locale=de so EN words like
-                // "decisions" don't render as "deci-sions" (which
-                // happened because <html lang="de"> is set globally
-                // and the browser was free to hyphenate any English
-                // text on this page). EN keeps `overflowWrap: normal`
-                // → no intra-word breaks, so short words stay intact.
+                // on iPhone 13 mini → horizontal scroll. DE: keep
+                // hyphens:auto so the long compound can wrap. EN:
+                // hyphens:manual + each word wrapped in a
+                // whiteSpace:nowrap span (rendered below) so short
+                // words like "insulin" / "decisions" stay atomic and
+                // never render as "insu-lin" or "deci-sions".
                 overflowWrap: locale === "de" ? "anywhere" : "normal",
                 hyphens: locale === "de" ? "auto" : "manual",
                 WebkitHyphens: locale === "de" ? "auto" : "manual",
-                // Belt-and-suspenders: even with `hyphens: manual`,
-                // some browsers/dev caches still hyphenated short EN
-                // words ("deci-sions"). `wordBreak: keep-all` forbids
-                // any break inside a word — paired with overflow-wrap
-                // normal it lets short EN words stay intact, while DE
-                // still breaks via the `hyphens: auto` rule above.
-                wordBreak: locale === "de" ? "normal" : "keep-all",
               }}
               lang={locale}
             >
-              {t("hero_title_line1")}<br />{t("hero_title_line2")}
+              {locale === "de" ? (
+                <>{t("hero_title_line1")}<br />{t("hero_title_line2")}</>
+              ) : (
+                <>
+                  {/* Per-word nowrap spans — `hyphens: manual` alone
+                      did not stop Safari/dev caches from hyphenating
+                      short Latin words when the column got narrow.
+                      Wrapping each word in a `whiteSpace: nowrap`
+                      span makes the word an unbreakable atom while
+                      still letting the H1 wrap between words. */}
+                  {t("hero_title_line1").split(" ").map((w, i, arr) => (
+                    <span key={`l1-${i}`} style={{ whiteSpace: "nowrap" }}>
+                      {w}{i < arr.length - 1 ? " " : ""}
+                    </span>
+                  ))}
+                  <br />
+                  {t("hero_title_line2").split(" ").map((w, i, arr) => (
+                    <span key={`l2-${i}`} style={{ whiteSpace: "nowrap" }}>
+                      {w}{i < arr.length - 1 ? " " : ""}
+                    </span>
+                  ))}
+                </>
+              )}
             </h1>
             <p style={{ fontSize: 18, lineHeight: 1.5, color: TEXT_DIM, margin: 0, maxWidth: 520 }}>
               {t("hero_subtitle")}
