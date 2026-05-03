@@ -11,6 +11,9 @@
 //   4. applyAdjustment is a no-op when hasSuggestion is false.
 //   5. Audit log is appended (not replaced) and never mutates the
 //      input settings object.
+//   6. applyAdjustment is idempotent on double-tap (Task #190): the
+//      same suggestion against an already-applied state must NOT
+//      append another history row.
 
 import { test, expect } from "@playwright/test";
 
@@ -155,4 +158,29 @@ test("applyAdjustment: appends to existing audit history rather than replacing",
   const next = applyAdjustment(s, sug);
   expect(next.adjustmentHistory).toHaveLength(3);
   expect(next.adjustmentHistory[0]).toEqual(prior);
+});
+
+// ── Task #190: idempotency on double-tap ────────────────────────────
+// Tapping Übernehmen twice in a row must NOT append a second history
+// row, since the values already match the suggestion's `to` targets.
+// The DB-backed `applyAdjustmentToSettings` enforces the same contract
+// (covered separately in applyAdjustmentToSettings.test.ts).
+
+test("applyAdjustment: idempotent on double-tap (no duplicate history)", () => {
+  const s = makeAdaptiveSettings({ icr: 15, correctionFactor: 50 });
+  const sug = suggestAdjustment(
+    s,
+    makePattern({ type: "overdosing", confidence: "high", sampleSize: 15 }),
+  );
+
+  const once = applyAdjustment(s, sug);
+  expect(once.adjustmentHistory).toHaveLength(2);
+
+  // Same suggestion against the now-updated state — both fields are
+  // already at their targets, so neither branch fires and history
+  // stays at 2 entries.
+  const twice = applyAdjustment(once, sug);
+  expect(twice.icr).toBe(once.icr);
+  expect(twice.correctionFactor).toBe(once.correctionFactor);
+  expect(twice.adjustmentHistory).toHaveLength(2);
 });

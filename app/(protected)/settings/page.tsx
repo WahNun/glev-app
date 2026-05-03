@@ -15,7 +15,9 @@ import {
   fetchInsulinSettings,
   saveInsulinSettings,
   DEFAULT_INSULIN_SETTINGS,
+  fetchAdjustmentHistory,
 } from "@/lib/userSettings";
+import type { AdjustmentRecord } from "@/lib/engine/adjustment";
 import {
   fetchAppointments,
   addAppointment,
@@ -97,7 +99,8 @@ type SheetKey =
   | "import"
   | "historical"
   | "googleSheets"
-  | "onboarding";
+  | "onboarding"
+  | "adjustmentHistory";
 
 /** Lightweight CGM status hook — fetches /api/cgm/status once on mount.
  * Silent on error (treats as disconnected). The full CgmSettingsCard owns
@@ -206,6 +209,12 @@ export default function SettingsPage() {
   const [accountCreatedAt, setAccountCreatedAt] = useState<string>("");
   const [accountMealCount, setAccountMealCount] = useState<number>(0);
   const [signingOut, setSigningOut] = useState(false);
+  // Engine adjustment audit history. The full list lives in
+  // `user_settings.adjustment_history` (JSONB); we surface only the
+  // most recent ~10 entries on the row subtitle / sheet so the user
+  // can see what the engine has been changing without us paginating.
+  // Failures collapse to an empty array — same UI as "nothing yet".
+  const [adjustmentHistory, setAdjustmentHistory] = useState<AdjustmentRecord[]>([]);
 
   const [openSheet, setOpenSheet] = useState<SheetKey | null>(null);
   // Draft snapshot captured the moment a sheet opens. If the user dismisses
@@ -258,6 +267,14 @@ export default function SettingsPage() {
     // which is the same UI as "no appointments saved yet" — no need
     // to surface a separate error state on the row subtitle.
     fetchAppointments().then(setAppointments).catch(() => {});
+    // Engine adjustment history — read-only audit trail surfaced under
+    // the Insulin section. Newest-first, capped to ~10 for display.
+    // `fetchAdjustmentHistory` already returns newest-first, so just
+    // take the first 10 — slicing the tail would surface the OLDEST
+    // entries on long-lived accounts.
+    fetchAdjustmentHistory()
+      .then((rows) => setAdjustmentHistory(rows.slice(0, 10)))
+      .catch(() => {});
     // Load account info (email + sign-up date + total meal count) for the
     // Account row subtitle and sheet. Each piece is best-effort: failures
     // leave the placeholder ("—") in place rather than blocking the row.
@@ -1511,9 +1528,67 @@ export default function SettingsPage() {
       ),
       footer: closeFooter,
     },
+    adjustmentHistory: {
+      title: tSettings("adjustment_history_title"),
+      body: (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <p style={{ fontSize: 13, color: "var(--text-faint)", lineHeight: 1.5, margin: 0 }}>
+            {tSettings("adjustment_history_intro")}
+          </p>
+          {adjustmentHistory.length === 0 ? (
+            <div style={{
+              padding: "14px 16px", borderRadius: 12,
+              background: "var(--surface-soft)", border: `1px solid ${BORDER}`,
+              fontSize: 13, color: "var(--text-faint)",
+            }}>
+              {tSettings("adjustment_history_empty")}
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {adjustmentHistory.map((rec, idx) => {
+                const date = parseDbDate(rec.at).toLocaleDateString(bcp47, {
+                  year: "numeric", month: "short", day: "numeric",
+                });
+                const fieldLabel = rec.field === "icr"
+                  ? tSettings("adjustment_field_icr")
+                  : tSettings("adjustment_field_cf");
+                return (
+                  <div
+                    key={`${rec.at}-${idx}`}
+                    style={{
+                      padding: "10px 12px", borderRadius: 10,
+                      background: "var(--surface-soft)", border: `1px solid ${BORDER}`,
+                      display: "flex", flexDirection: "column", gap: 4,
+                    }}
+                  >
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-strong)" }}>
+                      {tSettings("adjustment_history_row", {
+                        date,
+                        field: fieldLabel,
+                        from: rec.from,
+                        to: rec.to,
+                      })}
+                    </div>
+                    {rec.reason && (
+                      <div style={{ fontSize: 12, color: "var(--text-faint)" }}>
+                        {rec.reason}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ),
+      footer: closeFooter,
+    },
   };
 
   const active = openSheet ? sheetContent[openSheet] : null;
+  const adjustmentHistorySub = adjustmentHistory.length === 0
+    ? tSettings("subtitle_adjustment_history_empty")
+    : tSettings("subtitle_adjustment_history_count", { n: adjustmentHistory.length });
 
   return (
     <div style={{ maxWidth: 720, margin: "0 auto" }}>
@@ -1589,6 +1664,14 @@ export default function SettingsPage() {
           subtitle={lastAppointmentSub}
           ariaLabel={tSettings("row_open_aria", { label: tSettings("appointments_title") })}
           onClick={() => openSheetWith("lastAppointment")}
+        />
+        <SettingsRow
+          iconColor={ACCENT}
+          icon={ICON.insulin}
+          label={tSettings("row_adjustment_history")}
+          subtitle={adjustmentHistorySub}
+          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_adjustment_history") })}
+          onClick={() => openSheetWith("adjustmentHistory")}
         />
       </SettingsSection>
 

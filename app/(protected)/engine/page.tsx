@@ -11,6 +11,9 @@ import { logDebug } from "@/lib/debug";
 import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
 import { computeAdaptiveICR } from "@/lib/engine/adaptiveICR";
+import { detectPattern } from "@/lib/engine/patterns";
+import { suggestAdjustment, type AdaptiveSettings } from "@/lib/engine/adjustment";
+import { applyAdjustmentToSettings, getInsulinSettings } from "@/lib/userSettings";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
 import EngineLogTab, { InsulinForm, ExerciseForm } from "@/components/EngineLogTab";
 import FingerstickLogCard from "@/components/FingerstickLogCard";
@@ -249,6 +252,10 @@ export default function EnginePage() {
   // pull engine-specific copy without a rename storm in the rest of
   // the (~1900-line) component.
   const tEngine = useTranslations("engine");
+  // Adjustment suggestion messages live under `insights` (engine_msg_*),
+  // since they're shared with the Insights tab. Use a dedicated handle
+  // so we can render `AdjustmentMessage.key` with its params verbatim.
+  const tInsights = useTranslations("insights");
   // Carb-unit selector (g / BE / KE) — DACH users typically rechnen in
   // BE/KE statt Gramm. The hook owns conversion at this UI boundary;
   // everything below the boundary (saveMeal, runGlevEngine, classify*,
@@ -302,6 +309,16 @@ export default function EnginePage() {
   const [icrSampleSize, setIcrSampleSize] = useState(0);
   const [insulinLogs, setInsulinLogs] = useState<InsulinLog[]>([]);
   const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([]);
+  // Adaptive engine adjustment banner state. `dismissedSig` is hydrated
+  // from localStorage on mount and bumped whenever the user verwirft
+  // (or successfully applies) a suggestion, so the banner doesn't keep
+  // re-appearing for the same pattern. `historyTick` is bumped after a
+  // successful apply so the suggestion re-renders against fresh ICR/CF
+  // values (rotating to whatever the engine recommends next).
+  const [adjustmentBusy, setAdjustmentBusy] = useState(false);
+  const [adjustmentErr, setAdjustmentErr] = useState<string | null>(null);
+  const [dismissedSigs, setDismissedSigs] = useState<Record<string, number>>({});
+  const [adjustmentTick, setAdjustmentTick] = useState(0);
   const [loading, setLoading] = useState(true);
   const [glucose, setGlucose] = useState("");
   // The `carbs` form state holds the user-displayed value in their
@@ -465,6 +482,105 @@ export default function EnginePage() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // Hydrate the dismissed-suggestion cooldown map from localStorage. Each
+  // entry is `{ [patternSignature]: epochMs of dismissal }` and we cull
+  // anything older than the 14-day window on read so the dictionary
+  // doesn't grow unbounded over the user's lifetime.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem("glev_engine_adj_dismissed");
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Record<string, number>;
+      const cutoff = Date.now() - 14 * 24 * 3600_000;
+      const fresh: Record<string, number> = {};
+      for (const [sig, ts] of Object.entries(parsed)) {
+        if (typeof ts === "number" && ts >= cutoff) fresh[sig] = ts;
+      }
+      setDismissedSigs(fresh);
+      // Persist the culled map so the next read is cheap.
+      window.localStorage.setItem("glev_engine_adj_dismissed", JSON.stringify(fresh));
+    } catch { /* corrupted storage — ignore, banner will just show */ }
+  }, []);
+
+  // Compute the current adjustment suggestion from `meals`. The engine
+  // helpers are cheap pure functions; recomputing on every render keeps
+  // the banner consistent with whatever ICR/CF are now in localStorage
+  // (which we just wrote in the apply path). `adjustmentTick` is the
+  // explicit invalidator: bumping it after a successful apply forces
+  // `getInsulinSettings()` to be re-read against the freshly persisted
+  // values. The dependency on `meals.length` covers new logged meals.
+  const currentAdjustment = useMemo(() => {
+    if (meals.length === 0) return null;
+    const ins = getInsulinSettings();
+    const settings: AdaptiveSettings = {
+      icr: ins.icr,
+      correctionFactor: ins.cf,
+      lastUpdated: null,
+      adjustmentHistory: [],
+    };
+    const pattern = detectPattern(meals);
+    const suggestion = suggestAdjustment(settings, pattern);
+    if (!suggestion.hasSuggestion) return null;
+    if (pattern.confidence === "low" || pattern.sampleSize < 5) return null;
+    return { pattern, suggestion };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meals, adjustmentTick]);
+
+  // Stable per-pattern signature used as the localStorage cooldown key.
+  // We intentionally use `pattern.type` only (not the rotating ICR/CF
+  // numbers) so dismissing once silences the same recurring pattern for
+  // the full 14 days, regardless of the next +/-5% step the engine
+  // would have proposed.
+  const adjustmentSignature = currentAdjustment?.pattern.type ?? null;
+  const adjustmentDismissedUntil = adjustmentSignature
+    ? dismissedSigs[adjustmentSignature]
+    : undefined;
+  const adjustmentVisible = !!currentAdjustment
+    && (!adjustmentDismissedUntil
+        || Date.now() - adjustmentDismissedUntil > 14 * 24 * 3600_000);
+
+  /**
+   * Persist a dismissal in localStorage AND in component state so the
+   * banner disappears immediately without waiting for a re-render
+   * round-trip through storage.
+   */
+  function rememberDismissal(sig: string) {
+    const next = { ...dismissedSigs, [sig]: Date.now() };
+    setDismissedSigs(next);
+    if (typeof window !== "undefined") {
+      try { window.localStorage.setItem("glev_engine_adj_dismissed", JSON.stringify(next)); }
+      catch { /* storage disabled — banner state-only fallback is fine for the session */ }
+    }
+  }
+
+  async function handleApplyAdjustment() {
+    if (!currentAdjustment) return;
+    setAdjustmentBusy(true);
+    setAdjustmentErr(null);
+    try {
+      await applyAdjustmentToSettings(currentAdjustment.suggestion);
+      // No cooldown on apply — once the user accepts, the engine should
+      // immediately rotate to the next recommendation against the
+      // freshly persisted ICR/CF (handled by `setAdjustmentTick` below).
+      // The cooldown is reserved for explicit Verwerfen.
+      setDecisionToast(tEngine("adjustment_applied_toast"));
+      setTimeout(() => setDecisionToast(null), 2400);
+      // Force re-read of localStorage-mirrored ICR/CF so any next
+      // suggestion rotates against the fresh values.
+      setAdjustmentTick(t => t + 1);
+    } catch (e) {
+      setAdjustmentErr(e instanceof Error ? e.message : tEngine("adjustment_apply_failed"));
+    } finally {
+      setAdjustmentBusy(false);
+    }
+  }
+
+  function handleDismissAdjustment() {
+    if (!adjustmentSignature) return;
+    rememberDismissal(adjustmentSignature);
+  }
 
   // Track viewport — mobile gets 3 separate tabs (Engine | Bolus | Exercise),
   // desktop keeps the 2-tab layout (Engine | Log) with both forms side-by-side.
@@ -1463,6 +1579,73 @@ export default function EnginePage() {
           }
         >
           <div style={{ maxWidth: 720, margin: "0 auto", width: "100%", minWidth: 0 }}>
+          {adjustmentVisible && currentAdjustment && (
+            <div
+              role="region"
+              aria-label={tEngine("adjustment_banner_title")}
+              style={{
+                marginBottom: 16,
+                padding: "14px 16px",
+                borderRadius: 12,
+                background: "rgba(99, 102, 241, 0.08)",
+                border: "1px solid rgba(99, 102, 241, 0.35)",
+                display: "flex",
+                flexDirection: "column",
+                gap: 10,
+              }}
+            >
+              <div style={{ fontWeight: 600, fontSize: 14, color: "var(--text-primary, #1f2937)" }}>
+                {tEngine("adjustment_banner_title")}
+              </div>
+              <div style={{ fontSize: 13, lineHeight: 1.45, color: "var(--text-secondary, #4b5563)" }}>
+                {tInsights(
+                  currentAdjustment.suggestion.message.key as Parameters<typeof tInsights>[0],
+                  currentAdjustment.suggestion.message.params,
+                )}
+              </div>
+              {adjustmentErr && (
+                <div role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>{adjustmentErr}</div>
+              )}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={handleApplyAdjustment}
+                  disabled={adjustmentBusy}
+                  style={{
+                    padding: "8px 14px",
+                    borderRadius: 8,
+                    border: "none",
+                    background: "#4f46e5",
+                    color: "#fff",
+                    fontWeight: 600,
+                    fontSize: 13,
+                    cursor: adjustmentBusy ? "wait" : "pointer",
+                    opacity: adjustmentBusy ? 0.7 : 1,
+                  }}
+                >
+                  {adjustmentBusy ? tEngine("adjustment_apply_busy") : tEngine("adjustment_apply")}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDismissAdjustment}
+                  disabled={adjustmentBusy}
+                  style={{
+                    padding: "8px 14px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(99, 102, 241, 0.45)",
+                    background: "transparent",
+                    color: "#4f46e5",
+                    fontWeight: 600,
+                    fontSize: 13,
+                    cursor: "pointer",
+                  }}
+                  title={tEngine("adjustment_dismiss_hint")}
+                >
+                  {tEngine("adjustment_dismiss")}
+                </button>
+              </div>
+            </div>
+          )}
           {/* Wizard form is single-column by design — on mobile the chat
               panel sits inside Step 1's body (legacy stacked layout), on
               desktop it lives in the sticky right sidebar declared after

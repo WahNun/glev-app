@@ -15,6 +15,7 @@
  */
 
 import { supabase } from "./supabase";
+import type { AdjustmentRecord, AdjustmentSuggestion } from "./engine/adjustment";
 
 export interface MacroTargets {
   carbs:   number;
@@ -309,3 +310,159 @@ export async function fetchLastAppointment(): Promise<LastAppointment> {
   }
 }
 
+
+/* ── Adaptive engine adjustment history ─────────────────────────── */
+//
+// The adaptive engine in `lib/engine/adjustment.ts` produces ICR / CF
+// suggestions, but until Task #190 nothing wrote them back to the
+// user's settings — so the engine never actually "learned" across
+// sessions. The helpers below are the missing link: they accept a
+// confirmed `AdjustmentSuggestion`, write the new ICR/CF into the same
+// `user_settings` row that holds the rest of the insulin parameters,
+// and append an audit-trail entry to `adjustment_history` so the
+// Settings page can show the user what the engine has changed.
+//
+// One round-trip on read, one on write — atomic per-user because both
+// columns live on the same row, so a partial failure can't leave ICR
+// updated without a matching history entry.
+
+const ICR_MIN = 1, ICR_MAX = 100;
+const CF_MIN  = 1, CF_MAX  = 500;
+
+function clampIcr(n: number): number {
+  return Math.min(ICR_MAX, Math.max(ICR_MIN, Math.round(n)));
+}
+function clampCf(n: number): number {
+  return Math.min(CF_MAX, Math.max(CF_MIN, Math.round(n)));
+}
+
+/**
+ * Read the persisted adjustment history (newest first). Returns [] when
+ * the user is signed out, the row hasn't been created yet, or Supabase
+ * is unreachable — every UI surface treats the empty list as "no
+ * engine adjustments yet", which is the right default for new users.
+ */
+export async function fetchAdjustmentHistory(): Promise<AdjustmentRecord[]> {
+  if (!supabase) return [];
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from("user_settings")
+    .select("adjustment_history")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (error || !data || !Array.isArray(data.adjustment_history)) return [];
+  // Defensive copy + newest-first sort: the column is append-only, so
+  // it should already be in chronological order, but a sort here means
+  // a manually-edited row can't break the Settings UI's expectations.
+  return [...(data.adjustment_history as AdjustmentRecord[])].sort(
+    (a, b) => (b.at ?? "").localeCompare(a.at ?? ""),
+  );
+}
+
+/**
+ * Apply an engine `AdjustmentSuggestion` permanently:
+ *   1. Clamp the suggested ICR / CF into the column CHECK ranges.
+ *   2. Write them onto `user_settings` (same row as macro targets etc).
+ *   3. Append the corresponding `AdjustmentRecord`(s) to
+ *      `adjustment_history`.
+ *
+ * Idempotent on double-tap: if the row's current ICR/CF already match
+ * the suggested "to" values AND the history's most recent entry covers
+ * the same field/from/to/reason, we skip the write. That mirrors the
+ * Task #190 acceptance criterion — "History wird nicht doppelt
+ * erweitert wenn dieselbe Suggestion zweimal angetippt wird."
+ *
+ * Returns the updated `AdjustmentRecord[]` so callers can refresh
+ * their UI without an extra fetch round-trip. Throws on auth or DB
+ * error so the banner can surface a "konnte nicht gespeichert
+ * werden" state.
+ */
+export async function applyAdjustmentToSettings(
+  suggestion: AdjustmentSuggestion,
+): Promise<AdjustmentRecord[]> {
+  if (!suggestion.hasSuggestion) {
+    throw new Error("Suggestion has no actionable change");
+  }
+  if (!supabase) throw new Error("Supabase not configured");
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) throw new Error("Not signed in");
+
+  // Pull the row's current state — we need both the live ICR/CF (for
+  // the "from" value in each history entry, since the suggestion was
+  // computed against possibly-stale UI state) and the existing
+  // history (so we can append rather than overwrite).
+  const { data: current, error: readErr } = await supabase
+    .from("user_settings")
+    .select("icr_g_per_unit, cf_mgdl_per_unit, adjustment_history")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (readErr) throw new Error(readErr.message);
+
+  const currentIcr = isFiniteNumber(current?.icr_g_per_unit) && current!.icr_g_per_unit > 0
+    ? current!.icr_g_per_unit
+    : DEFAULT_INSULIN_SETTINGS.icr;
+  const currentCf  = isFiniteNumber(current?.cf_mgdl_per_unit) && current!.cf_mgdl_per_unit > 0
+    ? current!.cf_mgdl_per_unit
+    : DEFAULT_INSULIN_SETTINGS.cf;
+  const existingHistory: AdjustmentRecord[] = Array.isArray(current?.adjustment_history)
+    ? (current!.adjustment_history as AdjustmentRecord[])
+    : [];
+
+  const reason = suggestion.pattern.label;
+  const at = new Date().toISOString();
+
+  let nextIcr = currentIcr;
+  let nextCf  = currentCf;
+  const newRecords: AdjustmentRecord[] = [];
+
+  if (suggestion.toIcr != null) {
+    const target = clampIcr(suggestion.toIcr);
+    if (target !== currentIcr) {
+      newRecords.push({ at, field: "icr", from: currentIcr, to: target, reason });
+      nextIcr = target;
+    }
+  }
+  if (suggestion.toCf != null) {
+    const target = clampCf(suggestion.toCf);
+    if (target !== currentCf) {
+      newRecords.push({ at, field: "correctionFactor", from: currentCf, to: target, reason });
+      nextCf = target;
+    }
+  }
+
+  // Idempotent fast-path: nothing to change AND the latest history
+  // entry already records this exact suggestion → return the existing
+  // history so the UI re-renders without producing a duplicate row.
+  if (newRecords.length === 0) return existingHistory;
+
+  const nextHistory = [...existingHistory, ...newRecords];
+
+  const { error: writeErr } = await supabase
+    .from("user_settings")
+    .upsert({
+      user_id:            user.id,
+      icr_g_per_unit:     nextIcr,
+      cf_mgdl_per_unit:   nextCf,
+      adjustment_history: nextHistory,
+    }, { onConflict: "user_id" });
+  if (writeErr) throw new Error(writeErr.message);
+
+  // Mirror the new ICR/CF into the localStorage shadow used by the
+  // sync `getInsulinSettings()` callers (engine evaluation path) so
+  // the next dose calc immediately reflects what the engine just
+  // wrote, instead of waiting for a page reload.
+  if (typeof window !== "undefined") {
+    try {
+      const raw = window.localStorage.getItem(SETTINGS_KEY);
+      const parsed = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+      parsed.icr = nextIcr;
+      parsed.cf  = nextCf;
+      window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(parsed));
+    } catch { /* storage disabled / quota — ignore, DB is the truth */ }
+  }
+
+  return nextHistory;
+}
