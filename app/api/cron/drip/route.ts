@@ -61,6 +61,7 @@ interface DripRow {
   email: string;
   first_name: string | null;
   email_type: DripEmailType;
+  locale: "de" | "en" | null;
 }
 
 async function handle(req: NextRequest): Promise<NextResponse> {
@@ -88,7 +89,7 @@ async function handle(req: NextRequest): Promise<NextResponse> {
   // 1. Fällige, noch nicht versendete Rows holen, älteste zuerst.
   const { data: due, error: selectErr } = await admin
     .from("email_drip_schedule")
-    .select("id, email, first_name, email_type")
+    .select("id, email, first_name, email_type, locale")
     .is("sent_at", null)
     .lte("scheduled_at", nowIso)
     .order("scheduled_at", { ascending: true })
@@ -163,7 +164,16 @@ async function handle(req: NextRequest): Promise<NextResponse> {
 
   for (const raw of sendable) {
     try {
-      const rendered = renderDripEmail(raw.email_type, raw.first_name, raw.email);
+      // Locale defaults to 'de' for rows scheduled before the column
+      // existed (NULL in DB) — those buyers were on the EUR/German flow
+      // by definition, so the German renderer is the correct fallback.
+      const locale = raw.locale === "en" ? "en" : "de";
+      const rendered = renderDripEmail(
+        raw.email_type,
+        raw.first_name,
+        raw.email,
+        locale,
+      );
       const { data, error } = await resend.emails.send({
         from: rendered.from,
         to: raw.email,

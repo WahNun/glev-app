@@ -1,4 +1,8 @@
-import { betaWelcomeHtml, betaWelcomeSubject } from "@/lib/emails/beta-welcome";
+import {
+  betaWelcomeHtml,
+  betaWelcomeSubject,
+  type EmailLocale,
+} from "@/lib/emails/beta-welcome";
 import { proWelcomeHtml, proWelcomeSubject } from "@/lib/emails/pro-welcome";
 import {
   day7InsightsEmail,
@@ -41,50 +45,66 @@ const DEFAULT_NAME = "Julia";
 const DEFAULT_EMAIL = "julia@example.com";
 const DEFAULT_SESSION_ID = "cs_test_demo_session_for_preview_only";
 
-function buildTemplates(name: string, email: string): TemplateOption[] {
+function buildTemplates(
+  name: string,
+  email: string,
+  locale: EmailLocale,
+): TemplateOption[] {
   // App-URL aus dem env, sonst Production-Fallback. Steckt im Welcome-CTA
   // und im Unsubscribe-Link der Drips, also muss sie für die Preview real
   // genug aussehen.
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || "https://glev.app";
 
-  const day7 = day7InsightsEmail(name, email);
-  const day14 = day14FeedbackEmail(name, email);
-  const day30 = day30TrustpilotEmail(name, email);
+  const day7 = day7InsightsEmail(name, email, locale);
+  const day14 = day14FeedbackEmail(name, email, locale);
+  const day30 = day30TrustpilotEmail(name, email, locale);
+
+  const isEn = locale === "en";
 
   return [
     {
       key: "beta-welcome",
       label: "Beta — Welcome",
-      whenSent: "Sofort nach erfolgreicher Stripe-Checkout (€19 Beta-Setup-Fee)",
-      subject: betaWelcomeSubject(name),
-      html: betaWelcomeHtml(name, DEFAULT_SESSION_ID, appUrl),
+      whenSent: isEn
+        ? "Immediately after Stripe Checkout success ($19 Beta setup fee)"
+        : "Sofort nach erfolgreicher Stripe-Checkout (€19 Beta-Setup-Fee)",
+      subject: betaWelcomeSubject(name, locale),
+      html: betaWelcomeHtml(name, DEFAULT_SESSION_ID, appUrl, locale),
     },
     {
       key: "pro-welcome",
       label: "Pro — Welcome",
-      whenSent: "Sofort nach Anlage des Pro-Abos via Stripe-Checkout",
-      subject: proWelcomeSubject(name),
-      html: proWelcomeHtml(name, DEFAULT_SESSION_ID, appUrl, null),
+      whenSent: isEn
+        ? "Immediately after Pro subscription is created via Stripe Checkout"
+        : "Sofort nach Anlage des Pro-Abos via Stripe-Checkout",
+      subject: proWelcomeSubject(name, locale),
+      html: proWelcomeHtml(name, DEFAULT_SESSION_ID, appUrl, null, locale),
     },
     {
       key: "drip-day7",
-      label: "Drip — Tag 7 (Insights)",
-      whenSent: "7 Tage nach Welcome — Cron um 09:00 UTC",
+      label: isEn ? "Drip — Day 7 (Insights)" : "Drip — Tag 7 (Insights)",
+      whenSent: isEn
+        ? "7 days after welcome — cron at 09:00 UTC"
+        : "7 Tage nach Welcome — Cron um 09:00 UTC",
       subject: day7.subject,
       html: day7.html,
     },
     {
       key: "drip-day14",
-      label: "Drip — Tag 14 (Feedback)",
-      whenSent: "14 Tage nach Welcome — Cron um 09:00 UTC",
+      label: isEn ? "Drip — Day 14 (Feedback)" : "Drip — Tag 14 (Feedback)",
+      whenSent: isEn
+        ? "14 days after welcome — cron at 09:00 UTC"
+        : "14 Tage nach Welcome — Cron um 09:00 UTC",
       subject: day14.subject,
       html: day14.html,
     },
     {
       key: "drip-day30",
-      label: "Drip — Tag 30 (Trustpilot)",
-      whenSent: "30 Tage nach Welcome — Cron um 09:00 UTC",
+      label: isEn ? "Drip — Day 30 (Trustpilot)" : "Drip — Tag 30 (Trustpilot)",
+      whenSent: isEn
+        ? "30 days after welcome — cron at 09:00 UTC"
+        : "30 Tage nach Welcome — Cron um 09:00 UTC",
       subject: day30.subject,
       html: day30.html,
     },
@@ -142,11 +162,13 @@ export default async function AdminEmailsPage({
   const nameParam = Array.isArray(sp.name) ? sp.name[0] : sp.name;
   const emailParam = Array.isArray(sp.email) ? sp.email[0] : sp.email;
   const tParam = Array.isArray(sp.t) ? sp.t[0] : sp.t;
+  const langParam = Array.isArray(sp.lang) ? sp.lang[0] : sp.lang;
 
   const name = (nameParam ?? "").trim() || DEFAULT_NAME;
   const email = (emailParam ?? "").trim() || DEFAULT_EMAIL;
+  const locale: EmailLocale = langParam === "en" ? "en" : "de";
 
-  const templates = buildTemplates(name, email);
+  const templates = buildTemplates(name, email, locale);
   const selectedKey = templates.some((t) => t.key === tParam)
     ? (tParam as string)
     : templates[0].key;
@@ -166,6 +188,7 @@ export default async function AdminEmailsPage({
         selectedKey={selectedKey}
         name={name}
         email={email}
+        locale={locale}
       />
     </main>
   );

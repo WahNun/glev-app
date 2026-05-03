@@ -110,7 +110,7 @@ export async function sendNowAction(formData: FormData): Promise<void> {
   const admin = getSupabaseAdmin();
   const { data: row, error: fetchErr } = await admin
     .from("email_drip_schedule")
-    .select("id, email, first_name, email_type, sent_at")
+    .select("id, email, first_name, email_type, sent_at, locale")
     .eq("id", id)
     .maybeSingle();
 
@@ -134,7 +134,16 @@ export async function sendNowAction(formData: FormData): Promise<void> {
   }
 
   try {
-    const rendered = renderDripEmail(row.email_type, row.first_name, row.email);
+    // Locale defaults to 'de' for legacy rows scheduled before the column
+    // existed (NULL in DB). Same fallback as the cron worker — see
+    // app/api/cron/drip/route.ts.
+    const locale = row.locale === "en" ? "en" : "de";
+    const rendered = renderDripEmail(
+      row.email_type,
+      row.first_name,
+      row.email,
+      locale,
+    );
     const resend = getDripResend();
     const { data, error } = await resend.emails.send({
       from: rendered.from,

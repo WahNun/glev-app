@@ -146,10 +146,19 @@ export async function POST(req: NextRequest) {
     //    (template, dedupe_key) means the second attempt returns the
     //    existing row id instead of creating a second mail.
     try {
+      // Stripe Checkout Session locale was set by the checkout endpoint
+      // based on the buyer's currency selection (EUR → 'de', USD → 'en').
+      // Default to 'de' if Stripe didn't echo it back so a missing field
+      // never silently flips someone to English.
+      const locale =
+        (session as unknown as { locale?: string | null }).locale === 'en'
+          ? 'en'
+          : 'de';
+
       const { id: outboxId, deduplicated } = await enqueueEmail({
         recipient: email,
         template: 'beta-welcome',
-        payload: { name, sessionId, appUrl },
+        payload: { name, sessionId, appUrl, locale },
         dedupeKey: sessionId,
       });
       // eslint-disable-next-line no-console
@@ -166,7 +175,7 @@ export async function POST(req: NextRequest) {
       // ohne zugehörige Welcome-Mail hinterlässt. scheduleDripEmails
       // wirft nicht — bei DB-Fehlern wird nur geloggt, der Stripe-
       // Retry-Pfad bleibt unverändert.
-      await scheduleDripEmails(email, name, 'beta');
+      await scheduleDripEmails(email, name, 'beta', locale);
     } catch (err) {
       // Surface the failure to Stripe with a 500 so it retries the
       // delivery (Stripe retries up to 3 days at increasing intervals).

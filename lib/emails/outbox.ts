@@ -19,7 +19,11 @@
 
 import { Resend } from "resend";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { betaWelcomeHtml, betaWelcomeSubject } from "@/lib/emails/beta-welcome";
+import {
+  betaWelcomeHtml,
+  betaWelcomeSubject,
+  type EmailLocale,
+} from "@/lib/emails/beta-welcome";
 import { proWelcomeHtml, proWelcomeSubject } from "@/lib/emails/pro-welcome";
 
 // ---- Tunables -------------------------------------------------------------
@@ -99,6 +103,14 @@ export interface BetaWelcomePayload {
   name?: string | null;
   sessionId?: string | null;
   appUrl?: string | null;
+  /**
+   * Email language. Stamped by the Stripe webhook from `session.locale`
+   * (USD checkout → 'en', EUR checkout → 'de'). Optional + defaulted to
+   * 'de' so any rows enqueued before this field existed continue to send
+   * in German — which is the only language they would have sent in
+   * before EN templates existed.
+   */
+  locale?: EmailLocale;
 }
 
 /**
@@ -111,6 +123,8 @@ export interface ProWelcomePayload {
   sessionId?: string | null;
   appUrl?: string | null;
   trialEndsAt?: string | null;
+  /** See `BetaWelcomePayload.locale`. */
+  locale?: EmailLocale;
 }
 
 export type EmailPayload = BetaWelcomePayload | ProWelcomePayload;
@@ -144,22 +158,30 @@ function renderTemplate(template: EmailTemplate, payload: EmailPayload): Rendere
   switch (template) {
     case "beta-welcome": {
       const p = payload as BetaWelcomePayload;
+      const locale: EmailLocale = p.locale === "en" ? "en" : "de";
       return {
         from: "Glev <info@glev.app>",
-        subject: betaWelcomeSubject(p.name ?? null),
-        html: betaWelcomeHtml(p.name ?? null, p.sessionId ?? null, p.appUrl ?? null),
+        subject: betaWelcomeSubject(p.name ?? null, locale),
+        html: betaWelcomeHtml(
+          p.name ?? null,
+          p.sessionId ?? null,
+          p.appUrl ?? null,
+          locale,
+        ),
       };
     }
     case "pro-welcome": {
       const p = payload as ProWelcomePayload;
+      const locale: EmailLocale = p.locale === "en" ? "en" : "de";
       return {
         from: "Glev <info@glev.app>",
-        subject: proWelcomeSubject(p.name ?? null),
+        subject: proWelcomeSubject(p.name ?? null, locale),
         html: proWelcomeHtml(
           p.name ?? null,
           p.sessionId ?? null,
           p.appUrl ?? null,
           p.trialEndsAt ?? null,
+          locale,
         ),
       };
     }

@@ -7,6 +7,7 @@
 // 09:00 UTC durch den Cron-Endpoint app/api/cron/drip/route.ts.
 
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import type { EmailLocale } from "@/lib/emails/beta-welcome";
 import type { DripEmailType } from "@/lib/emails/drip-templates";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -70,6 +71,7 @@ export async function scheduleDripEmails(
   email: string,
   name: string | null | undefined,
   tier: "beta" | "pro",
+  locale: EmailLocale = "de",
 ): Promise<void> {
   if (!email) {
     // eslint-disable-next-line no-console
@@ -85,6 +87,7 @@ export async function scheduleDripEmails(
     first_name: firstName,
     tier,
     email_type: type,
+    locale,
     scheduled_at: new Date(now + days * DAY_MS).toISOString(),
   }));
 

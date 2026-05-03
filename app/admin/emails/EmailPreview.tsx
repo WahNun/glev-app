@@ -15,6 +15,7 @@ type Props = {
   selectedKey: string;
   name: string;
   email: string;
+  locale: "de" | "en";
 };
 
 type Width = "desktop" | "mobile";
@@ -43,6 +44,7 @@ export default function EmailPreview({
   selectedKey,
   name,
   email,
+  locale,
 }: Props) {
   const [width, setWidth] = useState<Width>("desktop");
 
@@ -59,7 +61,7 @@ export default function EmailPreview({
         <nav>
           {templates.map((t) => {
             const isActive = t.key === selected.key;
-            const href = buildHref(t.key, name, email);
+            const href = buildHref(t.key, name, email, locale);
             return (
               <a
                 key={t.key}
@@ -76,11 +78,38 @@ export default function EmailPreview({
           })}
         </nav>
 
+        {/* Sprach-Toggle: zeigt das aktuell selektierte Template in der
+            jeweils anderen Sprache. Echte Links statt Client-State, damit
+            man die URL teilen kann ("schau dir mal die EN-Variante an")
+            und damit Reload den Stand beibehält. */}
+        <h2 style={{ ...sidebarHeadingStyle, marginTop: 24 }}>Sprache</h2>
+        <div style={{ display: "flex", gap: 6 }}>
+          <a
+            href={buildHref(selected.key, name, email, "de")}
+            style={{
+              ...langBtnStyle,
+              ...(locale === "de" ? langBtnActiveStyle : null),
+            }}
+          >
+            DE
+          </a>
+          <a
+            href={buildHref(selected.key, name, email, "en")}
+            style={{
+              ...langBtnStyle,
+              ...(locale === "en" ? langBtnActiveStyle : null),
+            }}
+          >
+            EN
+          </a>
+        </div>
+
         <h2 style={{ ...sidebarHeadingStyle, marginTop: 24 }}>Variablen</h2>
         <form method="get" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {/* `t` mit-submitten, sonst springt die Auswahl beim Apply zurück
-              auf das erste Template. */}
+          {/* `t` und `lang` mit-submitten, sonst springt die Auswahl beim
+              Apply zurück auf das erste Template / Default-Sprache. */}
           <input type="hidden" name="t" value={selected.key} />
+          <input type="hidden" name="lang" value={locale} />
           <label style={labelStyle}>
             Vorname (Anrede)
             <input
@@ -180,13 +209,40 @@ export default function EmailPreview({
   );
 }
 
-function buildHref(key: string, name: string, email: string): string {
+function buildHref(
+  key: string,
+  name: string,
+  email: string,
+  locale: "de" | "en",
+): string {
   const sp = new URLSearchParams();
   sp.set("t", key);
   if (name) sp.set("name", name);
   if (email) sp.set("email", email);
+  sp.set("lang", locale);
   return `/admin/emails?${sp.toString()}`;
 }
+
+const langBtnStyle: React.CSSProperties = {
+  flex: 1,
+  padding: "8px 0",
+  background: "#fff",
+  color: "#374151",
+  border: "1px solid #d1d5db",
+  borderRadius: 6,
+  fontSize: 13,
+  fontWeight: 700,
+  cursor: "pointer",
+  textAlign: "center",
+  textDecoration: "none",
+  letterSpacing: "0.04em",
+};
+
+const langBtnActiveStyle: React.CSSProperties = {
+  background: "#4F6EF7",
+  color: "#fff",
+  borderColor: "#4F6EF7",
+};
 
 const layoutStyle: React.CSSProperties = {
   display: "grid",

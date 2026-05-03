@@ -234,6 +234,16 @@ export async function POST(req: NextRequest) {
           const name = fullName ?? session.customer_details?.name ?? null;
           const appUrl = resolveAppUrl(req);
           try {
+            // Stripe Checkout Session locale was set by the checkout
+            // endpoint based on the buyer's currency selection (EUR →
+            // 'de', USD → 'en'). Default to 'de' if Stripe didn't echo
+            // it back so a missing field never silently flips someone
+            // to English.
+            const locale =
+              (session as unknown as { locale?: string | null }).locale === "en"
+                ? "en"
+                : "de";
+
             const { id: outboxId, deduplicated } = await enqueueEmail({
               recipient: email,
               template: "pro-welcome",
@@ -242,6 +252,7 @@ export async function POST(req: NextRequest) {
                 sessionId: session.id,
                 appUrl,
                 trialEndsAt,
+                locale,
               },
               dedupeKey: session.id,
             });
@@ -259,7 +270,7 @@ export async function POST(req: NextRequest) {
             // zugehörige Welcome-Mail hinterlässt. scheduleDripEmails
             // wirft nicht — DB-Fehler werden geloggt, der Stripe-Retry-
             // Pfad bleibt unverändert.
-            await scheduleDripEmails(email, name, "pro");
+            await scheduleDripEmails(email, name, "pro", locale);
           } catch (err) {
             // eslint-disable-next-line no-console
             console.error("[pro/webhook] Outbox enqueue failed — asking Stripe to retry:", {
