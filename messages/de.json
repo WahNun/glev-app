@@ -360,7 +360,18 @@
     "engine_rec_clamped": "Auf Sicherheitsobergrenze von {max}u begrenzt — Kohlenhydrate prüfen oder Arzt konsultieren.",
     "engine_rec_stacking": "⚠ {count} Bolus-Gaben in den letzten 6h — aktives Insulin könnte noch wirken.",
     "engine_rec_basal": "Basal: {units}u {name} vor {hours}h.",
-    "engine_rec_exercise": "⚠ {minutes} min {type} ({intensity}) vor {hours}h — erhöhte Insulin-Empfindlichkeit möglich."
+    "engine_rec_exercise": "⚠ {minutes} min {type} ({intensity}) vor {hours}h — erhöhte Insulin-Empfindlichkeit möglich.",
+    "engine_rec_trend_rising_fast": "Pre-Meal-Trend: Glukose steigt schnell (>1,5 mg/dL/min) in den letzten 15 min — Dosis nicht angepasst, aber im Auge behalten.",
+    "engine_rec_trend_rising": "Pre-Meal-Trend: Glukose steigt leicht (>0,5 mg/dL/min) in den letzten 15 min.",
+    "engine_rec_trend_stable": "Pre-Meal-Trend: Glukose stabil in den letzten 15 min.",
+    "engine_rec_trend_falling": "Pre-Meal-Trend: Glukose fällt leicht (>0,5 mg/dL/min) in den letzten 15 min.",
+    "engine_rec_trend_falling_fast": "Pre-Meal-Trend: Glukose fällt schnell (>1,5 mg/dL/min) in den letzten 15 min — Hypo-Risiko prüfen.",
+    "engine_rec_trend_overshoot_warn": "⚠ BG knapp über Ziel und steigt schnell — die Korrektur könnte überschießen, wenn die Glukose sich gleich von selbst senkt.",
+    "engine_eval_trend_rising_fast": "Pre-Meal-Trend: Glukose stieg schnell (>1,5 mg/dL/min) in den 15 min vor der Mahlzeit — Anstieg danach teilweise schon vorhanden.",
+    "engine_eval_trend_rising": "Pre-Meal-Trend: Glukose stieg leicht (>0,5 mg/dL/min) in den 15 min vor der Mahlzeit.",
+    "engine_eval_trend_stable": "Pre-Meal-Trend: Glukose stabil in den 15 min vor der Mahlzeit.",
+    "engine_eval_trend_falling": "Pre-Meal-Trend: Glukose fiel leicht (>0,5 mg/dL/min) in den 15 min vor der Mahlzeit.",
+    "engine_eval_trend_falling_fast": "Pre-Meal-Trend: Glukose fiel schnell (>1,5 mg/dL/min) in den 15 min vor der Mahlzeit — Outcome ggf. dadurch beeinflusst."
   },
   "engineLog": {
     "insulin_card_title": "Insulin loggen",

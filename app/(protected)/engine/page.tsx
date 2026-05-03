@@ -21,6 +21,7 @@ import GlevLogo from "@/components/GlevLogo";
 import EngineChatPanel, { type SeedMessage } from "@/components/EngineChatPanel";
 import { useEngineHeader } from "@/lib/engineHeaderContext";
 import { fetchLatestCgm } from "@/components/CgmFetchButton";
+import { classifyPreReferenceTrend, type TrendClass, type TrendSample } from "@/lib/engine/trend";
 import { fetchLatestFingerstick, FS_OVERRIDE_WINDOW_MS } from "@/lib/fingerstick";
 import { parseDbTs, parseDbDate, parseLluTs } from "@/lib/time";
 
@@ -150,6 +151,7 @@ function runGlevEngine(
   icr: number,
   t: EngineTranslator,
   fmt: NumFormatter,
+  preTrend?: TrendClass,
 ): Recommendation {
   const cf = 50, target = 110;
   const carbDose = carbs / icr;
@@ -168,6 +170,17 @@ function runGlevEngine(
   // input changes anyway). The reason payload, on the other hand, stays
   // raw so the render site can apply ICU plural forms per locale.
   const safetyNotes = safetyNotesFromLogs(insulinLogs, exerciseLogs, t, fmt);
+
+  // Pre-Meal-Trend-Hinweis (Task #195) — strikt Doku, Dosis bleibt
+  // unverändert. Bei `rising_fast` knapp über dem Ziel zusätzlich der
+  // Overshoot-Hinweis. Schwellen für "knapp über Ziel" sind dieselben
+  // wie in `recommendDose` (≤ 40 mg/dL über Ziel = "knapp").
+  if (preTrend) {
+    safetyNotes.push(t(`engine_rec_trend_${preTrend}` as never));
+    if (preTrend === "rising_fast" && currentGlucose > target && currentGlucose - target <= 40) {
+      safetyNotes.push(t("engine_rec_trend_overshoot_warn"));
+    }
+  }
 
   if (similar.length >= 3) {
     const avg = Math.round(similar.reduce((s,m)=>s+(m.insulin_units||0),0)/similar.length * 10)/10;
@@ -336,6 +349,14 @@ export default function EnginePage() {
   const [running, setRunning] = useState(false);
   const [cgmPulling, setCgmPulling] = useState(false);
   const [lastReading, setLastReading] = useState<string>("");
+  // Pre-Meal-Trend (Task #195): Wir cachen nur die rohen CGM-Samples
+  // aus /api/cgm/history. Die Trend-Klassifikation läuft pro
+  // Engine-Aufruf gegen die jeweils aktive Bezugszeit (`mealTime`),
+  // sonst würde ein beim Page-Mount berechneter Trend stehen bleiben,
+  // selbst wenn der User die Mahlzeitzeit später anpasst oder die
+  // Empfehlung erst Minuten später anstößt. Der Slice auf 3–5 Samples
+  // vor der Referenz passiert in `lib/engine/trend.classifyPreReferenceTrend`.
+  const [trendSamples, setTrendSamples] = useState<TrendSample[]>([]);
   // 3-Step Wizard state — drives which view of the Engine tab is shown.
   // 0 = "Was hast du gegessen?" (voice/text input)
   // 1 = "Makros prüfen" (macros + glucose + meal time)
@@ -482,6 +503,45 @@ export default function EnginePage() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // Pre-Meal-Trend Sample-Cache (Task #195) — wir lesen die rohen CGM
+  // History-Samples auf Mount und (lazy) vor jedem Engine-Aufruf neu,
+  // damit eine spät angestoßene Empfehlung gegen frische Samples läuft.
+  // Die eigentliche Klassifikation passiert in `getPreTrendForRef()`
+  // unten gegen die aktuelle Bezugszeit (`mealTime` bzw. now).
+  const refreshTrendSamples = async () => {
+    try {
+      const r = await fetch("/api/cgm/history", { cache: "no-store" });
+      if (!r.ok) return [] as TrendSample[];
+      const j = (await r.json()) as { history?: Array<{ value: number | null; timestamp: string | null }> };
+      if (!Array.isArray(j.history)) return [] as TrendSample[];
+      const fresh: TrendSample[] = j.history.map(s => ({ value: s.value, timestamp: s.timestamp }));
+      setTrendSamples(fresh);
+      return fresh;
+    } catch {
+      return [] as TrendSample[];
+    }
+  };
+  const trendFetchedRef = useRef(false);
+  useEffect(() => {
+    if (trendFetchedRef.current) return;
+    trendFetchedRef.current = true;
+    refreshTrendSamples();
+  // refreshTrendSamples is stable enough for a mount-only call; the
+  // per-engine-run path re-invokes it explicitly.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /**
+   * Trend-Klassifikation für die aktuell aktive Bezugszeit. Slice +
+   * Klassifikation läuft synchron gegen die zuletzt gecachten Samples;
+   * Aufrufer können vorher `refreshTrendSamples()` awaiten, um sicher
+   * frische Daten zu bekommen.
+   */
+  const getPreTrendForRef = (refMs: number, samples: TrendSample[] = trendSamples): TrendClass | undefined => {
+    const r = classifyPreReferenceTrend(samples, refMs);
+    return r?.trend;
+  };
 
   // Hydrate the dismissed-suggestion cooldown map from localStorage. Each
   // entry is `{ [patternSignature]: epochMs of dismissal }` and we cull
@@ -915,10 +975,17 @@ export default function EnginePage() {
     const g = parseFloat(glucose)||110, c = carbUnit.toGrams(parseFloat(carbs)||0);
     if (!c) return;
     setRunning(true);
-    setTimeout(() => {
-      const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs, adaptedICR, tEngineFn, formatNum);
-      setResult(rec);
-      setRunning(false);
+    // Pre-Meal-Trend (Task #195): Frische Samples ziehen und gegen die
+    // jeweils aktive `mealTime` klassifizieren — sonst würde ein älterer,
+    // beim Mount berechneter Trend stehen bleiben, auch wenn der User
+    // die Mahlzeitzeit verschoben oder lange auf der Seite gewartet hat.
+    const refMs = mealTime ? Date.parse(mealTime) || Date.now() : Date.now();
+    refreshTrendSamples().then(samples => {
+      const trend = getPreTrendForRef(refMs, samples);
+      setTimeout(() => {
+        const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs, adaptedICR, tEngineFn, formatNum, trend);
+        setResult(rec);
+        setRunning(false);
       // Wizard auto-advance: bump from Step 2 ("Makros prüfen") to Step 3
       // ("Ergebnis") so the recommendation appears the moment the calc
       // completes. Functional guard prevents jumping if user navigated
@@ -930,8 +997,9 @@ export default function EnginePage() {
       // gespeichert, die der User nie bestätigt hat. Die Empfehlung
       // (`rec.dose`) bleibt im `result`-State und wird im Decision-Panel
       // angezeigt, sobald der Bolus-Pfad gewählt ist.
-      logDebug("ENGINE", { input: { glucose: g, carbs: c }, matchedMeals: rec.similarMeals.map(m => ({ id: m.id, carbs: m.carbs_grams, glucose: m.glucose_before, insulin: m.insulin_units })), suggestedDose: rec.dose, confidence: rec.confidence, recentInsulin: insulinLogs.length, recentExercise: exerciseLogs.length });
-    }, 600);
+      logDebug("ENGINE", { input: { glucose: g, carbs: c }, matchedMeals: rec.similarMeals.map(m => ({ id: m.id, carbs: m.carbs_grams, glucose: m.glucose_before, insulin: m.insulin_units })), suggestedDose: rec.dose, confidence: rec.confidence, recentInsulin: insulinLogs.length, recentExercise: exerciseLogs.length, preTrend: trend ?? null });
+      }, 600);
+    });
   }
 
   // Wizard Step 3 commit: saves the meal AND the recommended dose in one
@@ -1292,12 +1360,24 @@ export default function EnginePage() {
     const c = confirmedMeal.carbs_grams ?? carbUnit.toGrams(parseFloat(carbs) || 0);
     if (!c) { setDecisionToast("Keine Carbs hinterlegt — Einschätzung nicht möglich."); return; }
     setDecisionBusy(true);
-    setTimeout(() => {
-      const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs, adaptedICR, tEngineFn, formatNum);
-      setDecisionRec(rec);
-      setDecisionMode("rec");
-      setDecisionBusy(false);
-    }, 200);
+    // Pre-Meal-Trend (Task #195): Bezugszeit ist hier der gespeicherte
+    // `meal_time` der bestätigten Mahlzeit, nicht "jetzt" — der User
+    // klickt "Empfehlung holen" oft minutenlang nach dem Essen, und ein
+    // Trend bezogen auf NOW würde Post-Meal-Anstiege als pre-meal
+    // missdeuten. Frische Samples ziehen, dann gegen die Mahlzeitzeit
+    // klassifizieren.
+    const refMs = confirmedMeal.meal_time
+      ? Date.parse(confirmedMeal.meal_time) || Date.now()
+      : Date.now();
+    refreshTrendSamples().then(samples => {
+      const trend = getPreTrendForRef(refMs, samples);
+      setTimeout(() => {
+        const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs, adaptedICR, tEngineFn, formatNum, trend);
+        setDecisionRec(rec);
+        setDecisionMode("rec");
+        setDecisionBusy(false);
+      }, 200);
+    });
   }
 
   function handleDecisionAcceptRec() {

@@ -360,7 +360,18 @@
     "engine_rec_clamped": "Clamped to safety ceiling of {max}u — verify carb count or consult clinician.",
     "engine_rec_stacking": "⚠ {count} bolus doses in the last 6h — active insulin may still be working.",
     "engine_rec_basal": "Basal: {units}u {name} {hours}h ago.",
-    "engine_rec_exercise": "⚠ {minutes} min {type} ({intensity}) {hours}h ago — increased insulin sensitivity possible."
+    "engine_rec_exercise": "⚠ {minutes} min {type} ({intensity}) {hours}h ago — increased insulin sensitivity possible.",
+    "engine_rec_trend_rising_fast": "Pre-meal trend: glucose rising fast (>1.5 mg/dL/min) in the last 15 min — dose unchanged, but watch closely.",
+    "engine_rec_trend_rising": "Pre-meal trend: glucose rising slightly (>0.5 mg/dL/min) in the last 15 min.",
+    "engine_rec_trend_stable": "Pre-meal trend: glucose stable in the last 15 min.",
+    "engine_rec_trend_falling": "Pre-meal trend: glucose falling slightly (>0.5 mg/dL/min) in the last 15 min.",
+    "engine_rec_trend_falling_fast": "Pre-meal trend: glucose falling fast (>1.5 mg/dL/min) in the last 15 min — check for hypo risk.",
+    "engine_rec_trend_overshoot_warn": "⚠ BG just above target and rising fast — the correction may overshoot if glucose drops on its own shortly.",
+    "engine_eval_trend_rising_fast": "Pre-meal trend: glucose rose fast (>1.5 mg/dL/min) in the 15 min before the meal — part of the post-meal rise was already underway.",
+    "engine_eval_trend_rising": "Pre-meal trend: glucose rose slightly (>0.5 mg/dL/min) in the 15 min before the meal.",
+    "engine_eval_trend_stable": "Pre-meal trend: glucose stable in the 15 min before the meal.",
+    "engine_eval_trend_falling": "Pre-meal trend: glucose fell slightly (>0.5 mg/dL/min) in the 15 min before the meal.",
+    "engine_eval_trend_falling_fast": "Pre-meal trend: glucose fell fast (>1.5 mg/dL/min) in the 15 min before the meal — outcome may be influenced by that drop."
   },
   "engineLog": {
     "insulin_card_title": "Log Insulin",

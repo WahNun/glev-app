@@ -192,3 +192,18 @@ test("evaluateEntry confidence is high for big |delta| (>80)", () => {
   const r = evaluateEntry({ carbs: 50, insulin: 4, bgBefore: 100, bgAfter: 200 });
   expect(r.confidence).toBe("high");
 });
+
+// ── Pre-Meal-Trend (Task #195) ──────────────────────────────────────
+
+test("evaluateEntry: preTrend appends trend message, outcome unchanged", () => {
+  const baseInput = { carbs: 50, insulin: 4, bgBefore: 100, bgAfter: 110 };
+  const without = evaluateEntry(baseInput);
+  const withTrend = evaluateEntry({ ...baseInput, preTrend: "falling_fast" });
+  expect(withTrend.outcome).toBe(without.outcome);
+  expect(withTrend.messages.some(m => m.key === "engine_eval_trend_falling_fast")).toBe(true);
+});
+
+test("evaluateEntry: no preTrend → no trend message", () => {
+  const r = evaluateEntry({ carbs: 50, insulin: 4, bgBefore: 100, bgAfter: 110 });
+  expect(r.messages.some(m => m.key.startsWith("engine_eval_trend_"))).toBe(false);
+});

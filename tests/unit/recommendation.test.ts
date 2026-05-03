@@ -258,3 +258,56 @@ test("recommendDose: 0 carbs and BG within target → no dose, explanatory messa
   expect(r.recommendedUnits).toBe(0);
   expect(r.reasoning).toMatch(/No carbs and BG within target/);
 });
+
+// ── Pre-Meal-Trend (Task #195) ──────────────────────────────────────
+//
+// `preTrend` darf die Dosis nicht ändern (Compliance: v1 ist strikt
+// Doku), muss aber als zusätzlicher Reasoning-Satz auftauchen. Bei
+// `rising_fast` knapp über dem Ziel-BG zusätzlich der Overshoot-Hinweis.
+
+test("recommendDose: preTrend rising → trend message appended, dose unchanged", () => {
+  const baseInput = {
+    carbs: 30,
+    currentBG: 110,
+    targetBG: 110,
+    adaptiveICR: makeAdaptiveICR({ global: 15, sampleSize: 20 }),
+  };
+  const without = recommendDose(baseInput);
+  const withTrend = recommendDose({ ...baseInput, preTrend: "rising" });
+  expect(withTrend.recommendedUnits).toBe(without.recommendedUnits);
+  expect(withTrend.messages.some(m => m.key === "engine_rec_trend_rising")).toBe(true);
+  expect(withTrend.messages.some(m => m.key === "engine_rec_trend_overshoot_warn")).toBe(false);
+});
+
+test("recommendDose: preTrend rising_fast just above target → overshoot warning fires", () => {
+  const r = recommendDose({
+    carbs: 30,
+    currentBG: 130,
+    targetBG: 110,
+    adaptiveICR: makeAdaptiveICR({ global: 15, sampleSize: 20 }),
+    preTrend: "rising_fast",
+  });
+  expect(r.messages.some(m => m.key === "engine_rec_trend_rising_fast")).toBe(true);
+  expect(r.messages.some(m => m.key === "engine_rec_trend_overshoot_warn")).toBe(true);
+});
+
+test("recommendDose: preTrend rising_fast far above target → no overshoot warning", () => {
+  const r = recommendDose({
+    carbs: 30,
+    currentBG: 220,
+    targetBG: 110,
+    adaptiveICR: makeAdaptiveICR({ global: 15, sampleSize: 20 }),
+    preTrend: "rising_fast",
+  });
+  expect(r.messages.some(m => m.key === "engine_rec_trend_rising_fast")).toBe(true);
+  expect(r.messages.some(m => m.key === "engine_rec_trend_overshoot_warn")).toBe(false);
+});
+
+test("recommendDose: no preTrend → no trend message", () => {
+  const r = recommendDose({
+    carbs: 30,
+    currentBG: 110,
+    adaptiveICR: makeAdaptiveICR({ global: 15, sampleSize: 20 }),
+  });
+  expect(r.messages.some(m => m.key.startsWith("engine_rec_trend_"))).toBe(false);
+});

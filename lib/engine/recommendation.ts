@@ -2,6 +2,7 @@ import type { AdaptiveICR, TimeOfDay } from "./adaptiveICR";
 import type { InsulinLog } from "../insulin";
 import type { ExerciseLog } from "../exercise";
 import type { AdjustmentMessage } from "./adjustment";
+import type { TrendClass } from "./trend";
 import { parseDbTs } from "@/lib/time";
 
 export interface RecommendInput {
@@ -13,6 +14,14 @@ export interface RecommendInput {
   timeOfDay?: TimeOfDay;
   recentInsulinLogs?: InsulinLog[];
   recentExerciseLogs?: ExerciseLog[];
+  /**
+   * Pre-Meal-CGM-Trend aus den letzten ~15 min vor diesem Aufruf
+   * (siehe `lib/engine/trend.classifyTrend`). Wenn gesetzt, hängt die
+   * Engine einen Trend-Hinweis ans Reasoning. Die Dosis-Zahl wird
+   * dadurch NICHT verändert — Compliance-Vorgabe für v1, der Trend
+   * ist strikt Doku/Warnung.
+   */
+  preTrend?: TrendClass;
 }
 
 export interface RecommendOutput {
@@ -94,6 +103,22 @@ export function recommendDose(input: RecommendInput): RecommendOutput {
   }
   if (clamped) {
     messages.push({ key: "engine_rec_clamped", params: { max: MAX_DOSE_UNITS } });
+  }
+
+  // Pre-Meal-Trend-Annotation (Task #195). Strikt Doku — die Dosis
+  // bleibt unangetastet. Bei `rising_fast` knapp über dem Ziel-BG
+  // gibt's zusätzlich einen Overshoot-Hinweis: wenn die Glukose sich
+  // gleich von selbst senkt, könnte die Korrektur überschießen.
+  if (input.preTrend) {
+    messages.push({ key: `engine_rec_trend_${input.preTrend}` });
+    if (
+      input.preTrend === "rising_fast" &&
+      input.currentBG != null &&
+      input.currentBG > targetBG &&
+      input.currentBG - targetBG <= 40
+    ) {
+      messages.push({ key: "engine_rec_trend_overshoot_warn" });
+    }
   }
 
   const nowMs = Date.now();

@@ -1,6 +1,7 @@
 import type { InsulinLog } from "../insulin";
 import type { ExerciseLog } from "../exercise";
 import type { AdjustmentMessage } from "./adjustment";
+import type { TrendClass } from "./trend";
 import { parseDbTs } from "@/lib/time";
 import { getInsulinSettings, type InsulinSettings } from "@/lib/userSettings";
 
@@ -43,6 +44,13 @@ export interface EvaluateEntryInput {
    * the fallback (e.g. server-side recompute paths).
    */
   settings?: InsulinSettings;
+  /**
+   * Pre-Meal-CGM-Trend (Task #195): Klassifikation aus den letzten
+   * ~15 min vor `meal_time`. Wenn gesetzt, hängt der Evaluator einen
+   * Trend-Hinweis ans Reasoning, ändert aber das Outcome NICHT — die
+   * Trend-Lage ist strikt Doku/Erklärung.
+   */
+  preTrend?: TrendClass;
 }
 
 export interface EvaluateEntryResult {
@@ -100,6 +108,11 @@ function contextMessages(
   return out;
 }
 
+function trendMessages(preTrend?: TrendClass): AdjustmentMessage[] {
+  if (!preTrend) return [];
+  return [{ key: `engine_eval_trend_${preTrend}` }];
+}
+
 function speedMessages(speed1?: number | null, speed2?: number | null): AdjustmentMessage[] {
   const out: AdjustmentMessage[] = [];
   if (speed1 != null && Number.isFinite(speed1)) {
@@ -147,6 +160,7 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
       { key: "engine_eval_hypo_during", params: { minBg: minBg ?? "<70" } },
       ...speedMessages(input.speed1, input.speed2),
       ...contextMessages(input.recentInsulinLogs, input.recentExerciseLogs),
+      ...trendMessages(input.preTrend),
     ];
     return { outcome: "HYPO_DURING", messages, confidence: "high", delta, netCarbs };
   }
@@ -166,6 +180,7 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
         },
         ...speedMessages(input.speed1, input.speed2),
         ...contextMessages(input.recentInsulinLogs, input.recentExerciseLogs),
+        ...trendMessages(input.preTrend),
       ];
       return { outcome: "SPIKE", messages, confidence: "high", delta, netCarbs };
     }
@@ -199,6 +214,7 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
       primary,
       ...speedMessages(input.speed1, input.speed2),
       ...contextMessages(input.recentInsulinLogs, input.recentExerciseLogs),
+      ...trendMessages(input.preTrend),
     ];
     return { outcome, messages, confidence, delta, netCarbs };
   }
@@ -224,6 +240,7 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
     primary,
     ...speedMessages(input.speed1, input.speed2),
     ...contextMessages(input.recentInsulinLogs, input.recentExerciseLogs),
+    ...trendMessages(input.preTrend),
   ];
   return { outcome, messages, confidence: "low", delta: null, netCarbs };
 }
