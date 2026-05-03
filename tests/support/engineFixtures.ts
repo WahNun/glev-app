@@ -119,6 +119,8 @@ export function makeAdaptiveICR(overrides: Partial<AdaptiveICR> = {}): AdaptiveI
     global: null, morning: null, afternoon: null, evening: null,
     sampleSize: 0,
     pairedCount: 0,
+    pairedExplicitCount: 0,
+    pairedTimeWindowCount: 0,
     ...overrides,
   };
 }

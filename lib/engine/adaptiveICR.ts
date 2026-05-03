@@ -26,6 +26,14 @@ export interface AdaptiveICR {
    *  user can see whether their ICR is driven by separately-logged
    *  bolus shots or by the meal's own insulin field. */
   pairedCount: number;
+  /** Subset of `pairedCount` whose pairing came from an explicit
+   *  `related_entry_id` tag — the user (or app) actively linked that
+   *  bolus log to that meal. Most trustworthy signal. */
+  pairedExplicitCount: number;
+  /** Subset of `pairedCount` whose pairing came only from the ±30-min
+   *  time-window heuristic. Useful but less certain than an explicit
+   *  tag, so the UI surfaces it separately. */
+  pairedTimeWindowCount: number;
 }
 
 function timeOfDay(d: Date): TimeOfDay {
@@ -79,6 +87,8 @@ export function computeAdaptiveICR(meals: Meal[], boluses?: InsulinLog[]): Adapt
   // Basal entries are filtered out at every stage so a basal log
   // mistakenly tagged to a meal can never inflate the ICR.
   const bolusUnitsByMealId = new Map<string, number>();
+  const explicitPairedMealIds = new Set<string>();
+  const timeWindowPairedMealIds = new Set<string>();
   if (boluses && boluses.length > 0) {
     const mealIds = new Set(meals.map(m => m.id));
     const explicitTagged: InsulinLog[] = [];
@@ -98,6 +108,7 @@ export function computeAdaptiveICR(meals: Meal[], boluses?: InsulinLog[]): Adapt
     for (const b of explicitTagged) {
       const cur = bolusUnitsByMealId.get(b.related_entry_id!) ?? 0;
       bolusUnitsByMealId.set(b.related_entry_id!, cur + (b.units || 0));
+      explicitPairedMealIds.add(b.related_entry_id!);
     }
     // Pass 2: for meals not already covered by an explicit tag, run
     // the standard pair helper on the remaining (un-tagged) boluses.
@@ -106,11 +117,14 @@ export function computeAdaptiveICR(meals: Meal[], boluses?: InsulinLog[]): Adapt
       const pairs = pairBolusesToMeals(untagged, uncoveredMeals);
       for (const p of pairs) {
         bolusUnitsByMealId.set(p.meal.id, (p.bolus.units || 0));
+        timeWindowPairedMealIds.add(p.meal.id);
       }
     }
   }
 
   let pairedCount = 0;
+  let pairedExplicitCount = 0;
+  let pairedTimeWindowCount = 0;
   for (const m of meals) {
     const lc = lifecycleFor(m);
     if (lc.state !== "final") continue;
@@ -139,7 +153,14 @@ export function computeAdaptiveICR(meals: Meal[], boluses?: InsulinLog[]): Adapt
     const ratio = carbs / insulin;
     buckets.all.push({ value: ratio, weight: w });
     buckets[timeOfDay(parseDbDate(m.meal_time ?? m.created_at))].push({ value: ratio, weight: w });
-    if (usedPair) pairedCount++;
+    if (usedPair) {
+      pairedCount++;
+      // Distinguish the trustworthy explicit-tag pairing from the
+      // looser ±30-min time-window heuristic so the UI can show the
+      // user how confident the ICR sample really is.
+      if (explicitPairedMealIds.has(m.id)) pairedExplicitCount++;
+      else if (timeWindowPairedMealIds.has(m.id)) pairedTimeWindowCount++;
+    }
   }
 
   return {
@@ -149,5 +170,7 @@ export function computeAdaptiveICR(meals: Meal[], boluses?: InsulinLog[]): Adapt
     evening:   buckets.evening.length   >= 3 ? weightedAverage(buckets.evening)   : null,
     sampleSize: buckets.all.length,
     pairedCount,
+    pairedExplicitCount,
+    pairedTimeWindowCount,
   };
 }

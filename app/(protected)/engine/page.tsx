@@ -366,6 +366,8 @@ export default function EnginePage() {
   // in the recommendation card so the user can see whether the ICR is
   // being driven by separately-logged shots or the meal column.
   const [icrPairedCount, setIcrPairedCount] = useState(0);
+  const [icrPairedExplicitCount, setIcrPairedExplicitCount] = useState(0);
+  const [icrPairedTimeWindowCount, setIcrPairedTimeWindowCount] = useState(0);
   const [insulinLogs, setInsulinLogs] = useState<InsulinLog[]>([]);
   const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([]);
   // Adaptive engine adjustment banner state. `dismissedSig` is hydrated
@@ -1018,6 +1020,8 @@ export default function EnginePage() {
           setIcrConfidence(adaptive.sampleSize >= 10 ? "high" : adaptive.sampleSize >= 5 ? "medium" : "low");
           setIcrSampleSize(adaptive.sampleSize);
           setIcrPairedCount(adaptive.pairedCount);
+          setIcrPairedExplicitCount(adaptive.pairedExplicitCount);
+          setIcrPairedTimeWindowCount(adaptive.pairedTimeWindowCount);
           logDebug("ENGINE.ADAPTIVE_ICR", { newICR, sampleSize: adaptive.sampleSize, source: "computeAdaptiveICR.global" });
         }
       })
@@ -2426,8 +2430,10 @@ export default function EnginePage() {
                         }}
                       >
                         {tEngine("icr_source", {
-                          paired: icrPairedCount,
-                          total:  icrSampleSize,
+                          explicit:    icrPairedExplicitCount,
+                          timeWindow:  icrPairedTimeWindowCount,
+                          mealColumn:  Math.max(0, icrSampleSize - icrPairedCount),
+                          total:       icrSampleSize,
                         })}
                       </div>
                     )}

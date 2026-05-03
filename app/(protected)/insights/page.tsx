@@ -1034,8 +1034,10 @@ export default function InsightsPage() {
                     }}
                   >
                     {tInsights("engine_icr_source", {
-                      paired: adaptiveICR.pairedCount,
-                      total:  adaptiveICR.sampleSize,
+                      explicit:    adaptiveICR.pairedExplicitCount,
+                      timeWindow:  adaptiveICR.pairedTimeWindowCount,
+                      mealColumn:  Math.max(0, adaptiveICR.sampleSize - adaptiveICR.pairedCount),
+                      total:       adaptiveICR.sampleSize,
                     })}
                   </div>
                 )}

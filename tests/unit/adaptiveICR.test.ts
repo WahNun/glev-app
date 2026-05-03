@@ -38,7 +38,7 @@ function mealAt(hour: number, carbs: number, insulin: number, delta = 10, id = `
 
 test("computeAdaptiveICR: empty input returns all nulls", () => {
   const r = computeAdaptiveICR([]);
-  expect(r).toEqual({ global: null, morning: null, afternoon: null, evening: null, sampleSize: 0, pairedCount: 0 });
+  expect(r).toEqual({ global: null, morning: null, afternoon: null, evening: null, sampleSize: 0, pairedCount: 0, pairedExplicitCount: 0, pairedTimeWindowCount: 0 });
 });
 
 test("computeAdaptiveICR: skips non-final meals", () => {
@@ -246,6 +246,11 @@ test("computeAdaptiveICR: pairedCount reflects how many meals used a bolus pair 
   const r = computeAdaptiveICR([m1, m2, m3], [b1, b2]);
   expect(r.sampleSize).toBe(3);
   expect(r.pairedCount).toBe(2);
+  // Split: m1 came from an explicit `related_entry_id` tag, m2 from the
+  // ±30-min time-window heuristic. The UI surfaces these separately so
+  // users can judge how trustworthy the ICR sample is.
+  expect(r.pairedExplicitCount).toBe(1);
+  expect(r.pairedTimeWindowCount).toBe(1);
 });
 
 test("computeAdaptiveICR: pairedCount is 0 when no boluses are provided", () => {
@@ -254,6 +259,8 @@ test("computeAdaptiveICR: pairedCount is 0 when no boluses are provided", () => 
   const r = computeAdaptiveICR([m1, m2]);
   expect(r.sampleSize).toBe(2);
   expect(r.pairedCount).toBe(0);
+  expect(r.pairedExplicitCount).toBe(0);
+  expect(r.pairedTimeWindowCount).toBe(0);
 });
 
 test("computeAdaptiveICR: basal logs in the bolus list are ignored by pairing", () => {
