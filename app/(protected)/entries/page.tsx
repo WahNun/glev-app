@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { fetchMeals, deleteMeal, updateMeal, type Meal } from "@/lib/meals";
 import { fetchRecentInsulinLogs, deleteInsulinLog, updateInsulinReadings, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, deleteExerciseLog, type ExerciseLog } from "@/lib/exercise";
-import { evaluateExercise, exerciseTypeLabel, patternNote, interimMessage, finalMessage, deltaColor, aggregateExerciseTypeStats, personalPatternHeadline, PATTERN_MIN_SESSIONS } from "@/lib/exerciseEval";
+import { evaluateExercise, exerciseTypeLabel, exerciseTypeLabelI18n, patternNote, interimMessage, finalMessage, deltaColor, aggregateExerciseTypeStats, personalPatternHeadline, PATTERN_MIN_SESSIONS } from "@/lib/exerciseEval";
 import {
   evaluateBolus,
   bolusInterimMessage,
@@ -1779,6 +1779,7 @@ function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting }:
   allLogs: ExerciseLog[];
   isOpen: boolean; onToggle: () => void; onDelete: () => void; deleting: boolean;
 }) {
+  const tIns = useTranslations("insights");
   const start = parseDbDate(log.created_at);
   const end   = new Date(start.getTime() + log.duration_minutes * 60_000);
   const dateStr = start.toLocaleDateString("en", { month:"short", day:"numeric" });
@@ -1790,7 +1791,7 @@ function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting }:
   const endTimeStr = end.toLocaleTimeString("en", { hour:"numeric", minute:"2-digit" });
 
   const accent  = EXERCISE_ACCENT;
-  const typeLbl = exerciseTypeLabel(log.exercise_type);
+  const typeLbl = exerciseTypeLabelI18n(tIns, log.exercise_type);
   const evalInfo = evaluateExercise(log);
   const badgeColor = evalInfo.color;
 

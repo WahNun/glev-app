@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { insertInsulinLog } from "@/lib/insulin";
 import { insertExerciseLog, type ExerciseType } from "@/lib/exercise";
-import { exerciseTypeLabel } from "@/lib/exerciseEval";
+import { exerciseTypeLabelI18n } from "@/lib/exerciseEval";
 import { scheduleJobsForLog } from "@/lib/cgmJobs";
 import { fetchMealsForEngine, type Meal } from "@/lib/meals";
 import { parseDbDate, parseDbTs } from "@/lib/time";
@@ -518,7 +518,10 @@ export function InsulinForm() {
 // New exercise taxonomy used by the form. Legacy `hypertrophy` rows
 // remain valid in the DB and are mapped to "Strength" for display, but
 // the picker only shows the new set so going forward all rows use it.
-const EXERCISE_TYPE_OPTIONS: ExerciseType[] = ["cardio", "strength", "hiit", "yoga", "cycling", "run"];
+const EXERCISE_TYPE_OPTIONS: ExerciseType[] = [
+  "cardio", "strength", "hiit", "yoga", "cycling", "run",
+  "football", "tennis", "volleyball", "basketball",
+];
 
 // Retroactive-start choices. Selecting anything other than "Now"
 // shifts the reference time the CGM scheduler uses to compute the
@@ -535,6 +538,7 @@ const STARTED_OPTIONS: { value: number; label: string }[] = [
 
 export function ExerciseForm() {
   const tEng = useTranslations("engine");
+  const tIns = useTranslations("insights");
   const t = useTranslations("engineLog");
   const [type, setType] = useState<ExerciseType>("cardio");
   const [startedMinAgo, setStartedMinAgo] = useState<number>(0);
@@ -583,7 +587,7 @@ export function ExerciseForm() {
         refTimeIso: refIso,
         durationMinutes: d,
       });
-      const typeLabel = exerciseTypeLabel(type);
+      const typeLabel = exerciseTypeLabelI18n(tIns, type);
       const startedOpt = STARTED_OPTIONS.find(o => o.value === startedMinAgo);
       const startedLabel = startedMinAgo === 0 || !startedOpt
         ? ""
@@ -661,7 +665,7 @@ export function ExerciseForm() {
                     transition: "all 0.15s",
                   }}
                 >
-                  {exerciseTypeLabel(opt)}
+                  {exerciseTypeLabelI18n(tIns, opt)}
                 </button>
               );
             })}

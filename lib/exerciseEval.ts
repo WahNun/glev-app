@@ -166,6 +166,12 @@ export function patternNote(t: ExerciseType): string {
     case "cardio":
     case "cycling":
     case "run":
+    // Team / racquet sports are intermittent aerobic activity — same
+    // delayed-hypo profile as steady cardio for pattern-note purposes.
+    case "football":
+    case "tennis":
+    case "volleyball":
+    case "basketball":
       return "Aerobic exercise typically lowers glucose, with a delayed-hypo window 30–90 min after the session.";
     case "hiit":
       return "High-intensity intervals can push glucose UP during the workout (stress response) and then down sharply afterwards.";
@@ -177,7 +183,14 @@ export function patternNote(t: ExerciseType): string {
   }
 }
 
-/** Display label for an exercise type. Maps legacy 'hypertrophy' → 'Strength'. */
+/** Display label for an exercise type. Maps legacy 'hypertrophy' → 'Strength'.
+ *
+ *  English-only — kept for non-UI / fallback contexts (e.g. building
+ *  the headline sentence in `personalPatternHeadline()` which is
+ *  itself an English template). UI surfaces should prefer
+ *  `exerciseTypeLabelI18n(t, type)` so labels follow the active
+ *  locale (German users see "Krafttraining" / "Fußball" instead of
+ *  "Strength" / "Football"). */
 export function exerciseTypeLabel(t: ExerciseType): string {
   switch (t) {
     case "hypertrophy":
@@ -187,7 +200,24 @@ export function exerciseTypeLabel(t: ExerciseType): string {
     case "yoga":      return "Yoga";
     case "cycling":   return "Cycling";
     case "run":       return "Run";
+    case "football":  return "Football";
+    case "tennis":    return "Tennis";
+    case "volleyball":return "Volleyball";
+    case "basketball":return "Basketball";
   }
+}
+
+/** Locale-aware version of `exerciseTypeLabel`. Pass a translator
+ *  bound to the `insights` namespace (e.g. `useTranslations("insights")`)
+ *  — that's where the `exercise_type_*` keys live in
+ *  messages/{de,en}.json. The legacy `hypertrophy` token is collapsed
+ *  to `strength` so old rows still resolve to a real translation key. */
+export function exerciseTypeLabelI18n(
+  t: (key: string) => string,
+  type: ExerciseType,
+): string {
+  const norm = type === "hypertrophy" ? "strength" : type;
+  return t(`exercise_type_${norm}`);
 }
 
 // ────────────────────────────────────────────────────────────────────

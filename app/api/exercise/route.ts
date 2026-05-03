@@ -11,6 +11,9 @@ const COLS =
 // backward compat, adds the widened taxonomy used by the form.
 const VALID_TYPE = new Set([
   "hypertrophy", "strength", "cardio", "hiit", "yoga", "cycling", "run",
+  // Team / racquet sports — added in task #203 alongside the
+  // exercise_logs_exercise_type_check widening migration.
+  "football", "tennis", "volleyball", "basketball",
 ]);
 const VALID_INTENSITY = new Set(["low", "medium", "high"]);
 
@@ -63,7 +66,7 @@ export async function POST(req: NextRequest) {
 
   if (!VALID_TYPE.has(exercise_type)) {
     return NextResponse.json({
-      error: "exercise_type must be one of: cardio, strength, hiit, yoga, cycling, run (legacy 'hypertrophy' also accepted)",
+      error: "exercise_type must be one of: cardio, strength, hiit, yoga, cycling, run, football, tennis, volleyball, basketball (legacy 'hypertrophy' also accepted)",
     }, { status: 400 });
   }
   if (!VALID_INTENSITY.has(intensity)) {

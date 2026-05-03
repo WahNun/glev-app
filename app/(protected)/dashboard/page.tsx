@@ -6,7 +6,7 @@ import { fetchMeals, computeCalories, unifiedOutcome, type Meal } from "@/lib/me
 import { computeControlScore } from "@/lib/controlScore";
 import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
-import { evaluateExercise } from "@/lib/exerciseEval";
+import { evaluateExercise, exerciseTypeLabelI18n } from "@/lib/exerciseEval";
 import { fetchMacroTargets, DEFAULT_MACRO_TARGETS, type MacroTargets } from "@/lib/userSettings";
 import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, getEvalExplain } from "@/lib/mealTypes";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
@@ -516,6 +516,7 @@ function RecentEntries({
   const [expanded, setExpanded] = useState<string | null>(null);
   const toggle = (id: string) => setExpanded(prev => (prev === id ? null : id));
   const t = useTranslations("dashboard");
+  const tIns = useTranslations("insights");
 
   return (
     <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"16px 20px 8px" }}>
@@ -559,7 +560,7 @@ function RecentEntries({
                         locale={locale}
                         stats={[
                           { label:t("stat_duration"),  value:`${r.exercise!.duration_minutes} min`, color:KIND_ACCENT.exercise.color },
-                          { label:t("stat_type"),      value:r.exercise!.exercise_type === "cardio" ? t("ex_cardio") : t("ex_strength") },
+                          { label:t("stat_type"),      value:exerciseTypeLabelI18n(tIns, r.exercise!.exercise_type) },
                           { label:t("stat_intensity"), value:r.exercise!.intensity || "—" },
                           ...(r.exercise!.cgm_glucose_at_log != null ? [{ label:t("stat_cgm_at_log"), value:`${r.exercise!.cgm_glucose_at_log} mg/dL` }] : []),
                         ]}
@@ -617,6 +618,7 @@ function RecentChip({ text, color, mono = false }: { text: string; color: string
 //   stays consistent across kinds.
 function UnifiedRecentRow({ row, locale, onClick }: { row: RecentRow; locale: string; onClick: () => void }) {
   const t = useTranslations("dashboard");
+  const tIns = useTranslations("insights");
   const accent = KIND_ACCENT[row.kind];
   const letter =
     row.kind === "meal"     ? "M"
@@ -643,7 +645,7 @@ function UnifiedRecentRow({ row, locale, onClick }: { row: RecentRow; locale: st
     rightSlot = <RecentChip text={getEvalLabel(m.evaluation)} color={evColor} />;
   } else if (row.kind === "exercise") {
     const x = row.exercise!;
-    title = x.exercise_type === "cardio" ? t("ex_cardio") : t("ex_strength");
+    title = exerciseTypeLabelI18n(tIns, x.exercise_type);
     subtitle = `${timeStr} · ${x.duration_minutes}m`;
     const evalInfo = evaluateExercise(x);
     rightSlot = <RecentChip text={evalInfo.label} color={evalInfo.color} />;

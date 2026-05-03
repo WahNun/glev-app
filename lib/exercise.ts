@@ -15,7 +15,13 @@ export type ExerciseType =
   | "hiit"
   | "yoga"
   | "cycling"
-  | "run";
+  | "run"
+  // Team / racquet sports — intermittent aerobic activity, grouped
+  // with cardio for pattern-note guidance.
+  | "football"     // soccer
+  | "tennis"
+  | "volleyball"
+  | "basketball";
 
 export type ExerciseIntensity = "low" | "medium" | "high";
 
