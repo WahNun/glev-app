@@ -1126,7 +1126,18 @@
     "eval_explain_CHECK_CONTEXT": "Outcome unclear — review context before adjusting.",
     "state_pending": "Awaiting glucose data",
     "state_provisional": "Preliminary result (updates after 2h)",
-    "state_final": "Final outcome"
+    "state_final": "Final outcome",
+    "post_label_1h": "1h Post",
+    "post_label_2h": "2h Post",
+    "post_label_12h": "12h Post",
+    "post_label_24h": "24h Post",
+    "lc_outside_window": "Reading outside expected window (actual gap: {gap} min) — outcome cannot be reliably determined.",
+    "lc_awaiting_1h": "Awaiting 1-hour glucose check.",
+    "lc_window_early": "early check at {min} min",
+    "lc_window_1h": "1-hour check",
+    "lc_provisional_prefix": "{window}: Δ {delta} mg/dL. Preliminary direction only — updates after the 2-hour reading.",
+    "lc_no_post_meal": "(no post-meal reading captured)",
+    "lc_updates_after_2h": "Updates after 2-hour reading."
   },
   "marketing": {
     "nav_signin": "Sign in",

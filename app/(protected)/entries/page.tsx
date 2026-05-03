@@ -871,7 +871,7 @@ export default function EntriesPage() {
                       themeColor={GREEN}
                       slots={[
                         {
-                          label: "1h Post",
+                          label: tx("post_label_1h"),
                           fetchType: "bg_1h",
                           fetchedValue: m.bg_1h,
                           fetchedAtIso: m.bg_1h_at,
@@ -879,7 +879,7 @@ export default function EntriesPage() {
                           expectedFetchAtIso: new Date(parseDbDate(m.meal_time ?? m.created_at).getTime() + 60 * 60_000).toISOString(),
                         },
                         {
-                          label: "2h Post",
+                          label: tx("post_label_2h"),
                           fetchType: "bg_2h",
                           fetchedValue: m.bg_2h,
                           fetchedAtIso: m.bg_2h_at,
@@ -1066,6 +1066,54 @@ function stateColor(s: OutcomeState) {
   return GREEN;
 }
 
+/**
+ * Translate the wrapping strings produced by `lib/engine/lifecycle.ts`
+ * into the active locale. The deeper `evaluateEntry` reasoning passed
+ * through `${ev.reasoning}` is left in EN (engine output, deterministic
+ * for tests) — only the lifecycle wrapper sentences a user reads in
+ * the meal-log expanded card are translated here.
+ *
+ * Patterns handled (kept in sync with lib/engine/lifecycle.ts):
+ *   1) "Reading outside expected window (actual gap: ±X min) — outcome cannot be reliably determined."
+ *   2) "Awaiting 1-hour glucose check."
+ *   3) "<window>: Δ ±X mg/dL. Preliminary direction only — updates after the 2-hour reading. <inner>"
+ *      where <window> is "early check at X min" or "1-hour check"
+ *   4) "<inner> (no post-meal reading captured)"  /  "<inner> Updates after 2-hour reading."
+ */
+function translateLifecycleReasoning(
+  text: string,
+  tx: ReturnType<typeof useTranslations>,
+): string {
+  // 1) Out-of-window guard
+  const outsideRe = /^Reading outside expected window \(actual gap: ([+-]?\d+) min\) — outcome cannot be reliably determined\.$/;
+  const m1 = outsideRe.exec(text);
+  if (m1) return tx("lc_outside_window", { gap: m1[1] });
+
+  // 2) Awaiting 1h check
+  if (text === "Awaiting 1-hour glucose check.") return tx("lc_awaiting_1h");
+
+  // 3) Provisional 1H wrapper
+  const provRe = /^(early check at (\d+) min|1-hour check): Δ ([+-]?\d+) mg\/dL\. Preliminary direction only — updates after the 2-hour reading\.\s*(.*)$/;
+  const m3 = provRe.exec(text);
+  if (m3) {
+    const window = m3[2]
+      ? tx("lc_window_early", { min: m3[2] })
+      : tx("lc_window_1h");
+    const prefix = tx("lc_provisional_prefix", { window, delta: m3[3] });
+    return m3[4] ? `${prefix} ${m3[4]}` : prefix;
+  }
+
+  // 4) No-bg suffixes
+  if (text.endsWith(" (no post-meal reading captured)")) {
+    return `${text.slice(0, -" (no post-meal reading captured)".length)} ${tx("lc_no_post_meal")}`;
+  }
+  if (text.endsWith(" Updates after 2-hour reading.")) {
+    return `${text.slice(0, -" Updates after 2-hour reading.".length)} ${tx("lc_updates_after_2h")}`;
+  }
+
+  return text;
+}
+
 function LifecycleBlock({ meal, onUpdated }: { meal: Meal; onUpdated: (patch: Partial<Meal>) => void }) {
   const lc = lifecycleFor(meal);
   // i18n for the lifecycle chip label + section heading. Falls back to
@@ -1100,7 +1148,7 @@ function LifecycleBlock({ meal, onUpdated }: { meal: Meal; onUpdated: (patch: Pa
           {chipLabel}
         </span>
       </div>
-      <div style={{ fontSize:12, color:"var(--text-muted)", lineHeight:1.5 }}>{lc.reasoning}</div>
+      <div style={{ fontSize:12, color:"var(--text-muted)", lineHeight:1.5 }}>{translateLifecycleReasoning(lc.reasoning, tx)}</div>
       {(lc.delta1 != null || lc.delta2 != null) && (
         <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8, marginTop:2 }}>
           <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:8, padding:"8px 10px" }}>

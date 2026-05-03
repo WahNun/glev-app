@@ -1134,7 +1134,18 @@
     "eval_explain_CHECK_CONTEXT": "Verlauf unklar — Kontext prüfen, bevor du die Dosis anpasst.",
     "state_pending": "Wartet auf Glukose-Daten",
     "state_provisional": "Vorläufiges Ergebnis (aktualisiert nach 2h)",
-    "state_final": "Finales Ergebnis"
+    "state_final": "Finales Ergebnis",
+    "post_label_1h": "1h danach",
+    "post_label_2h": "2h danach",
+    "post_label_12h": "12h danach",
+    "post_label_24h": "24h danach",
+    "lc_outside_window": "Messwert außerhalb des erwarteten Zeitfensters (tatsächlicher Abstand: {gap} min) — Ergebnis nicht zuverlässig bewertbar.",
+    "lc_awaiting_1h": "Warte auf 1-Stunden-Glukose-Messung.",
+    "lc_window_early": "Frühe Messung nach {min} min",
+    "lc_window_1h": "1-Stunden-Messung",
+    "lc_provisional_prefix": "{window}: Δ {delta} mg/dL. Nur vorläufige Tendenz — aktualisiert nach der 2-Stunden-Messung.",
+    "lc_no_post_meal": "(keine Messung nach der Mahlzeit erfasst)",
+    "lc_updates_after_2h": "Aktualisiert nach der 2-Stunden-Messung."
   },
   "marketing": {
     "nav_signin": "Anmelden",
