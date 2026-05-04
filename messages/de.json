@@ -1120,7 +1120,9 @@
   "quickAdd": {
     "open_aria": "Schnell loggen",
     "close_aria": "Schnell-Hinzufügen schließen",
+    "open_engine": "Glev (Sprache)",
     "log_meal": "Mahlzeit loggen",
+    "log_insulin": "Insulin loggen",
     "measure_glucose": "Glukose messen",
     "log_activity": "Aktivität loggen",
     "log_cycle": "Zyklus loggen",

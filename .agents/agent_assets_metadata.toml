@@ -54,3 +54,9 @@ id = "oSC2rRkpIyy-qhbBQ_pl1"
 uri = "file://.local/insights_de_translation_report.md"
 type = "text"
 title = "Insights DE — Übersetzungs-Audit"
+
+[[outputs]]
+id = "hbdws8Ei3IJeZDkIfsLq8"
+uri = "file://.local/MEAL_CLASSIFICATION_REPORT.md"
+type = "text"
+title = "Meal Classification Report"

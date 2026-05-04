@@ -180,39 +180,15 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           <GlevLockup size={26} color="var(--text)" symbolBg="#0F0F14" />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {/* Engine-page tab toggle. Only rendered when the engine page
-              registers itself via EngineHeaderProvider. Sits oben rechts
-              alongside the Live badge + user icon so the page body can
-              start the chat panel immediately under the global header
-              without any intermediate "Glev Engine" title block. */}
-          {engineHdr.visible && (
-            <button
-              type="button"
-              onClick={engineHdr.toggleTabs}
-              aria-label={engineHdr.tabsExpanded ? "Tabs einklappen" : "Tabs ausklappen"}
-              aria-expanded={engineHdr.tabsExpanded}
-              aria-controls="engine-tabs-body"
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 6,
-                padding: "5px 10px", height: 28, borderRadius: 99,
-                background: engineHdr.tabsExpanded ? `${ACCENT}22` : "var(--surface-soft)",
-                border: `1px solid ${engineHdr.tabsExpanded ? ACCENT : "var(--border-strong)"}`,
-                color: engineHdr.tabsExpanded ? ACCENT : "var(--text-body)",
-                fontSize: 11, fontWeight: 700, letterSpacing: "-0.01em",
-                cursor: "pointer", transition: "all 0.15s",
-              }}
-            >
-              <span>{engineHdr.activeLabel}</span>
-              <svg
-                width="12" height="12" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                aria-hidden="true"
-                style={{ transition: "transform 0.2s", transform: engineHdr.tabsExpanded ? "rotate(180deg)" : "rotate(0deg)" }}
-              >
-                <polyline points="6 9 12 15 18 9"/>
-              </svg>
-            </button>
-          )}
+          {/* Engine-Pille im Header wurde entfernt (User-Wunsch
+              2026-05-04): "ich will nurnoch das plus symbol nutzen
+              im header allerdings müssen dort alle tabs die aktuell
+              in der pill erreichbar sind auch gelistet werden". Alle
+              Engine-Tabs (Engine, Insulin, Exercise, Glucose, Cycle,
+              Symptoms) sind jetzt einzig über das QuickAddMenu ("+")
+              erreichbar. EngineHeaderProvider bleibt im Provider-Tree
+              damit die engine page weiter setVisible/setActiveLabel
+              aufrufen darf — ohne UI-Konsequenz, aber konfliktfrei. */}
           {/* History-page sub-tab dropdown. Only rendered while the
               user is on /history; the page registers itself via
               HistoryHeaderProvider on mount. Replaces the old in-body

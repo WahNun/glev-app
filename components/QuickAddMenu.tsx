@@ -35,6 +35,33 @@ const RUN = (
   </svg>
 );
 
+// Engine-Tab (Glev AI / Sprache-Eingabe). Vier-Punkt-Sternchen, das
+// dem Glev-Logo nachempfunden ist — visuelle Brücke zur Engine.
+const ENGINE_ICON = (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="2" />
+    <circle cx="12" cy="3" r="1.5" />
+    <circle cx="12" cy="21" r="1.5" />
+    <circle cx="3" cy="12" r="1.5" />
+    <circle cx="21" cy="12" r="1.5" />
+    <line x1="12" y1="5" x2="12" y2="10" />
+    <line x1="12" y1="14" x2="12" y2="19" />
+    <line x1="5" y1="12" x2="10" y2="12" />
+    <line x1="14" y1="12" x2="19" y2="12" />
+  </svg>
+);
+
+// Insulin/Bolus — Spritze-Glyph
+const SYRINGE_ICON = (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 2l4 4" />
+    <path d="M17 3l4 4-7 7-4-4z" />
+    <path d="M14 7l-7 7" />
+    <path d="M9 12l3 3" />
+    <path d="M7 14l-4 4 2 2 4-4" />
+  </svg>
+);
+
 // The dropdown now mirrors the three options that used to live in the
 // bottom-of-screen Glev action sheet (which was deleted with the same
 // change that made the bottom-nav Glev tap route directly to the meal
@@ -56,12 +83,29 @@ const SYMPTOM_ICON = (
   </svg>
 );
 
-type ItemDef = { key: "log_meal" | "measure_glucose" | "log_activity" | "log_cycle" | "log_symptoms"; href: string; icon: React.ReactNode };
+type ItemDef = {
+  key:
+    | "open_engine"
+    | "log_meal"
+    | "log_insulin"
+    | "measure_glucose"
+    | "log_activity"
+    | "log_cycle"
+    | "log_symptoms";
+  href: string;
+  icon: React.ReactNode;
+};
+// Reihenfolge spiegelt die alte Engine-Pille (Engine, Insulin,
+// Exercise, Glucose) plus die bereits im "+" vorhandenen Logging-
+// Shortcuts (Mahlzeit, Zyklus, Symptome). Damit hat der User EINE
+// Stelle für alle Engine-Tabs + alle Schnell-Eingaben.
 const ITEM_DEFS: ItemDef[] = [
-  { key: "log_meal",         href: "/engine?tab=log",         icon: MEAL    },
-  { key: "measure_glucose",  href: "/engine?tab=fingerstick", icon: DROPLET },
-  { key: "log_activity",     href: "/engine?tab=exercise",    icon: RUN     },
-  { key: "log_cycle",        href: "/engine?tab=cycle",       icon: CYCLE_ICON },
+  { key: "open_engine",      href: "/engine?tab=engine",      icon: ENGINE_ICON  },
+  { key: "log_meal",         href: "/engine?tab=log",         icon: MEAL         },
+  { key: "log_insulin",      href: "/engine?tab=bolus",       icon: SYRINGE_ICON },
+  { key: "measure_glucose",  href: "/engine?tab=fingerstick", icon: DROPLET      },
+  { key: "log_activity",     href: "/engine?tab=exercise",    icon: RUN          },
+  { key: "log_cycle",        href: "/engine?tab=cycle",       icon: CYCLE_ICON   },
   { key: "log_symptoms",     href: "/engine?tab=symptoms",    icon: SYMPTOM_ICON },
 ];
 
