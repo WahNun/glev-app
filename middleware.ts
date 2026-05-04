@@ -3,6 +3,7 @@ import { PATHNAME_HEADER } from "@/lib/appRoutes";
 
 const PROTECTED = ["/dashboard", "/log", "/entries", "/insights", "/import", "/engine", "/onboarding"];
 const MAX_CHUNKS = 16;
+const COUNTRY_HEADER = "x-glev-country";
 
 function readSessionRaw(req: NextRequest, cookieName: string): string | null {
   const single = req.cookies.get(cookieName)?.value;
@@ -60,6 +61,13 @@ export function middleware(req: NextRequest) {
   // headers are untouched, so this never leaks to the client.
   const requestHeaders = new Headers(req.headers);
   requestHeaders.set(PATHNAME_HEADER, pathname);
+
+  const country =
+    req.headers.get("x-vercel-ip-country") ??
+    req.headers.get("cf-ipcountry");
+  if (country) {
+    requestHeaders.set(COUNTRY_HEADER, country);
+  }
 
   // `/` is the public marketing homepage — let it render for everyone.
   if (PROTECTED.some(p => pathname === p || pathname.startsWith(p + "/")) && !isAuthed) {
