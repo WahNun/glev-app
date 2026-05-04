@@ -5,6 +5,46 @@ const PROTECTED = ["/dashboard", "/log", "/entries", "/insights", "/import", "/e
 const MAX_CHUNKS = 16;
 const COUNTRY_HEADER = "x-glev-country";
 
+// Mirrors i18n/request.ts so the cookie we set on the geo path matches
+// exactly what the request config would have resolved on its own. Keep
+// these two lists in sync.
+const DACH_COUNTRIES = new Set(["DE", "AT", "CH", "LU", "LI"]);
+const LOCALE_COOKIE = "NEXT_LOCALE";
+// One year — same as the in-app language picker in lib/locale.ts.
+const LOCALE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
+
+function geoLocale(country: string | null | undefined): "de" | "en" | null {
+  if (!country) return null;
+  return DACH_COUNTRIES.has(country.toUpperCase()) ? "de" : "en";
+}
+
+// Persist the geo-resolved locale to a NEXT_LOCALE cookie so subsequent
+// visits stay on the same language even when the geo header is missing
+// (CDN cache, different edge node, etc.). We only set the cookie when:
+//   * a geo signal is available this request, AND
+//   * the visitor doesn't already have a NEXT_LOCALE cookie — never
+//     overwrite an explicit choice from the in-app language picker or
+//     the `?lang=` URL override.
+// The in-app picker keeps full control afterwards since it writes the
+// same cookie name with the same path.
+function persistGeoLocaleCookie(
+  req: NextRequest,
+  res: NextResponse,
+  country: string | null | undefined,
+) {
+  if (req.cookies.get(LOCALE_COOKIE)?.value) return;
+  const lang = geoLocale(country);
+  if (!lang) return;
+  res.cookies.set({
+    name: LOCALE_COOKIE,
+    value: lang,
+    path: "/",
+    maxAge: LOCALE_COOKIE_MAX_AGE,
+    sameSite: "lax",
+    secure: req.nextUrl.protocol === "https:",
+  });
+}
+
 function readSessionRaw(req: NextRequest, cookieName: string): string | null {
   const single = req.cookies.get(cookieName)?.value;
   if (single) return single;
@@ -71,10 +111,14 @@ export function middleware(req: NextRequest) {
 
   // `/` is the public marketing homepage — let it render for everyone.
   if (PROTECTED.some(p => pathname === p || pathname.startsWith(p + "/")) && !isAuthed) {
-    return NextResponse.redirect(new URL("/login", req.url));
+    const res = NextResponse.redirect(new URL("/login", req.url));
+    persistGeoLocaleCookie(req, res, country);
+    return res;
   }
   if (pathname === "/login" && isAuthed) {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
+    const res = NextResponse.redirect(new URL("/dashboard", req.url));
+    persistGeoLocaleCookie(req, res, country);
+    return res;
   }
 
   // `?lang=` URL override on marketing pages — forwarded to the
@@ -91,10 +135,10 @@ export function middleware(req: NextRequest) {
       requestHeaders.set(LANG_OVERRIDE_HEADER, lang);
       const res = NextResponse.next({ request: { headers: requestHeaders } });
       res.cookies.set({
-        name: "NEXT_LOCALE",
+        name: LOCALE_COOKIE,
         value: lang,
         path: "/",
-        maxAge: 60 * 60 * 24 * 365,
+        maxAge: LOCALE_COOKIE_MAX_AGE,
         sameSite: "lax",
         secure: req.nextUrl.protocol === "https:",
       });
@@ -102,7 +146,9 @@ export function middleware(req: NextRequest) {
     }
   }
 
-  return NextResponse.next({ request: { headers: requestHeaders } });
+  const res = NextResponse.next({ request: { headers: requestHeaders } });
+  persistGeoLocaleCookie(req, res, country);
+  return res;
 }
 
 export const config = {
