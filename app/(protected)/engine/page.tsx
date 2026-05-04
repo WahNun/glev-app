@@ -1095,7 +1095,12 @@ export default function EnginePage() {
     const gNum = Number.isFinite(gParsed) ? gParsed : null;
     // Same classification + calorie pipeline as handleConfirmLog so the
     // saved row is identical except for the insulin_units field.
-    const cls   = aiMealType ?? classifyMeal(cNum, pNum, fNum, fbNum);
+    // Immer deterministisch klassifizieren — die GPT-Antwort
+    // (aiMealType) wird NICHT mehr blind bevorzugt, weil sie aus dem
+    // initialen Voice-Parse stammt und nach User-Korrektur der Macros
+    // veraltet wäre (Bug-Fall 2026-05-04: 24g-Whey-Shake, GPT sagte
+    // HIGH_FAT, klassifyMeal sagt korrekt HIGH_PROTEIN).
+    const cls = classifyMeal(cNum, pNum, fNum, fbNum);
     const cal   = computeCalories(cNum, pNum, fNum);
     const mealIso = mealTime ? new Date(mealTime).toISOString() : new Date().toISOString();
     setConfirming(true);
@@ -1168,7 +1173,12 @@ export default function EnginePage() {
     const fbNum = parseFloat(fiber)   || 0;
     const gParsed = glucose.trim() === "" ? NaN : parseFloat(glucose);
     const gNum = Number.isFinite(gParsed) ? gParsed : null;
-    const cls   = aiMealType ?? classifyMeal(cNum, pNum, fNum, fbNum);
+    // Immer deterministisch klassifizieren — die GPT-Antwort
+    // (aiMealType) wird NICHT mehr blind bevorzugt, weil sie aus dem
+    // initialen Voice-Parse stammt und nach User-Korrektur der Macros
+    // veraltet wäre (Bug-Fall 2026-05-04: 24g-Whey-Shake, GPT sagte
+    // HIGH_FAT, klassifyMeal sagt korrekt HIGH_PROTEIN).
+    const cls = classifyMeal(cNum, pNum, fNum, fbNum);
     const cal   = computeCalories(cNum, pNum, fNum);
     const mealIso = mealTime ? new Date(mealTime).toISOString() : new Date().toISOString();
     setConfirming(true);
@@ -1236,7 +1246,8 @@ export default function EnginePage() {
     const fbNum = parseFloat(fiber)   || 0;
     const gParsed = glucose.trim() === "" ? NaN : parseFloat(glucose);
     const gNum = Number.isFinite(gParsed) ? gParsed : null;
-    const cls = aiMealType ?? classifyMeal(cNum, pNum, fNum, fbNum);
+    // Immer deterministisch klassifizieren (siehe Kommentar weiter oben).
+    const cls = classifyMeal(cNum, pNum, fNum, fbNum);
     const cal = computeCalories(cNum, pNum, fNum);
     const mealIso = mealTime ? new Date(mealTime).toISOString() : new Date().toISOString();
     setConfirming(true);
@@ -1318,7 +1329,12 @@ export default function EnginePage() {
     // BALANCED rules, but the AI sees richer context (sugar fraction,
     // ingredient identity) and resolves edge cases the macro-only
     // fallback can't. Falls back to classifyMeal() for typed entries.
-    const cls   = aiMealType ?? classifyMeal(cNum, pNum, fNum, fbNum);
+    // Immer deterministisch klassifizieren — die GPT-Antwort
+    // (aiMealType) wird NICHT mehr blind bevorzugt, weil sie aus dem
+    // initialen Voice-Parse stammt und nach User-Korrektur der Macros
+    // veraltet wäre (Bug-Fall 2026-05-04: 24g-Whey-Shake, GPT sagte
+    // HIGH_FAT, klassifyMeal sagt korrekt HIGH_PROTEIN).
+    const cls = classifyMeal(cNum, pNum, fNum, fbNum);
     const cal   = computeCalories(cNum, pNum, fNum);
     // Evaluation is no longer pre-computed at save time — lifecycleFor
     // (lib/engine/lifecycle.ts) decides when a row reaches "final" and

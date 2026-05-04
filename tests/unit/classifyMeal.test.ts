@@ -67,11 +67,10 @@ test("classifyMeal: carbs 44g + low fiber → NOT FAST_CARBS (under the floor)",
 test("classifyMeal: zero carbs with sugars=0 → sugarShare null, never FAST_CARBS", () => {
   // sugars/carbs would divide by zero; the helper short-circuits to
   // null when carbs is 0, so the FAST_CARBS test is skipped entirely
-  // regardless of the sugar number. Macros are kept lean enough that
-  // neither HIGH_FAT (fat share < 0.45) nor HIGH_PROTEIN (protein < 25g)
-  // fires either, so the result lands in BALANCED — pinning the
-  // "FAST_CARBS gate is hard at carbs >= 45" rule on its own.
-  expect(classifyMeal(0, 10, 1, 0, 0)).toBe("BALANCED");
+  // regardless of the sugar number. Carbs < 5 AND fat < 5 with protein
+  // present now fires the HIGH_PROTEIN "pure protein" rule (introduced
+  // 2026-05-04 to fix the whey-shake misclassification bug).
+  expect(classifyMeal(0, 10, 1, 0, 0)).toBe("HIGH_PROTEIN");
 });
 
 /* ──────────────────────────────────────────────────────────────────
@@ -98,21 +97,40 @@ test("classifyMeal: HIGH_FAT wins over HIGH_PROTEIN when both could apply", () =
    HIGH_PROTEIN — `protein > carbs && protein > fat && protein >= 25`.
    ────────────────────────────────────────────────────────────────── */
 
-test("classifyMeal: HIGH_PROTEIN when protein dominates and >= 25g", () => {
+test("classifyMeal: HIGH_PROTEIN when protein dominates and >= 20g", () => {
   // 20c(80) + 30p(120) + 5f(45) = 245 kcal. fat share 45/245 ≈ 0.18
   // → not HIGH_FAT. protein(30) > carbs(20), protein > fat(5),
-  // protein >= 25 → HIGH_PROTEIN.
+  // protein >= 20 → HIGH_PROTEIN.
   expect(classifyMeal(20, 30, 5, 3)).toBe("HIGH_PROTEIN");
 });
 
-test("classifyMeal: protein < 25g → falls through to BALANCED even when dominant", () => {
-  // 10c + 20p + 5f → protein dominates carbs+fat but only 20g (<25).
-  // Falls to BALANCED.
-  expect(classifyMeal(10, 20, 5, 2)).toBe("BALANCED");
+test("classifyMeal: pure-protein item → HIGH_PROTEIN regardless of grams (whey shake fix)", () => {
+  // 0c + 24p + 0f + 0fb → der echte User-Bug von 2026-05-04: ein
+  // 300g Proteinshake mit nur 24g Protein wurde als BALANCED (vor
+  // dem AI-Override) bzw. HIGH_FAT (mit AI-Override) klassifiziert.
+  // Neue (a)-Regel "carbs<5 && fat<5 && protein>0" deckt das ab,
+  // unabhängig davon dass 24g unter der "≥20g"-Schwelle liegt.
+  expect(classifyMeal(0, 24, 0, 0)).toBe("HIGH_PROTEIN");
+  // Auch ein winziger 5g-Protein-Shot zählt — wenn nichts anderes
+  // drin ist, IST es ein Protein-Item.
+  expect(classifyMeal(0, 5, 0, 0)).toBe("HIGH_PROTEIN");
+  // Plain Hähnchenbrust (35g Protein, 0c, 3f) — pure-protein-Regel
+  // fängt das auch wenn der dominante-Macro-Pfad ebenfalls greifen
+  // würde. 3g Fett ist unter der 5g-Schwelle.
+  expect(classifyMeal(0, 35, 3, 0)).toBe("HIGH_PROTEIN");
 });
 
-test("classifyMeal: protein equal to carbs → not HIGH_PROTEIN (strict greater-than)", () => {
-  // 25c + 25p + 5f → protein is NOT > carbs.
+test("classifyMeal: low-protein item < 20g but mixed → BALANCED (pure-protein rule needs near-zero carbs+fat)", () => {
+  // 10c + 18p + 5f → protein dominates aber nur 18g (<20). Carbs
+  // (10) >= 5, also greift auch die pure-protein-Regel nicht.
+  // → BALANCED. Schützt davor, dass jeder fett-arme Snack als
+  // HIGH_PROTEIN durchgeht.
+  expect(classifyMeal(10, 18, 5, 2)).toBe("BALANCED");
+});
+
+test("classifyMeal: protein equal to carbs → not HIGH_PROTEIN via dominance rule", () => {
+  // 25c + 25p + 5f → protein is NOT > carbs. carbs (25) >= 5 also
+  // greift die pure-protein-Regel nicht. → BALANCED.
   expect(classifyMeal(25, 25, 5, 3)).toBe("BALANCED");
 });
 

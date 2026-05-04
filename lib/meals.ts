@@ -98,8 +98,17 @@ export interface SaveMealInput {
  *                   (fat dominates the energy mix: pizza, fried, cheese,
  *                   nuts, avocado, cream — drives the delayed-rise pizza
  *                   effect)
- *   HIGH_PROTEIN  → protein > carbs  AND protein > fat  AND protein >= 25g
- *                   (steak, chicken, fish, eggs, legumes, dairy, shakes)
+ *   HIGH_PROTEIN  → matched if EITHER:
+ *                   (a) "pure protein" — carbs < 5g AND fat < 5g AND
+ *                       protein > 0 (Whey-Shake, Eiweißpulver in Wasser,
+ *                       Hähnchenbrust pur). Hat keine "≥ 25g"-Schwelle:
+ *                       wenn nichts anderes drin ist, IST es ein Protein-
+ *                       Item, egal ob 5g oder 50g.
+ *                   (b) protein > carbs AND protein > fat AND protein >= 20g
+ *                       (steak, chicken, fish, eggs, legumes, dairy,
+ *                       gemischte Mahlzeiten mit dominantem Protein —
+ *                       Schwelle von 25g auf 20g gesenkt 2026-05-04 weil
+ *                       ein 24g-Whey-Shake intuitiv HIGH_PROTEIN ist)
  *   BALANCED      → otherwise (no dominant macro). The legacy HIGH_FIBER
  *                   bucket has been removed — high-fiber meals now fall
  *                   through to BALANCED (and the lifecycle absorption
@@ -120,7 +129,13 @@ export function classifyMeal(
   if (carbs >= 45 && ((sugarShare != null && sugarShare > 0.5) || fiber < 5)) return "FAST_CARBS";
   const totalKcal = computeCalories(carbs, protein, fat);
   if (totalKcal > 0 && (fat * 9) / totalKcal > 0.45) return "HIGH_FAT";
-  if (protein > carbs && protein > fat && protein >= 25) return "HIGH_PROTEIN";
+  // (a) Sonderfall reines Protein: wenn carbs + fat praktisch nicht
+  // existieren, ist das Item per Definition HIGH_PROTEIN — unabhängig
+  // von der Protein-Menge. Sonst landet ein Whey-Shake (24P/0C/0F)
+  // fälschlich in BALANCED weil 24 < 25 — der User-Bug von 2026-05-04.
+  if (carbs < 5 && fat < 5 && protein > 0) return "HIGH_PROTEIN";
+  // (b) Standard-Fall: Protein dominant + nennenswerte Menge.
+  if (protein > carbs && protein > fat && protein >= 20) return "HIGH_PROTEIN";
   return "BALANCED";
 }
 
