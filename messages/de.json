@@ -467,6 +467,7 @@
     "symptom_save_btn": "Symptome speichern",
     "symptom_disclaimer": "Glev wertet Symptome nicht klinisch aus — die Einträge dienen dir als persönliches Tagebuch.",
     "symptom_logged_ok": "{count} Symptom(e) bei Schweregrad {severity} gespeichert.",
+    "symptom_logged_ok_with_cgm": "{count} Symptom(e) bei Schweregrad {severity} gespeichert · Glukose {cgm} mg/dL.",
     "symptom_row_title": "Symptome",
     "row_delete_aria": "Eintrag löschen",
     "symptom_headache": "Kopfschmerzen",
@@ -482,7 +483,9 @@
     "symptom_irritability": "Reizbarkeit",
     "symptom_back_pain": "Rückenschmerzen",
     "symptom_breast_tenderness": "Brustspannen",
-    "symptom_dizziness": "Schwindel"
+    "symptom_dizziness": "Schwindel",
+    "symptom_mouth_dryness": "Mundtrockenheit",
+    "symptom_polyuria": "Polyurie"
   },
   "history": {
     "title": "Verlauf",
@@ -781,7 +784,9 @@
     "symptom_irritability": "Reizbarkeit",
     "symptom_back_pain": "Rückenschmerzen",
     "symptom_breast_tenderness": "Brustspannen",
-    "symptom_dizziness": "Schwindel"
+    "symptom_dizziness": "Schwindel",
+    "symptom_mouth_dryness": "Mundtrockenheit",
+    "symptom_polyuria": "Polyurie"
   },
   "settings": {
     "title": "Einstellungen",

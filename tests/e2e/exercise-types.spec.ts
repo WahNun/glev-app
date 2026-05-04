@@ -136,19 +136,31 @@ test.describe("Engine → Exercise form taxonomy", () => {
     // adjacent InsulinForm to fight for the "Type" / "Duration" labels.
     await page.goto("/engine?tab=exercise");
 
-    // Sanity: every chip we plan to drive is actually rendered.
+    // The type picker is now a custom dropdown (disclosure button +
+    // ARIA listbox). The trigger sits above the duration field; the
+    // option list is mounted only while open. Open it once to assert
+    // every label is present, then close it again so we start the
+    // loop from a known state.
+    const dropdownTrigger = page.locator('button[aria-haspopup="listbox"]').first();
+    await expect(dropdownTrigger).toBeVisible();
+    await dropdownTrigger.click();
     for (const label of TYPE_LABELS) {
       await expect(
-        page.getByRole("button", { name: chipPattern(label) }),
+        page.getByRole("option", { name: chipPattern(label) }),
       ).toBeVisible();
     }
+    // Press Escape to close the listbox before driving the form so the
+    // submit button isn't covered by the absolute-positioned options.
+    await page.keyboard.press("Escape");
 
     const durationInput = page.locator('input[type="number"]').first();
     await expect(durationInput).toBeVisible();
 
     for (const label of TYPE_LABELS) {
-      // Pick the type chip.
-      await page.getByRole("button", { name: chipPattern(label) }).click();
+      // Open the dropdown and pick the option. The listbox auto-closes
+      // on selection so each iteration re-opens it explicitly.
+      await dropdownTrigger.click();
+      await page.getByRole("option", { name: chipPattern(label) }).click();
       // Re-enter duration each iteration — handleSubmit clears the
       // field on success.
       await durationInput.fill("30");
@@ -186,27 +198,32 @@ test.describe("Engine → Exercise form taxonomy", () => {
 
     await page.goto("/engine?tab=exercise");
 
+    // Open the type dropdown so the option list is mounted; the
+    // assertions below target ARIA listbox options now that the picker
+    // is a disclosure menu instead of a button grid.
+    await page.locator('button[aria-haspopup="listbox"]').first().click();
+
     // Football is the headline acceptance criterion in the task spec —
     // German users must see "Fußball", not "Football". A regression
     // back to hardcoded English would fail here even if the persistence
     // test above still passed.
     await expect(
-      page.getByRole("button", { name: /^Fußball$/ }),
+      page.getByRole("option", { name: /^Fußball$/ }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: /^Krafttraining$/ }),
+      page.getByRole("option", { name: /^Krafttraining$/ }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: /^Laufen$/ }),
+      page.getByRole("option", { name: /^Laufen$/ }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: /^Radfahren$/ }),
+      page.getByRole("option", { name: /^Radfahren$/ }),
     ).toBeVisible();
 
     // And the English chip must NOT be present — catches a future bug
     // where both locales' labels somehow ended up rendered side by side.
     await expect(
-      page.getByRole("button", { name: /^Football$/ }),
+      page.getByRole("option", { name: /^Football$/ }),
     ).toHaveCount(0);
   });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { insertInsulinLog } from "@/lib/insulin";
 import { insertExerciseLog, type ExerciseType } from "@/lib/exercise";
@@ -536,6 +536,138 @@ const STARTED_OPTIONS: { value: number; label: string }[] = [
   { value: 180, label: "3h" },
 ];
 
+/** Custom dropdown for the Sportart picker. Built as a disclosure
+ *  button + absolute-positioned options list (instead of a native
+ *  `<select>`) so the open list can carry the same orange-accent
+ *  styling as the Started/Intensity toggles in the same card — native
+ *  `<option>` rendering is browser-controlled and can't be themed
+ *  consistently across iOS Safari, Chrome, Firefox, etc.
+ *
+ *  Closes on outside click or Escape, exposes ARIA listbox semantics
+ *  for screen readers, and keeps row heights ≥ 40 px so each option
+ *  is a comfortable touch target on mobile. */
+function ExerciseTypeDropdown({
+  value, options, onChange, renderLabel,
+}: {
+  value: ExerciseType;
+  options: ExerciseType[];
+  onChange: (v: ExerciseType) => void;
+  renderLabel: (v: ExerciseType) => string;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={wrapperRef} style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        style={{
+          ...inp,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          textAlign: "left",
+          fontWeight: 600,
+          cursor: "pointer",
+        }}
+      >
+        <span>{renderLabel(value)}</span>
+        <svg
+          width="12" height="12" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" strokeWidth="2.5"
+          strokeLinecap="round" strokeLinejoin="round"
+          style={{
+            color: "var(--text-muted)",
+            transform: open ? "rotate(180deg)" : "none",
+            transition: "transform 0.15s",
+            flexShrink: 0,
+          }}
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+      {open && (
+        <div
+          role="listbox"
+          style={{
+            position: "absolute",
+            top: "calc(100% + 4px)",
+            left: 0,
+            right: 0,
+            zIndex: 20,
+            background: "var(--input-bg)",
+            border: `1px solid ${BORDER}`,
+            borderRadius: 12,
+            padding: 4,
+            display: "flex",
+            flexDirection: "column",
+            gap: 2,
+            maxHeight: 280,
+            overflowY: "auto",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
+          }}
+        >
+          {options.map(opt => {
+            const on = opt === value;
+            return (
+              <button
+                key={opt}
+                type="button"
+                role="option"
+                aria-selected={on}
+                onClick={() => { onChange(opt); setOpen(false); }}
+                onMouseEnter={(e) => {
+                  if (!on) e.currentTarget.style.background = "var(--surface-soft)";
+                }}
+                onMouseLeave={(e) => {
+                  if (!on) e.currentTarget.style.background = "transparent";
+                }}
+                style={{
+                  padding: "11px 12px",
+                  minHeight: 40,
+                  borderRadius: 8,
+                  border: "none",
+                  background: on ? `${ORANGE}22` : "transparent",
+                  color: on ? ORANGE : "var(--text)",
+                  fontSize: 14,
+                  fontWeight: on ? 700 : 500,
+                  letterSpacing: "-0.01em",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  transition: "background 0.1s",
+                }}
+              >
+                {renderLabel(opt)}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ExerciseForm() {
   const tEng = useTranslations("engine");
   const tIns = useTranslations("insights");
@@ -633,43 +765,17 @@ export function ExerciseForm() {
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
           <label style={labelStyle}>{t("type_label")}</label>
-          {/* 6 options — too wide for one row of equal columns on
-              narrow viewports. We render a 3-col grid that wraps to
-              2 rows; each cell is its own toggle button. */}
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
-            gap: 6,
-            background: "var(--input-bg)",
-            border: `1px solid ${BORDER}`,
-            borderRadius: 12,
-            padding: 4,
-          }}>
-            {EXERCISE_TYPE_OPTIONS.map(opt => {
-              const on = opt === type;
-              return (
-                <button
-                  key={opt}
-                  type="button"
-                  onClick={() => setType(opt)}
-                  style={{
-                    padding: "9px 10px",
-                    borderRadius: 8,
-                    border: "none",
-                    background: on ? `${ORANGE}22` : "transparent",
-                    color: on ? ORANGE : "var(--text-muted)",
-                    fontSize: 13,
-                    fontWeight: 700,
-                    letterSpacing: "-0.01em",
-                    cursor: "pointer",
-                    transition: "all 0.15s",
-                  }}
-                >
-                  {exerciseTypeLabelI18n(tIns, opt)}
-                </button>
-              );
-            })}
-          </div>
+          {/* Dropdown picker (replaces the previous 3-column button
+              grid). The list of 10 sport types was visually noisy
+              across two-and-a-bit rows — the disclosure pattern keeps
+              the closed state compact and scales cleanly if more
+              types are added later. */}
+          <ExerciseTypeDropdown
+            value={type}
+            options={EXERCISE_TYPE_OPTIONS}
+            onChange={setType}
+            renderLabel={(opt) => exerciseTypeLabelI18n(tIns, opt)}
+          />
         </div>
         <div>
           <label style={labelStyle}>{tEng("exercise_started_label")}</label>

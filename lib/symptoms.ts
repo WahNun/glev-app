@@ -25,6 +25,10 @@ export const SYMPTOM_TYPES = [
   "back_pain",
   "breast_tenderness",
   "dizziness",
+  // Classic hyper-/dehydration markers — useful diabetes context that
+  // pairs well with the per-row glucose snapshot below.
+  "mouth_dryness",
+  "polyuria",
 ] as const;
 
 export type SymptomType = typeof SYMPTOM_TYPES[number];
@@ -40,6 +44,11 @@ export interface SymptomLog {
   occurred_at: string;
   symptom_types: SymptomType[];
   severity: 1 | 2 | 3 | 4 | 5;
+  /** Snapshot of the live CGM reading at the moment of logging
+   *  (mg/dL). Null when no CGM is connected, when the entry is
+   *  logged retroactively, or for legacy rows inserted before this
+   *  column existed. */
+  cgm_glucose_at_log: number | null;
   notes: string | null;
 }
 
@@ -47,11 +56,14 @@ export interface SymptomLogInput {
   symptom_types: SymptomType[];
   severity: number;            // validated to 1..5
   occurred_at?: string;        // ISO; defaults to now()
+  /** Optional live CGM mg/dL captured by the caller right before the
+   *  insert. Pass `null` (or omit) when no reading is available. */
+  cgm_glucose_at_log?: number | null;
   notes?: string | null;
 }
 
 const COLS =
-  "id,user_id,created_at,occurred_at,symptom_types,severity,notes";
+  "id,user_id,created_at,occurred_at,symptom_types,severity,cgm_glucose_at_log,notes";
 
 export async function insertSymptomLog(input: SymptomLogInput): Promise<SymptomLog> {
   if (!supabase) throw new Error("Supabase is not configured");
@@ -72,6 +84,7 @@ export async function insertSymptomLog(input: SymptomLogInput): Promise<SymptomL
     symptom_types: types,
     severity: sev,
     occurred_at: input.occurred_at ?? new Date().toISOString(),
+    cgm_glucose_at_log: input.cgm_glucose_at_log ?? null,
     notes: input.notes?.trim() || null,
   };
 

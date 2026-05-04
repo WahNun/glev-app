@@ -82,6 +82,22 @@ function nowLocalDt(): string {
   return new Date(d.getTime() - off).toISOString().slice(0, 16);
 }
 
+/** Pull the freshest live CGM reading; null on any failure (no CGM
+ *  connected, network error, 401). Mirrors the same helper used by
+ *  the Insulin/Exercise forms so all three log types snapshot glucose
+ *  the same way. */
+async function pullCurrentCgm(): Promise<number | null> {
+  try {
+    const r = await fetch("/api/cgm/latest", { cache: "no-store" });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const v = j?.current?.value;
+    return typeof v === "number" && Number.isFinite(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 function PillRow<T extends string>({
   value, options, onChange, accent,
 }: {
@@ -350,16 +366,28 @@ export function SymptomForm() {
     setStatus({ kind: "submitting" });
     try {
       const occurredIso = new Date(occurredAt).toISOString();
+      // Snapshot the live CGM only when the symptom was logged ~now.
+      // For retroactive entries the live reading would be wrong by
+      // however far back occurred_at sits, so leave it null rather
+      // than store a misleading value. ±5 min tolerance matches the
+      // ManualEntryModal's "now window" so a user nudging the time
+      // picker by a couple minutes still gets the snapshot.
+      const NOW_WINDOW_MS = 5 * 60 * 1000;
+      const isNow = Math.abs(Date.now() - new Date(occurredAt).getTime()) <= NOW_WINDOW_MS;
+      const cgm = isNow ? await pullCurrentCgm() : null;
       const types = Array.from(selected);
       await insertSymptomLog({
         symptom_types: types,
         severity,
         occurred_at: occurredIso,
+        cgm_glucose_at_log: cgm,
         notes: notes.trim() || null,
       });
       setStatus({
         kind: "ok",
-        message: t("symptom_logged_ok", { count: types.length, severity }),
+        message: cgm != null
+          ? t("symptom_logged_ok_with_cgm", { count: types.length, severity, cgm: Math.round(cgm) })
+          : t("symptom_logged_ok", { count: types.length, severity }),
       });
       setSelected(new Set());
       setNotes("");

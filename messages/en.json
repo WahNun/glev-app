@@ -467,6 +467,7 @@
     "symptom_save_btn": "Save symptoms",
     "symptom_disclaimer": "Glev does not clinically interpret symptoms — entries serve as your personal journal.",
     "symptom_logged_ok": "{count} symptom(s) at severity {severity} saved.",
+    "symptom_logged_ok_with_cgm": "{count} symptom(s) at severity {severity} saved · glucose {cgm} mg/dL.",
     "symptom_row_title": "Symptoms",
     "row_delete_aria": "Delete entry",
     "symptom_headache": "Headache",
@@ -482,7 +483,9 @@
     "symptom_irritability": "Irritability",
     "symptom_back_pain": "Back pain",
     "symptom_breast_tenderness": "Breast tenderness",
-    "symptom_dizziness": "Dizziness"
+    "symptom_dizziness": "Dizziness",
+    "symptom_mouth_dryness": "Dry mouth",
+    "symptom_polyuria": "Polyuria"
   },
   "history": {
     "title": "History",
@@ -773,7 +776,9 @@
     "symptom_irritability": "Irritability",
     "symptom_back_pain": "Back pain",
     "symptom_breast_tenderness": "Breast tenderness",
-    "symptom_dizziness": "Dizziness"
+    "symptom_dizziness": "Dizziness",
+    "symptom_mouth_dryness": "Dry mouth",
+    "symptom_polyuria": "Polyuria"
   },
   "settings": {
     "title": "Settings",
