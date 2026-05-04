@@ -10,10 +10,12 @@ import type { NutritionPer100 } from "./types";
  * https://world.openfoodfacts.org/data
  */
 
-// 3s hard ceiling per task acceptance budget. OFF p95 is ~1.2s when
-// healthy and times out anyway when their CDN is in 503/maintenance
-// mode. Faster bail = faster USDA fallback when OFF is degraded.
-const OFF_TIMEOUT_MS = 3000;
+// 2.5s hard ceiling. OFF p95 is ~1.2s when healthy; the previous 3s
+// budget was set when OFF + USDA ran sequentially and an OFF timeout
+// blocked the USDA fallback. Now they run in parallel (see
+// aggregate.ts resolveItem), so a tighter ceiling here directly cuts
+// voice→form latency when both DBs miss and we fall through to GPT.
+const OFF_TIMEOUT_MS = 2500;
 const OFF_BASE = "https://world.openfoodfacts.org/cgi/search.pl";
 
 interface OffSearchResponse {

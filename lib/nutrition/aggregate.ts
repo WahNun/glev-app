@@ -39,19 +39,36 @@ interface ResolvedItem {
 }
 
 async function resolveItem(item: ParsedFoodItem): Promise<ResolvedItem> {
-  // Branded → OFF first; generic → USDA first.
+  // SPECULATIVE PARALLEL DB lookups — up to 2026-05-04 these ran
+  // sequentially (OFF then USDA, or USDA then OFF depending on
+  // is_branded). When both DBs MISS, that meant up to 6s of
+  // timeout-waiting per item before the GPT estimator even started —
+  // driving the voice→form round-trip to 12s+ for multi-item
+  // German-branded meals (the user-reported bug).
+  //
+  // Strategy: kick BOTH lookups off in parallel, then await the
+  // PRIMARY first. If primary hits, return immediately — the
+  // secondary is already in flight but its result is discarded
+  // (Node will still consume the response; that's fine). If primary
+  // misses, the secondary is usually already resolved (or close to
+  // it), so the await is near-instant. Worst case (both miss) is
+  // bounded by max(OFF, USDA) ≈ 2.5s instead of sequential
+  // OFF + USDA ≈ 5s — and the happy path stays at primary-only
+  // latency (~600ms USDA, ~1.2s OFF).
   const offTerm  = item.search_term_de || item.name;
   const usdaTerm = item.search_term_en || item.name;
+  const offP  = lookupOpenFoodFacts(offTerm);
+  const usdaP = lookupUSDA(usdaTerm);
 
   if (item.is_branded) {
-    const off = await lookupOpenFoodFacts(offTerm);
+    const off = await offP;
     if (off) return { per100: off, source: "open_food_facts" };
-    const usda = await lookupUSDA(usdaTerm);
+    const usda = await usdaP;
     if (usda) return { per100: usda, source: "usda" };
   } else {
-    const usda = await lookupUSDA(usdaTerm);
+    const usda = await usdaP;
     if (usda) return { per100: usda, source: "usda" };
-    const off = await lookupOpenFoodFacts(offTerm);
+    const off = await offP;
     if (off) return { per100: off, source: "open_food_facts" };
   }
 

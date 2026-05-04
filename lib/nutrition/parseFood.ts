@@ -69,7 +69,11 @@ export interface ParseFoodResult {
   raw: string;
 }
 
-const PARSE_TIMEOUT_MS = 8000;
+// 6s hard ceiling for the GPT parser (lowered from 8s 2026-05-04 as
+// part of the voice-latency fix). A typical 1-3 item meal completes
+// in ~1.5s; allowing 6s still covers gpt-4o-mini's tail without
+// holding the whole pipeline hostage when OpenAI is degraded.
+const PARSE_TIMEOUT_MS = 6000;
 
 export async function parseFoodText(text: string): Promise<ParseFoodResult> {
   const openai = getOpenAIClient();
@@ -78,7 +82,10 @@ export async function parseFoodText(text: string): Promise<ParseFoodResult> {
       model: "gpt-4o-mini",
       response_format: { type: "json_object" },
       temperature: 0.1,
-      max_tokens: 600,
+      // 350 tokens fits a 4-5 item meal (~70 tokens per item including
+      // bilingual search terms). Lowered from 600 — fewer output
+      // tokens directly reduces TTFB and total time.
+      max_tokens: 350,
       messages: [
         { role: "system", content: PARSER_PROMPT },
         { role: "user",   content: text },

@@ -12,10 +12,12 @@ import type { NutritionPer100 } from "./types";
  * https://fdc.nal.usda.gov/api-guide.html
  */
 
-// 3s hard ceiling per task acceptance budget. USDA p95 is ~600ms when
-// not rate-limited; DEMO_KEY 429s come back immediately so no need
-// for a generous timeout.
-const USDA_TIMEOUT_MS = 3000;
+// 2.5s hard ceiling. USDA p95 is ~600ms when not rate-limited;
+// DEMO_KEY 429s come back immediately. Lowered from 3s alongside OFF
+// in 2026-05-04 voice-latency fix: with parallel DB lookups (see
+// aggregate.ts resolveItem) the slower of OFF/USDA bounds the
+// per-item wall time, so this ceiling directly caps it.
+const USDA_TIMEOUT_MS = 2500;
 const USDA_BASE = "https://api.nal.usda.gov/fdc/v1/foods/search";
 
 interface UsdaSearchResponse {
