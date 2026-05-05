@@ -5,10 +5,20 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const COLS =
-  "id,user_id,created_at,start_date,end_date,flow_intensity,phase_marker,notes";
+  "id,user_id,created_at,start_date,end_date,flow_intensity,phase_marker,cycle_phase,notes";
 
 const FLOW = new Set(["light", "medium", "heavy"]);
-const PHASE = new Set(["ovulation", "pms", "other"]);
+// Legacy phase_marker enum — kept for reading pre-refactor rows. New
+// writes go to cycle_phase below; phase_marker='pms'/'other' is
+// rejected on POST.
+const PHASE_LEGACY = new Set(["ovulation", "pms", "other"]);
+// Standard 4-phase menstrual cycle enum (refactored model).
+const CYCLE_PHASE = new Set([
+  "follicular",
+  "ovulation",
+  "luteal",
+  "menstruation",
+]);
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** GET /api/menstrual — caller's menstrual_logs, newest first. */
@@ -56,6 +66,8 @@ export async function POST(req: NextRequest) {
     ? String(body.flow_intensity).toLowerCase() : null;
   const phase = body.phase_marker != null && body.phase_marker !== ""
     ? String(body.phase_marker).toLowerCase() : null;
+  const cyclePhase = body.cycle_phase != null && body.cycle_phase !== ""
+    ? String(body.cycle_phase).toLowerCase() : null;
   const notes = body.notes != null ? String(body.notes).trim() : null;
 
   if (!DATE_RE.test(start_date)) {
@@ -70,11 +82,34 @@ export async function POST(req: NextRequest) {
   if (flow && !FLOW.has(flow)) {
     return NextResponse.json({ error: "flow_intensity must be 'light', 'medium' or 'heavy'" }, { status: 400 });
   }
-  if (phase && !PHASE.has(phase)) {
-    return NextResponse.json({ error: "phase_marker must be 'ovulation', 'pms' or 'other'" }, { status: 400 });
+  // Legacy phase_marker is accepted only for `'ovulation'` going forward —
+  // PMS migrated to symptom_logs.category and "Andere" was removed by spec.
+  // The shape check still recognises the legacy 'pms'/'other' tokens so we
+  // can reject them with a more specific 400 message below (instead of an
+  // opaque "unknown enum value" reply).
+  if (phase && !PHASE_LEGACY.has(phase)) {
+    return NextResponse.json(
+      { error: "phase_marker must be 'ovulation' (legacy 'pms'/'other' are no longer accepted — use cycle_phase or symptom_logs.category='pms')" },
+      { status: 400 },
+    );
   }
-  if (!flow && !phase) {
-    return NextResponse.json({ error: "Either flow_intensity or phase_marker must be provided" }, { status: 400 });
+  if (phase === "pms" || phase === "other") {
+    return NextResponse.json(
+      { error: `phase_marker '${phase}' is no longer supported — use cycle_phase, or log PMS as a symptom_log with category='pms'` },
+      { status: 400 },
+    );
+  }
+  if (cyclePhase && !CYCLE_PHASE.has(cyclePhase)) {
+    return NextResponse.json(
+      { error: `cycle_phase must be one of: ${Array.from(CYCLE_PHASE).join(", ")}` },
+      { status: 400 },
+    );
+  }
+  if (!flow && !phase && !cyclePhase) {
+    return NextResponse.json(
+      { error: "Either flow_intensity, phase_marker (legacy) or cycle_phase must be provided" },
+      { status: 400 },
+    );
   }
 
   const row = {
@@ -83,6 +118,7 @@ export async function POST(req: NextRequest) {
     end_date,
     flow_intensity: flow,
     phase_marker: phase,
+    cycle_phase: cyclePhase,
     notes: notes || null,
   };
 

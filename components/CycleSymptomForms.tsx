@@ -4,13 +4,16 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   insertMenstrualLog,
+  CYCLE_PHASES,
   type FlowIntensity,
-  type PhaseMarker,
+  type CyclePhase,
 } from "@/lib/menstrual";
 import {
   insertSymptomLog,
   SYMPTOM_TYPES,
+  PMS_SYMPTOM_TYPES,
   type SymptomType,
+  type SymptomCategory,
 } from "@/lib/symptoms";
 import { hapticSelection, hapticSuccess, hapticError } from "@/lib/haptics";
 import SnapSlider from "@/components/log/SnapSlider";
@@ -162,7 +165,10 @@ export function CycleForm() {
   const [start, setStart] = useState<string>(() => todayDate());
   const [end, setEnd] = useState<string>("");
   const [flow, setFlow] = useState<FlowIntensity | null>("medium");
-  const [marker, setMarker] = useState<PhaseMarker | null>("ovulation");
+  // Refactored from the legacy 3-marker PhaseMarker (ovulation/pms/other)
+  // to the standard 4-phase enum. PMS is now a symptom category, "Andere"
+  // was removed by spec. Mode key stays "marker" for UX continuity.
+  const [phase, setPhase] = useState<CyclePhase | null>("ovulation");
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [savedTick, setSavedTick] = useState<number>(0);
@@ -174,7 +180,7 @@ export function CycleForm() {
       if (end && end < start) return false;
       return true;
     }
-    return marker != null;
+    return phase != null;
   })();
 
   async function handleSubmit() {
@@ -185,7 +191,7 @@ export function CycleForm() {
         start_date: start,
         end_date: mode === "bleeding" && end ? end : null,
         flow_intensity: mode === "bleeding" ? flow : null,
-        phase_marker: mode === "marker" ? marker : null,
+        cycle_phase: mode === "marker" ? phase : null,
         notes: notes.trim() || null,
       });
       setSavedTick(n => n + 1);
@@ -194,7 +200,7 @@ export function CycleForm() {
         kind: "ok",
         message: mode === "bleeding"
           ? t("cycle_logged_bleeding", { date: start, flow: flow ? t(`cycle_flow_${flow}` as never) : "" })
-          : t("cycle_logged_marker", { date: start, marker: marker ? t(`cycle_marker_${marker}` as never) : "" }),
+          : t("cycle_logged_phase", { date: start, phase: phase ? t(`cycle_phase_${phase}` as never) : "" }),
       });
       setNotes("");
       setEnd("");
@@ -311,16 +317,15 @@ export function CycleForm() {
 
         {mode === "marker" && (
           <div>
-            <label style={labelStyle}>{t("cycle_marker_label")}</label>
-            <PillRow<PhaseMarker>
-              value={marker}
-              onChange={setMarker}
+            <label style={labelStyle}>{t("cycle_phase_label")}</label>
+            <PillRow<CyclePhase>
+              value={phase}
+              onChange={setPhase}
               accent={PINK}
-              options={[
-                { value: "ovulation", label: t("cycle_marker_ovulation") },
-                { value: "pms",       label: t("cycle_marker_pms") },
-                { value: "other",     label: t("cycle_marker_other") },
-              ]}
+              options={CYCLE_PHASES.map(p => ({
+                value: p,
+                label: t(`cycle_phase_${p}` as never),
+              }))}
             />
           </div>
         )}
@@ -370,6 +375,22 @@ export function SymptomForm() {
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [savedTick, setSavedTick] = useState<number>(0);
+  // General body symptoms vs. curated PMS / cycle-related subset.
+  // The PMS chip list (PMS_SYMPTOM_TYPES) is a strict subset of the
+  // full vocabulary so a user-selected token is always representable
+  // in either bucket — but switching categories still clears the
+  // selection so chips never end up "selected but invisible" after
+  // the visible chip list shrinks.
+  const [category, setCategory] = useState<SymptomCategory>("general");
+  const chipTypes: readonly SymptomType[] =
+    category === "pms" ? PMS_SYMPTOM_TYPES : SYMPTOM_TYPES;
+
+  const switchCategory = (c: SymptomCategory) => {
+    if (c === category) return;
+    hapticSelection();
+    setCategory(c);
+    setSelected(new Set());
+  };
 
   const toggle = (s: SymptomType) => {
     hapticSelection();
@@ -402,15 +423,22 @@ export function SymptomForm() {
         severity,
         occurred_at: occurredIso,
         cgm_glucose_at_log: cgm,
+        category,
         notes: notes.trim() || null,
       });
       hapticSuccess();
       setSavedTick(n => n + 1);
+      // PMS-tagged saves get a distinct toast so the user sees the
+      // category landed correctly without having to inspect the row.
+      const isPms = category === "pms";
+      const okKey = cgm != null
+        ? (isPms ? "symptom_logged_pms_ok_with_cgm" : "symptom_logged_ok_with_cgm")
+        : (isPms ? "symptom_logged_pms_ok" : "symptom_logged_ok");
       setStatus({
         kind: "ok",
         message: cgm != null
-          ? t("symptom_logged_ok_with_cgm", { count: types.length, severity, cgm: Math.round(cgm) })
-          : t("symptom_logged_ok", { count: types.length, severity }),
+          ? t(okKey, { count: types.length, severity, cgm: Math.round(cgm) })
+          : t(okKey, { count: types.length, severity }),
       });
       setSelected(new Set());
       setNotes("");
@@ -438,9 +466,47 @@ export function SymptomForm() {
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
+          <label style={labelStyle}>{t("symptom_category_label")}</label>
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 6,
+            background: "var(--input-bg)",
+            border: `1px solid ${BORDER}`,
+            borderRadius: 12,
+            padding: 4,
+          }}>
+            {(["general", "pms"] as const).map(c => {
+              const on = c === category;
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => switchCategory(c)}
+                  style={{
+                    padding: "9px 10px", borderRadius: 8, border: "none",
+                    background: on ? `${PURPLE}22` : "transparent",
+                    color: on ? PURPLE : "var(--text-muted)",
+                    fontSize: 13, fontWeight: 700, cursor: "pointer",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  {t(`symptom_category_${c}` as never)}
+                </button>
+              );
+            })}
+          </div>
+          {category === "pms" && (
+            <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 6 }}>
+              {t("symptom_category_pms_hint")}
+            </div>
+          )}
+        </div>
+
+        <div>
           <label style={labelStyle}>{t("symptom_select_label")}</label>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {SYMPTOM_TYPES.map(s => {
+            {chipTypes.map(s => {
               const on = selected.has(s);
               return (
                 <button

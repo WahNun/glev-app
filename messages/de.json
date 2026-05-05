@@ -453,6 +453,12 @@
     "cycle_marker_ovulation": "Eisprung",
     "cycle_marker_pms": "PMS",
     "cycle_marker_other": "Andere",
+    "cycle_phase_label": "Zyklusphase",
+    "cycle_phase_follicular": "Follikelphase",
+    "cycle_phase_ovulation": "Eisprung",
+    "cycle_phase_luteal": "Lutealphase",
+    "cycle_phase_menstruation": "Menstruation",
+    "cycle_logged_phase": "{phase} am {date} gespeichert.",
     "cycle_note_placeholder": "Notizen (optional)",
     "cycle_save_btn": "Zyklus speichern",
     "cycle_disclaimer": "Glev sagt nichts vorher und ersetzt keine medizinische Beratung — alle Einträge sind reine Dokumentation für dich.",
@@ -489,7 +495,15 @@
     "symptom_breast_tenderness": "Brustspannen",
     "symptom_dizziness": "Schwindel",
     "symptom_mouth_dryness": "Mundtrockenheit",
-    "symptom_polyuria": "Polyurie"
+    "symptom_polyuria": "Polyurie",
+    "symptom_water_retention": "Wassereinlagerung",
+    "symptom_category_label": "Kategorie",
+    "symptom_category_general": "Allgemein",
+    "symptom_category_pms": "PMS · Zyklus",
+    "symptom_category_pms_hint": "PMS-Symptome werden als Luteal-Phasen-Signal für Insights ausgewertet.",
+    "symptom_category_pms_badge": "PMS",
+    "symptom_logged_pms_ok": "{count} PMS-Symptom(e) bei Schweregrad {severity} gespeichert.",
+    "symptom_logged_pms_ok_with_cgm": "{count} PMS-Symptom(e) bei Schweregrad {severity} gespeichert · Glukose {cgm} mg/dL."
   },
   "history": {
     "title": "Verlauf",
@@ -778,6 +792,9 @@
     "cycle_phase_ovulation": "Eisprung",
     "cycle_phase_pms": "PMS",
     "cycle_phase_other": "Andere",
+    "cycle_phase_follicular": "Follikelphase",
+    "cycle_phase_luteal": "Lutealphase",
+    "cycle_phase_menstruation": "Menstruation",
     "symptom_headache": "Kopfschmerzen",
     "symptom_fatigue": "Müdigkeit",
     "symptom_cramps": "Krämpfe",
@@ -793,7 +810,9 @@
     "symptom_breast_tenderness": "Brustspannen",
     "symptom_dizziness": "Schwindel",
     "symptom_mouth_dryness": "Mundtrockenheit",
-    "symptom_polyuria": "Polyurie"
+    "symptom_polyuria": "Polyurie",
+    "symptom_water_retention": "Wassereinlagerung",
+    "symptom_category_pms_badge": "PMS"
   },
   "settings": {
     "title": "Einstellungen",

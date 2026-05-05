@@ -14,7 +14,36 @@ import { supabase } from "./supabase";
  */
 
 export type FlowIntensity = "light" | "medium" | "heavy";
+
+/**
+ * Legacy 3-marker enum from the original cycle MVP. New entries write
+ * the 4-phase `cycle_phase` instead, but pre-refactor rows still carry
+ * a `phase_marker` value (notably `'pms'` and `'other'`) so reading
+ * code must continue to handle it.
+ *
+ * @deprecated for new writes — use `CyclePhase` instead.
+ */
 export type PhaseMarker = "ovulation" | "pms" | "other";
+
+/**
+ * Standard 4-phase menstrual cycle enum used by the refactored cycle
+ * tracker. `'menstruation'` overlaps semantically with the bleeding
+ * mode (which still tracks flow_intensity + start/end dates), but the
+ * phase variant lets users mark the phase without committing to flow
+ * granularity.
+ */
+export type CyclePhase = "follicular" | "ovulation" | "luteal" | "menstruation";
+
+export const CYCLE_PHASES: readonly CyclePhase[] = [
+  "follicular",
+  "ovulation",
+  "luteal",
+  "menstruation",
+];
+const CYCLE_PHASE_SET: Set<string> = new Set(CYCLE_PHASES);
+export function isCyclePhase(v: unknown): v is CyclePhase {
+  return typeof v === "string" && CYCLE_PHASE_SET.has(v);
+}
 
 export interface MenstrualLog {
   id: string;
@@ -23,7 +52,11 @@ export interface MenstrualLog {
   start_date: string;          // YYYY-MM-DD
   end_date: string | null;     // YYYY-MM-DD or null
   flow_intensity: FlowIntensity | null;
+  /** @deprecated for new writes — kept populated for legacy row reads. */
   phase_marker: PhaseMarker | null;
+  /** Standard 4-phase enum. Null for bleeding-only rows or legacy
+   *  entries pre-dating the column (read those via `phase_marker`). */
+  cycle_phase: CyclePhase | null;
   notes: string | null;
 }
 
@@ -31,12 +64,16 @@ export interface MenstrualLogInput {
   start_date: string;
   end_date?: string | null;
   flow_intensity?: FlowIntensity | null;
+  /** @deprecated — new code should pass `cycle_phase` instead. Kept
+   *  on the input shape so existing call sites keep compiling, but
+   *  the helper rejects new `'pms'` / `'other'` writes. */
   phase_marker?: PhaseMarker | null;
+  cycle_phase?: CyclePhase | null;
   notes?: string | null;
 }
 
 const COLS =
-  "id,user_id,created_at,start_date,end_date,flow_intensity,phase_marker,notes";
+  "id,user_id,created_at,start_date,end_date,flow_intensity,phase_marker,cycle_phase,notes";
 
 export async function insertMenstrualLog(input: MenstrualLogInput): Promise<MenstrualLog> {
   if (!supabase) throw new Error("Supabase is not configured");
@@ -45,12 +82,25 @@ export async function insertMenstrualLog(input: MenstrualLogInput): Promise<Mens
     throw new Error(authErr?.message || "Nicht angemeldet — bitte erneut einloggen.");
   }
 
+  // Reject the deprecated PMS / other phase markers on new writes —
+  // PMS is now stored as a `category='pms'` symptom_log and "Andere"
+  // was removed by spec. Legacy rows in the DB are unaffected.
+  const legacyMarker = input.phase_marker ?? null;
+  if (legacyMarker === "pms" || legacyMarker === "other") {
+    throw new Error(
+      `phase_marker '${legacyMarker}' ist nicht mehr verfügbar — bitte stattdessen cycle_phase setzen oder PMS als Symptom loggen.`,
+    );
+  }
+
+  const cyclePhase = isCyclePhase(input.cycle_phase) ? input.cycle_phase : null;
+
   const row: Record<string, unknown> = {
     user_id: user.id,
     start_date: input.start_date,
     end_date: input.end_date ?? null,
     flow_intensity: input.flow_intensity ?? null,
-    phase_marker: input.phase_marker ?? null,
+    phase_marker: legacyMarker,
+    cycle_phase: cyclePhase,
     notes: input.notes?.trim() || null,
   };
 

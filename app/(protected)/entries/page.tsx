@@ -520,7 +520,7 @@ export default function EntriesPage() {
       if (r.kind === "meal") txt = r.data.input_text ?? "";
       else if (r.kind === "bolus" || r.kind === "basal") txt = `${r.data.insulin_name} ${r.data.notes ?? ""}`;
       else if (r.kind === "exercise") txt = `${r.data.exercise_type} ${r.data.notes ?? ""}`;
-      else if (r.kind === "cycle") txt = `${r.data.flow_intensity ?? ""} ${r.data.phase_marker ?? ""} ${r.data.notes ?? ""}`;
+      else if (r.kind === "cycle") txt = `${r.data.flow_intensity ?? ""} ${r.data.phase_marker ?? ""} ${r.data.cycle_phase ?? ""} ${r.data.notes ?? ""}`;
       else if (r.kind === "symptoms") txt = `${(r.data.symptom_types || []).join(" ")} ${r.data.notes ?? ""}`;
       if (!txt.toLowerCase().includes(q)) return false;
     }
@@ -2630,9 +2630,14 @@ function CycleRowCard({ log, onDelete, deleting }: {
   const t = useTranslations("engineLog");
   const isBleeding = log.flow_intensity != null;
   const accent = "#FF2D78";
+  // Prefer the new 4-phase enum; fall back to the legacy phase_marker
+  // for pre-refactor rows so the entries log keeps rendering history
+  // entries (notably 'pms' / 'other') under their original label.
   const heading = isBleeding
     ? `${t("cycle_row_bleeding")} · ${t(`cycle_flow_${log.flow_intensity}` as never)}`
-    : `${t("cycle_row_marker")} · ${log.phase_marker ? t(`cycle_marker_${log.phase_marker}` as never) : ""}`;
+    : log.cycle_phase
+      ? `${t("cycle_row_marker")} · ${t(`cycle_phase_${log.cycle_phase}` as never)}`
+      : `${t("cycle_row_marker")} · ${log.phase_marker ? t(`cycle_marker_${log.phase_marker}` as never) : ""}`;
   const dateLine = log.end_date && log.end_date !== log.start_date
     ? `${fmtDateShort(log.start_date)} – ${fmtDateShort(log.end_date)}`
     : fmtDateShort(log.start_date);
@@ -2705,6 +2710,18 @@ function SymptomRowCard({ log, onDelete, deleting }: {
               }}/>
             ))}
           </div>
+          {/* PMS badge — surfaces the category bucket inline so the
+              user can spot cycle-tagged entries at a glance without
+              opening the row. Legacy rows have category='general'
+              by default and don't render this. */}
+          {log.category === "pms" && (
+            <span style={{
+              fontSize: 9, fontWeight: 800, padding: "2px 6px",
+              borderRadius: 99, background: `${accent}28`, color: accent,
+              border: `1px solid ${accent}48`, letterSpacing: "0.04em",
+              textTransform: "uppercase",
+            }}>{t("symptom_category_pms_badge")}</span>
+          )}
         </div>
         <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:6 }}>
           {(log.symptom_types || []).map(s => (

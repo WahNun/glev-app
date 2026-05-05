@@ -453,6 +453,12 @@
     "cycle_marker_ovulation": "Ovulation",
     "cycle_marker_pms": "PMS",
     "cycle_marker_other": "Other",
+    "cycle_phase_label": "Cycle phase",
+    "cycle_phase_follicular": "Follicular",
+    "cycle_phase_ovulation": "Ovulation",
+    "cycle_phase_luteal": "Luteal",
+    "cycle_phase_menstruation": "Menstruation",
+    "cycle_logged_phase": "{phase} on {date} saved.",
     "cycle_note_placeholder": "Notes (optional)",
     "cycle_save_btn": "Save cycle entry",
     "cycle_disclaimer": "Glev does not predict anything and does not replace medical advice — entries are pure documentation for you.",
@@ -489,7 +495,15 @@
     "symptom_breast_tenderness": "Breast tenderness",
     "symptom_dizziness": "Dizziness",
     "symptom_mouth_dryness": "Dry mouth",
-    "symptom_polyuria": "Polyuria"
+    "symptom_polyuria": "Polyuria",
+    "symptom_water_retention": "Water retention",
+    "symptom_category_label": "Category",
+    "symptom_category_general": "General",
+    "symptom_category_pms": "PMS · Cycle",
+    "symptom_category_pms_hint": "PMS symptoms surface as a luteal-phase signal in Insights.",
+    "symptom_category_pms_badge": "PMS",
+    "symptom_logged_pms_ok": "{count} PMS symptom(s) at severity {severity} saved.",
+    "symptom_logged_pms_ok_with_cgm": "{count} PMS symptom(s) at severity {severity} saved · glucose {cgm} mg/dL."
   },
   "history": {
     "title": "History",
@@ -770,6 +784,9 @@
     "cycle_phase_ovulation": "Ovulation",
     "cycle_phase_pms": "PMS",
     "cycle_phase_other": "Other",
+    "cycle_phase_follicular": "Follicular",
+    "cycle_phase_luteal": "Luteal",
+    "cycle_phase_menstruation": "Menstruation",
     "symptom_headache": "Headache",
     "symptom_fatigue": "Fatigue",
     "symptom_cramps": "Cramps",
@@ -785,7 +802,9 @@
     "symptom_breast_tenderness": "Breast tenderness",
     "symptom_dizziness": "Dizziness",
     "symptom_mouth_dryness": "Dry mouth",
-    "symptom_polyuria": "Polyuria"
+    "symptom_polyuria": "Polyuria",
+    "symptom_water_retention": "Water retention",
+    "symptom_category_pms_badge": "PMS"
   },
   "settings": {
     "title": "Settings",

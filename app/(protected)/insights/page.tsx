@@ -1521,8 +1521,14 @@ export default function InsightsPage() {
           const eMs = new Date(`${e}T00:00:00`).getTime();
           if (eMs >= sMs) bleedingDays += Math.round((eMs - sMs) / 86400000) + 1;
         }
-        if (r.phase_marker) {
-          phaseCounts[r.phase_marker] = (phaseCounts[r.phase_marker] || 0) + 1;
+        // Prefer the refactored 4-phase enum; fall back to the legacy
+        // phase_marker so pre-refactor rows still contribute counts.
+        // The labels above bucket either key the same way because both
+        // share the `cycle_phase_<token>` i18n namespace (legacy 'pms'
+        // and 'other' tokens still resolve via the deprecated keys).
+        const phaseKey = r.cycle_phase ?? r.phase_marker;
+        if (phaseKey) {
+          phaseCounts[phaseKey] = (phaseCounts[phaseKey] || 0) + 1;
         }
       }
 

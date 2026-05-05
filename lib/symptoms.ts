@@ -29,6 +29,11 @@ export const SYMPTOM_TYPES = [
   // pairs well with the per-row glucose snapshot below.
   "mouth_dryness",
   "polyuria",
+  // PMS-specific addition (Task #PMS-refactor). The other PMS preset
+  // labels (Heißhunger / Müdigkeit / Reizbarkeit / Kopfschmerzen /
+  // Schlafprobleme / Konzentrationsprobleme) reuse existing tokens
+  // above to avoid vocabulary duplication.
+  "water_retention",
 ] as const;
 
 export type SymptomType = typeof SYMPTOM_TYPES[number];
@@ -36,6 +41,37 @@ const SYMPTOM_SET: Set<string> = new Set(SYMPTOM_TYPES);
 export function isSymptomType(v: unknown): v is SymptomType {
   return typeof v === "string" && SYMPTOM_SET.has(v);
 }
+
+/**
+ * Symptom category. Each `symptom_logs` row belongs to ONE bucket —
+ * either generic body symptoms or PMS / cycle-related ones. The
+ * category drives which chip list is shown in the SymptomForm and
+ * later feeds the luteal-phase signal in Insights (without
+ * overriding any user-set `cycle_phase`).
+ */
+export const SYMPTOM_CATEGORIES = ["general", "pms"] as const;
+export type SymptomCategory = typeof SYMPTOM_CATEGORIES[number];
+const SYMPTOM_CATEGORY_SET: Set<string> = new Set(SYMPTOM_CATEGORIES);
+export function isSymptomCategory(v: unknown): v is SymptomCategory {
+  return typeof v === "string" && SYMPTOM_CATEGORY_SET.has(v);
+}
+
+/**
+ * Curated PMS chip list. Reuses existing general tokens for the
+ * classic four (cravings / fatigue / irritability / headache) plus
+ * the diabetes-relevant `sleep_disturbance` (Schlafprobleme),
+ * `brain_fog` (Konzentrationsprobleme) and the new
+ * `water_retention` (Wassereinlagerung). Order mirrors the spec.
+ */
+export const PMS_SYMPTOM_TYPES: readonly SymptomType[] = [
+  "cravings",
+  "fatigue",
+  "irritability",
+  "water_retention",
+  "headache",
+  "sleep_disturbance",
+  "brain_fog",
+];
 
 export interface SymptomLog {
   id: string;
@@ -49,6 +85,9 @@ export interface SymptomLog {
    *  logged retroactively, or for legacy rows inserted before this
    *  column existed. */
   cgm_glucose_at_log: number | null;
+  /** General body symptoms vs. PMS / cycle-related symptoms.
+   *  Defaults to 'general' for legacy rows pre-dating the column. */
+  category: SymptomCategory;
   notes: string | null;
 }
 
@@ -59,11 +98,13 @@ export interface SymptomLogInput {
   /** Optional live CGM mg/dL captured by the caller right before the
    *  insert. Pass `null` (or omit) when no reading is available. */
   cgm_glucose_at_log?: number | null;
+  /** Optional category — defaults to 'general' on insert. */
+  category?: SymptomCategory;
   notes?: string | null;
 }
 
 const COLS =
-  "id,user_id,created_at,occurred_at,symptom_types,severity,cgm_glucose_at_log,notes";
+  "id,user_id,created_at,occurred_at,symptom_types,severity,cgm_glucose_at_log,category,notes";
 
 export async function insertSymptomLog(input: SymptomLogInput): Promise<SymptomLog> {
   if (!supabase) throw new Error("Supabase is not configured");
@@ -79,12 +120,17 @@ export async function insertSymptomLog(input: SymptomLogInput): Promise<SymptomL
     throw new Error("Schweregrad muss zwischen 1 und 5 liegen.");
   }
 
+  const cat: SymptomCategory = isSymptomCategory(input.category)
+    ? input.category
+    : "general";
+
   const row: Record<string, unknown> = {
     user_id: user.id,
     symptom_types: types,
     severity: sev,
     occurred_at: input.occurred_at ?? new Date().toISOString(),
     cgm_glucose_at_log: input.cgm_glucose_at_log ?? null,
+    category: cat,
     notes: input.notes?.trim() || null,
   };
 

@@ -1,0 +1,227 @@
+You are working on the Glev Next.js app.
+
+GOAL:
+Refactor menstrual cycle tracking AND extend the existing symptom logging system
+without creating duplicate systems.
+
+We already have a general symptom logging screen.
+We will integrate PMS into that system instead of creating a separate one.
+
+---
+
+# PART 1 — CYCLE PHASE REFACTOR
+
+## REPLACE existing phase options:
+
+REMOVE:
+- "Eisprung" (standalone)
+- "PMS"
+- "Andere"
+
+ADD:
+
+cyclePhase ENUM:
+
+- follicular
+- ovulation
+- luteal
+- menstruation
+
+---
+
+## UI LABELS
+
+### German
+
+follicular → "Follikelphase"
+ovulation → "Eisprung"
+luteal → "Lutealphase"
+menstruation → "Menstruation"
+
+---
+
+### English
+
+follicular → "Follicular"
+ovulation → "Ovulation"
+luteal → "Luteal"
+menstruation → "Menstruation"
+
+---
+
+---
+
+# PART 2 — KEEP EXISTING SYMPTOM SYSTEM
+
+IMPORTANT:
+
+DO NOT create a new symptom system.
+
+We already have:
+→ a symptom logging tab
+
+We will EXTEND it.
+
+---
+
+---
+
+# PART 3 — ADD PMS AS A CATEGORY
+
+## Extend symptom model:
+
+Each symptom should have:
+
+- name
+- category
+
+---
+
+## ADD NEW CATEGORY:
+
+category: "pms"
+
+---
+
+## PMS PRESET SYMPTOMS
+
+### German:
+
+- "Heißhunger"
+- "Müdigkeit"
+- "Reizbarkeit"
+- "Wassereinlagerung"
+- "Kopfschmerzen"
+- "Schlafprobleme"
+- "Konzentrationsprobleme"
+
+---
+
+### English:
+
+- "Cravings"
+- "Fatigue"
+- "Irritability"
+- "Water retention"
+- "Headache"
+- "Sleep issues"
+- "Low focus"
+
+---
+
+---
+
+# PART 4 — SYMPTOM SCREEN UX UPDATE
+
+## In existing symptom logging screen:
+
+ADD:
+
+### Section:
+"Zyklusbezogene Symptome" / "Cycle-related symptoms"
+
+---
+
+## Interaction:
+
+1. User sees button or chip:
+
+→ "PMS / Zyklus"
+
+2. When selected:
+
+→ show checklist of PMS symptoms
+
+3. User can:
+
+- select multiple symptoms
+- log them like any other symptom
+
+---
+
+## UX RULES:
+
+- DO NOT overload main screen
+- PMS symptoms only appear when user selects PMS category
+- reuse existing chip / selection UI
+
+---
+
+---
+
+# PART 5 — DATA STORAGE
+
+Each symptom entry should store:
+
+- symptomName
+- category ("general" | "pms" | etc.)
+- timestamp
+
+---
+
+OPTIONAL:
+
+link to log entry if present
+
+---
+
+---
+
+# PART 6 — INTEGRATION WITH CYCLE PHASE
+
+If user logs PMS symptoms:
+
+→ system can infer:
+
+likely phase = luteal
+
+BUT:
+
+DO NOT override user-selected phase
+
+Only store as signal for insights later
+
+---
+
+---
+
+# PART 7 — CLEANUP
+
+REMOVE:
+
+- PMS as selectable cycle phase
+- "Andere" everywhere
+
+---
+
+---
+
+# PART 8 — FUTURE PREPARATION
+
+Prepare data for:
+
+- glucose vs cycle phase analysis
+- insulin sensitivity vs luteal phase
+- symptom correlation with glucose spikes
+
+---
+
+---
+
+# PART 9 — DESIGN RULES
+
+- keep dark UI
+- reuse existing components
+- no new colors
+- keep consistency mobile + desktop
+
+---
+
+---
+
+# OUTPUT
+
+- clean cycle phase system
+- PMS integrated into existing symptom system
+- no duplication
+- scalable structure for insights

@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authedClient, isMissingTable } from "../insulin/_helpers";
-import { SYMPTOM_TYPES, type SymptomType } from "@/lib/symptoms";
+import {
+  SYMPTOM_TYPES,
+  SYMPTOM_CATEGORIES,
+  type SymptomType,
+  type SymptomCategory,
+} from "@/lib/symptoms";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const COLS =
-  "id,user_id,created_at,occurred_at,symptom_types,severity,cgm_glucose_at_log,notes";
+  "id,user_id,created_at,occurred_at,symptom_types,severity,cgm_glucose_at_log,category,notes";
 
 const VALID_SYMPTOMS: Set<string> = new Set(SYMPTOM_TYPES);
+const VALID_CATEGORIES: Set<string> = new Set(SYMPTOM_CATEGORIES);
 
 /** GET /api/symptoms — caller's symptom_logs, newest first. */
 export async function GET(req: NextRequest) {
@@ -90,12 +96,29 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Category bucket — drives the chip list shown in the SymptomForm
+  // and the luteal-phase signal in Insights. Defaults to 'general'
+  // for older clients that omit the field; rejects unknown values to
+  // keep the DB CHECK constraint authoritative.
+  let category: SymptomCategory = "general";
+  if (body.category != null && body.category !== "") {
+    const raw = String(body.category).toLowerCase();
+    if (!VALID_CATEGORIES.has(raw)) {
+      return NextResponse.json(
+        { error: `category must be one of: ${Array.from(VALID_CATEGORIES).join(", ")}` },
+        { status: 400 },
+      );
+    }
+    category = raw as SymptomCategory;
+  }
+
   const row = {
     user_id: auth.user.id,
     symptom_types: uniqTypes,
     severity: sev,
     occurred_at,
     cgm_glucose_at_log: cgmAtLog,
+    category,
     notes: notes || null,
   };
 

@@ -1,0 +1,53 @@
+=== BEGIN ===
+TASK: Feature-Inventur — alle App-Features listen
+Lies alle relevanten Dateien. Mach KEINE Änderungen. Ziel: vollständige Liste aller aktuell implementierten Features damit wir sie nach Tier clustern können.
+bash# 1. Navigation + Hauptrouten (gibt Überblick über alle Screens)
+find app -name "page.tsx" | sort
+find app -name "layout.tsx" | sort
+
+# 2. Geschützte Routen (App-Features)
+find "app/(protected)" -name "page.tsx" 2>/dev/null | sort
+find "app/(app)" -name "page.tsx" 2>/dev/null | sort
+
+# 3. Nav-Komponente (zeigt was der User sieht)
+find components -name "*nav*" -o -name "*sidebar*" -o -name "*menu*" 2>/dev/null | head -10
+cat $(find components -name "*nav*" -o -name "*sidebar*" | head -3) 2>/dev/null
+
+# 4. Feature-Flags oder Plan-basierte Checks
+grep -r "plan\|tier\|subscription\|isPro\|isBeta\|hasAccess\|featureFlag" --include="*.tsx" --include="*.ts" -l | grep -v "node_modules\|\.next" | sort | head -20
+
+# 5. Was ist plan-gesperrt?
+grep -r "isPro\|isBeta\|plan ===\|plan !==\|checkPlan\|requiresPro\|proOnly" --include="*.tsx" --include="*.ts" -B1 -A2 | head -60
+
+# 6. API-Routen (zeigt welche Backend-Features existieren)
+find app/api -name "route.ts" | sort | head -40
+
+# 7. Supabase Tabellen (zeigt Datenmodell = Features)
+find supabase -name "*.sql" | sort | head -20
+cat supabase/migrations/*.sql 2>/dev/null | grep "CREATE TABLE" | sort -u
+
+# 8. Capacitor Plugins (native Features)
+cat package.json | grep -i "capacitor\|@cap"
+Erstelle danach eine strukturierte Feature-Liste in diesem Format:
+CORE FEATURES (jeder hat das)
+
+Feature: [Name] | Screen/Route: [Pfad] | Status: [live/in progress]
+
+APP-FEATURES (aktuell alle verfügbar)
+
+Feature: [Name] | Beschreibung: [1 Satz] | Status: [live/in progress]
+
+NATIVE/HARDWARE FEATURES
+
+Feature: [Name] | Plugin: [Name] | Status: [live/in progress]
+
+EXPORT / ARZT-FEATURES
+
+Feature: [Name] | Beschreibung: [1 Satz] | Status: [live/in progress]
+
+NOCH NICHT GEBAUT (aus Backlog erkennbar)
+
+Feature: [Name] | Hinweis: [warum erkennbar]
+
+Keine Code-Änderungen — nur lesen und listen.
+=== END ===
