@@ -663,24 +663,24 @@ export default function PreviewHome() {
           >
             <div>
               <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--text)" }}>
-                Beta-Reservierung
+                {t("pricing_beta_title")}
               </h3>
               <div style={{ marginTop: 14, display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text)" }}>€4,50</span>
-                <span style={{ fontSize: 15, color: "var(--text-muted)" }}>/ Monat</span>
-                <span style={{ fontSize: 18, color: "var(--text-muted)", textDecoration: "line-through", textDecorationThickness: "2px", textDecorationColor: "var(--text-muted)", marginLeft: 6, opacity: 0.9 }}>€9</span>
+                <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text)" }}>{t("pricing_beta_price")}</span>
+                <span style={{ fontSize: 15, color: "var(--text-muted)" }}>{t("pricing_beta_period")}</span>
+                <span style={{ fontSize: 18, color: "var(--text-muted)", textDecoration: "line-through", textDecorationThickness: "2px", textDecorationColor: "var(--text-muted)", marginLeft: 6, opacity: 0.9 }}>{t("pricing_beta_strike")}</span>
               </div>
               <p style={{ margin: "6px 0 0 0", fontSize: 12.5, color: "var(--text-muted)", letterSpacing: "-0.005em" }}>
-                in den ersten 3 Monaten
+                {t("pricing_beta_sublabel")}
               </p>
             </div>
 
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
               {[
-                "Voller App-Zugang ab sofort",
-                "Voice-Logging & AI-Mahlzeiten-Parsing",
-                "CGM-Integration (LibreLink 2 und 3, Nightscout)",
-                "Dashboard, Engine & Insights",
+                t("pricing_beta_b1"),
+                t("pricing_beta_b2"),
+                t("pricing_beta_b3"),
+                t("pricing_beta_b4"),
               ].map((bullet) => (
                 <PricingBullet key={bullet} text={bullet} />
               ))}
@@ -696,7 +696,7 @@ export default function PreviewHome() {
                 lineHeight: 1.55,
               }}
             >
-              Jetzt kostenlos · Billing startet im Juli · jederzeit kündbar
+              {t("pricing_beta_subtext")}
             </p>
 
             <Link
@@ -719,7 +719,7 @@ export default function PreviewHome() {
                 gap: 8,
               }}
             >
-              Beta-Zugang sichern
+              {t("pricing_beta_cta")}
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="5" y1="12" x2="19" y2="12" />
                 <polyline points="13 6 19 12 13 18" />
@@ -742,7 +742,7 @@ export default function PreviewHome() {
             }}
           >
             <div
-              aria-label="Empfohlen"
+              aria-label={t("pricing_pro_badge")}
               style={{
                 position: "absolute",
                 top: -12,
@@ -758,28 +758,28 @@ export default function PreviewHome() {
                 boxShadow: `0 4px 12px ${ACCENT}66`,
               }}
             >
-              Empfohlen
+              {t("pricing_pro_badge")}
             </div>
 
             <div>
               <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--text)" }}>
-                Pro · Founder-Tier
+                {t("pricing_pro_title")}
               </h3>
               <div style={{ marginTop: 14, display: "flex", alignItems: "baseline", gap: 8 }}>
-                <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text)" }}>€24,90</span>
-                <span style={{ fontSize: 15, color: "var(--text-muted)" }}>/ Monat</span>
+                <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text)" }}>{t("pricing_pro_price")}</span>
+                <span style={{ fontSize: 15, color: "var(--text-muted)" }}>{t("pricing_pro_period")}</span>
               </div>
             </div>
 
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
               {[
-                "Voller App-Zugang ab sofort",
-                "PDF Arzt-Report",
-                "Datenexport — CSV, Google Sheets, ZIP",
-                "Lifetime-Preis-Lock — €24,90 dauerhaft, auch nach Preiserhöhungen",
-                "Founder-Slack-Kanal — direkter Draht zum Team",
-                "Feature-Roadmap-Voting",
-                "Früher Zugang zu kommenden Features (Apple Health, erweiterte Analyse)",
+                t("pricing_pro_b1"),
+                t("pricing_pro_b2"),
+                t("pricing_pro_b3"),
+                t("pricing_pro_b4"),
+                t("pricing_pro_b5"),
+                t("pricing_pro_b6"),
+                t("pricing_pro_b7"),
               ].map((bullet) => (
                 <PricingBullet key={bullet} text={bullet} />
               ))}
@@ -795,7 +795,7 @@ export default function PreviewHome() {
                 lineHeight: 1.55,
               }}
             >
-              Karte heute hinterlegt · erste Buchung am 1. Juli 2026
+              {t("pricing_pro_subtext")}
             </p>
 
             <Link
@@ -818,7 +818,7 @@ export default function PreviewHome() {
                 boxShadow: `0 6px 18px ${ACCENT}40`,
               }}
             >
-              Mitglied werden
+              {t("pricing_pro_cta")}
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="5" y1="12" x2="19" y2="12" />
                 <polyline points="13 6 19 12 13 18" />
@@ -1015,7 +1015,8 @@ function PricingBullet({ text }: { text: string }) {
   );
 }
 
-/** Eine alternierende Feature-Detail-Row mit App-Render + Copy. */
+/** Eine alternierende Feature-Detail-Row mit App-Render im Phone-Frame
+ *  (gleiche Optik wie das Hero-Mockup) und Copy. */
 function FeatureImageRow({
   row,
   reverse,
@@ -1025,23 +1026,8 @@ function FeatureImageRow({
 }) {
   return (
     <div className={`glev-feat-row${reverse ? " glev-feat-row--rev" : ""}`}>
-      <div
-        className="glev-feat-row__img"
-        style={{
-          borderRadius: 18,
-          overflow: "hidden",
-          border: "1px solid var(--border)",
-          boxShadow: "0 12px 32px rgba(0,0,0,0.35)",
-          background: "var(--surface)",
-        }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={row.img}
-          alt={row.title}
-          loading="lazy"
-          style={{ display: "block", width: "100%", height: "auto" }}
-        />
+      <div className="glev-feat-row__img" style={{ display: "flex", justifyContent: "center" }}>
+        <PhoneShell src={row.img} alt={row.title} />
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <h3
@@ -1063,9 +1049,72 @@ function FeatureImageRow({
   );
 }
 
+/** Phone-Frame um einen Mockup-Render — analog zum Hero-Lockup, aber
+ *  als reine Bild-Hülle (kein Inhalt). Bezel + Notch + abgerundete Ecken. */
+function PhoneShell({ src, alt }: { src: string; alt: string }) {
+  // 1:2-Phone-Aspect, max 320px breit auf Desktop, schrumpft fluid.
+  return (
+    <div
+      style={{
+        position: "relative",
+        width: "min(320px, 100%)",
+        aspectRatio: "320 / 660",
+        background: "#0a0a0e",
+        borderRadius: 36,
+        padding: 12,
+        boxShadow:
+          "0 24px 56px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.06)",
+      }}
+    >
+      {/* Notch */}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          top: 12,
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: 96,
+          height: 22,
+          background: "#000",
+          borderRadius: 999,
+          zIndex: 2,
+        }}
+      />
+      {/* Bildschirm mit dem Mockup-Render */}
+      <div
+        style={{
+          position: "relative",
+          width: "100%",
+          height: "100%",
+          borderRadius: 26,
+          overflow: "hidden",
+          background: "#09090B",
+          border: "1px solid rgba(255,255,255,0.04)",
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt={alt}
+          loading="lazy"
+          style={{
+            display: "block",
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            objectPosition: "top center",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 /** Klinik-Karte mit lokalem State für Email-Warteliste. UI-only,
  *  kein Backend — nach Submit Toast-Bestätigung 4s anzeigen. */
 function KlinikCard() {
+  const t = useTranslations("marketing");
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
@@ -1093,7 +1142,7 @@ function KlinikCard() {
       }}
     >
       <div
-        aria-label="Coming Soon"
+        aria-label={t("pricing_klinik_badge")}
         style={{
           position: "absolute",
           top: -12,
@@ -1109,25 +1158,25 @@ function KlinikCard() {
           border: `1px solid ${BORDER}`,
         }}
       >
-        Coming Soon
+        {t("pricing_klinik_badge")}
       </div>
 
       <div>
         <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--text)" }}>
-          Klinik
+          {t("pricing_klinik_title")}
         </h3>
         <div style={{ marginTop: 14, display: "flex", alignItems: "baseline", gap: 8 }}>
-          <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text)" }}>€299</span>
-          <span style={{ fontSize: 15, color: "var(--text-muted)" }}>/ Monat</span>
+          <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text)" }}>{t("pricing_klinik_price")}</span>
+          <span style={{ fontSize: 15, color: "var(--text-muted)" }}>{t("pricing_klinik_period")}</span>
         </div>
       </div>
 
       <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
         {[
-          "Für Diabetespraxen & -berater",
-          "Multi-Patienten-Dashboard",
-          "Klinik-Reports mit Briefkopf",
-          "AV-Vertrag (DSGVO-konform)",
+          t("pricing_klinik_b1"),
+          t("pricing_klinik_b2"),
+          t("pricing_klinik_b3"),
+          t("pricing_klinik_b4"),
         ].map((b) => (
           <PricingBullet key={b} text={b} />
         ))}
@@ -1147,9 +1196,9 @@ function KlinikCard() {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="Deine E-Mail-Adresse"
+            placeholder={t("pricing_klinik_email_placeholder")}
             required
-            aria-label="E-Mail für Klinik-Warteliste"
+            aria-label={t("pricing_klinik_email_placeholder")}
             style={{
               flex: 1,
               minWidth: 0,
@@ -1179,7 +1228,7 @@ function KlinikCard() {
               fontFamily: "inherit",
             }}
           >
-            Auf Warteliste
+            {t("pricing_klinik_cta")}
           </button>
         </div>
         {submitted && (
@@ -1196,7 +1245,7 @@ function KlinikCard() {
               textAlign: "center",
             }}
           >
-            ✓ Eingetragen — wir melden uns.
+            {t("pricing_klinik_toast")}
           </div>
         )}
       </form>
