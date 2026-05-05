@@ -10,6 +10,11 @@ import { fetchMealsForEngine, type Meal } from "@/lib/meals";
 import { parseDbDate, parseDbTs } from "@/lib/time";
 import { isToday } from "@/lib/utils/datetime";
 import { BOLUS_MEAL_WINDOW_MS } from "@/lib/engine/pairing";
+import { hapticSelection, hapticSuccess, hapticError } from "@/lib/haptics";
+import TimeQuickChips from "@/components/log/TimeQuickChips";
+import SnapSlider from "@/components/log/SnapSlider";
+import CollapsibleField from "@/components/log/CollapsibleField";
+import SaveButton from "@/components/log/SaveButton";
 
 // Builds the dropdown label for a meal in the "Zu Mahlzeit verknüpfen"
 // picker — "HH:MM — <first food name or meal_type> (Xg C)". Defensive
@@ -153,7 +158,12 @@ function Segmented<T extends string>({
           <button
             key={opt.value}
             type="button"
-            onClick={() => onChange(opt.value)}
+            onClick={() => {
+              if (!on) {
+                hapticSelection();
+                onChange(opt.value);
+              }
+            }}
             style={{
               padding: "9px 10px",
               borderRadius: 8,
@@ -220,7 +230,21 @@ export function InsulinForm() {
   const t = useTranslations("engineLog");
   const [type, setType] = useState<"bolus" | "basal">("bolus");
   const [name, setName] = useState("");
-  const [units, setUnits] = useState("");
+  // Default starting positions for the SnapSlider: 5 IE bolus, 20 IE
+  // basal. The form accepts any 0.5-100 IE on submit.
+  const [units, setUnits] = useState<number>(5);
+  const [savedTick, setSavedTick] = useState<number>(0);
+  // Toggle bolus ↔ basal; only retarget the default if the user
+  // hasn't customised the value.
+  function handleTypeChange(next: "bolus" | "basal") {
+    setType(prev => {
+      if (prev === next) return prev;
+      // Retarget unit default if user hasn't customised it.
+      if (prev === "bolus" && units === 5)  setUnits(20);
+      if (prev === "basal" && units === 20) setUnits(5);
+      return next;
+    });
+  }
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   // Injection time picker — defaults to "now" for live submissions.
@@ -250,7 +274,7 @@ export function InsulinForm() {
   }, [type]);
 
   const placeholder = type === "bolus" ? "Fiasp" : "Tresiba";
-  const u = parseFloat(units);
+  const u = units;
   const atDate = parseLocalDt(at);
   // Validate the picker too — invalid date OR more than 365 days back
   // OR > 1 minute in the future (small grace window for clock drift)
@@ -278,19 +302,12 @@ export function InsulinForm() {
         units: u,
         cgm_glucose_at_log: cgm,
         notes: notes.trim() || null,
-        // Only persisted for bolus entries (insertInsulinLog drops it for
-        // basal even if set, but we also clear the UI on type=basal).
+        // bolus only — basal entries clear the related-meal UI.
         related_entry_id: type === "bolus" && relatedMealId ? relatedMealId : null,
-        // Override created_at when the picker isn't "now" — passed
-        // unconditionally because lib/insulin.ts only writes it when
-        // truthy and the live default still ends up within the same
-        // second the DB would otherwise have used.
         at: atIso,
       });
-      // Schedule post-fetches relative to the chosen injection time
-      // (not "now") so back-dated bolus +2h / basal +24h fetches can
-      // resolve immediately from CGM history. Falls back to the chosen
-      // instant if the row didn't echo created_at for some reason.
+      // Anchor scheduled post-fetches on the chosen injection time so
+      // back-dated entries can resolve from CGM history immediately.
       const ref = inserted?.created_at || atIso;
       void scheduleJobsForLog({
         logId: inserted.id,
@@ -300,13 +317,15 @@ export function InsulinForm() {
       const typeLabel = type === "bolus" ? t("type_bolus") : t("type_basal");
       const whenLabel = isRetro ? t("logged_when_suffix", { rel: relativeAgo(deltaMs, t) }) : "";
       const trimmedName = name.trim();
+      hapticSuccess();
+      setSavedTick(n => n + 1);
       setStatus({
         kind: "ok",
         message: cgm != null
           ? t("logged_with_cgm", { units: u, type: typeLabel, name: trimmedName, when: whenLabel, cgm: Math.round(cgm) })
           : t("logged_no_cgm", { units: u, type: typeLabel, name: trimmedName, when: whenLabel }),
       });
-      setUnits("");
+      setUnits(type === "bolus" ? 5 : 20);
       setNotes("");
       setRelatedMealId("");
       // Reset the picker to a fresh "now" so the next log doesn't
@@ -319,6 +338,7 @@ export function InsulinForm() {
       // missed wrap somewhere upstream doesn't degrade to the generic
       // "Unbekannter Fehler" fallback.
       const msg = extractErrMessage(e, t);
+      hapticError();
       setStatus({ kind: "error", message: t("save_failed_prefix", { message: msg }) });
     }
   }
@@ -343,7 +363,7 @@ export function InsulinForm() {
           <label style={labelStyle}>{t("type_label")}</label>
           <Segmented<"bolus" | "basal">
             value={type}
-            onChange={setType}
+            onChange={handleTypeChange}
             accent={GREEN}
             options={[
               { value: "bolus", label: t("type_bolus") },
@@ -362,16 +382,15 @@ export function InsulinForm() {
         </div>
         <div>
           <label style={labelStyle}>{t("units_label")}</label>
-          <input
-            style={inp}
-            type="number"
-            inputMode="decimal"
-            step="0.5"
-            min="0.5"
-            max="100"
-            placeholder={t("units_placeholder")}
+          <SnapSlider
             value={units}
-            onChange={e => setUnits(e.target.value)}
+            onChange={setUnits}
+            min={0.5}
+            max={100}
+            step={0.5}
+            unit={t("units_unit")}
+            accent={GREEN}
+            ariaLabel={t("units_label")}
           />
         </div>
         <div>
@@ -396,15 +415,18 @@ export function InsulinForm() {
               : t("default_now_hint")}
           </div>
         </div>
-        <div>
-          <label style={labelStyle}>{t("note_label")}</label>
+        <CollapsibleField
+          label={t("note_collapse_label")}
+          accent={GREEN}
+          hasValue={notes.trim().length > 0}
+        >
           <input
             style={inp}
             placeholder={t("note_insulin_placeholder")}
             value={notes}
             onChange={e => setNotes(e.target.value)}
           />
-        </div>
+        </CollapsibleField>
         {/* Bolus-only: explicit link to a meal logged today. Engine ICR
             pairing prefers this over the ±30min time-window heuristic.
             Hidden for basal because basal isn't dosed against a meal.
@@ -486,21 +508,14 @@ export function InsulinForm() {
         })()}
       </div>
 
-      <button
+      <SaveButton
         onClick={handleSubmit}
-        disabled={!valid || status.kind === "submitting"}
-        style={{
-          marginTop: 18, width: "100%", padding: "13px",
-          borderRadius: 12, border: "none",
-          background: valid ? GREEN : "var(--surface-soft)",
-          color: valid ? "var(--on-accent)" : "var(--text-ghost)",
-          fontSize: 14, fontWeight: 800,
-          cursor: valid ? "pointer" : "not-allowed",
-          transition: "all 0.15s",
-        }}
-      >
-        {t("log_insulin_btn")}
-      </button>
+        disabled={!valid}
+        busy={status.kind === "submitting"}
+        accent={GREEN}
+        label={t("log_insulin_btn")}
+        successKey={savedTick || null}
+      />
 
       <StatusBanner status={status} accent={GREEN} t={t} />
 
@@ -526,15 +541,20 @@ const EXERCISE_TYPE_OPTIONS: ExerciseType[] = [
 // Retroactive-start choices. Selecting anything other than "Now"
 // shifts the reference time the CGM scheduler uses to compute the
 // at-end and +1h fetches, so workouts that already ended can still
-// be evaluated from CGM history. Capped at 3 h to match the process
-// route's exercise abandon window.
+// be evaluated from CGM history. Spec calls for max 3 quick chips
+// (Now / 30m / 1h) plus an "Andere Zeit…" custom-time entry — the
+// custom path is rendered separately in the form so the chip row
+// stays compact.
 const STARTED_OPTIONS: { value: number; label: string }[] = [
   { value: 0,   label: "Now" },
   { value: 30,  label: "30m" },
   { value: 60,  label: "1h" },
-  { value: 120, label: "2h" },
-  { value: 180, label: "3h" },
 ];
+// Sentinel for the "Andere Zeit…" chip — when selected, the form
+// reveals a datetime-local picker so the user can back-date freely
+// (still capped at 3 h via the input's `min`).
+const STARTED_CUSTOM = -1;
+const STARTED_MAX_AGO_MIN = 180;
 
 /** Custom dropdown for the Sportart picker. Built as a disclosure
  *  button + absolute-positioned options list (instead of a native
@@ -636,7 +656,11 @@ function ExerciseTypeDropdown({
                 type="button"
                 role="option"
                 aria-selected={on}
-                onClick={() => { onChange(opt); setOpen(false); }}
+                onClick={() => {
+                  if (!on) hapticSelection();
+                  onChange(opt);
+                  setOpen(false);
+                }}
                 onMouseEnter={(e) => {
                   if (!on) e.currentTarget.style.background = "var(--surface-soft)";
                 }}
@@ -674,28 +698,46 @@ export function ExerciseForm() {
   const t = useTranslations("engineLog");
   const [type, setType] = useState<ExerciseType>("cardio");
   const [startedMinAgo, setStartedMinAgo] = useState<number>(0);
-  const [duration, setDuration] = useState("");
+  // "Andere Zeit…" surfaces a datetime-local input; converted back
+  // to minutes-ago at submit.
+  const [customStartAt, setCustomStartAt] = useState<string>(() => nowLocalDt());
+  const usingCustomStart = startedMinAgo === STARTED_CUSTOM;
+  const [duration, setDuration] = useState<number>(30);
   const [intensity, setIntensity] = useState<"low" | "medium" | "high">("medium");
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
+  const [savedTick, setSavedTick] = useState<number>(0);
 
-  const d = parseInt(duration, 10);
-  const valid = Number.isFinite(d) && d > 0 && d <= 600;
+  const d = duration;
+  // For the custom-time path, recompute minutes-ago at submit.
+  function effectiveStartedMinAgo(): number {
+    if (!usingCustomStart) return startedMinAgo;
+    const dt = parseLocalDt(customStartAt);
+    if (!dt) return 0;
+    const diff = Math.round((Date.now() - dt.getTime()) / 60_000);
+    return Math.max(0, Math.min(STARTED_MAX_AGO_MIN, diff));
+  }
+  const valid = Number.isFinite(d) && d > 0 && d <= 600
+    && (!usingCustomStart || !!parseLocalDt(customStartAt));
 
   // Compute the actual workout start instant for the submit confirmation
   // and the CGM scheduler. For "Now" this equals submit time.
+  // (`effectiveStartedMinAgo` resolves the custom-time path.)
   function computeStartIso(): string {
-    return new Date(Date.now() - startedMinAgo * 60_000).toISOString();
+    return new Date(Date.now() - effectiveStartedMinAgo() * 60_000).toISOString();
   }
 
   async function handleSubmit() {
     if (!valid) return;
     setStatus({ kind: "submitting" });
-    const isRetro = startedMinAgo > 0;
+    // Use the *effective* minutes-ago so the "Andere Zeit…" custom
+    // datetime path is treated as retro too — otherwise startedMinAgo
+    // is the -1 sentinel and the live CGM would be wrongly snapshotted.
+    const minAgoEff = effectiveStartedMinAgo();
+    const isRetro = minAgoEff > 0;
     // For live ("Now") submissions, anchor on the live CGM reading.
     // For retroactive submissions, leave the baseline NULL so the
-    // scheduler fills it from CGM history at the actual start instant
-    // (current value would otherwise be wrong by ≥ startedMinAgo).
+    // scheduler fills it from CGM history at the actual start instant.
     const cgm = isRetro ? null : await pullCurrentCgm();
     try {
       const refIso = computeStartIso();
@@ -720,29 +762,36 @@ export function ExerciseForm() {
         durationMinutes: d,
       });
       const typeLabel = exerciseTypeLabelI18n(tIns, type);
-      const startedOpt = STARTED_OPTIONS.find(o => o.value === startedMinAgo);
-      const startedLabel = startedMinAgo === 0 || !startedOpt
+      const minAgo = effectiveStartedMinAgo();
+      const startedOpt = STARTED_OPTIONS.find(o => o.value === minAgo);
+      const startedLabel = minAgo === 0
         ? ""
-        : t("exercise_started_suffix", { label: startedOpt.label });
+        : t("exercise_started_suffix", {
+            label: startedOpt?.label ?? relativeAgo(minAgo * 60_000, t),
+          });
       // Map the stored intensity token to the spec wording for display.
       const intensityLabel = intensity === "low"
         ? tEng("exercise_intensity_low")
         : intensity === "high"
           ? tEng("exercise_intensity_high")
           : tEng("exercise_intensity_medium");
+      hapticSuccess();
       setStatus({
         kind: "ok",
         message: cgm != null
           ? t("exercise_logged_with_cgm", { minutes: d, type: typeLabel, intensity: intensityLabel, when: startedLabel, cgm: Math.round(cgm) })
           : t("exercise_logged_no_cgm", { minutes: d, type: typeLabel, intensity: intensityLabel, when: startedLabel }),
       });
-      setDuration("");
+      setSavedTick(n => n + 1);
+      setDuration(30);
       setNotes("");
       setStartedMinAgo(0);
+      setCustomStartAt(nowLocalDt());
     } catch (e) {
       // See InsulinForm above — extract `.message` from PostgrestError-
       // like plain objects so the banner shows the real cause.
       const msg = extractErrMessage(e, t);
+      hapticError();
       setStatus({ kind: "error", message: t("save_failed_prefix", { message: msg }) });
     }
   }
@@ -781,98 +830,95 @@ export function ExerciseForm() {
           <label style={labelStyle}>{tEng("exercise_started_label")}</label>
           {/* Retroactive start picker — shifts the CGM scheduler's
               reference time so a workout already finished can still
-              be evaluated from CGM history within the 3 h window. */}
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: `repeat(${STARTED_OPTIONS.length}, 1fr)`,
-            gap: 6,
-            background: "var(--input-bg)",
-            border: `1px solid ${BORDER}`,
-            borderRadius: 12,
-            padding: 4,
-          }}>
-            {STARTED_OPTIONS.map(opt => {
-              const on = opt.value === startedMinAgo;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setStartedMinAgo(opt.value)}
-                  style={{
-                    padding: "9px 10px",
-                    borderRadius: 8,
-                    border: "none",
-                    background: on ? `${ORANGE}22` : "transparent",
-                    color: on ? ORANGE : "var(--text-muted)",
-                    fontSize: 13,
-                    fontWeight: 700,
-                    letterSpacing: "-0.01em",
-                    cursor: "pointer",
-                    transition: "all 0.15s",
-                  }}
-                >
-                  {opt.value === 0 ? t("started_now_btn") : t("started_ago_btn", { label: opt.label })}
-                </button>
-              );
-            })}
-          </div>
+              be evaluated from CGM history within the 3 h window.
+              Spec calls for max 3 quick chips + a "custom time" entry
+              that opens a datetime-local picker for arbitrary back-
+              dating; the selected chip drives `startedMinAgo` and the
+              sentinel `STARTED_CUSTOM` reveals the picker below. */}
+          <TimeQuickChips
+            value={startedMinAgo}
+            onChange={setStartedMinAgo}
+            accent={ORANGE}
+            ariaLabel={tEng("exercise_started_label")}
+            options={[
+              ...STARTED_OPTIONS.map(o => ({
+                value: o.value,
+                label: o.value === 0 ? t("started_now_btn") : t("started_ago_btn", { label: o.label }),
+              })),
+              { value: STARTED_CUSTOM, label: t("started_custom_btn") },
+            ]}
+          />
+          {usingCustomStart && (
+            <input
+              style={{ ...inp, marginTop: 8 }}
+              type="datetime-local"
+              max={nowLocalDt()}
+              min={toLocalDtString(new Date(Date.now() - STARTED_MAX_AGO_MIN * 60_000))}
+              value={customStartAt}
+              onChange={e => setCustomStartAt(e.target.value)}
+              aria-label={t("started_custom_btn")}
+            />
+          )}
         </div>
         <div>
           <label style={labelStyle}>{t("duration_label")}</label>
-          <input
-            style={inp}
-            type="number"
-            inputMode="numeric"
-            step="1"
-            min="1"
-            max="600"
-            placeholder={t("duration_placeholder")}
+          <SnapSlider
             value={duration}
-            onChange={e => setDuration(e.target.value)}
-          />
-        </div>
-        <div>
-          <label style={labelStyle}>{tEng("exercise_intensity_label")}</label>
-          {/* DB stores the legacy `medium` token (matches the existing
-              CHECK constraint on insulin_logs/exercise_logs); the
-              user-facing label reads "Moderate" per spec. */}
-          <Segmented<"low" | "medium" | "high">
-            value={intensity}
-            onChange={setIntensity}
+            onChange={setDuration}
+            min={5}
+            max={600}
+            step={5}
+            unit={t("duration_unit")}
             accent={ORANGE}
-            options={[
-              { value: "low",    label: tEng("exercise_intensity_low") },
-              { value: "medium", label: tEng("exercise_intensity_medium") },
-              { value: "high",   label: tEng("exercise_intensity_high") },
-            ]}
+            ariaLabel={t("duration_label")}
           />
         </div>
         <div>
-          <label style={labelStyle}>{t("note_label")}</label>
+          <label style={labelStyle}>
+            {tEng("exercise_intensity_label")} —{" "}
+            <span style={{ color: ORANGE, fontWeight: 700 }}>
+              {intensity === "low"
+                ? tEng("exercise_intensity_low")
+                : intensity === "high"
+                  ? tEng("exercise_intensity_high")
+                  : tEng("exercise_intensity_medium")}
+            </span>
+          </label>
+          {/* 3-stop slider mapped onto the low/medium/high DB enum. */}
+          <SnapSlider
+            value={intensity === "low" ? 1 : intensity === "high" ? 3 : 2}
+            onChange={(n) =>
+              setIntensity(n <= 1 ? "low" : n >= 3 ? "high" : "medium")
+            }
+            min={1}
+            max={3}
+            step={1}
+            accent={ORANGE}
+            ariaLabel={tEng("exercise_intensity_label")}
+          />
+        </div>
+        <CollapsibleField
+          label={t("note_collapse_label")}
+          accent={ORANGE}
+          hasValue={notes.trim().length > 0}
+        >
           <input
             style={inp}
             placeholder={t("note_exercise_placeholder")}
             value={notes}
             onChange={e => setNotes(e.target.value)}
           />
-        </div>
+        </CollapsibleField>
       </div>
 
-      <button
+      <SaveButton
         onClick={handleSubmit}
-        disabled={!valid || status.kind === "submitting"}
-        style={{
-          marginTop: 18, width: "100%", padding: "13px",
-          borderRadius: 12, border: "none",
-          background: valid ? ORANGE : "var(--surface-soft)",
-          color: valid ? "var(--on-accent)" : "var(--text-ghost)",
-          fontSize: 14, fontWeight: 800,
-          cursor: valid ? "pointer" : "not-allowed",
-          transition: "all 0.15s",
-        }}
-      >
-        {t("log_exercise_btn")}
-      </button>
+        disabled={!valid}
+        busy={status.kind === "submitting"}
+        accent={ORANGE}
+        label={t("log_exercise_btn")}
+        successKey={savedTick || null}
+      />
 
       <StatusBanner status={status} accent={ORANGE} t={t} />
 

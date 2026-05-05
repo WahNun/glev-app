@@ -25,6 +25,8 @@ import { fetchLatestCgm } from "@/components/CgmFetchButton";
 import { classifyPreReferenceTrend, type TrendClass, type TrendSample } from "@/lib/engine/trend";
 import { fetchLatestFingerstick, FS_OVERRIDE_WINDOW_MS } from "@/lib/fingerstick";
 import { parseDbTs, parseDbDate, parseLluTs } from "@/lib/time";
+import { hapticSuccess, hapticError } from "@/lib/haptics";
+import SnapSlider from "@/components/log/SnapSlider";
 
 // datetime-local needs "YYYY-MM-DDTHH:mm" in the *local* timezone (the input
 // strips the offset). Using toISOString() would silently shift the value to
@@ -1140,12 +1142,14 @@ export default function EnginePage() {
       // Refresh meals so the next recommendation immediately benefits.
       fetchMealsForEngine().then(setMeals).catch(() => {});
       logDebug("ENGINE.WIZARD_SAVE", { id: saved.id, carbs: cNum, insulin: result.dose, glucose: gNum, mealType: cls });
+      hapticSuccess();
       // FIX A: Hold on Step 3 with a green confirmation. No auto-reset, no
       // auto-navigate — the user explicitly clicks "Neues Essen" below to
       // clear the form and return to Step 1. This avoids the surprise of
       // the screen jumping away the moment they hit Save.
       setWizardSavedDose(result.dose);
     } catch (e) {
+      hapticError();
       setConfirmErr(e instanceof Error ? e.message : "Save failed");
     } finally {
       setConfirming(false);
@@ -1210,10 +1214,12 @@ export default function EnginePage() {
       void scheduleJobsForLog({ logId: saved.id, logType: "meal", refTimeIso: mealIso });
       fetchMealsForEngine().then(setMeals).catch(() => {});
       logDebug("ENGINE.SAVE_NO_BOLUS", { id: saved.id, carbs: cNum, glucose: gNum, mealType: cls });
+      hapticSuccess();
       // Same post-save state as handleWizardSave so both paths converge
       // on the identical "✓ Gespeichert — N IE geloggt" confirmation.
       setWizardSavedDose(0);
     } catch (e) {
+      hapticError();
       setConfirmErr(e instanceof Error ? e.message : "Save failed");
     } finally {
       setConfirming(false);
@@ -1278,8 +1284,10 @@ export default function EnginePage() {
       void scheduleJobsForLog({ logId: saved.id, logType: "meal", refTimeIso: mealIso });
       fetchMealsForEngine().then(setMeals).catch(() => {});
       logDebug("ENGINE.SAVE_DIRECT_BOLUS", { id: saved.id, carbs: cNum, glucose: gNum, mealType: cls, insulinUnits: iNum });
+      hapticSuccess();
       setWizardSavedDose(iNum);
     } catch (e) {
+      hapticError();
       setConfirmErr(e instanceof Error ? e.message : "Save failed");
     } finally {
       setConfirming(false);
@@ -1381,12 +1389,14 @@ export default function EnginePage() {
       setDecisionToast(tEngine("toast_meal_saved"));
       setTimeout(() => setDecisionToast(null), 2500);
       logDebug("ENGINE.CONFIRM_LOG", { id: saved.id, carbs: cNum, insulin: iNum, glucose: gNum, mealType: cls });
+      hapticSuccess();
       // Schedule CGM auto-fetches at +1h / +2h after meal time. Fire-and-forget;
       // failures (e.g. no CGM connected) are silent.
       void scheduleJobsForLog({ logId: saved.id, logType: "meal", refTimeIso: mealIso });
       // Refresh meals so the next recommendation immediately benefits.
       fetchMealsForEngine().then(setMeals).catch(() => {});
     } catch (e) {
+      hapticError();
       setConfirmErr(e instanceof Error ? e.message : "Save failed");
     } finally {
       setConfirming(false);
@@ -2119,11 +2129,32 @@ export default function EnginePage() {
                     macro-grid pattern. */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, rowGap: 14 }}>
                   <div>
-                    {/* Label and placeholder swap with the user's chosen
-                        unit (g/BE/KE). step=0.1 for BE/KE so users can
-                        enter typical 0.5/1/1.5 BE values. */}
+                    {/* KH SnapSlider — snap step + max scale automatically
+                        with the user's carb unit (5g / 0.5 BE / 0.5 KE).
+                        Empty input still allowed → falls back to 0 in the
+                        slider but state stays "" so submit-validation can
+                        distinguish "not entered" from "0 g". */}
                     <label style={{ fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>{tEngine("carbs_label")} ({carbUnit.label})</label>
-                    <input style={inp} type="number" inputMode="decimal" step={carbUnit.step} placeholder={carbUnit.placeholder} value={carbs} onChange={(e) => setCarbs(e.target.value)}/>
+                    {(() => {
+                      const numeric = parseFloat(carbs);
+                      const safeVal = Number.isFinite(numeric) ? numeric : 0;
+                      const maxInUnit = Math.max(10, Math.round(carbUnit.fromGrams(200)));
+                      const stepInUnit = carbUnit.unit === "g" ? 5 : carbUnit.step;
+                      const decimals = carbUnit.unit === "g" ? 0 : 1;
+                      return (
+                        <SnapSlider
+                          value={safeVal}
+                          onChange={(n) => setCarbs(String(n))}
+                          min={0}
+                          max={maxInUnit}
+                          step={stepInUnit}
+                          accent={ACCENT}
+                          decimals={decimals}
+                          unit={carbUnit.label}
+                          ariaLabel={tEngine("carbs_label")}
+                        />
+                      );
+                    })()}
                   </div>
                   <div>
                     <label style={{ fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>

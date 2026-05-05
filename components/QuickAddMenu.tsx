@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
+import { hapticLight, hapticSelection } from "@/lib/haptics";
 
 const ACCENT = "#4F6EF7";
 const SHEET_BG = "var(--surface-alt)";
@@ -123,9 +124,8 @@ export default function QuickAddMenu() {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  // Close on outside pointerdown / Escape. We use pointerdown (not
-  // click) so the menu collapses before the underlying tap target
-  // receives focus — matches iOS context-menu feel.
+  // pointerdown (not click) so the menu collapses before the next
+  // tap target receives focus.
   useEffect(() => {
     if (!open) return;
     function onPointerDown(e: PointerEvent) {
@@ -145,6 +145,7 @@ export default function QuickAddMenu() {
   }, [open]);
 
   function go(href: string) {
+    hapticLight();
     setOpen(false);
     router.push(href);
   }
@@ -160,7 +161,10 @@ export default function QuickAddMenu() {
 
       <button
         type="button"
-        onClick={() => setOpen(o => !o)}
+        onClick={() => {
+          hapticSelection();
+          setOpen(o => !o);
+        }}
         aria-label={open ? t("close_aria") : t("open_aria")}
         aria-expanded={open}
         aria-haspopup="menu"

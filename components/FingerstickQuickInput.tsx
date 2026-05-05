@@ -2,6 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import { insertFingerstick, type FingerstickReading } from "@/lib/fingerstick";
+import { hapticSuccess, hapticWarning, hapticError } from "@/lib/haptics";
+
+// Out-of-target glucose bands used to decide whether saving the new
+// reading should also fire a warning haptic on top of the success
+// haptic — keeps the user physically aware of hypo/hyper landings
+// even when their eyes are off the screen.
+const BG_LOW  = 70;
+const BG_HIGH = 180;
 
 const ACCENT  = "#4F6EF7";
 const PINK    = "#FF2D78";
@@ -59,15 +67,22 @@ export default function FingerstickQuickInput({
     setErr(null);
     const n = parseFloat(value);
     if (!Number.isFinite(n) || n < 20 || n > 600) {
+      hapticError();
       setErr("Bitte 20–600 mg/dL eingeben.");
       return;
     }
     setSaving(true);
     try {
       const r = await insertFingerstick({ value_mg_dl: n });
+      // Out-of-target → warning haptic (slightly stronger pattern than
+      // success). In-range → standard success haptic. Either way, the
+      // user gets a confirming buzz the moment the row persists.
+      if (n < BG_LOW || n > BG_HIGH) hapticWarning();
+      else                            hapticSuccess();
       onSaved(r);
       onClose();
     } catch (e) {
+      hapticError();
       setErr(e instanceof Error ? e.message : "Speichern fehlgeschlagen.");
     } finally {
       setSaving(false);

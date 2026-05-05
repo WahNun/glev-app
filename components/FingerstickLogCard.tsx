@@ -8,6 +8,14 @@ import {
   type FingerstickReading,
 } from "@/lib/fingerstick";
 import { isToday, isWithinDays, formatLocalTime } from "@/lib/utils/datetime";
+import { hapticSuccess, hapticWarning, hapticError } from "@/lib/haptics";
+import SnapSlider from "@/components/log/SnapSlider";
+import CollapsibleField from "@/components/log/CollapsibleField";
+import SaveButton from "@/components/log/SaveButton";
+
+// Target band — out-of-range saves trigger a warning haptic.
+const BG_LOW_TARGET  = 70;
+const BG_HIGH_TARGET = 180;
 
 const ACCENT  = "#4F6EF7";
 const GREEN   = "#22D3A0";
@@ -33,14 +41,14 @@ export default function FingerstickLogCard() {
     return t("latest_other", { date: formatLocalTime(iso, "date"), time });
   }
 
-  const [value, setValue]       = useState<string>("");
+  const [value, setValue]       = useState<number>(110);
   const [whenLocal, setWhenLocal] = useState<string>(() => toLocalInputValue(new Date()));
   const [note, setNote]         = useState<string>("");
   const [busy, setBusy]         = useState(false);
   const [feedback, setFeedback] = useState<{ kind: "ok" | "err"; msg: string } | null>(null);
   const [latest, setLatest]     = useState<FingerstickReading | null>(null);
+  const [savedTick, setSavedTick] = useState<number>(0);
 
-  const valueId = useId();
   const whenId  = useId();
   const noteId  = useId();
 
@@ -48,12 +56,12 @@ export default function FingerstickLogCard() {
     fetchLatestFingerstick().then(setLatest).catch(() => {});
   }, []);
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSave() {
     setFeedback(null);
 
-    const num = Number(value.replace(",", "."));
+    const num = value;
     if (!Number.isFinite(num) || num < 20 || num > 600) {
+      hapticError();
       setFeedback({ kind: "err", msg: t("err_value_range") });
       return;
     }
@@ -62,6 +70,7 @@ export default function FingerstickLogCard() {
     if (whenLocal) {
       const d = new Date(whenLocal);
       if (isNaN(d.getTime())) {
+        hapticError();
         setFeedback({ kind: "err", msg: t("err_invalid_when") });
         return;
       }
@@ -75,13 +84,17 @@ export default function FingerstickLogCard() {
         measured_at: measuredAt,
         notes: note.trim() || null,
       });
+      if (num < BG_LOW_TARGET || num > BG_HIGH_TARGET) hapticWarning();
+      else                                              hapticSuccess();
+      setSavedTick(n => n + 1);
       setLatest(saved);
-      setValue("");
+      setValue(110);
       setNote("");
       setWhenLocal(toLocalInputValue(new Date()));
       setFeedback({ kind: "ok", msg: t("saved_ok") });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : t("err_save_failed");
+      hapticError();
       setFeedback({ kind: "err", msg });
     } finally {
       setBusy(false);
@@ -122,48 +135,41 @@ export default function FingerstickLogCard() {
         </div>
       </div>
 
-      <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {/* Equal-width grid — Wert and Zeitpunkt share the row 1:1 so
-            the date chip never visually dwarfs the numeric input. The
-            datetime-local control will internally truncate / shorten
-            its display rather than overflow its column. */}
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 10 }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <label htmlFor={valueId} style={{ fontSize: 10, color: "var(--text-dim)", fontWeight: 600, letterSpacing: "0.04em" }}>
-              {t("value_label")}
-            </label>
-            <input
-              id={valueId}
-              type="number"
-              inputMode="decimal"
-              min={20}
-              max={600}
-              step={1}
-              placeholder={t("value_placeholder")}
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
-              required
-            />
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <label htmlFor={whenId} style={{ fontSize: 10, color: "var(--text-dim)", fontWeight: 600, letterSpacing: "0.04em" }}>
-              {t("when_label")}
-            </label>
-            <input
-              id={whenId}
-              type="datetime-local"
-              value={whenLocal}
-              onChange={(e) => setWhenLocal(e.target.value)}
-              style={inputStyle}
-            />
-          </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <label style={{ fontSize: 10, color: "var(--text-dim)", fontWeight: 600, letterSpacing: "0.04em" }}>
+            {t("value_label")}
+          </label>
+          <SnapSlider
+            value={value}
+            onChange={setValue}
+            min={40}
+            max={300}
+            step={10}
+            unit={t("mgdl_unit")}
+            accent={ACCENT}
+            ariaLabel={t("value_label")}
+          />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <label htmlFor={whenId} style={{ fontSize: 10, color: "var(--text-dim)", fontWeight: 600, letterSpacing: "0.04em" }}>
+            {t("when_label")}
+          </label>
+          <input
+            id={whenId}
+            type="datetime-local"
+            value={whenLocal}
+            onChange={(e) => setWhenLocal(e.target.value)}
+            style={inputStyle}
+          />
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <label htmlFor={noteId} style={{ fontSize: 10, color: "var(--text-dim)", fontWeight: 600, letterSpacing: "0.04em" }}>
-            {t("note_label")}
-          </label>
+        <CollapsibleField
+          label={t("note_collapse_label")}
+          accent={ACCENT}
+          hasValue={note.trim().length > 0}
+        >
+          <label htmlFor={noteId} style={{ display: "none" }}>{t("note_label")}</label>
           <input
             id={noteId}
             type="text"
@@ -173,38 +179,27 @@ export default function FingerstickLogCard() {
             style={inputStyle}
             maxLength={200}
           />
-        </div>
+        </CollapsibleField>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <button
-            type="submit"
-            disabled={busy}
-            style={{
-              padding: "9px 18px",
-              borderRadius: 10,
-              border: "none",
-              background: busy ? `${ACCENT}66` : ACCENT,
-              color:"var(--text)",
-              fontSize: 12, fontWeight: 700, letterSpacing: "0.02em",
-              cursor: busy ? "default" : "pointer",
-              transition: "background 120ms ease",
-            }}
-          >
-            {busy ? t("save_busy") : t("save_idle")}
-          </button>
-          <span
-            role="status"
-            aria-live="polite"
-            style={{
-              fontSize: 12, fontWeight: 600,
-              color: feedback?.kind === "ok" ? GREEN : PINK,
-              minHeight: 16,
-            }}
-          >
-            {feedback?.msg ?? ""}
-          </span>
-        </div>
-      </form>
+        <SaveButton
+          onClick={handleSave}
+          busy={busy}
+          accent={ACCENT}
+          label={busy ? t("save_busy") : t("save_idle")}
+          successKey={savedTick || null}
+        />
+        <span
+          role="status"
+          aria-live="polite"
+          style={{
+            fontSize: 12, fontWeight: 600,
+            color: feedback?.kind === "ok" ? GREEN : PINK,
+            minHeight: 16,
+          }}
+        >
+          {feedback?.msg ?? ""}
+        </span>
+      </div>
 
       <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.4 }}>
         {latest

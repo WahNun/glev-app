@@ -32,6 +32,7 @@ Glev is a Type 1 Diabetes insulin decision-support system designed to provide pe
 - Theming system in `app/globals.css` supports dark and light modes, maintaining consistent brand accents.
 - Navigation includes a sidebar for desktop and bottom navigation for mobile.
 - Some pages, like `app/mockups/dark-cockpit/page.tsx`, are intentionally dark for fixed product mockups.
+- **Log-screen haptics & shared form components**: `lib/haptics.ts` wraps `@capacitor/haptics` (native iOS/Android) with a `navigator.vibrate` web fallback and SSR-safe loaders, exposing `hapticLight/Medium/Selection/Success/Warning/Error`. Reusable input primitives live in `components/log/`: `SnapSlider` (detented numeric input with selection haptic on each step), `TimeQuickChips` (quick "Now / 5min / 15min" chip row), `CollapsibleField` (folded note row), and `SaveButton` (unified primary CTA with busy state and success haptic). Used across Insulin, Exercise, Cycle, Symptom, and Fingerstick log forms (`components/EngineLogTab.tsx`, `components/CycleSymptomForms.tsx`, `components/FingerstickLogCard.tsx`).
 
 **Backend/API:**
 - Supabase manages user authentication (email/password) and PostgreSQL database operations.

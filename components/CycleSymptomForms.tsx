@@ -12,6 +12,10 @@ import {
   SYMPTOM_TYPES,
   type SymptomType,
 } from "@/lib/symptoms";
+import { hapticSelection, hapticSuccess, hapticError } from "@/lib/haptics";
+import SnapSlider from "@/components/log/SnapSlider";
+import CollapsibleField from "@/components/log/CollapsibleField";
+import SaveButton from "@/components/log/SaveButton";
 
 const PINK   = "#FF2D78";
 const PURPLE = "#A78BFA";
@@ -122,7 +126,10 @@ function PillRow<T extends string>({
           <button
             key={opt.value}
             type="button"
-            onClick={() => onChange(on ? null : opt.value)}
+            onClick={() => {
+              hapticSelection();
+              onChange(on ? null : opt.value);
+            }}
             style={{
               padding: "9px 10px",
               borderRadius: 8,
@@ -158,6 +165,7 @@ export function CycleForm() {
   const [marker, setMarker] = useState<PhaseMarker | null>("ovulation");
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
+  const [savedTick, setSavedTick] = useState<number>(0);
 
   const valid = (() => {
     if (!start) return false;
@@ -180,6 +188,8 @@ export function CycleForm() {
         phase_marker: mode === "marker" ? marker : null,
         notes: notes.trim() || null,
       });
+      setSavedTick(n => n + 1);
+      hapticSuccess();
       setStatus({
         kind: "ok",
         message: mode === "bleeding"
@@ -192,6 +202,7 @@ export function CycleForm() {
       try { window.dispatchEvent(new CustomEvent("glev:menstrual-updated")); } catch {}
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      hapticError();
       setStatus({ kind: "error", message: t("save_failed_prefix", { message: msg }) });
     }
   }
@@ -226,7 +237,10 @@ export function CycleForm() {
                 <button
                   key={m}
                   type="button"
-                  onClick={() => setMode(m)}
+                  onClick={() => {
+                    if (!on) hapticSelection();
+                    setMode(m);
+                  }}
                   style={{
                     padding: "9px 10px", borderRadius: 8, border: "none",
                     background: on ? `${PINK}22` : "transparent",
@@ -271,16 +285,25 @@ export function CycleForm() {
               </div>
             </div>
             <div>
-              <label style={labelStyle}>{t("cycle_flow_label")}</label>
-              <PillRow<FlowIntensity>
-                value={flow}
-                onChange={setFlow}
+              {/* 1-5 slider mapped onto the light/medium/heavy DB enum. */}
+              <label style={labelStyle}>
+                {t("cycle_flow_label")} —{" "}
+                <span style={{ color: PINK, fontWeight: 700 }}>
+                  {flow === "light" ? t("cycle_flow_light")
+                    : flow === "heavy" ? t("cycle_flow_heavy")
+                    : t("cycle_flow_medium")}
+                </span>
+              </label>
+              <SnapSlider
+                value={flow === "light" ? 2 : flow === "heavy" ? 4 : 3}
+                onChange={(n) =>
+                  setFlow(n <= 2 ? "light" : n >= 4 ? "heavy" : "medium")
+                }
+                min={1}
+                max={5}
+                step={1}
                 accent={PINK}
-                options={[
-                  { value: "light",  label: t("cycle_flow_light") },
-                  { value: "medium", label: t("cycle_flow_medium") },
-                  { value: "heavy",  label: t("cycle_flow_heavy") },
-                ]}
+                ariaLabel={t("cycle_flow_label")}
               />
             </div>
           </>
@@ -302,8 +325,11 @@ export function CycleForm() {
           </div>
         )}
 
-        <div>
-          <label style={labelStyle}>{t("note_label")}</label>
+        <CollapsibleField
+          label={t("note_collapse_label")}
+          accent={PINK}
+          hasValue={notes.trim().length > 0}
+        >
           <input
             style={inp}
             placeholder={t("cycle_note_placeholder")}
@@ -311,24 +337,17 @@ export function CycleForm() {
             onChange={e => setNotes(e.target.value)}
             maxLength={300}
           />
-        </div>
+        </CollapsibleField>
       </div>
 
-      <button
+      <SaveButton
         onClick={handleSubmit}
-        disabled={!valid || status.kind === "submitting"}
-        style={{
-          marginTop: 18, width: "100%", padding: "13px",
-          borderRadius: 12, border: "none",
-          background: valid ? PINK : "var(--surface-soft)",
-          color: valid ? "var(--on-accent)" : "var(--text-ghost)",
-          fontSize: 14, fontWeight: 800,
-          cursor: valid ? "pointer" : "not-allowed",
-          transition: "all 0.15s",
-        }}
-      >
-        {t("cycle_save_btn")}
-      </button>
+        disabled={!valid}
+        busy={status.kind === "submitting"}
+        accent={PINK}
+        label={t("cycle_save_btn")}
+        successKey={savedTick || null}
+      />
 
       <StatusBanner status={status} accent={PINK} />
 
@@ -350,8 +369,10 @@ export function SymptomForm() {
   const [occurredAt, setOccurredAt] = useState<string>(() => nowLocalDt());
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
+  const [savedTick, setSavedTick] = useState<number>(0);
 
   const toggle = (s: SymptomType) => {
+    hapticSelection();
     setSelected(prev => {
       const next = new Set(prev);
       if (next.has(s)) next.delete(s); else next.add(s);
@@ -383,6 +404,8 @@ export function SymptomForm() {
         cgm_glucose_at_log: cgm,
         notes: notes.trim() || null,
       });
+      hapticSuccess();
+      setSavedTick(n => n + 1);
       setStatus({
         kind: "ok",
         message: cgm != null
@@ -396,6 +419,7 @@ export function SymptomForm() {
       try { window.dispatchEvent(new CustomEvent("glev:symptom-updated")); } catch {}
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      hapticError();
       setStatus({ kind: "error", message: t("save_failed_prefix", { message: msg }) });
     }
   }
@@ -445,14 +469,14 @@ export function SymptomForm() {
 
         <div>
           <label style={labelStyle}>{t("symptom_severity_label", { value: severity })}</label>
-          <input
-            type="range"
+          <SnapSlider
+            value={severity}
+            onChange={setSeverity}
             min={1}
             max={5}
             step={1}
-            value={severity}
-            onChange={e => setSeverity(Number(e.target.value))}
-            style={{ width: "100%", accentColor: PURPLE }}
+            accent={PURPLE}
+            ariaLabel={t("symptom_severity_label", { value: severity })}
           />
           <div style={{
             display: "flex", justifyContent: "space-between",
@@ -474,8 +498,11 @@ export function SymptomForm() {
           />
         </div>
 
-        <div>
-          <label style={labelStyle}>{t("note_label")}</label>
+        <CollapsibleField
+          label={t("note_collapse_label")}
+          accent={PURPLE}
+          hasValue={notes.trim().length > 0}
+        >
           <input
             style={inp}
             placeholder={t("symptom_note_placeholder")}
@@ -483,24 +510,17 @@ export function SymptomForm() {
             onChange={e => setNotes(e.target.value)}
             maxLength={300}
           />
-        </div>
+        </CollapsibleField>
       </div>
 
-      <button
+      <SaveButton
         onClick={handleSubmit}
-        disabled={!valid || status.kind === "submitting"}
-        style={{
-          marginTop: 18, width: "100%", padding: "13px",
-          borderRadius: 12, border: "none",
-          background: valid ? PURPLE : "var(--surface-soft)",
-          color: valid ? "var(--on-accent)" : "var(--text-ghost)",
-          fontSize: 14, fontWeight: 800,
-          cursor: valid ? "pointer" : "not-allowed",
-          transition: "all 0.15s",
-        }}
-      >
-        {t("symptom_save_btn")}
-      </button>
+        disabled={!valid}
+        busy={status.kind === "submitting"}
+        accent={PURPLE}
+        label={t("symptom_save_btn")}
+        successKey={savedTick || null}
+      />
 
       <StatusBanner status={status} accent={PURPLE} />
 
