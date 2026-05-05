@@ -3,89 +3,38 @@
 import { Suspense, useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import AppMockupPhone from "@/components/AppMockupPhone";
-import FAQ from "@/components/landing/FAQ";
-import FeatureTrio from "@/components/landing/FeatureTrio";
-import FounderSection from "@/components/landing/FounderSection";
 import LandingFooter from "@/components/landing/Footer";
 import Lockup from "@/components/landing/Lockup";
 import CGMCompatibility from "@/components/landing/CGMCompatibility";
-import PricingCard from "@/components/landing/PricingCard";
-import Steps from "@/components/landing/Steps";
 import {
   ACCENT,
   ACCENT_HOVER,
   BG,
+  BORDER,
   MINT,
+  SURFACE,
   TEXT_DIM,
   TEXT_FAINT,
 } from "@/components/landing/tokens";
 
-const CAPACITY = 500;
-
-type CountResponse = { count: number; capacity: number; remaining: number };
-
-const WAITLIST_HREF = "/contact?source=beta-waitlist&subject=Glev%20Beta%20Warteliste";
-
 /**
- * Primary CTA — POSTs to our /api/checkout/beta endpoint, receives a fresh
- * Stripe Checkout-Session URL und schickt den User dorthin. Damit kontrollieren
- * WIR welche Price-IDs verwendet werden (statt eines starr verlinkten Stripe
- * Payment-Links auf ein altes Produkt). Falls die Beta voll ist, fällt der
- * CTA auf den Mailto-Warteliste-Link zurück.
- *
- * Locale wird im Body mitgeschickt, damit der Backend-Endpoint die richtigen
- * Stripe-Price-IDs (EUR oder USD) auswählt.
+ * /preview-beta — copy & layout preview of /beta.
+ * Stripe wiring untouched: posts to /api/checkout/beta with locale.
  */
-function BetaCTALink({ isFull }: { isFull: boolean }) {
-  const t = useTranslations("betaPage");
+function PreviewBetaCTA({ block = true }: { block?: boolean }) {
+  const t = useTranslations("previewBeta");
   const locale = useLocale();
   const [hover, setHover] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  if (isFull) {
-    // Warteliste-Fallback bleibt ein simpler mailto-Link — kein API-Call nötig.
-    return (
-      <a
-        href={WAITLIST_HREF}
-        onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: hover ? ACCENT_HOVER : ACCENT,
-          color: "#fff",
-          textDecoration: "none",
-          border: "none",
-          borderRadius: 12,
-          padding: "16px 32px",
-          fontSize: 18,
-          fontWeight: 600,
-          fontFamily: "inherit",
-          minHeight: 56,
-          cursor: "pointer",
-          boxShadow: hover ? "0 0 0 4px rgba(79,110,247,0.25)" : "0 0 0 0 rgba(79,110,247,0)",
-          transition: "background 120ms ease, box-shadow 120ms ease",
-          outlineColor: "rgba(79,110,247,0.4)",
-          boxSizing: "border-box",
-        }}
-      >
-        {t("cta_waitlist")}
-      </a>
-    );
-  }
 
   async function handleClick() {
     if (loading) return;
     setError(null);
     setLoading(true);
 
-    // Meta Pixel — Lead conversion event. Fires on jedem CTA-Klick der den
-    // Visitor zu Stripe weiterreicht. Wir feuern es VOR dem fetch damit das
-    // Event auch dann ankommt wenn die Navigation den Pixel-Beacon abschneidet.
     if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
-      (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("track", "Lead");
+      (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("track", "InitiateCheckout");
     }
 
     try {
@@ -94,21 +43,14 @@ function BetaCTALink({ isFull }: { isFull: boolean }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ locale }),
       });
-
       const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
-
       if (!res.ok || !data.url) {
-        throw new Error(data.error || t("error_checkout_http", { status: res.status }));
+        throw new Error(data.error || `HTTP ${res.status}`);
       }
-
-      // Same-Tab-Redirect zu Stripe Checkout (Stripe-Standard — kein neuer Tab,
-      // damit der Browser-Back-Button den User sauber zurück zu /beta bringt
-      // und damit die success_url-Redirect-Chain auf glev.app funktioniert).
       window.location.href = data.url;
     } catch (err) {
       setLoading(false);
-      const message = err instanceof Error ? err.message : t("error_unknown");
-      setError(message);
+      setError(err instanceof Error ? err.message : "Unknown error");
     }
   }
 
@@ -139,7 +81,7 @@ function BetaCTALink({ isFull }: { isFull: boolean }) {
           transition: "background 120ms ease, box-shadow 120ms ease",
           outlineColor: "rgba(79,110,247,0.4)",
           boxSizing: "border-box",
-          width: "100%",
+          width: block ? "100%" : "auto",
         }}
       >
         {loading ? t("cta_loading") : t("cta_default")}
@@ -165,33 +107,22 @@ function BetaCTALink({ isFull }: { isFull: boolean }) {
   );
 }
 
-function BetaContent() {
-  const t = useTranslations("betaPage");
-  const locale = useLocale();
-  const [count, setCount] = useState<CountResponse | null>(null);
+const SECTION_WRAP_NARROW: React.CSSProperties = {
+  width: "100%",
+  maxWidth: 760,
+  margin: "0 auto 56px",
+  padding: "0 20px",
+  boxSizing: "border-box",
+};
+
+function PreviewBetaContent() {
+  const t = useTranslations("previewBeta");
 
   useEffect(() => {
-    let cancelled = false;
-    fetch("/api/beta/count", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((data: CountResponse) => {
-        if (!cancelled) setCount(data);
-      })
-      .catch(() => {
-        /* keep counter hidden on failure */
-      });
-    return () => {
-      cancelled = true;
-    };
+    if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
+      (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("trackCustom", "ViewBetaPagePreview");
+    }
   }, []);
-
-  const remaining = count?.remaining ?? CAPACITY;
-  const isFull = count != null && remaining <= 0;
-
-  const faqItems = [1, 2, 3, 4, 5].map((i) => ({
-    q: t(`faq_q${i}`),
-    a: t(`faq_a${i}`),
-  }));
 
   return (
     <main
@@ -202,12 +133,6 @@ function BetaContent() {
         padding: "48px 0 64px",
         display: "flex",
         flexDirection: "column",
-        // Mobile horizontal-scroll guard: the PhoneShell mockup has
-        // absolute side-buttons at left:-2px / right:-2px and a soft
-        // 80px box-shadow that can poke past the iPhone 13 mini's
-        // 375px viewport. Clip the page to its own width so the body
-        // never scrolls horizontally — vertical scroll is unaffected
-        // because we don't touch overflow-y.
         overflowX: "hidden",
         width: "100%",
       }}
@@ -219,24 +144,18 @@ function BetaContent() {
           gap: 56px;
           align-items: center;
         }
-        .glev-feat-grid {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 14px;
-        }
         .glev-phone-stage { justify-self: end; }
         .glev-hero-form { width: 100%; max-width: 420px; }
         @media (max-width: 960px) {
           .glev-hero-2col { grid-template-columns: 1fr; gap: 40px; }
           .glev-phone-stage { justify-self: center; }
-          .glev-feat-grid { grid-template-columns: 1fr; }
           .glev-hero-form { max-width: none; }
           .glev-hero-left { align-items: center !important; text-align: center !important; }
           .glev-hero-meta { justify-content: center !important; }
         }
       `}</style>
 
-      {/* 1. Hero — text/CTA left, app render right (stacks on mobile) */}
+      {/* 1. HERO */}
       <section
         style={{
           width: "100%",
@@ -266,43 +185,13 @@ function BetaContent() {
                 fontWeight: 700,
                 color: "#fff",
                 margin: 0,
-                // German compounds like "Insulinentscheidungen" don't
-                // break by default and overflow the 335px content area
-                // on iPhone 13 mini → horizontal scroll. DE: keep
-                // hyphens:auto so the long compound can wrap. EN:
-                // hyphens:manual + each word wrapped in a
-                // whiteSpace:nowrap span (rendered below) so short
-                // words like "insulin" / "decisions" stay atomic and
-                // never render as "insu-lin" or "deci-sions".
-                overflowWrap: locale === "de" ? "anywhere" : "normal",
-                hyphens: locale === "de" ? "auto" : "manual",
-                WebkitHyphens: locale === "de" ? "auto" : "manual",
+                overflowWrap: "normal",
+                hyphens: "manual",
+                WebkitHyphens: "manual",
+                whiteSpace: "pre-line",
               }}
-              lang={locale}
             >
-              {locale === "de" ? (
-                <>{t("hero_title_line1")}<br />{t("hero_title_line2")}</>
-              ) : (
-                <>
-                  {/* Per-word nowrap spans — `hyphens: manual` alone
-                      did not stop Safari/dev caches from hyphenating
-                      short Latin words when the column got narrow.
-                      Wrapping each word in a `whiteSpace: nowrap`
-                      span makes the word an unbreakable atom while
-                      still letting the H1 wrap between words. */}
-                  {t("hero_title_line1").split(" ").map((w, i, arr) => (
-                    <span key={`l1-${i}`} style={{ whiteSpace: "nowrap" }}>
-                      {w}{i < arr.length - 1 ? " " : ""}
-                    </span>
-                  ))}
-                  <br />
-                  {t("hero_title_line2").split(" ").map((w, i, arr) => (
-                    <span key={`l2-${i}`} style={{ whiteSpace: "nowrap" }}>
-                      {w}{i < arr.length - 1 ? " " : ""}
-                    </span>
-                  ))}
-                </>
-              )}
+              {t("hero_title")}
             </h1>
             <p style={{ fontSize: 18, lineHeight: 1.5, color: TEXT_DIM, margin: 0, maxWidth: 520 }}>
               {t("hero_subtitle")}
@@ -312,7 +201,7 @@ function BetaContent() {
               className="glev-hero-form"
               style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}
             >
-              <BetaCTALink isFull={isFull} />
+              <PreviewBetaCTA />
             </div>
 
             <div
@@ -324,159 +213,220 @@ function BetaContent() {
                 fontSize: 14,
                 color: MINT,
                 marginTop: 4,
-                fontWeight: 600,
-                flexWrap: "wrap",
-              }}
-            >
-              <span aria-hidden>★</span>
-              <span>{t("meta_early_access")}</span>
-            </div>
-
-            <div
-              className="glev-hero-meta"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                fontSize: 13,
-                color: TEXT_DIM,
-                marginTop: 2,
                 flexWrap: "wrap",
               }}
             >
               <span aria-hidden>↺</span>
-              <span>{t("meta_refund")}</span>
+              <span>{t("hero_microcopy")}</span>
             </div>
-
-            <div
-              className="glev-hero-meta"
-              style={{
-                fontSize: 13,
-                color: TEXT_FAINT,
-                marginTop: 2,
-              }}
-            >
-              {t("meta_privacy")}
-            </div>
-
-            {!isFull && (
-              <div
-                style={{
-                  fontSize: 13,
-                  color: TEXT_FAINT,
-                  marginTop: 4,
-                }}
-              >
-                {t("meta_seats", { count: remaining })}
-              </div>
-            )}
           </div>
 
           <div className="glev-phone-stage">
-            {/* Fully interactive hero — see homepage note. */}
             <AppMockupPhone />
           </div>
         </div>
       </section>
 
-      {/* 1b. CGM COMPATIBILITY — direkt unter Hero als Qualifikationsfilter */}
-      <section
-        style={{
-          width: "100%",
-          maxWidth: 600,
-          margin: "0 auto 56px",
-          padding: "0 20px",
-          boxSizing: "border-box",
-        }}
-      >
+      {/* 1b. CGM COMPATIBILITY — direkt nach Hero, hilft Early-Filter */}
+      <section style={{ ...SECTION_WRAP_NARROW, padding: "8px 20px 0" }}>
         <CGMCompatibility variant="compact" />
-        <p
+      </section>
+
+      {/* 2. POSITIONING */}
+      <section style={SECTION_WRAP_NARROW}>
+        <div
           style={{
-            margin: "16px 0 0",
-            fontSize: 13,
-            lineHeight: 1.55,
-            color: TEXT_FAINT,
+            background: SURFACE,
+            border: `1px solid ${BORDER}`,
+            borderRadius: 16,
+            padding: "24px 24px",
             textAlign: "center",
           }}
         >
-          {t("cgm_trust_line")}
+          <p
+            style={{
+              fontSize: 18,
+              lineHeight: 1.55,
+              color: "#fff",
+              margin: 0,
+              fontWeight: 500,
+            }}
+          >
+            {t("positioning")}
+          </p>
+        </div>
+      </section>
+
+      {/* 3. FLOW — 3 Schritte */}
+      <section style={SECTION_WRAP_NARROW}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 14 }}>
+          {[1, 2, 3].map((n) => (
+            <div
+              key={n}
+              style={{
+                display: "flex",
+                gap: 16,
+                background: SURFACE,
+                border: `1px solid ${BORDER}`,
+                borderRadius: 14,
+                padding: "18px 18px",
+                alignItems: "flex-start",
+              }}
+            >
+              <div
+                aria-hidden
+                style={{
+                  flexShrink: 0,
+                  width: 36,
+                  height: 36,
+                  borderRadius: 10,
+                  background: `${ACCENT}22`,
+                  color: ACCENT,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 700,
+                  fontSize: 16,
+                }}
+              >
+                {n}
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 16, fontWeight: 600, color: "#fff", marginBottom: 4 }}>
+                  {t(`flow_${n}_title` as never)}
+                </div>
+                <div style={{ fontSize: 14, lineHeight: 1.55, color: TEXT_DIM }}>
+                  {t(`flow_${n}_text` as never)}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 4. PRICING block */}
+      <section
+        style={{
+          width: "100%",
+          maxWidth: 680,
+          margin: "0 auto 56px",
+          padding: "0 20px",
+          boxSizing: "border-box",
+        }}
+      >
+        <div
+          style={{
+            background: SURFACE,
+            border: `1px solid ${BORDER}`,
+            borderRadius: 16,
+            padding: "28px 24px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 14,
+          }}
+        >
+          <div style={{ fontSize: 28, fontWeight: 700, color: "#fff", lineHeight: 1.15 }}>
+            {t("pricing_headline")}
+          </div>
+          <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+            {[1, 2, 3, 4].map((n) => (
+              <li
+                key={n}
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  alignItems: "flex-start",
+                  fontSize: 15,
+                  lineHeight: 1.5,
+                  color: TEXT_DIM,
+                }}
+              >
+                <span aria-hidden style={{ color: MINT, fontWeight: 700, marginTop: 1 }}>✓</span>
+                <span>{t(`pricing_bullet_${n}` as never)}</span>
+              </li>
+            ))}
+          </ul>
+          <div style={{ marginTop: 8 }}>
+            <PreviewBetaCTA />
+          </div>
+          <div style={{ fontSize: 13, color: MINT, textAlign: "center", marginTop: 4 }}>
+            {t("pricing_microcopy")}
+          </div>
+        </div>
+      </section>
+
+      {/* 5. FAQ — alle 10 */}
+      <section style={SECTION_WRAP_NARROW}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+            <div
+              key={n}
+              style={{
+                background: SURFACE,
+                border: `1px solid ${BORDER}`,
+                borderRadius: 14,
+                padding: "18px 20px",
+              }}
+            >
+              <div style={{ fontSize: 15, fontWeight: 600, color: "#fff", marginBottom: 6 }}>
+                {t(`faq_q${n}` as never)}
+              </div>
+              <div style={{ fontSize: 14, lineHeight: 1.55, color: TEXT_DIM }}>
+                {t(`faq_a${n}` as never)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 6. MINI-FOUNDER (subtil) */}
+      <section style={SECTION_WRAP_NARROW}>
+        <div
+          style={{
+            padding: "16px 4px",
+            textAlign: "center",
+          }}
+        >
+          <p
+            style={{
+              fontSize: 13,
+              lineHeight: 1.55,
+              color: TEXT_DIM,
+              margin: "0 0 4px",
+            }}
+          >
+            {t("mini_founder")}
+          </p>
+          <div style={{ fontSize: 12, color: TEXT_FAINT }}>
+            {t("mini_founder_attr")}
+          </div>
+        </div>
+      </section>
+
+      {/* Compliance footer */}
+      <section
+        style={{
+          width: "100%",
+          maxWidth: 760,
+          margin: "0 auto 32px",
+          padding: "0 20px",
+          boxSizing: "border-box",
+        }}
+      >
+        <p
+          style={{
+            fontSize: 11,
+            lineHeight: 1.55,
+            color: TEXT_FAINT,
+            textAlign: "center",
+            margin: 0,
+          }}
+        >
+          {t("compliance_footer")}
         </p>
       </section>
 
-      {/* 2. Steps */}
-      <section
-        style={{
-          width: "100%",
-          maxWidth: 680,
-          margin: "0 auto 56px",
-          padding: "0 20px",
-          boxSizing: "border-box",
-        }}
-      >
-        <Steps />
-      </section>
-
-      {/* 3. Feature cards (replaces the old bullet list) */}
-      <section
-        style={{
-          width: "100%",
-          maxWidth: 1080,
-          margin: "0 auto 56px",
-          padding: "0 20px",
-          boxSizing: "border-box",
-        }}
-      >
-        <FeatureTrio />
-      </section>
-
-      {/* 4. Pricing */}
-      <section
-        style={{
-          width: "100%",
-          maxWidth: 680,
-          margin: "0 auto 56px",
-          padding: "0 20px",
-          boxSizing: "border-box",
-        }}
-      >
-        <PricingCard
-          heading={t("pricing_heading")}
-          lines={[
-            { left: t("pricing_l1_left"), right: t("pricing_l1_right") },
-            { left: t("pricing_l2_left"), right: t("pricing_l2_right") },
-            { left: t("pricing_l3_left"), right: t("pricing_l3_right") },
-          ]}
-          footer={t("pricing_footer")}
-        />
-      </section>
-
-      {/* 5. Founder — Lucas's diagnosis story, directly above FAQ */}
-      <section
-        style={{
-          width: "100%",
-          maxWidth: 680,
-          margin: "0 auto 56px",
-          padding: "0 20px",
-          boxSizing: "border-box",
-        }}
-      >
-        <FounderSection />
-      </section>
-
-      {/* 6. FAQ */}
-      <section
-        style={{
-          width: "100%",
-          maxWidth: 680,
-          margin: "0 auto 56px",
-          padding: "0 20px",
-          boxSizing: "border-box",
-        }}
-      >
-        <FAQ items={faqItems} />
-      </section>
-
-      {/* 7. Footer */}
+      {/* Global footer */}
       <section
         style={{
           width: "100%",
@@ -492,15 +442,10 @@ function BetaContent() {
   );
 }
 
-/**
- * Suspense wrapper required by Next.js 14+ when a client component uses
- * useSearchParams() — without it the static prerender fails with
- * "useSearchParams() should be wrapped in a suspense boundary".
- */
-export default function BetaPage() {
+export default function PreviewBetaPage() {
   return (
     <Suspense fallback={null}>
-      <BetaContent />
+      <PreviewBetaContent />
     </Suspense>
   );
 }

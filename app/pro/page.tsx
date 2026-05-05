@@ -2,15 +2,11 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import Image from "next/image";
 import AppMockupPhone from "@/components/AppMockupPhone";
-import FAQ from "@/components/landing/FAQ";
-import FeatureTrio from "@/components/landing/FeatureTrio";
-import FounderSection from "@/components/landing/FounderSection";
 import LandingFooter from "@/components/landing/Footer";
 import Lockup from "@/components/landing/Lockup";
 import CGMCompatibility from "@/components/landing/CGMCompatibility";
-import PricingCard from "@/components/landing/PricingCard";
-import Steps from "@/components/landing/Steps";
 import {
   ACCENT,
   ACCENT_HOVER,
@@ -19,22 +15,15 @@ import {
   MINT,
   SURFACE,
   TEXT_DIM,
+  TEXT_FAINT,
 } from "@/components/landing/tokens";
 
 /**
- * Pro-CTA — POSTet auf /api/checkout/pro, bekommt eine fresh Stripe
- * Subscription-Checkout-Session zurück (mit Trial bis 1. Juli 2026)
- * und schickt den User dorthin. Damit kontrollieren WIR welche Price-IDs
- * verwendet werden — kein hardcoded Payment Link mehr.
- *
- * Locale wird im Body mitgeschickt, damit der Backend-Endpoint die richtigen
- * Stripe-Price-IDs (EUR oder USD) auswählt.
- *
- * Die "reiche" Variante /api/pro/checkout (mit Email-Validierung und
- * DB-Tracking) bleibt im Repo für späteres Funnel-Tracking.
+ * /preview-pro — copy & layout preview of /pro.
+ * Stripe wiring untouched: posts to /api/checkout/pro with locale.
  */
-function ProCTALink() {
-  const t = useTranslations("proPage");
+function PreviewProCTA({ block = true }: { block?: boolean }) {
+  const t = useTranslations("previewPro");
   const locale = useLocale();
   const [hover, setHover] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -45,8 +34,6 @@ function ProCTALink() {
     setError(null);
     setLoading(true);
 
-    // Meta Pixel — InitiateCheckout fires VOR dem fetch damit der Beacon
-    // auch dann ankommt wenn die Navigation den Pixel-Request abschneidet.
     if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
       (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("track", "InitiateCheckout");
     }
@@ -57,19 +44,14 @@ function ProCTALink() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ locale }),
       });
-
       const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
-
       if (!res.ok || !data.url) {
-        throw new Error(data.error || t("error_checkout_http", { status: res.status }));
+        throw new Error(data.error || `HTTP ${res.status}`);
       }
-
-      // Same-Tab-Redirect — Stripe-Checkout-Standard.
       window.location.href = data.url;
     } catch (err) {
       setLoading(false);
-      const message = err instanceof Error ? err.message : t("error_unknown");
-      setError(message);
+      setError(err instanceof Error ? err.message : "Unknown error");
     }
   }
 
@@ -100,7 +82,7 @@ function ProCTALink() {
           transition: "background 120ms ease, box-shadow 120ms ease",
           outlineColor: "rgba(79,110,247,0.4)",
           boxSizing: "border-box",
-          width: "100%",
+          width: block ? "100%" : "auto",
         }}
       >
         {loading ? t("cta_loading") : t("cta_default")}
@@ -126,29 +108,22 @@ function ProCTALink() {
   );
 }
 
-/**
- * /pro — direct monthly-subscription landing page.
- * A/B partner to /beta. No reservation deposit, no seat counter, billing
- * begins on the public launch date (1 July 2026) via a Stripe trial.
- */
-function ProContent() {
-  const t = useTranslations("proPage");
-  const tMarketing = useTranslations("marketing");
-  const launchDateLabel = tMarketing("landing_launch_date_label");
+const SECTION_WRAP_NARROW: React.CSSProperties = {
+  width: "100%",
+  maxWidth: 760,
+  margin: "0 auto 56px",
+  padding: "0 20px",
+  boxSizing: "border-box",
+};
 
-  // Meta Pixel — fires a custom `ViewProPage` event so we can build a
-  // pro-page-visitors retargeting audience separate from the generic
-  // PageView signal that fires on every route via the root layout.
+function PreviewProContent() {
+  const t = useTranslations("previewPro");
+
   useEffect(() => {
     if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
-      (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("trackCustom", "ViewProPage");
+      (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("trackCustom", "ViewProPagePreview");
     }
   }, []);
-
-  const faqItems = [1, 2, 3, 4, 5].map((i) => ({
-    q: t(`faq_q${i}`),
-    a: t(`faq_a${i}`),
-  }));
 
   return (
     <main
@@ -159,12 +134,6 @@ function ProContent() {
         padding: "48px 0 64px",
         display: "flex",
         flexDirection: "column",
-        // Mobile horizontal-scroll guard: the PhoneShell mockup has
-        // absolute side-buttons at left:-2px / right:-2px and a soft
-        // 80px box-shadow that can poke past the iPhone 13 mini's
-        // 375px viewport. Clip the page to its own width so the body
-        // never scrolls horizontally — vertical scroll is unaffected
-        // because we don't touch overflow-y.
         overflowX: "hidden",
         width: "100%",
       }}
@@ -176,14 +145,6 @@ function ProContent() {
           gap: 56px;
           align-items: center;
         }
-        .glev-feat-grid {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 24px;
-          max-width: 900px;
-          margin: 0 auto;
-        }
-        .glev-feat-grid > div { height: 100%; }
         .glev-phone-stage { justify-self: end; }
         .glev-hero-form { width: 100%; max-width: 420px; }
         @media (max-width: 960px) {
@@ -193,18 +154,9 @@ function ProContent() {
           .glev-hero-left { align-items: center !important; text-align: center !important; }
           .glev-hero-meta { justify-content: center !important; }
         }
-        .glev-scenario-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 16px;
-        }
-        @media (max-width: 640px) {
-          .glev-feat-grid { grid-template-columns: 1fr; }
-          .glev-scenario-grid { grid-template-columns: 1fr; }
-        }
       `}</style>
 
-      {/* 1. Hero — text/CTA left, app render right (stacks on mobile) */}
+      {/* 1. HERO */}
       <section
         style={{
           width: "100%",
@@ -234,15 +186,13 @@ function ProContent() {
                 fontWeight: 700,
                 color: "#fff",
                 margin: 0,
-                // Same mobile-overflow guard as /beta: lower the clamp
-                // floor and let German compounds break instead of
-                // pushing the page wider than the viewport.
-                overflowWrap: "anywhere",
-                hyphens: "auto",
-                WebkitHyphens: "auto",
+                overflowWrap: "normal",
+                hyphens: "manual",
+                WebkitHyphens: "manual",
+                whiteSpace: "pre-line",
               }}
             >
-              {t("hero_title_line1")}<br />{t("hero_title_line2")}<br />{t("hero_title_line3")}
+              {t("hero_title")}
             </h1>
             <p style={{ fontSize: 18, lineHeight: 1.5, color: TEXT_DIM, margin: 0, maxWidth: 520 }}>
               {t("hero_subtitle")}
@@ -252,7 +202,7 @@ function ProContent() {
               className="glev-hero-form"
               style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}
             >
-              <ProCTALink />
+              <PreviewProCTA />
             </div>
 
             <div
@@ -268,22 +218,151 @@ function ProContent() {
               }}
             >
               <span aria-hidden>↺</span>
-              <span>{t("meta_card", { date: launchDateLabel })}</span>
+              <span>{t("hero_microcopy")}</span>
             </div>
           </div>
 
           <div className="glev-phone-stage">
-            {/* Fully interactive hero — see homepage note. */}
             <AppMockupPhone />
           </div>
         </div>
       </section>
 
-      {/* 1b. Scenario — Aha-Moment block (Vorher / Nachher) */}
+      {/* 2. FOUNDER (direkt unter Hero) */}
+      <section style={SECTION_WRAP_NARROW}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            textAlign: "center",
+            gap: 16,
+          }}
+        >
+          <div
+            style={{
+              width: 96,
+              height: 96,
+              borderRadius: "50%",
+              background: ACCENT,
+              overflow: "hidden",
+              position: "relative",
+              boxShadow: "0 8px 24px rgba(79,110,247,0.35)",
+            }}
+          >
+            <Image
+              src="/founder.png"
+              alt="Lucas, Founder von Glev"
+              fill
+              sizes="96px"
+              priority
+              style={{
+                objectFit: "cover",
+                objectPosition: "50% 18%",
+                transform: "scale(1.6)",
+                transformOrigin: "50% 18%",
+              }}
+            />
+          </div>
+          <p
+            style={{
+              fontSize: 16,
+              lineHeight: 1.55,
+              color: "rgba(255,255,255,0.9)",
+              margin: 0,
+              maxWidth: 540,
+            }}
+          >
+            {t("founder_quote")}
+          </p>
+          <div style={{ fontSize: 14, fontWeight: 500, color: MINT }}>
+            {t("founder_attribution")}
+          </div>
+        </div>
+      </section>
+
+      {/* 2b. CGM COMPATIBILITY — Trust + Qualifikation vor Pricing */}
+      <section style={{ ...SECTION_WRAP_NARROW, padding: "8px 20px 0" }}>
+        <CGMCompatibility />
+      </section>
+
+      {/* 3. POSITIONING */}
+      <section style={SECTION_WRAP_NARROW}>
+        <div
+          style={{
+            background: SURFACE,
+            border: `1px solid ${BORDER}`,
+            borderRadius: 16,
+            padding: "24px 24px",
+            textAlign: "center",
+          }}
+        >
+          <p
+            style={{
+              fontSize: 18,
+              lineHeight: 1.55,
+              color: "#fff",
+              margin: 0,
+              fontWeight: 500,
+            }}
+          >
+            {t("positioning")}
+          </p>
+        </div>
+      </section>
+
+      {/* 4. FLOW — 3 Schritte */}
+      <section style={SECTION_WRAP_NARROW}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 14 }}>
+          {[1, 2, 3].map((n) => (
+            <div
+              key={n}
+              style={{
+                display: "flex",
+                gap: 16,
+                background: SURFACE,
+                border: `1px solid ${BORDER}`,
+                borderRadius: 14,
+                padding: "18px 18px",
+                alignItems: "flex-start",
+              }}
+            >
+              <div
+                aria-hidden
+                style={{
+                  flexShrink: 0,
+                  width: 36,
+                  height: 36,
+                  borderRadius: 10,
+                  background: `${ACCENT}22`,
+                  color: ACCENT,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 700,
+                  fontSize: 16,
+                }}
+              >
+                {n}
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 16, fontWeight: 600, color: "#fff", marginBottom: 4 }}>
+                  {t(`flow_${n}_title` as never)}
+                </div>
+                <div style={{ fontSize: 14, lineHeight: 1.55, color: TEXT_DIM }}>
+                  {t(`flow_${n}_text` as never)}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 5. PRICING block */}
       <section
         style={{
           width: "100%",
-          maxWidth: 760,
+          maxWidth: 680,
           margin: "0 auto 56px",
           padding: "0 20px",
           boxSizing: "border-box",
@@ -294,183 +373,142 @@ function ProContent() {
             background: SURFACE,
             border: `1px solid ${BORDER}`,
             borderRadius: 16,
-            padding: "24px 24px 28px",
+            padding: "28px 24px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 14,
           }}
         >
-          <p
-            style={{
-              fontSize: 16,
-              lineHeight: 1.55,
-              color: "#fff",
-              margin: "0 0 20px",
-            }}
-          >
-            {t.rich("scenario_intro", {
-              strong: (chunks) => <strong>{chunks}</strong>,
-            })}
-          </p>
-          <div className="glev-scenario-grid">
-            <div
-              style={{
-                background: BG,
-                border: `1px solid ${BORDER}`,
-                borderRadius: 12,
-                padding: 16,
-              }}
-            >
-              <strong
+          <div style={{ fontSize: 28, fontWeight: 700, color: "#fff", lineHeight: 1.15 }}>
+            {t("pricing_headline")}
+          </div>
+          <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+            {[1, 2, 3, 4].map((n) => (
+              <li
+                key={n}
                 style={{
-                  display: "block",
-                  fontSize: 12,
-                  color: "rgba(255,255,255,0.55)",
-                  marginBottom: 6,
-                  letterSpacing: "0.06em",
-                  textTransform: "uppercase",
+                  display: "flex",
+                  gap: 10,
+                  alignItems: "flex-start",
+                  fontSize: 15,
+                  lineHeight: 1.5,
+                  color: TEXT_DIM,
                 }}
               >
-                {t("scenario_without_label")}
-              </strong>
-              <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: "rgba(255,255,255,0.85)" }}>
-                {t("scenario_without_text")}
-              </p>
-            </div>
-            <div
-              style={{
-                background: BG,
-                border: `1px solid ${ACCENT}55`,
-                borderRadius: 12,
-                padding: 16,
-              }}
-            >
-              <strong
-                style={{
-                  display: "block",
-                  fontSize: 12,
-                  color: ACCENT,
-                  marginBottom: 6,
-                  letterSpacing: "0.06em",
-                  textTransform: "uppercase",
-                }}
-              >
-                {t("scenario_with_label")}
-              </strong>
-              <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: "rgba(255,255,255,0.85)" }}>
-                {t("scenario_with_text")}
-              </p>
-            </div>
+                <span aria-hidden style={{ color: MINT, fontWeight: 700, marginTop: 1 }}>✓</span>
+                <span>{t(`pricing_bullet_${n}` as never)}</span>
+              </li>
+            ))}
+          </ul>
+          <div style={{ marginTop: 8 }}>
+            <PreviewProCTA />
+          </div>
+          <div style={{ fontSize: 13, color: MINT, textAlign: "center", marginTop: 4 }}>
+            {t("pricing_microcopy")}
           </div>
         </div>
       </section>
 
-      {/* 2. Steps */}
-      <section
-        style={{
-          width: "100%",
-          maxWidth: 680,
-          margin: "0 auto 56px",
-          padding: "0 20px",
-          boxSizing: "border-box",
-        }}
-      >
-        <Steps />
-      </section>
-
-      {/* 3. Feature cards (replaces the old bullet list) */}
-      <section
-        style={{
-          width: "100%",
-          maxWidth: 1080,
-          margin: "0 auto 56px",
-          padding: "0 20px",
-          boxSizing: "border-box",
-        }}
-      >
-        <FeatureTrio
-          items={[
-            {
-              color: ACCENT,
-              title: t("trio_trend_title"),
-              text: t("trio_trend_text"),
-            },
-            {
-              color: MINT,
-              title: t("trio_meal_title"),
-              text: t("trio_meal_text"),
-            },
-            {
-              color: "#FF9500",
-              title: t("trio_timing_title"),
-              text: t("trio_timing_text"),
-            },
-          ]}
-          extra={{
-            color: "#FF2D78",
-            title: t("trio_extra_title"),
-            text: t("trio_extra_text"),
-          }}
-        />
-      </section>
-
-      {/* 3b. CGM Compatibility — Final Check vor Pricing */}
-      <section
-        style={{
-          width: "100%",
-          maxWidth: 680,
-          margin: "0 auto 24px",
-          padding: "0 20px",
-          boxSizing: "border-box",
-        }}
-      >
-        <CGMCompatibility />
-      </section>
-
-      {/* 4. Pricing */}
-      <section
-        style={{
-          width: "100%",
-          maxWidth: 680,
-          margin: "0 auto 56px",
-          padding: "0 20px",
-          boxSizing: "border-box",
-        }}
-      >
-        <PricingCard
-          heading={t("pricing_heading")}
-          lines={[
-            { left: t("pricing_l1_left", { date: launchDateLabel }), right: t("pricing_l1_right") },
-            { left: t("pricing_l2_left"), right: t("pricing_l2_right") },
-            { left: t("pricing_l3_left"), right: t("pricing_l3_right") },
-          ]}
-        />
-      </section>
-
-      {/* 5. Founder — Lucas's diagnosis story, directly above FAQ */}
-      <section
-        style={{
-          width: "100%",
-          maxWidth: 680,
-          margin: "0 auto 56px",
-          padding: "0 20px",
-          boxSizing: "border-box",
-        }}
-      >
-        <FounderSection />
-      </section>
-
       {/* 6. FAQ */}
+      <section style={SECTION_WRAP_NARROW}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {[1, 2, 3, 4].map((n) => (
+            <div
+              key={n}
+              style={{
+                background: SURFACE,
+                border: `1px solid ${BORDER}`,
+                borderRadius: 14,
+                padding: "18px 20px",
+              }}
+            >
+              <div style={{ fontSize: 15, fontWeight: 600, color: "#fff", marginBottom: 6 }}>
+                {t(`faq_q${n}` as never)}
+              </div>
+              <div style={{ fontSize: 14, lineHeight: 1.55, color: TEXT_DIM }}>
+                {t(`faq_a${n}` as never)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 7. TIER TABLE (compact, 3 rows) */}
+      <section style={SECTION_WRAP_NARROW}>
+        <h2
+          style={{
+            fontSize: 18,
+            fontWeight: 600,
+            color: "#fff",
+            margin: "0 0 14px",
+            letterSpacing: "-0.01em",
+            textAlign: "center",
+          }}
+        >
+          {t("tier_compact_headline")}
+        </h2>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {(
+            [
+              { label: t("tier_compact_beta_label"), tagline: t("tier_compact_beta_tagline") },
+              { label: t("tier_compact_pro_label"), tagline: t("tier_compact_pro_tagline") },
+              { label: t("tier_compact_clinic_label"), tagline: t("tier_compact_clinic_tagline") },
+            ] as const
+          ).map((row) => (
+            <div
+              key={row.label}
+              style={{
+                background: SURFACE,
+                border: `1px solid ${BORDER}`,
+                borderRadius: 12,
+                padding: "14px 16px",
+                display: "flex",
+                alignItems: "center",
+                gap: 14,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 14,
+                  fontWeight: 700,
+                  color: "#fff",
+                  minWidth: 60,
+                }}
+              >
+                {row.label}
+              </div>
+              <div style={{ fontSize: 14, color: TEXT_DIM, lineHeight: 1.45 }}>
+                {row.tagline}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Compliance footer */}
       <section
         style={{
           width: "100%",
-          maxWidth: 680,
-          margin: "0 auto 56px",
+          maxWidth: 760,
+          margin: "0 auto 32px",
           padding: "0 20px",
           boxSizing: "border-box",
         }}
       >
-        <FAQ items={faqItems} />
+        <p
+          style={{
+            fontSize: 11,
+            lineHeight: 1.55,
+            color: TEXT_FAINT,
+            textAlign: "center",
+            margin: 0,
+          }}
+        >
+          {t("compliance_footer")}
+        </p>
       </section>
 
-      {/* 7. Footer */}
+      {/* Global footer */}
       <section
         style={{
           width: "100%",
@@ -486,18 +524,10 @@ function ProContent() {
   );
 }
 
-/**
- * Suspense wrapper required by Next.js 14+ when a client component uses
- * useSearchParams() — without it the static prerender fails with
- * "useSearchParams() should be wrapped in a suspense boundary". The
- * fallback is null because /pro is a "use client" page that hydrates
- * immediately; there's no meaningful skeleton to show in the brief
- * server-render gap.
- */
-export default function ProPage() {
+export default function PreviewProPage() {
   return (
     <Suspense fallback={null}>
-      <ProContent />
+      <PreviewProContent />
     </Suspense>
   );
 }
