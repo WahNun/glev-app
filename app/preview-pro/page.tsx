@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import Image from "next/image";
 import AppMockupPhone from "@/components/AppMockupPhone";
 import LandingFooter from "@/components/landing/Footer";
 import Lockup from "@/components/landing/Lockup";
@@ -230,24 +231,50 @@ function PreviewProContent() {
       <section style={SECTION_WRAP_NARROW}>
         <div
           style={{
-            background: SURFACE,
-            border: `1px solid ${BORDER}`,
-            borderRadius: 16,
-            padding: "20px 22px",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            textAlign: "center",
+            gap: 16,
           }}
         >
+          <div
+            style={{
+              width: 96,
+              height: 96,
+              borderRadius: "50%",
+              background: ACCENT,
+              overflow: "hidden",
+              position: "relative",
+              boxShadow: "0 8px 24px rgba(79,110,247,0.35)",
+            }}
+          >
+            <Image
+              src="/founder.png"
+              alt="Lucas, Founder von Glev"
+              fill
+              sizes="96px"
+              priority
+              style={{
+                objectFit: "cover",
+                objectPosition: "50% 18%",
+                transform: "scale(1.6)",
+                transformOrigin: "50% 18%",
+              }}
+            />
+          </div>
           <p
             style={{
-              fontSize: 15,
+              fontSize: 16,
               lineHeight: 1.55,
-              color: "#fff",
-              margin: "0 0 8px",
-              fontWeight: 400,
+              color: "rgba(255,255,255,0.9)",
+              margin: 0,
+              maxWidth: 540,
             }}
           >
             {t("founder_quote")}
           </p>
-          <div style={{ fontSize: 13, color: TEXT_FAINT, fontWeight: 500 }}>
+          <div style={{ fontSize: 14, fontWeight: 500, color: MINT }}>
             {t("founder_attribution")}
           </div>
         </div>
