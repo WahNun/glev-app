@@ -62,7 +62,10 @@ captures/
 .cxx/
 
 # Google Services (e.g. APIs or Firebase)
-# google-services.json
+# Real Firebase config — never committed. The .example sibling file
+# (which IS committed) documents the expected shape; see
+# android/SIGNING_SETUP.md for how to obtain the real file.
+app/google-services.json
 
 # Freeline
 freeline.py
