@@ -77,6 +77,8 @@ android/app/src/main/assets/capacitor.config.json
 android/captures/
 android/local.properties
 android/.cxx/
+*.keystore
+*.jks
 
 # Fastlane build outputs and runtime state. The Fastfile, Appfile, Pluginfile
 # and Gemfile.lock are committed; everything else is generated.

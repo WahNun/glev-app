@@ -1,0 +1,150 @@
+=== BEGIN ===
+CONTEXT
+Capacitor 8 ist eingerichtet, android/ existiert bereits. Die App läuft im server.url-Modus (lädt live glev.app). Ziel: signierten AAB für Google Play Internal Testing bauen. Der eigentliche Gradle-Build läuft lokal auf dem Mac in Android Studio — dieser Prompt richtet alles vor was dafür nötig ist.
+
+STEP 1 — Bestehenden Android-Stand lesen
+bashcat android/app/build.gradle
+cat android/variables.gradle
+cat capacitor.config.ts
+ls android/app/src/main/res/mipmap-* 2>/dev/null | head -5
+grep -r "applicationId\|versionCode\|versionName" android/app/build.gradle | head -10
+Verstehe:
+
+Welche applicationId ist gesetzt? (muss app.glev oder ähnlich sein)
+Welche versionCode und versionName sind aktuell?
+Gibt es bereits einen signingConfigs-Block in build.gradle?
+
+
+STEP 2 — App-Metadaten in build.gradle prüfen und setzen
+Öffne android/app/build.gradle. Stelle sicher dass folgendes gesetzt ist:
+gradleandroid {
+    defaultConfig {
+        applicationId "app.glev"
+        minSdkVersion 22
+        targetSdkVersion 34
+        compileSdkVersion 34
+        versionCode 1
+        versionName "0.1.0"
+    }
+}
+Nur anpassen was fehlt oder falsch ist — nichts löschen.
+
+STEP 3 — Signing-Konfiguration hinzufügen
+In android/app/build.gradle einen signingConfigs-Block hinzufügen und im release-BuildType referenzieren:
+gradleandroid {
+    signingConfigs {
+        release {
+            storeFile file(System.getenv("KEYSTORE_PATH") ?: "release.keystore")
+            storePassword System.getenv("KEYSTORE_PASSWORD") ?: ""
+            keyAlias System.getenv("KEY_ALIAS") ?: "glev"
+            keyPassword System.getenv("KEY_PASSWORD") ?: ""
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+Die Werte kommen aus Umgebungsvariablen — der Keystore selbst wird lokal auf dem Mac generiert, nicht in Replit.
+
+STEP 4 — Android-Scripts in package.json ergänzen
+Füge zur scripts-Sektion in package.json hinzu:
+json"android:sync": "npx cap sync android",
+"android:open": "npx cap open android",
+"android:build:debug": "npx cap sync android && cd android && ./gradlew assembleDebug",
+"android:version": "node scripts/bump-android-version.mjs show"
+Erstelle scripts/bump-android-version.mjs (analog zu scripts/bump-ios-version.mjs):
+javascriptimport { readFileSync, writeFileSync } from 'fs'
+
+const buildGradlePath = 'android/app/build.gradle'
+const content = readFileSync(buildGradlePath, 'utf8')
+
+const versionCodeMatch = content.match(/versionCode (\d+)/)
+const versionNameMatch = content.match(/versionName "([^"]+)"/)
+
+const versionCode = versionCodeMatch ? parseInt(versionCodeMatch[1]) : 0
+const versionName = versionNameMatch ? versionNameMatch[1] : '0.0.0'
+
+const arg = process.argv[2]
+
+if (arg === 'show') {
+  console.log(`Android versionCode: ${versionCode}, versionName: ${versionName}`)
+} else if (arg === 'bump') {
+  const newVersionCode = versionCode + 1
+  const newContent = content
+    .replace(/versionCode \d+/, `versionCode ${newVersionCode}`)
+  writeFileSync(buildGradlePath, newContent)
+  console.log(`versionCode: ${versionCode} → ${newVersionCode}`)
+}
+
+STEP 5 — Keystore-Anleitung als README
+Erstelle android/SIGNING_SETUP.md:
+markdown# Android Signing Setup
+
+## Keystore einmalig generieren (lokal auf dem Mac)
+
+\`\`\`bash
+keytool -genkey -v \
+  -keystore ~/glev-release.keystore \
+  -alias glev \
+  -keyalg RSA \
+  -keysize 2048 \
+  -validity 10000
+\`\`\`
+
+Beim Ausfüllen: Name, Organisation (Glev), Land (PT), Passwort merken.
+
+⚠️ Den Keystore NIEMALS ins Git committen. Er bleibt lokal auf deinem Mac.
+Backup: iCloud oder Passwort-Manager.
+
+## Umgebungsvariablen setzen (lokal, vor dem Build)
+
+\`\`\`bash
+export KEYSTORE_PATH=~/glev-release.keystore
+export KEYSTORE_PASSWORD=<dein_passwort>
+export KEY_ALIAS=glev
+export KEY_PASSWORD=<dein_passwort>
+\`\`\`
+
+## AAB bauen für Play Store
+
+\`\`\`bash
+npm run android:sync
+cd android
+./gradlew bundleRelease
+\`\`\`
+
+AAB liegt danach unter: android/app/build/outputs/bundle/release/app-release.aab
+
+## In Play Console hochladen
+
+1. play.google.com/console → Glev → Testing → Internal testing
+2. Create new release → AAB hochladen
+3. Release notes hinzufügen → Save → Review → Start rollout
+\`\`\`
+
+STEP 6 — .gitignore prüfen
+Stelle sicher dass diese Zeilen in .gitignore sind:
+*.keystore
+*.jks
+android/local.properties
+
+STEP 7 — Sync + Commit
+bashnpx cap sync android
+tsc --noEmit 2>/dev/null || true
+git add -A android/app/build.gradle package.json scripts/bump-android-version.mjs android/SIGNING_SETUP.md .gitignore
+git commit -m "feat(android): signing config + build scripts + keystore setup guide"
+git push origin main
+
+DO NOT change
+
+capacitor.config.ts — server.url bleibt wie er ist
+next.config.ts — kein output: 'export' nötig
+iOS-Scripts und Fastlane-Config
+Bestehende Android-Ressourcen (Icons, Splashscreens wenn vorhanden)
+
+=== END ===
