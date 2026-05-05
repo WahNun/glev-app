@@ -179,9 +179,10 @@ function PreviewBetaContent() {
                 fontWeight: 700,
                 color: "#fff",
                 margin: 0,
-                overflowWrap: "anywhere",
-                hyphens: "auto",
-                WebkitHyphens: "auto",
+                overflowWrap: "normal",
+                hyphens: "manual",
+                WebkitHyphens: "manual",
+                whiteSpace: "pre-line",
               }}
             >
               {t("hero_title")}
