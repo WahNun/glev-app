@@ -669,6 +669,14 @@ export default function PreviewHome() {
               <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--text)" }}>
                 Beta-Reservierung
               </h3>
+              <div style={{ marginTop: 14, display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text)" }}>€4,50</span>
+                <span style={{ fontSize: 15, color: "var(--text-muted)" }}>/ Monat</span>
+                <span style={{ fontSize: 13, color: "var(--text-muted)", textDecoration: "line-through", marginLeft: 4 }}>€9</span>
+              </div>
+              <p style={{ margin: "6px 0 0 0", fontSize: 12.5, color: "var(--text-muted)", letterSpacing: "-0.005em" }}>
+                in den ersten 3 Monaten
+              </p>
             </div>
 
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
@@ -692,18 +700,7 @@ export default function PreviewHome() {
                 lineHeight: 1.55,
               }}
             >
-              Jetzt kostenlos · Billing startet im Juli
-            </p>
-
-            <p
-              style={{
-                margin: 0,
-                fontSize: 13.5,
-                color: "var(--text-body)",
-                lineHeight: 1.55,
-              }}
-            >
-              Erste 3 Monate je <strong style={{ color: "var(--text)" }}>€4,50</strong> · danach <strong style={{ color: "var(--text)" }}>€9/Monat</strong> · jederzeit kündbar
+              Jetzt kostenlos · Billing startet im Juli · jederzeit kündbar
             </p>
 
             <Link
