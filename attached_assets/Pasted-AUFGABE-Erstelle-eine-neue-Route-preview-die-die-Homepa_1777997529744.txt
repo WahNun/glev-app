@@ -1,0 +1,72 @@
+AUFGABE
+Erstelle eine neue Route /preview die die Homepage mit der neuen Copy zeigt. Die bestehende Homepage (/) wird NICHT angefasst. Kein git push.
+
+STEP 0 — Struktur prüfen
+bashfind app -name "page.tsx" | head -10
+Ziel: neue Datei unter app/(public)/preview/page.tsx oder app/preview/page.tsx — orientiere dich an der Ordnerstruktur der bestehenden Seiten.
+
+STEP 1 — Preview-Seite erstellen
+Kopiere die bestehende Homepage-Komponente als Basis und ersetze darin folgende Texte:
+Hero:
+
+DE Headline: Hör auf zu raten.
+EN Headline: Stop guessing.
+DE Subheadline: Logge deine Mahlzeit. Sieh, was wirklich passiert ist. Triff bessere Entscheidungen beim nächsten Mal.
+EN Subheadline: Log your meal. See what actually happened. Make a better decision next time.
+DE Support Line: Voice-first Logging · CGM-basierte Insights · Outcome-getriebenes Lernen
+EN Support Line: Voice-first logging · CGM-based insights · Outcome-driven learning
+CTAs — nur zwei, kein Preis:
+
+Primary: Wie Glev das löst → /pro
+Secondary: Frühzugang sichern → /beta
+
+
+
+Immediate Value Section:
+
+DE: Jede Mahlzeit zeigt dir etwas. / Glev verbindet deine Mahlzeit, dein Insulin und deine Glukosewerte — damit du erkennst, wann du unterdosiert, überdosiert oder richtig gelegen hast.
+EN analog
+
+Problem Section:
+
+DE Titel: Du entscheidest mit zu wenig Daten.
+DE Bullets: Ein einzelner Glukosewert sagt nichts / Gleiche Mahlzeit ≠ gleiches Ergebnis / Muster bleiben unsichtbar
+EN analog
+
+System Flow Section:
+
+DE: Sprechen → Essen → Verstehen → Verbessern / Du loggst deine Mahlzeit, Glev analysiert sie und zeigt dir, was wirklich passiert ist — damit deine nächste Entscheidung besser wird.
+EN analog
+
+Features Section:
+
+DE Titel: Was Glev wirklich macht / EN: What Glev actually does
+Beschreibungen auf max. 2 Zeilen kürzen
+Falls veraltete App-Screenshots vorhanden: durch aktuelle ersetzen oder Abschnitt entfernen
+
+Positioning Block (neu einfügen falls nicht in der bestehenden Homepage vorhanden):
+
+DE: Glev ist die Entscheidungsebene für CGM-Nutzer. / Nicht nur Tracking. Nicht Hardware. Sondern das System dazwischen.
+EN analog
+
+Compliance Footer (vor globalem Footer einfügen):
+
+DE: Glev ist ein Tool zur Dokumentation und Organisation und ersetzt keine medizinische Beratung. Entscheidungen zur Therapie sollten in Absprache mit medizinischem Fachpersonal getroffen werden.
+EN: Glev is a documentation and organisation tool and does not replace professional medical advice. Treatment decisions should be made in consultation with a healthcare professional.
+Styling: kleiner Text, muted — kein Fettdruck.
+
+
+NICHT ÄNDERN
+
+Bestehende Homepage (/) — bleibt exakt wie sie ist
+Alle anderen Seiten
+Styling / Tailwind-Klassen
+Globales Layout, Nav, Footer
+
+
+VERIFY
+
+tsc --noEmit → kein Fehler
+Dev-Server läuft → / und /preview im Browser öffnen
+Screenshot von /preview zeigen
+Warte auf Freigabe — kein Commit, kein Push

@@ -1,0 +1,921 @@
+"use client";
+
+// Preview-Route — separater Marketing-Stand mit überarbeiteter Copy.
+// Bewusst eine eigene Datei (statt Variante in /), damit die produktive
+// Homepage in / unangetastet bleibt und Lucas die neue Variante in Ruhe
+// gegen-die-alte vergleichen kann, bevor irgendetwas live geht.
+//
+// Struktur unterscheidet sich von / in:
+//   * Hero-Copy + nur 2 CTAs (kein /login-Tertiary)
+//   * neue "Immediate Value"-Sektion direkt nach dem Hero
+//   * neue Pain-Bullets
+//   * neue System-Flow-Sektion (statt der alten Steps-Komponente)
+//   * FeatureTrio bekommt eine eigene Section-Headline
+//   * FeatureDeepDive entfernt (per Spec — App-Screenshots veraltet)
+//   * neuer Positioning-Block vor der Pricing-Sektion
+//   * neuer Compliance-Disclaimer direkt vor dem globalen Footer
+// Pricing, FAQ, Nav und Footer bleiben strukturell identisch zur Homepage
+// und ziehen ihre Texte weiterhin aus dem `marketing`-Namespace.
+
+import Link from "next/link";
+import { useTranslations } from "next-intl";
+import GlevLockup from "@/components/GlevLockup";
+import AppMockupPhone from "@/components/AppMockupPhone";
+import FeatureTrio from "@/components/landing/FeatureTrio";
+import LocaleSwitcher from "@/components/LocaleSwitcher";
+
+const ACCENT  = "#4F6EF7";
+const HOVER   = "#6B8BFF";
+const GREEN   = "#22D3A0";
+const BG      = "var(--bg)";
+const SURFACE = "var(--surface)";
+const BORDER  = "var(--border)";
+
+export default function PreviewHome() {
+  const t  = useTranslations("marketing");
+  const tp = useTranslations("preview");
+  return (
+    <main
+      style={{
+        background: BG,
+        color: "var(--text)",
+        minHeight: "100dvh",
+        fontFamily: "var(--font-inter), Inter, system-ui, sans-serif",
+        position: "relative",
+        overflow: "hidden",
+        paddingTop: "calc(56px + env(safe-area-inset-top))",
+      }}
+    >
+      {/* Soft brand glow background */}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          inset: 0,
+          background:
+            "radial-gradient(60% 60% at 80% 0%, rgba(79,110,247,0.18) 0%, rgba(79,110,247,0) 60%), radial-gradient(50% 50% at 0% 100%, rgba(34,211,160,0.10) 0%, rgba(34,211,160,0) 60%)",
+          pointerEvents: "none",
+        }}
+      />
+
+      <style>{`
+        @keyframes glevPulse {
+          0%,100% { box-shadow: 0 0 0 0 ${ACCENT}55; }
+          70%     { box-shadow: 0 0 0 12px ${ACCENT}00; }
+        }
+        .glev-cta-primary { transition: transform 0.15s, box-shadow 0.15s, background 0.15s; }
+        .glev-cta-primary:hover { transform: translateY(-1px); background: ${HOVER}; box-shadow: 0 8px 24px ${ACCENT}55; }
+        .glev-cta-ghost { transition: background 0.15s, border-color 0.15s; }
+        .glev-cta-ghost:hover { background: var(--surface-soft); border-color: var(--border-strong); }
+        .glev-link { transition: color 0.15s; }
+        .glev-link:hover { color: ${HOVER} !important; }
+        .glev-pricing-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 20px;
+        }
+        @media (max-width: 720px) {
+          .glev-pricing-grid { grid-template-columns: 1fr; }
+        }
+        .glev-hero {
+          display: grid;
+          grid-template-columns: 1.1fr 0.9fr;
+          gap: 64px;
+          align-items: center;
+        }
+        .glev-phone-stage { justify-self: end; }
+        .glev-feat-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 14px;
+        }
+        @media (max-width: 960px) {
+          .glev-hero { grid-template-columns: 1fr; gap: 48px; }
+          .glev-phone-stage { justify-self: center; }
+          .glev-feat-grid { grid-template-columns: 1fr; }
+          .glev-h1 { font-size: clamp(40px, 11vw, 64px) !important; }
+        }
+      `}</style>
+
+      {/* TOP NAV */}
+      <nav
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 50,
+          background: "color-mix(in srgb, var(--bg) 72%, transparent)",
+          backdropFilter: "saturate(180%) blur(14px)",
+          WebkitBackdropFilter: "saturate(180%) blur(14px)",
+          borderBottom: `1px solid ${BORDER}`,
+          paddingTop: "env(safe-area-inset-top)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            maxWidth: 1180,
+            margin: "0 auto",
+            padding: "14px 24px",
+          }}
+        >
+          <Link href="/" style={{ textDecoration: "none", color: "inherit" }} aria-label={t("nav_aria_home")}>
+            <GlevLockup size={28} />
+          </Link>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <LocaleSwitcher ariaLabel={t("nav_aria_locale")} />
+            <Link
+              href="/blog"
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: "var(--text)",
+                textDecoration: "none",
+              }}
+              className="glev-link"
+            >
+              {t("nav_blog")}
+            </Link>
+            <Link
+              href="/login"
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: "var(--text)",
+                textDecoration: "none",
+                padding: "9px 16px",
+                borderRadius: 999,
+                border: `1px solid ${BORDER}`,
+                background: "var(--surface-soft)",
+              }}
+              className="glev-cta-ghost"
+            >
+              {t("nav_signin")}
+            </Link>
+          </div>
+        </div>
+      </nav>
+
+      {/* HERO */}
+      <section
+        style={{
+          position: "relative",
+          zIndex: 1,
+          maxWidth: 1180,
+          margin: "0 auto",
+          padding: "32px 24px 80px",
+        }}
+      >
+        <div className="glev-hero">
+          <div>
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "6px 12px",
+                borderRadius: 999,
+                background: `${GREEN}14`,
+                border: `1px solid ${GREEN}30`,
+                color: GREEN,
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                marginBottom: 24,
+              }}
+            >
+              <span
+                style={{
+                  width: 6, height: 6, borderRadius: 99,
+                  background: GREEN, animation: "glevPulse 2s ease-out infinite",
+                }}
+              />
+              {t("hero_badge")}
+            </div>
+
+            <h1
+              className="glev-h1"
+              style={{
+                fontSize: "clamp(48px, 7.2vw, 84px)",
+                fontWeight: 700,
+                letterSpacing: "-0.035em",
+                lineHeight: 1.02,
+                margin: 0,
+                color: "var(--text)",
+              }}
+            >
+              {tp("hero_h1")}<span style={{ color: GREEN }}>.</span>
+            </h1>
+
+            <p
+              style={{
+                marginTop: 24,
+                fontSize: 18,
+                lineHeight: 1.55,
+                color: "var(--text-body)",
+                maxWidth: 520,
+              }}
+            >
+              {tp("hero_subtitle")}
+            </p>
+
+            <div
+              style={{
+                marginTop: 32,
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 12,
+              }}
+            >
+              <Link
+                href="/pro"
+                className="glev-cta-primary"
+                style={{
+                  padding: "14px 22px",
+                  borderRadius: 12,
+                  background: ACCENT,
+                  color: "#fff",
+                  fontSize: 14,
+                  fontWeight: 700,
+                  letterSpacing: "-0.005em",
+                  textDecoration: "none",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  boxShadow: `0 6px 18px ${ACCENT}40`,
+                }}
+              >
+                {tp("hero_cta_primary")}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                  <polyline points="13 6 19 12 13 18" />
+                </svg>
+              </Link>
+
+              <Link
+                href="/beta"
+                className="glev-cta-ghost"
+                style={{
+                  padding: "14px 22px",
+                  borderRadius: 12,
+                  background: "transparent",
+                  color: "var(--text-strong)",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  textDecoration: "none",
+                  border: `1px solid ${BORDER}`,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                {tp("hero_cta_secondary")}
+              </Link>
+            </div>
+
+            {/* Support-Line — drei Mini-Beweise direkt unter den CTAs.
+                Bewusst klein und in Mono gesetzt, damit sie als
+                "Untertitel-Strip" liest, nicht als zusätzliche CTA. */}
+            <p
+              style={{
+                marginTop: 24,
+                fontSize: 12,
+                color: "var(--text-dim)",
+                fontFamily: "var(--font-mono), JetBrains Mono, monospace",
+                letterSpacing: "-0.005em",
+                lineHeight: 1.55,
+              }}
+            >
+              {tp("hero_support")}
+            </p>
+
+            {/* CGM-Status-Strip (identisch zur Homepage) */}
+            <div
+              style={{
+                marginTop: 28,
+                display: "inline-flex",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: 14,
+                rowGap: 8,
+                fontFamily: "var(--font-mono), JetBrains Mono, monospace",
+                fontSize: 12,
+                color: "var(--text-dim)",
+              }}
+            >
+              <span style={{ color: GREEN }}>● Libre 2</span>
+              <span>·</span>
+              <span style={{ color: GREEN }}>● Libre 3</span>
+              <span>·</span>
+              <span style={{ color: "var(--text-faint)" }}>○ Dexcom</span>
+              <span>·</span>
+              <span style={{ color: GREEN }}>● Nightscout</span>
+              <span>·</span>
+              <span style={{ color: "var(--text-faint)" }}>○ Medtronic</span>
+            </div>
+          </div>
+
+          <div className="glev-phone-stage">
+            <AppMockupPhone />
+          </div>
+        </div>
+      </section>
+
+      {/* IMMEDIATE VALUE — eine Aussage, die direkt nach dem Hero den
+          Nutzen in einem Satz spiegelt. Bewusst zentriert und ohne
+          Card-Background, damit sie wie ein Manifest-Statement wirkt
+          und nicht wie ein weiteres Feature-Modul. */}
+      <section
+        style={{
+          position: "relative",
+          zIndex: 1,
+          maxWidth: 760,
+          margin: "0 auto",
+          padding: "8px 24px 48px",
+          textAlign: "center",
+        }}
+      >
+        <h2
+          style={{
+            fontSize: "clamp(24px, 3.4vw, 32px)",
+            fontWeight: 700,
+            letterSpacing: "-0.02em",
+            lineHeight: 1.2,
+            margin: 0,
+            color: "var(--text)",
+          }}
+        >
+          {tp("value_title")}
+        </h2>
+        <p
+          style={{
+            marginTop: 16,
+            fontSize: 16,
+            lineHeight: 1.6,
+            color: "var(--text-body)",
+            maxWidth: 620,
+            marginLeft: "auto",
+            marginRight: "auto",
+          }}
+        >
+          {tp("value_body")}
+        </p>
+      </section>
+
+      {/* PAIN BLOCK — neue Bullets, gleiche Card-Optik wie auf der
+          Homepage, damit das Layout vergleichbar bleibt. */}
+      <section
+        id="pain"
+        style={{
+          position: "relative",
+          zIndex: 1,
+          maxWidth: 760,
+          margin: "0 auto",
+          padding: "16px 24px 64px",
+        }}
+      >
+        <div
+          style={{
+            background: SURFACE,
+            border: `1px solid ${BORDER}`,
+            borderRadius: 16,
+            padding: "28px 28px 30px",
+          }}
+        >
+          <h2
+            style={{
+              fontSize: "clamp(22px, 3.2vw, 28px)",
+              fontWeight: 700,
+              letterSpacing: "-0.02em",
+              lineHeight: 1.2,
+              margin: 0,
+              color: "var(--text)",
+            }}
+          >
+            {tp("pain_title")}
+          </h2>
+          <ul
+            style={{
+              listStyle: "none",
+              margin: "20px 0 0",
+              padding: 0,
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+            }}
+          >
+            {[tp("pain_b1"), tp("pain_b2"), tp("pain_b3")].map((bullet, i) => (
+              <li
+                key={i}
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 12,
+                  fontSize: 15,
+                  lineHeight: 1.55,
+                  color: "var(--text-body)",
+                  overflowWrap: "anywhere",
+                }}
+              >
+                <span
+                  aria-hidden
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: 99,
+                    background: GREEN,
+                    marginTop: 9,
+                    flexShrink: 0,
+                  }}
+                />
+                <span style={{ minWidth: 0 }}>{bullet}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      {/* SYSTEM FLOW — ersetzt die alte Steps-Komponente. Eine Zeile
+          Pfeile als visueller Ablauf, darunter ein einsatzschließender
+          Erklärsatz. */}
+      <section
+        id="flow"
+        style={{
+          position: "relative",
+          zIndex: 1,
+          maxWidth: 760,
+          margin: "0 auto",
+          padding: "16px 24px 64px",
+          textAlign: "center",
+        }}
+      >
+        <h2
+          style={{
+            fontSize: "clamp(24px, 3.4vw, 32px)",
+            fontWeight: 700,
+            letterSpacing: "-0.025em",
+            margin: 0,
+            color: "var(--text)",
+            lineHeight: 1.25,
+          }}
+        >
+          {tp("flow_title")}
+        </h2>
+        <p
+          style={{
+            marginTop: 16,
+            fontSize: 15,
+            lineHeight: 1.6,
+            color: "var(--text-body)",
+            maxWidth: 620,
+            marginLeft: "auto",
+            marginRight: "auto",
+          }}
+        >
+          {tp("flow_body")}
+        </p>
+      </section>
+
+      {/* FEATURE TRIO — gleiche Komponente wie Homepage, jetzt mit
+          eigener Section-Headline darüber. */}
+      <section
+        style={{
+          position: "relative",
+          zIndex: 1,
+          maxWidth: 1180,
+          margin: "0 auto",
+          padding: "16px 24px 48px",
+        }}
+      >
+        <h2
+          style={{
+            fontSize: "clamp(24px, 3.4vw, 32px)",
+            fontWeight: 700,
+            letterSpacing: "-0.025em",
+            margin: "0 0 24px",
+            color: "var(--text)",
+            textAlign: "center",
+          }}
+        >
+          {tp("features_title")}
+        </h2>
+        <FeatureTrio />
+      </section>
+
+      {/* POSITIONING BLOCK — kurzes, kategorisches Statement, das Glev
+          gegenüber Tracking-Apps und Hardware abgrenzt. Akzent-Border
+          links, damit es als Zitat / Manifest liest. */}
+      <section
+        style={{
+          position: "relative",
+          zIndex: 1,
+          maxWidth: 760,
+          margin: "0 auto",
+          padding: "16px 24px 64px",
+        }}
+      >
+        <div
+          style={{
+            borderLeft: `3px solid ${ACCENT}`,
+            paddingLeft: 20,
+          }}
+        >
+          <p
+            style={{
+              fontSize: "clamp(20px, 2.8vw, 26px)",
+              fontWeight: 700,
+              letterSpacing: "-0.02em",
+              lineHeight: 1.3,
+              margin: 0,
+              color: "var(--text)",
+            }}
+          >
+            {tp("positioning_title")}
+          </p>
+          <p
+            style={{
+              marginTop: 12,
+              fontSize: 15,
+              lineHeight: 1.6,
+              color: "var(--text-body)",
+            }}
+          >
+            {tp("positioning_body")}
+          </p>
+        </div>
+      </section>
+
+      {/* PRICING — strukturell + textuell identisch zur Homepage. */}
+      <section
+        id="pricing"
+        style={{
+          position: "relative",
+          zIndex: 1,
+          maxWidth: 1180,
+          margin: "0 auto",
+          padding: "16px 24px 64px",
+        }}
+      >
+        <div style={{ textAlign: "center", marginBottom: 32 }}>
+          <h2
+            style={{
+              fontSize: "clamp(28px, 4vw, 36px)",
+              fontWeight: 700,
+              letterSpacing: "-0.02em",
+              margin: 0,
+              color: "var(--text)",
+            }}
+          >
+            {t("pricing_title")}<span style={{ color: GREEN }}>.</span>
+          </h2>
+          <p
+            style={{
+              marginTop: 12,
+              fontSize: 15,
+              lineHeight: 1.55,
+              color: "var(--text-muted)",
+              maxWidth: 520,
+              marginLeft: "auto",
+              marginRight: "auto",
+            }}
+          >
+            {t("pricing_subtitle")}
+          </p>
+        </div>
+
+        <div className="glev-pricing-grid">
+          {/* Card 1 — Beta */}
+          <div
+            style={{
+              background: SURFACE,
+              border: `1px solid ${ACCENT}`,
+              borderRadius: 16,
+              padding: 28,
+              display: "flex",
+              flexDirection: "column",
+              gap: 20,
+              position: "relative",
+            }}
+          >
+            <div>
+              <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--text)" }}>
+                {t("pricing_beta_title")}
+              </h3>
+              <div style={{ marginTop: 14, display: "flex", alignItems: "baseline", gap: 8 }}>
+                <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text)" }}>{t("pricing_beta_price")}</span>
+                <span style={{ fontSize: 15, color: "var(--text-muted)" }}>{t("pricing_beta_period")}</span>
+              </div>
+            </div>
+
+            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+              {[
+                t("pricing_beta_b1"),
+                t("pricing_beta_b2"),
+                t("pricing_beta_b3"),
+                t("pricing_beta_b4"),
+              ].map((bullet) => (
+                <PricingBullet key={bullet} text={bullet} />
+              ))}
+            </ul>
+
+            <Link
+              href="/beta"
+              className="glev-cta-ghost"
+              style={{
+                marginTop: "auto",
+                padding: "13px 22px",
+                borderRadius: 12,
+                background: "transparent",
+                color: "var(--text)",
+                fontSize: 14,
+                fontWeight: 600,
+                letterSpacing: "-0.005em",
+                textDecoration: "none",
+                border: `1px solid ${ACCENT}`,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+              }}
+            >
+              {t("pricing_beta_cta")}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12" />
+                <polyline points="13 6 19 12 13 18" />
+              </svg>
+            </Link>
+          </div>
+
+          {/* Card 2 — Pro */}
+          <div
+            style={{
+              background: SURFACE,
+              border: `2px solid ${ACCENT}`,
+              borderRadius: 16,
+              padding: 28,
+              display: "flex",
+              flexDirection: "column",
+              gap: 20,
+              position: "relative",
+              boxShadow: `0 12px 32px ${ACCENT}20`,
+            }}
+          >
+            <div
+              aria-label={t("pricing_pro_badge")}
+              style={{
+                position: "absolute",
+                top: -12,
+                left: 24,
+                background: ACCENT,
+                color: "#fff",
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                padding: "4px 10px",
+                borderRadius: 999,
+                boxShadow: `0 4px 12px ${ACCENT}66`,
+              }}
+            >
+              {t("pricing_pro_badge")}
+            </div>
+
+            <div>
+              <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--text)" }}>
+                {t("pricing_pro_title")}
+              </h3>
+              <div style={{ marginTop: 14, display: "flex", alignItems: "baseline", gap: 8 }}>
+                <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text)" }}>{t("pricing_pro_price")}</span>
+                <span style={{ fontSize: 15, color: "var(--text-muted)" }}>{t("pricing_pro_period")}</span>
+              </div>
+            </div>
+
+            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+              {[
+                t("pricing_pro_b1"),
+                t("pricing_pro_b2"),
+                t("pricing_pro_b3"),
+                t("pricing_pro_b4"),
+                t("pricing_pro_b5"),
+              ].map((bullet) => (
+                <PricingBullet key={bullet} text={bullet} />
+              ))}
+            </ul>
+
+            <Link
+              href="/pro"
+              className="glev-cta-primary"
+              style={{
+                marginTop: "auto",
+                padding: "13px 22px",
+                borderRadius: 12,
+                background: ACCENT,
+                color: "#fff",
+                fontSize: 14,
+                fontWeight: 700,
+                letterSpacing: "-0.005em",
+                textDecoration: "none",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                boxShadow: `0 6px 18px ${ACCENT}40`,
+              }}
+            >
+              {t("pricing_pro_cta")}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12" />
+                <polyline points="13 6 19 12 13 18" />
+              </svg>
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ — komplett identisch zur Homepage. */}
+      <section
+        id="faq"
+        style={{
+          position: "relative",
+          zIndex: 1,
+          maxWidth: 760,
+          margin: "0 auto",
+          padding: "16px 24px 48px",
+        }}
+      >
+        <h2
+          style={{
+            fontSize: 22,
+            fontWeight: 700,
+            letterSpacing: "-0.01em",
+            margin: "0 0 16px",
+            color: "var(--text)",
+          }}
+        >
+          {t("faq_title")}
+        </h2>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {([
+            { q: t("faq_q1"), a: t("faq_a1") },
+            { q: t("faq_q2"), a: t("faq_a2") },
+            {
+              q: t("faq_q5"),
+              a: (
+                <>
+                  {t("faq_a5").split("/setup")[0]}
+                  <Link
+                    href="/setup"
+                    style={{ color: ACCENT, textDecoration: "underline", textUnderlineOffset: 2 }}
+                  >
+                    /setup
+                  </Link>
+                  {t("faq_a5").split("/setup")[1] ?? ""}
+                </>
+              ),
+            },
+            { q: t("faq_q6"), a: t("faq_a6") },
+            { q: t("faq_q7"), a: t("faq_a7") },
+            { q: t("faq_q3"), a: t("faq_a3") },
+            { q: t("faq_q4"), a: t("faq_a4") },
+          ] as { q: string; a: React.ReactNode }[]).map((item) => (
+            <details
+              key={item.q}
+              style={{
+                background: SURFACE,
+                border: `1px solid ${BORDER}`,
+                borderRadius: 12,
+                padding: "14px 16px",
+              }}
+            >
+              <summary
+                style={{
+                  listStyle: "none",
+                  cursor: "pointer",
+                  fontSize: 15,
+                  fontWeight: 600,
+                  color: "var(--text)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 12,
+                }}
+              >
+                <span>{item.q}</span>
+                <span aria-hidden style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono), JetBrains Mono, monospace" }}>+</span>
+              </summary>
+              <div style={{ fontSize: 14, color: "var(--text-body)", lineHeight: 1.55, marginTop: 10 }}>
+                {item.a}
+              </div>
+            </details>
+          ))}
+        </div>
+      </section>
+
+      {/* COMPLIANCE — kleiner muted Hinweis, bewusst KEIN Fettdruck.
+          Sitzt direkt vor dem globalen Footer und gibt der Seite einen
+          rechtssauberen Abschluss, ohne das Pricing-Block-Layout zu
+          stören. */}
+      <section
+        style={{
+          position: "relative",
+          zIndex: 1,
+          maxWidth: 760,
+          margin: "0 auto",
+          padding: "0 24px 32px",
+        }}
+      >
+        <p
+          style={{
+            margin: 0,
+            fontSize: 12,
+            lineHeight: 1.55,
+            color: "var(--text-faint)",
+            textAlign: "center",
+          }}
+        >
+          {tp("compliance")}
+        </p>
+      </section>
+
+      {/* FOOTER — identisch zur Homepage. */}
+      <footer
+        style={{
+          position: "relative",
+          zIndex: 1,
+          maxWidth: 1180,
+          margin: "0 auto",
+          padding: "28px 24px 36px",
+          borderTop: `1px solid ${BORDER}`,
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 12,
+          alignItems: "center",
+          justifyContent: "space-between",
+          fontSize: 12,
+          color: "var(--text-faint)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <GlevLockup size={20} color="var(--text-body)" />
+          <span>
+            {t("footer_copyright")}
+            {" · "}
+            <Link
+              href="/legal"
+              style={{ color: "inherit", textDecoration: "none" }}
+              aria-label={t("footer_legal_aria")}
+            >
+              {t("footer_legal")}
+            </Link>
+            {" · "}
+            <Link
+              href="/brand"
+              style={{ color: "inherit", textDecoration: "none" }}
+              aria-label={t("footer_brand_aria")}
+            >
+              {t("footer_brand")}
+            </Link>
+          </span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <LocaleSwitcher size="xs" ariaLabel={t("nav_aria_locale")} />
+          <div style={{ maxWidth: 560, lineHeight: 1.5 }}>
+            {t("footer_disclaimer")}
+          </div>
+        </div>
+      </footer>
+    </main>
+  );
+}
+
+
+function PricingBullet({ text }: { text: string }) {
+  return (
+    <li style={{ display: "flex", gap: 10, fontSize: 14, lineHeight: 1.5, color: "var(--text-strong)" }}>
+      <span
+        aria-hidden
+        style={{
+          flexShrink: 0,
+          width: 18,
+          height: 18,
+          borderRadius: "50%",
+          background: `${GREEN}1f`,
+          color: GREEN,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 11,
+          fontWeight: 700,
+          marginTop: 2,
+        }}
+      >
+        ✓
+      </span>
+      <span>{text}</span>
+    </li>
+  );
+}

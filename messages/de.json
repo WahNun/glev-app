@@ -1839,5 +1839,24 @@
     "vendor_nightscout_step_3": "In Glev → Einstellungen → CGM → Nightscout: trage deine URL und (falls genutzt) den Token ein.",
     "vendor_nightscout_step_4": "Glev verifiziert die Verbindung, holt den letzten Wert und synchronisiert ab jetzt automatisch.",
     "vendor_nightscout_note": "Nightscout ist nichts für Einsteiger — die Einrichtung der eigenen Instanz dauert je nach Hoster 30–60 Minuten. Wer schon eine hat, ist in unter 2 Minuten fertig."
+  },
+  "preview": {
+    "hero_h1": "Hör auf zu raten",
+    "hero_subtitle": "Logge deine Mahlzeit. Sieh, was wirklich passiert ist. Triff bessere Entscheidungen beim nächsten Mal.",
+    "hero_support": "Voice-first Logging · CGM-basierte Insights · Outcome-getriebenes Lernen",
+    "hero_cta_primary": "Wie Glev das löst",
+    "hero_cta_secondary": "Frühzugang sichern",
+    "value_title": "Jede Mahlzeit zeigt dir etwas.",
+    "value_body": "Glev verbindet deine Mahlzeit, dein Insulin und deine Glukosewerte — damit du erkennst, wann du unterdosiert, überdosiert oder richtig gelegen hast.",
+    "pain_title": "Du entscheidest mit zu wenig Daten.",
+    "pain_b1": "Ein einzelner Glukosewert sagt nichts",
+    "pain_b2": "Gleiche Mahlzeit ≠ gleiches Ergebnis",
+    "pain_b3": "Muster bleiben unsichtbar",
+    "flow_title": "Sprechen → Essen → Verstehen → Verbessern",
+    "flow_body": "Du loggst deine Mahlzeit, Glev analysiert sie und zeigt dir, was wirklich passiert ist — damit deine nächste Entscheidung besser wird.",
+    "features_title": "Was Glev wirklich macht",
+    "positioning_title": "Glev ist die Entscheidungsebene für CGM-Nutzer.",
+    "positioning_body": "Nicht nur Tracking. Nicht Hardware. Sondern das System dazwischen.",
+    "compliance": "Glev ist ein Tool zur Dokumentation und Organisation und ersetzt keine medizinische Beratung. Entscheidungen zur Therapie sollten in Absprache mit medizinischem Fachpersonal getroffen werden."
   }
 }
