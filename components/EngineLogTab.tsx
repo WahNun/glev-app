@@ -831,23 +831,68 @@ export function ExerciseForm() {
           {/* Retroactive start picker — shifts the CGM scheduler's
               reference time so a workout already finished can still
               be evaluated from CGM history within the 3 h window.
-              Spec calls for max 3 quick chips + a "custom time" entry
-              that opens a datetime-local picker for arbitrary back-
-              dating; the selected chip drives `startedMinAgo` and the
-              sentinel `STARTED_CUSTOM` reveals the picker below. */}
+
+              Layout: three equal-width quick chips (Jetzt / vor 30m /
+              vor 1h) so every label fits cleanly on a 375 px iPhone,
+              followed by a clearly-distinct dashed-outline "Andere
+              Zeit…" toggle. The custom entry used to be a 4th chip
+              in the same row, but its long German label was getting
+              truncated to the point users couldn't tell it existed.
+              The dashed toggle + calendar/pencil glyph reads as
+              "edit time" at a glance; tapping it toggles the
+              datetime picker, tapping a chip returns to quick-chip
+              mode. State: chip values drive `startedMinAgo`, the
+              sentinel `STARTED_CUSTOM` (-1) selects the picker. */}
           <TimeQuickChips
-            value={startedMinAgo}
+            // When the custom path is active, pass a value none of the
+            // chips can match so all three render in their inactive
+            // (muted) state — keeps the visual grouping consistent
+            // with the active dashed "Andere Zeit…" toggle below.
+            value={usingCustomStart ? -999 : startedMinAgo}
             onChange={setStartedMinAgo}
             accent={ORANGE}
             ariaLabel={tEng("exercise_started_label")}
-            options={[
-              ...STARTED_OPTIONS.map(o => ({
-                value: o.value,
-                label: o.value === 0 ? t("started_now_btn") : t("started_ago_btn", { label: o.label }),
-              })),
-              { value: STARTED_CUSTOM, label: t("started_custom_btn") },
-            ]}
+            options={STARTED_OPTIONS.map(o => ({
+              value: o.value,
+              label: o.value === 0 ? t("started_now_btn") : t("started_ago_btn", { label: o.label }),
+            }))}
           />
+          <button
+            type="button"
+            aria-pressed={usingCustomStart}
+            onClick={() => {
+              hapticSelection();
+              setStartedMinAgo(usingCustomStart ? 0 : STARTED_CUSTOM);
+            }}
+            style={{
+              marginTop: 8,
+              padding: "8px 12px",
+              fontSize: 12,
+              fontWeight: 600,
+              background: usingCustomStart ? `${ORANGE}1f` : "transparent",
+              color: usingCustomStart ? ORANGE : "var(--text-muted)",
+              border: `1px dashed ${usingCustomStart ? ORANGE : "var(--border-strong)"}`,
+              borderRadius: 8,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              transition: "all 0.15s",
+            }}
+          >
+            <svg
+              width="13" height="13" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2.2"
+              strokeLinecap="round" strokeLinejoin="round" aria-hidden
+            >
+              <rect x="3" y="4" width="18" height="18" rx="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8"  y1="2" x2="8"  y2="6" />
+              <line x1="3"  y1="10" x2="21" y2="10" />
+              <path d="M14 16l-3 3-2-2" />
+            </svg>
+            {t("started_custom_btn")}
+          </button>
           {usingCustomStart && (
             <input
               style={{ ...inp, marginTop: 8 }}
