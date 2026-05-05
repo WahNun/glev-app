@@ -1701,6 +1701,21 @@
     "faq_q5": "Where is my data stored?",
     "faq_a5": "In the EU (Supabase Frankfurt). German GDPR compliance. No data sharing, no advertising."
   },
+  "previewBeta": {
+    "hero_title": "Get in early. Pay less later.",
+    "hero_subtitle": "From July: €4.50 instead of €9.",
+    "hero_microcopy": "No payment today, cancel anytime",
+    "cta_default": "Get Beta access",
+    "cta_loading": "One moment …",
+    "positioning": "You test Glev before everyone else. First 3 months: €4.50. After that: €9.",
+    "flow_1_title": "In today",
+    "flow_1_text": "No payment.",
+    "flow_2_title": "Use immediately",
+    "flow_2_text": "All features from now.",
+    "flow_3_title": "Pay from July",
+    "flow_3_text": "€4.50 instead of €9.",
+    "compliance_footer": "Glev is not a medical device. Glev is a documentation and organisation tool and does not replace professional medical advice. Treatment decisions should be made in consultation with a healthcare professional."
+  },
   "previewPro": {
     "hero_title": "Lock in your price. Pay in July.",
     "hero_subtitle": "€24.90 stays — no matter what happens later.",

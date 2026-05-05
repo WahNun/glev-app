@@ -1709,6 +1709,21 @@
     "faq_q5": "Wo werden meine Daten gespeichert?",
     "faq_a5": "In der EU (Supabase Frankfurt). Deutsche DSGVO. Keine Datenweitergabe, keine Werbung."
   },
+  "previewBeta": {
+    "hero_title": "Früh rein. Später weniger zahlen.",
+    "hero_subtitle": "Ab Juli: 4,50 € statt 9 €.",
+    "hero_microcopy": "Kein Payment heute, jederzeit kündbar",
+    "cta_default": "Beta-Zugang sichern",
+    "cta_loading": "Einen Moment …",
+    "positioning": "Du testest Glev vor allen anderen. Die ersten 3 Monate zahlst du 4,50 €. Danach 9 €.",
+    "flow_1_title": "Heute rein",
+    "flow_1_text": "Kein Payment.",
+    "flow_2_title": "Sofort nutzen",
+    "flow_2_text": "Alle Funktionen ab jetzt.",
+    "flow_3_title": "Ab Juli zahlen",
+    "flow_3_text": "4,50 € statt 9 €.",
+    "compliance_footer": "Glev ist kein Medizinprodukt. Glev ist ein Tool zur Dokumentation und Organisation und ersetzt keine medizinische Beratung. Entscheidungen zur Therapie sollten in Absprache mit medizinischem Fachpersonal getroffen werden."
+  },
   "previewPro": {
     "hero_title": "Preis sichern. Bezahlen erst im Juli.",
     "hero_subtitle": "24,90 € bleibt — egal was später passiert.",
