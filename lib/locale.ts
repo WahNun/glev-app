@@ -51,18 +51,23 @@ export function writeLocaleCookie(locale: Locale) {
  */
 export async function setLocale(next: Locale): Promise<void> {
   writeLocaleCookie(next);
-  try {
-    if (supabase) {
-      const { data } = await supabase.auth.getUser();
-      const uid = data.user?.id;
-      if (uid) {
-        await supabase.from("profiles").update({ language: next }).eq("id", uid);
-      }
-    }
-  } catch {
-    // Network/profile errors must not block the language switch.
-  }
+  // Persist to Supabase as fire-and-forget — must NOT block the reload,
+  // otherwise a hanging auth/profile call (e.g. inside the Replit
+  // preview iframe) prevents the language from switching at all.
+  void persistLocaleToProfile(next);
   if (typeof window !== "undefined") {
     window.location.reload();
+  }
+}
+
+async function persistLocaleToProfile(next: Locale): Promise<void> {
+  try {
+    if (!supabase) return;
+    const { data } = await supabase.auth.getUser();
+    const uid = data.user?.id;
+    if (!uid) return;
+    await supabase.from("profiles").update({ language: next }).eq("id", uid);
+  } catch {
+    // Network/profile errors must not block the language switch.
   }
 }
