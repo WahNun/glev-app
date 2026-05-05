@@ -11,7 +11,8 @@ type DesktopPage =
   | "insights"
   | "recommend"
   | "import"
-  | "profile";
+  | "profile"
+  | "voice";
 
 type MobileTab =
   | "dashboard"
@@ -51,10 +52,12 @@ export default function FeatureDeepDive() {
     {
       title: t("deepdive_voice_title"),
       body: t("deepdive_voice_body"),
-      // The "Glev Engine" page (key: "recommend") shows the voice mic
-      // surface plus the GPT-Reasoning side panel — that's the canonical
-      // voice-first surface in the desktop app.
-      desktopPage: "recommend",
+      // Eigenständiges Voice-Flow-Mockup unter /mockups/voice-flow —
+      // cleanerer 3-Step-Wizard (1 Essen / 2 Makros / 3 Ergebnis) mit
+      // Sprechen-Button und AI-Food-Parser-Panel. Lucas-Spec, weil die
+      // volle Glev-Engine-Page (key "recommend") für die Marketing-
+      // Section zu unruhig wirkt.
+      desktopPage: "voice",
       mobileTab: "engine",
     },
     {

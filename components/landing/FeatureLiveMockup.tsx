@@ -28,7 +28,11 @@ type DesktopPage =
   | "insights"
   | "recommend"
   | "import"
-  | "profile";
+  | "profile"
+  // "voice" lädt ein eigenständiges Marketing-Mockup unter
+  // /mockups/voice-flow (3-Step-Wizard mit Sidebar + AI-Panel) statt
+  // einer Page im dark-cockpit. Siehe DesktopIframe unten.
+  | "voice";
 
 type MobileTab =
   | "dashboard"
@@ -103,7 +107,13 @@ function DesktopIframe({ page, title }: { page: DesktopPage; title: string }) {
     return () => ro.disconnect();
   }, []);
 
-  const src = `/mockups/dark-cockpit?embed=1&view=desktop&page=${page}`;
+  // Sonderfall "voice": eigenständige Marketing-Mockup-Route, weil der
+  // dark-cockpit-Embed-Mode die Sidebar ausblendet — der Voice-Flow
+  // soll aber explizit mit Sidebar rendern. Alle anderen Pages laden
+  // weiterhin die fokussierte dark-cockpit-Page.
+  const src = page === "voice"
+    ? "/mockups/voice-flow"
+    : `/mockups/dark-cockpit?embed=1&view=desktop&page=${page}`;
 
   return (
     <div
