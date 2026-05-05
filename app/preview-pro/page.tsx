@@ -406,7 +406,7 @@ function PreviewProContent() {
       {/* 6. FAQ */}
       <section style={SECTION_WRAP_NARROW}>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {[1, 2, 3].map((n) => (
+          {[1, 2, 3, 4].map((n) => (
             <div
               key={n}
               style={{
@@ -421,6 +421,58 @@ function PreviewProContent() {
               </div>
               <div style={{ fontSize: 14, lineHeight: 1.55, color: TEXT_DIM }}>
                 {t(`faq_a${n}` as never)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 7. TIER TABLE (compact, 3 rows) */}
+      <section style={SECTION_WRAP_NARROW}>
+        <h2
+          style={{
+            fontSize: 18,
+            fontWeight: 600,
+            color: "#fff",
+            margin: "0 0 14px",
+            letterSpacing: "-0.01em",
+            textAlign: "center",
+          }}
+        >
+          {t("tier_compact_headline")}
+        </h2>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {(
+            [
+              { label: t("tier_compact_beta_label"), tagline: t("tier_compact_beta_tagline") },
+              { label: t("tier_compact_pro_label"), tagline: t("tier_compact_pro_tagline") },
+              { label: t("tier_compact_clinic_label"), tagline: t("tier_compact_clinic_tagline") },
+            ] as const
+          ).map((row) => (
+            <div
+              key={row.label}
+              style={{
+                background: SURFACE,
+                border: `1px solid ${BORDER}`,
+                borderRadius: 12,
+                padding: "14px 16px",
+                display: "flex",
+                alignItems: "center",
+                gap: 14,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 14,
+                  fontWeight: 700,
+                  color: "#fff",
+                  minWidth: 60,
+                }}
+              >
+                {row.label}
+              </div>
+              <div style={{ fontSize: 14, color: TEXT_DIM, lineHeight: 1.45 }}>
+                {row.tagline}
               </div>
             </div>
           ))}
