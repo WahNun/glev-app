@@ -672,7 +672,7 @@ export default function PreviewHome() {
               <div style={{ marginTop: 14, display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text)" }}>€4,50</span>
                 <span style={{ fontSize: 15, color: "var(--text-muted)" }}>/ Monat</span>
-                <span style={{ fontSize: 13, color: "var(--text-muted)", textDecoration: "line-through", marginLeft: 4 }}>€9</span>
+                <span style={{ fontSize: 18, color: "var(--text-muted)", textDecoration: "line-through", textDecorationThickness: "2px", textDecorationColor: "var(--text-muted)", marginLeft: 6, opacity: 0.9 }}>€9</span>
               </div>
               <p style={{ margin: "6px 0 0 0", fontSize: 12.5, color: "var(--text-muted)", letterSpacing: "-0.005em" }}>
                 in den ersten 3 Monaten
