@@ -204,7 +204,10 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
     } else {
       outcome = "GOOD";
       primary = {
-        key: "engine_eval_good",
+        // Task #250 — when no insulin was given we must not claim
+        // "Insulin-Dosis hat zur Kohlenhydratlast gepasst". Swap to a
+        // neutral variant that just describes the trajectory.
+        key: insulin > 0 ? "engine_eval_good" : "engine_eval_good_no_insulin",
         params: { delta: `${delta > 0 ? "+" : ""}${delta}` },
       };
     }
@@ -220,6 +223,20 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
   }
 
   // No bgAfter: fallback ICR-ratio heuristic using personal settings.
+  // Task #250 — short-circuit when no insulin was given. The ratio path
+  // would mechanically yield UNDERDOSE (ratio = 0/expected), but calling
+  // a meal with zero bolus an "Unter-Dosis" makes no sense and the
+  // matching `engine_eval_icr_*` strings all describe the dose. Return
+  // a neutral GOOD with a no-insulin/no-data note instead.
+  if (insulin <= 0) {
+    const messages: AdjustmentMessage[] = [
+      { key: "engine_eval_no_insulin_no_data" },
+      ...speedMessages(input.speed1, input.speed2),
+      ...contextMessages(input.recentInsulinLogs, input.recentExerciseLogs),
+      ...trendMessages(input.preTrend),
+    ];
+    return { outcome: "GOOD", messages, confidence: "low", delta: null, netCarbs };
+  }
   let expected = netCarbs / settings.icr;
   if (bgBefore && bgBefore > settings.targetBg) expected += (bgBefore - settings.targetBg) / settings.cf;
   const ratio = insulin / Math.max(expected, 0.1);

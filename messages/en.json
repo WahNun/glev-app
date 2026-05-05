@@ -327,6 +327,8 @@
     "engine_eval_underdose": "Post-meal glucose rose {delta} mg/dL — insulin insufficient for the carb load.",
     "engine_eval_overdose": "Post-meal glucose dropped {delta} mg/dL — insulin exceeded glucose needs.",
     "engine_eval_good": "Glucose stayed within ±30 mg/dL (Δ{delta}) — dose matched the meal.",
+    "engine_eval_good_no_insulin": "Glucose stayed within ±30 mg/dL (Δ{delta}) — trajectory ok without insulin.",
+    "engine_eval_no_insulin_no_data": "No insulin dose recorded — no comment possible without a follow-up reading.",
     "engine_eval_icr_overdose": "Dose is {pct}% above the ICR-expected amount — likely over-dose (no post-meal reading).",
     "engine_eval_icr_underdose": "Dose is {pct}% below the ICR-expected amount — likely under-dose (no post-meal reading).",
     "engine_eval_icr_good": "Dose matches the ICR-expected amount within ±35% (no post-meal reading to confirm).",

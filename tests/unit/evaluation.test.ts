@@ -193,6 +193,27 @@ test("evaluateEntry confidence is high for big |delta| (>80)", () => {
   expect(r.confidence).toBe("high");
 });
 
+// ── No-insulin guard (Task #250) ────────────────────────────────────
+
+test("evaluateEntry: GOOD with insulin=0 swaps in the no-insulin message", () => {
+  const r = evaluateEntry({ carbs: 50, insulin: 0, bgBefore: 100, bgAfter: 110 });
+  expect(r.outcome).toBe("GOOD");
+  expect(r.messages[0]?.key).toBe("engine_eval_good_no_insulin");
+});
+
+test("evaluateEntry: GOOD with insulin>0 still uses the dose-matched message", () => {
+  const r = evaluateEntry({ carbs: 50, insulin: 4, bgBefore: 100, bgAfter: 110 });
+  expect(r.outcome).toBe("GOOD");
+  expect(r.messages[0]?.key).toBe("engine_eval_good");
+});
+
+test("evaluateEntry: ICR fallback with insulin=0 returns neutral GOOD, not UNDERDOSE", () => {
+  const r = evaluateEntry({ carbs: 60, insulin: 0, bgBefore: 110, settings: { icr: 15, cf: 50, targetBg: 110 } });
+  expect(r.outcome).toBe("GOOD");
+  expect(r.messages[0]?.key).toBe("engine_eval_no_insulin_no_data");
+  expect(r.delta).toBeNull();
+});
+
 // ── Pre-Meal-Trend (Task #195) ──────────────────────────────────────
 
 test("evaluateEntry: preTrend appends trend message, outcome unchanged", () => {

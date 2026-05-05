@@ -209,7 +209,16 @@ export default function EntriesPage() {
     try { return tx(key); } catch { return fallback; }
   };
   const txEvalLabel   = (ev: string | null): string => ev ? txSafe(`eval_${ev}`, getEvalLabel(ev)) : "—";
-  const txEvalExplain = (ev: string | null): string => ev ? txSafe(`eval_explain_${ev}`, "") : "";
+  // Task #250 — every `eval_explain_*` string in messages/{de,en}.json
+  // is phrased around the bolus ("Insulin-Dosis hat …", "Insulin
+  // exceeded …"). When the meal had no insulin attached, none of those
+  // explanations are truthful. Suppress the explainer entirely and let
+  // the generic eval label (e.g. "Gut" / "Good") stand on its own.
+  const txEvalExplain = (ev: string | null, insulinUnits?: number | null): string => {
+    if (!ev) return "";
+    if (!insulinUnits || insulinUnits <= 0) return "";
+    return txSafe(`eval_explain_${ev}`, "");
+  };
   const txTypeLabel   = (t: string | null): string | null => t ? txSafe(`type_${t}`, TYPE_LABELS[t] || t.replace("_"," ")) : null;
   const txTypeExplain = (t: string | null): string => t ? txSafe(`type_explain_${t}`, TYPE_EXPLAIN[t] || "") : "";
   const [meals, setMeals]     = useState<Meal[]>([]);
@@ -975,8 +984,8 @@ export default function EntriesPage() {
                             {txEvalLabel(ev)}
                           </span>
                         </div>
-                        {txEvalExplain(ev) && (
-                          <div style={{ fontSize:12, color:"var(--text-muted)", lineHeight:1.5 }}>{txEvalExplain(ev)}</div>
+                        {txEvalExplain(ev, m.insulin_units) && (
+                          <div style={{ fontSize:12, color:"var(--text-muted)", lineHeight:1.5 }}>{txEvalExplain(ev, m.insulin_units)}</div>
                         )}
                       </div>
                     )}

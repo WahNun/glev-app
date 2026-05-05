@@ -327,6 +327,8 @@
     "engine_eval_underdose": "Glukose nach der Mahlzeit stieg um {delta} mg/dL — Insulin reichte für die Kohlenhydratmenge nicht aus.",
     "engine_eval_overdose": "Glukose nach der Mahlzeit fiel um {delta} mg/dL — Insulin überstieg den Glukosebedarf.",
     "engine_eval_good": "Glukose blieb innerhalb von ±30 mg/dL (Δ{delta}) — Dosis passte zur Mahlzeit.",
+    "engine_eval_good_no_insulin": "Glukose blieb innerhalb von ±30 mg/dL (Δ{delta}) — Verlauf ok ohne Insulin.",
+    "engine_eval_no_insulin_no_data": "Keine Insulin-Dosis erfasst — kein Hinweis ohne Verlaufswert möglich.",
     "engine_eval_icr_overdose": "Dosis liegt {pct}% über dem aus dem KH-Faktor erwarteten Wert — vermutlich Über-Dosis (kein Wert nach der Mahlzeit).",
     "engine_eval_icr_underdose": "Dosis liegt {pct}% unter dem aus dem KH-Faktor erwarteten Wert — vermutlich Unter-Dosis (kein Wert nach der Mahlzeit).",
     "engine_eval_icr_good": "Dosis entspricht dem aus dem KH-Faktor erwarteten Wert auf ±35% genau (kein Wert nach der Mahlzeit zur Bestätigung).",
