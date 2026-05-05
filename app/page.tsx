@@ -1,31 +1,40 @@
 "use client";
 
+// Marketing-Homepage. Vorher unter /preview iteriert und am 5. Mai 2026
+// von Lucas auf live geschaltet (alte /preview-Route wurde entfernt,
+// dieser Inhalt ersetzt nun die produktive Homepage 1:1).
+//
+// Struktur:
+//   * Hero-Copy + 2 CTAs
+//   * "Immediate Value"-Sektion direkt nach dem Hero
+//   * Pain-Bullets
+//   * System-Flow-Sektion
+//   * FeatureTrio mit eigener Section-Headline
+//   * Features-im-Detail: statische App-Renders aus /public/mockups/
+//   * Positioning-Block vor der Pricing-Sektion
+//   * Pricing: 3 Karten (Beta, Pro · Founder-Tier hervorgehoben,
+//     Klinik mit Coming-Soon-Email-Warteliste statt CTA)
+//   * Compliance-Disclaimer direkt vor dem globalen Footer
+// FAQ, Nav und Footer ziehen ihre Texte aus dem `marketing`-Namespace.
+
+import { useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-// react hooks no longer needed — homepage is now stateless
 import GlevLockup from "@/components/GlevLockup";
 import AppMockupPhone from "@/components/AppMockupPhone";
 import FeatureTrio from "@/components/landing/FeatureTrio";
-import Steps from "@/components/landing/Steps";
-import FeatureDeepDive from "@/components/landing/FeatureDeepDive";
 import LocaleSwitcher from "@/components/LocaleSwitcher";
 
-// Brand accents stay constant across themes (per the brand spec) — surface,
-// border and text colors point at the theme CSS variables in
-// `app/globals.css` so the landing page automatically follows Light Mode
-// when `<html data-theme="light">` is set (Task #42).
 const ACCENT  = "#4F6EF7";
 const HOVER   = "#6B8BFF";
 const GREEN   = "#22D3A0";
-const ORANGE  = "#FF9500";
-const PINK    = "#FF2D78";
 const BG      = "var(--bg)";
 const SURFACE = "var(--surface)";
-const SURF2   = "var(--surface-alt)";
 const BORDER  = "var(--border)";
 
-export default function Home() {
-  const t = useTranslations("marketing");
+export default function PreviewHome() {
+  const t  = useTranslations("marketing");
+  const tp = useTranslations("preview");
   return (
     <main
       style={{
@@ -35,7 +44,6 @@ export default function Home() {
         fontFamily: "var(--font-inter), Inter, system-ui, sans-serif",
         position: "relative",
         overflow: "hidden",
-        // Compensate for the now-fixed top nav (~56px content + iOS notch).
         paddingTop: "calc(56px + env(safe-area-inset-top))",
       }}
     >
@@ -52,10 +60,6 @@ export default function Home() {
       />
 
       <style>{`
-        @keyframes glevSlideIn {
-          from { opacity: 0; transform: scale(1.02); }
-          to   { opacity: 1; transform: scale(1); }
-        }
         @keyframes glevPulse {
           0%,100% { box-shadow: 0 0 0 0 ${ACCENT}55; }
           70%     { box-shadow: 0 0 0 12px ${ACCENT}00; }
@@ -63,20 +67,32 @@ export default function Home() {
         .glev-cta-primary { transition: transform 0.15s, box-shadow 0.15s, background 0.15s; }
         .glev-cta-primary:hover { transform: translateY(-1px); background: ${HOVER}; box-shadow: 0 8px 24px ${ACCENT}55; }
         .glev-cta-ghost { transition: background 0.15s, border-color 0.15s; }
-        /* Hover tint pulled from the theme tokens so ghost buttons land on
-           a faint surface inset in both Dark and Light Mode (Task #42). */
         .glev-cta-ghost:hover { background: var(--surface-soft); border-color: var(--border-strong); }
         .glev-link { transition: color 0.15s; }
         .glev-link:hover { color: ${HOVER} !important; }
-        .glev-secondary-link { transition: color 0.15s; }
-        .glev-secondary-link:hover { color: var(--text-strong) !important; text-decoration: underline; text-underline-offset: 3px; }
         .glev-pricing-grid {
           display: grid;
-          grid-template-columns: 1fr 1fr;
+          grid-template-columns: 1fr 1fr 1fr;
           gap: 20px;
+          align-items: stretch;
+        }
+        @media (max-width: 1080px) {
+          .glev-pricing-grid { grid-template-columns: 1fr 1fr; }
         }
         @media (max-width: 720px) {
           .glev-pricing-grid { grid-template-columns: 1fr; }
+        }
+        .glev-feat-row {
+          display: grid;
+          grid-template-columns: 1.2fr 1fr;
+          gap: 56px;
+          align-items: center;
+        }
+        @media (max-width: 720px) {
+          .glev-feat-row { grid-template-columns: 1fr !important; gap: 24px !important; }
+        }
+        @media (min-width: 721px) {
+          .glev-feat-row--rev .glev-feat-row__img { order: 2; }
         }
         .glev-hero {
           display: grid;
@@ -84,12 +100,12 @@ export default function Home() {
           gap: 64px;
           align-items: center;
         }
+        .glev-phone-stage { justify-self: end; }
         .glev-feat-grid {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
           gap: 14px;
         }
-        .glev-phone-stage { justify-self: end; }
         @media (max-width: 960px) {
           .glev-hero { grid-template-columns: 1fr; gap: 48px; }
           .glev-phone-stage { justify-self: center; }
@@ -98,12 +114,7 @@ export default function Home() {
         }
       `}</style>
 
-      {/* TOP NAV — fixed-to-viewport so it never freezes mid-scroll on iOS
-          Safari (the bug was: position:relative inside an overflow:hidden
-          parent caused jittery momentum-scroll handover on iPhone 13 mini).
-          Inner div keeps the 1180px max-width centering. Backdrop-blur over
-          a translucent BG so content scrolls cleanly underneath, and
-          safe-area-inset-top respects the notch. */}
+      {/* TOP NAV */}
       <nav
         style={{
           position: "fixed",
@@ -111,9 +122,6 @@ export default function Home() {
           left: 0,
           right: 0,
           zIndex: 50,
-          // color-mix tints the page bg so the same rule reads as a dark
-          // translucent slab in Dark Mode and a light translucent slab
-          // in Light Mode (Task #42).
           background: "color-mix(in srgb, var(--bg) 72%, transparent)",
           backdropFilter: "saturate(180%) blur(14px)",
           WebkitBackdropFilter: "saturate(180%) blur(14px)",
@@ -135,17 +143,7 @@ export default function Home() {
             <GlevLockup size={28} />
           </Link>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            {/* Brand-Link bewusst aus dem Header entfernt — nur noch
-                versteckt im Footer als Copyright-Tail erreichbar.
-                Begründung: das Brand-Book ist Marketing-/Dev-Material,
-                kein User-Pfad — soll im öffentlichen Header keinen
-                Slot belegen. */}
             <LocaleSwitcher ariaLabel={t("nav_aria_locale")} />
-            {/* Blog-Einstieg ins öffentliche Soro-Widget unter /blog —
-                bewusst als textueller Sekundär-Link gestaltet (nicht als
-                Pill-Button), damit der primäre Login-CTA visuell weiterhin
-                heraussticht. Header-Slot ist mobil eng, daher absichtlich
-                knappes Wort. */}
             <Link
               href="/blog"
               style={{
@@ -189,7 +187,6 @@ export default function Home() {
         }}
       >
         <div className="glev-hero">
-          {/* LEFT: copy */}
           <div>
             <div
               style={{
@@ -228,7 +225,7 @@ export default function Home() {
                 color: "var(--text)",
               }}
             >
-              {t("hero_h1")}<span style={{ color: GREEN }}>.</span>
+              {tp("hero_h1")}<span style={{ color: GREEN }}>.</span>
             </h1>
 
             <p
@@ -240,89 +237,80 @@ export default function Home() {
                 maxWidth: 520,
               }}
             >
-              {t("hero_subtitle")}
+              {tp("hero_subtitle")}
             </p>
 
             <div
               style={{
                 marginTop: 32,
                 display: "flex",
-                flexDirection: "column",
-                alignItems: "flex-start",
+                flexWrap: "wrap",
                 gap: 12,
               }}
             >
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-                <Link
-                  href="/pro"
-                  className="glev-cta-primary"
-                  style={{
-                    padding: "14px 22px",
-                    borderRadius: 12,
-                    background: ACCENT,
-                    // White stays constant in both themes — readable on
-                    // the brand-blue button regardless of mode.
-                    color: "#fff",
-                    fontSize: 14,
-                    fontWeight: 700,
-                    letterSpacing: "-0.005em",
-                    textDecoration: "none",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 8,
-                    boxShadow: `0 6px 18px ${ACCENT}40`,
-                  }}
-                >
-                  {t("hero_cta_primary")}
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="5" y1="12" x2="19" y2="12" />
-                    <polyline points="13 6 19 12 13 18" />
-                  </svg>
-                </Link>
-
-                <Link
-                  href="/login"
-                  className="glev-cta-ghost"
-                  style={{
-                    padding: "14px 22px",
-                    borderRadius: 12,
-                    background: "transparent",
-                    color: "var(--text-strong)",
-                    fontSize: 14,
-                    fontWeight: 600,
-                    textDecoration: "none",
-                    border: `1px solid ${BORDER}`,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
-                >
-                  {t("hero_cta_secondary")}
-                </Link>
-              </div>
+              <Link
+                href="/pro"
+                className="glev-cta-primary"
+                style={{
+                  padding: "14px 22px",
+                  borderRadius: 12,
+                  background: ACCENT,
+                  color: "#fff",
+                  fontSize: 14,
+                  fontWeight: 700,
+                  letterSpacing: "-0.005em",
+                  textDecoration: "none",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  boxShadow: `0 6px 18px ${ACCENT}40`,
+                }}
+              >
+                {tp("hero_cta_primary")}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                  <polyline points="13 6 19 12 13 18" />
+                </svg>
+              </Link>
 
               <Link
                 href="/beta"
-                className="glev-secondary-link"
+                className="glev-cta-ghost"
                 style={{
-                  fontSize: 13,
-                  color: "var(--text-muted)",
+                  padding: "14px 22px",
+                  borderRadius: 12,
+                  background: "transparent",
+                  color: "var(--text-strong)",
+                  fontSize: 14,
+                  fontWeight: 600,
                   textDecoration: "none",
-                  fontWeight: 500,
-                  letterSpacing: "-0.005em",
+                  border: `1px solid ${BORDER}`,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
                 }}
               >
-                {t("hero_cta_tertiary")}
+                {tp("hero_cta_secondary")}
               </Link>
             </div>
 
-            {/* CGM-Status-Strip — green dot = jetzt nutzbar (Libre 2 + Libre 3
-                via LibreLinkUp), grey dot = in Arbeit / coming soon. Kept in
-                sync with the FAQ entry "Welche CGMs werden unterstützt?" so
-                a visitor's first hero glance and the deep-dive answer agree.
-                flex-wrap so the 5 chips fold cleanly on narrow phone widths
-                instead of horizontally clipping; rowGap matches gap so a
-                wrapped line stays visually balanced. */}
+            {/* Support-Line — drei Mini-Beweise direkt unter den CTAs.
+                Bewusst klein und in Mono gesetzt, damit sie als
+                "Untertitel-Strip" liest, nicht als zusätzliche CTA. */}
+            <p
+              style={{
+                marginTop: 24,
+                fontSize: 12,
+                color: "var(--text-dim)",
+                fontFamily: "var(--font-mono), JetBrains Mono, monospace",
+                letterSpacing: "-0.005em",
+                lineHeight: 1.55,
+              }}
+            >
+              {tp("hero_support")}
+            </p>
+
+            {/* CGM-Status-Strip (identisch zur Homepage) */}
             <div
               style={{
                 marginTop: 28,
@@ -336,9 +324,7 @@ export default function Home() {
                 color: "var(--text-dim)",
               }}
             >
-              <span style={{ color: GREEN }}>● Libre 2</span>
-              <span>·</span>
-              <span style={{ color: GREEN }}>● Libre 3</span>
+              <span style={{ color: GREEN }}>● {tp("cgm_libre")}</span>
               <span>·</span>
               <span style={{ color: "var(--text-faint)" }}>○ Dexcom</span>
               <span>·</span>
@@ -348,29 +334,55 @@ export default function Home() {
             </div>
           </div>
 
-          {/* RIGHT: iPhone with live, clickable app mockup */}
           <div className="glev-phone-stage">
-            {/* Hero render is fully interactive — bottom nav AND the
-                top-right cog both work, so visitors can poke through
-                every screen including the Einstellungen tab (which
-                exposes its own restricted set of demo-safe toggles).
-                Was previously locked down with hideTopCog out of an
-                abundance of caution; user explicitly asked for the
-                full clickability back 2026-04-29. */}
             <AppMockupPhone />
           </div>
         </div>
       </section>
 
-      {/* PAIN BLOCK — Problem-Agitation step rendered immediately after
-          the Hero section so the visitor reads Problem → Agitation →
-          Solution in order (Pain → FeatureTrio → "So funktioniert
-          Glev"). Mirrors the same container max-width and surface
-          tokens as its neighbours so it slots into the dark theme
-          without drifting. The bullets use a small green accent dot
-          (matching the hero badge / headline period) instead of bare
-          hyphens, and the list wraps cleanly on narrow phones — no
-          horizontal scrolling. */}
+      {/* IMMEDIATE VALUE — eine Aussage, die direkt nach dem Hero den
+          Nutzen in einem Satz spiegelt. Bewusst zentriert und ohne
+          Card-Background, damit sie wie ein Manifest-Statement wirkt
+          und nicht wie ein weiteres Feature-Modul. */}
+      <section
+        style={{
+          position: "relative",
+          zIndex: 1,
+          maxWidth: 760,
+          margin: "0 auto",
+          padding: "8px 24px 48px",
+          textAlign: "center",
+        }}
+      >
+        <h2
+          style={{
+            fontSize: "clamp(24px, 3.4vw, 32px)",
+            fontWeight: 700,
+            letterSpacing: "-0.02em",
+            lineHeight: 1.2,
+            margin: 0,
+            color: "var(--text)",
+          }}
+        >
+          {tp("value_title")}
+        </h2>
+        <p
+          style={{
+            marginTop: 16,
+            fontSize: 16,
+            lineHeight: 1.6,
+            color: "var(--text-body)",
+            maxWidth: 620,
+            marginLeft: "auto",
+            marginRight: "auto",
+          }}
+        >
+          {tp("value_body")}
+        </p>
+      </section>
+
+      {/* PAIN BLOCK — neue Bullets, gleiche Card-Optik wie auf der
+          Homepage, damit das Layout vergleichbar bleibt. */}
       <section
         id="pain"
         style={{
@@ -399,7 +411,7 @@ export default function Home() {
               color: "var(--text)",
             }}
           >
-            {t("pain_title")}
+            {tp("pain_title")}
           </h2>
           <ul
             style={{
@@ -411,7 +423,7 @@ export default function Home() {
               gap: 12,
             }}
           >
-            {[t("pain_b1"), t("pain_b2"), t("pain_b3")].map((bullet, i) => (
+            {[tp("pain_b1"), tp("pain_b2"), tp("pain_b3")].map((bullet, i) => (
               <li
                 key={i}
                 style={{
@@ -442,9 +454,49 @@ export default function Home() {
         </div>
       </section>
 
-      {/* FEATURE TRIO — Solution preview that follows the Pain block,
-          completing the Problem → Agitation → Solution sequence before
-          the deeper "So funktioniert Glev" walkthrough. */}
+      {/* SYSTEM FLOW — ersetzt die alte Steps-Komponente. Eine Zeile
+          Pfeile als visueller Ablauf, darunter ein einsatzschließender
+          Erklärsatz. */}
+      <section
+        id="flow"
+        style={{
+          position: "relative",
+          zIndex: 1,
+          maxWidth: 760,
+          margin: "0 auto",
+          padding: "16px 24px 64px",
+          textAlign: "center",
+        }}
+      >
+        <h2
+          style={{
+            fontSize: "clamp(24px, 3.4vw, 32px)",
+            fontWeight: 700,
+            letterSpacing: "-0.025em",
+            margin: 0,
+            color: "var(--text)",
+            lineHeight: 1.25,
+          }}
+        >
+          {tp("flow_title")}
+        </h2>
+        <p
+          style={{
+            marginTop: 16,
+            fontSize: 15,
+            lineHeight: 1.6,
+            color: "var(--text-body)",
+            maxWidth: 620,
+            marginLeft: "auto",
+            marginRight: "auto",
+          }}
+        >
+          {tp("flow_body")}
+        </p>
+      </section>
+
+      {/* FEATURE TRIO — gleiche Komponente wie Homepage, jetzt mit
+          eigener Section-Headline darüber. */}
       <section
         style={{
           position: "relative",
@@ -454,35 +506,27 @@ export default function Home() {
           padding: "16px 24px 48px",
         }}
       >
+        <h2
+          style={{
+            fontSize: "clamp(24px, 3.4vw, 32px)",
+            fontWeight: 700,
+            letterSpacing: "-0.025em",
+            margin: "0 0 24px",
+            color: "var(--text)",
+            textAlign: "center",
+          }}
+        >
+          {tp("features_title")}
+        </h2>
         <FeatureTrio />
       </section>
 
-      {/* HOW IT WORKS — 3 steps */}
-      <section
-        id="how"
-        style={{
-          position: "relative",
-          zIndex: 1,
-          maxWidth: 760,
-          margin: "0 auto",
-          padding: "16px 24px 64px",
-        }}
-      >
-        <h2
-          style={{
-            fontSize: "clamp(28px, 4vw, 36px)",
-            fontWeight: 700,
-            letterSpacing: "-0.03em",
-            margin: "0 0 28px",
-            color: "var(--text)",
-          }}
-        >
-          {t("how_title")}
-        </h2>
-        <Steps />
-      </section>
-
-      {/* FEATURES IM DETAIL — 4 alternating rows with app screenshots */}
+      {/* FEATURES IM DETAIL — 4 alternierende Rows mit echten App-
+          Renders aus /public/mockups/ (dashboard / engine / entries /
+          insights). Statische Bilder statt live iframes weil Lucas die
+          Marketing-Surface ruhiger und schneller will und es einfacher
+          ist, Screenshots regelmäßig auszutauschen als die dark-cockpit-
+          Mockups synchron zu halten. */}
       <section
         style={{
           position: "relative",
@@ -492,10 +536,80 @@ export default function Home() {
           padding: "16px 24px 80px",
         }}
       >
-        <FeatureDeepDive />
+        <h2
+          style={{
+            fontSize: "clamp(28px, 4vw, 36px)",
+            fontWeight: 700,
+            letterSpacing: "-0.02em",
+            margin: "0 0 56px",
+            color: "var(--text)",
+            textAlign: "center",
+          }}
+        >
+          {t("deepdive_title")}
+        </h2>
+        <div style={{ display: "flex", flexDirection: "column", gap: 80 }}>
+          {[
+            { img: "/mockups/engine.png",    title: t("deepdive_voice_title"),    body: t("deepdive_voice_body") },
+            { img: "/mockups/entries.png",   title: t("deepdive_macro_title"),    body: t("deepdive_macro_body") },
+            { img: "/mockups/dashboard.png", title: t("deepdive_cgm_title"),      body: t("deepdive_cgm_body") },
+            { img: "/mockups/insights.png",  title: t("deepdive_insights_title"), body: t("deepdive_insights_body") },
+          ].map((row, i) => (
+            <FeatureImageRow key={row.title} row={row} reverse={i % 2 === 1} />
+          ))}
+        </div>
       </section>
 
-      {/* PRICING */}
+      {/* POSITIONING BLOCK — kurzes, kategorisches Statement, das Glev
+          gegenüber Tracking-Apps und Hardware abgrenzt. Akzent-Border
+          links, damit es als Zitat / Manifest liest. */}
+      <section
+        style={{
+          position: "relative",
+          zIndex: 1,
+          maxWidth: 760,
+          margin: "0 auto",
+          padding: "16px 24px 64px",
+        }}
+      >
+        <div
+          style={{
+            borderLeft: `3px solid ${ACCENT}`,
+            paddingLeft: 20,
+          }}
+        >
+          <p
+            style={{
+              fontSize: "clamp(20px, 2.8vw, 26px)",
+              fontWeight: 700,
+              letterSpacing: "-0.02em",
+              lineHeight: 1.3,
+              margin: 0,
+              color: "var(--text)",
+            }}
+          >
+            {tp("positioning_title")}
+          </p>
+          <p
+            style={{
+              marginTop: 12,
+              fontSize: 15,
+              lineHeight: 1.6,
+              color: "var(--text-body)",
+            }}
+          >
+            {tp("positioning_body")}
+          </p>
+        </div>
+      </section>
+
+      {/* PRICING — 3 Karten: Beta-Reservierung (kostenlos jetzt /
+          Subscription ab Juli), Pro · Founder-Tier (hervorgehoben,
+          €24,90/Mo, 7 Bullets), Klinik (€299/Mo, Coming Soon —
+          Email-Warteliste statt CTA, UI-only Toast bei Submit).
+          Strings inline statt aus messages, weil das eine schnelle
+          Iteration über die Preview ist und Lucas die Copy häufig
+          dreht — Promotion in messages erst bei Live-Schaltung. */}
       <section
         id="pricing"
         style={{
@@ -534,11 +648,11 @@ export default function Home() {
         </div>
 
         <div className="glev-pricing-grid">
-          {/* Card 1 — Beta-Reservierung (secondary feel) */}
+          {/* Karte 1 — Beta-Reservierung */}
           <div
             style={{
               background: SURFACE,
-              border: `1px solid ${ACCENT}`,
+              border: `1px solid ${BORDER}`,
               borderRadius: 16,
               padding: 28,
               display: "flex",
@@ -549,24 +663,41 @@ export default function Home() {
           >
             <div>
               <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--text)" }}>
-                {t("pricing_beta_title")}
+                Beta-Reservierung
               </h3>
-              <div style={{ marginTop: 14, display: "flex", alignItems: "baseline", gap: 8 }}>
-                <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text)" }}>{t("pricing_beta_price")}</span>
-                <span style={{ fontSize: 15, color: "var(--text-muted)" }}>{t("pricing_beta_period")}</span>
+              <div style={{ marginTop: 14, display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text)" }}>€4,50</span>
+                <span style={{ fontSize: 15, color: "var(--text-muted)" }}>/ Monat</span>
+                <span style={{ fontSize: 18, color: "var(--text-muted)", textDecoration: "line-through", textDecorationThickness: "2px", textDecorationColor: "var(--text-muted)", marginLeft: 6, opacity: 0.9 }}>€9</span>
               </div>
+              <p style={{ margin: "6px 0 0 0", fontSize: 12.5, color: "var(--text-muted)", letterSpacing: "-0.005em" }}>
+                in den ersten 3 Monaten
+              </p>
             </div>
 
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
               {[
-                t("pricing_beta_b1"),
-                t("pricing_beta_b2"),
-                t("pricing_beta_b3"),
-                t("pricing_beta_b4"),
+                "Voller App-Zugang ab sofort",
+                "Voice-Logging & AI-Mahlzeiten-Parsing",
+                "CGM-Integration (LibreLink 2 und 3, Nightscout)",
+                "Dashboard, Engine & Insights",
               ].map((bullet) => (
                 <PricingBullet key={bullet} text={bullet} />
               ))}
             </ul>
+
+            <p
+              style={{
+                margin: 0,
+                fontSize: 13,
+                color: "var(--text-muted)",
+                fontFamily: "var(--font-mono), JetBrains Mono, monospace",
+                letterSpacing: "-0.005em",
+                lineHeight: 1.55,
+              }}
+            >
+              Jetzt kostenlos · Billing startet im Juli · jederzeit kündbar
+            </p>
 
             <Link
               href="/beta"
@@ -588,7 +719,7 @@ export default function Home() {
                 gap: 8,
               }}
             >
-              {t("pricing_beta_cta")}
+              Beta-Zugang sichern
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="5" y1="12" x2="19" y2="12" />
                 <polyline points="13 6 19 12 13 18" />
@@ -596,7 +727,7 @@ export default function Home() {
             </Link>
           </div>
 
-          {/* Card 2 — Pro · Founder-Tier (primary, recommended) */}
+          {/* Karte 2 — Pro · Founder-Tier (hervorgehoben) */}
           <div
             style={{
               background: SURFACE,
@@ -611,7 +742,7 @@ export default function Home() {
             }}
           >
             <div
-              aria-label={t("pricing_pro_badge")}
+              aria-label="Empfohlen"
               style={{
                 position: "absolute",
                 top: -12,
@@ -627,30 +758,45 @@ export default function Home() {
                 boxShadow: `0 4px 12px ${ACCENT}66`,
               }}
             >
-              {t("pricing_pro_badge")}
+              Empfohlen
             </div>
 
             <div>
               <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--text)" }}>
-                {t("pricing_pro_title")}
+                Pro · Founder-Tier
               </h3>
               <div style={{ marginTop: 14, display: "flex", alignItems: "baseline", gap: 8 }}>
-                <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text)" }}>{t("pricing_pro_price")}</span>
-                <span style={{ fontSize: 15, color: "var(--text-muted)" }}>{t("pricing_pro_period")}</span>
+                <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text)" }}>€24,90</span>
+                <span style={{ fontSize: 15, color: "var(--text-muted)" }}>/ Monat</span>
               </div>
             </div>
 
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
               {[
-                t("pricing_pro_b1"),
-                t("pricing_pro_b2"),
-                t("pricing_pro_b3"),
-                t("pricing_pro_b4"),
-                t("pricing_pro_b5"),
+                "Voller App-Zugang ab sofort",
+                "PDF Arzt-Report",
+                "Datenexport — CSV, Google Sheets, ZIP",
+                "Lifetime-Preis-Lock — €24,90 dauerhaft, auch nach Preiserhöhungen",
+                "Founder-Slack-Kanal — direkter Draht zum Team",
+                "Feature-Roadmap-Voting",
+                "Früher Zugang zu kommenden Features (Apple Health, erweiterte Analyse)",
               ].map((bullet) => (
                 <PricingBullet key={bullet} text={bullet} />
               ))}
             </ul>
+
+            <p
+              style={{
+                margin: 0,
+                fontSize: 13,
+                color: "var(--text-muted)",
+                fontFamily: "var(--font-mono), JetBrains Mono, monospace",
+                letterSpacing: "-0.005em",
+                lineHeight: 1.55,
+              }}
+            >
+              Karte heute hinterlegt · erste Buchung am 1. Juli 2026
+            </p>
 
             <Link
               href="/pro"
@@ -672,17 +818,20 @@ export default function Home() {
                 boxShadow: `0 6px 18px ${ACCENT}40`,
               }}
             >
-              {t("pricing_pro_cta")}
+              Mitglied werden
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="5" y1="12" x2="19" y2="12" />
                 <polyline points="13 6 19 12 13 18" />
               </svg>
             </Link>
           </div>
+
+          {/* Karte 3 — Klinik (Coming Soon, Email-Warteliste statt CTA) */}
+          <KlinikCard />
         </div>
       </section>
 
-      {/* FAQ */}
+      {/* FAQ — komplett identisch zur Homepage. */}
       <section
         id="faq"
         style={{
@@ -690,7 +839,7 @@ export default function Home() {
           zIndex: 1,
           maxWidth: 760,
           margin: "0 auto",
-          padding: "16px 24px 80px",
+          padding: "16px 24px 48px",
         }}
       >
         <h2
@@ -708,13 +857,6 @@ export default function Home() {
           {([
             { q: t("faq_q1"), a: t("faq_a1") },
             { q: t("faq_q2"), a: t("faq_a2") },
-            // q5 = "Wo finde ich Setup-Anleitungen?" — sits directly
-            // after q2 (CGM compatibility) so the natural follow-up
-            // question lands next to its parent rather than at the
-            // end of the list. Render the answer with a clickable
-            // <Link> to /setup since the answer is essentially
-            // "open this page" — plain-text URLs in a FAQ feel
-            // unfinished.
             {
               q: t("faq_q5"),
               a: (
@@ -768,7 +910,33 @@ export default function Home() {
         </div>
       </section>
 
-      {/* FOOTER */}
+      {/* COMPLIANCE — kleiner muted Hinweis, bewusst KEIN Fettdruck.
+          Sitzt direkt vor dem globalen Footer und gibt der Seite einen
+          rechtssauberen Abschluss, ohne das Pricing-Block-Layout zu
+          stören. */}
+      <section
+        style={{
+          position: "relative",
+          zIndex: 1,
+          maxWidth: 760,
+          margin: "0 auto",
+          padding: "0 24px 32px",
+        }}
+      >
+        <p
+          style={{
+            margin: 0,
+            fontSize: 12,
+            lineHeight: 1.55,
+            color: "var(--text-faint)",
+            textAlign: "center",
+          }}
+        >
+          {tp("compliance")}
+        </p>
+      </section>
+
+      {/* FOOTER — identisch zur Homepage. */}
       <footer
         style={{
           position: "relative",
@@ -798,10 +966,6 @@ export default function Home() {
             >
               {t("footer_legal")}
             </Link>
-            {/* Brand-Book Link, gut versteckt: gleiche Farbe wie Copyright,
-                kein Underline, nur durch dezente Trenn-Mittelpunkt sichtbar.
-                Bleibt für Direktaufruf via /brand erreichbar; SectionNav etc.
-                im /brand selbst funktionieren wie bisher. */}
             {" · "}
             <Link
               href="/brand"
@@ -851,4 +1015,191 @@ function PricingBullet({ text }: { text: string }) {
   );
 }
 
+/** Eine alternierende Feature-Detail-Row mit App-Render + Copy. */
+function FeatureImageRow({
+  row,
+  reverse,
+}: {
+  row: { img: string; title: string; body: string };
+  reverse: boolean;
+}) {
+  return (
+    <div className={`glev-feat-row${reverse ? " glev-feat-row--rev" : ""}`}>
+      <div
+        className="glev-feat-row__img"
+        style={{
+          borderRadius: 18,
+          overflow: "hidden",
+          border: "1px solid var(--border)",
+          boxShadow: "0 12px 32px rgba(0,0,0,0.35)",
+          background: "var(--surface)",
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={row.img}
+          alt={row.title}
+          loading="lazy"
+          style={{ display: "block", width: "100%", height: "auto" }}
+        />
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <h3
+          style={{
+            fontSize: "clamp(22px, 3vw, 28px)",
+            fontWeight: 700,
+            letterSpacing: "-0.02em",
+            margin: 0,
+            color: "var(--text)",
+          }}
+        >
+          {row.title}
+        </h3>
+        <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6, color: "var(--text-body)" }}>
+          {row.body}
+        </p>
+      </div>
+    </div>
+  );
+}
 
+/** Klinik-Karte mit lokalem State für Email-Warteliste. UI-only,
+ *  kein Backend — nach Submit Toast-Bestätigung 4s anzeigen. */
+function KlinikCard() {
+  const [email, setEmail] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim()) return;
+    setSubmitted(true);
+    setEmail("");
+    // Toast nach 4s wieder ausblenden, damit das Eingabefeld
+    // erneut interaktiv ist (gut für wiederholte Screenshots).
+    window.setTimeout(() => setSubmitted(false), 4000);
+  }
+
+  return (
+    <div
+      style={{
+        background: SURFACE,
+        border: `1px solid ${BORDER}`,
+        borderRadius: 16,
+        padding: 28,
+        display: "flex",
+        flexDirection: "column",
+        gap: 20,
+        position: "relative",
+      }}
+    >
+      <div
+        aria-label="Coming Soon"
+        style={{
+          position: "absolute",
+          top: -12,
+          left: 24,
+          background: "var(--surface-soft, #232329)",
+          color: "var(--text-muted)",
+          fontSize: 11,
+          fontWeight: 700,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          padding: "4px 10px",
+          borderRadius: 999,
+          border: `1px solid ${BORDER}`,
+        }}
+      >
+        Coming Soon
+      </div>
+
+      <div>
+        <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--text)" }}>
+          Klinik
+        </h3>
+        <div style={{ marginTop: 14, display: "flex", alignItems: "baseline", gap: 8 }}>
+          <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text)" }}>€299</span>
+          <span style={{ fontSize: 15, color: "var(--text-muted)" }}>/ Monat</span>
+        </div>
+      </div>
+
+      <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+        {[
+          "Für Diabetespraxen & -berater",
+          "Multi-Patienten-Dashboard",
+          "Klinik-Reports mit Briefkopf",
+          "AV-Vertrag (DSGVO-konform)",
+        ].map((b) => (
+          <PricingBullet key={b} text={b} />
+        ))}
+      </ul>
+
+      <form
+        onSubmit={onSubmit}
+        style={{
+          marginTop: "auto",
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+        }}
+      >
+        <div style={{ display: "flex", gap: 8 }}>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Deine E-Mail-Adresse"
+            required
+            aria-label="E-Mail für Klinik-Warteliste"
+            style={{
+              flex: 1,
+              minWidth: 0,
+              padding: "11px 14px",
+              borderRadius: 10,
+              background: "var(--bg)",
+              border: `1px solid ${BORDER}`,
+              color: "var(--text)",
+              fontSize: 13,
+              outline: "none",
+              fontFamily: "inherit",
+            }}
+          />
+          <button
+            type="submit"
+            style={{
+              padding: "11px 16px",
+              borderRadius: 10,
+              background: ACCENT,
+              color: "#fff",
+              fontSize: 13,
+              fontWeight: 700,
+              letterSpacing: "-0.005em",
+              border: "none",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+              fontFamily: "inherit",
+            }}
+          >
+            Auf Warteliste
+          </button>
+        </div>
+        {submitted && (
+          <div
+            role="status"
+            style={{
+              padding: "8px 12px",
+              borderRadius: 8,
+              background: `${GREEN}1a`,
+              border: `1px solid ${GREEN}55`,
+              color: GREEN,
+              fontSize: 12.5,
+              fontWeight: 600,
+              textAlign: "center",
+            }}
+          >
+            ✓ Eingetragen — wir melden uns.
+          </div>
+        )}
+      </form>
+    </div>
+  );
+}
