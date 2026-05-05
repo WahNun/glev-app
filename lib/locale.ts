@@ -49,15 +49,39 @@ export function writeLocaleCookie(locale: Locale) {
  * we still apply the cookie + reload so the language switches locally —
  * persistence will happen on the next successful update.
  */
+// Paths where the middleware honours `?lang=de|en` and re-issues the
+// NEXT_LOCALE cookie server-side via Set-Cookie. Keep in sync with
+// `LANG_OVERRIDE_PATHS` in middleware.ts.
+const LANG_OVERRIDE_PATHS = ["/", "/pro", "/beta", "/setup"];
+
+function isLangOverridePath(pathname: string): boolean {
+  return LANG_OVERRIDE_PATHS.some(
+    (p) => pathname === p || pathname.startsWith(p + "/"),
+  );
+}
+
 export async function setLocale(next: Locale): Promise<void> {
   writeLocaleCookie(next);
   // Persist to Supabase as fire-and-forget — must NOT block the reload,
   // otherwise a hanging auth/profile call (e.g. inside the Replit
   // preview iframe) prevents the language from switching at all.
   void persistLocaleToProfile(next);
-  if (typeof window !== "undefined") {
-    window.location.reload();
+  if (typeof window === "undefined") return;
+
+  // On the public marketing pages, hop through `?lang=` so the
+  // middleware re-issues the NEXT_LOCALE cookie via a Set-Cookie
+  // response header. This works in third-party iframe contexts
+  // (e.g. the Replit preview canvas) where document.cookie writes
+  // are partitioned/blocked and would not survive the reload.
+  const { pathname, search, hash } = window.location;
+  if (isLangOverridePath(pathname)) {
+    const params = new URLSearchParams(search);
+    params.set("lang", next);
+    window.location.href = `${pathname}?${params.toString()}${hash}`;
+    return;
   }
+
+  window.location.reload();
 }
 
 async function persistLocaleToProfile(next: Locale): Promise<void> {
