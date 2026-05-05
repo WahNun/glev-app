@@ -518,6 +518,8 @@ export default function EntriesPage() {
         ev === o
         || (o === "OVERDOSE"  && ev === "HIGH")
         || (o === "UNDERDOSE" && ev === "LOW")
+        // Task #251: SPIKE_STRONG falls under the user-facing SPIKE filter.
+        || (o === "SPIKE"     && ev === "SPIKE_STRONG")
       );
       if (!matches) return false;
     }

@@ -7,6 +7,10 @@ import { pairBolusesToMeals } from "./pairing";
 const OUTCOME_WEIGHT: Record<string, number> = {
   GOOD: 1.0,
   SPIKE: 0.7,
+  // Task #251: SPIKE_STRONG carries less weight than a regular SPIKE
+  // because the dose was clearly mismatched for the meal — we want
+  // those samples to contribute a softer pull on the adaptive ICR.
+  SPIKE_STRONG: 0.4,
   UNDERDOSE: 0.3,
   OVERDOSE: 0.3,
 };

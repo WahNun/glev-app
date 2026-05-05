@@ -52,7 +52,7 @@ function buildCards(meals: Meal[], t: DashT): CardData[] {
   for (const m of meals) {
     const ev = unifiedOutcome(m);
     if      (ev === "GOOD") good++;
-    else if (ev === "SPIKE" || ev === "UNDERDOSE" || ev === "LOW") spike++;
+    else if (ev === "SPIKE" || ev === "SPIKE_STRONG" || ev === "UNDERDOSE" || ev === "LOW") spike++;
     else if (ev === "OVERDOSE" || ev === "HIGH") hypo++;
   }
   const goodRate  = total ? (good / total) * 100 : 0;
@@ -272,7 +272,7 @@ function OutcomeChart({ meals }: { meals: Meal[] }) {
     const ev = m.evaluation || "";
     if (ev === "OVERDOSE" || ev === "HIGH") groups[idx.HIGH].count++;
     else if (ev === "UNDERDOSE" || ev === "LOW") groups[idx.LOW].count++;
-    else if (ev === "SPIKE") groups[idx.SPIKE].count++;
+    else if (ev === "SPIKE" || ev === "SPIKE_STRONG") groups[idx.SPIKE].count++;
     else if (ev === "GOOD") groups[idx.GOOD].count++;
   });
   const total = meals.length || 1;

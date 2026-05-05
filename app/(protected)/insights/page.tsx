@@ -75,7 +75,7 @@ type EvalBucket = "GOOD" | "SPIKE" | "HYPO" | null;
 const EVAL_NORM = (ev: string|null): EvalBucket => {
   if (!ev) return null;
   if (ev === "GOOD") return "GOOD";
-  if (ev === "SPIKE" || ev === "UNDERDOSE" || ev === "LOW")  return "SPIKE";
+  if (ev === "SPIKE" || ev === "SPIKE_STRONG" || ev === "UNDERDOSE" || ev === "LOW")  return "SPIKE";
   if (ev === "OVERDOSE" || ev === "HIGH")                    return "HYPO";
   return null;
 };

@@ -68,7 +68,13 @@ export function detectPattern(meals: Meal[], now: Date = new Date()): Pattern {
     if (x.lc.outcome === "GOOD")           { counts.good++;      weighted.good      += w; }
     else if (x.lc.outcome === "UNDERDOSE") { counts.underdose++; weighted.underdose += w; }
     else if (x.lc.outcome === "OVERDOSE")  { counts.overdose++;  weighted.overdose  += w; }
-    else if (x.lc.outcome === "SPIKE")     { counts.spike++;     weighted.spike     += w; }
+    // Task #251: SPIKE_STRONG counts in the same bucket as SPIKE for
+    // pattern detection — both indicate a post-meal rapid rise; the
+    // severity differentiation is surfaced via the chip color/label,
+    // not via a separate pattern bucket.
+    else if (x.lc.outcome === "SPIKE" || x.lc.outcome === "SPIKE_STRONG") {
+      counts.spike++; weighted.spike += w;
+    }
   }
 
   // ── Curve-aware enrichment (Task #187 / #194) ──────────────────────

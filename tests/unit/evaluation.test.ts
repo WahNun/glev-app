@@ -247,6 +247,71 @@ test("evaluateEntry: ICR fallback with insulin=0 returns neutral GOOD, not UNDER
   expect(r.delta).toBeNull();
 });
 
+// ── Speed-as-spike-signal (Task #251 — Diagnose Case C) ────────────
+
+test("evaluateEntry: SPIKE when speed1 ≥ 1.5 mg/dL/min even though Δ_2h is small", () => {
+  // Classic "kurz heftiger Anstieg, bis +2h wieder abgebaut" — bgBefore
+  // 100 → bg_2h 110 (Δ=+10 → would be GOOD). speed1 derived upstream
+  // from bg_1h=200 → +100 mg/dL in 60 min = 1.67 mg/dL/min.
+  const r = evaluateEntry({
+    carbs: 50, insulin: 4, bgBefore: 100, bgAfter: 110,
+    speed1: 1.67, speed2: 0.08,
+  });
+  expect(r.outcome).toBe("SPIKE");
+  expect(r.messages[0].key).toBe("engine_eval_spike_speed");
+  expect(r.messages[0].params!.window).toBe("1h");
+});
+
+test("evaluateEntry: SPIKE_STRONG when speed1 ≥ 2.5 mg/dL/min", () => {
+  const r = evaluateEntry({
+    carbs: 50, insulin: 4, bgBefore: 100, bgAfter: 115,
+    speed1: 2.8, speed2: 0.12,
+  });
+  expect(r.outcome).toBe("SPIKE_STRONG");
+});
+
+test("evaluateEntry: speed below 1.5 mg/dL/min does NOT trigger SPIKE", () => {
+  const r = evaluateEntry({
+    carbs: 50, insulin: 4, bgBefore: 100, bgAfter: 115,
+    speed1: 1.2, speed2: 0.12,
+  });
+  expect(r.outcome).toBe("GOOD");
+});
+
+test("evaluateEntry: negative speed1 (rapid drop) does NOT trigger SPIKE", () => {
+  const r = evaluateEntry({
+    carbs: 50, insulin: 4, bgBefore: 200, bgAfter: 195,
+    speed1: -2.5, speed2: -0.04,
+  });
+  expect(r.outcome).toBe("GOOD");
+});
+
+test("evaluateEntry: magnitude SPIKE upgrades to SPIKE_STRONG when delta > 1.5×cutoff", () => {
+  // BALANCED cutoff 55 → strong threshold 82.5. delta 90 → SPIKE_STRONG.
+  const r = evaluateEntry({ carbs: 50, insulin: 4, bgBefore: 100, bgAfter: 190 });
+  expect(r.outcome).toBe("SPIKE_STRONG");
+});
+
+test("evaluateEntry: peakRise SPIKE upgrades to SPIKE_STRONG when peakRise > 1.5×cutoff", () => {
+  // FAST_CARBS cutoff 70 → strong threshold 105. peakRise 130 → SPIKE_STRONG.
+  const r = evaluateEntry({
+    carbs: 50, insulin: 4, bgBefore: 100, bgAfter: 130,
+    classification: "FAST_CARBS",
+    minBg180: 95, maxBg180: 230, timeToPeakMin: 45,
+  });
+  expect(r.outcome).toBe("SPIKE_STRONG");
+  expect(r.messages[0].key).toBe("engine_eval_spike_peak");
+});
+
+test("evaluateEntry: speed-only SPIKE without bgAfter has medium confidence", () => {
+  const r = evaluateEntry({
+    carbs: 50, insulin: 4, bgBefore: 100, bgAfter: null,
+    speed1: 1.8,
+  });
+  expect(r.outcome).toBe("SPIKE");
+  expect(r.confidence).toBe("medium");
+});
+
 // ── Pre-Meal-Trend (Task #195) ──────────────────────────────────────
 
 test("evaluateEntry: preTrend appends trend message, outcome unchanged", () => {

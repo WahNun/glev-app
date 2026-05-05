@@ -165,6 +165,8 @@ Es gibt an keiner Stelle (`evaluation.ts`, `lifecycle.ts`, `chipState.ts`, `entr
 - `peakRise > spikeCutoff` (Zeile 170) ist die einzige Stelle, an der die Form der Kurve einbezogen wird — und auch nur die Höhe, nicht die Geschwindigkeit.
 - Es gibt **keine** Differenzierung "leichter" vs. "starker" Spike (siehe §3 unten).
 
+> **Status (Task #251):** Behoben für den positiven Spike-Fall. `evaluateEntry` ruft jetzt einen einheitlichen `detectSpike()`-Helfer (`lib/engine/evaluation.ts`, ca. Z. 144–225), der peakRise + Δ_2h + speed1/speed2 kombiniert. Schwellen sind als exportierte Konstanten dokumentiert: `SPEED_SPIKE_MGDL_PER_MIN = 1.5` (≈ 90 mg/dL/h) → SPIKE, `SPEED_SPIKE_STRONG_MGDL_PER_MIN = 2.5` (≈ 150 mg/dL/h) → SPIKE_STRONG. Magnituden-basiert wird ebenfalls auf SPIKE_STRONG hochgestuft, sobald `peakRise` oder Δ_2h über `SPIKE_STRONG_MAGNITUDE_MULTIPLIER × spikeCutoff` (Faktor 1.5) liegen. Damit kippt die kurze, bis zur 2h-Messung wieder abgebaute Spitze nicht mehr in `GOOD`, und die UI bekommt einen eigenen SPIKE_STRONG-Outcome (`#FF6A00`, eigenes Label `eval_SPIKE_STRONG` / `eval_explain_SPIKE_STRONG`). Der negative-Speed-Fall (rapider Abfall, der bis +2h wieder ausgeglichen ist) bleibt offen — das ist absichtlich nicht Teil von #251.
+
 ---
 
 ## 3. Spike-Logik im Detail

@@ -61,6 +61,10 @@ export const EVAL_COLORS: Record<string, string> = {
   LOW: PALETTE.ORANGE,
   HIGH: "#FF2D78",
   SPIKE: "#FFD60A",
+  // Task #251: SPIKE_STRONG = severe rapid spike (peak/Δ above 1.5×
+  // class-cutoff OR speed ≥ 2.5 mg/dL/min). Deeper amber so it reads
+  // visibly more alarming than the regular yellow SPIKE chip.
+  SPIKE_STRONG: "#FF6A00",
   OVERDOSE: "#FF2D78",
   UNDERDOSE: PALETTE.ORANGE,
   // Task #187: hypos detected anywhere inside the 3h post-meal window
@@ -76,6 +80,7 @@ export const EVAL_LABELS: Record<string, string> = {
   LOW: "Under Dose",
   HIGH: "Over Dose",
   SPIKE: "Spike",
+  SPIKE_STRONG: "Strong Spike",
   OVERDOSE: "Over Dose",
   UNDERDOSE: "Under Dose",
   HYPO_DURING: "Hypo im Verlauf",
@@ -89,6 +94,7 @@ export const EVAL_EXPLAIN: Record<string, string> = {
   LOW: "Insulin insufficient → glucose increased after meal.",
   UNDERDOSE: "Insulin insufficient → glucose increased after meal.",
   SPIKE: "Rapid glucose increase detected post meal.",
+  SPIKE_STRONG: "Severe rapid glucose spike — magnitude or rate well above the per-meal threshold.",
   HYPO_DURING: "Glucose dropped below 70 mg/dL somewhere inside the 3h post-meal window — even if the 2h reading was back in range.",
   CHECK_CONTEXT: "Outcome unclear — review context before adjusting.",
 };

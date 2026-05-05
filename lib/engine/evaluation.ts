@@ -5,7 +5,32 @@ import type { TrendClass } from "./trend";
 import { parseDbTs } from "@/lib/time";
 import { getInsulinSettings, type InsulinSettings } from "@/lib/userSettings";
 
-export type Outcome = "GOOD" | "UNDERDOSE" | "OVERDOSE" | "SPIKE" | "HYPO_DURING" | "CHECK_CONTEXT";
+export type Outcome = "GOOD" | "UNDERDOSE" | "OVERDOSE" | "SPIKE" | "SPIKE_STRONG" | "HYPO_DURING" | "CHECK_CONTEXT";
+
+/**
+ * Speed-based spike detection (Task #251 / Diagnose Case C).
+ *
+ * `speed1` / `speed2` are the average mg/dL/min slopes computed in
+ * `lifecycleFor` (delta1/60 and delta2/120). Until #251 they were only
+ * rendered as begleitender Text — a meal with a kurz heftigen Anstieg
+ * that was already abgebaut bis zur 2h-Messung looked like "GOOD"
+ * because |Δ_2h| stayed under the cutoff.
+ *
+ * The thresholds below promote the slope to a first-class SPIKE
+ * trigger. They were calibrated against the existing class-cutoffs
+ * (BALANCED 55 mg/dL → ~0.46 mg/dL/min over 2h, FAST_CARBS 70 mg/dL
+ * → ~1.17 mg/dL/min over 1h) so a speed alone above 1.5 mg/dL/min
+ * is already steeper than every class-cutoff:
+ *
+ *   1.5 mg/dL/min  ≈ 90 mg/dL pro Stunde   →  SPIKE
+ *   2.5 mg/dL/min  ≈ 150 mg/dL pro Stunde  →  SPIKE_STRONG
+ *
+ * Magnitude-based detections (peakRise / Δ_2h) additionally upgrade
+ * to SPIKE_STRONG when above SPIKE_STRONG_MAGNITUDE_MULTIPLIER × cutoff.
+ */
+export const SPEED_SPIKE_MGDL_PER_MIN          = 1.5;
+export const SPEED_SPIKE_STRONG_MGDL_PER_MIN   = 2.5;
+export const SPIKE_STRONG_MAGNITUDE_MULTIPLIER = 1.5;
 
 export type Classification = "FAST_CARBS" | "HIGH_PROTEIN" | "HIGH_FAT" | "BALANCED" | null | undefined;
 
@@ -113,6 +138,89 @@ function trendMessages(preTrend?: TrendClass): AdjustmentMessage[] {
   return [{ key: `engine_eval_trend_${preTrend}` }];
 }
 
+interface SpikeDetection {
+  outcome: "SPIKE" | "SPIKE_STRONG";
+  primary: AdjustmentMessage;
+}
+
+/**
+ * Unified spike detector — combines magnitude (peakRise via curve OR
+ * bg_2h-Δ) and slope (`speed1`/`speed2`) into one decision so a steep
+ * brief Anstieg, der bis zur 2h-Messung wieder abgebaut ist, no longer
+ * rutscht durch als GOOD (Diagnose Case C).
+ *
+ * Returns `null` when no spike signal fires. Picks the most informative
+ * primary message (peak > delta > speed) so the user sees the concrete
+ * mg/dL number when available, and falls back to the slope description
+ * when only the speed crossed its threshold.
+ */
+function detectSpike(args: {
+  classKey: string;
+  spikeCutoff: number;
+  peakRise: number | null;
+  peakAtMin: number | null;
+  delta: number | null;
+  speed1: number | null | undefined;
+  speed2: number | null | undefined;
+}): SpikeDetection | null {
+  const { classKey: cKey, spikeCutoff, peakRise, peakAtMin, delta, speed1, speed2 } = args;
+
+  const peakSpike  = peakRise != null && peakRise > spikeCutoff;
+  const deltaSpike = delta    != null && delta    > spikeCutoff;
+
+  // Only positive slopes count as a spike trigger — a negative speed1
+  // means BG was falling, not spiking.
+  const s1Rise = speed1 != null && Number.isFinite(speed1) && speed1 > 0 ? speed1 : 0;
+  const s2Rise = speed2 != null && Number.isFinite(speed2) && speed2 > 0 ? speed2 : 0;
+  const speedTrigger =
+    s1Rise >= SPEED_SPIKE_MGDL_PER_MIN || s2Rise >= SPEED_SPIKE_MGDL_PER_MIN;
+
+  if (!peakSpike && !deltaSpike && !speedTrigger) return null;
+
+  const strongMagnitude =
+    (peakRise != null && peakRise > spikeCutoff * SPIKE_STRONG_MAGNITUDE_MULTIPLIER) ||
+    (delta    != null && delta    > spikeCutoff * SPIKE_STRONG_MAGNITUDE_MULTIPLIER);
+  const strongSpeed =
+    s1Rise >= SPEED_SPIKE_STRONG_MGDL_PER_MIN ||
+    s2Rise >= SPEED_SPIKE_STRONG_MGDL_PER_MIN;
+
+  const outcome: "SPIKE" | "SPIKE_STRONG" =
+    strongMagnitude || strongSpeed ? "SPIKE_STRONG" : "SPIKE";
+
+  let primary: AdjustmentMessage;
+  if (peakSpike) {
+    primary = {
+      key: "engine_eval_spike_peak",
+      params: {
+        rise: peakRise!,
+        peakAt: peakAtMin ?? "?",
+        threshold: spikeCutoff,
+        classKey: cKey,
+      },
+    };
+  } else if (deltaSpike) {
+    primary = {
+      key: "engine_eval_spike",
+      params: { delta: delta!, threshold: spikeCutoff, classKey: cKey },
+    };
+  } else {
+    // Speed-only trigger — surface the dominant slope and threshold.
+    const dominant = s1Rise >= s2Rise ? s1Rise : s2Rise;
+    const window: "1h" | "2h" = s1Rise >= s2Rise ? "1h" : "2h";
+    primary = {
+      key: "engine_eval_spike_speed",
+      params: {
+        speed: `+${dominant.toFixed(2)}`,
+        threshold: SPEED_SPIKE_MGDL_PER_MIN.toFixed(1),
+        window,
+        classKey: cKey,
+      },
+    };
+  }
+
+  return { outcome, primary };
+}
+
 function speedMessages(speed1?: number | null, speed2?: number | null): AdjustmentMessage[] {
   const out: AdjustmentMessage[] = [];
   if (speed1 != null && Number.isFinite(speed1)) {
@@ -186,37 +294,45 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
     return { outcome: "HYPO_DURING", messages, confidence: "high", delta, netCarbs };
   }
 
-  if (input.maxBg180 != null && bgBefore != null) {
-    const peakRise = Math.round(input.maxBg180 - bgBefore);
-    if (peakRise > spikeCutoff) {
-      const messages: AdjustmentMessage[] = [
-        {
-          key: "engine_eval_spike_peak",
-          params: {
-            rise: peakRise,
-            peakAt: input.timeToPeakMin ?? "?",
-            threshold: spikeCutoff,
-            classKey: classKey(cls),
-          },
-        },
-        ...speedMessages(input.speed1, input.speed2),
-        ...contextMessages(input.recentInsulinLogs, input.recentExerciseLogs),
-        ...trendMessages(input.preTrend),
-      ];
-      return { outcome: "SPIKE", messages, confidence: "high", delta, netCarbs };
-    }
+  // Unified spike detection (Task #251): combines peakRise + Δ_2h + slope.
+  // Runs BEFORE the delta-based GOOD/UNDER/OVER triage so a steep brief
+  // Anstieg, der bis zur 2h-Messung wieder abgebaut ist (|Δ_2h| ≤ 30,
+  // aber speed1 > 1.5 mg/dL/min), no longer rutscht durch als GOOD.
+  const spike = detectSpike({
+    classKey: classKey(cls),
+    spikeCutoff,
+    peakRise: input.maxBg180 != null && bgBefore != null
+      ? Math.round(input.maxBg180 - bgBefore)
+      : null,
+    peakAtMin: input.timeToPeakMin ?? null,
+    delta,
+    speed1: input.speed1,
+    speed2: input.speed2,
+  });
+  if (spike) {
+    const messages: AdjustmentMessage[] = [
+      spike.primary,
+      ...speedMessages(input.speed1, input.speed2),
+      ...contextMessages(input.recentInsulinLogs, input.recentExerciseLogs),
+      ...trendMessages(input.preTrend),
+    ];
+    // Magnitude-backed spikes (peak or Δ_2h known) → high confidence.
+    // Speed-only triggers without any post-meal magnitude → medium.
+    const hasMagnitudeSignal =
+      (input.maxBg180 != null && bgBefore != null) || delta != null;
+    return {
+      outcome: spike.outcome,
+      messages,
+      confidence: hasMagnitudeSignal ? "high" : "medium",
+      delta,
+      netCarbs,
+    };
   }
 
   if (delta != null) {
     let outcome: Outcome;
     let primary: AdjustmentMessage;
-    if (delta > spikeCutoff) {
-      outcome = "SPIKE";
-      primary = {
-        key: "engine_eval_spike",
-        params: { delta, threshold: spikeCutoff, classKey: classKey(cls) },
-      };
-    } else if (delta > 30) {
+    if (delta > 30) {
       outcome = "UNDERDOSE";
       primary = { key: "engine_eval_underdose", params: { delta } };
     } else if (delta < -30) {
