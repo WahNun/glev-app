@@ -6,6 +6,7 @@ import { getLocale, getMessages } from "next-intl/server";
 import { cookies, headers } from "next/headers";
 import "./globals.css";
 import { PreventZoom } from "@/components/PreventZoom";
+import PushNotificationsProvider from "@/components/PushNotificationsProvider";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { APP_ROUTE_REGEX_SOURCE, isAppRoute, PATHNAME_HEADER } from "@/lib/appRoutes";
 
@@ -175,6 +176,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <NextIntlClientProvider locale={locale} messages={messages}>
           <ThemeProvider>
             <PreventZoom />
+            <PushNotificationsProvider />
             {children}
           </ThemeProvider>
         </NextIntlClientProvider>

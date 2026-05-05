@@ -1,0 +1,30 @@
+{
+  "_comment": "Template only — DO NOT use as-is. Download the real file from Firebase Console (see android/SIGNING_SETUP.md → 'Push Notifications via Firebase'). Place the real file next to this one as android/app/google-services.json. The real file is gitignored.",
+  "project_info": {
+    "project_number": "<FIREBASE_PROJECT_NUMBER>",
+    "project_id": "<FIREBASE_PROJECT_ID>",
+    "storage_bucket": "<FIREBASE_PROJECT_ID>.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "<FIREBASE_ANDROID_APP_ID>",
+        "android_client_info": {
+          "package_name": "app.glev"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "<FIREBASE_ANDROID_API_KEY>"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

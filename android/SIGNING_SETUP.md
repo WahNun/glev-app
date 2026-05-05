@@ -114,3 +114,92 @@ npm run android:build:debug        # produces android/app/build/outputs/apk/debu
 
 Subsequent uploads only need a new `versionCode` (bump it via
 `npm run android:bump:build`) and rebuilt AAB.
+
+## 6. Push Notifications via Firebase (FCM)
+
+Android push notifications go through **Firebase Cloud Messaging** (FCM)
+— the same way iOS goes through APNs. The Capacitor shell already has
+the wiring (`@capacitor/push-notifications` plugin + the
+`com.google.gms.google-services` Gradle Try/Catch in
+`android/app/build.gradle`), but it stays disabled until a real
+`google-services.json` is dropped into `android/app/`.
+
+The file is **gitignored** (`android/.gitignore` → `app/google-services.json`)
+because it contains the project's Firebase API key and project number.
+A committed sibling `android/app/google-services.json.example` documents
+the expected shape so you can sanity-check what Firebase gives you.
+
+### 6.1 Create the Firebase project (one time)
+
+1. Open <https://console.firebase.google.com/> with the Google account
+   that should own Glev push.
+2. **Add project** → name `Glev` (or `Glev Production`). Disable Google
+   Analytics — we don't use it for push and it adds extra setup.
+3. Inside the new project, **Project settings → General → Your apps →
+   Add app → Android**.
+4. Fill in:
+   - **Android package name**: `app.glev` (must match
+     `android/app/build.gradle` → `applicationId` exactly)
+   - **App nickname**: `Glev Android`
+   - **Debug signing certificate SHA-1**: optional for FCM-only setup;
+     skip unless you also need Dynamic Links / Google Sign-In.
+5. **Download `google-services.json`** when Firebase offers it. Save it
+   to `android/app/google-services.json` in this repo. The Gradle
+   Try/Catch picks it up automatically on the next build — you do not
+   need to edit any `.gradle` file.
+6. Skip the "Add Firebase SDK" and "Verify installation" wizard steps —
+   they describe the native Java SDK, but we use the Capacitor plugin
+   which already pulls FCM in transitively via the
+   `com.google.gms.google-services` plugin.
+
+### 6.2 Verify the build picks up the file
+
+After dropping `google-services.json` into `android/app/`:
+
+```bash
+npm run android:sync
+cd android
+./gradlew assembleDebug
+```
+
+You should see a Gradle log line like
+`> Task :app:processDebugGoogleServices` (proving the plugin is now
+applied). If you see `google-services.json not found, google-services
+plugin not applied. Push Notifications won't work` instead, the file
+is in the wrong directory or empty.
+
+### 6.3 Smoke-test from the Firebase Console
+
+1. Install the freshly-built debug APK on an Android device
+   (`adb install android/app/build/outputs/apk/debug/app-debug.apk`)
+   or roll out an Internal Testing AAB and install via the Play tester
+   link.
+2. Open the app once so the Capacitor `PushNotificationsProvider`
+   (`components/PushNotificationsProvider.tsx`) runs, requests the
+   POST_NOTIFICATIONS permission, and registers an FCM token. Grant
+   the prompt.
+3. The token is stored in the WebView's `localStorage` under
+   `glev_push_token` — you can read it via `chrome://inspect` →
+   "Inspect" on the device → DevTools Console:
+   ```js
+   localStorage.getItem("glev_push_token");
+   ```
+4. In the Firebase Console: **Engage → Messaging → Create your first
+   campaign → Firebase Notification messages → Send test message**.
+   Paste the FCM token and **Test**.
+5. The test push should arrive within a few seconds. If the app is in
+   the foreground it lands in the system tray; if backgrounded it also
+   wakes the device. Either is a passing smoke test.
+
+### 6.4 Production checklist
+
+- `google-services.json` is **per-project**, not per-build-variant.
+  Same file works for debug and release as long as the
+  `applicationId` matches.
+- For Play Store distribution, no extra Play Console wiring is
+  required — FCM uses the package name + Firebase project, not the
+  Play upload key.
+- If you ever rotate the Firebase project (e.g. moving from a personal
+  to an org-owned account), download the new `google-services.json`,
+  drop it in place, and rebuild. Old tokens stop working immediately;
+  the next app launch re-registers and gets a fresh token.
