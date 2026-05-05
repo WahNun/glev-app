@@ -22,6 +22,7 @@ import { useTranslations } from "next-intl";
 import GlevLockup from "@/components/GlevLockup";
 import AppMockupPhone from "@/components/AppMockupPhone";
 import FeatureTrio from "@/components/landing/FeatureTrio";
+import FeatureDeepDive from "@/components/landing/FeatureDeepDive";
 import LocaleSwitcher from "@/components/LocaleSwitcher";
 
 const ACCENT  = "#4F6EF7";
@@ -307,9 +308,7 @@ export default function PreviewHome() {
                 color: "var(--text-dim)",
               }}
             >
-              <span style={{ color: GREEN }}>● Libre 2</span>
-              <span>·</span>
-              <span style={{ color: GREEN }}>● Libre 3</span>
+              <span style={{ color: GREEN }}>● {tp("cgm_libre")}</span>
               <span>·</span>
               <span style={{ color: "var(--text-faint)" }}>○ Dexcom</span>
               <span>·</span>
@@ -506,6 +505,23 @@ export default function PreviewHome() {
         <FeatureTrio />
       </section>
 
+      {/* FEATURES IM DETAIL — 4 alternating rows mit Live-App-Mockups.
+          Aus / kopiert. Nutzt FeatureDeepDive (Desktop = live iframe der
+          dark-cockpit Pages, Mobile = AppMockupPhone-Komponente) — keine
+          statischen Screenshots, also bleibt die Section automatisch
+          synchron mit dem aktuellen App-Stand. */}
+      <section
+        style={{
+          position: "relative",
+          zIndex: 1,
+          maxWidth: 1080,
+          margin: "0 auto",
+          padding: "16px 24px 80px",
+        }}
+      >
+        <FeatureDeepDive />
+      </section>
+
       {/* POSITIONING BLOCK — kurzes, kategorisches Statement, das Glev
           gegenüber Tracking-Apps und Hardware abgrenzt. Akzent-Border
           links, damit es als Zitat / Manifest liest. */}
@@ -588,7 +604,10 @@ export default function PreviewHome() {
         </div>
 
         <div className="glev-pricing-grid">
-          {/* Card 1 — Beta */}
+          {/* Card 1 — Beta (überarbeitet für /preview)
+              Subscription-Modell statt €19 Einmalzahlung:
+              3 Monate je €4,50, danach €9/Monat, jederzeit kündbar.
+              Subtext stellt klar: jetzt kostenlos, Billing erst im Juli. */}
           <div
             style={{
               background: SURFACE,
@@ -605,22 +624,30 @@ export default function PreviewHome() {
               <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--text)" }}>
                 {t("pricing_beta_title")}
               </h3>
-              <div style={{ marginTop: 14, display: "flex", alignItems: "baseline", gap: 8 }}>
-                <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text)" }}>{t("pricing_beta_price")}</span>
-                <span style={{ fontSize: 15, color: "var(--text-muted)" }}>{t("pricing_beta_period")}</span>
-              </div>
             </div>
 
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
               {[
-                t("pricing_beta_b1"),
-                t("pricing_beta_b2"),
-                t("pricing_beta_b3"),
-                t("pricing_beta_b4"),
+                tp("pricing_beta_b1_v2"),
+                tp("pricing_beta_b2_v2"),
+                tp("pricing_beta_b3_v2"),
               ].map((bullet) => (
                 <PricingBullet key={bullet} text={bullet} />
               ))}
             </ul>
+
+            <p
+              style={{
+                margin: 0,
+                fontSize: 13,
+                color: "var(--text-muted)",
+                fontFamily: "var(--font-mono), JetBrains Mono, monospace",
+                letterSpacing: "-0.005em",
+                lineHeight: 1.55,
+              }}
+            >
+              {tp("pricing_beta_subtext")}
+            </p>
 
             <Link
               href="/beta"
@@ -642,7 +669,7 @@ export default function PreviewHome() {
                 gap: 8,
               }}
             >
-              {t("pricing_beta_cta")}
+              {tp("pricing_beta_cta_v2")}
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="5" y1="12" x2="19" y2="12" />
                 <polyline points="13 6 19 12 13 18" />
