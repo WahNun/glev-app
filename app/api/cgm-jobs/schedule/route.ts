@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticate } from "../../cgm/_helpers";
 import { adminClient } from "@/lib/cgm/supabase";
-import { getHistory } from "@/lib/cgm/llu";
+// Use the source-agnostic dispatcher so Nightscout / Apple Health users
+// also get the immediate "before" reading on schedule. Importing
+// directly from `lib/cgm/llu` skipped the dispatcher and silently
+// returned no value for non-LLU users.
+import { getHistory } from "@/lib/cgm";
 import type { LogType, FetchType } from "@/lib/cgmJobs";
 
 export const runtime = "nodejs";

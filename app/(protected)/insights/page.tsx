@@ -1110,6 +1110,27 @@ export default function InsightsPage() {
                     <div style={{ fontSize:11, color:"var(--text-strong)", lineHeight:1.5 }}>
                       {tInsights(suggestion.message.key, suggestion.message.params)}
                     </div>
+                    {/* Curve-derived advisories (Task #237 follow-up):
+                        rendered as compact bullet rows directly under the
+                        primary suggestion. Independent of `hasSuggestion`
+                        — a balanced pattern can still surface a "20 % of
+                        meals dipped 1–3h later" signal. */}
+                    {suggestion.advisories && suggestion.advisories.length > 0 && (
+                      <ul style={{
+                        listStyle:"none", margin:"8px 0 0 0", padding:0,
+                        display:"flex", flexDirection:"column", gap:4,
+                      }}>
+                        {suggestion.advisories.map((a, i) => (
+                          <li key={`${a.key}-${i}`} style={{
+                            fontSize:11, color:"var(--text-muted)", lineHeight:1.5,
+                            display:"flex", gap:6, alignItems:"flex-start",
+                          }}>
+                            <span style={{ color:ACCENT, fontWeight:700, marginTop:1 }}>•</span>
+                            <span>{tInsights(a.key as Parameters<typeof tInsights>[0], a.params)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                     <div style={{ marginTop:8 }}>
                       <DisclaimerChip/>
                     </div>

@@ -1,0 +1,151 @@
+=== BEGIN ===
+CONTEXT
+CGM-Kurvendaten sind seit 03.05.2026 vollständig gebaut: meal_glucose_samples, bolus_glucose_samples, exercise_glucose_samples laufen in Produktion. evaluation.ts nutzt die Kurve bereits (HYPO_DURING, Peak-basierte SPIKE-Erkennung). patterns.ts zählt aber nur die finalen Outcomes — die Kurvendaten werden dort noch nicht genutzt. Außerdem gibt es einen bekannten Bug im Schedule-Endpoint.
+
+STEP 1 — Bug fixen: schedule/route.ts importiert falsch
+Datei: app/api/cgm-jobs/schedule/route.ts
+Zeile 4 importiert direkt aus @/lib/cgm/llu statt aus dem Dispatcher @/lib/cgm.
+bashcat app/api/cgm-jobs/schedule/route.ts
+Ändere den Import:
+typescript// VORHER (falsch):
+import { ... } from '@/lib/cgm/llu'
+
+// NACHHER (richtig):
+import { ... } from '@/lib/cgm'
+Das ist eine 1-Zeilen-Änderung. Nightscout-User bekommen sonst beim Erst-Schedule keinen "before"-Wert.
+
+STEP 2 — Bestehenden patterns.ts Code lesen
+bashcat lib/engine/patterns.ts
+cat lib/engine/adjustment.ts
+
+# Welche Felder haben Mahlzeiten mit Kurvendaten?
+grep -r "max_bg_180\|min_bg_180\|time_to_peak\|auc_180\|had_hypo_window\|min_bg_60_180" --include="*.ts" | head -30
+Verstehe:
+
+Wie werden Mahlzeiten aktuell für detectPattern() geladen? (welches Supabase-Query, welche Felder)
+Haben die geladenen Mahlzeiten bereits max_bg_180, time_to_peak_min, had_hypo_window, auc_180 als Felder?
+
+
+STEP 3 — Mahlzeit-Query um Kurvenfelder erweitern
+Dort wo die Mahlzeiten für detectPattern() aus Supabase geladen werden, sicherstellen dass diese Felder mitgeladen werden:
+typescript.select(`
+  id, created_at, evaluation, carbs, bg_before,
+  max_bg_180, min_bg_180, time_to_peak_min,
+  auc_180, had_hypo_window, min_bg_60_180,
+  meal_type
+`)
+Falls die Felder bereits mitgeladen werden: direkt zu Step 4.
+
+STEP 4 — patterns.ts um kurvenbasierte Analyse erweitern
+Ziel: Neben den finalen Outcomes (GOOD/SPIKE/UNDERDOSE/OVERDOSE) auch Kurven-Muster erkennen. Neue Erkenntnisse die patterns.ts liefern soll:
+typescriptexport interface PatternResult {
+  pattern: 'overdosing' | 'underdosing' | 'spiking' | 'balanced' | 'insufficient_data'
+  
+  // NEU: Kurven-Insights (wenn Daten vorhanden)
+  curveInsights?: {
+    hypoRate: number              // Anteil Mahlzeiten mit Hypo im 3h-Fenster
+    fastSpikeRate: number         // Anteil mit time_to_peak < 45 min
+    lateDipRate: number           // Anteil mit min_bg_60_180 < 80 (late hypo)
+    avgTimeToPeak: number | null  // Ø Minuten bis Peak (nur finalisierte Kurven)
+    avgAuc: number | null         // Ø AUC-180 (Glukose-Exposition gesamt)
+  }
+  
+  sampleSize: number
+  curveDataAvailable: number      // wie viele Mahlzeiten haben Kurvendaten
+}
+Implementierung — erweitere detectPattern():
+typescriptexport function detectPattern(meals: MealForPattern[]): PatternResult {
+  // ... bestehende Logik bleibt exakt gleich ...
+  const base = existingDetectPattern(meals)  // outcome, sampleSize etc.
+
+  // Kurven-Analyse obendrauf (additiv, bricht nichts)
+  const withCurve = meals.filter(m =>
+    m.max_bg_180 != null && m.bg_before != null
+  )
+
+  if (withCurve.length === 0) {
+    return base  // kein Kurvendaten → alles wie vorher
+  }
+
+  const hypoCount = withCurve.filter(m => m.had_hypo_window === true).length
+  const fastSpikeCount = withCurve.filter(m =>
+    m.time_to_peak_min != null && m.time_to_peak_min < 45
+  ).length
+  const lateDipCount = withCurve.filter(m =>
+    m.min_bg_60_180 != null && m.min_bg_60_180 < 80
+  ).length
+
+  const peakTimes = withCurve
+    .map(m => m.time_to_peak_min)
+    .filter((t): t is number => t != null)
+  const aucs = withCurve
+    .map(m => m.auc_180)
+    .filter((a): a is number => a != null)
+
+  return {
+    ...base,
+    curveDataAvailable: withCurve.length,
+    curveInsights: {
+      hypoRate: hypoCount / withCurve.length,
+      fastSpikeRate: fastSpikeCount / withCurve.length,
+      lateDipRate: lateDipCount / withCurve.length,
+      avgTimeToPeak: peakTimes.length
+        ? peakTimes.reduce((a, b) => a + b, 0) / peakTimes.length
+        : null,
+      avgAuc: aucs.length
+        ? aucs.reduce((a, b) => a + b, 0) / aucs.length
+        : null,
+    },
+  }
+}
+
+STEP 5 — suggestAdjustment() um Kurven-Kontext erweitern
+In lib/engine/adjustment.ts: wenn curveInsights vorhanden, diese in der Reasoning-Message mitsenden.
+typescript// Zusätzliche Messages wenn Kurvendaten vorhanden
+if (pattern.curveInsights) {
+  const { hypoRate, fastSpikeRate, lateDipRate, avgTimeToPeak } = pattern.curveInsights
+
+  if (hypoRate > 0.2) {
+    messages.push({
+      key: 'engine.adjustment.hypo_warning',
+      params: { rate: Math.round(hypoRate * 100) }
+    })
+  }
+
+  if (fastSpikeRate > 0.4 && avgTimeToPeak != null) {
+    messages.push({
+      key: 'engine.adjustment.fast_spike_hint',
+      params: { avgMinutes: Math.round(avgTimeToPeak) }
+    })
+    // Hinweis: Pre-Bolus-Timing, nicht ICR-Änderung
+  }
+
+  if (lateDipRate > 0.2) {
+    messages.push({
+      key: 'engine.adjustment.late_dip_warning',
+      params: { rate: Math.round(lateDipRate * 100) }
+    })
+  }
+}
+i18n-Keys in messages/de.json unter engine.adjustment:
+json"hypo_warning": "Bei {rate} % deiner Mahlzeiten gab es einen Unterzucker im 3h-Fenster.",
+"fast_spike_hint": "Dein Glukose steigt im Schnitt nach {avgMinutes} Min. Ein früherer Pre-Bolus könnte helfen.",
+"late_dip_warning": "Bei {rate} % der Mahlzeiten gab es einen späten Abfall nach 1–3h."
+Mirror in messages/en.json:
+json"hypo_warning": "You had a low glucose event in {rate}% of your meals within the 3h window.",
+"fast_spike_hint": "Your glucose peaks on average at {avgMinutes} min. An earlier pre-bolus may help.",
+"late_dip_warning": "{rate}% of your meals showed a late glucose dip between 1–3h."
+
+STEP 6 — TypeScript + Commit
+bashtsc --noEmit
+git add -A && git commit -m "feat(engine): curve-aware pattern detection + schedule dispatcher fix" && git push origin main
+
+DO NOT change
+
+evaluation.ts — Kurven-Evaluation läuft bereits korrekt
+Bestehenden Backfill-Job in app/api/cgm-jobs/process
+Stripe, Email, Onboarding, LLU/Nightscout Auth
+recommendation.ts — Dosis-Empfehlung bleibt unverändert
+Die bestehende Pattern-Klassifikation (overdosing/underdosing/spiking/balanced) — nur additiv erweitern
+
+=== END ===
