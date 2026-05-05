@@ -552,6 +552,44 @@ async function processCurveJob(
     return "pending";
   }
 
+  // Reconcile the cached `meal.evaluation` column with the live engine
+  // result now that the curve aggregates are in. Without this, a curve
+  // backfill can flip the lifecycle outcome (e.g. detect HYPO_DURING /
+  // peak-based SPIKE) while `meal.evaluation` still holds the old
+  // bg_2h-delta verdict — the entries page chip and OUTCOME card would
+  // then disagree (Task #253 / docs §5.6).
+  if (cfg.logTable === "meals") {
+    try {
+      const { data: full } = await admin
+        .from("meals")
+        .select(
+          "id, meal_time, created_at, glucose_before, glucose_after, " +
+          "bg_1h, bg_1h_at, bg_2h, bg_2h_at, " +
+          "carbs_grams, protein_grams, fat_grams, fiber_grams, " +
+          "insulin_units, meal_type, evaluation, " +
+          "min_bg_180, max_bg_180, time_to_peak_min, had_hypo_window"
+        )
+        .eq("id", row.id as string)
+        .single();
+      if (full) {
+        const { lifecycleFor } = await import("@/lib/engine/lifecycle");
+        // Use defaults — server-side reconciliation should not depend on
+        // the user's localStorage ICR/CF mirror, and the curve-aware
+        // pathways (HYPO_DURING / peak SPIKE / Δ-2h) don't read
+        // `settings`. The ICR fallback only fires when bgAfter is null,
+        // which doesn't apply here (we just back-filled curve data).
+        const lc = lifecycleFor(full as never);
+        const nextEval = lc.state === "final" ? lc.outcome : null;
+        const cachedEval = (full as unknown as { evaluation: string | null }).evaluation;
+        if (nextEval !== cachedEval) {
+          await admin.from("meals").update({ evaluation: nextEval }).eq("id", row.id as string);
+        }
+      }
+    } catch (e) {
+      console.warn("[cgm-jobs/process] evaluation reconcile failed:", (e as Error)?.message || e);
+    }
+  }
+
   await admin.from("cgm_fetch_jobs")
     .update({
       status: "fetched",
