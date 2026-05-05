@@ -60,3 +60,15 @@ id = "hbdws8Ei3IJeZDkIfsLq8"
 uri = "file://.local/MEAL_CLASSIFICATION_REPORT.md"
 type = "text"
 title = "Meal Classification Report"
+
+[[outputs]]
+id = "gRKH1_sZqBxwLSQKEWkCZ"
+uri = "file://.local/exports/glev-website-redo.pdf"
+type = "pdf"
+title = "Glev — Website Redo (/preview)"
+
+[[outputs]]
+id = "9JmRZdMJuz5smsfsoT-ms"
+uri = "file://.local/exports/glev-current-homepage.pdf"
+type = "pdf"
+title = "Glev — Aktuelle Homepage (/)"

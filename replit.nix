@@ -1,5 +1,7 @@
 {pkgs}: {
   deps = [
+    pkgs.chromium
+    pkgs.gtk3
     pkgs.playwright-driver
     pkgs.freetype
     pkgs.fontconfig
