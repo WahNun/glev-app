@@ -1701,6 +1701,16 @@
     "faq_q5": "Where is my data stored?",
     "faq_a5": "In the EU (Supabase Frankfurt). German GDPR compliance. No data sharing, no advertising."
   },
+  "cgm": {
+    "section_title": "Works with your CGM?",
+    "group_supported": "Supported",
+    "group_limited": "Limited",
+    "microcopy": "Dexcom and Medtronic currently work via Nightscout. Direct integrations are coming.",
+    "nightscout_link": "What is Nightscout?",
+    "modal_title": "Nightscout",
+    "modal_body": "Nightscout is an open-source solution that lets you share your CGM data in real time and connect it to other apps.\n\nIf you use Dexcom or Medtronic, you can connect Glev through Nightscout.",
+    "modal_cta": "Learn more"
+  },
   "previewBeta": {
     "hero_title": "Get in early.\nPay less later.",
     "hero_subtitle": "From July: €4.50 instead of €9.",

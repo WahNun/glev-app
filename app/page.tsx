@@ -23,6 +23,7 @@ import { useTranslations } from "next-intl";
 import GlevLockup from "@/components/GlevLockup";
 import AppMockupPhone from "@/components/AppMockupPhone";
 import FeatureTrio from "@/components/landing/FeatureTrio";
+import CGMCompatibility from "@/components/landing/CGMCompatibility";
 import LocaleSwitcher from "@/components/LocaleSwitcher";
 
 const ACCENT  = "#4F6EF7";
@@ -379,6 +380,17 @@ export default function PreviewHome() {
         >
           {tp("value_body")}
         </p>
+      </section>
+
+      {/* CGM COMPATIBILITY — direkt unter Hero/Trust-Layer */}
+      <section
+        style={{
+          position: "relative",
+          zIndex: 1,
+          padding: "0 0 48px",
+        }}
+      >
+        <CGMCompatibility />
       </section>
 
       {/* PAIN BLOCK — neue Bullets, gleiche Card-Optik wie auf der

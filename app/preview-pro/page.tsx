@@ -6,6 +6,7 @@ import Image from "next/image";
 import AppMockupPhone from "@/components/AppMockupPhone";
 import LandingFooter from "@/components/landing/Footer";
 import Lockup from "@/components/landing/Lockup";
+import CGMCompatibility from "@/components/landing/CGMCompatibility";
 import {
   ACCENT,
   ACCENT_HOVER,
@@ -278,6 +279,11 @@ function PreviewProContent() {
             {t("founder_attribution")}
           </div>
         </div>
+      </section>
+
+      {/* 2b. CGM COMPATIBILITY — Trust + Qualifikation vor Pricing */}
+      <section style={{ ...SECTION_WRAP_NARROW, padding: "8px 20px 0" }}>
+        <CGMCompatibility />
       </section>
 
       {/* 3. POSITIONING */}

@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import AppMockupPhone from "@/components/AppMockupPhone";
 import LandingFooter from "@/components/landing/Footer";
 import Lockup from "@/components/landing/Lockup";
+import CGMCompatibility from "@/components/landing/CGMCompatibility";
 import {
   ACCENT,
   ACCENT_HOVER,
@@ -224,6 +225,11 @@ function PreviewBetaContent() {
             <AppMockupPhone />
           </div>
         </div>
+      </section>
+
+      {/* 1b. CGM COMPATIBILITY — direkt nach Hero, hilft Early-Filter */}
+      <section style={{ ...SECTION_WRAP_NARROW, padding: "8px 20px 0" }}>
+        <CGMCompatibility variant="compact" />
       </section>
 
       {/* 2. POSITIONING */}
