@@ -1,7 +1,6 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import AppMockupPhone from "@/components/AppMockupPhone";
 import LandingFooter from "@/components/landing/Footer";
@@ -12,20 +11,14 @@ import {
   BG,
   BORDER,
   MINT,
-  PINK,
   SURFACE,
   TEXT_DIM,
   TEXT_FAINT,
 } from "@/components/landing/tokens";
 
 /**
- * /preview-pro — copy-only refresh of /pro.
- *
- * IMPORTANT: this is a parallel preview route. The live /pro page and
- * its Stripe wiring stay untouched. The CTA below POSTs to the same
- * `/api/checkout/pro` endpoint with the user's locale (so the same
- * EUR/USD price-IDs are used) — Stripe logic, IDs, redirect contract
- * are intentionally unchanged.
+ * /preview-pro — copy & layout preview of /pro.
+ * Stripe wiring untouched: posts to /api/checkout/pro with locale.
  */
 function PreviewProCTA({ block = true }: { block?: boolean }) {
   const t = useTranslations("previewPro");
@@ -113,6 +106,14 @@ function PreviewProCTA({ block = true }: { block?: boolean }) {
   );
 }
 
+const SECTION_WRAP_NARROW: React.CSSProperties = {
+  width: "100%",
+  maxWidth: 760,
+  margin: "0 auto 56px",
+  padding: "0 20px",
+  boxSizing: "border-box",
+};
+
 function PreviewProContent() {
   const t = useTranslations("previewPro");
 
@@ -151,18 +152,9 @@ function PreviewProContent() {
           .glev-hero-left { align-items: center !important; text-align: center !important; }
           .glev-hero-meta { justify-content: center !important; }
         }
-        .glev-tier-grid {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 16px;
-          align-items: stretch;
-        }
-        @media (max-width: 880px) {
-          .glev-tier-grid { grid-template-columns: 1fr; }
-        }
       `}</style>
 
-      {/* 1. Hero */}
+      {/* 1. HERO */}
       <section
         style={{
           width: "100%",
@@ -234,16 +226,35 @@ function PreviewProContent() {
         </div>
       </section>
 
-      {/* 2. Positionierung */}
-      <section
-        style={{
-          width: "100%",
-          maxWidth: 760,
-          margin: "0 auto 56px",
-          padding: "0 20px",
-          boxSizing: "border-box",
-        }}
-      >
+      {/* 2. FOUNDER (direkt unter Hero) */}
+      <section style={SECTION_WRAP_NARROW}>
+        <div
+          style={{
+            background: SURFACE,
+            border: `1px solid ${BORDER}`,
+            borderRadius: 16,
+            padding: "20px 22px",
+          }}
+        >
+          <p
+            style={{
+              fontSize: 15,
+              lineHeight: 1.55,
+              color: "#fff",
+              margin: "0 0 8px",
+              fontWeight: 400,
+            }}
+          >
+            {t("founder_quote")}
+          </p>
+          <div style={{ fontSize: 13, color: TEXT_FAINT, fontWeight: 500 }}>
+            {t("founder_attribution")}
+          </div>
+        </div>
+      </section>
+
+      {/* 3. POSITIONING */}
+      <section style={SECTION_WRAP_NARROW}>
         <div
           style={{
             background: SURFACE,
@@ -267,23 +278,9 @@ function PreviewProContent() {
         </div>
       </section>
 
-      {/* 3. Flow — 3 Schritte (Nutzergewinn) */}
-      <section
-        style={{
-          width: "100%",
-          maxWidth: 760,
-          margin: "0 auto 56px",
-          padding: "0 20px",
-          boxSizing: "border-box",
-        }}
-      >
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr",
-            gap: 14,
-          }}
-        >
+      {/* 4. FLOW — 3 Schritte */}
+      <section style={SECTION_WRAP_NARROW}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 14 }}>
           {[1, 2, 3].map((n) => (
             <div
               key={n}
@@ -328,7 +325,7 @@ function PreviewProContent() {
         </div>
       </section>
 
-      {/* 4. Pricing block */}
+      {/* 5. PRICING block */}
       <section
         style={{
           width: "100%",
@@ -379,111 +376,31 @@ function PreviewProContent() {
         </div>
       </section>
 
-      {/* 5. Founder */}
-      <section
-        style={{
-          width: "100%",
-          maxWidth: 680,
-          margin: "0 auto 56px",
-          padding: "0 20px",
-          boxSizing: "border-box",
-        }}
-      >
-        <div
-          style={{
-            background: SURFACE,
-            border: `1px solid ${BORDER}`,
-            borderRadius: 16,
-            padding: "24px 24px",
-          }}
-        >
-          <p
-            style={{
-              fontSize: 16,
-              lineHeight: 1.6,
-              color: "#fff",
-              margin: "0 0 12px",
-              fontStyle: "italic",
-            }}
-          >
-            {t("founder_quote")}
-          </p>
-          <div style={{ fontSize: 13, color: TEXT_FAINT, fontWeight: 500 }}>
-            {t("founder_attribution")}
-          </div>
+      {/* 6. FAQ */}
+      <section style={SECTION_WRAP_NARROW}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {[1, 2, 3].map((n) => (
+            <div
+              key={n}
+              style={{
+                background: SURFACE,
+                border: `1px solid ${BORDER}`,
+                borderRadius: 14,
+                padding: "18px 20px",
+              }}
+            >
+              <div style={{ fontSize: 15, fontWeight: 600, color: "#fff", marginBottom: 6 }}>
+                {t(`faq_q${n}` as never)}
+              </div>
+              <div style={{ fontSize: 14, lineHeight: 1.55, color: TEXT_DIM }}>
+                {t(`faq_a${n}` as never)}
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 
-      {/* 6. Pricing-Tabelle — Beta / Pro / Klinik */}
-      <section
-        style={{
-          width: "100%",
-          maxWidth: 1080,
-          margin: "0 auto 40px",
-          padding: "0 20px",
-          boxSizing: "border-box",
-        }}
-      >
-        <div className="glev-tier-grid">
-          {/* Beta */}
-          <TierCard
-            title={t("tier_beta_title")}
-            price={t("tier_beta_price")}
-            subtext={t("tier_beta_subtext")}
-            features={[
-              t("tier_beta_f1"),
-              t("tier_beta_f2"),
-              t("tier_beta_f3"),
-              t("tier_beta_f4"),
-              t("tier_beta_f5"),
-              t("tier_beta_f6"),
-            ]}
-            ctaLabel={t("tier_beta_cta")}
-            ctaHref="/beta"
-            accent={MINT}
-          />
-
-          {/* Pro — featured */}
-          <TierCard
-            title={t("tier_pro_title")}
-            price={t("tier_pro_price")}
-            subtext={t("tier_pro_subtext")}
-            features={[
-              t("tier_pro_f1"),
-              t("tier_pro_f2"),
-              t("tier_pro_f3"),
-              t("tier_pro_f4"),
-              t("tier_pro_f5"),
-              t("tier_pro_f6"),
-              t("tier_pro_f7"),
-            ]}
-            ctaLabel={t("tier_pro_cta")}
-            ctaStripe
-            accent={ACCENT}
-            featured
-            badge={t("tier_pro_badge")}
-          />
-
-          {/* Klinik */}
-          <TierCard
-            title={t("tier_clinic_title")}
-            price={t("tier_clinic_price")}
-            features={[
-              t("tier_clinic_f1"),
-              t("tier_clinic_f2"),
-              t("tier_clinic_f3"),
-              t("tier_clinic_f4"),
-            ]}
-            ctaLabel={t("tier_clinic_cta")}
-            ctaHref="mailto:lucas@wahnon-connect.com?subject=Klinik%20Warteliste"
-            accent={PINK}
-            badge={t("tier_clinic_badge")}
-            badgeMuted
-          />
-        </div>
-      </section>
-
-      {/* 7. Compliance footer (page-specific, above global footer) */}
+      {/* Compliance footer */}
       <section
         style={{
           width: "100%",
@@ -506,7 +423,7 @@ function PreviewProContent() {
         </p>
       </section>
 
-      {/* 8. Global footer (unchanged) */}
+      {/* Global footer */}
       <section
         style={{
           width: "100%",
@@ -519,157 +436,6 @@ function PreviewProContent() {
         <LandingFooter />
       </section>
     </main>
-  );
-}
-
-/** Single tier card. Three variants:
- *   - default: inline link CTA
- *   - ctaStripe=true: renders the PreviewProCTA Stripe button
- *   - featured=true: highlighted border + subtle glow
- *   - badge: small pill in the top-right (badgeMuted = neutral colour)
- */
-function TierCard(props: {
-  title: string;
-  price: string;
-  subtext?: string;
-  features: string[];
-  ctaLabel: string;
-  ctaHref?: string;
-  ctaStripe?: boolean;
-  accent: string;
-  featured?: boolean;
-  badge?: string;
-  badgeMuted?: boolean;
-}) {
-  const { title, price, subtext, features, ctaLabel, ctaHref, ctaStripe, accent, featured, badge, badgeMuted } = props;
-  const [hover, setHover] = useState(false);
-
-  const externalMail = ctaHref?.startsWith("mailto:");
-
-  return (
-    <div
-      style={{
-        position: "relative",
-        background: SURFACE,
-        border: `1px solid ${featured ? `${ACCENT}80` : BORDER}`,
-        borderRadius: 16,
-        padding: "24px 22px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 16,
-        boxShadow: featured ? `0 0 0 4px rgba(79,110,247,0.12)` : "none",
-      }}
-    >
-      {badge && (
-        <div
-          style={{
-            position: "absolute",
-            top: 12,
-            right: 12,
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-            padding: "4px 8px",
-            borderRadius: 99,
-            background: badgeMuted ? "rgba(255,255,255,0.08)" : `${accent}22`,
-            color: badgeMuted ? TEXT_FAINT : accent,
-            border: `1px solid ${badgeMuted ? BORDER : `${accent}55`}`,
-          }}
-        >
-          {badge}
-        </div>
-      )}
-
-      <div>
-        <div style={{ fontSize: 13, fontWeight: 600, color: accent, letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 8 }}>
-          {title}
-        </div>
-        <div style={{ fontSize: 28, fontWeight: 700, color: "#fff", lineHeight: 1.1 }}>
-          {price}
-        </div>
-        {subtext && (
-          <div style={{ fontSize: 12, color: TEXT_FAINT, marginTop: 6, lineHeight: 1.5 }}>
-            {subtext}
-          </div>
-        )}
-      </div>
-
-      <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
-        {features.map((f, i) => (
-          <li
-            key={i}
-            style={{
-              display: "flex",
-              gap: 8,
-              alignItems: "flex-start",
-              fontSize: 13.5,
-              lineHeight: 1.5,
-              color: TEXT_DIM,
-            }}
-          >
-            <span aria-hidden style={{ color: accent, fontWeight: 700, marginTop: 1, flexShrink: 0 }}>·</span>
-            <span>{f}</span>
-          </li>
-        ))}
-      </ul>
-
-      {ctaStripe ? (
-        <PreviewProCTA />
-      ) : ctaHref ? (
-        externalMail ? (
-          <a
-            href={ctaHref}
-            onMouseEnter={() => setHover(true)}
-            onMouseLeave={() => setHover(false)}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: hover ? `${accent}22` : "transparent",
-              color: accent,
-              textDecoration: "none",
-              border: `1px solid ${accent}`,
-              borderRadius: 12,
-              padding: "14px 20px",
-              fontSize: 15,
-              fontWeight: 600,
-              minHeight: 50,
-              transition: "background 120ms ease",
-              boxSizing: "border-box",
-              width: "100%",
-            }}
-          >
-            {ctaLabel}
-          </a>
-        ) : (
-          <Link
-            href={ctaHref}
-            onMouseEnter={() => setHover(true)}
-            onMouseLeave={() => setHover(false)}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: hover ? `${accent}22` : "transparent",
-              color: accent,
-              textDecoration: "none",
-              border: `1px solid ${accent}`,
-              borderRadius: 12,
-              padding: "14px 20px",
-              fontSize: 15,
-              fontWeight: 600,
-              minHeight: 50,
-              transition: "background 120ms ease",
-              boxSizing: "border-box",
-              width: "100%",
-            }}
-          >
-            {ctaLabel}
-          </Link>
-        )
-      ) : null}
-    </div>
   );
 }
 

@@ -17,11 +17,8 @@ import {
 } from "@/components/landing/tokens";
 
 /**
- * /preview-beta — copy-only refresh of /beta.
- *
- * Parallel preview route. /beta and its Stripe wiring stay untouched.
- * The CTA below POSTs to the same `/api/checkout/beta` endpoint with the
- * user's locale — Stripe IDs, redirect contract, server logic unchanged.
+ * /preview-beta — copy & layout preview of /beta.
+ * Stripe wiring untouched: posts to /api/checkout/beta with locale.
  */
 function PreviewBetaCTA({ block = true }: { block?: boolean }) {
   const t = useTranslations("previewBeta");
@@ -109,6 +106,14 @@ function PreviewBetaCTA({ block = true }: { block?: boolean }) {
   );
 }
 
+const SECTION_WRAP_NARROW: React.CSSProperties = {
+  width: "100%",
+  maxWidth: 760,
+  margin: "0 auto 56px",
+  padding: "0 20px",
+  boxSizing: "border-box",
+};
+
 function PreviewBetaContent() {
   const t = useTranslations("previewBeta");
 
@@ -149,7 +154,7 @@ function PreviewBetaContent() {
         }
       `}</style>
 
-      {/* 1. Hero */}
+      {/* 1. HERO */}
       <section
         style={{
           width: "100%",
@@ -221,16 +226,8 @@ function PreviewBetaContent() {
         </div>
       </section>
 
-      {/* 2. Positionierung */}
-      <section
-        style={{
-          width: "100%",
-          maxWidth: 760,
-          margin: "0 auto 56px",
-          padding: "0 20px",
-          boxSizing: "border-box",
-        }}
-      >
+      {/* 2. POSITIONING */}
+      <section style={SECTION_WRAP_NARROW}>
         <div
           style={{
             background: SURFACE,
@@ -254,23 +251,9 @@ function PreviewBetaContent() {
         </div>
       </section>
 
-      {/* 3. Flow — 3 Schritte */}
-      <section
-        style={{
-          width: "100%",
-          maxWidth: 760,
-          margin: "0 auto 56px",
-          padding: "0 20px",
-          boxSizing: "border-box",
-        }}
-      >
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr",
-            gap: 14,
-          }}
-        >
+      {/* 3. FLOW — 3 Schritte */}
+      <section style={SECTION_WRAP_NARROW}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 14 }}>
           {[1, 2, 3].map((n) => (
             <div
               key={n}
@@ -315,7 +298,106 @@ function PreviewBetaContent() {
         </div>
       </section>
 
-      {/* 4. Compliance footer (Glev ist KEIN Medizinprodukt) */}
+      {/* 4. PRICING block */}
+      <section
+        style={{
+          width: "100%",
+          maxWidth: 680,
+          margin: "0 auto 56px",
+          padding: "0 20px",
+          boxSizing: "border-box",
+        }}
+      >
+        <div
+          style={{
+            background: SURFACE,
+            border: `1px solid ${BORDER}`,
+            borderRadius: 16,
+            padding: "28px 24px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 14,
+          }}
+        >
+          <div style={{ fontSize: 28, fontWeight: 700, color: "#fff", lineHeight: 1.15 }}>
+            {t("pricing_headline")}
+          </div>
+          <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+            {[1, 2, 3, 4].map((n) => (
+              <li
+                key={n}
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  alignItems: "flex-start",
+                  fontSize: 15,
+                  lineHeight: 1.5,
+                  color: TEXT_DIM,
+                }}
+              >
+                <span aria-hidden style={{ color: MINT, fontWeight: 700, marginTop: 1 }}>✓</span>
+                <span>{t(`pricing_bullet_${n}` as never)}</span>
+              </li>
+            ))}
+          </ul>
+          <div style={{ marginTop: 8 }}>
+            <PreviewBetaCTA />
+          </div>
+          <div style={{ fontSize: 13, color: MINT, textAlign: "center", marginTop: 4 }}>
+            {t("pricing_microcopy")}
+          </div>
+        </div>
+      </section>
+
+      {/* 5. FAQ — alle 10 */}
+      <section style={SECTION_WRAP_NARROW}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+            <div
+              key={n}
+              style={{
+                background: SURFACE,
+                border: `1px solid ${BORDER}`,
+                borderRadius: 14,
+                padding: "18px 20px",
+              }}
+            >
+              <div style={{ fontSize: 15, fontWeight: 600, color: "#fff", marginBottom: 6 }}>
+                {t(`faq_q${n}` as never)}
+              </div>
+              <div style={{ fontSize: 14, lineHeight: 1.55, color: TEXT_DIM }}>
+                {t(`faq_a${n}` as never)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 6. MINI-FOUNDER (subtil) */}
+      <section style={SECTION_WRAP_NARROW}>
+        <div
+          style={{
+            padding: "16px 4px",
+            textAlign: "center",
+          }}
+        >
+          <p
+            style={{
+              fontSize: 13,
+              lineHeight: 1.55,
+              color: TEXT_DIM,
+              margin: "0 0 4px",
+            }}
+          >
+            {t("mini_founder")}
+          </p>
+          <div style={{ fontSize: 12, color: TEXT_FAINT }}>
+            {t("mini_founder_attr")}
+          </div>
+        </div>
+      </section>
+
+      {/* Compliance footer */}
       <section
         style={{
           width: "100%",
@@ -338,7 +420,7 @@ function PreviewBetaContent() {
         </p>
       </section>
 
-      {/* 5. Global footer (unchanged) */}
+      {/* Global footer */}
       <section
         style={{
           width: "100%",
