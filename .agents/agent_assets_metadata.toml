@@ -72,3 +72,27 @@ id = "9JmRZdMJuz5smsfsoT-ms"
 uri = "file://.local/exports/glev-current-homepage.pdf"
 type = "pdf"
 title = "Glev — Aktuelle Homepage (/)"
+
+[[outputs]]
+id = "PiFzm09UuJKlc02sfcbXi"
+uri = "file://.local/exports/preview-pricing.png"
+type = "image"
+title = "Pricing — 3 Karten (Beta · Pro Founder · Klinik)"
+
+[[outputs]]
+id = "O1pPSE3YmpDEIFaFmoxXS"
+uri = "file://.local/exports/preview-pricing-toast.png"
+type = "image"
+title = "Klinik-Warteliste — Toast nach Submit"
+
+[[outputs]]
+id = "LI0VjFaW0-VOCNqmv0iMH"
+uri = "file://.local/exports/preview-features.png"
+type = "image"
+title = "Features im Detail — App-Renders aus /public/mockups/"
+
+[[outputs]]
+id = "GMJw_s6wVeJ67GPTa8C5C"
+uri = "file://.local/exports/glev-preview-pricing-3cards.pdf"
+type = "pdf"
+title = "Komplette /preview-Seite (PDF)"

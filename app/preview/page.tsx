@@ -11,18 +11,22 @@
 //   * neue Pain-Bullets
 //   * neue System-Flow-Sektion (statt der alten Steps-Komponente)
 //   * FeatureTrio bekommt eine eigene Section-Headline
-//   * FeatureDeepDive entfernt (per Spec — App-Screenshots veraltet)
+//   * Features-im-Detail-Sektion: statische App-Renders aus
+//     /public/mockups/ statt der live iframes (Lucas-Spec — saubereres
+//     Marketing-Bild, keine Iframe-Last)
 //   * neuer Positioning-Block vor der Pricing-Sektion
+//   * Pricing: 3 Karten (Beta, Pro · Founder-Tier hervorgehoben,
+//     Klinik mit Coming-Soon-Email-Warteliste statt CTA)
 //   * neuer Compliance-Disclaimer direkt vor dem globalen Footer
-// Pricing, FAQ, Nav und Footer bleiben strukturell identisch zur Homepage
+// FAQ, Nav und Footer bleiben strukturell identisch zur Homepage
 // und ziehen ihre Texte weiterhin aus dem `marketing`-Namespace.
 
+import { useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import GlevLockup from "@/components/GlevLockup";
 import AppMockupPhone from "@/components/AppMockupPhone";
 import FeatureTrio from "@/components/landing/FeatureTrio";
-import FeatureDeepDive from "@/components/landing/FeatureDeepDive";
 import LocaleSwitcher from "@/components/LocaleSwitcher";
 
 const ACCENT  = "#4F6EF7";
@@ -72,11 +76,27 @@ export default function PreviewHome() {
         .glev-link:hover { color: ${HOVER} !important; }
         .glev-pricing-grid {
           display: grid;
-          grid-template-columns: 1fr 1fr;
+          grid-template-columns: 1fr 1fr 1fr;
           gap: 20px;
+          align-items: stretch;
+        }
+        @media (max-width: 1080px) {
+          .glev-pricing-grid { grid-template-columns: 1fr 1fr; }
         }
         @media (max-width: 720px) {
           .glev-pricing-grid { grid-template-columns: 1fr; }
+        }
+        .glev-feat-row {
+          display: grid;
+          grid-template-columns: 1.2fr 1fr;
+          gap: 56px;
+          align-items: center;
+        }
+        @media (max-width: 720px) {
+          .glev-feat-row { grid-template-columns: 1fr !important; gap: 24px !important; }
+        }
+        @media (min-width: 721px) {
+          .glev-feat-row--rev .glev-feat-row__img { order: 2; }
         }
         .glev-hero {
           display: grid;
@@ -505,11 +525,12 @@ export default function PreviewHome() {
         <FeatureTrio />
       </section>
 
-      {/* FEATURES IM DETAIL — 4 alternating rows mit Live-App-Mockups.
-          Aus / kopiert. Nutzt FeatureDeepDive (Desktop = live iframe der
-          dark-cockpit Pages, Mobile = AppMockupPhone-Komponente) — keine
-          statischen Screenshots, also bleibt die Section automatisch
-          synchron mit dem aktuellen App-Stand. */}
+      {/* FEATURES IM DETAIL — 4 alternierende Rows mit echten App-
+          Renders aus /public/mockups/ (dashboard / engine / entries /
+          insights). Statische Bilder statt live iframes weil Lucas die
+          Marketing-Surface ruhiger und schneller will und es einfacher
+          ist, Screenshots regelmäßig auszutauschen als die dark-cockpit-
+          Mockups synchron zu halten. */}
       <section
         style={{
           position: "relative",
@@ -519,7 +540,28 @@ export default function PreviewHome() {
           padding: "16px 24px 80px",
         }}
       >
-        <FeatureDeepDive />
+        <h2
+          style={{
+            fontSize: "clamp(28px, 4vw, 36px)",
+            fontWeight: 700,
+            letterSpacing: "-0.02em",
+            margin: "0 0 56px",
+            color: "var(--text)",
+            textAlign: "center",
+          }}
+        >
+          {t("deepdive_title")}
+        </h2>
+        <div style={{ display: "flex", flexDirection: "column", gap: 80 }}>
+          {[
+            { img: "/mockups/engine.png",    title: t("deepdive_voice_title"),    body: t("deepdive_voice_body") },
+            { img: "/mockups/entries.png",   title: t("deepdive_macro_title"),    body: t("deepdive_macro_body") },
+            { img: "/mockups/dashboard.png", title: t("deepdive_cgm_title"),      body: t("deepdive_cgm_body") },
+            { img: "/mockups/insights.png",  title: t("deepdive_insights_title"), body: t("deepdive_insights_body") },
+          ].map((row, i) => (
+            <FeatureImageRow key={row.title} row={row} reverse={i % 2 === 1} />
+          ))}
+        </div>
       </section>
 
       {/* POSITIONING BLOCK — kurzes, kategorisches Statement, das Glev
@@ -565,7 +607,13 @@ export default function PreviewHome() {
         </div>
       </section>
 
-      {/* PRICING — strukturell + textuell identisch zur Homepage. */}
+      {/* PRICING — 3 Karten: Beta-Reservierung (kostenlos jetzt /
+          Subscription ab Juli), Pro · Founder-Tier (hervorgehoben,
+          €24,90/Mo, 7 Bullets), Klinik (€299/Mo, Coming Soon —
+          Email-Warteliste statt CTA, UI-only Toast bei Submit).
+          Strings inline statt aus messages, weil das eine schnelle
+          Iteration über die Preview ist und Lucas die Copy häufig
+          dreht — Promotion in messages erst bei Live-Schaltung. */}
       <section
         id="pricing"
         style={{
@@ -604,14 +652,11 @@ export default function PreviewHome() {
         </div>
 
         <div className="glev-pricing-grid">
-          {/* Card 1 — Beta (überarbeitet für /preview)
-              Subscription-Modell statt €19 Einmalzahlung:
-              3 Monate je €4,50, danach €9/Monat, jederzeit kündbar.
-              Subtext stellt klar: jetzt kostenlos, Billing erst im Juli. */}
+          {/* Karte 1 — Beta-Reservierung */}
           <div
             style={{
               background: SURFACE,
-              border: `1px solid ${ACCENT}`,
+              border: `1px solid ${BORDER}`,
               borderRadius: 16,
               padding: 28,
               display: "flex",
@@ -622,15 +667,16 @@ export default function PreviewHome() {
           >
             <div>
               <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--text)" }}>
-                {t("pricing_beta_title")}
+                Beta-Reservierung
               </h3>
             </div>
 
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
               {[
-                tp("pricing_beta_b1_v2"),
-                tp("pricing_beta_b2_v2"),
-                tp("pricing_beta_b3_v2"),
+                "Voller App-Zugang ab sofort",
+                "Voice-Logging & AI-Mahlzeiten-Parsing",
+                "CGM-Integration (LibreLink 2 und 3, Nightscout)",
+                "Dashboard, Engine & Insights",
               ].map((bullet) => (
                 <PricingBullet key={bullet} text={bullet} />
               ))}
@@ -646,7 +692,18 @@ export default function PreviewHome() {
                 lineHeight: 1.55,
               }}
             >
-              {tp("pricing_beta_subtext")}
+              Jetzt kostenlos · Billing startet im Juli
+            </p>
+
+            <p
+              style={{
+                margin: 0,
+                fontSize: 13.5,
+                color: "var(--text-body)",
+                lineHeight: 1.55,
+              }}
+            >
+              Erste 3 Monate je <strong style={{ color: "var(--text)" }}>€4,50</strong> · danach <strong style={{ color: "var(--text)" }}>€9/Monat</strong> · jederzeit kündbar
             </p>
 
             <Link
@@ -669,7 +726,7 @@ export default function PreviewHome() {
                 gap: 8,
               }}
             >
-              {tp("pricing_beta_cta_v2")}
+              Beta-Zugang sichern
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="5" y1="12" x2="19" y2="12" />
                 <polyline points="13 6 19 12 13 18" />
@@ -677,7 +734,7 @@ export default function PreviewHome() {
             </Link>
           </div>
 
-          {/* Card 2 — Pro */}
+          {/* Karte 2 — Pro · Founder-Tier (hervorgehoben) */}
           <div
             style={{
               background: SURFACE,
@@ -692,7 +749,7 @@ export default function PreviewHome() {
             }}
           >
             <div
-              aria-label={t("pricing_pro_badge")}
+              aria-label="Empfohlen"
               style={{
                 position: "absolute",
                 top: -12,
@@ -708,30 +765,45 @@ export default function PreviewHome() {
                 boxShadow: `0 4px 12px ${ACCENT}66`,
               }}
             >
-              {t("pricing_pro_badge")}
+              Empfohlen
             </div>
 
             <div>
               <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--text)" }}>
-                {t("pricing_pro_title")}
+                Pro · Founder-Tier
               </h3>
               <div style={{ marginTop: 14, display: "flex", alignItems: "baseline", gap: 8 }}>
-                <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text)" }}>{t("pricing_pro_price")}</span>
-                <span style={{ fontSize: 15, color: "var(--text-muted)" }}>{t("pricing_pro_period")}</span>
+                <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text)" }}>€24,90</span>
+                <span style={{ fontSize: 15, color: "var(--text-muted)" }}>/ Monat</span>
               </div>
             </div>
 
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
               {[
-                t("pricing_pro_b1"),
-                t("pricing_pro_b2"),
-                t("pricing_pro_b3"),
-                t("pricing_pro_b4"),
-                t("pricing_pro_b5"),
+                "Voller App-Zugang ab sofort",
+                "PDF Arzt-Report",
+                "Datenexport — CSV, Google Sheets, ZIP",
+                "Lifetime-Preis-Lock — €24,90 dauerhaft, auch nach Preiserhöhungen",
+                "Founder-Slack-Kanal — direkter Draht zum Team",
+                "Feature-Roadmap-Voting",
+                "Früher Zugang zu kommenden Features (Apple Health, erweiterte Analyse)",
               ].map((bullet) => (
                 <PricingBullet key={bullet} text={bullet} />
               ))}
             </ul>
+
+            <p
+              style={{
+                margin: 0,
+                fontSize: 13,
+                color: "var(--text-muted)",
+                fontFamily: "var(--font-mono), JetBrains Mono, monospace",
+                letterSpacing: "-0.005em",
+                lineHeight: 1.55,
+              }}
+            >
+              Karte heute hinterlegt · erste Buchung am 1. Juli 2026
+            </p>
 
             <Link
               href="/pro"
@@ -753,13 +825,16 @@ export default function PreviewHome() {
                 boxShadow: `0 6px 18px ${ACCENT}40`,
               }}
             >
-              {t("pricing_pro_cta")}
+              Mitglied werden
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="5" y1="12" x2="19" y2="12" />
                 <polyline points="13 6 19 12 13 18" />
               </svg>
             </Link>
           </div>
+
+          {/* Karte 3 — Klinik (Coming Soon, Email-Warteliste statt CTA) */}
+          <KlinikCard />
         </div>
       </section>
 
@@ -944,5 +1019,194 @@ function PricingBullet({ text }: { text: string }) {
       </span>
       <span>{text}</span>
     </li>
+  );
+}
+
+/** Eine alternierende Feature-Detail-Row mit App-Render + Copy. */
+function FeatureImageRow({
+  row,
+  reverse,
+}: {
+  row: { img: string; title: string; body: string };
+  reverse: boolean;
+}) {
+  return (
+    <div className={`glev-feat-row${reverse ? " glev-feat-row--rev" : ""}`}>
+      <div
+        className="glev-feat-row__img"
+        style={{
+          borderRadius: 18,
+          overflow: "hidden",
+          border: "1px solid var(--border)",
+          boxShadow: "0 12px 32px rgba(0,0,0,0.35)",
+          background: "var(--surface)",
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={row.img}
+          alt={row.title}
+          loading="lazy"
+          style={{ display: "block", width: "100%", height: "auto" }}
+        />
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <h3
+          style={{
+            fontSize: "clamp(22px, 3vw, 28px)",
+            fontWeight: 700,
+            letterSpacing: "-0.02em",
+            margin: 0,
+            color: "var(--text)",
+          }}
+        >
+          {row.title}
+        </h3>
+        <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6, color: "var(--text-body)" }}>
+          {row.body}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** Klinik-Karte mit lokalem State für Email-Warteliste. UI-only,
+ *  kein Backend — nach Submit Toast-Bestätigung 4s anzeigen. */
+function KlinikCard() {
+  const [email, setEmail] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim()) return;
+    setSubmitted(true);
+    setEmail("");
+    // Toast nach 4s wieder ausblenden, damit das Eingabefeld
+    // erneut interaktiv ist (gut für wiederholte Screenshots).
+    window.setTimeout(() => setSubmitted(false), 4000);
+  }
+
+  return (
+    <div
+      style={{
+        background: SURFACE,
+        border: `1px solid ${BORDER}`,
+        borderRadius: 16,
+        padding: 28,
+        display: "flex",
+        flexDirection: "column",
+        gap: 20,
+        position: "relative",
+      }}
+    >
+      <div
+        aria-label="Coming Soon"
+        style={{
+          position: "absolute",
+          top: -12,
+          left: 24,
+          background: "var(--surface-soft, #232329)",
+          color: "var(--text-muted)",
+          fontSize: 11,
+          fontWeight: 700,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          padding: "4px 10px",
+          borderRadius: 999,
+          border: `1px solid ${BORDER}`,
+        }}
+      >
+        Coming Soon
+      </div>
+
+      <div>
+        <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--text)" }}>
+          Klinik
+        </h3>
+        <div style={{ marginTop: 14, display: "flex", alignItems: "baseline", gap: 8 }}>
+          <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text)" }}>€299</span>
+          <span style={{ fontSize: 15, color: "var(--text-muted)" }}>/ Monat</span>
+        </div>
+      </div>
+
+      <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+        {[
+          "Für Diabetespraxen & -berater",
+          "Multi-Patienten-Dashboard",
+          "Klinik-Reports mit Briefkopf",
+          "AV-Vertrag (DSGVO-konform)",
+        ].map((b) => (
+          <PricingBullet key={b} text={b} />
+        ))}
+      </ul>
+
+      <form
+        onSubmit={onSubmit}
+        style={{
+          marginTop: "auto",
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+        }}
+      >
+        <div style={{ display: "flex", gap: 8 }}>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Deine E-Mail-Adresse"
+            required
+            aria-label="E-Mail für Klinik-Warteliste"
+            style={{
+              flex: 1,
+              minWidth: 0,
+              padding: "11px 14px",
+              borderRadius: 10,
+              background: "var(--bg)",
+              border: `1px solid ${BORDER}`,
+              color: "var(--text)",
+              fontSize: 13,
+              outline: "none",
+              fontFamily: "inherit",
+            }}
+          />
+          <button
+            type="submit"
+            style={{
+              padding: "11px 16px",
+              borderRadius: 10,
+              background: ACCENT,
+              color: "#fff",
+              fontSize: 13,
+              fontWeight: 700,
+              letterSpacing: "-0.005em",
+              border: "none",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+              fontFamily: "inherit",
+            }}
+          >
+            Auf Warteliste
+          </button>
+        </div>
+        {submitted && (
+          <div
+            role="status"
+            style={{
+              padding: "8px 12px",
+              borderRadius: 8,
+              background: `${GREEN}1a`,
+              border: `1px solid ${GREEN}55`,
+              color: GREEN,
+              fontSize: 12.5,
+              fontWeight: 600,
+              textAlign: "center",
+            }}
+          >
+            ✓ Eingetragen — wir melden uns.
+          </div>
+        )}
+      </form>
+    </div>
   );
 }
