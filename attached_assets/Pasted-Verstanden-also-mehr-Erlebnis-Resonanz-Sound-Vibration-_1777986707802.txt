@@ -1,0 +1,36 @@
+Verstanden — also mehr Erlebnis & Resonanz: Sound, Vibration, Mikro-Animationen, sich-anfühlen-wie-was-Echtes. Das ist eine super Richtung für eine T1D-App, weil jede Aktion (Bolus, Glukose, Mahlzeit) emotional auch gerade hingehört.
+
+Zwei Sachen vorweg — der Screenshot ist nicht angekommen (war wohl nicht angehängt), und der Dev-Server ist gerade abgekrazt. Lass mich das parallel checken:
+
+
+5 actions
+Server läuft wieder (Port-Konflikt vom Hot-Reload, jetzt frei). Tests-Failures sind alle pre-existing (kennen wir schon, nicht durch unsere Änderungen verursacht).
+
+Jetzt zu "mehr erlebbar / Resonanz / haptisch" — Screenshot ist immer noch nicht angekommen, kannst du den nochmal hochziehen? In der Zwischenzeit ein konkreter Plan was das in deiner App heißen könnte, damit wir parallel reden:
+
+Vorschlag: 3-Schichten-Modell für Glev
+Schicht 1 — Haptik (sofort spürbar, baut Vertrauen)
+Du hast Capacitor schon integriert, also: @capacitor/haptics plus ein Web-Fallback (navigator.vibrate). Mein Vorschlag wo es triggert:
+
+Bolus geloggt → medium impact (das "Klick" eines mechanischen Pens)
+AI hat Mahlzeit erkannt → light tap
+Dose-Empfehlung erscheint → selection feedback (subtiles Tick)
+BG außerhalb Zielbereich (Warnung) → warning notification (kurze Doppel-Vibration)
+Tab-Wechsel im Engine → light tap
+Schicht 2 — Mikro-Animationen (Glev fühlt sich "lebendig" an)
+
+Zahlen "rollen hoch" statt sofort zu erscheinen (z.B. Units 0 → 4.5 in 600ms, mit Spring-Easing)
+Mic-Button atmet sanft beim Aufnehmen (Scale 1.0 ↔ 1.06)
+Empfehlungs-Badge poppt rein mit Spring (Apple-Style)
+Glukose-Ring "atmet" leicht (Pulse) wenn out-of-range
+Card-Übergänge mit Federung statt linearer Animation
+Skeleton-Shimmer statt Spinner beim Laden
+Schicht 3 — Resonanz (App reagiert auf deinen Zustand)
+
+Hintergrund-Gradient verschiebt Farbton subtil je nach aktuellem BG (mint im Ziel, warm orange wenn drift, cool bei niedrig)
+Trend-Pfeil neigt sich leicht je nach Geschwindigkeit
+"Active Insulin"-Kurve animiert beim Erscheinen rein (1.5s)
+Mahlzeit-Klassifikations-Badge bekommt Glow in Brand-Farbe (HIGH_PROTEIN = mint, FAST_CARBS = pink, etc.)
+Mein Vorschlag wie wir starten: Schick mir den Screenshot vom Screen den du gerade vor dir hast, dann sag ich dir konkret welche 3 dieser Sachen ich auf genau diesem Screen einbauen würde, mit echtem Code. So bauen wir Schritt für Schritt auf, statt alles auf einmal umzubauen.
+
+Welche Schicht zieht dich am meisten? Wenn du sagst "haptik first" — das ist in 30 Min App-weit drin.
