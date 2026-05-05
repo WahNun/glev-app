@@ -411,12 +411,12 @@ function ProContent() {
         />
       </section>
 
-      {/* 3b. CGM COMPATIBILITY — Trust + Qualifikation vor Pricing */}
+      {/* 3b. CGM Compatibility — Final Check vor Pricing */}
       <section
         style={{
           width: "100%",
           maxWidth: 680,
-          margin: "0 auto 32px",
+          margin: "0 auto 24px",
           padding: "0 20px",
           boxSizing: "border-box",
         }}

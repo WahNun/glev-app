@@ -1703,11 +1703,12 @@
     "faq_a5": "In the EU (Supabase Frankfurt). German GDPR compliance. No data sharing, no advertising."
   },
   "cgm": {
-    "section_title": "Does Glev work with your CGM?",
+    "section_title": "Does Glev work with your setup?",
     "group_supported": "Supported",
     "group_limited": "Limited",
     "microcopy": "Dexcom and Medtronic currently work via Nightscout. Direct integrations are coming.",
     "nightscout_link": "What is Nightscout?",
+    "unsure_hint": "If you're unsure, try Glev via the <link>Beta</link> first.",
     "modal_title": "Nightscout",
     "modal_body": "Nightscout is an open-source solution that lets you share your CGM data in real time and connect it to other apps.\n\nIf you use Dexcom or Medtronic, you can connect Glev through Nightscout.",
     "modal_cta": "Learn more"

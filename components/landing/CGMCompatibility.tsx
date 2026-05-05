@@ -95,6 +95,31 @@ export default function CGMCompatibility({ variant = "default" }: { variant?: Va
             {t("nightscout_link")}
           </button>
         </p>
+
+        <p
+          style={{
+            margin: 0,
+            fontSize: 12.5,
+            lineHeight: 1.55,
+            color: TEXT_FAINT,
+          }}
+        >
+          {t.rich("unsure_hint", {
+            link: (chunks) => (
+              <a
+                href="/"
+                style={{
+                  color: MINT,
+                  textDecoration: "underline",
+                  textUnderlineOffset: 2,
+                  fontWeight: 500,
+                }}
+              >
+                {chunks}
+              </a>
+            ),
+          })}
+        </p>
       </div>
 
       {modalOpen ? <NightscoutModal onClose={() => setModalOpen(false)} /> : null}
