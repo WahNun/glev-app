@@ -8,6 +8,7 @@ import FeatureTrio from "@/components/landing/FeatureTrio";
 import FounderSection from "@/components/landing/FounderSection";
 import LandingFooter from "@/components/landing/Footer";
 import Lockup from "@/components/landing/Lockup";
+import CGMCompatibility from "@/components/landing/CGMCompatibility";
 import PricingCard from "@/components/landing/PricingCard";
 import Steps from "@/components/landing/Steps";
 import {
@@ -408,6 +409,19 @@ function ProContent() {
             text: t("trio_extra_text"),
           }}
         />
+      </section>
+
+      {/* 3b. CGM COMPATIBILITY — Trust + Qualifikation vor Pricing */}
+      <section
+        style={{
+          width: "100%",
+          maxWidth: 680,
+          margin: "0 auto 32px",
+          padding: "0 20px",
+          boxSizing: "border-box",
+        }}
+      >
+        <CGMCompatibility />
       </section>
 
       {/* 4. Pricing */}
