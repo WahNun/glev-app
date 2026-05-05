@@ -1,0 +1,63 @@
+## Error Type
+Console Error
+
+## Error Message
+A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <HotReload globalError={[...]} webSocket={WebSocket} staticIndicatorState={{pathname:null, ...}}>
+      <AppDevOverlayErrorBoundary globalError={[...]}>
+        <ReplaySsrOnlyErrors>
+        <DevRootHTTPAccessFallbackBoundary>
+          <HTTPAccessFallbackBoundary notFound={<NotAllowedRootHTTPFallbackError>}>
+            <HTTPAccessFallbackErrorBoundary pathname="/" notFound={<NotAllowedRootHTTPFallbackError>} ...>
+              <RedirectBoundary>
+                <RedirectErrorBoundary router={{...}}>
+                  <Head>
+                  <__next_root_layout_boundary__>
+                    <SegmentViewNode type="layout" pagePath="layout.tsx">
+                      <SegmentTrieNode>
+                      <link>
+                      <script>
+                      <script>
+                      <script>
+                      <script>
+                      <RootLayout>
+                        <html lang="de" className="inter_1ec0..." data-theme="dark" suppressHydrationWarning={true}>
+                          <head>
+                            <script
+                              dangerouslySetInnerHTML={{
++                               __html: "\n(function(){try{\n  var APP_RE=\"^/(?:dashboard|log|entries|insights|import..."
+-                               __html: ""
+                              }}
+-                             src="/__replco/static/devtools/injected.js"
+-                             onerror={"parent.postMessage({event:'error',payload:'script.onerror: Failed to load '+e..."}
+                            >
+                          ...
+                  ...
+
+
+
+    at script (<anonymous>:null:null)
+    at RootLayout (app/layout.tsx:132:9)
+
+## Code Frame
+  130 |             mounts so the very first painted frame already has the right
+  131 |             data-theme attribute and theme-color meta — no FOUC. */}
+> 132 |         <script dangerouslySetInnerHTML={{ __html: NO_FLICKER_THEME_S...
+      |         ^
+  133 |       </head>
+  134 |       <body>
+  135 |         {/* Meta Pixel — fires PageView on every route. Loaded with
+
+Next.js version: 16.2.4 (Turbopack)
