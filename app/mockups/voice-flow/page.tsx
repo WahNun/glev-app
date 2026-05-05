@@ -157,23 +157,97 @@ export default function VoiceFlowMockup() {
           </div>
         </div>
 
-        {/* Erklärungstext, vertikal mittig — kein Input-Stub am Boden
-            (Lucas-Spec: Panel zeigt nur den Erklär-Status, Input
-            erscheint erst nach dem ersten Log). */}
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <p style={{
-            margin: 0, textAlign: "center",
-            fontSize: 13, lineHeight: 1.55,
-            color: TEXT_DIM,
-            maxWidth: 280,
-          }}>
-            Sobald du eine Mahlzeit loggst (per Stimme oder Text),
-            erklärt GPT dir hier, wie es die Makros aufgebrochen hat.
-            Du kannst Folgefragen stellen oder Korrekturen vorschlagen
-            — bestätigte Korrekturen werden ins Formular übernommen.
-          </p>
+        {/* Beispiel-Chat: zeigt einen User-Input und die GPT-Antwort,
+            damit der Parser im Marketing-Render „lebt" statt leer
+            zu wirken (Lucas-Spec). */}
+        <div style={{
+          flex: 1,
+          display: "flex", flexDirection: "column",
+          gap: 12,
+          marginTop: 18,
+          overflow: "hidden",
+        }}>
+          {/* User-Bubble (rechtsbündig) */}
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <div style={{
+              maxWidth: "85%",
+              padding: "10px 14px",
+              borderRadius: "14px 14px 4px 14px",
+              background: ACCENT_DIM,
+              border: `1px solid rgba(79,110,247,0.30)`,
+              color: TEXT,
+              fontSize: 12.5, lineHeight: 1.4,
+            }}>
+              Pasta mit Tomatensauce, 80 g Nudeln und ein Apfel
+            </div>
+          </div>
+
+          {/* GPT-Response (linksbündig) */}
+          <div style={{ display: "flex", justifyContent: "flex-start" }}>
+            <div style={{
+              maxWidth: "92%",
+              padding: "12px 14px",
+              borderRadius: "14px 14px 14px 4px",
+              background: "rgba(255,255,255,0.035)",
+              border: `1px solid ${BORDER_HI}`,
+              color: TEXT_DIM,
+              fontSize: 12.5, lineHeight: 1.5,
+              display: "flex", flexDirection: "column", gap: 8,
+            }}>
+              <div style={{ color: TEXT, fontWeight: 600 }}>
+                Aufschlüsselung:
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <MacroLine label="Nudeln (80 g, trocken)" value="≈ 60 g KH" />
+                <MacroLine label="Tomatensauce (~120 g)" value="≈ 8 g KH" />
+                <MacroLine label="Apfel (mittel, ~150 g)" value="≈ 20 g KH" />
+              </div>
+              <div style={{
+                marginTop: 4, paddingTop: 8,
+                borderTop: `1px solid ${BORDER}`,
+                display: "flex", justifyContent: "space-between",
+                color: TEXT, fontWeight: 700, fontSize: 13,
+              }}>
+                <span>Gesamt</span>
+                <span style={{ color: ACCENT }}>≈ 88 g KH</span>
+              </div>
+              <div style={{ fontSize: 11.5, color: TEXT_FAINT, lineHeight: 1.45 }}>
+                Geschätzt anhand Standardportionen — passe die Mengen
+                rechts an, falls deine Pasta-Portion größer war.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Input-Bar am Boden — Folgefragen / Korrekturen */}
+        <div style={{
+          marginTop: 12,
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "8px 8px 8px 14px",
+          borderRadius: 10,
+          background: "rgba(255,255,255,0.03)",
+          border: `1px solid ${BORDER}`,
+        }}>
+          <span style={{ flex: 1, fontSize: 12, color: TEXT_FAINT, letterSpacing: "-0.005em" }}>
+            Frage oder Korrektur… z. B. „Die Pasta-Portion war größer"
+          </span>
+          <button style={{
+            padding: "6px 14px", borderRadius: 8,
+            background: ACCENT, color: "#fff",
+            fontSize: 12, fontWeight: 700, letterSpacing: "-0.005em",
+            border: "none", cursor: "pointer",
+          }}>Senden</button>
         </div>
       </aside>
+    </div>
+  );
+}
+
+function MacroLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 12, lineHeight: 1.4 }}>
+      <span style={{ color: "rgba(255,255,255,0.65)" }}>{label}</span>
+      <span style={{ color: "rgba(255,255,255,0.85)", fontVariantNumeric: "tabular-nums" }}>{value}</span>
     </div>
   );
 }
