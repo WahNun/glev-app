@@ -150,12 +150,33 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
     cls === "HIGH_PROTEIN" ? 50 :
     55;
 
-  // Curve-aware decisions (Task #187). When the +3h backfill job has
-  // populated the window aggregates we can detect hypos that happened
-  // BETWEEN the bg_1h / bg_2h snapshots and use the peak rise (not the
-  // bg_2h-Δ) for SPIKE — both are invisible to the legacy two-point path.
-  if (input.hadHypoWindow === true && bgBefore != null) {
-    const minBg = input.minBg180 != null ? Math.round(input.minBg180) : null;
+  // Curve-aware + sparse-hypo decisions. A meal must NEVER be labelled
+  // GOOD if any post-meal BG (bg_1h, bg_2h, or the 0–180 min curve
+  // minimum) dipped below the hypo threshold.
+  //
+  // Two paths cover this:
+  //   • Curve path (Task #187): `hadHypoWindow === true` OR a populated
+  //     `minBg180 < HYPO_THRESHOLD` — detects a hypo that happened
+  //     BETWEEN the bg_1h / bg_2h snapshots.
+  //   • Sparse path (Task #249): the single post-meal point we *do* have
+  //     (`bgAfter`, fed by lifecycle as bg_2h or bg_1h) is itself below
+  //     the threshold. Without this guard, e.g. 110 → 60 mg/dL would
+  //     fall into the Δ-block and be labelled OVERDOSE while the meal
+  //     is plainly in HYPO territory; or 100 → (mid 60) → 100 leaks
+  //     into "GOOD" because the in-between dip is invisible.
+  const HYPO_THRESHOLD = 70;
+  const sparseHypoBg =
+    bgAfter != null && bgAfter < HYPO_THRESHOLD;
+  const curveHypo =
+    input.hadHypoWindow === true ||
+    (input.minBg180 != null && input.minBg180 < HYPO_THRESHOLD);
+  if ((curveHypo || sparseHypoBg) && bgBefore != null) {
+    // Prefer the curve minimum when known; otherwise fall back to the
+    // sparse post-meal point that triggered the guard.
+    const minBg =
+      input.minBg180 != null ? Math.round(input.minBg180)
+      : sparseHypoBg          ? Math.round(bgAfter as number)
+      : null;
     const messages: AdjustmentMessage[] = [
       { key: "engine_eval_hypo_during", params: { minBg: minBg ?? "<70" } },
       ...speedMessages(input.speed1, input.speed2),

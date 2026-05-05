@@ -145,6 +145,15 @@ Es gibt an keiner Stelle (`evaluation.ts`, `lifecycle.ts`, `chipState.ts`, `entr
 ### Case B — Hypo erkannt, trotzdem Bewertung „Gut"
 **Möglich, an mehreren Stellen.**
 
+> **Status (Task #249 — Fix):** Punkt 1 (Sparse-Pfad) und Punkt 2 (Cache-Skew
+> auf der Entries-Seite) sind behoben. `evaluateEntry` flaggt jetzt jede
+> Mahlzeit mit `bgAfter < 70` ODER `minBg180 < 70` als `HYPO_DURING` —
+> auch ohne Curve-Backfill. `app/(protected)/entries/page.tsx` liest das
+> Outcome aus `lifecycleFor(meal).outcome` (Cache nur als Fallback). Punkt
+> 3 (1h-Provisional, der erst nach 2h flippt) bleibt vom Lifecycle-Design
+> her bestehen — sobald jedoch der bg_2h-Wert oder das Curve-Aggregat
+> eintreffen, wird die Hypo erkannt.
+
 1. *Sparse-Pfad ohne Curve:* Solange kein Curve-Backfill (`max_bg_180/min_bg_180/had_hypo_window` alle null) gelaufen ist, sieht `evaluateEntry` nur `bgBefore` und `bgAfter (= bg_2h)`. Eine Hypo **zwischen** den beiden Punkten ist unsichtbar. Beispiel: 110 → (Mitte 60) → 100 → `delta = -10` → Block (3) liefert `GOOD` (Zeile 205). Die Hypo wird vom Outcome-Pfad nie gesehen.
 2. *Cache-Skew:* `meal.evaluation` wird zum Insert-Zeitpunkt mit `null` belegt (`app/(protected)/engine/page.tsx:1135, 1210, 1280`). Wenn später `lifecycleFor` durch hereinkommende Curve-Aggregate auf HYPO_DURING flipped, hat der Datenbank-Cache trotzdem evtl. später `GOOD` (durch andere Schreibpfade) — `entries/page.tsx:211–212` zeigt dann `eval_GOOD` + `eval_explain_GOOD`, weil es **nur** auf `meal.evaluation` schaut, nicht auf `lifecycleFor(meal).outcome`. Demgegenüber benutzt `chipState.ts:83` `lc.outcome ?? meal.evaluation`, also kann der Chip "HYPO_DURING" zeigen während die direkt darunter gerenderte Erklärung "Insulin-Dosis hat gepasst" sagt.
 3. *1h-Provisional-Pfad:* In `lifecycleFor` (Zeilen 113–142) wird `evaluateEntry(bg_1h)` aufgerufen — eine spätere Hypo zwischen +1h und +2h ist im `outcome` der provisorischen Bewertung nicht enthalten und kann als `GOOD` gelabelt werden, bevor der Curve-Backfill greift.

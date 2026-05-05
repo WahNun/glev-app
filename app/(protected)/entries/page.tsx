@@ -846,7 +846,15 @@ export default function EntriesPage() {
             // MEAL row — original rendering preserved below.
             const m = r.data;
             const isOpen = expanded === m.id;
-            const ev = m.evaluation;
+            // Outcome shown in the OUTCOME card (label + "Insulin-Dosis hat …"
+            // explanation) MUST come from the same source as the lifecycle
+            // chip — otherwise the chip can show HYPO_DURING while the
+            // explanation directly under it still says "Gut, Insulin passte".
+            // `meal.evaluation` is a write-time DB cache and can lag behind
+            // curve-backfill or sparse-hypo recomputation; trust the live
+            // `lifecycleFor` outcome and fall back to the cache only when
+            // the lifecycle has nothing to say (pending / outside-window).
+            const ev = lifecycleFor(m).outcome ?? m.evaluation;
             const date = parseDbDate(m.meal_time ?? m.created_at);
             const dateStr = date.toLocaleDateString("en", { month:"short", day:"numeric" }).replace(/^(\w+) (\d+)$/, "$2. $1.");
             const totalProt = m.protein_grams ?? (Array.isArray(m.parsed_json) ? m.parsed_json.reduce((s,f)=>s+(f.protein||0),0) : 0);

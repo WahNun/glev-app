@@ -44,10 +44,43 @@ test("evaluateEntry: SPIKE when delta exceeds the BALANCED 55 cutoff", () => {
   expect(r.reasoning).toMatch(/balanced meals/);
 });
 
-test("evaluateEntry: OVERDOSE when delta < -30", () => {
-  const r = evaluateEntry({ carbs: 50, insulin: 4, bgBefore: 100, bgAfter: 60 });
+test("evaluateEntry: OVERDOSE when delta < -30 and bgAfter ≥ hypo threshold", () => {
+  // bgAfter=80 keeps the post-meal value above the 70 mg/dL hypo cutoff
+  // so we still exercise the pure Δ-based OVERDOSE branch (Task #249
+  // moved bgAfter < 70 into HYPO_DURING precedence).
+  const r = evaluateEntry({ carbs: 50, insulin: 4, bgBefore: 120, bgAfter: 80 });
   expect(r.outcome).toBe("OVERDOSE");
   expect(r.delta).toBe(-40);
+});
+
+// ── Sparse-Hypo Guard (Task #249) ──────────────────────────────────
+//
+// Without the +3h curve backfill (`hadHypoWindow` / `minBg180` both
+// null), a single post-meal point below 70 mg/dL must still flip the
+// outcome to HYPO_DURING — never GOOD, never OVERDOSE. This locks in
+// "Hypo schlägt Gut" for the sparse path.
+
+test("evaluateEntry: sparse bgAfter < 70 → HYPO_DURING (no curve)", () => {
+  const r = evaluateEntry({ carbs: 50, insulin: 4, bgBefore: 110, bgAfter: 65 });
+  expect(r.outcome).toBe("HYPO_DURING");
+  expect(r.confidence).toBe("high");
+  expect(r.messages.some(m => m.key === "engine_eval_hypo_during")).toBe(true);
+});
+
+test("evaluateEntry: sparse minBg180 < 70 wins even when bgAfter is back in range", () => {
+  // 100 → (mid-window 60) → 100 is the canonical Case B from
+  // docs/engine-evaluation-diagnose.md — Δ = 0 would have produced
+  // GOOD without the new guard.
+  const r = evaluateEntry({
+    carbs: 50, insulin: 4, bgBefore: 100, bgAfter: 100,
+    minBg180: 60,
+  });
+  expect(r.outcome).toBe("HYPO_DURING");
+});
+
+test("evaluateEntry: bgAfter exactly at 70 is NOT a hypo", () => {
+  const r = evaluateEntry({ carbs: 50, insulin: 4, bgBefore: 95, bgAfter: 70 });
+  expect(r.outcome).toBe("GOOD");
 });
 
 test("evaluateEntry: FAST_CARBS spike threshold is 70 mg/dL", () => {
