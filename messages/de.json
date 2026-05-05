@@ -1666,7 +1666,8 @@
     "faq_q4": "Wann startet die Beta?",
     "faq_a4": "Juli 2026. Beta-Tester bekommen den Zugangslink per Email zwei Wochen vor dem öffentlichen Launch.",
     "faq_q5": "Wo werden meine Daten gespeichert?",
-    "faq_a5": "In der EU (Supabase Frankfurt). Deutsche DSGVO. Keine Datenweitergabe, keine Werbung."
+    "faq_a5": "In der EU (Supabase Frankfurt). Deutsche DSGVO. Keine Datenweitergabe, keine Werbung.",
+    "cgm_trust_line": "Nicht sicher? Du kannst Glev risikofrei testen — kein Payment bis Juli."
   },
   "proPage": {
     "hero_title_line1": "Einmal sprechen.",

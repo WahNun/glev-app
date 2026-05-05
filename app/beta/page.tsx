@@ -379,6 +379,30 @@ function BetaContent() {
         </div>
       </section>
 
+      {/* 1b. CGM COMPATIBILITY — direkt unter Hero als Qualifikationsfilter */}
+      <section
+        style={{
+          width: "100%",
+          maxWidth: 600,
+          margin: "0 auto 56px",
+          padding: "0 20px",
+          boxSizing: "border-box",
+        }}
+      >
+        <CGMCompatibility variant="compact" />
+        <p
+          style={{
+            margin: "16px 0 0",
+            fontSize: 13,
+            lineHeight: 1.55,
+            color: TEXT_FAINT,
+            textAlign: "center",
+          }}
+        >
+          {t("cgm_trust_line")}
+        </p>
+      </section>
+
       {/* 2. Steps */}
       <section
         style={{
@@ -403,19 +427,6 @@ function BetaContent() {
         }}
       >
         <FeatureTrio />
-      </section>
-
-      {/* 3b. CGM COMPATIBILITY — Trust + Qualifikation vor Pricing */}
-      <section
-        style={{
-          width: "100%",
-          maxWidth: 680,
-          margin: "0 auto 32px",
-          padding: "0 20px",
-          boxSizing: "border-box",
-        }}
-      >
-        <CGMCompatibility />
       </section>
 
       {/* 4. Pricing */}

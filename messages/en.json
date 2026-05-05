@@ -1658,7 +1658,8 @@
     "faq_q4": "When does the beta start?",
     "faq_a4": "July 2026. Beta testers receive the access link by email two weeks before the public launch.",
     "faq_q5": "Where is my data stored?",
-    "faq_a5": "In the EU (Supabase Frankfurt). German GDPR compliance. No data sharing, no advertising."
+    "faq_a5": "In the EU (Supabase Frankfurt). German GDPR compliance. No data sharing, no advertising.",
+    "cgm_trust_line": "Not sure? You can try Glev risk-free — no payment until July."
   },
   "proPage": {
     "hero_title_line1": "Speak once.",
