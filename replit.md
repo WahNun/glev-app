@@ -54,6 +54,9 @@ Glev is a Type 1 Diabetes insulin decision-support system designed to provide pe
 - `meals` table stores meal details, including `input_text`, `parsed_json`, glucose levels, carbs, insulin, meal type, and evaluation.
 - `user_preferences` table stores per-user UI preferences like dashboard and insights card order.
 
+**Marketing Mockups Refresh:**
+- `scripts/refresh-mockups.mjs` (Playwright) loggt einen Test-Account ein, klickt das Onboarding weg, erzwingt Dark-Theme via `localStorage.glev_theme=dark` und zieht frische 393×852 @ 2× Screenshots nach `public/mockups/{dashboard,engine,entries,insights}.png` — diese vier werden in der Homepage-Deepdive-Sektion (`app/page.tsx` `FeatureImageRow`) gezeigt. Aufruf: `MOCKUP_USER_EMAIL=… MOCKUP_USER_PASSWORD=… node scripts/refresh-mockups.mjs`. Die Engine-Step-2-Pille ist `<div role="listitem">` ohne Click-Handler, daher zeigen wir bewusst nur Step 1 und nutzen `entries.png` (Mahlzeitenliste mit Makros) für die „Macros"-Reihe.
+
 ## External Dependencies
 
 - **Supabase:** PostgreSQL database, authentication, and user preference storage.
