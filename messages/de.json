@@ -1710,7 +1710,7 @@
     "faq_a5": "In der EU (Supabase Frankfurt). Deutsche DSGVO. Keine Datenweitergabe, keine Werbung."
   },
   "cgm": {
-    "section_title": "Kompatibel mit deinem CGM?",
+    "section_title": "Funktioniert Glev mit deinem CGM?",
     "group_supported": "Unterstützt",
     "group_limited": "Eingeschränkt",
     "microcopy": "Dexcom und Medtronic funktionieren aktuell über Nightscout. Direkte Integrationen folgen.",

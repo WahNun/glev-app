@@ -327,11 +327,7 @@ export default function PreviewHome() {
             >
               <span style={{ color: GREEN }}>● {tp("cgm_libre")}</span>
               <span>·</span>
-              <span style={{ color: "var(--text-faint)" }}>○ Dexcom</span>
-              <span>·</span>
               <span style={{ color: GREEN }}>● Nightscout</span>
-              <span>·</span>
-              <span style={{ color: "var(--text-faint)" }}>○ Medtronic</span>
             </div>
           </div>
 
@@ -382,16 +378,6 @@ export default function PreviewHome() {
         </p>
       </section>
 
-      {/* CGM COMPATIBILITY — direkt unter Hero/Trust-Layer */}
-      <section
-        style={{
-          position: "relative",
-          zIndex: 1,
-          padding: "0 0 48px",
-        }}
-      >
-        <CGMCompatibility />
-      </section>
 
       {/* PAIN BLOCK — neue Bullets, gleiche Card-Optik wie auf der
           Homepage, damit das Layout vergleichbar bleibt. */}
@@ -570,6 +556,17 @@ export default function PreviewHome() {
             <FeatureImageRow key={row.title} row={row} reverse={i % 2 === 1} />
           ))}
         </div>
+      </section>
+
+      {/* CGM COMPATIBILITY — Check-Layer vor Positioning/Pricing */}
+      <section
+        style={{
+          position: "relative",
+          zIndex: 1,
+          padding: "0 0 32px",
+        }}
+      >
+        <CGMCompatibility />
       </section>
 
       {/* POSITIONING BLOCK — kurzes, kategorisches Statement, das Glev
