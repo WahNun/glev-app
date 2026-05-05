@@ -318,15 +318,55 @@ export function CycleForm() {
         {mode === "marker" && (
           <div>
             <label style={labelStyle}>{t("cycle_phase_label")}</label>
-            <PillRow<CyclePhase>
-              value={phase}
-              onChange={setPhase}
-              accent={PINK}
-              options={CYCLE_PHASES.map(p => ({
-                value: p,
-                label: t(`cycle_phase_${p}` as never),
-              }))}
-            />
+            {/* Native select — viel ehrlicher als ein 4-spaltiger
+                PillRow, dessen Labels (Lutealphase, Menstruation)
+                auf schmalen Screens abgeschnitten wurden. Der
+                System-Picker auf iOS/Android handhabt Overflow,
+                Accessibility und Tastatur-Navigation gratis. */}
+            <div style={{ position: "relative" }}>
+              <select
+                value={phase ?? ""}
+                onChange={(e) => {
+                  hapticSelection();
+                  const v = e.target.value;
+                  setPhase(v === "" ? null : (v as CyclePhase));
+                }}
+                aria-label={t("cycle_phase_label")}
+                style={{
+                  ...inp,
+                  appearance: "none",
+                  WebkitAppearance: "none",
+                  MozAppearance: "none",
+                  paddingRight: 36,
+                  cursor: "pointer",
+                  fontWeight: 600,
+                  color: phase ? PINK : "var(--text-muted)",
+                }}
+              >
+                <option value="" disabled>
+                  {t("cycle_phase_label")}
+                </option>
+                {CYCLE_PHASES.map((p) => (
+                  <option key={p} value={p}>
+                    {t(`cycle_phase_${p}` as never)}
+                  </option>
+                ))}
+              </select>
+              <svg
+                width="14" height="14" viewBox="0 0 24 24"
+                fill="none" stroke="currentColor" strokeWidth="2.4"
+                strokeLinecap="round" strokeLinejoin="round"
+                aria-hidden="true"
+                style={{
+                  position: "absolute", right: 14, top: "50%",
+                  transform: "translateY(-50%)",
+                  pointerEvents: "none",
+                  color: "var(--text-muted)",
+                }}
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </div>
           </div>
         )}
 
