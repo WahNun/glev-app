@@ -1,0 +1,1 @@
+Sprachgesteuerter Mahlzeit-Tracker für Typ-1-Diabetes. Makros per KI, CGM live.

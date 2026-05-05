@@ -1,0 +1,76 @@
+Play Console listing metadata for app.glev
+==========================================
+
+App name (Play Console > Main store listing > App name):
+    Glev — Typ-1 Tracker            (DE, max 30 chars)
+    Glev — Type 1 Tracker           (EN, max 30 chars)
+
+Default language:
+    German (Germany) — de-DE
+
+Additional language:
+    English (United States) — en-US
+
+Application type:
+    App
+
+Category:
+    Medical                          (primary)
+    Health & Fitness                 (alternative if Medical needs declarations
+                                      we don't yet have — see README)
+
+Tags (Play Console > Tags, pick up to 5):
+    Diabetes management
+    Health tracking
+    Nutrition
+    Logbook
+    Personal wellness
+
+Contact details:
+    Email:    support@glev.app
+    Website:  https://glev.app
+    Phone:    (leave blank — optional)
+
+Privacy policy URL:
+    https://glev.app/legal/privacy
+
+Store listing contact details checklist:
+    [ ] support@glev.app inbox monitored
+    [ ] privacy URL returns 200 in incognito and is not behind login
+
+Content rating:
+    Run the IARC questionnaire in Play Console.
+    Expected rating for Glev (no user-generated public content, no ads,
+    no gambling, no violence): PEGI 3 / ESRB Everyone / USK 0.
+
+Target audience and content:
+    Target age group: 18+ (medical/diabetes context)
+    Appeal to children: No
+
+Ads:
+    No, this app contains no ads.
+
+In-app purchases:
+    Yes — one-time Pro purchase, billed via the website (Stripe).
+    The Android shell loads https://glev.app and does NOT use Google Play
+    Billing for the current Pro flow. If Play Review flags this, switch the
+    Pro purchase to Google Play Billing or restrict it to existing accounts
+    inside the app (the policy allows out-of-app purchases for SaaS).
+
+Data safety form:
+    Data collected:
+      - Account: email address (required for sign-in)
+      - Health & Fitness: blood glucose readings, insulin doses, meals,
+        exercise, cycle / symptom notes
+      - App activity: in-app diagnostics (no third-party analytics SDK)
+    Data shared with third parties:
+      - None
+    Data is encrypted in transit:
+      - Yes (HTTPS to Supabase EU region)
+    Users can request data deletion:
+      - Yes — via account settings inside the app
+        (and via support@glev.app)
+
+Countries / regions:
+    Start with: Germany, Austria, Switzerland, then expand to all EEA + UK
+    once internal testing is stable.

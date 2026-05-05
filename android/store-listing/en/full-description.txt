@@ -1,0 +1,28 @@
+Glev is the voice-first meal tracker built for people living with Type 1 Diabetes. Speak your meal, and Glev parses carbs, protein and fat with AI — every entry is automatically linked to your CGM glucose reading.
+
+What you can do with Glev:
+
+• Log a meal in seconds — by voice, tap, or quick-entry shortcuts
+• Get macros calculated automatically (carbs, protein, fat, calories)
+• Pull your current glucose from FreeStyle Libre 2 (via LibreLinkUp) at log time
+• Record insulin doses, exercise, cycle and symptoms in one place
+• Review Time in Range, meal patterns and workout reactions on the Insights page
+• Export your data as CSV — you stay in control
+
+What Glev is NOT:
+
+Glev is not a medical device, not an insulin calculator, and not a diabetes coach. Glev does not calculate insulin doses and does not give therapy recommendations. Therapy decisions stay between you and your endocrinologist or diabetes team. Glev is a documentation and organisation tool that helps you understand the relationship between food, activity and glucose.
+
+Who Glev is for:
+
+People with Type 1 Diabetes who use a CGM and want a fast, everyday way to log meals and glucose responses — without juggling three different apps every time. Currently supported: FreeStyle Libre 2 via LibreLinkUp. Dexcom and Nightscout are in progress.
+
+Privacy:
+
+Glucose, meal and insulin data are stored in the EU region (Supabase). Authentication runs through Supabase, AI features through Replit AI Integrations. Full details in our privacy policy: https://glev.app/legal/privacy
+
+Pricing:
+
+The beta is paid — early adopters get Pro access at a reduced one-time price. Details on https://glev.app
+
+Built by a Type 1 myself, because existing apps were too slow.

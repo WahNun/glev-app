@@ -1,0 +1,28 @@
+Glev ist der sprachgesteuerte Essens-Tracker für Menschen mit Typ-1-Diabetes. Sprich deine Mahlzeit kurz ein, Glev erkennt Kohlenhydrate, Protein und Fett per KI und verknüpft jeden Eintrag automatisch mit deinem Glukose-Wert vom CGM.
+
+Was du mit Glev machst:
+
+• Mahlzeit in Sekunden loggen — per Sprache, Tippen oder Foto-freier Schnelleingabe
+• Makros automatisch berechnen lassen (Kohlenhydrate, Protein, Fett, Kalorien)
+• Aktuellen Glukose-Wert beim Loggen aus FreeStyle Libre 2 (via LibreLinkUp) übernehmen
+• Insulin-Dosen, Bewegung, Zyklus und Symptome dokumentieren
+• In den Insights deine Zeit im Zielbereich, Mahlzeit-Muster und Workout-Reaktionen sehen
+• Daten als CSV exportieren — du behältst die volle Kontrolle
+
+Was Glev NICHT ist:
+
+Glev ist kein Medizinprodukt, kein Insulinrechner und kein Diabetes-Coach. Glev berechnet keine Insulin-Dosen und gibt keine Therapie-Empfehlungen. Therapieentscheidungen triffst du gemeinsam mit deinem behandelnden Arzt oder Diabetes-Team. Glev ist ein Dokumentations- und Organisations-Tool, das dir hilft, Zusammenhänge zwischen Essen, Bewegung und Glukose besser zu verstehen.
+
+Für wen ist Glev gemacht:
+
+Typ-1-Diabetiker:innen mit CGM, die einen schnellen, alltagstauglichen Weg suchen, Mahlzeiten und Glukose-Reaktionen zu dokumentieren — ohne jedes Mal zwischen drei Apps zu wechseln. Aktuell unterstützt: FreeStyle Libre 2 über LibreLinkUp. Dexcom und Nightscout in Arbeit.
+
+Datenschutz:
+
+Glukose-, Mahlzeiten- und Insulin-Daten liegen in der EU-Region (Supabase). Anmeldung über Supabase, KI-Funktionen über Replit AI Integrations. Mehr in unserer Datenschutzerklärung: https://glev.app/legal/privacy
+
+Kosten:
+
+Die Beta ist kostenpflichtig — Frühnutzer:innen sichern sich Pro-Zugang zu einem reduzierten Einmalpreis. Details findest du auf https://glev.app
+
+Gebaut von einem Typ-1-Diabetiker, weil bestehende Apps zu langsam waren.
