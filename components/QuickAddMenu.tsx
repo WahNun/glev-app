@@ -5,6 +5,10 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { hapticLight, hapticSelection } from "@/lib/haptics";
 import GlevLogo from "@/components/GlevLogo";
+import {
+  fetchCycleLoggingEnabled,
+  CYCLE_LOGGING_CHANGED_EVENT,
+} from "@/lib/cyclePrefs";
 
 const ACCENT = "#4F6EF7";
 const SHEET_BG = "var(--surface-alt)";
@@ -121,6 +125,47 @@ export default function QuickAddMenu() {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
+  // "Zyklus loggen" is opt-in (Settings → App → Zyklus-Logging).
+  // Default false so it stays hidden until the user explicitly
+  // enables it. We re-fetch when the menu opens so a toggle change
+  // in another tab is picked up without a page reload, and we also
+  // listen for the in-page broadcast event so the same-tab flow
+  // updates immediately.
+  const [cycleEnabled, setCycleEnabled] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    fetchCycleLoggingEnabled()
+      .then((v) => { if (!cancelled) setCycleEnabled(v); })
+      .catch(() => {});
+    function onChange(e: Event) {
+      const ce = e as CustomEvent<boolean>;
+      if (typeof ce.detail === "boolean") setCycleEnabled(ce.detail);
+    }
+    if (typeof window !== "undefined") {
+      window.addEventListener(CYCLE_LOGGING_CHANGED_EVENT, onChange);
+    }
+    return () => {
+      cancelled = true;
+      if (typeof window !== "undefined") {
+        window.removeEventListener(CYCLE_LOGGING_CHANGED_EVENT, onChange);
+      }
+    };
+  }, []);
+
+  // Re-sync when the menu is opened so a toggle change made in
+  // another tab/device since first mount is reflected the next
+  // time the user pops the menu.
+  useEffect(() => {
+    if (!open) return;
+    fetchCycleLoggingEnabled()
+      .then(setCycleEnabled)
+      .catch(() => {});
+  }, [open]);
+
+  const visibleItems = ITEM_DEFS.filter(
+    (it) => it.key !== "log_cycle" || cycleEnabled,
+  );
+
   // pointerdown (not click) so the menu collapses before the next
   // tap target receives focus.
   useEffect(() => {
@@ -205,7 +250,7 @@ export default function QuickAddMenu() {
             animation: "glevQuickAddIn 0.18s cubic-bezier(0.32, 0.72, 0, 1)",
           }}
         >
-          {ITEM_DEFS.map(it => (
+          {visibleItems.map(it => (
             <button
               key={it.key}
               type="button"

@@ -43,6 +43,10 @@ import {
   DEFAULT_NOTIFICATION_PREFS,
   type NotificationPrefs,
 } from "@/lib/notificationPrefs";
+import {
+  fetchCycleLoggingEnabled,
+  saveCycleLoggingEnabled,
+} from "@/lib/cyclePrefs";
 
 const ACCENT = "#4F6EF7", GREEN = "#22D3A0", PINK = "#FF2D78", PURPLE = "#A78BFA";
 const BORDER = "var(--border)";
@@ -100,7 +104,8 @@ type SheetKey =
   | "historical"
   | "googleSheets"
   | "onboarding"
-  | "adjustmentHistory";
+  | "adjustmentHistory"
+  | "cycleLogging";
 
 /** Lightweight CGM status hook — fetches /api/cgm/status once on mount.
  * Silent on error (treats as disconnected). The full CgmSettingsCard owns
@@ -165,6 +170,10 @@ export default function SettingsPage() {
   // throughout the engine, entries, and insights surfaces.
   const carbUnit = useCarbUnit();
   const [macroTargets, setMacroTargets] = useState<MacroTargets>(DEFAULT_MACRO_TARGETS);
+  // Opt-in cycle-logging shortcut (gated row in the header "+" menu).
+  // DB-backed via `user_settings.cycle_logging_enabled`. Default false
+  // — has to be explicitly enabled here before it shows up.
+  const [cycleLoggingEnabled, setCycleLoggingEnabled] = useState(false);
   // Notification preferences (DB-backed via user_settings.notif_*). Phase 1
   // ships the prefs surface; Phase 2 (web push + cron sender) will start
   // honouring `criticalAlerts` and `quietStart/End`.
@@ -236,6 +245,7 @@ export default function SettingsPage() {
     if (!supabase) return;
     fetchMacroTargets().then(setMacroTargets).catch(() => {});
     fetchNotificationPrefs().then(setNotifPrefs).catch(() => {});
+    fetchCycleLoggingEnabled().then(setCycleLoggingEnabled).catch(() => {});
     // Insulin parameters (ICR / CF / target BG) live in `user_settings`
     // — the DB row is the source of truth. We merge it into the local
     // Settings state so the row subtitles reflect the real saved
@@ -598,6 +608,23 @@ export default function SettingsPage() {
     setNotifPrefs((prev) => ({ ...prev, [key]: val }));
   }
 
+  /** Toggle the cycle-logging opt-in. Optimistic — flips local state
+   *  immediately so the switch animates, then persists. On DB error we
+   *  revert so the UI never lies about the saved value. */
+  const toggleCycleLogging = useCallback(async (next: boolean) => {
+    const prev = cycleLoggingEnabled;
+    setCycleLoggingEnabled(next);
+    setSaveError("");
+    try {
+      await saveCycleLoggingEnabled(next);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+    } catch (e) {
+      setCycleLoggingEnabled(prev);
+      setSaveError(e instanceof Error ? e.message : tSettings("save_failed"));
+    }
+  }, [cycleLoggingEnabled, tSettings]);
+
   async function handleReloadHistorical() {
     if (!confirm(tSettings("historical_confirm"))) return;
     setReloading(true);
@@ -651,6 +678,7 @@ export default function SettingsPage() {
     carbs: <svg {...iconProps}><path d="M12 2v6" /><path d="M9 5l3 3 3-3" /><path d="M5 12c0-3 3-5 7-5s7 2 7 5c0 5-3 9-7 9s-7-4-7-9z" /></svg>,
     calendar: <svg {...iconProps}><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>,
     account: <svg {...iconProps}><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-7 8-7s8 3 8 7" /></svg>,
+    cycle: <svg {...iconProps}><circle cx="12" cy="12" r="9" /><path d="M12 3a9 9 0 0 1 0 18" /></svg>,
   };
 
   /* ── subtitles derived from current state ──────────────────────── */
@@ -691,6 +719,9 @@ export default function SettingsPage() {
   const notifSub = notifPrefs.criticalAlerts
     ? tSettings("subtitle_notif_on", { from: notifPrefs.quietStart, to: notifPrefs.quietEnd })
     : tSettings("subtitle_notif_off");
+  const cycleLoggingSub = cycleLoggingEnabled
+    ? tSettings("subtitle_cycle_logging_on")
+    : tSettings("subtitle_cycle_logging_off");
 
   /* ── shared sheet footers ──────────────────────────────────────── */
   /** Save footer: button calls `onSave()`; sheet only dismisses on a true
@@ -1154,6 +1185,37 @@ export default function SettingsPage() {
         <p style={{ fontSize: 13, color: "var(--text-body)", lineHeight: 1.55, margin: 0 }}>
           {tSettings("sheet_dexcom_body")}
         </p>
+      ),
+      footer: closeFooter,
+    },
+    cycleLogging: {
+      title: tSettings("cycle_logging_title"),
+      body: (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", background: "var(--surface-soft)", borderRadius: 10, gap: 12 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 500 }}>{tSettings("cycle_logging_label")}</div>
+              <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 2 }}>{tSettings("cycle_logging_desc")}</div>
+            </div>
+            <div
+              role="switch"
+              aria-checked={cycleLoggingEnabled}
+              aria-label={tSettings("cycle_logging_label")}
+              onClick={() => { void toggleCycleLogging(!cycleLoggingEnabled); }}
+              style={{
+                width: 44, height: 24, borderRadius: 99, cursor: "pointer", flexShrink: 0,
+                background: cycleLoggingEnabled ? PINK : "var(--border-strong)",
+                border: `1px solid ${cycleLoggingEnabled ? PINK + "60" : BORDER}`,
+                position: "relative", transition: "background 0.2s",
+              }}
+            >
+              <div style={{ position: "absolute", top: 2, left: cycleLoggingEnabled ? 22 : 2, width: 18, height: 18, borderRadius: 99, background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }} />
+            </div>
+          </div>
+          {saveError && (
+            <div style={{ fontSize: 12, color: PINK, lineHeight: 1.4 }}>{saveError}</div>
+          )}
+        </div>
       ),
       footer: closeFooter,
     },
@@ -1712,6 +1774,14 @@ export default function SettingsPage() {
           subtitle={notifSub}
           ariaLabel={tSettings("row_open_aria", { label: tSettings("notifications") })}
           onClick={() => openSheetWith("notifications")}
+        />
+        <SettingsRow
+          iconColor={PINK}
+          icon={ICON.cycle}
+          label={tSettings("cycle_logging_title")}
+          subtitle={cycleLoggingSub}
+          ariaLabel={tSettings("row_open_aria", { label: tSettings("cycle_logging_title") })}
+          onClick={() => openSheetWith("cycleLogging")}
         />
         <SettingsRow
           iconColor={ACCENT}
