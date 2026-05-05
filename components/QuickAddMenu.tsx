@@ -102,7 +102,12 @@ type ItemDef = {
 // Stelle für alle Engine-Tabs + alle Schnell-Eingaben.
 const ITEM_DEFS: ItemDef[] = [
   { key: "open_engine",      href: "/engine?tab=engine",      icon: ENGINE_ICON  },
-  { key: "log_meal",         href: "/engine?tab=log",         icon: MEAL         },
+  // "Mahlzeit loggen" goes to the engine voice/text + KH-slider flow
+  // (tab=engine), NOT the desktop-only "log" meta-view which just
+  // stacks InsulinForm + ExerciseForm and on mobile auto-downgrades
+  // to bolus — that landed users on the insulin screen instead of
+  // the meal wizard.
+  { key: "log_meal",         href: "/engine?tab=engine",      icon: MEAL         },
   { key: "log_insulin",      href: "/engine?tab=bolus",       icon: SYRINGE_ICON },
   { key: "measure_glucose",  href: "/engine?tab=fingerstick", icon: DROPLET      },
   { key: "log_activity",     href: "/engine?tab=exercise",    icon: RUN          },
