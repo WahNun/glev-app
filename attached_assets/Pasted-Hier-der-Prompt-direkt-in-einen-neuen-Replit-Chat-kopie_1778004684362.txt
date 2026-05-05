@@ -1,0 +1,58 @@
+Hier der Prompt — direkt in einen neuen Replit-Chat kopieren:
+
+AUFGABE: Evaluation Engine Diagnose (nur Analyse, kein Fix)
+In der Glev App gibt es Inkonsistenzen zwischen Verlaufsstatus und Gesamtbewertung.
+Beispiel:
+
+Insulin: 0 Units, starker Drop nach 1h, Hypo erkannt
+Output: Status "Hypo im Verlauf" ✅ — Bewertung "Gut" ❌ — Kommentar "Insulin-Dosis hat gepasst" ❌
+
+Ziel: bestehende Evaluation-Logik vollständig verstehen und dokumentieren. KEIN Fix, KEIN Refactor.
+
+STEP 1 — Dateien finden
+bashfind lib/engine -name "*.ts" | sort
+find app/api -name "*.ts" | xargs grep -l "outcome\|evaluation\|good\|hypo\|spike" -i 2>/dev/null
+
+STEP 2 — Aktuelle Logik extrahieren
+Lies die relevanten Dateien (wahrscheinlich evaluation.ts, recommendation.ts, patterns.ts) und beantworte:
+
+Wie wird das Outcome berechnet? Welche Inputs: bgBefore, bg1h, bg2h, insulinUnits, carbs?
+Welche Regeln existieren aktuell (IF/ELSE, Thresholds)?
+Gibt es getrennte Systeme für: Status (Hypo/Spike), Bewertung ("Gut"), Insulin-Kommentar? Wie interagieren diese?
+
+
+STEP 3 — Inkonsistenzen identifizieren
+Prüfe konkret ob folgende Cases auftreten können:
+
+Case A: insulinUnits = 0 → trotzdem Kommentar "Insulin-Dosis passt"
+Case B: Hypo erkannt → trotzdem Bewertung "Gut"
+Case C: Starker negativer Delta/Speed → kein Einfluss auf Bewertung
+
+
+STEP 4 — Spike-Logik analysieren
+
+Wann wird ein Spike erkannt?
+Wird Spike in der Bewertung berücksichtigt?
+Gibt es Level-Differenzierung (leichter vs. starker Spike)?
+
+
+ERWARTETER OUTPUT
+Liefere ein Dokument mit:
+1. Aktuelle Entscheidungslogik (rekonstruiert als Pseudocode/Regeln)
+2. Liste aller Inkonsistenzen (mit Datei + Zeilennummer wenn möglich)
+3. Fehlende Regeln, z.B.:
+
+Keine Hierarchie (Hypo > Spike > Gut)
+Kein Guard für insulinUnits = 0
+Keine Verbindung Status ↔ Bewertung
+Geschwindigkeit (mg/dL/min) nicht korrekt gewichtet
+
+4. Vorschlag Ziel-Logik (high level, noch kein Code):
+
+Hypo → überschreibt Bewertung → immer negativ
+Spike → eigene Kategorie, nicht "Gut"
+insulinUnits = 0 → kein Insulin-Kommentar
+Risiko-Hierarchie vor Outcome-Score
+
+
+Kein Code schreiben, kein Fix. Nur Diagnose und Dokumentation.
