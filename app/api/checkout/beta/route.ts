@@ -58,10 +58,10 @@ export async function POST(req: NextRequest) {
       throw new Error('Missing STRIPE_BILLING_ANCHOR');
     }
 
-    const billingCycleAnchor = Math.floor(
+    const trialEnd = Math.floor(
       new Date(process.env.STRIPE_BILLING_ANCHOR).getTime() / 1000,
     );
-    if (!Number.isFinite(billingCycleAnchor) || billingCycleAnchor <= 0) {
+    if (!Number.isFinite(trialEnd) || trialEnd <= 0) {
       throw new Error(
         'Invalid STRIPE_BILLING_ANCHOR (expected ISO date, e.g. 2026-07-01T00:00:00Z)',
       );
@@ -81,11 +81,11 @@ export async function POST(req: NextRequest) {
       // Karte heute hinterlegen, erste Abbuchung am Launch-Tag.
       payment_method_collection: 'always',
       subscription_data: {
-        // Erste Rechnung am Launch-Datum (z.B. 1. Juli 2026 00:00 UTC).
-        // proration_behavior: 'none' verhindert dass Stripe für die Tage
-        // zwischen Sign-up und Anchor anteilig abrechnet.
-        billing_cycle_anchor: billingCycleAnchor,
-        proration_behavior: 'none',
+        // Trial bis zum Launch-Datum (z.B. 1. Juli 2026 00:00 UTC). Karte
+        // wird heute hinterlegt, erste Abbuchung am Trial-Ende. Stripe
+        // verlangt mind. 48h Vorlauf — STRIPE_BILLING_ANCHOR muss in der
+        // Zukunft liegen.
+        trial_end: trialEnd,
         metadata: { feature: 'beta_subscription' },
       },
       metadata: { feature: 'beta_subscription' },
