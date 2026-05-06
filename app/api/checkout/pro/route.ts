@@ -78,6 +78,18 @@ export async function POST(req: NextRequest) {
     const trialEndMs = PRO_TRIAL_END * 1000;
     const trialIsViable = trialEndMs - nowMs >= STRIPE_TRIAL_MIN_LEAD_MS;
 
+    // Optionaler ENV-Override für den Billing-Cycle-Anchor — wenn gesetzt,
+    // wird die erste Rechnung exakt zu diesem Zeitpunkt erstellt. Fällt
+    // weg wenn die Variable fehlt oder ungültig ist (Backward-compat).
+    const billingAnchorEnv = process.env.STRIPE_BILLING_ANCHOR;
+    const billingCycleAnchor = billingAnchorEnv
+      ? Math.floor(new Date(billingAnchorEnv).getTime() / 1000)
+      : null;
+    const useAnchor =
+      billingCycleAnchor !== null &&
+      Number.isFinite(billingCycleAnchor) &&
+      billingCycleAnchor > 0;
+
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: "subscription",
       line_items: [
@@ -92,6 +104,14 @@ export async function POST(req: NextRequest) {
       subscription_data: {
         // Trial only when launch is far enough out (Stripe constraint).
         ...(trialIsViable ? { trial_end: PRO_TRIAL_END } : {}),
+        // Erste Rechnung am Launch-Tag. proration_behavior: 'none'
+        // verhindert Anteils-Abrechnung zwischen Sign-up und Anchor.
+        ...(useAnchor
+          ? {
+              billing_cycle_anchor: billingCycleAnchor as number,
+              proration_behavior: "none" as const,
+            }
+          : {}),
         // Stamp the subscription so the webhook + downstream tooling can
         // tell apart Pro from Beta even without looking at the price id.
         metadata: { feature: "pro_subscription" },
