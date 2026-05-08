@@ -1,7 +1,7 @@
-# App identifiers come from capacitor.config.ts (appId: "app.glev").
+# App identifiers come from capacitor.config.ts (appId: "com.glev.app").
 # Apple ID + team are environment-driven so individual developers and CI can
 # point at their own Apple Developer accounts without editing the repo.
-app_identifier(ENV["APP_IDENTIFIER"] || "app.glev")
+app_identifier(ENV["APP_IDENTIFIER"] || "com.glev.app")
 
 apple_id(ENV["FASTLANE_APPLE_ID"]) if ENV["FASTLANE_APPLE_ID"]
 itc_team_id(ENV["FASTLANE_ITC_TEAM_ID"]) if ENV["FASTLANE_ITC_TEAM_ID"]
