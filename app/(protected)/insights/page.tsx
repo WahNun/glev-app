@@ -1734,7 +1734,7 @@ function RelinkSourceLine({
         style={{
           width: "100%", textAlign: "left",
           background: "transparent", border: "none", padding: 0,
-          fontSize: 12, color: "var(--text-faint)", lineHeight: 1.4,
+          fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5,
           cursor: hasTimeWindow ? "pointer" : "default",
           font: "inherit",
         }}
