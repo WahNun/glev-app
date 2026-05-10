@@ -16,16 +16,6 @@ const TEXT = "var(--text-strong)";
 const TEXT_DIM = "var(--text-muted)";
 const BORDER = "var(--border)";
 
-const MEAL = (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M18 8h1a4 4 0 0 1 0 8h-1" />
-    <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z" />
-    <line x1="6" y1="1" x2="6" y2="4" />
-    <line x1="10" y1="1" x2="10" y2="4" />
-    <line x1="14" y1="1" x2="14" y2="4" />
-  </svg>
-);
-
 const DROPLET = (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 2.5s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z" />
@@ -83,7 +73,6 @@ const SYMPTOM_ICON = (
 type ItemDef = {
   key:
     | "open_engine"
-    | "log_meal"
     | "log_insulin"
     | "measure_glucose"
     | "log_activity"
@@ -94,16 +83,12 @@ type ItemDef = {
 };
 // Reihenfolge spiegelt die alte Engine-Pille (Engine, Insulin,
 // Exercise, Glucose) plus die bereits im "+" vorhandenen Logging-
-// Shortcuts (Mahlzeit, Zyklus, Symptome). Damit hat der User EINE
-// Stelle für alle Engine-Tabs + alle Schnell-Eingaben.
+// Shortcuts (Zyklus, Symptome). "Mahlzeit loggen" ist absichtlich
+// NICHT mehr drin — der "Glev"-Eintrag oben routet bereits auf
+// /engine?tab=engine (den Mahlzeit-Voice/Text-Flow), ein zweiter
+// Eintrag wäre redundant.
 const ITEM_DEFS: ItemDef[] = [
   { key: "open_engine",      href: "/engine?tab=engine",      icon: ENGINE_ICON  },
-  // "Mahlzeit loggen" goes to the engine voice/text + KH-slider flow
-  // (tab=engine), NOT the desktop-only "log" meta-view which just
-  // stacks InsulinForm + ExerciseForm and on mobile auto-downgrades
-  // to bolus — that landed users on the insulin screen instead of
-  // the meal wizard.
-  { key: "log_meal",         href: "/engine?tab=engine",      icon: MEAL         },
   { key: "log_insulin",      href: "/engine?tab=bolus",       icon: SYRINGE_ICON },
   { key: "measure_glucose",  href: "/engine?tab=fingerstick", icon: DROPLET      },
   { key: "log_activity",     href: "/engine?tab=exercise",    icon: RUN          },
