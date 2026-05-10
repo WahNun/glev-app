@@ -514,6 +514,7 @@
     "title": "Verlauf",
     "insights": "Insights",
     "entries": "Einträge",
+    "entries_subline": "{shown} von {total} Einträgen. Klicke eine Zeile zum Aufklappen.",
     "no_entries": "Noch keine Einträge"
   },
   "insights": {
@@ -586,6 +587,10 @@
     "scope_mode_week": "Woche",
     "scope_mode_month": "Monat",
     "scope_mode_year": "Jahr",
+    "scope_chip_open": "Zeitraum öffnen",
+    "scope_chip_close": "Zeitraum schließen",
+    "scope_prev": "Zurück",
+    "scope_next": "Weiter",
     "scope_aria_prev": "Vorheriger Zeitraum",
     "scope_aria_next": "Nächster Zeitraum",
     "scope_week_label": "KW {n}",

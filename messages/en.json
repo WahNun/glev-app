@@ -514,6 +514,7 @@
     "title": "History",
     "insights": "Insights",
     "entries": "Entries",
+    "entries_subline": "{shown} of {total} entries. Tap a row to expand.",
     "no_entries": "No entries yet"
   },
   "insights": {
@@ -578,6 +579,10 @@
     "scope_mode_week": "Week",
     "scope_mode_month": "Month",
     "scope_mode_year": "Year",
+    "scope_chip_open": "Open period",
+    "scope_chip_close": "Close period",
+    "scope_prev": "Previous",
+    "scope_next": "Next",
     "scope_aria_prev": "Previous period",
     "scope_aria_next": "Next period",
     "scope_week_label": "Wk {n}",

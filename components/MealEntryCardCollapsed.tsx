@@ -7,7 +7,7 @@ import { chipForMeal } from "@/lib/engine/chipState";
 import { renderEngineMessage, renderEngineMessages } from "@/lib/engineMessages";
 import { parseDbDate } from "@/lib/time";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 
 const ACCENT = "#4F6EF7";
 const ORANGE = "#FF9500";
@@ -26,10 +26,11 @@ export default function MealEntryCardCollapsed({
   // The DB column stays in grams; only the rendered value swaps.
   const carbUnit = useCarbUnit();
   const tEngine = useTranslations("engine");
+  const locale = useLocale();
   const ts = meal.meal_time ?? meal.created_at;
   const d = parseDbDate(ts);
-  const dateStr = d.toLocaleDateString("en", { month: "short", day: "numeric" });
-  const timeStr = d.toLocaleTimeString("en", { hour: "numeric", minute: "2-digit" });
+  const dateStr = d.toLocaleDateString(locale, { month: "short", day: "numeric" });
+  const timeStr = d.toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
 
   const catColor = meal.meal_type ? TYPE_COLORS[meal.meal_type] || "var(--text-dim)" : null;
   const catLabel = meal.meal_type ? TYPE_LABELS[meal.meal_type] || meal.meal_type : null;

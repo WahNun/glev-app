@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { fetchMeals, deleteMeal, updateMeal, type Meal } from "@/lib/meals";
 import { fetchRecentInsulinLogs, deleteInsulinLog, updateInsulinReadings, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, deleteExerciseLog, type ExerciseLog } from "@/lib/exercise";
@@ -199,6 +199,9 @@ export default function EntriesPage() {
   // CARBS rows below. The MealEditor edit form is intentionally NOT
   // converted (out of scope for the rollout).
   const carbUnit = useCarbUnit();
+  const locale = useLocale();
+  const tNav = useTranslations("nav");
+  const tHistory = useTranslations("history");
   // i18n for the meal-expanded view (section labels, mini-card labels,
   // type/eval pills, lifecycle state). Keys live in messages/{de,en}.json
   // under "entriesExpand". Helpers below fall back to the lib/mealTypes
@@ -552,8 +555,8 @@ export default function EntriesPage() {
     <div style={{ maxWidth:960, margin:"0 auto" }}>
       <style>{``}</style>
       <div style={{ marginBottom:24 }}>
-        <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>Einträge</h1>
-        <p style={{ color:"var(--text-faint)", fontSize:14 }}>{filtered.length} von {rows.length} Einträgen. Klicke eine Zeile zum Aufklappen.</p>
+        <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>{tNav("entries")}</h1>
+        <p style={{ color:"var(--text-faint)", fontSize:14 }}>{tHistory("entries_subline", { shown: filtered.length, total: rows.length })}</p>
       </div>
 
       {/* MANUAL ENTRY CTA */}
@@ -859,7 +862,7 @@ export default function EntriesPage() {
             // has nothing to say (pending / outside-window / pre-curve).
             const ev = lifecycleFor(m).outcome ?? m.evaluation;
             const date = parseDbDate(m.meal_time ?? m.created_at);
-            const dateStr = date.toLocaleDateString("en", { month:"short", day:"numeric" }).replace(/^(\w+) (\d+)$/, "$2. $1.");
+            const dateStr = date.toLocaleDateString(locale, { month:"short", day:"numeric" });
             const totalProt = m.protein_grams ?? (Array.isArray(m.parsed_json) ? m.parsed_json.reduce((s,f)=>s+(f.protein||0),0) : 0);
             const totalFat  = m.fat_grams ?? (Array.isArray(m.parsed_json) ? m.parsed_json.reduce((s,f)=>s+(f.fat||0),0) : 0);
             const totalFiber = m.fiber_grams ?? (Array.isArray(m.parsed_json) ? m.parsed_json.reduce((s,f)=>s+(f.fiber||0),0) : 0);
@@ -1484,9 +1487,10 @@ function BolusRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
   log: InsulinLog;
   isOpen: boolean; onToggle: () => void; onDelete: () => void; deleting: boolean;
 }) {
+  const locale = useLocale();
   const d = parseDbDate(log.created_at);
-  const dateStr = d.toLocaleDateString("en", { month:"short", day:"numeric" });
-  const timeStr = d.toLocaleTimeString("en", { hour:"numeric", minute:"2-digit" });
+  const dateStr = d.toLocaleDateString(locale, { month:"short", day:"numeric" });
+  const timeStr = d.toLocaleTimeString(locale, { hour:"numeric", minute:"2-digit" });
 
   const accent  = INSULIN_ACCENT;
   const evalInfo = evaluateBolus(log);
@@ -1644,9 +1648,10 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
   log: InsulinLog;
   isOpen: boolean; onToggle: () => void; onDelete: () => void; deleting: boolean;
 }) {
+  const locale = useLocale();
   const d = parseDbDate(log.created_at);
-  const dateStr = d.toLocaleDateString("en", { month:"short", day:"numeric" });
-  const timeStr = d.toLocaleTimeString("en", { hour:"numeric", minute:"2-digit" });
+  const dateStr = d.toLocaleDateString(locale, { month:"short", day:"numeric" });
+  const timeStr = d.toLocaleTimeString(locale, { hour:"numeric", minute:"2-digit" });
 
   const accent = BASAL_ACCENT;
   const before = numOrNull(log.cgm_glucose_at_log);
@@ -1872,15 +1877,16 @@ function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting }:
   isOpen: boolean; onToggle: () => void; onDelete: () => void; deleting: boolean;
 }) {
   const tIns = useTranslations("insights");
+  const locale = useLocale();
   const start = parseDbDate(log.created_at);
   const end   = new Date(start.getTime() + log.duration_minutes * 60_000);
-  const dateStr = start.toLocaleDateString("en", { month:"short", day:"numeric" });
-  const timeStr = start.toLocaleTimeString("en", { hour:"numeric", minute:"2-digit" });
+  const dateStr = start.toLocaleDateString(locale, { month:"short", day:"numeric" });
+  const timeStr = start.toLocaleTimeString(locale, { hour:"numeric", minute:"2-digit" });
   // End-side date is computed independently so workouts that cross
   // midnight (e.g. start 23:50, run 30 min) display the next day's
   // date for ENDED instead of duplicating the start date.
-  const endDateStr = end.toLocaleDateString("en", { month:"short", day:"numeric" });
-  const endTimeStr = end.toLocaleTimeString("en", { hour:"numeric", minute:"2-digit" });
+  const endDateStr = end.toLocaleDateString(locale, { month:"short", day:"numeric" });
+  const endTimeStr = end.toLocaleTimeString(locale, { hour:"numeric", minute:"2-digit" });
 
   const accent  = EXERCISE_ACCENT;
   const typeLbl = exerciseTypeLabelI18n(tIns, log.exercise_type);

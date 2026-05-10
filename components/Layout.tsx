@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { signOut } from "@/lib/auth";
 import GlevLockup from "@/components/GlevLockup";
 import GlevLogo from "@/components/GlevLogo";
@@ -15,7 +15,6 @@ import {
   computeScopeWindow, type ScopeMode,
 } from "@/lib/scopeHeaderContext";
 import { startOfDay, startOfDaysAgo, startOfToday, userTimezone } from "@/lib/utils/datetime";
-import { useLocale } from "next-intl";
 
 const ACCENT  = "#4F6EF7";
 const GREEN   = "#22D3A0";
