@@ -2016,6 +2016,8 @@
     "positioning_body": "Not just tracking. Not hardware. The system in between.",
     "compliance": "Glev is a documentation and organisation tool and does not replace professional medical advice. Treatment decisions should be made in consultation with a healthcare professional.",
     "cgm_libre": "Libre 2 and 3",
+    "cgm_dexcom_planned": "Dexcom (planned)",
+    "cgm_medtronic_planned": "Medtronic (planned)",
     "pricing_beta_b1_v2": "First 3 months at $4.90",
     "pricing_beta_b2_v2": "Then $9/month",
     "pricing_beta_b3_v2": "Cancel anytime",

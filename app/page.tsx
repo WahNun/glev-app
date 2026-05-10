@@ -328,6 +328,10 @@ export default function PreviewHome() {
               <span style={{ color: GREEN }}>● {tp("cgm_libre")}</span>
               <span>·</span>
               <span style={{ color: GREEN }}>● Nightscout</span>
+              <span>·</span>
+              <span style={{ color: "var(--text-dim)" }}>● {tp("cgm_dexcom_planned")}</span>
+              <span>·</span>
+              <span style={{ color: "var(--text-dim)" }}>● {tp("cgm_medtronic_planned")}</span>
             </div>
           </div>
 
