@@ -444,7 +444,7 @@ export default function DashboardPage() {
         </div>
       ),
     },
-    { id: "recent-entries", node: <RecentEntries rows={recentRows} locale={dateLocale} onViewAll={() => router.push("/history")} onViewEntry={(id) => router.push(`/entries#${id}`)} onMealUpdated={(m) => setMeals(prev => prev.map(x => x.id === m.id ? m : x))}/> },
+    { id: "recent-entries", node: <RecentEntries rows={recentRows} locale={dateLocale} onViewAll={() => router.push("/entries")} onViewEntry={(id) => router.push(`/entries#${id}`)} onMealUpdated={(m) => setMeals(prev => prev.map(x => x.id === m.id ? m : x))}/> },
   ];
 
   return (
