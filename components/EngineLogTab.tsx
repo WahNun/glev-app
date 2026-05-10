@@ -534,8 +534,9 @@ export function InsulinForm() {
 // remain valid in the DB and are mapped to "Strength" for display, but
 // the picker only shows the new set so going forward all rows use it.
 const EXERCISE_TYPE_OPTIONS: ExerciseType[] = [
-  "cardio", "strength", "hiit", "yoga", "cycling", "run",
+  "cardio", "strength", "hiit", "yoga", "cycling", "run", "swimming",
   "football", "tennis", "volleyball", "basketball",
+  "hot_shower", "cold_shower",
 ];
 
 // Retroactive-start choices. Selecting anything other than "Now"

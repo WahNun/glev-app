@@ -166,6 +166,7 @@ export function patternNote(t: ExerciseType): string {
     case "cardio":
     case "cycling":
     case "run":
+    case "swimming":
     // Team / racquet sports are intermittent aerobic activity — same
     // delayed-hypo profile as steady cardio for pattern-note purposes.
     case "football":
@@ -180,6 +181,10 @@ export function patternNote(t: ExerciseType): string {
       return "Resistance training often nudges glucose UP transiently; values commonly settle within 1–2 h.";
     case "yoga":
       return "Yoga and low-intensity movement usually have a mild, stabilising effect on glucose.";
+    case "hot_shower":
+      return "A hot shower causes vasodilation, which can speed up insulin absorption — watch for an unusually fast glucose drop in the next 30–60 min.";
+    case "cold_shower":
+      return "A cold shower triggers vasoconstriction and a brief adrenaline response, which can transiently push glucose UP.";
   }
 }
 
@@ -204,6 +209,9 @@ export function exerciseTypeLabel(t: ExerciseType): string {
     case "tennis":    return "Tennis";
     case "volleyball":return "Volleyball";
     case "basketball":return "Basketball";
+    case "swimming":  return "Swimming";
+    case "hot_shower":  return "Hot shower";
+    case "cold_shower": return "Cold shower";
   }
 }
 

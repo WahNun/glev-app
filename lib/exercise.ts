@@ -16,12 +16,20 @@ export type ExerciseType =
   | "yoga"
   | "cycling"
   | "run"
+  | "swimming"
   // Team / racquet sports — intermittent aerobic activity, grouped
   // with cardio for pattern-note guidance.
   | "football"     // soccer
   | "tennis"
   | "volleyball"
-  | "basketball";
+  | "basketball"
+  // Body-temperature events — not really "sport" but they affect
+  // insulin absorption / glucose dynamics enough that T1Ds want to
+  // log them next to exercise. Hot shower → vasodilation can speed
+  // insulin absorption (drop risk). Cold shower → vasoconstriction
+  // + adrenaline can transiently push glucose up.
+  | "hot_shower"
+  | "cold_shower";
 
 export type ExerciseIntensity = "low" | "medium" | "high";
 
