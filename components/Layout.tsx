@@ -610,7 +610,10 @@ function ScopeHeaderChip({
         <div
           role="menu"
           style={{
-            position: "absolute", top: "calc(100% + 8px)", right: 0,
+            position: "fixed",
+            top: 56,
+            left: "50%",
+            transform: "translateX(-50%)",
             width: 240,
             background: "var(--surface-alt)",
             border: `1px solid var(--border)`,
