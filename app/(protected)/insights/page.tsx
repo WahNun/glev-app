@@ -12,7 +12,79 @@ import { suggestAdjustment, type AdaptiveSettings, type AdjustmentSuggestion } f
 import SortableCardGrid, { type SortableItem } from "@/components/SortableCardGrid";
 import { useCardOrder } from "@/lib/cardOrder";
 import { parseDbTs, parseDbDate } from "@/lib/time";
-import { startOfDay, startOfToday, startOfDaysAgo } from "@/lib/utils/datetime";
+import { startOfDay, startOfToday, startOfDaysAgo, userTimezone } from "@/lib/utils/datetime";
+
+// ─── History scope ───────────────────────────────────────────────
+// Variant B (Task #235): the Insights page now exposes a global
+// time-scope picker at the top. Day / Week / Month / Year + ◀ ▶
+// arrows. Every card derives its window from this scope so a
+// "Tag" view is truly that day's data, "Monat Mai 2026" is exactly
+// that calendar month, and so on. Previous-period deltas (e.g.
+// "TIR vs prev week") use the same-shape preceding window.
+type ScopeMode = "day" | "week" | "month" | "year";
+
+interface ScopeWindow {
+  startMs: number;          // inclusive lower bound
+  endMs: number;            // exclusive upper bound (= start of next period)
+  prevStartMs: number;      // inclusive lower bound of the previous period
+  prevEndMs: number;        // exclusive upper bound of the previous period (== startMs)
+}
+
+/** Compute the millisecond bounds of the period containing `anchor`
+ *  for the given scope mode. All boundaries snap to midnight in the
+ *  user's local timezone via `startOfDay`, which itself handles DST
+ *  correctly. The previous-period bounds describe the immediately
+ *  preceding window of the same shape (last week, last month, etc.). */
+function computeScopeWindow(mode: ScopeMode, anchor: Date): ScopeWindow {
+  // Resolve anchor's local Y/M/D + weekday in the user's timezone so
+  // boundaries don't drift between server (UTC) and client.
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: userTimezone,
+    year: "numeric", month: "2-digit", day: "2-digit", weekday: "short",
+  });
+  const parts = fmt.formatToParts(anchor);
+  const get = (t: string) => parts.find(p => p.type === t)!.value;
+  const y = Number(get("year"));
+  const mo = Number(get("month"));
+  const d = Number(get("day"));
+  const wkdShort = get("weekday"); // Mon, Tue, … Sun
+
+  // Helper: midnight in user TZ for a given Y/M/D. Constructs a UTC
+  // noon (avoids DST edge cases) of that date and snaps via startOfDay,
+  // which formats it back into user TZ. Day overflow (d > daysInMonth,
+  // d <= 0) is naturally handled by Date.UTC's calendar arithmetic.
+  const midnight = (yy: number, mm: number, dd: number): number => {
+    const noonUtc = new Date(Date.UTC(yy, mm - 1, dd, 12, 0, 0));
+    return startOfDay(noonUtc).getTime();
+  };
+
+  if (mode === "day") {
+    const startMs = midnight(y, mo, d);
+    const endMs = midnight(y, mo, d + 1);
+    const prevStartMs = midnight(y, mo, d - 1);
+    return { startMs, endMs, prevStartMs, prevEndMs: startMs };
+  }
+  if (mode === "week") {
+    const wkdIdx: Record<string, number> = { Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6, Sun:7 };
+    const idx = wkdIdx[wkdShort] ?? 1;
+    const monD = d - (idx - 1); // back up to Monday
+    const startMs = midnight(y, mo, monD);
+    const endMs = midnight(y, mo, monD + 7);
+    const prevStartMs = midnight(y, mo, monD - 7);
+    return { startMs, endMs, prevStartMs, prevEndMs: startMs };
+  }
+  if (mode === "month") {
+    const startMs = midnight(y, mo, 1);
+    const endMs = midnight(y, mo + 1, 1);
+    const prevStartMs = midnight(y, mo - 1, 1);
+    return { startMs, endMs, prevStartMs, prevEndMs: startMs };
+  }
+  // year
+  const startMs = midnight(y, 1, 1);
+  const endMs = midnight(y + 1, 1, 1);
+  const prevStartMs = midnight(y - 1, 1, 1);
+  return { startMs, endMs, prevStartMs, prevEndMs: startMs };
+}
 import {
   fetchFingersticks,
   type FingerstickReading,
@@ -177,6 +249,14 @@ export default function InsightsPage() {
   const [symptomLogs, setSymptomLogs]     = useState<SymptomLog[]>([]);
   const [loading, setLoading]           = useState(true);
 
+  // History scope state — see ScopeMode + computeScopeWindow at top.
+  // Default = "week" anchored on today, which gives the Mon..Sun week
+  // currently in progress. Carried in component state (not URL) so
+  // navigating away + back resets to the live week, matching the
+  // "current snapshot" expectation when re-opening Insights.
+  const [scopeMode, setScopeMode] = useState<ScopeMode>("week");
+  const [scopeAnchor, setScopeAnchor] = useState<Date>(() => new Date());
+
   useEffect(() => {
     // 14d covers every metric window (CV% needs 14d; hypo/hyper/TDD only 7d).
     // Calendar-aware lower bound: midnight 13 days ago in user's TZ → covers
@@ -222,19 +302,26 @@ export default function InsightsPage() {
     </div>
   );
 
-  const now = Date.now();
-  // Calendar-aware week boundaries (midnight in user's TZ) — see
-  // lib/utils/datetime. wkAgo = midnight 6d ago → "last 7 calendar days
-  // including today". wk2Ago = midnight 13d ago → prior 7-day window.
-  const wkAgo  = startOfDaysAgo(6).getTime();
-  const wk2Ago = startOfDaysAgo(13).getTime();
-  const last7 = meals.filter(m => parseDbTs(m.created_at) >= wkAgo);
+  // Scope-derived window bounds. These replace the old fixed
+  // "last 7 days" / "last 14 days" / "last 30 days" anchors so every
+  // card follows the user's selected period. `now` is the exclusive
+  // upper bound (start of the period AFTER the selected one) so a
+  // window that ends in the past (e.g. last week) doesn't accidentally
+  // include today's readings.
+  const scope = computeScopeWindow(scopeMode, scopeAnchor);
+  const now = scope.endMs;
+  const wkAgo  = scope.startMs;       // start of selected period
+  const wk2Ago = scope.prevStartMs;   // start of previous comparable period
+  const last7 = meals.filter(m => {
+    const t = parseDbTs(m.created_at);
+    return t >= wkAgo && t < now;
+  });
 
   // ── Time in Range buckets (consensus 70–180 mg/dL band) ──
   const last7Bg = last7.filter(m => m.glucose_before != null).map(m => m.glucose_before as number);
   const prev7Bg = meals.filter(m => {
     const t = parseDbTs(m.created_at);
-    return t >= wk2Ago && t < wkAgo && m.glucose_before != null;
+    return t >= wk2Ago && t < scope.prevEndMs && m.glucose_before != null;
   }).map(m => m.glucose_before as number);
 
   const bucket = (arr: number[]) => {
@@ -272,20 +359,84 @@ export default function InsightsPage() {
     tInsights("weekday_short_fri"),
     tInsights("weekday_short_sat"),
   ];
+  // Trend buckets — adapt resolution to the selected scope so the
+  // sparkline matches the hero metrics above it.
+  //   day   → 6 × 4h buckets   (0/4/8/12/16/20)
+  //   week  → 7 daily buckets  (Mon..Sun, weekday-short labels)
+  //   month → 4–5 weekly buckets (W1..Wn)
+  //   year  → 12 monthly buckets (Jan..Dec)
+  // All buckets respect the active `[wkAgo, now)` window. Empty
+  // buckets carry `avg: null` so the sparkline interpolation logic
+  // below can still draw a continuous line.
   const trendDays: { label: string; avg: number | null }[] = [];
-  for (let i = 6; i >= 0; i--) {
-    const dayStart = startOfDaysAgo(i);
-    const dayEndMs = startOfDaysAgo(i - 1).getTime();
-    const dayBgs = meals
-      .filter(m => {
-        const t = parseDbTs(m.created_at);
-        return t >= dayStart.getTime() && t < dayEndMs && m.glucose_before != null;
-      })
-      .map(m => m.glucose_before as number);
-    trendDays.push({
-      label: weekdayShortLabels[dayStart.getDay()],
-      avg: dayBgs.length ? dayBgs.reduce((a, b) => a + b, 0) / dayBgs.length : null,
-    });
+  if (scopeMode === "day") {
+    for (let h = 0; h < 24; h += 4) {
+      const bStart = wkAgo + h * 3600000;
+      const bEnd   = wkAgo + (h + 4) * 3600000;
+      const bgs = meals
+        .filter(m => {
+          const t = parseDbTs(m.created_at);
+          return t >= bStart && t < bEnd && m.glucose_before != null;
+        })
+        .map(m => m.glucose_before as number);
+      trendDays.push({
+        label: String(h),
+        avg: bgs.length ? bgs.reduce((a, b) => a + b, 0) / bgs.length : null,
+      });
+    }
+  } else if (scopeMode === "year") {
+    const yr = new Date(wkAgo).getFullYear();
+    const monthFmt = new Intl.DateTimeFormat(locale, { month: "short", timeZone: userTimezone });
+    for (let mIdx = 0; mIdx < 12; mIdx++) {
+      const bStart = new Date(yr, mIdx, 1).getTime();
+      const bEnd   = new Date(yr, mIdx + 1, 1).getTime();
+      const bgs = meals
+        .filter(m => {
+          const t = parseDbTs(m.created_at);
+          return t >= bStart && t < bEnd && m.glucose_before != null;
+        })
+        .map(m => m.glucose_before as number);
+      trendDays.push({
+        label: monthFmt.format(new Date(bStart)),
+        avg: bgs.length ? bgs.reduce((a, b) => a + b, 0) / bgs.length : null,
+      });
+    }
+  } else if (scopeMode === "month") {
+    // Iterate through scope in 7-day chunks; cap at 5 buckets.
+    let cursor = wkAgo;
+    let wIdx = 1;
+    while (cursor < now && wIdx <= 5) {
+      const bEnd = Math.min(cursor + 7 * 86400000, now);
+      const bgs = meals
+        .filter(m => {
+          const t = parseDbTs(m.created_at);
+          return t >= cursor && t < bEnd && m.glucose_before != null;
+        })
+        .map(m => m.glucose_before as number);
+      trendDays.push({
+        label: `W${wIdx}`,
+        avg: bgs.length ? bgs.reduce((a, b) => a + b, 0) / bgs.length : null,
+      });
+      cursor = bEnd;
+      wIdx++;
+    }
+  } else {
+    // Week mode (and fallback): 7 daily buckets across the scope.
+    for (let i = 0; i < 7; i++) {
+      const bStart = wkAgo + i * 86400000;
+      const bEnd   = wkAgo + (i + 1) * 86400000;
+      if (bStart >= now) break;
+      const bgs = meals
+        .filter(m => {
+          const t = parseDbTs(m.created_at);
+          return t >= bStart && t < bEnd && m.glucose_before != null;
+        })
+        .map(m => m.glucose_before as number);
+      trendDays.push({
+        label: weekdayShortLabels[new Date(bStart).getDay()],
+        avg: bgs.length ? bgs.reduce((a, b) => a + b, 0) / bgs.length : null,
+      });
+    }
   }
   let lastVal: number | null = null;
   const firstFallback = last7Avg ?? 100;
@@ -295,10 +446,13 @@ export default function InsightsPage() {
   });
 
   // ── Cross-source BG reading pools (meals + insulin + exercise + fingerstick) ──
-  // Calendar-aware: midnight 13d ago in user's TZ = "last 14 calendar days".
-  const fourteenAgo = startOfDaysAgo(13).getTime();
-  const readings14 = collectBgReadings(meals, insulinLogs, exerciseLogs, fingersticks, fourteenAgo);
-  const readings7  = readings14.filter(r => r.t >= wkAgo);
+  // Scope-aware: now follows the selected period rather than a fixed
+  // 14-day window. `readings7` is kept as an alias for the in-period
+  // pool (every reading inside the current scope window).
+  const fourteenAgo = wkAgo;
+  const readings14 = collectBgReadings(meals, insulinLogs, exerciseLogs, fingersticks, fourteenAgo)
+    .filter(r => r.t < now);
+  const readings7  = readings14;
 
   // ── Hypo / Hyper event counters (7d, count of individual readings) ──
   const hypoEnough  = readings7.length >= MIN_DATAPOINTS;
@@ -327,7 +481,7 @@ export default function InsightsPage() {
   const tddByDay = new Map<string, number>();
   for (const il of insulinLogs) {
     const t = parseDbTs(il.created_at);
-    if (t < wkAgo) continue;
+    if (t < wkAgo || t >= now) continue;
     const dayStart = startOfDay(new Date(t));
     const key = dayStart.toISOString().slice(0, 10);
     tddByDay.set(key, (tddByDay.get(key) ?? 0) + Number(il.units || 0));
@@ -344,9 +498,12 @@ export default function InsightsPage() {
   const tirPct = b7.inR;              // 70–180
   const tarPct = b7.hi;               // > 180
 
-  // ── Workout (exercise) analytics, 30-day window ──
-  const thirtyAgo = now - 30 * 86400000;
-  const exercise30 = exerciseLogs.filter(ex => parseDbTs(ex.created_at) >= thirtyAgo);
+  // ── Workout (exercise) analytics — scope-aware ──
+  const thirtyAgo = wkAgo;
+  const exercise30 = exerciseLogs.filter(ex => {
+    const t = parseDbTs(ex.created_at);
+    return t >= thirtyAgo && t < now;
+  });
   // Pre-evaluate once so all three workout sections share the same outcomes.
   const exerciseEvaluated = exercise30.map(ex => ({ ex, outcome: evaluateExercise(ex).outcome }));
 
@@ -1681,9 +1838,193 @@ export default function InsightsPage() {
         <p style={{ color:"var(--text-faint)", fontSize:13 }}>{tInsights("header_subtitle", { n: total })}</p>
       </div>
 
+      {/* Global history-scope picker (Variant B). Renders just below the
+          page heading and above all cards so every metric in the grid
+          re-keys to the selected window when the user steps through
+          days/weeks/months/years. State lives in the parent so a card
+          flip / re-order doesn't reset the period. */}
+      <ScopeHeader
+        mode={scopeMode}
+        anchor={scopeAnchor}
+        scope={scope}
+        locale={locale}
+        onModeChange={(m) => { setScopeMode(m); setScopeAnchor(new Date()); }}
+        onAnchorChange={setScopeAnchor}
+      />
+
       {/* Filter out items whose node was set to null (e.g. workout-patterns
           when fewer than 2 patterns are detected — spec says hide entirely). */}
       <InsightsSortable items={items.filter(it => it.node !== null)}/>
+    </div>
+  );
+}
+
+/**
+ * History scope header — Day / Week / Month / Year selector + ◀ ▶
+ * arrows that step the anchor through the chosen scope. Renders inline
+ * inside the Insights page so the parent owns scope state and every
+ * card below this header automatically re-keys when the user navigates.
+ *
+ * The "next" arrow is disabled when the selected period already ends
+ * after `Date.now()` (i.e. you can't peek into a future week).
+ */
+function ScopeHeader({
+  mode, anchor, scope, locale,
+  onModeChange, onAnchorChange,
+}: {
+  mode: ScopeMode;
+  anchor: Date;
+  scope: ScopeWindow;
+  locale: string;
+  onModeChange: (m: ScopeMode) => void;
+  onAnchorChange: (d: Date) => void;
+}) {
+  const tInsights = useTranslations("insights");
+
+  // Live "now" sample (re-evaluated on each render — fine, parent owns
+  // anchor state so we don't need to schedule re-renders for the
+  // disabled-next state).
+  const nowMs = Date.now();
+  const isCurrent = scope.endMs > nowMs && scope.startMs <= nowMs;
+  const canNext = scope.endMs <= nowMs;
+
+  // Build a human label for the active period.
+  const labelFmt = (() => {
+    if (mode === "day") {
+      // "Heute" / "Gestern" / "Mo, 5. Mai" / "Mo, 5. Mai 2025" if not this year
+      const today = startOfToday().getTime();
+      if (scope.startMs === today) return tInsights("scope_today");
+      const yesterday = startOfDaysAgo(1).getTime();
+      if (scope.startMs === yesterday) return tInsights("scope_yesterday");
+      const sameYear = anchor.getFullYear() === new Date().getFullYear();
+      return new Intl.DateTimeFormat(locale, {
+        weekday: "short", day: "numeric", month: "short",
+        year: sameYear ? undefined : "numeric",
+        timeZone: userTimezone,
+      }).format(new Date(scope.startMs));
+    }
+    if (mode === "week") {
+      // "5.–11. Mai" or "Diese Woche" if current
+      if (isCurrent) return tInsights("scope_this_week");
+      const start = new Date(scope.startMs);
+      const end = new Date(scope.endMs - 86400000); // last day of week (inclusive)
+      const sameMonth = start.getMonth() === end.getMonth();
+      const startStr = new Intl.DateTimeFormat(locale, {
+        day: "numeric", month: sameMonth ? undefined : "short",
+        timeZone: userTimezone,
+      }).format(start);
+      const endStr = new Intl.DateTimeFormat(locale, {
+        day: "numeric", month: "short",
+        year: end.getFullYear() === new Date().getFullYear() ? undefined : "numeric",
+        timeZone: userTimezone,
+      }).format(end);
+      return `${startStr} – ${endStr}`;
+    }
+    if (mode === "month") {
+      if (isCurrent) return tInsights("scope_this_month");
+      return new Intl.DateTimeFormat(locale, {
+        month: "long",
+        year: anchor.getFullYear() === new Date().getFullYear() ? undefined : "numeric",
+        timeZone: userTimezone,
+      }).format(new Date(scope.startMs));
+    }
+    if (isCurrent) return tInsights("scope_this_year");
+    return String(new Date(scope.startMs).getFullYear());
+  })();
+
+  function step(dir: -1 | 1) {
+    if (dir === 1 && !canNext) return;
+    // Step the anchor by jumping into the prev/next period — the
+    // computeScopeWindow function handles month/year arithmetic
+    // correctly when day-of-month overflows (Date.UTC normalises).
+    const next = dir === -1 ? scope.prevStartMs : scope.endMs;
+    onAnchorChange(new Date(next));
+  }
+
+  const ACCENT = "#4F6EF7";
+  const SURFACE_SOFT = "var(--surface-soft)";
+  const BORDER = "var(--border-soft)";
+
+  const modes: ScopeMode[] = ["day", "week", "month", "year"];
+
+  return (
+    <div
+      data-no-swipe
+      style={{
+        display: "flex", flexDirection: "column", gap: 10,
+        padding: "12px 12px 14px",
+        background: "var(--surface)",
+        border: `1px solid ${BORDER}`,
+        borderRadius: 14,
+        marginBottom: 14,
+      }}
+    >
+      {/* Row 1: ← label → */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <button
+          type="button"
+          onClick={() => step(-1)}
+          aria-label={tInsights("scope_aria_prev")}
+          style={{
+            width: 32, height: 32, borderRadius: 99, padding: 0,
+            background: SURFACE_SOFT, border: `1px solid ${BORDER}`,
+            color: "var(--text-body)", cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div style={{
+          flex: 1, textAlign: "center", fontSize: 14, fontWeight: 700,
+          letterSpacing: "-0.01em", color: "var(--text)",
+        }}>
+          {labelFmt}
+        </div>
+        <button
+          type="button"
+          onClick={() => step(1)}
+          disabled={!canNext}
+          aria-label={tInsights("scope_aria_next")}
+          style={{
+            width: 32, height: 32, borderRadius: 99, padding: 0,
+            background: SURFACE_SOFT, border: `1px solid ${BORDER}`,
+            color: canNext ? "var(--text-body)" : "var(--text-faint)",
+            cursor: canNext ? "pointer" : "not-allowed",
+            opacity: canNext ? 1 : 0.4,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+
+      {/* Row 2: mode chips */}
+      <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
+        {modes.map((m) => {
+          const active = m === mode;
+          return (
+            <button
+              key={m}
+              type="button"
+              onClick={() => onModeChange(m)}
+              aria-pressed={active}
+              style={{
+                flex: "1 1 0",
+                padding: "7px 10px",
+                borderRadius: 10,
+                border: `1px solid ${active ? ACCENT : BORDER}`,
+                background: active ? `${ACCENT}18` : "transparent",
+                color: active ? ACCENT : "var(--text-dim)",
+                fontSize: 13, fontWeight: active ? 700 : 500,
+                cursor: "pointer", letterSpacing: "-0.01em",
+                transition: "all 0.12s",
+              }}
+            >
+              {tInsights(`scope_mode_${m}`)}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

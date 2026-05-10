@@ -123,6 +123,65 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     }
   }, [pathname, historyHdr]);
 
+  // Mobile horizontal swipe → next/prev primary tab (Swipe-A: hard
+  // tab switch, no slide animation). Listens on the <main> element so
+  // touches that start in the header / bottom nav / open sheets don't
+  // accidentally trigger navigation. Carriers (insights TIR bar, etc.)
+  // can opt out by adding `data-no-swipe` to their root — the handler
+  // walks `closest()` and bails early in that case.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const main = document.querySelector(".glev-main") as HTMLElement | null;
+    if (!main) return;
+
+    const tabs = ["/dashboard", "/engine", "/history", "/settings"];
+    const idx = tabs.findIndex((p) => pathname.startsWith(p));
+    if (idx === -1) return;
+
+    let startX = 0;
+    let startY = 0;
+    let startT = 0;
+    let blocked = false;
+
+    function onStart(e: TouchEvent) {
+      if (e.touches.length !== 1) { blocked = true; return; }
+      const target = e.target as HTMLElement | null;
+      // Skip if the swipe begins inside an opt-out region (date pickers,
+      // chart drag handles, scope header, etc.).
+      if (target && target.closest("[data-no-swipe]")) { blocked = true; return; }
+      blocked = false;
+      const t = e.touches[0];
+      startX = t.clientX;
+      startY = t.clientY;
+      startT = Date.now();
+    }
+    function onEnd(e: TouchEvent) {
+      if (blocked) return;
+      const t = e.changedTouches[0];
+      if (!t) return;
+      const dx = t.clientX - startX;
+      const dy = t.clientY - startY;
+      const dt = Date.now() - startT;
+      // Gesture must be: short (≤ 600ms), long enough horizontally
+      // (≥ 60px), and clearly horizontal (|dx| > 2·|dy|).
+      if (dt > 600) return;
+      if (Math.abs(dx) < 60) return;
+      if (Math.abs(dy) > Math.abs(dx) / 2) return;
+      if (dx < 0 && idx < tabs.length - 1) {
+        router.push(tabs[idx + 1]);
+      } else if (dx > 0 && idx > 0) {
+        router.push(tabs[idx - 1]);
+      }
+    }
+
+    main.addEventListener("touchstart", onStart, { passive: true });
+    main.addEventListener("touchend", onEnd, { passive: true });
+    return () => {
+      main.removeEventListener("touchstart", onStart);
+      main.removeEventListener("touchend", onEnd);
+    };
+  }, [pathname, router]);
+
   async function handleSignOut() {
     await signOut();
     router.push("/login");
