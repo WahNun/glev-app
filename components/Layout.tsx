@@ -359,7 +359,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         </button>
       </aside>
 
-      <main className="glev-main" style={{ flex: 1, padding: "28px 32px", maxWidth: "100%", overflowX: "hidden" }}>
+      <main className="glev-main" style={{ flex: 1, padding: "28px 32px", maxWidth: "100%", overflowX: "hidden", zoom: 1.12 }}>
         {children}
       </main>
 
