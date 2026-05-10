@@ -1,7 +1,9 @@
 {
   "nav": {
     "dashboard": "Dashboard",
+    "entries": "Einträge",
     "glev": "Glev",
+    "insights": "Insights",
     "history": "Verlauf",
     "settings": "Einstellungen"
   },

@@ -10,7 +10,12 @@ import AboutGlevModal from "@/components/AboutGlevModal";
 import AccountSheet from "@/components/AccountSheet";
 import QuickAddMenu from "@/components/QuickAddMenu";
 import { EngineHeaderProvider, useEngineHeader } from "@/lib/engineHeaderContext";
-import { HistoryHeaderProvider, useHistoryHeader, type HistoryTab } from "@/lib/historyHeaderContext";
+import {
+  ScopeHeaderProvider, useScopeHeader,
+  computeScopeWindow, type ScopeMode,
+} from "@/lib/scopeHeaderContext";
+import { startOfDay, startOfDaysAgo, startOfToday, userTimezone } from "@/lib/utils/datetime";
+import { useLocale } from "next-intl";
 
 const ACCENT  = "#4F6EF7";
 const GREEN   = "#22D3A0";
@@ -26,21 +31,26 @@ const NAV_SURFACE  = "var(--surface)";
 const NAV_BORDER   = "var(--border)";
 const NAV_INACTIVE = "var(--text-dim)";
 
-// Desktop sidebar items. 4 entries, mirrors the mobile bottom-nav set
-// vertically. The user explicitly requested the order
-// "Dashboard / Glev / Verlauf / Einstellungen" (task #19) — Glev sits
-// in slot 2, the same position it occupies as the centered FAB on
-// mobile (Dashboard | [Glev FAB] | History | Settings). Labels reuse
-// the nav.* i18n keys so a German user sees "Verlauf" and an English
-// user sees "History". The "log" tab and standalone "insights" tab
-// were dropped per user request — both are now reachable via the
-// merged Verlauf page (/history) which has internal Insights/Entries
-// sub-tabs.
-type NavKey = "dashboard" | "glev" | "history" | "settings";
+// Desktop sidebar items. 5 entries: Dashboard / Einträge / Glev /
+// Insights / Settings. The mobile bottom nav mirrors this exact set in
+// the same order so muscle memory between desktop & mobile lines up.
+// Glev keeps slot 3 (centre) — flanked by Einträge on the left and
+// Insights on the right — matching how the user described the desired
+// layout when restoring the two surfaces from the merged /history
+// wrapper. The "log" tab is intentionally still dropped; logging flows
+// live in the header "+" QuickAddMenu.
+type NavKey = "dashboard" | "entries" | "glev" | "insights" | "settings";
 type NavItem = { key: NavKey; path: string; icon: (a: boolean) => React.ReactNode };
 const NAV: NavItem[] = [
   { key: "dashboard", path: "/dashboard", icon: (a) => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "var(--text-dim)"} strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+  )},
+  // Einträge — flat list of all logged meals + glucose + exercise + …
+  // entries. Lives between Dashboard and Glev on the user's request
+  // so the "what happened" surface sits adjacent to the at-a-glance
+  // dashboard.
+  { key: "entries", path: "/entries", icon: (a) => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "var(--text-dim)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
   )},
   // Glev brand mark in the nav rail. Recoloured monochrome (grey when
   // inactive, ACCENT when active) so its visual weight sits on the same
@@ -53,25 +63,31 @@ const NAV: NavItem[] = [
       <GlevLogo size={18} color={a ? ACCENT : "var(--text-dim)"} bg="transparent"/>
     </span>
   )},
-  { key: "history", path: "/history", icon: (a) => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "var(--text-dim)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 4 3 10 9 10"/><polyline points="12 7 12 12 16 14"/></svg>
+  // Insights — aggregate analytics (TIR, GMI, patterns). Sits between
+  // Glev and Settings: the deeper-analysis surface anchored on the
+  // right side, with the new global scope chip (Day/Week/Month/Year)
+  // appearing in the mobile header while this tab is active.
+  { key: "insights", path: "/insights", icon: (a) => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "var(--text-dim)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
   )},
   { key: "settings", path: "/settings", icon: (a) => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "var(--text-dim)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
   )},
 ];
 
+/**
+ * Public wrapper. Composes both page-header providers so the mobile
+ * global header (rendered inside LayoutInner) and each page (rendered
+ * as `children`) share state for their respective header controls.
+ *   - EngineHeaderProvider → engine tabs chip
+ *   - ScopeHeaderProvider  → Day/Week/Month/Year scope chip on /insights
+ */
 export default function Layout({ children }: { children: React.ReactNode }) {
-  // Wrap the actual layout body in BOTH page-header providers so the
-  // mobile global header (rendered inside LayoutInner) and each page
-  // (rendered as `children`) share state for their respective header
-  // controls. EngineHeaderProvider drives the engine tabs chip;
-  // HistoryHeaderProvider drives the Insights/Einträge dropdown.
   return (
     <EngineHeaderProvider>
-      <HistoryHeaderProvider>
+      <ScopeHeaderProvider>
         <LayoutInner>{children}</LayoutInner>
-      </HistoryHeaderProvider>
+      </ScopeHeaderProvider>
     </EngineHeaderProvider>
   );
 }
@@ -94,8 +110,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // (QuickAddMenu) so the bottom-nav tap stays a single decisive
   // gesture. The old `glevSheetOpen` state + bottom action sheet
   // were removed in this same change.
-  const engineHdr  = useEngineHeader();
-  const historyHdr = useHistoryHeader();
+  const engineHdr = useEngineHeader();
+  const scopeHdr  = useScopeHeader();
 
   useEffect(() => {
     fetch("/api/debug/state").then(r => r.json()).then(d => console.log("[DEBUG:STATE]", d)).catch(() => {});
@@ -112,16 +128,15 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     }
   }, [pathname, engineHdr]);
 
-  // Same defensive reset for the history-header dropdown — when the
-  // user leaves /history (or /insights / /entries which the history
-  // page composes internally), the small "Insights ▾ / Einträge ▾"
-  // chip must disappear from the global header even if the page's
-  // own unmount handler hasn't fired yet.
+  // Same defensive reset for the scope-header chip — when the user
+  // leaves /insights, the Day/Week/Month/Year chip must disappear
+  // from the global header even if the page's own unmount handler
+  // hasn't fired yet.
   useEffect(() => {
-    if (!pathname.startsWith("/history")) {
-      historyHdr.setVisible(false);
+    if (!pathname.startsWith("/insights")) {
+      scopeHdr.setVisible(false);
     }
-  }, [pathname, historyHdr]);
+  }, [pathname, scopeHdr]);
 
   // Mobile horizontal swipe → next/prev primary tab (Swipe-A: hard
   // tab switch, no slide animation). Listens on the <main> element so
@@ -134,7 +149,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     const main = document.querySelector(".glev-main") as HTMLElement | null;
     if (!main) return;
 
-    const tabs = ["/dashboard", "/engine", "/history", "/settings"];
+    const tabs = ["/dashboard", "/entries", "/engine", "/insights", "/settings"];
     const idx = tabs.findIndex((p) => pathname.startsWith(p));
     if (idx === -1) return;
 
@@ -253,8 +268,13 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               HistoryHeaderProvider on mount. Replaces the old in-body
               "Insights / Einträge" pill so /history opens straight to
               the cards without a row of vertical chrome at the top. */}
-          {historyHdr.visible && (
-            <HistoryHeaderChip tab={historyHdr.tab} setTab={historyHdr.setTab} />
+          {scopeHdr.visible && (
+            <ScopeHeaderChip
+              mode={scopeHdr.mode}
+              anchor={scopeHdr.anchor}
+              setMode={scopeHdr.setMode}
+              setAnchor={scopeHdr.setAnchor}
+            />
           )}
           <div style={{ fontSize: 13, padding: "5px 12px", borderRadius: 99, background: `${GREEN}18`, color: GREEN, fontWeight: 600 }}>Live</div>
           {/* QuickAddMenu — the three primary logging shortcuts
@@ -344,13 +364,17 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         {children}
       </main>
 
-      {/* MOBILE BOTTOM NAV — 4 visible tabs (Dashboard left, Glev center
-          elevated, History right-of-center, Settings far right). Glev is a
-          floating circular FAB that opens an action sheet instead of
-          navigating; the spacer slot keeps the 4 underlying labels evenly
-          distributed so the elevated button doesn't visually collide with
-          its neighbours. The sheet itself lives below as a portal-style
-          overlay so it can cover the nav. */}
+      {/* MOBILE BOTTOM NAV — 5 tabs (Dashboard, Einträge, Glev,
+          Insights, Settings) restored after the brief 4-tab phase that
+          merged Insights+Einträge under /history. The user explicitly
+          asked for both surfaces back in the bottom nav with Einträge
+          left of Glev and Insights right of Glev so muscle memory
+          aligns with the rendered icon order. All five tabs share the
+          same MobileTab visuals — no FAB, no elevated centre. Glev's
+          brand mark sits in slot 3 (centre) and tapping it routes
+          straight to /engine (Step 1 voice input). The three logging
+          shortcuts live in the header "+" QuickAddMenu, so each
+          bottom-nav tap stays a single decisive gesture. */}
       <nav className="glev-mobile-nav" style={{
         position: "fixed", bottom: 0, left: 0, right: 0,
         background: NAV_SURFACE, borderTop: `1px solid ${NAV_BORDER}`,
@@ -367,21 +391,21 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             </svg>
           )}
         />
-        {/* Glev tab — equal-weight 4th-of-4 slot. Tapping routes
-            STRAIGHT to /engine (no ?tab= query). The engine page
-            defaults to the "engine" sub-tab on Step 1 (voice input),
-            which is the entry point the user expects. Sub-screens
-            (Log, Bolus, Aktivität, Fingerstick) are reachable from
-            the header "+" dropdown (QuickAddMenu) and from the
-            engine header tabs-chip; the bottom-nav tap stays a
-            single decisive gesture into the headline tool. The
-            three-way "pick a flow" action sheet was removed in this
-            same change.
-            Visual rules:
-              - no background bubble / circle / FAB elevation
-              - same icon size + stroke as the other 3 tabs
-              - active = icon+label colour change to ACCENT whenever
-                the user is anywhere under /engine. */}
+        <MobileTab
+          label={tNav("entries")}
+          active={pathname.startsWith("/entries")}
+          onClick={() => router.push("/entries")}
+          icon={(a) => (
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : NAV_INACTIVE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="8" y1="6" x2="21" y2="6"/>
+              <line x1="8" y1="12" x2="21" y2="12"/>
+              <line x1="8" y1="18" x2="21" y2="18"/>
+              <line x1="3" y1="6" x2="3.01" y2="6"/>
+              <line x1="3" y1="12" x2="3.01" y2="12"/>
+              <line x1="3" y1="18" x2="3.01" y2="18"/>
+            </svg>
+          )}
+        />
         <MobileTab
           label={tNav("glev")}
           active={pathname.startsWith("/engine")}
@@ -391,14 +415,14 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           )}
         />
         <MobileTab
-          label={tNav("history")}
-          active={pathname.startsWith("/history")}
-          onClick={() => router.push("/history")}
+          label={tNav("insights")}
+          active={pathname.startsWith("/insights")}
+          onClick={() => router.push("/insights")}
           icon={(a) => (
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : NAV_INACTIVE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 12a9 9 0 1 0 3-6.7" />
-              <polyline points="3 4 3 10 9 10" />
-              <polyline points="12 7 12 12 16 14" />
+              <line x1="18" y1="20" x2="18" y2="10"/>
+              <line x1="12" y1="20" x2="12" y2="4"/>
+              <line x1="6" y1="20" x2="6" y2="14"/>
             </svg>
           )}
         />
@@ -413,7 +437,6 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             </svg>
           )}
         />
-
       </nav>
 
       {/* The mobile Glev action sheet was removed: the bottom-nav Glev
@@ -454,7 +477,7 @@ function MobileTab({
         gap: 4, padding: "6px 2px", height: 56,
         border: "none", background: "transparent", cursor: "pointer",
         color: active ? ACCENT : NAV_INACTIVE,
-        fontSize: 13, fontWeight: active ? 600 : 500, letterSpacing: "0.01em",
+        fontSize: 11, fontWeight: active ? 600 : 500, letterSpacing: "0.005em",
         borderRadius: 10,
         transition: "color 0.15s",
       }}
@@ -471,24 +494,68 @@ function MobileTab({
 }
 
 /**
- * Compact "Insights ▾ / Einträge ▾" chip rendered in the global
- * mobile header while the user is on /history. Mirrors the visual
- * shape of the engine tabs chip (same height, padding, fontSize)
- * so the two coexist cleanly when /engine is unrelated. Tapping
- * opens a small popover with the two tabs; selecting one writes
- * back into the shared HistoryHeaderContext, which the /history
- * page reads to swap its body between Insights and Einträge.
+ * Compact scope picker rendered in the global mobile header while the
+ * user is on /insights. Replaces the older "Insights ▾ / Einträge ▾"
+ * dropdown — both surfaces are now standalone bottom-nav tabs again,
+ * so the header slot is repurposed to hold the time-window selector
+ * (Tag / Woche / Monat / Jahr + ◀ ▶) that every Insights card derives
+ * its data from. State lives in `ScopeHeaderContext`; the Insights
+ * page reads it for window math, this chip reads + writes for UI.
  */
-function HistoryHeaderChip({
-  tab, setTab,
+function ScopeHeaderChip({
+  mode, anchor, setMode, setAnchor,
 }: {
-  tab: HistoryTab;
-  setTab: (t: HistoryTab) => void;
+  mode: ScopeMode;
+  anchor: Date;
+  setMode: (m: ScopeMode) => void;
+  setAnchor: (d: Date) => void;
 }) {
+  const locale = useLocale();
+  const scope  = computeScopeWindow(mode, anchor);
+  const nowMs  = Date.now();
+  const isCurrent = scope.endMs > nowMs && scope.startMs <= nowMs;
+  const canNext   = scope.endMs <= nowMs;
+
+  // Step the anchor by one period in the active mode.
+  const stepAnchor = (dir: -1 | 1) => {
+    const a = new Date(anchor);
+    if (mode === "day")   a.setDate(a.getDate() + dir);
+    if (mode === "week")  a.setDate(a.getDate() + dir * 7);
+    if (mode === "month") a.setMonth(a.getMonth() + dir);
+    if (mode === "year")  a.setFullYear(a.getFullYear() + dir);
+    setAnchor(a);
+  };
+
+  // Compact label for the closed chip.
+  const labelFor = (): string => {
+    if (mode === "day") {
+      const today = startOfToday().getTime();
+      if (scope.startMs === today) return "Heute";
+      const yesterday = startOfDaysAgo(1).getTime();
+      if (scope.startMs === yesterday) return "Gestern";
+      return new Intl.DateTimeFormat(locale, {
+        day: "numeric", month: "short", timeZone: userTimezone,
+      }).format(new Date(scope.startMs));
+    }
+    if (mode === "week") {
+      if (isCurrent) return "Diese Woche";
+      const start = new Date(scope.startMs);
+      const end   = new Date(scope.endMs - 86400000);
+      const fmt = new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", timeZone: userTimezone });
+      return `${fmt.format(start)}–${fmt.format(end)}`;
+    }
+    if (mode === "month") {
+      return new Intl.DateTimeFormat(locale, { month: "long", year: "numeric", timeZone: userTimezone })
+        .format(new Date(scope.startMs));
+    }
+    return new Intl.DateTimeFormat(locale, { year: "numeric", timeZone: userTimezone })
+      .format(new Date(scope.startMs));
+  };
+
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  // Close on outside pointerdown / Escape — matches QuickAddMenu so
+  // Close on outside pointerdown / Escape — same UX as QuickAddMenu so
   // the two header popovers feel identical to muscle memory.
   useEffect(() => {
     if (!open) return;
@@ -506,14 +573,19 @@ function HistoryHeaderChip({
     };
   }, [open]);
 
-  const labelFor = (t: HistoryTab) => (t === "insights" ? "Insights" : "Einträge");
+  const modes: { key: ScopeMode; label: string }[] = [
+    { key: "day",   label: "Tag"   },
+    { key: "week",  label: "Woche" },
+    { key: "month", label: "Monat" },
+    { key: "year",  label: "Jahr"  },
+  ];
 
   return (
-    <div ref={wrapperRef} style={{ position: "relative" }}>
+    <div ref={wrapperRef} data-no-swipe style={{ position: "relative" }}>
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        aria-label={open ? "Verlauf-Tabs schließen" : "Verlauf-Tabs öffnen"}
+        aria-label={open ? "Zeitraum schließen" : "Zeitraum öffnen"}
         aria-expanded={open}
         aria-haspopup="menu"
         style={{
@@ -524,14 +596,15 @@ function HistoryHeaderChip({
           color: open ? ACCENT : "var(--text-body)",
           fontSize: 13, fontWeight: 700, letterSpacing: "-0.01em",
           cursor: "pointer", transition: "all 0.15s",
+          maxWidth: 180, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
         }}
       >
-        <span>{labelFor(tab)}</span>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{labelFor()}</span>
         <svg
           width="12" height="12" viewBox="0 0 24 24" fill="none"
           stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
           aria-hidden="true"
-          style={{ transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "rotate(0deg)" }}
+          style={{ transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0 }}
         >
           <polyline points="6 9 12 15 18 9"/>
         </svg>
@@ -542,48 +615,81 @@ function HistoryHeaderChip({
           role="menu"
           style={{
             position: "absolute", top: "calc(100% + 8px)", right: 0,
-            width: 180,
+            width: 240,
             background: "var(--surface-alt)",
             border: `1px solid var(--border)`,
             borderRadius: 14,
             boxShadow: "var(--shadow-card)",
-            padding: 6,
+            padding: 10,
             zIndex: 60,
+            display: "flex", flexDirection: "column", gap: 8,
           }}
         >
-          {(["insights", "entries"] as const).map(t => {
-            const isActive = tab === t;
-            return (
-              <button
-                key={t}
-                type="button"
-                role="menuitemradio"
-                aria-checked={isActive}
-                onClick={() => { setTab(t); setOpen(false); }}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  width: "100%", padding: "10px 12px",
-                  background: isActive ? `${ACCENT}22` : "transparent",
-                  border: "none",
-                  color: isActive ? "#fff" : "var(--text-strong)",
-                  fontSize: 14.5, fontWeight: isActive ? 700 : 500,
-                  cursor: "pointer", textAlign: "left",
-                  borderRadius: 10,
-                }}
-              >
-                <span>{labelFor(t)}</span>
-                {isActive && (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                    stroke={ACCENT} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
-                    aria-hidden="true">
-                    <polyline points="20 6 9 17 4 12"/>
-                  </svg>
-                )}
-              </button>
-            );
-          })}
+          {/* Mode chips row — Tag / Woche / Monat / Jahr */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 4 }}>
+            {modes.map(m => {
+              const isActive = mode === m.key;
+              return (
+                <button
+                  key={m.key}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={isActive}
+                  onClick={() => { setMode(m.key); setAnchor(new Date()); }}
+                  style={{
+                    padding: "8px 4px",
+                    background: isActive ? ACCENT : "transparent",
+                    color: isActive ? "#fff" : "var(--text-strong)",
+                    border: `1px solid ${isActive ? ACCENT : "var(--border)"}`,
+                    borderRadius: 8,
+                    fontSize: 12.5, fontWeight: isActive ? 700 : 500,
+                    cursor: "pointer",
+                  }}
+                >
+                  {m.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* ◀ label ▶ row */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <button
+              type="button"
+              onClick={() => stepAnchor(-1)}
+              aria-label="Zurück"
+              style={{
+                width: 32, height: 32, borderRadius: 8,
+                background: "transparent", border: `1px solid var(--border)`,
+                color: "var(--text-strong)", cursor: "pointer",
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <div style={{ flex: 1, textAlign: "center", fontSize: 13, fontWeight: 600, color: "var(--text-strong)" }}>
+              {labelFor()}
+            </div>
+            <button
+              type="button"
+              onClick={() => canNext && stepAnchor(1)}
+              disabled={!canNext}
+              aria-label="Weiter"
+              style={{
+                width: 32, height: 32, borderRadius: 8,
+                background: "transparent", border: `1px solid var(--border)`,
+                color: canNext ? "var(--text-strong)" : "var(--text-faint)",
+                cursor: canNext ? "pointer" : "not-allowed",
+                opacity: canNext ? 1 : 0.4,
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
         </div>
       )}
     </div>
   );
 }
+

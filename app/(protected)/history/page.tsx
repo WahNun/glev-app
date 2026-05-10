@@ -1,31 +1,12 @@
-"use client";
-
-import { useEffect } from "react";
-import InsightsPage from "../insights/page";
-import EntriesPage from "../entries/page";
-import { useHistoryHeader } from "@/lib/historyHeaderContext";
+import { redirect } from "next/navigation";
 
 /**
- * /history is a thin wrapper that swaps between Insights and
- * Einträge based on a sub-tab held in HistoryHeaderContext. The tab
- * picker itself is rendered into the global mobile header by
- * components/Layout.tsx as a small "Insights ▾ / Einträge ▾" chip
- * — see HistoryHeaderChip there. This page registers visible=true
- * on mount so that chip appears, and resets to false on unmount in
- * case the route change race-loses to the layout's defensive
- * pathname-based reset.
+ * Legacy /history route. The Insights + Einträge sub-tab pattern was
+ * dropped (2026-05-10) in favor of restoring both as standalone
+ * footer-nav tabs (Einträge zwischen Dashboard & Glev, Insights
+ * zwischen Glev & Settings). Anything still linking here lands on
+ * the Insights surface.
  */
-export default function HistoryPage() {
-  const { tab, setVisible } = useHistoryHeader();
-
-  useEffect(() => {
-    setVisible(true);
-    return () => setVisible(false);
-  }, [setVisible]);
-
-  return (
-    <div>
-      {tab === "insights" ? <InsightsPage /> : <EntriesPage />}
-    </div>
-  );
+export default function HistoryRedirect() {
+  redirect("/insights");
 }
