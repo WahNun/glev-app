@@ -180,13 +180,13 @@ const cardTitleStyle: React.CSSProperties = {
 };
 
 const cardDescStyle: React.CSSProperties = {
-  fontSize: 13,
+  fontSize: 14,
   color: "#555",
   lineHeight: 1.4,
 };
 
 const cardHrefStyle: React.CSSProperties = {
-  fontSize: 12,
+  fontSize: 13,
   color: "#888",
   fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
   marginTop: "auto",

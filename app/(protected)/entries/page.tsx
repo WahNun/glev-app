@@ -538,7 +538,7 @@ export default function EntriesPage() {
     return true;
   });
 
-  const inp: React.CSSProperties = { background:"var(--input-bg)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"9px 14px", color:"var(--text)", fontSize:13, outline:"none" };
+  const inp: React.CSSProperties = { background:"var(--input-bg)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"9px 14px", color:"var(--text)", fontSize:14, outline:"none" };
 
   if (loading) return (
     <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"60vh", gap:12, color:"var(--text-faint)" }}>
@@ -567,7 +567,7 @@ export default function EntriesPage() {
             border:`1px dashed ${ACCENT}55`,
             background:`${ACCENT}10`,
             color:ACCENT,
-            fontSize:13, fontWeight:700, letterSpacing:"-0.01em",
+            fontSize:14, fontWeight:700, letterSpacing:"-0.01em",
             cursor:"pointer",
             display:"flex", alignItems:"center", justifyContent:"center", gap:8,
             transition:"all 0.2s",
@@ -594,7 +594,7 @@ export default function EntriesPage() {
               border:`1px solid ${activeCount > 0 ? ACCENT+"60" : BORDER}`,
               background: activeCount > 0 ? `${ACCENT}18` : "transparent",
               color: activeCount > 0 ? ACCENT : "var(--text-muted)",
-              fontSize:12,
+              fontSize:13,
               fontWeight: activeCount > 0 ? 600 : 500,
               cursor:"pointer",
               display:"inline-flex", alignItems:"center", gap:8,
@@ -673,7 +673,7 @@ export default function EntriesPage() {
                       border:`1px solid ${PINK}40`,
                       background:`${PINK}10`,
                       color:PINK,
-                      fontSize:12, fontWeight:600, cursor:"pointer",
+                      fontSize:13, fontWeight:600, cursor:"pointer",
                       display:"inline-flex", alignItems:"center", gap:6,
                     }}
                   >
@@ -699,7 +699,7 @@ export default function EntriesPage() {
               border:`1px solid ${ACCENT}40`,
               background:`${ACCENT}10`,
               color:ACCENT,
-              fontSize:11,
+              fontSize:13,
               fontWeight:600,
               cursor:"pointer",
               display:"inline-flex", alignItems:"center", gap:4,
@@ -738,7 +738,7 @@ export default function EntriesPage() {
                       border:`1px solid ${ACCENT}60`,
                       background:`${ACCENT}18`,
                       color:ACCENT,
-                      fontSize:12, fontWeight:600, cursor:"pointer",
+                      fontSize:13, fontWeight:600, cursor:"pointer",
                       display:"inline-flex", alignItems:"center", gap:6,
                     }}
                   >
@@ -759,7 +759,7 @@ export default function EntriesPage() {
                       border:`1px solid ${ACCENT}60`,
                       background:`${ACCENT}18`,
                       color:ACCENT,
-                      fontSize:12, fontWeight:600, cursor:"pointer",
+                      fontSize:13, fontWeight:600, cursor:"pointer",
                       display:"inline-flex", alignItems:"center", gap:6,
                     }}
                   >
@@ -901,7 +901,7 @@ export default function EntriesPage() {
 
             const MiniCard = ({ l, v, c }: { l: string; v: string; c?: string }) => (
               <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
-                <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{l}</div>
+                <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{l}</div>
                 <div style={{ fontSize:14, fontWeight:700, color:c || "var(--text-strong)", letterSpacing:"-0.01em" }}>{v}</div>
               </div>
             );
@@ -928,7 +928,7 @@ export default function EntriesPage() {
                   <MealEntryCardCollapsed meal={m} onClick={() => expandRow(m.id)}/>
                 ) : (
                   <div onClick={() => expandRow(null)} style={{ padding:"14px 16px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between", gap:14 }}>
-                    <div style={{ fontSize:12, color:"var(--text-muted)", letterSpacing:"0.02em" }}>
+                    <div style={{ fontSize:13, color:"var(--text-muted)", letterSpacing:"0.02em" }}>
                       {dateStr}
                       <span style={{ color:"var(--text-ghost)", margin:"0 8px" }}>·</span>
                       {date.toLocaleTimeString("en", { hour:"numeric", minute:"2-digit" })}
@@ -990,13 +990,13 @@ export default function EntriesPage() {
                     {ev && (
                       <div style={{ marginTop:14, background:`${evColor}10`, border:`1px solid ${evColor}40`, borderRadius:12, padding:"12px 14px", display:"flex", flexDirection:"column", gap:8 }}>
                         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
-                          <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>{tx("outcome_section").toUpperCase()}</div>
-                          <span style={{ padding:"6px 14px", borderRadius:99, fontSize:11, fontWeight:700, background:evColor, color:"var(--on-accent)", whiteSpace:"nowrap", letterSpacing:"0.04em", textTransform:"uppercase" }}>
+                          <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>{tx("outcome_section").toUpperCase()}</div>
+                          <span style={{ padding:"6px 14px", borderRadius:99, fontSize:13, fontWeight:700, background:evColor, color:"var(--on-accent)", whiteSpace:"nowrap", letterSpacing:"0.04em", textTransform:"uppercase" }}>
                             {txEvalLabel(ev)}
                           </span>
                         </div>
                         {txEvalExplain(ev, m.insulin_units) && (
-                          <div style={{ fontSize:12, color:"var(--text-muted)", lineHeight:1.5 }}>{txEvalExplain(ev, m.insulin_units)}</div>
+                          <div style={{ fontSize:13, color:"var(--text-muted)", lineHeight:1.5 }}>{txEvalExplain(ev, m.insulin_units)}</div>
                         )}
                       </div>
                     )}
@@ -1005,13 +1005,13 @@ export default function EntriesPage() {
                     {catLabel && catColor && (
                       <div style={{ background:`${catColor}10`, border:`1px solid ${catColor}40`, borderRadius:12, padding:"12px 14px", display:"flex", flexDirection:"column", gap:8 }}>
                         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
-                          <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>{tx("meal_classification").toUpperCase()}</div>
-                          <span style={{ padding:"6px 14px", borderRadius:99, fontSize:11, fontWeight:700, background:catColor, color:"var(--on-accent)", whiteSpace:"nowrap", letterSpacing:"0.04em", textTransform:"uppercase" }}>
+                          <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>{tx("meal_classification").toUpperCase()}</div>
+                          <span style={{ padding:"6px 14px", borderRadius:99, fontSize:13, fontWeight:700, background:catColor, color:"var(--on-accent)", whiteSpace:"nowrap", letterSpacing:"0.04em", textTransform:"uppercase" }}>
                             {catLabel}
                           </span>
                         </div>
                         {catExplain && (
-                          <div style={{ fontSize:12, color:"var(--text-muted)", lineHeight:1.5 }}>{catExplain}</div>
+                          <div style={{ fontSize:13, color:"var(--text-muted)", lineHeight:1.5 }}>{catExplain}</div>
                         )}
                       </div>
                     )}
@@ -1019,8 +1019,8 @@ export default function EntriesPage() {
                     {/* MEAL */}
                     {m.input_text && (
                       <div>
-                        <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.1em", fontWeight:700, margin:"4px 0 6px" }}>{tx("meal_section").toUpperCase()}</div>
-                        <div style={{ fontSize:13, color:"var(--text-body)", lineHeight:1.55 }}>{m.input_text}</div>
+                        <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.1em", fontWeight:700, margin:"4px 0 6px" }}>{tx("meal_section").toUpperCase()}</div>
+                        <div style={{ fontSize:14, color:"var(--text-body)", lineHeight:1.55 }}>{m.input_text}</div>
                       </div>
                     )}
 
@@ -1030,12 +1030,12 @@ export default function EntriesPage() {
                       return (
                         <div style={{ background:`${ACCENT}10`, border:`1px solid ${ACCENT}40`, borderRadius:12, padding:"10px 12px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
                           <div style={{ display:"flex", flexDirection:"column", gap:2, minWidth:0 }}>
-                            <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>{tx("korrektur_bolus").toUpperCase()}</div>
-                            <div style={{ fontSize:12, color:"var(--text-body)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                            <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>{tx("korrektur_bolus").toUpperCase()}</div>
+                            <div style={{ fontSize:13, color:"var(--text-body)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                               {parent ? tx("korrektur_for", { text: parent.input_text.length > 50 ? parent.input_text.slice(0, 50) + "…" : parent.input_text }) : tx("original_deleted")}
                             </div>
                           </div>
-                          <span style={{ padding:"4px 10px", borderRadius:99, fontSize:10, fontWeight:700, background:ACCENT, color:"var(--on-accent)", whiteSpace:"nowrap", letterSpacing:"0.04em" }}>K</span>
+                          <span style={{ padding:"4px 10px", borderRadius:99, fontSize:12, fontWeight:700, background:ACCENT, color:"var(--on-accent)", whiteSpace:"nowrap", letterSpacing:"0.04em" }}>K</span>
                         </div>
                       );
                     })()}
@@ -1048,10 +1048,10 @@ export default function EntriesPage() {
                       return (
                         <div style={{ background:`${ACCENT}08`, border:`1px solid ${ACCENT}30`, borderRadius:12, padding:"10px 12px", display:"flex", flexDirection:"column", gap:8 }}>
                           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
-                            <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>
+                            <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>
                               {tx("korrekturen", { n: corrections.length }).toUpperCase()}
                             </div>
-                            <span style={{ padding:"4px 10px", borderRadius:99, fontSize:10, fontWeight:700, background:`${ACCENT}25`, color:ACCENT, border:`1px solid ${ACCENT}50`, whiteSpace:"nowrap" }}>
+                            <span style={{ padding:"4px 10px", borderRadius:99, fontSize:12, fontWeight:700, background:`${ACCENT}25`, color:ACCENT, border:`1px solid ${ACCENT}50`, whiteSpace:"nowrap" }}>
                               {tx("total_suffix", { total: totalCorrInsulin.toFixed(1) })}
                             </span>
                           </div>
@@ -1060,7 +1060,7 @@ export default function EntriesPage() {
                               const t = parseDbDate(c.meal_time ?? c.created_at);
                               const timeStr = t.toLocaleTimeString("en", { hour:"numeric", minute:"2-digit" });
                               return (
-                                <div key={c.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, fontSize:11.5, color:"var(--text-muted)" }}>
+                                <div key={c.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, fontSize:13.5, color:"var(--text-muted)" }}>
                                   <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{timeStr}</span>
                                   <span style={{ color:ACCENT, fontWeight:700, flexShrink:0 }}>{c.insulin_units ?? 0}u</span>
                                 </div>
@@ -1073,7 +1073,7 @@ export default function EntriesPage() {
 
                     {/* MACROS & DOSING — 3-col grid of mini-cards */}
                     <div>
-                      <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8 }}>{tx("macros_dosing").toUpperCase()}</div>
+                      <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8 }}>{tx("macros_dosing").toUpperCase()}</div>
                       <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
                         {/* CARBS / NET CARBS render in the user's chosen
                             unit (g/BE/KE). Other macros stay in grams —
@@ -1095,7 +1095,7 @@ export default function EntriesPage() {
 
                     {/* GLUCOSE — 2-col grid of mini-cards */}
                     <div>
-                      <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8 }}>{tx("glucose_section").toUpperCase()}</div>
+                      <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8 }}>{tx("glucose_section").toUpperCase()}</div>
                       <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8 }}>
                         <MiniCard l={tx("mini_bg_before")} v={m.glucose_before ? `${m.glucose_before} mg/dL` : "—"} c={bgC}/>
                         <MiniCard l={afterTag ? `${tx("mini_bg_after")} (${afterTag})` : tx("mini_bg_after")} v={afterValue != null ? `${afterValue} mg/dL` : "—"} c={afterC}/>
@@ -1107,11 +1107,11 @@ export default function EntriesPage() {
                     {/* EDIT + DELETE — side by side. Edit swaps the body for
                         an inline editor (handled at the panel root above). */}
                     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginTop:4 }}>
-                      <button onClick={() => setEditingId(m.id)} style={{ padding:"12px", borderRadius:10, border:`1px solid ${ACCENT}40`, background:`${ACCENT}08`, color:ACCENT, fontSize:13, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, letterSpacing:"0.02em" }}>
+                      <button onClick={() => setEditingId(m.id)} style={{ padding:"12px", borderRadius:10, border:`1px solid ${ACCENT}40`, background:`${ACCENT}08`, color:ACCENT, fontSize:14, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, letterSpacing:"0.02em" }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
                         {tx("edit")}
                       </button>
-                      <button onClick={() => handleDelete(m.id)} disabled={deleting === m.id} style={{ padding:"12px", borderRadius:10, border:`1px solid ${PINK}40`, background:`${PINK}08`, color:PINK, fontSize:13, fontWeight:600, cursor:deleting === m.id ? "wait" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, letterSpacing:"0.02em" }}>
+                      <button onClick={() => handleDelete(m.id)} disabled={deleting === m.id} style={{ padding:"12px", borderRadius:10, border:`1px solid ${PINK}40`, background:`${PINK}08`, color:PINK, fontSize:14, fontWeight:600, cursor:deleting === m.id ? "wait" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, letterSpacing:"0.02em" }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
                         {deleting === m.id ? tx("deleting") : tx("delete")}
                       </button>
@@ -1144,8 +1144,8 @@ export default function EntriesPage() {
 function Stat({ label, val, color }: { label: string; val: string; color?: string }) {
   return (
     <div style={{ display:"flex", justifyContent:"space-between" }}>
-      <span style={{ fontSize:12, color:"var(--text-faint)" }}>{label}</span>
-      <span style={{ fontSize:12, fontWeight:500, color:color||"var(--text-body)" }}>{val}</span>
+      <span style={{ fontSize:13, color:"var(--text-faint)" }}>{label}</span>
+      <span style={{ fontSize:13, fontWeight:500, color:color||"var(--text-body)" }}>{val}</span>
     </div>
   );
 }
@@ -1189,26 +1189,26 @@ function LifecycleBlock({ meal, onUpdated }: { meal: Meal; onUpdated: (patch: Pa
   return (
     <div style={{ marginTop:14, background:`${c}10`, border:`1px solid ${c}40`, borderRadius:12, padding:"12px 14px", display:"flex", flexDirection:"column", gap:10 }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
-        <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>{tx("outcome_state").toUpperCase()}</div>
-        <span style={{ padding:"6px 14px", borderRadius:99, fontSize:11, fontWeight:700, background:c, color:"var(--on-accent)", letterSpacing:"0.04em", textTransform:"uppercase" }}>
+        <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>{tx("outcome_state").toUpperCase()}</div>
+        <span style={{ padding:"6px 14px", borderRadius:99, fontSize:13, fontWeight:700, background:c, color:"var(--on-accent)", letterSpacing:"0.04em", textTransform:"uppercase" }}>
           {chipLabel}
         </span>
       </div>
-      <div style={{ fontSize:12, color:"var(--text-muted)", lineHeight:1.5 }}>{renderEngineMessages(tEngine, lc.messages)}</div>
+      <div style={{ fontSize:13, color:"var(--text-muted)", lineHeight:1.5 }}>{renderEngineMessages(tEngine, lc.messages)}</div>
       {(lc.delta1 != null || lc.delta2 != null) && (
         <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8, marginTop:2 }}>
           <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:8, padding:"8px 10px" }}>
-            <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.08em", fontWeight:600 }}>Δ 1H</div>
-            <div style={{ fontSize:13, fontWeight:700, color: lc.delta1 != null ? "var(--text-strong)" : "var(--text-faint)" }}>
+            <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.08em", fontWeight:600 }}>Δ 1H</div>
+            <div style={{ fontSize:14, fontWeight:700, color: lc.delta1 != null ? "var(--text-strong)" : "var(--text-faint)" }}>
               {lc.delta1 != null ? `${lc.delta1 > 0 ? "+" : ""}${lc.delta1} mg/dL` : "—"}
-              {lc.speed1 != null && <span style={{ fontSize:10, color:"var(--text-dim)", marginLeft:6 }}>({lc.speed1.toFixed(2)}/min)</span>}
+              {lc.speed1 != null && <span style={{ fontSize:12, color:"var(--text-dim)", marginLeft:6 }}>({lc.speed1.toFixed(2)}/min)</span>}
             </div>
           </div>
           <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:8, padding:"8px 10px" }}>
-            <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.08em", fontWeight:600 }}>Δ 2H</div>
-            <div style={{ fontSize:13, fontWeight:700, color: lc.delta2 != null ? "var(--text-strong)" : "var(--text-faint)" }}>
+            <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.08em", fontWeight:600 }}>Δ 2H</div>
+            <div style={{ fontSize:14, fontWeight:700, color: lc.delta2 != null ? "var(--text-strong)" : "var(--text-faint)" }}>
               {lc.delta2 != null ? `${lc.delta2 > 0 ? "+" : ""}${lc.delta2} mg/dL` : "—"}
-              {lc.speed2 != null && <span style={{ fontSize:10, color:"var(--text-dim)", marginLeft:6 }}>({lc.speed2.toFixed(2)}/min)</span>}
+              {lc.speed2 != null && <span style={{ fontSize:12, color:"var(--text-dim)", marginLeft:6 }}>({lc.speed2.toFixed(2)}/min)</span>}
             </div>
           </div>
         </div>
@@ -1222,18 +1222,18 @@ function ReadingInput({ label, value, onChange, onSave, busy, placeholder }: {
 }) {
   return (
     <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:8, padding:"8px 10px", display:"flex", flexDirection:"column", gap:6 }}>
-      <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.08em", fontWeight:600 }}>{label.toUpperCase()}</div>
+      <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.08em", fontWeight:600 }}>{label.toUpperCase()}</div>
       <div style={{ display:"flex", gap:6 }}>
         <input
           type="number" inputMode="numeric" min={30} max={600}
           value={value} placeholder={placeholder}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onSave(); } }}
-          style={{ flex:1, minWidth:0, padding:"6px 8px", borderRadius:6, border:`1px solid ${BORDER}`, background:"var(--surface-soft)", color:"var(--text-strong)", fontSize:13, fontWeight:600 }}
+          style={{ flex:1, minWidth:0, padding:"6px 8px", borderRadius:6, border:`1px solid ${BORDER}`, background:"var(--surface-soft)", color:"var(--text-strong)", fontSize:14, fontWeight:600 }}
         />
         <button
           onClick={onSave} disabled={busy}
-          style={{ padding:"6px 10px", borderRadius:6, border:`1px solid ${ACCENT}40`, background:`${ACCENT}18`, color:ACCENT, fontSize:11, fontWeight:700, cursor: busy ? "wait" : "pointer" }}
+          style={{ padding:"6px 10px", borderRadius:6, border:`1px solid ${ACCENT}40`, background:`${ACCENT}18`, color:ACCENT, fontSize:13, fontWeight:700, cursor: busy ? "wait" : "pointer" }}
         >
           {busy ? "…" : "Save"}
         </button>
@@ -1302,22 +1302,22 @@ function NonMealRow({
           `}</style>
           {/* Col 1: Date (time shown in expanded detail) */}
           <div style={{ minWidth:0 }}>
-            <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>When</div>
-            <div style={{ fontSize:13, fontWeight:600, color:"var(--text-strong)", letterSpacing:"-0.01em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", fontFamily:"var(--font-mono)" }}>
+            <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>When</div>
+            <div style={{ fontSize:14, fontWeight:600, color:"var(--text-strong)", letterSpacing:"-0.01em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", fontFamily:"var(--font-mono)" }}>
               {dateStr}
             </div>
           </div>
           {/* Col 2: Kind badge */}
           <div style={{ minWidth:0 }}>
-            <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>Type</div>
+            <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>Type</div>
             <div style={{ display:"flex", alignItems:"center", gap:6, minWidth:0 }}>
               <span style={{ width:7, height:7, borderRadius:99, background:accent, opacity:0.85, flexShrink:0 }}/>
-              <span style={{ fontSize:12, fontWeight:700, color:accent, letterSpacing:"0.04em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{badge}</span>
+              <span style={{ fontSize:13, fontWeight:700, color:accent, letterSpacing:"0.04em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{badge}</span>
             </div>
           </div>
           {/* Col 3: Primary metric (Dose / Duration) */}
           <div style={{ minWidth:0 }}>
-            <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>{primaryLabel}</div>
+            <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>{primaryLabel}</div>
             <div style={{ fontSize:14, fontWeight:700, color:primaryColor, letterSpacing:"-0.01em", fontFamily:"var(--font-mono)" }}>{primaryValue}</div>
           </div>
           {/* Col 4: Secondary — neutral by default; bolus/basal pass an
@@ -1325,7 +1325,7 @@ function NonMealRow({
               Optional `secondarySubtitle` adds a muted second line (used
               by bolus rows for the historic ICR snapshot). */}
           <div style={{ minWidth:0 }}>
-            <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>{secondaryLabel}</div>
+            <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>{secondaryLabel}</div>
             <div
               title={secondarySubtitle ? `${secondaryValue} ${secondarySubtitle}` : secondaryValue}
               style={{
@@ -1344,7 +1344,7 @@ function NonMealRow({
             {secondarySubtitle && (
               <div
                 style={{
-                  fontSize: 10,
+                  fontSize: 12,
                   fontWeight: 500,
                   color: "var(--text-muted)",
                   letterSpacing: "0.01em",
@@ -1361,14 +1361,14 @@ function NonMealRow({
           </div>
           {/* Col 5: chevron */}
           <span className="glev-mec-eval" style={{
-            justifySelf:"end", padding:"5px 10px", borderRadius:99, fontSize:10, fontWeight:700,
+            justifySelf:"end", padding:"5px 10px", borderRadius:99, fontSize:12, fontWeight:700,
             background:`${accent}18`, color:accent, border:`1px solid ${accent}30`,
             whiteSpace:"nowrap", letterSpacing:"0.05em", textTransform:"uppercase",
           }}>{badge}</span>
         </div>
       ) : (
         <div onClick={onToggle} style={{ padding:"14px 16px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between", gap:14 }}>
-          <div style={{ fontSize:12, color:"var(--text-muted)", letterSpacing:"0.02em" }}>
+          <div style={{ fontSize:13, color:"var(--text-muted)", letterSpacing:"0.02em" }}>
             {dateStr}
             <span style={{ color:accent, fontWeight:700, marginLeft:10, letterSpacing:"0.04em" }}>{badge}</span>
           </div>
@@ -1383,7 +1383,7 @@ function NonMealRow({
           {expandedDetails}
           <button onClick={onDelete} disabled={deleting} style={{
             marginTop:4, padding:"12px", borderRadius:10, border:`1px solid ${PINK}40`,
-            background:`${PINK}08`, color:PINK, fontSize:13, fontWeight:600,
+            background:`${PINK}08`, color:PINK, fontSize:14, fontWeight:600,
             cursor:deleting ? "wait" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, letterSpacing:"0.02em",
           }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
@@ -1451,10 +1451,10 @@ function InsulinReadingsBackfill({ logId, slots }: {
       flexDirection: "column",
       gap: 8,
     }}>
-      <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.08em", fontWeight:600 }}>
+      <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.08em", fontWeight:600 }}>
         MANUAL OVERRIDE
       </div>
-      <div style={{ fontSize:11, color:"var(--text-muted)", lineHeight:1.5 }}>
+      <div style={{ fontSize:13, color:"var(--text-muted)", lineHeight:1.5 }}>
         Auto-fetch couldn't pull from your CGM. Enter the meter reading and we'll backfill the entry.
       </div>
       <div style={{
@@ -1474,7 +1474,7 @@ function InsulinReadingsBackfill({ logId, slots }: {
           />
         ))}
       </div>
-      {err && <div style={{ fontSize:11, color:PINK }}>{err}</div>}
+      {err && <div style={{ fontSize:13, color:PINK }}>{err}</div>}
     </div>
   );
 }
@@ -1621,13 +1621,13 @@ function BolusRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
 
           {log.notes && (
             <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
-              <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>NOTES</div>
-              <div style={{ fontSize:13, color:"var(--text-strong)", lineHeight:1.5 }}>{log.notes}</div>
+              <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>NOTES</div>
+              <div style={{ fontSize:14, color:"var(--text-strong)", lineHeight:1.5 }}>{log.notes}</div>
             </div>
           )}
 
           <div style={{
-            fontSize:11, color:"var(--text-faint)",
+            fontSize:13, color:"var(--text-faint)",
             textAlign:"center", letterSpacing:"0.02em", lineHeight:1.5,
             paddingTop:2,
           }}>
@@ -1740,12 +1740,12 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
               borderRadius:10, padding:"10px 12px",
             }}>
               {trend.state === "loading" && (
-                <div style={{ fontSize:12, color:"var(--text-dim)", textAlign:"center", padding:"24px 0" }}>
+                <div style={{ fontSize:13, color:"var(--text-dim)", textAlign:"center", padding:"24px 0" }}>
                   Loading CGM history…
                 </div>
               )}
               {trend.state === "error" && (
-                <div style={{ fontSize:12, color:"var(--text-dim)", textAlign:"center", padding:"24px 0" }}>
+                <div style={{ fontSize:13, color:"var(--text-dim)", textAlign:"center", padding:"24px 0" }}>
                   CGM not connected or history unavailable.
                 </div>
               )}
@@ -1761,7 +1761,7 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
               {/* Time-axis labels. */}
               <div style={{
                 display:"flex", justifyContent:"space-between",
-                fontSize:9, color:"var(--text-faint)", letterSpacing:"0.06em",
+                fontSize:11, color:"var(--text-faint)", letterSpacing:"0.06em",
                 marginTop:6,
               }}>
                 <span>−6 h</span>
@@ -1824,13 +1824,13 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
 
           {log.notes && (
             <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
-              <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>NOTES</div>
-              <div style={{ fontSize:13, color:"var(--text-strong)", lineHeight:1.5 }}>{log.notes}</div>
+              <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>NOTES</div>
+              <div style={{ fontSize:14, color:"var(--text-strong)", lineHeight:1.5 }}>{log.notes}</div>
             </div>
           )}
 
           <div style={{
-            fontSize:11, color:"var(--text-faint)",
+            fontSize:13, color:"var(--text-faint)",
             textAlign:"center", letterSpacing:"0.02em", lineHeight:1.5,
             paddingTop:2,
           }}>
@@ -1857,7 +1857,7 @@ function BolusDeltaPill({ label, delta }: { label: string; delta: number | null 
       border:`1px solid ${BORDER}`,
       borderRadius:10, padding:"10px 12px",
     }}>
-      <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{label}</div>
+      <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{label}</div>
       <div style={{ fontSize:14, fontWeight:700, color, letterSpacing:"-0.01em", fontFamily:"var(--font-mono)" }}>{text}</div>
     </div>
   );
@@ -1984,7 +1984,7 @@ function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting }:
 
           {/* 4) Pattern note --------------------------------------- */}
           <ExPanel title="PATTERN NOTE">
-            <div style={{ fontSize:13, color:"var(--text-body)", lineHeight:1.55 }}>
+            <div style={{ fontSize:14, color:"var(--text-body)", lineHeight:1.55 }}>
               {patternNote(log.exercise_type)}
             </div>
           </ExPanel>
@@ -1997,14 +1997,14 @@ function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting }:
 
           {log.notes && (
             <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
-              <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>NOTES</div>
-              <div style={{ fontSize:13, color:"var(--text-strong)", lineHeight:1.5 }}>{log.notes}</div>
+              <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>NOTES</div>
+              <div style={{ fontSize:14, color:"var(--text-strong)", lineHeight:1.5 }}>{log.notes}</div>
             </div>
           )}
 
           {/* Disclaimer — last item before the inherited Delete button. */}
           <div style={{
-            fontSize:11, color:"var(--text-faint)",
+            fontSize:13, color:"var(--text-faint)",
             textAlign:"center", letterSpacing:"0.02em", lineHeight:1.5,
             paddingTop:2,
           }}>
@@ -2056,7 +2056,7 @@ function ExPanel({ title, children }: { title: string; children: React.ReactNode
       padding:"12px 14px",
     }}>
       <div style={{
-        fontSize:10, fontWeight:700, letterSpacing:"0.1em",
+        fontSize:12, fontWeight:700, letterSpacing:"0.1em",
         color:"var(--text-dim)", marginBottom:10,
       }}>{title}</div>
       {children}
@@ -2077,7 +2077,7 @@ function DeltaPill({ label, delta }: { label: string; delta: number | null }) {
       border:`1px solid ${BORDER}`,
       borderRadius:10, padding:"10px 12px",
     }}>
-      <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{label}</div>
+      <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{label}</div>
       <div style={{ fontSize:14, fontWeight:700, color, letterSpacing:"-0.01em", fontFamily:"var(--font-mono)" }}>{text}</div>
     </div>
   );
@@ -2101,19 +2101,19 @@ function EvalBlock({ heading, unlocked, body, color, outcomeLabel }: {
     }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:6 }}>
         <span style={{
-          fontSize:9, fontWeight:700, letterSpacing:"0.1em",
+          fontSize:11, fontWeight:700, letterSpacing:"0.1em",
           color: unlocked ? color : "var(--text-faint)",
         }}>{heading}</span>
         {unlocked && outcomeLabel && (
           <span style={{
-            fontSize:9, fontWeight:700, letterSpacing:"0.08em",
+            fontSize:11, fontWeight:700, letterSpacing:"0.08em",
             color, padding:"2px 8px", borderRadius:99,
             border:`1px solid ${color}40`, background:`${color}15`,
           }}>{outcomeLabel}</span>
         )}
       </div>
       <div style={{
-        fontSize:13, lineHeight:1.5,
+        fontSize:14, lineHeight:1.5,
         color: unlocked ? "var(--text-strong)" : "var(--text-faint)",
       }}>{body}</div>
     </div>
@@ -2123,7 +2123,7 @@ function EvalBlock({ heading, unlocked, body, color, outcomeLabel }: {
 function Detail({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
     <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
-      <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{label}</div>
+      <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{label}</div>
       <div style={{ fontSize:14, fontWeight:700, color: color || "var(--text-strong)", letterSpacing:"-0.01em" }}>{value}</div>
     </div>
   );
@@ -2150,11 +2150,11 @@ function PersonalPatternPanel({ log, allLogs }: { log: ExerciseLog; allLogs: Exe
 
   return (
     <ExPanel title="PERSONAL PATTERN">
-      <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.06em", fontWeight:600, marginBottom:8 }}>
+      <div style={{ fontSize:13, color:"var(--text-dim)", letterSpacing:"0.06em", fontWeight:600, marginBottom:8 }}>
         Based on your last {stats.count} {typeLbl.toLowerCase()} {stats.count === 1 ? "session" : "sessions"}
       </div>
       {headline && (
-        <div style={{ fontSize:13, color:"var(--text-body)", lineHeight:1.55, marginBottom:10 }}>
+        <div style={{ fontSize:14, color:"var(--text-body)", lineHeight:1.55, marginBottom:10 }}>
           {headline}
         </div>
       )}
@@ -2195,9 +2195,9 @@ function PatternStatTile({ label, delta, sample }: { label: string; delta: numbe
       border:`1px solid ${BORDER}`,
       borderRadius:10, padding:"10px 12px",
     }}>
-      <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{label}</div>
+      <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{label}</div>
       <div style={{ fontSize:14, fontWeight:700, color, letterSpacing:"-0.01em", fontFamily:"var(--font-mono)" }}>{text}</div>
-      <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:3 }}>
+      <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:3 }}>
         {enough ? `n = ${sample}` : `n = ${sample} · need ${PATTERN_MIN_SESSIONS}+`}
       </div>
     </div>
@@ -2226,9 +2226,9 @@ function HypoShareTile({ hypoCount, classifiedCount, share }: {
       border:`1px solid ${BORDER}`,
       borderRadius:10, padding:"10px 12px",
     }}>
-      <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>HYPO RISK SHARE</div>
+      <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>HYPO RISK SHARE</div>
       <div style={{ fontSize:14, fontWeight:700, color, letterSpacing:"-0.01em", fontFamily:"var(--font-mono)" }}>{text}</div>
-      <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:3 }}>
+      <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:3 }}>
         {enough
           ? "of classified sessions ended in HYPO RISK"
           : `n = ${classifiedCount} classified · need ${PATTERN_MIN_SESSIONS}+`}
@@ -2247,7 +2247,7 @@ function FilterSection<T extends string>({
 }) {
   return (
     <div>
-      <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8, textTransform:"uppercase" }}>
+      <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8, textTransform:"uppercase" }}>
         {title}
       </div>
       <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
@@ -2266,7 +2266,7 @@ function FilterSection<T extends string>({
                 border:`1px solid ${active ? ACCENT+"60" : BORDER}`,
                 background: active ? `${ACCENT}18` : "transparent",
                 color: active ? ACCENT : "var(--text-muted)",
-                fontSize:12,
+                fontSize:13,
                 fontWeight: active ? 600 : 500,
                 cursor:"pointer",
                 whiteSpace:"nowrap",
@@ -2299,7 +2299,7 @@ function DateRangeSection({
 }) {
   return (
     <div>
-      <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8, textTransform:"uppercase" }}>
+      <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8, textTransform:"uppercase" }}>
         Date range
       </div>
       <div role="radiogroup" aria-label="Date range" style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
@@ -2318,7 +2318,7 @@ function DateRangeSection({
                 border:`1px solid ${active ? ACCENT+"60" : BORDER}`,
                 background: active ? `${ACCENT}18` : "transparent",
                 color: active ? ACCENT : "var(--text-muted)",
-                fontSize:12,
+                fontSize:13,
                 fontWeight: active ? 600 : 500,
                 cursor:"pointer",
                 whiteSpace:"nowrap",
@@ -2338,7 +2338,7 @@ function DateRangeSection({
       </div>
       {value === "custom" && (
         <div style={{ display:"flex", gap:8, marginTop:10, flexWrap:"wrap" }}>
-          <label style={{ display:"flex", flexDirection:"column", gap:4, fontSize:10, color:"var(--text-dim)", letterSpacing:"0.06em", fontWeight:600, textTransform:"uppercase", flex:"1 1 140px" }}>
+          <label style={{ display:"flex", flexDirection:"column", gap:4, fontSize:12, color:"var(--text-dim)", letterSpacing:"0.06em", fontWeight:600, textTransform:"uppercase", flex:"1 1 140px" }}>
             From
             <input
               type="date"
@@ -2351,13 +2351,13 @@ function DateRangeSection({
                 borderRadius:8,
                 padding:"7px 10px",
                 color:"var(--text)",
-                fontSize:12,
+                fontSize:13,
                 outline:"none",
                 colorScheme:"dark",
               }}
             />
           </label>
-          <label style={{ display:"flex", flexDirection:"column", gap:4, fontSize:10, color:"var(--text-dim)", letterSpacing:"0.06em", fontWeight:600, textTransform:"uppercase", flex:"1 1 140px" }}>
+          <label style={{ display:"flex", flexDirection:"column", gap:4, fontSize:12, color:"var(--text-dim)", letterSpacing:"0.06em", fontWeight:600, textTransform:"uppercase", flex:"1 1 140px" }}>
             To
             <input
               type="date"
@@ -2370,7 +2370,7 @@ function DateRangeSection({
                 borderRadius:8,
                 padding:"7px 10px",
                 color:"var(--text)",
-                fontSize:12,
+                fontSize:13,
                 outline:"none",
                 colorScheme:"dark",
               }}
@@ -2504,15 +2504,15 @@ function MealEditor({ meal, onSaved, onCancel }: {
   return (
     <div ref={rootRef} style={{ display:"flex", flexDirection:"column", gap:14, scrollMarginTop:80 }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
-        <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>
+        <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>
           EINTRAG BEARBEITEN
         </div>
-        <span style={{ padding:"4px 10px", borderRadius:99, fontSize:10, fontWeight:700, background:`${ACCENT}20`, color:ACCENT, border:`1px solid ${ACCENT}40`, letterSpacing:"0.04em", textTransform:"uppercase" }}>
+        <span style={{ padding:"4px 10px", borderRadius:99, fontSize:12, fontWeight:700, background:`${ACCENT}20`, color:ACCENT, border:`1px solid ${ACCENT}40`, letterSpacing:"0.04em", textTransform:"uppercase" }}>
           Editor
         </span>
       </div>
 
-      <div style={{ fontSize:11, color:"var(--text-dim)", lineHeight:1.5 }}>
+      <div style={{ fontSize:13, color:"var(--text-dim)", lineHeight:1.5 }}>
         Korrigiert Makros + Bolus nachträglich. Outcome-Klassifikation und
         Calories werden automatisch neu berechnet. Glukose-Werte und Uhrzeit
         bleiben unverändert.
@@ -2534,7 +2534,7 @@ function MealEditor({ meal, onSaved, onCancel }: {
       />
 
       {err && (
-        <div style={{ fontSize:12, color:PINK, padding:"8px 10px", background:`${PINK}10`, border:`1px solid ${PINK}30`, borderRadius:8 }}>
+        <div style={{ fontSize:13, color:PINK, padding:"8px 10px", background:`${PINK}10`, border:`1px solid ${PINK}30`, borderRadius:8 }}>
           {err}
         </div>
       )}
@@ -2549,7 +2549,7 @@ function MealEditor({ meal, onSaved, onCancel }: {
             border:`1px solid ${BORDER}`,
             background:"var(--surface-soft)",
             color:"var(--text-body)",
-            fontSize:13,
+            fontSize:14,
             fontWeight:600,
             cursor:busy ? "not-allowed" : "pointer",
             letterSpacing:"0.02em",
@@ -2566,7 +2566,7 @@ function MealEditor({ meal, onSaved, onCancel }: {
             border:`1px solid ${ACCENT}`,
             background:ACCENT,
             color:"var(--on-accent)",
-            fontSize:13,
+            fontSize:14,
             fontWeight:700,
             cursor:busy ? "wait" : "pointer",
             letterSpacing:"0.02em",
@@ -2593,7 +2593,7 @@ function EditField({ label, value, onChange, accent, placeholder, step }: {
 }) {
   return (
     <label style={{ display:"flex", flexDirection:"column", gap:4 }}>
-      <span style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>
+      <span style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>
         {label}
       </span>
       <input
@@ -2673,10 +2673,10 @@ function CycleRowCard({ log, onDelete, deleting }: {
         fontWeight:800, fontSize:14, flexShrink:0,
       }}>♀</div>
       <div style={{ flex:1, minWidth:0 }}>
-        <div style={{ fontSize:13, fontWeight:700, color:"var(--text-strong)", letterSpacing:"-0.01em" }}>
+        <div style={{ fontSize:14, fontWeight:700, color:"var(--text-strong)", letterSpacing:"-0.01em" }}>
           {heading}
         </div>
-        <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:2, display:"flex", gap:8, flexWrap:"wrap" }}>
+        <div style={{ fontSize:13, color:"var(--text-faint)", marginTop:2, display:"flex", gap:8, flexWrap:"wrap" }}>
           <span>{dateLine}</span>
           {log.notes && <span style={{ color:"var(--text-dim)" }}>· {log.notes}</span>}
         </div>
@@ -2719,7 +2719,7 @@ function SymptomRowCard({ log, onDelete, deleting }: {
       }}>★</div>
       <div style={{ flex:1, minWidth:0 }}>
         <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-          <div style={{ fontSize:13, fontWeight:700, color:"var(--text-strong)" }}>
+          <div style={{ fontSize:14, fontWeight:700, color:"var(--text-strong)" }}>
             {t("symptom_row_title")}
           </div>
           <div style={{ display:"flex", gap:2 }} aria-label={`Severity ${log.severity} of 5`}>
@@ -2736,7 +2736,7 @@ function SymptomRowCard({ log, onDelete, deleting }: {
               by default and don't render this. */}
           {log.category === "pms" && (
             <span style={{
-              fontSize: 9, fontWeight: 800, padding: "2px 6px",
+              fontSize: 11, fontWeight: 800, padding: "2px 6px",
               borderRadius: 99, background: `${accent}28`, color: accent,
               border: `1px solid ${accent}48`, letterSpacing: "0.04em",
               textTransform: "uppercase",
@@ -2746,13 +2746,13 @@ function SymptomRowCard({ log, onDelete, deleting }: {
         <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:6 }}>
           {(log.symptom_types || []).map(s => (
             <span key={s} style={{
-              fontSize:10, fontWeight:600, padding:"2px 8px",
+              fontSize:12, fontWeight:600, padding:"2px 8px",
               borderRadius:99, background:`${accent}14`, color:accent,
               border:`1px solid ${accent}28`,
             }}>{t(`symptom_${s}` as never)}</span>
           ))}
         </div>
-        <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:6, display:"flex", gap:8, flexWrap:"wrap" }}>
+        <div style={{ fontSize:13, color:"var(--text-faint)", marginTop:6, display:"flex", gap:8, flexWrap:"wrap" }}>
           <span>{fmtDateTimeShort(log.occurred_at)}</span>
           {log.notes && <span style={{ color:"var(--text-dim)" }}>· {log.notes}</span>}
         </div>

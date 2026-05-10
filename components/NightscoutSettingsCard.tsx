@@ -43,7 +43,7 @@ const inp: React.CSSProperties = {
   fontFamily: "inherit",
 };
 const labelStyle: React.CSSProperties = {
-  fontSize: 12,
+  fontSize: 13,
   color: "var(--text-dim)",
   display: "block",
   marginBottom: 6,
@@ -225,14 +225,14 @@ export default function NightscoutSettingsCard() {
             >
               {t("title")}
             </div>
-            <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
+            <div style={{ fontSize: 13, color: "var(--text-dim)" }}>
               {t("subtitle")}
             </div>
           </div>
         </div>
         <span
           style={{
-            fontSize: 10,
+            fontSize: 12,
             fontWeight: 700,
             padding: "4px 10px",
             borderRadius: 99,
@@ -295,7 +295,7 @@ export default function NightscoutSettingsCard() {
           <div
             role="alert"
             style={{
-              fontSize: 12,
+              fontSize: 13,
               color: PINK,
               background: `${PINK}10`,
               border: `1px solid ${PINK}30`,
@@ -311,7 +311,7 @@ export default function NightscoutSettingsCard() {
           <div
             role="status"
             style={{
-              fontSize: 12,
+              fontSize: 13,
               color: GREEN,
               background: `${GREEN}10`,
               border: `1px solid ${GREEN}30`,

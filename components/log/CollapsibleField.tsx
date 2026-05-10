@@ -56,7 +56,7 @@ export default function CollapsibleField({
           border: "none",
           padding: "4px 0",
           color: accent ?? "var(--text-muted)",
-          fontSize: 12,
+          fontSize: 13,
           fontWeight: 700,
           letterSpacing: "-0.01em",
           cursor: "pointer",

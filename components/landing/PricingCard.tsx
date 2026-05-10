@@ -32,7 +32,7 @@ export default function PricingCard({ heading, lines, footer }: PricingCardProps
         ))}
       </div>
       {footer && (
-        <div style={{ fontSize: 13, color: MINT, lineHeight: 1.5 }}>{footer}</div>
+        <div style={{ fontSize: 14, color: MINT, lineHeight: 1.5 }}>{footer}</div>
       )}
     </section>
   );

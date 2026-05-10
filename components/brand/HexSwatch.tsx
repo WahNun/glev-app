@@ -67,7 +67,7 @@ export default function HexSwatch({
       >
         {hex}
       </div>
-      <div style={{ fontSize: 11, lineHeight: 1.3, opacity: 0.75 }}>{role}</div>
+      <div style={{ fontSize: 13, lineHeight: 1.3, opacity: 0.75 }}>{role}</div>
       {copied && (
         <div
           style={{
@@ -80,7 +80,7 @@ export default function HexSwatch({
             color: "#fff",
             borderRadius: 12,
             fontFamily: "var(--font-mono)",
-            fontSize: 12,
+            fontSize: 13,
           }}
         >
           {t("brand_swatch_copied", { hex })}

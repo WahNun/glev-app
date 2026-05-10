@@ -42,7 +42,7 @@ const inp: React.CSSProperties = {
   width: "100%",
 };
 const labelStyle: React.CSSProperties = {
-  fontSize: 12,
+  fontSize: 13,
   color: "var(--text-dim)",
   display: "block",
   marginBottom: 6,
@@ -61,7 +61,7 @@ function StatusBanner({ status, accent }: { status: Status; accent: string }) {
       <div style={{
         marginTop: 14, padding: "10px 14px",
         background: "var(--surface-soft)", borderRadius: 10,
-        fontSize: 12, color: "var(--text-muted)",
+        fontSize: 13, color: "var(--text-muted)",
       }}>…</div>
     );
   }
@@ -71,7 +71,7 @@ function StatusBanner({ status, accent }: { status: Status; accent: string }) {
     <div style={{
       marginTop: 14, padding: "12px 14px",
       background: `${color}14`, border: `1px solid ${color}33`, borderRadius: 10,
-      fontSize: 13, color, fontWeight: 600,
+      fontSize: 14, color, fontWeight: 600,
     }}>
       {status.message}
     </div>
@@ -139,7 +139,7 @@ function PillRow<T extends string>({
               border: "none",
               background: on ? `${accent}22` : "transparent",
               color: on ? accent : "var(--text-muted)",
-              fontSize: 13,
+              fontSize: 14,
               fontWeight: 700,
               letterSpacing: "-0.01em",
               cursor: "pointer",
@@ -215,12 +215,12 @@ export function CycleForm() {
 
   return (
     <div style={card}>
-      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
         <span style={{
           width: 22, height: 22, borderRadius: 6,
           background: `${PINK}20`, border: `1px solid ${PINK}40`,
           display: "flex", alignItems: "center", justifyContent: "center",
-          color: PINK, fontSize: 12,
+          color: PINK, fontSize: 13,
         }}>♀</span>
         {t("cycle_card_title")}
       </div>
@@ -251,7 +251,7 @@ export function CycleForm() {
                     padding: "9px 10px", borderRadius: 8, border: "none",
                     background: on ? `${PINK}22` : "transparent",
                     color: on ? PINK : "var(--text-muted)",
-                    fontSize: 13, fontWeight: 700, cursor: "pointer",
+                    fontSize: 14, fontWeight: 700, cursor: "pointer",
                   }}
                 >
                   {t(`cycle_mode_${m}`)}
@@ -286,7 +286,7 @@ export function CycleForm() {
                 max={todayDate()}
                 onChange={e => setEnd(e.target.value)}
               />
-              <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 6 }}>
+              <div style={{ fontSize: 13, color: "var(--text-faint)", marginTop: 6 }}>
                 {t("cycle_end_hint")}
               </div>
             </div>
@@ -399,7 +399,7 @@ export function CycleForm() {
       <div style={{
         marginTop: 14, padding: "10px 12px",
         background: "var(--surface-soft)", borderRadius: 10,
-        fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5,
+        fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5,
       }}>
         {t("cycle_disclaimer")}
       </div>
@@ -494,12 +494,12 @@ export function SymptomForm() {
 
   return (
     <div style={card}>
-      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
         <span style={{
           width: 22, height: 22, borderRadius: 6,
           background: `${PURPLE}20`, border: `1px solid ${PURPLE}40`,
           display: "flex", alignItems: "center", justifyContent: "center",
-          color: PURPLE, fontSize: 12, fontWeight: 800,
+          color: PURPLE, fontSize: 13, fontWeight: 800,
         }}>★</span>
         {t("symptom_card_title")}
       </div>
@@ -527,7 +527,7 @@ export function SymptomForm() {
                     padding: "9px 10px", borderRadius: 8, border: "none",
                     background: on ? `${PURPLE}22` : "transparent",
                     color: on ? PURPLE : "var(--text-muted)",
-                    fontSize: 13, fontWeight: 700, cursor: "pointer",
+                    fontSize: 14, fontWeight: 700, cursor: "pointer",
                     transition: "all 0.15s",
                   }}
                 >
@@ -537,7 +537,7 @@ export function SymptomForm() {
             })}
           </div>
           {category === "pms" && (
-            <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 6 }}>
+            <div style={{ fontSize: 13, color: "var(--text-faint)", marginTop: 6 }}>
               {t("symptom_category_pms_hint")}
             </div>
           )}
@@ -559,7 +559,7 @@ export function SymptomForm() {
                     border: `1px solid ${on ? PURPLE : "var(--border)"}`,
                     background: on ? `${PURPLE}22` : "var(--input-bg)",
                     color: on ? PURPLE : "var(--text-muted)",
-                    fontSize: 12, fontWeight: 600, cursor: "pointer",
+                    fontSize: 13, fontWeight: 600, cursor: "pointer",
                     transition: "all 0.12s",
                   }}
                 >
@@ -568,7 +568,7 @@ export function SymptomForm() {
               );
             })}
           </div>
-          <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 6 }}>
+          <div style={{ fontSize: 13, color: "var(--text-faint)", marginTop: 6 }}>
             {t("symptom_select_hint")}
           </div>
         </div>
@@ -586,7 +586,7 @@ export function SymptomForm() {
           />
           <div style={{
             display: "flex", justifyContent: "space-between",
-            fontSize: 10, color: "var(--text-faint)", marginTop: 4,
+            fontSize: 12, color: "var(--text-faint)", marginTop: 4,
           }}>
             <span>{t("symptom_severity_min")}</span>
             <span>{t("symptom_severity_max")}</span>
@@ -633,7 +633,7 @@ export function SymptomForm() {
       <div style={{
         marginTop: 14, padding: "10px 12px",
         background: "var(--surface-soft)", borderRadius: 10,
-        fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5,
+        fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5,
       }}>
         {t("symptom_disclaimer")}
       </div>

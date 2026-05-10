@@ -72,7 +72,7 @@ export default function EmailPreview({
                 }}
               >
                 <span style={{ fontWeight: 600 }}>{t.label}</span>
-                <span style={{ fontSize: 11, color: "#6b7280" }}>{t.whenSent}</span>
+                <span style={{ fontSize: 13, color: "#6b7280" }}>{t.whenSent}</span>
               </a>
             );
           })}
@@ -145,7 +145,7 @@ export default function EmailPreview({
       <section style={mainStyle}>
         <div style={metaBarStyle}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>Subject</div>
+            <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 4 }}>Subject</div>
             <div
               style={{
                 fontSize: 15,
@@ -230,7 +230,7 @@ const langBtnStyle: React.CSSProperties = {
   color: "#374151",
   border: "1px solid #d1d5db",
   borderRadius: 6,
-  fontSize: 13,
+  fontSize: 14,
   fontWeight: 700,
   cursor: "pointer",
   textAlign: "center",
@@ -261,7 +261,7 @@ const sidebarStyle: React.CSSProperties = {
 };
 
 const sidebarHeadingStyle: React.CSSProperties = {
-  fontSize: 12,
+  fontSize: 13,
   textTransform: "uppercase",
   letterSpacing: "0.06em",
   color: "#6b7280",
@@ -277,7 +277,7 @@ const sidebarItemStyle: React.CSSProperties = {
   borderRadius: 6,
   textDecoration: "none",
   color: "#111",
-  fontSize: 13,
+  fontSize: 14,
   marginBottom: 4,
   border: "1px solid transparent",
 };
@@ -292,7 +292,7 @@ const labelStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: 4,
-  fontSize: 12,
+  fontSize: 13,
   color: "#374151",
 };
 
@@ -300,7 +300,7 @@ const textInputStyle: React.CSSProperties = {
   padding: "8px 10px",
   border: "1px solid #d1d5db",
   borderRadius: 6,
-  fontSize: 13,
+  fontSize: 14,
   fontFamily: "inherit",
 };
 
@@ -310,14 +310,14 @@ const applyBtnStyle: React.CSSProperties = {
   color: "#fff",
   border: "none",
   borderRadius: 6,
-  fontSize: 13,
+  fontSize: 14,
   fontWeight: 600,
   cursor: "pointer",
   marginTop: 4,
 };
 
 const hintStyle: React.CSSProperties = {
-  fontSize: 11,
+  fontSize: 13,
   color: "#9ca3af",
   marginTop: 16,
   lineHeight: 1.5,
@@ -345,7 +345,7 @@ const widthBtnStyle: React.CSSProperties = {
   color: "#374151",
   border: "1px solid #d1d5db",
   borderRadius: 6,
-  fontSize: 12,
+  fontSize: 13,
   fontWeight: 600,
   cursor: "pointer",
 };

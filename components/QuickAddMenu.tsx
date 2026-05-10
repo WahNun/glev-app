@@ -245,7 +245,7 @@ export default function QuickAddMenu() {
                 display: "flex", alignItems: "center", gap: 10,
                 width: "100%", padding: "10px 12px",
                 background: "transparent", border: "none",
-                color: TEXT, fontSize: 13.5, fontWeight: 500,
+                color: TEXT, fontSize: 14.5, fontWeight: 500,
                 cursor: "pointer", textAlign: "left",
                 borderRadius: 10,
                 transition: "background 0.12s",

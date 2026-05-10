@@ -242,7 +242,7 @@ function HeroFront({
         display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
       }}>
         <span style={{
-          fontSize: 11, fontWeight: 700, letterSpacing: "0.12em",
+          fontSize: 13, fontWeight: 700, letterSpacing: "0.12em",
           color: GREEN, textTransform: "uppercase",
         }}>
           GLUCOSE · LIVE
@@ -250,7 +250,7 @@ function HeroFront({
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {ageLabel && (
             <span style={{
-              fontSize: 10, color: "var(--text-dim)",
+              fontSize: 12, color: "var(--text-dim)",
               fontFamily: "var(--font-mono)",
             }}>
               {ageLabel}
@@ -260,7 +260,7 @@ function HeroFront({
             <CgmFetchButton variant="ghost" onResult={onCgmRefresh} title="Refresh CGM" />
           )}
           {flippable && (
-            <span style={{ fontSize: 10, color: "var(--text-ghost)" }}>↺</span>
+            <span style={{ fontSize: 12, color: "var(--text-ghost)" }}>↺</span>
           )}
         </div>
       </div>
@@ -274,14 +274,14 @@ function HeroFront({
           }}>
             {Math.round(current.v)}
           </span>
-          <span style={{ fontSize: 12, color: "var(--text-dim)" }}>mg/dL</span>
+          <span style={{ fontSize: 13, color: "var(--text-dim)" }}>mg/dL</span>
           {fsOverride && (
             <span style={{
               padding: "2px 7px", borderRadius: 99,
               background: "var(--border)",
               border: "1px solid var(--text-ghost)",
               color: "var(--text-strong)",
-              fontSize: 9, fontWeight: 700, letterSpacing: "0.08em",
+              fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
               textTransform: "uppercase",
             }}>
               FS
@@ -290,7 +290,7 @@ function HeroFront({
           {delta && (
             <span style={{
               marginLeft: "auto", display: "flex", alignItems: "center", gap: 4,
-              color: valueColor, fontSize: 11, fontWeight: 600,
+              color: valueColor, fontSize: 13, fontWeight: 600,
             }}>
               <TrendArrow direction={delta.direction} color={valueColor} />
               {delta.label}
@@ -300,7 +300,7 @@ function HeroFront({
       ) : (
         <div style={{
           minHeight: 48, display: "flex", alignItems: "center",
-          color: "var(--text-dim)", fontSize: 12,
+          color: "var(--text-dim)", fontSize: 13,
         }}>
           {state.kind === "loading" ? "Loading CGM data…"
             : state.kind === "no-cgm" ? "Connect a CGM in Settings to see live glucose."
@@ -567,7 +567,7 @@ function RollingChart({ readings }: { readings: ChartPoint[] }) {
 
 function BackStats({ readings }: { readings: Array<{ t: number; v: number }> }) {
   if (readings.length === 0) {
-    return <div style={{ color: "var(--text-dim)", fontSize: 13 }}>No readings yet today.</div>;
+    return <div style={{ color: "var(--text-dim)", fontSize: 14 }}>No readings yet today.</div>;
   }
   const values = readings.map((r) => r.v);
   const avg = Math.round(values.reduce((a, b) => a + b, 0) / values.length);
@@ -593,16 +593,16 @@ function BackStats({ readings }: { readings: Array<{ t: number; v: number }> }) 
   return (
     <>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ fontSize: 11, color: ACCENT, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+        <div style={{ fontSize: 13, color: ACCENT, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
           Today's summary
         </div>
-        <span style={{ fontSize: 9, color: "var(--text-ghost)" }}>↺ back</span>
+        <span style={{ fontSize: 11, color: "var(--text-ghost)" }}>↺ back</span>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, flex: 1 }}>
         {stats.map((s) => (
           <div key={s.l} style={{ background: "var(--surface-soft)", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "8px 10px", display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0 }}>
-            <div style={{ fontSize: 9, color: "var(--text-dim)", letterSpacing: "0.07em", fontWeight: 600, marginBottom: 4, textTransform: "uppercase" }}>{s.l}</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: s.c || "var(--text-strong)", letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.v}</div>
+            <div style={{ fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.07em", fontWeight: 600, marginBottom: 4, textTransform: "uppercase" }}>{s.l}</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: s.c || "var(--text-strong)", letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.v}</div>
           </div>
         ))}
       </div>

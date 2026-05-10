@@ -13,7 +13,7 @@ export default function LandingFooter() {
   return (
     <footer
       style={{
-        fontSize: 12,
+        fontSize: 13,
         color: TEXT_FAINT,
         display: "flex",
         gap: 8,

@@ -790,7 +790,7 @@ export default function ExportPanel() {
         <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text)" }}>
           {t("header_title")}
         </div>
-        <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 4, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 14, color: "var(--text-dim)", marginTop: 4, lineHeight: 1.5 }}>
           {t("header_subtitle")}
         </div>
       </div>
@@ -801,10 +801,10 @@ export default function ExportPanel() {
           all, the same way "Filter" chips on a list scope the
           rows beneath. */}
       <div style={card}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-strong)", marginBottom: 4 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)", marginBottom: 4 }}>
           {t("range_label")}
         </div>
-        <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 12, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 12, lineHeight: 1.5 }}>
           {t("range_help")}
         </div>
         {/* Preset chips. Render with the same chip pattern used
@@ -835,7 +835,7 @@ export default function ExportPanel() {
                   border: `1px solid ${active ? ACCENT : BORDER}`,
                   background: active ? `${ACCENT}20` : "var(--surface-soft)",
                   color: active ? ACCENT : "var(--text-strong)",
-                  fontSize: 12,
+                  fontSize: 13,
                   fontWeight: 600,
                   cursor: busy !== null ? "not-allowed" : "pointer",
                   opacity: busy !== null ? 0.6 : 1,
@@ -873,7 +873,7 @@ export default function ExportPanel() {
                     border: `1px solid ${active ? ACCENT : BORDER}`,
                     background: active ? `${ACCENT}20` : "var(--surface-soft)",
                     color: active ? ACCENT : "var(--text-strong)",
-                    fontSize: 12,
+                    fontSize: 13,
                     fontWeight: 600,
                     cursor: busy !== null ? "not-allowed" : "pointer",
                     opacity: busy !== null ? 0.6 : 1,
@@ -895,7 +895,7 @@ export default function ExportPanel() {
                       border: `1px solid ${BORDER}`,
                       background: "var(--surface-soft)",
                       color: "var(--text-strong)",
-                      fontSize: 12,
+                      fontSize: 13,
                       fontWeight: 700,
                       cursor: busy !== null ? "not-allowed" : "pointer",
                       opacity: busy !== null ? 0.6 : 1,
@@ -937,7 +937,7 @@ export default function ExportPanel() {
                       }}
                     >
                       <div style={{
-                        fontSize: 10, fontWeight: 700, letterSpacing: "0.06em",
+                        fontSize: 12, fontWeight: 700, letterSpacing: "0.06em",
                         textTransform: "uppercase", color: "var(--text-faint)",
                         padding: "6px 10px 4px",
                       }}>
@@ -971,7 +971,7 @@ export default function ExportPanel() {
                               padding: "8px 10px", borderRadius: 8, border: "none",
                               background: isActive ? `${ACCENT}15` : "transparent",
                               color: isActive ? ACCENT : "var(--text-strong)",
-                              fontSize: 12, fontWeight: 600,
+                              fontSize: 13, fontWeight: 600,
                               cursor: "pointer",
                               textAlign: "left",
                             }}
@@ -979,7 +979,7 @@ export default function ExportPanel() {
                             <span>{apptFormatted}</span>
                             {appt.note && (
                               <span style={{
-                                fontSize: 11, fontWeight: 500,
+                                fontSize: 13, fontWeight: 500,
                                 color: isActive ? ACCENT : "var(--text-dim)",
                                 opacity: 0.85,
                                 overflow: "hidden", textOverflow: "ellipsis",
@@ -1011,7 +1011,7 @@ export default function ExportPanel() {
                   border: `1px solid ${active ? ACCENT : BORDER}`,
                   background: active ? `${ACCENT}20` : "var(--surface-soft)",
                   color: active ? ACCENT : "var(--text-strong)",
-                  fontSize: 12,
+                  fontSize: 13,
                   fontWeight: 600,
                   cursor: busy !== null ? "not-allowed" : "pointer",
                   opacity: busy !== null ? 0.6 : 1,
@@ -1032,7 +1032,7 @@ export default function ExportPanel() {
             display: "flex", flexWrap: "wrap", gap: 12,
             marginTop: 12, alignItems: "flex-end",
           }}>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11, color: "var(--text-dim)" }}>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, color: "var(--text-dim)" }}>
               {t("range_from")}
               <input
                 type="date"
@@ -1045,12 +1045,12 @@ export default function ExportPanel() {
                   border: `1px solid ${BORDER}`,
                   background: "var(--surface-soft)",
                   color: "var(--text-strong)",
-                  fontSize: 13,
+                  fontSize: 14,
                   fontFamily: "inherit",
                 }}
               />
             </label>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11, color: "var(--text-dim)" }}>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, color: "var(--text-dim)" }}>
               {t("range_to")}
               <input
                 type="date"
@@ -1063,7 +1063,7 @@ export default function ExportPanel() {
                   border: `1px solid ${BORDER}`,
                   background: "var(--surface-soft)",
                   color: "var(--text-strong)",
-                  fontSize: 13,
+                  fontSize: 14,
                   fontFamily: "inherit",
                 }}
               />
@@ -1081,7 +1081,7 @@ export default function ExportPanel() {
           aria-live="polite"
           style={{
             marginTop: 12,
-            fontSize: 11,
+            fontSize: 13,
             color: "var(--text-dim)",
             lineHeight: 1.5,
             minHeight: 16,
@@ -1156,7 +1156,7 @@ export default function ExportPanel() {
                 <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)", marginBottom: 2 }}>
                   {t(row.labelKey)}
                 </div>
-                <div style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.4 }}>
+                <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.4 }}>
                   {t(row.descKey)}
                 </div>
               </div>
@@ -1167,7 +1167,7 @@ export default function ExportPanel() {
                   padding: "8px 14px", borderRadius: 9, border: `1px solid ${BORDER}`,
                   background: "var(--surface-soft)",
                   color: isBusy || isEmpty ? "var(--text-dim)" : "var(--text-strong)",
-                  fontSize: 12, fontWeight: 600,
+                  fontSize: 13, fontWeight: 600,
                   cursor: disabled ? "not-allowed" : "pointer",
                   opacity: busy !== null && !isBusy ? 0.45 : 1,
                   whiteSpace: "nowrap", flexShrink: 0,
@@ -1232,7 +1232,7 @@ export default function ExportPanel() {
                 border: `1px solid ${BORDER}`,
                 background: "var(--surface-soft)",
                 color: busy === "all" || isEmptyRange ? "var(--text-dim)" : "var(--text-strong)",
-                fontSize: 13, fontWeight: 600,
+                fontSize: 14, fontWeight: 600,
                 cursor: bulkDisabled ? "not-allowed" : "pointer",
                 opacity: bulkDim ? 0.55 : (busy !== null && busy !== "all" ? 0.5 : 1),
               }}
@@ -1285,7 +1285,7 @@ export default function ExportPanel() {
           background: msg.kind === "ok" ? `${GREEN}15` : `${PINK}15`,
           border: `1px solid ${msg.kind === "ok" ? GREEN : PINK}40`,
           color: msg.kind === "ok" ? GREEN : PINK,
-          fontSize: 12, fontWeight: 600,
+          fontSize: 13, fontWeight: 600,
         }}>
           {msg.text}
         </div>
@@ -1295,7 +1295,7 @@ export default function ExportPanel() {
       <div style={{
         marginTop: 4, padding: "12px 14px", borderRadius: 10,
         background: "var(--surface-soft)", border: `1px dashed ${BORDER}`,
-        fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5,
+        fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5,
       }}>
         <strong style={{ color: "var(--text-muted)" }}>{t("pdf_info_label")}</strong>{t("pdf_info_body")}
       </div>
@@ -1308,7 +1308,7 @@ export default function ExportPanel() {
       <div style={{
         padding: "8px 12px", borderRadius: 8,
         background: "var(--surface-soft)",
-        fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5,
+        fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5,
       }}>
         {t("carb_unit_note", { unit: carbUnitLabel })}
       </div>

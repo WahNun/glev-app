@@ -424,13 +424,13 @@ export default function ManualEntryModal({
     borderRadius: 10,
     padding: "10px 12px",
     color:"var(--text)",
-    fontSize: 13,
+    fontSize: 14,
     width: "100%",
     outline: "none",
     boxSizing: "border-box",
   };
   const labelStyle: React.CSSProperties = {
-    fontSize: 10,
+    fontSize: 12,
     color: "var(--text-dim)",
     marginBottom: 6,
     letterSpacing: "0.08em",
@@ -472,7 +472,7 @@ export default function ManualEntryModal({
         }}>
           <div>
             <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: "-0.02em" }}>{t("title")}</div>
-            <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}>
+            <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 2 }}>
               {t("subtitle")}
             </div>
           </div>
@@ -502,7 +502,7 @@ export default function ManualEntryModal({
           <div>
             <label style={labelStyle}>{t("meal_time_label")}</label>
             <input type="datetime-local" value={mealTime} onChange={(e) => setMealTime(e.target.value)} style={inp}/>
-            <div style={{ marginTop: 4, fontSize: 10, color: "var(--text-faint)" }}>
+            <div style={{ marginTop: 4, fontSize: 12, color: "var(--text-faint)" }}>
               {t("meal_time_hint")}
             </div>
           </div>
@@ -513,7 +513,7 @@ export default function ManualEntryModal({
             <input
               value={desc} onChange={(e) => setDesc(e.target.value)}
               placeholder={t("description_placeholder")}
-              style={{ ...inp, fontSize: 13 }}
+              style={{ ...inp, fontSize: 14 }}
             />
           </div>
 
@@ -581,7 +581,7 @@ export default function ManualEntryModal({
 
           {error && (
             <div style={{
-              fontSize: 12, color: PINK,
+              fontSize: 13, color: PINK,
               padding: "8px 12px",
               background: `${PINK}10`,
               borderRadius: 8,
@@ -603,15 +603,15 @@ export default function ManualEntryModal({
           const at2 = parseLocalDt(bg2hAt);
           const Row = ({ label, value, accent }: { label: string; value: React.ReactNode; accent?: string }) => (
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, padding: "8px 0", borderBottom: `1px solid ${BORDER}` }}>
-              <span style={{ fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.04em" }}>{label}</span>
-              <span style={{ fontSize: 13, fontWeight: 600, color: accent ?? "#fff", textAlign: "right" }}>{value}</span>
+              <span style={{ fontSize: 13, color: "var(--text-dim)", letterSpacing: "0.04em" }}>{label}</span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: accent ?? "#fff", textAlign: "right" }}>{value}</span>
             </div>
           );
           const fmtTime = (d: Date | null) => d ? d.toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
 
           return (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
+              <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5 }}>
                 {t("review_intro")}
               </div>
 
@@ -644,7 +644,7 @@ export default function ManualEntryModal({
               {/* Follow-ups (CGM-derived) */}
               {(bg1hN != null || bg2hN != null) && (
                 <div style={{ background: "var(--surface-soft)", border: `1px dashed ${BORDER}`, borderRadius: 12, padding: "10px 14px" }}>
-                  <div style={{ fontSize: 10, color: "var(--text-dim)", letterSpacing: "0.08em", fontWeight: 700, textTransform: "uppercase", marginBottom: 4 }}>
+                  <div style={{ fontSize: 12, color: "var(--text-dim)", letterSpacing: "0.08em", fontWeight: 700, textTransform: "uppercase", marginBottom: 4 }}>
                     {t("followup_label")} <span style={{ opacity: 0.6, textTransform: "none", letterSpacing: 0 }}>{t("followup_source")}</span>
                   </div>
                   {bg1hN != null && (
@@ -666,7 +666,7 @@ export default function ManualEntryModal({
 
               {error && (
                 <div style={{
-                  fontSize: 12, color: PINK,
+                  fontSize: 13, color: PINK,
                   padding: "8px 12px",
                   background: `${PINK}10`,
                   borderRadius: 8,
@@ -693,7 +693,7 @@ export default function ManualEntryModal({
               border: `1px solid ${BORDER}`,
               background: "transparent",
               color: "var(--text-muted)",
-              fontSize: 13, fontWeight: 600,
+              fontSize: 14, fontWeight: 600,
               cursor: saving ? "not-allowed" : "pointer",
             }}
           >
@@ -717,7 +717,7 @@ export default function ManualEntryModal({
                   ? "var(--border-soft)"
                   : `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
                 color: !canSubmit || cgmLoading ? "var(--text-faint)" : "#fff",
-                fontSize: 13, fontWeight: 700,
+                fontSize: 14, fontWeight: 700,
                 cursor: !canSubmit || cgmLoading ? "not-allowed" : "pointer",
                 boxShadow: !canSubmit || cgmLoading ? "none" : `0 4px 20px ${ACCENT}40`,
                 transition: "all 0.2s",
@@ -739,7 +739,7 @@ export default function ManualEntryModal({
                   ? "var(--border-soft)"
                   : `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
                 color: saved ? GREEN : saving ? "var(--text-faint)" : "#fff",
-                fontSize: 13, fontWeight: 700,
+                fontSize: 14, fontWeight: 700,
                 cursor: saving || saved ? "default" : "pointer",
                 boxShadow: saving || saved ? "none" : `0 4px 20px ${ACCENT}40`,
                 transition: "all 0.2s",

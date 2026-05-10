@@ -57,7 +57,7 @@ function FeatureCard({
       <p
         style={{
           margin: 0,
-          fontSize: 13.5,
+          fontSize: 14.5,
           lineHeight: 1.55,
           color: "rgba(255,255,255,0.6)",
         }}

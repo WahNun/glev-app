@@ -177,7 +177,7 @@ export default async function AdminEmailsPage({
     <main style={pageStyle}>
       <h1 style={{ fontSize: 22, margin: "0 0 16px" }}>Glev — Mail-Preview</h1>
 
-      <p style={{ margin: "0 0 16px", color: "#555", fontSize: 13 }}>
+      <p style={{ margin: "0 0 16px", color: "#555", fontSize: 14 }}>
         Live-Render aus <code>lib/emails/*</code> — was du siehst ist exakt was
         Resend an die Käufer:innen schickt. Inhalt änderst du im Code, diese
         Seite zeigt dir das Ergebnis.

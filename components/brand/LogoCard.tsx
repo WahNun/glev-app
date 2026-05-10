@@ -52,7 +52,7 @@ export default function LogoCard({
         {description && (
           <div
             style={{
-              fontSize: 13,
+              fontSize: 14,
               color: "var(--text-muted)",
               lineHeight: 1.5,
             }}
@@ -70,7 +70,7 @@ export default function LogoCard({
           color: "#fff",
           padding: "8px 14px",
           borderRadius: 8,
-          fontSize: 13,
+          fontSize: 14,
           fontWeight: 500,
           textDecoration: "none",
         }}

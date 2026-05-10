@@ -600,10 +600,10 @@ export default function InsightsPage() {
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
             <CardLabel text={tInsights("card_time_in_range_title")}/>
-            <div style={{ fontSize:9, color:"var(--text-dim)" }}>70–180 mg/dL</div>
+            <div style={{ fontSize:11, color:"var(--text-dim)" }}>70–180 mg/dL</div>
           </div>
           {b7.n === 0 ? (
-            <div style={{ padding:"18px 0", textAlign:"center", color:"var(--text-faint)", fontSize:11 }}>
+            <div style={{ padding:"18px 0", textAlign:"center", color:"var(--text-faint)", fontSize:13 }}>
               {tInsights("card_time_in_range_empty")}
             </div>
           ) : (
@@ -614,7 +614,7 @@ export default function InsightsPage() {
                 </div>
                 <div style={{ fontSize:14, color:GREEN, fontWeight:700 }}>%</div>
                 {prev7Bg.length > 0 && (
-                  <div style={{ marginLeft:"auto", fontSize:9, color: tirDelta >= 0 ? GREEN : ORANGE, fontWeight:600 }}>
+                  <div style={{ marginLeft:"auto", fontSize:11, color: tirDelta >= 0 ? GREEN : ORANGE, fontWeight:600 }}>
                     {tirDelta >= 0 ? "+" : ""}{tirDelta} {tInsights("delta_vs_prev_week")}
                   </div>
                 )}
@@ -632,7 +632,7 @@ export default function InsightsPage() {
                 {tirPct > 0 && <div style={{ width:`${tirPct}%`, background:GREEN }}/>}
                 {tarPct > 0 && <div style={{ width:`${tarPct}%`, background:HIGH_YELLOW }}/>}
               </div>
-              <div style={{ display:"flex", justifyContent:"space-between", marginTop:6, fontSize:9, color:"var(--text-dim)", flexWrap:"wrap", gap:6 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", marginTop:6, fontSize:11, color:"var(--text-dim)", flexWrap:"wrap", gap:6 }}>
                 <span style={{ color:PINK }}>● {tInsights("tir_legend_below")} · {tbrPct}%</span>
                 <span style={{ color:GREEN }}>● {tInsights("tir_legend_in")} · {tirPct}%</span>
                 <span style={{ color:HIGH_YELLOW }}>● {tInsights("tir_legend_above")} · {tarPct}%</span>
@@ -671,10 +671,10 @@ export default function InsightsPage() {
                   <div style={{ fontSize:24, fontWeight:800, color:"var(--text)", fontFamily:"var(--font-mono)", lineHeight:1 }}>
                     {Math.round(last7Avg)}
                   </div>
-                  <div style={{ fontSize:9, color:"var(--text-dim)" }}>mg/dL</div>
+                  <div style={{ fontSize:11, color:"var(--text-dim)" }}>mg/dL</div>
                 </div>
                 {bgDelta != null && (
-                  <div style={{ fontSize:9, color: bgDelta < 0 ? GREEN : bgDelta > 0 ? ORANGE : "var(--text-dim)", marginTop:2, fontWeight:600 }}>
+                  <div style={{ fontSize:11, color: bgDelta < 0 ? GREEN : bgDelta > 0 ? ORANGE : "var(--text-dim)", marginTop:2, fontWeight:600 }}>
                     {bgDelta > 0 ? "+" : bgDelta < 0 ? "−" : ""}{Math.abs(bgDelta)} {tInsights("delta_vs_prev")}
                   </div>
                 )}
@@ -706,10 +706,10 @@ export default function InsightsPage() {
                   <div style={{ fontSize:24, fontWeight:800, color:"var(--text)", fontFamily:"var(--font-mono)", lineHeight:1 }}>
                     {gmi.toFixed(1)}
                   </div>
-                  <div style={{ fontSize:9, color:"var(--text-dim)" }}>%</div>
+                  <div style={{ fontSize:11, color:"var(--text-dim)" }}>%</div>
                 </div>
                 {gmiDelta != null && (
-                  <div style={{ fontSize:9, color: gmiDelta < 0 ? GREEN : gmiDelta > 0 ? ORANGE : "var(--text-dim)", marginTop:2, fontWeight:600 }}>
+                  <div style={{ fontSize:11, color: gmiDelta < 0 ? GREEN : gmiDelta > 0 ? ORANGE : "var(--text-dim)", marginTop:2, fontWeight:600 }}>
                     {gmiDelta > 0 ? "+" : gmiDelta < 0 ? "−" : ""}{Math.abs(gmiDelta).toFixed(1)} {tInsights("delta_vs_prev")}
                   </div>
                 )}
@@ -737,10 +737,10 @@ export default function InsightsPage() {
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
             <CardLabel text={tInsights("card_glucose_trend_title")}/>
-            <div style={{ fontSize:9, color:"var(--text-dim)" }}>{tInsights("card_glucose_trend_sub")}</div>
+            <div style={{ fontSize:11, color:"var(--text-dim)" }}>{tInsights("card_glucose_trend_sub")}</div>
           </div>
           <Sparkline values={trendValues} color={ACCENT}/>
-          <div style={{ display:"flex", justifyContent:"space-between", marginTop:4, fontSize:8, color:"var(--text-faint)" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", marginTop:4, fontSize:11, color:"var(--text-faint)" }}>
             {trendDays.map((d, i) => <span key={i}>{d.label}</span>)}
           </div>
         </FlipCard>
@@ -770,22 +770,22 @@ export default function InsightsPage() {
           >
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
               <CardLabel text={tInsights("card_hypo_events_title")}/>
-              <div style={{ fontSize:9, color:"var(--text-dim)" }}>&lt; {HYPO_THRESHOLD_MGDL} mg/dL</div>
+              <div style={{ fontSize:11, color:"var(--text-dim)" }}>&lt; {HYPO_THRESHOLD_MGDL} mg/dL</div>
             </div>
             {!hypoEnough ? (
               <div style={{ padding:"18px 0", textAlign:"center" }}>
-                <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>{tInsights("insufficient_data")}</div>
-                <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:4 }}>{tInsights("min_readings_required", { min: MIN_DATAPOINTS })}</div>
+                <div style={{ fontSize:14, color:"var(--text-dim)", fontWeight:600 }}>{tInsights("insufficient_data")}</div>
+                <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:4 }}>{tInsights("min_readings_required", { min: MIN_DATAPOINTS })}</div>
               </div>
             ) : (
               <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
                 <div style={{ fontSize:36, fontWeight:800, color:accent, letterSpacing:"-0.04em", fontFamily:"var(--font-mono)", lineHeight:1 }}>
                   {hypoCount7d}
                 </div>
-                <div style={{ fontSize:11, color:accent, fontWeight:600 }}>
+                <div style={{ fontSize:13, color:accent, fontWeight:600 }}>
                   {hypoCount7d === 0 ? tInsights("hypo_count_zero") : hypoCount7d === 1 ? tInsights("hypo_count_one") : tInsights("hypo_count_many")}
                 </div>
-                <div style={{ marginLeft:"auto", fontSize:9, color:"var(--text-dim)" }}>
+                <div style={{ marginLeft:"auto", fontSize:11, color:"var(--text-dim)" }}>
                   {tInsights("readings_count", { n: readings7.length })}
                 </div>
               </div>
@@ -818,22 +818,22 @@ export default function InsightsPage() {
           >
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
               <CardLabel text={tInsights("card_hyper_events_title")}/>
-              <div style={{ fontSize:9, color:"var(--text-dim)" }}>&gt; {HYPER_THRESHOLD_MGDL} mg/dL</div>
+              <div style={{ fontSize:11, color:"var(--text-dim)" }}>&gt; {HYPER_THRESHOLD_MGDL} mg/dL</div>
             </div>
             {!hyperEnough ? (
               <div style={{ padding:"18px 0", textAlign:"center" }}>
-                <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>{tInsights("insufficient_data")}</div>
-                <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:4 }}>{tInsights("min_readings_required", { min: MIN_DATAPOINTS })}</div>
+                <div style={{ fontSize:14, color:"var(--text-dim)", fontWeight:600 }}>{tInsights("insufficient_data")}</div>
+                <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:4 }}>{tInsights("min_readings_required", { min: MIN_DATAPOINTS })}</div>
               </div>
             ) : (
               <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
                 <div style={{ fontSize:36, fontWeight:800, color:accent, letterSpacing:"-0.04em", fontFamily:"var(--font-mono)", lineHeight:1 }}>
                   {hyperCount7d}
                 </div>
-                <div style={{ fontSize:11, color:accent, fontWeight:600 }}>
+                <div style={{ fontSize:13, color:accent, fontWeight:600 }}>
                   {hyperCount7d === 0 ? tInsights("hyper_count_zero") : hyperCount7d === 1 ? tInsights("hyper_count_one") : tInsights("hyper_count_many")}
                 </div>
-                <div style={{ marginLeft:"auto", fontSize:9, color:"var(--text-dim)" }}>
+                <div style={{ marginLeft:"auto", fontSize:11, color:"var(--text-dim)" }}>
                   {tInsights("readings_count", { n: readings7.length })}
                 </div>
               </div>
@@ -864,12 +864,12 @@ export default function InsightsPage() {
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
             <CardLabel text={tInsights("cv_label")}/>
-            <div style={{ fontSize:9, color:"var(--text-dim)" }}>CV%</div>
+            <div style={{ fontSize:11, color:"var(--text-dim)" }}>CV%</div>
           </div>
           {!cvEnough || cvPct == null ? (
             <div style={{ padding:"18px 0", textAlign:"center" }}>
-              <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>{tInsights("insufficient_data")}</div>
-              <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:4 }}>{tInsights("min_readings_required", { min: MIN_DATAPOINTS })}</div>
+              <div style={{ fontSize:14, color:"var(--text-dim)", fontWeight:600 }}>{tInsights("insufficient_data")}</div>
+              <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:4 }}>{tInsights("min_readings_required", { min: MIN_DATAPOINTS })}</div>
             </div>
           ) : (
             <>
@@ -878,7 +878,7 @@ export default function InsightsPage() {
                   {cvPct.toFixed(1)}
                 </div>
                 <div style={{ fontSize:14, color:cvColor, fontWeight:700 }}>%</div>
-                <div style={{ marginLeft:"auto", fontSize:9, color:cvColor, fontWeight:700 }}>
+                <div style={{ marginLeft:"auto", fontSize:11, color:cvColor, fontWeight:700 }}>
                   {cvPct < CV_STABLE_PCT
                     ? tInsights("cv_status_stable")
                     : cvPct <= CV_HIGH_PCT
@@ -893,7 +893,7 @@ export default function InsightsPage() {
                 <div style={{ position:"absolute", left:`${(CV_HIGH_PCT/75)*100}%`,   top:0, bottom:0, right:0,                                          background:PINK,        opacity:0.55 }}/>
                 <div style={{ position:"absolute", left:`${Math.min(cvPct, 75) / 75 * 100}%`, top:-2, bottom:-2, width:2, background:"var(--text)", borderRadius:1, transform:"translateX(-1px)" }}/>
               </div>
-              <div style={{ display:"flex", justifyContent:"space-between", marginTop:6, fontSize:8, color:"var(--text-dim)" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", marginTop:6, fontSize:11, color:"var(--text-dim)" }}>
                 <span style={{ color:GREEN }}>{tInsights("cv_legend_stable")}</span>
                 <span style={{ color:HIGH_YELLOW }}>{tInsights("cv_legend_medium")}</span>
                 <span style={{ color:PINK }}>{tInsights("cv_legend_unstable")}</span>
@@ -922,20 +922,20 @@ export default function InsightsPage() {
         >
           <CardLabel text={tInsights("card_meal_evaluation_title")}/>
           {totalN === 0 ? (
-            <div style={{ padding:"18px 0", textAlign:"center", color:"var(--text-faint)", fontSize:11 }}>
+            <div style={{ padding:"18px 0", textAlign:"center", color:"var(--text-faint)", fontSize:13 }}>
               {tInsights("card_meal_evaluation_empty")}
             </div>
           ) : (
             <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:8 }}>
               {evalRows.map(r => (
                 <div key={r.label} style={{ display:"flex", alignItems:"center", gap:8 }}>
-                  <div style={{ width:60, fontSize:10, color:r.color }}>{r.label}</div>
+                  <div style={{ width:60, fontSize:12, color:r.color }}>{r.label}</div>
                   <div style={{ flex:1, height:6, background:"var(--surface-soft)", borderRadius:99, overflow:"hidden" }}>
                     <div style={{ height:"100%", width:`${r.pct}%`, background:r.color, borderRadius:99, transition:"width 0.3s" }}/>
                   </div>
                   <div
                     title={`${r.pct}%`}
-                    style={{ width:24, textAlign:"right", fontSize:10, color:"var(--text)", fontFamily:"var(--font-mono)", fontWeight:600 }}
+                    style={{ width:24, textAlign:"right", fontSize:12, color:"var(--text)", fontFamily:"var(--font-mono)", fontWeight:600 }}
                   >
                     {r.count}
                   </div>
@@ -990,7 +990,7 @@ export default function InsightsPage() {
                   <CardLabel text={tInsights("engine_label")}/>
                   <span style={{
                     display:"inline-flex", alignItems:"center", gap:6,
-                    fontSize:9, fontWeight:700, letterSpacing:"0.1em",
+                    fontSize:11, fontWeight:700, letterSpacing:"0.1em",
                     color: statusColor, flexShrink:0,
                     padding:"3px 8px", borderRadius:99,
                     border:`1px solid ${statusColor}55`,
@@ -1013,7 +1013,7 @@ export default function InsightsPage() {
                   padding:"2px 2px 10px", marginBottom:10,
                   borderBottom:`1px solid var(--border-soft)`,
                 }}>
-                  <span style={{ fontSize:10, color:"var(--text-dim)", fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase" }}>
+                  <span style={{ fontSize:12, color:"var(--text-dim)", fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase" }}>
                     {tInsights("engine_label_icr")}
                   </span>
                   <span style={{
@@ -1024,7 +1024,7 @@ export default function InsightsPage() {
                   }}>
                     {icrText}
                   </span>
-                  <span style={{ fontSize:10, color:"var(--text-faint)", marginLeft:"auto", textAlign:"right", lineHeight:1.25 }}>
+                  <span style={{ fontSize:12, color:"var(--text-faint)", marginLeft:"auto", textAlign:"right", lineHeight:1.25 }}>
                     {tInsights("engine_outcome_weighted")}<br/>
                     {tInsights("engine_final_meals", { n: enginePattern.sampleSize })}
                   </span>
@@ -1077,10 +1077,10 @@ export default function InsightsPage() {
                     : enginePattern.explanation;
                   return (
                     <>
-                      <div style={{ fontSize:12, color:"var(--text-muted)", lineHeight:1.5, marginBottom:6 }}>
+                      <div style={{ fontSize:13, color:"var(--text-muted)", lineHeight:1.5, marginBottom:6 }}>
                         <span style={{ color:"var(--text)", fontWeight:600 }}>{label}</span>
                       </div>
-                      <div style={{ fontSize:11, color:"var(--text-muted)", lineHeight:1.5 }}>
+                      <div style={{ fontSize:13, color:"var(--text-muted)", lineHeight:1.5 }}>
                         {explanation}
                       </div>
                     </>
@@ -1099,7 +1099,7 @@ export default function InsightsPage() {
                   }}>
                     <div style={{
                       display:"flex", alignItems:"center", gap:6,
-                      fontSize:9, fontWeight:700, color:ACCENT,
+                      fontSize:11, fontWeight:700, color:ACCENT,
                       letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:4,
                     }}>
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
@@ -1107,7 +1107,7 @@ export default function InsightsPage() {
                       </svg>
                       {suggestion.hasSuggestion ? tInsights("engine_pill_suggested") : tInsights("engine_pill_advisory")}
                     </div>
-                    <div style={{ fontSize:11, color:"var(--text-strong)", lineHeight:1.5 }}>
+                    <div style={{ fontSize:13, color:"var(--text-strong)", lineHeight:1.5 }}>
                       {tInsights(suggestion.message.key, suggestion.message.params)}
                     </div>
                     {/* Curve-derived advisories (Task #237 follow-up):
@@ -1122,7 +1122,7 @@ export default function InsightsPage() {
                       }}>
                         {suggestion.advisories.map((a, i) => (
                           <li key={`${a.key}-${i}`} style={{
-                            fontSize:11, color:"var(--text-muted)", lineHeight:1.5,
+                            fontSize:13, color:"var(--text-muted)", lineHeight:1.5,
                             display:"flex", gap:6, alignItems:"flex-start",
                           }}>
                             <span style={{ color:ACCENT, fontWeight:700, marginTop:1 }}>•</span>
@@ -1164,12 +1164,12 @@ export default function InsightsPage() {
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
             <CardLabel text={tInsights("card_tdd_title")}/>
-            <div style={{ fontSize:9, color:"var(--text-dim)" }}>{tInsights("card_tdd_sub")}</div>
+            <div style={{ fontSize:11, color:"var(--text-dim)" }}>{tInsights("card_tdd_sub")}</div>
           </div>
           {!tddEnough || tddAvg7 == null ? (
             <div style={{ padding:"18px 0", textAlign:"center" }}>
-              <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>{tInsights("insufficient_data")}</div>
-              <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:4 }}>{tInsights("tdd_min_required", { min: MIN_DATAPOINTS })}</div>
+              <div style={{ fontSize:14, color:"var(--text-dim)", fontWeight:600 }}>{tInsights("insufficient_data")}</div>
+              <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:4 }}>{tInsights("tdd_min_required", { min: MIN_DATAPOINTS })}</div>
             </div>
           ) : (
             <>
@@ -1178,15 +1178,15 @@ export default function InsightsPage() {
                   {tddAvg7.toFixed(1)}
                 </div>
                 <div style={{ fontSize:14, color:"var(--text-dim)", fontWeight:700 }}>{tInsights("tdd_unit_main")}</div>
-                <div style={{ marginLeft:"auto", fontSize:9, color:"var(--text-dim)" }}>{tInsights("tdd_avg_7d")}</div>
+                <div style={{ marginLeft:"auto", fontSize:11, color:"var(--text-dim)" }}>{tInsights("tdd_avg_7d")}</div>
               </div>
               <div style={{ marginTop:10, display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 10px", background:`${ACCENT}10`, border:`1px solid ${ACCENT}25`, borderRadius:10 }}>
-                <div style={{ fontSize:10, color:"var(--text-muted)", fontWeight:600 }}>{tInsights("tdd_today")}</div>
+                <div style={{ fontSize:12, color:"var(--text-muted)", fontWeight:600 }}>{tInsights("tdd_today")}</div>
                 <div style={{ display:"flex", alignItems:"baseline", gap:4 }}>
                   <div style={{ fontSize:18, fontWeight:800, color:ACCENT, fontFamily:"var(--font-mono)", lineHeight:1 }}>
                     {tddToday.toFixed(1)}
                   </div>
-                  <div style={{ fontSize:10, color:ACCENT, fontWeight:700 }}>U</div>
+                  <div style={{ fontSize:12, color:ACCENT, fontWeight:700 }}>U</div>
                 </div>
               </div>
             </>
@@ -1213,17 +1213,17 @@ export default function InsightsPage() {
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
             <CardLabel text={tInsights("card_patterns_title")}/>
-            <div style={{ fontSize:9, color:"var(--text-dim)" }}>{tInsights("card_patterns_signal_count", { n: patterns.length })}</div>
+            <div style={{ fontSize:11, color:"var(--text-dim)" }}>{tInsights("card_patterns_signal_count", { n: patterns.length })}</div>
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
             {patterns.map((p, i) => (
               <div key={i} style={{ display:"flex", gap:8, padding:"8px 10px", background:`${p.color}08`, border:`1px solid ${p.color}20`, borderRadius:10, alignItems:"flex-start" }}>
-                <div style={{ width:22, height:22, borderRadius:99, background:`${p.color}20`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:11 }}>
+                <div style={{ width:22, height:22, borderRadius:99, background:`${p.color}20`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:13 }}>
                   {p.icon}
                 </div>
                 <div style={{ minWidth:0 }}>
-                  <div style={{ fontSize:11, fontWeight:600, color:p.color, marginBottom:2 }}>{p.title}</div>
-                  <div style={{ fontSize:10, color:"var(--text-dim)", lineHeight:1.45 }}>{p.desc}</div>
+                  <div style={{ fontSize:13, fontWeight:600, color:p.color, marginBottom:2 }}>{p.title}</div>
+                  <div style={{ fontSize:12, color:"var(--text-dim)", lineHeight:1.45 }}>{p.desc}</div>
                 </div>
               </div>
             ))}
@@ -1253,12 +1253,12 @@ export default function InsightsPage() {
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
             <CardLabel text={tInsights("card_workout_outcomes_title")}/>
-            <div style={{ fontSize:9, color:"var(--text-dim)" }}>{tInsights("card_workout_outcomes_sub")}</div>
+            <div style={{ fontSize:11, color:"var(--text-dim)" }}>{tInsights("card_workout_outcomes_sub")}</div>
           </div>
           {!workoutOutcomeEnough ? (
             <div style={{ padding:"18px 0", textAlign:"center" }}>
-              <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>{tInsights("insufficient_data")}</div>
-              <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:4 }}>{tInsights("workout_outcomes_min_required", { min: MIN_DATAPOINTS })}</div>
+              <div style={{ fontSize:14, color:"var(--text-dim)", fontWeight:600 }}>{tInsights("insufficient_data")}</div>
+              <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:4 }}>{tInsights("workout_outcomes_min_required", { min: MIN_DATAPOINTS })}</div>
             </div>
           ) : (
             <>
@@ -1266,7 +1266,7 @@ export default function InsightsPage() {
                 <div style={{ fontSize:36, fontWeight:800, color:"var(--text)", letterSpacing:"-0.04em", fontFamily:"var(--font-mono)", lineHeight:1 }}>
                   {workoutTotal30}
                 </div>
-                <div style={{ fontSize:11, color:"var(--text-dim)", fontWeight:600 }}>{tInsights("workout_outcomes_total_30d")}</div>
+                <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>{tInsights("workout_outcomes_total_30d")}</div>
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                 {RANKED_OUTCOMES.map(oc => {
@@ -1276,18 +1276,18 @@ export default function InsightsPage() {
                   const label = tInsights(`workout_outcome_label_${oc.toLowerCase()}`);
                   return (
                     <div key={oc} style={{ display:"flex", alignItems:"center", gap:8 }}>
-                      <div style={{ width:78, fontSize:10, color, fontWeight:700, letterSpacing:"0.02em" }}>{label}</div>
+                      <div style={{ width:78, fontSize:12, color, fontWeight:700, letterSpacing:"0.02em" }}>{label}</div>
                       <div style={{ flex:1, position:"relative", height:6, borderRadius:99, background:"var(--surface-soft)", overflow:"hidden" }}>
                         <div style={{ width:`${pct}%`, height:"100%", background:color, opacity:0.85 }}/>
                       </div>
-                      <div style={{ width:54, textAlign:"right", fontSize:10, color:"var(--text-muted)", fontFamily:"var(--font-mono)" }}>
+                      <div style={{ width:54, textAlign:"right", fontSize:12, color:"var(--text-muted)", fontFamily:"var(--font-mono)" }}>
                         {pct}% · {n}
                       </div>
                     </div>
                   );
                 })}
                 {workoutOutcomeCounts.PENDING > 0 && (
-                  <div style={{ marginTop:2, fontSize:9, color:"var(--text-faint)" }}>
+                  <div style={{ marginTop:2, fontSize:11, color:"var(--text-faint)" }}>
                     {tInsights("workout_outcomes_pending_suffix", { n: workoutOutcomeCounts.PENDING })}
                   </div>
                 )}
@@ -1319,12 +1319,12 @@ export default function InsightsPage() {
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
             <CardLabel text={tInsights("workout_bg_response_label")}/>
-            <div style={{ fontSize:9, color:"var(--text-dim)" }}>{tInsights("workout_bg_response_sub")}</div>
+            <div style={{ fontSize:11, color:"var(--text-dim)" }}>{tInsights("workout_bg_response_sub")}</div>
           </div>
           {!bgResponseEnough ? (
             <div style={{ padding:"18px 0", textAlign:"center" }}>
-              <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>{tInsights("insufficient_data")}</div>
-              <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:4 }}>{tInsights("workout_bg_response_min_required", { min: MIN_DATAPOINTS })}</div>
+              <div style={{ fontSize:14, color:"var(--text-dim)", fontWeight:600 }}>{tInsights("insufficient_data")}</div>
+              <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:4 }}>{tInsights("workout_bg_response_min_required", { min: MIN_DATAPOINTS })}</div>
             </div>
           ) : (
             <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
@@ -1336,14 +1336,14 @@ export default function InsightsPage() {
                 return (
                   <div key={row.type} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 10px", background:"var(--surface-soft)", border:"1px solid var(--border-soft)", borderRadius:10 }}>
                     <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontSize:11, fontWeight:700, color:"var(--text)", letterSpacing:"0.01em" }}>{row.label}</div>
-                      <div style={{ fontSize:9, color:"var(--text-dim)", marginTop:1 }}>{tInsights("workout_bg_response_session_count", { n: row.count })}</div>
+                      <div style={{ fontSize:13, fontWeight:700, color:"var(--text)", letterSpacing:"0.01em" }}>{row.label}</div>
+                      <div style={{ fontSize:11, color:"var(--text-dim)", marginTop:1 }}>{tInsights("workout_bg_response_session_count", { n: row.count })}</div>
                     </div>
                     <div style={{ display:"flex", alignItems:"baseline", gap:3 }}>
                       <div style={{ fontSize:18, fontWeight:800, color, fontFamily:"var(--font-mono)", lineHeight:1 }}>
                         {sign}{Math.abs(row.avgDelta)}
                       </div>
-                      <div style={{ fontSize:9, color:"var(--text-dim)", fontWeight:600 }}>mg/dL</div>
+                      <div style={{ fontSize:11, color:"var(--text-dim)", fontWeight:600 }}>mg/dL</div>
                     </div>
                   </div>
                 );
@@ -1376,17 +1376,17 @@ export default function InsightsPage() {
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
             <CardLabel text={tInsights("card_workout_patterns_title")}/>
-            <div style={{ fontSize:9, color:"var(--text-dim)" }}>{tInsights("card_workout_patterns_signal_count", { n: workoutPatterns.length })}</div>
+            <div style={{ fontSize:11, color:"var(--text-dim)" }}>{tInsights("card_workout_patterns_signal_count", { n: workoutPatterns.length })}</div>
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
             {workoutPatterns.map((p, i) => (
               <div key={i} style={{ display:"flex", gap:8, padding:"8px 10px", background:`${p.color}10`, border:`1px solid ${p.color}25`, borderRadius:10, alignItems:"flex-start" }}>
-                <div style={{ width:22, height:22, borderRadius:99, background:`${p.color}20`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:11, color:p.color, fontWeight:700 }}>
+                <div style={{ width:22, height:22, borderRadius:99, background:`${p.color}20`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:13, color:p.color, fontWeight:700 }}>
                   {p.icon}
                 </div>
                 <div style={{ minWidth:0 }}>
-                  <div style={{ fontSize:11, fontWeight:600, color:p.color, marginBottom:2 }}>{p.title}</div>
-                  <div style={{ fontSize:10, color:"var(--text-dim)", lineHeight:1.45 }}>{p.desc}</div>
+                  <div style={{ fontSize:13, fontWeight:600, color:p.color, marginBottom:2 }}>{p.title}</div>
+                  <div style={{ fontSize:12, color:"var(--text-dim)", lineHeight:1.45 }}>{p.desc}</div>
                 </div>
               </div>
             ))}
@@ -1413,7 +1413,7 @@ export default function InsightsPage() {
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
             <CardLabel text={tInsights("card_meal_type_title")}/>
-            <div style={{ fontSize:9, color:"var(--text-dim)" }}>{tInsights("card_meal_type_sub")}</div>
+            <div style={{ fontSize:11, color:"var(--text-dim)" }}>{tInsights("card_meal_type_sub")}</div>
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
             {TYPE_ORDER.map(type => {
@@ -1427,15 +1427,15 @@ export default function InsightsPage() {
               return (
                 <div key={type} style={{ background:`${col}08`, border:`1px solid ${col}20`, borderRadius:10, padding:"8px 10px", opacity: has ? 1 : 0.55 }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6, gap:4 }}>
-                    <div style={{ fontSize:9, fontWeight:700, color:col, letterSpacing:"0.06em", textTransform:"uppercase", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{TYPE_LABELS[type]}</div>
-                    <div style={{ fontSize:11, fontWeight:700, color:has?barCol:"var(--text-faint)", fontFamily:"var(--font-mono)" }}>
+                    <div style={{ fontSize:11, fontWeight:700, color:col, letterSpacing:"0.06em", textTransform:"uppercase", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{TYPE_LABELS[type]}</div>
+                    <div style={{ fontSize:13, fontWeight:700, color:has?barCol:"var(--text-faint)", fontFamily:"var(--font-mono)" }}>
                       {has ? `${successPct}%` : "—"}
                     </div>
                   </div>
                   <div style={{ height:4, borderRadius:99, background:"var(--surface-soft)", overflow:"hidden", marginBottom:6 }}>
                     <div style={{ height:"100%", width:`${successPct}%`, background:barCol, borderRadius:99 }}/>
                   </div>
-                  <div style={{ fontSize:9, color:"var(--text-dim)", lineHeight:1.4 }}>
+                  <div style={{ fontSize:11, color:"var(--text-dim)", lineHeight:1.4 }}>
                     {has
                       ? tInsights("meal_type_card_summary", { n: data.count, carbs: carbUnit.display(avgC), insulin: avgI })
                       : tInsights("meal_type_card_no_data")}
@@ -1466,7 +1466,7 @@ export default function InsightsPage() {
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
             <CardLabel text={tInsights("card_time_of_day_title")}/>
-            <div style={{ fontSize:9, color:"var(--text-dim)" }}>{tInsights("card_time_of_day_sub")}</div>
+            <div style={{ fontSize:11, color:"var(--text-dim)" }}>{tInsights("card_time_of_day_sub")}</div>
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
             {Object.entries(timeGroups).map(([label, data]) => {
@@ -1480,12 +1480,12 @@ export default function InsightsPage() {
                                                 "time_of_day_night";
               return (
                 <div key={label} style={{ display:"grid", gridTemplateColumns:"110px 1fr 32px 32px", gap:8, alignItems:"center" }}>
-                  <div style={{ fontSize:10, color:"var(--text-muted)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{tInsights(i18nKey)}</div>
+                  <div style={{ fontSize:12, color:"var(--text-muted)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{tInsights(i18nKey)}</div>
                   <div style={{ height:6, borderRadius:99, background:"var(--surface-soft)", overflow:"hidden" }}>
                     <div style={{ height:"100%", width:`${pct}%`, background:col, borderRadius:99 }}/>
                   </div>
-                  <div style={{ fontSize:10, fontWeight:700, color: has?col:"var(--text-faint)", textAlign:"right", fontFamily:"var(--font-mono)" }}>{has?`${pct}%`:"—"}</div>
-                  <div style={{ fontSize:9, color:"var(--text-faint)", textAlign:"right" }}>{data.count}</div>
+                  <div style={{ fontSize:12, fontWeight:700, color: has?col:"var(--text-faint)", textAlign:"right", fontFamily:"var(--font-mono)" }}>{has?`${pct}%`:"—"}</div>
+                  <div style={{ fontSize:11, color:"var(--text-faint)", textAlign:"right" }}>{data.count}</div>
                 </div>
               );
             })}
@@ -1571,33 +1571,33 @@ export default function InsightsPage() {
           >
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
               <CardLabel text={tInsights("card_cycle_symptoms_title")}/>
-              <div style={{ fontSize:9, color:"var(--text-dim)" }}>
+              <div style={{ fontSize:11, color:"var(--text-dim)" }}>
                 {tInsights("card_cycle_symptoms_window")}
               </div>
             </div>
 
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:10 }}>
               <div style={{ background:`${PINK}10`, border:`1px solid ${PINK}24`, borderRadius:10, padding:"10px 12px" }}>
-                <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.06em", fontWeight:700, textTransform:"uppercase" }}>
+                <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.06em", fontWeight:700, textTransform:"uppercase" }}>
                   {tInsights("cycle_bleeding_days_label")}
                 </div>
                 <div style={{ fontSize:22, fontWeight:800, color:PINK, fontFamily:"var(--font-mono)", lineHeight:1.1, marginTop:4 }}>
                   {bleedingDays}
                 </div>
                 {Object.keys(phaseCounts).length > 0 && (
-                  <div style={{ fontSize:10, color:"var(--text-dim)", marginTop:6, lineHeight:1.4 }}>
+                  <div style={{ fontSize:12, color:"var(--text-dim)", marginTop:6, lineHeight:1.4 }}>
                     {Object.entries(phaseCounts).map(([k, n]) => `${tInsights(`cycle_phase_${k}` as never)} ×${n}`).join(" · ")}
                   </div>
                 )}
               </div>
               <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
-                <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.06em", fontWeight:700, textTransform:"uppercase" }}>
+                <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.06em", fontWeight:700, textTransform:"uppercase" }}>
                   {tInsights("symptom_entries_label")}
                 </div>
                 <div style={{ fontSize:22, fontWeight:800, color:"var(--text-strong)", fontFamily:"var(--font-mono)", lineHeight:1.1, marginTop:4 }}>
                   {totalSymptomEntries}
                 </div>
-                <div style={{ fontSize:10, color:"var(--text-dim)", marginTop:6 }}>
+                <div style={{ fontSize:12, color:"var(--text-dim)", marginTop:6 }}>
                   {tInsights("symptom_entries_sub")}
                 </div>
               </div>
@@ -1605,16 +1605,16 @@ export default function InsightsPage() {
 
             {topSymptoms.length > 0 ? (
               <div>
-                <div style={{ fontSize:10, color:"var(--text-dim)", fontWeight:700, marginBottom:6, letterSpacing:"0.04em" }}>
+                <div style={{ fontSize:12, color:"var(--text-dim)", fontWeight:700, marginBottom:6, letterSpacing:"0.04em" }}>
                   {tInsights("symptom_top_label")}
                 </div>
                 <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                   {topSymptoms.map(s => (
                     <div key={s.key} style={{ display:"grid", gridTemplateColumns:"1fr auto auto", gap:8, alignItems:"center", padding:"6px 10px", background:"var(--surface-soft)", borderRadius:8 }}>
-                      <div style={{ fontSize:11, fontWeight:600, color:"var(--text)" }}>
+                      <div style={{ fontSize:13, fontWeight:600, color:"var(--text)" }}>
                         {tInsights(`symptom_${s.key}` as never)}
                       </div>
-                      <div style={{ fontSize:10, color:"var(--text-dim)", fontFamily:"var(--font-mono)" }}>
+                      <div style={{ fontSize:12, color:"var(--text-dim)", fontFamily:"var(--font-mono)" }}>
                         ×{s.count}
                       </div>
                       <div style={{ display:"flex", gap:2 }} aria-label={`avg ${s.avgSev.toFixed(1)} of 5`}>
@@ -1630,7 +1630,7 @@ export default function InsightsPage() {
                 </div>
               </div>
             ) : (
-              <div style={{ fontSize:11, color:"var(--text-faint)", fontStyle:"italic" }}>
+              <div style={{ fontSize:13, color:"var(--text-faint)", fontStyle:"italic" }}>
                 {tInsights("symptom_top_empty")}
               </div>
             )}
@@ -1678,7 +1678,7 @@ export default function InsightsPage() {
     <div style={{ maxWidth:480, margin:"0 auto" }}>
       <div style={{ marginBottom:18 }}>
         <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>Insights</h1>
-        <p style={{ color:"var(--text-faint)", fontSize:12 }}>{tInsights("header_subtitle", { n: total })}</p>
+        <p style={{ color:"var(--text-faint)", fontSize:13 }}>{tInsights("header_subtitle", { n: total })}</p>
       </div>
 
       {/* Filter out items whose node was set to null (e.g. workout-patterns
@@ -1734,7 +1734,7 @@ function RelinkSourceLine({
         style={{
           width: "100%", textAlign: "left",
           background: "transparent", border: "none", padding: 0,
-          fontSize: 10, color: "var(--text-faint)", lineHeight: 1.4,
+          fontSize: 12, color: "var(--text-faint)", lineHeight: 1.4,
           cursor: hasTimeWindow ? "pointer" : "default",
           font: "inherit",
         }}
@@ -1757,7 +1757,7 @@ function RelinkSourceLine({
           background: "var(--surface-soft)", border: `1px solid var(--border)`,
           display: "flex", flexDirection: "column", gap: 8,
         }}>
-          <div style={{ fontSize: 10, color: "var(--text-dim)", lineHeight: 1.5 }}>
+          <div style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.5 }}>
             {tInsights("engine_icr_relink_intro")}
           </div>
           {timeWindowPairs.map(p => {
@@ -1780,9 +1780,9 @@ function RelinkSourceLine({
                 padding: "8px 10px", borderRadius: 8,
                 background: "var(--surface)", border: `1px solid var(--border-soft)`,
               }}>
-                <div style={{ flex: 1, minWidth: 160, fontSize: 11, color: "var(--text-strong)", lineHeight: 1.45 }}>
+                <div style={{ flex: 1, minWidth: 160, fontSize: 13, color: "var(--text-strong)", lineHeight: 1.45 }}>
                   <div style={{ fontWeight: 700 }}>{p.bolus.units}u {p.bolus.insulin_name || ""}</div>
-                  <div style={{ fontSize: 10, color: "var(--text-dim)" }}>
+                  <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
                     {tInsights("engine_icr_relink_pair_line", {
                       bolusAt: dtFmt(bolusTime),
                       meal: mealLabel,
@@ -1791,7 +1791,7 @@ function RelinkSourceLine({
                     })}
                   </div>
                   {isErr && (
-                    <div style={{ fontSize: 10, color: PINK, marginTop: 4 }}>
+                    <div style={{ fontSize: 12, color: PINK, marginTop: 4 }}>
                       {tInsights("engine_icr_relink_failed")}
                     </div>
                   )}
@@ -1814,7 +1814,7 @@ function RelinkSourceLine({
                   style={{
                     padding: "6px 12px", borderRadius: 8, border: "none",
                     background: ACCENT, color: "var(--on-accent)",
-                    fontSize: 11, fontWeight: 700,
+                    fontSize: 13, fontWeight: 700,
                     cursor: isBusy ? "wait" : "pointer",
                     opacity: isBusy ? 0.7 : 1,
                     whiteSpace: "nowrap",
@@ -1847,7 +1847,7 @@ function InsightsSortable({ items }: { items: SortableItem[] }) {
 function CardLabel({ text, color }: { text: string; color?: string }) {
   return (
     <div style={{
-      fontSize:9, fontWeight:700, letterSpacing:"0.1em",
+      fontSize:11, fontWeight:700, letterSpacing:"0.1em",
       color: color ?? "var(--text-dim)", textTransform:"uppercase",
     }}>{text}</div>
   );
@@ -1903,10 +1903,10 @@ function DisclaimerChip({ text }: { text?: string } = {}) {
       padding:"5px 10px", borderRadius:12,
       background:"var(--surface-soft)",
       border:"1px solid var(--border-strong)",
-      fontSize:10, color:"var(--text-muted)", lineHeight:1.35,
+      fontSize:12, color:"var(--text-muted)", lineHeight:1.35,
       maxWidth:"100%",
     }}>
-      <span aria-hidden style={{ fontSize:11, lineHeight:1.2 }}>⚕️</span>
+      <span aria-hidden style={{ fontSize:13, lineHeight:1.2 }}>⚕️</span>
       <span>{text ?? tInsights("disclaimer_default")}</span>
     </div>
   );
@@ -1923,10 +1923,10 @@ function ThresholdBack({
   const tInsights = useTranslations("insights");
   return (
     <div style={{ display:"flex", flexDirection:"column", height:"100%", gap:8 }}>
-      <div style={{ fontSize:12, color:accent, fontWeight:700, letterSpacing:"0.01em", lineHeight:1.25 }}>
+      <div style={{ fontSize:13, color:accent, fontWeight:700, letterSpacing:"0.01em", lineHeight:1.25 }}>
         {title}
       </div>
-      <div style={{ fontSize:10, color:"var(--text-body)", lineHeight:1.5, display:"flex", flexDirection:"column", gap:6 }}>
+      <div style={{ fontSize:12, color:"var(--text-body)", lineHeight:1.5, display:"flex", flexDirection:"column", gap:6 }}>
         {paragraphs.map((p, i) => <div key={i}>{p}</div>)}
       </div>
       <div style={{ marginTop:"auto", display:"flex", flexDirection:"column", gap:6, alignItems:"flex-start" }}>
@@ -1943,17 +1943,17 @@ function IcrInfoBack({ heading, body, subLine, accent }: {
   const tInsights = useTranslations("insights");
   return (
     <div style={{ display:"flex", flexDirection:"column", height:"100%", gap:8 }}>
-      <div style={{ fontSize:12, color:accent, fontWeight:700, letterSpacing:"0.01em", lineHeight:1.25 }}>
+      <div style={{ fontSize:13, color:accent, fontWeight:700, letterSpacing:"0.01em", lineHeight:1.25 }}>
         {heading}
       </div>
-      <div style={{ fontSize:11, color:"var(--text-body)", lineHeight:1.55 }}>{body}</div>
-      <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.02em", marginTop:2 }}>
+      <div style={{ fontSize:13, color:"var(--text-body)", lineHeight:1.55 }}>{body}</div>
+      <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.02em", marginTop:2 }}>
         {subLine}
       </div>
       {/* Bottom region: disclaimer chip + return hint, both pinned to the bottom. */}
       <div style={{ marginTop:"auto", paddingTop:10, display:"flex", flexDirection:"column", gap:6 }}>
         <DisclaimerChip/>
-        <div style={{ fontSize:9, color:"var(--text-faint)", textAlign:"right", letterSpacing:"0.02em" }}>
+        <div style={{ fontSize:11, color:"var(--text-faint)", textAlign:"right", letterSpacing:"0.02em" }}>
           {tInsights("flip_hint_back")}
         </div>
       </div>
@@ -1969,7 +1969,7 @@ function InfoCornerIcon() {
   return (
     <span aria-hidden style={{
       position:"absolute", top:3, right:6,
-      fontSize:10, lineHeight:1,
+      fontSize:12, lineHeight:1,
       color:"var(--text-dim)",
       pointerEvents:"none",
     }}>{"\u2139\uFE0E"}</span>
@@ -2060,11 +2060,11 @@ function FlipBack({ title, accent, paragraphs }: { title: string; accent: string
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-        <div style={{ fontSize:10, color:accent, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>{title}</div>
-        <span style={{ fontSize:9, color:"var(--text-faint)" }}>{tInsights("flip_hint_back")}</span>
+        <div style={{ fontSize:12, color:accent, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>{title}</div>
+        <span style={{ fontSize:11, color:"var(--text-faint)" }}>{tInsights("flip_hint_back")}</span>
       </div>
       {paragraphs.map((p, i) => (
-        <div key={i} style={{ fontSize:11, color:"var(--text-muted)", lineHeight:1.5 }}>{p}</div>
+        <div key={i} style={{ fontSize:13, color:"var(--text-muted)", lineHeight:1.5 }}>{p}</div>
       ))}
     </div>
   );
@@ -2102,7 +2102,7 @@ function InsightFlipTile({ tile }: { tile: InsightTile }) {
       <div style={{ fontSize:24, fontWeight:800, color:tile.color, fontFamily:"var(--font-mono)", lineHeight:1, letterSpacing:"-0.03em", marginTop:6 }}>
         {tile.val}
       </div>
-      <div style={{ fontSize:9, color:"var(--text-faint)", marginTop:4 }}>{tile.sub}</div>
+      <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:4 }}>{tile.sub}</div>
       {/* Show ℹ affordance only on tiles that opt-in to a richer back side. */}
       {tile.infoBack && <InfoCornerIcon/>}
     </>
@@ -2111,13 +2111,13 @@ function InsightFlipTile({ tile }: { tile: InsightTile }) {
   // of the default formula/explain pair. Other tiles keep the legacy back.
   const backContent = tile.infoBack ?? (
     <>
-      <div style={{ fontSize:9, fontWeight:700, color:tile.color, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:4 }}>
+      <div style={{ fontSize:11, fontWeight:700, color:tile.color, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:4 }}>
         {tile.label}
       </div>
-      <div style={{ fontSize:9, color:"var(--text-muted)", fontFamily:"var(--font-mono)", background:"var(--surface-soft)", padding:"4px 6px", borderRadius:5, marginBottom:4, wordBreak:"break-word" }}>
+      <div style={{ fontSize:11, color:"var(--text-muted)", fontFamily:"var(--font-mono)", background:"var(--surface-soft)", padding:"4px 6px", borderRadius:5, marginBottom:4, wordBreak:"break-word" }}>
         {tile.formula}
       </div>
-      <div style={{ fontSize:10, color:"var(--text-muted)", lineHeight:1.4 }}>{tile.explain}</div>
+      <div style={{ fontSize:12, color:"var(--text-muted)", lineHeight:1.4 }}>{tile.explain}</div>
     </>
   );
 

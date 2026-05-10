@@ -80,7 +80,7 @@ export default function AboutGlevModal({ open, onClose }: { open: boolean; onClo
           <Row label={t("row_account")} value={email ?? "—"} mono />
         </div>
 
-        <div style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.55 }}>
+        <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.55 }}>
           {t("description")}
         </div>
 
@@ -90,7 +90,7 @@ export default function AboutGlevModal({ open, onClose }: { open: boolean; onClo
             style={{
               flex: 1, padding: "12px 16px", borderRadius: 12,
               border: `1px solid ${BORDER}`, background: "transparent",
-              color: "var(--text-strong)", fontSize: 13, fontWeight: 600, cursor: "pointer",
+              color: "var(--text-strong)", fontSize: 14, fontWeight: 600, cursor: "pointer",
             }}
           >
             {t("close_btn")}
@@ -101,7 +101,7 @@ export default function AboutGlevModal({ open, onClose }: { open: boolean; onClo
             style={{
               flex: 1, padding: "12px 16px", borderRadius: 12,
               border: `1px solid ${PINK}40`, background: `${PINK}15`,
-              color: PINK, fontSize: 13, fontWeight: 700, cursor: busy ? "wait" : "pointer",
+              color: PINK, fontSize: 14, fontWeight: 700, cursor: busy ? "wait" : "pointer",
             }}
           >
             {busy ? t("signout_busy") : t("signout_idle")}
@@ -112,7 +112,7 @@ export default function AboutGlevModal({ open, onClose }: { open: boolean; onClo
           onClick={() => { onClose(); router.push("/settings"); }}
           style={{
             background: "transparent", border: "none",
-            color: ACCENT, fontSize: 12, fontWeight: 600,
+            color: ACCENT, fontSize: 13, fontWeight: 600,
             padding: "4px 0", cursor: "pointer", textAlign: "center",
           }}
         >
@@ -132,10 +132,10 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
         background: "var(--surface-soft)", border: `1px solid ${BORDER}`,
       }}
     >
-      <span style={{ fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600 }}>{label}</span>
+      <span style={{ fontSize: 13, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600 }}>{label}</span>
       <span
         style={{
-          fontSize: 12, fontWeight: 600, color: "var(--text-strong)",
+          fontSize: 13, fontWeight: 600, color: "var(--text-strong)",
           fontFamily: mono ? "var(--font-mono)" : undefined,
           maxWidth: "70%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
         }}

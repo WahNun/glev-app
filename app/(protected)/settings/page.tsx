@@ -730,7 +730,7 @@ export default function SettingsPage() {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {saveError && (
-          <div style={{ fontSize: 12, color: PINK, lineHeight: 1.4, textAlign: "center" }}>{saveError}</div>
+          <div style={{ fontSize: 13, color: PINK, lineHeight: 1.4, textAlign: "center" }}>{saveError}</div>
         )}
         <button
           type="button"
@@ -761,7 +761,7 @@ export default function SettingsPage() {
       style={{
         width: "100%", padding: "12px 16px", borderRadius: 12,
         border: `1px solid ${BORDER}`, background: "var(--surface-soft)",
-        color: "var(--text-strong)", fontSize: 13, fontWeight: 600, cursor: "pointer",
+        color: "var(--text-strong)", fontSize: 14, fontWeight: 600, cursor: "pointer",
       }}
     >
       {tSettings("sheet_close")}
@@ -783,7 +783,7 @@ export default function SettingsPage() {
             padding: "12px 14px", borderRadius: 12,
             background: "var(--surface-soft)", border: `1px solid ${BORDER}`,
           }}>
-            <div style={{ fontSize: 11, color: "var(--text-faint)", marginBottom: 4 }}>
+            <div style={{ fontSize: 13, color: "var(--text-faint)", marginBottom: 4 }}>
               {tSettings("account_email_label")}
             </div>
             <div style={{
@@ -800,7 +800,7 @@ export default function SettingsPage() {
               padding: "12px 14px", borderRadius: 12,
               background: "var(--surface-soft)", border: `1px solid ${BORDER}`,
             }}>
-              <div style={{ fontSize: 11, color: "var(--text-faint)", marginBottom: 4 }}>
+              <div style={{ fontSize: 13, color: "var(--text-faint)", marginBottom: 4 }}>
                 {tSettings("account_member_since_label")}
               </div>
               <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-strong)" }}>
@@ -811,7 +811,7 @@ export default function SettingsPage() {
               padding: "12px 14px", borderRadius: 12,
               background: "var(--surface-soft)", border: `1px solid ${BORDER}`,
             }}>
-              <div style={{ fontSize: 11, color: "var(--text-faint)", marginBottom: 4 }}>
+              <div style={{ fontSize: 13, color: "var(--text-faint)", marginBottom: 4 }}>
                 {tSettings("account_meals_logged_label")}
               </div>
               <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.02em" }}>
@@ -845,11 +845,11 @@ export default function SettingsPage() {
       body: (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
           <div>
-            <label style={{ fontSize: 12, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>{tSettings("target_min")}</label>
+            <label style={{ fontSize: 13, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>{tSettings("target_min")}</label>
             <input style={inp} type="number" value={settings.targetMin} onChange={(e) => upd("targetMin", parseInt(e.target.value) || 70)} />
           </div>
           <div>
-            <label style={{ fontSize: 12, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>{tSettings("target_max")}</label>
+            <label style={{ fontSize: 13, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>{tSettings("target_max")}</label>
             <input style={inp} type="number" value={settings.targetMax} onChange={(e) => upd("targetMax", parseInt(e.target.value) || 180)} />
           </div>
         </div>
@@ -859,7 +859,7 @@ export default function SettingsPage() {
     units: {
       title: tSettings("sheet_units_title"),
       body: (
-        <p style={{ fontSize: 13, color: "var(--text-body)", lineHeight: 1.55, margin: 0 }}>
+        <p style={{ fontSize: 14, color: "var(--text-body)", lineHeight: 1.55, margin: 0 }}>
           {tSettings("sheet_units_body")}
         </p>
       ),
@@ -869,7 +869,7 @@ export default function SettingsPage() {
       title: tSettings("insulin_to_carb_ratio"),
       body: (
         <div>
-          <label style={{ fontSize: 12, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>{tSettings("icr_label")}</label>
+          <label style={{ fontSize: 13, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>{tSettings("icr_label")}</label>
           <input
             style={inp}
             type="number"
@@ -879,7 +879,7 @@ export default function SettingsPage() {
             value={settings.icr}
             onChange={(e) => upd("icr", parseInt(e.target.value) || DEFAULT_INSULIN_SETTINGS.icr)}
           />
-          <div style={{ fontSize: 11, color: "var(--text-ghost)", marginTop: 6 }}>{tSettings("icr_hint")}</div>
+          <div style={{ fontSize: 13, color: "var(--text-ghost)", marginTop: 6 }}>{tSettings("icr_hint")}</div>
         </div>
       ),
       footer: <SaveFooter onSave={saveInsulinAction} />,
@@ -888,7 +888,7 @@ export default function SettingsPage() {
       title: tSettings("correction_factor"),
       body: (
         <div>
-          <label style={{ fontSize: 12, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>{tSettings("cf_label")}</label>
+          <label style={{ fontSize: 13, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>{tSettings("cf_label")}</label>
           <input
             style={inp}
             type="number"
@@ -898,7 +898,7 @@ export default function SettingsPage() {
             value={settings.cf}
             onChange={(e) => upd("cf", parseInt(e.target.value) || DEFAULT_INSULIN_SETTINGS.cf)}
           />
-          <div style={{ fontSize: 11, color: "var(--text-ghost)", marginTop: 6 }}>{tSettings("cf_hint")}</div>
+          <div style={{ fontSize: 13, color: "var(--text-ghost)", marginTop: 6 }}>{tSettings("cf_hint")}</div>
         </div>
       ),
       footer: <SaveFooter onSave={saveInsulinAction} />,
@@ -907,7 +907,7 @@ export default function SettingsPage() {
       title: tSettings("row_target_bg"),
       body: (
         <div>
-          <label style={{ fontSize: 12, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>{tSettings("target_bg_label")}</label>
+          <label style={{ fontSize: 13, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>{tSettings("target_bg_label")}</label>
           <input
             style={inp}
             type="number"
@@ -917,7 +917,7 @@ export default function SettingsPage() {
             value={settings.targetBg}
             onChange={(e) => upd("targetBg", parseInt(e.target.value) || DEFAULT_INSULIN_SETTINGS.targetBg)}
           />
-          <div style={{ fontSize: 11, color: "var(--text-ghost)", marginTop: 6 }}>{tSettings("target_bg_hint")}</div>
+          <div style={{ fontSize: 13, color: "var(--text-ghost)", marginTop: 6 }}>{tSettings("target_bg_hint")}</div>
         </div>
       ),
       footer: <SaveFooter onSave={saveInsulinAction} />,
@@ -932,7 +932,7 @@ export default function SettingsPage() {
       title: tSettings("appointments_title"),
       body: (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.5 }}>
+          <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5 }}>
             {tSettings("appointments_hint")}
           </div>
 
@@ -945,7 +945,7 @@ export default function SettingsPage() {
             padding: "12px 14px", borderRadius: 12,
             background: "var(--surface-soft)", border: `1px solid ${BORDER}`,
           }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-strong)" }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-strong)" }}>
               {tSettings("appointments_add_title")}
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -977,7 +977,7 @@ export default function SettingsPage() {
                 alignSelf: "flex-start",
                 padding: "8px 16px", borderRadius: 9, border: "none",
                 background: `${ACCENT}`, color: "#fff",
-                fontSize: 12, fontWeight: 700,
+                fontSize: 13, fontWeight: 700,
                 cursor: apptBusy !== null || !newApptDate ? "not-allowed" : "pointer",
                 opacity: apptBusy !== null || !newApptDate ? 0.6 : 1,
               }}
@@ -995,7 +995,7 @@ export default function SettingsPage() {
             <div style={{
               padding: "16px 14px", borderRadius: 12,
               border: `1px dashed ${BORDER}`,
-              fontSize: 12, color: "var(--text-faint)",
+              fontSize: 13, color: "var(--text-faint)",
               textAlign: "center", lineHeight: 1.5,
             }}>
               {tSettings("appointments_empty")}
@@ -1060,7 +1060,7 @@ export default function SettingsPage() {
                             style={{
                               padding: "6px 14px", borderRadius: 8, border: "none",
                               background: ACCENT, color: "#fff",
-                              fontSize: 12, fontWeight: 600,
+                              fontSize: 13, fontWeight: 600,
                               cursor: rowBusy ? "wait" : "pointer",
                               opacity: rowBusy ? 0.6 : 1,
                             }}
@@ -1084,7 +1084,7 @@ export default function SettingsPage() {
                               border: `1px solid ${BORDER}`,
                               background: "transparent",
                               color: "var(--text-body)",
-                              fontSize: 12, fontWeight: 600,
+                              fontSize: 13, fontWeight: 600,
                               cursor: rowBusy ? "not-allowed" : "pointer",
                             }}
                           >
@@ -1102,7 +1102,7 @@ export default function SettingsPage() {
                           </div>
                           {appt.note && (
                             <div style={{
-                              fontSize: 12, color: "var(--text-dim)",
+                              fontSize: 13, color: "var(--text-dim)",
                               marginTop: 2, lineHeight: 1.4,
                               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                             }}>
@@ -1128,7 +1128,7 @@ export default function SettingsPage() {
                             border: `1px solid ${BORDER}`,
                             background: "var(--surface-soft)",
                             color: "var(--text-body)",
-                            fontSize: 12, fontWeight: 600,
+                            fontSize: 13, fontWeight: 600,
                             cursor: apptBusy !== null ? "not-allowed" : "pointer",
                             opacity: apptBusy !== null ? 0.5 : 1,
                           }}
@@ -1145,7 +1145,7 @@ export default function SettingsPage() {
                             border: `1px solid ${PINK}40`,
                             background: `${PINK}10`,
                             color: PINK,
-                            fontSize: 12, fontWeight: 600,
+                            fontSize: 13, fontWeight: 600,
                             cursor: apptBusy !== null ? "not-allowed" : "pointer",
                             opacity: apptBusy !== null ? 0.5 : 1,
                           }}
@@ -1163,7 +1163,7 @@ export default function SettingsPage() {
           )}
 
           {saveError && (
-            <div style={{ fontSize: 12, color: PINK, lineHeight: 1.4 }}>{saveError}</div>
+            <div style={{ fontSize: 13, color: PINK, lineHeight: 1.4 }}>{saveError}</div>
           )}
         </div>
       ),
@@ -1182,7 +1182,7 @@ export default function SettingsPage() {
     dexcom: {
       title: tSettings("sheet_dexcom_title"),
       body: (
-        <p style={{ fontSize: 13, color: "var(--text-body)", lineHeight: 1.55, margin: 0 }}>
+        <p style={{ fontSize: 14, color: "var(--text-body)", lineHeight: 1.55, margin: 0 }}>
           {tSettings("sheet_dexcom_body")}
         </p>
       ),
@@ -1194,8 +1194,8 @@ export default function SettingsPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", background: "var(--surface-soft)", borderRadius: 10, gap: 12 }}>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>{tSettings("cycle_logging_label")}</div>
-              <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 2 }}>{tSettings("cycle_logging_desc")}</div>
+              <div style={{ fontSize: 14, fontWeight: 500 }}>{tSettings("cycle_logging_label")}</div>
+              <div style={{ fontSize: 13, color: "var(--text-faint)", marginTop: 2 }}>{tSettings("cycle_logging_desc")}</div>
             </div>
             <div
               role="switch"
@@ -1213,7 +1213,7 @@ export default function SettingsPage() {
             </div>
           </div>
           {saveError && (
-            <div style={{ fontSize: 12, color: PINK, lineHeight: 1.4 }}>{saveError}</div>
+            <div style={{ fontSize: 13, color: PINK, lineHeight: 1.4 }}>{saveError}</div>
           )}
         </div>
       ),
@@ -1226,8 +1226,8 @@ export default function SettingsPage() {
           {/* Critical alerts toggle */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", background: "var(--surface-soft)", borderRadius: 10, gap: 12 }}>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>{tSettings("notif_critical_label")}</div>
-              <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 2 }}>{tSettings("notif_critical_desc")}</div>
+              <div style={{ fontSize: 14, fontWeight: 500 }}>{tSettings("notif_critical_label")}</div>
+              <div style={{ fontSize: 13, color: "var(--text-faint)", marginTop: 2 }}>{tSettings("notif_critical_desc")}</div>
             </div>
             <div
               role="switch"
@@ -1250,8 +1250,8 @@ export default function SettingsPage() {
               DB value so Phase 2 only needs to drop the disabled styling. */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", background: "var(--surface-soft)", borderRadius: 10, gap: 12, opacity: 0.55 }}>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 500 }}>{tSettings("notif_smart_label")}</div>
-              <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 2 }}>{tSettings("notif_smart_soon")}</div>
+              <div style={{ fontSize: 14, fontWeight: 500 }}>{tSettings("notif_smart_label")}</div>
+              <div style={{ fontSize: 13, color: "var(--text-faint)", marginTop: 2 }}>{tSettings("notif_smart_soon")}</div>
             </div>
             <div
               role="switch"
@@ -1270,22 +1270,22 @@ export default function SettingsPage() {
 
           {/* Quiet hours from–to */}
           <div style={{ padding: "12px 14px", background: "var(--surface-soft)", borderRadius: 10 }}>
-            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>{tSettings("notif_quiet_label")}</div>
-            <div style={{ fontSize: 11, color: "var(--text-faint)", marginBottom: 10 }}>{tSettings("notif_quiet_desc")}</div>
+            <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>{tSettings("notif_quiet_label")}</div>
+            <div style={{ fontSize: 13, color: "var(--text-faint)", marginBottom: 10 }}>{tSettings("notif_quiet_desc")}</div>
             <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-              <span style={{ fontSize: 12, color: "var(--text-body)" }}>{tSettings("notif_quiet_from")}</span>
+              <span style={{ fontSize: 13, color: "var(--text-body)" }}>{tSettings("notif_quiet_from")}</span>
               <input
                 type="time"
                 value={notifPrefs.quietStart}
                 onChange={(e) => updNotif("quietStart", e.target.value)}
-                style={{ ...inp, width: "auto", padding: "6px 10px", fontSize: 13 }}
+                style={{ ...inp, width: "auto", padding: "6px 10px", fontSize: 14 }}
               />
-              <span style={{ fontSize: 12, color: "var(--text-body)" }}>{tSettings("notif_quiet_to")}</span>
+              <span style={{ fontSize: 13, color: "var(--text-body)" }}>{tSettings("notif_quiet_to")}</span>
               <input
                 type="time"
                 value={notifPrefs.quietEnd}
                 onChange={(e) => updNotif("quietEnd", e.target.value)}
-                style={{ ...inp, width: "auto", padding: "6px 10px", fontSize: 13 }}
+                style={{ ...inp, width: "auto", padding: "6px 10px", fontSize: 14 }}
               />
             </div>
           </div>
@@ -1342,7 +1342,7 @@ export default function SettingsPage() {
             </button>
           </div>
           {pendingLocale && (
-            <div style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5 }}>
+            <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5 }}>
               {tSettings("language_confirm_body")}
             </div>
           )}
@@ -1359,10 +1359,10 @@ export default function SettingsPage() {
       title: tSettings("appearance"),
       body: (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.5 }}>
+          <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5 }}>
             {tSettings("appearance_hint")}
           </div>
-          <div style={{ fontSize: 11, color: "var(--text-faint)", lineHeight: 1.5 }}>
+          <div style={{ fontSize: 13, color: "var(--text-faint)", lineHeight: 1.5 }}>
             {tSettings("appearance_app_only_hint")}
           </div>
           <div role="radiogroup" aria-label={tSettings("appearance")} style={{
@@ -1386,7 +1386,7 @@ export default function SettingsPage() {
                     padding: "9px 12px", borderRadius: 99, border: "none", cursor: "pointer",
                     background: active ? ACCENT : "transparent",
                     color: active ? "#fff" : "var(--text-body)",
-                    fontSize: 13, fontWeight: active ? 600 : 500,
+                    fontSize: 14, fontWeight: active ? 600 : 500,
                     transition: "background 120ms ease, color 120ms ease",
                   }}
                 >
@@ -1403,7 +1403,7 @@ export default function SettingsPage() {
       title: tSettings("carb_unit_title"),
       body: (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.5 }}>
+          <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5 }}>
             {tSettings("carb_unit_hint")}
           </div>
           <div role="radiogroup" aria-label={tSettings("carb_unit_title")} style={{
@@ -1427,7 +1427,7 @@ export default function SettingsPage() {
                     padding: "9px 12px", borderRadius: 99, border: "none", cursor: "pointer",
                     background: active ? ACCENT : "transparent",
                     color: active ? "#fff" : "var(--text-body)",
-                    fontSize: 13, fontWeight: active ? 600 : 500,
+                    fontSize: 14, fontWeight: active ? 600 : 500,
                     transition: "background 120ms ease, color 120ms ease",
                   }}
                 >
@@ -1436,7 +1436,7 @@ export default function SettingsPage() {
               );
             })}
           </div>
-          <div style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5 }}>
+          <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5 }}>
             {carbUnit.description}
           </div>
         </div>
@@ -1447,7 +1447,7 @@ export default function SettingsPage() {
       title: tSettings("daily_macros_title"),
       body: (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.5 }}>
+          <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5 }}>
             {tSettings("daily_macros_desc")}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
@@ -1458,7 +1458,7 @@ export default function SettingsPage() {
               { key: "fiber", label: tSettings("macro_fiber_label"), def: 30, max: 200 },
             ] as Array<{ key: keyof MacroTargets; label: string; def: number; max: number }>).map((target) => (
               <div key={target.key}>
-                <label style={{ fontSize: 12, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>{target.label}</label>
+                <label style={{ fontSize: 13, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>{target.label}</label>
                 <input
                   style={inp}
                   type="number"
@@ -1486,7 +1486,7 @@ export default function SettingsPage() {
       title: tSettings("row_historical_reload"),
       body: (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.55 }}>
+          <div style={{ fontSize: 14, color: "var(--text-dim)", lineHeight: 1.55 }}>
             {tSettings("historical_intro")}
           </div>
           <button
@@ -1495,14 +1495,14 @@ export default function SettingsPage() {
             style={{
               padding: "12px 18px", borderRadius: 10, border: `1px solid ${ACCENT}40`,
               cursor: reloading ? "wait" : "pointer",
-              background: `${ACCENT}15`, color: ACCENT, fontSize: 13, fontWeight: 600,
+              background: `${ACCENT}15`, color: ACCENT, fontSize: 14, fontWeight: 600,
               opacity: reloading ? 0.6 : 1,
             }}
           >
             {reloading ? tSettings("historical_loading") : tSettings("historical_reload")}
           </button>
           {reloadMsg && (
-            <div style={{ fontSize: 12, color: reloadMsg.kind === "error" ? PINK : GREEN }}>{reloadMsg.text}</div>
+            <div style={{ fontSize: 13, color: reloadMsg.kind === "error" ? PINK : GREEN }}>{reloadMsg.text}</div>
           )}
         </div>
       ),
@@ -1518,7 +1518,7 @@ export default function SettingsPage() {
       title: tSettings("onboarding_replay_title"),
       body: (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.55 }}>
+          <div style={{ fontSize: 14, color: "var(--text-dim)", lineHeight: 1.55 }}>
             {tSettings("onboarding_replay_desc")}
           </div>
           <button
@@ -1570,12 +1570,12 @@ export default function SettingsPage() {
               <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)", marginBottom: 2 }}>
                 {tSettings("google_sheets_title")}
               </div>
-              <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
+              <div style={{ fontSize: 13, color: "var(--text-dim)" }}>
                 {tSettings("google_sheets_desc")}
               </div>
             </div>
             <span style={{
-              fontSize: 10, fontWeight: 700, padding: "4px 10px", borderRadius: 99,
+              fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 99,
               background: "var(--surface)", color: "var(--text-dim)",
               border: `1px solid ${BORDER}`, letterSpacing: "0.08em", textTransform: "uppercase",
               whiteSpace: "nowrap",
@@ -1583,7 +1583,7 @@ export default function SettingsPage() {
               {tSettings("coming_soon")}
             </span>
           </div>
-          <div style={{ fontSize: 12, color: "var(--text-faint)", lineHeight: 1.55 }}>
+          <div style={{ fontSize: 13, color: "var(--text-faint)", lineHeight: 1.55 }}>
             {tSettings("google_sheets_footnote")}
           </div>
         </div>
@@ -1594,14 +1594,14 @@ export default function SettingsPage() {
       title: tSettings("adjustment_history_title"),
       body: (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <p style={{ fontSize: 13, color: "var(--text-faint)", lineHeight: 1.5, margin: 0 }}>
+          <p style={{ fontSize: 14, color: "var(--text-faint)", lineHeight: 1.5, margin: 0 }}>
             {tSettings("adjustment_history_intro")}
           </p>
           {adjustmentHistory.length === 0 ? (
             <div style={{
               padding: "14px 16px", borderRadius: 12,
               background: "var(--surface-soft)", border: `1px solid ${BORDER}`,
-              fontSize: 13, color: "var(--text-faint)",
+              fontSize: 14, color: "var(--text-faint)",
             }}>
               {tSettings("adjustment_history_empty")}
             </div>
@@ -1623,7 +1623,7 @@ export default function SettingsPage() {
                       display: "flex", flexDirection: "column", gap: 4,
                     }}
                   >
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-strong)" }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)" }}>
                       {tSettings("adjustment_history_row", {
                         date,
                         field: fieldLabel,
@@ -1632,7 +1632,7 @@ export default function SettingsPage() {
                       })}
                     </div>
                     {rec.reason && (
-                      <div style={{ fontSize: 12, color: "var(--text-faint)" }}>
+                      <div style={{ fontSize: 13, color: "var(--text-faint)" }}>
                         {rec.reason}
                       </div>
                     )}
@@ -1873,7 +1873,7 @@ export default function SettingsPage() {
       <p style={{
         marginTop: 36, marginBottom: 8,
         marginLeft: "auto", marginRight: "auto",
-        maxWidth: 560, fontSize: 11, lineHeight: 1.55,
+        maxWidth: 560, fontSize: 13, lineHeight: 1.55,
         color: "var(--text-faint)", textAlign: "center",
       }}>
         {tSettings("footer_disclaimer")}

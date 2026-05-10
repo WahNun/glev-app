@@ -78,10 +78,10 @@ export default function MealEntryCardCollapsed({
           date can never be cut off. */}
       <div style={{ minWidth: 0 }}>
         <div className="glev-mec-cell-label">When</div>
-        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-strong)", letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "var(--font-mono)" }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)", letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "var(--font-mono)" }}>
           {dateStr}
         </div>
-        <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text-dim)", letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "var(--font-mono)", marginTop: 2 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-dim)", letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "var(--font-mono)", marginTop: 2 }}>
           {timeStr}
         </div>
       </div>
@@ -92,12 +92,12 @@ export default function MealEntryCardCollapsed({
         {catColor && catShort ? (
           <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
             <span style={{ width: 7, height: 7, borderRadius: 99, background: catColor, opacity: 0.85, flexShrink: 0 }} />
-            <span title={catLabel || ""} style={{ fontSize: 12, fontWeight: 700, color: catColor, letterSpacing: "0.04em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <span title={catLabel || ""} style={{ fontSize: 13, fontWeight: 700, color: catColor, letterSpacing: "0.04em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {catShort}
             </span>
           </div>
         ) : (
-          <span style={{ fontSize: 12, color: "var(--text-ghost)" }}>—</span>
+          <span style={{ fontSize: 13, color: "var(--text-ghost)" }}>—</span>
         )}
       </div>
 
@@ -122,7 +122,7 @@ export default function MealEntryCardCollapsed({
         <div className="glev-mec-cell-label">Insulin</div>
         <div style={{ fontSize: 14, fontWeight: 700, color: meal.insulin_units ? ACCENT : "var(--text-faint)", letterSpacing: "-0.01em", fontFamily: "var(--font-mono)" }}>
           {meal.insulin_units ?? 0}
-          <span style={{ fontSize: 10, color: "var(--text-faint)", fontWeight: 500, marginLeft: 2 }}>u</span>
+          <span style={{ fontSize: 12, color: "var(--text-faint)", fontWeight: 500, marginLeft: 2 }}>u</span>
         </div>
       </div>
 
@@ -136,7 +136,7 @@ export default function MealEntryCardCollapsed({
           style={{
             padding: "5px 10px",
             borderRadius: 99,
-            fontSize: 10,
+            fontSize: 12,
             fontWeight: 700,
             background: `${chip.color}18`,
             color: chip.color,

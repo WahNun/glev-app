@@ -147,7 +147,7 @@ export default function SnapSlider({
         )}
         {unit && (
           <span style={{
-            fontSize: 12, fontWeight: 700, color: "var(--text-muted)",
+            fontSize: 13, fontWeight: 700, color: "var(--text-muted)",
             letterSpacing: "0.02em", textTransform: "uppercase",
           }}>{unit}</span>
         )}

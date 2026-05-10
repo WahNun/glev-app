@@ -121,15 +121,15 @@ export default function GlucoseTrendFront({
       {/* Header */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 6 }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700 }}>Glucose Trend</div>
-          <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 2 }}>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>Glucose Trend</div>
+          <div style={{ fontSize: 13, color: "var(--text-faint)", marginTop: 2 }}>
             Avg pre-meal glucose · last 14 days
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
           {recentAvg && (
             <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: 9, color: "var(--text-faint)", letterSpacing: "0.08em", fontWeight: 600 }}>
+              <div style={{ fontSize: 11, color: "var(--text-faint)", letterSpacing: "0.08em", fontWeight: 600 }}>
                 7-DAY AVG
               </div>
               <div
@@ -146,7 +146,7 @@ export default function GlucoseTrendFront({
             </div>
           )}
           {showFlipHint && (
-            <span style={{ fontSize: 9, color: "var(--text-ghost)", marginLeft: 4 }}>↺</span>
+            <span style={{ fontSize: 11, color: "var(--text-ghost)", marginLeft: 4 }}>↺</span>
           )}
         </div>
       </div>

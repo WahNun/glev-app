@@ -108,7 +108,7 @@ const linkStyle: React.CSSProperties = {
   padding: "6px 12px",
   color: "#ccc",
   textDecoration: "none",
-  fontSize: 13,
+  fontSize: 14,
   fontWeight: 500,
   borderRadius: 4,
 };
@@ -125,7 +125,7 @@ const logoutBtnStyle: React.CSSProperties = {
   color: "#ccc",
   border: "1px solid #444",
   borderRadius: 4,
-  fontSize: 13,
+  fontSize: 14,
   fontWeight: 500,
   cursor: "pointer",
   fontFamily: "inherit",

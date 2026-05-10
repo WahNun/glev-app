@@ -71,7 +71,7 @@ export default function CGMCompatibility({ variant = "default" }: { variant?: Va
         <p
           style={{
             margin: 0,
-            fontSize: 13,
+            fontSize: 14,
             lineHeight: 1.55,
             color: TEXT_DIM,
           }}
@@ -85,7 +85,7 @@ export default function CGMCompatibility({ variant = "default" }: { variant?: Va
               border: 0,
               padding: 0,
               color: MINT,
-              fontSize: 13,
+              fontSize: 14,
               fontWeight: 600,
               cursor: "pointer",
               textDecoration: "underline",
@@ -99,7 +99,7 @@ export default function CGMCompatibility({ variant = "default" }: { variant?: Va
         <p
           style={{
             margin: 0,
-            fontSize: 12.5,
+            fontSize: 13.5,
             lineHeight: 1.55,
             color: TEXT_FAINT,
           }}
@@ -132,7 +132,7 @@ function CompatRow({ color, label, items }: { color: string; label: string; item
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <div
         style={{
-          fontSize: 11,
+          fontSize: 13,
           fontWeight: 700,
           letterSpacing: "0.08em",
           textTransform: "uppercase",
@@ -153,7 +153,7 @@ function CompatRow({ color, label, items }: { color: string; label: string; item
               borderRadius: 999,
               background: "var(--surface-2, rgba(255,255,255,0.04))",
               border: `1px solid ${BORDER}`,
-              fontSize: 13,
+              fontSize: 14,
               fontWeight: 500,
               color: "var(--text)",
             }}

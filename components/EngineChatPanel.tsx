@@ -221,14 +221,14 @@ export default function EngineChatPanel({
         columnGap:8, rowGap:2, minWidth:0, flex:1,
       }}>
         <span style={{
-          fontSize:12, fontWeight:700, letterSpacing:"0.08em",
+          fontSize:13, fontWeight:700, letterSpacing:"0.08em",
           color:"var(--text-dim)",
           whiteSpace:"nowrap",
         }}>
           {t("ai_food_parser_caps")}
         </span>
         <span style={{
-          fontSize:11, fontWeight:600, color:ACCENT, letterSpacing:"0.04em",
+          fontSize:13, fontWeight:600, color:ACCENT, letterSpacing:"0.04em",
           whiteSpace:"nowrap",
         }}>
           {t("gpt_reasoning_title")}
@@ -253,7 +253,7 @@ export default function EngineChatPanel({
             padding:"4px 10px", borderRadius:99,
             background: `${color}18`,
             border: `1px solid ${color}40`,
-            fontSize:10, fontWeight:700, letterSpacing:"0.06em",
+            fontSize:12, fontWeight:700, letterSpacing:"0.06em",
             color, flexShrink:0,
           }}>
             <style>{`@keyframes efpSpin { to { transform: rotate(360deg) } }`}</style>
@@ -352,7 +352,7 @@ export default function EngineChatPanel({
               margin:"auto",
               textAlign:"center",
               color:"var(--text-dim)",
-              fontSize:13, lineHeight:1.65, maxWidth:340,
+              fontSize:14, lineHeight:1.65, maxWidth:340,
             }}>
               {t("chat_intro")}
             </div>
@@ -377,7 +377,7 @@ export default function EngineChatPanel({
                   background: `${palette.c}18`,
                   border: `1px solid ${palette.c}40`,
                   color: palette.c,
-                  fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
+                  fontSize: 11, fontWeight: 700, letterSpacing: "0.06em",
                 }}>
                   <span style={{
                     width: 5, height: 5, borderRadius: "50%",
@@ -396,7 +396,7 @@ export default function EngineChatPanel({
                 border: `1px solid ${m.role === "user" ? `${ACCENT}40` : BORDER}`,
                 borderRadius: 12,
                 padding: "10px 13px",
-                fontSize: 13, lineHeight: 1.55,
+                fontSize: 14, lineHeight: 1.55,
                 color: m.role === "user" ? "var(--text)" : "var(--text-body)",
                 whiteSpace: "pre-wrap",
                 wordBreak: "break-word",
@@ -426,7 +426,7 @@ export default function EngineChatPanel({
             <div style={{
               alignSelf:"stretch", padding:"8px 12px",
               background:`${PINK}15`, border:`1px solid ${PINK}40`, borderRadius:10,
-              color:PINK, fontSize:12,
+              color:PINK, fontSize:13,
             }}>
               {err}
             </div>
@@ -454,7 +454,7 @@ export default function EngineChatPanel({
               background:"var(--surface-soft)",
               border:`1px solid ${BORDER}`,
               borderRadius:10,
-              color:"var(--text)", fontSize:13, outline:"none",
+              color:"var(--text)", fontSize:14, outline:"none",
             }}
           />
           <button
@@ -468,7 +468,7 @@ export default function EngineChatPanel({
                 ? `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`
                 : "var(--border-soft)",
               color: input.trim() && !sending ? "#fff" : "var(--text-faint)",
-              fontSize:13, fontWeight:700,
+              fontSize:14, fontWeight:700,
               cursor: input.trim() && !sending ? "pointer" : "not-allowed",
               transition:"all 0.15s",
               opacity: ready ? 1 : 0.7,

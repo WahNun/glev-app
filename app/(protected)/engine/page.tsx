@@ -1726,7 +1726,7 @@ export default function EnginePage() {
                       borderRadius:99, border:"none", cursor:"pointer",
                       background: on ? ACCENT : "transparent",
                       color:"var(--text)",
-                      fontSize:13, fontWeight: on ? 600 : 500,
+                      fontSize:14, fontWeight: on ? 600 : 500,
                       textAlign:"center", whiteSpace:"nowrap",
                       transition:"background 0.15s",
                     }}
@@ -1783,14 +1783,14 @@ export default function EnginePage() {
               <div style={{ fontWeight: 600, fontSize: 14, color: "var(--text-primary, #1f2937)" }}>
                 {tEngine("adjustment_banner_title")}
               </div>
-              <div style={{ fontSize: 13, lineHeight: 1.45, color: "var(--text-secondary, #4b5563)" }}>
+              <div style={{ fontSize: 14, lineHeight: 1.45, color: "var(--text-secondary, #4b5563)" }}>
                 {tInsights(
                   currentAdjustment.suggestion.message.key as Parameters<typeof tInsights>[0],
                   currentAdjustment.suggestion.message.params,
                 )}
               </div>
               {adjustmentErr && (
-                <div role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>{adjustmentErr}</div>
+                <div role="alert" style={{ fontSize: 13, color: "#b91c1c" }}>{adjustmentErr}</div>
               )}
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <button
@@ -1804,7 +1804,7 @@ export default function EnginePage() {
                     background: "#4f46e5",
                     color: "#fff",
                     fontWeight: 600,
-                    fontSize: 13,
+                    fontSize: 14,
                     cursor: adjustmentBusy ? "wait" : "pointer",
                     opacity: adjustmentBusy ? 0.7 : 1,
                   }}
@@ -1822,7 +1822,7 @@ export default function EnginePage() {
                     background: "transparent",
                     color: "#4f46e5",
                     fontWeight: 600,
-                    fontSize: 13,
+                    fontSize: 14,
                     cursor: "pointer",
                   }}
                   title={tEngine("adjustment_dismiss_hint")}
@@ -1905,12 +1905,12 @@ export default function EnginePage() {
           {/* Page-level success toast (post-save) and error banner. Rendered
               above the active step so they're visible regardless of current step. */}
           {decisionToast && (
-            <div style={{ marginBottom: 16, padding: "10px 14px", borderRadius: 10, background: `${GREEN}15`, border: `1px solid ${GREEN}40`, color: GREEN, fontSize: 12 }}>
+            <div style={{ marginBottom: 16, padding: "10px 14px", borderRadius: 10, background: `${GREEN}15`, border: `1px solid ${GREEN}40`, color: GREEN, fontSize: 13 }}>
               {decisionToast}
             </div>
           )}
           {confirmErr && (
-            <div style={{ marginBottom: 16, padding: "10px 14px", borderRadius: 10, background: `${PINK}15`, border: `1px solid ${PINK}40`, color: PINK, fontSize: 12 }}>
+            <div style={{ marginBottom: 16, padding: "10px 14px", borderRadius: 10, background: `${PINK}15`, border: `1px solid ${PINK}40`, color: PINK, fontSize: 13 }}>
               {confirmErr}
             </div>
           )}
@@ -1977,7 +1977,7 @@ export default function EnginePage() {
                 {recording ? tEngine("voice_btn_stop") : parsing ? tEngine("voice_btn_processing") : tEngine("voice_btn_speak")}
               </button>
               {voiceErr && (
-                <div style={{ fontSize: 11, color: PINK, textAlign: "center", maxWidth: 360 }}>{voiceErr}</div>
+                <div style={{ fontSize: 13, color: PINK, textAlign: "center", maxWidth: 360 }}>{voiceErr}</div>
               )}
               {/* FIX B: Explain WHY the Sprechen button is disabled when the
                   browser doesn't expose MediaRecorder + getUserMedia (iOS
@@ -1985,7 +1985,7 @@ export default function EnginePage() {
                   hint the button just appears greyed out with no recourse,
                   and users don't realise they can fall back to the chat. */}
               {!speechAvail && !voiceErr && (
-                <div style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", maxWidth: 360, lineHeight: 1.4 }}>
+                <div style={{ fontSize: 13, color: "var(--text-muted)", textAlign: "center", maxWidth: 360, lineHeight: 1.4 }}>
                   {tEngine("voice_unavailable_hint")}
                 </div>
               )}
@@ -2076,7 +2076,7 @@ export default function EnginePage() {
                   display: "flex", alignItems: "center", justifyContent: "space-between",
                   gap: 8, marginBottom: 12,
                 }}>
-                  <div style={{ fontSize: 11, color: "var(--text-faint)", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700 }}>
+                  <div style={{ fontSize: 13, color: "var(--text-faint)", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700 }}>
                     {tEngine("macros_section")}
                   </div>
                   {/* Provenance badge: shows whether the macros currently in the
@@ -2108,7 +2108,7 @@ export default function EnginePage() {
                           background: palette.bg,
                           border: `1px solid ${palette.border}`,
                           color: palette.color,
-                          fontSize: 10, fontWeight: 700, letterSpacing: "0.06em",
+                          fontSize: 12, fontWeight: 700, letterSpacing: "0.06em",
                           flexShrink: 0,
                         }}
                       >
@@ -2134,7 +2134,7 @@ export default function EnginePage() {
                         Empty input still allowed → falls back to 0 in the
                         slider but state stays "" so submit-validation can
                         distinguish "not entered" from "0 g". */}
-                    <label style={{ fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>{tEngine("carbs_label")} ({carbUnit.label})</label>
+                    <label style={{ fontSize: 13, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>{tEngine("carbs_label")} ({carbUnit.label})</label>
                     {(() => {
                       const numeric = parseFloat(carbs);
                       const safeVal = Number.isFinite(numeric) ? numeric : 0;
@@ -2157,17 +2157,17 @@ export default function EnginePage() {
                     })()}
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>
-                      {tEngine("fiber_label")} <span style={{ textTransform: "none", color: "var(--text-faint)", fontSize: 10, fontWeight: 500 }}>{tEngine("optional_short")}</span>
+                    <label style={{ fontSize: 13, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>
+                      {tEngine("fiber_label")} <span style={{ textTransform: "none", color: "var(--text-faint)", fontSize: 12, fontWeight: 500 }}>{tEngine("optional_short")}</span>
                     </label>
                     <input style={inp} type="number" placeholder={tEngine("placeholder_fiber")} value={fiber} onChange={(e) => setFiber(e.target.value)}/>
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>{tEngine("protein_label")}</label>
+                    <label style={{ fontSize: 13, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>{tEngine("protein_label")}</label>
                     <input style={inp} type="number" placeholder={tEngine("placeholder_protein")} value={protein} onChange={(e) => setProtein(e.target.value)}/>
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>{tEngine("fat_label")}</label>
+                    <label style={{ fontSize: 13, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>{tEngine("fat_label")}</label>
                     <input style={inp} type="number" placeholder={tEngine("placeholder_fat")} value={fat} onChange={(e) => setFat(e.target.value)}/>
                   </div>
                 </div>
@@ -2175,20 +2175,20 @@ export default function EnginePage() {
 
               {/* Section header: Glukose & Zeit — glucose + CGM pull pill, meal time */}
               <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 11, color: "var(--text-faint)", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700, marginBottom: 12 }}>
+                <div style={{ fontSize: 13, color: "var(--text-faint)", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700, marginBottom: 12 }}>
                   {tEngine("glucose_time_section")}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   <div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, gap: 8 }}>
-                      <label style={{ fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <label style={{ fontSize: 13, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6 }}>
                         <span>{tEngine("glucose_before_label")}{lastReading ? ` · ${tEngine("glucose_last_prefix")}: ${lastReading}` : ""}</span>
                         {currentTrend ? <TrendArrow trend={currentTrend} t={tEngine}/> : null}
                       </label>
                       <button onClick={handlePullCgm} disabled={cgmPulling} style={{
                         display: "flex", alignItems: "center", gap: 6,
                         padding: "4px 10px", borderRadius: 99, border: `1px solid ${ACCENT}40`,
-                        background: `${ACCENT}15`, color: ACCENT, fontSize: 11, fontWeight: 600,
+                        background: `${ACCENT}15`, color: ACCENT, fontSize: 13, fontWeight: 600,
                         cursor: cgmPulling ? "wait" : "pointer", flexShrink: 0,
                       }}>
                         <span style={{ width: 7, height: 7, borderRadius: "50%", background: GREEN, boxShadow: `0 0 6px ${GREEN}` }}/>
@@ -2198,7 +2198,7 @@ export default function EnginePage() {
                     <input style={inp} type="number" placeholder={tEngine("placeholder_glucose")} value={glucose} onChange={(e) => setGlucose(e.target.value)}/>
                   </div>
                   <div>
-                    <label style={{ fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>
+                    <label style={{ fontSize: 13, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>
                       {tEngine("meal_time_label")}
                     </label>
                     <input
@@ -2288,7 +2288,7 @@ export default function EnginePage() {
                       width: "100%", height: 32, borderRadius: 6,
                       border: "none", background: "transparent",
                       color: "var(--text-muted)",
-                      fontSize: 12, fontWeight: 600, letterSpacing: "-0.01em",
+                      fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
                       cursor: running || confirming ? "not-allowed" : "pointer",
                       textDecoration: "underline", textUnderlineOffset: 3,
                       textDecorationColor: "var(--text-ghost)",
@@ -2306,7 +2306,7 @@ export default function EnginePage() {
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: ACCENT, letterSpacing: "-0.01em" }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: ACCENT, letterSpacing: "-0.01em" }}>
                         {tEngine("direct_bolus_label")}
                       </span>
                       <button
@@ -2349,7 +2349,7 @@ export default function EnginePage() {
                         <span style={{
                           position: "absolute", right: 12, top: "50%",
                           transform: "translateY(-50%)",
-                          color: "var(--text-dim)", fontSize: 12, fontWeight: 600,
+                          color: "var(--text-dim)", fontSize: 13, fontWeight: 600,
                           pointerEvents: "none",
                         }}>
                           {tEngine("units_short")}
@@ -2371,7 +2371,7 @@ export default function EnginePage() {
                                 ? "rgba(79,110,247,0.4)"
                                 : valid ? ACCENT : "rgba(79,110,247,0.25)",
                               color:"var(--text)",
-                              fontSize: 13, fontWeight: 700, letterSpacing: "-0.01em",
+                              fontSize: 14, fontWeight: 700, letterSpacing: "-0.01em",
                               cursor: blocked ? (confirming ? "wait" : "not-allowed") : "pointer",
                               transition: "background 0.2s",
                             }}
@@ -2395,7 +2395,7 @@ export default function EnginePage() {
                   style={{
                     width: "100%", height: 36, borderRadius: 8,
                     border: "none", background: "transparent",
-                    color: "var(--text-faint)", fontSize: 13, fontWeight: 500,
+                    color: "var(--text-faint)", fontSize: 14, fontWeight: 500,
                     cursor: running || confirming ? "not-allowed" : "pointer",
                   }}
                 >
@@ -2417,7 +2417,7 @@ export default function EnginePage() {
                 // transition on a successful calc, but if state was lost
                 // (e.g. tab switch + reset) give the user a clean way back.
                 <div style={{ ...card, padding: 20, marginBottom: 16 }}>
-                  <div style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.5, marginBottom: 14 }}>
+                  <div style={{ color: "var(--text-muted)", fontSize: 14, lineHeight: 1.5, marginBottom: 14 }}>
                     {tEngine("no_estimate_body")}
                   </div>
                   <button
@@ -2425,7 +2425,7 @@ export default function EnginePage() {
                     style={{
                       padding: "10px 18px", borderRadius: 10,
                       border: `1px solid ${BORDER}`, background: "transparent",
-                      color:"var(--text)", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                      color:"var(--text)", fontSize: 14, fontWeight: 600, cursor: "pointer",
                     }}
                   >
                     {tEngine("btn_back")}
@@ -2439,7 +2439,7 @@ export default function EnginePage() {
                     background: "var(--surface)", border: "1px solid var(--border)",
                     borderRadius: 16, padding: 20, marginBottom: 14,
                   }}>
-                    <div style={{ fontSize: 11, color: "var(--text-faint)", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700, marginBottom: 8 }}>
+                    <div style={{ fontSize: 13, color: "var(--text-faint)", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700, marginBottom: 8 }}>
                       {tEngine("recommended_dose_label")}
                     </div>
                     <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 14 }}>
@@ -2448,7 +2448,7 @@ export default function EnginePage() {
                       </span>
                       <span style={{ fontSize: 14, color: "var(--text-dim)", fontWeight: 600 }}>{tEngine("units_short")}</span>
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 12, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 13, flexWrap: "wrap" }}>
                       {/* ICR display in the user's chosen unit. displayICR
                           returns the full formatted string with units
                           baked in (e.g. "24 g KH/IE", "2 BE/IE", "2.4
@@ -2457,14 +2457,14 @@ export default function EnginePage() {
                       <span style={{ color: "var(--text-muted)" }}>{tEngine("icr_label")}: {carbUnit.displayICR(adaptedICR)}</span>
                       <span style={{
                         padding: "2px 10px", borderRadius: 99,
-                        fontSize: 10, fontWeight: 700, letterSpacing: "0.05em",
+                        fontSize: 12, fontWeight: 700, letterSpacing: "0.05em",
                         background: `${CONF_COLOR[result.confidence]}22`,
                         color: CONF_COLOR[result.confidence],
                         border: `1px solid ${CONF_COLOR[result.confidence]}40`,
                       }}>
                         {result.confidence}
                       </span>
-                      <span style={{ color: "var(--text-faint)", fontSize: 11 }}>
+                      <span style={{ color: "var(--text-faint)", fontSize: 13 }}>
                         {result.source === "historical" ? tEngine("source_historical") : result.source === "blended" ? tEngine("source_blended") : tEngine("source_formula")}
                       </span>
                     </div>
@@ -2477,7 +2477,7 @@ export default function EnginePage() {
                       <div
                         title={tEngine("icr_source_tooltip")}
                         style={{
-                          marginTop: 8, fontSize: 11,
+                          marginTop: 8, fontSize: 13,
                           color: "var(--text-faint)", lineHeight: 1.4,
                         }}
                       >
@@ -2504,7 +2504,7 @@ export default function EnginePage() {
                         display: "flex", alignItems: "center", justifyContent: "space-between",
                         width: "100%", padding: "12px 16px",
                         background: "transparent", border: "none", cursor: "pointer",
-                        color: "var(--text-faint)", fontSize: 11, fontWeight: 700,
+                        color: "var(--text-faint)", fontSize: 13, fontWeight: 700,
                         letterSpacing: "0.08em", textTransform: "uppercase",
                       }}
                     >
@@ -2516,14 +2516,14 @@ export default function EnginePage() {
                       </svg>
                     </button>
                     {reasoningExpanded && (
-                      <div id="gpt-reasoning-body" style={{ padding: "0 16px 14px", fontSize: 13, lineHeight: 1.6, color: "var(--text-body)" }}>
+                      <div id="gpt-reasoning-body" style={{ padding: "0 16px 14px", fontSize: 14, lineHeight: 1.6, color: "var(--text-body)" }}>
                         {renderReasoning(result.reasoning, result.safetyNotes, tEngineFn, formatNum)}
                       </div>
                     )}
                   </div>
 
                   {/* Meal summary line — shows what the user is about to save. */}
-                  <div style={{ marginBottom: 18, fontSize: 12, color: "var(--text-dim)", lineHeight: 1.5, padding: "0 4px" }}>
+                  <div style={{ marginBottom: 18, fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5, padding: "0 4px" }}>
                     {/* Meal summary line: render carbs in the user's unit
                         with the matching short label (g / BE / KE). */}
                     {(desc.trim() || transcript.trim() || tEngine("meal_fallback"))} · {parseFloat(carbs) ? carbUnit.display(carbUnit.toGrams(parseFloat(carbs))) : `0 ${carbUnit.label}`}
@@ -2556,7 +2556,7 @@ export default function EnginePage() {
                         style={{
                           width: "100%", height: 36, borderRadius: 8,
                           border: "none", background: "transparent",
-                          color: "var(--text-faint)", fontSize: 13, fontWeight: 500,
+                          color: "var(--text-faint)", fontSize: 14, fontWeight: 500,
                           cursor: confirming ? "not-allowed" : "pointer",
                         }}
                       >
@@ -2598,7 +2598,7 @@ export default function EnginePage() {
 
                   {/* Important medical disclaimer — same wording as the legacy result panel. */}
                   <div style={{ marginTop: 24, padding: "14px 18px", background: "var(--surface-soft)", borderRadius: 12, border: `1px solid ${BORDER}` }}>
-                    <div style={{ fontSize: 11, color: "var(--text-ghost)", lineHeight: 1.6 }}>
+                    <div style={{ fontSize: 13, color: "var(--text-ghost)", lineHeight: 1.6 }}>
                       <strong style={{ color: "var(--text-dim)" }}>{tEngine("disclaimer_label")}</strong> {tEngine("disclaimer_body")}
                     </div>
                   </div>

@@ -199,7 +199,7 @@ const h2Style: React.CSSProperties = {
 const countStyle: React.CSSProperties = {
   fontWeight: 400,
   color: "#666",
-  fontSize: 13,
+  fontSize: 14,
 };
 
 const tableWrapStyle: React.CSSProperties = {
@@ -211,7 +211,7 @@ const tableWrapStyle: React.CSSProperties = {
 const tableStyle: React.CSSProperties = {
   width: "100%",
   borderCollapse: "collapse",
-  fontSize: 13,
+  fontSize: 14,
 };
 
 const thStyle: React.CSSProperties = {
@@ -233,7 +233,7 @@ const monoTdStyle: React.CSSProperties = {
   ...tdStyle,
   fontFamily:
     "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
-  fontSize: 12,
+  fontSize: 13,
   color: "#444",
 };
 

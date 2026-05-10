@@ -57,7 +57,7 @@ const card: React.CSSProperties = {
   padding: "20px 24px",
 };
 const labelStyle: React.CSSProperties = {
-  fontSize: 12,
+  fontSize: 13,
   color: "var(--text-dim)",
   display: "block",
   marginBottom: 6,
@@ -170,7 +170,7 @@ function Segmented<T extends string>({
               border: "none",
               background: on ? `${accent}22` : "transparent",
               color: on ? accent : "var(--text-muted)",
-              fontSize: 13,
+              fontSize: 14,
               fontWeight: 700,
               letterSpacing: "-0.01em",
               cursor: "pointer",
@@ -198,7 +198,7 @@ function StatusBanner({ status, accent, t }: { status: Status; accent: string; t
       <div style={{
         marginTop: 14, padding: "10px 14px",
         background: "var(--surface-soft)", borderRadius: 10,
-        fontSize: 12, color: "var(--text-muted)",
+        fontSize: 13, color: "var(--text-muted)",
       }}>
         {t("saving_inline")}
       </div>
@@ -209,7 +209,7 @@ function StatusBanner({ status, accent, t }: { status: Status; accent: string; t
       <div style={{
         marginTop: 14, padding: "12px 14px",
         background: `${accent}14`, border: `1px solid ${accent}33`, borderRadius: 10,
-        fontSize: 13, color: accent, fontWeight: 600,
+        fontSize: 14, color: accent, fontWeight: 600,
       }}>
         {status.message}
       </div>
@@ -219,7 +219,7 @@ function StatusBanner({ status, accent, t }: { status: Status; accent: string; t
     <div style={{
       marginTop: 14, padding: "12px 14px",
       background: `${PINK}14`, border: `1px solid ${PINK}33`, borderRadius: 10,
-      fontSize: 13, color: PINK, fontWeight: 600,
+      fontSize: 14, color: PINK, fontWeight: 600,
     }}>
       {status.message}
     </div>
@@ -345,7 +345,7 @@ export function InsulinForm() {
 
   return (
     <div style={card}>
-      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
         <span style={{
           width: 22, height: 22, borderRadius: 6,
           background: `${GREEN}20`, border: `1px solid ${GREEN}40`,
@@ -409,7 +409,7 @@ export function InsulinForm() {
             max={nowLocalDt()}
             onChange={e => setAt(e.target.value)}
           />
-          <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 6 }}>
+          <div style={{ fontSize: 13, color: "var(--text-faint)", marginTop: 6 }}>
             {atDate && nowMs - atDate.getTime() > 5 * 60_000
               ? t("backdated_hint", { when: relativeAgo(nowMs - atDate.getTime(), t) })
               : t("default_now_hint")}
@@ -463,8 +463,8 @@ export function InsulinForm() {
                   background: `${ACCENT}10`, border: `1px solid ${ACCENT}33`,
                   display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
                 }}>
-                  <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.4, flex: 1, minWidth: 140 }}>
-                    <div style={{ fontWeight: 700, color: ACCENT, fontSize: 10, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 2 }}>
+                  <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.4, flex: 1, minWidth: 140 }}>
+                    <div style={{ fontWeight: 700, color: ACCENT, fontSize: 12, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 2 }}>
                       {t("link_suggestion_label")}
                     </div>
                     {t("link_suggestion_body", { meal: formatMealOption(suggestion, t("meal_fallback")) })}
@@ -475,7 +475,7 @@ export function InsulinForm() {
                     style={{
                       padding: "8px 14px", borderRadius: 8, border: "none",
                       background: ACCENT, color: "var(--on-accent)",
-                      fontSize: 12, fontWeight: 700, cursor: "pointer",
+                      fontSize: 13, fontWeight: 700, cursor: "pointer",
                       whiteSpace: "nowrap",
                     }}
                   >
@@ -495,11 +495,11 @@ export function InsulinForm() {
                 ))}
               </select>
               {todayMeals.length === 0 ? (
-                <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 6 }}>
+                <div style={{ fontSize: 13, color: "var(--text-faint)", marginTop: 6 }}>
                   {t("no_meals_today")}
                 </div>
               ) : (
-                <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 6 }}>
+                <div style={{ fontSize: 13, color: "var(--text-faint)", marginTop: 6 }}>
                   {t("today_meals_hint")}
                 </div>
               )}
@@ -522,7 +522,7 @@ export function InsulinForm() {
       <div style={{
         marginTop: 14, padding: "10px 12px",
         background: "var(--surface-soft)", borderRadius: 10,
-        fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5,
+        fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5,
       }}>
         {t("insulin_disclaimer")}
       </div>
@@ -798,7 +798,7 @@ export function ExerciseForm() {
 
   return (
     <div style={card}>
-      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
         <span style={{
           width: 22, height: 22, borderRadius: 6,
           background: `${ORANGE}20`, border: `1px solid ${ORANGE}40`,
@@ -867,7 +867,7 @@ export function ExerciseForm() {
             style={{
               marginTop: 8,
               padding: "8px 12px",
-              fontSize: 12,
+              fontSize: 13,
               fontWeight: 600,
               background: usingCustomStart ? `${ORANGE}1f` : "transparent",
               color: usingCustomStart ? ORANGE : "var(--text-muted)",
@@ -970,7 +970,7 @@ export function ExerciseForm() {
       <div style={{
         marginTop: 14, padding: "10px 12px",
         background: "var(--surface-soft)", borderRadius: 10,
-        fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5,
+        fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5,
       }}>
         {t("exercise_disclaimer")}
       </div>
@@ -1003,7 +1003,7 @@ export default function EngineLogTab() {
         marginTop: 20, padding: "14px 18px",
         background: "var(--surface-soft)", borderRadius: 12, border: `1px solid ${BORDER}`,
       }}>
-        <div style={{ fontSize: 11, color: "var(--text-ghost)", lineHeight: 1.6 }}>
+        <div style={{ fontSize: 13, color: "var(--text-ghost)", lineHeight: 1.6 }}>
           <strong style={{ color: "var(--text-dim)" }}>{t("footer_note_label")}</strong>{" "}
           {t("footer_note_body")}
         </div>

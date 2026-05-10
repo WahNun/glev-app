@@ -107,7 +107,7 @@ export default function FingerstickLogCard() {
     borderRadius: 10,
     padding: "10px 12px",
     color:"var(--text)",
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: "inherit",
     outline: "none",
     width: "100%",
@@ -124,12 +124,12 @@ export default function FingerstickLogCard() {
     }}>
       <div>
         <div style={{
-          fontSize:9, fontWeight:700, letterSpacing:"0.1em",
+          fontSize:11, fontWeight:700, letterSpacing:"0.1em",
           color:"var(--text-dim)", textTransform:"uppercase",
         }}>{t("card_eyebrow")}</div>
         <div style={{
           marginTop: 4,
-          fontSize: 13, fontWeight: 600, color:"var(--text)", lineHeight: 1.3,
+          fontSize: 14, fontWeight: 600, color:"var(--text)", lineHeight: 1.3,
         }}>
           {t("card_title")}
         </div>
@@ -137,7 +137,7 @@ export default function FingerstickLogCard() {
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <label style={{ fontSize: 10, color: "var(--text-dim)", fontWeight: 600, letterSpacing: "0.04em" }}>
+          <label style={{ fontSize: 12, color: "var(--text-dim)", fontWeight: 600, letterSpacing: "0.04em" }}>
             {t("value_label")}
           </label>
           <SnapSlider
@@ -152,7 +152,7 @@ export default function FingerstickLogCard() {
           />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <label htmlFor={whenId} style={{ fontSize: 10, color: "var(--text-dim)", fontWeight: 600, letterSpacing: "0.04em" }}>
+          <label htmlFor={whenId} style={{ fontSize: 12, color: "var(--text-dim)", fontWeight: 600, letterSpacing: "0.04em" }}>
             {t("when_label")}
           </label>
           <input
@@ -192,7 +192,7 @@ export default function FingerstickLogCard() {
           role="status"
           aria-live="polite"
           style={{
-            fontSize: 12, fontWeight: 600,
+            fontSize: 13, fontWeight: 600,
             color: feedback?.kind === "ok" ? GREEN : PINK,
             minHeight: 16,
           }}
@@ -201,13 +201,13 @@ export default function FingerstickLogCard() {
         </span>
       </div>
 
-      <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.4 }}>
+      <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.4 }}>
         {latest
           ? <>{t("latest_label")}<span style={{ color:"var(--text)", fontFamily: "var(--font-mono)", fontWeight: 700 }}>{t("latest_value", { value: Math.round(latest.value_mg_dl) })}</span> · {formatLatestWhen(latest.measured_at)}</>
           : <>{t("no_values")}</>}
       </div>
 
-      <div style={{ fontSize: 10, color: "var(--text-faint)", lineHeight: 1.4, fontStyle: "italic" }}>
+      <div style={{ fontSize: 12, color: "var(--text-faint)", lineHeight: 1.4, fontStyle: "italic" }}>
         {t("footnote")}
       </div>
     </div>

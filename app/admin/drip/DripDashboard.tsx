@@ -82,7 +82,7 @@ function StatusBadge({ status }: { status: DripStatus }) {
         display: "inline-block",
         padding: "2px 8px",
         borderRadius: 999,
-        fontSize: 12,
+        fontSize: 13,
         fontWeight: 600,
         background: c.bg,
         color: c.fg,
@@ -116,7 +116,7 @@ function CountCard({
         background: "#fff",
       }}
     >
-      <div style={{ fontSize: 12, color: "#666", marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 13, color: "#666", marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: 24, fontWeight: 700, color: toneColor }}>{value}</div>
     </div>
   );
@@ -146,7 +146,7 @@ export default function DripDashboard({
           <CountCard label="Versendet (gesamt)" value={counts.sentTotal} tone="default" />
           <CountCard label="Fehlgeschlagen" value={counts.failed} tone="bad" />
         </div>
-        <p style={{ color: "#777", fontSize: 12, margin: "8px 0 0" }}>
+        <p style={{ color: "#777", fontSize: 13, margin: "8px 0 0" }}>
           Counter zählen über die gesamte Tabelle, nicht nur die unten gezeigte
           Liste. „Fehlgeschlagen" = noch nicht versendet und mehr als 24 h überfällig
           — der Drip-Cron läuft täglich um 09:00 UTC und probiert es bei jedem Lauf
@@ -179,7 +179,7 @@ export default function DripDashboard({
             Suchen
           </button>
           {query ? (
-            <a href="/admin/drip" style={{ fontSize: 13, color: "#3045a8", textDecoration: "underline" }}>
+            <a href="/admin/drip" style={{ fontSize: 14, color: "#3045a8", textDecoration: "underline" }}>
               Zurücksetzen
             </a>
           ) : null}
@@ -233,7 +233,7 @@ export default function DripDashboard({
                       <td style={tdStyle}>{fmtDate(r.sent_at)}</td>
                       <td style={tdStyle}>
                         {!canAct ? (
-                          <span style={{ color: "#888", fontSize: 12 }}>—</span>
+                          <span style={{ color: "#888", fontSize: 13 }}>—</span>
                         ) : editing ? (
                           <form
                             action={async (fd) => {
@@ -330,7 +330,7 @@ const h2Style: React.CSSProperties = {
 const countStyle: React.CSSProperties = {
   fontWeight: 400,
   color: "#666",
-  fontSize: 13,
+  fontSize: 14,
 };
 
 const tableWrapStyle: React.CSSProperties = {
@@ -342,7 +342,7 @@ const tableWrapStyle: React.CSSProperties = {
 const tableStyle: React.CSSProperties = {
   width: "100%",
   borderCollapse: "collapse",
-  fontSize: 13,
+  fontSize: 14,
 };
 
 const thStyle: React.CSSProperties = {
@@ -377,7 +377,7 @@ const smallBtnStyle: React.CSSProperties = {
   color: "#fff",
   border: "none",
   borderRadius: 4,
-  fontSize: 12,
+  fontSize: 13,
   fontWeight: 600,
   cursor: "pointer",
 };
@@ -386,6 +386,6 @@ const inlineInputStyle: React.CSSProperties = {
   padding: "6px 8px",
   border: "1px solid #ccc",
   borderRadius: 4,
-  fontSize: 12,
+  fontSize: 13,
   fontFamily: "inherit",
 };

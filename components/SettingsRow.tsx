@@ -21,7 +21,7 @@ export function SettingsSection({ title, children }: SettingsSectionProps) {
     <section style={{ marginBottom: 24 }}>
       <h2
         style={{
-          fontSize: 11,
+          fontSize: 13,
           fontWeight: 600,
           color: "var(--text-faint)",
           letterSpacing: "0.08em",
@@ -123,7 +123,7 @@ export function SettingsRow({
         {subtitle && (
           <span
             style={{
-              fontSize: 12,
+              fontSize: 13,
               color: "var(--text-dim)",
               marginTop: 2,
               lineHeight: 1.3,
@@ -144,7 +144,7 @@ export function SettingsRow({
             gap: 6,
             flexShrink: 0,
             color: "var(--text-dim)",
-            fontSize: 12,
+            fontSize: 13,
           }}
         >
           {rightAdornment}

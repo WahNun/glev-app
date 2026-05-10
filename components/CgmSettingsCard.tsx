@@ -62,7 +62,7 @@ const inp: React.CSSProperties = {
   width: "100%",
 };
 const label: React.CSSProperties = {
-  fontSize: 12,
+  fontSize: 13,
   color: "var(--text-dim)",
   display: "block",
   marginBottom: 6,
@@ -631,16 +631,16 @@ export default function CgmSettingsCard() {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* STATUS CARD */}
       <div style={card}>
-        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 16 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>
           CGM-Verbindung
         </div>
 
         {loadingStatus ? (
-          <div style={{ fontSize: 13, color: "var(--text-dim)" }}>
+          <div style={{ fontSize: 14, color: "var(--text-dim)" }}>
             Status wird geladen…
           </div>
         ) : statusError ? (
-          <div style={{ fontSize: 13, color: PINK }}>Fehler: {statusError}</div>
+          <div style={{ fontSize: 14, color: PINK }}>Fehler: {statusError}</div>
         ) : connected ? (
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
@@ -663,7 +663,7 @@ export default function CgmSettingsCard() {
               const h = status?.sessionHealth;
               if (!h || h === "never_tested") {
                 return (
-                  <div style={{ fontSize: 12, color: "var(--text-faint)", marginBottom: 14 }}>
+                  <div style={{ fontSize: 13, color: "var(--text-faint)", marginBottom: 14 }}>
                     Noch nie getestet – klicke "Verbindung testen" um den Status zu prüfen.
                   </div>
                 );
@@ -687,19 +687,19 @@ export default function CgmSettingsCard() {
               return (
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 14 }}>
                   <span style={{ width: 8, height: 8, borderRadius: 99, background: color, flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, color }}>{label}{suffix}</span>
+                  <span style={{ fontSize: 13, color }}>{label}{suffix}</span>
                 </div>
               );
             })()}
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
               <div style={{ background: "var(--surface-soft)", borderRadius: 10, padding: "12px 14px" }}>
-                <div style={{ fontSize: 11, color: "var(--text-faint)", marginBottom: 4 }}>E-Mail</div>
-                <div style={{ fontSize: 13, fontWeight: 600, wordBreak: "break-all" }}>{status?.email}</div>
+                <div style={{ fontSize: 13, color: "var(--text-faint)", marginBottom: 4 }}>E-Mail</div>
+                <div style={{ fontSize: 14, fontWeight: 600, wordBreak: "break-all" }}>{status?.email}</div>
               </div>
               <div style={{ background: "var(--surface-soft)", borderRadius: 10, padding: "12px 14px" }}>
-                <div style={{ fontSize: 11, color: "var(--text-faint)", marginBottom: 4 }}>Region</div>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{status?.region}</div>
+                <div style={{ fontSize: 13, color: "var(--text-faint)", marginBottom: 4 }}>Region</div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>{status?.region}</div>
               </div>
             </div>
 
@@ -709,7 +709,7 @@ export default function CgmSettingsCard() {
                   padding: "10px 14px",
                   borderRadius: 10,
                   marginBottom: 14,
-                  fontSize: 13,
+                  fontSize: 14,
                   background: testResult.ok ? `${GREEN}10` : `${PINK}10`,
                   border: `1px solid ${testResult.ok ? GREEN : PINK}30`,
                   color: testResult.ok ? GREEN : PINK,
@@ -731,7 +731,7 @@ export default function CgmSettingsCard() {
                   cursor: testing ? "wait" : "pointer",
                   background: `${ACCENT}15`,
                   color: ACCENT,
-                  fontSize: 13,
+                  fontSize: 14,
                   fontWeight: 600,
                   opacity: testing ? 0.6 : 1,
                 }}
@@ -751,7 +751,7 @@ export default function CgmSettingsCard() {
                   cursor: "pointer",
                   background: "transparent",
                   color: "var(--text-body)",
-                  fontSize: 13,
+                  fontSize: 14,
                   fontWeight: 500,
                 }}
               >
@@ -767,7 +767,7 @@ export default function CgmSettingsCard() {
                   cursor: disconnecting ? "wait" : "pointer",
                   background: "transparent",
                   color: PINK,
-                  fontSize: 13,
+                  fontSize: 14,
                   fontWeight: 500,
                   opacity: disconnecting ? 0.6 : 1,
                 }}
@@ -790,7 +790,7 @@ export default function CgmSettingsCard() {
               />
               <div style={{ fontSize: 14, fontWeight: 600 }}>Nicht verbunden</div>
             </div>
-            <div style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.5 }}>
+            <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5 }}>
               Verbinde dein LibreLinkUp-Konto unten, damit Glev deine Glukosewerte
               automatisch abrufen kann.
             </div>
@@ -803,7 +803,7 @@ export default function CgmSettingsCard() {
         <details style={{ cursor: "pointer" }}>
           <summary
             style={{
-              fontSize: 13,
+              fontSize: 14,
               fontWeight: 600,
               listStyle: "none",
               cursor: "pointer",
@@ -815,7 +815,7 @@ export default function CgmSettingsCard() {
           <div
             style={{
               marginTop: 12,
-              fontSize: 12,
+              fontSize: 13,
               color: "var(--text-muted)",
               lineHeight: 1.6,
               display: "flex",
@@ -840,7 +840,7 @@ export default function CgmSettingsCard() {
               </strong>{" "}
               ein – nicht die deines Haupt-LibreLink-Kontos.
             </p>
-            <p style={{ margin: 0, fontSize: 11, color: "var(--text-dim)" }}>
+            <p style={{ margin: 0, fontSize: 13, color: "var(--text-dim)" }}>
               Hinweis zur Sicherheit: Das Passwort wird serverseitig mit
               AES-256-GCM verschlüsselt gespeichert.
             </p>
@@ -851,7 +851,7 @@ export default function CgmSettingsCard() {
       {/* FORM */}
       {showForm && (
         <form onSubmit={handleSubmit} style={card}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 16 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>
             {connected ? "Zugangsdaten ändern" : "Zugangsdaten eingeben"}
           </div>
 
@@ -905,7 +905,7 @@ export default function CgmSettingsCard() {
                     placeholder="follower@example.com"
                   />
                   {emailError && (
-                    <div id="cgm-email-err" role="alert" style={{ fontSize: 11, color: PINK, marginTop: 4 }}>
+                    <div id="cgm-email-err" role="alert" style={{ fontSize: 13, color: PINK, marginTop: 4 }}>
                       {emailError}
                     </div>
                   )}
@@ -935,7 +935,7 @@ export default function CgmSettingsCard() {
                     required
                   />
                   {passwordError && (
-                    <div id="cgm-password-err" role="alert" style={{ fontSize: 11, color: PINK, marginTop: 4 }}>
+                    <div id="cgm-password-err" role="alert" style={{ fontSize: 13, color: PINK, marginTop: 4 }}>
                       {passwordError}
                     </div>
                   )}
@@ -972,10 +972,10 @@ export default function CgmSettingsCard() {
                   {submitting ? "Verbinde…" : "Speichern & verbinden"}
                 </button>
                 {formError && (
-                  <div style={{ fontSize: 13, color: PINK, marginTop: 4 }}>{formError}</div>
+                  <div style={{ fontSize: 14, color: PINK, marginTop: 4 }}>{formError}</div>
                 )}
                 {formSuccess && (
-                  <div style={{ fontSize: 13, color: GREEN, marginTop: 4 }}>{formSuccess}</div>
+                  <div style={{ fontSize: 14, color: GREEN, marginTop: 4 }}>{formSuccess}</div>
                 )}
               </>
             )}
@@ -984,7 +984,7 @@ export default function CgmSettingsCard() {
               <>
                 <div
                   style={{
-                    fontSize: 12,
+                    fontSize: 13,
                     color: "var(--text-muted)",
                     lineHeight: 1.6,
                     background: "var(--surface-soft)",
@@ -999,7 +999,7 @@ export default function CgmSettingsCard() {
                   <span
                     style={{
                       alignSelf: "flex-start",
-                      fontSize: 10,
+                      fontSize: 12,
                       fontWeight: 700,
                       letterSpacing: "0.08em",
                       textTransform: "uppercase",
@@ -1022,7 +1022,7 @@ export default function CgmSettingsCard() {
                 {junctionState?.connected && junctionState.glucose != null && (
                   <div
                     style={{
-                      fontSize: 13,
+                      fontSize: 14,
                       color: GREEN,
                       background: `${GREEN}10`,
                       border: `1px solid ${GREEN}30`,
@@ -1065,7 +1065,7 @@ export default function CgmSettingsCard() {
                 {junctionMessage && (
                   <div
                     style={{
-                      fontSize: 13,
+                      fontSize: 14,
                       color: junctionMessage.kind === "success" ? GREEN : PINK,
                       marginTop: 4,
                     }}
@@ -1080,7 +1080,7 @@ export default function CgmSettingsCard() {
               <>
                 <div
                   style={{
-                    fontSize: 12,
+                    fontSize: 13,
                     color: "var(--text-muted)",
                     lineHeight: 1.6,
                     background: "var(--surface-soft)",
@@ -1151,7 +1151,7 @@ export default function CgmSettingsCard() {
                 {nightscoutConnected && nightscoutLatest != null && (
                   <div
                     style={{
-                      fontSize: 13,
+                      fontSize: 14,
                       color: GREEN,
                       background: `${GREEN}10`,
                       border: `1px solid ${GREEN}30`,
@@ -1211,7 +1211,7 @@ export default function CgmSettingsCard() {
                 {nightscoutMessage && (
                   <div
                     style={{
-                      fontSize: 13,
+                      fontSize: 14,
                       color:
                         nightscoutMessage.kind === "success" ? GREEN : PINK,
                       marginTop: 4,
@@ -1227,7 +1227,7 @@ export default function CgmSettingsCard() {
               <>
                 <div
                   style={{
-                    fontSize: 12,
+                    fontSize: 13,
                     color: "var(--text-muted)",
                     lineHeight: 1.6,
                     background: "var(--surface-soft)",
@@ -1246,7 +1246,7 @@ export default function CgmSettingsCard() {
                 {!isNativePlatform && (
                   <div
                     style={{
-                      fontSize: 12,
+                      fontSize: 13,
                       color: "var(--text-dim)",
                       background: "var(--surface-soft)",
                       border: `1px solid ${BORDER}`,
@@ -1262,7 +1262,7 @@ export default function CgmSettingsCard() {
                 {appleHealthSelected && appleHealthStatus && (
                   <div
                     style={{
-                      fontSize: 13,
+                      fontSize: 14,
                       color: GREEN,
                       background: `${GREEN}10`,
                       border: `1px solid ${GREEN}30`,
@@ -1273,7 +1273,7 @@ export default function CgmSettingsCard() {
                     {appleHealthStatus.lastValueMgDl != null
                       ? `✓ Verbunden — letzter Wert: ${appleHealthStatus.lastValueMgDl} mg/dL`
                       : "✓ Verbunden — noch keine Werte synchronisiert."}
-                    <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>
+                    <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 4 }}>
                       {appleHealthStatus.count} Werte gespeichert
                       {appleHealthStatus.lastTimestamp
                         ? ` · zuletzt ${formatRelativeAge(appleHealthStatus.lastTimestamp)}`
@@ -1335,7 +1335,7 @@ export default function CgmSettingsCard() {
                 {appleHealthMessage && (
                   <div
                     style={{
-                      fontSize: 13,
+                      fontSize: 14,
                       color:
                         appleHealthMessage.kind === "success"
                           ? GREEN

@@ -143,6 +143,6 @@ const btnStyle: React.CSSProperties = {
 
 const errStyle: React.CSSProperties = {
   color: "#c00",
-  fontSize: 13,
+  fontSize: 14,
   margin: "0 0 8px",
 };

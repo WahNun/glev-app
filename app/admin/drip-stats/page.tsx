@@ -241,7 +241,7 @@ const btnStyle: React.CSSProperties = {
 
 const errStyle: React.CSSProperties = {
   color: "#c00",
-  fontSize: 13,
+  fontSize: 14,
   margin: "0 0 8px",
 };
 
@@ -251,7 +251,7 @@ const warnStyle: React.CSSProperties = {
   border: "1px solid #ffe082",
   padding: "8px 12px",
   borderRadius: 6,
-  fontSize: 13,
+  fontSize: 14,
   margin: "0 0 12px",
 };
 
@@ -264,7 +264,7 @@ const sectionHeadingStyle: React.CSSProperties = {
 const tableStyle: React.CSSProperties = {
   borderCollapse: "collapse",
   width: "100%",
-  fontSize: 13,
+  fontSize: 14,
   background: "#fff",
 };
 
@@ -340,7 +340,7 @@ function DailySpark({
 }) {
   const n = buckets.length;
   if (n === 0) {
-    return <span style={{ color: "#999", fontSize: 12 }}>—</span>;
+    return <span style={{ color: "#999", fontSize: 13 }}>—</span>;
   }
 
   // Scale both metrics to the same axis so the chart's vertical
@@ -428,7 +428,7 @@ function SparkLegend() {
         marginLeft: 10,
         fontWeight: 400,
         color: "#555",
-        fontSize: 12,
+        fontSize: 13,
         verticalAlign: "middle",
       }}
     >

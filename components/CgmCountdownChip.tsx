@@ -132,7 +132,7 @@ function CgmCountdownChip({
       minHeight: 84,
     }}>
       <div style={{
-        fontSize: 9, color: "var(--text-dim)", letterSpacing: "0.08em",
+        fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.08em",
         fontWeight: 600, textTransform: "uppercase",
       }}>
         {label}
@@ -176,9 +176,9 @@ function FetchedDisplay({ value, baseline, fetchedAtIso }: {
         fontFamily: "var(--font-mono)", letterSpacing: "-0.02em",
         lineHeight: 1.1,
       }}>
-        {v} <span style={{ fontSize: 10, color: "var(--text-dim)", fontWeight: 500 }}>mg/dL</span>
+        {v} <span style={{ fontSize: 12, color: "var(--text-dim)", fontWeight: 500 }}>mg/dL</span>
       </div>
-      <div style={{ fontSize: 10, color: "var(--text-dim)", display: "flex", gap: 6, flexWrap: "wrap" }}>
+      <div style={{ fontSize: 12, color: "var(--text-dim)", display: "flex", gap: 6, flexWrap: "wrap" }}>
         {delta != null && (
           <span style={{ color: deltaColor(delta), fontWeight: 700, fontFamily: "var(--font-mono)" }}>
             {delta > 0 ? "+" : ""}{delta}
@@ -215,7 +215,7 @@ function PendingDisplay({ startAtMs, expectedAtMs, now, themeColor }: {
           {text}
         </div>
       </div>
-      <div style={{ fontSize: 10, color: "var(--text-dim)" }}>
+      <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
         Erwartet {expectedDate.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
       </div>
     </>
@@ -229,7 +229,7 @@ function MissingDisplay({ expectedAtMs }: { expectedAtMs: number }) {
       <div style={{ fontSize: 14, fontWeight: 700, color: PINK }}>
         Überfällig
       </div>
-      <div style={{ fontSize: 10, color: "var(--text-dim)" }}>
+      <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
         Erwartet {expectedDate.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
       </div>
     </>

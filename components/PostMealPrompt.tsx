@@ -115,7 +115,7 @@ export default function PostMealPrompt() {
               <div style={{ color: "var(--text)", fontWeight: 600, fontSize: 14, lineHeight: 1.3 }}>
                 {t("title", { label: pendingMeal.label })}
               </div>
-              <div style={{ color: TEXT_DIM, fontSize: 12, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <div style={{ color: TEXT_DIM, fontSize: 13, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {pendingMeal.name}
               </div>
             </div>
@@ -158,7 +158,7 @@ export default function PostMealPrompt() {
               <span style={{
                 position: "absolute", right: 12, top: "50%",
                 transform: "translateY(-50%)",
-                color: TEXT_DIM, fontSize: 13, pointerEvents: "none",
+                color: TEXT_DIM, fontSize: 14, pointerEvents: "none",
               }}>mg/dL</span>
             </div>
             <button
@@ -181,7 +181,7 @@ export default function PostMealPrompt() {
           {error && (
             <div role="alert" style={{
               marginTop: 10,
-              color: "#FF8A8A", fontSize: 12, lineHeight: 1.4,
+              color: "#FF8A8A", fontSize: 13, lineHeight: 1.4,
             }}>{error}</div>
           )}
 
@@ -189,7 +189,7 @@ export default function PostMealPrompt() {
             onClick={dismiss}
             style={{
               background: "none", border: "none",
-              color: "var(--text-dim)", fontSize: 12,
+              color: "var(--text-dim)", fontSize: 13,
               cursor: "pointer", marginTop: 10, padding: 0,
               fontFamily: "inherit",
             }}

@@ -116,14 +116,14 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
           <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:2, flexWrap:"wrap" }}>
             <div style={{ fontSize:16, fontWeight:700, color:"var(--text-strong)" }}>{displayName}</div>
             <span style={{
-              fontSize:10, fontWeight:700, padding:"3px 9px", borderRadius:99,
+              fontSize:12, fontWeight:700, padding:"3px 9px", borderRadius:99,
               background:`${ACCENT}20`, color:ACCENT, letterSpacing:"0.08em",
             }}>
               {t("plan_free").toUpperCase()}
             </span>
           </div>
           <div style={{
-            fontSize:13, color:"var(--text-dim)",
+            fontSize:14, color:"var(--text-dim)",
             overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
           }}>{email || "—"}</div>
         </div>
@@ -135,14 +135,14 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
           background:"var(--surface-soft)", borderRadius:12,
           border:`1px solid ${BORDER}`, padding:"14px 16px",
         }}>
-          <div style={{ fontSize:11, color:"var(--text-faint)", marginBottom:4 }}>{t("stat_meals_logged")}</div>
+          <div style={{ fontSize:13, color:"var(--text-faint)", marginBottom:4 }}>{t("stat_meals_logged")}</div>
           <div style={{ fontSize:20, fontWeight:800, letterSpacing:"-0.02em" }}>{mealCount}</div>
         </div>
         <div style={{
           background:"var(--surface-soft)", borderRadius:12,
           border:`1px solid ${BORDER}`, padding:"14px 16px",
         }}>
-          <div style={{ fontSize:11, color:"var(--text-faint)", marginBottom:4 }}>{t("stat_member_since")}</div>
+          <div style={{ fontSize:13, color:"var(--text-faint)", marginBottom:4 }}>{t("stat_member_since")}</div>
           <div style={{ fontSize:14, fontWeight:700, color:"var(--text-strong)" }}>{createdAt || "—"}</div>
         </div>
       </div>
@@ -174,7 +174,7 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
           <div style={{ fontSize:14, fontWeight:700, color:"var(--text-strong)", marginBottom:2 }}>
             {t("upgrade_title")}
           </div>
-          <div style={{ fontSize:12, color:"var(--text-dim)", lineHeight:1.4 }}>
+          <div style={{ fontSize:13, color:"var(--text-dim)", lineHeight:1.4 }}>
             {t("upgrade_body")}
           </div>
         </div>
@@ -202,7 +202,7 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
         >
           <div style={{ flex:1, minWidth:0 }}>
             <div style={{ fontSize:14, fontWeight:500 }}>{t("row_change_password")}</div>
-            <div style={{ fontSize:12, color:"var(--text-faint)", marginTop:2 }}>
+            <div style={{ fontSize:13, color:"var(--text-faint)", marginTop:2 }}>
               {pwState === "ok" ? t("password_sent")
                 : pwState === "err" ? t("password_failed")
                 : pwState === "sending" ? t("password_sending")

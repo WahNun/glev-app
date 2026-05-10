@@ -197,7 +197,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           {historyHdr.visible && (
             <HistoryHeaderChip tab={historyHdr.tab} setTab={historyHdr.setTab} />
           )}
-          <div style={{ fontSize: 11, padding: "5px 12px", borderRadius: 99, background: `${GREEN}18`, color: GREEN, fontWeight: 600 }}>Live</div>
+          <div style={{ fontSize: 13, padding: "5px 12px", borderRadius: 99, background: `${GREEN}18`, color: GREEN, fontWeight: 600 }}>Live</div>
           {/* QuickAddMenu — the three primary logging shortcuts
               (Mahlzeit / Glukose / Aktivität) live here in the header
               as a small dropdown behind a 32×32 "+" button. This is
@@ -261,7 +261,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
                 borderRadius: 10, border: "none", cursor: "pointer",
                 background: active ? `${ACCENT}18` : "transparent",
                 color: active ? ACCENT : "var(--text-dim)",
-                fontSize: 13, fontWeight: active ? 600 : 400,
+                fontSize: 14, fontWeight: active ? 600 : 400,
                 textAlign: "left", width: "100%",
               }}>
                 {icon(active)}
@@ -274,7 +274,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         <button onClick={handleSignOut} style={{
           display: "flex", alignItems: "center", gap: 8, padding: "10px 12px",
           borderRadius: 10, border: "none", cursor: "pointer", background: "transparent",
-          color: "var(--text-ghost)", fontSize: 12, textAlign: "left", width: "100%",
+          color: "var(--text-ghost)", fontSize: 13, textAlign: "left", width: "100%",
         }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
           Sign Out
@@ -395,7 +395,7 @@ function MobileTab({
         gap: 4, padding: "6px 2px", height: 56,
         border: "none", background: "transparent", cursor: "pointer",
         color: active ? ACCENT : NAV_INACTIVE,
-        fontSize: 11, fontWeight: active ? 600 : 500, letterSpacing: "0.01em",
+        fontSize: 13, fontWeight: active ? 600 : 500, letterSpacing: "0.01em",
         borderRadius: 10,
         transition: "color 0.15s",
       }}
@@ -463,7 +463,7 @@ function HistoryHeaderChip({
           background: open ? `${ACCENT}22` : "var(--surface-soft)",
           border: `1px solid ${open ? ACCENT : "var(--border-strong)"}`,
           color: open ? ACCENT : "var(--text-body)",
-          fontSize: 11, fontWeight: 700, letterSpacing: "-0.01em",
+          fontSize: 13, fontWeight: 700, letterSpacing: "-0.01em",
           cursor: "pointer", transition: "all 0.15s",
         }}
       >
@@ -507,7 +507,7 @@ function HistoryHeaderChip({
                   background: isActive ? `${ACCENT}22` : "transparent",
                   border: "none",
                   color: isActive ? "#fff" : "var(--text-strong)",
-                  fontSize: 13.5, fontWeight: isActive ? 700 : 500,
+                  fontSize: 14.5, fontWeight: isActive ? 700 : 500,
                   cursor: "pointer", textAlign: "left",
                   borderRadius: 10,
                 }}

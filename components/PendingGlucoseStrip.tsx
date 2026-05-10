@@ -134,16 +134,16 @@ export default function PendingGlucoseStrip({
             border: `1px solid ${ACCENT}66`,
             background: `${ACCENT}1A`,
             color: ACCENT,
-            fontSize: 11, fontWeight: 600,
+            fontSize: 13, fontWeight: 600,
             cursor: "pointer", fontFamily: "inherit",
           }}
         >
-          <span style={{ fontSize: 8, lineHeight: 1 }}>●</span>
+          <span style={{ fontSize: 11, lineHeight: 1 }}>●</span>
           BG nach {activeTp.label} eintragen
         </button>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>
+          <div style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 500 }}>
             BG nach {activeTp.label}
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
@@ -172,7 +172,7 @@ export default function PendingGlucoseStrip({
               <span style={{
                 position: "absolute", right: 10, top: "50%",
                 transform: "translateY(-50%)",
-                color: "var(--text-dim)", fontSize: 11, pointerEvents: "none",
+                color: "var(--text-dim)", fontSize: 13, pointerEvents: "none",
               }}>mg/dL</span>
             </div>
             <button
@@ -182,7 +182,7 @@ export default function PendingGlucoseStrip({
               style={{
                 background: saving || !val ? "#333" : ACCENT,
                 color:"var(--text)", border: "none", borderRadius: 8,
-                padding: "0 14px", fontWeight: 600, fontSize: 12,
+                padding: "0 14px", fontWeight: 600, fontSize: 13,
                 fontFamily: "inherit",
                 cursor: saving || !val ? "default" : "pointer",
                 whiteSpace: "nowrap",
@@ -203,7 +203,7 @@ export default function PendingGlucoseStrip({
             >×</button>
           </div>
           {err && (
-            <div role="alert" style={{ color: "#FF8A8A", fontSize: 11 }}>{err}</div>
+            <div role="alert" style={{ color: "#FF8A8A", fontSize: 13 }}>{err}</div>
           )}
         </div>
       )}

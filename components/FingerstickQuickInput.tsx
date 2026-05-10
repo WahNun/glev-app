@@ -116,7 +116,7 @@ export default function FingerstickQuickInput({
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
             <div style={{
-              fontSize: 10, fontWeight: 700, letterSpacing: "0.12em",
+              fontSize: 12, fontWeight: 700, letterSpacing: "0.12em",
               color: ACCENT, textTransform: "uppercase",
             }}>
               Fingerstick
@@ -141,7 +141,7 @@ export default function FingerstickQuickInput({
         {/* Big numeric input */}
         <div>
           <label style={{
-            fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+            fontSize: 12, fontWeight: 700, letterSpacing: "0.08em",
             color: "var(--text-dim)", textTransform: "uppercase",
             display: "block", marginBottom: 6,
           }}>
@@ -172,7 +172,7 @@ export default function FingerstickQuickInput({
               outline: "none",
             }}
           />
-          <div style={{ fontSize: 10, color: "var(--text-faint)", marginTop: 6, textAlign: "center" }}>
+          <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 6, textAlign: "center" }}>
             Wird mit aktueller Zeit gespeichert. Überschreibt CGM-Wert für 5 Minuten.
           </div>
         </div>
@@ -181,7 +181,7 @@ export default function FingerstickQuickInput({
           <div style={{
             padding: "10px 12px", borderRadius: 10,
             background: `${PINK}15`, border: `1px solid ${PINK}40`,
-            color: PINK, fontSize: 12,
+            color: PINK, fontSize: 13,
           }}>
             {err}
           </div>

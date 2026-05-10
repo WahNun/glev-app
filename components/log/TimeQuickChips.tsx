@@ -73,7 +73,7 @@ export default function TimeQuickChips({
               border: "none",
               background: on ? `${accent}22` : "transparent",
               color: on ? accent : "var(--text-muted)",
-              fontSize: 13,
+              fontSize: 14,
               fontWeight: 700,
               letterSpacing: "-0.01em",
               cursor: "pointer",

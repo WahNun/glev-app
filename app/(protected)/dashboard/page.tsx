@@ -112,15 +112,15 @@ function FlipCard({ card }: { card: CardData }) {
         {/* Front */}
         <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, padding:"14px 18px", boxSizing:"border-box", display:"flex", flexDirection:"column", justifyContent:"space-between" }}>
           <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between" }}>
-            <div style={{ fontSize:10, color:"var(--text-dim)", letterSpacing:"0.08em", fontWeight:600, textTransform:"uppercase" }}>{card.label}</div>
-            <span style={{ fontSize:9, color:"var(--text-ghost)" }}>↺</span>
+            <div style={{ fontSize:12, color:"var(--text-dim)", letterSpacing:"0.08em", fontWeight:600, textTransform:"uppercase" }}>{card.label}</div>
+            <span style={{ fontSize:11, color:"var(--text-ghost)" }}>↺</span>
           </div>
           <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", gap:8 }}>
             <div style={{ display:"flex", alignItems:"flex-end", gap:4 }}>
               <span style={{ fontSize:56, fontWeight:800, color:card.color, letterSpacing:"-0.03em", lineHeight:1, fontFamily:"var(--font-mono)" }}>{card.value}</span>
-              <span style={{ fontSize:13, color:"var(--text-faint)", paddingBottom:3 }}>{card.unit}</span>
+              <span style={{ fontSize:14, color:"var(--text-faint)", paddingBottom:3 }}>{card.unit}</span>
             </div>
-            <span style={{ fontSize:11, color:"var(--text-faint)" }}>{card.sub}</span>
+            <span style={{ fontSize:13, color:"var(--text-faint)" }}>{card.sub}</span>
           </div>
           <div style={{ height:4, background:"var(--surface-soft)", borderRadius:99, overflow:"hidden" }}>
             <div style={{ width:`${Math.min(Math.max(card.bar, 0), 100)}%`, height:"100%", background:card.color, borderRadius:99, transition:"width 0.6s ease" }}/>
@@ -129,11 +129,11 @@ function FlipCard({ card }: { card: CardData }) {
         {/* Back */}
         <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", transform:"rotateY(180deg)", background:`linear-gradient(145deg,${card.color}12,${SURFACE} 65%)`, border:`1px solid ${card.color}33`, borderRadius:14, padding:"12px 16px", boxSizing:"border-box", overflow:"hidden", display:"flex", flexDirection:"column", gap:6, justifyContent:"space-between" }}>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-            <div style={{ fontSize:10, color:card.color, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>{card.label}</div>
-            <span style={{ fontSize:9, color:"var(--text-ghost)" }}>{t("flip_back")}</span>
+            <div style={{ fontSize:12, color:card.color, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>{card.label}</div>
+            <span style={{ fontSize:11, color:"var(--text-ghost)" }}>{t("flip_back")}</span>
           </div>
-          <div style={{ fontSize:10, color:"var(--text-muted)", lineHeight:1.45, fontFamily:"var(--font-mono)" }}>{card.formula}</div>
-          <div style={{ fontSize:10, color:"var(--text-dim)", lineHeight:1.4 }}>{card.explanation.slice(0,110)}…</div>
+          <div style={{ fontSize:12, color:"var(--text-muted)", lineHeight:1.45, fontFamily:"var(--font-mono)" }}>{card.formula}</div>
+          <div style={{ fontSize:12, color:"var(--text-dim)", lineHeight:1.4 }}>{card.explanation.slice(0,110)}…</div>
         </div>
       </div>
     </div>
@@ -218,8 +218,8 @@ function TrendChart({ meals }: { meals: Meal[] }) {
         {/* BACK */}
         <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", transform:"rotateY(180deg)", background:`linear-gradient(145deg, ${ACCENT}10, ${SURFACE} 65%)`, border:`1px solid ${ACCENT}33`, borderRadius:16, padding:"20px 24px", boxSizing:"border-box", display:"flex", flexDirection:"column", gap:14, overflow:"hidden" }}>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-            <div style={{ fontSize:11, color:ACCENT, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>{t("trend_breakdown")}</div>
-            <span style={{ fontSize:9, color:"var(--text-ghost)" }}>{t("flip_back")}</span>
+            <div style={{ fontSize:13, color:ACCENT, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>{t("trend_breakdown")}</div>
+            <span style={{ fontSize:11, color:"var(--text-ghost)" }}>{t("flip_back")}</span>
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10 }}>
             {[
@@ -231,22 +231,22 @@ function TrendChart({ meals }: { meals: Meal[] }) {
               { l:t("trend_7day_slope"), v: last7.length>=2 ? `${slope>0?"+":""}${slope.toFixed(1)}${t("trend_slope_per_day")}` : "—", c: Math.abs(slope)<2 ? GREEN : slope>0 ? ORANGE : ACCENT },
             ].map(s => (
               <div key={s.l} style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
-                <div style={{ fontSize:9, color:"var(--text-dim)", letterSpacing:"0.07em", fontWeight:600, marginBottom:4, textTransform:"uppercase" }}>{s.l}</div>
+                <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.07em", fontWeight:600, marginBottom:4, textTransform:"uppercase" }}>{s.l}</div>
                 <div style={{ fontSize:14, fontWeight:700, color:s.c || "var(--text-strong)", letterSpacing:"-0.01em" }}>{s.v}</div>
               </div>
             ))}
           </div>
           <div style={{ flex:1, display:"flex", flexDirection:"column" }}>
-            <div style={{ fontSize:10, color:"var(--text-dim)", letterSpacing:"0.07em", fontWeight:600, marginBottom:8, textTransform:"uppercase" }}>{t("trend_by_weekday")}</div>
+            <div style={{ fontSize:12, color:"var(--text-dim)", letterSpacing:"0.07em", fontWeight:600, marginBottom:8, textTransform:"uppercase" }}>{t("trend_by_weekday")}</div>
             <div style={{ display:"flex", gap:6, flex:1, alignItems:"flex-end" }}>
               {weekdayAvgs.map((v, i) => {
                 const h = v == null ? 8 : Math.max(8, Math.min(100, ((v - 60) / (240 - 60)) * 100));
                 const c = v == null ? "var(--border-strong)" : v > 140 ? ORANGE : v < 80 ? PINK : GREEN;
                 return (
                   <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4, height:"100%", justifyContent:"flex-end" }}>
-                    <div style={{ fontSize:10, fontWeight:700, color: v == null ? "var(--text-ghost)" : c }}>{v ?? "—"}</div>
+                    <div style={{ fontSize:12, fontWeight:700, color: v == null ? "var(--text-ghost)" : c }}>{v ?? "—"}</div>
                     <div style={{ width:"100%", maxWidth:32, height:`${h}%`, background:c, opacity: v == null ? 0.4 : 0.85, borderRadius:6, transition:"height 0.4s ease" }}/>
-                    <div style={{ fontSize:9, color:"var(--text-dim)" }}>{weekdayLabels[i]}</div>
+                    <div style={{ fontSize:11, color:"var(--text-dim)" }}>{weekdayLabels[i]}</div>
                   </div>
                 );
               })}
@@ -293,10 +293,10 @@ function OutcomeChart({ meals }: { meals: Meal[] }) {
         <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"20px 24px", boxSizing:"border-box", display:"flex", flexDirection:"column", overflow:"hidden" }}>
           <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between" }}>
             <div>
-              <div style={{ fontSize:13, fontWeight:600, marginBottom:4 }}>{t("outcome_dist")}</div>
-              <div style={{ fontSize:11, color:"var(--text-faint)" }}>{t("outcome_alltime")}</div>
+              <div style={{ fontSize:14, fontWeight:600, marginBottom:4 }}>{t("outcome_dist")}</div>
+              <div style={{ fontSize:13, color:"var(--text-faint)" }}>{t("outcome_alltime")}</div>
             </div>
-            <span style={{ fontSize:9, color:"var(--text-ghost)" }}>{t("flip_hint_short")}</span>
+            <span style={{ fontSize:11, color:"var(--text-ghost)" }}>{t("flip_hint_short")}</span>
           </div>
           <div style={{ flex:1, display:"flex", flexDirection:"column", justifyContent:"center", gap:14 }}>
             {groups.map(g => {
@@ -304,8 +304,8 @@ function OutcomeChart({ meals }: { meals: Meal[] }) {
               return (
                 <div key={g.label}>
                   <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-                    <span style={{ fontSize:12, color:"var(--text-dim)" }}>{g.label}</span>
-                    <span style={{ fontSize:12, fontWeight:600, color:g.color }}>{g.count} <span style={{ color:"var(--text-faint)", fontWeight:400 }}>({pct}%)</span></span>
+                    <span style={{ fontSize:13, color:"var(--text-dim)" }}>{g.label}</span>
+                    <span style={{ fontSize:13, fontWeight:600, color:g.color }}>{g.count} <span style={{ color:"var(--text-faint)", fontWeight:400 }}>({pct}%)</span></span>
                   </div>
                   <div style={{ height:6, borderRadius:99, background:"var(--border-soft)", overflow:"hidden" }}>
                     <div style={{ height:"100%", width:`${pct}%`, background:g.color, borderRadius:99, transition:"width 0.8s ease" }}/>
@@ -318,21 +318,21 @@ function OutcomeChart({ meals }: { meals: Meal[] }) {
         {/* BACK */}
         <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", transform:"rotateY(180deg)", background:`linear-gradient(145deg, ${ACCENT}10, ${SURFACE} 65%)`, border:`1px solid ${ACCENT}33`, borderRadius:16, padding:"20px 24px", boxSizing:"border-box", display:"flex", flexDirection:"column", gap:12, overflow:"hidden" }}>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-            <div style={{ fontSize:11, color:ACCENT, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>{t("outcome_what_means")}</div>
-            <span style={{ fontSize:9, color:"var(--text-ghost)" }}>{t("flip_back")}</span>
+            <div style={{ fontSize:13, color:ACCENT, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>{t("outcome_what_means")}</div>
+            <span style={{ fontSize:11, color:"var(--text-ghost)" }}>{t("flip_back")}</span>
           </div>
           <div style={{ flex:1, display:"flex", flexDirection:"column", gap:10, justifyContent:"center" }}>
             {groups.map(g => (
               <div key={g.key} style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
                 <span style={{ width:8, height:8, borderRadius:99, background:g.color, flexShrink:0, marginTop:5 }}/>
                 <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontSize:11, fontWeight:700, color:g.color, lineHeight:1.2, marginBottom:2 }}>{g.label}</div>
-                  <div style={{ fontSize:10.5, color:"var(--text-muted)", lineHeight:1.4 }}>{g.description}</div>
+                  <div style={{ fontSize:13, fontWeight:700, color:g.color, lineHeight:1.2, marginBottom:2 }}>{g.label}</div>
+                  <div style={{ fontSize:12.5, color:"var(--text-muted)", lineHeight:1.4 }}>{g.description}</div>
                 </div>
               </div>
             ))}
           </div>
-          <div style={{ fontSize:9.5, color:"var(--text-faint)", lineHeight:1.4, paddingTop:8, borderTop:`1px solid ${BORDER}` }}>
+          <div style={{ fontSize:11.5, color:"var(--text-faint)", lineHeight:1.4, paddingTop:8, borderTop:`1px solid ${BORDER}` }}>
             {t("outcome_basis")}
           </div>
         </div>
@@ -524,18 +524,18 @@ function RecentEntries({
           Spec'd typography: 11px / 0.12em / rgba(255,255,255,0.45) for the
           label, 13px ACCENT for the link. */}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
-        <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:"var(--text-dim)" }}>
+        <div style={{ fontSize:13, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:"var(--text-dim)" }}>
           {t("recent_label")}
         </div>
         <button
           onClick={onViewAll}
-          style={{ fontSize:13, color:ACCENT, background:"transparent", border:"none", cursor:"pointer", padding:0, fontWeight:500 }}
+          style={{ fontSize:14, color:ACCENT, background:"transparent", border:"none", cursor:"pointer", padding:0, fontWeight:500 }}
         >
           {t("see_all")}
         </button>
       </div>
       {rows.length === 0 ? (
-        <div style={{ padding:"24px 0 16px", textAlign:"center", color:"var(--text-ghost)", fontSize:13 }}>
+        <div style={{ padding:"24px 0 16px", textAlign:"center", color:"var(--text-ghost)", fontSize:14 }}>
           {t("no_entries_yet")}
         </div>
       ) : (
@@ -601,7 +601,7 @@ function RecentChip({ text, color, mono = false }: { text: string; color: string
   return (
     <span style={{
       padding: "6px 12px", borderRadius: 99,
-      fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
+      fontSize: 13, fontWeight: 700, letterSpacing: "0.08em",
       textTransform: "uppercase", whiteSpace: "nowrap",
       background: `${color}22`, color,
       ...(mono ? { fontFamily: "var(--font-mono)" } : {}),
@@ -680,7 +680,7 @@ function UnifiedRecentRow({ row, locale, onClick }: { row: RecentRow; locale: st
         <div style={{ fontSize:14, fontWeight:700, color:"var(--text-strong)", letterSpacing:"-0.01em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
           {title}
         </div>
-        <div style={{ fontSize:12, color:"var(--text-dim)", fontFamily:"var(--font-mono)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+        <div style={{ fontSize:13, color:"var(--text-dim)", fontFamily:"var(--font-mono)", marginTop:2, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
           {subtitle}
         </div>
       </div>
@@ -717,21 +717,21 @@ function NonMealLightExpand({
   return (
     <div style={{ padding:"12px 16px 14px", display:"flex", flexDirection:"column", gap:14 }}>
       <div>
-        <div style={{ fontSize:9, color:"var(--text-faint)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8, textTransform:"uppercase" }}>{t("details")}</div>
+        <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8, textTransform:"uppercase" }}>{t("details")}</div>
         <div style={{ display:"flex", gap:24, flexWrap:"wrap" }}>
           {stats.map(s => (
             <div key={s.label} style={{ display:"flex", flexDirection:"column", minWidth:70, gap:3 }}>
-              <span style={{ fontSize:10, color:"var(--text-faint)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:600 }}>{s.label}</span>
-              <span style={{ fontSize:13, fontWeight:700, color: s.color || "var(--text-strong)", fontFamily:"var(--font-mono)" }}>{s.value}</span>
+              <span style={{ fontSize:12, color:"var(--text-faint)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:600 }}>{s.label}</span>
+              <span style={{ fontSize:14, fontWeight:700, color: s.color || "var(--text-strong)", fontFamily:"var(--font-mono)" }}>{s.value}</span>
             </div>
           ))}
         </div>
       </div>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap", paddingTop:8, borderTop:`1px solid ${BORDER}` }}>
-        <span style={{ fontSize:11, color:"var(--text-dim)", fontFamily:"var(--font-mono)" }}>{fullTimestamp}</span>
+        <span style={{ fontSize:13, color:"var(--text-dim)", fontFamily:"var(--font-mono)" }}>{fullTimestamp}</span>
         <button
           onClick={(e) => { e.stopPropagation(); onViewFull(); }}
-          style={{ background:"transparent", border:"none", color:ACCENT, fontSize:12, fontWeight:600, cursor:"pointer", padding:"4px 0", letterSpacing:"-0.01em" }}
+          style={{ background:"transparent", border:"none", color:ACCENT, fontSize:13, fontWeight:600, cursor:"pointer", padding:"4px 0", letterSpacing:"-0.01em" }}
         >
           {t("view_full_entry")}
         </button>
@@ -782,12 +782,12 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
         <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"18px 24px 22px", boxSizing:"border-box" }}>
           {/* Header — title left, badge right (hidden when no data). */}
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-            <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:"var(--text-muted)" }}>
+            <div style={{ fontSize:13, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:"var(--text-muted)" }}>
               {t("control_score_label")}
             </div>
             {hasData && (
               <div style={{
-                fontSize:9, fontWeight:800, color:badge.color,
+                fontSize:11, fontWeight:800, color:badge.color,
                 padding:"4px 10px", borderRadius:99,
                 border:`1px solid ${badge.color}55`, background:`${badge.color}18`,
                 letterSpacing:"0.1em",
@@ -801,10 +801,10 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
             <span style={{ fontSize:56, fontWeight:800, color:ACCENT, letterSpacing:"-0.03em", fontFamily:"var(--font-mono)", lineHeight:1 }}>
               {hasData ? score : "—"}
             </span>
-            <span style={{ fontSize:13, color:"var(--text-dim)", fontWeight:500 }}>/ 100</span>
+            <span style={{ fontSize:14, color:"var(--text-dim)", fontWeight:500 }}>/ 100</span>
             <span style={{
               marginLeft:"auto",
-              fontSize:10, fontWeight:600, fontFamily:"var(--font-mono)",
+              fontSize:12, fontWeight:600, fontFamily:"var(--font-mono)",
               color: delta == null ? "var(--text-dim)"
                    : delta > 0      ? GREEN
                    : delta < 0      ? PINK
@@ -827,20 +827,20 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
               transition:"width 0.6s ease",
             }}/>
           </div>
-          <span style={{ position:"absolute", bottom:8, right:14, fontSize:9, color:"var(--text-ghost)" }}>↺</span>
+          <span style={{ position:"absolute", bottom:8, right:14, fontSize:11, color:"var(--text-ghost)" }}>↺</span>
         </div>
         {/* ────────── Back ────────── */}
         <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", transform:"rotateY(180deg)", background:`linear-gradient(145deg, ${ACCENT}12, ${SURFACE} 65%)`, border:`1px solid ${ACCENT}33`, borderRadius:16, padding:"18px 24px 22px", boxSizing:"border-box", display:"flex", flexDirection:"column", gap:10 }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-            <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:ACCENT }}>
+            <div style={{ fontSize:13, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:ACCENT }}>
               {t("control_score_back_title")}
             </div>
-            <span style={{ fontSize:9, color:"var(--text-ghost)" }}>{t("flip_back")}</span>
+            <span style={{ fontSize:11, color:"var(--text-ghost)" }}>{t("flip_back")}</span>
           </div>
-          <div style={{ fontSize:11, color:"var(--text-body)", lineHeight:1.5, fontFamily:"var(--font-mono)" }}>
+          <div style={{ fontSize:13, color:"var(--text-body)", lineHeight:1.5, fontFamily:"var(--font-mono)" }}>
             {t("control_score_formula")}
           </div>
-          <div style={{ fontSize:10, color:"var(--text-dim)", lineHeight:1.5 }}>
+          <div style={{ fontSize:12, color:"var(--text-dim)", lineHeight:1.5 }}>
             {t("control_score_explain")}
           </div>
         </div>
@@ -916,11 +916,11 @@ function DailyMacrosCard({ meals, targets }: { meals: Meal[]; targets: MacroTarg
           cursor:"pointer",
         }}
       >
-        <div style={{ fontSize:11, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:"var(--text-muted)" }}>
+        <div style={{ fontSize:13, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:"var(--text-muted)" }}>
           {t("daily_macros")}
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-          <div style={{ fontSize:11, color:"var(--text-dim)", fontWeight:500, fontFamily:"var(--font-mono)" }}>
+          <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:500, fontFamily:"var(--font-mono)" }}>
             {today.count} {today.count === 1 ? t("meal_singular") : t("meal_plural")}
           </div>
           <svg
@@ -982,31 +982,31 @@ function DailyMacrosCard({ meals, targets }: { meals: Meal[]; targets: MacroTarg
           >
             {/* 1. Calories — prominent kcal total. */}
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
-              <div style={{ fontSize:10, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700, textTransform:"uppercase" }}>
+              <div style={{ fontSize:12, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700, textTransform:"uppercase" }}>
                 {t("calories")}
               </div>
               <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
                 <span style={{ fontSize:28, fontWeight:800, color:ACCENT, letterSpacing:"-0.02em", fontFamily:"var(--font-mono)" }}>
                   {Math.round(today.calories).toLocaleString()}
                 </span>
-                <span style={{ fontSize:12, color:"var(--text-dim)", fontWeight:500 }}>{t("kcal")}</span>
+                <span style={{ fontSize:13, color:"var(--text-dim)", fontWeight:500 }}>{t("kcal")}</span>
               </div>
             </div>
 
             {/* 2. % of daily target — one bar per macro, color-matched to its ring. */}
             <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-              <div style={{ fontSize:10, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700, textTransform:"uppercase", marginBottom:2 }}>
+              <div style={{ fontSize:12, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700, textTransform:"uppercase", marginBottom:2 }}>
                 {t("pct_daily_target")}
               </div>
               {pcts.map(p => (
                 <div key={p.label} style={{ display:"flex", alignItems:"center", gap:10 }}>
-                  <div style={{ flex:"0 0 60px", fontSize:10, color:"var(--text-muted)", letterSpacing:"0.06em", fontWeight:700 }}>
+                  <div style={{ flex:"0 0 60px", fontSize:12, color:"var(--text-muted)", letterSpacing:"0.06em", fontWeight:700 }}>
                     {p.label}
                   </div>
                   <div style={{ flex:1, height:5, background:"var(--border-soft)", borderRadius:99, overflow:"hidden" }}>
                     <div style={{ height:"100%", width:`${(Math.min(1, p.pct) * 100).toFixed(1)}%`, background:p.color, borderRadius:99 }} />
                   </div>
-                  <div style={{ flex:"0 0 40px", textAlign:"right", fontSize:10, color:"var(--text-muted)", fontFamily:"var(--font-mono)", fontWeight:600 }}>
+                  <div style={{ flex:"0 0 40px", textAlign:"right", fontSize:12, color:"var(--text-muted)", fontFamily:"var(--font-mono)", fontWeight:600 }}>
                     {Math.round(p.pct * 100)}%
                   </div>
                 </div>
@@ -1015,8 +1015,8 @@ function DailyMacrosCard({ meals, targets }: { meals: Meal[]; targets: MacroTarg
 
             {/* 3. Tip — accent label + dynamic body copy. */}
             <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 14px" }}>
-              <div style={{ fontSize:11, lineHeight:1.55, color:"var(--text-body)" }}>
-                <span style={{ color:ACCENT, fontWeight:800, letterSpacing:"0.08em", marginRight:8, fontSize:10 }}>{t("tip_label")}</span>
+              <div style={{ fontSize:13, lineHeight:1.55, color:"var(--text-body)" }}>
+                <span style={{ color:ACCENT, fontWeight:800, letterSpacing:"0.08em", marginRight:8, fontSize:12 }}>{t("tip_label")}</span>
                 {tip}
               </div>
             </div>
@@ -1087,10 +1087,10 @@ function MacroRing({
         </text>
         </svg>
       </div>
-      <div style={{ fontSize:10, color:"var(--text-muted)", textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700 }}>
+      <div style={{ fontSize:12, color:"var(--text-muted)", textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700 }}>
         {label}
       </div>
-      <div style={{ fontSize:9, color:"var(--text-faint)", fontFamily:"var(--font-mono)" }}>
+      <div style={{ fontSize:11, color:"var(--text-faint)", fontFamily:"var(--font-mono)" }}>
         / {target}{unit}
       </div>
     </div>
