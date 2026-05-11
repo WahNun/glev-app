@@ -1481,7 +1481,7 @@
     "faq_q3": "Is Glev a medical device?",
     "faq_a3": "No. Glev is a documentation and organization tool. Therapy decisions stay between you and your doctor.",
     "faq_q4": "Where is my data stored?",
-    "faq_a4": "In the EU (Ireland) (Supabase). German GDPR. No data sharing, no advertising.",
+    "faq_a4": "In the EU (Ireland) on Supabase — we deliberately chose the EU region so all health and account data stays inside the European Union, with no replication to third countries. German GDPR. No data sharing, no advertising.",
     "footer_copyright": "© 2026 Glev · hello@glev.app",
     "footer_legal": "Privacy · Terms",
     "footer_legal_aria": "Privacy policy and terms of service",
@@ -1724,7 +1724,7 @@
     "faq_q4": "When does the beta start?",
     "faq_a4": "July 2026. Beta testers receive the access link by email two weeks before the public launch.",
     "faq_q5": "Where is my data stored?",
-    "faq_a5": "In the EU (Ireland) (Supabase). German GDPR compliance. No data sharing, no advertising.",
+    "faq_a5": "In the EU (Ireland) on Supabase — we deliberately chose the EU region so all health and account data stays inside the European Union, with no replication to third countries. German GDPR compliance. No data sharing, no advertising.",
     "cgm_trust_line": "Not sure? You can try Glev risk-free — no payment until July."
   },
   "proPage": {
@@ -1761,7 +1761,7 @@
     "faq_q4": "How is this membership different from the Beta reservation?",
     "faq_a4": "The /beta variant is a free reservation with a Beta discount in the first year. /pro is a direct monthly membership at full price. Both get access on July 1, 2026.",
     "faq_q5": "Where is my data stored?",
-    "faq_a5": "In the EU (Ireland) (Supabase). German GDPR compliance. No data sharing, no advertising."
+    "faq_a5": "In the EU (Ireland) on Supabase — we deliberately chose the EU region so all health and account data stays inside the European Union, with no replication to third countries. German GDPR compliance. No data sharing, no advertising."
   },
   "cgm": {
     "section_title": "Does Glev work with your setup?",

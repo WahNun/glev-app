@@ -115,6 +115,7 @@ export default function LegalPage() {
                 <tr><td><strong>Stripe, Inc.</strong></td><td>Zahlungsabwicklung</td><td>USA / EU</td><td><span className="badge warning">USA möglich</span></td></tr>
               </tbody>
             </table>
+            <p>Wir haben für Supabase bewusst die <strong>EU-Region Irland</strong> gewählt, damit alle Gesundheits- und Kontodaten innerhalb der Europäischen Union gespeichert und verarbeitet werden. Es findet <strong>keine Spiegelung in Drittländer</strong> statt – die Datenbank-Replikation bleibt vollständig innerhalb der EU.</p>
             <div className="highlight-box">
               <strong>Hinweis zu Drittlandtransfers (USA)</strong>
               Vercel und Stripe können Daten in die USA übermitteln. Beide sind im Rahmen des <strong>EU-U.S. Data Privacy Framework</strong> zertifiziert und setzen <strong>Standardvertragsklauseln (SCC)</strong> gemäß Art. 46 Abs. 2 lit. c DSGVO ein.
