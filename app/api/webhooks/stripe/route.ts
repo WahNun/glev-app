@@ -254,12 +254,24 @@ export async function POST(req: NextRequest) {
       // Only stamp full_name when we actually got one — never overwrite a
       // previously stored name with NULL if Stripe somehow omits the field
       // on a retry.
+      // Capture the buyer's billing country from Stripe's customer_details
+      // so the /admin/users filter can group by geolocation. Currency is
+      // already on the row (default 'eur', set by /api/beta/checkout based
+      // on the buyer's currency selection). Defensive — only write when
+      // Stripe actually echoes a country back; never blank out a
+      // previously-captured value on a webhook retry.
+      const sessionCountry =
+        typeof session.customer_details?.address?.country === 'string'
+          ? session.customer_details.address.country.toUpperCase()
+          : null;
+
       const betaUpdate: Record<string, unknown> = {
         status: 'paid',
         fulfilled_at: nowIso,
         stripe_customer_id: customerId,
       };
       if (fullName) betaUpdate.full_name = fullName;
+      if (sessionCountry) betaUpdate.country = sessionCountry;
 
       const { data: bySession, error: sessionUpdErr } = await supabaseAdmin
         .from('beta_reservations')
@@ -291,6 +303,7 @@ export async function POST(req: NextRequest) {
           stripe_customer_id: customerId,
         };
         if (fullName) betaUpdateByEmail.full_name = fullName;
+        if (sessionCountry) betaUpdateByEmail.country = sessionCountry;
 
         const { data: byEmail, error: emailUpdErr } = await supabaseAdmin
           .from('beta_reservations')

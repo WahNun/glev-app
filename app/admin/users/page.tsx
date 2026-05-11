@@ -4,6 +4,7 @@ import {
   loginAction,
   grantPlanByEmailAction,
   grantBetaFreeYearAction,
+  backfillCurrencyCountryAction,
 } from "./actions";
 import UsersTable, { type UserRow } from "./UsersTable";
 import Link from "next/link";
@@ -136,7 +137,7 @@ export default async function AdminUsersPage({
       : Promise.resolve({ data: [], error: null }),
     sb
       .from("pro_subscriptions")
-      .select("email, status, trial_ends_at, current_period_end")
+      .select("email, status, trial_ends_at, current_period_end, currency, country")
       .order("created_at", { ascending: false })
       .limit(500),
     // Beta-Käufer:innen separat laden — `profiles.subscription_status` ist
@@ -145,7 +146,7 @@ export default async function AdminUsersPage({
     // beta_reservations-Tabelle (status='fulfilled' = bezahlt + freigeschaltet).
     sb
       .from("beta_reservations")
-      .select("email, status, created_at")
+      .select("email, status, created_at, currency, country")
       .order("created_at", { ascending: false })
       .limit(500),
     // Best-effort: optionale Spalten. Wenn die Migration in dieser
@@ -178,11 +179,15 @@ export default async function AdminUsersPage({
     status: string | null;
     trial_ends_at: string | null;
     current_period_end: string | null;
+    currency: string | null;
+    country: string | null;
   };
   type BetaRow = {
     email: string;
     status: string | null;
     created_at: string | null;
+    currency: string | null;
+    country: string | null;
   };
 
   type ProfOptRow = {
@@ -270,6 +275,18 @@ export default async function AdminUsersPage({
       pro_status: pro?.status ?? null,
       trial_ends_at: pro?.trial_ends_at ?? null,
       beta_status: beta?.status ?? null,
+      // Currency + Land für den Filter — Pro hat Vorrang (Subscription
+      // läuft ja noch, ist relevanter als eine evtl. ältere Beta-
+      // Reservation derselben Person), sonst Beta. Beide Quellen sind
+      // optional (alte Migration → null), die UI zeigt dann "—".
+      currency:
+        (pro?.currency ? pro.currency.toLowerCase() : null) ??
+        (beta?.currency ? beta.currency.toLowerCase() : null) ??
+        null,
+      country:
+        (pro?.country ? pro.country.toUpperCase() : null) ??
+        (beta?.country ? beta.country.toUpperCase() : null) ??
+        null,
       // Alte Beta-Käufer:innen (vor 25.04.2026) haben keine Reservation,
       // sondern stehen nur als profiles.subscription_status='beta'.
       // UsersTable nutzt das fürs Beta-Filter-Tab.
@@ -461,6 +478,49 @@ export default async function AdminUsersPage({
           />
           <button type="submit" style={bfyBtnStyle}>
             1 Jahr freischalten + Welcome
+          </button>
+        </form>
+      </section>
+
+      {/* Backfill-Action: zieht Currency + Land für alle Bestandskäufer:innen
+          aus der Stripe-API nach. Idempotent — überschreibt keine bereits
+          gefüllten Felder, kann also gefahrlos mehrfach geklickt werden.
+          Banner über dem Block zeigt das Ergebnis nach Rücksprung. */}
+      <section style={{ ...grantBoxStyle, background: "#f5f3ff", borderColor: "#c4b5fd" }}>
+        <h2 style={{ fontSize: 14, margin: "0 0 4px", color: "#5b21b6", fontWeight: 700 }}>
+          Currency + Land aus Stripe nachziehen (Backfill)
+        </h2>
+        <p style={{ fontSize: 12, color: "#5b21b6", margin: "0 0 12px" }}>
+          Lädt für alle bestehenden Käufer:innen ohne <code>currency</code>/
+          <code>country</code> die Stripe Checkout Session und füllt die
+          fehlenden Felder (EUR/USD + Billing-Land). Pro- und Beta-Tabelle.
+          Idempotent — überschreibt nichts, was schon gesetzt ist.{" "}
+          {(() => {
+            const bf = Array.isArray(sp.backfill) ? sp.backfill[0] : sp.backfill;
+            if (bf !== "ok") return null;
+            const pro = Array.isArray(sp.pro) ? sp.pro[0] : sp.pro;
+            const beta = Array.isArray(sp.beta) ? sp.beta[0] : sp.beta;
+            const skipped = Array.isArray(sp.skipped) ? sp.skipped[0] : sp.skipped;
+            const errors = Array.isArray(sp.errors) ? sp.errors[0] : sp.errors;
+            return (
+              <strong style={{ color: "#065f46" }}>
+                ✓ Letzter Lauf: Pro {pro ?? 0} aktualisiert · Beta {beta ?? 0} aktualisiert ·{" "}
+                {skipped ?? 0} übersprungen · {errors ?? 0} Fehler.
+              </strong>
+            );
+          })()}
+        </p>
+        <form action={backfillCurrencyCountryAction}>
+          <button
+            type="submit"
+            style={{
+              ...btnStyle,
+              background: "#7c3aed",
+              borderColor: "#7c3aed",
+              color: "#fff",
+            }}
+          >
+            Backfill jetzt starten
           </button>
         </form>
       </section>

@@ -27,6 +27,10 @@ export type UserRow = {
   beta_status: string | null;
   /** profiles.subscription_status='beta' — alte Beta-Käufer:innen (vor 25.04.2026) hatten kein beta_reservations-Eintrag. */
   legacy_beta: boolean;
+  /** ISO 4217 lowercase (eur/usd) — gespeichert auf pro_subscriptions.currency und beta_reservations.currency. null = unbekannt (alte Käufer vor Backfill). */
+  currency: string | null;
+  /** ISO 3166-1 alpha-2 uppercase (DE/US/AT/…) — Stripe customer billing country. null = unbekannt. */
+  country: string | null;
 };
 
 type Filter =
@@ -108,6 +112,29 @@ export default function UsersTable({
 }) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [currency, setCurrency] = useState<string>(""); // "" = alle
+  const [country, setCountry] = useState<string>(""); // "" = alle
+
+  // Currency-Optionen sind eine kleine, geschlossene Menge (eur/usd plus
+  // alles andere was Stripe je geschickt hat). Land-Optionen wachsen
+  // dynamisch mit den Käufer:innen — wir bauen sie aus den tatsächlich
+  // vorhandenen Werten auf, damit der Operator keinen Filter "AT" findet,
+  // wenn noch nie ein:e Österreicher:in gekauft hat. Sortierung:
+  // alphabetisch (außer "—"-Bucket ans Ende, falls relevant).
+  const currencyOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of rows) {
+      if (r.currency) set.add(r.currency);
+    }
+    return Array.from(set).sort();
+  }, [rows]);
+  const countryOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of rows) {
+      if (r.country) set.add(r.country);
+    }
+    return Array.from(set).sort();
+  }, [rows]);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -119,13 +146,36 @@ export default function UsersTable({
       if (filter === "manual" && !r.manual_plan_override) return false;
       if (filter === "deleted" && !r.deleted_at) return false;
       if (filter === "admin" && r.role !== "admin") return false;
+      // Currency/Land: "" = alle, "__none__" = nur Zeilen ohne Wert
+      // (nützlich, um Backfill-Lücken zu finden).
+      if (currency === "__none__" && r.currency) return false;
+      if (currency && currency !== "__none__" && r.currency !== currency) return false;
+      if (country === "__none__" && r.country) return false;
+      if (country && country !== "__none__" && r.country !== country) return false;
       if (needle) {
-        const hay = `${r.email} ${r.display_name ?? ""}`.toLowerCase();
+        // Freitextsuche deckt bewusst ALLE sichtbaren Felder ab, damit
+        // Lucas z.B. "AT" oder "usd" tippen kann statt das Dropdown zu
+        // öffnen. Inkl. Rolle, Plan, CGM, Status-Flags, Land, Currency.
+        const hay = [
+          r.email,
+          r.display_name ?? "",
+          r.role,
+          r.plan,
+          r.language ?? "",
+          r.currency ?? "",
+          r.country ?? "",
+          r.cgm,
+          r.pro_status ?? "",
+          r.beta_status ?? "",
+          r.manual_plan_note ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
         if (!hay.includes(needle)) return false;
       }
       return true;
     });
-  }, [rows, q, filter]);
+  }, [rows, q, filter, currency, country]);
 
   return (
     <div>
@@ -151,21 +201,51 @@ export default function UsersTable({
         ))}
       </div>
 
-      <input
-        type="text"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="Suche nach E-Mail oder Name…"
-        style={{
-          width: "100%",
-          padding: "10px 12px",
-          border: "1px solid #ccc",
-          borderRadius: 6,
-          fontSize: 14,
-          fontFamily: "inherit",
-          marginBottom: 12,
-        }}
-      />
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+        <input
+          type="text"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Suche: E-Mail, Name, Land (z.B. DE), Currency (z.B. usd)…"
+          style={{
+            flex: "1 1 320px",
+            minWidth: 240,
+            padding: "10px 12px",
+            border: "1px solid #ccc",
+            borderRadius: 6,
+            fontSize: 14,
+            fontFamily: "inherit",
+          }}
+        />
+        <select
+          value={currency}
+          onChange={(e) => setCurrency(e.target.value)}
+          title="Filter nach Zahlungswährung (Stripe Checkout)"
+          style={selectStyle}
+        >
+          <option value="">Currency: alle</option>
+          {currencyOptions.map((c) => (
+            <option key={c} value={c}>
+              {c.toUpperCase()}
+            </option>
+          ))}
+          <option value="__none__">— ohne —</option>
+        </select>
+        <select
+          value={country}
+          onChange={(e) => setCountry(e.target.value)}
+          title="Filter nach Stripe-Billing-Land"
+          style={selectStyle}
+        >
+          <option value="">Land: alle</option>
+          {countryOptions.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+          <option value="__none__">— ohne —</option>
+        </select>
+      </div>
 
       <p style={{ fontSize: 13, color: "#555", margin: "0 0 8px" }}>
         {filtered.length} von {rows.length} angezeigt
@@ -182,6 +262,8 @@ export default function UsersTable({
               <th style={thStyle}>Status</th>
               <th style={thStyle}>CGM</th>
               <th style={thStyle}>Sprache</th>
+              <th style={thStyle}>Currency</th>
+              <th style={thStyle}>Land</th>
               <th style={thStyle}>Letzter Login</th>
               <th style={thStyle}>Angelegt</th>
               <th style={thStyle}></th>
@@ -268,6 +350,12 @@ export default function UsersTable({
                   >
                     {r.language ?? <span style={{ color: "#999" }}>—</span>}
                   </td>
+                  <td style={tdStyle}>
+                    {r.currency ? r.currency.toUpperCase() : <span style={{ color: "#999" }}>—</span>}
+                  </td>
+                  <td style={tdStyle}>
+                    {r.country ?? <span style={{ color: "#999" }}>—</span>}
+                  </td>
                   <td style={tdStyle} title={r.last_sign_in_at ?? ""}>
                     {fmtRel(r.last_sign_in_at)}
                   </td>
@@ -282,7 +370,7 @@ export default function UsersTable({
             })}
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={9} style={{ padding: 32, textAlign: "center", color: "#999" }}>
+                <td colSpan={11} style={{ padding: 32, textAlign: "center", color: "#999" }}>
                   Keine User gefunden.
                 </td>
               </tr>
@@ -316,4 +404,15 @@ const openBtnStyle: React.CSSProperties = {
   color: "#3b4cdc",
   textDecoration: "none",
   fontWeight: 600,
+};
+const selectStyle: React.CSSProperties = {
+  flex: "0 0 auto",
+  minWidth: 140,
+  padding: "10px 12px",
+  border: "1px solid #ccc",
+  borderRadius: 6,
+  fontSize: 14,
+  fontFamily: "inherit",
+  background: "#fff",
+  cursor: "pointer",
 };

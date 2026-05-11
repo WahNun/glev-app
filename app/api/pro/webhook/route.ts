@@ -138,6 +138,17 @@ export async function POST(req: NextRequest) {
           priceId = sub.items?.data?.[0]?.price?.id ?? null;
         }
 
+        // Stripe currency on the session is the lowercase 3-letter ISO
+        // code the buyer paid in (eur/usd). Country is on customer_details.
+        // address.country (uppercase 2-letter, DE/US/…). Both feed the
+        // admin filter on /admin/users.
+        const sessionCurrency =
+          typeof session.currency === "string" ? session.currency.toLowerCase() : null;
+        const sessionCountry =
+          typeof session.customer_details?.address?.country === "string"
+            ? session.customer_details.address.country.toUpperCase()
+            : null;
+
         const update: Record<string, unknown> = {
           status: mapStripeStatus(stripeStatus) ?? "trialing",
           stripe_customer_id: customerId,
@@ -150,6 +161,11 @@ export async function POST(req: NextRequest) {
         // Only stamp full_name when we actually got one — never blank out a
         // previously stored name on a Stripe retry that omits the field.
         if (fullName) update.full_name = fullName;
+        // Same defensive pattern for currency/country: only write when
+        // present so a Stripe retry that omits them doesn't clobber a
+        // previously-captured value.
+        if (sessionCurrency) update.currency = sessionCurrency;
+        if (sessionCountry) update.country = sessionCountry;
 
         // Three-layer row resolution, most-reliable first:
         //   1. metadata.subscription_row_id — set by /api/pro/checkout, immune

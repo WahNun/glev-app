@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { timingSafeEqual } from "node:crypto";
 
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { getStripe } from "@/lib/stripeServer";
 import { writeAuditLog, isSchemaMissingError } from "@/lib/admin/audit";
 import { enqueueEmail } from "@/lib/emails/outbox";
 import { scheduleDripEmails } from "@/lib/emails/drip-scheduler";
@@ -843,6 +844,165 @@ export async function setRoleAction(formData: FormData): Promise<void> {
   });
 
   revalidateUserPaths(userId);
+}
+
+/**
+ * Backfill `currency` und `country` auf `pro_subscriptions` und
+ * `beta_reservations` aus der Stripe-API. Lädt für jede Zeile, der noch
+ * Werte fehlen, die zugehörige Stripe Checkout Session und übernimmt
+ * `session.currency` (3-letter ISO, lowercase) und
+ * `session.customer_details.address.country` (2-letter ISO, uppercase).
+ *
+ * Ausgelegt für eine einmalige Operator-Ausführung — wenn die Tabelle
+ * mal sehr groß wird, kann man den `limit(500)`-Schritt durch eine
+ * Schleife mit `range()` erweitern. Für jetzt ist 500 mehr als genug.
+ *
+ * Idempotent: bereits gefüllte Felder werden NICHT überschrieben (nur
+ * NULL → Wert), und Zeilen ohne `stripe_session_id` werden übersprungen
+ * (die kann man nur via Customer rückwärts auflösen, das wäre ein
+ * separater zweiter Pass).
+ */
+export async function backfillCurrencyCountryAction(): Promise<void> {
+  const adminToken = await requireAdminToken();
+  const sb = getSupabaseAdmin();
+  const stripe = getStripe();
+
+  let proUpdated = 0;
+  let proSkipped = 0;
+  let betaUpdated = 0;
+  let betaSkipped = 0;
+  let errors = 0;
+
+  // ---- pro_subscriptions ------------------------------------------------
+  const { data: proRows, error: proErr } = await sb
+    .from("pro_subscriptions")
+    .select("id, stripe_session_id, currency, country")
+    .or("currency.is.null,country.is.null")
+    .limit(500);
+
+  if (proErr) {
+    // eslint-disable-next-line no-console
+    console.error("[backfill] pro_subscriptions select failed:", proErr.code, proErr.message);
+    errors++;
+  } else {
+    for (const row of (proRows ?? []) as Array<{
+      id: string;
+      stripe_session_id: string | null;
+      currency: string | null;
+      country: string | null;
+    }>) {
+      if (!row.stripe_session_id) {
+        proSkipped++;
+        continue;
+      }
+      try {
+        const session = await stripe.checkout.sessions.retrieve(row.stripe_session_id, {
+          expand: ["customer_details"],
+        });
+        const update: Record<string, unknown> = {};
+        if (!row.currency && typeof session.currency === "string") {
+          update.currency = session.currency.toLowerCase();
+        }
+        if (!row.country && typeof session.customer_details?.address?.country === "string") {
+          update.country = session.customer_details.address.country.toUpperCase();
+        }
+        if (Object.keys(update).length === 0) {
+          proSkipped++;
+          continue;
+        }
+        const { error: upErr } = await sb
+          .from("pro_subscriptions")
+          .update(update)
+          .eq("id", row.id);
+        if (upErr) {
+          // eslint-disable-next-line no-console
+          console.error("[backfill] pro_subscriptions update failed:", row.id, upErr.message);
+          errors++;
+        } else {
+          proUpdated++;
+        }
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn("[backfill] stripe sessions.retrieve failed (pro):", row.stripe_session_id, e);
+        errors++;
+      }
+    }
+  }
+
+  // ---- beta_reservations ------------------------------------------------
+  // Currency hat hier einen Default ('eur'), wir füllen also primär `country`.
+  // Trotzdem auch `currency` mitziehen, falls jemand explizit USD bezahlt
+  // hat und die alte Default-Spalte das überdeckt.
+  const { data: betaRows, error: betaErr } = await sb
+    .from("beta_reservations")
+    .select("id, stripe_session_id, currency, country")
+    .is("country", null)
+    .limit(500);
+
+  if (betaErr) {
+    // eslint-disable-next-line no-console
+    console.error("[backfill] beta_reservations select failed:", betaErr.code, betaErr.message);
+    errors++;
+  } else {
+    for (const row of (betaRows ?? []) as Array<{
+      id: string;
+      stripe_session_id: string | null;
+      currency: string | null;
+      country: string | null;
+    }>) {
+      if (!row.stripe_session_id) {
+        betaSkipped++;
+        continue;
+      }
+      try {
+        const session = await stripe.checkout.sessions.retrieve(row.stripe_session_id, {
+          expand: ["customer_details"],
+        });
+        const update: Record<string, unknown> = {};
+        if (typeof session.customer_details?.address?.country === "string") {
+          update.country = session.customer_details.address.country.toUpperCase();
+        }
+        // Currency nur überschreiben, wenn die DB-Zeile noch den
+        // 'eur'-Default trägt UND Stripe was anderes geliefert hat.
+        if (
+          typeof session.currency === "string" &&
+          session.currency.toLowerCase() !== (row.currency ?? "").toLowerCase()
+        ) {
+          update.currency = session.currency.toLowerCase();
+        }
+        if (Object.keys(update).length === 0) {
+          betaSkipped++;
+          continue;
+        }
+        const { error: upErr } = await sb
+          .from("beta_reservations")
+          .update(update)
+          .eq("id", row.id);
+        if (upErr) {
+          // eslint-disable-next-line no-console
+          console.error("[backfill] beta_reservations update failed:", row.id, upErr.message);
+          errors++;
+        } else {
+          betaUpdated++;
+        }
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn("[backfill] stripe sessions.retrieve failed (beta):", row.stripe_session_id, e);
+        errors++;
+      }
+    }
+  }
+
+  await writeAuditLog({
+    action: "backfill_currency_country",
+    note: `pro: ${proUpdated} updated / ${proSkipped} skipped · beta: ${betaUpdated} updated / ${betaSkipped} skipped · errors: ${errors}`,
+    adminToken,
+  });
+
+  revalidatePath("/admin/users");
+  redirect(
+    `/admin/users?backfill=ok&pro=${proUpdated}&beta=${betaUpdated}&skipped=${proSkipped + betaSkipped}&errors=${errors}`,
+  );
 }
 
 /**
