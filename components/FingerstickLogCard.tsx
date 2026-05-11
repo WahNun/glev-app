@@ -9,8 +9,8 @@ import {
 } from "@/lib/fingerstick";
 import { isToday, isWithinDays, formatLocalTime } from "@/lib/utils/datetime";
 import { hapticSuccess, hapticWarning, hapticError } from "@/lib/haptics";
-import SnapSlider from "@/components/log/SnapSlider";
 import CollapsibleField from "@/components/log/CollapsibleField";
+import NumberField from "@/components/log/NumberField";
 import SaveButton from "@/components/log/SaveButton";
 
 // Target band — out-of-range saves trigger a warning haptic.
@@ -41,7 +41,11 @@ export default function FingerstickLogCard() {
     return t("latest_other", { date: formatLocalTime(iso, "date"), time });
   }
 
-  const [value, setValue]       = useState<number>(110);
+  // Free-form text input — keeps the user's exact typed glucose value
+  // (e.g. "127") without any slider snapping. Validation + clamp happens
+  // at save time. Empty string = nothing entered yet → save shows the
+  // standard "value out of range" error so the user knows to type one.
+  const [valueStr, setValueStr] = useState<string>("");
   const [whenLocal, setWhenLocal] = useState<string>(() => toLocalInputValue(new Date()));
   const [note, setNote]         = useState<string>("");
   const [busy, setBusy]         = useState(false);
@@ -49,6 +53,7 @@ export default function FingerstickLogCard() {
   const [latest, setLatest]     = useState<FingerstickReading | null>(null);
   const [savedTick, setSavedTick] = useState<number>(0);
 
+  const valueId = useId();
   const whenId  = useId();
   const noteId  = useId();
 
@@ -59,7 +64,10 @@ export default function FingerstickLogCard() {
   async function handleSave() {
     setFeedback(null);
 
-    const num = value;
+    // Accept both "127" and "127,5" (German decimal). Empty/garbage
+    // input falls through to the same "out of range" error as a value
+    // outside 20–600 so we only ever surface one validation message.
+    const num = Number((valueStr ?? "").replace(",", "."));
     if (!Number.isFinite(num) || num < 20 || num > 600) {
       hapticError();
       setFeedback({ kind: "err", msg: t("err_value_range") });
@@ -88,7 +96,7 @@ export default function FingerstickLogCard() {
       else                                              hapticSuccess();
       setSavedTick(n => n + 1);
       setLatest(saved);
-      setValue(110);
+      setValueStr("");
       setNote("");
       setWhenLocal(toLocalInputValue(new Date()));
       setFeedback({ kind: "ok", msg: t("saved_ok") });
@@ -137,14 +145,19 @@ export default function FingerstickLogCard() {
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <label style={{ fontSize: 12, color: "var(--text-dim)", fontWeight: 600, letterSpacing: "0.04em" }}>
+          <label htmlFor={valueId} style={{ fontSize: 12, color: "var(--text-dim)", fontWeight: 600, letterSpacing: "0.04em" }}>
             {t("value_label")}
           </label>
-          <SnapSlider
-            value={value}
-            onChange={setValue}
-            min={40}
-            max={300}
+          {/* Free-form numeric input (shared NumberField primitive) —
+              replaces the previous SnapSlider so the user can type the
+              exact value from their meter (e.g. "127") instead of
+              dragging a 260-step slider. */}
+          <NumberField
+            id={valueId}
+            value={valueStr}
+            onChange={setValueStr}
+            min={20}
+            max={600}
             step={1}
             unit={t("mgdl_unit")}
             accent={ACCENT}

@@ -13,6 +13,7 @@ import { BOLUS_MEAL_WINDOW_MS } from "@/lib/engine/pairing";
 import { hapticSelection, hapticSuccess, hapticError } from "@/lib/haptics";
 import TimeQuickChips from "@/components/log/TimeQuickChips";
 import SnapSlider from "@/components/log/SnapSlider";
+import NumberField from "@/components/log/NumberField";
 import CollapsibleField from "@/components/log/CollapsibleField";
 import SaveButton from "@/components/log/SaveButton";
 
@@ -230,9 +231,10 @@ export function InsulinForm() {
   const t = useTranslations("engineLog");
   const [type, setType] = useState<"bolus" | "basal">("bolus");
   const [name, setName] = useState("");
-  // Default starting positions for the SnapSlider: 5 IE bolus, 20 IE
-  // basal. The form accepts any 0.5-100 IE on submit.
-  const [units, setUnits] = useState<number>(5);
+  // Default starting positions: "5" IE bolus, "20" IE basal. Stored
+  // as a string so the user can type free-form (e.g. "7,5"); parsed
+  // and clamped to 0.5–100 IE on submit.
+  const [units, setUnits] = useState<string>("5");
   const [savedTick, setSavedTick] = useState<number>(0);
   // Toggle bolus ↔ basal; only retarget the default if the user
   // hasn't customised the value.
@@ -240,8 +242,8 @@ export function InsulinForm() {
     setType(prev => {
       if (prev === next) return prev;
       // Retarget unit default if user hasn't customised it.
-      if (prev === "bolus" && units === 5)  setUnits(20);
-      if (prev === "basal" && units === 20) setUnits(5);
+      if (prev === "bolus" && units === "5")  setUnits("20");
+      if (prev === "basal" && units === "20") setUnits("5");
       return next;
     });
   }
@@ -274,7 +276,9 @@ export function InsulinForm() {
   }, [type]);
 
   const placeholder = type === "bolus" ? "Fiasp" : "Tresiba";
-  const u = units;
+  // Accept "5" and "7,5" (German decimal). Empty/garbage parses to NaN
+  // → invalidates the form via the existing `Number.isFinite` check.
+  const u = Number((units ?? "").replace(",", "."));
   const atDate = parseLocalDt(at);
   // Validate the picker too — invalid date OR more than 365 days back
   // OR > 1 minute in the future (small grace window for clock drift)
@@ -325,7 +329,7 @@ export function InsulinForm() {
           ? t("logged_with_cgm", { units: u, type: typeLabel, name: trimmedName, when: whenLabel, cgm: Math.round(cgm) })
           : t("logged_no_cgm", { units: u, type: typeLabel, name: trimmedName, when: whenLabel }),
       });
-      setUnits(type === "bolus" ? 5 : 20);
+      setUnits(type === "bolus" ? "5" : "20");
       setNotes("");
       setRelatedMealId("");
       // Reset the picker to a fresh "now" so the next log doesn't
@@ -382,7 +386,10 @@ export function InsulinForm() {
         </div>
         <div>
           <label style={labelStyle}>{t("units_label")}</label>
-          <SnapSlider
+          {/* Free-form text input — replaces SnapSlider so the user
+              types the exact dose (e.g. "7,5") instead of dragging a
+              200-step slider. Submit-time validation enforces 0.5–100 IE. */}
+          <NumberField
             value={units}
             onChange={setUnits}
             min={0.5}
@@ -703,13 +710,17 @@ export function ExerciseForm() {
   // to minutes-ago at submit.
   const [customStartAt, setCustomStartAt] = useState<string>(() => nowLocalDt());
   const usingCustomStart = startedMinAgo === STARTED_CUSTOM;
-  const [duration, setDuration] = useState<number>(30);
+  // Duration in minutes — stored as string for free-form typing
+  // (e.g. "45"), parsed and validated to 1–600 min on submit.
+  const [duration, setDuration] = useState<string>("30");
   const [intensity, setIntensity] = useState<"low" | "medium" | "high">("medium");
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [savedTick, setSavedTick] = useState<number>(0);
 
-  const d = duration;
+  // Accept "30" and "30,5" (German decimal). Empty/garbage parses to
+  // NaN → invalidates the form via the existing `Number.isFinite` check.
+  const d = Number((duration ?? "").replace(",", "."));
   // For the custom-time path, recompute minutes-ago at submit.
   function effectiveStartedMinAgo(): number {
     if (!usingCustomStart) return startedMinAgo;
@@ -784,7 +795,7 @@ export function ExerciseForm() {
           : t("exercise_logged_no_cgm", { minutes: d, type: typeLabel, intensity: intensityLabel, when: startedLabel }),
       });
       setSavedTick(n => n + 1);
-      setDuration(30);
+      setDuration("30");
       setNotes("");
       setStartedMinAgo(0);
       setCustomStartAt(nowLocalDt());
@@ -908,10 +919,13 @@ export function ExerciseForm() {
         </div>
         <div>
           <label style={labelStyle}>{t("duration_label")}</label>
-          <SnapSlider
+          {/* Free-form text input — replaces SnapSlider so the user
+              types the exact duration (e.g. "45") instead of dragging
+              a 595-step slider. Submit-time validation enforces 1–600 min. */}
+          <NumberField
             value={duration}
             onChange={setDuration}
-            min={5}
+            min={1}
             max={600}
             step={1}
             unit={t("duration_unit")}
