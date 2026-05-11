@@ -15,6 +15,7 @@ import SkeletonBlock from "@/components/SkeletonBlock";
 import { useCardOrder } from "@/lib/cardOrder";
 import { parseDbTs, parseDbDate } from "@/lib/time";
 import { startOfDay, startOfToday, startOfDaysAgo, userTimezone } from "@/lib/utils/datetime";
+import { fetchUserProfile, cycleSurfacesAvailable, type Sex } from "@/lib/userProfile";
 
 // ─── History scope ───────────────────────────────────────────────
 // Scope state (mode + anchor) now lives in `ScopeHeaderContext` so
@@ -193,6 +194,14 @@ export default function InsightsPage() {
   const [menstrualLogs, setMenstrualLogs] = useState<MenstrualLog[]>([]);
   const [symptomLogs, setSymptomLogs]     = useState<SymptomLog[]>([]);
   const [loading, setLoading]           = useState(true);
+  // Biological sex — gates the cycle half of the "Zyklus & Symptome"
+  // card. Male users see a symptoms-only variant (cycle stats hidden,
+  // card retitled). Null/unset is treated as "show everything" so
+  // pre-onboarding users aren't worse off.
+  const [sex, setSex] = useState<Sex | null>(null);
+  useEffect(() => {
+    fetchUserProfile().then((p) => setSex(p.sex)).catch(() => {});
+  }, []);
 
   // History scope state — sourced from the global ScopeHeaderContext
   // so the chip in the mobile header (rendered by components/Layout.tsx
@@ -299,12 +308,27 @@ export default function InsightsPage() {
     return t >= wkAgo && t < now;
   });
 
+  // ── Cross-source BG reading pools (meals + insulin + exercise + fingerstick) ──
+  // Pulled up here (was below) so TIR / TBR / TAR can use the same
+  // coherent reading universe as the Hypo/Hyper counters and CV%
+  // tile. Without this, manually-logged fingerstick hypos never
+  // lowered TIR or appeared in the TBR band — a real safety gap that
+  // hid recent low events from the user (Task: Lucas's 2026-05-11
+  // bug report).
+  const fourteenAgo = wkAgo;
+  const readings14 = collectBgReadings(meals, insulinLogs, exerciseLogs, fingersticks, fourteenAgo)
+    .filter(r => r.t < now);
+  const readings7  = readings14;
+  const readingsPrev7 = collectBgReadings(meals, insulinLogs, exerciseLogs, fingersticks, wk2Ago)
+    .filter(r => r.t >= wk2Ago && r.t < scope.prevEndMs);
+
   // ── Time in Range buckets (consensus 70–180 mg/dL band) ──
-  const last7Bg = last7.filter(m => m.glucose_before != null).map(m => m.glucose_before as number);
-  const prev7Bg = meals.filter(m => {
-    const t = parseDbTs(m.created_at);
-    return t >= wk2Ago && t < scope.prevEndMs && m.glucose_before != null;
-  }).map(m => m.glucose_before as number);
+  // Cross-source: every BG reading we have for the period (meal
+  // pre/post, insulin pre/+1h/+2h/..., exercise pre/end/+1h, manual
+  // fingersticks). Prevents "hypo I logged manually doesn't show up
+  // in TIR" gaps.
+  const last7Bg = readings7.map(r => r.v);
+  const prev7Bg = readingsPrev7.map(r => r.v);
 
   const bucket = (arr: number[]) => {
     const t = arr.length || 1;
@@ -427,16 +451,8 @@ export default function InsightsPage() {
     return lastVal ?? firstFallback;
   });
 
-  // ── Cross-source BG reading pools (meals + insulin + exercise + fingerstick) ──
-  // Scope-aware: now follows the selected period rather than a fixed
-  // 14-day window. `readings7` is kept as an alias for the in-period
-  // pool (every reading inside the current scope window).
-  const fourteenAgo = wkAgo;
-  const readings14 = collectBgReadings(meals, insulinLogs, exerciseLogs, fingersticks, fourteenAgo)
-    .filter(r => r.t < now);
-  const readings7  = readings14;
-
   // ── Hypo / Hyper event counters (7d, count of individual readings) ──
+  // (`readings7` / `readings14` are computed earlier so TIR can share them.)
   const hypoEnough  = readings7.length >= MIN_DATAPOINTS;
   const hyperEnough = readings7.length >= MIN_DATAPOINTS;
   const hypoCount7d  = readings7.filter(r => r.v < HYPO_THRESHOLD_MGDL).length;
@@ -460,6 +476,18 @@ export default function InsightsPage() {
     : PINK;
 
   // ── TDD: total daily insulin units (bolus + basal) ──
+  // Two sources contribute:
+  //   1. `insulin_logs.units` — standalone Insulin-Form entries
+  //   2. `meals.insulin_units` — insulin typed directly into a meal
+  // Casual users only ever use (2), so without it the TDD card stays
+  // empty even with hundreds of logged meals. To avoid double-counting
+  // when the user logs BOTH (e.g. correction bolus linked to a meal),
+  // we skip a meal's insulin if any insulin_log row already points to
+  // it via `related_entry_id`.
+  const linkedMealIds = new Set<string>();
+  for (const il of insulinLogs) {
+    if (il.related_entry_id) linkedMealIds.add(il.related_entry_id);
+  }
   const tddByDay = new Map<string, number>();
   for (const il of insulinLogs) {
     const t = parseDbTs(il.created_at);
@@ -467,6 +495,16 @@ export default function InsightsPage() {
     const dayStart = startOfDay(new Date(t));
     const key = dayStart.toISOString().slice(0, 10);
     tddByDay.set(key, (tddByDay.get(key) ?? 0) + Number(il.units || 0));
+  }
+  for (const m of meals) {
+    const u = Number(m.insulin_units || 0);
+    if (!Number.isFinite(u) || u <= 0) continue;
+    if (linkedMealIds.has(m.id)) continue;
+    const t = parseDbTs(m.meal_time ?? m.created_at);
+    if (t < wkAgo || t >= now) continue;
+    const dayStart = startOfDay(new Date(t));
+    const key = dayStart.toISOString().slice(0, 10);
+    tddByDay.set(key, (tddByDay.get(key) ?? 0) + u);
   }
   const tddDayCount    = tddByDay.size;
   const tddEnough      = tddDayCount >= MIN_DATAPOINTS;
@@ -1689,7 +1727,14 @@ export default function InsightsPage() {
         .sort((a, b) => b.count - a.count)
         .slice(0, 3);
 
-      const hasAny = bleedingDays > 0 || Object.keys(phaseCounts).length > 0 || totalSymptomEntries > 0;
+      // Male users see a symptoms-only variant: the cycle stat tile and
+      // phase counts are hidden (clinically irrelevant), the card is
+      // retitled to "Symptome", and `hasAny` ignores cycle signals so
+      // the card stays hidden when the only data is cycle-side noise.
+      const showCycle = cycleSurfacesAvailable(sex);
+      const hasAny = showCycle
+        ? (bleedingDays > 0 || Object.keys(phaseCounts).length > 0 || totalSymptomEntries > 0)
+        : totalSymptomEntries > 0;
       if (!hasAny) return { id: "cycle-symptoms", node: null };
 
       return {
@@ -1709,26 +1754,34 @@ export default function InsightsPage() {
             }
           >
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-              <CardLabel text={tInsights("card_cycle_symptoms_title")}/>
+              <CardLabel text={tInsights(showCycle ? "card_cycle_symptoms_title" : "card_symptoms_only_title")}/>
               <div style={{ fontSize:11, color:"var(--text-dim)" }}>
                 {tInsights("card_cycle_symptoms_window")}
               </div>
             </div>
 
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:10 }}>
-              <div style={{ background:`${PINK}10`, border:`1px solid ${PINK}24`, borderRadius:10, padding:"10px 12px" }}>
-                <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.06em", fontWeight:700, textTransform:"uppercase" }}>
-                  {tInsights("cycle_bleeding_days_label")}
-                </div>
-                <div style={{ fontSize:22, fontWeight:800, color:PINK, fontFamily:"var(--font-mono)", lineHeight:1.1, marginTop:4 }}>
-                  {bleedingDays}
-                </div>
-                {Object.keys(phaseCounts).length > 0 && (
-                  <div style={{ fontSize:12, color:"var(--text-dim)", marginTop:6, lineHeight:1.4 }}>
-                    {Object.entries(phaseCounts).map(([k, n]) => `${tInsights(`cycle_phase_${k}` as never)} ×${n}`).join(" · ")}
+            <div style={{
+              display:"grid",
+              // Male users hide the cycle tile entirely, so the symptom
+              // tile spans the full card width instead of leaving a gap.
+              gridTemplateColumns: showCycle ? "1fr 1fr" : "1fr",
+              gap:8, marginBottom:10,
+            }}>
+              {showCycle && (
+                <div style={{ background:`${PINK}10`, border:`1px solid ${PINK}24`, borderRadius:10, padding:"10px 12px" }}>
+                  <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.06em", fontWeight:700, textTransform:"uppercase" }}>
+                    {tInsights("cycle_bleeding_days_label")}
                   </div>
-                )}
-              </div>
+                  <div style={{ fontSize:22, fontWeight:800, color:PINK, fontFamily:"var(--font-mono)", lineHeight:1.1, marginTop:4 }}>
+                    {bleedingDays}
+                  </div>
+                  {Object.keys(phaseCounts).length > 0 && (
+                    <div style={{ fontSize:12, color:"var(--text-dim)", marginTop:6, lineHeight:1.4 }}>
+                      {Object.entries(phaseCounts).map(([k, n]) => `${tInsights(`cycle_phase_${k}` as never)} ×${n}`).join(" · ")}
+                    </div>
+                  )}
+                </div>
+              )}
               <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
                 <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.06em", fontWeight:700, textTransform:"uppercase" }}>
                   {tInsights("symptom_entries_label")}

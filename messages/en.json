@@ -818,6 +818,7 @@
     "workout_dur_medium": "Workouts 30–60 minutes",
     "workout_dur_long": "Workouts over 60 minutes",
     "card_cycle_symptoms_title": "Cycle & symptoms",
+    "card_symptoms_only_title": "Symptoms",
     "card_cycle_symptoms_window": "last 30 days",
     "cycle_symptoms_back_title": "What does this card show?",
     "cycle_symptoms_back_p1": "An overview of your cycle and symptom entries from the last 30 days. Pure documentation — no predictions, no medical assessment.",
