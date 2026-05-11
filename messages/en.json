@@ -380,7 +380,8 @@
     "engine_eval_trend_falling": "Pre-meal trend: glucose fell slightly (>0.5 mg/dL/min) in the 15 min before the meal.",
     "engine_eval_trend_falling_fast": "Pre-meal trend: glucose fell fast (>1.5 mg/dL/min) in the 15 min before the meal — outcome may be influenced by that drop.",
     "tab_cycle": "Cycle",
-    "tab_symptoms": "Symptoms"
+    "tab_symptoms": "Symptoms",
+    "tab_influences": "Influences"
   },
   "engineLog": {
     "insulin_card_title": "Log Insulin",
@@ -508,7 +509,27 @@
     "symptom_category_pms_hint": "PMS symptoms surface as a luteal-phase signal in Insights.",
     "symptom_category_pms_badge": "PMS",
     "symptom_logged_pms_ok": "{count} PMS symptom(s) at severity {severity} saved.",
-    "symptom_logged_pms_ok_with_cgm": "{count} PMS symptom(s) at severity {severity} saved · glucose {cgm} mg/dL."
+    "symptom_logged_pms_ok_with_cgm": "{count} PMS symptom(s) at severity {severity} saved · glucose {cgm} mg/dL.",
+    "influence_card_title": "Log influences",
+    "influence_type_label": "Type",
+    "influence_type_alcohol": "Alcohol",
+    "influence_type_cannabis": "Cannabis",
+    "influence_type_medication": "Medication",
+    "influence_type_other": "Other",
+    "influence_details_label": "Details (optional)",
+    "influence_details_placeholder": "e.g. beer, ibuprofen, …",
+    "influence_amount_label": "Amount (optional)",
+    "influence_amount_placeholder": "e.g. 2 glasses, 400 mg, …",
+    "influence_when_label": "When?",
+    "influence_when_now_chip": "Now",
+    "influence_when_ago_chip": "−{hours}h",
+    "influence_when_custom_btn": "Other time…",
+    "influence_note_placeholder": "Notes (optional)",
+    "influence_save_btn": "Save entry",
+    "influence_disclaimer": "Glev does not clinically interpret influences — entries serve as your personal journal and do not affect any insulin recommendation.",
+    "influence_logged_ok": "{type} saved.",
+    "influence_logged_ok_with_cgm": "{type} saved · glucose {cgm} mg/dL.",
+    "influence_row_title": "Influence"
   },
   "history": {
     "title": "History",
@@ -1200,7 +1221,8 @@
     "measure_glucose": "Measure glucose",
     "log_activity": "Log activity",
     "log_cycle": "Log cycle",
-    "log_symptoms": "Log symptoms"
+    "log_symptoms": "Log symptoms",
+    "log_influences": "Log influences"
   },
   "about": {
     "row_version": "Version",

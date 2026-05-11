@@ -76,6 +76,14 @@ const SYMPTOM_ICON = (
   </svg>
 );
 
+// Influences (Einflussfaktoren) — neutral diamond glyph; copy stays
+// neutral ("Einflussfaktoren" / "Influences") for App-Store compliance.
+const INFLUENCE_ICON = (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="12 2 22 12 12 22 2 12" />
+  </svg>
+);
+
 type ItemDef = {
   key:
     | "open_engine"
@@ -83,7 +91,8 @@ type ItemDef = {
     | "measure_glucose"
     | "log_activity"
     | "log_cycle"
-    | "log_symptoms";
+    | "log_symptoms"
+    | "log_influences";
   href: string;
   icon: React.ReactNode;
 };
@@ -100,6 +109,7 @@ const ITEM_DEFS: ItemDef[] = [
   { key: "log_activity",     href: "/engine?tab=exercise",    icon: RUN          },
   { key: "log_cycle",        href: "/engine?tab=cycle",       icon: CYCLE_ICON   },
   { key: "log_symptoms",     href: "/engine?tab=symptoms",    icon: SYMPTOM_ICON },
+  { key: "log_influences",   href: "/engine?tab=influences",  icon: INFLUENCE_ICON },
 ];
 
 /**

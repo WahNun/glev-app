@@ -7,6 +7,7 @@ import { fetchRecentInsulinLogs, deleteInsulinLog, updateInsulinReadings, type I
 import { fetchRecentExerciseLogs, deleteExerciseLog, type ExerciseLog } from "@/lib/exercise";
 import { fetchRecentMenstrualLogs, deleteMenstrualLog, type MenstrualLog } from "@/lib/menstrual";
 import { fetchRecentSymptomLogs, deleteSymptomLog, type SymptomLog } from "@/lib/symptoms";
+import { fetchRecentInfluenceLogs, deleteInfluenceLog, type InfluenceLog } from "@/lib/influences";
 import { evaluateExercise, exerciseTypeLabel, exerciseTypeLabelI18n, patternNote, interimMessage, finalMessage, deltaColor, aggregateExerciseTypeStats, personalPatternHeadline, PATTERN_MIN_SESSIONS } from "@/lib/exerciseEval";
 import {
   evaluateBolus,
@@ -37,7 +38,7 @@ function evL(ev: string|null) { return getEvalLabel(ev); }
 // Multi-select filter sections. Selections are AND-ed across sections; OR-ed
 // within a section. Meal-kind / outcome implicitly restrict to meal rows;
 // exercise-kind implicitly restricts to exercise rows.
-type EntryTypeKey   = "meal" | "bolus" | "basal" | "exercise" | "cycle" | "symptoms";
+type EntryTypeKey   = "meal" | "bolus" | "basal" | "exercise" | "cycle" | "symptoms" | "influences";
 type MealKindKey    = "FAST_CARBS" | "HIGH_PROTEIN" | "HIGH_FAT" | "BALANCED";
 type ExerciseKindKey = "cardio" | "hypertrophy";
 type OutcomeKey     = "GOOD" | "UNDERDOSE" | "OVERDOSE" | "SPIKE";
@@ -65,6 +66,7 @@ const ENTRY_TYPE_OPTIONS: { value: EntryTypeKey; label: string }[] = [
   { value: "exercise", label: "Exercise" },
   { value: "cycle",    label: "Cycle" },
   { value: "symptoms", label: "Symptoms" },
+  { value: "influences", label: "Influences" },
 ];
 const MEAL_KIND_OPTIONS: { value: MealKindKey; label: string }[] = [
   { value: "FAST_CARBS",   label: "Fast Carbs" },
@@ -191,7 +193,8 @@ type Row =
   | { kind: "basal"; id: string; ts: string; data: InsulinLog }
   | { kind: "exercise"; id: string; ts: string; data: ExerciseLog }
   | { kind: "cycle"; id: string; ts: string; data: MenstrualLog }
-  | { kind: "symptoms"; id: string; ts: string; data: SymptomLog };
+  | { kind: "symptoms"; id: string; ts: string; data: SymptomLog }
+  | { kind: "influences"; id: string; ts: string; data: InfluenceLog };
 
 export default function EntriesPage() {
   // Carb-unit selector — converts the stored grams value into the
@@ -229,6 +232,7 @@ export default function EntriesPage() {
   const [exercise, setExercise] = useState<ExerciseLog[]>([]);
   const [cycle, setCycle]       = useState<MenstrualLog[]>([]);
   const [symptoms, setSymptoms] = useState<SymptomLog[]>([]);
+  const [influences, setInfluences] = useState<InfluenceLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -352,12 +356,13 @@ export default function EntriesPage() {
     let cancelled = false;
     async function load(initial: boolean) {
       try {
-        const [m, ins, ex, cy, sy] = await Promise.all([
+        const [m, ins, ex, cy, sy, inf] = await Promise.all([
           fetchMeals(),
           fetchRecentInsulinLogs(60).catch(() => []),
           fetchRecentExerciseLogs(60).catch(() => []),
           fetchRecentMenstrualLogs(120).catch(() => [] as MenstrualLog[]),
           fetchRecentSymptomLogs(120).catch(() => [] as SymptomLog[]),
+          fetchRecentInfluenceLogs(120).catch(() => [] as InfluenceLog[]),
         ]);
         if (!cancelled) {
           setMeals(m);
@@ -365,6 +370,7 @@ export default function EntriesPage() {
           setExercise(ex);
           setCycle(cy);
           setSymptoms(sy);
+          setInfluences(inf);
         }
       } catch (e) { console.error(e); }
       finally { if (!cancelled && initial) setLoading(false); }
@@ -376,6 +382,7 @@ export default function EntriesPage() {
     window.addEventListener("glev:exercise-updated", onUpdated);
     window.addEventListener("glev:menstrual-updated", onUpdated);
     window.addEventListener("glev:symptom-updated", onUpdated);
+    window.addEventListener("glev:influence-updated", onUpdated);
     return () => {
       cancelled = true;
       window.removeEventListener("glev:meals-updated", onUpdated);
@@ -383,6 +390,7 @@ export default function EntriesPage() {
       window.removeEventListener("glev:exercise-updated", onUpdated);
       window.removeEventListener("glev:menstrual-updated", onUpdated);
       window.removeEventListener("glev:symptom-updated", onUpdated);
+      window.removeEventListener("glev:influence-updated", onUpdated);
     };
   }, []);
 
@@ -466,6 +474,19 @@ export default function EntriesPage() {
     } finally { setDeleting(null); }
   }
 
+  async function handleDeleteInfluence(id: string) {
+    if (!confirm("Delete this entry? This cannot be undone.")) return;
+    setDeleting(id);
+    try {
+      await deleteInfluenceLog(id);
+      setInfluences(xs => xs.filter(x => x.id !== id));
+      setExpanded(null);
+    } catch (e) {
+      console.error(e);
+      alert("Could not delete entry.");
+    } finally { setDeleting(null); }
+  }
+
   // Merge meal/bolus/basal/exercise/cycle/symptoms into a single timeline.
   // Cycle rows sort by start_date (00:00 local) since they don't carry a
   // wall-clock time; symptom rows sort by their explicit occurred_at.
@@ -476,10 +497,11 @@ export default function EntriesPage() {
       ...exercise.map<Row>(x => ({ kind: "exercise", id: x.id, ts: x.created_at, data: x })),
       ...cycle.map<Row>(c => ({ kind: "cycle", id: c.id, ts: `${c.start_date}T00:00:00`, data: c })),
       ...symptoms.map<Row>(s => ({ kind: "symptoms", id: s.id, ts: s.occurred_at, data: s })),
+      ...influences.map<Row>(i => ({ kind: "influences", id: i.id, ts: i.occurred_at, data: i })),
     ];
     all.sort((a, b) => parseDbTs(b.ts) - parseDbTs(a.ts));
     return all;
-  }, [meals, insulin, exercise, cycle, symptoms]);
+  }, [meals, insulin, exercise, cycle, symptoms, influences]);
 
   // Memoize to keep the bounds stable across re-renders within the same render
   // cycle and to recompute when the user changes the date filter.
@@ -536,6 +558,7 @@ export default function EntriesPage() {
       else if (r.kind === "exercise") txt = `${r.data.exercise_type} ${r.data.notes ?? ""}`;
       else if (r.kind === "cycle") txt = `${r.data.flow_intensity ?? ""} ${r.data.phase_marker ?? ""} ${r.data.cycle_phase ?? ""} ${r.data.notes ?? ""}`;
       else if (r.kind === "symptoms") txt = `${(r.data.symptom_types || []).join(" ")} ${r.data.notes ?? ""}`;
+      else if (r.kind === "influences") txt = `${r.data.influence_type} ${r.data.details ?? ""} ${r.data.amount ?? ""} ${r.data.notes ?? ""}`;
       if (!txt.toLowerCase().includes(q)) return false;
     }
     return true;
@@ -829,6 +852,18 @@ export default function EntriesPage() {
                   log={s}
                   onDelete={() => handleDeleteSymptom(s.id)}
                   deleting={deleting === s.id}
+                />
+              );
+            }
+            // INFLUENCES row — neutral "Einflussfaktoren" entry.
+            if (r.kind === "influences") {
+              const i = r.data;
+              return (
+                <InfluenceRowCard
+                  key={i.id}
+                  log={i}
+                  onDelete={() => handleDeleteInfluence(i.id)}
+                  deleting={deleting === i.id}
                 />
               );
             }
@@ -2684,6 +2719,63 @@ function CycleRowCard({ log, onDelete, deleting }: {
         </div>
         <div style={{ fontSize:13, color:"var(--text-faint)", marginTop:2, display:"flex", gap:8, flexWrap:"wrap" }}>
           <span>{dateLine}</span>
+          {log.notes && <span style={{ color:"var(--text-dim)" }}>· {log.notes}</span>}
+        </div>
+      </div>
+      <button
+        onClick={onDelete}
+        disabled={deleting}
+        aria-label={t("row_delete_aria")}
+        style={{
+          background:"transparent", border:"none", cursor:deleting?"wait":"pointer",
+          color:"var(--text-faint)", padding:6, borderRadius:6,
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="3 6 5 6 21 6"/>
+          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+        </svg>
+      </button>
+    </div>
+  );
+}
+
+function InfluenceRowCard({ log, onDelete, deleting }: {
+  log: InfluenceLog;
+  onDelete: () => void;
+  deleting: boolean;
+}) {
+  const t = useTranslations("engineLog");
+  const accent = "#F5A524";
+  const typeLabel = t(`influence_type_${log.influence_type}` as never);
+  const subParts: string[] = [];
+  if (log.details) subParts.push(log.details);
+  if (log.amount)  subParts.push(log.amount);
+  return (
+    <div style={{
+      background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:12,
+      padding:"12px 14px", display:"flex", alignItems:"flex-start", gap:12,
+    }}>
+      <div style={{
+        width:30, height:30, borderRadius:8,
+        background:`${accent}18`, color:accent,
+        display:"flex", alignItems:"center", justifyContent:"center",
+        fontWeight:800, fontSize:14, flexShrink:0,
+      }}>◆</div>
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+          <div style={{ fontSize:14, fontWeight:700, color:"var(--text-strong)" }}>
+            {t("influence_row_title")}
+          </div>
+          <span style={{
+            fontSize:12, fontWeight:700, padding:"2px 8px",
+            borderRadius:99, background:`${accent}14`, color:accent,
+            border:`1px solid ${accent}28`,
+          }}>{typeLabel}</span>
+        </div>
+        <div style={{ fontSize:13, color:"var(--text-faint)", marginTop:6, display:"flex", gap:8, flexWrap:"wrap" }}>
+          <span>{fmtDateTimeShort(log.occurred_at)}</span>
+          {subParts.length > 0 && <span style={{ color:"var(--text-dim)" }}>· {subParts.join(" · ")}</span>}
           {log.notes && <span style={{ color:"var(--text-dim)" }}>· {log.notes}</span>}
         </div>
       </div>

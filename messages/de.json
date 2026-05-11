@@ -380,7 +380,8 @@
     "engine_eval_trend_falling": "Pre-Meal-Trend: Glukose fiel leicht (>0,5 mg/dL/min) in den 15 min vor der Mahlzeit.",
     "engine_eval_trend_falling_fast": "Pre-Meal-Trend: Glukose fiel schnell (>1,5 mg/dL/min) in den 15 min vor der Mahlzeit — Outcome ggf. dadurch beeinflusst.",
     "tab_cycle": "Zyklus",
-    "tab_symptoms": "Symptome"
+    "tab_symptoms": "Symptome",
+    "tab_influences": "Einflussfaktoren"
   },
   "engineLog": {
     "insulin_card_title": "Insulin loggen",
@@ -508,7 +509,27 @@
     "symptom_category_pms_hint": "PMS-Symptome werden als Luteal-Phasen-Signal für Insights ausgewertet.",
     "symptom_category_pms_badge": "PMS",
     "symptom_logged_pms_ok": "{count} PMS-Symptom(e) bei Schweregrad {severity} gespeichert.",
-    "symptom_logged_pms_ok_with_cgm": "{count} PMS-Symptom(e) bei Schweregrad {severity} gespeichert · Glukose {cgm} mg/dL."
+    "symptom_logged_pms_ok_with_cgm": "{count} PMS-Symptom(e) bei Schweregrad {severity} gespeichert · Glukose {cgm} mg/dL.",
+    "influence_card_title": "Einflussfaktoren loggen",
+    "influence_type_label": "Typ",
+    "influence_type_alcohol": "Alkohol",
+    "influence_type_cannabis": "Cannabis",
+    "influence_type_medication": "Medikamente",
+    "influence_type_other": "Sonstiges",
+    "influence_details_label": "Details (optional)",
+    "influence_details_placeholder": "z.B. Bier, Ibuprofen, …",
+    "influence_amount_label": "Menge (optional)",
+    "influence_amount_placeholder": "z.B. 2 Glas, 400 mg, …",
+    "influence_when_label": "Wann?",
+    "influence_when_now_chip": "Jetzt",
+    "influence_when_ago_chip": "−{hours}h",
+    "influence_when_custom_btn": "Andere Zeit…",
+    "influence_note_placeholder": "Notizen (optional)",
+    "influence_save_btn": "Eintrag speichern",
+    "influence_disclaimer": "Glev wertet Einflussfaktoren nicht klinisch aus — die Einträge dienen dir als persönliches Tagebuch und beeinflussen keine Insulin-Empfehlung.",
+    "influence_logged_ok": "{type} gespeichert.",
+    "influence_logged_ok_with_cgm": "{type} gespeichert · Glukose {cgm} mg/dL.",
+    "influence_row_title": "Einflussfaktor"
   },
   "history": {
     "title": "Verlauf",
@@ -1208,7 +1229,8 @@
     "measure_glucose": "Glukose messen",
     "log_activity": "Aktivität loggen",
     "log_cycle": "Zyklus loggen",
-    "log_symptoms": "Symptome loggen"
+    "log_symptoms": "Symptome loggen",
+    "log_influences": "Einflussfaktoren loggen"
   },
   "about": {
     "row_version": "Version",
