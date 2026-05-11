@@ -1629,7 +1629,9 @@
     "faq_q6": "Does Glev work without a CGM?",
     "faq_a6": "Yes. You can type glucose values manually and log meals without a CGM integration. The adaptive engine learns more slowly with less data, but it works.",
     "faq_q7": "Do I need an iPhone for Apple Health?",
-    "faq_a7": "Yes, Apple Health is iOS-only. Android users connect via LibreLinkUp (Libre) or Nightscout (all brands). A direct cloud integration with Dexcom and Medtronic is in development."
+    "faq_a7": "Yes, Apple Health is iOS-only. Android users connect via LibreLinkUp (Libre) or Nightscout (all brands). A direct cloud integration with Dexcom and Medtronic is in development.",
+    "faq_q8": "What data is sent to the AI?",
+    "faq_a8": "Only your meal text. When you type e.g. \"cheese sandwich with tomato\", Glev sends exactly that one sentence to OpenAI so it can estimate carbs, protein and fat. Glucose values, insulin doses, your name or email are never transmitted — those stay encrypted on our server in Frankfurt. OpenAI is contractually prohibited from using these texts to train their models."
   },
   "account": {
     "title": "Account",

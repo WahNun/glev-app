@@ -889,6 +889,7 @@ export default function PreviewHome() {
             { q: t("faq_q7"), a: t("faq_a7") },
             { q: t("faq_q3"), a: t("faq_a3") },
             { q: t("faq_q4"), a: t("faq_a4") },
+            { q: t("faq_q8"), a: t("faq_a8") },
           ] as { q: string; a: React.ReactNode }[]).map((item) => (
             <details
               key={item.q}

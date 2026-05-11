@@ -100,6 +100,91 @@ function revalidateUserPaths(userId?: string | null): void {
 }
 
 // ---------------------------------------------------------------------------
+// Quick-Grant: per E-Mail einen manuellen Plan vergeben (Beta-Freischaltung
+// für Friends-&-Family ohne Stripe). Auf /admin/users im Kopf eingebaut,
+// damit man ohne Klick durch die Liste & Detailseite jemanden freischalten
+// kann.
+// ---------------------------------------------------------------------------
+
+export async function grantPlanByEmailAction(formData: FormData): Promise<void> {
+  const adminToken = await requireAdminToken();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const plan = String(formData.get("plan") ?? "beta");
+  const note = String(formData.get("note") ?? "").trim() || null;
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    redirect("/admin/users?grant_err=email");
+  }
+  if (!["free", "beta", "pro"].includes(plan)) {
+    redirect("/admin/users?grant_err=plan");
+  }
+
+  const sb = getSupabaseAdmin();
+
+  // auth.users hat keinen direkten getByEmail-Endpoint im Admin-SDK — wir
+  // paginieren bis zu 1000 User durch (ausreichend für unsere Größe) und
+  // matchen case-insensitive auf die E-Mail.
+  let found: { id: string; email?: string } | null = null;
+  try {
+    const { data, error } = await sb.auth.admin.listUsers({
+      page: 1,
+      perPage: 1000,
+    });
+    if (error) throw error;
+    found =
+      (data?.users ?? []).find(
+        (u) => (u.email ?? "").toLowerCase() === email,
+      ) ?? null;
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn("[admin/users/grantByEmail] listUsers failed:", e);
+    redirect("/admin/users?grant_err=lookup");
+  }
+
+  if (!found) {
+    redirect(`/admin/users?grant_err=notfound&email=${encodeURIComponent(email)}`);
+  }
+  const userId = found.id;
+
+  const { data: before } = await sb
+    .from("profiles")
+    .select("user_id, manual_plan_override, manual_plan_note, plan")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const { error: updErr } = await sb
+    .from("profiles")
+    .update({
+      manual_plan_override: plan,
+      manual_plan_note: note ?? `Freigeschaltet via Quick-Grant (${plan})`,
+      manual_plan_set_at: new Date().toISOString(),
+    })
+    .eq("user_id", userId);
+
+  if (updErr) {
+    if (isSchemaMissingError(updErr)) {
+      redirect(`/admin/users/${userId}?err=migration`);
+    }
+    redirect(`/admin/users?grant_err=db&email=${encodeURIComponent(email)}`);
+  }
+
+  await writeAuditLog({
+    action: "grant_plan_by_email",
+    targetUserId: userId,
+    targetEmail: email,
+    before,
+    after: { manual_plan_override: plan, manual_plan_note: note },
+    note: `Quick-Grant: ${(before as { manual_plan_override?: string } | null)?.manual_plan_override ?? "—"} → ${plan}`,
+    adminToken,
+  });
+
+  revalidateUserPaths(userId);
+  redirect(
+    `/admin/users?granted=${encodeURIComponent(email)}&plan=${plan}`,
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Stage 2 — Plan / Status / Daten editieren
 // ---------------------------------------------------------------------------
 

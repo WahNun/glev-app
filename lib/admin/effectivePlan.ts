@@ -2,6 +2,7 @@ export type EffectivePlan = "free" | "beta" | "pro";
 
 export type PlanInputs = {
   manual_plan_override?: string | null;
+  manual_plan_expires_at?: string | null;
   plan?: string | null;
   subscription_status?: string | null;
 };
@@ -21,9 +22,18 @@ export type PlanInputs = {
  */
 export function computeEffectivePlan(p: PlanInputs): EffectivePlan {
   const o = (p.manual_plan_override ?? "").toLowerCase();
-  if (o === "pro") return "pro";
-  if (o === "beta") return "beta";
-  if (o === "free") return "free";
+  // Admin-Override hat Ablaufdatum (z.B. Beta-Free-Year): wenn abgelaufen,
+  // Override ignorieren und auf reguläre Plan-Ermittlung zurückfallen.
+  const expiresAt = p.manual_plan_expires_at
+    ? Date.parse(p.manual_plan_expires_at)
+    : NaN;
+  const overrideExpired =
+    Number.isFinite(expiresAt) && expiresAt < Date.now();
+  if (!overrideExpired) {
+    if (o === "pro") return "pro";
+    if (o === "beta") return "beta";
+    if (o === "free") return "free";
+  }
 
   const plan = (p.plan ?? "").toLowerCase();
   if (plan === "pro") return "pro";

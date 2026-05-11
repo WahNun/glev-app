@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { isAdminAuthed, loginAction } from "./actions";
+import { isAdminAuthed, loginAction, grantPlanByEmailAction } from "./actions";
 import UsersTable, { type UserRow } from "./UsersTable";
 import Link from "next/link";
 import { computeEffectivePlan } from "@/lib/admin/effectivePlan";
@@ -210,6 +210,22 @@ export default async function AdminUsersPage({
   });
 
   const deletedParam = Array.isArray(sp.deleted) ? sp.deleted[0] : sp.deleted;
+  const grantedParam = Array.isArray(sp.granted) ? sp.granted[0] : sp.granted;
+  const grantedPlanParam = Array.isArray(sp.plan) ? sp.plan[0] : sp.plan;
+  const grantErrParam = Array.isArray(sp.grant_err) ? sp.grant_err[0] : sp.grant_err;
+  const grantErrEmail = Array.isArray(sp.email) ? sp.email[0] : sp.email;
+  const grantErrMsg =
+    grantErrParam === "email"
+      ? "Bitte gültige E-Mail eingeben."
+      : grantErrParam === "plan"
+        ? "Ungültiger Plan."
+        : grantErrParam === "lookup"
+          ? "User-Suche fehlgeschlagen — bitte später erneut versuchen."
+          : grantErrParam === "notfound"
+            ? `Keine Account mit ${grantErrEmail ?? "dieser E-Mail"} gefunden. User muss sich erst registriert haben.`
+            : grantErrParam === "db"
+              ? `Datenbank-Fehler beim Freischalten von ${grantErrEmail ?? "User"}.`
+              : null;
 
   return (
     <main style={pageStyle}>
@@ -237,10 +253,65 @@ export default async function AdminUsersPage({
           User <strong>{deletedParam}</strong> wurde komplett gelöscht.
         </p>
       ) : null}
+      {grantedParam ? (
+        <p style={successStyle}>
+          ✓ <strong>{grantedParam}</strong> wurde auf{" "}
+          <strong>{grantedPlanParam ?? "—"}</strong> freigeschaltet (manueller
+          Plan-Override gesetzt, hat Vorrang vor Stripe).
+        </p>
+      ) : null}
+      {grantErrMsg ? <p style={errStyle}>{grantErrMsg}</p> : null}
       {authErr ? <p style={errStyle}>auth.users-Fehler: {authErr}</p> : null}
       {profilesRes.error ? (
         <p style={errStyle}>profiles-Fehler: {profilesRes.error.message}</p>
       ) : null}
+
+      {/* Quick-Grant: User per E-Mail freischalten ohne Klick durch die Liste */}
+      <section style={grantBoxStyle}>
+        <h2 style={{ fontSize: 14, margin: "0 0 4px", color: "#111", fontWeight: 700 }}>
+          Schnell-Freischaltung per E-Mail
+        </h2>
+        <p style={{ fontSize: 12, color: "#666", margin: "0 0 12px" }}>
+          User muss bereits registriert sein. Setzt einen manuellen
+          Plan-Override — überschreibt Stripe-Status, ohne ihn zu verändern.
+          Reversibel über die Detailseite.
+        </p>
+        <form
+          action={grantPlanByEmailAction}
+          style={{
+            display: "flex",
+            gap: 8,
+            flexWrap: "wrap",
+            alignItems: "stretch",
+          }}
+        >
+          <input
+            type="email"
+            name="email"
+            required
+            placeholder="user@example.com"
+            style={{ ...inputStyle, flex: "1 1 240px", minWidth: 200 }}
+          />
+          <select
+            name="plan"
+            defaultValue="beta"
+            style={{ ...inputStyle, flex: "0 0 110px" }}
+          >
+            <option value="beta">Beta</option>
+            <option value="pro">Pro</option>
+            <option value="free">Free (entziehen)</option>
+          </select>
+          <input
+            type="text"
+            name="note"
+            placeholder="Notiz (optional, z.B. Name)"
+            style={{ ...inputStyle, flex: "1 1 220px", minWidth: 180 }}
+          />
+          <button type="submit" style={btnStyle}>
+            Freischalten
+          </button>
+        </form>
+      </section>
 
       <UsersTable rows={rows} pageSize={PAGE_SIZE} truncated={rows.length === PAGE_SIZE} />
     </main>
@@ -286,6 +357,13 @@ const errStyle: React.CSSProperties = {
   color: "#c00",
   fontSize: 14,
   margin: "0 0 8px",
+};
+const grantBoxStyle: React.CSSProperties = {
+  background: "#f9fafb",
+  border: "1px solid #e5e7eb",
+  borderRadius: 8,
+  padding: 14,
+  marginBottom: 16,
 };
 const successStyle: React.CSSProperties = {
   color: "#047857",

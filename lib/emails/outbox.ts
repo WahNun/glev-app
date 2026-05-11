@@ -25,6 +25,10 @@ import {
   type EmailLocale,
 } from "@/lib/emails/beta-welcome";
 import { proWelcomeHtml, proWelcomeSubject } from "@/lib/emails/pro-welcome";
+import {
+  betaFreeYearWelcomeHtml,
+  betaFreeYearWelcomeSubject,
+} from "@/lib/emails/beta-free-year-welcome";
 
 // ---- Tunables -------------------------------------------------------------
 
@@ -92,7 +96,10 @@ const FINALIZE_RETRY_DELAY_MS = 250;
  * `renderTemplate()` below means TS will fail the build if a new
  * template is added but the renderer isn't updated.
  */
-export type EmailTemplate = "beta-welcome" | "pro-welcome";
+export type EmailTemplate =
+  | "beta-welcome"
+  | "pro-welcome"
+  | "beta-free-year-welcome";
 
 /**
  * Payload shape per template. Stored as jsonb in the outbox so the
@@ -127,7 +134,22 @@ export interface ProWelcomePayload {
   locale?: EmailLocale;
 }
 
-export type EmailPayload = BetaWelcomePayload | ProWelcomePayload;
+/**
+ * Beta-Free-Year welcome — admin-granted 1-year free Beta. No Stripe
+ * involvement, so no sessionId. `expiresAt` is required so the email
+ * can state the explicit end date.
+ */
+export interface BetaFreeYearWelcomePayload {
+  name?: string | null;
+  appUrl?: string | null;
+  expiresAt: string;
+  locale?: EmailLocale;
+}
+
+export type EmailPayload =
+  | BetaWelcomePayload
+  | ProWelcomePayload
+  | BetaFreeYearWelcomePayload;
 
 /**
  * Compile-time mapping from template name → payload shape. The
@@ -146,6 +168,7 @@ export type EmailPayload = BetaWelcomePayload | ProWelcomePayload;
 export interface PayloadByTemplate {
   "beta-welcome": BetaWelcomePayload;
   "pro-welcome": ProWelcomePayload;
+  "beta-free-year-welcome": BetaFreeYearWelcomePayload;
 }
 
 interface RenderedEmail {
