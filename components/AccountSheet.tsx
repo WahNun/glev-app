@@ -7,10 +7,12 @@ import { signOut, getCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { parseDbDate, localeToBcp47 } from "@/lib/time";
 import BottomSheet from "@/components/BottomSheet";
+import { computeEffectivePlan, type EffectivePlan } from "@/lib/admin/effectivePlan";
 
 const ACCENT = "#4F6EF7";
 const PINK = "#FF2D78";
 const PURPLE = "#A78BFA";
+const GREEN = "#22D3A0";
 const BORDER = "var(--border)";
 
 interface AccountSheetProps {
@@ -21,10 +23,14 @@ interface AccountSheetProps {
 /**
  * Bottom sheet opened from the header avatar tap. Surfaces the personal
  * account info that used to live on /settings (profile row + member-since /
- * meal-count stats), plus the upgrade CTA, password-reset shortcut, and
- * sign-out button. Pro detection is intentionally omitted — there is no
- * isPro state in the codebase yet, so the upgrade card is always shown
- * (which matches the spec "visible if NOT pro").
+ * meal-count stats), plus the upgrade CTA (only when NOT pro/beta),
+ * password-reset shortcut, and sign-out button.
+ *
+ * Plan resolution: pulls the same four columns the admin panel uses
+ * (manual_plan_override / manual_plan_expires_at / plan / subscription_status)
+ * and runs them through computeEffectivePlan, so an admin grant in
+ * /admin/users immediately reflects here. Falls back to "free" if the
+ * row can't be read.
  */
 export default function AccountSheet({ open, onClose }: AccountSheetProps) {
   const t = useTranslations("account");
@@ -34,6 +40,7 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
   const [email, setEmail] = useState<string>("");
   const [createdAt, setCreatedAt] = useState<string>("");
   const [mealCount, setMealCount] = useState<number>(0);
+  const [plan, setPlan] = useState<EffectivePlan>("free");
   const [signingOut, setSigningOut] = useState(false);
   // password-reset request state. "ok"/"err" are sticky labels shown on
   // the row's right-hand side until the sheet re-opens, so the user gets
@@ -56,6 +63,28 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
         if (supabase) {
           const { count } = await supabase.from("meals").select("id", { count: "exact", head: true });
           if (!cancelled) setMealCount(count || 0);
+
+          // Resolve effective plan from profiles. Same precedence the
+          // admin panel uses (manual override → profiles.plan → legacy
+          // subscription_status → free). RLS scopes the row to the
+          // signed-in user automatically.
+          if (user?.id) {
+            const { data: profileRow } = await supabase
+              .from("profiles")
+              .select("manual_plan_override, manual_plan_expires_at, plan, subscription_status")
+              .eq("user_id", user.id)
+              .maybeSingle();
+            if (!cancelled) {
+              setPlan(
+                computeEffectivePlan({
+                  manual_plan_override: profileRow?.manual_plan_override ?? null,
+                  manual_plan_expires_at: profileRow?.manual_plan_expires_at ?? null,
+                  plan: profileRow?.plan ?? null,
+                  subscription_status: profileRow?.subscription_status ?? null,
+                })
+              );
+            }
+          }
         }
       } catch {
         // Network failures here are non-fatal — the sheet still renders
@@ -115,12 +144,22 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
         <div style={{ flex:1, minWidth:0 }}>
           <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:2, flexWrap:"wrap" }}>
             <div style={{ fontSize:16, fontWeight:700, color:"var(--text-strong)" }}>{displayName}</div>
-            <span style={{
-              fontSize:12, fontWeight:700, padding:"3px 9px", borderRadius:99,
-              background:`${ACCENT}20`, color:ACCENT, letterSpacing:"0.08em",
-            }}>
-              {t("plan_free").toUpperCase()}
-            </span>
+            {/* Plan pill — colour matches the plan: Pro = purple (premium),
+                Beta = green (active reservation), Free = blue (default). */}
+            {(() => {
+              const pillColor = plan === "pro" ? PURPLE : plan === "beta" ? GREEN : ACCENT;
+              const pillLabel = plan === "pro" ? t("plan_pro")
+                : plan === "beta" ? t("plan_beta")
+                : t("plan_free");
+              return (
+                <span style={{
+                  fontSize:12, fontWeight:700, padding:"3px 9px", borderRadius:99,
+                  background:`${pillColor}20`, color:pillColor, letterSpacing:"0.08em",
+                }}>
+                  {pillLabel.toUpperCase()}
+                </span>
+              );
+            })()}
           </div>
           <div style={{
             fontSize:14, color:"var(--text-dim)",
@@ -147,9 +186,10 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
         </div>
       </div>
 
-      {/* Upgrade card (purple gradient). Always shown — no isPro detection
-          exists in the codebase yet, which matches the spec "visible if NOT
-          pro" since every current user is on the free plan. */}
+      {/* Upgrade card — only shown when the user is NOT already on Pro.
+          Beta users still see it (Beta is the reservation tier; the
+          actual Pro subscription is the upgrade target). */}
+      {plan !== "pro" && (
       <button
         onClick={() => { onClose(); router.push("/pro"); }}
         style={{
@@ -182,6 +222,7 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
           <polyline points="9 18 15 12 9 6"/>
         </svg>
       </button>
+      )}
 
       {/* Action rows — grouped card, hairline-separated. Mirrors the
           iOS-style row pattern used on the main settings page. */}
