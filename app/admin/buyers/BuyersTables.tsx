@@ -10,6 +10,7 @@ export type BetaRow = {
   amount_cents: number | null;
   currency: string | null;
   stripe_session_id: string | null;
+  stripe_customer_id?: string | null;
   created_at: string | null;
   fulfilled_at: string | null;
 };
@@ -22,6 +23,8 @@ export type ProRow = {
   trial_ends_at: string | null;
   current_period_end: string | null;
   stripe_session_id: string | null;
+  stripe_customer_id?: string | null;
+  stripe_subscription_id?: string | null;
   created_at: string | null;
 };
 

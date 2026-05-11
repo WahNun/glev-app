@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { isAdminAuthed, loginAction } from "./actions";
 import BuyersTables, { type BetaRow, type ProRow } from "./BuyersTables";
+import DuplicateSignups from "./DuplicateSignups";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -77,12 +78,12 @@ export default async function AdminBuyersPage({
   const [betaRes, proRes] = await Promise.all([
     sb
       .from("beta_reservations")
-      .select("id, email, full_name, status, amount_cents, currency, stripe_session_id, created_at, fulfilled_at")
+      .select("id, email, full_name, status, amount_cents, currency, stripe_session_id, stripe_customer_id, created_at, fulfilled_at")
       .order("created_at", { ascending: false })
       .limit(PAGE_LIMIT),
     sb
       .from("pro_subscriptions")
-      .select("id, email, full_name, status, trial_ends_at, current_period_end, stripe_session_id, created_at")
+      .select("id, email, full_name, status, trial_ends_at, current_period_end, stripe_session_id, stripe_customer_id, stripe_subscription_id, created_at")
       .order("created_at", { ascending: false })
       .limit(PAGE_LIMIT),
   ]);
@@ -100,6 +101,8 @@ export default async function AdminBuyersPage({
 
       {betaErr ? <p style={errStyle}>Beta DB-Fehler: {betaErr}</p> : null}
       {proErr ? <p style={errStyle}>Pro DB-Fehler: {proErr}</p> : null}
+
+      <DuplicateSignups beta={beta} pro={pro} />
 
       <BuyersTables
         beta={beta}
