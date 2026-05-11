@@ -56,27 +56,29 @@ export default function CurrentDayGlucoseCard() {
 
   const loadHistory = useCallback(async (signal?: { cancelled: boolean }) => {
     try {
-      // Fetch CGM history and today's fingersticks in parallel. FS failure
+      // Fetch CGM history and recent fingersticks in parallel. FS failure
       // is non-fatal — we degrade to CGM-only rather than block the card.
       const [data, fsResult] = await Promise.all([
         fetchCgmHistory(),
         fetchRecentFingersticks(24).catch(() => [] as FingerstickReading[]),
       ]);
       if (!data) throw new Error("CGM unavailable");
-      const today0 = new Date();
-      today0.setHours(0, 0, 0, 0);
-      const todayStart = today0.getTime();
+      // Rolling 12h window so the live chart never has a "hole" at
+      // midnight when the day-axis would otherwise reset to 00:00.
+      // The back-card "Today's summary" filters this set down to
+      // today-only itself, so we keep the wider window in state.
       const now = Date.now();
+      const twelveHoursAgo = now - 12 * 60 * 60 * 1000;
 
       const cgm = (data.history || [])
         .filter((r) => r.value != null && r.timestamp)
         .map((r) => ({ t: parseLluTs(r.timestamp!), v: r.value! }))
-        .filter((r) => r.t >= todayStart && r.t <= now)
+        .filter((r) => r.t >= twelveHoursAgo && r.t <= now)
         .sort((a, b) => a.t - b.t);
 
       const fingersticks = fsResult
         .map((r) => ({ t: new Date(r.measured_at).getTime(), v: Number(r.value_mg_dl) }))
-        .filter((r) => Number.isFinite(r.t) && Number.isFinite(r.v) && r.t >= todayStart && r.t <= now)
+        .filter((r) => Number.isFinite(r.t) && Number.isFinite(r.v) && r.t >= twelveHoursAgo && r.t <= now)
         .sort((a, b) => a.t - b.t);
 
       const cgmCurrent = data.current && data.current.value != null && data.current.timestamp
@@ -384,13 +386,13 @@ function computeDelta15m(
   return { label: `${sign}${Math.abs(delta)} / 15m`, direction };
 }
 
-/* RollingChart — full day of readings on a (00:00 today) → now domain so
-   the user sees the day's full glucose curve, not just a rolling 2-hour
-   window. Filters the parent's full-day `readings` array client-side.
-   X-axis labels are hour markers (0h / 6h / 12h / 18h / now) — only
-   those within the elapsed window are rendered. Touch-revealed grid
-   uses 1-hour vertical intervals for fine time orientation. Line +
-   last-point color tracks `glucoseLineColor(last.v)`. */
+/* RollingChart — last 12h of readings on a (now − 12h) → now domain so
+   the curve never has a midnight "hole" the way a 00:00→now domain
+   does right after the day rolls over. Filters the parent's readings
+   array client-side. X-axis labels are relative markers (-12h / -8h /
+   -4h / now). Touch-revealed grid uses 2-hour vertical intervals for
+   fine time orientation. Line + last-point color tracks
+   `glucoseLineColor(last.v)`. */
 function RollingChart({ readings }: { readings: ChartPoint[] }) {
   // Measure the container so the SVG always renders in true pixel space.
   const containerRef = useRef<HTMLDivElement>(null);
@@ -416,15 +418,12 @@ function RollingChart({ readings }: { readings: ChartPoint[] }) {
   const padT = 8;
   const padB = 22;
 
-  // Full-day window: 00:00 today (local) → now. Source readings come
-  // from the parent which loads the full day; we just slice client-side
-  // here (defensive — anything outside today is dropped).
+  // Rolling 12h window: (now − 12h) → now. Anchored to the current
+  // time so the chart slides forward continuously and never shows a
+  // midnight cliff. Parent already loads exactly this window; the
+  // re-filter here is defensive.
   const now = Date.now();
-  const winStart = useMemo(() => {
-    const d = new Date(now);
-    d.setHours(0, 0, 0, 0);
-    return d.getTime();
-  }, [now]);
+  const winStart = useMemo(() => now - 12 * 60 * 60 * 1000, [now]);
   const visible = useMemo(
     () => readings.filter((r) => r.t >= winStart && r.t <= now),
     [readings, winStart, now],
@@ -442,16 +441,16 @@ function RollingChart({ readings }: { readings: ChartPoint[] }) {
   const toY = (v: number) => padT + (1 - (v - yMin) / (yMax - yMin)) * (H - padT - padB);
 
   const yTicks = [70, 110, 180, 250];
-  // Hour-of-day markers (0h / 6h / 12h / 18h) — only those already
-  // elapsed are rendered; "now" always anchors the right edge.
+  // Relative markers anchored to "now" on the right edge: −12h / −8h /
+  // −4h / now. Always rendered in full because the rolling window is
+  // always 12h wide.
   const xLabels: Array<{ t: number; label: string }> = useMemo(() => {
-    const labels: Array<{ t: number; label: string }> = [{ t: winStart, label: "0h" }];
-    for (const h of [6, 12, 18]) {
-      const t = winStart + h * 3600 * 1000;
-      if (t <= now - 30 * 60 * 1000) labels.push({ t, label: `${h}h` });
-    }
-    labels.push({ t: now, label: "now" });
-    return labels;
+    return [
+      { t: winStart,                       label: "-12h" },
+      { t: now - 8 * 3600 * 1000,          label: "-8h"  },
+      { t: now - 4 * 3600 * 1000,          label: "-4h"  },
+      { t: now,                            label: "now"  },
+    ];
   }, [winStart, now]);
 
   const path = visibleCgm.map((r, i) => `${i === 0 ? "M" : "L"}${toX(r.t).toFixed(1)},${toY(r.v).toFixed(1)}`).join(" ");
@@ -516,16 +515,17 @@ function RollingChart({ readings }: { readings: ChartPoint[] }) {
             <text key={`xl${x.label}`} x={toX(x.t)} y={H - 6} textAnchor="middle" fontSize="9" fill="var(--text-faint)">{x.label}</text>
           ))}
           {/* Touch-revealed grid — appears only while the crosshair is
-              active. 1-hour vertical intervals across the elapsed window
-              for fine time orientation, plus horizontal lines at the
-              Y ticks for value reference. */}
+              active. 2-hour vertical intervals across the 12h window
+              for fine time orientation (1h would crowd the narrow
+              card), plus horizontal lines at the Y ticks for value
+              reference. */}
           {active && (
             <g style={{ pointerEvents: "none" }}>
               {yTicks.map((v) => (
                 <line key={`gh${v}`} x1={padL} y1={toY(v)} x2={W - padR} y2={toY(v)} stroke="var(--border-strong)" strokeDasharray="3 4" />
               ))}
-              {Array.from({ length: Math.floor((now - winStart) / (3600 * 1000)) + 1 }, (_, i) => {
-                const t = winStart + i * 3600 * 1000;
+              {Array.from({ length: 7 }, (_, i) => {
+                const t = winStart + i * 2 * 3600 * 1000;
                 return (
                   <line key={`gv${i}`} x1={toX(t)} y1={padT} x2={toX(t)} y2={H - padB} stroke="var(--border-strong)" strokeWidth="1" strokeDasharray="2 4" />
                 );
@@ -566,10 +566,22 @@ function RollingChart({ readings }: { readings: ChartPoint[] }) {
 }
 
 function BackStats({ readings }: { readings: Array<{ t: number; v: number }> }) {
-  if (readings.length === 0) {
+  // The parent now feeds us a rolling 12h window (so the front-card
+  // chart never has a midnight hole). The "Today's summary" tile is
+  // semantically still about *today*, so we filter back down here.
+  const todayStart = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  }, []);
+  const todayReadings = useMemo(
+    () => readings.filter((r) => r.t >= todayStart),
+    [readings, todayStart],
+  );
+  if (todayReadings.length === 0) {
     return <div style={{ color: "var(--text-dim)", fontSize: 14 }}>No readings yet today.</div>;
   }
-  const values = readings.map((r) => r.v);
+  const values = todayReadings.map((r) => r.v);
   const avg = Math.round(values.reduce((a, b) => a + b, 0) / values.length);
   const inRange = values.filter((v) => v >= RANGE_LOW && v <= RANGE_HIGH).length;
   const tir = Math.round((inRange / values.length) * 100);
@@ -577,8 +589,8 @@ function BackStats({ readings }: { readings: Array<{ t: number; v: number }> }) 
   const below = values.filter((v) => v < RANGE_LOW).length;
   const tar = Math.round((above / values.length) * 100);
   const tbr = Math.round((below / values.length) * 100);
-  const max = readings.reduce((a, b) => (b.v > a.v ? b : a));
-  const min = readings.reduce((a, b) => (b.v < a.v ? b : a));
+  const max = todayReadings.reduce((a, b) => (b.v > a.v ? b : a));
+  const min = todayReadings.reduce((a, b) => (b.v < a.v ? b : a));
   const fmtTime = (t: number) => new Date(t).toLocaleTimeString("en", { hour: "numeric", minute: "2-digit" });
 
   const stats: Array<{ l: string; v: string; c?: string }> = [
