@@ -66,7 +66,70 @@ interface DripPageData {
   fetchErrors: string[];
 }
 
-async function loadDripData(now: Date, query: string): Promise<DripPageData> {
+/**
+ * Status-Quick-Filter, identisch zu den Counter-Karten oben. Wird als
+ * `?status=...`-Param vom Dashboard gesetzt (Klick auf Counter-Karte
+ * oder Dropdown-Auswahl). "all" = kein Filter, Tabelle zeigt alles.
+ *
+ * Übersetzung in WHERE-Clauses passiert in `applyStatusFilter()` —
+ * dort 1:1 dieselbe Logik wie classifyRow() in drip-status.ts, damit
+ * die gefilterten Zeilen das passende Status-Badge tragen.
+ */
+export type DripStatusFilter =
+  | "all"
+  | "pending"
+  | "due_today"
+  | "due_tomorrow"
+  | "due_this_week"
+  | "failed"
+  | "sent";
+
+const STATUS_VALUES: DripStatusFilter[] = [
+  "all",
+  "pending",
+  "due_today",
+  "due_tomorrow",
+  "due_this_week",
+  "failed",
+  "sent",
+];
+
+const TIER_VALUES = ["all", "beta", "pro"] as const;
+export type TierFilter = (typeof TIER_VALUES)[number];
+
+const TYPE_VALUES = ["all", "day7_insights", "day14_feedback", "day30_trustpilot"] as const;
+export type TypeFilter = (typeof TYPE_VALUES)[number];
+
+export interface DripFilters {
+  q: string;
+  status: DripStatusFilter;
+  tier: TierFilter;
+  type: TypeFilter;
+}
+
+function parseStatus(v: unknown): DripStatusFilter {
+  return typeof v === "string" && (STATUS_VALUES as string[]).includes(v)
+    ? (v as DripStatusFilter)
+    : "all";
+}
+function parseTier(v: unknown): TierFilter {
+  return typeof v === "string" && (TIER_VALUES as readonly string[]).includes(v)
+    ? (v as TierFilter)
+    : "all";
+}
+function parseType(v: unknown): TypeFilter {
+  return typeof v === "string" && (TYPE_VALUES as readonly string[]).includes(v)
+    ? (v as TypeFilter)
+    : "all";
+}
+
+/** Whether any filter beyond an empty query is active — used by the
+ *  page to decide whether to show the "Zurücksetzen alle Filter"-Link. */
+function hasActiveFilters(f: DripFilters): boolean {
+  return f.q.trim() !== "" || f.status !== "all" || f.tier !== "all" || f.type !== "all";
+}
+
+async function loadDripData(now: Date, filters: DripFilters): Promise<DripPageData> {
   const sb = getSupabaseAdmin();
   const w = dripBucketWindows(now);
 
@@ -110,25 +173,73 @@ async function loadDripData(now: Date, query: string): Promise<DripPageData> {
     .is("sent_at", null)
     .lt("scheduled_at", w.failedThresholdIso);
 
-  // Tabellen-Inhalt — getrennter Pfad für Default vs. Suche.
-  const trimmedQ = query.trim();
-  const listP = trimmedQ
-    ? sb
-        .from("email_drip_schedule")
-        .select("id, email, first_name, tier, email_type, scheduled_at, sent_at, created_at")
-        // Suche per ILIKE auf email — Substring, case-insensitive,
-        // damit sowohl "alice@example.com" als auch "alice" und
-        // "@example.com" zum gewünschten Treffer führen. % am Anfang
-        // verhindert Index-Nutzung, ist aber bei der erwarteten
-        // Tabellen-Größe vertretbar.
-        .ilike("email", `%${trimmedQ}%`)
-        .order("scheduled_at", { ascending: false })
-        .limit(SEARCH_LIMIT)
-    : sb
-        .from("email_drip_schedule")
-        .select("id, email, first_name, tier, email_type, scheduled_at, sent_at, created_at")
-        .order("created_at", { ascending: false })
-        .limit(LIST_LIMIT);
+  // Tabellen-Inhalt — Filter werden additiv aufgesetzt. Sobald
+  // irgendein Filter aktiv ist, fahren wir das größere SEARCH_LIMIT
+  // (500) statt LIST_LIMIT (300), damit eine breite Suche wie
+  // "status=pending" nicht künstlich gekappt wird.
+  const trimmedQ = filters.q.trim();
+  const anyFilter = hasActiveFilters(filters);
+  const limit = anyFilter ? SEARCH_LIMIT : LIST_LIMIT;
+  // Bei aktivem Filter sortieren wir nach scheduled_at desc (relevant
+  // bei Status-Suche), sonst nach created_at desc (Default: neueste
+  // angelegte zuerst, wie bisher).
+  const orderCol = anyFilter ? "scheduled_at" : "created_at";
+
+  let listQ = sb
+    .from("email_drip_schedule")
+    .select("id, email, first_name, tier, email_type, scheduled_at, sent_at, created_at");
+
+  if (trimmedQ) {
+    // Suche per ILIKE auf email — Substring, case-insensitive,
+    // damit sowohl "alice@example.com" als auch "alice" und
+    // "@example.com" zum gewünschten Treffer führen.
+    listQ = listQ.ilike("email", `%${trimmedQ}%`);
+  }
+  if (filters.tier !== "all") {
+    listQ = listQ.eq("tier", filters.tier);
+  }
+  if (filters.type !== "all") {
+    listQ = listQ.eq("email_type", filters.type);
+  }
+  // Status: 1:1 dieselben Bucket-Bedingungen wie die Counter oben +
+  // wie classifyRow() in drip-status.ts. Sonst widerspricht das
+  // Status-Badge der Tabelle dem Filter, mit dem es geladen wurde.
+  switch (filters.status) {
+    case "pending":
+      // Wartend = noch nicht versendet UND nicht failed-grace überschritten.
+      // (Inkl. heute fällig + morgen + diese Woche + weiter in der Zukunft.)
+      listQ = listQ.is("sent_at", null).gte("scheduled_at", w.failedThresholdIso);
+      break;
+    case "due_today":
+      listQ = listQ
+        .is("sent_at", null)
+        .gte("scheduled_at", w.failedThresholdIso)
+        .lt("scheduled_at", w.tomorrowStartIso);
+      break;
+    case "due_tomorrow":
+      listQ = listQ
+        .is("sent_at", null)
+        .gte("scheduled_at", w.tomorrowStartIso)
+        .lt("scheduled_at", w.dayAfterTomorrowStartIso);
+      break;
+    case "due_this_week":
+      listQ = listQ
+        .is("sent_at", null)
+        .gte("scheduled_at", w.dayAfterTomorrowStartIso)
+        .lt("scheduled_at", w.weekFromNowIso);
+      break;
+    case "failed":
+      listQ = listQ.is("sent_at", null).lt("scheduled_at", w.failedThresholdIso);
+      break;
+    case "sent":
+      listQ = listQ.not("sent_at", "is", null);
+      break;
+    case "all":
+    default:
+      break;
+  }
+
+  const listP = listQ.order(orderCol, { ascending: false }).limit(limit);
 
   const [
     dueTodayR,
@@ -169,7 +280,6 @@ async function loadDripData(now: Date, query: string): Promise<DripPageData> {
     failed: failedR.count ?? 0,
   };
   const rows = (listR.data ?? []) as DripScheduleRow[];
-  const limit = trimmedQ ? SEARCH_LIMIT : LIST_LIMIT;
   return { counts, rows, truncated: rows.length === limit, fetchErrors: errs };
 }
 
@@ -218,7 +328,15 @@ export default async function AdminDripPage({
   }
 
   const qParam = Array.isArray(sp.q) ? sp.q[0] : sp.q;
-  const query = (qParam ?? "").toString();
+  const statusParam = Array.isArray(sp.status) ? sp.status[0] : sp.status;
+  const tierParam = Array.isArray(sp.tier) ? sp.tier[0] : sp.tier;
+  const typeParam = Array.isArray(sp.type) ? sp.type[0] : sp.type;
+  const filters: DripFilters = {
+    q: (qParam ?? "").toString(),
+    status: parseStatus(statusParam),
+    tier: parseTier(tierParam),
+    type: parseType(typeParam),
+  };
 
   // `now` EINMAL pro Render festnageln und an alles weiterreichen:
   // - die SQL-Counter in loadDripData (Bucket-Grenzen),
@@ -228,7 +346,7 @@ export default async function AdminDripPage({
   // 24h-Failed-Schwellwert) Counter und Badges ein Row anders
   // klassifizieren als die andere Stelle.
   const now = new Date();
-  const { counts, rows, truncated, fetchErrors } = await loadDripData(now, query);
+  const { counts, rows, truncated, fetchErrors } = await loadDripData(now, filters);
 
   return (
     <main style={pageStyle}>
@@ -253,7 +371,7 @@ export default async function AdminDripPage({
         listLimit={LIST_LIMIT}
         truncated={truncated}
         nowIso={now.toISOString()}
-        query={query}
+        filters={filters}
       />
     </main>
   );

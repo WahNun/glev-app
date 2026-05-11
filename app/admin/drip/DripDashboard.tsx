@@ -11,6 +11,12 @@ import {
   type DripStatus,
 } from "@/lib/emails/drip-status";
 import { sendNowAction, cancelAction, rescheduleAction } from "./actions";
+import type {
+  DripFilters,
+  DripStatusFilter,
+  TierFilter,
+  TypeFilter,
+} from "./page";
 
 export type DripRow = DripScheduleRow;
 
@@ -28,11 +34,11 @@ type Props = {
    */
   nowIso: string;
   /**
-   * Aktueller Suchbegriff aus `?q=...`. Wird als Default-Value für das
-   * Suchfeld verwendet, damit die URL nach Submit das Feld korrekt
-   * vorbefüllt zurückzeigt.
+   * Aktive Filter aus der URL (?q, ?status, ?tier, ?type). Werden als
+   * Default-Values für die Form-Felder benutzt und geben den
+   * "Zurücksetzen"-Link Bescheid, wann er sichtbar sein soll.
    */
-  query: string;
+  filters: DripFilters;
 };
 
 function fmtDate(v: string | null | undefined): string {
@@ -61,6 +67,29 @@ function fmtType(t: string): string {
   }
 }
 
+const STATUS_LABEL: Record<DripStatusFilter, string> = {
+  all: "Alle Status",
+  pending: "Wartend (alle offenen)",
+  due_today: "Heute fällig",
+  due_tomorrow: "Morgen fällig",
+  due_this_week: "Nächste 7 Tage",
+  failed: "Fehlgeschlagen",
+  sent: "Versendet",
+};
+
+const TIER_LABEL: Record<TierFilter, string> = {
+  all: "Alle Tiers",
+  beta: "Beta",
+  pro: "Pro",
+};
+
+const TYPE_LABEL: Record<TypeFilter, string> = {
+  all: "Alle Typen",
+  day7_insights: "Tag 7 — Insights",
+  day14_feedback: "Tag 14 — Feedback",
+  day30_trustpilot: "Tag 30 — Trustpilot",
+};
+
 /**
  * Browser-`datetime-local` Input erwartet "YYYY-MM-DDTHH:mm" in
  * Lokalzeit. Wir initialisieren das Feld mit dem aktuellen
@@ -72,6 +101,21 @@ function toLocalInputValue(iso: string): string {
   if (Number.isNaN(d.getTime())) return "";
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Build a filtered admin-drip URL preserving any non-overridden filters.
+ *  Used by the clickable counter cards as quick "show me only failed"
+ *  shortcuts — clicking sets just `status=`, leaves the email search and
+ *  other filters intact. */
+function buildHref(current: DripFilters, override: Partial<DripFilters>): string {
+  const merged: DripFilters = { ...current, ...override };
+  const params = new URLSearchParams();
+  if (merged.q.trim()) params.set("q", merged.q.trim());
+  if (merged.status !== "all") params.set("status", merged.status);
+  if (merged.tier !== "all") params.set("tier", merged.tier);
+  if (merged.type !== "all") params.set("type", merged.type);
+  const qs = params.toString();
+  return qs ? `/admin/drip?${qs}` : "/admin/drip";
 }
 
 function StatusBadge({ status }: { status: DripStatus }) {
@@ -98,27 +142,37 @@ function CountCard({
   label,
   value,
   tone,
+  href,
+  active,
 }: {
   label: string;
   value: number;
   tone: "default" | "warn" | "ok" | "bad";
+  href: string;
+  active: boolean;
 }) {
   const toneColor =
     tone === "warn" ? "#a85a00" : tone === "ok" ? "#1e7c3a" : tone === "bad" ? "#a4271c" : "#111";
   return (
-    <div
+    <a
+      href={href}
       style={{
         flex: "1 1 140px",
         minWidth: 140,
         padding: "12px 14px",
-        border: "1px solid #e5e5e5",
+        border: active ? `2px solid ${toneColor}` : "1px solid #e5e5e5",
         borderRadius: 8,
-        background: "#fff",
+        background: active ? "#f7f7f7" : "#fff",
+        color: "inherit",
+        textDecoration: "none",
+        cursor: "pointer",
+        display: "block",
       }}
+      title={active ? "Filter aktiv — klick zum Entfernen" : "Klick zum Filtern"}
     >
       <div style={{ fontSize: 13, color: "#666", marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: 24, fontWeight: 700, color: toneColor }}>{value}</div>
-    </div>
+    </a>
   );
 }
 
@@ -129,38 +183,55 @@ export default function DripDashboard({
   listLimit,
   truncated,
   nowIso,
-  query,
+  filters,
 }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const now = useMemo(() => new Date(nowIso), [nowIso]);
+  const anyFilter =
+    filters.q.trim() !== "" ||
+    filters.status !== "all" ||
+    filters.tier !== "all" ||
+    filters.type !== "all";
+
+  // Counter-Karten als Quick-Filter-Shortcuts. Klick auf eine Karte
+  // toggelt den passenden Status-Filter — nochmaliger Klick auf eine
+  // bereits aktive Karte entfernt den Filter wieder (active → "all").
+  const cardHref = (target: DripStatusFilter): string =>
+    buildHref(filters, { status: filters.status === target ? "all" : target });
 
   return (
     <>
       <section style={{ marginBottom: 24 }}>
         <h2 style={h2Style}>Status-Übersicht</h2>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-          <CountCard label="Heute fällig" value={counts.dueToday} tone="warn" />
-          <CountCard label="Morgen fällig" value={counts.dueTomorrow} tone="default" />
-          <CountCard label="Nächste 7 Tage" value={counts.dueThisWeek} tone="default" />
-          <CountCard label="Versendet (7 Tage)" value={counts.sentLast7Days} tone="ok" />
-          <CountCard label="Versendet (gesamt)" value={counts.sentTotal} tone="default" />
-          <CountCard label="Fehlgeschlagen" value={counts.failed} tone="bad" />
+          <CountCard label="Heute fällig" value={counts.dueToday} tone="warn"
+            href={cardHref("due_today")} active={filters.status === "due_today"} />
+          <CountCard label="Morgen fällig" value={counts.dueTomorrow} tone="default"
+            href={cardHref("due_tomorrow")} active={filters.status === "due_tomorrow"} />
+          <CountCard label="Nächste 7 Tage" value={counts.dueThisWeek} tone="default"
+            href={cardHref("due_this_week")} active={filters.status === "due_this_week"} />
+          <CountCard label="Versendet (7 Tage)" value={counts.sentLast7Days} tone="ok"
+            href={cardHref("sent")} active={filters.status === "sent"} />
+          <CountCard label="Versendet (gesamt)" value={counts.sentTotal} tone="default"
+            href={cardHref("sent")} active={filters.status === "sent"} />
+          <CountCard label="Fehlgeschlagen" value={counts.failed} tone="bad"
+            href={cardHref("failed")} active={filters.status === "failed"} />
         </div>
         <p style={{ color: "#777", fontSize: 13, margin: "8px 0 0" }}>
           Counter zählen über die gesamte Tabelle, nicht nur die unten gezeigte
           Liste. „Fehlgeschlagen" = noch nicht versendet und mehr als 24 h überfällig
           — der Drip-Cron läuft täglich um 09:00 UTC und probiert es bei jedem Lauf
-          erneut.
+          erneut. Klick auf eine Karte filtert die Tabelle entsprechend.
         </p>
       </section>
 
       <section style={{ marginBottom: 16 }}>
         {/*
-          Suchformular als GET an /admin/drip?q=… — Server-Komponente liest
-          den Param und fragt die DB mit ILIKE über die GESAMTE Tabelle ab,
-          nicht nur das Default-Fenster. Damit findet die Suche auch alte
-          versendete Drip-Termine, die längst aus den letzten 300 Rows raus
-          sind. "x"-Button setzt den Param zurück auf leer.
+          Filter-Form als GET an /admin/drip?q=…&status=…&tier=…&type=… —
+          Server-Komponente liest die Params und baut die DB-Query mit
+          additiven WHERE-Clauses zusammen. Sobald irgendein Filter aktiv
+          ist, fahren wir mit dem größeren SEARCH_LIMIT statt LIST_LIMIT.
+          Reset löscht alle Filter.
         */}
         <form
           method="get"
@@ -170,17 +241,32 @@ export default function DripDashboard({
           <input
             type="search"
             name="q"
-            defaultValue={query}
+            defaultValue={filters.q}
             placeholder="Suche nach Email-Adresse…"
             aria-label="Drip-Termine suchen"
             style={searchStyle}
           />
+          <select name="status" defaultValue={filters.status} style={selectStyle} aria-label="Status">
+            {(Object.keys(STATUS_LABEL) as DripStatusFilter[]).map((s) => (
+              <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+            ))}
+          </select>
+          <select name="tier" defaultValue={filters.tier} style={selectStyle} aria-label="Tier">
+            {(Object.keys(TIER_LABEL) as TierFilter[]).map((t) => (
+              <option key={t} value={t}>{TIER_LABEL[t]}</option>
+            ))}
+          </select>
+          <select name="type" defaultValue={filters.type} style={selectStyle} aria-label="Mail-Typ">
+            {(Object.keys(TYPE_LABEL) as TypeFilter[]).map((t) => (
+              <option key={t} value={t}>{TYPE_LABEL[t]}</option>
+            ))}
+          </select>
           <button type="submit" style={smallBtnStyle}>
-            Suchen
+            Filtern
           </button>
-          {query ? (
+          {anyFilter ? (
             <a href="/admin/drip" style={{ fontSize: 14, color: "#3045a8", textDecoration: "underline" }}>
-              Zurücksetzen
+              Alle Filter zurücksetzen
             </a>
           ) : null}
         </form>
@@ -191,9 +277,9 @@ export default function DripDashboard({
           Drip-Termine{" "}
           <span style={countStyle}>
             ({rows.length}
-            {!query && truncated ? ` — neueste ${listLimit} angezeigt` : ""}
-            {query && truncated ? ` — gekappt bei ${searchLimit}` : ""}
-            {query ? ` für "${query}"` : ""})
+            {!anyFilter && truncated ? ` — neueste ${listLimit} angezeigt` : ""}
+            {anyFilter && truncated ? ` — gekappt bei ${searchLimit}` : ""}
+            {anyFilter ? ` mit aktiven Filtern` : ""})
           </span>
         </h2>
         <div style={tableWrapStyle}>
@@ -213,7 +299,7 @@ export default function DripDashboard({
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={7} style={{ ...tdStyle, textAlign: "center", color: "#888" }}>
-                    {query ? "Keine Treffer." : "Keine Drip-Termine."}
+                    {anyFilter ? "Keine Treffer." : "Keine Drip-Termine."}
                   </td>
                 </tr>
               ) : (
@@ -362,13 +448,23 @@ const tdStyle: React.CSSProperties = {
 };
 
 const searchStyle: React.CSSProperties = {
-  flex: "1 1 320px",
-  maxWidth: 420,
+  flex: "1 1 240px",
+  maxWidth: 320,
   padding: "10px 12px",
   border: "1px solid #ccc",
   borderRadius: 6,
   fontSize: 14,
   fontFamily: "inherit",
+};
+
+const selectStyle: React.CSSProperties = {
+  padding: "9px 10px",
+  border: "1px solid #ccc",
+  borderRadius: 6,
+  fontSize: 14,
+  fontFamily: "inherit",
+  background: "#fff",
+  color: "#111",
 };
 
 const smallBtnStyle: React.CSSProperties = {
