@@ -1489,7 +1489,7 @@
     "faq_q3": "Ist Glev ein Medizinprodukt?",
     "faq_a3": "Nein. Glev ist ein Dokumentations- und Organisations-Tool. Therapieentscheidungen triffst du weiter mit deinem Arzt.",
     "faq_q4": "Wo werden meine Daten gespeichert?",
-    "faq_a4": "In der EU (Supabase Frankfurt). Deutsche DSGVO. Keine Datenweitergabe, keine Werbung.",
+    "faq_a4": "In der EU (Irland) (Supabase). Deutsche DSGVO. Keine Datenweitergabe, keine Werbung.",
     "footer_copyright": "© 2026 Glev · hello@glev.app",
     "footer_legal": "Datenschutz · AGB",
     "footer_legal_aria": "Datenschutzerklärung und AGB",
@@ -1682,7 +1682,7 @@
     "faq_q7": "Brauche ich ein iPhone für Apple Health?",
     "faq_a7": "Ja, Apple Health läuft nur auf iOS. Android-Nutzer nutzen LibreLinkUp (Libre) oder Nightscout (alle Marken). Eine direkte Cloud-Anbindung an Dexcom und Medtronic ist in Arbeit.",
     "faq_q8": "Welche Daten gehen an die KI?",
-    "faq_a8": "Nur dein Mahlzeiten-Text. Wenn du z.B. \"Käsebrot mit Tomate\" eingibst, schickt Glev genau diesen einen Satz an OpenAI, damit Kohlenhydrate, Eiweiß und Fett geschätzt werden. Glukosewerte, Insulindosen, dein Name oder deine E-Mail werden nie übertragen — die bleiben verschlüsselt auf unserem Server in Frankfurt. OpenAI darf diese Texte laut Vertrag nicht zum Trainieren ihrer Modelle verwenden."
+    "faq_a8": "Nur dein Mahlzeiten-Text. Wenn du z.B. \"Käsebrot mit Tomate\" eingibst, schickt Glev genau diesen einen Satz an OpenAI, damit Kohlenhydrate, Eiweiß und Fett geschätzt werden. Glukosewerte, Insulindosen, dein Name oder deine E-Mail werden nie übertragen — die bleiben verschlüsselt auf unserem Server in der EU (Irland). OpenAI darf diese Texte laut Vertrag nicht zum Trainieren ihrer Modelle verwenden."
   },
   "account": {
     "title": "Konto",
@@ -1732,7 +1732,7 @@
     "faq_q4": "Wann startet die Beta?",
     "faq_a4": "Juli 2026. Beta-Tester bekommen den Zugangslink per Email zwei Wochen vor dem öffentlichen Launch.",
     "faq_q5": "Wo werden meine Daten gespeichert?",
-    "faq_a5": "In der EU (Supabase Frankfurt). Deutsche DSGVO. Keine Datenweitergabe, keine Werbung.",
+    "faq_a5": "In der EU (Irland) (Supabase). Deutsche DSGVO. Keine Datenweitergabe, keine Werbung.",
     "cgm_trust_line": "Nicht sicher? Du kannst Glev risikofrei testen — kein Payment bis Juli."
   },
   "proPage": {
@@ -1769,7 +1769,7 @@
     "faq_q4": "Was unterscheidet diese Mitgliedschaft von der Beta-Reservierung?",
     "faq_a4": "Die /beta-Variante ist eine €19 Einmalreservierung mit Beta-Discount im ersten Jahr. /pro ist eine direkte Monats-Mitgliedschaft ohne Reservierungseinsatz, dafür zum vollen Preis. Beide bekommen Zugang am 1. Juli 2026.",
     "faq_q5": "Wo werden meine Daten gespeichert?",
-    "faq_a5": "In der EU (Supabase Frankfurt). Deutsche DSGVO. Keine Datenweitergabe, keine Werbung."
+    "faq_a5": "In der EU (Irland) (Supabase). Deutsche DSGVO. Keine Datenweitergabe, keine Werbung."
   },
   "cgm": {
     "section_title": "Funktioniert Glev mit deinem Setup?",

@@ -110,7 +110,7 @@ export default function LegalPage() {
             <table>
               <thead><tr><th>Dienstleister</th><th>Zweck</th><th>Standort</th><th>Drittland</th></tr></thead>
               <tbody>
-                <tr><td><strong>Supabase, Inc.</strong></td><td>Datenbank, Authentifizierung</td><td>EU (Frankfurt)</td><td><span className="badge">EU-Region</span></td></tr>
+                <tr><td><strong>Supabase, Inc.</strong></td><td>Datenbank, Authentifizierung</td><td>EU (Irland)</td><td><span className="badge">EU-Region</span></td></tr>
                 <tr><td><strong>Vercel, Inc.</strong></td><td>Hosting, Deployment (Next.js)</td><td>Primär EU, ggf. USA</td><td><span className="badge warning">USA möglich</span></td></tr>
                 <tr><td><strong>Stripe, Inc.</strong></td><td>Zahlungsabwicklung</td><td>USA / EU</td><td><span className="badge warning">USA möglich</span></td></tr>
               </tbody>
