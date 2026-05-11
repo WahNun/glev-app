@@ -184,6 +184,9 @@ export default function ImportPanel({ embedded = false }: { embedded?: boolean }
             mealType: mt,
             evaluation: null,
             createdAt: r.createdAt,
+            // CSV / Sheets imports are historical — the live CGM trend
+            // arrow at import time is not meaningful for an old meal.
+            preMealTrend: null,
           });
           inserted++;
         } catch (e) {
@@ -243,6 +246,9 @@ export default function ImportPanel({ embedded = false }: { embedded?: boolean }
           mealType: classifyMeal(carbs, protein, fat, fiber),
           evaluation: null,
           createdAt: createdAt ?? null,
+          // CSV imports are historical — the live CGM trend at import
+          // time is not meaningful for an old meal.
+          preMealTrend: null,
         });
         count++;
       } catch (e) {

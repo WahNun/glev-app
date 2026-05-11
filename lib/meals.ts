@@ -60,6 +60,13 @@ export interface Meal {
   meal_type: string | null;
   evaluation: string | null;
   related_meal_id: string | null;
+  // Snapshot of the live CGM trend arrow at the moment the meal was
+  // logged (Task #265). One of `fallingQuickly` / `falling` / `stable`
+  // / `rising` / `risingQuickly` — verbatim from the source adapter
+  // (LLU / Nightscout / Apple Health). Null when the CGM was
+  // unavailable, slow, or returned no current reading. Display-only;
+  // the engine continues to use its own regression-derived TrendClass.
+  pre_meal_trend: string | null;
   created_at: string;
 }
 
@@ -83,6 +90,9 @@ export interface SaveMealInput {
   createdAt?: string | null;
   mealTime?: string | null;
   relatedMealId?: string | null;
+  /** Live CGM trend arrow snapshot (Task #265). Pass `null` when no
+   *  CGM reading is available — the save path never fails on this. */
+  preMealTrend?: string | null;
 }
 
 /**
@@ -209,6 +219,7 @@ export async function saveMeal(input: SaveMealInput): Promise<Meal> {
     meal_type:      input.mealType,
     evaluation:     input.evaluation,
     related_meal_id: input.relatedMealId ?? null,
+    pre_meal_trend: input.preMealTrend ?? null,
   };
   if (input.createdAt) row.created_at = input.createdAt;
   if (input.mealTime) row.meal_time = input.mealTime;
@@ -228,6 +239,12 @@ export async function saveMeal(input: SaveMealInput): Promise<Meal> {
   // Retry without related_meal_id if the column is missing (migration pending).
   if (error && /related_meal_id/i.test(error.message ?? "")) {
     delete row.related_meal_id;
+    const r2 = await supabase.from("meals").insert(row).select().single();
+    data = r2.data; error = r2.error;
+  }
+  // Retry without pre_meal_trend if the column is missing (migration pending).
+  if (error && /pre_meal_trend/i.test(error.message ?? "")) {
+    delete row.pre_meal_trend;
     const r2 = await supabase.from("meals").insert(row).select().single();
     data = r2.data; error = r2.error;
   }
@@ -382,7 +399,7 @@ export async function updateMeal(id: string, patch: UpdateMealInput): Promise<Me
   return data as Meal;
 }
 
-const FULL_COLS = "id, user_id, input_text, parsed_json, glucose_before, glucose_after, bg_1h, bg_1h_at, bg_2h, bg_2h_at, glucose_30min, glucose_30min_at, glucose_1h, glucose_1h_at, glucose_90min, glucose_90min_at, glucose_2h, glucose_2h_at, glucose_3h, glucose_3h_at, outcome_state, min_bg_180, max_bg_180, time_to_peak_min, auc_180, had_hypo_window, min_bg_60_180, meal_time, carbs_grams, protein_grams, fat_grams, fiber_grams, calories, insulin_units, meal_type, evaluation, related_meal_id, created_at";
+const FULL_COLS = "id, user_id, input_text, parsed_json, glucose_before, glucose_after, bg_1h, bg_1h_at, bg_2h, bg_2h_at, glucose_30min, glucose_30min_at, glucose_1h, glucose_1h_at, glucose_90min, glucose_90min_at, glucose_2h, glucose_2h_at, glucose_3h, glucose_3h_at, outcome_state, min_bg_180, max_bg_180, time_to_peak_min, auc_180, had_hypo_window, min_bg_60_180, meal_time, carbs_grams, protein_grams, fat_grams, fiber_grams, calories, insulin_units, meal_type, evaluation, related_meal_id, pre_meal_trend, created_at";
 const MID_COLS  = "id, user_id, input_text, parsed_json, glucose_before, glucose_after, carbs_grams, protein_grams, fat_grams, fiber_grams, calories, insulin_units, meal_type, evaluation, created_at";
 const CORE_COLS = "id, user_id, input_text, parsed_json, glucose_before, carbs_grams, insulin_units, meal_type, evaluation, created_at";
 
@@ -539,6 +556,7 @@ export async function fetchMeals(opts: FetchMealsOptions = {}): Promise<Meal[]> 
         min_bg_180: null, max_bg_180: null, time_to_peak_min: null, auc_180: null,
         had_hypo_window: null, min_bg_60_180: null,
         related_meal_id: null,
+        pre_meal_trend: null,
       })) as unknown as typeof data;
       error = null;
     } else if (mid.error) {
@@ -549,6 +567,7 @@ export async function fetchMeals(opts: FetchMealsOptions = {}): Promise<Meal[]> 
         min_bg_180: null, max_bg_180: null, time_to_peak_min: null, auc_180: null,
         had_hypo_window: null, min_bg_60_180: null,
         related_meal_id: null,
+        pre_meal_trend: null,
       })) as unknown as typeof data;
       error = null;
     }

@@ -50,6 +50,7 @@ export function makeMeal(overrides: Partial<Meal> & { id?: string } = {}): Meal 
     meal_type: "BALANCED",
     evaluation: null,
     related_meal_id: null,
+    pre_meal_trend: null,
     created_at: new Date(mealMs).toISOString(),
     ...overrides,
   };

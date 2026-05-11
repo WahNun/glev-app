@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useTranslations, useLocale } from "next-intl";
 import { localeToBcp47 } from "@/lib/time";
 import { fetchMealsForEngine, classifyMeal, computeCalories, saveMeal, deleteMeal, updateMeal, type Meal } from "@/lib/meals";
+import { getCurrentTrendArrow } from "@/lib/cgm/trendArrow";
 import { scheduleJobsForLog } from "@/lib/cgmJobs";
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
 import { logDebug } from "@/lib/debug";
@@ -1106,6 +1107,10 @@ export default function EnginePage() {
     const cal   = computeCalories(cNum, pNum, fNum);
     const mealIso = mealTime ? new Date(mealTime).toISOString() : new Date().toISOString();
     setConfirming(true);
+    // Capture the live CGM trend arrow at meal-save time (Task #265).
+    // Helper swallows all errors and times out fast — the save path is
+    // never blocked by a slow or unavailable CGM.
+    const preMealTrend = await getCurrentTrendArrow();
     try {
       const saved = await saveMeal({
         inputText: desc.trim() || transcript.trim() || "(manual entry)",
@@ -1135,6 +1140,7 @@ export default function EnginePage() {
         evaluation: null,
         createdAt: mealIso,
         mealTime: mealIso,
+        preMealTrend,
       });
       // Schedule CGM auto-fetches at +1h / +2h after meal time. Fire-and-forget;
       // failures (e.g. no CGM connected) are silent.
@@ -1186,6 +1192,8 @@ export default function EnginePage() {
     const cal   = computeCalories(cNum, pNum, fNum);
     const mealIso = mealTime ? new Date(mealTime).toISOString() : new Date().toISOString();
     setConfirming(true);
+    // Capture live CGM trend arrow snapshot (Task #265).
+    const preMealTrendNoBolus = await getCurrentTrendArrow();
     try {
       const saved = await saveMeal({
         inputText: desc.trim() || transcript.trim() || "(manual entry)",
@@ -1210,6 +1218,7 @@ export default function EnginePage() {
         evaluation: null,
         createdAt: mealIso,
         mealTime: mealIso,
+        preMealTrend: preMealTrendNoBolus,
       });
       void scheduleJobsForLog({ logId: saved.id, logType: "meal", refTimeIso: mealIso });
       fetchMealsForEngine().then(setMeals).catch(() => {});
@@ -1257,6 +1266,8 @@ export default function EnginePage() {
     const cal = computeCalories(cNum, pNum, fNum);
     const mealIso = mealTime ? new Date(mealTime).toISOString() : new Date().toISOString();
     setConfirming(true);
+    // Capture live CGM trend arrow snapshot (Task #265).
+    const preMealTrendDirect = await getCurrentTrendArrow();
     try {
       const saved = await saveMeal({
         inputText: desc.trim() || transcript.trim() || "(manual entry)",
@@ -1280,6 +1291,7 @@ export default function EnginePage() {
         evaluation: null,
         createdAt: mealIso,
         mealTime: mealIso,
+        preMealTrend: preMealTrendDirect,
       });
       void scheduleJobsForLog({ logId: saved.id, logType: "meal", refTimeIso: mealIso });
       fetchMealsForEngine().then(setMeals).catch(() => {});
@@ -1353,6 +1365,8 @@ export default function EnginePage() {
     // clock and convert to a real ISO instant for storage.
     const mealIso = mealTime ? new Date(mealTime).toISOString() : new Date().toISOString();
     setConfirming(true);
+    // Capture live CGM trend arrow snapshot (Task #265).
+    const preMealTrendConfirm = await getCurrentTrendArrow();
     try {
       const saved = await saveMeal({
         inputText: desc.trim() || transcript.trim() || "(manual entry)",
@@ -1376,6 +1390,7 @@ export default function EnginePage() {
         evaluation: evalStr,
         createdAt: mealIso,
         mealTime: mealIso,
+        preMealTrend: preMealTrendConfirm,
       });
       // Park the saved row + open the decision panel. Form fields stay
       // populated so the panel has visible context — they only reset once

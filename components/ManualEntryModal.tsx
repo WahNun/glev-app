@@ -9,6 +9,7 @@ import {
   computeCalories,
   type Meal,
 } from "@/lib/meals";
+import { getCurrentTrendArrow } from "@/lib/cgm/trendArrow";
 import { scheduleAutoFillForMeal, findCgmReadingNearTime } from "@/lib/postMealCgmAutoFill";
 import { supabase } from "@/lib/supabase";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
@@ -282,6 +283,9 @@ export default function ManualEntryModal({
     // updateMeal recompute path) populate it accordingly.
 
     setSaving(true);
+    // Capture live CGM trend arrow snapshot (Task #265). Helper swallows
+    // errors / times out fast so the save UX is never blocked by CGM.
+    const preMealTrend = await getCurrentTrendArrow();
     try {
       const mealIso = mt.toISOString();
       const meal = await saveMeal({
@@ -299,6 +303,7 @@ export default function ManualEntryModal({
         evaluation:   null,
         createdAt:    mealIso,
         mealTime:     mealIso,
+        preMealTrend,
       });
 
       // Optionally write 1h / 2h readings with their custom timestamps. We do

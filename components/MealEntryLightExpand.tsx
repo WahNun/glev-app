@@ -8,6 +8,17 @@ import { chipForMeal } from "@/lib/engine/chipState";
 import { renderEngineMessage, renderEngineMessages } from "@/lib/engineMessages";
 import { parseDbDate, parseDbTs } from "@/lib/time";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
+import TrendArrowIcon from "@/components/TrendArrowIcon";
+
+/** Map the stored 5-state device trend string to the 3-state arrow we
+ *  render. Anything else (null, undefined, unknown future buckets like
+ *  "notComputable") collapses to null → renders nothing. */
+function trendDirectionFor(t: string | null | undefined): "up" | "down" | "flat" | null {
+  if (t === "falling" || t === "fallingQuickly") return "down";
+  if (t === "stable") return "flat";
+  if (t === "rising" || t === "risingQuickly") return "up";
+  return null;
+}
 
 const ACCENT = "#4F6EF7";
 const GREEN  = "#22D3A0";
@@ -226,10 +237,13 @@ export default function MealEntryLightExpand({
     </span>
   );
 
-  const Stat = ({ label, value, color }: { label: string; value: React.ReactNode; color?: string }) => (
+  const Stat = ({ label, value, color, adornment }: { label: string; value: React.ReactNode; color?: string; adornment?: React.ReactNode }) => (
     <div style={{ display:"flex", flexDirection:"column", minWidth:70, gap:3 }}>
       <span style={{ fontSize:12, color:"var(--text-faint)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:600 }}>{label}</span>
-      <span style={{ fontSize:14, fontWeight:700, color: color || "var(--text-strong)", fontFamily:"var(--font-mono)" }}>{value}</span>
+      <span style={{ fontSize:14, fontWeight:700, color: color || "var(--text-strong)", fontFamily:"var(--font-mono)", display:"inline-flex", alignItems:"center" }}>
+        {value}
+        {adornment}
+      </span>
     </div>
   );
 
@@ -346,7 +360,23 @@ export default function MealEntryLightExpand({
       <div>
         <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8, textTransform:"uppercase" }}>{td("glucose_section")}</div>
         <div style={{ display:"flex", gap:24, flexWrap:"wrap" }}>
-          <Stat label={td("bg_before")} value={before != null ? `${before} mg/dL` : "—"} color={beforeColor}/>
+          <Stat
+            label={td("bg_before")}
+            value={before != null ? `${before} mg/dL` : "—"}
+            color={beforeColor}
+            adornment={(() => {
+              const dir = trendDirectionFor(meal.pre_meal_trend);
+              if (!dir) return null;
+              return (
+                <span
+                  title={meal.pre_meal_trend ?? undefined}
+                  style={{ display: "inline-flex", alignItems: "center", marginLeft: 5 }}
+                >
+                  <TrendArrowIcon direction={dir} color={beforeColor} />
+                </span>
+              );
+            })()}
+          />
           <Stat label={td("bg_after")}  value={afterValue} color={after != null ? afterColor : undefined}/>
           <Stat label={td("delta")}     value={delta != null ? `${delta > 0 ? "+" : ""}${delta} mg/dL` : "—"} color={deltaColor}/>
         </div>

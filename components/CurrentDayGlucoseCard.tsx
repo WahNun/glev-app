@@ -3,6 +3,7 @@ import { fetchCgmHistory } from "@/lib/cgm/clientCache";
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import CgmFetchButton, { type CgmFetchResult } from "@/components/CgmFetchButton";
+import TrendArrow from "@/components/TrendArrowIcon";
 import { useCrosshair, CrosshairOverlay, CrosshairTooltip, type CrosshairPoint } from "@/components/ChartCrosshair";
 import { parseLluTs as _parseLluTs } from "@/lib/time";
 import {
@@ -321,38 +322,6 @@ function HeroFront({
   );
 }
 
-/* Trend arrow icon — three flavours (NE up, SE down, →flat) matching
-   the hero mockup's stroke style. Color is passed in so it tracks the
-   current value's range color (GREEN / ORANGE / PINK). */
-function TrendArrow({ direction, color }: { direction: "up" | "down" | "flat"; color: string }) {
-  const common = {
-    width: 14, height: 14, viewBox: "0 0 24 24", fill: "none",
-    stroke: color, strokeWidth: 2.5,
-    strokeLinecap: "round" as const, strokeLinejoin: "round" as const,
-  };
-  if (direction === "up") {
-    return (
-      <svg {...common}>
-        <line x1="7" y1="17" x2="17" y2="7" />
-        <polyline points="9 7 17 7 17 15" />
-      </svg>
-    );
-  }
-  if (direction === "down") {
-    return (
-      <svg {...common}>
-        <line x1="7" y1="7" x2="17" y2="17" />
-        <polyline points="9 17 17 17 17 9" />
-      </svg>
-    );
-  }
-  return (
-    <svg {...common}>
-      <line x1="5" y1="12" x2="19" y2="12" />
-      <polyline points="15 8 19 12 15 16" />
-    </svg>
-  );
-}
 
 function formatAge(ms: number): string {
   const min = Math.floor(ms / 60000);

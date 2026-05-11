@@ -48,3 +48,16 @@ export function invalidateCgmCache(): void {
   cachedData = null;
   cachedAt = null;
 }
+
+/**
+ * Non-fetching cache peek — returns the cached payload only when it is
+ * still within TTL, otherwise null. Never triggers a network request.
+ * Useful for callers (e.g. the meal-save trend snapshot) that must
+ * never stall the UX waiting for CGM history.
+ */
+export function peekCgmHistoryCache(): HistoryData | null {
+  if (cachedData && cachedAt && Date.now() - cachedAt < CACHE_TTL_MS) {
+    return cachedData;
+  }
+  return null;
+}

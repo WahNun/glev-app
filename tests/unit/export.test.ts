@@ -90,6 +90,7 @@ function makeMeal(overrides: Partial<Meal>): Meal {
     meal_type: null,
     evaluation: null,
     related_meal_id: null,
+    pre_meal_trend: null,
     created_at: "2026-04-30T08:00:00Z",
     ...overrides,
   };
