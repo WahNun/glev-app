@@ -102,8 +102,15 @@ export default async function AdminUsersPage({
     userIds.length
       ? sb
           .from("profiles")
+          // `subscription_status` ist eine Legacy-Spalte (Migration
+          // 20260510_add_admin_user_management.sql fügt sie hinzu, ist
+          // aber in vielen Umgebungen noch nicht angewendet) und nur
+          // 4. Fallback in computeEffectivePlan. Da wir jetzt zusätzlich
+          // pro_subscriptions + beta_reservations als verlässliche
+          // Quelle joinen, lassen wir sie hier raus → der "column
+          // does not exist"-Banner verschwindet ohne Funktionsverlust.
           .select(
-            "user_id, display_name, role, language, plan, subscription_status, manual_plan_override, manual_plan_note, deleted_at, created_by_admin, cgm_connected, cgm_source, nightscout_url",
+            "user_id, display_name, role, language, plan, manual_plan_override, manual_plan_note, deleted_at, created_by_admin, cgm_connected, cgm_source, nightscout_url",
           )
           .in("user_id", userIds)
       : Promise.resolve({ data: [], error: null }),
@@ -132,7 +139,6 @@ export default async function AdminUsersPage({
     role: string | null;
     language: string | null;
     plan: string | null;
-    subscription_status: string | null;
     manual_plan_override: string | null;
     manual_plan_note: string | null;
     deleted_at: string | null;
@@ -172,7 +178,6 @@ export default async function AdminUsersPage({
     const effective = computeEffectivePlan({
       manual_plan_override: p?.manual_plan_override,
       plan: p?.plan,
-      subscription_status: p?.subscription_status,
     });
     let cgmKind: "none" | "llu" | "nightscout" | "applehealth" | "junction" = "none";
     if (lluByUser.has(u.id)) cgmKind = "llu";
