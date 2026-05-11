@@ -145,7 +145,7 @@ export default function FingerstickLogCard() {
             onChange={setValue}
             min={40}
             max={300}
-            step={10}
+            step={1}
             unit={t("mgdl_unit")}
             accent={ACCENT}
             ariaLabel={t("value_label")}

@@ -913,7 +913,7 @@ export function ExerciseForm() {
             onChange={setDuration}
             min={5}
             max={600}
-            step={5}
+            step={1}
             unit={t("duration_unit")}
             accent={ORANGE}
             ariaLabel={t("duration_label")}

@@ -85,7 +85,20 @@ export default function SnapSlider({
 
   function commitDraft() {
     const parsed = Number((draft ?? "").replace(",", "."));
-    if (Number.isFinite(parsed)) commit(parsed);
+    if (Number.isFinite(parsed)) {
+      // Tap-to-edit: keep the user's exact typed value (clamped + rounded
+      // to the slider's decimals). Snapping the typed input to the step
+      // grid would silently rewrite "127" → "130" for a step=10 slider,
+      // which is exactly the surprise we want to avoid for fingerstick
+      // entries. The drag track still snaps via commit().
+      const clamped = Math.max(min, Math.min(max, parsed));
+      const rounded = Number(clamped.toFixed(dec));
+      if (rounded !== lastValueRef.current) {
+        hapticLight();
+        lastValueRef.current = rounded;
+      }
+      onChange(rounded);
+    }
     setEditing(false);
     setDraft("");
   }
