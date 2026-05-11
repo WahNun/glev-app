@@ -120,6 +120,17 @@ export function middleware(req: NextRequest) {
     persistGeoLocaleCookie(req, res, country);
     return res;
   }
+  // Authed users hitting the marketing landing page get fast-forwarded
+  // into the app. Unauthed users continue to see the landing page.
+  // Skip the redirect when `?lang=` is present so the language picker
+  // on the marketing page can still preview the other locale even when
+  // the visitor is logged in (we'd otherwise short-circuit before the
+  // lang-override branch below ever runs).
+  if (pathname === "/" && isAuthed && !searchParams.get("lang")) {
+    const res = NextResponse.redirect(new URL("/dashboard", req.url));
+    persistGeoLocaleCookie(req, res, country);
+    return res;
+  }
 
   // `?lang=` URL override on marketing pages — forwarded to the
   // next-intl request config via a request header so the current

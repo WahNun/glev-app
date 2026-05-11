@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import useSWR, { mutate as swrMutate } from "swr";
 import { useRouter } from "next/navigation";
 import { fetchMeals, computeCalories, unifiedOutcome, type Meal } from "@/lib/meals";
 import { computeControlScore } from "@/lib/controlScore";
@@ -359,32 +360,39 @@ export default function DashboardPage() {
     fetchMacroTargets().then(setMacroTargets).catch(() => {});
   }, []);
 
+  // SWR-backed cached fetch of meals + insulin + exercise. The
+  // SWRProvider in app/(protected)/layout.tsx persists this cache to
+  // localStorage so a re-mount (back navigation, tab switch on native
+  // shell) renders the previous data instantly while we revalidate in
+  // the background. We hydrate the existing useState mirrors so all
+  // downstream optimistic updates (e.g. RecentEntries → onMealUpdated
+  // calling setMeals) keep working untouched.
+  const { data: dashSWR } = useSWR(
+    "dashboard:meals+insulin60+exercise60",
+    async () => {
+      const [m, ins, ex] = await Promise.all([
+        fetchMeals(),
+        fetchRecentInsulinLogs(60).catch(() => [] as InsulinLog[]),
+        fetchRecentExerciseLogs(60).catch(() => [] as ExerciseLog[]),
+      ]);
+      return { meals: m, insulin: ins, exercise: ex };
+    },
+  );
+
   useEffect(() => {
-    let cancelled = false;
-    async function load(initial: boolean) {
-      try {
-        // Parallel fetch of all three log types so the "Recent Entries"
-        // panel and the totals counter reflect every kind of entry.
-        const [m, ins, ex] = await Promise.all([
-          fetchMeals(),
-          fetchRecentInsulinLogs(60).catch(() => []),
-          fetchRecentExerciseLogs(60).catch(() => []),
-        ]);
-        if (!cancelled) {
-          setMeals(m);
-          setInsulin(ins);
-          setExercise(ex);
-        }
-      } catch (e) { console.error(e); }
-      finally { if (!cancelled && initial) setLoading(false); }
-    }
-    load(true);
-    function onUpdated() { load(false); }
+    if (!dashSWR) return;
+    setMeals(dashSWR.meals);
+    setInsulin(dashSWR.insulin);
+    setExercise(dashSWR.exercise);
+    setLoading(false);
+  }, [dashSWR]);
+
+  useEffect(() => {
+    function onUpdated() { swrMutate("dashboard:meals+insulin60+exercise60"); }
     window.addEventListener("glev:meals-updated",    onUpdated);
     window.addEventListener("glev:insulin-updated",  onUpdated);
     window.addEventListener("glev:exercise-updated", onUpdated);
     return () => {
-      cancelled = true;
       window.removeEventListener("glev:meals-updated",    onUpdated);
       window.removeEventListener("glev:insulin-updated",  onUpdated);
       window.removeEventListener("glev:exercise-updated", onUpdated);

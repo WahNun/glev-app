@@ -2,7 +2,7 @@
   "name": "Glev",
   "short_name": "Glev",
   "description": "Type 1 Diabetes insulin decision-support app",
-  "start_url": "/",
+  "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
   "background_color": "#0A0A0F",

@@ -5,6 +5,7 @@ import Layout from "@/components/Layout";
 import CgmAutoFillProvider from "@/components/CgmAutoFillProvider";
 import CgmJobsTicker from "@/components/CgmJobsTicker";
 import LanguageSync from "@/components/LanguageSync";
+import SWRProvider from "@/components/SWRProvider";
 
 /**
  * Protected layout — server component.
@@ -29,12 +30,14 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   await runOnboardingGate();
 
   return (
-    <Layout>
-      <LanguageSync />
-      <CgmAutoFillProvider />
-      <CgmJobsTicker />
-      {children}
-    </Layout>
+    <SWRProvider>
+      <Layout>
+        <LanguageSync />
+        <CgmAutoFillProvider />
+        <CgmJobsTicker />
+        {children}
+      </Layout>
+    </SWRProvider>
   );
 }
 
