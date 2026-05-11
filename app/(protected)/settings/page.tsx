@@ -35,7 +35,6 @@ import AccountSheet from "@/components/AccountSheet";
 import { SettingsSection, SettingsRow, ConnectedDot } from "@/components/SettingsRow";
 import { setLocale, readLocaleCookie, DEFAULT_LOCALE, type Locale } from "@/lib/locale";
 import { useTheme } from "@/components/ThemeProvider";
-import { useFeaturebase } from "featurebase-js/react";
 import type { ThemeChoice } from "@/lib/theme";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
 import type { CarbUnit } from "@/lib/carbUnits";
@@ -723,11 +722,6 @@ export default function SettingsPage() {
     feedback: <svg {...iconProps}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>,
     sparkle: <svg {...iconProps}><path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" /></svg>,
   };
-
-  // Featurebase messenger handles. The hook returns stable references —
-  // safe to call from row click handlers without memoisation. Only used
-  // by the "Hilfe & Feedback" section below; everything else is decoupled.
-  const featurebase = useFeaturebase();
 
   /* ── subtitles derived from current state ──────────────────────── */
   const targetRangeSub = tSettings("subtitle_target_range", { min: settings.targetMin, max: settings.targetMax });
@@ -1810,34 +1804,6 @@ export default function SettingsPage() {
         <p style={{ color: "var(--text-faint)", fontSize: 14 }}>{tSettings("page_subtitle")}</p>
       </div>
 
-      <SettingsSection title={tSettings("section_support")}>
-        <SettingsRow
-          first
-          iconColor={ACCENT}
-          icon={ICON.support}
-          label={tSettings("row_support_chat")}
-          subtitle={tSettings("subtitle_support_chat")}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_support_chat") })}
-          onClick={() => featurebase.show()}
-        />
-        <SettingsRow
-          iconColor={PURPLE}
-          icon={ICON.feedback}
-          label={tSettings("row_support_feedback")}
-          subtitle={tSettings("subtitle_support_feedback")}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_support_feedback") })}
-          onClick={() => featurebase.showNewMessage()}
-        />
-        <SettingsRow
-          iconColor={GREEN}
-          icon={ICON.sparkle}
-          label={tSettings("row_support_changelog")}
-          subtitle={tSettings("subtitle_support_changelog")}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_support_changelog") })}
-          onClick={() => featurebase.showChangelog()}
-        />
-      </SettingsSection>
-
       <SettingsSection title={tSettings("section_account")}>
         <SettingsRow
           first
@@ -2059,6 +2025,18 @@ export default function SettingsPage() {
           subtitle={tSettings("subtitle_coming_soon")}
           ariaLabel={tSettings("row_open_aria", { label: tSettings("google_sheets_title") })}
           onClick={() => openSheetWith("googleSheets")}
+        />
+      </SettingsSection>
+
+      <SettingsSection title={tSettings("section_support")}>
+        <SettingsRow
+          first
+          iconColor={PURPLE}
+          icon={ICON.feedback}
+          label={tSettings("row_feature_requests")}
+          subtitle={tSettings("subtitle_feature_requests")}
+          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_feature_requests") })}
+          onClick={() => window.open("https://glev.featurebase.app/", "_blank", "noopener,noreferrer")}
         />
       </SettingsSection>
 

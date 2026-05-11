@@ -36,7 +36,6 @@
     "@supabase/supabase-js": "^2.104.0",
     "@types/jszip": "^3.4.0",
     "axios": "^1.15.2",
-    "featurebase-js": "^1.0.3",
     "googleapis": "^171.4.0",
     "jszip": "^3.10.1",
     "next": "^16.2.4",

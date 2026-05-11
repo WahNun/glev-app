@@ -8,7 +8,6 @@ import "./globals.css";
 import { PreventZoom } from "@/components/PreventZoom";
 import PushNotificationsProvider from "@/components/PushNotificationsProvider";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import FeaturebaseProvider from "@/components/FeaturebaseProvider";
 import { APP_ROUTE_REGEX_SOURCE, isAppRoute, PATHNAME_HEADER } from "@/lib/appRoutes";
 
 const META_PIXEL_ID = "984291337254954";
@@ -178,7 +177,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <ThemeProvider>
             <PreventZoom />
             <PushNotificationsProvider />
-            <FeaturebaseProvider>{children}</FeaturebaseProvider>
+            {children}
           </ThemeProvider>
         </NextIntlClientProvider>
       </body>
