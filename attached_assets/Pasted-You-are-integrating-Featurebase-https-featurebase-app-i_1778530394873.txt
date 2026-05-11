@@ -1,0 +1,369 @@
+You are integrating Featurebase (https://featurebase.app) into a React application
+using the official "featurebase-js" SDK.
+
+══════════════════════════════════════════════════════════════════════
+HOW WE'LL WORK — collaborative, opt-in rollout
+══════════════════════════════════════════════════════════════════════
+
+This is a step-by-step rollout. Do the steps in order, pause where instructed, and ASK the
+user before wiring up anything beyond Phase 1.
+
+  Phase 1 — Anonymous SDK install                                (always — start here, no questions)
+  Phase 2 — Per-surface wiring (Messenger config, Changelog,
+            Feedback, Surveys)                                   (opt-in, per surface)
+  Phase 3 — Identify logged-in users via a JWT                   (opt-in)
+  Phase 4 — Logout / shutdown wiring                             (opt-in)
+
+After Phase 1, present the menu (template included below) and wait. Run only the items the
+user picks. Loop the menu until they say 'done'. Do NOT pre-emptively attempt phases 2/3/4
+without explicit approval — they are context-dependent and easy to mis-wire.
+
+CONTEXT
+- Featurebase is a customer feedback + support platform. The SDK installs the in-app messenger, changelog widget, feedback widget, and surveys
+  from a single entry point.
+- The single canonical config field is "appId" (the workspace's MongoDB id, 24-char hex).
+  This workspace's appId is: 6a02376b161c3ac09a57c9dd
+- The SDK reads the workspace's "General → Manage modules" toggles server-side and decides
+  which surfaces to start automatically. The developer does NOT have to flip flags per-surface.
+- Vanilla messenger methods are direct named imports
+  (`import { show, hide, ... } from 'featurebase-js'`). There is **no**
+  `Featurebase('action', ...)` string-channel like Intercom. If you've used Intercom-style
+  SDKs before, the call shape here is different.
+
+══════════════════════════════════════════════════════════════════════
+PHASE 1 — Anonymous install (do this now, no questions asked)
+══════════════════════════════════════════════════════════════════════
+
+This phase boots the SDK in anonymous mode. Visitors will see the launcher and can chat /
+submit feedback without being identified. It's the right starting point for every project —
+adding identity, surface configuration, and logout wiring later are all purely additive.
+
+1. Install the package:
+   npm install featurebase-js
+   (or pnpm add / yarn add / bun add — match the package manager this repo already uses.)
+
+2. Render <FeaturebaseProvider> exactly once at the application root (e.g. app/layout.tsx in
+   Next.js, the root of <App /> in a Vite SPA, _app.tsx in pages-router Next.js). Wrap the rest
+   of the tree inside it. Do NOT mount it per-route — that would re-boot the messenger on every
+   navigation.
+
+   IMPORTANT (Next.js App Router): the file holding <FeaturebaseProvider> must be a Client
+   Component — add 'use client' at the very top, or extract the Provider into its own
+   'use client' file and import it from a Server Component layout.
+
+3. Drop in this exact snippet, adapted to the project's file layout:
+
+```tsx
+'use client'; // required when this lives in a Next.js Server Component (e.g. app/layout.tsx)
+
+import { FeaturebaseProvider } from 'featurebase-js/react';
+
+export function Root({ children }) {
+  return (
+    <FeaturebaseProvider appId="6a02376b161c3ac09a57c9dd">
+      {children}
+    </FeaturebaseProvider>
+  );
+}
+```
+
+4. Verify Phase 1 worked before moving on. The check depends on whether the workspace has
+   the Support module enabled in "General → Manage modules":
+
+   - Support module ON  → ask the user to load the page; the floating messenger launcher
+     should appear in a corner (typically bottom-right). Seeing the launcher confirms the
+     SDK is booted, identity is flowing, and the runtime script loaded successfully.
+
+   - Support module OFF → there is nothing visible to verify yet on the page itself, and
+     that's expected. Do NOT treat the missing launcher as a failure, and do NOT improvise
+     a network/console check here. Tell the user "Phase 1 is wired up — we'll verify it
+     end-to-end when we boot the first surface in Phase 2", then continue to step 5.
+
+5. Report back to the user:
+   - List the file paths you modified.
+   - Note which surface (if any) is currently visible based on what you observed.
+   - Then present this exact menu and STOP:
+
+     "Phase 1 is done — featurebase-js is installed and any modules enabled in your dashboard's
+     General → Manage modules will boot automatically. Want me to wire up any of these next?
+     Pick zero or more:
+
+       [2A] Messenger configuration — props (theme, language, hideDefaultLauncher, alignment,
+            padding) and methods (show / hide / showArticle / showChangelog / setTheme /
+            unread-count subscription, etc.) so you can drive the messenger from your own UI.
+       [2B] Changelog widget — a standalone 'What is new' surface, independent of the
+            messenger. You pick: card (floating bottom-corner) / popup (auto-opens for new
+            updates) / dropdown (anchored to a button in your nav).
+       [2C] Feedback widget — a floating button to browse boards and submit posts without
+            leaving your app.
+       [2D] Surveys — auto-displays the survey that matches the visitor based on dashboard
+            targeting; mount once, no per-survey code.
+       [3]  Sync user information — JWT-based identity so conversations, posts, votes, and
+            survey responses are tied to real accounts in the dashboard.
+       [4]  Logout / shutdown wiring — clean teardown when users sign out.
+
+     Reply with the items you want (e.g. '2A 2D 3') or 'done' to stop."
+
+══════════════════════════════════════════════════════════════════════
+PHASE 2 — Per-surface wiring (only the items the user picked)
+══════════════════════════════════════════════════════════════════════
+
+Run only the sub-sections the user named, in any order. Verify each surface behaves as
+expected before moving to the next.
+
+────────────────────────────────────────────────────────────────────
+2A. MESSENGER configuration & methods
+────────────────────────────────────────────────────────────────────
+
+The messenger is already mounted in Phase 1. This step adds:
+  (i)  configuration props on the Phase 1 install, and/or
+  (ii) imperative API calls so you can drive it from your own UI.
+
+ASK the user which props they want (default: keep the launcher visible, light theme, right
+alignment) and which methods they need. Only include the props/methods they say yes to —
+shipping all of them is noisy.
+
+Common props (extend the Phase 1 install with any of these):
+
+```tsx
+<FeaturebaseProvider
+  appId="6a02376b161c3ac09a57c9dd"
+  theme="dark"               // 'light' | 'dark'
+  language="en"              // BCP-47 short code (en, de, fr, …)
+  hideDefaultLauncher        // hide the floating launcher; open via show()
+  alignment="left"           // 'left' | 'right'
+  horizontalPadding={24}     // px from the side
+  verticalPadding={80}       // px from the bottom
+>
+  {children}
+</FeaturebaseProvider>
+```
+
+Common methods (drive the messenger from your own UI — a custom chat button, a "Help" link in
+your nav, a "What's new" trigger, etc.):
+
+```tsx
+import { useFeaturebase } from 'featurebase-js/react';
+
+export function ChatLauncher() {
+  const {
+    show,                  // open the messenger
+    hide,                  // close it
+    showSpace,             // 'home' | 'messages' | 'help' | 'changelog'
+    showMessages,          // shortcut for showSpace('messages')
+    showArticle,           // open a specific help article by id or slug
+    showChangelog,         // open changelog index, or pass an id for a specific entry
+    showConversation,      // open a specific conversation by id
+    showNewMessage,        // open the new-message composer (optionally pre-filled)
+    setTheme,              // change theme at runtime ('light' | 'dark')
+    setLanguage,           // change language at runtime (BCP-47)
+    update,                // re-identify the visitor without re-booting
+    shutdown,              // tear down the messenger (use on logout)
+    unreadCount,           // reactive — re-renders on change
+  } = useFeaturebase();
+
+  return (
+    <button onClick={show} aria-label={`Open chat, ${unreadCount} unread`}>
+      Chat {unreadCount > 0 && <span className="badge">{unreadCount}</span>}
+    </button>
+  );
+}
+```
+
+────────────────────────────────────────────────────────────────────
+2B. CHANGELOG WIDGET — standalone 'What is new' surface
+────────────────────────────────────────────────────────────────────
+
+ASK the user which variant they want, then use ONLY that variant's snippet:
+  - card     — non-intrusive floating card in a bottom corner (recommended; expands on click)
+  - popup    — fullscreen popup, auto-opens once per visitor for new updates
+  - dropdown — lightweight dropdown anchored to a <button data-featurebase-changelog> in their UI
+
+Card variant:
+
+```tsx
+import { useChangelogWidget } from 'featurebase-js/react';
+
+export function ChangelogCard() {
+  useChangelogWidget({
+    theme: 'light',
+    changelogCard: {
+      enabled: true,
+      layout: { position: 'bottom-right' },
+    },
+  });
+  return null;
+}
+```
+
+Popup variant:
+
+```tsx
+import { useChangelogWidget } from 'featurebase-js/react';
+
+export function ReleaseNotesButton() {
+  const { openPopup } = useChangelogWidget({
+    theme: 'light',
+    popup: { enabled: true, autoOpenForNewUpdates: true },
+  });
+
+  return <button onClick={openPopup}>What is new</button>;
+}
+```
+
+Dropdown variant:
+
+```tsx
+import { useChangelogWidget } from 'featurebase-js/react';
+
+export function WhatsNewButton() {
+  useChangelogWidget({
+    theme: 'light',
+    dropdown: { enabled: true, placement: 'bottom' },
+  });
+
+  return <button data-featurebase-changelog>What is new</button>;
+}
+```
+
+────────────────────────────────────────────────────────────────────
+2C. FEEDBACK WIDGET
+────────────────────────────────────────────────────────────────────
+
+ASK the user for the slug of the board the panel should open on by default (`defaultBoard`).
+If they don't have a preference, omit the field — the panel will open to the board picker.
+
+```tsx
+import { useFeedbackWidget } from 'featurebase-js/react';
+
+export function FeedbackHost() {
+  useFeedbackWidget({
+    theme: 'light',
+    placement: 'bottom-right',
+    defaultBoard: 'feature-requests',
+  });
+  return null;
+}
+```
+
+────────────────────────────────────────────────────────────────────
+2D. SURVEYS
+────────────────────────────────────────────────────────────────────
+
+Mount once at the app root. Targeting (URL pattern, segment, user attribute) is owned by the
+dashboard — there is no per-survey code on the client side, no destroySurveys(), nothing else
+to wire up.
+
+```tsx
+import { useSurveyWidget } from 'featurebase-js/react';
+
+export function SurveyHost() {
+  // Targeting (URL pattern, segment, user attribute) is owned by the dashboard —
+  // there is no per-survey code on the client side.
+  useSurveyWidget();
+  return null;
+}
+```
+
+After completing each requested surface, verify by interacting with it before moving on to
+the next item the user picked.
+
+══════════════════════════════════════════════════════════════════════
+PHASE 3 — Identify users with a JWT (only if the user picked [3])
+══════════════════════════════════════════════════════════════════════
+
+Identifying a logged-in user lets Featurebase tie messenger conversations, feedback posts,
+changelog reads, and survey responses to a real contact in the dashboard — and unlocks
+user-attribute targeting for surveys (e.g. "only show to plan = 'pro'").
+
+Follow Featurebase's official JWT setup guide end-to-end:
+
+   https://help.featurebase.app/articles/5257986-creating-and-signing-a-jwt
+
+That guide is the source of truth. It walks through:
+   - Where to find the JWT secret (Dashboard → Settings → Access & Security → Security).
+   - The exact payload shape (userId, email, name, optional custom attributes, companies).
+   - How to sign with HS256 server-side using their official code samples (Node.js, Python,
+     C#, Java, Go, PHP — pick the one that matches this backend).
+   - How to validate the resulting JWT with the dashboard's "Validate JWT" tool.
+
+After the JWT is being minted server-side and exposed to the browser (via SSR props, an
+authenticated /me endpoint, or whatever pattern this app already uses for user data), update
+the install to pass it through:
+
+```tsx
+'use client'; // required when this lives in a Next.js Server Component (e.g. app/layout.tsx)
+
+import { FeaturebaseProvider } from 'featurebase-js/react';
+
+export function Root({ children, user }) {
+  return (
+    <FeaturebaseProvider
+      appId="6a02376b161c3ac09a57c9dd"
+      featurebaseJwt={user?.featurebaseJwt}
+    >
+      {children}
+    </FeaturebaseProvider>
+  );
+}
+```
+
+Verify Phase 3:
+   - As a logged-in user, interact with whichever Featurebase surface this workspace uses
+     (open the messenger, submit feedback, click the changelog widget, respond to a survey).
+   - In the Featurebase dashboard, the resulting conversation / post / vote / survey response
+     should be attributed to that user with their name + email + any custom attributes you
+     signed into the JWT.
+   - Anonymous visitors (where featurebaseJwt is undefined) keep working unchanged.
+
+══════════════════════════════════════════════════════════════════════
+PHASE 4 — Logout / shutdown wiring (only if the user picked [4])
+══════════════════════════════════════════════════════════════════════
+
+Cleanly tear down identity on logout so a new visitor at the same browser doesn't inherit
+the previous user's messenger session, unread count, or widget identity.
+
+```tsx
+// Option A — conditionally render the Provider (preferred when the app
+//             already has an auth gate at the root):
+{user ? (
+  <FeaturebaseProvider appId="6a02376b161c3ac09a57c9dd" featurebaseJwt={user.featurebaseJwt}>
+    <App />
+  </FeaturebaseProvider>
+) : (
+  <App />
+)}
+
+// Option B — call shutdown() from useFeaturebase in your logout handler:
+const { shutdown } = useFeaturebase();
+function onLogout() {
+  shutdown();
+}
+```
+
+After logout, the next render with a valid `featurebaseJwt` (React) or the next
+`Featurebase({ appId, featurebaseJwt })` call (Vanilla) cleanly re-identifies the new visitor
+without any extra wiring.
+
+══════════════════════════════════════════════════════════════════════
+WHEN DONE
+══════════════════════════════════════════════════════════════════════
+
+After all selected items are wired and verified, present a short summary:
+   - Files modified.
+   - Surfaces wired (messenger / changelog / feedback / surveys).
+   - Whether identity is anonymous or JWT-based.
+   - Anything the user still has to do themselves (e.g. set FEATUREBASE_JWT_SECRET in
+     production secrets, configure custom attributes in the dashboard, decide on a defaultBoard slug).
+
+Then ask: "Anything else you want to wire up?" and either loop back to the menu or stop on
+'done'.
+
+CONSTRAINTS
+- Do NOT add a <script> tag for the runtime; the SDK auto-injects it on first call.
+- Do NOT call Featurebase() / mount FeaturebaseProvider inside a useEffect that depends on
+  route changes — it should run once per app lifetime.
+- Treat the JWT secret as a server-side secret. Never put it in client-side code or env vars
+  prefixed with NEXT_PUBLIC_, VITE_, etc.
+- When using the vanilla SDK, use direct named imports for messenger methods
+  (`show`, `hide`, `showArticle`, …). There is no `Featurebase('action', ...)` string channel.
