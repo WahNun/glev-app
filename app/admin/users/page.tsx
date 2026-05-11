@@ -248,7 +248,12 @@ export default async function AdminUsersPage({
       email: u.email ?? "",
       display_name: p?.display_name ?? null,
       role: p?.role ?? "user",
-      language: p?.language ?? "de",
+      // WICHTIG: kein "de"-Fallback. profiles.language ist nur gesetzt,
+      // wenn der User explizit im Settings-Screen umgestellt hat. Die
+      // echte Runtime-Sprache kommt aus Cookie + Accept-Language-Header
+      // (siehe next-intl-Setup) und kennen wir hier nicht. Ein stiller
+      // "de"-Default wäre für UK/US-User irreführend.
+      language: p?.language ?? null,
       created_at: u.created_at,
       last_sign_in_at: u.last_sign_in_at ?? null,
       email_confirmed_at: u.email_confirmed_at ?? null,

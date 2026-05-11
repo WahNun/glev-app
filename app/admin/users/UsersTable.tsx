@@ -9,7 +9,8 @@ export type UserRow = {
   email: string;
   display_name: string | null;
   role: string;
-  language: string;
+  /** null = im Profil nie explizit gesetzt (Runtime-Default kommt aus Cookie + Accept-Language). */
+  language: string | null;
   created_at: string;
   last_sign_in_at: string | null;
   email_confirmed_at: string | null;
@@ -257,7 +258,16 @@ export default function UsersTable({
                     )}
                   </td>
                   <td style={tdStyle}>{cgmLabel(r.cgm)}</td>
-                  <td style={tdStyle}>{r.language}</td>
+                  <td
+                    style={tdStyle}
+                    title={
+                      r.language
+                        ? `Im Profil gesetzt: ${r.language}`
+                        : "Nicht gesetzt — Runtime nutzt Cookie + Accept-Language-Header"
+                    }
+                  >
+                    {r.language ?? <span style={{ color: "#999" }}>—</span>}
+                  </td>
                   <td style={tdStyle} title={r.last_sign_in_at ?? ""}>
                     {fmtRel(r.last_sign_in_at)}
                   </td>
