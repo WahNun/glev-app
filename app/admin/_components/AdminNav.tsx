@@ -25,10 +25,12 @@ import { logoutAction } from "../_actions";
 
 const ITEMS: ReadonlyArray<{ href: string; label: string }> = [
   { href: "/admin/users", label: "Nutzer" },
+  { href: "/admin/subscriptions", label: "Abos" },
   { href: "/admin/buyers", label: "Käufer" },
   { href: "/admin/drip", label: "Drip-Pipeline" },
   { href: "/admin/drip-stats", label: "Drip-Statistik" },
   { href: "/admin/emails", label: "Mail-Preview" },
+  { href: "/admin/settings", label: "Einstellungen" },
 ];
 
 export default function AdminNav() {

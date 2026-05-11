@@ -999,9 +999,13 @@ export async function backfillCurrencyCountryAction(): Promise<void> {
     adminToken,
   });
 
+  // Backfill-Button lebt jetzt unter /admin/settings (vorher direkt auf
+  // /admin/users); UsersPage neu rendern, aber zur Settings-Seite
+  // zurückspringen, damit das Ergebnis-Banner dort sichtbar wird.
   revalidatePath("/admin/users");
+  revalidatePath("/admin/settings");
   redirect(
-    `/admin/users?backfill=ok&pro=${proUpdated}&beta=${betaUpdated}&skipped=${proSkipped + betaSkipped}&errors=${errors}`,
+    `/admin/settings?backfill=ok&pro=${proUpdated}&beta=${betaUpdated}&skipped=${proSkipped + betaSkipped}&errors=${errors}`,
   );
 }
 

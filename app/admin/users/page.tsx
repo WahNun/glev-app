@@ -4,7 +4,6 @@ import {
   loginAction,
   grantPlanByEmailAction,
   grantBetaFreeYearAction,
-  backfillCurrencyCountryAction,
 } from "./actions";
 import UsersTable, { type UserRow } from "./UsersTable";
 import Link from "next/link";
@@ -482,48 +481,8 @@ export default async function AdminUsersPage({
         </form>
       </section>
 
-      {/* Backfill-Action: zieht Currency + Land für alle Bestandskäufer:innen
-          aus der Stripe-API nach. Idempotent — überschreibt keine bereits
-          gefüllten Felder, kann also gefahrlos mehrfach geklickt werden.
-          Banner über dem Block zeigt das Ergebnis nach Rücksprung. */}
-      <section style={{ ...grantBoxStyle, background: "#f5f3ff", borderColor: "#c4b5fd" }}>
-        <h2 style={{ fontSize: 14, margin: "0 0 4px", color: "#5b21b6", fontWeight: 700 }}>
-          Currency + Land aus Stripe nachziehen (Backfill)
-        </h2>
-        <p style={{ fontSize: 12, color: "#5b21b6", margin: "0 0 12px" }}>
-          Lädt für alle bestehenden Käufer:innen ohne <code>currency</code>/
-          <code>country</code> die Stripe Checkout Session und füllt die
-          fehlenden Felder (EUR/USD + Billing-Land). Pro- und Beta-Tabelle.
-          Idempotent — überschreibt nichts, was schon gesetzt ist.{" "}
-          {(() => {
-            const bf = Array.isArray(sp.backfill) ? sp.backfill[0] : sp.backfill;
-            if (bf !== "ok") return null;
-            const pro = Array.isArray(sp.pro) ? sp.pro[0] : sp.pro;
-            const beta = Array.isArray(sp.beta) ? sp.beta[0] : sp.beta;
-            const skipped = Array.isArray(sp.skipped) ? sp.skipped[0] : sp.skipped;
-            const errors = Array.isArray(sp.errors) ? sp.errors[0] : sp.errors;
-            return (
-              <strong style={{ color: "#065f46" }}>
-                ✓ Letzter Lauf: Pro {pro ?? 0} aktualisiert · Beta {beta ?? 0} aktualisiert ·{" "}
-                {skipped ?? 0} übersprungen · {errors ?? 0} Fehler.
-              </strong>
-            );
-          })()}
-        </p>
-        <form action={backfillCurrencyCountryAction}>
-          <button
-            type="submit"
-            style={{
-              ...btnStyle,
-              background: "#7c3aed",
-              borderColor: "#7c3aed",
-              color: "#fff",
-            }}
-          >
-            Backfill jetzt starten
-          </button>
-        </form>
-      </section>
+      {/* Backfill-Button ist nach /admin/settings umgezogen — er wird
+          selten gebraucht und nahm hier nur Platz weg. */}
 
       <UsersTable rows={rows} pageSize={PAGE_SIZE} truncated={rows.length === PAGE_SIZE} />
     </main>
