@@ -31,6 +31,7 @@ import ExportPanel from "@/components/ExportPanel";
 import CgmSettingsCard from "@/components/CgmSettingsCard";
 import NightscoutSettingsCard from "@/components/NightscoutSettingsCard";
 import BottomSheet from "@/components/BottomSheet";
+import AccountSheet from "@/components/AccountSheet";
 import { SettingsSection, SettingsRow, ConnectedDot } from "@/components/SettingsRow";
 import { setLocale, readLocaleCookie, DEFAULT_LOCALE, type Locale } from "@/lib/locale";
 import { useTheme } from "@/components/ThemeProvider";
@@ -93,7 +94,6 @@ function saveSettings(s: Settings) {
 // stay type-checked together. Adding a new row = extend this union and
 // add an entry to `sheetContent` below.
 type SheetKey =
-  | "account"
   | "targetRange"
   | "units"
   | "icr"
@@ -247,6 +247,12 @@ export default function SettingsPage() {
   const [adjustmentHistory, setAdjustmentHistory] = useState<AdjustmentRecord[]>([]);
 
   const [openSheet, setOpenSheet] = useState<SheetKey | null>(null);
+  // Account-Sheet aus dem Header — geteilte Komponente, deshalb
+  // separater State neben `openSheet` (das die Settings-internen
+  // BottomSheets steuert). Sowohl die Header-Avatar-Pille als auch
+  // die "Konto"-Reihe in den Settings öffnen jetzt dieses Sheet,
+  // damit „was du im Header siehst" = „was du in den Settings siehst".
+  const [accountSheetOpen, setAccountSheetOpen] = useState(false);
   // Draft snapshot captured the moment a sheet opens. If the user dismisses
   // the sheet via backdrop / ESC / drag-down without saving, we revert the
   // in-memory state to this snapshot so half-typed values don't leak back
@@ -879,76 +885,6 @@ export default function SettingsPage() {
 
   /* ── sheet content blocks ──────────────────────────────────────── */
   const sheetContent: Record<SheetKey, { title: string; body: ReactNode; footer?: ReactNode }> = {
-    account: {
-      // Re-introduces the profile/stats block (email · sign-up date · total
-      // meals · sign out) that lived on the old tabbed settings page.
-      // Per Task #54 it gets its own dedicated row + sheet so the rest of
-      // the iOS-style list stays focused on per-feature settings.
-      title: tSettings("account_sheet_title"),
-      body: (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {/* Email row — primary identity, shown at top */}
-          <div style={{
-            padding: "12px 14px", borderRadius: 12,
-            background: "var(--surface-soft)", border: `1px solid ${BORDER}`,
-          }}>
-            <div style={{ fontSize: 13, color: "var(--text-faint)", marginBottom: 4 }}>
-              {tSettings("account_email_label")}
-            </div>
-            <div style={{
-              fontSize: 14, fontWeight: 600, color: "var(--text-strong)",
-              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-            }}>
-              {accountEmail || "—"}
-            </div>
-          </div>
-
-          {/* Two stat tiles: sign-up date + total meal count */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <div style={{
-              padding: "12px 14px", borderRadius: 12,
-              background: "var(--surface-soft)", border: `1px solid ${BORDER}`,
-            }}>
-              <div style={{ fontSize: 13, color: "var(--text-faint)", marginBottom: 4 }}>
-                {tSettings("account_member_since_label")}
-              </div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-strong)" }}>
-                {accountCreatedAt || "—"}
-              </div>
-            </div>
-            <div style={{
-              padding: "12px 14px", borderRadius: 12,
-              background: "var(--surface-soft)", border: `1px solid ${BORDER}`,
-            }}>
-              <div style={{ fontSize: 13, color: "var(--text-faint)", marginBottom: 4 }}>
-                {tSettings("account_meals_logged_label")}
-              </div>
-              <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.02em" }}>
-                {accountMealCount}
-              </div>
-            </div>
-          </div>
-
-          {/* Sign-out CTA — destructive styling so it's visually distinct
-              from the neutral info tiles above. */}
-          <button
-            type="button"
-            onClick={handleSignOut}
-            disabled={signingOut}
-            style={{
-              width: "100%", padding: "13px 16px", borderRadius: 12,
-              border: `1px solid ${PINK}40`, background: `${PINK}15`,
-              color: PINK, fontSize: 14, fontWeight: 700,
-              cursor: signingOut ? "wait" : "pointer",
-              marginTop: 4,
-            }}
-          >
-            {signingOut ? tSettings("account_signing_out") : tSettings("account_sign_out")}
-          </button>
-        </div>
-      ),
-      footer: closeFooter,
-    },
     targetRange: {
       title: tSettings("row_target_range"),
       body: (
@@ -1910,7 +1846,7 @@ export default function SettingsPage() {
           label={tSettings("row_account")}
           subtitle={accountEmail || tSettings("account_subtitle_placeholder")}
           ariaLabel={tSettings("row_open_aria", { label: tSettings("row_account") })}
-          onClick={() => openSheetWith("account")}
+          onClick={() => setAccountSheetOpen(true)}
         />
       </SettingsSection>
 
@@ -2143,6 +2079,14 @@ export default function SettingsPage() {
       >
         {active?.body}
       </BottomSheet>
+
+      {/* Geteiltes Konto-Sheet — identisch zu dem aus dem Header-Avatar.
+          Damit sehen Header- und Settings-Klick exakt dasselbe (E-Mail,
+          Mitglied seit, Mahlzeiten, Passwort ändern, Upgrade, Abmelden). */}
+      <AccountSheet
+        open={accountSheetOpen}
+        onClose={() => setAccountSheetOpen(false)}
+      />
     </div>
   );
 }
