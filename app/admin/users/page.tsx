@@ -302,14 +302,15 @@ export default async function AdminUsersPage({
     ? sp.bfy_granted[0]
     : sp.bfy_granted;
   const bfyUntilParam = Array.isArray(sp.until) ? sp.until[0] : sp.until;
+  const bfyNewParam = Array.isArray(sp.new) ? sp.new[0] : sp.new;
   const bfyErrParam = Array.isArray(sp.bfy_err) ? sp.bfy_err[0] : sp.bfy_err;
   const bfyErrMsg =
     bfyErrParam === "email"
       ? "Bitte gültige E-Mail eingeben."
       : bfyErrParam === "lookup"
         ? "User-Suche fehlgeschlagen — bitte später erneut versuchen."
-        : bfyErrParam === "notfound"
-          ? `Kein Account mit ${grantErrEmail ?? "dieser E-Mail"} gefunden. User muss sich erst registriert haben.`
+        : bfyErrParam === "invite"
+          ? `Konnte ${grantErrEmail ?? "User"} nicht neu anlegen — bitte Logs prüfen.`
           : bfyErrParam === "db"
             ? `Datenbank-Fehler beim Beta-Free-Year-Freischalten von ${grantErrEmail ?? "User"}.`
             : null;
@@ -353,6 +354,13 @@ export default async function AdminUsersPage({
           ✓ <strong>{bfyGrantedParam}</strong> wurde ins Beta-Free-Year-Programm
           aufgenommen — Zugang bis <strong>{bfyUntilParam ?? "—"}</strong>,
           Welcome-Mail + Drip (Tag 7/14/30) eingeplant.
+          {bfyNewParam ? (
+            <>
+              {" "}<strong>Neuer Account angelegt</strong> — die Welcome-Mail
+              enthält einen Login-Link, der zur Account-Einrichtung
+              (Name + Passwort) führt.
+            </>
+          ) : null}
         </p>
       ) : null}
       {bfyErrMsg ? <p style={errStyle}>{bfyErrMsg}</p> : null}
@@ -418,8 +426,10 @@ export default async function AdminUsersPage({
         <p style={{ fontSize: 12, color: "#065f46", margin: "0 0 12px" }}>
           1 Jahr kostenloser Beta-Zugang. Sendet Welcome-Mail mit explizitem
           End-Datum und plant die Onboarding-Drip-Sequenz (Tag 7/14/30) ein.
-          User muss bereits registriert sein. Idempotent — zweimal klicken
-          schadet nicht.
+          Funktioniert auch für noch <strong>nicht registrierte</strong> User
+          — dann legen wir den Account stumm an, die Welcome-Mail enthält
+          einen Login-Link, und auf <code>/welcome/beta</code> setzt
+          die Person Name + Passwort. Idempotent — zweimal klicken schadet nicht.
         </p>
         <form
           action={grantBetaFreeYearAction}
@@ -435,13 +445,19 @@ export default async function AdminUsersPage({
             name="email"
             required
             placeholder="user@example.com"
-            style={{ ...inputStyle, flex: "1 1 240px", minWidth: 200 }}
+            style={{ ...inputStyle, flex: "1 1 220px", minWidth: 200 }}
+          />
+          <input
+            type="text"
+            name="fullName"
+            placeholder="Name (optional, sonst fragen wir bei Signup)"
+            style={{ ...inputStyle, flex: "1 1 220px", minWidth: 180 }}
           />
           <input
             type="text"
             name="note"
             placeholder='Notiz (optional, default: "Beta-Free-Year-Programm")'
-            style={{ ...inputStyle, flex: "1 1 280px", minWidth: 200 }}
+            style={{ ...inputStyle, flex: "1 1 220px", minWidth: 180 }}
           />
           <button type="submit" style={bfyBtnStyle}>
             1 Jahr freischalten + Welcome

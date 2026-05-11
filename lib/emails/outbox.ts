@@ -138,12 +138,20 @@ export interface ProWelcomePayload {
  * Beta-Free-Year welcome — admin-granted 1-year free Beta. No Stripe
  * involvement, so no sessionId. `expiresAt` is required so the email
  * can state the explicit end date.
+ *
+ * `signupUrl` is set ONLY when the admin invited a brand-new user (the
+ * email landed on someone who didn't exist yet). It carries the
+ * Supabase-generated invite/magic action_link that establishes a
+ * session on /welcome/beta where the recipient sets their name +
+ * password. For existing users it stays unset and the CTA points at
+ * /dashboard like before.
  */
 export interface BetaFreeYearWelcomePayload {
   name?: string | null;
   appUrl?: string | null;
   expiresAt: string;
   locale?: EmailLocale;
+  signupUrl?: string | null;
 }
 
 export type EmailPayload =
@@ -219,6 +227,7 @@ function renderTemplate(template: EmailTemplate, payload: EmailPayload): Rendere
           p.appUrl ?? null,
           p.expiresAt,
           locale,
+          p.signupUrl ?? null,
         ),
       };
     }

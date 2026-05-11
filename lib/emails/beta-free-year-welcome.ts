@@ -2,11 +2,15 @@
  * Welcome email for the "Beta Free Year" program — friends-and-family
  * style 1-year free Beta access granted via /admin/users (no Stripe).
  *
- * Differences vs. beta-welcome.ts:
- *   - No "complete checkout" CTA (the user is already a registered
- *     account — admin granted access on top).
- *   - States the explicit access end date so expectations are clear.
- *   - Same brand styling so it feels like part of the Glev family.
+ * Two flavours, picked by whether `signupUrl` is set:
+ *   - Existing user (signupUrl=null): CTA → /dashboard, copy says
+ *     "Du bist startklar". Same as before.
+ *   - Brand-new user (signupUrl=Supabase invite link): CTA → that
+ *     invite link, copy says "Account in 30 Sekunden einrichten" and
+ *     the recipient lands on /welcome/beta to pick name + password.
+ *
+ * Same brand styling in both flavours so it feels like part of the
+ * Glev family.
  *
  * @param name      Display name (optional). First token used for greeting.
  * @param appUrl    Public app origin without trailing slash. Falls back
@@ -14,6 +18,8 @@
  * @param expiresAt ISO timestamp when access ends. Required — the whole
  *                  point of this template is communicating the end date.
  * @param locale    'de' (default) or 'en'.
+ * @param signupUrl Optional Supabase invite/magic link. When set the
+ *                  CTA points here instead of /dashboard.
  */
 import type { EmailLocale } from "@/lib/emails/beta-welcome";
 
@@ -22,14 +28,17 @@ export function betaFreeYearWelcomeHtml(
   appUrl: string | null | undefined,
   expiresAt: string,
   locale: EmailLocale = "de",
+  signupUrl: string | null = null,
 ): string {
   const first = firstNameFrom(name);
   const baseUrl = (appUrl || "https://glev.app").replace(/\/$/, "");
   const dashboardUrl = `${baseUrl}/dashboard`;
   const endDate = formatDate(expiresAt, locale);
+  const ctaUrl = signupUrl || dashboardUrl;
+  const isInvite = Boolean(signupUrl);
 
-  if (locale === "en") return htmlEn(first, dashboardUrl, baseUrl, endDate);
-  return htmlDe(first, dashboardUrl, baseUrl, endDate);
+  if (locale === "en") return htmlEn(first, ctaUrl, baseUrl, endDate, isInvite);
+  return htmlDe(first, ctaUrl, baseUrl, endDate, isInvite);
 }
 
 export function betaFreeYearWelcomeSubject(
@@ -49,11 +58,16 @@ export function betaFreeYearWelcomeSubject(
 
 function htmlDe(
   first: string | null,
-  dashboardUrl: string,
+  ctaUrl: string,
   baseUrl: string,
   endDate: string,
+  isInvite: boolean,
 ): string {
   const greeting = first ? `Hallo ${first}` : "Hallo";
+  const ctaLabel = isInvite ? "Account einrichten →" : "Zum Dashboard →";
+  const explainerLine = isInvite
+    ? `Klick auf den Button unten — du landest auf einer kurzen Seite, wo du deinen Namen wählst und ein Passwort setzt. Dauert 30 Sekunden.`
+    : `Falls du noch keinen Account hast: registriere dich einfach mit dieser E-Mail-Adresse auf <a href="${baseUrl}" style="color:#5b6cff;">glev.app</a> — wir erkennen dich automatisch und schalten den Zugang frei.`;
   return `<!DOCTYPE html>
 <html lang="de">
 <head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
@@ -74,12 +88,12 @@ function htmlDe(
       Dein Beta-Zugang läuft bis zum <strong>${endDate}</strong>. Bis dahin hast du vollen Zugriff auf alle Beta-Funktionen.
     </p>
     <table cellpadding="0" cellspacing="0" style="margin:24px 0;"><tr><td>
-      <a href="${dashboardUrl}" style="display:inline-block;background:#5b6cff;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:600;font-size:16px;">
-        Zum Dashboard →
+      <a href="${ctaUrl}" style="display:inline-block;background:#5b6cff;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:600;font-size:16px;">
+        ${ctaLabel}
       </a>
     </td></tr></table>
     <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#64748b;">
-      Falls du noch keinen Account hast: registriere dich einfach mit dieser E-Mail-Adresse auf <a href="${baseUrl}" style="color:#5b6cff;">glev.app</a> — wir erkennen dich automatisch und schalten den Zugang frei.
+      ${explainerLine}
     </p>
     <p style="margin:24px 0 0;font-size:14px;line-height:1.6;color:#64748b;">
       Bei Fragen einfach auf diese Mail antworten — wir lesen jede einzelne.
@@ -96,11 +110,16 @@ function htmlDe(
 
 function htmlEn(
   first: string | null,
-  dashboardUrl: string,
+  ctaUrl: string,
   baseUrl: string,
   endDate: string,
+  isInvite: boolean,
 ): string {
   const greeting = first ? `Hi ${first}` : "Hi";
+  const ctaLabel = isInvite ? "Set up your account →" : "Open dashboard →";
+  const explainerLine = isInvite
+    ? `Click the button below — you'll land on a short page where you pick your name and a password. Takes 30 seconds.`
+    : `No account yet? Sign up with this email address at <a href="${baseUrl}" style="color:#5b6cff;">glev.app</a> — we'll recognize you and unlock access automatically.`;
   return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
@@ -121,12 +140,12 @@ function htmlEn(
       Your Beta access is valid until <strong>${endDate}</strong>. Until then, you have full access to every Beta feature.
     </p>
     <table cellpadding="0" cellspacing="0" style="margin:24px 0;"><tr><td>
-      <a href="${dashboardUrl}" style="display:inline-block;background:#5b6cff;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:600;font-size:16px;">
-        Open dashboard →
+      <a href="${ctaUrl}" style="display:inline-block;background:#5b6cff;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:600;font-size:16px;">
+        ${ctaLabel}
       </a>
     </td></tr></table>
     <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#64748b;">
-      No account yet? Sign up with this email address at <a href="${baseUrl}" style="color:#5b6cff;">glev.app</a> — we'll recognize you and unlock access automatically.
+      ${explainerLine}
     </p>
     <p style="margin:24px 0 0;font-size:14px;line-height:1.6;color:#64748b;">
       Any questions? Just reply to this email — we read every single one.

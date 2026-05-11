@@ -203,12 +203,21 @@ export async function grantBetaFreeYearAction(formData: FormData): Promise<void>
   const adminToken = await requireAdminToken();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const note = String(formData.get("note") ?? "").trim() || "Beta-Free-Year-Programm";
+  // Optionaler Name aus dem Admin-Block — wird (a) als profiles.display_name
+  // gesetzt UND (b) als user_metadata.full_name in den Supabase-Invite
+  // mitgegeben, sodass die Begrüßung in der Welcome-Mail den richtigen
+  // Vornamen nutzt. Wenn leer, fragt die /welcome/beta-Maske den Namen
+  // beim Signup ab (Pflichtfeld), weil das Onboarding ihn aktuell nicht
+  // erfasst — siehe Q&A im Admin-UI-Hilfetext.
+  const fullNameFromForm = String(formData.get("fullName") ?? "").trim() || null;
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     redirect("/admin/users?bfy_err=email");
   }
 
   const sb = getSupabaseAdmin();
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "")
+    || "https://glev.app";
 
   // User in auth.users finden — gleiche Pagination-Strategie wie
   // grantPlanByEmailAction (Supabase-Admin-SDK hat keinen getByEmail).
@@ -229,15 +238,62 @@ export async function grantBetaFreeYearAction(formData: FormData): Promise<void>
     redirect("/admin/users?bfy_err=lookup");
   }
 
+  // Wenn kein User existiert → Friends-&-Family-Invite-Pfad: wir legen
+  // den Account stumm an (createUser, email_confirm=true, kein Passwort)
+  // und erzeugen einen magic-Login-Link via generateLink. Den Link
+  // kleben wir in unsere eigene Welcome-Mail (statt Supabase die generic
+  // "You've been invited" Mail rauspusten zu lassen). Der Empfänger
+  // klickt → /welcome/beta etabliert Session → Maske fragt Name + Passwort.
+  let userId: string;
+  let signupUrl: string | null = null;
+  let isNewUser = false;
   if (!found) {
-    redirect(
-      `/admin/users?bfy_err=notfound&email=${encodeURIComponent(email)}`,
-    );
+    isNewUser = true;
+    try {
+      const { data: created, error: createErr } = await sb.auth.admin.createUser({
+        email,
+        email_confirm: true,
+        user_metadata: fullNameFromForm ? { full_name: fullNameFromForm } : {},
+      });
+      if (createErr || !created?.user?.id) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          "[admin/users/betaFreeYear] createUser failed:",
+          createErr?.message,
+        );
+        redirect(`/admin/users?bfy_err=invite&email=${encodeURIComponent(email)}`);
+      }
+      userId = created.user.id;
+
+      const { data: linkData, error: linkErr } = await sb.auth.admin.generateLink({
+        type: "magiclink",
+        email,
+        options: { redirectTo: `${appUrl}/welcome/beta` },
+      });
+      if (linkErr || !linkData?.properties?.action_link) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          "[admin/users/betaFreeYear] generateLink failed:",
+          linkErr?.message,
+        );
+        // User ist angelegt — wir lassen sie ohne Signup-URL durchlaufen
+        // (Welcome-Mail kommt mit /dashboard-CTA, dort kann der User per
+        // "Passwort vergessen" aufs Konto kommen). Best-effort.
+      } else {
+        signupUrl = linkData.properties.action_link;
+      }
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn("[admin/users/betaFreeYear] new-user setup failed:", e);
+      redirect(`/admin/users?bfy_err=invite&email=${encodeURIComponent(email)}`);
+    }
+  } else {
+    userId = found.id;
   }
-  const userId = found.id;
 
   // Profil holen (Sprache + Anzeige-Name für Mail), inklusive Vorzustand
-  // für den Audit-Log.
+  // für den Audit-Log. Bei brand-neuen Usern existiert die Zeile evtl.
+  // schon (auth-Trigger) — sonst greift unten der Upsert.
   const { data: before } = await sb
     .from("profiles")
     .select(
@@ -261,18 +317,31 @@ export async function grantBetaFreeYearAction(formData: FormData): Promise<void>
     Date.now() + BETA_FREE_YEAR_DAYS * 24 * 60 * 60 * 1000,
   ).toISOString();
 
-  const { error: updErr } = await sb
-    .from("profiles")
-    .update({
-      manual_plan_override: "beta",
-      manual_plan_expires_at: expiresAt,
-      manual_plan_note: note,
-      manual_plan_set_at: new Date().toISOString(),
-    })
-    .eq("user_id", userId);
+  // Effektiver Name: Form-Eingabe hat Vorrang vor existierendem Profil-
+  // Eintrag (Operator hat ihn gerade explizit eingegeben), sonst was
+  // schon im Profil steht.
+  const effectiveDisplayName = fullNameFromForm ?? beforeRow?.display_name ?? null;
 
-  if (updErr) {
-    if (isSchemaMissingError(updErr)) {
+  // Bei brand-neuen Usern müssen wir UPSERTEN (Profile-Zeile existiert
+  // evtl. noch nicht), bei existierenden reicht UPDATE.
+  const planPatch: Record<string, unknown> = {
+    manual_plan_override: "beta",
+    manual_plan_expires_at: expiresAt,
+    manual_plan_note: note,
+    manual_plan_set_at: new Date().toISOString(),
+  };
+  if (fullNameFromForm) {
+    planPatch.display_name = fullNameFromForm;
+  }
+  const updRes = isNewUser
+    ? await sb.from("profiles").upsert(
+        { user_id: userId, language: "de", created_by_admin: true, ...planPatch },
+        { onConflict: "user_id" },
+      )
+    : await sb.from("profiles").update(planPatch).eq("user_id", userId);
+
+  if (updRes.error) {
+    if (isSchemaMissingError(updRes.error)) {
       redirect(`/admin/users/${userId}?err=migration`);
     }
     redirect(`/admin/users?bfy_err=db&email=${encodeURIComponent(email)}`);
@@ -281,9 +350,7 @@ export async function grantBetaFreeYearAction(formData: FormData): Promise<void>
   // Sprache fürs Mailing — Profil ist die Quelle der Wahrheit, default
   // ist Deutsch (matches app-weiter Default).
   const locale: EmailLocale = beforeRow?.language === "en" ? "en" : "de";
-  const displayName = beforeRow?.display_name ?? null;
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "")
-    || "https://glev.app";
+  const displayName = effectiveDisplayName;
 
   // Welcome-Mail in die Outbox. Dedupe-Key bindet an User-ID + „bfy" —
   // wenn der Operator versehentlich zweimal klickt, bekommt der User
@@ -299,6 +366,7 @@ export async function grantBetaFreeYearAction(formData: FormData): Promise<void>
         appUrl,
         expiresAt,
         locale,
+        signupUrl,
       },
       dedupeKey: `bfy:${userId}`,
     });
@@ -337,7 +405,7 @@ export async function grantBetaFreeYearAction(formData: FormData): Promise<void>
 
   revalidateUserPaths(userId);
   redirect(
-    `/admin/users?bfy_granted=${encodeURIComponent(email)}&until=${encodeURIComponent(expiresAt.slice(0, 10))}`,
+    `/admin/users?bfy_granted=${encodeURIComponent(email)}&until=${encodeURIComponent(expiresAt.slice(0, 10))}${isNewUser ? "&new=1" : ""}`,
   );
 }
 

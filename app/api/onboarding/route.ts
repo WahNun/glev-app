@@ -68,6 +68,32 @@ export async function POST(req: NextRequest) {
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     const action = typeof body.action === "string" ? body.action : "";
 
+    // ── action: "display_name" ────────────────────────────────────
+    // Setzt profiles.display_name. Genutzt von /welcome/beta (BFY-Invite-
+    // Flow), wo der frisch eingeladene User seinen Namen wählt — das
+    // Onboarding fragt ihn aktuell nicht ab, also ist diese Maske unsere
+    // einzige strukturierte Stelle, ihn zu erfassen. Validiert: 2-80
+    // Zeichen, getrimmt.
+    if (action === "display_name") {
+      const raw = typeof body.display_name === "string" ? body.display_name.trim() : "";
+      if (raw.length < 2 || raw.length > 80) {
+        return NextResponse.json(
+          { error: "invalid display_name — expected 2-80 chars after trimming" },
+          { status: 400 },
+        );
+      }
+      const { error: dbErr } = await auth.sb
+        .from("profiles")
+        .update({ display_name: raw })
+        .eq("user_id", auth.user.id);
+      if (dbErr) {
+        // eslint-disable-next-line no-console
+        console.error("[onboarding POST display_name] db error:", dbErr.code, dbErr.message);
+        return NextResponse.json({ error: dbErr.message }, { status: 500 });
+      }
+      return NextResponse.json({ ok: true, action });
+    }
+
     // ── action: "profile" ─────────────────────────────────────────
     // Mandatory: sex + birth_year. Optional: height_cm, weight_kg.
     // Out-of-range or missing mandatory fields return 400 so the
@@ -129,7 +155,7 @@ export async function POST(req: NextRequest) {
     let timestamp: string | null;
     if (action === "complete")    timestamp = new Date().toISOString();
     else if (action === "reset")  timestamp = null;
-    else return NextResponse.json({ error: "invalid action — expected 'complete' | 'reset' | 'profile'" }, { status: 400 });
+    else return NextResponse.json({ error: "invalid action — expected 'complete' | 'reset' | 'profile' | 'display_name'" }, { status: 400 });
 
     // profiles is keyed on user_id (FK to auth.users.id), not id —
     // see supabase/migrations/20260427_add_junction_user_id.sql.

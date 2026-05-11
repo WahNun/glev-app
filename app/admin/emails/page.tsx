@@ -5,6 +5,10 @@ import {
 } from "@/lib/emails/beta-welcome";
 import { proWelcomeHtml, proWelcomeSubject } from "@/lib/emails/pro-welcome";
 import {
+  betaFreeYearWelcomeHtml,
+  betaFreeYearWelcomeSubject,
+} from "@/lib/emails/beta-free-year-welcome";
+import {
   day7InsightsEmail,
   day14FeedbackEmail,
   day30TrustpilotEmail,
@@ -62,6 +66,17 @@ function buildTemplates(
 
   const isEn = locale === "en";
 
+  // Beta-Free-Year: in echt setzen wir das End-Datum auf heute + 365.
+  // Für die Vorschau zeigen wir denselben Zeitraum, damit Lucas das
+  // formatierte Datum genauso sieht wie ein echter Empfänger.
+  const bfyExpiresAt = new Date(
+    Date.now() + 365 * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  // Ein realistischer Beispiel-Login-Link für die Invite-Variante. Geht
+  // nirgends hin (Demo-Token), aber zeigt dem Operator wie der CTA-Link
+  // im echten Empfänger-Posteingang aussieht.
+  const bfySignupUrl = `${appUrl}/welcome/beta#access_token=demo_preview_only&type=magiclink`;
+
   return [
     {
       key: "beta-welcome",
@@ -80,6 +95,28 @@ function buildTemplates(
         : "Sofort nach Anlage des Pro-Abos via Stripe-Checkout",
       subject: proWelcomeSubject(name, locale),
       html: proWelcomeHtml(name, DEFAULT_SESSION_ID, appUrl, null, locale),
+    },
+    {
+      key: "beta-free-year-welcome-existing",
+      label: isEn
+        ? "Beta-Free-Year — Welcome (existing user)"
+        : "Beta-Free-Year — Welcome (bestehender User)",
+      whenSent: isEn
+        ? "Admin grants 1 free Beta year via /admin/users — recipient already has an account"
+        : "Admin schaltet 1 Jahr Beta via /admin/users frei — Empfänger:in hat bereits einen Account",
+      subject: betaFreeYearWelcomeSubject(name, locale),
+      html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, null),
+    },
+    {
+      key: "beta-free-year-welcome-invite",
+      label: isEn
+        ? "Beta-Free-Year — Welcome (new user invite)"
+        : "Beta-Free-Year — Welcome (neuer User, Invite)",
+      whenSent: isEn
+        ? "Admin grants 1 free Beta year via /admin/users — recipient is brand-new, gets login link to /welcome/beta"
+        : "Admin schaltet 1 Jahr Beta via /admin/users frei — neuer User, kriegt Login-Link auf /welcome/beta",
+      subject: betaFreeYearWelcomeSubject(name, locale),
+      html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, bfySignupUrl),
     },
     {
       key: "drip-day7",
