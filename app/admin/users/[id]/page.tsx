@@ -11,10 +11,14 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminUserDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
+  const errParam = Array.isArray(sp.err) ? sp.err[0] : sp.err;
   const authed = await isAdminAuthed();
   if (!authed) {
     return (
@@ -128,6 +132,42 @@ export default async function AdminUserDetailPage({
       <p style={{ color: "#666", fontSize: 14, margin: "0 0 24px" }}>
         E-Mail: <code>{authUser.email ?? "—"}</code> · ID: <code>{id}</code>
       </p>
+
+      {errParam === "migration" || errParam === "migration_partial" ? (
+        <div style={migrationBannerStyle}>
+          <strong style={{ display: "block", marginBottom: 6 }}>
+            Diese Aktion benötigt eine Datenbank-Migration, die in dieser
+            Umgebung noch nicht angewendet ist.
+          </strong>
+          {errParam === "migration_partial" ? (
+            <p style={{ margin: "0 0 8px" }}>
+              Der User wurde angelegt, aber der Profile-Patch (manueller
+              Plan / „Admin-angelegt"-Flag) konnte nicht geschrieben werden.
+            </p>
+          ) : null}
+          <p style={{ margin: "0 0 8px" }}>
+            Bitte gegen Production-Supabase ausführen (idempotent, kann
+            mehrfach laufen):
+          </p>
+          <code
+            style={{
+              display: "block",
+              background: "#fff8e1",
+              padding: "8px 10px",
+              borderRadius: 4,
+              fontSize: 12,
+              wordBreak: "break-all",
+              border: "1px solid #fde68a",
+            }}
+          >
+            node scripts/apply-migration.mjs
+            supabase/migrations/20260510_add_admin_user_management.sql
+          </code>
+          <p style={{ margin: "8px 0 0", fontSize: 12, color: "#92400e" }}>
+            Danach Seite neu laden — die Aktion ist dann verfügbar.
+          </p>
+        </div>
+      ) : null}
 
       {/* Block 1 — Stammdaten */}
       <Section title="Stammdaten">
@@ -323,4 +363,13 @@ const badgeInfo: React.CSSProperties = {
   padding: "3px 8px",
   borderRadius: 4,
   fontWeight: 600,
+};
+const migrationBannerStyle: React.CSSProperties = {
+  background: "#fffbeb",
+  border: "1px solid #fcd34d",
+  color: "#78350f",
+  padding: "12px 14px",
+  borderRadius: 8,
+  fontSize: 14,
+  marginBottom: 20,
 };

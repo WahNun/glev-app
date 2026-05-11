@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { timingSafeEqual } from "node:crypto";
 
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { writeAuditLog } from "@/lib/admin/audit";
+import { writeAuditLog, isSchemaMissingError } from "@/lib/admin/audit";
 
 /**
  * Server actions for /admin/users (Stages 1-3).
@@ -138,7 +138,12 @@ export async function setManualPlanAction(formData: FormData): Promise<void> {
     })
     .eq("user_id", userId);
 
-  if (error) throw new Error("supabase: " + error.message);
+  if (error) {
+    if (isSchemaMissingError(error)) {
+      redirect(`/admin/users/${userId}?err=migration`);
+    }
+    throw new Error("supabase: " + error.message);
+  }
 
   await writeAuditLog({
     action: "set_manual_plan",
@@ -173,7 +178,12 @@ export async function clearManualPlanAction(formData: FormData): Promise<void> {
     })
     .eq("user_id", userId);
 
-  if (error) throw new Error("supabase: " + error.message);
+  if (error) {
+    if (isSchemaMissingError(error)) {
+      redirect(`/admin/users/${userId}?err=migration`);
+    }
+    throw new Error("supabase: " + error.message);
+  }
 
   await writeAuditLog({
     action: "clear_manual_plan",
@@ -271,10 +281,15 @@ export async function softDeleteAction(formData: FormData): Promise<void> {
   });
   if (banErr) throw new Error("auth: " + banErr.message);
 
-  await sb
+  const { error: softErr } = await sb
     .from("profiles")
     .update({ deleted_at: new Date().toISOString() })
     .eq("user_id", userId);
+  if (softErr && isSchemaMissingError(softErr)) {
+    // Spalte deleted_at fehlt — Ban (oben) ist trotzdem schon gesetzt.
+    // Den Operator informieren statt 500 zu werfen.
+    redirect(`/admin/users/${userId}?err=migration`);
+  }
 
   await writeAuditLog({
     action: "soft_delete",
@@ -297,10 +312,13 @@ export async function restoreUserAction(formData: FormData): Promise<void> {
   });
   if (banErr) throw new Error("auth: " + banErr.message);
 
-  await sb
+  const { error: restoreErr } = await sb
     .from("profiles")
     .update({ deleted_at: null })
     .eq("user_id", userId);
+  if (restoreErr && isSchemaMissingError(restoreErr)) {
+    redirect(`/admin/users/${userId}?err=migration`);
+  }
 
   await writeAuditLog({
     action: "restore_user",
@@ -427,6 +445,12 @@ export async function createUserAction(formData: FormData): Promise<void> {
     .from("profiles")
     .upsert(profilePatch, { onConflict: "user_id" });
   if (profErr) {
+    if (isSchemaMissingError(profErr)) {
+      // User wurde in auth.users angelegt, aber Profile-Patch (mit
+      // created_by_admin / manual_plan_*) ist gescheitert weil Migration
+      // fehlt. User ist nutzbar, nur ohne diese Marker.
+      redirect(`/admin/users/${userId}?err=migration_partial`);
+    }
     // eslint-disable-next-line no-console
     console.warn("[admin/users/createUser] profile upsert warning:", profErr.message);
   }
