@@ -102,15 +102,19 @@ export default async function AdminUsersPage({
     userIds.length
       ? sb
           .from("profiles")
-          // `subscription_status` ist eine Legacy-Spalte (Migration
-          // 20260510_add_admin_user_management.sql fügt sie hinzu, ist
-          // aber in vielen Umgebungen noch nicht angewendet) und nur
-          // 4. Fallback in computeEffectivePlan. Da wir jetzt zusätzlich
-          // pro_subscriptions + beta_reservations als verlässliche
-          // Quelle joinen, lassen wir sie hier raus → der "column
-          // does not exist"-Banner verschwindet ohne Funktionsverlust.
+          // Wir selectieren bewusst NUR Spalten, die im Basis-Schema
+          // garantiert existieren. Die Felder aus
+          // 20260510_add_admin_user_management.sql
+          // (manual_plan_override, manual_plan_note, manual_plan_set_at,
+          // deleted_at, created_by_admin) und das Legacy-Feld
+          // subscription_status sind in vielen Umgebungen noch nicht
+          // migriert — wenn auch nur eine davon fehlt, schlägt der
+          // ganze SELECT fehl und blendet den roten Banner ein.
+          // Sobald die Migration läuft, kann man die Spalten hier
+          // wieder ergänzen (siehe unten den row-Mapper, der schon
+          // mit den optionalen Feldern umgehen kann).
           .select(
-            "user_id, display_name, role, language, plan, manual_plan_override, manual_plan_note, deleted_at, created_by_admin, cgm_connected, cgm_source, nightscout_url",
+            "user_id, display_name, role, language, plan, cgm_connected, cgm_source, nightscout_url",
           )
           .in("user_id", userIds)
       : Promise.resolve({ data: [], error: null }),
@@ -139,10 +143,6 @@ export default async function AdminUsersPage({
     role: string | null;
     language: string | null;
     plan: string | null;
-    manual_plan_override: string | null;
-    manual_plan_note: string | null;
-    deleted_at: string | null;
-    created_by_admin: boolean | null;
     cgm_connected: boolean | null;
     cgm_source: string | null;
     nightscout_url: string | null;
@@ -176,7 +176,6 @@ export default async function AdminUsersPage({
     const pro = proByEmail.get(email);
     const beta = betaByEmail.get(email);
     const effective = computeEffectivePlan({
-      manual_plan_override: p?.manual_plan_override,
       plan: p?.plan,
     });
     let cgmKind: "none" | "llu" | "nightscout" | "applehealth" | "junction" = "none";
@@ -196,10 +195,13 @@ export default async function AdminUsersPage({
       email_confirmed_at: u.email_confirmed_at ?? null,
       banned_until: u.banned_until ?? null,
       plan: effective,
-      manual_plan_override: p?.manual_plan_override ?? null,
-      manual_plan_note: p?.manual_plan_note ?? null,
-      deleted_at: p?.deleted_at ?? null,
-      created_by_admin: !!p?.created_by_admin,
+      // Diese vier Felder kommen aus
+      // 20260510_add_admin_user_management.sql und sind bis zur
+      // Migration nicht verfügbar → safe defaults.
+      manual_plan_override: null,
+      manual_plan_note: null,
+      deleted_at: null,
+      created_by_admin: false,
       cgm: cgmKind,
       pro_status: pro?.status ?? null,
       trial_ends_at: pro?.trial_ends_at ?? null,
