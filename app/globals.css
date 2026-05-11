@@ -111,6 +111,12 @@ html, body {
      still allowing taps and scrolling. */
   touch-action: manipulation;
   -webkit-text-size-adjust: 100%;
+  /* Safety-net against any single oversized child (hero phone frame
+     with shadow, long unbreakable strings, etc.) pushing the page
+     wider than the viewport — caused content on iPhone 13 mini to
+     appear off-center with the right card border clipped. */
+  max-width: 100vw;
+  overflow-x: hidden;
 }
 
 /* Brand spec: Inter Bold (Hero, Headlines, Logo Wordmark) uses -0.03em

@@ -113,6 +113,13 @@ export default function PreviewHome() {
           .glev-feat-grid { grid-template-columns: 1fr; }
           .glev-h1 { font-size: clamp(40px, 11vw, 64px) !important; }
         }
+        /* iPhone 13 mini (375px) and similar narrow viewports: tighten
+           the section gutter so the 320px hero phone frame plus its
+           drop-shadow fits without forcing a horizontal scroll, and so
+           the pricing cards have a visible right border. */
+        @media (max-width: 420px) {
+          .glev-section-mobile-tight { padding-left: 16px !important; padding-right: 16px !important; }
+        }
       `}</style>
 
       {/* TOP NAV */}
@@ -179,6 +186,7 @@ export default function PreviewHome() {
 
       {/* HERO */}
       <section
+        className="glev-section-mobile-tight"
         style={{
           position: "relative",
           zIndex: 1,
