@@ -98,7 +98,7 @@ export default async function AdminUsersPage({
 
   const userIds = authUsers.map((u) => u.id);
 
-  const [profilesRes, cgmRes, proRes] = await Promise.all([
+  const [profilesRes, cgmRes, proRes, betaRes] = await Promise.all([
     userIds.length
       ? sb
           .from("profiles")
@@ -113,6 +113,15 @@ export default async function AdminUsersPage({
     sb
       .from("pro_subscriptions")
       .select("email, status, trial_ends_at, current_period_end")
+      .order("created_at", { ascending: false })
+      .limit(500),
+    // Beta-Käufer:innen separat laden — `profiles.subscription_status` ist
+    // noch nicht überall migriert, daher wäre `computeEffectivePlan`
+    // alleine unzuverlässig für Beta-Erkennung. Source of truth ist die
+    // beta_reservations-Tabelle (status='fulfilled' = bezahlt + freigeschaltet).
+    sb
+      .from("beta_reservations")
+      .select("email, status, created_at")
       .order("created_at", { ascending: false })
       .limit(500),
   ]);
@@ -139,19 +148,27 @@ export default async function AdminUsersPage({
     trial_ends_at: string | null;
     current_period_end: string | null;
   };
+  type BetaRow = {
+    email: string;
+    status: string | null;
+    created_at: string | null;
+  };
 
   const profiles = (profilesRes.data ?? []) as ProfRow[];
   const cgms = (cgmRes.data ?? []) as CgmRow[];
   const pros = (proRes.data ?? []) as ProSubRow[];
+  const betas = (betaRes.data ?? []) as BetaRow[];
 
   const profileById = new Map(profiles.map((p) => [p.user_id, p]));
   const lluByUser = new Map(cgms.map((c) => [c.user_id, c.llu_email]));
   const proByEmail = new Map(pros.map((p) => [p.email.toLowerCase(), p]));
+  const betaByEmail = new Map(betas.map((b) => [b.email.toLowerCase(), b]));
 
   const rows: UserRow[] = authUsers.map((u) => {
     const p = profileById.get(u.id);
     const email = (u.email ?? "").toLowerCase();
     const pro = proByEmail.get(email);
+    const beta = betaByEmail.get(email);
     const effective = computeEffectivePlan({
       manual_plan_override: p?.manual_plan_override,
       plan: p?.plan,
@@ -181,6 +198,7 @@ export default async function AdminUsersPage({
       cgm: cgmKind,
       pro_status: pro?.status ?? null,
       trial_ends_at: pro?.trial_ends_at ?? null,
+      beta_status: beta?.status ?? null,
     };
   });
 

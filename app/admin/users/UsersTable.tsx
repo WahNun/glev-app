@@ -22,14 +22,16 @@ export type UserRow = {
   cgm: "none" | "llu" | "nightscout" | "applehealth" | "junction";
   pro_status: string | null;
   trial_ends_at: string | null;
+  /** beta_reservations.status — typisch "fulfilled" wenn bezahlt + freigeschaltet, "pending" während Checkout. */
+  beta_status: string | null;
 };
 
 type Filter =
   | "all"
   | "free"
-  | "beta"
+  | "beta_buyer"
   | "pro"
-  | "trial"
+  | "pro_trial"
   | "manual"
   | "deleted"
   | "admin";
@@ -37,13 +39,23 @@ type Filter =
 const FILTERS: ReadonlyArray<{ key: Filter; label: string }> = [
   { key: "all", label: "Alle" },
   { key: "free", label: "Free" },
-  { key: "beta", label: "Beta" },
+  { key: "beta_buyer", label: "Beta-Käufer" },
   { key: "pro", label: "Pro" },
-  { key: "trial", label: "Trial läuft" },
+  { key: "pro_trial", label: "Pro-Trial" },
   { key: "manual", label: "Manuell" },
   { key: "deleted", label: "Gelöscht" },
   { key: "admin", label: "Admins" },
 ];
+
+function isBetaBuyer(r: UserRow): boolean {
+  // Beta gilt als gekauft sobald die Reservation existiert und nicht
+  // explizit storniert/refunded ist. Strikt fulfilled-only wäre zu eng,
+  // weil "pending" Käufer:innen während des Checkouts auch interessant
+  // sind.
+  if (!r.beta_status) return false;
+  const s = r.beta_status.toLowerCase();
+  return s !== "refunded" && s !== "cancelled" && s !== "canceled";
+}
 
 function fmtDate(v: string | null | undefined): string {
   if (!v) return "—";
@@ -92,9 +104,9 @@ export default function UsersTable({
     const needle = q.trim().toLowerCase();
     return rows.filter((r) => {
       if (filter === "free" && r.plan !== "free") return false;
-      if (filter === "beta" && r.plan !== "beta") return false;
+      if (filter === "beta_buyer" && !isBetaBuyer(r)) return false;
       if (filter === "pro" && r.plan !== "pro") return false;
-      if (filter === "trial" && !isTrialActive(r)) return false;
+      if (filter === "pro_trial" && !isTrialActive(r)) return false;
       if (filter === "manual" && !r.manual_plan_override) return false;
       if (filter === "deleted" && !r.deleted_at) return false;
       if (filter === "admin" && r.role !== "admin") return false;
@@ -176,7 +188,14 @@ export default function UsersTable({
               if (r.created_by_admin) flags.push("Admin-angelegt");
               if (r.role === "admin") flags.push("Admin-Rolle");
               if (!r.email_confirmed_at) flags.push("E-Mail unbestätigt");
-              if (isTrialActive(r)) flags.push("Trial");
+              if (isTrialActive(r)) flags.push("Pro-Trial");
+              if (isBetaBuyer(r)) {
+                flags.push(
+                  r.beta_status?.toLowerCase() === "pending"
+                    ? "Beta (pending)"
+                    : "Beta-Käufer",
+                );
+              }
               return (
                 <tr
                   key={r.id}
