@@ -39,7 +39,7 @@ export default function InsightsStep({
 
   return (
     <Shell
-      step={3}
+      step={4}
       onNext={onNext}
       onBack={onBack}
       primaryLabel={t("primary")}

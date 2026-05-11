@@ -36,7 +36,7 @@ export default function EngineStep({
   const bullets = [t("bullet_1"), t("bullet_2"), t("bullet_3")];
 
   return (
-    <Shell step={2} onNext={onNext} onBack={onBack} onSkip={onSkip}>
+    <Shell step={3} onNext={onNext} onBack={onBack} onSkip={onSkip}>
       <div>
         <h1
           style={{

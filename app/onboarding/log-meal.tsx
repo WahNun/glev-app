@@ -37,7 +37,7 @@ export default function LogMealStep({
   ];
 
   return (
-    <Shell step={1} onNext={onNext} onBack={onBack} onSkip={onSkip}>
+    <Shell step={2} onNext={onNext} onBack={onBack} onSkip={onSkip}>
       <div>
         <h1
           style={{

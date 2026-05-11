@@ -9,8 +9,13 @@ import type { User } from "@supabase/supabase-js";
  *
  * POST { action: "complete" } → set profiles.onboarding_completed_at = NOW()
  * POST { action: "reset" }    → set profiles.onboarding_completed_at = NULL
+ * POST { action: "profile", sex, birth_year, height_cm?, weight_kg? }
+ *   → upsert personal-info fields collected on the "About you" step.
+ *     sex + birth_year are mandatory; height/weight are optional and
+ *     null clears the column. Validated server-side; out-of-range
+ *     values return 400.
  *
- * Both actions require an authenticated user; both are idempotent. The
+ * All actions require an authenticated user and are idempotent. The
  * "reset" action is wired to the Settings → "Onboarding wiederholen"
  * row so users who skipped can replay the flow on demand.
  *
@@ -60,13 +65,71 @@ export async function POST(req: NextRequest) {
     const auth = await authedClient(req);
     if (!auth.user) return NextResponse.json({ error: auth.error }, { status: 401 });
 
-    const body = (await req.json().catch(() => ({}))) as { action?: unknown };
+    const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     const action = typeof body.action === "string" ? body.action : "";
+
+    // ── action: "profile" ─────────────────────────────────────────
+    // Mandatory: sex + birth_year. Optional: height_cm, weight_kg.
+    // Out-of-range or missing mandatory fields return 400 so the
+    // onboarding screen can surface a clear inline error.
+    if (action === "profile") {
+      const sex = body.sex;
+      const birthYear = body.birth_year;
+      const heightCm  = body.height_cm;
+      const weightKg  = body.weight_kg;
+
+      if (sex !== "female" && sex !== "male" && sex !== "diverse") {
+        return NextResponse.json(
+          { error: "invalid sex — expected 'female' | 'male' | 'diverse'" },
+          { status: 400 },
+        );
+      }
+      if (typeof birthYear !== "number" || !Number.isInteger(birthYear) ||
+          birthYear < 1900 || birthYear > new Date().getFullYear()) {
+        return NextResponse.json(
+          { error: "invalid birth_year — expected integer between 1900 and current year" },
+          { status: 400 },
+        );
+      }
+      // Height/weight: undefined = don't touch; null = clear; number = set.
+      const update: Record<string, unknown> = {
+        sex,
+        birth_year: birthYear,
+      };
+      if (heightCm !== undefined) {
+        if (heightCm !== null && (typeof heightCm !== "number" || heightCm < 50 || heightCm > 280)) {
+          return NextResponse.json({ error: "invalid height_cm — expected 50-280 or null" }, { status: 400 });
+        }
+        update.height_cm = heightCm;
+      }
+      if (weightKg !== undefined) {
+        if (weightKg !== null && (typeof weightKg !== "number" || weightKg < 20 || weightKg > 400)) {
+          return NextResponse.json({ error: "invalid weight_kg — expected 20-400 or null" }, { status: 400 });
+        }
+        update.weight_kg = weightKg;
+      }
+
+      const { error: dbErr } = await auth.sb
+        .from("profiles")
+        .update(update)
+        .eq("user_id", auth.user.id);
+
+      if (dbErr) {
+        const missingColumn = dbErr.code === "42703" || /column .* does not exist/i.test(dbErr.message ?? "");
+        // eslint-disable-next-line no-console
+        console.error("[onboarding POST profile] db error:", dbErr.code, dbErr.message);
+        return NextResponse.json(
+          { error: dbErr.message },
+          { status: missingColumn ? 503 : 500 },
+        );
+      }
+      return NextResponse.json({ ok: true, action });
+    }
 
     let timestamp: string | null;
     if (action === "complete")    timestamp = new Date().toISOString();
     else if (action === "reset")  timestamp = null;
-    else return NextResponse.json({ error: "invalid action — expected 'complete' or 'reset'" }, { status: 400 });
+    else return NextResponse.json({ error: "invalid action — expected 'complete' | 'reset' | 'profile'" }, { status: 400 });
 
     // profiles is keyed on user_id (FK to auth.users.id), not id —
     // see supabase/migrations/20260427_add_junction_user_id.sql.

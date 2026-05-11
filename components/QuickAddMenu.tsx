@@ -9,6 +9,12 @@ import {
   fetchCycleLoggingEnabled,
   CYCLE_LOGGING_CHANGED_EVENT,
 } from "@/lib/cyclePrefs";
+import {
+  fetchUserProfile,
+  cycleSurfacesAvailable,
+  USER_PROFILE_CHANGED_EVENT,
+  type Sex,
+} from "@/lib/userProfile";
 
 const ACCENT = "#4F6EF7";
 const SHEET_BG = "var(--surface-alt)";
@@ -110,45 +116,55 @@ export default function QuickAddMenu() {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  // "Zyklus loggen" is opt-in (Settings → App → Zyklus-Logging).
-  // Default false so it stays hidden until the user explicitly
-  // enables it. We re-fetch when the menu opens so a toggle change
-  // in another tab is picked up without a page reload, and we also
-  // listen for the in-page broadcast event so the same-tab flow
-  // updates immediately.
+  // "Zyklus loggen" gating is two-stage:
+  //   1. Sex must NOT be 'male' (collected at onboarding). Male users
+  //      never see the cycle row anywhere — Settings or here.
+  //   2. The user must have flipped the opt-in toggle in Settings.
+  // Both fetched once on mount + re-synced when the menu opens, plus
+  // window-event listeners so a change in another part of the UI is
+  // reflected immediately without a reload.
   const [cycleEnabled, setCycleEnabled] = useState(false);
+  const [sex, setSex] = useState<Sex | null>(null);
   useEffect(() => {
     let cancelled = false;
     fetchCycleLoggingEnabled()
       .then((v) => { if (!cancelled) setCycleEnabled(v); })
       .catch(() => {});
-    function onChange(e: Event) {
+    fetchUserProfile()
+      .then((p) => { if (!cancelled) setSex(p.sex); })
+      .catch(() => {});
+    function onCycleChange(e: Event) {
       const ce = e as CustomEvent<boolean>;
       if (typeof ce.detail === "boolean") setCycleEnabled(ce.detail);
     }
+    function onProfileChange() {
+      fetchUserProfile().then((p) => setSex(p.sex)).catch(() => {});
+    }
     if (typeof window !== "undefined") {
-      window.addEventListener(CYCLE_LOGGING_CHANGED_EVENT, onChange);
+      window.addEventListener(CYCLE_LOGGING_CHANGED_EVENT, onCycleChange);
+      window.addEventListener(USER_PROFILE_CHANGED_EVENT, onProfileChange);
     }
     return () => {
       cancelled = true;
       if (typeof window !== "undefined") {
-        window.removeEventListener(CYCLE_LOGGING_CHANGED_EVENT, onChange);
+        window.removeEventListener(CYCLE_LOGGING_CHANGED_EVENT, onCycleChange);
+        window.removeEventListener(USER_PROFILE_CHANGED_EVENT, onProfileChange);
       }
     };
   }, []);
 
-  // Re-sync when the menu is opened so a toggle change made in
-  // another tab/device since first mount is reflected the next
-  // time the user pops the menu.
+  // Re-sync when the menu is opened so changes made in another tab/
+  // device since first mount are reflected the next time the user
+  // pops the menu.
   useEffect(() => {
     if (!open) return;
-    fetchCycleLoggingEnabled()
-      .then(setCycleEnabled)
-      .catch(() => {});
+    fetchCycleLoggingEnabled().then(setCycleEnabled).catch(() => {});
+    fetchUserProfile().then((p) => setSex(p.sex)).catch(() => {});
   }, [open]);
 
+  const cycleVisible = cycleSurfacesAvailable(sex) && cycleEnabled;
   const visibleItems = ITEM_DEFS.filter(
-    (it) => it.key !== "log_cycle" || cycleEnabled,
+    (it) => it.key !== "log_cycle" || cycleVisible,
   );
 
   // pointerdown (not click) so the menu collapses before the next
