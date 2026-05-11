@@ -208,6 +208,20 @@ function renderTemplate(template: EmailTemplate, payload: EmailPayload): Rendere
         ),
       };
     }
+    case "beta-free-year-welcome": {
+      const p = payload as BetaFreeYearWelcomePayload;
+      const locale: EmailLocale = p.locale === "en" ? "en" : "de";
+      return {
+        from: "Glev <info@glev.app>",
+        subject: betaFreeYearWelcomeSubject(p.name ?? null, locale),
+        html: betaFreeYearWelcomeHtml(
+          p.name ?? null,
+          p.appUrl ?? null,
+          p.expiresAt,
+          locale,
+        ),
+      };
+    }
     default: {
       // Compile-time check: if a new template is added to the union
       // and not handled above, this assignment will fail TS.

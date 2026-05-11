@@ -7,6 +7,9 @@ import { timingSafeEqual } from "node:crypto";
 
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { writeAuditLog, isSchemaMissingError } from "@/lib/admin/audit";
+import { enqueueEmail } from "@/lib/emails/outbox";
+import { scheduleDripEmails } from "@/lib/emails/drip-scheduler";
+import type { EmailLocale } from "@/lib/emails/beta-welcome";
 
 /**
  * Server actions for /admin/users (Stages 1-3).
@@ -181,6 +184,160 @@ export async function grantPlanByEmailAction(formData: FormData): Promise<void> 
   revalidateUserPaths(userId);
   redirect(
     `/admin/users?granted=${encodeURIComponent(email)}&plan=${plan}`,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Beta-Free-Year-Programm: 1 Jahr kostenloser Beta-Zugang als Friends-&-
+// Family-Geschenk. Wie Quick-Grant, plus:
+//   - manual_plan_expires_at = jetzt + 1 Jahr (Override läuft automatisch
+//     ab — siehe computeEffectivePlan)
+//   - Welcome-Mail mit explizitem End-Datum geht in die Outbox
+//   - User wird in den Standard-Drip eingeplant (Tag 7/14/30) — gleicher
+//     Onboarding-Touch wie Beta-Käufer:innen
+// ---------------------------------------------------------------------------
+
+const BETA_FREE_YEAR_DAYS = 365;
+
+export async function grantBetaFreeYearAction(formData: FormData): Promise<void> {
+  const adminToken = await requireAdminToken();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const note = String(formData.get("note") ?? "").trim() || "Beta-Free-Year-Programm";
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    redirect("/admin/users?bfy_err=email");
+  }
+
+  const sb = getSupabaseAdmin();
+
+  // User in auth.users finden — gleiche Pagination-Strategie wie
+  // grantPlanByEmailAction (Supabase-Admin-SDK hat keinen getByEmail).
+  let found: { id: string; email?: string } | null = null;
+  try {
+    const { data, error } = await sb.auth.admin.listUsers({
+      page: 1,
+      perPage: 1000,
+    });
+    if (error) throw error;
+    found =
+      (data?.users ?? []).find(
+        (u) => (u.email ?? "").toLowerCase() === email,
+      ) ?? null;
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn("[admin/users/betaFreeYear] listUsers failed:", e);
+    redirect("/admin/users?bfy_err=lookup");
+  }
+
+  if (!found) {
+    redirect(
+      `/admin/users?bfy_err=notfound&email=${encodeURIComponent(email)}`,
+    );
+  }
+  const userId = found.id;
+
+  // Profil holen (Sprache + Anzeige-Name für Mail), inklusive Vorzustand
+  // für den Audit-Log.
+  const { data: before } = await sb
+    .from("profiles")
+    .select(
+      "user_id, manual_plan_override, manual_plan_expires_at, manual_plan_note, plan, language, display_name",
+    )
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const beforeRow = before as
+    | {
+        manual_plan_override?: string | null;
+        manual_plan_expires_at?: string | null;
+        manual_plan_note?: string | null;
+        plan?: string | null;
+        language?: string | null;
+        display_name?: string | null;
+      }
+    | null;
+
+  const expiresAt = new Date(
+    Date.now() + BETA_FREE_YEAR_DAYS * 24 * 60 * 60 * 1000,
+  ).toISOString();
+
+  const { error: updErr } = await sb
+    .from("profiles")
+    .update({
+      manual_plan_override: "beta",
+      manual_plan_expires_at: expiresAt,
+      manual_plan_note: note,
+      manual_plan_set_at: new Date().toISOString(),
+    })
+    .eq("user_id", userId);
+
+  if (updErr) {
+    if (isSchemaMissingError(updErr)) {
+      redirect(`/admin/users/${userId}?err=migration`);
+    }
+    redirect(`/admin/users?bfy_err=db&email=${encodeURIComponent(email)}`);
+  }
+
+  // Sprache fürs Mailing — Profil ist die Quelle der Wahrheit, default
+  // ist Deutsch (matches app-weiter Default).
+  const locale: EmailLocale = beforeRow?.language === "en" ? "en" : "de";
+  const displayName = beforeRow?.display_name ?? null;
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "")
+    || "https://glev.app";
+
+  // Welcome-Mail in die Outbox. Dedupe-Key bindet an User-ID + „bfy" —
+  // wenn der Operator versehentlich zweimal klickt, bekommt der User
+  // trotzdem nur eine Mail (zweiter Insert findet die existierende Row
+  // via partial unique index auf (template, dedupe_key) und gibt deren
+  // ID zurück — siehe enqueueEmail-Doku).
+  try {
+    await enqueueEmail({
+      recipient: email,
+      template: "beta-free-year-welcome",
+      payload: {
+        name: displayName,
+        appUrl,
+        expiresAt,
+        locale,
+      },
+      dedupeKey: `bfy:${userId}`,
+    });
+  } catch (e) {
+    // Profile ist bereits aktualisiert — Mail-Fehler nicht eskalieren,
+    // sonst sieht es im UI so aus als wäre nichts passiert. Der Operator
+    // kann die Mail später aus /admin/emails manuell triggern.
+    // eslint-disable-next-line no-console
+    console.warn("[admin/users/betaFreeYear] enqueueEmail failed:", e);
+  }
+
+  // Drip-Sequenz (Tag 7/14/30) einplanen. tier='beta' ist mit dem
+  // CHECK-Constraint kompatibel (siehe email_drip_schedule-Migration).
+  // Idempotent über das (email, email_type)-Unique-Constraint, also
+  // schadet ein zweiter Klick auch hier nicht.
+  try {
+    await scheduleDripEmails(email, displayName, "beta", locale);
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn("[admin/users/betaFreeYear] scheduleDripEmails failed:", e);
+  }
+
+  await writeAuditLog({
+    action: "grant_beta_free_year",
+    targetUserId: userId,
+    targetEmail: email,
+    before: beforeRow,
+    after: {
+      manual_plan_override: "beta",
+      manual_plan_expires_at: expiresAt,
+      manual_plan_note: note,
+    },
+    note: `Beta Free Year — läuft bis ${expiresAt.slice(0, 10)}`,
+    adminToken,
+  });
+
+  revalidateUserPaths(userId);
+  redirect(
+    `/admin/users?bfy_granted=${encodeURIComponent(email)}&until=${encodeURIComponent(expiresAt.slice(0, 10))}`,
   );
 }
 

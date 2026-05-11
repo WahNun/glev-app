@@ -1,5 +1,10 @@
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { isAdminAuthed, loginAction, grantPlanByEmailAction } from "./actions";
+import {
+  isAdminAuthed,
+  loginAction,
+  grantPlanByEmailAction,
+  grantBetaFreeYearAction,
+} from "./actions";
 import UsersTable, { type UserRow } from "./UsersTable";
 import Link from "next/link";
 import { computeEffectivePlan } from "@/lib/admin/effectivePlan";
@@ -227,6 +232,24 @@ export default async function AdminUsersPage({
               ? `Datenbank-Fehler beim Freischalten von ${grantErrEmail ?? "User"}.`
               : null;
 
+  // Beta-Free-Year-Programm — eigene Banner + Fehler, damit man sieht
+  // ob NUR der Plan oder auch Welcome-Mail+Drip durchgegangen sind.
+  const bfyGrantedParam = Array.isArray(sp.bfy_granted)
+    ? sp.bfy_granted[0]
+    : sp.bfy_granted;
+  const bfyUntilParam = Array.isArray(sp.until) ? sp.until[0] : sp.until;
+  const bfyErrParam = Array.isArray(sp.bfy_err) ? sp.bfy_err[0] : sp.bfy_err;
+  const bfyErrMsg =
+    bfyErrParam === "email"
+      ? "Bitte gültige E-Mail eingeben."
+      : bfyErrParam === "lookup"
+        ? "User-Suche fehlgeschlagen — bitte später erneut versuchen."
+        : bfyErrParam === "notfound"
+          ? `Kein Account mit ${grantErrEmail ?? "dieser E-Mail"} gefunden. User muss sich erst registriert haben.`
+          : bfyErrParam === "db"
+            ? `Datenbank-Fehler beim Beta-Free-Year-Freischalten von ${grantErrEmail ?? "User"}.`
+            : null;
+
   return (
     <main style={pageStyle}>
       <div
@@ -261,6 +284,14 @@ export default async function AdminUsersPage({
         </p>
       ) : null}
       {grantErrMsg ? <p style={errStyle}>{grantErrMsg}</p> : null}
+      {bfyGrantedParam ? (
+        <p style={successStyle}>
+          ✓ <strong>{bfyGrantedParam}</strong> wurde ins Beta-Free-Year-Programm
+          aufgenommen — Zugang bis <strong>{bfyUntilParam ?? "—"}</strong>,
+          Welcome-Mail + Drip (Tag 7/14/30) eingeplant.
+        </p>
+      ) : null}
+      {bfyErrMsg ? <p style={errStyle}>{bfyErrMsg}</p> : null}
       {authErr ? <p style={errStyle}>auth.users-Fehler: {authErr}</p> : null}
       {profilesRes.error ? (
         <p style={errStyle}>profiles-Fehler: {profilesRes.error.message}</p>
@@ -309,6 +340,47 @@ export default async function AdminUsersPage({
           />
           <button type="submit" style={btnStyle}>
             Freischalten
+          </button>
+        </form>
+      </section>
+
+      {/* Beta-Free-Year-Programm: 1 Jahr Beta + Welcome-Mail + Drip
+          (Tag 7/14/30). Funktioniert wie Quick-Grant, plus die drei
+          Onboarding-Touches die auch Beta-Käufer:innen kriegen. */}
+      <section style={bfyBoxStyle}>
+        <h2 style={{ fontSize: 14, margin: "0 0 4px", color: "#065f46", fontWeight: 700 }}>
+          Beta-Free-Year-Programm (Friends &amp; Family)
+        </h2>
+        <p style={{ fontSize: 12, color: "#065f46", margin: "0 0 12px" }}>
+          1 Jahr kostenloser Beta-Zugang. Sendet Welcome-Mail mit explizitem
+          End-Datum und plant die Onboarding-Drip-Sequenz (Tag 7/14/30) ein.
+          User muss bereits registriert sein. Idempotent — zweimal klicken
+          schadet nicht.
+        </p>
+        <form
+          action={grantBetaFreeYearAction}
+          style={{
+            display: "flex",
+            gap: 8,
+            flexWrap: "wrap",
+            alignItems: "stretch",
+          }}
+        >
+          <input
+            type="email"
+            name="email"
+            required
+            placeholder="user@example.com"
+            style={{ ...inputStyle, flex: "1 1 240px", minWidth: 200 }}
+          />
+          <input
+            type="text"
+            name="note"
+            placeholder='Notiz (optional, default: "Beta-Free-Year-Programm")'
+            style={{ ...inputStyle, flex: "1 1 280px", minWidth: 200 }}
+          />
+          <button type="submit" style={bfyBtnStyle}>
+            1 Jahr freischalten + Welcome
           </button>
         </form>
       </section>
@@ -373,4 +445,21 @@ const successStyle: React.CSSProperties = {
   padding: "8px 12px",
   borderRadius: 6,
   border: "1px solid #a7f3d0",
+};
+const bfyBoxStyle: React.CSSProperties = {
+  background: "#ecfdf5",
+  border: "1px solid #a7f3d0",
+  borderRadius: 8,
+  padding: 14,
+  marginBottom: 16,
+};
+const bfyBtnStyle: React.CSSProperties = {
+  padding: "10px 16px",
+  background: "#047857",
+  color: "#fff",
+  border: "none",
+  borderRadius: 6,
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: "pointer",
 };

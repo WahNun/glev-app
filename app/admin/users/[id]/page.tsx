@@ -79,6 +79,7 @@ export default async function AdminUserDetailPage({
 
   const effective = computeEffectivePlan({
     manual_plan_override: profile?.manual_plan_override as string | null | undefined,
+    manual_plan_expires_at: profile?.manual_plan_expires_at as string | null | undefined,
     plan: profile?.plan as string | null | undefined,
     subscription_status: profile?.subscription_status as string | null | undefined,
   });
@@ -198,6 +199,20 @@ export default async function AdminUserDetailPage({
                       : ""
                   }`
                 : "—"
+            }
+          />
+          <KV
+            label="Override läuft ab"
+            v={
+              profile?.manual_plan_expires_at
+                ? (() => {
+                    const exp = profile.manual_plan_expires_at as string;
+                    const expired = Date.parse(exp) < Date.now();
+                    return `${fmtDateTime(exp)}${expired ? " · ABGELAUFEN" : ""}`;
+                  })()
+                : profile?.manual_plan_override
+                  ? "kein Ablauf (lifetime)"
+                  : "—"
             }
           />
           <KV label="profiles.plan (Stripe)" v={(profile?.plan as string) ?? "—"} />
