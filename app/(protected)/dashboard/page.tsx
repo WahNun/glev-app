@@ -15,6 +15,7 @@ import MealEntryLightExpand from "@/components/MealEntryLightExpand";
 import CurrentDayGlucoseCard from "@/components/CurrentDayGlucoseCard";
 import GlucoseTrendFront from "@/components/GlucoseTrendChart";
 import SortableCardGrid, { type SortableItem } from "@/components/SortableCardGrid";
+import SkeletonBlock from "@/components/SkeletonBlock";
 import { useCardOrder } from "@/lib/cardOrder";
 import { parseDbDate, parseDbTs, localeToBcp47 } from "@/lib/time";
 import { useLocale, useTranslations } from "next-intl";
@@ -414,11 +415,18 @@ export default function DashboardPage() {
 
   const totalEntries = meals.length + insulin.length + exercise.length;
 
+  // Skeleton loading state — mirrors app/(protected)/dashboard/loading.tsx
+  // so the visible UI never jumps when data arrives. Feels much faster
+  // than the old centered spinner because the user sees the page shape
+  // immediately instead of staring at a tiny spinner on a blank screen.
   if (loading) return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"60vh", gap:12, color:"var(--text-faint)" }}>
-      <div style={{ width:20, height:20, border:`2px solid ${ACCENT}`, borderTopColor:"transparent", borderRadius:99, animation:"spin 0.8s linear infinite" }}/>
-      {t("loading")}
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    <div style={{ padding:"16px 16px 96px", display:"flex", flexDirection:"column", gap:16 }}>
+      <style>{`@keyframes glevPulse{0%,100%{opacity:.55}50%{opacity:.85}}`}</style>
+      <SkeletonBlock height={56} />
+      <SkeletonBlock height={180} />
+      <SkeletonBlock height={140} />
+      <SkeletonBlock height={140} />
+      <SkeletonBlock height={220} />
     </div>
   );
 

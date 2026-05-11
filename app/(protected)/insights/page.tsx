@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useId } from "react";
+import useSWR, { mutate as swrMutate } from "swr";
 import { useLocale, useTranslations } from "next-intl";
 import { fetchMeals, fetchMealsForEngine, unifiedOutcome, type Meal } from "@/lib/meals";
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
@@ -10,6 +11,7 @@ import { updateInsulinLogLink } from "@/lib/insulin";
 import { detectPattern } from "@/lib/engine/patterns";
 import { suggestAdjustment, type AdaptiveSettings, type AdjustmentSuggestion } from "@/lib/engine/adjustment";
 import SortableCardGrid, { type SortableItem } from "@/components/SortableCardGrid";
+import SkeletonBlock from "@/components/SkeletonBlock";
 import { useCardOrder } from "@/lib/cardOrder";
 import { parseDbTs, parseDbDate } from "@/lib/time";
 import { startOfDay, startOfToday, startOfDaysAgo, userTimezone } from "@/lib/utils/datetime";
@@ -204,40 +206,73 @@ export default function InsightsPage() {
     return () => setScopeChipVisible(false);
   }, [setScopeChipVisible]);
 
+  // SWR-backed cached fetch — same pattern as Dashboard. The
+  // SWRProvider in app/(protected)/layout.tsx persists this cache to
+  // localStorage so a re-mount (tab switch on native shell) renders
+  // the previous data instantly while we revalidate in the
+  // background. The `loading` flag only stays true on the very first
+  // visit (when the cache is empty); afterwards the page paints
+  // immediately with stale data and silently refreshes.
+  const { data: insightsSWR } = useSWR(
+    "insights:meals+engine+insulin14+insulin90+exercise30+fs+menstrual+symptoms",
+    async () => {
+      const fingerstickFromIso = startOfDaysAgo(13).toISOString();
+      const [m, em, il, ilEngine, ex, fs, ml, sl] = await Promise.all([
+        fetchMeals().catch(() => [] as Meal[]),
+        fetchMealsForEngine().catch(() => [] as Meal[]),
+        fetchRecentInsulinLogs(14).catch(() => [] as InsulinLog[]),
+        fetchRecentInsulinLogs(90).catch(() => [] as InsulinLog[]),
+        fetchRecentExerciseLogs(30).catch(() => [] as ExerciseLog[]),
+        fetchFingersticks(fingerstickFromIso).catch(() => [] as FingerstickReading[]),
+        fetchRecentMenstrualLogs(60).catch(() => [] as MenstrualLog[]),
+        fetchRecentSymptomLogs(30).catch(() => [] as SymptomLog[]),
+      ]);
+      return { meals: m, engineMeals: em, insulinLogs: il, engineBoluses: ilEngine, exerciseLogs: ex, fingersticks: fs, menstrualLogs: ml, symptomLogs: sl };
+    },
+  );
+
   useEffect(() => {
-    // 14d covers every metric window (CV% needs 14d; hypo/hyper/TDD only 7d).
-    // Calendar-aware lower bound: midnight 13 days ago in user's TZ → covers
-    // today + previous 13 calendar days.
-    const fingerstickFromIso = startOfDaysAgo(13).toISOString();
-    Promise.all([
-      fetchMeals().catch(() => [] as Meal[]),
-      fetchMealsForEngine().catch(() => [] as Meal[]),
-      fetchRecentInsulinLogs(14).catch(() => [] as InsulinLog[]),
-      fetchRecentInsulinLogs(90).catch(() => [] as InsulinLog[]),
-      fetchRecentExerciseLogs(30).catch(() => [] as ExerciseLog[]),
-      fetchFingersticks(fingerstickFromIso).catch(() => [] as FingerstickReading[]),
-      fetchRecentMenstrualLogs(60).catch(() => [] as MenstrualLog[]),
-      fetchRecentSymptomLogs(30).catch(() => [] as SymptomLog[]),
-    ])
-      .then(([m, em, il, ilEngine, ex, fs, ml, sl]) => {
-        setMeals(m);
-        setEngineMeals(em);
-        setInsulinLogs(il);
-        setEngineBoluses(ilEngine);
-        setExerciseLogs(ex);
-        setFingersticks(fs);
-        setMenstrualLogs(ml);
-        setSymptomLogs(sl);
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    if (!insightsSWR) return;
+    setMeals(insightsSWR.meals);
+    setEngineMeals(insightsSWR.engineMeals);
+    setInsulinLogs(insightsSWR.insulinLogs);
+    setEngineBoluses(insightsSWR.engineBoluses);
+    setExerciseLogs(insightsSWR.exerciseLogs);
+    setFingersticks(insightsSWR.fingersticks);
+    setMenstrualLogs(insightsSWR.menstrualLogs);
+    setSymptomLogs(insightsSWR.symptomLogs);
+    setLoading(false);
+  }, [insightsSWR]);
+
+  // Revalidate when other parts of the app log new entries.
+  useEffect(() => {
+    const key = "insights:meals+engine+insulin14+insulin90+exercise30+fs+menstrual+symptoms";
+    function onUpdated() { swrMutate(key); }
+    window.addEventListener("glev:meals-updated",    onUpdated);
+    window.addEventListener("glev:insulin-updated",  onUpdated);
+    window.addEventListener("glev:exercise-updated", onUpdated);
+    return () => {
+      window.removeEventListener("glev:meals-updated",    onUpdated);
+      window.removeEventListener("glev:insulin-updated",  onUpdated);
+      window.removeEventListener("glev:exercise-updated", onUpdated);
+    };
   }, []);
 
+  // Skeleton loading state — mirrors app/(protected)/insights/loading.tsx
+  // shape so the visible UI never jumps when data arrives. Replaces the
+  // old centered spinner because a layout-shaped skeleton feels much
+  // faster to the user than a blank screen with a tiny spinner.
   if (loading) return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"60vh", gap:12, color:"var(--text-faint)" }}>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-      <div style={{ width:20, height:20, border:`2px solid ${ACCENT}`, borderTopColor:"transparent", borderRadius:99, animation:"spin 0.8s linear infinite" }}/>
-      {tInsights("loading_insights")}
+    <div style={{ padding:"16px 16px 96px", display:"flex", flexDirection:"column", gap:16 }}>
+      <style>{`@keyframes glevPulse{0%,100%{opacity:.55}50%{opacity:.85}}`}</style>
+      <SkeletonBlock height={48} />
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+        <SkeletonBlock height={96} />
+        <SkeletonBlock height={96} />
+      </div>
+      <SkeletonBlock height={260} />
+      <SkeletonBlock height={200} />
+      <SkeletonBlock height={200} />
     </div>
   );
 
