@@ -103,7 +103,15 @@ export default async function AdminUsersPage({
 
   const userIds = authUsers.map((u) => u.id);
 
-  const [profilesRes, cgmRes, proRes, betaRes] = await Promise.all([
+  // Optionaler Zweit-SELECT für Spalten, die in einigen Umgebungen
+  // (alte Migrationen) noch fehlen können. Wir trennen das vom
+  // Haupt-SELECT, damit ein fehlendes Feld nicht die ganze Liste killt.
+  // Wichtig für die Beta-Anzeige: alte Beta-Käufer:innen (Stripe-Produkt
+  // vor 25.04.2026) haben KEINE Zeile in `beta_reservations`, sondern
+  // wurden vom älteren Webhook direkt mit profiles.subscription_status=
+  // 'beta' markiert (siehe app/api/webhooks/stripe/route.ts). Ohne
+  // diesen optionalen Lookup würden sie als "Free" erscheinen.
+  const [profilesRes, cgmRes, proRes, betaRes, profilesOptRes] = await Promise.all([
     userIds.length
       ? sb
           .from("profiles")
@@ -140,6 +148,18 @@ export default async function AdminUsersPage({
       .select("email, status, created_at")
       .order("created_at", { ascending: false })
       .limit(500),
+    // Best-effort: optionale Spalten. Wenn die Migration in dieser
+    // Umgebung fehlt, bricht dieser SELECT — wir fangen das ab und
+    // fallen still auf eine leere Map zurück, ohne die Hauptliste
+    // zu beeinflussen.
+    userIds.length
+      ? sb
+          .from("profiles")
+          .select(
+            "user_id, subscription_status, manual_plan_override, manual_plan_expires_at, manual_plan_note, deleted_at, created_by_admin",
+          )
+          .in("user_id", userIds)
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   type ProfRow = {
@@ -165,23 +185,57 @@ export default async function AdminUsersPage({
     created_at: string | null;
   };
 
+  type ProfOptRow = {
+    user_id: string;
+    subscription_status: string | null;
+    manual_plan_override: string | null;
+    manual_plan_expires_at: string | null;
+    manual_plan_note: string | null;
+    deleted_at: string | null;
+    created_by_admin: boolean | null;
+  };
+
   const profiles = (profilesRes.data ?? []) as ProfRow[];
   const cgms = (cgmRes.data ?? []) as CgmRow[];
   const pros = (proRes.data ?? []) as ProSubRow[];
   const betas = (betaRes.data ?? []) as BetaRow[];
+  // Wenn der optionale SELECT fehlgeschlagen ist (Migration fehlt),
+  // bekommen wir einfach eine leere Liste — UI fällt dann auf die
+  // alten Defaults zurück.
+  const profilesOpt = (profilesOptRes.data ?? []) as ProfOptRow[];
 
   const profileById = new Map(profiles.map((p) => [p.user_id, p]));
+  const profileOptById = new Map(profilesOpt.map((p) => [p.user_id, p]));
   const lluByUser = new Map(cgms.map((c) => [c.user_id, c.llu_email]));
   const proByEmail = new Map(pros.map((p) => [p.email.toLowerCase(), p]));
   const betaByEmail = new Map(betas.map((b) => [b.email.toLowerCase(), b]));
 
   const rows: UserRow[] = authUsers.map((u) => {
     const p = profileById.get(u.id);
+    const opt = profileOptById.get(u.id);
     const email = (u.email ?? "").toLowerCase();
     const pro = proByEmail.get(email);
     const beta = betaByEmail.get(email);
+    // Effektiven Plan aus ALLEN verfügbaren Quellen berechnen — nicht
+    // nur aus profiles.plan. Stripe schreibt profiles.plan='pro' erst
+    // NACH der ersten echten Zahlung, während des 7-Tage-Trials steht
+    // dort noch 'free'. Beta hat zwei Quellen: (a) neue Käufer:innen
+    // landen in beta_reservations (status='fulfilled'), (b) alte
+    // Käufer:innen vor 25.04.2026 wurden direkt mit
+    // profiles.subscription_status='beta' markiert.
+    let derivedPlan: string | null = p?.plan ?? null;
+    if (pro?.status === "trialing" || pro?.status === "active") {
+      derivedPlan = "pro";
+    } else if (beta?.status === "fulfilled") {
+      derivedPlan = "beta";
+    } else if ((opt?.subscription_status ?? "").toLowerCase() === "beta") {
+      derivedPlan = "beta";
+    }
     const effective = computeEffectivePlan({
-      plan: p?.plan,
+      manual_plan_override: opt?.manual_plan_override,
+      manual_plan_expires_at: opt?.manual_plan_expires_at,
+      plan: derivedPlan,
+      subscription_status: opt?.subscription_status,
     });
     let cgmKind: "none" | "llu" | "nightscout" | "applehealth" | "junction" = "none";
     if (lluByUser.has(u.id)) cgmKind = "llu";
@@ -200,17 +254,22 @@ export default async function AdminUsersPage({
       email_confirmed_at: u.email_confirmed_at ?? null,
       banned_until: u.banned_until ?? null,
       plan: effective,
-      // Diese vier Felder kommen aus
-      // 20260510_add_admin_user_management.sql und sind bis zur
-      // Migration nicht verfügbar → safe defaults.
-      manual_plan_override: null,
-      manual_plan_note: null,
-      deleted_at: null,
-      created_by_admin: false,
+      // Diese vier Felder kommen aus dem optionalen Zweit-SELECT — wenn
+      // die Migration fehlt, fallen wir still auf die alten Defaults
+      // zurück (das war vorher auch das Verhalten).
+      manual_plan_override: opt?.manual_plan_override ?? null,
+      manual_plan_note: opt?.manual_plan_note ?? null,
+      deleted_at: opt?.deleted_at ?? null,
+      created_by_admin: opt?.created_by_admin ?? false,
       cgm: cgmKind,
       pro_status: pro?.status ?? null,
       trial_ends_at: pro?.trial_ends_at ?? null,
       beta_status: beta?.status ?? null,
+      // Alte Beta-Käufer:innen (vor 25.04.2026) haben keine Reservation,
+      // sondern stehen nur als profiles.subscription_status='beta'.
+      // UsersTable nutzt das fürs Beta-Filter-Tab.
+      legacy_beta:
+        (opt?.subscription_status ?? "").toLowerCase() === "beta",
     };
   });
 

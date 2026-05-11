@@ -24,6 +24,8 @@ export type UserRow = {
   trial_ends_at: string | null;
   /** beta_reservations.status — typisch "fulfilled" wenn bezahlt + freigeschaltet, "pending" während Checkout. */
   beta_status: string | null;
+  /** profiles.subscription_status='beta' — alte Beta-Käufer:innen (vor 25.04.2026) hatten kein beta_reservations-Eintrag. */
+  legacy_beta: boolean;
 };
 
 type Filter =
@@ -52,9 +54,15 @@ function isBetaBuyer(r: UserRow): boolean {
   // explizit storniert/refunded ist. Strikt fulfilled-only wäre zu eng,
   // weil "pending" Käufer:innen während des Checkouts auch interessant
   // sind.
-  if (!r.beta_status) return false;
-  const s = r.beta_status.toLowerCase();
-  return s !== "refunded" && s !== "cancelled" && s !== "canceled";
+  if (r.beta_status) {
+    const s = r.beta_status.toLowerCase();
+    if (s !== "refunded" && s !== "cancelled" && s !== "canceled") return true;
+  }
+  // Alt-Käufer:innen aus dem ersten Stripe-Beta-Produkt (vor dem
+  // 25.04.2026-Webhook). Die haben keine beta_reservations-Zeile,
+  // sondern nur profiles.subscription_status='beta'.
+  if (r.legacy_beta) return true;
+  return false;
 }
 
 function fmtDate(v: string | null | undefined): string {
@@ -193,7 +201,9 @@ export default function UsersTable({
                 flags.push(
                   r.beta_status?.toLowerCase() === "pending"
                     ? "Beta (pending)"
-                    : "Beta-Käufer",
+                    : r.beta_status
+                      ? "Beta-Käufer"
+                      : "Beta (Alt-Produkt)",
                 );
               }
               return (
