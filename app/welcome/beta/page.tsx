@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { supabase } from "@/lib/supabase";
 import GlevLockup from "@/components/GlevLockup";
 
@@ -26,9 +27,9 @@ import GlevLockup from "@/components/GlevLockup";
  *      Chance, ihn zu setzen.
  *   4. Redirect → /dashboard. Onboarding triggert dort beim ersten Besuch.
  *
- * Hardcoded Deutsch wie /auth/confirm — die Friends-&-Family-Empfänger:innen
- * sind primär Lucas's deutscher Bekanntenkreis; locale-Variante kann
- * später nachgezogen werden, falls's relevant wird.
+ * Lokalisiert via next-intl. Locale wird durch i18n/request.ts aus dem
+ * NEXT_LOCALE-Cookie / Accept-Language-Header / Geo-Hinweis aufgelöst —
+ * brand-neue Empfänger ohne Cookie kriegen i.d.R. die Browser-Sprache.
  *
  * Suspense-Boundary wie in app/welcome/page.tsx — useSearchParams()
  * erzwingt Client-Rendering, ohne Boundary scheitert Vercels statischer
@@ -36,7 +37,7 @@ import GlevLockup from "@/components/GlevLockup";
  */
 export default function WelcomeBetaPage() {
   return (
-    <Suspense fallback={<Shell><CenterDim>Lädt …</CenterDim></Shell>}>
+    <Suspense fallback={<Shell><CenterDim>…</CenterDim></Shell>}>
       <WelcomeBetaInner />
     </Suspense>
   );
@@ -71,6 +72,7 @@ type State =
 function WelcomeBetaInner() {
   const router = useRouter();
   const params = useSearchParams();
+  const t = useTranslations("marketing");
 
   const [state, setState] = useState<State>({ kind: "verifying" });
   const [name, setName]         = useState("");
@@ -82,7 +84,7 @@ function WelcomeBetaInner() {
     let cancelled = false;
 
     if (!supabase) {
-      setState({ kind: "invalid", reason: "Auth-Service nicht konfiguriert." });
+      setState({ kind: "invalid", reason: t("welcome_beta_invalid_no_auth") });
       return;
     }
 
@@ -103,9 +105,7 @@ function WelcomeBetaInner() {
         const { data: sess, error: sessErr } = await supabase!.auth.getSession();
         if (sessErr) throw sessErr;
         if (!sess.session?.user) {
-          throw new Error(
-            "Kein gültiger Login-Link — bitte fordere einen neuen Welcome-Link an oder schreib uns auf hello@glev.app.",
-          );
+          throw new Error(t("welcome_beta_invalid_no_session"));
         }
         if (cancelled) return;
         const u = sess.session.user;
@@ -123,29 +123,29 @@ function WelcomeBetaInner() {
     })();
 
     return () => { cancelled = true; };
-  }, [params]);
+  }, [params, t]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
     if (!supabase) {
-      setError("Auth-Service nicht konfiguriert.");
+      setError(t("welcome_beta_invalid_no_auth"));
       return;
     }
     if (state.kind !== "ready") return;
 
     const trimmedName = name.trim();
     if (trimmedName.length < 2) {
-      setError("Bitte gib deinen Namen ein (mindestens 2 Zeichen).");
+      setError(t("welcome_beta_err_name_short"));
       return;
     }
     if (password.length < 6) {
-      setError("Passwort muss mindestens 6 Zeichen lang sein.");
+      setError(t("welcome_beta_err_password_short"));
       return;
     }
     if (password !== confirm) {
-      setError("Die beiden Passwörter stimmen nicht überein.");
+      setError(t("welcome_beta_err_password_mismatch"));
       return;
     }
 
@@ -186,27 +186,30 @@ function WelcomeBetaInner() {
     }, 900);
   }
 
+  const supportHref =
+    `mailto:hello@glev.app?subject=${encodeURIComponent(t("welcome_beta_support_subject"))}`;
+
   return (
     <Shell>
       {state.kind === "verifying" && (
         <CenterDim>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", marginBottom: 8 }}>
-            BESTÄTIGE ZUGANG
+            {t("welcome_beta_verify_kicker")}
           </div>
-          <div>Einen Moment …</div>
+          <div>{t("welcome_beta_verify_body")}</div>
         </CenterDim>
       )}
 
       {state.kind === "invalid" && (
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: 16, fontWeight: 600, color: PINK, marginBottom: 10 }}>
-            Login-Link ungültig oder abgelaufen
+            {t("welcome_beta_invalid_title")}
           </div>
           <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.5, marginBottom: 22 }}>
             {state.reason}
           </div>
           <a
-            href="mailto:hello@glev.app?subject=Beta-Free-Year%20Welcome-Link%20Problem"
+            href={supportHref}
             style={{
               display: "inline-block",
               padding: "10px 18px",
@@ -219,7 +222,7 @@ function WelcomeBetaInner() {
               marginRight: 10,
             }}
           >
-            Support kontaktieren
+            {t("welcome_beta_support_cta")}
           </a>
           <Link
             href="/login"
@@ -234,7 +237,7 @@ function WelcomeBetaInner() {
               textDecoration: "none",
             }}
           >
-            Zum Login
+            {t("welcome_beta_login_cta")}
           </Link>
         </div>
       )}
@@ -242,18 +245,17 @@ function WelcomeBetaInner() {
       {(state.kind === "ready" || state.kind === "saving") && (
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{ fontSize: 11, color: GREEN, letterSpacing: "0.1em", fontWeight: 700, marginBottom: 4 }}>
-            BETA-ZUGANG FREIGESCHALTET ✓
+            {t("welcome_beta_kicker")}
           </div>
           <div style={{ fontSize: 18, fontWeight: 700, color: "white", marginBottom: 2 }}>
-            Account einrichten
+            {t("welcome_beta_title")}
           </div>
           <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", lineHeight: 1.5, marginBottom: 6 }}>
-            Wähle deinen Anzeigenamen und ein Passwort — danach geht's direkt
-            zum Dashboard.
+            {t("welcome_beta_subtitle")}
           </div>
 
           <div>
-            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 6, letterSpacing: "0.08em" }}>E-MAIL</div>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 6, letterSpacing: "0.08em" }}>{t("welcome_beta_email_label")}</div>
             <input
               type="email"
               value={state.email ?? ""}
@@ -264,12 +266,12 @@ function WelcomeBetaInner() {
           </div>
 
           <div>
-            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 6, letterSpacing: "0.08em" }}>NAME</div>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 6, letterSpacing: "0.08em" }}>{t("welcome_beta_name_label")}</div>
             <input
               type="text"
               value={name}
               onChange={e => setName(e.target.value)}
-              placeholder="Dein Vor- und Nachname"
+              placeholder={t("welcome_beta_name_placeholder")}
               required
               minLength={2}
               autoFocus
@@ -280,7 +282,7 @@ function WelcomeBetaInner() {
           </div>
 
           <div>
-            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 6, letterSpacing: "0.08em" }}>NEUES PASSWORT</div>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 6, letterSpacing: "0.08em" }}>{t("welcome_beta_password_label")}</div>
             <input
               type="password"
               value={password}
@@ -295,7 +297,7 @@ function WelcomeBetaInner() {
           </div>
 
           <div>
-            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 6, letterSpacing: "0.08em" }}>WIEDERHOLEN</div>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 6, letterSpacing: "0.08em" }}>{t("welcome_beta_password_confirm_label")}</div>
             <input
               type="password"
               value={confirm}
@@ -333,7 +335,7 @@ function WelcomeBetaInner() {
             cursor: state.kind === "saving" ? "default" : "pointer",
             transition: "all 0.15s", marginTop: 4,
           }}>
-            {state.kind === "saving" ? "Speichere …" : "Account einrichten"}
+            {state.kind === "saving" ? t("welcome_beta_submitting") : t("welcome_beta_submit")}
           </button>
         </form>
       )}
@@ -341,10 +343,10 @@ function WelcomeBetaInner() {
       {state.kind === "saved" && (
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: 16, fontWeight: 600, color: GREEN, marginBottom: 8 }}>
-            Account aktiv ✓
+            {t("welcome_beta_saved_title")}
           </div>
           <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)" }}>
-            Du wirst zum Dashboard weitergeleitet …
+            {t("welcome_beta_saved_body")}
           </div>
         </div>
       )}
