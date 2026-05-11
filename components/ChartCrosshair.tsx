@@ -14,6 +14,9 @@ export type CrosshairPoint = {
   y: number;
   color: string;
   tooltip: string[];
+  /** Optional small uppercase badge rendered at the bottom of the tooltip
+      (e.g. "MANUAL" for hand-entered fingerstick values). */
+  badge?: string;
 };
 
 const SURFACE = "var(--surface)";
@@ -225,6 +228,26 @@ export function CrosshairTooltip({
           {line}
         </div>
       ))}
+      {active.badge && (
+        <div
+          style={{
+            display: "inline-block",
+            marginTop: 4,
+            padding: "1px 6px",
+            borderRadius: 99,
+            background: "var(--border)",
+            border: `1px solid ${active.color}66`,
+            color: "var(--text-strong)",
+            fontSize: 9,
+            fontWeight: 700,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            lineHeight: 1.3,
+          }}
+        >
+          {active.badge}
+        </div>
+      )}
     </div>
   );
 }

@@ -434,12 +434,12 @@ function RollingChart({ readings }: { readings: ChartPoint[] }) {
     if (W <= 0 || H <= 0) return [];
     return visible.map((r) => {
       const fmtTime = new Date(r.t).toLocaleTimeString("en", { hour: "2-digit", minute: "2-digit", hour12: false });
-      const tag = r.source === "fingerstick" ? "FS" : "CGM";
       return {
         x: toX(r.t),
         y: toY(r.v),
         color: glucoseLineColor(r.v),
-        tooltip: [fmtTime, `${Math.round(r.v)} mg/dL · ${tag}`],
+        tooltip: [fmtTime, `${Math.round(r.v)} mg/dL`],
+        badge: r.source === "fingerstick" ? "Manuell" : undefined,
       };
     });
     // toX/toY depend on W/H/winStart/now; visible + W + H captures it all.
@@ -505,18 +505,21 @@ function RollingChart({ readings }: { readings: ChartPoint[] }) {
           <path d={path} fill="none" stroke={lastC} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           {/* Last CGM point */}
           {lastCgm && <circle cx={lastX} cy={lastY} r="4" fill={lastC} stroke={SURFACE} strokeWidth="1.5" />}
-          {/* Fingerstick markers — 8×8 squares with white outline so they
-              visually contrast with the CGM trace and the last-point dot. */}
+          {/* Fingerstick markers — rendered with the EXACT same shape and
+              size as the crosshair-active dot in `ChartCrosshair.tsx`
+              (halo r=9 @ 0.15 + inner r=4.5 with surface stroke 1.5) so a
+              manually-entered value looks indistinguishable from a hovered
+              CGM point. Color is value-derived (`glucoseLineColor`), not
+              source-derived: red/orange/green/yellow ramp by mg/dL. */}
           {visibleFs.map((r, i) => {
             const cx = toX(r.t);
             const cy = toY(r.v);
+            const c  = glucoseLineColor(r.v);
             return (
-              <rect
-                key={`fs${i}-${r.t}`}
-                x={cx - 4} y={cy - 4} width={8} height={8}
-                fill={glucoseLineColor(r.v)}
-                stroke="var(--text)" strokeWidth="1.5"
-              />
+              <g key={`fs${i}-${r.t}`}>
+                <circle cx={cx} cy={cy} r="9"   fill={c} fillOpacity="0.15" />
+                <circle cx={cx} cy={cy} r="4.5" fill={c} stroke={SURFACE} strokeWidth="1.5" />
+              </g>
             );
           })}
           {/* Crosshair */}
