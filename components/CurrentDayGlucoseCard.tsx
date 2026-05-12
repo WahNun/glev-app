@@ -70,17 +70,25 @@ export default function CurrentDayGlucoseCard() {
       // The back-card "Today's summary" filters this set down to
       // today-only itself, so we keep the wider window in state.
       const now = Date.now();
-      const twelveHoursAgo = now - 12 * 60 * 60 * 1000;
+      // 24h fetch-side window (was 12h). Lucas 2026-05-12: with the
+      // newest CGM point landing exactly at -12h, the previous filter
+      // dropped EVERYTHING and the chart rendered as a black box (the
+      // stale overlay couldn't fire either, because it requires
+      // allCgm.length > 0). 24h gives the chart's adaptive 4-14h
+      // window plenty of headroom and matches the back-card "today's
+      // summary" filter scope. parseLluTs may return NaN for malformed
+      // strings — exclude those explicitly.
+      const twentyFourHoursAgo = now - 24 * 60 * 60 * 1000;
 
       const cgm = (data.history || [])
         .filter((r) => r.value != null && r.timestamp)
         .map((r) => ({ t: parseLluTs(r.timestamp!), v: r.value! }))
-        .filter((r) => r.t >= twelveHoursAgo && r.t <= now)
+        .filter((r) => Number.isFinite(r.t) && r.t >= twentyFourHoursAgo && r.t <= now)
         .sort((a, b) => a.t - b.t);
 
       const fingersticks = fsResult
         .map((r) => ({ t: new Date(r.measured_at).getTime(), v: Number(r.value_mg_dl) }))
-        .filter((r) => Number.isFinite(r.t) && Number.isFinite(r.v) && r.t >= twelveHoursAgo && r.t <= now)
+        .filter((r) => Number.isFinite(r.t) && Number.isFinite(r.v) && r.t >= twentyFourHoursAgo && r.t <= now)
         .sort((a, b) => a.t - b.t);
 
       // Prefer the newest CGM history point if it's newer than the
@@ -460,7 +468,11 @@ function RollingChart({ readings }: { readings: ChartPoint[] }) {
   // chart stays at the tighter 4h zoom.
   const now = Date.now();
   const MIN_WIN = 4  * 60 * 60 * 1000;
-  const MAX_WIN = 12 * 60 * 60 * 1000;
+  // MAX 14h (was 12h). Gives the chart breathing room when the newest
+  // CGM point sits right at the 12h boundary — at MAX=12h that point
+  // would land on the far-left edge of the chart and be invisible.
+  // 14h pulls the trace ~2h inward so it's actually drawable.
+  const MAX_WIN = 14 * 60 * 60 * 1000;
   const winSpan = useMemo(() => {
     const all = readings.filter((r) => r.t <= now && r.t >= now - MAX_WIN);
     if (all.length === 0) return MAX_WIN;
