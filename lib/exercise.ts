@@ -29,7 +29,12 @@ export type ExerciseType =
   // insulin absorption (drop risk). Cold shower → vasoconstriction
   // + adrenaline can transiently push glucose up.
   | "hot_shower"
-  | "cold_shower";
+  | "cold_shower"
+  // Breathwork (Wim Hof, box breathing, holotropic, etc.) — adrenergic
+  // / parasympathetic shift can move glucose either direction depending
+  // on style, so it gets its own bucket rather than collapsing into
+  // yoga or cardio.
+  | "breathwork";
 
 export type ExerciseIntensity = "low" | "medium" | "high";
 

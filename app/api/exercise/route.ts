@@ -14,6 +14,9 @@ const VALID_TYPE = new Set([
   // Team / racquet sports — added in task #203 alongside the
   // exercise_logs_exercise_type_check widening migration.
   "football", "tennis", "volleyball", "basketball",
+  // Body-temperature events + swimming + breathwork — must match the
+  // CHECK constraint in supabase/migrations/20260512_add_breathwork_and_swimming_exercise_types.sql.
+  "swimming", "hot_shower", "cold_shower", "breathwork",
 ]);
 const VALID_INTENSITY = new Set(["low", "medium", "high"]);
 
@@ -66,7 +69,7 @@ export async function POST(req: NextRequest) {
 
   if (!VALID_TYPE.has(exercise_type)) {
     return NextResponse.json({
-      error: "exercise_type must be one of: cardio, strength, hiit, yoga, cycling, run, football, tennis, volleyball, basketball (legacy 'hypertrophy' also accepted)",
+      error: "exercise_type must be one of: cardio, strength, hiit, yoga, cycling, run, swimming, football, tennis, volleyball, basketball, breathwork, hot_shower, cold_shower (legacy 'hypertrophy' also accepted)",
     }, { status: 400 });
   }
   if (!VALID_INTENSITY.has(intensity)) {

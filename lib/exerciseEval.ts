@@ -181,6 +181,8 @@ export function patternNote(t: ExerciseType): string {
       return "Resistance training often nudges glucose UP transiently; values commonly settle within 1–2 h.";
     case "yoga":
       return "Yoga and low-intensity movement usually have a mild, stabilising effect on glucose.";
+    case "breathwork":
+      return "Breathwork sessions can shift glucose in either direction — adrenergic styles (Wim Hof, fast holotropic) often nudge it UP via stress hormones, while slow box / parasympathetic breathing tends to settle it.";
     case "hot_shower":
       return "A hot shower causes vasodilation, which can speed up insulin absorption — watch for an unusually fast glucose drop in the next 30–60 min.";
     case "cold_shower":
@@ -210,6 +212,7 @@ export function exerciseTypeLabel(t: ExerciseType): string {
     case "volleyball":return "Volleyball";
     case "basketball":return "Basketball";
     case "swimming":  return "Swimming";
+    case "breathwork":  return "Breathwork";
     case "hot_shower":  return "Hot shower";
     case "cold_shower": return "Cold shower";
   }

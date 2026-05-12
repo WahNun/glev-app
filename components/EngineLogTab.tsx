@@ -543,6 +543,7 @@ export function InsulinForm() {
 const EXERCISE_TYPE_OPTIONS: ExerciseType[] = [
   "cardio", "strength", "hiit", "yoga", "cycling", "run", "swimming",
   "football", "tennis", "volleyball", "basketball",
+  "breathwork",
   "hot_shower", "cold_shower",
 ];
 
