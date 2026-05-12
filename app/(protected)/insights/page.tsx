@@ -819,7 +819,17 @@ export default function InsightsPage() {
   const eveningSucc = timeGroups["Evening (17–21)"];
   if (morningSucc.count >= 3 && morningSucc.good/morningSucc.count < 0.5) patterns.push({ icon:"☀", title:tInsights("pattern_morning_issues_title"),    desc:tInsights("pattern_morning_issues_desc"),    color:ORANGE });
   if (eveningSucc.count >= 3 && eveningSucc.good/eveningSucc.count > 0.8) patterns.push({ icon:"🌙", title:tInsights("pattern_evening_strength_title"), desc:tInsights("pattern_evening_strength_desc"), color:ACCENT });
-  if (patterns.length === 0) patterns.push({ icon:"→", title:tInsights("pattern_no_signals_title"), desc:tInsights("pattern_no_signals_desc"), color:"var(--text-faint)" });
+  // Empty-state copy depends on whether the user has enough meals for
+  // the detector to be statistically meaningful. <15 meals → onboarding
+  // hint ("log more"). >=15 meals → mixed-signal hint (Lucas reported
+  // seeing the "log 15+" copy with 113 meals on 2026-05-12).
+  if (patterns.length === 0) {
+    if (meals.length >= 15) {
+      patterns.push({ icon:"→", title:tInsights("pattern_mixed_title"), desc:tInsights("pattern_mixed_desc"), color:"var(--text-faint)" });
+    } else {
+      patterns.push({ icon:"→", title:tInsights("pattern_no_signals_title"), desc:tInsights("pattern_no_signals_desc"), color:"var(--text-faint)" });
+    }
+  }
 
   // Adaptive engine derivations — driven by the engine-only 90-day pull
   // (`engineMeals`) so the morning/afternoon/evening ICR buckets and the

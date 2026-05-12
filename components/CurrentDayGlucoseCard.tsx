@@ -1,5 +1,6 @@
 "use client";
 import { fetchCgmHistory } from "@/lib/cgm/clientCache";
+import { useTranslations } from "next-intl";
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import CgmFetchButton, { type CgmFetchResult } from "@/components/CgmFetchButton";
@@ -404,6 +405,7 @@ function computeDelta15m(
    fine time orientation. Line + last-point color tracks
    `glucoseLineColor(last.v)`. */
 function RollingChart({ readings }: { readings: ChartPoint[] }) {
+  const t = useTranslations("insights");
   // Measure the container so the SVG always renders in true pixel space.
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState<{ w: number; h: number }>({ w: 720, h: 200 });
@@ -480,6 +482,18 @@ function RollingChart({ readings }: { readings: ChartPoint[] }) {
   const lastX = lastCgm ? toX(lastCgm.t) : 0;
   const lastY = lastCgm ? toY(lastCgm.v) : 0;
   const lastC = lastCgm ? glucoseLineColor(lastCgm.v) : ACCENT;
+
+  // Stale-data overlay: CGM data exists but every CGM point is older
+  // than the 4h window. Without this the chart area looks broken (only
+  // an empty green band). Lucas reported a 9h-stale chart on 2026-05-12.
+  // CGM-specific (not merged readings) so a fresh manual fingerstick
+  // doesn't mask a dead sensor — the message is literally "Keine
+  // aktuellen CGM-Daten", and the FS dot still renders inside the SVG
+  // alongside the overlay text.
+  const allCgm = useMemo(() => readings.filter((r) => r.source === "cgm"), [readings]);
+  const newestCgm = allCgm.length ? allCgm[allCgm.length - 1] : null;
+  const isStale = allCgm.length > 0 && visibleCgm.length === 0 && newestCgm != null;
+  const staleAge = isStale && newestCgm ? formatAge(now - newestCgm.t) : null;
 
   // Crosshair-snappable points (pixel space). Includes BOTH CGM and FS so
   // the user can hover/touch either kind of marker.
@@ -586,6 +600,28 @@ function RollingChart({ readings }: { readings: ChartPoint[] }) {
         </svg>
       )}
       <CrosshairTooltip active={active} containerWidth={W} containerHeight={H} />
+      {isStale && staleAge && (
+        <div
+          style={{
+            position: "absolute",
+            inset: `${padT}px ${padR}px ${padB}px ${padL}px`,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 4,
+            textAlign: "center",
+            pointerEvents: "none",
+          }}
+        >
+          <div style={{ fontSize: 12, fontWeight: 700, color: ORANGE, letterSpacing: "0.04em" }}>
+            {t("live_chart_stale_title")}
+          </div>
+          <div style={{ fontSize: 11, color: "var(--text-dim)", maxWidth: 280, lineHeight: 1.35 }}>
+            {t("live_chart_stale_desc", { age: staleAge })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
