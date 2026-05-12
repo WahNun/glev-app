@@ -1322,6 +1322,7 @@ function NonMealRow({
   secondarySubtitle?: string;
   expandedDetails: React.ReactNode;
 }) {
+  const tx = useTranslations("entriesExpand");
   return (
     <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, overflow:"hidden" }}>
       {!isOpen ? (

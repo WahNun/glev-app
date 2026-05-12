@@ -1,6 +1,7 @@
 import { lookupOpenFoodFacts } from "./openFoodFacts";
 import { lookupUSDA } from "./usda";
 import { estimateItemNutrition } from "./estimate";
+import { categoryDefaultFor } from "./categoryDefaults";
 import type {
   AggregatedNutrition,
   AggregateSource,
@@ -73,16 +74,24 @@ async function resolveItem(item: ParsedFoodItem): Promise<ResolvedItem> {
   }
 
   // Both DBs missed → GPT estimate. estimateItemNutrition THROWS on
-  // any failure (config, API, all-zero response) per the T1D safety
-  // contract — see lib/nutrition/estimate.ts. We catch here so a
-  // single-item failure doesn't kill the whole meal: the failed item
-  // becomes 'unknown' (zero macros, surfaced to the UI as a refusal
-  // to auto-populate dosing inputs), while items that DID resolve
-  // still flow through normally.
+  // any failure (config, API, all-zero response, IMPOSSIBLE) per the
+  // T1D safety contract — see lib/nutrition/estimate.ts.
   try {
     const est = await estimateItemNutrition(item);
     return { per100: est, source: "estimated" };
   } catch {
+    // Option C (2026-05-12 — Lucas): before tagging this item as
+    // 'unknown' (which escalates the WHOLE meal to nutritionSource
+    // 'unknown' and blocks auto-fill — see topLevelSource), try a
+    // deterministic category-default lookup. Common foods like
+    // "Sucuk", "Schnitzel", "Pommes" map to broad per-100g averages
+    // sourced from USDA SR-Legacy + OFF category medians. Better a
+    // ±20% category estimate than zero macros for a single rate-
+    // limited / IMPOSSIBLE LLM response.
+    const fallback = categoryDefaultFor(item);
+    if (fallback) {
+      return { per100: fallback.per100, source: "estimated" };
+    }
     return { per100: ZERO, source: "unknown" };
   }
 }
