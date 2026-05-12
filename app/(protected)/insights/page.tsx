@@ -374,21 +374,23 @@ export default function InsightsPage() {
   // All buckets respect the active `[wkAgo, now)` window. Empty
   // buckets carry `avg: null` so the sparkline interpolation logic
   // below can still draw a continuous line.
+  // Bucket source: cross-source readings (meals + insulin + exercise +
+  // fingersticks) — same pool as TIR / GMI / Hypo / Hyper / CV. Was
+  // previously meals.glucose_before-only, which made manual fingerstick
+  // hypos invisible in the trend line even though they showed up in TIR.
   const trendDays: { label: string; avg: number | null }[] = [];
+  const avgInRange = (lo: number, hi: number): number | null => {
+    let sum = 0, n = 0;
+    for (const r of readings7) {
+      if (r.t >= lo && r.t < hi) { sum += r.v; n++; }
+    }
+    return n ? sum / n : null;
+  };
   if (scopeMode === "day") {
     for (let h = 0; h < 24; h += 4) {
       const bStart = wkAgo + h * 3600000;
       const bEnd   = wkAgo + (h + 4) * 3600000;
-      const bgs = meals
-        .filter(m => {
-          const t = parseDbTs(m.created_at);
-          return t >= bStart && t < bEnd && m.glucose_before != null;
-        })
-        .map(m => m.glucose_before as number);
-      trendDays.push({
-        label: String(h),
-        avg: bgs.length ? bgs.reduce((a, b) => a + b, 0) / bgs.length : null,
-      });
+      trendDays.push({ label: String(h), avg: avgInRange(bStart, bEnd) });
     }
   } else if (scopeMode === "year") {
     const yr = new Date(wkAgo).getFullYear();
@@ -396,16 +398,7 @@ export default function InsightsPage() {
     for (let mIdx = 0; mIdx < 12; mIdx++) {
       const bStart = new Date(yr, mIdx, 1).getTime();
       const bEnd   = new Date(yr, mIdx + 1, 1).getTime();
-      const bgs = meals
-        .filter(m => {
-          const t = parseDbTs(m.created_at);
-          return t >= bStart && t < bEnd && m.glucose_before != null;
-        })
-        .map(m => m.glucose_before as number);
-      trendDays.push({
-        label: monthFmt.format(new Date(bStart)),
-        avg: bgs.length ? bgs.reduce((a, b) => a + b, 0) / bgs.length : null,
-      });
+      trendDays.push({ label: monthFmt.format(new Date(bStart)), avg: avgInRange(bStart, bEnd) });
     }
   } else if (scopeMode === "month") {
     // Iterate through scope in 7-day chunks; cap at 5 buckets.
@@ -413,16 +406,7 @@ export default function InsightsPage() {
     let wIdx = 1;
     while (cursor < now && wIdx <= 5) {
       const bEnd = Math.min(cursor + 7 * 86400000, now);
-      const bgs = meals
-        .filter(m => {
-          const t = parseDbTs(m.created_at);
-          return t >= cursor && t < bEnd && m.glucose_before != null;
-        })
-        .map(m => m.glucose_before as number);
-      trendDays.push({
-        label: `W${wIdx}`,
-        avg: bgs.length ? bgs.reduce((a, b) => a + b, 0) / bgs.length : null,
-      });
+      trendDays.push({ label: `W${wIdx}`, avg: avgInRange(cursor, bEnd) });
       cursor = bEnd;
       wIdx++;
     }
@@ -432,15 +416,9 @@ export default function InsightsPage() {
       const bStart = wkAgo + i * 86400000;
       const bEnd   = wkAgo + (i + 1) * 86400000;
       if (bStart >= now) break;
-      const bgs = meals
-        .filter(m => {
-          const t = parseDbTs(m.created_at);
-          return t >= bStart && t < bEnd && m.glucose_before != null;
-        })
-        .map(m => m.glucose_before as number);
       trendDays.push({
         label: weekdayShortLabels[new Date(bStart).getDay()],
-        avg: bgs.length ? bgs.reduce((a, b) => a + b, 0) / bgs.length : null,
+        avg: avgInRange(bStart, bEnd),
       });
     }
   }
