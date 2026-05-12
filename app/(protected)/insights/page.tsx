@@ -530,6 +530,19 @@ export default function InsightsPage() {
   // when the user logs BOTH (e.g. correction bolus linked to a meal),
   // we skip a meal's insulin if any insulin_log row already points to
   // it via `related_entry_id`.
+  //
+  // Window: TDD ALWAYS uses a rolling 7-day window regardless of the
+  // global scope picker, because the card label literally promises
+  // "7T" (see card_tdd_title) and a Mon-anchored "Diese Woche" scope
+  // can never reach MIN_DATAPOINTS=3 days early in the week — Lucas
+  // hit "Nicht genug Daten" on Tuesday morning despite logging 120+
+  // meals (2026-05-12 bug report). startOfDaysAgo(6) gives the 7
+  // calendar days inclusive of today.
+  // Use Date.now() (NOT scope.endMs) so navigating to a past week/month
+  // still shows the rolling 7d ending today — the card promises "7T",
+  // not "7 days ending at the scope cursor".
+  const tddFromMs = startOfDaysAgo(6).getTime();
+  const tddNowMs  = Date.now();
   const linkedMealIds = new Set<string>();
   for (const il of insulinLogs) {
     if (il.related_entry_id) linkedMealIds.add(il.related_entry_id);
@@ -548,7 +561,7 @@ export default function InsightsPage() {
   };
   for (const il of insulinLogs) {
     const t = parseDbTs(il.created_at);
-    if (t < wkAgo || t >= now) continue;
+    if (t < tddFromMs || t >= tddNowMs) continue;
     const u = Number(il.units || 0);
     if (!Number.isFinite(u) || u <= 0) continue;
     const dayStart = startOfDay(new Date(t));
@@ -561,7 +574,7 @@ export default function InsightsPage() {
     if (!Number.isFinite(u) || u <= 0) continue;
     if (linkedMealIds.has(m.id)) continue;
     const t = parseDbTs(m.meal_time ?? m.created_at);
-    if (t < wkAgo || t >= now) continue;
+    if (t < tddFromMs || t >= tddNowMs) continue;
     const dayStart = startOfDay(new Date(t));
     const key = dayStart.toISOString().slice(0, 10);
     addToDay(key, "bolus", u);
@@ -1494,7 +1507,7 @@ export default function InsightsPage() {
                 tInsights("tdd_back_p1"),
                 tInsights("tdd_back_p2"),
                 tddEnough
-                  ? tInsights("tdd_back_p3", { logs: insulinLogs.filter(il => parseDbTs(il.created_at) >= wkAgo).length, days: tddDayCount })
+                  ? tInsights("tdd_back_p3", { logs: insulinLogs.filter(il => { const t = parseDbTs(il.created_at); return t >= tddFromMs && t < tddNowMs; }).length, days: tddDayCount })
                   : tInsights("tdd_back_p3_insufficient", { min: MIN_DATAPOINTS }),
               ]}
             />
