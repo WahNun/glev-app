@@ -741,7 +741,7 @@ export default function EntriesPage() {
           </button>
         ))}
         </div>
-        <input style={{ ...inp, width:"100%", boxSizing:"border-box" }} placeholder="Search entries…" value={search} onChange={e => setSearch(e.target.value)}/>
+        <input style={{ ...inp, width:"100%", boxSizing:"border-box" }} placeholder={tx("search_placeholder")} value={search} onChange={e => setSearch(e.target.value)}/>
       </div>
 
       {/* CARD STACK */}
@@ -1341,14 +1341,14 @@ function NonMealRow({
           `}</style>
           {/* Col 1: Date (time shown in expanded detail) */}
           <div style={{ minWidth:0 }}>
-            <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>When</div>
+            <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>{tx("row_when")}</div>
             <div style={{ fontSize:14, fontWeight:600, color:"var(--text-strong)", letterSpacing:"-0.01em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", fontFamily:"var(--font-mono)" }}>
               {dateStr}
             </div>
           </div>
           {/* Col 2: Kind badge */}
           <div style={{ minWidth:0 }}>
-            <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>Type</div>
+            <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>{tx("row_type")}</div>
             <div style={{ display:"flex", alignItems:"center", gap:6, minWidth:0 }}>
               <span style={{ width:7, height:7, borderRadius:99, background:accent, opacity:0.85, flexShrink:0 }}/>
               <span style={{ fontSize:13, fontWeight:700, color:accent, letterSpacing:"0.04em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{badge}</span>
@@ -1523,6 +1523,7 @@ function BolusRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
   log: InsulinLog;
   isOpen: boolean; onToggle: () => void; onDelete: () => void; deleting: boolean;
 }) {
+  const tx = useTranslations("entriesExpand");
   const locale = useLocale();
   const d = parseDbDate(log.created_at);
   const dateStr = d.toLocaleDateString(locale, { month:"short", day:"numeric" });
@@ -1569,10 +1570,10 @@ function BolusRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
       badge={evalInfo.label}
       dateStr={dateStr}
       timeStr={timeStr}
-      primaryLabel="Brand"
-      primaryValue={log.insulin_name || "rapid-acting"}
+      primaryLabel={tx("row_brand")}
+      primaryValue={log.insulin_name || tx("row_default_rapid")}
       primaryColor="var(--text-strong)"
-      secondaryLabel="Dose"
+      secondaryLabel={tx("row_dose")}
       secondaryValue={`${log.units}u`}
       secondaryColor={accent}
       secondaryMono
@@ -1580,12 +1581,12 @@ function BolusRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
       expandedDetails={
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
           {/* 1) Session details ------------------------------------ */}
-          <ExPanel title="SESSION DETAILS">
+          <ExPanel title={tx("panel_session_details")}>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8 }}>
-              <Detail label="DOSE" value={`${log.units} u`} color={accent}/>
-              <Detail label="INSULIN" value={log.insulin_name || "—"}/>
-              <Detail label="WHEN" value={`${dateStr} · ${timeStr}`}/>
-              <Detail label="TYPE" value="Bolus"/>
+              <Detail label={tx("detail_dose")} value={`${log.units} u`} color={accent}/>
+              <Detail label={tx("detail_insulin")} value={log.insulin_name || "—"}/>
+              <Detail label={tx("detail_when")} value={`${dateStr} · ${timeStr}`}/>
+              <Detail label={tx("detail_type")} value={tx("type_bolus")}/>
               {/* Historic ICR snapshot (frozen at log time). Shows "—"
                   for legacy rows or pre-ICR-config entries so a doctor
                   reviewing the log can tell "no snapshot" from "0". */}
@@ -1684,6 +1685,7 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
   log: InsulinLog;
   isOpen: boolean; onToggle: () => void; onDelete: () => void; deleting: boolean;
 }) {
+  const tx = useTranslations("entriesExpand");
   const locale = useLocale();
   const d = parseDbDate(log.created_at);
   const dateStr = d.toLocaleDateString(locale, { month:"short", day:"numeric" });
@@ -1765,30 +1767,30 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
       onDelete={onDelete}
       deleting={deleting}
       accent={accent}
-      badge="BASAL"
+      badge={tx("type_basal").toUpperCase()}
       dateStr={dateStr}
       timeStr={timeStr}
-      primaryLabel="Brand"
-      primaryValue={log.insulin_name || "long-acting"}
+      primaryLabel={tx("row_brand")}
+      primaryValue={log.insulin_name || tx("row_default_long")}
       primaryColor="var(--text-strong)"
-      secondaryLabel="Dose"
+      secondaryLabel={tx("row_dose")}
       secondaryValue={`${log.units}u`}
       secondaryColor={accent}
       secondaryMono
       expandedDetails={
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
           {/* 1) Session details ------------------------------------ */}
-          <ExPanel title="SESSION DETAILS">
+          <ExPanel title={tx("panel_session_details")}>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8 }}>
-              <Detail label="DOSE" value={`${log.units} u`} color={accent}/>
-              <Detail label="INSULIN" value={log.insulin_name || "—"}/>
-              <Detail label="WHEN" value={`${dateStr} · ${timeStr}`}/>
-              <Detail label="TYPE" value="Basal"/>
+              <Detail label={tx("detail_dose")} value={`${log.units} u`} color={accent}/>
+              <Detail label={tx("detail_insulin")} value={log.insulin_name || "—"}/>
+              <Detail label={tx("detail_when")} value={`${dateStr} · ${timeStr}`}/>
+              <Detail label={tx("detail_type")} value={tx("type_basal")}/>
             </div>
           </ExPanel>
 
           {/* 2) 6h CGM trend leading up to the injection ----------- */}
-          <ExPanel title="6 H GLUCOSE TREND (pre-injection)">
+          <ExPanel title={tx("panel_6h_pre")}>
             <div style={{
               background:"var(--surface-soft)",
               border:`1px solid ${BORDER}`,
@@ -1930,6 +1932,7 @@ function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting }:
   isOpen: boolean; onToggle: () => void; onDelete: () => void; deleting: boolean;
 }) {
   const tIns = useTranslations("insights");
+  const tx = useTranslations("entriesExpand");
   const locale = useLocale();
   const start = parseDbDate(log.created_at);
   const end   = new Date(start.getTime() + log.duration_minutes * 60_000);
@@ -1967,21 +1970,21 @@ function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting }:
       badge={evalInfo.label}
       dateStr={dateStr}
       timeStr={timeStr}
-      primaryLabel="Duration"
+      primaryLabel={tx("row_duration")}
       primaryValue={`${log.duration_minutes}m`}
       primaryColor={accent}
-      secondaryLabel="Type"
+      secondaryLabel={tx("row_type")}
       secondaryValue={typeLbl}
       expandedDetails={
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
           {/* 1) Session details ------------------------------------ */}
-          <ExPanel title="SESSION DETAILS">
+          <ExPanel title={tx("panel_session_details")}>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8 }}>
-              <Detail label="TYPE" value={typeLbl}/>
-              <Detail label="DURATION" value={`${log.duration_minutes} min`} color={accent}/>
-              <Detail label="INTENSITY" value={intensityLabel(log.intensity)}/>
-              <Detail label="STARTED" value={`${dateStr} · ${timeStr}`}/>
-              <Detail label="ENDED" value={`${endDateStr} · ${endTimeStr}`}/>
+              <Detail label={tx("detail_type")} value={typeLbl}/>
+              <Detail label={tx("detail_duration")} value={`${log.duration_minutes} min`} color={accent}/>
+              <Detail label={tx("detail_intensity")} value={intensityLabel(log.intensity)}/>
+              <Detail label={tx("detail_started")} value={`${dateStr} · ${timeStr}`}/>
+              <Detail label={tx("detail_ended")} value={`${endDateStr} · ${endTimeStr}`}/>
             </div>
           </ExPanel>
 

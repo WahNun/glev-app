@@ -26,6 +26,7 @@ export default function MealEntryCardCollapsed({
   // The DB column stays in grams; only the rendered value swaps.
   const carbUnit = useCarbUnit();
   const tEngine = useTranslations("engine");
+  const tx = useTranslations("entriesExpand");
   const locale = useLocale();
   const ts = meal.meal_time ?? meal.created_at;
   const d = parseDbDate(ts);
@@ -78,7 +79,7 @@ export default function MealEntryCardCollapsed({
           for one wrappable line. Stacking gives each its own row so the
           date can never be cut off. */}
       <div style={{ minWidth: 0 }}>
-        <div className="glev-mec-cell-label">When</div>
+        <div className="glev-mec-cell-label">{tx("row_when")}</div>
         <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)", letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "var(--font-mono)" }}>
           {dateStr}
         </div>
@@ -89,7 +90,7 @@ export default function MealEntryCardCollapsed({
 
       {/* Col 2: Classification */}
       <div style={{ minWidth: 0 }}>
-        <div className="glev-mec-cell-label">Type</div>
+        <div className="glev-mec-cell-label">{tx("row_type")}</div>
         {catColor && catShort ? (
           <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
             <span style={{ width: 7, height: 7, borderRadius: 99, background: catColor, opacity: 0.85, flexShrink: 0 }} />
@@ -104,7 +105,7 @@ export default function MealEntryCardCollapsed({
 
       {/* Col 3: Carbs */}
       <div style={{ minWidth: 0 }}>
-        <div className="glev-mec-cell-label">Carbs</div>
+        <div className="glev-mec-cell-label">{tx("row_carbs")}</div>
         <div style={{ fontSize: 14, fontWeight: 700, color: meal.carbs_grams ? ORANGE : "var(--text-faint)", letterSpacing: "-0.01em", fontFamily: "var(--font-mono)" }}>
           {/* Use the centralized display() helper — keeps formatting
               rules (rounding, label spacing) in one place rather than
@@ -120,7 +121,7 @@ export default function MealEntryCardCollapsed({
           statt zwei verschiedene Flags ("—" vs "0") für dasselbe Outcome
           zu zeigen. Farbe bleibt für 0/null gedimmt. */}
       <div style={{ minWidth: 0 }}>
-        <div className="glev-mec-cell-label">Insulin</div>
+        <div className="glev-mec-cell-label">{tx("row_insulin")}</div>
         <div style={{ fontSize: 14, fontWeight: 700, color: meal.insulin_units ? ACCENT : "var(--text-faint)", letterSpacing: "-0.01em", fontFamily: "var(--font-mono)" }}>
           {meal.insulin_units ?? 0}
           <span style={{ fontSize: 12, color: "var(--text-faint)", fontWeight: 500, marginLeft: 2 }}>u</span>
