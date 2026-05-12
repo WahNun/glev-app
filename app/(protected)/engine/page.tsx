@@ -951,16 +951,12 @@ export default function EnginePage() {
         // viewport too aggressively.
         chatPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       }, 300);
-      // Auto-advance to Step 2 (Makros prüfen) — Lucas 2026-05-12 reversed
-      // his earlier "stay on Step 1" preference: he wants the macros
-      // visible immediately after the parse instead of behind an extra
-      // "Weiter zu Makros prüfen →" tap. We only advance when the
-      // aggregator returned trustworthy numbers (`safeToAutofill`); on
-      // unknown/failed parses the user stays on Step 1 so they can
-      // correct via chat before committing wrong numbers downstream.
-      if (safeToAutofill && macroBits.length > 0) {
-        setStepIndex(1);
-      }
+      // No auto-advance (Lucas 2026-05-12, second pass): the form
+      // fields are autopopulated immediately on parse, but the user
+      // explicitly wants to keep the manual "Weiter zu Makros prüfen →"
+      // tap so they can review the chat seed (macros line + parsed
+      // description) on Step 1 before committing. Earlier auto-advance
+      // attempt was reverted same session — do NOT re-introduce.
     } catch (e) {
       // eslint-disable-next-line no-console
       console.log("[PERF voice/engine] FAILED after:", Date.now() - tStop, "ms");
