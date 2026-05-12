@@ -330,15 +330,27 @@ export default function InsightsPage() {
   const last7Bg = readings7.map(r => r.v);
   const prev7Bg = readingsPrev7.map(r => r.v);
 
+  // TIR/TBR/TAR rounding rule — Lucas reported a true hypo (manual
+  // fingerstick) showing up in the Hypo-Events tile while TIR still
+  // displayed 100%. Cause: with ~200 in-range readings + 1 hypo, the
+  // hypo bucket was 0.5% and `Math.round(0.5)=1` was masked because
+  // the in-range bucket independently rounded to 100. We now floor
+  // every non-zero hypo/hyper bucket to at least 1% (so a single
+  // out-of-range reading is never invisible) and compute TIR as the
+  // residual `100 − TBR − TAR`, which keeps the three displayed
+  // segments summing to exactly 100 even with the floor in place.
   const bucket = (arr: number[]) => {
-    const t = arr.length || 1;
-    return {
-      vlow: Math.round((arr.filter(g => g < 54).length / t) * 100),
-      lo:   Math.round((arr.filter(g => g >= 54 && g < 70).length / t) * 100),
-      inR:  Math.round((arr.filter(g => g >= 70 && g <= 180).length / t) * 100),
-      hi:   Math.round((arr.filter(g => g > 180).length / t) * 100),
-      n: arr.length,
-    };
+    const n = arr.length;
+    if (n === 0) return { vlow: 0, lo: 0, inR: 0, hi: 0, n: 0 };
+    const cVlow = arr.filter(g => g < 54).length;
+    const cLo   = arr.filter(g => g >= 54 && g < 70).length;
+    const cHi   = arr.filter(g => g > 180).length;
+    const pct = (c: number) => c === 0 ? 0 : Math.max(1, Math.round((c / n) * 100));
+    const vlow = pct(cVlow);
+    const lo   = pct(cLo);
+    const hi   = pct(cHi);
+    const inR  = Math.max(0, 100 - vlow - lo - hi);
+    return { vlow, lo, inR, hi, n };
   };
   const b7  = bucket(last7Bg);
   const bP7 = bucket(prev7Bg);
