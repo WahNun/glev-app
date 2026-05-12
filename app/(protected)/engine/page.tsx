@@ -906,21 +906,31 @@ export default function EnginePage() {
       setNutritionSource(
         ns === "database" || ns === "mixed" || ns === "estimated" || ns === "unknown" ? ns : null,
       );
-      // Hand the parsed result to the chat panel so the user sees what the AI
-      // captured and can immediately push back ("the banana was bigger") in
-      // the same conversation thread.
+      // Seed the chat panel — Lucas 2026-05-12: drop the chatty "Got it"
+      // opener and the "Tell me if anything's off" follow-up. The user
+      // wants the macros front-and-centre on first reply, not a
+      // conversation starter that asks for confirmation. We now show
+      // ONLY the macros line (when the parser found numbers) plus the
+      // captured description as a single short line so the user can
+      // sanity-check what was heard. If the parser failed to extract
+      // macros (unknown source / empty totals) we keep a compact "konnte
+      // nicht erkennen — bitte ergänzen" hint so the user isn't left
+      // staring at an empty card.
       const chatLines: string[] = [];
+      const macroBits: string[] = [];
+      if (t.carbs   != null) macroBits.push(`${t.carbs}g KH`);
+      if (t.protein != null) macroBits.push(`${t.protein}g Protein`);
+      if (t.fat     != null) macroBits.push(`${t.fat}g Fett`);
+      if (t.fiber   != null) macroBits.push(`${t.fiber}g Ballaststoffe`);
+      if (macroBits.length) {
+        chatLines.push(macroBits.join(" · "));
+      } else {
+        chatLines.push(`Makros konnten nicht automatisch erkannt werden — bitte unten ergänzen.`);
+      }
       const descLine = typeof pData.description === "string" && pData.description.trim()
         ? pData.description.trim()
         : text;
-      chatLines.push(`Got it: ${descLine}`);
-      const macroBits: string[] = [];
-      if (t.carbs   != null) macroBits.push(`${t.carbs}g carbs`);
-      if (t.protein != null) macroBits.push(`${t.protein}g protein`);
-      if (t.fat     != null) macroBits.push(`${t.fat}g fat`);
-      if (t.fiber   != null) macroBits.push(`${t.fiber}g fiber`);
-      if (macroBits.length) chatLines.push(`Macros: ${macroBits.join(" · ")}.`);
-      chatLines.push(`Tell me if anything's off — I'll update the form on the left.`);
+      chatLines.push(descLine);
       setChatSeed({ id: Date.now(), content: chatLines.join("\n\n") });
       logDebug("ENGINE.VOICE", { text, totals: t });
       // Voice submission implies the user is logging a meal *now* — pull
@@ -941,10 +951,16 @@ export default function EnginePage() {
         // viewport too aggressively.
         chatPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       }, 300);
-      // No auto-advance: the user explicitly asked to stay on Step 1 after
-      // the parse so they can read the chat, push back on the AI, or tweak
-      // the form before committing. Step 1 → Step 2 is now driven by the
-      // explicit "Weiter zu Makros prüfen →" button rendered below the chat.
+      // Auto-advance to Step 2 (Makros prüfen) — Lucas 2026-05-12 reversed
+      // his earlier "stay on Step 1" preference: he wants the macros
+      // visible immediately after the parse instead of behind an extra
+      // "Weiter zu Makros prüfen →" tap. We only advance when the
+      // aggregator returned trustworthy numbers (`safeToAutofill`); on
+      // unknown/failed parses the user stays on Step 1 so they can
+      // correct via chat before committing wrong numbers downstream.
+      if (safeToAutofill && macroBits.length > 0) {
+        setStepIndex(1);
+      }
     } catch (e) {
       // eslint-disable-next-line no-console
       console.log("[PERF voice/engine] FAILED after:", Date.now() - tStop, "ms");
