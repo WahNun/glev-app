@@ -958,9 +958,40 @@ export default function InsightsPage() {
             />
           }
         >
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+          {/* Header — title left, "Ø pro Tag" subtitle + the actual
+              7-day average number on the right. Without the number the
+              card only showed the sparkline + the "Ø pro Tag" label,
+              which read as a promise ("here comes the average") with
+              nothing delivering it. Color-coded the same way as the
+              other glucose tiles: green in-range, orange high, pink
+              low. Falls back to "—" while we don't yet have ≥2 days of
+              data so the slot doesn't disappear. */}
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
             <CardLabel text={tInsights("card_glucose_trend_title")}/>
-            <div style={{ fontSize:11, color:"var(--text-dim)" }}>{tInsights("card_glucose_trend_sub")}</div>
+            <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end" }}>
+              <div style={{ fontSize:11, color:"var(--text-dim)" }}>{tInsights("card_glucose_trend_sub")}</div>
+              <div style={{
+                fontSize: 22,
+                fontWeight: 800,
+                letterSpacing: "-0.03em",
+                lineHeight: 1.1,
+                fontFamily: "var(--font-mono)",
+                color: last7Avg == null
+                  ? "var(--text-faint)"
+                  : last7Avg > 140
+                    ? ORANGE
+                    : last7Avg < 80
+                      ? PINK
+                      : GREEN,
+              }}>
+                {last7Avg != null ? Math.round(last7Avg) : "—"}
+                {last7Avg != null && (
+                  <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-faint)", marginLeft: 4 }}>
+                    mg/dL
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
           {trendHasData ? (
             <>
