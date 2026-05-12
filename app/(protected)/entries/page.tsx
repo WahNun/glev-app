@@ -17,6 +17,7 @@ import {
   bolusPendingLabel,
 } from "@/lib/insulinEval";
 import CgmSparkline, { type SparklinePoint } from "@/components/CgmSparkline";
+import { fetchFingersticks } from "@/lib/fingerstick";
 import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel } from "@/lib/mealTypes";
 import { lifecycleFor, STATE_LABELS, type OutcomeState } from "@/lib/engine/lifecycle";
 import { renderEngineMessages } from "@/lib/engineMessages";
@@ -1703,22 +1704,25 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
 
   // Lazy-fetch CGM history when the row first opens. LLU graph only
   // returns ~12 h of recent readings, so this only renders meaningful
-  // data for basals logged within the last ~12 h.
+  // data for basals logged within the last ~12 h. Manual fingersticks
+  // for the same window are fetched in parallel so they overlay as
+  // colored dots on the sparkline (Task #273).
   const [trend, setTrend] = useState<{
     state: "idle" | "loading" | "ready" | "error";
     points: SparklinePoint[];
+    fingersticks: SparklinePoint[];
     error?: string;
-  }>({ state: "idle", points: [] });
+  }>({ state: "idle", points: [], fingersticks: [] });
 
   useEffect(() => {
     if (!isOpen || trend.state !== "idle") return;
-    setTrend({ state: "loading", points: [] });
+    setTrend({ state: "loading", points: [], fingersticks: [] });
     let cancelled = false;
-    fetch("/api/cgm/history", { cache: "no-store" })
-      .then(async r => {
+    Promise.all([
+      fetch("/api/cgm/history", { cache: "no-store" }).then(async r => {
         if (!r.ok) throw new Error(`history ${r.status}`);
         const out = await r.json() as { history?: { timestamp?: string | null; value?: number | null }[] };
-        const pts: SparklinePoint[] = (out.history || [])
+        return (out.history || [])
           .map(h => {
             const t = h.timestamp ? (parseLluTs(h.timestamp) ?? NaN) : NaN;
             const v = typeof h.value === "number" ? h.value : NaN;
@@ -1726,13 +1730,24 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
           })
           .filter((p): p is SparklinePoint => p !== null)
           .sort((a, b) => a.t - b.t);
-        if (!cancelled) setTrend({ state: "ready", points: pts });
+      }),
+      // Fingersticks within the 6 h pre-injection window. Failure is
+      // non-fatal — we degrade to CGM-only rather than block the chart.
+      fetchFingersticks(new Date(fromMs).toISOString(), new Date(toMs).toISOString())
+        .then(rows => rows
+          .map(r => ({ t: new Date(r.measured_at).getTime(), v: Number(r.value_mg_dl) }))
+          .filter((p): p is SparklinePoint => Number.isFinite(p.t) && Number.isFinite(p.v))
+          .sort((a, b) => a.t - b.t))
+        .catch(() => [] as SparklinePoint[]),
+    ])
+      .then(([pts, fs]) => {
+        if (!cancelled) setTrend({ state: "ready", points: pts, fingersticks: fs });
       })
       .catch(e => {
-        if (!cancelled) setTrend({ state: "error", points: [], error: (e as Error)?.message || "fetch failed" });
+        if (!cancelled) setTrend({ state: "error", points: [], fingersticks: [], error: (e as Error)?.message || "fetch failed" });
       });
     return () => { cancelled = true; };
-  }, [isOpen, trend.state]);
+  }, [isOpen, trend.state, fromMs, toMs]);
 
   // Stats for the 6 h pre-injection window.
   const inWindow = trend.points.filter(p => p.t >= fromMs && p.t <= toMs);
@@ -1792,10 +1807,13 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
               {trend.state === "ready" && (
                 <CgmSparkline
                   points={trend.points}
+                  fingersticks={trend.fingersticks}
                   fromMs={fromMs}
                   toMs={toMs}
                   markerMs={d.getTime()}
                   color={accent}
+                  manualLabel={locale.startsWith("de") ? "Manuell" : "Manual"}
+                  locale={locale}
                 />
               )}
               {/* Time-axis labels. */}
