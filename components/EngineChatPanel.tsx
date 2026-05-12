@@ -295,40 +295,17 @@ export default function EngineChatPanel({
         border: `1px solid ${BORDER}`,
         borderRadius: 16,
         display:"flex", flexDirection:"column",
-        // Per UX request (Lucas 2026-05-12, Screenshot IMG_6476): the
-        // chat panel should claim the ENTIRE vertical space between
-        // the Sprechen button above and the fixed bottom tab bar
-        // below — no longer capped at 50 dvh, and no leftover blank
-        // space under "Senden" before the tab bar starts. svh = the
-        // viewport at its smallest (browser chrome at its tallest),
-        // so first-paint never clips the input row.
-        //
-        // Reservation breakdown (~240 px, was 340 px — the old number
-        // double-counted gaps + assumed a sub-tab toggle that's been
-        // removed):
-        //   app header              ~64
-        //   step indicator pills    ~60
-        //   Sprechen pill           ~64
-        //   stack gaps              ~20
-        //   bottom tab bar          ~80  → minus, but split out below
-        //                           ────
-        //                           ~208 (rounded to 240 to leave a
-        //                                 small breathing margin so a
-        //                                 single browser-chrome tweak
-        //                                 doesn't push the input row
-        //                                 out of view)
-        // The bottom-nav 80 px is folded into the 240 reservation, so
-        // we don't subtract safe-area-inset-bottom a second time —
-        // the iOS home-indicator height is already inside the nav
-        // bar's own padding.
-        // Min 240 keeps the panel usable on iPhone SE 1st-gen / mini
-        // when the reservation overshoots on a particular browser
-        // chrome height. The Weiter / Zurück action button is
-        // intentionally pushed just below the visible area when
-        // shown — Step 1 only reveals it once macros are filled, at
-        // which point the user is about to advance anyway.
-        height:
-          "calc(100svh - 240px - env(safe-area-inset-top, 0px))",
+        // Lucas 2026-05-12 (round 3): fully flex-driven height now.
+        // The previous calc(100svh - 240px) approach was still
+        // leaving a visible gap above the bottom tab bar because the
+        // reservation can't account for safe-area-inset-top + the
+        // user's exact app-header chrome on every device. Switching
+        // to flex:1 lets the panel claim ALL remaining height in its
+        // parent flex column (Step 1 wrapper, see engine/page.tsx)
+        // so it always closes flush against the bottom-nav border.
+        // minHeight 240 keeps it usable on iPhone SE / mini if the
+        // parent column ever ends up shorter than expected.
+        flex: "1 1 0",
         minHeight: 240,
         overflow:"hidden",
       }}>

@@ -1628,13 +1628,18 @@ export default function EnginePage() {
       ref={chatPanelRef}
       style={{
         width: "100%",
-        // On desktop the wrapper sits inside a sticky <aside> with a
+        // Desktop: the wrapper sits inside a sticky <aside> with a
         // fixed viewport-derived height — `height: 100%` lets the
         // EngineChatPanel's own `height: 100%` desktop branch fill
-        // that available space. On mobile the panel sets its own
-        // `100svh - 340px` calc, so we leave the wrapper as auto to
-        // avoid collapsing inside the Step 1 flex column.
-        height: isMobile ? "auto" : "100%",
+        // that available space.
+        // Mobile: become a flex item that grabs all remaining height
+        // in the Step 1 flex column (see stepIndex===0 wrapper) so
+        // the chat card extends flush down to the fixed bottom-nav.
+        // `display:flex` propagates the height into the inner
+        // EngineChatPanel which uses `flex:1` on its mobile branch.
+        ...(isMobile
+          ? { flex: "1 1 0", minHeight: 0, display: "flex", flexDirection: "column" as const }
+          : { height: "100%" }),
         marginTop: isMobile ? 4 : 0,
       }}
     >
@@ -1980,7 +1985,23 @@ export default function EnginePage() {
               Both inputs are visible without scrolling so the user can
               choose freely between speaking or chatting. ───────── */}
           {stepIndex === 0 && (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, padding: "24px 0 8px" }}>
+            <div style={{
+              display: "flex", flexDirection: "column", alignItems: "center",
+              gap: 14, padding: "24px 0 8px",
+              // Mobile: stretch to fill the viewport between the fixed
+              // app header and fixed bottom-nav so the chat panel
+              // (flex:1 inside) closes flush against the nav. The
+              // 220px reservation covers the app header (~64 + safe-
+              // area-top), the step indicator pills (~80), the
+              // Sprechen pill row (~80) and small gaps. Bottom-nav is
+              // outside the page scroll (position:fixed) so we don't
+              // subtract it. Desktop keeps natural height since the
+              // chat lives in a sticky right sidebar instead.
+              minHeight: isMobile
+                ? "calc(100svh - 220px - env(safe-area-inset-top, 0px))"
+                : undefined,
+            }}>
+
               {/* Sprechen / Voice-input button. Now styled as a dark
                   pill carrying the brand-mark icon (Glev hexagon) instead
                   of a generic mic glyph, so the primary call-to-action on

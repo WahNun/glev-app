@@ -387,22 +387,18 @@ function RollingChart({ readings }: { readings: ChartPoint[] }) {
   const padT = 8;
   const padB = 22;
 
-  // Adaptive rolling window — Lucas reported that with only ~3-5h of
-  // CGM data the chart wasted most of its width on empty space. We now
-  // pick a window between 4h (minimum) and 12h (maximum) sized to the
-  // actual data span (oldest reading → now) plus a small right-side
-  // padding so the latest dot doesn't kiss the right edge. With no
-  // data we fall back to the historical 12h placeholder.
+  // Fixed 4h rolling window — Lucas 2026-05-12 reverted the earlier
+  // "adaptive 4-12h" experiment. The previous logic stretched the
+  // x-axis out to the oldest reading (e.g. -10h when the last CGM
+  // sync was 7h ago), which read as "the chart shows the last 10
+  // hours" instead of the intended "last 4 hours, with stale data".
+  // The card title already shows "Xh ago" for the latest reading, so
+  // a fixed window is unambiguous: leftmost edge = -4h, rightmost
+  // edge = now, no matter how stale the data is. Stale data simply
+  // means the trace ends partway across the chart instead of at
+  // "now" — which correctly communicates "no recent readings".
   const now = Date.now();
-  const MIN_WIN = 4  * 60 * 60 * 1000;
-  const MAX_WIN = 12 * 60 * 60 * 1000;
-  const winSpan = useMemo(() => {
-    const all = readings.filter((r) => r.t <= now && r.t >= now - MAX_WIN);
-    if (all.length === 0) return MAX_WIN;
-    const oldest = Math.min(...all.map((r) => r.t));
-    const span   = now - oldest + 30 * 60 * 1000; // +30min padding
-    return Math.max(MIN_WIN, Math.min(MAX_WIN, span));
-  }, [readings, now]);
+  const winSpan = 4 * 60 * 60 * 1000;
   const winStart = useMemo(() => now - winSpan, [now, winSpan]);
   const visible = useMemo(
     () => readings.filter((r) => r.t >= winStart && r.t <= now),
