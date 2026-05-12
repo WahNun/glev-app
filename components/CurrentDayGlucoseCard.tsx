@@ -447,18 +447,27 @@ function RollingChart({ readings }: { readings: ChartPoint[] }) {
   const padT = 8;
   const padB = 22;
 
-  // Fixed 4h rolling window — Lucas 2026-05-12 reverted the earlier
-  // "adaptive 4-12h" experiment. The previous logic stretched the
-  // x-axis out to the oldest reading (e.g. -10h when the last CGM
-  // sync was 7h ago), which read as "the chart shows the last 10
-  // hours" instead of the intended "last 4 hours, with stale data".
-  // The card title already shows "Xh ago" for the latest reading, so
-  // a fixed window is unambiguous: leftmost edge = -4h, rightmost
-  // edge = now, no matter how stale the data is. Stale data simply
-  // means the trace ends partway across the chart instead of at
-  // "now" — which correctly communicates "no recent readings".
+  // Adaptive rolling window (4h–12h). Restored 2026-05-12 after the
+  // fixed-4h variant from earlier today (commit 9f17757) caused the
+  // chart to render completely empty whenever the newest CGM point
+  // was older than 4h — Lucas saw "9h ago" with a blank chart and
+  // (correctly) read it as the app being broken, not as "stale data".
+  // Adaptive behaviour: pick a window between 4h (minimum) and 12h
+  // (maximum) sized to the actual data span (oldest reading → now)
+  // plus 30min right-side padding so the latest dot doesn't kiss the
+  // right edge. This way, if the most recent reading is 7h old the
+  // chart shows ~8h and the trace is visible; if data is fresh the
+  // chart stays at the tighter 4h zoom.
   const now = Date.now();
-  const winSpan = 4 * 60 * 60 * 1000;
+  const MIN_WIN = 4  * 60 * 60 * 1000;
+  const MAX_WIN = 12 * 60 * 60 * 1000;
+  const winSpan = useMemo(() => {
+    const all = readings.filter((r) => r.t <= now && r.t >= now - MAX_WIN);
+    if (all.length === 0) return MAX_WIN;
+    const oldest = Math.min(...all.map((r) => r.t));
+    const span   = now - oldest + 30 * 60 * 1000; // +30min padding
+    return Math.max(MIN_WIN, Math.min(MAX_WIN, span));
+  }, [readings, now]);
   const winStart = useMemo(() => now - winSpan, [now, winSpan]);
   const visible = useMemo(
     () => readings.filter((r) => r.t >= winStart && r.t <= now),
