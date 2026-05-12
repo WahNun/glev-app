@@ -422,12 +422,31 @@ export default function InsightsPage() {
       });
     }
   }
-  let lastVal: number | null = null;
-  const firstFallback = last7Avg ?? 100;
-  const trendValues: number[] = trendDays.map(d => {
-    if (d.avg != null) { lastVal = d.avg; return d.avg; }
-    return lastVal ?? firstFallback;
+  // Trend fill strategy — Lucas reported the line flatlining even with
+  // a non-trivial dataset (100% TIR, 112 meals). The previous algorithm
+  // only forward-filled `lastVal`, so any leading null bucket fell back
+  // to a single global `last7Avg` constant. With sparse data clustered
+  // in 1-2 days, that produced [avg, avg, avg, dayVal, dayVal, dayVal,
+  // dayVal] — visually flat after Sparkline normalised. We now do a
+  // proper bidirectional fill so the rendered line follows the actual
+  // shape of the data: leading nulls inherit the FIRST observed value,
+  // trailing/middle nulls forward-fill from the most recent observed
+  // value. Together they form a stair-step that the Sparkline can scale.
+  const observedAvgs = trendDays.map(d => d.avg);
+  const observedCount = observedAvgs.filter(v => v != null).length;
+  const trendHasData = observedCount >= 2;
+  let trendFwd: number | null = null;
+  const fwdFilled: (number | null)[] = observedAvgs.map(v => {
+    if (v != null) { trendFwd = v; return v; }
+    return trendFwd;
   });
+  let trendBwd: number | null = null;
+  for (let i = fwdFilled.length - 1; i >= 0; i--) {
+    const v = fwdFilled[i];
+    if (v != null) { trendBwd = v; }
+    else if (trendBwd != null) { fwdFilled[i] = trendBwd; }
+  }
+  const trendValues: number[] = fwdFilled.map(v => v ?? last7Avg ?? 100);
 
   // ── Hypo / Hyper event counters (7d, count of individual readings) ──
   // (`readings7` / `readings14` are computed earlier so TIR can share them.)
@@ -894,10 +913,21 @@ export default function InsightsPage() {
             <CardLabel text={tInsights("card_glucose_trend_title")}/>
             <div style={{ fontSize:11, color:"var(--text-dim)" }}>{tInsights("card_glucose_trend_sub")}</div>
           </div>
-          <Sparkline values={trendValues} color={ACCENT}/>
-          <div style={{ display:"flex", justifyContent:"space-between", marginTop:4, fontSize:11, color:"var(--text-faint)" }}>
-            {trendDays.map((d, i) => <span key={i}>{d.label}</span>)}
-          </div>
+          {trendHasData ? (
+            <>
+              <Sparkline values={trendValues} color={ACCENT}/>
+              <div style={{ display:"flex", justifyContent:"space-between", marginTop:4, fontSize:11, color:"var(--text-faint)" }}>
+                {trendDays.map((d, i) => <span key={i}>{d.label}</span>)}
+              </div>
+            </>
+          ) : (
+            <div style={{
+              minHeight: 64, display:"flex", alignItems:"center", justifyContent:"center",
+              fontSize: 13, color: "var(--text-dim)", textAlign: "center", padding: "8px 4px",
+            }}>
+              {tInsights("card_glucose_trend_empty")}
+            </div>
+          )}
         </FlipCard>
       ),
     },

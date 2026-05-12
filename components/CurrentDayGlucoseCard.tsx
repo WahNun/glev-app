@@ -387,12 +387,23 @@ function RollingChart({ readings }: { readings: ChartPoint[] }) {
   const padT = 8;
   const padB = 22;
 
-  // Rolling 12h window: (now − 12h) → now. Anchored to the current
-  // time so the chart slides forward continuously and never shows a
-  // midnight cliff. Parent already loads exactly this window; the
-  // re-filter here is defensive.
+  // Adaptive rolling window — Lucas reported that with only ~3-5h of
+  // CGM data the chart wasted most of its width on empty space. We now
+  // pick a window between 4h (minimum) and 12h (maximum) sized to the
+  // actual data span (oldest reading → now) plus a small right-side
+  // padding so the latest dot doesn't kiss the right edge. With no
+  // data we fall back to the historical 12h placeholder.
   const now = Date.now();
-  const winStart = useMemo(() => now - 12 * 60 * 60 * 1000, [now]);
+  const MIN_WIN = 4  * 60 * 60 * 1000;
+  const MAX_WIN = 12 * 60 * 60 * 1000;
+  const winSpan = useMemo(() => {
+    const all = readings.filter((r) => r.t <= now && r.t >= now - MAX_WIN);
+    if (all.length === 0) return MAX_WIN;
+    const oldest = Math.min(...all.map((r) => r.t));
+    const span   = now - oldest + 30 * 60 * 1000; // +30min padding
+    return Math.max(MIN_WIN, Math.min(MAX_WIN, span));
+  }, [readings, now]);
+  const winStart = useMemo(() => now - winSpan, [now, winSpan]);
   const visible = useMemo(
     () => readings.filter((r) => r.t >= winStart && r.t <= now),
     [readings, winStart, now],
@@ -410,17 +421,22 @@ function RollingChart({ readings }: { readings: ChartPoint[] }) {
   const toY = (v: number) => padT + (1 - (v - yMin) / (yMax - yMin)) * (H - padT - padB);
 
   const yTicks = [70, 110, 180, 250];
-  // Relative markers anchored to "now" on the right edge: −12h / −8h /
-  // −4h / now. Always rendered in full because the rolling window is
-  // always 12h wide.
+  // Relative markers anchored to "now" on the right edge. Computed
+  // from `winSpan` so the labels track the adaptive window width
+  // (-12h / -8h / -4h / now when full; -4h / -3h / -1h / now when
+  // zoomed to a thin slice of recent data).
   const xLabels: Array<{ t: number; label: string }> = useMemo(() => {
+    const spanH = winSpan / 3600 / 1000;
+    const h1 = Math.max(1, Math.round(spanH));
+    const h2 = Math.max(1, Math.round((spanH * 2) / 3));
+    const h3 = Math.max(1, Math.round(spanH / 3));
     return [
-      { t: winStart,                       label: "-12h" },
-      { t: now - 8 * 3600 * 1000,          label: "-8h"  },
-      { t: now - 4 * 3600 * 1000,          label: "-4h"  },
-      { t: now,                            label: "now"  },
+      { t: now - h1 * 3600 * 1000, label: `-${h1}h` },
+      { t: now - h2 * 3600 * 1000, label: `-${h2}h` },
+      { t: now - h3 * 3600 * 1000, label: `-${h3}h` },
+      { t: now,                    label: "now"     },
     ];
-  }, [winStart, now]);
+  }, [winSpan, now]);
 
   const path = visibleCgm.map((r, i) => `${i === 0 ? "M" : "L"}${toX(r.t).toFixed(1)},${toY(r.v).toFixed(1)}`).join(" ");
   const lastCgm = visibleCgm[visibleCgm.length - 1];

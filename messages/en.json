@@ -562,6 +562,7 @@
     "card_gmi_title": "GMI / est. A1C",
     "card_glucose_trend_title": "7-day trend",
     "card_glucose_trend_sub": "avg per day",
+    "card_glucose_trend_empty": "Not enough daily data for a trend yet.",
     "card_hypo_events_title": "Hypo Events · 7d",
     "card_hyper_events_title": "Hyper Events · 7d",
     "card_meal_evaluation_title": "Meal evaluation · 7d",

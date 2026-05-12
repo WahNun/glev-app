@@ -570,6 +570,7 @@
     "card_gmi_title": "GMI / gesch. HbA1c",
     "card_glucose_trend_title": "7-Tage-Trend",
     "card_glucose_trend_sub": "Ø pro Tag",
+    "card_glucose_trend_empty": "Noch zu wenig Tagesdaten für einen Trend.",
     "card_hypo_events_title": "Hypo-Events · 7T",
     "card_hyper_events_title": "Hyper-Events · 7T",
     "card_meal_evaluation_title": "Mahlzeiten-Bewertung · 7T",
