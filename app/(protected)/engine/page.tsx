@@ -347,6 +347,26 @@ export default function EnginePage() {
     [tEngine],
   );
   const [tab, setTab]         = useState<"engine"|"log"|"bolus"|"exercise"|"fingerstick"|"cycle"|"symptoms"|"influences">("engine");
+  // Biological sex — gates the cycle tab from the engine tab strip and
+  // protects against deep-linked `?tab=cycle` for male users. Defaults
+  // to "show everything" while loading so we don't briefly hide it for
+  // a returning female user.
+  const [showCycleTab, setShowCycleTab] = useState<boolean>(true);
+  useEffect(() => {
+    let cancelled = false;
+    import("@/lib/userProfile").then(({ fetchUserProfile, cycleSurfacesAvailable }) => {
+      fetchUserProfile()
+        .then((p) => { if (!cancelled) setShowCycleTab(cycleSurfacesAvailable(p.sex)); })
+        .catch(() => {});
+    });
+    return () => { cancelled = true; };
+  }, []);
+  // If the user lands on `?tab=cycle` (or had it selected last) and the
+  // profile resolves to male, bump them back to the engine tab so the
+  // hidden cycle form can never render under them.
+  useEffect(() => {
+    if (!showCycleTab && tab === "cycle") setTab("engine");
+  }, [showCycleTab, tab]);
   // Sync the active sub-tab from the URL ?tab= query so deep-links
   // from the header QuickAddMenu ("Glukose messen", "Insulin loggen",
   // "Sport loggen") land directly on the right card. We listen to
@@ -1690,12 +1710,18 @@ export default function EnginePage() {
         // fell back to "Engine" — confusing the user into thinking the
         // navigation broke. The "log" combined view is dropped; users
         // now click the dedicated tab they want.
+        // Cycle tab is gated on biological sex — male users never see
+        // it (no bleeding / phase concept applies). Symptoms tab stays
+        // visible for everyone; the PMS subcategory inside it is gated
+        // separately in the SymptomForm itself.
         const tabsCfg = [
           { id:"engine"      as const, label: tEngine("tab_engine") },
           { id:"bolus"       as const, label: tEngine("tab_insulin") },
           { id:"exercise"    as const, label: tEngine("tab_exercise") },
           { id:"fingerstick" as const, label: tEngine("tab_glucose") },
-          { id:"cycle"       as const, label: tEngine("tab_cycle") },
+          ...(showCycleTab
+            ? [{ id:"cycle" as const, label: tEngine("tab_cycle") }]
+            : []),
           { id:"symptoms"    as const, label: tEngine("tab_symptoms") },
           { id:"influences"  as const, label: tEngine("tab_influences") },
         ];
@@ -2655,7 +2681,7 @@ export default function EnginePage() {
       {tab === "bolus"       && <InsulinForm />}
       {tab === "exercise"    && <ExerciseForm />}
       {tab === "fingerstick" && <FingerstickLogCard />}
-      {tab === "cycle"       && <CycleForm />}
+      {tab === "cycle" && showCycleTab && <CycleForm />}
       {tab === "symptoms"    && <SymptomForm />}
       {tab === "influences"  && <InfluenceForm />}
     </div>

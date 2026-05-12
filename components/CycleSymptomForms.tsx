@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import {
   insertMenstrualLog,
@@ -19,6 +19,7 @@ import { hapticSelection, hapticSuccess, hapticError } from "@/lib/haptics";
 import SnapSlider from "@/components/log/SnapSlider";
 import CollapsibleField from "@/components/log/CollapsibleField";
 import SaveButton from "@/components/log/SaveButton";
+import { fetchUserProfile, cycleSurfacesAvailable, type Sex } from "@/lib/userProfile";
 
 const PINK   = "#FF2D78";
 const PURPLE = "#A78BFA";
@@ -422,6 +423,21 @@ export function SymptomForm() {
   // selection so chips never end up "selected but invisible" after
   // the visible chip list shrinks.
   const [category, setCategory] = useState<SymptomCategory>("general");
+  // Biological sex gates the PMS / cycle category. Male users never see
+  // the toggle and stay locked on "general"; null is treated as "show
+  // everything" so pre-onboarding users aren't worse off. Same source of
+  // truth (`fetchUserProfile`) as the Insights cycle card.
+  const [sex, setSex] = useState<Sex | null>(null);
+  useEffect(() => {
+    fetchUserProfile().then((p) => setSex(p.sex)).catch(() => {});
+  }, []);
+  const showCycleCategory = cycleSurfacesAvailable(sex);
+  // If the profile resolves to male after the user already opened the
+  // PMS tab, force them back to "general" so they can't end up logging
+  // a hidden category.
+  useEffect(() => {
+    if (!showCycleCategory && category === "pms") setCategory("general");
+  }, [showCycleCategory, category]);
   const chipTypes: readonly SymptomType[] =
     category === "pms" ? PMS_SYMPTOM_TYPES : SYMPTOM_TYPES;
 
@@ -505,43 +521,45 @@ export function SymptomForm() {
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <div>
-          <label style={labelStyle}>{t("symptom_category_label")}</label>
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 6,
-            background: "var(--input-bg)",
-            border: `1px solid ${BORDER}`,
-            borderRadius: 12,
-            padding: 4,
-          }}>
-            {(["general", "pms"] as const).map(c => {
-              const on = c === category;
-              return (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => switchCategory(c)}
-                  style={{
-                    padding: "9px 10px", borderRadius: 8, border: "none",
-                    background: on ? `${PURPLE}22` : "transparent",
-                    color: on ? PURPLE : "var(--text-muted)",
-                    fontSize: 14, fontWeight: 700, cursor: "pointer",
-                    transition: "all 0.15s",
-                  }}
-                >
-                  {t(`symptom_category_${c}` as never)}
-                </button>
-              );
-            })}
-          </div>
-          {category === "pms" && (
-            <div style={{ fontSize: 13, color: "var(--text-faint)", marginTop: 6 }}>
-              {t("symptom_category_pms_hint")}
+        {showCycleCategory && (
+          <div>
+            <label style={labelStyle}>{t("symptom_category_label")}</label>
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 6,
+              background: "var(--input-bg)",
+              border: `1px solid ${BORDER}`,
+              borderRadius: 12,
+              padding: 4,
+            }}>
+              {(["general", "pms"] as const).map(c => {
+                const on = c === category;
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => switchCategory(c)}
+                    style={{
+                      padding: "9px 10px", borderRadius: 8, border: "none",
+                      background: on ? `${PURPLE}22` : "transparent",
+                      color: on ? PURPLE : "var(--text-muted)",
+                      fontSize: 14, fontWeight: 700, cursor: "pointer",
+                      transition: "all 0.15s",
+                    }}
+                  >
+                    {t(`symptom_category_${c}` as never)}
+                  </button>
+                );
+              })}
             </div>
-          )}
-        </div>
+            {category === "pms" && (
+              <div style={{ fontSize: 13, color: "var(--text-faint)", marginTop: 6 }}>
+                {t("symptom_category_pms_hint")}
+              </div>
+            )}
+          </div>
+        )}
 
         <div>
           <label style={labelStyle}>{t("symptom_select_label")}</label>

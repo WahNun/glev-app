@@ -210,9 +210,15 @@ export function InfluenceForm() {
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div>
           <label style={labelStyle}>{t("influence_type_label")}</label>
+          {/* Was a fixed `repeat(N, 1fr)` grid, which on iPhone-13-mini
+              widths squashed "Medikamente" / "Sonstiges" so the labels
+              clipped at the right edge of the rounded container. Switch
+              to a wrap-friendly flex row: each chip sizes to its label
+              (whiteSpace:nowrap), grows to fill its row, and breaks to
+              a second line rather than truncating. */}
           <div style={{
-            display: "grid",
-            gridTemplateColumns: `repeat(${INFLUENCE_TYPES.length}, 1fr)`,
+            display: "flex",
+            flexWrap: "wrap",
             gap: 6,
             background: "var(--input-bg)",
             border: `1px solid ${BORDER}`,
@@ -227,10 +233,13 @@ export function InfluenceForm() {
                   type="button"
                   onClick={() => selectType(v)}
                   style={{
-                    padding: "9px 8px", borderRadius: 8, border: "none",
+                    flex: "1 1 auto",
+                    minWidth: 72,
+                    padding: "9px 12px", borderRadius: 8, border: "none",
                     background: on ? `${AMBER}22` : "transparent",
                     color: on ? AMBER : "var(--text-muted)",
                     fontSize: 13, fontWeight: 700, cursor: "pointer",
+                    whiteSpace: "nowrap",
                     transition: "all 0.15s",
                   }}
                 >

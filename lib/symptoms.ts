@@ -64,6 +64,8 @@ export function isSymptomCategory(v: unknown): v is SymptomCategory {
  * `water_retention` (Wassereinlagerung). Order mirrors the spec.
  */
 export const PMS_SYMPTOM_TYPES: readonly SymptomType[] = [
+  "cramps",
+  "bloating",
   "cravings",
   "fatigue",
   "irritability",
