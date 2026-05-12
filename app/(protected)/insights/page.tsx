@@ -460,11 +460,48 @@ export default function InsightsPage() {
   }
   const trendValues: number[] = fwdFilled.map(v => v ?? last7Avg ?? 100);
 
-  // ── Hypo / Hyper event counters (7d, count of individual readings) ──
+  // ── Hypo / Hyper event counters (7d, ATTD-style clustered events) ──
   // (`readings7` / `readings14` are computed earlier so TIR can share them.)
-  const hypoEnough  = readings7.length >= MIN_DATAPOINTS;
-  const hyperEnough = readings7.length >= MIN_DATAPOINTS;
-  const hypoCount7d  = readings7.filter(r => r.v < HYPO_THRESHOLD_MGDL).length;
+  // Lucas's request 2026-05-12: split hypos into two clinically-meaningful
+  // buckets instead of "every reading <70 = 1 event":
+  //   • Mini-Hypo     — cluster of <70 readings spanning  <15 min
+  //   • Klinische Hypo— cluster of <70 readings spanning ≥15 min
+  // Adjacent <70 readings are merged into the same cluster as long as
+  // their gap is ≤ HYPO_GAP_MS (15 min). A single point (one CGM reading
+  // or one manual fingerstick) has zero span and falls into "mini" — we
+  // don't extrapolate an unknown duration. Hypers stay as raw count for
+  // now (Lucas only asked about hypos); switching them to the same model
+  // is a follow-up if needed.
+  const HYPO_GAP_MS      = 15 * 60 * 1000;
+  const HYPO_CLINICAL_MS = 15 * 60 * 1000;
+  const countHypoEvents = (rs: BgReading[]): { mini: number; clinical: number } => {
+    const lows = rs
+      .filter(r => r.v < HYPO_THRESHOLD_MGDL)
+      .sort((a, b) => a.t - b.t);
+    if (lows.length === 0) return { mini: 0, clinical: 0 };
+    let mini = 0, clinical = 0;
+    let cStart = lows[0].t;
+    let cEnd   = lows[0].t;
+    const flush = () => {
+      if (cEnd - cStart >= HYPO_CLINICAL_MS) clinical += 1;
+      else mini += 1;
+    };
+    for (let i = 1; i < lows.length; i++) {
+      if (lows[i].t - cEnd <= HYPO_GAP_MS) {
+        cEnd = lows[i].t;
+      } else {
+        flush();
+        cStart = lows[i].t;
+        cEnd   = lows[i].t;
+      }
+    }
+    flush();
+    return { mini, clinical };
+  };
+  const hypoEnough   = readings7.length >= MIN_DATAPOINTS;
+  const hyperEnough  = readings7.length >= MIN_DATAPOINTS;
+  const hypoEvents7d = countHypoEvents(readings7);
+  const hypoTotal7d  = hypoEvents7d.mini + hypoEvents7d.clinical;
   const hyperCount7d = readings7.filter(r => r.v > HYPER_THRESHOLD_MGDL).length;
 
   // ── Glucose Variability CV% (14d, ATTD consensus) ──
@@ -947,7 +984,13 @@ export default function InsightsPage() {
     {
       id: "hypo-events",
       node: (() => {
-        const accent = hypoCount7d > 0 ? PINK : GREEN;
+        // Card accent prioritises the more severe bucket: pink for any
+        // clinical (≥15 min) hypo, orange for mini-only, green for none.
+        const accent = hypoEvents7d.clinical > 0
+          ? PINK
+          : hypoEvents7d.mini > 0
+            ? ORANGE
+            : GREEN;
         return (
           <FlipCard
             accent={accent}
@@ -958,6 +1001,7 @@ export default function InsightsPage() {
                 paragraphs={[
                   tInsights("hypo_back_p1"),
                   tInsights("hypo_back_p2"),
+                  tInsights("hypo_back_p3_clusters"),
                   hypoEnough
                     ? tInsights("readings_window_p3", { n: readings7.length })
                     : tInsights("min_readings_window_required", { min: MIN_DATAPOINTS }),
@@ -974,15 +1018,55 @@ export default function InsightsPage() {
                 <div style={{ fontSize:14, color:"var(--text-dim)", fontWeight:600 }}>{tInsights("insufficient_data")}</div>
                 <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:4 }}>{tInsights("min_readings_required", { min: MIN_DATAPOINTS })}</div>
               </div>
-            ) : (
+            ) : hypoTotal7d === 0 ? (
               <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
-                <div style={{ fontSize:36, fontWeight:800, color:accent, letterSpacing:"-0.04em", fontFamily:"var(--font-mono)", lineHeight:1 }}>
-                  {hypoCount7d}
-                </div>
-                <div style={{ fontSize:13, color:accent, fontWeight:600 }}>
-                  {hypoCount7d === 0 ? tInsights("hypo_count_zero") : hypoCount7d === 1 ? tInsights("hypo_count_one") : tInsights("hypo_count_many")}
+                <div style={{ fontSize:36, fontWeight:800, color:GREEN, letterSpacing:"-0.04em", fontFamily:"var(--font-mono)", lineHeight:1 }}>0</div>
+                <div style={{ fontSize:13, color:GREEN, fontWeight:600 }}>
+                  {tInsights("hypo_count_zero")}
                 </div>
                 <div style={{ marginLeft:"auto", fontSize:11, color:"var(--text-dim)" }}>
+                  {tInsights("readings_count", { n: readings7.length })}
+                </div>
+              </div>
+            ) : (
+              // Two-bucket layout — Mini-Hypo (<15 min) and Klinische Hypo
+              // (≥15 min) side-by-side. Each shows a count + a short
+              // duration hint so Lucas knows what each bucket means at a
+              // glance without flipping the card.
+              <div>
+                <div style={{ display:"flex", gap:12 }}>
+                  <div style={{ flex:1 }}>
+                    <div style={{
+                      fontSize:30, fontWeight:800,
+                      color: hypoEvents7d.mini > 0 ? ORANGE : "var(--text-faint)",
+                      letterSpacing:"-0.04em", fontFamily:"var(--font-mono)", lineHeight:1,
+                    }}>
+                      {hypoEvents7d.mini}
+                    </div>
+                    <div style={{ fontSize:12, color:"var(--text-dim)", fontWeight:600, marginTop:4 }}>
+                      {tInsights("hypo_mini_label")}
+                    </div>
+                    <div style={{ fontSize:10, color:"var(--text-faint)", marginTop:2 }}>
+                      {tInsights("hypo_mini_sub")}
+                    </div>
+                  </div>
+                  <div style={{ flex:1 }}>
+                    <div style={{
+                      fontSize:30, fontWeight:800,
+                      color: hypoEvents7d.clinical > 0 ? PINK : "var(--text-faint)",
+                      letterSpacing:"-0.04em", fontFamily:"var(--font-mono)", lineHeight:1,
+                    }}>
+                      {hypoEvents7d.clinical}
+                    </div>
+                    <div style={{ fontSize:12, color:"var(--text-dim)", fontWeight:600, marginTop:4 }}>
+                      {tInsights("hypo_clinical_label")}
+                    </div>
+                    <div style={{ fontSize:10, color:"var(--text-faint)", marginTop:2 }}>
+                      {tInsights("hypo_clinical_sub")}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ marginTop:8, fontSize:11, color:"var(--text-dim)", textAlign:"right" }}>
                   {tInsights("readings_count", { n: readings7.length })}
                 </div>
               </div>
