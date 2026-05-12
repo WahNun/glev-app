@@ -717,6 +717,8 @@
     "tdd_unit_main": "U/Tag",
     "tdd_avg_7d": "Ø 7T",
     "tdd_today": "Heute",
+    "tdd_bolus_label": "Bolus",
+    "tdd_basal_label": "Basal",
     "tdd_min_required": "≥ {min} Tage mit Insulin-Logs erforderlich",
     "tdd_back_p1": "Total Daily Dose (TDD) ist die Summe aller protokollierten Insulin-Einheiten pro Tag — Bolus + Basal aus dem Engine-Log.",
     "tdd_back_p2": "Hauptzahl: Tagesdurchschnitt der letzten 7 Tage (Summe ÷ 7). Heutige Tagessumme separat darunter. Eine konstante TDD signalisiert stabile Stoffwechseleinstellung; Schwankungen > 20 % können auf veränderten Insulinbedarf hindeuten.",

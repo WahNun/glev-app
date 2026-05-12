@@ -534,13 +534,27 @@ export default function InsightsPage() {
   for (const il of insulinLogs) {
     if (il.related_entry_id) linkedMealIds.add(il.related_entry_id);
   }
-  const tddByDay = new Map<string, number>();
+  // Per-day map keeps bolus + basal as a tuple so the card can show
+  // both legs of TDD instead of just the lump sum. Meals always count
+  // as bolus (insulin_units in the meal row is always carb-cover or a
+  // correction bolus, never basal). Standalone insulin_logs carry
+  // their own insulin_type so we route by that.
+  type DayBuckets = { bolus: number; basal: number };
+  const tddByDay = new Map<string, DayBuckets>();
+  const addToDay = (key: string, leg: keyof DayBuckets, u: number) => {
+    const cur = tddByDay.get(key) ?? { bolus: 0, basal: 0 };
+    cur[leg] += u;
+    tddByDay.set(key, cur);
+  };
   for (const il of insulinLogs) {
     const t = parseDbTs(il.created_at);
     if (t < wkAgo || t >= now) continue;
+    const u = Number(il.units || 0);
+    if (!Number.isFinite(u) || u <= 0) continue;
     const dayStart = startOfDay(new Date(t));
     const key = dayStart.toISOString().slice(0, 10);
-    tddByDay.set(key, (tddByDay.get(key) ?? 0) + Number(il.units || 0));
+    const leg: keyof DayBuckets = il.insulin_type === "basal" ? "basal" : "bolus";
+    addToDay(key, leg, u);
   }
   for (const m of meals) {
     const u = Number(m.insulin_units || 0);
@@ -550,14 +564,26 @@ export default function InsightsPage() {
     if (t < wkAgo || t >= now) continue;
     const dayStart = startOfDay(new Date(t));
     const key = dayStart.toISOString().slice(0, 10);
-    tddByDay.set(key, (tddByDay.get(key) ?? 0) + u);
+    addToDay(key, "bolus", u);
   }
   const tddDayCount    = tddByDay.size;
   const tddEnough      = tddDayCount >= MIN_DATAPOINTS;
   const tddTodayKey    = startOfToday().toISOString().slice(0, 10);
-  const tddToday       = tddByDay.get(tddTodayKey) ?? 0;
-  const tddSum7        = Array.from(tddByDay.values()).reduce((a, b) => a + b, 0);
+  const tddTodayBuckets = tddByDay.get(tddTodayKey) ?? { bolus: 0, basal: 0 };
+  const tddToday       = tddTodayBuckets.bolus + tddTodayBuckets.basal;
+  const tddTodayBolus  = tddTodayBuckets.bolus;
+  const tddTodayBasal  = tddTodayBuckets.basal;
+  const tddSumsAll     = Array.from(tddByDay.values()).reduce(
+    (acc, d) => ({ bolus: acc.bolus + d.bolus, basal: acc.basal + d.basal }),
+    { bolus: 0, basal: 0 },
+  );
+  const tddSum7        = tddSumsAll.bolus + tddSumsAll.basal;
   const tddAvg7        = tddEnough ? +(tddSum7 / 7).toFixed(1) : null;
+  // Per-leg 7-day averages — divide by full 7 (not by tddDayCount) to
+  // mirror tddAvg7's denominator so bolus + basal averages add up to
+  // the headline TDD average exactly.
+  const tddAvg7Bolus   = tddEnough ? +(tddSumsAll.bolus / 7).toFixed(1) : null;
+  const tddAvg7Basal   = tddEnough ? +(tddSumsAll.basal / 7).toFixed(1) : null;
 
   // ── Extended TIR (TBR / TIR / TAR three-color view, reuses b7 buckets) ──
   const tbrPct = b7.vlow + b7.lo;     // < 70
@@ -1492,13 +1518,71 @@ export default function InsightsPage() {
                 <div style={{ fontSize:14, color:"var(--text-dim)", fontWeight:700 }}>{tInsights("tdd_unit_main")}</div>
                 <div style={{ marginLeft:"auto", fontSize:11, color:"var(--text-dim)" }}>{tInsights("tdd_avg_7d")}</div>
               </div>
+              {/* Bolus / Basal split for the 7-day average. Helps Lucas
+                  see whether his TDD is dominated by carb-cover boluses
+                  or by basal — important for interpreting changes. Two
+                  pills side-by-side; sum equals the headline number
+                  above (we divide both legs by the same 7-day window). */}
+              {(tddAvg7Bolus != null || tddAvg7Basal != null) && (
+                <div style={{ marginTop:8, display:"flex", gap:6 }}>
+                  <div style={{
+                    flex:1, padding:"6px 10px", background:`${ACCENT}10`, border:`1px solid ${ACCENT}25`,
+                    borderRadius:10, display:"flex", flexDirection:"column", gap:2,
+                  }}>
+                    <div style={{ fontSize:10, color:"var(--text-faint)", letterSpacing:"0.06em", fontWeight:600, textTransform:"uppercase" }}>
+                      {tInsights("tdd_bolus_label")}
+                    </div>
+                    <div style={{ display:"flex", alignItems:"baseline", gap:4 }}>
+                      <div style={{ fontSize:18, fontWeight:800, color:ACCENT, fontFamily:"var(--font-mono)", lineHeight:1 }}>
+                        {(tddAvg7Bolus ?? 0).toFixed(1)}
+                      </div>
+                      <div style={{ fontSize:11, color:ACCENT, fontWeight:700 }}>U</div>
+                    </div>
+                  </div>
+                  <div style={{
+                    flex:1, padding:"6px 10px", background:`${ACCENT_SOFT}12`, border:`1px solid ${ACCENT_SOFT}30`,
+                    borderRadius:10, display:"flex", flexDirection:"column", gap:2,
+                  }}>
+                    <div style={{ fontSize:10, color:"var(--text-faint)", letterSpacing:"0.06em", fontWeight:600, textTransform:"uppercase" }}>
+                      {tInsights("tdd_basal_label")}
+                    </div>
+                    <div style={{ display:"flex", alignItems:"baseline", gap:4 }}>
+                      <div style={{ fontSize:18, fontWeight:800, color:ACCENT_SOFT, fontFamily:"var(--font-mono)", lineHeight:1 }}>
+                        {(tddAvg7Basal ?? 0).toFixed(1)}
+                      </div>
+                      <div style={{ fontSize:11, color:ACCENT_SOFT, fontWeight:700 }}>U</div>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div style={{ marginTop:10, display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 10px", background:`${ACCENT}10`, border:`1px solid ${ACCENT}25`, borderRadius:10 }}>
                 <div style={{ fontSize:12, color:"var(--text-muted)", fontWeight:600 }}>{tInsights("tdd_today")}</div>
-                <div style={{ display:"flex", alignItems:"baseline", gap:4 }}>
-                  <div style={{ fontSize:18, fontWeight:800, color:ACCENT, fontFamily:"var(--font-mono)", lineHeight:1 }}>
-                    {tddToday.toFixed(1)}
+                <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
+                  {/* Today's bolus / basal slivers — small label + value
+                      stack so Lucas can see at a glance "today is mostly
+                      basal" or "today I've boluses 6, basal 12". */}
+                  <div style={{ display:"flex", alignItems:"baseline", gap:3 }}>
+                    <span style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.05em" }}>
+                      {tInsights("tdd_bolus_label")}
+                    </span>
+                    <span style={{ fontSize:13, fontWeight:800, color:ACCENT, fontFamily:"var(--font-mono)", lineHeight:1 }}>
+                      {tddTodayBolus.toFixed(1)}
+                    </span>
                   </div>
-                  <div style={{ fontSize:12, color:ACCENT, fontWeight:700 }}>U</div>
+                  <div style={{ display:"flex", alignItems:"baseline", gap:3 }}>
+                    <span style={{ fontSize:10, color:"var(--text-faint)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.05em" }}>
+                      {tInsights("tdd_basal_label")}
+                    </span>
+                    <span style={{ fontSize:13, fontWeight:800, color:ACCENT_SOFT, fontFamily:"var(--font-mono)", lineHeight:1 }}>
+                      {tddTodayBasal.toFixed(1)}
+                    </span>
+                  </div>
+                  <div style={{ display:"flex", alignItems:"baseline", gap:4, paddingLeft:6, borderLeft:`1px solid ${ACCENT}30` }}>
+                    <div style={{ fontSize:18, fontWeight:800, color:ACCENT, fontFamily:"var(--font-mono)", lineHeight:1 }}>
+                      {tddToday.toFixed(1)}
+                    </div>
+                    <div style={{ fontSize:12, color:ACCENT, fontWeight:700 }}>U</div>
+                  </div>
                 </div>
               </div>
             </>

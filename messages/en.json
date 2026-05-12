@@ -709,6 +709,8 @@
     "tdd_unit_main": "U/day",
     "tdd_avg_7d": "Ø 7d",
     "tdd_today": "Today",
+    "tdd_bolus_label": "Bolus",
+    "tdd_basal_label": "Basal",
     "tdd_min_required": "≥ {min} days with insulin logs required",
     "tdd_back_p1": "Total Daily Dose (TDD) is the sum of all logged insulin units per day — bolus + basal from the engine log.",
     "tdd_back_p2": "Headline number: 7-day daily average (sum ÷ 7). Today's running total is shown separately below. A steady TDD signals a stable metabolic baseline; swings > 20% can point to a changing insulin need.",
