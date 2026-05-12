@@ -295,23 +295,41 @@ export default function EngineChatPanel({
         border: `1px solid ${BORDER}`,
         borderRadius: 16,
         display:"flex", flexDirection:"column",
-        // Per UX request: the chat panel should claim the ENTIRE
-        // vertical space between the Sprechen button above and the
-        // fixed bottom tab bar below — no longer capped at 50 dvh.
-        // svh = the viewport at its smallest (browser chrome at its
-        // tallest), so first-paint never clips the input row.
-        // Reservation ~340 px = global app header (~64) + step
-        // indicator + sub-tab toggle + Sprechen pill + small gaps
-        // (~196) + bottom tab bar (~80). Min 200 keeps the panel
-        // usable on iPhone SE 1st-gen / mini in case the reservation
-        // overshoots on a particular browser chrome height. The
-        // Weiter / Zurück action button is intentionally pushed
-        // below the visible area when shown — Step 1 only reveals
-        // it once macros are filled, at which point the user is
-        // about to advance anyway.
+        // Per UX request (Lucas 2026-05-12, Screenshot IMG_6476): the
+        // chat panel should claim the ENTIRE vertical space between
+        // the Sprechen button above and the fixed bottom tab bar
+        // below — no longer capped at 50 dvh, and no leftover blank
+        // space under "Senden" before the tab bar starts. svh = the
+        // viewport at its smallest (browser chrome at its tallest),
+        // so first-paint never clips the input row.
+        //
+        // Reservation breakdown (~240 px, was 340 px — the old number
+        // double-counted gaps + assumed a sub-tab toggle that's been
+        // removed):
+        //   app header              ~64
+        //   step indicator pills    ~60
+        //   Sprechen pill           ~64
+        //   stack gaps              ~20
+        //   bottom tab bar          ~80  → minus, but split out below
+        //                           ────
+        //                           ~208 (rounded to 240 to leave a
+        //                                 small breathing margin so a
+        //                                 single browser-chrome tweak
+        //                                 doesn't push the input row
+        //                                 out of view)
+        // The bottom-nav 80 px is folded into the 240 reservation, so
+        // we don't subtract safe-area-inset-bottom a second time —
+        // the iOS home-indicator height is already inside the nav
+        // bar's own padding.
+        // Min 240 keeps the panel usable on iPhone SE 1st-gen / mini
+        // when the reservation overshoots on a particular browser
+        // chrome height. The Weiter / Zurück action button is
+        // intentionally pushed just below the visible area when
+        // shown — Step 1 only reveals it once macros are filled, at
+        // which point the user is about to advance anyway.
         height:
-          "calc(100svh - 340px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))",
-        minHeight: 200,
+          "calc(100svh - 240px - env(safe-area-inset-top, 0px))",
+        minHeight: 240,
         overflow:"hidden",
       }}>
         {header}
