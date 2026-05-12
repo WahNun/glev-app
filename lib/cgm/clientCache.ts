@@ -47,6 +47,13 @@ export async function fetchCgmHistory(): Promise<HistoryData | null> {
 export function invalidateCgmCache(): void {
   cachedData = null;
   cachedAt = null;
+  // Also drop any in-flight request — otherwise a refresh issued during
+  // a parallel auto-refresh would still piggyback on the old (now-stale)
+  // promise and silently re-populate the cache with stale data, defeating
+  // the invalidation. Setting inFlight to null forces the next call to
+  // start a fresh network round-trip. (Lucas 2026-05-12 follow-up: the
+  // architect flagged this race after the original cache-invalidate fix.)
+  inFlight = null;
 }
 
 /**

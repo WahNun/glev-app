@@ -1,5 +1,5 @@
 "use client";
-import { fetchCgmHistory } from "@/lib/cgm/clientCache";
+import { fetchCgmHistory, invalidateCgmCache } from "@/lib/cgm/clientCache";
 import { useTranslations } from "next-intl";
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
@@ -83,9 +83,19 @@ export default function CurrentDayGlucoseCard() {
         .filter((r) => Number.isFinite(r.t) && Number.isFinite(r.v) && r.t >= twelveHoursAgo && r.t <= now)
         .sort((a, b) => a.t - b.t);
 
-      const cgmCurrent = data.current && data.current.value != null && data.current.timestamp
+      // Prefer the newest CGM history point if it's newer than the
+      // official `connection.glucoseMeasurement` value. LLU's official
+      // current can lag the graphData stream by hours on some sensors
+      // (Lucas reported "9h ago" 2026-05-12 while LLU app showed live
+      // data — graphData was fresh, glucoseMeasurement was stale).
+      const officialCurrent = data.current && data.current.value != null && data.current.timestamp
         ? { v: data.current.value, t: parseLluTs(data.current.timestamp) }
-        : (cgm.length ? { v: cgm[cgm.length - 1].v, t: cgm[cgm.length - 1].t } : null);
+        : null;
+      const newestHistory = cgm.length ? { v: cgm[cgm.length - 1].v, t: cgm[cgm.length - 1].t } : null;
+      const cgmCurrent =
+        officialCurrent && newestHistory
+          ? (newestHistory.t > officialCurrent.t ? newestHistory : officialCurrent)
+          : (officialCurrent ?? newestHistory);
 
       if (!signal?.cancelled) setS({ kind: "ok", cgm, fingersticks, cgmCurrent });
     } catch (e) {
@@ -142,8 +152,15 @@ export default function CurrentDayGlucoseCard() {
 
   // Refresh full daily history after the user pulls a new latest reading
   // (CGM) or saves a new fingerstick. Both data streams need to re-merge.
+  // We MUST invalidate the 30s clientCache first — otherwise loadHistory()
+  // returns the stale cached payload and the user's tap on the refresh
+  // button silently does nothing for up to 30 seconds (Lucas reported
+  // 2026-05-12 the chart staying empty even after multiple refreshes).
   const onCgmRefresh = useCallback((r: CgmFetchResult) => {
-    if (r.ok) loadHistory();
+    if (r.ok) {
+      invalidateCgmCache();
+      loadHistory();
+    }
   }, [loadHistory]);
 
   return (
