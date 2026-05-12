@@ -98,6 +98,47 @@ export default function CurrentDayGlucoseCard() {
     return () => { signal.cancelled = true; };
   }, [loadHistory]);
 
+  // Auto-refresh while the card is on screen so the live tile actually
+  // stays live without the user having to pull or remount. 60-second
+  // cadence matches what Libre 2 Plus / Libre 3 push to LinkUp (~5 min
+  // sensor updates, but LLU's graph endpoint can land new points
+  // earlier). Pauses while the tab is hidden so we don't drain battery
+  // when the app is backgrounded; resumes immediately on visibility
+  // change with one extra fetch so the user sees the freshest value
+  // the moment they return. The 30s client-side cache in
+  // lib/cgm/clientCache.ts coalesces this with anything else mounting.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const REFRESH_MS = 60_000;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    const start = () => {
+      if (intervalId != null) return;
+      intervalId = setInterval(() => {
+        if (document.visibilityState === "visible") loadHistory();
+      }, REFRESH_MS);
+    };
+    const stop = () => {
+      if (intervalId != null) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        loadHistory();
+        start();
+      } else {
+        stop();
+      }
+    };
+    if (document.visibilityState === "visible") start();
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [loadHistory]);
+
   // Refresh full daily history after the user pulls a new latest reading
   // (CGM) or saves a new fingerstick. Both data streams need to re-merge.
   const onCgmRefresh = useCallback((r: CgmFetchResult) => {
