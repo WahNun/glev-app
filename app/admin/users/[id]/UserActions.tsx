@@ -11,6 +11,7 @@ import {
   hardDeleteAction,
   setRoleAction,
   sendMagicLinkAction,
+  sendPasswordResetAction,
 } from "../actions";
 
 /**
@@ -114,6 +115,14 @@ export default function UserActions({
           <input type="hidden" name="email" value={email} />
           <button type="submit" style={btnSecondary}>
             Magic-Link an {email || "User"} senden
+          </button>
+        </form>
+
+        <form action={sendPasswordResetAction} style={{ ...row, marginTop: 8 }}>
+          <input type="hidden" name="userId" value={userId} />
+          <input type="hidden" name="email" value={email} />
+          <button type="submit" style={btnSecondary}>
+            Passwort-Reset-Mail an {email || "User"} senden
           </button>
         </form>
 

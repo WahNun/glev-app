@@ -1014,6 +1014,78 @@ export async function backfillCurrencyCountryAction(): Promise<void> {
  * when an invited user lost their original mail or the operator wants
  * to give them a fresh login link without resetting their password.
  */
+/**
+ * Schickt dem User eine Passwort-Reset-Email — mit unserem eigenen
+ * bilingualen Glev-Template (de/en) statt Supabase's generic Recovery-
+ * Mail.
+ *
+ * Flow:
+ *   1. profiles.language + display_name laden (Sprache + Personalisierung)
+ *   2. Supabase generateLink({type:'recovery'}) → action_link holen
+ *   3. action_link in unsere `password-reset`-Template einkleben und
+ *      via outbox/Resend schicken (gleiche Pipeline wie Beta-Welcome)
+ *   4. Audit-Log: "send_password_reset"
+ *
+ * Das aktuelle Passwort des Users bleibt gültig, bis er den Link
+ * klickt und ein neues setzt (Supabase-Standardverhalten, in der
+ * Mail explizit erwähnt).
+ */
+export async function sendPasswordResetAction(formData: FormData): Promise<void> {
+  const adminToken = await requireAdminToken();
+  const userId = String(formData.get("userId") ?? "");
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  if (!userId || !email) throw new Error("userId und email erforderlich");
+
+  const sb = getSupabaseAdmin();
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+
+  // Sprache + Anzeigename aus dem Profil ziehen, damit die Mail in der
+  // Sprache des Users rausgeht (Default: de).
+  const { data: profileRow } = await sb
+    .from("profiles")
+    .select("language, display_name")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const profile = (profileRow ?? null) as
+    | { language?: string | null; display_name?: string | null }
+    | null;
+  const locale: EmailLocale = profile?.language === "en" ? "en" : "de";
+  const displayName = profile?.display_name ?? null;
+
+  // Recovery-Link bei Supabase erzeugen. generateLink liefert den
+  // action_link zurück — Supabase verschickt dabei KEINE eigene Mail
+  // (das Senden übernehmen wir mit unserem bilingualen Template).
+  const { data: linkData, error: linkErr } = await sb.auth.admin.generateLink({
+    type: "recovery",
+    email,
+    options: appUrl ? { redirectTo: `${appUrl}/auth/confirm` } : undefined,
+  });
+  if (linkErr || !linkData?.properties?.action_link) {
+    throw new Error("auth: " + (linkErr?.message ?? "kein action_link"));
+  }
+  const resetUrl = linkData.properties.action_link;
+
+  await enqueueEmail({
+    recipient: email,
+    template: "password-reset",
+    payload: {
+      name: displayName,
+      resetUrl,
+      appUrl: appUrl || null,
+      locale,
+    },
+  });
+
+  await writeAuditLog({
+    action: "send_password_reset",
+    targetUserId: userId,
+    targetEmail: email,
+    adminToken,
+  });
+
+  revalidateUserPaths(userId);
+}
+
 export async function sendMagicLinkAction(formData: FormData): Promise<void> {
   const adminToken = await requireAdminToken();
   const userId = String(formData.get("userId") ?? "");

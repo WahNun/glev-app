@@ -29,6 +29,10 @@ import {
   betaFreeYearWelcomeHtml,
   betaFreeYearWelcomeSubject,
 } from "@/lib/emails/beta-free-year-welcome";
+import {
+  passwordResetHtml,
+  passwordResetSubject,
+} from "@/lib/emails/password-reset";
 
 // ---- Tunables -------------------------------------------------------------
 
@@ -99,7 +103,8 @@ const FINALIZE_RETRY_DELAY_MS = 250;
 export type EmailTemplate =
   | "beta-welcome"
   | "pro-welcome"
-  | "beta-free-year-welcome";
+  | "beta-free-year-welcome"
+  | "password-reset";
 
 /**
  * Payload shape per template. Stored as jsonb in the outbox so the
@@ -154,10 +159,25 @@ export interface BetaFreeYearWelcomePayload {
   signupUrl?: string | null;
 }
 
+/**
+ * Admin-triggered password reset. `resetUrl` is the action_link from
+ * `auth.admin.generateLink({type: 'recovery'})` — Supabase short-lives
+ * it (default ~1h), so we treat the payload as one-shot: any retry of
+ * a `dead` row would re-send a stale link. The action route is the
+ * source of truth for generating fresh links; outbox just delivers.
+ */
+export interface PasswordResetPayload {
+  name?: string | null;
+  resetUrl: string;
+  appUrl?: string | null;
+  locale?: EmailLocale;
+}
+
 export type EmailPayload =
   | BetaWelcomePayload
   | ProWelcomePayload
-  | BetaFreeYearWelcomePayload;
+  | BetaFreeYearWelcomePayload
+  | PasswordResetPayload;
 
 /**
  * Compile-time mapping from template name → payload shape. The
@@ -177,6 +197,7 @@ export interface PayloadByTemplate {
   "beta-welcome": BetaWelcomePayload;
   "pro-welcome": ProWelcomePayload;
   "beta-free-year-welcome": BetaFreeYearWelcomePayload;
+  "password-reset": PasswordResetPayload;
 }
 
 interface RenderedEmail {
@@ -228,6 +249,20 @@ function renderTemplate(template: EmailTemplate, payload: EmailPayload): Rendere
           p.expiresAt,
           locale,
           p.signupUrl ?? null,
+        ),
+      };
+    }
+    case "password-reset": {
+      const p = payload as PasswordResetPayload;
+      const locale: EmailLocale = p.locale === "en" ? "en" : "de";
+      return {
+        from: "Glev <info@glev.app>",
+        subject: passwordResetSubject(p.name ?? null, locale),
+        html: passwordResetHtml(
+          p.name ?? null,
+          p.resetUrl,
+          p.appUrl ?? null,
+          locale,
         ),
       };
     }
