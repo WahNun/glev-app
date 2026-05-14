@@ -7,7 +7,7 @@ import { signOut, getCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { parseDbDate, localeToBcp47 } from "@/lib/time";
 import BottomSheet from "@/components/BottomSheet";
-import { computeEffectivePlan, type EffectivePlan } from "@/lib/admin/effectivePlan";
+import { type EffectivePlan } from "@/lib/admin/effectivePlan";
 
 const ACCENT = "#4F6EF7";
 const PINK = "#FF2D78";
@@ -64,25 +64,25 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
           const { count } = await supabase.from("meals").select("id", { count: "exact", head: true });
           if (!cancelled) setMealCount(count || 0);
 
-          // Resolve effective plan from profiles. Same precedence the
-          // admin panel uses (manual override → profiles.plan → legacy
-          // subscription_status → free). RLS scopes the row to the
-          // signed-in user automatically.
+          // Resolve effective plan via /api/me/plan. We deliberately do
+          // NOT read `profiles` directly with the browser client here:
+          // any RLS quirk on the manual-override columns silently
+          // collapses the read to null and pins the UI to "free" even
+          // when the admin panel shows Pro. The server route uses the
+          // service-role admin client + the same `computeEffectivePlan`
+          // logic the admin panel uses, so this badge is guaranteed to
+          // match what the operator sees.
           if (user?.id) {
-            const { data: profileRow } = await supabase
-              .from("profiles")
-              .select("manual_plan_override, manual_plan_expires_at, plan, subscription_status")
-              .eq("user_id", user.id)
-              .maybeSingle();
-            if (!cancelled) {
-              setPlan(
-                computeEffectivePlan({
-                  manual_plan_override: profileRow?.manual_plan_override ?? null,
-                  manual_plan_expires_at: profileRow?.manual_plan_expires_at ?? null,
-                  plan: profileRow?.plan ?? null,
-                  subscription_status: profileRow?.subscription_status ?? null,
-                })
-              );
+            try {
+              const res = await fetch("/api/me/plan", { credentials: "include" });
+              if (res.ok) {
+                const j = (await res.json()) as { plan?: EffectivePlan };
+                if (!cancelled && (j.plan === "pro" || j.plan === "beta" || j.plan === "free")) {
+                  setPlan(j.plan);
+                }
+              }
+            } catch {
+              /* leave default "free" — non-fatal */
             }
           }
         }
