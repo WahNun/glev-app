@@ -2404,6 +2404,21 @@ export default function InsightsPage() {
       {/* Filter out items whose node was set to null (e.g. workout-patterns
           when fewer than 2 patterns are detected — spec says hide entirely). */}
       <InsightsSortable items={items.filter(it => it.node !== null)}/>
+
+      {/* Compliance disclaimer — required at the foot of every
+          analytics surface so users don't read TIR / hypo-counter
+          numbers as medical guidance. Neutral gray, small, no chip. */}
+      <p style={{
+        marginTop: 18,
+        marginBottom: 24,
+        fontSize: 11,
+        lineHeight: 1.5,
+        color: "var(--text-faint)",
+        textAlign: "center",
+        padding: "0 12px",
+      }}>
+        {tInsights("page_medical_disclaimer")}
+      </p>
     </div>
   );
 }
