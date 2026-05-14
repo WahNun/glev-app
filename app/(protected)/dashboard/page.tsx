@@ -9,7 +9,7 @@ import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
 import { evaluateExercise, exerciseTypeLabelI18n } from "@/lib/exerciseEval";
 import { fetchMacroTargets, DEFAULT_MACRO_TARGETS, type MacroTargets } from "@/lib/userSettings";
-import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, getEvalExplain } from "@/lib/mealTypes";
+import { TYPE_COLORS, getEvalColor, chipLabelsFrom } from "@/lib/mealTypes";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
 import MealEntryLightExpand from "@/components/MealEntryLightExpand";
 import CurrentDayGlucoseCard from "@/components/CurrentDayGlucoseCard";
@@ -27,9 +27,6 @@ const DASHBOARD_DEFAULT_ORDER = ["today-glucose", "today-macros", "stats", "char
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="var(--surface)", BORDER="var(--border)";
-
-function evalColor(ev: string | null) { return getEvalColor(ev); }
-function evalLabel(ev: string | null) { return getEvalLabel(ev); }
 
 interface CardData {
   key: string; label: string; color: string;
@@ -635,6 +632,8 @@ function RecentChip({ text, color, mono = false }: { text: string; color: string
 function UnifiedRecentRow({ row, locale, onClick }: { row: RecentRow; locale: string; onClick: () => void }) {
   const t = useTranslations("dashboard");
   const tIns = useTranslations("insights");
+  const tChips = useTranslations("chips");
+  const chipLabels = chipLabelsFrom(tChips);
   const accent = KIND_ACCENT[row.kind];
   const letter =
     row.kind === "meal"     ? "M"
@@ -651,14 +650,14 @@ function UnifiedRecentRow({ row, locale, onClick }: { row: RecentRow; locale: st
 
   if (row.kind === "meal") {
     const m = row.meal!;
-    title = (m.meal_type && TYPE_LABELS[m.meal_type]) || t("meal_singular");
+    title = (m.meal_type && chipLabels.typeLabel(m.meal_type)) || t("meal_singular");
     const macroBits: string[] = [];
     if (m.carbs_grams   != null) macroBits.push(`${m.carbs_grams}g C`);
     if (m.protein_grams != null) macroBits.push(`${m.protein_grams}g P`);
     if (m.fat_grams     != null) macroBits.push(`${m.fat_grams}g F`);
     subtitle = macroBits.length ? `${timeStr} · ${macroBits.join(" · ")}` : timeStr;
     const evColor = getEvalColor(m.evaluation);
-    rightSlot = <RecentChip text={getEvalLabel(m.evaluation)} color={evColor} />;
+    rightSlot = <RecentChip text={chipLabels.evalLabel(m.evaluation)} color={evColor} />;
   } else if (row.kind === "exercise") {
     const x = row.exercise!;
     title = exerciseTypeLabelI18n(tIns, x.exercise_type);

@@ -13,8 +13,13 @@ export type ChipState = {
   body: AdjustmentMessage[];
   /** Localizable trend hint (provisional only). */
   trendHint?: AdjustmentMessage;
-  /** Cached final-state outcome label (already localized via getEvalLabel). */
+  /**
+   * Cached final-state outcome label (English fallback via getEvalLabel).
+   * Prefer {@link finalOutcome} + a chips-namespace translator for i18n.
+   */
   finalOutcomeLabel?: string;
+  /** Raw outcome key (e.g. "GOOD", "OVERDOSE") for locale-aware label rendering. */
+  finalOutcome?: string | null;
   lc: LifecycleResult;
 };
 
@@ -90,6 +95,7 @@ export function chipForMeal(meal: Meal, now: Date = new Date(), locale: string =
     // the cached label.
     label: { key: "engine_chip_final_label" },
     finalOutcomeLabel: getEvalLabel(outcome),
+    finalOutcome: outcome,
     body: lc.messages,
     lc,
   };

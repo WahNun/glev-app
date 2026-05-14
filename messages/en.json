@@ -2202,5 +2202,33 @@
     "save_success": "Saved.",
     "save_error": "Save failed",
     "phase_a_note": "Phase A: values are stored. The engine will pick the windows up in a later update."
+  },
+  "chips": {
+    "eval_GOOD": "Good",
+    "eval_LOW": "Under Dose",
+    "eval_HIGH": "Over Dose",
+    "eval_OVERDOSE": "Over Dose",
+    "eval_UNDERDOSE": "Under Dose",
+    "eval_SPIKE": "Spike",
+    "eval_SPIKE_STRONG": "Strong Spike",
+    "eval_HYPO_DURING": "Hypo in window",
+    "eval_CHECK_CONTEXT": "Review",
+    "eval_explain_GOOD": "Insulin matched carbohydrate load effectively.",
+    "eval_explain_LOW": "Insulin insufficient → glucose increased after meal.",
+    "eval_explain_HIGH": "Insulin exceeded glucose requirements → glucose dropped significantly.",
+    "eval_explain_OVERDOSE": "Insulin exceeded glucose requirements → glucose dropped significantly.",
+    "eval_explain_UNDERDOSE": "Insulin insufficient → glucose increased after meal.",
+    "eval_explain_SPIKE": "Rapid glucose increase detected post meal.",
+    "eval_explain_SPIKE_STRONG": "Severe rapid glucose spike — magnitude or rate well above the threshold for this meal.",
+    "eval_explain_HYPO_DURING": "Glucose dropped below 70 mg/dL somewhere inside the 3h post-meal window — even if the 2h reading was back in range.",
+    "eval_explain_CHECK_CONTEXT": "Outcome unclear — review context before adjusting.",
+    "type_FAST_CARBS": "Fast Carbs",
+    "type_HIGH_PROTEIN": "High Protein",
+    "type_HIGH_FAT": "High Fat",
+    "type_BALANCED": "Balanced",
+    "type_explain_FAST_CARBS": "High glycemic load, low fiber → fast absorption",
+    "type_explain_HIGH_PROTEIN": "High protein ratio slows glucose absorption",
+    "type_explain_HIGH_FAT": "High fat delays the glucose spike",
+    "type_explain_BALANCED": "Even macro distribution → stable glucose response"
   }
 }

@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { useTranslations } from "next-intl";
 import { updateMeal, type Meal } from "@/lib/meals";
-import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
+import { TYPE_COLORS, chipLabelsFrom } from "@/lib/mealTypes";
 import { chipForMeal } from "@/lib/engine/chipState";
 import { renderEngineMessage, renderEngineMessages } from "@/lib/engineMessages";
 import { parseDbDate, parseDbTs } from "@/lib/time";
@@ -45,6 +45,8 @@ export default function MealEntryLightExpand({
   const td = useTranslations("dashboard");
   const tm = useTranslations("mealEdit");
   const tEngine = useTranslations("engine");
+  const tChips = useTranslations("chips");
+  const chipLabels = chipLabelsFrom(tChips);
   // Carb-unit selector now drives both the read-view stats and the edit
   // form: the eCarbs input is seeded via carbUnit.fromGrams() and saved
   // via carbUnit.toGrams() so DACH users see BE/KE consistently. The DB
@@ -97,7 +99,7 @@ export default function MealEntryLightExpand({
   // Lifecycle-driven chip — pending=gray / provisional=purple / final=outcome
   const chip = chipForMeal(meal);
   const catColor = meal.meal_type ? (TYPE_COLORS[meal.meal_type] || ACCENT) : null;
-  const catLabel = meal.meal_type ? (TYPE_LABELS[meal.meal_type] || meal.meal_type) : null;
+  const catLabel = meal.meal_type ? chipLabels.typeLabel(meal.meal_type) : null;
 
   // ─── Edit mode ────────────────────────────────────────────────────────────
   // Inline editing allows users to fix a typo (wrong carbs / wrong insulin)
@@ -347,7 +349,7 @@ export default function MealEntryLightExpand({
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
           <span style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>{td("outcome")}</span>
           <span style={{ padding:"4px 10px", borderRadius:99, fontSize:12, fontWeight:700, background:chip.color, color:"var(--on-accent)", letterSpacing:"0.04em", textTransform:"uppercase" }}>
-            {chip.finalOutcomeLabel ?? renderEngineMessage(tEngine, chip.label)}
+            {chip.finalOutcome ? chipLabels.evalLabel(chip.finalOutcome) : renderEngineMessage(tEngine, chip.label)}
           </span>
         </div>
         <div style={{ fontSize:13, color:"var(--text-body)", lineHeight:1.5 }}>{renderEngineMessages(tEngine, chip.body)}</div>

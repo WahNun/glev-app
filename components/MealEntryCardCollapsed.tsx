@@ -2,7 +2,7 @@
 
 import React from "react";
 import type { Meal } from "@/lib/meals";
-import { TYPE_COLORS, TYPE_SHORT, TYPE_LABELS } from "@/lib/mealTypes";
+import { TYPE_COLORS, TYPE_SHORT, chipLabelsFrom } from "@/lib/mealTypes";
 import { chipForMeal } from "@/lib/engine/chipState";
 import { renderEngineMessage, renderEngineMessages } from "@/lib/engineMessages";
 import { parseDbDate } from "@/lib/time";
@@ -27,6 +27,8 @@ export default function MealEntryCardCollapsed({
   const carbUnit = useCarbUnit();
   const tEngine = useTranslations("engine");
   const tx = useTranslations("entriesExpand");
+  const tChips = useTranslations("chips");
+  const chipLabels = chipLabelsFrom(tChips);
   const locale = useLocale();
   const ts = meal.meal_time ?? meal.created_at;
   const d = parseDbDate(ts);
@@ -34,7 +36,7 @@ export default function MealEntryCardCollapsed({
   const timeStr = d.toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
 
   const catColor = meal.meal_type ? TYPE_COLORS[meal.meal_type] || "var(--text-dim)" : null;
-  const catLabel = meal.meal_type ? TYPE_LABELS[meal.meal_type] || meal.meal_type : null;
+  const catLabel = meal.meal_type ? chipLabels.typeLabel(meal.meal_type) : null;
   const catShort = meal.meal_type ? TYPE_SHORT[meal.meal_type] || meal.meal_type.slice(0, 2) : null;
 
   // 3-state chip: pending=gray / provisional=purple / final=outcome color.
@@ -148,7 +150,7 @@ export default function MealEntryCardCollapsed({
             textTransform: "uppercase",
           }}
         >
-          {chip.finalOutcomeLabel ?? renderEngineMessage(tEngine, chip.label)}
+          {chip.finalOutcome ? chipLabels.evalLabel(chip.finalOutcome) : renderEngineMessage(tEngine, chip.label)}
         </span>
       )}
     </div>

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useId } from "react";
 import useSWR, { mutate as swrMutate } from "swr";
 import { useLocale, useTranslations } from "next-intl";
 import { fetchMeals, fetchMealsForEngine, unifiedOutcome, type Meal } from "@/lib/meals";
-import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
+import { TYPE_COLORS, chipLabelsFrom } from "@/lib/mealTypes";
 import { computeAdaptiveICR } from "@/lib/engine/adaptiveICR";
 import { fetchInsulinSettings, persistEngineIcr, DEFAULT_INSULIN_SETTINGS } from "@/lib/userSettings";
 import { pairBolusesToMeals } from "@/lib/engine/pairing";
@@ -210,11 +210,16 @@ function mergeContinuousReadings(
 }
 
 export default function InsightsPage() {
+  // Chip-namespace translator (Task #279) — used to localize meal-type
+  // headings on the per-type breakdown cards. Falls back to English
+  // labels via chipLabelsFrom() when keys are missing.
   // Carb-unit selector — feeds the per-type "avg carbs" line and the
   // "Avg insulin" tile sublabel. All aggregates are computed in grams
   // upstream; only the rendered string switches to BE/KE/g.
   const carbUnit = useCarbUnit();
   const tInsights = useTranslations("insights");
+  const tChips = useTranslations("chips");
+  const chipLabels = chipLabelsFrom(tChips);
   const locale = useLocale();
   const [meals, setMeals]               = useState<Meal[]>([]);
   // Engine-only meals subset (last 90 days) — feeds `computeAdaptiveICR`
@@ -2208,7 +2213,7 @@ export default function InsightsPage() {
               return (
                 <div key={type} style={{ background:`${col}08`, border:`1px solid ${col}20`, borderRadius:10, padding:"8px 10px", opacity: has ? 1 : 0.55 }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6, gap:4 }}>
-                    <div style={{ fontSize:11, fontWeight:700, color:col, letterSpacing:"0.06em", textTransform:"uppercase", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{TYPE_LABELS[type]}</div>
+                    <div style={{ fontSize:11, fontWeight:700, color:col, letterSpacing:"0.06em", textTransform:"uppercase", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{chipLabels.typeLabel(type)}</div>
                     <div style={{ fontSize:13, fontWeight:700, color:has?barCol:"var(--text-faint)", fontFamily:"var(--font-mono)" }}>
                       {has ? `${successPct}%` : "—"}
                     </div>

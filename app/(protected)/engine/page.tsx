@@ -7,7 +7,7 @@ import { localeToBcp47 } from "@/lib/time";
 import { fetchMealsForEngine, classifyMeal, computeCalories, saveMeal, deleteMeal, updateMeal, type Meal } from "@/lib/meals";
 import { getCurrentTrendArrow } from "@/lib/cgm/trendArrow";
 import { scheduleJobsForLog } from "@/lib/cgmJobs";
-import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
+import { TYPE_COLORS } from "@/lib/mealTypes";
 import { logDebug } from "@/lib/debug";
 import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";

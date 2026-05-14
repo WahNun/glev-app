@@ -2211,5 +2211,33 @@
     "save_success": "Gespeichert.",
     "save_error": "Fehler beim Speichern",
     "phase_a_note": "Phase A: Werte werden gespeichert. Die Engine berücksichtigt die Fenster in einem späteren Update."
+  },
+  "chips": {
+    "eval_GOOD": "Gut",
+    "eval_LOW": "Unterdosis",
+    "eval_HIGH": "Überdosis",
+    "eval_OVERDOSE": "Überdosis",
+    "eval_UNDERDOSE": "Unterdosis",
+    "eval_SPIKE": "Spike",
+    "eval_SPIKE_STRONG": "Starker Spike",
+    "eval_HYPO_DURING": "Hypo im Verlauf",
+    "eval_CHECK_CONTEXT": "Prüfen",
+    "eval_explain_GOOD": "Insulin-Dosis hat zur Kohlenhydratlast gepasst.",
+    "eval_explain_LOW": "Insulin nicht ausreichend → Glukose nach der Mahlzeit gestiegen.",
+    "eval_explain_HIGH": "Insulin überstieg den Bedarf → Glukose ist deutlich abgefallen.",
+    "eval_explain_OVERDOSE": "Insulin überstieg den Bedarf → Glukose ist deutlich abgefallen.",
+    "eval_explain_UNDERDOSE": "Insulin nicht ausreichend → Glukose nach der Mahlzeit gestiegen.",
+    "eval_explain_SPIKE": "Schneller Glukose-Anstieg nach der Mahlzeit erkannt.",
+    "eval_explain_SPIKE_STRONG": "Sehr starker Glukose-Anstieg — Höhe oder Geschwindigkeit liegen deutlich über der Schwelle für diese Mahlzeit.",
+    "eval_explain_HYPO_DURING": "Glukose ist innerhalb des 3h-Fensters nach der Mahlzeit unter 70 mg/dL gefallen — auch wenn der 2h-Wert wieder im Zielbereich war.",
+    "eval_explain_CHECK_CONTEXT": "Verlauf unklar — Kontext prüfen, bevor du die Dosis anpasst.",
+    "type_FAST_CARBS": "Schnelle Kohlenhydrate",
+    "type_HIGH_PROTEIN": "Eiweißreich",
+    "type_HIGH_FAT": "Fettreich",
+    "type_BALANCED": "Ausgewogen",
+    "type_explain_FAST_CARBS": "Hohe glykämische Last, wenig Ballaststoffe → schnelle Aufnahme",
+    "type_explain_HIGH_PROTEIN": "Hoher Eiweißanteil verlangsamt die Glukose-Aufnahme",
+    "type_explain_HIGH_FAT": "Hoher Fettanteil verzögert den Glukose-Anstieg",
+    "type_explain_BALANCED": "Ausgewogene Makro-Verteilung → stabile Glukose-Antwort"
   }
 }

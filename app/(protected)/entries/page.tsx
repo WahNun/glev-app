@@ -18,7 +18,7 @@ import {
 } from "@/lib/insulinEval";
 import CgmSparkline, { type SparklinePoint } from "@/components/CgmSparkline";
 import { fetchFingersticks } from "@/lib/fingerstick";
-import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel } from "@/lib/mealTypes";
+import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, chipLabelsFrom } from "@/lib/mealTypes";
 import { lifecycleFor, STATE_LABELS, type OutcomeState } from "@/lib/engine/lifecycle";
 import { renderEngineMessages } from "@/lib/engineMessages";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
@@ -229,6 +229,22 @@ export default function EntriesPage() {
   };
   const txTypeLabel   = (t: string | null): string | null => t ? txSafe(`type_${t}`, TYPE_LABELS[t] || t.replace("_"," ")) : null;
   const txTypeExplain = (t: string | null): string => t ? txSafe(`type_explain_${t}`, TYPE_EXPLAIN[t] || "") : "";
+  // Localized labels for the filter dropdowns + active filter chips. The
+  // option *values* (FAST_CARBS, GOOD, ...) stay as the canonical English
+  // keys; only the displayed label switches per locale via the shared
+  // `chips` namespace.
+  const tChips = useTranslations("chips");
+  const chipLabels = chipLabelsFrom(tChips);
+  const mealKindOptions = useMemo(
+    () => MEAL_KIND_OPTIONS.map(o => ({ value: o.value, label: chipLabels.typeLabel(o.value) })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [locale],
+  );
+  const outcomeOptions = useMemo(
+    () => OUTCOME_OPTIONS.map(o => ({ value: o.value, label: chipLabels.evalLabel(o.value) })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [locale],
+  );
   const [meals, setMeals]     = useState<Meal[]>([]);
   const [insulin, setInsulin] = useState<InsulinLog[]>([]);
   const [exercise, setExercise] = useState<ExerciseLog[]>([]);
@@ -333,7 +349,7 @@ export default function EntriesPage() {
       if (opt) chips.push({ key: `entryType:${v}`, label: opt.label, remove: () => toggleFilter("entryType", v) });
     }
     for (const v of filters.mealKind) {
-      const opt = MEAL_KIND_OPTIONS.find(o => o.value === v);
+      const opt = mealKindOptions.find(o => o.value === v);
       if (opt) chips.push({ key: `mealKind:${v}`, label: opt.label, remove: () => toggleFilter("mealKind", v) });
     }
     for (const v of filters.exerciseKind) {
@@ -341,7 +357,7 @@ export default function EntriesPage() {
       if (opt) chips.push({ key: `exerciseKind:${v}`, label: opt.label, remove: () => toggleFilter("exerciseKind", v) });
     }
     for (const v of filters.outcome) {
-      const opt = OUTCOME_OPTIONS.find(o => o.value === v);
+      const opt = outcomeOptions.find(o => o.value === v);
       if (opt) chips.push({ key: `outcome:${v}`, label: opt.label, remove: () => toggleFilter("outcome", v) });
     }
     return chips;
@@ -654,7 +670,7 @@ export default function EntriesPage() {
               />
               <FilterSection
                 title="Meal kind"
-                options={MEAL_KIND_OPTIONS}
+                options={mealKindOptions}
                 selected={filters.mealKind}
                 onToggle={(v) => toggleFilter("mealKind", v)}
               />
@@ -666,7 +682,7 @@ export default function EntriesPage() {
               />
               <FilterSection
                 title="Outcome"
-                options={OUTCOME_OPTIONS}
+                options={outcomeOptions}
                 selected={filters.outcome}
                 onToggle={(v) => toggleFilter("outcome", v)}
               />

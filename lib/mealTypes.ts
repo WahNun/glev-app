@@ -109,3 +109,63 @@ export function getEvalLabel(ev?: string | null) {
 export function getEvalExplain(ev?: string | null) {
   return ev ? EVAL_EXPLAIN[ev] || "" : "";
 }
+
+/**
+ * i18n-aware chip-label helpers (Task #279).
+ *
+ * The legacy `get*Label` / `get*Explain` functions above keep returning
+ * hardcoded English so non-React call sites (engine, lifecycle, tests)
+ * still get a sensible string. UI surfaces should prefer
+ * {@link useChipLabels} (React hook) or {@link chipLabelsFrom} (callable
+ * with a next-intl `t` handle) so chips render in the active locale.
+ *
+ * Translator handle compatible with `useTranslations("chips")`.
+ */
+type ChipsTranslator = (key: string, values?: Record<string, string | number>) => string;
+
+/** Bundle of chip-label functions wired to the active translator. */
+export type ChipLabels = {
+  evalLabel:   (ev?: string | null) => string;
+  evalExplain: (ev?: string | null) => string;
+  typeLabel:   (t?: string | null) => string;
+  typeExplain: (t?: string | null) => string;
+};
+
+/**
+ * Build a {@link ChipLabels} bundle from any next-intl translator
+ * scoped to the `chips` namespace. Each function falls back to the
+ * hardcoded English label when the key is missing — defensive against
+ * future label additions that haven't been mirrored into the message
+ * catalogues yet.
+ */
+export function chipLabelsFrom(t: ChipsTranslator): ChipLabels {
+  // next-intl throws on missing keys; the safe wrapper swallows the
+  // throw and returns the supplied fallback so a stale catalogue can
+  // never crash a chip render.
+  const safe = (key: string, fallback: string): string => {
+    try {
+      const v = t(key);
+      return v && v !== key ? v : fallback;
+    } catch {
+      return fallback;
+    }
+  };
+  return {
+    evalLabel: (ev) => {
+      if (!ev) return "—";
+      return safe(`eval_${ev}`, EVAL_LABELS[ev] || ev);
+    },
+    evalExplain: (ev) => {
+      if (!ev) return "";
+      return safe(`eval_explain_${ev}`, EVAL_EXPLAIN[ev] || "");
+    },
+    typeLabel: (ty) => {
+      if (!ty) return "—";
+      return safe(`type_${ty}`, TYPE_LABELS[ty] || ty.replace("_", " ").toLowerCase());
+    },
+    typeExplain: (ty) => {
+      if (!ty) return "";
+      return safe(`type_explain_${ty}`, TYPE_EXPLAIN[ty] || "");
+    },
+  };
+}
