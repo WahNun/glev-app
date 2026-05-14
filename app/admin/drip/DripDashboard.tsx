@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 
 import {
   classifyRow,
@@ -186,6 +186,31 @@ export default function DripDashboard({
   filters,
 }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Bestätigungs-Dialog für „Sofort senden". Wir wollen verhindern,
+  // dass der Operator versehentlich eine echte Drip-Mail rausjagt —
+  // einmal raus, kein Undo. Der Send-Button öffnet den Dialog,
+  // erst „Ja, senden" feuert die Server-Action via useTransition.
+  // `pendingId` lockt während der Action läuft den Button derselben
+  // Zeile, damit kein Doppelklick zwei Mails verschickt.
+  const [confirmRow, setConfirmRow] = useState<DripRow | null>(null);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
+
+  function handleConfirmSend(): void {
+    const row = confirmRow;
+    if (!row || pendingId) return;
+    setPendingId(row.id);
+    setConfirmRow(null);
+    startTransition(async () => {
+      try {
+        const fd = new FormData();
+        fd.set("id", row.id);
+        await sendNowAction(fd);
+      } finally {
+        setPendingId(null);
+      }
+    });
+  }
   const now = useMemo(() => new Date(nowIso), [nowIso]);
   const anyFilter =
     filters.q.trim() !== "" ||
@@ -366,16 +391,19 @@ export default function DripDashboard({
                           </form>
                         ) : (
                           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                            <form action={sendNowAction}>
-                              <input type="hidden" name="id" value={r.id} />
-                              <button
-                                type="submit"
-                                style={smallBtnStyle}
-                                title="Mail jetzt sofort über Resend senden"
-                              >
-                                Sofort senden
-                              </button>
-                            </form>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmRow(r)}
+                              disabled={pendingId === r.id || confirmRow?.id === r.id}
+                              style={{
+                                ...smallBtnStyle,
+                                opacity: pendingId === r.id || confirmRow?.id === r.id ? 0.6 : 1,
+                                cursor: pendingId === r.id || confirmRow?.id === r.id ? "not-allowed" : "pointer",
+                              }}
+                              title="Mail jetzt sofort über Resend senden"
+                            >
+                              {pendingId === r.id ? "Sende…" : "Sofort senden"}
+                            </button>
                             <button
                               type="button"
                               onClick={() => setEditingId(r.id)}
@@ -404,6 +432,75 @@ export default function DripDashboard({
           </table>
         </div>
       </section>
+
+      {/* Bestätigungs-Dialog für „Sofort senden". Inline, damit wir
+          keine zusätzliche Modal-Library für eine einzige Stelle
+          ziehen. Klick auf den Backdrop ODER „Abbrechen" schließt
+          ohne Aktion. „Ja, senden" feuert die Server-Action — der
+          Button-Lock auf Row-Ebene verhindert Doppelklicks während
+          der Action läuft. */}
+      {confirmRow && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="drip-confirm-title"
+          onClick={() => setConfirmRow(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: 16,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "#fff",
+              color: "#111",
+              borderRadius: 10,
+              padding: "22px 24px",
+              maxWidth: 440,
+              width: "100%",
+              boxShadow: "0 12px 40px rgba(0,0,0,0.35)",
+            }}
+          >
+            <h3
+              id="drip-confirm-title"
+              style={{ margin: "0 0 10px", fontSize: 17, fontWeight: 700 }}
+            >
+              E-Mail wirklich senden?
+            </h3>
+            <p style={{ margin: "0 0 6px", fontSize: 14, lineHeight: 1.5 }}>
+              <strong>{fmtType(confirmRow.email_type)}</strong> an{" "}
+              <strong>{confirmRow.email}</strong> ({fmtTier(confirmRow.tier)}).
+            </p>
+            <p style={{ margin: "0 0 18px", fontSize: 13, color: "#666", lineHeight: 1.5 }}>
+              Die Mail geht sofort über Resend raus und kann nicht mehr zurückgeholt werden.
+            </p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={() => setConfirmRow(null)}
+                style={{ ...smallBtnStyle, background: "#888" }}
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSend}
+                autoFocus
+                style={{ ...smallBtnStyle, background: "#0a7a3b" }}
+              >
+                Ja, senden
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
