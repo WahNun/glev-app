@@ -62,6 +62,12 @@ export function lifecycleFor(m: Meal, now: Date = new Date(), settings?: Insulin
   const out1h = gap1h != null && Math.abs(gap1h) > WINDOW_TOLERANCE_MIN;
   const out2h = gap2h != null && Math.abs(gap2h) > WINDOW_TOLERANCE_MIN;
 
+  // Pass the meal's own timestamp so the evaluator's ratio path can
+  // consult the user's per-time ICR schedule (Matildav Phase B).
+  const mealTimeForIcr = m.meal_time
+    ? new Date(mealMs)
+    : (m.created_at ? new Date(m.created_at) : null);
+
   const baseEval = (afterValue: number | null) => evaluateEntry({
     carbs:    m.carbs_grams ?? 0,
     protein:  m.protein_grams ?? 0,
@@ -74,6 +80,7 @@ export function lifecycleFor(m: Meal, now: Date = new Date(), settings?: Insulin
     speed1,
     speed2,
     settings,
+    mealTime: mealTimeForIcr,
     // Curve-derived aggregates (Task #187) — enables HYPO_DURING and
     // peak-based SPIKE detection inside `evaluateEntry`. Null on rows
     // that pre-date the +3h backfill job, in which case the evaluator

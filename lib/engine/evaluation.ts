@@ -4,6 +4,7 @@ import type { AdjustmentMessage } from "./adjustment";
 import type { TrendClass } from "./trend";
 import { parseDbTs } from "@/lib/time";
 import { getInsulinSettings, type InsulinSettings } from "@/lib/userSettings";
+import { getEffectiveICR } from "@/lib/icrSchedule";
 
 export type Outcome = "GOOD" | "UNDERDOSE" | "OVERDOSE" | "SPIKE" | "SPIKE_STRONG" | "HYPO_DURING" | "CHECK_CONTEXT";
 
@@ -76,6 +77,15 @@ export interface EvaluateEntryInput {
    * Trend-Lage ist strikt Doku/Erklärung.
    */
   preTrend?: TrendClass;
+  /**
+   * Optional meal timestamp — when set, the ratio path looks up a
+   * time-banded ICR via `getEffectiveICR(mealTime, settings.icr)`
+   * (Phase B of Matildav's per-window ICR feature). When omitted or
+   * when the user has the schedule master-toggle off, falls back to
+   * `settings.icr` so behaviour is unchanged for callers that don't
+   * pass a time.
+   */
+  mealTime?: Date | null;
 }
 
 export interface EvaluateEntryResult {
@@ -374,7 +384,14 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
     ];
     return { outcome: "GOOD", messages, confidence: "low", delta: null, netCarbs };
   }
-  let expected = netCarbs / settings.icr;
+  // Phase B (Matildav window-ICR): when a meal time is supplied AND
+  // the user has the schedule master toggle on with an active window
+  // at that time, grade the dose against the window's ICR instead of
+  // the global one. Falls through to settings.icr otherwise.
+  const effective = input.mealTime
+    ? getEffectiveICR(input.mealTime, settings.icr)
+    : { icr: settings.icr, slot: null };
+  let expected = netCarbs / effective.icr;
   if (bgBefore && bgBefore > settings.targetBg) expected += (bgBefore - settings.targetBg) / settings.cf;
   const ratio = insulin / Math.max(expected, 0.1);
 

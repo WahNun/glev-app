@@ -931,6 +931,40 @@ export default function SettingsPage() {
             onChange={(e) => upd("icr", parseInt(e.target.value) || DEFAULT_INSULIN_SETTINGS.icr)}
           />
           <div style={{ fontSize: 13, color: "var(--text-ghost)", marginTop: 6 }}>{tSettings("icr_hint")}</div>
+          {/* Matildav Phase A — link to the per-time-window editor.
+              Lives INSIDE the ICR sheet so users find it where they
+              expect (under "Insulin-Carb-Verhältnis"), not as a sibling
+              row in the Insulin section. */}
+          <button
+            type="button"
+            onClick={() => { setOpenSheet(null); router.push("/settings/icr-schedule"); }}
+            style={{
+              marginTop: 18,
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "12px 14px",
+              background: "var(--surface-soft)",
+              border: `1px solid var(--border)`,
+              borderRadius: 12,
+              cursor: "pointer",
+              textAlign: "left",
+            }}
+            aria-label={tSettings("row_open_aria", { label: tSettings("row_icr_schedule") })}
+          >
+            <div style={{ flex: 1, paddingRight: 10 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>
+                {tSettings("row_icr_schedule")}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 2 }}>
+                {icrScheduleSummary?.enabled && icrScheduleSummary.activeSlots > 0
+                  ? tSettings("subtitle_icr_schedule_on", { n: icrScheduleSummary.activeSlots })
+                  : tSettings("subtitle_icr_schedule_off")}
+              </div>
+            </div>
+            <span style={{ fontSize: 18, color: "var(--text-ghost)" }}>›</span>
+          </button>
         </div>
       ),
       footer: <SaveFooter onSave={saveInsulinAction} />,
@@ -1873,18 +1907,6 @@ export default function SettingsPage() {
           subtitle={targetBgSub}
           ariaLabel={tSettings("row_open_aria", { label: tSettings("row_target_bg") })}
           onClick={() => openSheetWith("targetBg")}
-        />
-        <SettingsRow
-          iconColor={ACCENT}
-          icon={ICON.insulin}
-          label={tSettings("row_icr_schedule")}
-          subtitle={
-            icrScheduleSummary?.enabled && icrScheduleSummary.activeSlots > 0
-              ? tSettings("subtitle_icr_schedule_on", { n: icrScheduleSummary.activeSlots })
-              : tSettings("subtitle_icr_schedule_off")
-          }
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_icr_schedule") })}
-          onClick={() => router.push("/settings/icr-schedule")}
         />
         <SettingsRow
           iconColor={ACCENT}

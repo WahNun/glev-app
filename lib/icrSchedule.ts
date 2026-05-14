@@ -15,6 +15,11 @@
 
 import { supabase } from "./supabase";
 
+/** localStorage mirror — lets the engine read the schedule synchronously
+ *  from inside `evaluateEntry()` (which can't await). Updated on every
+ *  fetch + save. Schema-versioned so future changes can invalidate. */
+const LS_KEY = "glev_icr_schedule_v1";
+
 export type IcrSlot = {
   slotIndex: 1 | 2 | 3;
   label: string;
@@ -79,7 +84,69 @@ export function findActiveSlot(schedule: IcrSchedule, minute: number): IcrSlot |
   return null;
 }
 
-/** Read the schedule from Supabase. Empty/error → empty schedule. */
+/** Sync localStorage read — used by the engine inside evaluateEntry()
+ *  which can't await. Returns EMPTY_ICR_SCHEDULE on SSR / parse error /
+ *  empty cache so callers can always fall back to the global ICR. */
+export function loadIcrScheduleSync(): IcrSchedule {
+  if (typeof window === "undefined") return EMPTY_ICR_SCHEDULE;
+  try {
+    const raw = window.localStorage.getItem(LS_KEY);
+    if (!raw) return EMPTY_ICR_SCHEDULE;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return EMPTY_ICR_SCHEDULE;
+    const enabled = parsed.enabled === true;
+    const slotsRaw = Array.isArray(parsed.slots) ? parsed.slots : [];
+    const slots: IcrSlot[] = [];
+    for (const r of slotsRaw) {
+      if (!r || typeof r !== "object") continue;
+      const idx = Number(r.slotIndex);
+      if (idx !== 1 && idx !== 2 && idx !== 3) continue;
+      const startMinute = Number(r.startMinute);
+      const endMinute   = Number(r.endMinute);
+      const icr         = Number(r.icrGPerUnit);
+      if (!Number.isFinite(startMinute) || !Number.isFinite(endMinute) || !Number.isFinite(icr)) continue;
+      slots.push({
+        slotIndex: idx as 1 | 2 | 3,
+        label: typeof r.label === "string" ? r.label : "",
+        startMinute, endMinute,
+        icrGPerUnit: icr,
+        enabled: r.enabled !== false,
+      });
+    }
+    return { enabled, slots };
+  } catch {
+    return EMPTY_ICR_SCHEDULE;
+  }
+}
+
+function writeScheduleToLS(schedule: IcrSchedule): void {
+  if (typeof window === "undefined") return;
+  try { window.localStorage.setItem(LS_KEY, JSON.stringify(schedule)); }
+  catch { /* quota / privacy mode — silently ignore, DB is source of truth */ }
+}
+
+/** "Which ICR applies right now?" — sync helper used by the evaluator
+ *  and the dose recommender. Returns the matching slot's ICR when:
+ *   1. master toggle is on, AND
+ *   2. an enabled slot covers `at`'s minute-of-day.
+ *  Otherwise returns `fallbackIcr` (the global ICR from user_settings).
+ *  The matching slot (if any) is returned so the UI can attribute the
+ *  recommendation to a window name. */
+export function getEffectiveICR(
+  at: Date,
+  fallbackIcr: number,
+): { icr: number; slot: IcrSlot | null } {
+  const schedule = loadIcrScheduleSync();
+  if (!schedule.enabled) return { icr: fallbackIcr, slot: null };
+  const minute = at.getHours() * 60 + at.getMinutes();
+  const slot = findActiveSlot(schedule, minute);
+  if (!slot) return { icr: fallbackIcr, slot: null };
+  return { icr: slot.icrGPerUnit, slot };
+}
+
+/** Read the schedule from Supabase. Empty/error → empty schedule.
+ *  Side effect: mirrors the result into localStorage so `loadIcrScheduleSync`
+ *  has the latest data ready for the engine. */
 export async function fetchIcrSchedule(): Promise<IcrSchedule> {
   if (!supabase) return EMPTY_ICR_SCHEDULE;
   const { data: { user } } = await supabase.auth.getUser();
@@ -100,7 +167,11 @@ export async function fetchIcrSchedule(): Promise<IcrSchedule> {
     .eq("user_id", user.id)
     .order("slot_index", { ascending: true });
 
-  if (rErr || !rows) return { enabled, slots: [] };
+  if (rErr || !rows) {
+    const out = { enabled, slots: [] };
+    writeScheduleToLS(out);
+    return out;
+  }
 
   const slots: IcrSlot[] = rows
     .filter(r => r.slot_index === 1 || r.slot_index === 2 || r.slot_index === 3)
@@ -113,7 +184,9 @@ export async function fetchIcrSchedule(): Promise<IcrSchedule> {
       enabled: r.enabled !== false,
     }));
 
-  return { enabled, slots };
+  const out = { enabled, slots };
+  writeScheduleToLS(out);
+  return out;
 }
 
 /** Replace the user's full schedule (master toggle + 3 slots).
@@ -160,4 +233,8 @@ export async function saveIcrSchedule(schedule: IcrSchedule): Promise<void> {
       .upsert(rows, { onConflict: "user_id,slot_index" });
     if (rErr) throw rErr;
   }
+
+  // Mirror the freshly-saved state into LS so the next evaluator call
+  // sees it without waiting for fetchIcrSchedule to re-run.
+  writeScheduleToLS(schedule);
 }
