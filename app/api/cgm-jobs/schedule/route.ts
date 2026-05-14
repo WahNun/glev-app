@@ -6,7 +6,9 @@ import { adminClient } from "@/lib/cgm/supabase";
 // directly from `lib/cgm/llu` skipped the dispatcher and silently
 // returned no value for non-LLU users.
 import { getHistory } from "@/lib/cgm";
+import type { Reading } from "@/lib/cgm/llu";
 import type { LogType, FetchType } from "@/lib/cgmJobs";
+import { parseLluTs } from "@/lib/time";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -103,44 +105,57 @@ export async function POST(req: NextRequest) {
 
   const admin = adminClient();
 
-  // 1) Try an immediate "before" fetch from the CGM. If the user has no
-  //    CGM connected or the upstream errors out, we just skip — the post
-  //    jobs are still scheduled.
-  //
-  //    Retroactive logs (refTime more than ~5 min in the past) take the
-  //    nearest CGM history reading to refTime instead of the live
-  //    "current" value, so a workout logged after the fact gets a
-  //    sensible "before" anchor.
-  let glucoseAtLog: number | null = null;
+  // 1) Pull CGM history ONCE up front. We reuse it for two things:
+  //    a) the immediate "before" anchor (existing behaviour) and
+  //    b) the new retroactive backfill of any post-fetch job whose
+  //       fetch_time already lies in the past — see step 4 below.
+  //    A single fetch keeps the route fast and avoids hammering LLU
+  //    when the user logs a backdated meal.
+  let history: Reading[] = [];
+  let currentValue: number | null = null;
+  let cgmAvailable = true;
+  try {
+    const out = await getHistory(user.id);
+    history = out?.history || [];
+    const cv = out?.current?.value;
+    if (typeof cv === "number" && Number.isFinite(cv)) currentValue = cv;
+  } catch (e) {
+    cgmAvailable = false;
+    console.info("[cgm-jobs/schedule] CGM not available:", (e as Error)?.message || e);
+  }
+
+  // Source-agnostic "find nearest reading within ±windowMs of targetMs".
+  // Mirrors `pickReadingNear` in /api/cgm-jobs/process so backfilled
+  // values match what the worker would have written later.
+  const HISTORY_WINDOW_MS = 10 * 60_000;
+  function nearest(targetMs: number, windowMs = HISTORY_WINDOW_MS): number | null {
+    let best: { v: number; dt: number } | null = null;
+    for (const h of history) {
+      const v = h?.value;
+      if (typeof v !== "number" || !Number.isFinite(v)) continue;
+      const tMs = parseLluTs(h.timestamp);
+      if (tMs == null) continue;
+      const dt = Math.abs(tMs - targetMs);
+      if (dt > windowMs) continue;
+      if (!best || dt < best.dt) best = { v, dt };
+    }
+    return best ? best.v : null;
+  }
+
+  // 2) Try an immediate "before" fetch. Retroactive logs (refTime more
+  //    than ~5 min in the past) take the nearest CGM history reading to
+  //    refTime instead of the live "current" value, so a workout logged
+  //    after the fact gets a sensible "before" anchor.
   const nowMs = Date.now();
   const refMs = refTime.getTime();
   const RETRO_THRESHOLD_MS = 5 * 60_000;
-  const HISTORY_WINDOW_MS  = 10 * 60_000;
-  try {
-    const out = await getHistory(user.id);
+  let glucoseAtLog: number | null = null;
+  if (cgmAvailable) {
     if (nowMs - refMs > RETRO_THRESHOLD_MS) {
-      // Retroactive — match nearest history point within ±10min of refTime.
-      const hist = out?.history || [];
-      let best: { value: number; dt: number } | null = null;
-      for (const h of hist) {
-        const v = (h as { value?: unknown })?.value;
-        const tRaw = (h as { timestamp?: unknown; time?: unknown })?.timestamp
-                  ?? (h as { time?: unknown })?.time;
-        if (typeof v !== "number" || !Number.isFinite(v)) continue;
-        const tMs = typeof tRaw === "number" ? tRaw : Date.parse(String(tRaw));
-        if (!Number.isFinite(tMs)) continue;
-        const dt = Math.abs(tMs - refMs);
-        if (dt > HISTORY_WINDOW_MS) continue;
-        if (!best || dt < best.dt) best = { value: v, dt };
-      }
-      if (best) glucoseAtLog = best.value;
-    } else {
-      const v = out?.current?.value;
-      if (typeof v === "number" && Number.isFinite(v)) glucoseAtLog = v;
+      glucoseAtLog = nearest(refMs);
+    } else if (currentValue != null) {
+      glucoseAtLog = currentValue;
     }
-  } catch (e) {
-    // Upstream failure (no creds, network, etc.) — silent skip.
-    console.info("[cgm-jobs/schedule] no CGM 'before' value:", (e as Error)?.message || e);
   }
 
   // 2) If we got a "before" value, write it to the log row when its
@@ -172,11 +187,63 @@ export async function POST(req: NextRequest) {
     status:     "pending" as const,
   }));
 
+  let insertedJobs: { id: string; fetch_type: FetchType; fetch_time: string }[] = [];
   if (rows.length > 0) {
-    const { error: insErr } = await admin.from("cgm_fetch_jobs").insert(rows);
+    const { data: ins, error: insErr } = await admin
+      .from("cgm_fetch_jobs")
+      .insert(rows)
+      .select("id, fetch_type, fetch_time");
     if (insErr) {
       console.error("[cgm-jobs/schedule] insert failed:", insErr);
       return NextResponse.json({ error: insErr.message }, { status: 500 });
+    }
+    insertedJobs = (ins ?? []) as typeof insertedJobs;
+  }
+
+  // 4) Retroactive backfill for backdated logs. Any job whose fetch_time
+  //    is already in the past at insert time would otherwise wait for
+  //    the next /api/cgm-jobs/process tick — and for meals would be
+  //    killed by MEAL_ABANDON_AFTER_MS=1h on the very next pass if it
+  //    didn't immediately resolve. Here we run the same ±10 min history
+  //    match the worker uses, write the value to the parent log column
+  //    AND mark the job as fetched in one pass. Curve jobs
+  //    (meal_curve_180 / bolus_curve_180 / exercise_curve_180) are
+  //    skipped — they need the full 0–180 min sample-table upsert which
+  //    lives in processCurveJob and runs on the next worker tick.
+  //    Non-curve point-value jobs are the ones the UI shows as
+  //    "Überfällig" so this fixes the visible bug for backdated meals.
+  let backfilled = 0;
+  if (cgmAvailable && history.length > 0) {
+    for (const job of insertedJobs) {
+      const ftMs = new Date(job.fetch_time).getTime();
+      if (!Number.isFinite(ftMs) || ftMs > nowMs) continue;            // future-only → worker
+      const tc = targetColumn(logType, job.fetch_type);
+      if (!tc) continue;                                               // curve / unknown → worker
+      const value = nearest(ftMs);
+      if (value == null) continue;                                     // no match → worker retries
+      const stampIso = new Date(nowMs).toISOString();
+      try {
+        const { data: rowRaw } = await admin
+          .from(tc.table).select("*").eq("id", logId).maybeSingle();
+        const row = rowRaw as unknown as Record<string, unknown> | null;
+        const cur = row ? row[tc.column] : null;
+        if (row && (cur == null || cur === "")) {
+          await admin.from(tc.table)
+            .update({ [tc.column]: value })
+            .eq("id", logId);
+        }
+        await admin.from("cgm_fetch_jobs")
+          .update({
+            status: "fetched",
+            value_mgdl: value,
+            fetched_at: stampIso,
+            updated_at: stampIso,
+          })
+          .eq("id", job.id);
+        backfilled += 1;
+      } catch (e) {
+        console.warn("[cgm-jobs/schedule] backfill writeback failed:", e);
+      }
     }
   }
 
@@ -184,5 +251,6 @@ export async function POST(req: NextRequest) {
     ok: true,
     glucoseAtLog,
     scheduledCount: rows.length,
+    backfilledCount: backfilled,
   });
 }
