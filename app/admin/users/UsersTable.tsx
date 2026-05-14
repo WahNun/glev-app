@@ -261,7 +261,12 @@ export default function UsersTable({
               <th style={thStyle}>Plan</th>
               <th style={thStyle}>Status</th>
               <th style={thStyle}>CGM</th>
-              <th style={thStyle}>Sprache</th>
+              <th
+                style={thStyle}
+                title="Nur explizit gewählt (Sprachumschalter oder Admin-Anlegen). „—" = nicht gesetzt, Runtime nutzt Cookie + Accept-Language."
+              >
+                Sprache
+              </th>
               <th style={thStyle}>Currency</th>
               <th style={thStyle}>Land</th>
               <th style={thStyle}>Letzter Login</th>

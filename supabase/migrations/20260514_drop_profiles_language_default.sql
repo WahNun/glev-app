@@ -1,0 +1,18 @@
+-- Drop the implicit DEFAULT 'de' on profiles.language.
+--
+-- Background: the original migration (20260427_add_profiles_language.sql)
+-- added the column with `DEFAULT 'de'`. That meant every new profile row —
+-- regardless of how the user actually got created (Stripe checkout,
+-- auth-trigger, admin form) — got language='de' written automatically,
+-- even if the user never explicitly chose a language.
+--
+-- That made the /admin/users "Sprache"-column misleading: it showed "de"
+-- for everyone, including users whose runtime UI is actually English
+-- (resolved from cookie + Accept-Language by next-intl).
+--
+-- After this migration, only explicit writes (currently: lib/locale.ts
+-- when the user clicks the language switcher, and the admin
+-- createUserAction form) will populate the column. Existing rows keep
+-- their current value — we do NOT reset them, because we cannot
+-- distinguish "user actively chose de" from "DB default kicked in".
+ALTER TABLE profiles ALTER COLUMN language DROP DEFAULT;
