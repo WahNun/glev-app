@@ -224,11 +224,204 @@ export async function saveInsulinSettings(settings: InsulinSettings): Promise<vo
     .from("user_settings")
     .upsert({
       user_id:          user.id,
-      icr_g_per_unit:   Math.round(settings.icr),
+      // ICR is now NUMERIC(5,1) (Migration 20260515_split_icr_user_engine.sql)
+      // — round to one decimal so the column can express e.g. 8.5 without
+      // either drifting (8.547) or being silently floored to 8.
+      icr_g_per_unit:   Math.round(settings.icr * 10) / 10,
       cf_mgdl_per_unit: Math.round(settings.cf),
       target_bg_mgdl:   Math.round(settings.targetBg),
     }, { onConflict: "user_id" });
 
+  if (error) throw new Error(error.message);
+}
+
+/* ── Engine-computed ICR (separate from user-set ICR) ─────────────── */
+//
+// Lucas-Spec May 14 split the single ICR column into two values that
+// never clobber each other:
+//
+//   * `icr_g_per_unit`        → user-facing manual value. Bolus calc
+//                               reads this. Settings UI writes this.
+//   * `icr_g_per_unit_engine` → engine-computed adaptive ICR. ANZEIGE
+//                               only by default; never feeds the bolus
+//                               math unless the user opted-in via
+//                               `engine_icr_auto_apply`.
+//
+// `persistEngineIcr` is called from the client (insights page) every
+// time `computeAdaptiveICR` re-runs. That happens on every page load
+// after a meal got logged, so the engine column stays roughly fresh
+// without needing a separate cron. When `engine_icr_auto_apply` is on
+// AND the engine has at least 10 meals, the engine value also takes
+// over `icr_g_per_unit` and an entry lands in `adjustment_history`
+// so the user can see what changed.
+
+const ENGINE_ICR_AUTO_APPLY_MIN_SAMPLES = 10;
+
+export interface EngineIcrInfo {
+  /** Engine-computed adaptive ICR (g per unit), or null when the
+   *  engine doesn't have enough meals yet. */
+  value: number | null;
+  /** Number of finalized meals that contributed to `value`. 0 when
+   *  the engine hasn't computed yet. */
+  sampleSize: number;
+  /** ISO timestamp of the most recent engine recomputation, or null
+   *  when no computation has been persisted yet. */
+  updatedAt: string | null;
+  /** When TRUE the engine overwrites `icr_g_per_unit` once
+   *  `sampleSize` reaches `ENGINE_ICR_AUTO_APPLY_MIN_SAMPLES`. */
+  autoApply: boolean;
+}
+
+export const DEFAULT_ENGINE_ICR_INFO: EngineIcrInfo = {
+  value: null,
+  sampleSize: 0,
+  updatedAt: null,
+  autoApply: false,
+};
+
+/**
+ * Read the persisted engine ICR + auto-apply preference. Returns the
+ * default zero-state when the user is signed out, the row hasn't been
+ * created, or Supabase is unreachable — same fallback strategy as the
+ * other helpers in this file so consumers don't have to handle errors.
+ */
+export async function fetchEngineIcrInfo(): Promise<EngineIcrInfo> {
+  if (!supabase) return DEFAULT_ENGINE_ICR_INFO;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return DEFAULT_ENGINE_ICR_INFO;
+
+  const { data, error } = await supabase
+    .from("user_settings")
+    .select("icr_g_per_unit_engine, engine_icr_sample_size, engine_icr_updated_at, engine_icr_auto_apply")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (error || !data) return DEFAULT_ENGINE_ICR_INFO;
+
+  return {
+    value:      isFiniteNumber(data.icr_g_per_unit_engine) && data.icr_g_per_unit_engine > 0
+                  ? data.icr_g_per_unit_engine : null,
+    sampleSize: isFiniteNumber(data.engine_icr_sample_size) ? data.engine_icr_sample_size : 0,
+    updatedAt:  typeof data.engine_icr_updated_at === "string" ? data.engine_icr_updated_at : null,
+    autoApply:  Boolean(data.engine_icr_auto_apply),
+  };
+}
+
+/**
+ * Persist the engine-computed adaptive ICR. Always writes the engine
+ * column. When the user has `engine_icr_auto_apply=TRUE` AND the sample
+ * size reaches the threshold, ALSO writes the user column and appends
+ * an `adjustment_history` entry so the audit trail stays complete.
+ *
+ * Idempotent on a no-op: if the engine value rounds to the same one-
+ * decimal number that's already persisted, nothing is written. Errors
+ * are swallowed (warned to console) — the caller (insights page) is a
+ * fire-and-forget useEffect; a transient DB hiccup must not break the
+ * card render.
+ */
+export async function persistEngineIcr(rawValue: number | null, rawSampleSize: number): Promise<void> {
+  if (!supabase) return;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  // Round to one decimal to match the column precision. Null pass-
+  // through means "engine has no enough data" — we still persist that
+  // explicitly so an old engine value doesn't linger after meals are
+  // deleted.
+  const engineValue = rawValue != null && Number.isFinite(rawValue) && rawValue > 0
+    ? Math.round(rawValue * 10) / 10
+    : null;
+  const sampleSize = Math.max(0, Math.floor(rawSampleSize));
+
+  // Pull current state to (a) skip writes when the rounded value matches
+  // and (b) decide whether auto-apply should also touch the user column.
+  const { data: current, error: readErr } = await supabase
+    .from("user_settings")
+    .select("icr_g_per_unit, icr_g_per_unit_engine, engine_icr_sample_size, engine_icr_auto_apply, adjustment_history")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (readErr) {
+    // eslint-disable-next-line no-console
+    console.warn("[glev] persistEngineIcr read failed:", readErr.message);
+    return;
+  }
+
+  const currentEngine = isFiniteNumber(current?.icr_g_per_unit_engine)
+    ? current!.icr_g_per_unit_engine : null;
+  const currentSample = isFiniteNumber(current?.engine_icr_sample_size)
+    ? current!.engine_icr_sample_size : 0;
+  // No-op fast path: same engine value AND same sample size → nothing
+  // changed since last persist, skip the write entirely.
+  if (currentEngine === engineValue && currentSample === sampleSize) return;
+
+  const updates: Record<string, unknown> = {
+    user_id:                user.id,
+    icr_g_per_unit_engine:  engineValue,
+    engine_icr_sample_size: sampleSize,
+    engine_icr_updated_at:  new Date().toISOString(),
+  };
+
+  // Auto-apply: only when the user opted in AND the engine has enough
+  // confidence (>=10 meals) AND the new value differs from the user's
+  // current manual value (idempotent — re-applying the same number
+  // would just spam the audit log).
+  const autoApply = Boolean(current?.engine_icr_auto_apply);
+  const currentUserIcr = isFiniteNumber(current?.icr_g_per_unit) && current!.icr_g_per_unit > 0
+    ? current!.icr_g_per_unit
+    : null;
+  if (autoApply && engineValue != null && sampleSize >= ENGINE_ICR_AUTO_APPLY_MIN_SAMPLES
+      && currentUserIcr !== engineValue) {
+    updates.icr_g_per_unit = engineValue;
+    const existingHistory: AdjustmentRecord[] = Array.isArray(current?.adjustment_history)
+      ? (current!.adjustment_history as AdjustmentRecord[]) : [];
+    updates.adjustment_history = [
+      ...existingHistory,
+      {
+        at: new Date().toISOString(),
+        field: "icr",
+        // `from` may be null on first auto-apply — the AdjustmentRecord
+        // shape expects a number, so we substitute the engine value
+        // (which means "no prior delta"). Downstream UI tolerates
+        // from===to as a no-op-render.
+        from: currentUserIcr ?? engineValue,
+        to: engineValue,
+        reason: "engine-auto-apply",
+      },
+    ];
+    // Mirror the new user ICR into localStorage so the sync
+    // `getInsulinSettings()` caller (engine evaluation hot path) sees
+    // the auto-applied value on the very next dose calc.
+    if (typeof window !== "undefined") {
+      try {
+        const raw = window.localStorage.getItem(SETTINGS_KEY);
+        const parsed = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+        parsed.icr = engineValue;
+        window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(parsed));
+      } catch { /* storage disabled / quota — ignore */ }
+    }
+  }
+
+  const { error: writeErr } = await supabase
+    .from("user_settings")
+    .upsert(updates, { onConflict: "user_id" });
+  if (writeErr) {
+    // eslint-disable-next-line no-console
+    console.warn("[glev] persistEngineIcr write failed:", writeErr.message);
+  }
+}
+
+/**
+ * Toggle whether the engine is allowed to auto-apply its adaptive ICR
+ * onto the user's manual value. Throws on auth/DB error so the
+ * Settings UI can surface a save-failed state.
+ */
+export async function setEngineIcrAutoApply(enabled: boolean): Promise<void> {
+  if (!supabase) throw new Error("Supabase not configured");
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) throw new Error("Not signed in");
+
+  const { error } = await supabase
+    .from("user_settings")
+    .upsert({ user_id: user.id, engine_icr_auto_apply: enabled }, { onConflict: "user_id" });
   if (error) throw new Error(error.message);
 }
 

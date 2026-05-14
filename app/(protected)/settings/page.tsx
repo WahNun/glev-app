@@ -16,6 +16,10 @@ import {
   saveInsulinSettings,
   DEFAULT_INSULIN_SETTINGS,
   fetchAdjustmentHistory,
+  fetchEngineIcrInfo,
+  setEngineIcrAutoApply,
+  DEFAULT_ENGINE_ICR_INFO,
+  type EngineIcrInfo,
 } from "@/lib/userSettings";
 import type { AdjustmentRecord } from "@/lib/engine/adjustment";
 import {
@@ -250,6 +254,17 @@ export default function SettingsPage() {
   // can see what the engine has been changing without us paginating.
   // Failures collapse to an empty array — same UI as "nothing yet".
   const [adjustmentHistory, setAdjustmentHistory] = useState<AdjustmentRecord[]>([]);
+  // Engine-computed ICR info (Lucas-Spec May 14). Surfaced in the ICR
+  // sheet as a read-only suggestion line "Engine-Vorschlag: 1:X · …
+  // Mahlzeiten" plus an opt-in toggle that lets the engine auto-apply
+  // its value once it has 10+ meals of data. Defaults to the zero
+  // state (no value, no samples, auto-apply off) so the suggestion
+  // line is hidden until the engine has actually computed something.
+  const [engineIcrInfo, setEngineIcrInfo] = useState<EngineIcrInfo>(DEFAULT_ENGINE_ICR_INFO);
+  // Independent in-flight flag for the auto-apply toggle so flipping
+  // it doesn't grey out the whole sheet's Save button — the toggle
+  // commits straight to the DB without going through SaveFooter.
+  const [autoApplyBusy, setAutoApplyBusy] = useState(false);
 
   const [openSheet, setOpenSheet] = useState<SheetKey | null>(null);
   // Account-Sheet aus dem Header — geteilte Komponente, deshalb
@@ -324,6 +339,9 @@ export default function SettingsPage() {
     fetchAdjustmentHistory()
       .then((rows) => setAdjustmentHistory(rows.slice(0, 10)))
       .catch(() => {});
+    // Engine ICR + auto-apply preference. Failure → zero state, which
+    // hides the suggestion line and shows the toggle as off.
+    fetchEngineIcrInfo().then(setEngineIcrInfo).catch(() => {});
     // Load account info (email + sign-up date + total meal count) for the
     // Account row subtitle and sheet. Each piece is best-effort: failures
     // leave the placeholder ("—") in place rather than blocking the row.
@@ -495,7 +513,10 @@ export default function SettingsPage() {
     setSaveError("");
     try {
       const clamped = {
-        icr:      Math.min(100, Math.max(1, Math.round(settings.icr))),
+        // ICR is now NUMERIC(5,1) in the DB (Migration 20260515) — round
+        // to one decimal so 8.5 survives the round-trip but 8.547 is
+        // sanitised. CF + target BG remain integer columns.
+        icr:      Math.min(100, Math.max(1, Math.round(settings.icr * 10) / 10)),
         cf:       Math.min(500, Math.max(1, Math.round(settings.cf))),
         targetBg: Math.min(200, Math.max(60, Math.round(settings.targetBg))),
       };
@@ -926,11 +947,96 @@ export default function SettingsPage() {
             type="number"
             min={1}
             max={100}
-            step={1}
+            step={0.5}
             value={settings.icr}
-            onChange={(e) => upd("icr", parseInt(e.target.value) || DEFAULT_INSULIN_SETTINGS.icr)}
+            onChange={(e) => {
+              // parseFloat (not parseInt) so 8.5 survives the input.
+              // Empty/invalid → fall back to the default ICR rather than
+              // NaN, which would propagate through saveInsulinAction's
+              // clamp and land as 1 (the lower bound).
+              const parsed = parseFloat(e.target.value);
+              upd("icr", Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_INSULIN_SETTINGS.icr);
+            }}
           />
           <div style={{ fontSize: 13, color: "var(--text-ghost)", marginTop: 6 }}>{tSettings("icr_hint")}</div>
+
+          {/* Engine-Vorschlag (Lucas-Spec May 14): read-only line under
+              the input that surfaces the engine-computed ICR + how many
+              meals fed it. Hidden until the engine has actually computed
+              a value (sampleSize > 0) so brand-new users don't see an
+              empty placeholder. Pure display — the toggle below is what
+              actually controls whether the engine writes anything. */}
+          {engineIcrInfo.value != null && engineIcrInfo.sampleSize > 0 ? (
+            <div style={{
+              marginTop: 14,
+              padding: "10px 12px",
+              background: "var(--surface-soft)",
+              border: `1px solid var(--border-soft)`,
+              borderRadius: 10,
+              fontSize: 12,
+              color: "var(--text-dim)",
+              lineHeight: 1.5,
+            }}>
+              {tSettings("icr_engine_suggestion", {
+                value: Math.round(engineIcrInfo.value * 10) / 10,
+                n: engineIcrInfo.sampleSize,
+              })}
+            </div>
+          ) : engineIcrInfo.sampleSize > 0 ? (
+            <div style={{ marginTop: 10, fontSize: 12, color: "var(--text-faint)" }}>
+              {tSettings("icr_engine_warming_up", { n: engineIcrInfo.sampleSize })}
+            </div>
+          ) : (
+            <div style={{ marginTop: 10, fontSize: 12, color: "var(--text-faint)" }}>
+              {tSettings("icr_engine_no_data_yet")}
+            </div>
+          )}
+
+          {/* Auto-apply toggle — opt-in. Default off so existing users
+              see no behaviour change. When on, the engine writes its
+              value into icr_g_per_unit (and appends to adjustment_history)
+              once sampleSize >= 10. Commits directly to the DB on tap so
+              the user gets immediate feedback; rollback on error. */}
+          <label style={{
+            marginTop: 14,
+            display: "flex", alignItems: "flex-start", gap: 12,
+            padding: "12px 14px",
+            background: "var(--surface-soft)",
+            border: `1px solid var(--border)`,
+            borderRadius: 12,
+            cursor: autoApplyBusy ? "wait" : "pointer",
+            opacity: autoApplyBusy ? 0.6 : 1,
+          }}>
+            <input
+              type="checkbox"
+              checked={engineIcrInfo.autoApply}
+              disabled={autoApplyBusy}
+              onChange={async (e) => {
+                const next = e.target.checked;
+                // Optimistic flip so the UI feels instant; revert on
+                // DB error so the toggle never lies about what's saved.
+                setEngineIcrInfo((p) => ({ ...p, autoApply: next }));
+                setAutoApplyBusy(true);
+                try {
+                  await setEngineIcrAutoApply(next);
+                } catch {
+                  setEngineIcrInfo((p) => ({ ...p, autoApply: !next }));
+                  setSaveError(tSettings("save_failed"));
+                } finally {
+                  setAutoApplyBusy(false);
+                }
+              }}
+              style={{ width: 18, height: 18, marginTop: 1, flexShrink: 0, cursor: "inherit" }}
+            />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>
+                {tSettings("icr_auto_apply_label")}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 4, lineHeight: 1.5 }}>
+                {tSettings("icr_auto_apply_hint")}
+              </div>
+            </div>
+          </label>
           {/* Matildav Phase A — link to the per-time-window editor.
               Lives INSIDE the ICR sheet so users find it where they
               expect (under "Insulin-Carb-Verhältnis"), not as a sibling

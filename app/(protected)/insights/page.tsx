@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { fetchMeals, fetchMealsForEngine, unifiedOutcome, type Meal } from "@/lib/meals";
 import { TYPE_COLORS, TYPE_LABELS } from "@/lib/mealTypes";
 import { computeAdaptiveICR } from "@/lib/engine/adaptiveICR";
+import { fetchInsulinSettings, persistEngineIcr, DEFAULT_INSULIN_SETTINGS } from "@/lib/userSettings";
 import { pairBolusesToMeals } from "@/lib/engine/pairing";
 import { updateInsulinLogLink } from "@/lib/insulin";
 import { detectPattern } from "@/lib/engine/patterns";
@@ -242,6 +243,16 @@ export default function InsightsPage() {
   // card retitled). Null/unset is treated as "show everything" so
   // pre-onboarding users aren't worse off.
   const [sex, setSex] = useState<Sex | null>(null);
+  // User-set manual ICR loaded from `user_settings.icr_g_per_unit`
+  // (Lucas-Spec May 14 — see lib/userSettings.ts EngineIcrInfo for the
+  // sister engine-computed value). Shown alongside the engine ICR in
+  // the Adaptive-Engine card so the user can compare what they set
+  // versus what the engine has learned. Defaults to 15 (the system
+  // default) until the async fetch resolves.
+  const [userIcr, setUserIcr] = useState<number>(DEFAULT_INSULIN_SETTINGS.icr);
+  useEffect(() => {
+    fetchInsulinSettings().then(s => setUserIcr(s.icr)).catch(() => {});
+  }, []);
   useEffect(() => {
     fetchUserProfile().then((p) => setSex(p.sex)).catch(() => {});
   }, []);
@@ -955,6 +966,24 @@ export default function InsightsPage() {
   // pattern detector's recent-window stats aren't dragged off course by
   // year-old rows. Long-term tiles below continue to read from `meals`.
   const adaptiveICR  = computeAdaptiveICR(engineMeals, engineBoluses);
+  // Persist the engine-computed ICR back to user_settings on every
+  // recomputation. Fire-and-forget — `persistEngineIcr` is idempotent
+  // (skips writes when nothing changed) and swallows transient errors
+  // so the card render never blocks on the round-trip. The DB write is
+  // what makes "Engine-Vorschlag: 1:X · basiert auf Y Mahlzeiten" in
+  // Settings reflect the latest meal data without a separate cron.
+  // When the user has `engine_icr_auto_apply` enabled AND the engine
+  // has reached its confidence threshold, the same call also pushes
+  // the value into the user column + appends an audit-trail entry.
+  useEffect(() => {
+    if (loading) return;
+    persistEngineIcr(adaptiveICR.global, adaptiveICR.sampleSize);
+  // adaptiveICR is rebuilt on every render — keying on its primitive
+  // fields keeps this effect from firing infinitely while still
+  // re-running whenever the engine value or sample count actually
+  // changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, adaptiveICR.global, adaptiveICR.sampleSize]);
   const enginePattern = detectPattern(engineMeals);
   const settings: AdaptiveSettings = {
     icr: adaptiveICR.global ? Math.round(adaptiveICR.global * 10) / 10 : 15,
@@ -1665,32 +1694,57 @@ export default function InsightsPage() {
                   </span>
                 </div>
 
-                {/* Hero ICR — matched 1:1 to the Raw-ICR performance-tile
-                    (fontSize:20) so both ICR values feel optically equal.
-                    The card already carries the Engine's identity via the
-                    ACCENT colour and status pill — the number itself does
-                    not need to be larger than its raw sibling tile.
-                    Bottom-border separator + extra marginBottom give the
-                    pattern-evaluation block below clear breathing room. */}
+                {/* Two-value ICR block (Lucas-Spec May 14): show the
+                    user's manual value AND the engine-computed value
+                    side-by-side so it's clear they're two different
+                    numbers and the engine never silently overwrote the
+                    user's setting.
+                      Row 1 ("Dein Faktor"): white, bold — this is the
+                        value bolus calc actually uses.
+                      Row 2 ("Engine"):       dimmed grey + mono — the
+                        suggestion. Hidden when no engine value yet
+                        (warming-up state), so we don't render an
+                        empty "1:–" placeholder.
+                    Bottom-border + marginBottom keep the pattern-
+                    evaluation block underneath clearly separated. */}
                 <div style={{
-                  display:"flex", alignItems:"baseline", gap:8,
+                  display:"flex", flexDirection:"column", gap:6,
                   padding:"2px 2px 14px", marginBottom:16,
                   borderBottom:`1px solid var(--border-soft)`,
                 }}>
-                  <span style={{ fontSize:11, color:"var(--text-dim)", fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase" }}>
-                    {tInsights("engine_label_icr")}
-                  </span>
-                  <span style={{
-                    fontSize:20, fontWeight:800,
-                    color: adaptiveICR.global ? ACCENT : "var(--text-ghost)",
-                    fontFamily:"var(--font-mono)",
-                    lineHeight:1, letterSpacing:"-0.03em",
-                  }}>
-                    {icrText}
-                  </span>
-                  <span style={{ fontSize:11, color:"var(--text-faint)", marginLeft:"auto", textAlign:"right", lineHeight:1.3 }}>
-                    {tInsights("engine_final_meals", { n: enginePattern.sampleSize })}
-                  </span>
+                  {/* DEIN FAKTOR — user-set, white, what the bolus calc reads. */}
+                  <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
+                    <span style={{ fontSize:11, color:"var(--text-dim)", fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase" }}>
+                      {tInsights("engine_user_icr_label")}
+                    </span>
+                    <span style={{
+                      fontSize:20, fontWeight:800,
+                      color: "var(--text)",
+                      fontFamily:"var(--font-mono)",
+                      lineHeight:1, letterSpacing:"-0.03em",
+                    }}>
+                      {tInsights("engine_user_icr_value", { value: Math.round(userIcr * 10) / 10 })}
+                    </span>
+                  </div>
+                  {/* ENGINE — adaptive, dimmed, only shown once data exists. */}
+                  {adaptiveICR.global != null && (
+                    <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
+                      <span style={{ fontSize:11, color:"var(--text-faint)", fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase" }}>
+                        {tInsights("engine_label_icr")}
+                      </span>
+                      <span style={{
+                        fontSize:14, fontWeight:600,
+                        color: "var(--text-dim)",
+                        fontFamily:"var(--font-mono)",
+                        lineHeight:1, letterSpacing:"-0.03em",
+                      }}>
+                        {icrText}
+                      </span>
+                      <span style={{ fontSize:11, color:"var(--text-faint)", marginLeft:"auto", textAlign:"right", lineHeight:1.3 }}>
+                        {tInsights("engine_final_meals", { n: enginePattern.sampleSize })}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* ICR source breakdown — makes it visible whether the
