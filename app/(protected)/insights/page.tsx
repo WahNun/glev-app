@@ -977,7 +977,6 @@ export default function InsightsPage() {
       node: (
         <FlipCard
           accent={GREEN}
-          variant="glass"
           back={
             <FlipBack
               title={tInsights("tir_back_title")}
