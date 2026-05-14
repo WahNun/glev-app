@@ -1061,6 +1061,12 @@ export default function InsightsPage() {
                           padding:0,
                           cursor:"pointer",
                           height:"100%",
+                          // Apple-Wallet light-sweep needs a clipping
+                          // host — the overlay div uses absolute inset:0
+                          // and we don't want the streak bleeding past
+                          // the rounded caps.
+                          position:"relative",
+                          overflow:"hidden",
                           borderTopLeftRadius:     isFirst ? 99 : 0,
                           borderBottomLeftRadius:  isFirst ? 99 : 0,
                           borderTopRightRadius:    isLast  ? 99 : 0,
@@ -1081,7 +1087,20 @@ export default function InsightsPage() {
                             : "inset 0 1px 0 0 rgba(255,255,255,0.32), inset 0 -1px 0 0 rgba(0,0,0,0.18)",
                           transition:"transform 280ms cubic-bezier(0.22, 0.9, 0.32, 1.18), filter 220ms ease-out, opacity 220ms ease-out, box-shadow 220ms ease-out",
                         }}
-                      />
+                      >
+                        {/* Light-sweep overlay (Apple-Wallet feel).
+                            One-shot 700ms streak, staggered 80ms per
+                            segment so TIR/Below/Above feel like they
+                            materialise in sequence rather than at once.
+                            `forwards` fill keeps the final transparent
+                            state so the bar doesn't flash again on
+                            re-render. */}
+                        <span
+                          aria-hidden
+                          className="glev-tir-sweep"
+                          style={{ animationDelay: `${i * 80}ms` }}
+                        />
+                      </button>
                     );
                   })}
                 </div>
