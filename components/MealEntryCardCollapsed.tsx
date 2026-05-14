@@ -80,10 +80,10 @@ export default function MealEntryCardCollapsed({
           date can never be cut off. */}
       <div style={{ minWidth: 0 }}>
         <div className="glev-mec-cell-label">{tx("row_when")}</div>
-        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)", letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "var(--font-mono)" }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)", letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
           {dateStr}
         </div>
-        <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-dim)", letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "var(--font-mono)", marginTop: 2 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-dim)", letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: 2 }}>
           {timeStr}
         </div>
       </div>

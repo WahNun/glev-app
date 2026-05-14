@@ -1275,7 +1275,7 @@ const EXERCISE_ACCENT = "#22C55E";
 
 function NonMealRow({
   isOpen, onToggle, onDelete, deleting, accent, badge, dateStr, timeStr,
-  primaryLabel, primaryValue, primaryColor,
+  primaryLabel, primaryValue, primaryColor, primaryMono,
   secondaryLabel, secondaryValue, secondaryColor, secondaryMono,
   secondarySubtitle,
   expandedDetails,
@@ -1298,6 +1298,11 @@ function NonMealRow({
    *  accent + mono treatment after the BRAND/DOSE swap. */
   secondaryColor?: string;
   secondaryMono?: boolean;
+  /** Optional override — defaults to false. Mono should only be used
+   *  on numeric primary values (e.g. exercise duration "30m"); brand
+   *  names ("Fiasp", "Tresiba") render in the default font so the
+   *  card matches the chip typography. */
+  primaryMono?: boolean;
   /** Optional second line under the secondary value — used by bolus rows
    *  to surface the historic ICR snapshot (e.g. "@ 2 BE/IE"). Rendered
    *  in muted text and elided on small screens to avoid layout shifts. */
@@ -1325,7 +1330,7 @@ function NonMealRow({
           {/* Col 1: Date (time shown in expanded detail) */}
           <div style={{ minWidth:0 }}>
             <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>{tx("row_when")}</div>
-            <div style={{ fontSize:14, fontWeight:600, color:"var(--text-strong)", letterSpacing:"-0.01em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", fontFamily:"var(--font-mono)" }}>
+            <div style={{ fontSize:14, fontWeight:600, color:"var(--text-strong)", letterSpacing:"-0.01em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
               {dateStr}
             </div>
           </div>
@@ -1340,7 +1345,7 @@ function NonMealRow({
           {/* Col 3: Primary metric (Dose / Duration) */}
           <div style={{ minWidth:0 }}>
             <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:3, textTransform:"uppercase" }}>{primaryLabel}</div>
-            <div style={{ fontSize:14, fontWeight:700, color:primaryColor, letterSpacing:"-0.01em", fontFamily:"var(--font-mono)" }}>{primaryValue}</div>
+            <div style={{ fontSize:14, fontWeight:700, color:primaryColor, letterSpacing:"-0.01em", fontFamily: primaryMono ? "var(--font-mono)" : undefined }}>{primaryValue}</div>
           </div>
           {/* Col 4: Secondary — neutral by default; bolus/basal pass an
               accent + mono override so DOSE keeps its prominent styling.
@@ -1373,7 +1378,6 @@ function NonMealRow({
                   whiteSpace: "nowrap",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
-                  fontFamily: "var(--font-mono)",
                   marginTop: 2,
                 }}
               >
@@ -1956,6 +1960,7 @@ function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting }:
       primaryLabel={tx("row_duration")}
       primaryValue={`${log.duration_minutes}m`}
       primaryColor={accent}
+      primaryMono
       secondaryLabel={tx("row_type")}
       secondaryValue={typeLbl}
       expandedDetails={

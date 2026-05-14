@@ -237,10 +237,10 @@ export default function MealEntryLightExpand({
     </span>
   );
 
-  const Stat = ({ label, value, color, adornment }: { label: string; value: React.ReactNode; color?: string; adornment?: React.ReactNode }) => (
+  const Stat = ({ label, value, color, adornment, mono = true }: { label: string; value: React.ReactNode; color?: string; adornment?: React.ReactNode; mono?: boolean }) => (
     <div style={{ display:"flex", flexDirection:"column", minWidth:70, gap:3 }}>
       <span style={{ fontSize:12, color:"var(--text-faint)", letterSpacing:"0.06em", textTransform:"uppercase", fontWeight:600 }}>{label}</span>
-      <span style={{ fontSize:14, fontWeight:700, color: color || "var(--text-strong)", fontFamily:"var(--font-mono)", display:"inline-flex", alignItems:"center" }}>
+      <span style={{ fontSize:14, fontWeight:700, color: color || "var(--text-strong)", fontFamily: mono ? "var(--font-mono)" : undefined, display:"inline-flex", alignItems:"center" }}>
         {value}
         {adornment}
       </span>
@@ -377,7 +377,7 @@ export default function MealEntryLightExpand({
               );
             })()}
           />
-          <Stat label={td("bg_after")}  value={afterValue} color={after != null ? afterColor : undefined}/>
+          <Stat label={td("bg_after")}  value={afterValue} color={after != null ? afterColor : undefined} mono={after != null}/>
           <Stat label={td("delta")}     value={delta != null ? `${delta > 0 ? "+" : ""}${delta} mg/dL` : "—"} color={deltaColor}/>
         </div>
       </div>
@@ -407,7 +407,7 @@ export default function MealEntryLightExpand({
 
       {/* TIMESTAMP + EDIT/LINK */}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap", paddingTop:8, borderTop:`1px solid ${BORDER}` }}>
-        <span style={{ fontSize:13, color:"var(--text-dim)", fontFamily:"var(--font-mono)" }}>
+        <span style={{ fontSize:13, color:"var(--text-dim)" }}>
           {fullTimestamp}
           {savedFlash && (
             <span style={{ marginLeft: 12, color: GREEN, fontWeight: 700 }}>{td("saved_flash")}</span>
