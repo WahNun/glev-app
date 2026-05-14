@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import {
   setManualPlanAction,
   clearManualPlanAction,
@@ -46,6 +46,30 @@ export default function UserActions({
 }) {
   const [confirmKind, setConfirmKind] = useState<"soft" | "hard" | null>(null);
   const [confirmEmail, setConfirmEmail] = useState("");
+  // Bestätigungs-Dialog für Magic-Link & Passwort-Reset. Beide
+  // schicken eine echte E-Mail an den User und sollten nicht aus
+  // Versehen ausgelöst werden — gleiche UX wie der Drip-Send-Confirm.
+  const [simpleConfirm, setSimpleConfirm] = useState<"magic" | "reset" | null>(null);
+  const [pendingSimple, setPendingSimple] = useState<"magic" | "reset" | null>(null);
+  const [, startTransition] = useTransition();
+
+  function runSimpleAction(): void {
+    const kind = simpleConfirm;
+    if (!kind || pendingSimple) return;
+    setPendingSimple(kind);
+    setSimpleConfirm(null);
+    startTransition(async () => {
+      try {
+        const fd = new FormData();
+        fd.set("userId", userId);
+        fd.set("email", email);
+        if (kind === "magic") await sendMagicLinkAction(fd);
+        else await sendPasswordResetAction(fd);
+      } finally {
+        setPendingSimple(null);
+      }
+    });
+  }
 
   return (
     <>
@@ -110,21 +134,41 @@ export default function UserActions({
           <p style={{ ...muted, margin: "0 0 12px" }}>E-Mail ist bestätigt.</p>
         )}
 
-        <form action={sendMagicLinkAction} style={{ ...row, marginTop: 8 }}>
-          <input type="hidden" name="userId" value={userId} />
-          <input type="hidden" name="email" value={email} />
-          <button type="submit" style={btnSecondary}>
-            Magic-Link an {email || "User"} senden
+        <div style={{ ...row, marginTop: 8 }}>
+          <button
+            type="button"
+            onClick={() => setSimpleConfirm("magic")}
+            disabled={pendingSimple === "magic" || simpleConfirm === "magic"}
+            style={{
+              ...btnSecondary,
+              opacity: pendingSimple === "magic" || simpleConfirm === "magic" ? 0.6 : 1,
+              cursor:
+                pendingSimple === "magic" || simpleConfirm === "magic" ? "not-allowed" : "pointer",
+            }}
+          >
+            {pendingSimple === "magic"
+              ? "Sende…"
+              : `Magic-Link an ${email || "User"} senden`}
           </button>
-        </form>
+        </div>
 
-        <form action={sendPasswordResetAction} style={{ ...row, marginTop: 8 }}>
-          <input type="hidden" name="userId" value={userId} />
-          <input type="hidden" name="email" value={email} />
-          <button type="submit" style={btnSecondary}>
-            Passwort-Reset-Mail an {email || "User"} senden
+        <div style={{ ...row, marginTop: 8 }}>
+          <button
+            type="button"
+            onClick={() => setSimpleConfirm("reset")}
+            disabled={pendingSimple === "reset" || simpleConfirm === "reset"}
+            style={{
+              ...btnSecondary,
+              opacity: pendingSimple === "reset" || simpleConfirm === "reset" ? 0.6 : 1,
+              cursor:
+                pendingSimple === "reset" || simpleConfirm === "reset" ? "not-allowed" : "pointer",
+            }}
+          >
+            {pendingSimple === "reset"
+              ? "Sende…"
+              : `Passwort-Reset-Mail an ${email || "User"} senden`}
           </button>
-        </form>
+        </div>
 
         {cgmConnected ? (
           <form action={disconnectCgmAction} style={{ ...row, marginTop: 12 }}>
@@ -234,6 +278,54 @@ export default function UserActions({
                 {confirmKind === "soft" ? "Soft-Delete" : "Hard-Delete"} bestätigen
               </button>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Bestätigungs-Dialog für Magic-Link / Passwort-Reset.
+          Klick auf Backdrop oder „Abbrechen" schließt ohne Aktion.
+          „Ja, senden" feuert die Server-Action via useTransition. */}
+      {simpleConfirm ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="user-confirm-title"
+          style={modalBackdrop}
+          onClick={() => setSimpleConfirm(null)}
+        >
+          <div style={modalCard} onClick={(e) => e.stopPropagation()}>
+            <h3 id="user-confirm-title" style={{ margin: "0 0 8px", fontSize: 18 }}>
+              E-Mail wirklich senden?
+            </h3>
+            <p style={{ margin: "0 0 8px", fontSize: 14, color: "#444" }}>
+              {simpleConfirm === "magic"
+                ? "Magic-Link (Einmal-Login) an"
+                : "Passwort-Reset-Link an"}{" "}
+              <strong>{email}</strong>.
+            </p>
+            <p style={{ margin: "0 0 16px", fontSize: 13, color: "#666" }}>
+              {simpleConfirm === "magic"
+                ? "Der Link loggt den User direkt ein und ist nur einmal gültig."
+                : "Der User erhält einen Link, mit dem er ein neues Passwort setzen kann."}{" "}
+              Die Mail geht sofort raus und kann nicht mehr zurückgeholt werden.
+            </p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                style={btnSecondary}
+                onClick={() => setSimpleConfirm(null)}
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                autoFocus
+                onClick={runSimpleAction}
+                style={{ ...btnPrimary, background: "#0a7a3b" }}
+              >
+                Ja, senden
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
