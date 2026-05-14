@@ -1050,6 +1050,9 @@
     "status_connected": "Verbunden",
     "subtitle_target_range": "{min} – {max} mg/dL",
     "subtitle_icr": "1:{value} g/U",
+    "row_icr_schedule": "ICR-Zeitfenster",
+    "subtitle_icr_schedule_off": "Ein ICR über den ganzen Tag",
+    "subtitle_icr_schedule_on": "{n, plural, one {# aktives Fenster} other {# aktive Fenster}}",
     "row_adjustment_history": "Engine-Verlauf",
     "subtitle_adjustment_history_empty": "Noch keine Engine-Anpassungen gespeichert",
     "subtitle_adjustment_history_count": "{n, plural, one {# gespeicherte Anpassung} other {# gespeicherte Anpassungen}}",
@@ -2176,5 +2179,28 @@
     "pricing_beta_b3_v2": "Jederzeit kündbar",
     "pricing_beta_subtext": "Jetzt kostenlos · Billing startet im Juli",
     "pricing_beta_cta_v2": "Beta-Zugang sichern"
+  },
+  "icrSchedule": {
+    "page_title": "ICR-Zeitfenster",
+    "page_subtitle": "Hinterlege bis zu drei Tageszeiten mit eigenem Insulin-Carb-Verhältnis. Die Engine nutzt sie, sobald wir Phase B freischalten — heute werden deine Werte erst einmal sicher gespeichert.",
+    "back_to_settings": "Zurück zu Einstellungen",
+    "loading": "Lade …",
+    "master_toggle_label": "Zeitfenster aktivieren",
+    "master_toggle_help": "Ist der Schalter aus, gilt weiter dein einzelner ICR-Wert aus den Insulin-Einstellungen.",
+    "slot_label": "Fenster {n}",
+    "slot_enabled": "Aktiv",
+    "slot_name_label": "Name",
+    "slot_placeholder_1": "z. B. Morgen",
+    "slot_placeholder_2": "z. B. Mittag",
+    "slot_placeholder_3": "z. B. Abend",
+    "slot_from": "Von",
+    "slot_to": "Bis",
+    "slot_icr_label": "Insulin-Carb-Verhältnis",
+    "slot_icr_unit": "g pro 1 U",
+    "save": "Speichern",
+    "saving": "Speichere …",
+    "save_success": "Gespeichert.",
+    "save_error": "Fehler beim Speichern",
+    "phase_a_note": "Phase A: Werte werden gespeichert. Die Engine berücksichtigt die Fenster in einem späteren Update."
   }
 }

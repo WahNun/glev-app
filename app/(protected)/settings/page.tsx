@@ -56,6 +56,7 @@ import {
   type UserProfile,
   type Sex,
 } from "@/lib/userProfile";
+import { fetchIcrSchedule } from "@/lib/icrSchedule";
 
 const ACCENT = "#4F6EF7", GREEN = "#22D3A0", PINK = "#FF2D78", PURPLE = "#A78BFA";
 const BORDER = "var(--border)";
@@ -187,6 +188,11 @@ export default function SettingsPage() {
   // at onboarding. `sex` gates the cycle-logging row below: male users
   // never see it. The "About me" sheet exposes these for editing.
   const [userProfile, setUserProfile] = useState<UserProfile>(EMPTY_USER_PROFILE);
+  // ICR-schedule summary (Matildav request, Phase A) — drives the
+  // "ICR-Zeitfenster" row subtitle so it reflects real saved state.
+  // Shape: { enabled, activeSlots } where activeSlots = count of slots
+  // with enabled=true. Null until first fetch completes.
+  const [icrScheduleSummary, setIcrScheduleSummary] = useState<{ enabled: boolean; activeSlots: number } | null>(null);
   // Sheet drafts for the About-me edit form. Live alongside `userProfile`
   // so cancelling the sheet (backdrop / ESC) doesn't clobber the saved
   // values — the SaveFooter calls saveAboutMe() which reads these.
@@ -273,6 +279,12 @@ export default function SettingsPage() {
     fetchNotificationPrefs().then(setNotifPrefs).catch(() => {});
     fetchCycleLoggingEnabled().then(setCycleLoggingEnabled).catch(() => {});
     fetchUserProfile().then(setUserProfile).catch(() => {});
+    fetchIcrSchedule()
+      .then((s) => setIcrScheduleSummary({
+        enabled: s.enabled,
+        activeSlots: s.slots.filter((slot) => slot.enabled).length,
+      }))
+      .catch(() => {});
     // Insulin parameters (ICR / CF / target BG) live in `user_settings`
     // — the DB row is the source of truth. We merge it into the local
     // Settings state so the row subtitles reflect the real saved
@@ -1861,6 +1873,18 @@ export default function SettingsPage() {
           subtitle={targetBgSub}
           ariaLabel={tSettings("row_open_aria", { label: tSettings("row_target_bg") })}
           onClick={() => openSheetWith("targetBg")}
+        />
+        <SettingsRow
+          iconColor={ACCENT}
+          icon={ICON.insulin}
+          label={tSettings("row_icr_schedule")}
+          subtitle={
+            icrScheduleSummary?.enabled && icrScheduleSummary.activeSlots > 0
+              ? tSettings("subtitle_icr_schedule_on", { n: icrScheduleSummary.activeSlots })
+              : tSettings("subtitle_icr_schedule_off")
+          }
+          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_icr_schedule") })}
+          onClick={() => router.push("/settings/icr-schedule")}
         />
         <SettingsRow
           iconColor={ACCENT}
