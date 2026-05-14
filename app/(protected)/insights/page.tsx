@@ -977,6 +977,7 @@ export default function InsightsPage() {
       node: (
         <FlipCard
           accent={GREEN}
+          variant="glass"
           back={
             <FlipBack
               title={tInsights("tir_back_title")}
@@ -1133,10 +1134,13 @@ export default function InsightsPage() {
                     style={{
                       marginTop: 12,
                       padding: "10px 12px",
-                      background: "var(--surface-soft)",
-                      border: `1px solid ${cfg.color}`,
-                      borderRadius: 10,
+                      background: `linear-gradient(180deg, ${cfg.color}1A 0%, rgba(255,255,255,0.04) 60%, ${cfg.color}10 100%)`,
+                      backdropFilter: "blur(30px) saturate(160%)",
+                      WebkitBackdropFilter: "blur(30px) saturate(160%)",
+                      border: `1px solid ${cfg.color}55`,
+                      borderRadius: 14,
                       borderLeftWidth: 3,
+                      boxShadow: "inset 0 1px 0 0 rgba(255,255,255,0.18), 0 4px 14px rgba(0,0,0,0.20)",
                     }}
                   >
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom: 4 }}>
@@ -2666,12 +2670,17 @@ function InfoCornerIcon() {
 }
 
 function FlipCard({
-  children, back, accent = ACCENT, padding = "12px 14px",
+  children, back, accent = ACCENT, padding = "12px 14px", variant = "default",
 }: {
   children: React.ReactNode;
   back: React.ReactNode;
   accent?: string;
   padding?: string;
+  /** "glass" applies an Apple-style Liquid Glass surface: translucent
+   *  backdrop blur, refractive 1px border, and a soft inner highlight
+   *  along the top edge to fake the "wet glass" cap. Falls back to a
+   *  semi-transparent surface on browsers without backdrop-filter. */
+  variant?: "default" | "glass";
 }) {
   const [flipped, setFlipped] = useState(false);
   // Which face's content the ghost mirrors. Swapped at flip-midpoint
@@ -2686,14 +2695,48 @@ function FlipCard({
     return () => clearTimeout(t);
   }, [flipped, activeFace]);
 
-  const frontShell: React.CSSProperties = {
+  // ── Liquid-Glass shell (variant="glass") ──────────────────────────
+  // Apple iOS 26-style frosted surface. Three stacked layers fake the
+  // "wet glass" optic in pure CSS:
+  //   1. backdrop-filter blur+saturate so what's behind bleeds through
+  //   2. semi-transparent base tint (lighter on top via gradient) so
+  //      the surface has body even on flat backgrounds
+  //   3. inset box-shadow combo: bright top-edge highlight + subtle
+  //      bottom shadow that together suggest a refractive cap
+  // Border uses a soft white→transparent gradient via background-clip
+  // for the rim-light effect Apple uses on glass elements.
+  const glassFront: React.CSSProperties = {
+    background:
+      "linear-gradient(180deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.04) 50%, rgba(255,255,255,0.06) 100%)",
+    backdropFilter: "blur(40px) saturate(180%)",
+    WebkitBackdropFilter: "blur(40px) saturate(180%)",
+    border: "1px solid rgba(255,255,255,0.14)",
+    borderRadius: 18,
+    padding,
+    boxSizing: "border-box",
+    boxShadow:
+      "inset 0 1px 0 0 rgba(255,255,255,0.22), inset 0 -1px 0 0 rgba(0,0,0,0.18), 0 8px 24px rgba(0,0,0,0.28)",
+  };
+  const glassBack: React.CSSProperties = {
+    background: `linear-gradient(160deg, ${accent}1F 0%, rgba(255,255,255,0.06) 60%, ${accent}10 100%)`,
+    backdropFilter: "blur(40px) saturate(180%)",
+    WebkitBackdropFilter: "blur(40px) saturate(180%)",
+    border: `1px solid ${accent}55`,
+    borderRadius: 18,
+    padding,
+    boxSizing: "border-box",
+    boxShadow:
+      `inset 0 1px 0 0 rgba(255,255,255,0.22), inset 0 -1px 0 0 rgba(0,0,0,0.18), 0 8px 24px ${accent}22`,
+  };
+
+  const frontShell: React.CSSProperties = variant === "glass" ? glassFront : {
     background: SURFACE,
     border: `1px solid ${BORDER}`,
     borderRadius: 14,
     padding,
     boxSizing: "border-box",
   };
-  const backShell: React.CSSProperties = {
+  const backShell: React.CSSProperties = variant === "glass" ? glassBack : {
     background: `linear-gradient(145deg, ${accent}12, ${SURFACE} 65%)`,
     border: `1px solid ${accent}33`,
     borderRadius: 14,
