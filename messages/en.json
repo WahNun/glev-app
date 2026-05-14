@@ -1257,7 +1257,9 @@
     "log_activity": "Log activity",
     "log_cycle": "Log cycle",
     "log_symptoms": "Log symptoms",
-    "log_influences": "Log influences"
+    "log_influences": "Log influences",
+    "add_meal_manual": "Add meal manually",
+    "cta_add_entry": "Entry"
   },
   "about": {
     "row_version": "Version",

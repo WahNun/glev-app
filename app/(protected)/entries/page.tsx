@@ -24,6 +24,7 @@ import { renderEngineMessages } from "@/lib/engineMessages";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
 import PendingGlucoseStrip from "@/components/PendingGlucoseStrip";
 import ManualEntryModal from "@/components/ManualEntryModal";
+import EntryAddCTA from "@/components/EntryAddCTA";
 import { CgmCountdownPair } from "@/components/CgmCountdownChip";
 import { parseDbDate, parseDbTs, parseLluTs } from "@/lib/time";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
@@ -583,29 +584,10 @@ export default function EntriesPage() {
         <p style={{ color:"var(--text-faint)", fontSize:14 }}>{tHistory("entries_subline", { shown: filtered.length, total: rows.length })}</p>
       </div>
 
-      {/* MANUAL ENTRY CTA */}
-      <div style={{ marginBottom:14 }}>
-        <button
-          onClick={() => setManualOpen(true)}
-          style={{
-            width:"100%",
-            padding:"12px 16px",
-            borderRadius:12,
-            border:`1px dashed ${ACCENT}55`,
-            background:`${ACCENT}10`,
-            color:ACCENT,
-            fontSize:14, fontWeight:700, letterSpacing:"-0.01em",
-            cursor:"pointer",
-            display:"flex", alignItems:"center", justifyContent:"center", gap:8,
-            transition:"all 0.2s",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = `${ACCENT}1f`; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = `${ACCENT}10`; }}
-        >
-          <span style={{ fontSize:18, lineHeight:1, marginTop:-1 }}>+</span>
-          Mahlzeit
-        </button>
-      </div>
+      {/* "+ Eintrag" CTA — popup mirrors the header "+" dropdown.
+          Manual meal entry is preserved as the first item so the old
+          "+ Mahlzeit" sheet stays reachable from this screen. */}
+      <EntryAddCTA onManualMeal={() => setManualOpen(true)} />
 
       {/* FILTERS + SEARCH */}
       <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:20 }}>

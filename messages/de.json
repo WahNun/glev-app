@@ -1265,7 +1265,9 @@
     "log_activity": "Aktivität loggen",
     "log_cycle": "Zyklus loggen",
     "log_symptoms": "Symptome loggen",
-    "log_influences": "Einflussfaktoren loggen"
+    "log_influences": "Einflussfaktoren loggen",
+    "add_meal_manual": "Mahlzeit manuell eintragen",
+    "cta_add_entry": "Eintrag"
   },
   "about": {
     "row_version": "Version",
