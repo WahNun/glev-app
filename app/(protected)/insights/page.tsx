@@ -1666,27 +1666,30 @@ export default function InsightsPage() {
                   </span>
                 </div>
 
-                {/* Hero ICR — matches the colourful big-number style used by
-                    Avg BG / GMI / performance tiles: 24px mono, lineHeight 1,
-                    ACCENT colour as the engine's signature. */}
+                {/* Hero ICR — matched 1:1 to the Raw-ICR performance-tile
+                    (fontSize:20) so both ICR values feel optically equal.
+                    The card already carries the Engine's identity via the
+                    ACCENT colour and status pill — the number itself does
+                    not need to be larger than its raw sibling tile.
+                    Bottom-border separator + extra marginBottom give the
+                    pattern-evaluation block below clear breathing room. */}
                 <div style={{
                   display:"flex", alignItems:"baseline", gap:8,
-                  padding:"2px 2px 10px", marginBottom:10,
+                  padding:"2px 2px 14px", marginBottom:16,
                   borderBottom:`1px solid var(--border-soft)`,
                 }}>
-                  <span style={{ fontSize:12, color:"var(--text-dim)", fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase" }}>
+                  <span style={{ fontSize:11, color:"var(--text-dim)", fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase" }}>
                     {tInsights("engine_label_icr")}
                   </span>
                   <span style={{
-                    fontSize:24, fontWeight:800,
+                    fontSize:20, fontWeight:800,
                     color: adaptiveICR.global ? ACCENT : "var(--text-ghost)",
                     fontFamily:"var(--font-mono)",
                     lineHeight:1, letterSpacing:"-0.03em",
                   }}>
                     {icrText}
                   </span>
-                  <span style={{ fontSize:12, color:"var(--text-faint)", marginLeft:"auto", textAlign:"right", lineHeight:1.25 }}>
-                    {tInsights("engine_outcome_weighted")}<br/>
+                  <span style={{ fontSize:11, color:"var(--text-faint)", marginLeft:"auto", textAlign:"right", lineHeight:1.3 }}>
                     {tInsights("engine_final_meals", { n: enginePattern.sampleSize })}
                   </span>
                 </div>
@@ -1738,10 +1741,16 @@ export default function InsightsPage() {
                     : enginePattern.explanation;
                   return (
                     <>
-                      <div style={{ fontSize:13, color:"var(--text-muted)", lineHeight:1.5, marginBottom:6 }}>
-                        <span style={{ color:"var(--text)", fontWeight:600 }}>{label}</span>
+                      {/* Pattern title + explanation use the SAME body-text
+                          treatment as other cards (12px muted) — the title
+                          gets `var(--text)` weight to anchor the block, but
+                          we don't escalate to 13/14px so the engine card
+                          reads like a peer of TDD/Patterns rather than a
+                          self-contained section with its own typography. */}
+                      <div style={{ fontSize:12, color:"var(--text-muted)", lineHeight:1.5, marginBottom:4 }}>
+                        <span style={{ color:"var(--text)", fontWeight:700 }}>{label}</span>
                       </div>
-                      <div style={{ fontSize:13, color:"var(--text-muted)", lineHeight:1.5 }}>
+                      <div style={{ fontSize:12, color:"var(--text-muted)", lineHeight:1.5 }}>
                         {explanation}
                       </div>
                     </>
@@ -2382,23 +2391,27 @@ export default function InsightsPage() {
             // grouping both ICR-related views into one cluster. Color switched
             // from ORANGE to ACCENT_SOFT (lighter sibling of the Adaptive
             // Engine's ACCENT) to signal "same metric family, lower hierarchy".
-            { label:tInsights("tile_raw_icr_label"),      val:`1:${estICR}`,   sub:tInsights("tile_raw_icr_sub"), color:ACCENT_SOFT,
+            // Color rules (page-wide, see Lucas' brief):
+            //   GREEN  → in-target metrics  (TIR, Trefferquote, Ø Glukose im Ziel)
+            //   text   → neutral data points (HbA1c/GMI, Ø Glukose vor Essen, Ø Insulin)
+            //   #A78BFA → raw / uncorrected   (Roher KH-Faktor)
+            { label:tInsights("tile_raw_icr_label"),      val:`1:${estICR}`,   sub:tInsights("tile_raw_icr_sub"), color:"#A78BFA",
               formula:tInsights("tile_raw_icr_formula"),   explain:tInsights("tile_raw_icr_explain"),
               infoBack: (
                 <IcrInfoBack
                   heading={tInsights("raw_icr_info_heading")}
-                  accent={ACCENT_SOFT}
+                  accent="#A78BFA"
                   body={tInsights("raw_icr_info_body")}
                   subLine={tInsights("raw_icr_info_subline")}
                 />
               ),
             },
-            { label:tInsights("tile_avg_glucose_label"),  val:`${avgGlucose}`, sub:tInsights("tile_avg_glucose_sub"),           color:ACCENT,
+            { label:tInsights("tile_avg_glucose_label"),  val:`${avgGlucose}`, sub:tInsights("tile_avg_glucose_sub"),           color:"var(--text)",
               formula:tInsights("tile_avg_glucose_formula"),      explain:tInsights("tile_avg_glucose_explain") },
-            // Good rate moved out of slot 0 into Raw ICR's previous position.
+            // Good rate (Trefferquote) — in-target metric → GREEN.
             { label:tInsights("tile_good_rate_label"),    val:`${goodRate.toFixed(1)}%`,  sub:tInsights("tile_good_rate_sub", { good: goodAll, total }),   color:GREEN,
               formula:tInsights("tile_good_rate_formula"),            explain:tInsights("tile_good_rate_explain") },
-            { label:tInsights("tile_avg_insulin_label"),  val:`${avgInsulin}u`, sub:tInsights("tile_avg_insulin_sub", { carbs: carbUnit.display(avgCarbs) }), color:"#A78BFA",
+            { label:tInsights("tile_avg_insulin_label"),  val:`${avgInsulin}u`, sub:tInsights("tile_avg_insulin_sub", { carbs: carbUnit.display(avgCarbs) }), color:"var(--text)",
               formula:tInsights("tile_avg_insulin_formula"),               explain:tInsights("tile_avg_insulin_explain") },
           ].map((t,i) => <InsightFlipTile key={i} tile={t}/>)}
         </div>
@@ -2732,7 +2745,7 @@ function InfoCornerIcon() {
 }
 
 function FlipCard({
-  children, back, accent = ACCENT, padding = "12px 14px", variant = "default",
+  children, back, accent = ACCENT, padding = "12px 14px", variant = "glass",
 }: {
   children: React.ReactNode;
   back: React.ReactNode;
@@ -2741,7 +2754,10 @@ function FlipCard({
   /** "glass" applies an Apple-style Liquid Glass surface: translucent
    *  backdrop blur, refractive 1px border, and a soft inner highlight
    *  along the top edge to fake the "wet glass" cap. Falls back to a
-   *  semi-transparent surface on browsers without backdrop-filter. */
+   *  semi-transparent surface on browsers without backdrop-filter.
+   *  Default is "glass" — the entire Insights tab now wears the
+   *  Wallet/Liquid-Glass treatment. Pass `variant="default"` only if
+   *  you explicitly need the legacy flat shell (no current callers). */
   variant?: "default" | "glass";
 }) {
   const [flipped, setFlipped] = useState(false);
@@ -2778,6 +2794,11 @@ function FlipCard({
     boxSizing: "border-box",
     boxShadow:
       "inset 0 1px 0 0 rgba(255,255,255,0.22), inset 0 -1px 0 0 rgba(0,0,0,0.18), 0 8px 24px rgba(0,0,0,0.28)",
+    // The Apple-Wallet light-sweep overlay (.glev-card-sweep) below
+    // is positioned `absolute inset:0` and must be clipped to the
+    // rounded glass shell — without overflow:hidden the streak
+    // bleeds past the rim-light border on the corners.
+    overflow: "hidden",
   };
   const glassBack: React.CSSProperties = {
     background: `linear-gradient(160deg, ${accent}1F 0%, rgba(255,255,255,0.06) 60%, ${accent}10 100%)`,
@@ -2833,6 +2854,13 @@ function FlipCard({
           backfaceVisibility:"hidden",
           ...frontShell,
         }}>
+          {/* Apple-Wallet light-sweep — fires once when the card mounts.
+              Hosted by the FRONT face only (BACK is hidden until flip,
+              so re-running the sweep there would feel out of place).
+              Glass shell already sets `overflow:hidden` so the streak
+              respects the rounded rim. nth-of-type stagger lives in
+              app/globals.css → .glev-flip-card .glev-card-sweep. */}
+          <span aria-hidden className="glev-card-sweep"/>
           {children}
         </div>
         {/* BACK */}
@@ -2880,23 +2908,27 @@ function InsightFlipTile({ tile }: { tile: InsightTile }) {
     return () => clearTimeout(t);
   }, [flipped, activeFace]);
 
+  // Tile padding raised from 10→16 vertical so the small tiles
+  // (Raw ICR, Ø Glucose, Trefferquote, Ø Insulin) breathe — label,
+  // hero value and sub-line shouldn't sit on top of each other. Hero
+  // value also gets a touch more marginTop (6→8) for the same reason.
   const frontShell: React.CSSProperties = {
     background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14,
-    padding:"10px 12px", boxSizing:"border-box",
+    padding:"16px 12px", boxSizing:"border-box",
   };
   const backShell: React.CSSProperties = {
     background:`linear-gradient(145deg, ${tile.color}12, ${SURFACE} 65%)`,
     border:`1px solid ${tile.color}33`, borderRadius:14,
-    padding:"10px 12px", boxSizing:"border-box",
+    padding:"16px 12px", boxSizing:"border-box",
   };
 
   const frontContent = (
     <>
       <CardLabel text={tile.label}/>
-      <div style={{ fontSize:24, fontWeight:800, color:tile.color, fontFamily:"var(--font-mono)", lineHeight:1, letterSpacing:"-0.03em", marginTop:6 }}>
+      <div style={{ fontSize:20, fontWeight:800, color:tile.color, fontFamily:"var(--font-mono)", lineHeight:1, letterSpacing:"-0.03em", marginTop:8 }}>
         {tile.val}
       </div>
-      <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:4 }}>{tile.sub}</div>
+      <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:6 }}>{tile.sub}</div>
       {/* Show ℹ affordance only on tiles that opt-in to a richer back side. */}
       {tile.infoBack && <InfoCornerIcon/>}
     </>

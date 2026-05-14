@@ -263,7 +263,7 @@ export default function UsersTable({
               <th style={thStyle}>CGM</th>
               <th
                 style={thStyle}
-                title="Nur explizit gewählt (Sprachumschalter oder Admin-Anlegen). „—" = nicht gesetzt, Runtime nutzt Cookie + Accept-Language."
+                title={'Nur explizit gewählt (Sprachumschalter oder Admin-Anlegen). „—" = nicht gesetzt, Runtime nutzt Cookie + Accept-Language.'}
               >
                 Sprache
               </th>
