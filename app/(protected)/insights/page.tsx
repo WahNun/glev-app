@@ -1717,35 +1717,45 @@ export default function InsightsPage() {
                   padding:"2px 2px 14px", marginBottom:16,
                   borderBottom:`1px solid var(--border-soft)`,
                 }}>
-                  {/* DEIN FAKTOR — user-set, white, what the bolus calc reads. */}
+                  {/* DEIN FAKTOR — user-set, ACCENT-blau (Lucas: "die
+                      blaue Schrift sah eigentlich ganz geil aus"). Größer
+                      + fetter als die Engine-Zeile, weil das der Wert ist,
+                      mit dem der Bolus tatsächlich rechnet. */}
                   <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
                     <span style={{ fontSize:11, color:"var(--text-dim)", fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase" }}>
                       {tInsights("engine_user_icr_label")}
                     </span>
                     <span style={{
                       fontSize:20, fontWeight:800,
-                      color: "var(--text)",
+                      color: ACCENT,
                       fontFamily:"var(--font-mono)",
                       lineHeight:1, letterSpacing:"-0.03em",
                     }}>
                       {tInsights("engine_user_icr_value", { value: Math.round(userIcr * 10) / 10 })}
                     </span>
                   </div>
-                  {/* ENGINE — adaptive, dimmed, only shown once data exists. */}
+                  {/* ENGINE — adaptive, ebenfalls ACCENT-blau aber
+                      kleiner, damit visuelle Hierarchie klar bleibt
+                      (User = primär, Engine = sekundär). Der "X Mahl-
+                      zeiten"-Counter rechts war Lucas zu dominant —
+                      jetzt fontSize 10 + faint statt 11 + dim, damit er
+                      ruhiger neben den Zahlen sitzt. Nur eingeblendet,
+                      sobald die Engine tatsächlich einen Wert hat. */}
                   {adaptiveICR.global != null && (
                     <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
                       <span style={{ fontSize:11, color:"var(--text-faint)", fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase" }}>
                         {tInsights("engine_label_icr")}
                       </span>
                       <span style={{
-                        fontSize:14, fontWeight:600,
-                        color: "var(--text-dim)",
+                        fontSize:14, fontWeight:700,
+                        color: ACCENT,
                         fontFamily:"var(--font-mono)",
                         lineHeight:1, letterSpacing:"-0.03em",
+                        opacity: 0.85,
                       }}>
                         {icrText}
                       </span>
-                      <span style={{ fontSize:11, color:"var(--text-faint)", marginLeft:"auto", textAlign:"right", lineHeight:1.3 }}>
+                      <span style={{ fontSize:10, color:"var(--text-faint)", marginLeft:"auto", textAlign:"right", lineHeight:1.3, opacity: 0.7 }}>
                         {tInsights("engine_final_meals", { n: enginePattern.sampleSize })}
                       </span>
                     </div>
