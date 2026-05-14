@@ -258,6 +258,24 @@ export default function InsightsPage() {
   useEffect(() => {
     fetchInsulinSettings().then(s => setUserIcr(s.icr)).catch(() => {});
   }, []);
+  // Persist the engine-computed ICR back to user_settings whenever the
+  // engine data window changes. Fire-and-forget — `persistEngineIcr`
+  // is idempotent (skips writes when nothing changed) and swallows
+  // transient errors so this never blocks render. When the user has
+  // `engine_icr_auto_apply` enabled AND the engine has reached its
+  // confidence threshold, the same call also pushes the value into
+  // the user column + appends an audit-trail entry.
+  //
+  // CRITICAL: this effect MUST sit above the `if (loading) return …`
+  // early returns further down, otherwise the hook count changes
+  // between renders → React error #310. We recompute adaptiveICR
+  // inside the effect so the hook only depends on the raw meal/bolus
+  // state and not on a derived object that gets rebuilt every render.
+  useEffect(() => {
+    if (loading) return;
+    const a = computeAdaptiveICR(engineMeals, engineBoluses);
+    persistEngineIcr(a.global, a.sampleSize);
+  }, [loading, engineMeals, engineBoluses]);
   useEffect(() => {
     fetchUserProfile().then((p) => setSex(p.sex)).catch(() => {});
   }, []);
@@ -971,24 +989,6 @@ export default function InsightsPage() {
   // pattern detector's recent-window stats aren't dragged off course by
   // year-old rows. Long-term tiles below continue to read from `meals`.
   const adaptiveICR  = computeAdaptiveICR(engineMeals, engineBoluses);
-  // Persist the engine-computed ICR back to user_settings on every
-  // recomputation. Fire-and-forget — `persistEngineIcr` is idempotent
-  // (skips writes when nothing changed) and swallows transient errors
-  // so the card render never blocks on the round-trip. The DB write is
-  // what makes "Engine-Vorschlag: 1:X · basiert auf Y Mahlzeiten" in
-  // Settings reflect the latest meal data without a separate cron.
-  // When the user has `engine_icr_auto_apply` enabled AND the engine
-  // has reached its confidence threshold, the same call also pushes
-  // the value into the user column + appends an audit-trail entry.
-  useEffect(() => {
-    if (loading) return;
-    persistEngineIcr(adaptiveICR.global, adaptiveICR.sampleSize);
-  // adaptiveICR is rebuilt on every render — keying on its primitive
-  // fields keeps this effect from firing infinitely while still
-  // re-running whenever the engine value or sample count actually
-  // changes.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, adaptiveICR.global, adaptiveICR.sampleSize]);
   const enginePattern = detectPattern(engineMeals);
   const settings: AdaptiveSettings = {
     icr: adaptiveICR.global ? Math.round(adaptiveICR.global * 10) / 10 : 15,
