@@ -2745,7 +2745,7 @@ function InfoCornerIcon() {
 }
 
 function FlipCard({
-  children, back, accent = ACCENT, padding = "12px 14px", variant = "glass",
+  children, back, accent = ACCENT, padding = "12px 14px", variant = "default",
 }: {
   children: React.ReactNode;
   back: React.ReactNode;
@@ -2854,13 +2854,6 @@ function FlipCard({
           backfaceVisibility:"hidden",
           ...frontShell,
         }}>
-          {/* Apple-Wallet light-sweep — fires once when the card mounts.
-              Hosted by the FRONT face only (BACK is hidden until flip,
-              so re-running the sweep there would feel out of place).
-              Glass shell already sets `overflow:hidden` so the streak
-              respects the rounded rim. nth-of-type stagger lives in
-              app/globals.css → .glev-flip-card .glev-card-sweep. */}
-          <span aria-hidden className="glev-card-sweep"/>
           {children}
         </div>
         {/* BACK */}

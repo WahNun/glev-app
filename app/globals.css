@@ -215,33 +215,3 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; width: 0; heig
 @media (prefers-reduced-motion: reduce) {
   .glev-tir-sweep { animation: none; opacity: 0; }
 }
-
-/* Card-level light-sweep — fires once on mount across every Insights
-   FlipCard so the whole tab feels materialised by light, not stamped
-   in. Slower (900ms) and softer (0.18 alpha vs 0.32) than the TIR-
-   segment sweep because the host surface is much larger; we don't
-   want the streak to dominate the card. nth-of-type stagger means
-   the cards cascade top-to-bottom rather than flashing simultaneously,
-   matching the Apple-Wallet "deck of cards just landed" vibe. */
-.glev-flip-card .glev-card-sweep {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 1;
-  background: linear-gradient(
-    110deg,
-    transparent 30%,
-    rgba(255,255,255,0.18) 50%,
-    transparent 70%
-  );
-  transform: translateX(-60%);
-  animation: glev-light-sweep 900ms ease-out 1 both;
-}
-.glev-flip-card:nth-of-type(2) .glev-card-sweep { animation-delay:  60ms; }
-.glev-flip-card:nth-of-type(3) .glev-card-sweep { animation-delay: 120ms; }
-.glev-flip-card:nth-of-type(4) .glev-card-sweep { animation-delay: 180ms; }
-.glev-flip-card:nth-of-type(5) .glev-card-sweep { animation-delay: 240ms; }
-.glev-flip-card:nth-of-type(n+6) .glev-card-sweep { animation-delay: 300ms; }
-@media (prefers-reduced-motion: reduce) {
-  .glev-flip-card .glev-card-sweep { animation: none; opacity: 0; }
-}
