@@ -41,6 +41,7 @@ import { evaluateExercise, type ExerciseOutcome } from "@/lib/exerciseEval";
 import { fetchRecentMenstrualLogs, type MenstrualLog } from "@/lib/menstrual";
 import { fetchRecentSymptomLogs, type SymptomLog, type SymptomType } from "@/lib/symptoms";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
+import { fetchCgmSamples, type ContinuousReading } from "@/lib/cgmSamplesClient";
 
 /** Default top-to-bottom order. Hero block (time-in-range, gmi-a1c,
  *  glucose-trend, meal-evaluation) mirrors the homepage `InsightsScreen()`
@@ -165,6 +166,47 @@ function collectBgReadings(
   return out;
 }
 
+/** Merge continuous CGM samples (cgm_samples + apple_health_readings —
+ *  see lib/cgm/samples.ts) into an event-based reading pool. The
+ *  Worker writes event-anchored values (bg_1h / glucose_after_1h /
+ *  etc.) that DO overlap in time with continuous samples — without
+ *  deduplication TIR / CV / hypo counters would double-count those
+ *  identical readings. The window is intentionally tight (±2 min):
+ *  the worker matches CGM history with a ±10 min window, but the
+ *  value it picks is THE reading at one CGM-clock minute (every 5
+ *  min for LLU, ~1 min for Nightscout/HK) — within ±2 min two
+ *  readings are almost certainly the same physical sensor sample.
+ *  Manual fingersticks at the same minute are a different
+ *  measurement (different device) so we keep the dedup conservative
+ *  rather than aggressive.
+ */
+function mergeContinuousReadings(
+  events: BgReading[],
+  continuous: ContinuousReading[],
+  sinceMs: number,
+  untilMs: number,
+): BgReading[] {
+  const DEDUP_MS = 2 * 60 * 1000;
+  const filtered = continuous.filter(r => r.t >= sinceMs && r.t < untilMs && Number.isFinite(r.v));
+  if (filtered.length === 0) return events;
+  // Index continuous samples by minute bucket for O(1) overlap check.
+  const minuteBucket = new Set<number>();
+  for (const r of filtered) {
+    const bucket = Math.round(r.t / DEDUP_MS);
+    minuteBucket.add(bucket);
+    minuteBucket.add(bucket - 1);
+    minuteBucket.add(bucket + 1);
+  }
+  // Drop event readings whose timestamp lands inside any continuous
+  // sample's ±2 min window — continuous wins because it's the canonical
+  // raw stream the event-based worker is itself drawing from.
+  const keptEvents = events.filter(r => {
+    const bucket = Math.round(r.t / DEDUP_MS);
+    return !minuteBucket.has(bucket);
+  });
+  return keptEvents.concat(filtered.map(r => ({ v: r.v, t: r.t })));
+}
+
 export default function InsightsPage() {
   // Carb-unit selector — feeds the per-type "avg carbs" line and the
   // "Avg insulin" tile sublabel. All aggregates are computed in grams
@@ -267,6 +309,25 @@ export default function InsightsPage() {
     };
   }, []);
 
+  // Continuous CGM samples — Option B (see
+  // supabase/migrations/20260514_add_cgm_samples.sql). Pull a fixed
+  // wide window (last 60 days) so the scope-picker's "month" mode
+  // also has data without re-fetching when the user changes scope.
+  // 60d ≈ 17_280 readings/user max — well under our 5_000-per-source
+  // cap (lib/cgm/samples.ts limits per source) so we'll get ~60 days
+  // even for a Nightscout user with 1-min granularity. SWR cached so
+  // the page stays snappy.
+  const { data: continuousSamples } = useSWR(
+    "insights:cgm-samples-60d",
+    async () => {
+      const toMs = Date.now();
+      const fromMs = toMs - 60 * 24 * 3600 * 1000;
+      return fetchCgmSamples(fromMs, toMs);
+    },
+    { revalidateOnFocus: false, refreshInterval: 5 * 60 * 1000 },
+  );
+  const continuous: ContinuousReading[] = continuousSamples ?? [];
+
   // Skeleton loading state — mirrors app/(protected)/insights/loading.tsx
   // shape so the visible UI never jumps when data arrives. Replaces the
   // old centered spinner because a layout-shaped skeleton feels much
@@ -316,11 +377,19 @@ export default function InsightsPage() {
   // hid recent low events from the user (Task: Lucas's 2026-05-11
   // bug report).
   const fourteenAgo = wkAgo;
-  const readings14 = collectBgReadings(meals, insulinLogs, exerciseLogs, fingersticks, fourteenAgo)
+  const readings14Events = collectBgReadings(meals, insulinLogs, exerciseLogs, fingersticks, fourteenAgo)
     .filter(r => r.t < now);
+  // Merge continuous CGM samples (Option B). For users with a CGM
+  // (LLU / Nightscout / Apple Health) this fills the gaps between
+  // logged events so hypo/TIR/CV reflect what the sensor actually
+  // saw, not just readings around meals + boluses + workouts. For
+  // users without a CGM `continuous` is empty and behaviour is
+  // identical to the old event-only pool.
+  const readings14 = mergeContinuousReadings(readings14Events, continuous, fourteenAgo, now);
   const readings7  = readings14;
-  const readingsPrev7 = collectBgReadings(meals, insulinLogs, exerciseLogs, fingersticks, wk2Ago)
+  const readingsPrev7Events = collectBgReadings(meals, insulinLogs, exerciseLogs, fingersticks, wk2Ago)
     .filter(r => r.t >= wk2Ago && r.t < scope.prevEndMs);
+  const readingsPrev7 = mergeContinuousReadings(readingsPrev7Events, continuous, wk2Ago, scope.prevEndMs);
 
   // ── Time in Range buckets (consensus 70–180 mg/dL band) ──
   // Cross-source: every BG reading we have for the period (meal
