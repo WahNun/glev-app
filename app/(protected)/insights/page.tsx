@@ -2201,7 +2201,13 @@ export default function InsightsPage() {
             <CardLabel text={tInsights("card_meal_type_title")}/>
             <div style={{ fontSize:11, color:"var(--text-dim)" }}>{tInsights("card_meal_type_sub")}</div>
           </div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
+          {/* `minmax(0,1fr)` (statt nacktem `1fr`) zwingt beide Spalten
+              auf exakt 50% — sonst pusht ein langes deutsches Label
+              wie "SCHNELLE KOHLENHYDRATE" die linke Spalte breiter und
+              die rechte Karte rutscht über den Kartenrand hinaus. Mit
+              minmax(0,…) greift auch das `text-overflow: ellipsis` des
+              Labels. */}
+          <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)", gap:6 }}>
             {TYPE_ORDER.map(type => {
               const data = types[type];
               const has = data.count > 0;
