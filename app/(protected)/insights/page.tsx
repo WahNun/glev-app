@@ -1016,18 +1016,32 @@ export default function InsightsPage() {
                   each segment is now tap-explorable — selecting a band
                   swells it (scaleY) and reveals a contextual info panel
                   below. The crosshair shows the most recent reading. */}
-              <div style={{ position:"relative", paddingTop:12, paddingBottom: currentMarkerPct != null ? 18 : 0 }}>
+              <div style={{ position:"relative", paddingTop:14, paddingBottom: currentMarkerPct != null ? 22 : 4 }}>
+                {/* Bar wrapper. Padding above/below leaves room for the
+                    selected segment to "breathe" without clipping its
+                    glow. The bar itself is a pill carved out of the
+                    surface — we keep `overflow:visible` so a selected
+                    segment's outer glow can spill, and rely on per-
+                    segment rounding for the pill shape. */}
                 <div
                   role="group"
                   aria-label={`Time below range ${tbrPct} percent, in range ${tirPct} percent, above range ${tarPct} percent`}
-                  style={{ display:"flex", height:12, borderRadius:99, overflow:"visible", background:"var(--surface-soft)" }}
+                  style={{
+                    position:"relative",
+                    display:"flex",
+                    height:14,
+                    borderRadius:99,
+                    background:"rgba(255,255,255,0.06)",
+                    boxShadow:"inset 0 1px 1px rgba(0,0,0,0.35), inset 0 -1px 0 rgba(255,255,255,0.05)",
+                  }}
                 >
                   {([
                     { key:"tbr" as const, pct: tbrPct, color: PINK,        label: tInsights("tir_legend_below") },
                     { key:"tir" as const, pct: tirPct, color: GREEN,       label: tInsights("tir_legend_in") },
                     { key:"tar" as const, pct: tarPct, color: HIGH_YELLOW, label: tInsights("tir_legend_above") },
                   ]).filter(s => s.pct > 0).map((s, i, arr) => {
-                    const isSel = tirSelected === s.key;
+                    const isSel  = tirSelected === s.key;
+                    const dimmed = tirSelected != null && tirSelected !== "now" && !isSel;
                     const isFirst = i === 0;
                     const isLast  = i === arr.length - 1;
                     return (
@@ -1039,7 +1053,10 @@ export default function InsightsPage() {
                         aria-label={`${s.label}: ${s.pct}%`}
                         style={{
                           width:`${s.pct}%`,
-                          background: s.color,
+                          // Glassy gradient fill — top-light, bottom-dark
+                          // mimics the rim-light reading of a liquid
+                          // glass cap rather than a flat solid block.
+                          background:`linear-gradient(180deg, ${s.color} 0%, ${s.color}E0 55%, ${s.color}CC 100%)`,
                           border:"none",
                           padding:0,
                           cursor:"pointer",
@@ -1048,10 +1065,21 @@ export default function InsightsPage() {
                           borderBottomLeftRadius:  isFirst ? 99 : 0,
                           borderTopRightRadius:    isLast  ? 99 : 0,
                           borderBottomRightRadius: isLast  ? 99 : 0,
-                          transform: isSel ? "scaleY(1.9)" : "scaleY(1)",
+                          // Selection effect — DON'T scale wildly. Lift
+                          // gently, brighten, and let the surrounding
+                          // soft glow (drop-shadow filter) sell it as
+                          // "the glass underneath is lit up".
+                          transform: isSel ? "translateY(-2px) scaleY(1.35)" : "scaleY(1)",
                           transformOrigin:"center",
-                          boxShadow: isSel ? `0 0 0 2px var(--surface), 0 0 0 3px ${s.color}` : "none",
-                          transition:"transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 180ms",
+                          opacity: dimmed ? 0.45 : 1,
+                          filter: isSel
+                            ? `brightness(1.15) saturate(1.15) drop-shadow(0 0 6px ${s.color}AA) drop-shadow(0 2px 8px ${s.color}66)`
+                            : "none",
+                          // Bright top-edge highlight = wet-glass meniscus.
+                          boxShadow: isSel
+                            ? "inset 0 1px 0 0 rgba(255,255,255,0.55), inset 0 -1px 0 0 rgba(0,0,0,0.18)"
+                            : "inset 0 1px 0 0 rgba(255,255,255,0.32), inset 0 -1px 0 0 rgba(0,0,0,0.18)",
+                          transition:"transform 280ms cubic-bezier(0.22, 0.9, 0.32, 1.18), filter 220ms ease-out, opacity 220ms ease-out, box-shadow 220ms ease-out",
                         }}
                       />
                     );
