@@ -36,6 +36,7 @@ import {
   type FingerstickReading,
 } from "@/lib/fingerstick";
 import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
+import { hapticSelection } from "@/lib/haptics";
 import { fetchRecentExerciseLogs, type ExerciseLog, type ExerciseType } from "@/lib/exercise";
 import { evaluateExercise, type ExerciseOutcome } from "@/lib/exerciseEval";
 import { fetchRecentMenstrualLogs, type MenstrualLog } from "@/lib/menstrual";
@@ -327,6 +328,16 @@ export default function InsightsPage() {
     { revalidateOnFocus: false, refreshInterval: 5 * 60 * 1000 },
   );
   const continuous: ContinuousReading[] = continuousSamples ?? [];
+
+  // ── TIR-bar interactive selection (tap a band → context info + the
+  // band visually swells). Lucas's request 2026-05-14: turn the static
+  // 3-color bar into something tap-explorable so a user can ask "what
+  // does my 32% TBR actually mean?" without flipping the whole card.
+  // Selecting "now" highlights the live-glucose marker instead of a
+  // band. Tapping the same target again deselects.
+  const [tirSelected, setTirSelected] = useState<"tbr" | "tir" | "tar" | "now" | null>(null);
+  const toggleTirSel = (k: "tbr" | "tir" | "tar" | "now") =>
+    setTirSelected((prev) => (prev === k ? null : k));
 
   // Skeleton loading state — mirrors app/(protected)/insights/loading.tsx
   // shape so the visible UI never jumps when data arrives. Replaces the
@@ -672,6 +683,45 @@ export default function InsightsPage() {
   const tirPct = b7.inR;              // 70–180
   const tarPct = b7.hi;               // > 180
 
+  // ── Live "current glucose" marker for the TIR bar ──
+  // Uses the most-recent reading across the unified pool (continuous
+  // CGM samples + event-anchored values + manual fingersticks). Drives
+  // the crosshair on the bar AND the "Aktueller Wert" detail panel
+  // when the user taps the marker.
+  const tirLatest = readings14.length > 0
+    ? readings14.reduce((a, b) => (a.t > b.t ? a : b))
+    : null;
+  const currentBg     = tirLatest?.v ?? null;
+  const currentBgT    = tirLatest?.t ?? null;
+  const currentBgAgoMin = currentBgT != null ? Math.max(0, Math.round((Date.now() - currentBgT) / 60000)) : null;
+  const currentBgZone: "tbr" | "tir" | "tar" | null = currentBg == null
+    ? null
+    : currentBg < TIR_LOW_MGDL ? "tbr"
+    : currentBg <= TIR_HIGH_MGDL ? "tir"
+    : "tar";
+  // Position the crosshair within the bar so it lands inside the
+  // band that matches its value. Each segment's WIDTH represents
+  // time-share, not value-range, so we map the value proportionally
+  // INSIDE its zone. Hard caps at 40 / 300 mg/dL bracket the
+  // off-the-chart edges.
+  let currentMarkerPct: number | null = null;
+  if (currentBg != null) {
+    if (currentBg < TIR_LOW_MGDL) {
+      const within = Math.max(0, Math.min(1, (currentBg - 40) / (TIR_LOW_MGDL - 40)));
+      currentMarkerPct = tbrPct * within;
+    } else if (currentBg <= TIR_HIGH_MGDL) {
+      const within = (currentBg - TIR_LOW_MGDL) / (TIR_HIGH_MGDL - TIR_LOW_MGDL);
+      currentMarkerPct = tbrPct + tirPct * within;
+    } else {
+      const within = Math.max(0, Math.min(1, (currentBg - TIR_HIGH_MGDL) / (300 - TIR_HIGH_MGDL)));
+      currentMarkerPct = tbrPct + tirPct + tarPct * within;
+    }
+  }
+  // Convert "% of 7d" → human-readable hours (24h × 7 = 168h total).
+  const tbrHours = +(tbrPct / 100 * 168).toFixed(1);
+  const tirHours = +(tirPct / 100 * 168).toFixed(1);
+  const tarHours = +(tarPct / 100 * 168).toFixed(1);
+
   // ── Workout (exercise) analytics — scope-aware ──
   const thirtyAgo = wkAgo;
   const exercise30 = exerciseLogs.filter(ex => {
@@ -960,24 +1010,154 @@ export default function InsightsPage() {
                   </div>
                 )}
               </div>
-              {/* 3-color TBR / TIR / TAR bar (clinical consensus). The
-                  legacy 4-segment bar (vlow/lo/inR/hi from `b7`) was
-                  collapsed into TBR=vlow+lo / TIR=inR / TAR=hi to match
-                  the ATTD consensus three-band visual standard. */}
-              <div
-                role="img"
-                aria-label={`Time below range ${tbrPct} percent, in range ${tirPct} percent, above range ${tarPct} percent`}
-                style={{ display:"flex", height:12, borderRadius:99, overflow:"hidden", background:"var(--surface-soft)" }}
-              >
-                {tbrPct > 0 && <div style={{ width:`${tbrPct}%`, background:PINK }}/>}
-                {tirPct > 0 && <div style={{ width:`${tirPct}%`, background:GREEN }}/>}
-                {tarPct > 0 && <div style={{ width:`${tarPct}%`, background:HIGH_YELLOW }}/>}
+              {/* 3-color TBR / TIR / TAR bar (clinical consensus,
+                  ATTD three-band visual standard). Lucas 2026-05-14:
+                  each segment is now tap-explorable — selecting a band
+                  swells it (scaleY) and reveals a contextual info panel
+                  below. The crosshair shows the most recent reading. */}
+              <div style={{ position:"relative", paddingTop:12, paddingBottom: currentMarkerPct != null ? 18 : 0 }}>
+                <div
+                  role="group"
+                  aria-label={`Time below range ${tbrPct} percent, in range ${tirPct} percent, above range ${tarPct} percent`}
+                  style={{ display:"flex", height:12, borderRadius:99, overflow:"visible", background:"var(--surface-soft)" }}
+                >
+                  {([
+                    { key:"tbr" as const, pct: tbrPct, color: PINK,        label: tInsights("tir_legend_below") },
+                    { key:"tir" as const, pct: tirPct, color: GREEN,       label: tInsights("tir_legend_in") },
+                    { key:"tar" as const, pct: tarPct, color: HIGH_YELLOW, label: tInsights("tir_legend_above") },
+                  ]).filter(s => s.pct > 0).map((s, i, arr) => {
+                    const isSel = tirSelected === s.key;
+                    const isFirst = i === 0;
+                    const isLast  = i === arr.length - 1;
+                    return (
+                      <button
+                        key={s.key}
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); void hapticSelection(); toggleTirSel(s.key); }}
+                        aria-pressed={isSel}
+                        aria-label={`${s.label}: ${s.pct}%`}
+                        style={{
+                          width:`${s.pct}%`,
+                          background: s.color,
+                          border:"none",
+                          padding:0,
+                          cursor:"pointer",
+                          height:"100%",
+                          borderTopLeftRadius:     isFirst ? 99 : 0,
+                          borderBottomLeftRadius:  isFirst ? 99 : 0,
+                          borderTopRightRadius:    isLast  ? 99 : 0,
+                          borderBottomRightRadius: isLast  ? 99 : 0,
+                          transform: isSel ? "scaleY(1.9)" : "scaleY(1)",
+                          transformOrigin:"center",
+                          boxShadow: isSel ? `0 0 0 2px var(--surface), 0 0 0 3px ${s.color}` : "none",
+                          transition:"transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 180ms",
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+                {/* Live "you are here" crosshair — taps the marker to
+                    reveal the current-value detail panel. */}
+                {currentMarkerPct != null && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); void hapticSelection(); toggleTirSel("now"); }}
+                    aria-pressed={tirSelected === "now"}
+                    aria-label={`${tInsights("tir_marker_aria")}: ${Math.round(currentBg!)} mg/dL`}
+                    style={{
+                      position:"absolute",
+                      left:`calc(${currentMarkerPct}% - 9px)`,
+                      top: 4,
+                      width: 18,
+                      height: 28,
+                      padding: 0,
+                      border:"none",
+                      background:"transparent",
+                      cursor:"pointer",
+                      display:"flex",
+                      flexDirection:"column",
+                      alignItems:"center",
+                      justifyContent:"flex-start",
+                    }}
+                  >
+                    <div style={{
+                      width: 2,
+                      height: 28,
+                      background: "var(--text)",
+                      borderRadius: 2,
+                      boxShadow: tirSelected === "now"
+                        ? "0 0 0 2px var(--surface), 0 0 0 3px var(--text)"
+                        : "0 0 0 1.5px var(--surface)",
+                      transition: "box-shadow 180ms",
+                    }}/>
+                    <div style={{
+                      marginTop: 2,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      fontFamily:"var(--font-mono)",
+                      color:"var(--text)",
+                      whiteSpace:"nowrap",
+                      transform:"translateX(0)",
+                    }}>
+                      {Math.round(currentBg!)}
+                    </div>
+                  </button>
+                )}
               </div>
-              <div style={{ display:"flex", justifyContent:"space-between", marginTop:6, fontSize:11, color:"var(--text-dim)", flexWrap:"wrap", gap:6 }}>
-                <span style={{ color:PINK }}>● {tInsights("tir_legend_below")} · {tbrPct}%</span>
-                <span style={{ color:GREEN }}>● {tInsights("tir_legend_in")} · {tirPct}%</span>
-                <span style={{ color:HIGH_YELLOW }}>● {tInsights("tir_legend_above")} · {tarPct}%</span>
+              <div style={{ display:"flex", justifyContent:"space-between", marginTop:8, fontSize:11, color:"var(--text-dim)", flexWrap:"wrap", gap:6 }}>
+                <span style={{ color:PINK,        fontWeight: tirSelected === "tbr" ? 700 : 500 }}>● {tInsights("tir_legend_below")} · {tbrPct}%</span>
+                <span style={{ color:GREEN,       fontWeight: tirSelected === "tir" ? 700 : 500 }}>● {tInsights("tir_legend_in")} · {tirPct}%</span>
+                <span style={{ color:HIGH_YELLOW, fontWeight: tirSelected === "tar" ? 700 : 500 }}>● {tInsights("tir_legend_above")} · {tarPct}%</span>
               </div>
+              {/* Contextual info panel — appears when a band or the
+                  marker is tapped. Tap the same target again to close. */}
+              {tirSelected != null && (() => {
+                const cfg =
+                  tirSelected === "tbr" ? { color: PINK,        title: tInsights("tir_detail_tbr_title"),  body: tInsights("tir_detail_tbr_body",  { pct: tbrPct, hours: tbrHours, mini: hypoEvents7d.mini, clinical: hypoEvents7d.clinical }) } :
+                  tirSelected === "tir" ? { color: GREEN,       title: tInsights("tir_detail_tir_title"),  body: tInsights("tir_detail_tir_body",  { pct: tirPct, hours: tirHours }) } :
+                  tirSelected === "tar" ? { color: HIGH_YELLOW, title: tInsights("tir_detail_tar_title"),  body: tInsights("tir_detail_tar_body",  { pct: tarPct, hours: tarHours }) } :
+                  /* now */              { color: "var(--text)", title: tInsights("tir_detail_now_title"),
+                                            body: currentBg == null
+                                              ? tInsights("tir_detail_now_empty")
+                                              : tInsights("tir_detail_now_body", {
+                                                  bg: Math.round(currentBg),
+                                                  ago: currentBgAgoMin ?? 0,
+                                                  zone: currentBgZone === "tbr" ? tInsights("tir_zone_tbr")
+                                                       : currentBgZone === "tir" ? tInsights("tir_zone_tir")
+                                                       : tInsights("tir_zone_tar"),
+                                                }) };
+                return (
+                  <div
+                    role="region"
+                    aria-live="polite"
+                    style={{
+                      marginTop: 12,
+                      padding: "10px 12px",
+                      background: "var(--surface-soft)",
+                      border: `1px solid ${cfg.color}`,
+                      borderRadius: 10,
+                      borderLeftWidth: 3,
+                    }}
+                  >
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom: 4 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform:"uppercase", color: cfg.color }}>
+                        {cfg.title}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); void hapticSelection(); setTirSelected(null); }}
+                        aria-label={tInsights("tir_detail_close")}
+                        style={{ background:"transparent", border:"none", color:"var(--text-dim)", fontSize: 16, lineHeight: 1, cursor:"pointer", padding: "0 4px" }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text)", lineHeight: 1.5 }}>
+                      {cfg.body}
+                    </div>
+                  </div>
+                );
+              })()}
             </>
           )}
         </FlipCard>
