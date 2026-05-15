@@ -3,10 +3,6 @@ import { Document, Page, Text, View, StyleSheet, renderToFile } from '@react-pdf
 
 // Brand tokens (BB v1 · April 2026)
 const BRAND = '#4F6EF7';
-const BRAND_GLOW = '#4F6EF740';
-const IN_RANGE = '#22D3A0';
-const HYPER = '#FF9500';
-const HYPO = '#FF2D78';
 const PAGE_BG = '#09090B';
 const SURFACE = '#111117';
 const SURFACE_ALT = '#141420';
@@ -16,18 +12,13 @@ const T_SECONDARY = '#FFFFFFBF';
 const T_MUTED = '#FFFFFF80';
 const T_TERTIARY = '#FFFFFF59';
 const BORDER = '#FFFFFF14';
-// Brand wants Inter; @react-pdf ships Helvetica (Inter-class sans). Brandbook explicitly
-// requires "always include system fallback so flash-of-unstyled-text uses a sane local font" —
-// Helvetica is that fallback. Mono uses Courier as JetBrains-Mono fallback (data only).
 const SANS = 'Helvetica';
 const SANS_B = 'Helvetica-Bold';
 const MONO = 'Courier';
-const MONO_B = 'Courier-Bold';
 
 const s = StyleSheet.create({
   page: { paddingTop: 36, paddingBottom: 56, paddingHorizontal: 36, fontSize: 9.5, color: T_STRONG, fontFamily: SANS, lineHeight: 1.45, backgroundColor: PAGE_BG },
 
-  // header band
   hdr: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 },
   word: { fontFamily: SANS_B, fontSize: 18, color: BRAND, letterSpacing: -0.5 },
   hdrMeta: { fontFamily: MONO, fontSize: 8, color: T_TERTIARY },
@@ -38,39 +29,33 @@ const s = StyleSheet.create({
   h2: { fontFamily: SANS_B, fontSize: 13, color: T_PRIMARY, marginTop: 18, marginBottom: 10, letterSpacing: -0.2 },
   kicker: { fontFamily: SANS_B, fontSize: 8.5, color: BRAND, letterSpacing: 1.5, marginBottom: 6 },
 
-  // table — surface card
   card: { backgroundColor: SURFACE, borderRadius: 6, padding: 0, overflow: 'hidden', marginBottom: 4 },
   trH: { flexDirection: 'row', backgroundColor: SURFACE_ALT, paddingVertical: 8, paddingHorizontal: 8, borderBottom: `1pt solid ${BORDER}` },
   tr:  { flexDirection: 'row', paddingVertical: 7, paddingHorizontal: 8, borderBottom: `0.5pt solid ${BORDER}`, minHeight: 22 },
   th:  { fontFamily: SANS_B, fontSize: 7.5, color: T_MUTED, letterSpacing: 1 },
   td:  { fontSize: 8.5, color: T_STRONG, paddingRight: 4 },
-  tdMuted: { fontSize: 8.5, color: T_MUTED, paddingRight: 4 },
   tdStrong: { fontFamily: SANS_B, fontSize: 8.5, color: T_PRIMARY, paddingRight: 4 },
   tdMono: { fontFamily: MONO, fontSize: 8.5, color: T_PRIMARY, paddingRight: 4 },
-  tdMonoMuted: { fontFamily: MONO, fontSize: 8.5, color: T_SECONDARY, paddingRight: 4 },
 
+  // 5-column layout: Sensor | Quell-App | Glev-Quelle | Wert alle | Wann ist er sichtbar
   c1: { width: '13%' },
-  c2: { width: '21%' },
+  c2: { width: '24%' },
   c3: { width: '14%' },
-  c4: { width: '18%' },
-  c5: { width: '16%' },
-  c6: { width: '18%' },
+  c4: { width: '14%' },
+  c5: { width: '35%' },
 
-  callout: { backgroundColor: SURFACE, borderLeft: `2pt solid ${BRAND}`, padding: 10, marginTop: 12, marginBottom: 8, fontSize: 9.5, color: T_STRONG, borderRadius: 3 },
+  callout: { backgroundColor: SURFACE, borderLeft: `2pt solid ${BRAND}`, padding: 10, marginTop: 12, marginBottom: 8, fontSize: 9.5, color: T_STRONG, borderRadius: 3, lineHeight: 1.55 },
 
-  // glev "source" cards
   srcCard: { backgroundColor: SURFACE, borderRadius: 6, padding: 12, marginBottom: 8, borderLeft: `2pt solid ${BRAND}` },
   srcLabel: { fontFamily: SANS_B, fontSize: 10.5, color: T_PRIMARY, marginBottom: 4, letterSpacing: -0.1 },
   srcBody: { fontSize: 9.5, color: T_SECONDARY, lineHeight: 1.55 },
 
-  // bullets
   bullet: { flexDirection: 'row', marginBottom: 5 },
   bulletDot: { width: 12, color: BRAND, fontSize: 10, fontFamily: SANS_B },
   bulletText: { flex: 1, fontSize: 9.5, color: T_STRONG, lineHeight: 1.5 },
 
-  // help-card grid
   helpRow: { flexDirection: 'row', gap: 8, marginBottom: 6 },
-  helpKey: { width: '20%', fontFamily: SANS_B, fontSize: 9.5, color: BRAND },
+  helpKey: { width: '22%', fontFamily: SANS_B, fontSize: 9.5, color: BRAND },
   helpVal: { flex: 1, fontSize: 9.5, color: T_STRONG, lineHeight: 1.5 },
 
   footer: { position: 'absolute', bottom: 24, left: 36, right: 36, paddingTop: 8, borderTop: `0.5pt solid ${BORDER}` },
@@ -81,12 +66,11 @@ const s = StyleSheet.create({
 const Cell = (text, base, w, key) => React.createElement(Text, { style: [base, w], key }, text);
 
 const TableRow = (cols, i) => React.createElement(View, { style: s.tr, key: `r${i}`, wrap: false }, [
-  Cell(cols[0], s.tdStrong,    s.c1, 'a'),
-  Cell(cols[1], s.td,          s.c2, 'b'),
-  Cell(cols[2], s.tdStrong,    s.c3, 'c'),
-  Cell(cols[3], s.tdMono,      s.c4, 'd'),
-  Cell(cols[4], s.tdMonoMuted, s.c5, 'e'),
-  Cell(cols[5], s.tdMuted,     s.c6, 'f'),
+  Cell(cols[0], s.tdStrong, s.c1, 'a'),
+  Cell(cols[1], s.td,       s.c2, 'b'),
+  Cell(cols[2], s.tdStrong, s.c3, 'c'),
+  Cell(cols[3], s.tdMono,   s.c4, 'd'),
+  Cell(cols[4], s.td,       s.c5, 'e'),
 ]);
 
 const Bullet = (txt, k) => React.createElement(View, { style: s.bullet, key: k }, [
@@ -106,99 +90,93 @@ const HelpRow = (k, v, key) => React.createElement(View, { style: s.helpRow, key
 
 // ---------- CONTENT (DE) ----------
 const DE = {
-  date: '15.05.2026',
-  metaRight: 'v1 · 15.05.2026',
-  h1: 'CGM-Quellen-Matrix',
-  sub: 'Welche zeitliche Auflösung sieht der Nutzer in Glev — abhängig vom Sensor, der Quell-App auf dem Phone und der gewählten Glev-Quelle.',
-  kicker: 'INTERNES REFERENZ-DOKUMENT',
-  th2a: 'Quick-Lookup',
-  thCols: ['SENSOR', 'QUELL-APP AUF DEM PHONE', 'GLEV-QUELLE', 'PUNKTE / STUNDE', 'LATENZ', 'LÜCKEN-RISIKO'],
+  metaRight: 'v2 · 15.05.2026',
+  h1: 'Wie kommen deine Glukose-Werte in Glev?',
+  sub: 'Glev liest deinen Sensor nicht selbst aus. Es bekommt die Werte von einer App auf deinem Handy. Welche App du nutzt, entscheidet, wie oft du in Glev einen neuen Wert siehst.',
+  kicker: 'HILFE · CGM-QUELLEN',
+  th2a: 'Übersicht: was passt zu deinem Setup?',
+  thCols: ['SENSOR', 'APP AUF DEM HANDY', 'GLEV-QUELLE', 'NEUER WERT', 'WAS DU SIEHST'],
   rows: [
-    ['Libre 2',      'LibreLink',                        'LLU',          '4 / 15 min',  '2-4 min',     'mittel — Hypos zwischen Ticks unsichtbar'],
-    ['Libre 2',      'xDrip4iOS / iAPS / Loop',          'Apple Health', '60 / 1 min',  '30 s - 2 min', 'niedrig (solange Phone in BLE-Reichweite)'],
-    ['Libre 2',      'xDrip4iOS / iAPS / Loop',          'Nightscout',   '60 / 1 min',  '30 s - 1 min', 'niedrig'],
-    ['Libre 3',     'LibreLink (DACH)',                  'LLU',          '4 / 15 min',  '2-4 min',     'mittel — Abbott aggregiert für Share-API'],
-    ['Libre 3',     'LibreLink (USA/UK, älter)',         'Apple Health', '60 / 1 min',  '30 s - 2 min', 'niedrig'],
-    ['Libre 3',     'xDrip4iOS / Juggluco',              'AH oder NS',   '60 / 1 min',  '30 s - 2 min', 'niedrig'],
-    ['Dexcom G6',   'Dexcom-App',                        'Apple Health', '12 / 5 min',  '5-7 min',     'niedrig (Hardware-Limit)'],
-    ['Dexcom G7',   'Dexcom-App',                        'Apple Health', '12 / 5 min',  '5-7 min',     'niedrig'],
-    ['Dexcom G6/G7','Loop / Loop Follow / xDrip',        'Nightscout',   '12 / 5 min',  '1-3 min',     'niedrig'],
+    ['Libre 2',       'LibreLink',                       'LLU',          'alle 15 min', 'Reicht für den Tagesverlauf. Kurze Tiefs zwischen den 15-Min-Punkten siehst du nicht.'],
+    ['Libre 2',       'xDrip4iOS / iAPS / Loop',         'Apple Health', 'jede Minute', 'Lückenlose Kurve in Echtzeit.'],
+    ['Libre 2',       'xDrip4iOS / iAPS / Loop',         'Nightscout',   'jede Minute', 'Lückenlose Kurve in Echtzeit.'],
+    ['Libre 3',       'LibreLink (Deutschland)',         'LLU',          'alle 15 min', 'Wie Libre 2: Kurve okay, kurze Tiefs unsichtbar.'],
+    ['Libre 3',       'xDrip4iOS / Juggluco',            'Health od. NS','jede Minute', 'Lückenlose Kurve in Echtzeit.'],
+    ['Dexcom G6',     'Dexcom-App',                      'Apple Health', 'alle 5 min',  'Sehr gute Auflösung — der Sensor selbst misst nur alle 5 Minuten.'],
+    ['Dexcom G7',     'Dexcom-App',                      'Apple Health', 'alle 5 min',  'Wie G6. G7 ist nur kleiner und schneller einsatzbereit, nicht „genauer".'],
+    ['Dexcom G6/G7',  'Loop / Loop Follow / xDrip',      'Nightscout',   'alle 5 min',  'Wie über Apple Health, nur via Nightscout-Server.'],
   ],
-  callout: 'Wichtig: Glev refreshed die UI alle 60 s (mit 30 s Client-Cache). Selbst bei 1-Minuten-Datenquellen sieht der Nutzer maximal einen neuen Punkt pro Minute — die Datenquelle entscheidet aber, wie viel echte Auflösung dahinter steckt.',
-  th2b: 'Was bedeuten die drei Glev-Quellen technisch?',
+  callout: 'Glev holt sich neue Werte alle 2 Minuten von deiner Quelle ab (vorher waren es 5 Minuten). Sobald die Quelle einen neuen Wert hat, ist er also spätestens 2 Minuten später bei dir in Glev. Wie viele Werte pro Stunde du siehst, hängt aber weiterhin von der Quelle ab — Glev kann nicht mehr Werte zeigen als deine App liefert.',
+  th2b: 'Die drei Glev-Quellen, einfach erklärt',
   src: [
-    ['1. LLU (LibreLinkUp) — Cloud, alle 15 min',
-     'Glev fragt Abbotts Share-with-Caregivers-API alle 60 s. Abbott liefert den aktuellen Wert (live) plus die letzten ca. 12 h als 15-Minuten-Aggregate. Kurze Hypos oder Hyper, die zwischen zwei 15-min-Ticks bottomen, sind für Glev nicht sichtbar — egal welcher Libre-Sensor. Vorteil: null Setup. Nachteil: 15-Minuten-Auflösung ist klinisch grob.'],
-    ['2. Apple Health — lokal, Auflösung = was die Quell-App reinschreibt',
-     'Glev liest aus der iOS-Health-Datenbank. Die Cadence ist 1:1 die der schreibenden App. LibreLink → Health funktioniert in DACH NICHT mehr (Abbott hat den Toggle 2023 entfernt). Dexcom-App → Health schreibt nativ alle 5 min. xDrip4iOS / iAPS / Loop / Juggluco → Health = 1 min, weil sie den Sensor direkt via BLE auslesen. Vorteil: keine Cloud-Latenz. Nachteil: Setup nötig (Quell-App, Permissions, Glev-iOS-Shell mit HealthKit-Recht).'],
-    ['3. Nightscout — eigener Server, Auflösung = was Uploader-App pusht',
-     'Glev pollt einen Nightscout-Endpunkt alle 60 s. xDrip / Loop / Juggluco → NS = 1 min (Libre) oder 5 min (Dexcom-Hardware-Limit). LibreLink → NS geht nicht direkt, brauchst eine Mittelschicht. Vorteil: Quelle der Wahrheit liegt beim Nutzer, plattform-agnostisch (iOS und Android). Nachteil: Server-Hosting (kostenlos auf Vercel oder Railway, aber 2-4 h Setup).'],
+    ['1. LLU — der einfachste Weg (15-Minuten-Werte)',
+     'LLU steht für „LibreLinkUp", die kostenlose Familien-App von Abbott. Du fügst Glev wie ein Familienmitglied hinzu und Glev darf deine Werte mitlesen. Vorteil: keine extra Software nötig, in 5 Minuten eingerichtet. Nachteil: Abbott schickt nur einen Wert alle 15 Minuten heraus, auch wenn dein Sensor öfter misst. Ein kurzer Unterzucker zwischen zwei Punkten ist für Glev unsichtbar.'],
+    ['2. Apple Health — die beste Auflösung auf dem iPhone',
+     'Apple Health ist die Gesundheits-App von Apple, die alle deine Apps gemeinsam nutzen können. Eine andere App (z. B. xDrip oder die Dexcom-App) liest deinen Sensor live aus und legt jeden Wert in Apple Health ab. Glev liest die Werte von dort. Vorteil: jeder Wert ist sofort da, lückenlos, ohne Cloud-Umweg. Nachteil: nur auf dem iPhone, du musst einmal die andere App einrichten und Glev die Berechtigung geben.'],
+    ['3. Nightscout — die offene Lösung für iPhone und Android',
+     'Nightscout ist ein kleiner Server, den du dir selbst (oder mit Hilfe der Diabetes-Community) einmalig aufsetzt. Eine Uploader-App auf deinem Handy schickt deine Werte dorthin, Glev liest sie ab. Vorteil: funktioniert auf iPhone und Android und du hast deine Daten unter Kontrolle. Nachteil: einmalig 2-4 Stunden Einrichtung. Ideal wenn du schon mit Loop, AAPS oder xDrip arbeitest.'],
   ],
-  th2c: 'Caveats für die Nutzer-Kommunikation',
+  th2c: 'Gut zu wissen',
   bullets: [
-    'DACH-Libre-2- oder Libre-3-Nutzer ohne xDrip oder Nightscout sind auf 15-Minuten-LLU-Auflösung festgenagelt. Der Apple-Health-Pfad ist für sie de facto tot. Das ist nicht Glevs Fehler — das ist Abbotts Geschäftsentscheidung.',
-    'Dexcom-Nutzer haben nie 1-Minuten-Auflösung, egal welcher Pfad — der Sensor selbst sampled nur alle 5 min. Hardware, nicht Software.',
-    'G7 ist nicht „besser" als G6 in Sachen Auflösung — G7 ist nur kleiner und schneller im Warm-up.',
-    'Latenz ist nicht gleich Auflösung. Eine LLU-Kurve mit 15-Minuten-Punkten kann den letzten Wert schon nach 2 min zeigen (geringe Latenz), die Lücken zwischen den Ticks bleiben aber leer.',
-    'Hypo-Erkennung in Insights zählt nur Punkte unter 70 mg/dL die im Datenstrom auftauchen. Bei 15-min-LLU also nur Hypos die zufällig auf einen Tick fallen oder mindestens 15 min dauern. Bei 1-Minuten-Quellen praktisch alles.',
-    'Manuelle Fingersticks umgehen die Auflösungs-Limits — werden immer gezählt und im Graph als Quadrat eingezeichnet. Wer auf LLU sitzt und ein verdächtiges Tief vermutet sollte zusätzlich einen Fingerstick loggen.',
+    'Wenn du in Deutschland einen Libre 2 oder Libre 3 hast und nichts außer der LibreLink-App nutzt, bist du auf 15-Minuten-Auflösung festgelegt. Das ist keine Glev-Schwäche — Abbott hat den direkten Weg in Apple Health 2023 abgeschaltet.',
+    'Dexcom-Sensoren messen prinzipbedingt alle 5 Minuten — egal welchen Weg du wählst. Das ist eine Hardware-Eigenschaft, keine Software-Einstellung.',
+    'Manuelle Fingerstick-Werte, die du in Glev einträgst, werden immer berücksichtigt und im Diagramm als kleines Quadrat markiert. Wenn du auf LLU bist und einen Verdacht auf Unterzucker hast, miss kurz mit dem Finger und trage es ein.',
+    'Die Hypo-Erkennung in Insights kann nur das zählen, was sie sieht. Bei 15-Minuten-Werten werden also nur Tiefs erfasst, die mindestens 15 Minuten dauern oder zufällig genau auf einen Messpunkt fallen.',
+    'Die Glev-Engine arbeitet mit allen drei Quellen gleich gut — sie nutzt für Empfehlungen den Wert, der zur Mahlzeit am nächsten dran liegt.',
   ],
-  th2d: 'Vorgeschlagene Hilfetexte für die Settings-CGM-Auswahl',
+  th2d: 'Welche Quelle passt zu dir?',
   help: [
-    ['LLU',          'Auflösung 15 min. Einfachste Anbindung, aber kurze Hypos können fehlen — bei Verdacht zusätzlich Fingerstick loggen.'],
-    ['Apple Health', 'Auflösung gleich deine Quell-App (z. B. xDrip = 1 min, Dexcom-App = 5 min). Erfordert HealthKit-Berechtigung in der Glev-iOS-App.'],
-    ['Nightscout',   'Auflösung gleich dein Uploader (xDrip = 1 min, Loop = 5 min). Erfordert eigenen Nightscout-Server.'],
+    ['LLU',          'Du willst loslegen ohne Bastelei und 15-Minuten-Auflösung reicht dir. Klassisch für DACH-Libre-Nutzer.'],
+    ['Apple Health', 'Du hast ein iPhone und nutzt schon eine Live-App wie xDrip, Loop, iAPS oder die Dexcom-App. Beste Kombination aus Komfort und Auflösung.'],
+    ['Nightscout',   'Du hast Android (oder willst plattformunabhängig sein), bist technikaffin oder läufst sowieso schon mit Loop/AAPS/xDrip. Volle Datenhoheit.'],
   ],
-  footer1: 'Glev · CGM-Quellen-Matrix · 15.05.2026',
-  footer2: 'Glev ist ein Dokumentations- und Organisations-Tool, kein Medizinprodukt. Therapieentscheidungen triffst du in Absprache mit deinem Arzt. · hello@glev.app',
+  footer1: 'Glev · Hilfe · CGM-Quellen · Stand 15.05.2026',
+  footer2: 'Glev ist ein Dokumentations- und Organisations-Tool, kein Medizinprodukt. Therapieentscheidungen triffst du gemeinsam mit deinem Arzt. · hello@glev.app',
 };
 
 // ---------- CONTENT (EN) ----------
 const EN = {
-  date: '2026-05-15',
-  metaRight: 'v1 · 2026-05-15',
-  h1: 'CGM source matrix',
-  sub: 'What time resolution the user actually sees inside Glev — depending on sensor, the source app on their phone, and the chosen Glev source.',
-  kicker: 'INTERNAL REFERENCE DOCUMENT',
-  th2a: 'Quick lookup',
-  thCols: ['SENSOR', 'SOURCE APP ON PHONE', 'GLEV SOURCE', 'POINTS / HOUR', 'LATENCY', 'GAP RISK'],
+  metaRight: 'v2 · 2026-05-15',
+  h1: 'How your glucose values reach Glev',
+  sub: "Glev doesn't read your sensor directly. It picks up the values from another app on your phone. Which app you use decides how often you see a new value in Glev.",
+  kicker: 'HELP · CGM SOURCES',
+  th2a: 'Overview: what fits your setup?',
+  thCols: ['SENSOR', 'APP ON YOUR PHONE', 'GLEV SOURCE', 'NEW VALUE', 'WHAT YOU SEE'],
   rows: [
-    ['Libre 2',      'LibreLink',                        'LLU',          '4 / 15 min',  '2-4 min',     'medium — hypos between ticks invisible'],
-    ['Libre 2',      'xDrip4iOS / iAPS / Loop',          'Apple Health', '60 / 1 min',  '30 s - 2 min', 'low (as long as phone is in BLE range)'],
-    ['Libre 2',      'xDrip4iOS / iAPS / Loop',          'Nightscout',   '60 / 1 min',  '30 s - 1 min', 'low'],
-    ['Libre 3',     'LibreLink (DACH)',                  'LLU',          '4 / 15 min',  '2-4 min',     'medium — Abbott aggregates for Share API'],
-    ['Libre 3',     'LibreLink (US/UK, older)',          'Apple Health', '60 / 1 min',  '30 s - 2 min', 'low'],
-    ['Libre 3',     'xDrip4iOS / Juggluco',              'AH or NS',     '60 / 1 min',  '30 s - 2 min', 'low'],
-    ['Dexcom G6',   'Dexcom app',                        'Apple Health', '12 / 5 min',  '5-7 min',     'low (hardware limit)'],
-    ['Dexcom G7',   'Dexcom app',                        'Apple Health', '12 / 5 min',  '5-7 min',     'low'],
-    ['Dexcom G6/G7','Loop / Loop Follow / xDrip',        'Nightscout',   '12 / 5 min',  '1-3 min',     'low'],
+    ['Libre 2',       'LibreLink',                       'LLU',          'every 15 min','Good enough for the daily trend. Short lows between the 15-min points are invisible.'],
+    ['Libre 2',       'xDrip4iOS / iAPS / Loop',         'Apple Health', 'every minute','Smooth, gap-free curve in real time.'],
+    ['Libre 2',       'xDrip4iOS / iAPS / Loop',         'Nightscout',   'every minute','Smooth, gap-free curve in real time.'],
+    ['Libre 3',       'LibreLink (DACH)',                'LLU',          'every 15 min','Same as Libre 2: curve is OK, short lows are invisible.'],
+    ['Libre 3',       'xDrip4iOS / Juggluco',            'Health or NS', 'every minute','Smooth, gap-free curve in real time.'],
+    ['Dexcom G6',     'Dexcom app',                      'Apple Health', 'every 5 min', 'Very good resolution — the sensor itself only measures every 5 minutes.'],
+    ['Dexcom G7',     'Dexcom app',                      'Apple Health', 'every 5 min', 'Same as G6. G7 is only smaller and faster to warm up, not "more accurate".'],
+    ['Dexcom G6/G7',  'Loop / Loop Follow / xDrip',      'Nightscout',   'every 5 min', 'Same as via Apple Health, but through a Nightscout server.'],
   ],
-  callout: 'Important: Glev refreshes its UI every 60 s (with a 30 s client cache). Even with 1-minute data sources, the user sees at most one new point per minute — but the source decides how much real resolution sits behind it.',
-  th2b: 'What the three Glev sources actually mean technically',
+  callout: "Glev pulls new values from your source every 2 minutes (it used to be every 5). So once your source has a new value, it's in Glev within 2 minutes at most. How many values per hour you see still depends on the source — Glev can't show more values than your app delivers.",
+  th2b: 'The three Glev sources, plain English',
   src: [
-    ['1. LLU (LibreLinkUp) — cloud, every 15 min',
-     'Glev calls Abbott\'s Share-with-caregivers API every 60 s. Abbott returns the current value (live) plus roughly the last 12 h as 15-minute aggregates. Short hypos or hypers that bottom out between two 15-min ticks are invisible to Glev — regardless of which Libre sensor. Upside: zero setup. Downside: 15-minute resolution is clinically coarse.'],
-    ['2. Apple Health — local, resolution = whatever the source app writes in',
-     'Glev reads from the iOS Health database. Cadence is 1:1 whatever the writing app produces. LibreLink → Health no longer works in DACH (Abbott removed the toggle in 2023). The Dexcom app → Health writes natively every 5 min. xDrip4iOS / iAPS / Loop / Juggluco → Health = 1 min, because they read the sensor directly via BLE. Upside: no cloud latency. Downside: setup needed (source app, permissions, Glev iOS shell with HealthKit entitlement).'],
-    ['3. Nightscout — your own server, resolution = whatever the uploader app pushes',
-     'Glev polls a Nightscout endpoint every 60 s. xDrip / Loop / Juggluco → NS = 1 min (Libre) or 5 min (Dexcom hardware limit). LibreLink → NS is not direct, you need a middleware layer. Upside: source of truth lives with the user, platform-agnostic (iOS and Android). Downside: server hosting (free on Vercel or Railway, but 2-4 h setup).'],
+    ['1. LLU — the easiest path (values every 15 min)',
+     "LLU stands for \"LibreLinkUp\", Abbott's free family app. You add Glev like a family member and Glev gets to read your values along with you. Upside: no extra software needed, set up in 5 minutes. Downside: Abbott only releases one value every 15 minutes, even though your sensor measures more often. A short low between two points is invisible to Glev."],
+    ['2. Apple Health — the best resolution on iPhone',
+     "Apple Health is Apple's health app that all your apps can share. Another app (e.g. xDrip or the Dexcom app) reads your sensor live and stores every value in Apple Health. Glev reads the values from there. Upside: every value arrives instantly, gap-free, no cloud detour. Downside: iPhone only, you have to set up the other app once and grant Glev permission."],
+    ['3. Nightscout — the open solution for iPhone and Android',
+     'Nightscout is a small server that you (or someone from the diabetes community) sets up once. An uploader app on your phone sends your values there, Glev reads them. Upside: works on iPhone and Android and you stay in control of your data. Downside: 2-4 hours of one-time setup. Ideal if you already use Loop, AAPS or xDrip.'],
   ],
-  th2c: 'Caveats for user communication',
+  th2c: 'Good to know',
   bullets: [
-    'DACH Libre 2 or Libre 3 users without xDrip or Nightscout are stuck on 15-minute LLU resolution. The Apple Health path is effectively dead for them. That\'s not Glev\'s fault — it\'s Abbott\'s business decision.',
-    'Dexcom users never get 1-minute resolution, regardless of path — the sensor itself only samples every 5 min. Hardware, not software.',
-    'G7 is not "better" than G6 for resolution — G7 is just smaller and faster on warm-up.',
-    'Latency is not the same as resolution. An LLU curve with 15-minute points can show the latest value within 2 min (low latency), but the gaps between ticks stay empty.',
-    'Hypo detection in Insights only counts points below 70 mg/dL that actually appear in the data stream. With 15-min LLU that means only hypos that happen to land on a tick or last at least 15 min. With 1-minute sources, basically everything.',
-    'Manual fingersticks bypass the resolution limit — they always count and are drawn as squares on the chart. If you\'re on LLU and suspect a low between ticks, log a fingerstick.',
+    "If you're in Germany/Austria/Switzerland with a Libre 2 or Libre 3 and only use the LibreLink app, you're stuck on 15-minute resolution. That's not a Glev weakness — Abbott shut down the direct path into Apple Health back in 2023.",
+    "Dexcom sensors only measure every 5 minutes by design — no matter which path you choose. That's a hardware property, not a software setting.",
+    "Manual fingerstick values that you log in Glev are always counted and shown as a small square on the chart. If you're on LLU and suspect a low, take a quick fingerstick and log it.",
+    "The hypo detection in Insights can only count what it sees. With 15-minute values, only lows that last at least 15 minutes (or land exactly on a measurement point) are detected.",
+    "The Glev engine works equally well with all three sources — for recommendations it uses the value closest in time to the meal.",
   ],
-  th2d: 'Suggested helper copy for the Settings → CGM source picker',
+  th2d: 'Which source fits you?',
   help: [
-    ['LLU',          '"Resolution 15 min. Simplest setup, but short hypos can be missed — log a fingerstick if you suspect one."'],
-    ['Apple Health', '"Resolution = your source app (e.g. xDrip = 1 min, Dexcom app = 5 min). Requires HealthKit permission in the Glev iOS app."'],
-    ['Nightscout',   '"Resolution = your uploader (xDrip = 1 min, Loop = 5 min). Requires your own Nightscout server."'],
+    ['LLU',          "You want to start without tinkering and 15-minute resolution is enough for you. The classic choice for DACH Libre users."],
+    ['Apple Health', 'You have an iPhone and already use a live app like xDrip, Loop, iAPS or the Dexcom app. Best mix of comfort and resolution.'],
+    ['Nightscout',   'You have Android (or want platform independence), are tech-minded, or already run Loop/AAPS/xDrip. Full data sovereignty.'],
   ],
-  footer1: 'Glev · CGM source matrix · 2026-05-15',
+  footer1: 'Glev · Help · CGM sources · As of 2026-05-15',
   footer2: 'Glev is a documentation and organisation tool, not a medical device. Therapy decisions are made together with your doctor. · hello@glev.app',
 };
 
@@ -220,7 +198,6 @@ const buildDoc = (C) => React.createElement(Document, {},
         Cell(C.thCols[2], s.th, s.c3, 'c'),
         Cell(C.thCols[3], s.th, s.c4, 'd'),
         Cell(C.thCols[4], s.th, s.c5, 'e'),
-        Cell(C.thCols[5], s.th, s.c6, 'f'),
       ]),
       ...C.rows.map(TableRow),
     ]),
@@ -245,6 +222,14 @@ const buildDoc = (C) => React.createElement(Document, {},
   ]),
 );
 
+// Output to public/help/ so the Settings → Hilfe & Feedback row can
+// link directly to /help/cgm-quellen-de.pdf without going through any
+// auth/route. Keeping the legacy exports/ copies too so nothing
+// outside the repo breaks if someone bookmarked them.
+await renderToFile(buildDoc(DE), 'public/help/cgm-quellen-de.pdf');
+console.log('OK → public/help/cgm-quellen-de.pdf');
+await renderToFile(buildDoc(EN), 'public/help/cgm-sources-en.pdf');
+console.log('OK → public/help/cgm-sources-en.pdf');
 await renderToFile(buildDoc(DE), 'exports/glev-cgm-quellen-matrix-de.pdf');
 console.log('OK → exports/glev-cgm-quellen-matrix-de.pdf');
 await renderToFile(buildDoc(EN), 'exports/glev-cgm-source-matrix-en.pdf');

@@ -1110,6 +1110,8 @@
     "section_support": "Help & Feedback",
     "row_feature_requests": "Feature Requests",
     "subtitle_feature_requests": "Request a feature or vote on other suggestions",
+    "row_help_cgm_sources": "CGM sources explained (PDF)",
+    "subtitle_help_cgm_sources": "Which sensor + which app = which resolution in Glev",
     "section_account": "Account",
     "row_account": "Account",
     "account_subtitle_placeholder": "Profile, stats, sign out",
