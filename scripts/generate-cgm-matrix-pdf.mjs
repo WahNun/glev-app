@@ -1,5 +1,12 @@
 import React from 'react';
-import { Document, Page, Text, View, StyleSheet, renderToFile } from '@react-pdf/renderer';
+import { Document, Page, Text, View, Image, StyleSheet, renderToFile } from '@react-pdf/renderer';
+import path from 'node:path';
+
+// Brand wordmark — the proper "glev." with the green dot. Lucas'
+// hard requirement: never render the brand as plain text again. We
+// load the white variant from public/help-assets/ (copied from the
+// brand-book PNG attached on 2026-05-15).
+const LOGO_PATH = path.resolve('public/help-assets/glev-wordmark-white.png');
 
 // Brand tokens (BB v1 · April 2026)
 const BRAND = '#4F6EF7';
@@ -20,13 +27,21 @@ const s = StyleSheet.create({
   page: { paddingTop: 36, paddingBottom: 56, paddingHorizontal: 36, fontSize: 9.5, color: T_STRONG, fontFamily: SANS, lineHeight: 1.45, backgroundColor: PAGE_BG },
 
   hdr: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 },
-  word: { fontFamily: SANS_B, fontSize: 18, color: BRAND, letterSpacing: -0.5 },
+  // Wordmark logo — keep aspect ratio (source PNG 720×253, ratio
+  // ~2.85). Height 18 → width 51.3, fits cleanly in the header band
+  // alongside the right-aligned meta date.
+  logo: { width: 51, height: 18 },
   hdrMeta: { fontFamily: MONO, fontSize: 8, color: T_TERTIARY },
 
-  h1: { fontFamily: SANS_B, fontSize: 26, color: T_PRIMARY, letterSpacing: -0.6, marginBottom: 6 },
-  sub: { fontSize: 11, color: T_SECONDARY, marginBottom: 18, lineHeight: 1.5 },
+  // h1: explicit lineHeight 1.18 + larger marginBottom prevent the
+  // descenders of the title from colliding with the first line of
+  // sub (the 1.45 page default + tight letterSpacing made react-pdf
+  // collapse the title's vertical box, the bug Lucas flagged with
+  // the screenshot from 2026-05-15).
+  h1: { fontFamily: SANS_B, fontSize: 26, color: T_PRIMARY, letterSpacing: -0.6, lineHeight: 1.18, marginBottom: 14 },
+  sub: { fontSize: 11, color: T_SECONDARY, marginTop: 4, marginBottom: 22, lineHeight: 1.55 },
 
-  h2: { fontFamily: SANS_B, fontSize: 13, color: T_PRIMARY, marginTop: 18, marginBottom: 10, letterSpacing: -0.2 },
+  h2: { fontFamily: SANS_B, fontSize: 13, color: T_PRIMARY, marginTop: 18, marginBottom: 10, letterSpacing: -0.2, lineHeight: 1.25 },
   kicker: { fontFamily: SANS_B, fontSize: 8.5, color: BRAND, letterSpacing: 1.5, marginBottom: 6 },
 
   card: { backgroundColor: SURFACE, borderRadius: 6, padding: 0, overflow: 'hidden', marginBottom: 4 },
@@ -183,7 +198,7 @@ const EN = {
 const buildDoc = (C) => React.createElement(Document, {},
   React.createElement(Page, { size: 'A4', style: s.page }, [
     React.createElement(View, { style: s.hdr, key: 'hdr' }, [
-      React.createElement(Text, { style: s.word, key: 'w' }, 'glev'),
+      React.createElement(Image, { style: s.logo, src: LOGO_PATH, key: 'w' }),
       React.createElement(Text, { style: s.hdrMeta, key: 'm' }, C.metaRight),
     ]),
     React.createElement(Text, { style: s.kicker, key: 'k' }, C.kicker),
