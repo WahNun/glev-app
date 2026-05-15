@@ -24,9 +24,9 @@ const SANS_B = 'Helvetica-Bold';
 const MONO = 'Courier';
 
 const s = StyleSheet.create({
-  page: { paddingTop: 36, paddingBottom: 56, paddingHorizontal: 36, fontSize: 9.5, color: T_STRONG, fontFamily: SANS, lineHeight: 1.45, backgroundColor: PAGE_BG },
+  page: { paddingTop: 28, paddingBottom: 44, paddingHorizontal: 36, fontSize: 9.5, color: T_STRONG, fontFamily: SANS, lineHeight: 1.4, backgroundColor: PAGE_BG },
 
-  hdr: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 },
+  hdr: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   // Wordmark logo — keep aspect ratio (source PNG 720×253, ratio
   // ~2.85). Height 18 → width 51.3, fits cleanly in the header band
   // alongside the right-aligned meta date.
@@ -38,15 +38,15 @@ const s = StyleSheet.create({
   // sub (the 1.45 page default + tight letterSpacing made react-pdf
   // collapse the title's vertical box, the bug Lucas flagged with
   // the screenshot from 2026-05-15).
-  h1: { fontFamily: SANS_B, fontSize: 26, color: T_PRIMARY, letterSpacing: -0.6, lineHeight: 1.18, marginBottom: 14 },
-  sub: { fontSize: 11, color: T_SECONDARY, marginTop: 4, marginBottom: 22, lineHeight: 1.55 },
+  h1: { fontFamily: SANS_B, fontSize: 22, color: T_PRIMARY, letterSpacing: -0.6, lineHeight: 1.18, marginBottom: 6 },
+  sub: { fontSize: 10, color: T_SECONDARY, marginTop: 2, marginBottom: 10, lineHeight: 1.45 },
 
-  h2: { fontFamily: SANS_B, fontSize: 13, color: T_PRIMARY, marginTop: 10, marginBottom: 8, letterSpacing: -0.2, lineHeight: 1.25 },
+  h2: { fontFamily: SANS_B, fontSize: 12, color: T_PRIMARY, marginTop: 6, marginBottom: 6, letterSpacing: -0.2, lineHeight: 1.25 },
   kicker: { fontFamily: SANS_B, fontSize: 8.5, color: BRAND, letterSpacing: 1.5, marginBottom: 6 },
 
   card: { backgroundColor: SURFACE, borderRadius: 6, padding: 0, overflow: 'hidden', marginBottom: 4 },
-  trH: { flexDirection: 'row', backgroundColor: SURFACE_ALT, paddingVertical: 8, paddingHorizontal: 8, borderBottom: `1pt solid ${BORDER}` },
-  tr:  { flexDirection: 'row', paddingVertical: 7, paddingHorizontal: 8, borderBottom: `0.5pt solid ${BORDER}`, minHeight: 22 },
+  trH: { flexDirection: 'row', backgroundColor: SURFACE_ALT, paddingVertical: 5, paddingHorizontal: 8, borderBottom: `1pt solid ${BORDER}` },
+  tr:  { flexDirection: 'row', paddingVertical: 4, paddingHorizontal: 8, borderBottom: `0.5pt solid ${BORDER}`, minHeight: 16 },
   th:  { fontFamily: SANS_B, fontSize: 7.5, color: T_MUTED, letterSpacing: 1 },
   td:  { fontSize: 8.5, color: T_STRONG, paddingRight: 4 },
   tdStrong: { fontFamily: SANS_B, fontSize: 8.5, color: T_PRIMARY, paddingRight: 4 },
@@ -59,7 +59,7 @@ const s = StyleSheet.create({
   c4: { width: '14%' },
   c5: { width: '35%' },
 
-  callout: { backgroundColor: SURFACE, borderLeft: `2pt solid ${BRAND}`, padding: 10, marginTop: 12, marginBottom: 8, fontSize: 9.5, color: T_STRONG, borderRadius: 3, lineHeight: 1.55 },
+  callout: { backgroundColor: SURFACE, borderLeft: `2pt solid ${BRAND}`, padding: 8, marginTop: 8, marginBottom: 4, fontSize: 9, color: T_STRONG, borderRadius: 3, lineHeight: 1.45 },
 
   srcCard: { backgroundColor: SURFACE, borderRadius: 6, padding: 12, marginBottom: 8, borderLeft: `2pt solid ${BRAND}` },
   srcLabel: { fontFamily: SANS_B, fontSize: 10.5, color: T_PRIMARY, marginBottom: 4, letterSpacing: -0.1 },
