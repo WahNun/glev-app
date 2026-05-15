@@ -6,7 +6,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { fetchMeals, fetchMealsForEngine, unifiedOutcome, type Meal } from "@/lib/meals";
 import { TYPE_COLORS, chipLabelsFrom } from "@/lib/mealTypes";
 import { computeAdaptiveICR } from "@/lib/engine/adaptiveICR";
-import { fetchIcrSchedule, findActiveSlot, EMPTY_ICR_SCHEDULE, type IcrSchedule } from "@/lib/icrSchedule";
+import { fetchIcrSchedule, findActiveSlot, saveIcrSchedule, EMPTY_ICR_SCHEDULE, type IcrSchedule } from "@/lib/icrSchedule";
 import { fetchInsulinSettings, persistEngineIcr, DEFAULT_INSULIN_SETTINGS } from "@/lib/userSettings";
 import { pairBolusesToMeals } from "@/lib/engine/pairing";
 import { updateInsulinLogLink } from "@/lib/insulin";
@@ -284,6 +284,18 @@ export default function InsightsPage() {
   // calm. User taps "Alle Fenster ansehen ↓" to reveal per-window
   // learned ICRs + status pills (TUNED/LEARNING/WARMING UP).
   const [windowsExpanded, setWindowsExpanded] = useState<boolean>(false);
+
+  // Phase B5: per-window engine suggestion. When a window is TUNED
+  // (≥8 samples) AND the engine's learned ICR drifts >10% off the
+  // user's manual slot value, an inline "Engine schlägt vor: 1:14
+  // [Übernehmen] [Behalten]" row appears under that window. We track:
+  //   • dismissed: a Set of "slotIndex:rounded-learned" keys so a
+  //     "Behalten" tap hides THIS specific suggestion but lets a new
+  //     one re-appear once the engine has learned a different value.
+  //   • applying: per-slot busy flag so the buttons grey out during
+  //     the saveIcrSchedule round-trip and we don't double-write.
+  const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
+  const [applyingSlot,         setApplyingSlot]         = useState<number | null>(null);
   useEffect(() => {
     fetchIcrSchedule().then(s => setIcrSchedule(s)).catch(() => {});
     const id = setInterval(() => {
@@ -1881,54 +1893,159 @@ export default function InsightsPage() {
                               w.sampleSize >= TUNED_MIN ? GREEN :
                               w.sampleSize >= 3         ? ACCENT :
                                                           "var(--text-faint)";
-                            const learnedText = w.learnedIcr != null
-                              ? `1:${Math.round(w.learnedIcr * 10) / 10}`
-                              : "—";
+                            const learnedRounded = w.learnedIcr != null
+                              ? Math.round(w.learnedIcr * 10) / 10
+                              : null;
+                            const learnedText = learnedRounded != null ? `1:${learnedRounded}` : "—";
+
+                            // Phase B5 suggestion gate: TUNED + learned set
+                            // + drift > 10% + not yet dismissed for this
+                            // exact value + the manual value differs from
+                            // the rounded learned (otherwise applying is a
+                            // no-op). Drift is symmetric (|Δ| / manual).
+                            const SUGGEST_MIN_DRIFT = 0.10;
+                            const drift = learnedRounded != null && w.manualIcr > 0
+                              ? Math.abs(learnedRounded - w.manualIcr) / w.manualIcr
+                              : 0;
+                            const dismissKey = `${w.slotIndex}:${learnedRounded ?? ""}`;
+                            const showSuggestion =
+                              w.sampleSize >= TUNED_MIN &&
+                              learnedRounded != null &&
+                              learnedRounded !== Math.round(w.manualIcr * 10) / 10 &&
+                              drift > SUGGEST_MIN_DRIFT &&
+                              !dismissedSuggestions.has(dismissKey);
+                            const isApplying = applyingSlot === w.slotIndex;
+
+                            const handleApply = async () => {
+                              if (learnedRounded == null) return;
+                              setApplyingSlot(w.slotIndex);
+                              try {
+                                // Replace just this slot's icr — keep the
+                                // rest of the schedule (label, time band,
+                                // enabled flag, master toggle) intact.
+                                const next: IcrSchedule = {
+                                  ...icrSchedule,
+                                  slots: icrSchedule.slots.map(s =>
+                                    s.slotIndex === w.slotIndex
+                                      ? { ...s, icrGPerUnit: learnedRounded }
+                                      : s,
+                                  ),
+                                };
+                                await saveIcrSchedule(next);
+                                setIcrSchedule(next);
+                              } catch {
+                                // Swallow — the worst case is the user taps
+                                // again. We don't want a crash on a side
+                                // panel inside the engine card.
+                              } finally {
+                                setApplyingSlot(null);
+                              }
+                            };
+
                             return (
-                              <div key={w.slotIndex} style={{
-                                display:"flex", alignItems:"center",
-                                gap:8, fontSize:12, lineHeight:1.3,
-                                flexWrap:"wrap",
-                              }}>
-                                <span style={{
-                                  fontWeight:700, color:"var(--text)",
-                                  minWidth:64,
-                                }}>
-                                  {label}
-                                </span>
-                                <span style={{
-                                  color:"var(--text-dim)",
-                                  fontFamily:"var(--font-mono)",
-                                }}>
-                                  {tInsights("engine_window_manual_short", {
-                                    icr: Math.round(w.manualIcr * 10) / 10,
-                                  })}
-                                </span>
-                                <span style={{
-                                  color: ACCENT, opacity: 0.85,
-                                  fontFamily:"var(--font-mono)", fontWeight:700,
-                                }}>
-                                  {tInsights("engine_window_learned_short", {
-                                    icr: learnedText,
-                                  })}
-                                </span>
-                                <span style={{
-                                  marginLeft:"auto",
-                                  display:"inline-flex", alignItems:"center", gap:6,
+                              <div key={w.slotIndex} style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                                <div style={{
+                                  display:"flex", alignItems:"center",
+                                  gap:8, fontSize:12, lineHeight:1.3,
+                                  flexWrap:"wrap",
                                 }}>
                                   <span style={{
-                                    fontSize:10, fontWeight:700, letterSpacing:"0.08em",
-                                    padding:"2px 6px", borderRadius:99,
-                                    background: `${statusColor}18`,
-                                    color: statusColor,
-                                    border: `1px solid ${statusColor}55`,
+                                    fontWeight:700, color:"var(--text)",
+                                    minWidth:64,
                                   }}>
-                                    {tInsights(statusKey)}
+                                    {label}
                                   </span>
-                                  <span style={{ fontSize:10, color:"var(--text-faint)" }}>
-                                    {tInsights("engine_final_meals", { n: w.sampleSize })}
+                                  <span style={{
+                                    color:"var(--text-dim)",
+                                    fontFamily:"var(--font-mono)",
+                                  }}>
+                                    {tInsights("engine_window_manual_short", {
+                                      icr: Math.round(w.manualIcr * 10) / 10,
+                                    })}
                                   </span>
-                                </span>
+                                  <span style={{
+                                    color: ACCENT, opacity: 0.85,
+                                    fontFamily:"var(--font-mono)", fontWeight:700,
+                                  }}>
+                                    {tInsights("engine_window_learned_short", {
+                                      icr: learnedText,
+                                    })}
+                                  </span>
+                                  <span style={{
+                                    marginLeft:"auto",
+                                    display:"inline-flex", alignItems:"center", gap:6,
+                                  }}>
+                                    <span style={{
+                                      fontSize:10, fontWeight:700, letterSpacing:"0.08em",
+                                      padding:"2px 6px", borderRadius:99,
+                                      background: `${statusColor}18`,
+                                      color: statusColor,
+                                      border: `1px solid ${statusColor}55`,
+                                    }}>
+                                      {tInsights(statusKey)}
+                                    </span>
+                                    <span style={{ fontSize:10, color:"var(--text-faint)" }}>
+                                      {tInsights("engine_final_meals", { n: w.sampleSize })}
+                                    </span>
+                                  </span>
+                                </div>
+                                {showSuggestion && (
+                                  <div style={{
+                                    display:"flex", alignItems:"center",
+                                    flexWrap:"wrap", gap:8,
+                                    padding:"6px 8px",
+                                    borderRadius:6,
+                                    background: `${ACCENT}12`,
+                                    border: `1px solid ${ACCENT}44`,
+                                  }}>
+                                    <span style={{
+                                      fontSize:11, color:"var(--text)", lineHeight:1.3,
+                                    }}>
+                                      {tInsights("engine_window_suggest", {
+                                        icr: learnedRounded,
+                                      })}
+                                    </span>
+                                    <span style={{ marginLeft:"auto", display:"inline-flex", gap:6 }}>
+                                      <button
+                                        type="button"
+                                        disabled={isApplying}
+                                        onClick={handleApply}
+                                        style={{
+                                          fontSize:11, fontWeight:700,
+                                          padding:"4px 10px", borderRadius:99,
+                                          background: ACCENT, color:"#fff",
+                                          border:"none",
+                                          cursor: isApplying ? "default" : "pointer",
+                                          opacity: isApplying ? 0.6 : 1,
+                                        }}
+                                      >
+                                        {tInsights(isApplying ? "engine_window_applying" : "engine_window_apply")}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={isApplying}
+                                        onClick={() => {
+                                          setDismissedSuggestions(prev => {
+                                            const next = new Set(prev);
+                                            next.add(dismissKey);
+                                            return next;
+                                          });
+                                        }}
+                                        style={{
+                                          fontSize:11, fontWeight:600,
+                                          padding:"4px 10px", borderRadius:99,
+                                          background:"transparent",
+                                          color:"var(--text-dim)",
+                                          border:"1px solid var(--border)",
+                                          cursor: isApplying ? "default" : "pointer",
+                                          opacity: isApplying ? 0.6 : 1,
+                                        }}
+                                      >
+                                        {tInsights("engine_window_keep")}
+                                      </button>
+                                    </span>
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
