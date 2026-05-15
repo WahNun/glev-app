@@ -936,10 +936,15 @@ export default function EntriesPage() {
             const deltaC = glucDelta !== null ? (Math.abs(glucDelta) < 50 ? GREEN : glucDelta > 0 ? ORANGE : PINK) : "var(--text-faint)";
             const evColor = evC(ev);
 
+            // MiniCard — eine Kachel im 3-Spalten-Makros-Grid. `minWidth:0`
+            // damit das Grid `minmax(0,1fr)` greift und lange Werte wie
+            // "Schnelle Kohlenhydrate" (KATEGORIE-Tile) nicht über den
+            // Kartenrand rutschen. `wordBreak:"break-word"` lässt mehr-
+            // wörtige Werte umbrechen statt zu clippen.
             const MiniCard = ({ l, v, c }: { l: string; v: string; c?: string }) => (
-              <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
+              <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px", minWidth:0, overflow:"hidden" }}>
                 <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{l}</div>
-                <div style={{ fontSize:14, fontWeight:700, color:c || "var(--text-strong)", letterSpacing:"-0.01em" }}>{v}</div>
+                <div style={{ fontSize:14, fontWeight:700, color:c || "var(--text-strong)", letterSpacing:"-0.01em", wordBreak:"break-word", lineHeight:1.3 }}>{v}</div>
               </div>
             );
 
@@ -1041,9 +1046,17 @@ export default function EntriesPage() {
                     {/* CLASSIFICATION — highlighted card with explanation */}
                     {catLabel && catColor && (
                       <div style={{ background:`${catColor}10`, border:`1px solid ${catColor}40`, borderRadius:12, padding:"12px 14px", display:"flex", flexDirection:"column", gap:8 }}>
-                        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
-                          <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>{tx("meal_classification").toUpperCase()}</div>
-                          <span style={{ padding:"6px 14px", borderRadius:99, fontSize:13, fontWeight:700, background:catColor, color:"var(--on-accent)", whiteSpace:"nowrap", letterSpacing:"0.04em", textTransform:"uppercase" }}>
+                        {/* `flexWrap:"wrap"` + `minWidth:0` auf dem Label
+                            sorgen dafür, dass die "SCHNELLE KOHLEN-
+                            HYDRATE"-Pill (länger als der englische
+                            "FAST CARBS") auf engen Phones in die
+                            nächste Zeile rutscht statt den orangen
+                            Kartenrand zu sprengen. Pill bleibt mit
+                            `flexShrink:0` zusammen, damit der Text
+                            innen nicht unschön bricht. */}
+                        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
+                          <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700, minWidth:0 }}>{tx("meal_classification").toUpperCase()}</div>
+                          <span style={{ padding:"6px 14px", borderRadius:99, fontSize:13, fontWeight:700, background:catColor, color:"var(--on-accent)", whiteSpace:"nowrap", letterSpacing:"0.04em", textTransform:"uppercase", flexShrink:0, maxWidth:"100%" }}>
                             {catLabel}
                           </span>
                         </div>
@@ -1111,7 +1124,7 @@ export default function EntriesPage() {
                     {/* MACROS & DOSING — 3-col grid of mini-cards */}
                     <div>
                       <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8 }}>{tx("macros_dosing").toUpperCase()}</div>
-                      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
+                      <div style={{ display:"grid", gridTemplateColumns:"repeat(3, minmax(0, 1fr))", gap:8 }}>
                         {/* CARBS / NET CARBS render in the user's chosen
                             unit (g/BE/KE). Other macros stay in grams —
                             the BE/KE convention is carb-specific. */}
