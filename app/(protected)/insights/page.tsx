@@ -1762,31 +1762,12 @@ export default function InsightsPage() {
                   )}
                 </div>
 
-                {/* ICR source breakdown — makes it visible whether the
-                    adaptive ICR is being driven by separately-logged
-                    bolus shots (paired via related_entry_id or ±30-min
-                    time-window) or by the legacy meal.insulin_units
-                    column. When at least one pair came in via the
-                    time-window heuristic, the line becomes a tap
-                    target that opens an inline relink panel — the user
-                    can upgrade those heuristic pairs to explicit tags
-                    (Task #211). Hidden when there are zero contributing
-                    meals (warming-up state already says so). */}
-                {adaptiveICR.sampleSize > 0 && (
-                  <RelinkSourceLine
-                    adaptiveICR={adaptiveICR}
-                    engineMeals={engineMeals}
-                    engineBoluses={engineBoluses}
-                    onLinked={(bolusId, mealId) => {
-                      setEngineBoluses(prev => prev.map(b => b.id === bolusId ? { ...b, related_entry_id: mealId } : b));
-                      setInsulinLogs(prev => prev.map(b => b.id === bolusId ? { ...b, related_entry_id: mealId } : b));
-                    }}
-                  />
-                )}
-
                 {/* Pattern label — German renders localized strings; English
                     keeps the engine defaults from lib/engine/patterns.ts as
-                    the single source of truth. */}
+                    the single source of truth.
+                    Order rationale (BB-Hierarchie, May 2026): Verdict first,
+                    then explanation, then meta-source line at the bottom —
+                    so the eye reads What? → Why? → From which data?. */}
                 {(() => {
                   const n = enginePattern.sampleSize;
                   const safe = n > 0 ? n : 1;
@@ -1809,21 +1790,46 @@ export default function InsightsPage() {
                     : enginePattern.explanation;
                   return (
                     <>
-                      {/* Pattern title + explanation use the SAME body-text
-                          treatment as other cards (12px muted) — the title
-                          gets `var(--text)` weight to anchor the block, but
-                          we don't escalate to 13/14px so the engine card
-                          reads like a peer of TDD/Patterns rather than a
-                          self-contained section with its own typography. */}
-                      <div style={{ fontSize:12, color:"var(--text-muted)", lineHeight:1.5, marginBottom:4 }}>
-                        <span style={{ color:"var(--text)", fontWeight:700 }}>{label}</span>
+                      {/* Lower-half hierarchy (BB v1, max-3-Sizes rule):
+                          Verdict 14/700 text-primary, Body 13/regular
+                          text-muted, Meta-Source line below at 11/faint.
+                          Hierarchy carried by weight + color, not by
+                          stacking ever-larger fonts. */}
+                      <div style={{ fontSize:14, fontWeight:700, color:"var(--text)", lineHeight:1.4, marginBottom:4 }}>
+                        {label}
                       </div>
-                      <div style={{ fontSize:12, color:"var(--text-muted)", lineHeight:1.5 }}>
+                      <div style={{ fontSize:13, color:"var(--text-muted)", lineHeight:1.5 }}>
                         {explanation}
                       </div>
                     </>
                   );
                 })()}
+
+                {/* ICR source breakdown — makes it visible whether the
+                    adaptive ICR is being driven by separately-logged
+                    bolus shots (paired via related_entry_id or ±30-min
+                    time-window) or by the legacy meal.insulin_units
+                    column. When at least one pair came in via the
+                    time-window heuristic, the line becomes a tap
+                    target that opens an inline relink panel — the user
+                    can upgrade those heuristic pairs to explicit tags
+                    (Task #211). Hidden when there are zero contributing
+                    meals (warming-up state already says so).
+                    Sits BELOW the verdict/explanation as a quiet meta
+                    footnote (May 2026 hierarchy fix). */}
+                {adaptiveICR.sampleSize > 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    <RelinkSourceLine
+                      adaptiveICR={adaptiveICR}
+                      engineMeals={engineMeals}
+                      engineBoluses={engineBoluses}
+                      onLinked={(bolusId, mealId) => {
+                        setEngineBoluses(prev => prev.map(b => b.id === bolusId ? { ...b, related_entry_id: mealId } : b));
+                        setInsulinLogs(prev => prev.map(b => b.id === bolusId ? { ...b, related_entry_id: mealId } : b));
+                      }}
+                    />
+                  </div>
+                )}
 
                 {/* Suggestion / advisory block — the engine returns a
                     structured i18n descriptor (message.key + message.params)
@@ -2576,7 +2582,7 @@ function RelinkSourceLine({
         style={{
           width: "100%", textAlign: "left",
           background: "transparent", border: "none", padding: 0,
-          fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5,
+          fontSize: 11, color: "var(--text-faint)", lineHeight: 1.5,
           cursor: hasTimeWindow ? "pointer" : "default",
           font: "inherit",
         }}
@@ -2588,7 +2594,7 @@ function RelinkSourceLine({
           total:       adaptiveICR.sampleSize,
         })}
         {hasTimeWindow && (
-          <span style={{ marginLeft: 6, color: "var(--accent)", fontWeight: 700 }}>
+          <span style={{ marginLeft: 6, color: "var(--accent)", fontWeight: 500 }}>
             {open ? tInsights("engine_icr_relink_close") : tInsights("engine_icr_relink_open")}
           </span>
         )}
