@@ -21,3 +21,26 @@ else
   npm install --no-audit --no-fund
   echo "[post-merge] npm install succeeded — pnpm-lock.json may need to be committed"
 fi
+
+# Verify that every column referenced by lib/meals.ts::FULL_COLS exists
+# in the live Supabase `meals` table. fetchMeals() silently falls back
+# to MID_COLS / CORE_COLS when a column is missing, which strips every
+# curve-aggregate field and leaves chips stuck in "VORLÄUFIG". Catch
+# that drift here so a merged-but-not-applied migration is noticed
+# before the first request. Non-fatal: exit 78 means SUPABASE_ACCESS_TOKEN
+# is unset (skip), exit 1 means missing columns (warn loudly but still
+# allow post-merge to finish).
+echo "[post-merge] checking meals schema drift …"
+set +e
+node scripts/check-meals-schema.mjs
+schema_rc=$?
+set -e
+if [ "$schema_rc" -eq 0 ]; then
+  echo "[post-merge] meals schema OK"
+elif [ "$schema_rc" -eq 78 ]; then
+  echo "[post-merge] meals schema check skipped (SUPABASE_ACCESS_TOKEN not set)"
+elif [ "$schema_rc" -eq 1 ]; then
+  echo "[post-merge] WARNING: meals schema drift detected — apply pending migrations via 'npm run db:migrate'"
+else
+  echo "[post-merge] WARNING: meals schema check errored (rc=$schema_rc) — continuing"
+fi
