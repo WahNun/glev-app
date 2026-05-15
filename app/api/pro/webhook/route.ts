@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { getStripe } from "@/lib/stripeServer";
 import { extractFullNameFromSession } from "@/lib/stripeCheckout";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
@@ -26,6 +27,104 @@ function resolveAppUrl(req: NextRequest): string {
   const host =
     req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? new URL(req.url).host;
   return `${proto}://${host}`;
+}
+
+/**
+ * Map a Stripe subscription status to the value we want to write into
+ * `profiles.plan`. Only "trialing" / "active" / "past_due" grant Pro access;
+ * anything terminal (cancelled, unpaid, incomplete_expired) clears the plan
+ * back to free. Returns `undefined` for unknown statuses so the caller can
+ * choose to leave `profiles.plan` untouched in that case.
+ */
+function mapStripeStatusToPlan(s: string | null | undefined): "pro" | null | undefined {
+  if (!s) return undefined;
+  switch (s) {
+    case "trialing":
+    case "active":
+    case "past_due":
+      return "pro";
+    case "canceled":
+    case "unpaid":
+    case "incomplete_expired":
+      return null;
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Resolve a Supabase auth user id by email. Mirrors the pagination strategy
+ * used by `app/admin/users/actions.ts` (Supabase admin SDK has no
+ * `getUserByEmail`). Webhook traffic is low-volume so paginating ≤1000 users
+ * per call is fine; if we ever exceed that we'll need a SQL-based lookup.
+ *
+ * Returns `null` when the email is unknown — callers must treat that as a
+ * non-fatal "no profile to update" case so we don't fail the webhook just
+ * because the buyer hasn't created an app account yet.
+ */
+async function findUserIdByEmail(
+  sb: SupabaseClient,
+  email: string,
+): Promise<string | null> {
+  try {
+    const normalized = email.toLowerCase();
+    const { data, error } = await sb.auth.admin.listUsers({
+      page: 1,
+      perPage: 1000,
+    });
+    if (error) throw error;
+    const found = (data?.users ?? []).find(
+      (u) => (u.email ?? "").toLowerCase() === normalized,
+    );
+    return found?.id ?? null;
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn("[pro/webhook] findUserIdByEmail failed:", {
+      email,
+      err: e instanceof Error ? e.message : String(e),
+    });
+    return null;
+  }
+}
+
+/**
+ * Sync `profiles.plan` for the buyer derived from `email`. Best-effort:
+ * we log but never throw, so a missing profile / unknown email never fails
+ * the webhook (the row in `pro_subscriptions` is the durable record; the
+ * backfill SQL can repair `profiles.plan` after the fact if needed).
+ *
+ * `plan` semantics:
+ *   - "pro"  → profile is a paying / trialing Pro user
+ *   - null   → terminal status, downgrade back to free
+ */
+async function syncProfilePlanByEmail(
+  sb: SupabaseClient,
+  email: string | null,
+  plan: "pro" | null,
+): Promise<void> {
+  if (!email) return;
+  const userId = await findUserIdByEmail(sb, email);
+  if (!userId) {
+    // eslint-disable-next-line no-console
+    console.warn("[pro/webhook] no auth user for email — skipping profiles.plan sync", { email });
+    return;
+  }
+  const { error } = await sb
+    .from("profiles")
+    .update({ plan })
+    .eq("user_id", userId);
+  if (error) {
+    // eslint-disable-next-line no-console
+    console.warn("[pro/webhook] profiles.plan update failed (non-fatal):", {
+      userId,
+      plan,
+      code: error.code,
+      message: error.message,
+    });
+    return;
+  }
+  // eslint-disable-next-line no-console
+  console.log("[pro/webhook] profiles.plan synced:", { userId, plan });
 }
 
 /**
@@ -224,6 +323,14 @@ export async function POST(req: NextRequest) {
         // eslint-disable-next-line no-console
         console.log("[pro/webhook] subscription created:", { email, customerId, subscriptionId, trialEndsAt });
 
+        // Mirror the Pro membership onto `profiles.plan` so the rest of the
+        // app (paywalls, badges, /api/me/plan) reads a single source of
+        // truth instead of joining `pro_subscriptions` from every consumer.
+        // Default to "pro" when Stripe hasn't reported a status yet — the
+        // checkout just completed, the trial is starting now.
+        const planAtCheckout = mapStripeStatusToPlan(stripeStatus) ?? "pro";
+        await syncProfilePlanByEmail(sb, email, planAtCheckout);
+
         // Enqueue the post-checkout welcome email into the durable outbox
         // (lib/emails/outbox.ts). The cron worker (/api/cron/flush-outbox,
         // hit by .github/workflows/flush-outbox.yml every ~2 min) drains
@@ -324,7 +431,7 @@ export async function POST(req: NextRequest) {
           .from("pro_subscriptions")
           .update(update)
           .eq("stripe_subscription_id", sub.id)
-          .select("id");
+          .select("id, email");
 
         if (updErr) {
           // eslint-disable-next-line no-console
@@ -340,6 +447,17 @@ export async function POST(req: NextRequest) {
           console.warn("[pro/webhook] subscription.updated for unbound subscription:", sub.id);
           return NextResponse.json({ error: "row_not_yet_bound" }, { status: 500 });
         }
+
+        // Mirror the new status onto `profiles.plan`. We only touch the
+        // profile when the Stripe status maps to a known plan transition
+        // ("pro" or "free"); unknown/transient statuses (incomplete, paused)
+        // leave the profile untouched so we don't flap a paying user back
+        // to free during a momentary state we don't fully understand.
+        const planFromStatus = mapStripeStatusToPlan(sub.status);
+        if (planFromStatus !== undefined) {
+          const rowEmail = (data[0] as { email?: string | null }).email ?? null;
+          await syncProfilePlanByEmail(sb, rowEmail, planFromStatus);
+        }
         return NextResponse.json({ received: true });
       }
 
@@ -349,7 +467,7 @@ export async function POST(req: NextRequest) {
           .from("pro_subscriptions")
           .update({ status: "cancelled" })
           .eq("stripe_subscription_id", sub.id)
-          .select("id");
+          .select("id, email");
 
         if (updErr) {
           // eslint-disable-next-line no-console
@@ -362,6 +480,88 @@ export async function POST(req: NextRequest) {
           console.warn("[pro/webhook] subscription.deleted for unbound subscription:", sub.id);
           return NextResponse.json({ error: "row_not_yet_bound" }, { status: 500 });
         }
+
+        // Subscription terminated → drop `profiles.plan` back to free so the
+        // user immediately loses Pro access on next page load.
+        const rowEmail = (data[0] as { email?: string | null }).email ?? null;
+        await syncProfilePlanByEmail(sb, rowEmail, null);
+        return NextResponse.json({ received: true });
+      }
+
+      case "customer.subscription.created": {
+        // Stripe occasionally emits subscription.created before
+        // checkout.session.completed. We don't touch pro_subscriptions here
+        // (the completed-handler is the canonical writer with full session
+        // context — price id, currency, full_name, row binding) — but we
+        // DO mirror plan state to profiles so a delayed completed-event
+        // can't leave a paying user on "free". The completed-handler is
+        // idempotent and will re-run sync immediately after.
+        const sub = event.data.object as Stripe.Subscription;
+        const planFromStatus = mapStripeStatusToPlan(sub.status);
+        if (planFromStatus !== undefined) {
+          // Resolve email via the existing pro_subscriptions row if it
+          // exists; otherwise fall back to the Stripe Customer object so
+          // the very-first-event-after-checkout case still finds the user.
+          const { data: row } = await sb
+            .from("pro_subscriptions")
+            .select("email")
+            .eq("stripe_subscription_id", sub.id)
+            .maybeSingle();
+          let email = (row as { email?: string | null } | null)?.email ?? null;
+          if (!email && sub.customer) {
+            try {
+              const customerId =
+                typeof sub.customer === "string" ? sub.customer : sub.customer.id;
+              const cust = await stripe.customers.retrieve(customerId);
+              if (!("deleted" in cust && cust.deleted)) {
+                email = (cust as Stripe.Customer).email?.toLowerCase() ?? null;
+              }
+            } catch (e) {
+              // eslint-disable-next-line no-console
+              console.warn("[pro/webhook] subscription.created customer fetch failed:", {
+                err: e instanceof Error ? e.message : String(e),
+              });
+            }
+          }
+          await syncProfilePlanByEmail(sb, email, planFromStatus);
+        }
+        return NextResponse.json({ received: true });
+      }
+
+      case "invoice.paid":
+      case "invoice.payment_failed": {
+        // Invoice events let us catch billing transitions that don't always
+        // come with a subscription.updated (Stripe sometimes only fires the
+        // invoice for renewal cycles). invoice.paid → user is current
+        // ('pro'); invoice.payment_failed → status flips to past_due
+        // server-side, which we still treat as 'pro' (Stripe's grace window
+        // — they can update their card before being cancelled). Terminal
+        // cancellation comes through subscription.deleted.
+        const invoice = event.data.object as Stripe.Invoice;
+        const subId =
+          typeof (invoice as unknown as { subscription?: unknown }).subscription === "string"
+            ? ((invoice as unknown as { subscription: string }).subscription)
+            : ((invoice as unknown as { subscription?: { id?: string } }).subscription?.id ?? null);
+        if (!subId) {
+          // Non-subscription invoice (one-off charge) — nothing to sync.
+          return NextResponse.json({ received: true, ignored: "no_subscription" });
+        }
+        // Prefer the email already on our row (we own it, no extra Stripe
+        // API call). Falls back to the invoice's customer_email field
+        // which Stripe stamps from the Customer object.
+        const { data: row } = await sb
+          .from("pro_subscriptions")
+          .select("email")
+          .eq("stripe_subscription_id", subId)
+          .maybeSingle();
+        const email =
+          (row as { email?: string | null } | null)?.email ??
+          invoice.customer_email?.toLowerCase() ??
+          null;
+        // invoice.paid → 'pro'. invoice.payment_failed → still 'pro'
+        // (past_due grace), don't kick the user out preemptively. Real
+        // termination flows through subscription.deleted → null.
+        await syncProfilePlanByEmail(sb, email, "pro");
         return NextResponse.json({ received: true });
       }
 

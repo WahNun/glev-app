@@ -78,44 +78,18 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  let plan = computeEffectivePlan({
+  // Single source of truth: `profiles.plan` is now kept in sync by the
+  // Pro Stripe webhook (`/api/pro/webhook` → syncProfilePlanByEmail) for
+  // every status transition (trial start, active renewal, cancel). Beta
+  // continues to flow through `profiles.subscription_status` (set by the
+  // beta webhook). The previous `pro_subscriptions` / `beta_reservations`
+  // fallback was removed once the webhook + backfill (Task #295) shipped.
+  const plan = computeEffectivePlan({
     manual_plan_override: row?.manual_plan_override ?? null,
     manual_plan_expires_at: row?.manual_plan_expires_at ?? null,
     plan: row?.plan ?? null,
     subscription_status: row?.subscription_status ?? null,
   });
-
-  // Fallback: der Pro-Stripe-Webhook schreibt nur in `pro_subscriptions`,
-  // nicht in `profiles.plan`. D.h. Trial-/Active-Pro-User würden hier
-  // sonst als "free" raus. Wenn computeEffectivePlan auf free gefallen
-  // ist UND es eine aktive Pro-Subscription gibt, korrigieren wir hier.
-  // Beta-Käufer:innen werden separat in `beta_reservations` getrackt;
-  // wenn `profiles.subscription_status="beta"` schon greift, bleibt es
-  // beim Beta-Pfad — sonst Fallback hier.
-  if (plan === "free") {
-    const { data: pro } = await admin
-      .from("pro_subscriptions")
-      .select("status")
-      .eq("user_id", a.user.id)
-      .maybeSingle();
-    const proStatus = (pro?.status ?? "").toLowerCase();
-    if (["trialing", "active", "past_due"].includes(proStatus)) {
-      plan = "pro";
-    } else {
-      const userEmail = (a.user.email ?? "").toLowerCase();
-      if (userEmail) {
-        const { data: beta } = await admin
-          .from("beta_reservations")
-          .select("status")
-          .eq("email", userEmail)
-          .maybeSingle();
-        const betaStatus = (beta?.status ?? "").toLowerCase();
-        if (betaStatus === "paid") {
-          plan = "beta";
-        }
-      }
-    }
-  }
 
   return NextResponse.json(
     { plan },
