@@ -225,19 +225,17 @@ const buildDoc = (C) => React.createElement(Document, {},
       ...C.rows.map(TableRow),
     ]),
 
-    React.createElement(View, { style: s.callout, key: 'co' },
+    // Callout is `wrap={false}` so its borderLeft never splits across
+    // a page boundary (Lucas-spec 2026-05-15: previously the blue
+    // accent stripe leaked as a ghost on the following page).
+    React.createElement(View, { style: s.callout, key: 'co', wrap: false },
       React.createElement(Text, {}, C.callout),
     ),
 
-    // Keep each H2 with its first child by reserving vertical space
-    // ahead via `minPresenceAhead`. This avoids wrapping the H2
-    // together with a `wrap={false}` SrcCard inside another
-    // `wrap={false}` View — that double-wrap caused react-pdf to
-    // leak the inner card's borderLeft as a ghost stripe at the top
-    // of the next page (Lucas-spec 2026-05-15). With only the H2
-    // carrying `minPresenceAhead`, layout flows naturally and the
-    // orphan is still prevented.
-    React.createElement(Text, { style: s.h2, minPresenceAhead: 120, key: 'h2b' }, C.th2b),
+    // Hard page break before "Die drei Glev-Quellen" so the section
+    // always starts cleanly at the top of a fresh page. marginTop is
+    // overridden to 0 since the heading sits at the page top.
+    React.createElement(Text, { style: [s.h2, { marginTop: 0 }], break: true, key: 'h2b' }, C.th2b),
     ...C.src.map(([l, b], i) => SrcCard(l, b, `src${i}`)),
 
     React.createElement(Text, { style: s.h2, minPresenceAhead: 60, key: 'h2c' }, C.th2c),
