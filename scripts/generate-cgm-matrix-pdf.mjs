@@ -221,14 +221,28 @@ const buildDoc = (C) => React.createElement(Document, {},
       React.createElement(Text, {}, C.callout),
     ),
 
-    React.createElement(Text, { style: s.h2, key: 'h2b' }, C.th2b),
-    ...C.src.map(([l, b], i) => SrcCard(l, b, `src${i}`)),
+    // Each H2 is glued to its first child via a wrap={false} group
+    // so a section heading never gets orphaned at the bottom of a
+    // page while its content jumps to the next (Lucas-spec
+    // 2026-05-15: "Die drei Glev-Quellen" must sit on the same page
+    // as the first source card). Remaining children flow normally.
+    React.createElement(View, { wrap: false, key: 'h2b-grp' }, [
+      React.createElement(Text, { style: s.h2, key: 'h2b' }, C.th2b),
+      SrcCard(C.src[0][0], C.src[0][1], 'src0'),
+    ]),
+    ...C.src.slice(1).map(([l, b], i) => SrcCard(l, b, `src${i + 1}`)),
 
-    React.createElement(Text, { style: s.h2, key: 'h2c' }, C.th2c),
-    ...C.bullets.map((b, i) => Bullet(b, `bul${i}`)),
+    React.createElement(View, { wrap: false, key: 'h2c-grp' }, [
+      React.createElement(Text, { style: s.h2, key: 'h2c' }, C.th2c),
+      Bullet(C.bullets[0], 'bul0'),
+    ]),
+    ...C.bullets.slice(1).map((b, i) => Bullet(b, `bul${i + 1}`)),
 
-    React.createElement(Text, { style: s.h2, key: 'h2d' }, C.th2d),
-    ...C.help.map(([k, v], i) => HelpRow(k, v, `hp${i}`)),
+    React.createElement(View, { wrap: false, key: 'h2d-grp' }, [
+      React.createElement(Text, { style: s.h2, key: 'h2d' }, C.th2d),
+      HelpRow(C.help[0][0], C.help[0][1], 'hp0'),
+    ]),
+    ...C.help.slice(1).map(([k, v], i) => HelpRow(k, v, `hp${i + 1}`)),
 
     React.createElement(View, { style: s.footer, fixed: true, key: 'f' }, [
       React.createElement(Text, { style: s.footerLine1, key: 'f1' }, C.footer1),
