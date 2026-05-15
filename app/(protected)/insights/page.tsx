@@ -2593,7 +2593,17 @@ function RelinkSourceLine({
   const mealColumn = Math.max(0, adaptiveICR.sampleSize - adaptiveICR.pairedCount);
 
   return (
-    <div style={{ marginTop: -4, marginBottom: 10 }}>
+    // The whole block sits inside a FlipCard whose outer div toggles
+    // rotateY on click + Enter/Space. Without stopping propagation here
+    // every tap on "Review matches", every confirm-button click, and
+    // every key press inside the panel would also flip the card. Swallow
+    // both event types at the wrapper so the entire interactive subtree
+    // is shielded.
+    <div
+      style={{ marginTop: -4, marginBottom: 10 }}
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+    >
       <button
         type="button"
         onClick={() => hasTimeWindow && setOpen(o => !o)}
