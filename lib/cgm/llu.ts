@@ -193,11 +193,12 @@ interface LluConnectionsBody {
 interface LluMeasurement {
   Value?: number;
   ValueInMgPerDl?: number;
+  // Abbott liefert zwei Zeitstempel-Felder pro Messung:
+  //   • Timestamp        — Lokalzeit des Patienten-Phones, kein TZ-Suffix
+  //   • FactoryTimestamp — echte UTC vom Sensor (was wir wollen)
+  // Bestätigt 2026-05-15 mit Live-Diagnose-Log gegen die DACH-Region.
+  // mapMeasurement() bevorzugt deshalb FactoryTimestamp.
   Timestamp?: string;
-  // FactoryTimestamp ist laut Abbott-Doku echte UTC vom Sensor, während
-  // Timestamp Lokalzeit des Patienten-Phones ist (ohne TZ-Suffix).
-  // Vorübergehend mitgezogen, damit das Diagnose-Log in getHistory()
-  // beide Felder nebeneinander zeigen kann.
   FactoryTimestamp?: string;
   TrendArrow?: number;
 }
@@ -426,49 +427,7 @@ export async function getHistory(
     }
     const g = await lluGraph(sess.region, sess.token, sess.accountIdHash, patientId);
     const conn = g?.data?.connection;
-    const raw = g?.data?.graphData || [];
-
-    // ── DIAGNOSE-LOG (temporär, 2026-05-15) ──────────────────────────────
-    // Lucas hat einen 100 mg/dL-Versatz zwischen LLU-iOS und Glev gesehen
-    // — Verdacht: parseLluTs() in lib/time.ts behandelt Abbotts `Timestamp`
-    // als UTC, obwohl es vermutlich Lokalzeit (CEST = UTC+2) ist. Bevor
-    // wir den Parser ändern, loggen wir hier *einmal pro getHistory-Call*
-    // beide Zeitstempel-Felder + den Wert für je 3 Anfangs- und 3 End-
-    // Punkte, plus den `glucoseMeasurement.current`-Punkt. So sehen wir
-    // in den Vercel-Logs schwarz auf weiß was Abbott für diesen Account
-    // schickt. Kann nach dem Fix wieder raus (siehe Task #283-Folgearbeit).
-    try {
-      const sample = (label: string, m?: LluMeasurement | null) => {
-        if (!m) return { label, present: false };
-        const tsUtc = m.Timestamp ? parseLluUtcDebug(m.Timestamp) : null;
-        const ftUtc = m.FactoryTimestamp ? parseLluUtcDebug(m.FactoryTimestamp) : null;
-        return {
-          label,
-          v: m.ValueInMgPerDl ?? m.Value ?? null,
-          Timestamp: m.Timestamp ?? null,
-          FactoryTimestamp: m.FactoryTimestamp ?? null,
-          parsedTimestampAsUTC_iso: tsUtc,
-          parsedFactoryAsUTC_iso: ftUtc,
-        };
-      };
-      const head = raw.slice(0, 3).map((m, i) => sample(`graph[${i}]`, m));
-      const tail = raw.slice(-3).map((m, i) => sample(`graph[-${raw.length - (raw.length - 3 + i)}]`, m));
-      // eslint-disable-next-line no-console
-      console.info("[cgm/llu DIAG]", JSON.stringify({
-        userId,
-        graphCount: raw.length,
-        serverNowUtc: new Date().toISOString(),
-        current: sample("current", conn?.glucoseMeasurement),
-        head,
-        tail,
-      }));
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.warn("[cgm/llu DIAG] log failed", e);
-    }
-    // ────────────────────────────────────────────────────────────────────
-
-    const history = raw
+    const history = (g?.data?.graphData || [])
       .map(mapMeasurement)
       .filter((x): x is Reading => x !== null);
     return {
@@ -476,18 +435,4 @@ export async function getHistory(
       history,
     };
   });
-}
-
-// Debug-Helfer — parst Abbotts "M/D/YYYY h:mm:ss AM/PM" *als UTC*
-// (wie der echte parseLluTs es heute tut) und gibt das Ergebnis als
-// ISO-String zurück, damit man es im Log neben dem Rohstring sieht.
-function parseLluUtcDebug(s: string): string | null {
-  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)?$/i);
-  if (!m) return null;
-  let h = parseInt(m[4], 10);
-  const ap = (m[7] || "").toUpperCase();
-  if (ap === "PM" && h < 12) h += 12;
-  if (ap === "AM" && h === 12) h = 0;
-  const epoch = Date.UTC(parseInt(m[3], 10), parseInt(m[1], 10) - 1, parseInt(m[2], 10), h, parseInt(m[5], 10), parseInt(m[6], 10));
-  return new Date(epoch).toISOString();
 }
