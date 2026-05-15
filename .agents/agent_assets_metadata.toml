@@ -119,10 +119,10 @@ title = "Glev · CGM source matrix (EN)"
 id = "XBK2VGodwBlIJ3MMgYCUD"
 uri = "file://public/help/cgm-quellen-de.pdf"
 type = "pdf"
-title = "CGM-Quellen (DE) — v3 Hard-Pagebreak"
+title = "CGM-Quellen (DE) — v3 kompakter, ohne Footer-Linie"
 
 [[outputs]]
 id = "dRCEAvRavL8JBDL1v_X70"
 uri = "file://public/help/cgm-sources-en.pdf"
 type = "pdf"
-title = "CGM sources (EN) — v3 hard pagebreak"
+title = "CGM sources (EN) — v3 tighter, no footer line"

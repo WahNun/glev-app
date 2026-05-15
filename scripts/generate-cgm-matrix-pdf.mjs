@@ -41,7 +41,7 @@ const s = StyleSheet.create({
   h1: { fontFamily: SANS_B, fontSize: 26, color: T_PRIMARY, letterSpacing: -0.6, lineHeight: 1.18, marginBottom: 14 },
   sub: { fontSize: 11, color: T_SECONDARY, marginTop: 4, marginBottom: 22, lineHeight: 1.55 },
 
-  h2: { fontFamily: SANS_B, fontSize: 13, color: T_PRIMARY, marginTop: 18, marginBottom: 10, letterSpacing: -0.2, lineHeight: 1.25 },
+  h2: { fontFamily: SANS_B, fontSize: 13, color: T_PRIMARY, marginTop: 10, marginBottom: 8, letterSpacing: -0.2, lineHeight: 1.25 },
   kicker: { fontFamily: SANS_B, fontSize: 8.5, color: BRAND, letterSpacing: 1.5, marginBottom: 6 },
 
   card: { backgroundColor: SURFACE, borderRadius: 6, padding: 0, overflow: 'hidden', marginBottom: 4 },
@@ -73,7 +73,7 @@ const s = StyleSheet.create({
   helpKey: { width: '22%', fontFamily: SANS_B, fontSize: 9.5, color: BRAND },
   helpVal: { flex: 1, fontSize: 9.5, color: T_STRONG, lineHeight: 1.5 },
 
-  footer: { position: 'absolute', bottom: 24, left: 36, right: 36, paddingTop: 8, borderTop: `0.5pt solid ${BORDER}` },
+  footer: { position: 'absolute', bottom: 24, left: 36, right: 36, paddingTop: 8 },
   footerLine1: { fontSize: 7.5, color: T_TERTIARY, marginBottom: 2 },
   footerLine2: { fontSize: 7, color: T_MUTED, lineHeight: 1.4 },
 });
@@ -232,10 +232,9 @@ const buildDoc = (C) => React.createElement(Document, {},
       React.createElement(Text, {}, C.callout),
     ),
 
-    // Hard page break before "Die drei Glev-Quellen" so the section
-    // always starts cleanly at the top of a fresh page. marginTop is
-    // overridden to 0 since the heading sits at the page top.
-    React.createElement(Text, { style: [s.h2, { marginTop: 0 }], break: true, key: 'h2b' }, C.th2b),
+    // Heading flows naturally; minPresenceAhead keeps it from being
+    // orphaned right above a page break.
+    React.createElement(Text, { style: s.h2, minPresenceAhead: 100, key: 'h2b' }, C.th2b),
     ...C.src.map(([l, b], i) => SrcCard(l, b, `src${i}`)),
 
     React.createElement(Text, { style: s.h2, minPresenceAhead: 60, key: 'h2c' }, C.th2c),
