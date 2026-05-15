@@ -232,9 +232,11 @@ const buildDoc = (C) => React.createElement(Document, {},
       React.createElement(Text, {}, C.callout),
     ),
 
-    // Heading flows naturally; minPresenceAhead keeps it from being
-    // orphaned right above a page break.
-    React.createElement(Text, { style: s.h2, minPresenceAhead: 100, key: 'h2b' }, C.th2b),
+    // Hard page break before "Die drei Glev-Quellen": Lucas-spec
+    // 2026-05-15 — page 1 ends with the callout, the source-cards
+    // section starts fresh on page 2. marginTop=0 so the heading
+    // doesn't push down from the page top.
+    React.createElement(Text, { style: [s.h2, { marginTop: 0 }], break: true, key: 'h2b' }, C.th2b),
     ...C.src.map(([l, b], i) => SrcCard(l, b, `src${i}`)),
 
     React.createElement(Text, { style: s.h2, minPresenceAhead: 60, key: 'h2c' }, C.th2c),
