@@ -243,6 +243,16 @@ export default function InsightsPage() {
   const [menstrualLogs, setMenstrualLogs] = useState<MenstrualLog[]>([]);
   const [symptomLogs, setSymptomLogs]     = useState<SymptomLog[]>([]);
   const [loading, setLoading]           = useState(true);
+  // Relink-panel open state lives HERE (not inside RelinkSourceLine) because
+  // the FlipCard around the engine card renders its `children` twice — once
+  // as a hidden ghost in normal flow (sets parent height) and once absolutely
+  // positioned as the visible front. Local useState in RelinkSourceLine made
+  // only the front instance grow when toggled, the ghost stayed collapsed,
+  // parent height never updated, and the expanded panel bled visually into
+  // the next grid row. Lifting the state here makes both ghost + front see
+  // the same `open` value, so the ghost grows in lock-step and the parent
+  // grid cell expands cleanly.
+  const [relinkOpen, setRelinkOpen]     = useState(false);
   // Biological sex — gates the cycle half of the "Zyklus & Symptome"
   // card. Male users see a symptoms-only variant (cycle stats hidden,
   // card retitled). Null/unset is treated as "show everything" so
@@ -1823,6 +1833,8 @@ export default function InsightsPage() {
                       adaptiveICR={adaptiveICR}
                       engineMeals={engineMeals}
                       engineBoluses={engineBoluses}
+                      open={relinkOpen}
+                      onToggle={setRelinkOpen}
                       onLinked={(bolusId, mealId) => {
                         setEngineBoluses(prev => prev.map(b => b.id === bolusId ? { ...b, related_entry_id: mealId } : b));
                         setInsulinLogs(prev => prev.map(b => b.id === bolusId ? { ...b, related_entry_id: mealId } : b));
@@ -2553,14 +2565,22 @@ function RelinkSourceLine({
   engineMeals,
   engineBoluses,
   onLinked,
+  open,
+  onToggle,
 }: {
   adaptiveICR: ReturnType<typeof computeAdaptiveICR>;
   engineMeals: Meal[];
   engineBoluses: InsulinLog[];
   onLinked: (bolusId: string, mealId: string) => void;
+  /** Controlled — must be lifted to the InsightsPage level. See the
+   *  note next to `relinkOpen` useState for why local state breaks
+   *  the FlipCard ghost-mirror layout. */
+  open: boolean;
+  onToggle: (next: boolean) => void;
 }) {
   const tInsights = useTranslations("insights");
-  const [open, setOpen] = useState(false);
+  const setOpen = (next: boolean | ((prev: boolean) => boolean)) =>
+    onToggle(typeof next === "function" ? next(open) : next);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [errorId, setErrorId] = useState<string | null>(null);
 
