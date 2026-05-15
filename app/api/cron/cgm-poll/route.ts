@@ -1,5 +1,5 @@
 // Cron worker — polls every connected LLU / Nightscout user's CGM
-// history every */5 min and persists the readings into cgm_samples
+// history every */2 min and persists the readings into cgm_samples
 // for cross-event use (Insights hypo detection, future Engine trend,
 // weekly report, etc.).
 //
@@ -15,7 +15,7 @@
 //   are skipped because their iOS shell already pushes a continuous
 //   stream into apple_health_readings.
 //
-// Schedule expectation: hit this endpoint every 5 min from Vercel cron.
+// Schedule expectation: hit this endpoint every 2 min from Vercel cron.
 // The handler is idempotent — the (user_id, timestamp) UNIQUE INDEX on
 // cgm_samples means repeated polls of the same window = no duplicates.
 //
@@ -103,6 +103,7 @@ async function pollOne(
 }
 
 async function handle(req: NextRequest): Promise<NextResponse> {
+  const start = Date.now();
   const expected = process.env.CRON_SECRET;
   if (!expected || expected.length < 16) {
     console.error("[cron/cgm-poll] CRON_SECRET not configured or too short (min 16 chars)");
@@ -189,6 +190,7 @@ async function handle(req: NextRequest): Promise<NextResponse> {
   }
 
   if (toPoll.length === 0) {
+    console.log(`cgm-poll done in ${Date.now() - start}ms, ${toPoll.length} users`);
     return NextResponse.json({
       ok: true,
       polledUsers: 0,
@@ -220,6 +222,7 @@ async function handle(req: NextRequest): Promise<NextResponse> {
     console.warn("[cron/cgm-poll] per-user failures:", errors);
   }
 
+  console.log(`cgm-poll done in ${Date.now() - start}ms, ${toPoll.length} users`);
   return NextResponse.json({
     ok: true,
     polledUsers: toPoll.length,
