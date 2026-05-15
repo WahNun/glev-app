@@ -319,6 +319,7 @@ export default async function AdminUsersPage({
     : sp.bfy_granted;
   const bfyUntilParam = Array.isArray(sp.until) ? sp.until[0] : sp.until;
   const bfyNewParam = Array.isArray(sp.new) ? sp.new[0] : sp.new;
+  const bfyPlanParam = Array.isArray(sp.plan) ? sp.plan[0] : sp.plan;
   const bfyErrParam = Array.isArray(sp.bfy_err) ? sp.bfy_err[0] : sp.bfy_err;
   const bfyErrMsg =
     bfyErrParam === "email"
@@ -367,9 +368,10 @@ export default async function AdminUsersPage({
       {grantErrMsg ? <p style={errStyle}>{grantErrMsg}</p> : null}
       {bfyGrantedParam ? (
         <p style={successStyle}>
-          ✓ <strong>{bfyGrantedParam}</strong> wurde ins Beta-Free-Year-Programm
-          aufgenommen — Zugang bis <strong>{bfyUntilParam ?? "—"}</strong>,
-          Welcome-Mail + Drip (Tag 7/14/30) eingeplant.
+          ✓ <strong>{bfyGrantedParam}</strong> wurde ins{" "}
+          <strong>{bfyPlanParam === "pro" ? "Pro" : "Beta"}-Free-Year-Programm</strong>
+          {" "}aufgenommen — Zugang bis <strong>{bfyUntilParam ?? "—"}</strong>,
+          Welcome-Mail{bfyPlanParam === "pro" ? "" : " + Drip (Tag 7/14/30)"} eingeplant.
           {bfyNewParam ? (
             <>
               {" "}<strong>Neuer Account angelegt</strong> — die Welcome-Mail
@@ -432,16 +434,19 @@ export default async function AdminUsersPage({
         </form>
       </section>
 
-      {/* Beta-Free-Year-Programm: 1 Jahr Beta + Welcome-Mail + Drip
-          (Tag 7/14/30). Funktioniert wie Quick-Grant, plus die drei
-          Onboarding-Touches die auch Beta-Käufer:innen kriegen. */}
+      {/* Free-Year-Programm: 1 Jahr Beta ODER Pro + Welcome-Mail
+          (+ Drip Tag 7/14/30 nur für Beta). Funktioniert wie
+          Quick-Grant, plus Onboarding-Touches. Pro-Variante ist für
+          Diabetolog:innen / Multiplikator:innen gedacht. */}
       <section style={bfyBoxStyle}>
         <h2 style={{ fontSize: 14, margin: "0 0 4px", color: "#065f46", fontWeight: 700 }}>
-          Beta-Free-Year-Programm (Friends &amp; Family)
+          Free-Year-Programm (Friends &amp; Family / Diabetolog:innen)
         </h2>
         <p style={{ fontSize: 12, color: "#065f46", margin: "0 0 12px" }}>
-          1 Jahr kostenloser Beta-Zugang. Sendet Welcome-Mail mit explizitem
-          End-Datum und plant die Onboarding-Drip-Sequenz (Tag 7/14/30) ein.
+          1 Jahr kostenloser Zugang — wahlweise <strong>Beta</strong> (Friends
+          &amp; Family, mit Onboarding-Drip Tag 7/14/30) oder <strong>Pro</strong>
+          {" "}(Diabetolog:innen, Multiplikator:innen — ohne Drip).
+          Sendet Welcome-Mail mit explizitem End-Datum.
           Funktioniert auch für noch <strong>nicht registrierte</strong> User
           — dann legen wir den Account stumm an, die Welcome-Mail enthält
           einen Login-Link, und auf <code>/welcome/beta</code> setzt
@@ -461,19 +466,28 @@ export default async function AdminUsersPage({
             name="email"
             required
             placeholder="user@example.com"
-            style={{ ...inputStyle, flex: "1 1 220px", minWidth: 200 }}
+            style={{ ...inputStyle, flex: "1 1 200px", minWidth: 180 }}
           />
           <input
             type="text"
             name="fullName"
             placeholder="Name (optional, sonst fragen wir bei Signup)"
-            style={{ ...inputStyle, flex: "1 1 220px", minWidth: 180 }}
+            style={{ ...inputStyle, flex: "1 1 200px", minWidth: 180 }}
           />
+          <select
+            name="plan"
+            defaultValue="beta"
+            style={{ ...inputStyle, flex: "0 0 160px", minWidth: 140 }}
+            title="Plan-Auswahl"
+          >
+            <option value="beta">Beta (1 Jahr)</option>
+            <option value="pro">Pro (1 Jahr, z.B. Diabetolog:innen)</option>
+          </select>
           <input
             type="text"
             name="note"
-            placeholder='Notiz (optional, default: "Beta-Free-Year-Programm")'
-            style={{ ...inputStyle, flex: "1 1 220px", minWidth: 180 }}
+            placeholder='Notiz (optional)'
+            style={{ ...inputStyle, flex: "1 1 180px", minWidth: 160 }}
           />
           <button type="submit" style={bfyBtnStyle}>
             1 Jahr freischalten + Welcome

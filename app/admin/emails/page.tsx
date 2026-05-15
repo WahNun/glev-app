@@ -104,8 +104,8 @@ function buildTemplates(
       whenSent: isEn
         ? "Admin grants 1 free Beta year via /admin/users — recipient already has an account"
         : "Admin schaltet 1 Jahr Beta via /admin/users frei — Empfänger:in hat bereits einen Account",
-      subject: betaFreeYearWelcomeSubject(name, locale),
-      html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, null),
+      subject: betaFreeYearWelcomeSubject(name, locale, "beta"),
+      html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, null, "beta"),
     },
     {
       key: "beta-free-year-welcome-invite",
@@ -115,8 +115,30 @@ function buildTemplates(
       whenSent: isEn
         ? "Admin grants 1 free Beta year via /admin/users — recipient is brand-new, gets login link to /welcome/beta"
         : "Admin schaltet 1 Jahr Beta via /admin/users frei — neuer User, kriegt Login-Link auf /welcome/beta",
-      subject: betaFreeYearWelcomeSubject(name, locale),
-      html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, bfySignupUrl),
+      subject: betaFreeYearWelcomeSubject(name, locale, "beta"),
+      html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, bfySignupUrl, "beta"),
+    },
+    {
+      key: "pro-free-year-welcome-existing",
+      label: isEn
+        ? "Pro-Free-Year — Welcome (existing user)"
+        : "Pro-Free-Year — Welcome (bestehender User)",
+      whenSent: isEn
+        ? "Admin grants 1 free Pro year (e.g. for diabetologists) via /admin/users — recipient already has an account"
+        : "Admin schaltet 1 Jahr Pro via /admin/users frei (z.B. für Diabetolog:innen) — Empfänger:in hat bereits einen Account",
+      subject: betaFreeYearWelcomeSubject(name, locale, "pro"),
+      html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, null, "pro"),
+    },
+    {
+      key: "pro-free-year-welcome-invite",
+      label: isEn
+        ? "Pro-Free-Year — Welcome (new user invite)"
+        : "Pro-Free-Year — Welcome (neuer User, Invite)",
+      whenSent: isEn
+        ? "Admin grants 1 free Pro year via /admin/users — recipient is brand-new, gets login link to /welcome/beta"
+        : "Admin schaltet 1 Jahr Pro via /admin/users frei — neuer User, kriegt Login-Link auf /welcome/beta",
+      subject: betaFreeYearWelcomeSubject(name, locale, "pro"),
+      html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, bfySignupUrl, "pro"),
     },
     {
       key: "drip-day7",

@@ -203,7 +203,17 @@ const BETA_FREE_YEAR_DAYS = 365;
 export async function grantBetaFreeYearAction(formData: FormData): Promise<void> {
   const adminToken = await requireAdminToken();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  const note = String(formData.get("note") ?? "").trim() || "Beta-Free-Year-Programm";
+  // Plan-Auswahl: "beta" (default, Friends & Family wie gehabt) oder
+  // "pro" (Diabetolog:innen / Multiplikator:innen — selber Mechanismus,
+  // setzt manual_plan_override="pro" statt "beta", Welcome-Mail spricht
+  // dann von „Pro" statt „Beta"; Drip-Sequenz wird für Pro übersprungen
+  // weil sie Beta-Onboarding-spezifisch ist).
+  const planRaw = String(formData.get("plan") ?? "beta").trim().toLowerCase();
+  const plan: "beta" | "pro" = planRaw === "pro" ? "pro" : "beta";
+  const planTitle = plan === "pro" ? "Pro" : "Beta";
+  const note =
+    String(formData.get("note") ?? "").trim() ||
+    `${planTitle}-Free-Year-Programm`;
   // Optionaler Name aus dem Admin-Block — wird (a) als profiles.display_name
   // gesetzt UND (b) als user_metadata.full_name in den Supabase-Invite
   // mitgegeben, sodass die Begrüßung in der Welcome-Mail den richtigen
@@ -326,7 +336,7 @@ export async function grantBetaFreeYearAction(formData: FormData): Promise<void>
   // Bei brand-neuen Usern müssen wir UPSERTEN (Profile-Zeile existiert
   // evtl. noch nicht), bei existierenden reicht UPDATE.
   const planPatch: Record<string, unknown> = {
-    manual_plan_override: "beta",
+    manual_plan_override: plan,
     manual_plan_expires_at: expiresAt,
     manual_plan_note: note,
     manual_plan_set_at: new Date().toISOString(),
@@ -368,8 +378,12 @@ export async function grantBetaFreeYearAction(formData: FormData): Promise<void>
         expiresAt,
         locale,
         signupUrl,
+        plan,
       },
-      dedupeKey: `bfy:${userId}`,
+      // Dedupe-Key bindet Plan mit ein, damit ein versehentliches
+      // Pro-Upgrade nach einer früheren Beta-Mail keinen Welcome
+      // verschluckt (alte Beta-Mail wäre sonst dedupliziert).
+      dedupeKey: `bfy:${userId}:${plan}`,
     });
   } catch (e) {
     // Profile ist bereits aktualisiert — Mail-Fehler nicht eskalieren,
@@ -379,34 +393,35 @@ export async function grantBetaFreeYearAction(formData: FormData): Promise<void>
     console.warn("[admin/users/betaFreeYear] enqueueEmail failed:", e);
   }
 
-  // Drip-Sequenz (Tag 7/14/30) einplanen. tier='beta' ist mit dem
-  // CHECK-Constraint kompatibel (siehe email_drip_schedule-Migration).
-  // Idempotent über das (email, email_type)-Unique-Constraint, also
-  // schadet ein zweiter Klick auch hier nicht.
-  try {
-    await scheduleDripEmails(email, displayName, "beta", locale);
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.warn("[admin/users/betaFreeYear] scheduleDripEmails failed:", e);
+  // Drip-Sequenz (Tag 7/14/30) einplanen — nur für Beta. Pro-Käufer
+  // (oder hier Pro-Geschenkte) durchlaufen kein Beta-Onboarding-Drip,
+  // sonst kriegen Diabetolog:innen Beta-Tipps die für sie irrelevant sind.
+  if (plan === "beta") {
+    try {
+      await scheduleDripEmails(email, displayName, "beta", locale);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn("[admin/users/betaFreeYear] scheduleDripEmails failed:", e);
+    }
   }
 
   await writeAuditLog({
-    action: "grant_beta_free_year",
+    action: plan === "pro" ? "grant_pro_free_year" : "grant_beta_free_year",
     targetUserId: userId,
     targetEmail: email,
     before: beforeRow,
     after: {
-      manual_plan_override: "beta",
+      manual_plan_override: plan,
       manual_plan_expires_at: expiresAt,
       manual_plan_note: note,
     },
-    note: `Beta Free Year — läuft bis ${expiresAt.slice(0, 10)}`,
+    note: `${planTitle} Free Year — läuft bis ${expiresAt.slice(0, 10)}`,
     adminToken,
   });
 
   revalidateUserPaths(userId);
   redirect(
-    `/admin/users?bfy_granted=${encodeURIComponent(email)}&until=${encodeURIComponent(expiresAt.slice(0, 10))}${isNewUser ? "&new=1" : ""}`,
+    `/admin/users?bfy_granted=${encodeURIComponent(email)}&until=${encodeURIComponent(expiresAt.slice(0, 10))}&plan=${plan}${isNewUser ? "&new=1" : ""}`,
   );
 }
 

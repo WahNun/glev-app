@@ -157,6 +157,9 @@ export interface BetaFreeYearWelcomePayload {
   expiresAt: string;
   locale?: EmailLocale;
   signupUrl?: string | null;
+  // Optional: "beta" (default, rückwärtskompatibel) oder "pro". Steuert
+  // nur die Wortwahl in Subject/HTML — Programm-Logik ist identisch.
+  plan?: "beta" | "pro";
 }
 
 /**
@@ -240,15 +243,17 @@ function renderTemplate(template: EmailTemplate, payload: EmailPayload): Rendere
     case "beta-free-year-welcome": {
       const p = payload as BetaFreeYearWelcomePayload;
       const locale: EmailLocale = p.locale === "en" ? "en" : "de";
+      const plan: "beta" | "pro" = p.plan === "pro" ? "pro" : "beta";
       return {
         from: "Glev <info@glev.app>",
-        subject: betaFreeYearWelcomeSubject(p.name ?? null, locale),
+        subject: betaFreeYearWelcomeSubject(p.name ?? null, locale, plan),
         html: betaFreeYearWelcomeHtml(
           p.name ?? null,
           p.appUrl ?? null,
           p.expiresAt,
           locale,
           p.signupUrl ?? null,
+          plan,
         ),
       };
     }

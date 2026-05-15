@@ -26,11 +26,53 @@ const inp: React.CSSProperties = {
 };
 
 type State =
+  | { kind: "needs_confirm" }
   | { kind: "verifying" }
   | { kind: "ready" }
   | { kind: "invalid"; reason: string }
   | { kind: "saving" }
   | { kind: "saved" };
+
+/**
+ * Per Magic-Link-Type the right user-facing copy & CTA. Used on the
+ * pre-verify "Account einrichten"-Schritt, der den Mail-Scanner-Bug
+ * (Outlook/Mimecast verbrennen den OTP vorab) aushebelt.
+ */
+function copyForType(type: string): { title: string; sub: string; cta: string } {
+  switch (type) {
+    case "invite":
+      return {
+        title: "Account einrichten",
+        sub: "Du wurdest zu Glev eingeladen. Klicke unten, um deinen Account zu aktivieren und dein Passwort zu setzen.",
+        cta: "Account einrichten",
+      };
+    case "recovery":
+      return {
+        title: "Passwort zurücksetzen",
+        sub: "Klicke unten, um fortzufahren und ein neues Passwort zu vergeben.",
+        cta: "Passwort zurücksetzen",
+      };
+    case "signup":
+    case "email":
+      return {
+        title: "Email bestätigen",
+        sub: "Klicke unten, um deine Email-Adresse zu bestätigen.",
+        cta: "Email bestätigen",
+      };
+    case "magiclink":
+      return {
+        title: "Anmelden",
+        sub: "Klicke unten, um dich anzumelden.",
+        cta: "Jetzt anmelden",
+      };
+    default:
+      return {
+        title: "Bestätigung",
+        sub: "Klicke unten, um fortzufahren.",
+        cta: "Fortfahren",
+      };
+  }
+}
 
 /**
  * /auth/confirm — universeller Landing-Endpoint für Magic-Links die
@@ -65,49 +107,58 @@ function ConfirmInner() {
   const router = useRouter();
   const params = useSearchParams();
 
-  const [state, setState] = useState<State>({ kind: "verifying" });
+  // Start im "needs_confirm"-State, NICHT direkt verifizieren.
+  // Hintergrund: Mail-Scanner (Outlook Safe Links, Mimecast, Apple Privacy
+  // Relay) öffnen Email-Links automatisch zur Phishing-Prüfung. Würden wir
+  // verifyOtp() in einem useEffect beim Page-Mount aufrufen, würde der
+  // Scanner den Einmal-Code dabei verbrennen — der echte User sähe dann
+  // beim eigenen Klick "otp_expired". Lösung (Industry-Standard, siehe
+  // Slack/Vercel/GitHub): Zwischenseite mit Button. Erst der menschliche
+  // Klick auf "Account einrichten" ruft verifyOtp(). Mail-Scanner laden
+  // zwar die Seite, klicken aber nichts → Token bleibt unverbraucht.
+  const type      = params.get("type") ?? "recovery";
+  const code      = params.get("code");
+  const tokenHash = params.get("token_hash");
+  const hasParams = Boolean(code || tokenHash);
+
+  const [state, setState] = useState<State>(
+    hasParams ? { kind: "needs_confirm" } : { kind: "invalid", reason: "Kein gültiger Bestätigungs-Link — bitte fordere einen neuen Link an." },
+  );
   const [password, setPassword] = useState("");
   const [confirm, setConfirm]   = useState("");
   const [error, setError]       = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
+    if (!supabase) {
+      setState({ kind: "invalid", reason: "Auth-Service nicht konfiguriert." });
+    }
+  }, []);
 
+  async function handleConfirmClick() {
     if (!supabase) {
       setState({ kind: "invalid", reason: "Auth-Service nicht konfiguriert." });
       return;
     }
-
-    const code      = params.get("code");
-    const tokenHash = params.get("token_hash");
-    const type      = params.get("type") ?? "recovery";
-
-    (async () => {
-      try {
-        if (code) {
-          const { error: ex } = await supabase!.auth.exchangeCodeForSession(code);
-          if (ex) throw ex;
-        } else if (tokenHash) {
-          const { error: vo } = await supabase!.auth.verifyOtp({
-            token_hash: tokenHash,
-            type: type as "recovery" | "invite" | "email" | "signup" | "email_change" | "magiclink",
-          });
-          if (vo) throw vo;
-        } else {
-          throw new Error("Kein gültiger Bestätigungs-Link — bitte fordere einen neuen Reset-Link an.");
-        }
-
-        if (cancelled) return;
-        setState({ kind: "ready" });
-      } catch (err) {
-        if (cancelled) return;
-        const msg = err instanceof Error ? err.message : String(err);
-        setState({ kind: "invalid", reason: msg });
+    setState({ kind: "verifying" });
+    try {
+      if (code) {
+        const { error: ex } = await supabase.auth.exchangeCodeForSession(code);
+        if (ex) throw ex;
+      } else if (tokenHash) {
+        const { error: vo } = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: type as "recovery" | "invite" | "email" | "signup" | "email_change" | "magiclink",
+        });
+        if (vo) throw vo;
+      } else {
+        throw new Error("Kein gültiger Bestätigungs-Link — bitte fordere einen neuen Reset-Link an.");
       }
-    })();
-
-    return () => { cancelled = true; };
-  }, [params]);
+      setState({ kind: "ready" });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setState({ kind: "invalid", reason: msg });
+    }
+  }
 
   async function handleSetPassword(e: React.FormEvent) {
     e.preventDefault();
@@ -145,6 +196,41 @@ function ConfirmInner() {
 
   return (
     <Shell>
+      {state.kind === "needs_confirm" && (() => {
+        const c = copyForType(type);
+        return (
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", letterSpacing: "0.12em", marginBottom: 10 }}>
+              GLEV
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: "white", marginBottom: 10, letterSpacing: "-0.01em" }}>
+              {c.title}
+            </div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.55, marginBottom: 22 }}>
+              {c.sub}
+            </div>
+            <button
+              type="button"
+              onClick={handleConfirmClick}
+              style={{
+                width: "100%",
+                padding: "13px",
+                background: `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
+                border: "none",
+                borderRadius: 12,
+                color: "white",
+                fontSize: 14,
+                fontWeight: 700,
+                cursor: "pointer",
+                transition: "all 0.15s",
+              }}
+            >
+              {c.cta}
+            </button>
+          </div>
+        );
+      })()}
+
       {state.kind === "verifying" && (
         <CenterDim>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", marginBottom: 8 }}>

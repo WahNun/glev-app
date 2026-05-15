@@ -23,12 +23,24 @@
  */
 import type { EmailLocale } from "@/lib/emails/beta-welcome";
 
+// Plan-Label (Beta vs. Pro). Standardmäßig Beta, damit alle alten
+// Aufrufer ohne Änderung weiterlaufen. „Pro" wird vom neuen
+// Diabetologen-/Friends-&-Family-Pro-Pfad gesetzt — selbe Mail-Optik,
+// nur das Wort tauscht sich aus, damit nicht ein Pro-User „Beta"
+// liest.
+export type FreeYearPlanLabel = "beta" | "pro";
+
+function planLabel(plan: FreeYearPlanLabel): string {
+  return plan === "pro" ? "Pro" : "Beta";
+}
+
 export function betaFreeYearWelcomeHtml(
   name: string | null | undefined,
   appUrl: string | null | undefined,
   expiresAt: string,
   locale: EmailLocale = "de",
   signupUrl: string | null = null,
+  plan: FreeYearPlanLabel = "beta",
 ): string {
   const first = firstNameFrom(name);
   const baseUrl = (appUrl || "https://glev.app").replace(/\/$/, "");
@@ -36,24 +48,27 @@ export function betaFreeYearWelcomeHtml(
   const endDate = formatDate(expiresAt, locale);
   const ctaUrl = signupUrl || dashboardUrl;
   const isInvite = Boolean(signupUrl);
+  const label = planLabel(plan);
 
-  if (locale === "en") return htmlEn(first, ctaUrl, baseUrl, endDate, isInvite);
-  return htmlDe(first, ctaUrl, baseUrl, endDate, isInvite);
+  if (locale === "en") return htmlEn(first, ctaUrl, baseUrl, endDate, isInvite, label);
+  return htmlDe(first, ctaUrl, baseUrl, endDate, isInvite, label);
 }
 
 export function betaFreeYearWelcomeSubject(
   name: string | null | undefined,
   locale: EmailLocale = "de",
+  plan: FreeYearPlanLabel = "beta",
 ): string {
   const first = firstNameFrom(name);
+  const label = planLabel(plan);
   if (locale === "en") {
     return first
-      ? `${first}, you've got 1 year of Glev Beta — on the house`
-      : "You've got 1 year of Glev Beta — on the house";
+      ? `${first}, you've got 1 year of Glev ${label} — on the house`
+      : `You've got 1 year of Glev ${label} — on the house`;
   }
   return first
-    ? `${first}, du hast 1 Jahr Glev Beta geschenkt bekommen`
-    : "Du hast 1 Jahr Glev Beta geschenkt bekommen";
+    ? `${first}, du hast 1 Jahr Glev ${label} geschenkt bekommen`
+    : `Du hast 1 Jahr Glev ${label} geschenkt bekommen`;
 }
 
 function htmlDe(
@@ -62,6 +77,7 @@ function htmlDe(
   baseUrl: string,
   endDate: string,
   isInvite: boolean,
+  label: string,
 ): string {
   const greeting = first ? `Hallo ${first}` : "Hallo";
   const ctaLabel = isInvite ? "Account einrichten →" : "Zum Dashboard →";
@@ -71,7 +87,7 @@ function htmlDe(
   return `<!DOCTYPE html>
 <html lang="de">
 <head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>1 Jahr Glev Beta geschenkt</title></head>
+<title>1 Jahr Glev ${label} geschenkt</title></head>
 <body style="margin:0;padding:0;background:#f9f9f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9f9f9;padding:40px 0;">
 <tr><td align="center">
@@ -82,10 +98,10 @@ function htmlDe(
   <tr><td style="padding:40px 40px 32px;">
     <p style="margin:0 0 20px;font-size:18px;font-weight:600;color:#0f172a;">${greeting} 👋</p>
     <p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#334155;">
-      wir haben dir gerade <strong>1 Jahr Glev Beta</strong> kostenlos freigeschaltet — komplett ohne Bezahlung, ohne Trial-Pflicht, ohne Haken.
+      wir haben dir gerade <strong>1 Jahr Glev ${label}</strong> kostenlos freigeschaltet — komplett ohne Bezahlung, ohne Trial-Pflicht, ohne Haken.
     </p>
     <p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#334155;">
-      Dein Beta-Zugang läuft bis zum <strong>${endDate}</strong>. Bis dahin hast du vollen Zugriff auf alle Beta-Funktionen.
+      Dein ${label}-Zugang läuft bis zum <strong>${endDate}</strong>. Bis dahin hast du vollen Zugriff auf alle ${label}-Funktionen.
     </p>
     <table cellpadding="0" cellspacing="0" style="margin:24px 0;"><tr><td>
       <a href="${ctaUrl}" style="display:inline-block;background:#5b6cff;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:600;font-size:16px;">
@@ -114,6 +130,7 @@ function htmlEn(
   baseUrl: string,
   endDate: string,
   isInvite: boolean,
+  label: string,
 ): string {
   const greeting = first ? `Hi ${first}` : "Hi";
   const ctaLabel = isInvite ? "Set up your account →" : "Open dashboard →";
@@ -123,7 +140,7 @@ function htmlEn(
   return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>1 free year of Glev Beta</title></head>
+<title>1 free year of Glev ${label}</title></head>
 <body style="margin:0;padding:0;background:#f9f9f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9f9f9;padding:40px 0;">
 <tr><td align="center">
@@ -134,10 +151,10 @@ function htmlEn(
   <tr><td style="padding:40px 40px 32px;">
     <p style="margin:0 0 20px;font-size:18px;font-weight:600;color:#0f172a;">${greeting} 👋</p>
     <p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#334155;">
-      we just unlocked <strong>1 year of Glev Beta</strong> for you — free, no trial period, no strings attached.
+      we just unlocked <strong>1 year of Glev ${label}</strong> for you — free, no trial period, no strings attached.
     </p>
     <p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#334155;">
-      Your Beta access is valid until <strong>${endDate}</strong>. Until then, you have full access to every Beta feature.
+      Your ${label} access is valid until <strong>${endDate}</strong>. Until then, you have full access to every ${label} feature.
     </p>
     <table cellpadding="0" cellspacing="0" style="margin:24px 0;"><tr><td>
       <a href="${ctaUrl}" style="display:inline-block;background:#5b6cff;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:600;font-size:16px;">
