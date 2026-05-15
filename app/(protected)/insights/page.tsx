@@ -1993,7 +1993,10 @@ export default function InsightsPage() {
                                   </span>
                                 </div>
                                 {showSuggestion && (
-                                  <div style={{
+                                  <div
+                                    onClick={(e) => e.stopPropagation()}
+                                    onKeyDown={(e) => e.stopPropagation()}
+                                    style={{
                                     display:"flex", alignItems:"center",
                                     flexWrap:"wrap", gap:8,
                                     padding:"6px 8px",
