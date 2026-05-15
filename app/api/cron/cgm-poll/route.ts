@@ -80,9 +80,19 @@ async function pollOne(
       ? await llu.getHistory(userId)
       : await nightscout.getHistory(userId);
     const history = out?.history || [];
-    if (history.length === 0) return { ok: true, inserted: 0, source };
+    const current = source === "llu" ? out?.current ?? null : null;
+    if (history.length === 0 && !current) return { ok: true, inserted: 0, source };
 
     const rows: SampleRow[] = [];
+    // Für LLU zusätzlich den Live-Wert (connection.glucoseMeasurement)
+    // mit aufnehmen — der ist ~jede Minute frisch, während graphData nur
+    // alle 15 min aktualisiert wird. Duplikate (Live-Wert == Graph-Sample)
+    // fängt der UNIQUE-Index (user_id, timestamp) via ignoreDuplicates ab.
+    // Nightscout liefert current = history[0], dort nichts extra zu tun.
+    if (current) {
+      const row = readingToRow(userId, source, current);
+      if (row) rows.push(row);
+    }
     for (const r of history) {
       const row = readingToRow(userId, source, r);
       if (row) rows.push(row);
