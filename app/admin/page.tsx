@@ -26,6 +26,12 @@ const SECTIONS: ReadonlyArray<{
   description: string;
 }> = [
   {
+    href: "/admin/users",
+    title: "Nutzer & Einladungen",
+    description:
+      "User suchen, Plan setzen, neuen Account anlegen. Hier sitzt auch der „1 Jahr Beta/Pro freischalten + Welcome"-Button für Friends & Family und Diabetolog:innen.",
+  },
+  {
     href: "/admin/buyers",
     title: "Käuferübersicht",
     description:
