@@ -12,6 +12,7 @@ import { logDebug } from "@/lib/debug";
 import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
 import { computeAdaptiveICR } from "@/lib/engine/adaptiveICR";
+import { getEffectiveICR } from "@/lib/icrSchedule";
 import { detectPattern } from "@/lib/engine/patterns";
 import { suggestAdjustment, type AdaptiveSettings } from "@/lib/engine/adjustment";
 import { applyAdjustmentToSettings, getInsulinSettings } from "@/lib/userSettings";
@@ -157,9 +158,24 @@ function runGlevEngine(
   t: EngineTranslator,
   fmt: NumFormatter,
   preTrend?: TrendClass,
+  // Phase B (Matildav window-ICR): meal timestamp the recommendation is
+  // for. When the user has the ICR-schedule master toggle on AND a slot
+  // covers this minute, the recommender uses the slot's ICR instead of
+  // the global one. Falls back to `icr` otherwise (and when called
+  // without a time — keeps `recommendDose` parity for older callers).
+  mealTime?: Date | null,
 ): Recommendation {
   const cf = 50, target = 110;
-  const carbDose = carbs / icr;
+  // Resolve which ICR actually grades this meal. If the schedule toggle
+  // is off or no slot matches, `effectiveIcr === icr` and the formula
+  // path renders identical reasoning to before. When a slot wins, the
+  // dose, the formula reasoning line, and the post-hoc evaluation in
+  // `lib/engine/evaluation.ts` all consult the same value, so the user
+  // never sees a recommendation that contradicts the later grade.
+  const effectiveIcr = mealTime
+    ? getEffectiveICR(mealTime, icr).icr
+    : icr;
+  const carbDose = carbs / effectiveIcr;
   const correctionDose = Math.max(0, (currentGlucose - target) / cf);
   const formulaDose = Math.round((carbDose + correctionDose) * 10) / 10;
 
@@ -215,7 +231,10 @@ function runGlevEngine(
     reasoning: {
       kind: "formula",
       carbs,
-      icr,
+      // Show the ICR that actually drove the dose so the reasoning
+      // line and the math the user can verify in their head match. If
+      // no schedule slot matched, this equals the original `icr` arg.
+      icr: effectiveIcr,
       correction: Math.round(correctionDose*10)/10,
     },
     safetyNotes,
@@ -1088,7 +1107,7 @@ export default function EnginePage() {
     refreshTrendSamples().then(samples => {
       const trend = getPreTrendForRef(refMs, samples);
       setTimeout(() => {
-        const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs, adaptedICR, tEngineFn, formatNum, trend);
+        const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs, adaptedICR, tEngineFn, formatNum, trend, new Date(refMs));
         setResult(rec);
         setRunning(false);
       // Wizard auto-advance: bump from Step 2 ("Makros prüfen") to Step 3
@@ -1515,7 +1534,7 @@ export default function EnginePage() {
     refreshTrendSamples().then(samples => {
       const trend = getPreTrendForRef(refMs, samples);
       setTimeout(() => {
-        const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs, adaptedICR, tEngineFn, formatNum, trend);
+        const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs, adaptedICR, tEngineFn, formatNum, trend, new Date(refMs));
         setDecisionRec(rec);
         setDecisionMode("rec");
         setDecisionBusy(false);
