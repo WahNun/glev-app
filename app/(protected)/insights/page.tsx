@@ -1861,7 +1861,8 @@ export default function InsightsPage() {
                     <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:4 }}>
                       <button
                         type="button"
-                        onClick={() => setWindowsExpanded(v => !v)}
+                        onClick={(e) => { e.stopPropagation(); setWindowsExpanded(v => !v); }}
+                        onKeyDown={(e) => e.stopPropagation()}
                         style={{
                           alignSelf:"flex-start",
                           background:"transparent", border:"none", padding:0,
@@ -1877,6 +1878,7 @@ export default function InsightsPage() {
                       {windowsExpanded && (
                         <div style={{
                           display:"flex", flexDirection:"column", gap:6,
+                          marginTop:8,
                           padding:"8px 10px", borderRadius:8,
                           background:"var(--card-2, rgba(255,255,255,0.03))",
                           border:"1px solid var(--border)",
