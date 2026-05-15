@@ -22,25 +22,29 @@ else
   echo "[post-merge] npm install succeeded — pnpm-lock.json may need to be committed"
 fi
 
-# Verify that every column referenced by lib/meals.ts::FULL_COLS exists
-# in the live Supabase `meals` table. fetchMeals() silently falls back
-# to MID_COLS / CORE_COLS when a column is missing, which strips every
-# curve-aggregate field and leaves chips stuck in "VORLÄUFIG". Catch
-# that drift here so a merged-but-not-applied migration is noticed
-# before the first request. Non-fatal: exit 78 means SUPABASE_ACCESS_TOKEN
-# is unset (skip), exit 1 means missing columns (warn loudly but still
-# allow post-merge to finish).
-echo "[post-merge] checking meals schema drift …"
+# Verify that every column referenced by the lib/*.ts column lists
+# exists in the live Supabase tables. Several helpers silently fall
+# back when a column is missing (lib/meals.ts FULL_COLS → MID_COLS →
+# CORE_COLS, plus the COLS constants in lib/insulin.ts,
+# lib/exercise.ts, lib/fingerstick.ts, lib/symptoms.ts,
+# lib/menstrual.ts, and the scattered user_settings selects), which
+# strips fields and either leaves UI stuck in stale states or fails
+# at runtime with cryptic 42703 errors. Catch that drift here so a
+# merged-but-not-applied migration is noticed before the first
+# request. Non-fatal: exit 78 means SUPABASE_ACCESS_TOKEN is unset
+# (skip), exit 1 means missing columns (warn loudly but still allow
+# post-merge to finish).
+echo "[post-merge] checking schema drift across covered tables …"
 set +e
-node scripts/check-meals-schema.mjs
+node scripts/check-schema-drift.mjs
 schema_rc=$?
 set -e
 if [ "$schema_rc" -eq 0 ]; then
-  echo "[post-merge] meals schema OK"
+  echo "[post-merge] schema OK"
 elif [ "$schema_rc" -eq 78 ]; then
-  echo "[post-merge] meals schema check skipped (SUPABASE_ACCESS_TOKEN not set)"
+  echo "[post-merge] schema check skipped (SUPABASE_ACCESS_TOKEN not set)"
 elif [ "$schema_rc" -eq 1 ]; then
-  echo "[post-merge] WARNING: meals schema drift detected — apply pending migrations via 'npm run db:migrate'"
+  echo "[post-merge] WARNING: schema drift detected — apply pending migrations via 'npm run db:migrate'"
 else
-  echo "[post-merge] WARNING: meals schema check errored (rc=$schema_rc) — continuing"
+  echo "[post-merge] WARNING: schema check errored (rc=$schema_rc) — continuing"
 fi
