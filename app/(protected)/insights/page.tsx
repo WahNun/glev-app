@@ -2583,12 +2583,21 @@ function RelinkSourceLine({
     onToggle(typeof next === "function" ? next(open) : next);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [errorId, setErrorId] = useState<string | null>(null);
+  // "Nein, war anders" only hides the row locally for this session — we
+  // don't have a `rejected_pairs` table yet, so persisting the dismissal
+  // would need a schema migration. Reload re-evaluates the heuristic and
+  // the row may reappear; that's acceptable for now and called out in the
+  // matrix doc. If users start asking for sticky dismissal we add a
+  // dedicated table (Lucas: ask before major changes).
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
 
   // Recompute the time-window pairs from the same primitives the
   // engine uses, then keep only the ones whose pairing came from the
   // heuristic (explicit ones don't need the user's attention).
   const allPairs = pairBolusesToMeals(engineBoluses, engineMeals);
-  const timeWindowPairs = allPairs.filter(p => p.source === "time-window");
+  const timeWindowPairs = allPairs
+    .filter(p => p.source === "time-window")
+    .filter(p => !dismissedIds.has(p.bolus.id));
   const hasTimeWindow = timeWindowPairs.length > 0;
   const mealColumn = Math.max(0, adaptiveICR.sampleSize - adaptiveICR.pairedCount);
 
@@ -2674,35 +2683,73 @@ function RelinkSourceLine({
                     </div>
                   )}
                 </div>
-                <button
-                  type="button"
-                  disabled={isBusy}
-                  onClick={async () => {
-                    setBusyId(p.bolus.id);
-                    setErrorId(null);
-                    try {
-                      await updateInsulinLogLink(p.bolus.id, p.meal.id);
-                      onLinked(p.bolus.id, p.meal.id);
-                    } catch {
-                      setErrorId(p.bolus.id);
-                    } finally {
-                      setBusyId(null);
-                    }
-                  }}
-                  style={{
-                    padding: "6px 12px", borderRadius: 8, border: "none",
-                    background: ACCENT, color: "var(--on-accent)",
-                    fontSize: 13, fontWeight: 700,
-                    cursor: isBusy ? "wait" : "pointer",
-                    opacity: isBusy ? 0.7 : 1,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {isBusy ? tInsights("engine_icr_relink_busy") : tInsights("engine_icr_relink_confirm")}
-                </button>
+                {/* Two-button row: primary "Yes, that's right" persists the
+                    pairing via related_entry_id; secondary "No, that's not
+                    it" only dismisses the row locally (see dismissedIds
+                    note above). Stacked vertically when narrow so labels
+                    never get cut off. */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={async () => {
+                      setBusyId(p.bolus.id);
+                      setErrorId(null);
+                      try {
+                        await updateInsulinLogLink(p.bolus.id, p.meal.id);
+                        onLinked(p.bolus.id, p.meal.id);
+                      } catch {
+                        setErrorId(p.bolus.id);
+                      } finally {
+                        setBusyId(null);
+                      }
+                    }}
+                    style={{
+                      padding: "6px 12px", borderRadius: 8, border: "none",
+                      background: ACCENT, color: "var(--on-accent)",
+                      fontSize: 13, fontWeight: 700,
+                      cursor: isBusy ? "wait" : "pointer",
+                      opacity: isBusy ? 0.7 : 1,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {isBusy ? tInsights("engine_icr_relink_busy") : tInsights("engine_icr_relink_confirm")}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => {
+                      setDismissedIds(prev => {
+                        const next = new Set(prev);
+                        next.add(p.bolus.id);
+                        return next;
+                      });
+                      setErrorId(null);
+                    }}
+                    style={{
+                      padding: "6px 12px", borderRadius: 8,
+                      background: "transparent",
+                      border: `1px solid var(--border)`,
+                      color: "var(--text-dim)",
+                      fontSize: 13, fontWeight: 500,
+                      cursor: isBusy ? "wait" : "pointer",
+                      opacity: isBusy ? 0.5 : 1,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {tInsights("engine_icr_relink_reject")}
+                  </button>
+                </div>
               </div>
             );
           })}
+          {/* Bottom-of-panel hint — explains what "Yes" actually does so
+              the user understands they're teaching the engine, not just
+              clicking a generic button. Quiet styling so it doesn't
+              compete with the row buttons. */}
+          <div style={{ fontSize: 12, color: "var(--text-faint)", lineHeight: 1.5, paddingTop: 2 }}>
+            {tInsights("engine_icr_relink_hint")}
+          </div>
         </div>
       )}
     </div>
