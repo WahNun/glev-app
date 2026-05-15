@@ -96,3 +96,9 @@ id = "GMJw_s6wVeJ67GPTa8C5C"
 uri = "file://.local/exports/glev-preview-pricing-3cards.pdf"
 type = "pdf"
 title = "Komplette /preview-Seite (PDF)"
+
+[[outputs]]
+id = "AaygHduzYvVmsK6Jpzkdx"
+uri = "file://exports/glev-cgm-quellen-matrix.pdf"
+type = "pdf"
+title = "Glev · CGM-Quellen-Matrix"
