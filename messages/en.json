@@ -2184,7 +2184,7 @@
   },
   "icrSchedule": {
     "page_title": "ICR time windows",
-    "page_subtitle": "Set up to three times of day with their own insulin-to-carb ratio. The engine will use them once we turn on Phase B — today your values are safely stored.",
+    "page_subtitle": "Set up to three times of day with their own insulin-to-carb ratio. When the toggle is active, the engine uses your value within the matching window — for both recommendations and the post-meal grade. The learned Adaptive value on the Engine card stays day-wide for now.",
     "back_to_settings": "Back to settings",
     "loading": "Loading …",
     "master_toggle_label": "Activate time windows",

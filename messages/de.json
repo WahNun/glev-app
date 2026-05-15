@@ -2193,7 +2193,7 @@
   },
   "icrSchedule": {
     "page_title": "ICR-Zeitfenster",
-    "page_subtitle": "Hinterlege bis zu drei Tageszeiten mit eigenem Insulin-Carb-Verhältnis. Die Engine nutzt sie, sobald wir Phase B freischalten — heute werden deine Werte erst einmal sicher gespeichert.",
+    "page_subtitle": "Hinterlege bis zu drei Tageszeiten mit eigenem Insulin-Carb-Verhältnis. Wenn der Schalter aktiv ist, nutzt die Engine im jeweiligen Fenster deinen hinterlegten Wert — sowohl für Empfehlungen als auch für die Bewertung im Nachhinein. Der gelernte Adaptive-Wert auf der Engine-Karte bleibt vorerst tagesübergreifend.",
     "back_to_settings": "Zurück zu Einstellungen",
     "loading": "Lade …",
     "master_toggle_label": "Zeitfenster aktivieren",
