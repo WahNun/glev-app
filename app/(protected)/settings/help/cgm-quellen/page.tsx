@@ -168,45 +168,84 @@ export default function CgmSourcesHelpPage() {
         {C.sub}
       </p>
 
-      {/* Section A — Overview table */}
+      {/* Section A — Overview as stacked cards (mobile-first; the
+          5-column grid was unreadable on a 393px phone — Lucas-spec
+          2026-05-15). Each card shows: sensor + Glev-source pill on
+          top, then App / Neuer Wert / Was du siehst as labelled rows. */}
       <h2 style={{ fontSize: 16, fontWeight: 700, color: TEXT, marginTop: 22, marginBottom: 10 }}>
         {C.th2a}
       </h2>
-      <div style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 10, overflow: "hidden", marginBottom: 12 }}>
-        {/* Table header */}
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(90px, 1.1fr) minmax(120px, 1.6fr) minmax(80px, 1fr) minmax(90px, 1.1fr) minmax(140px, 2.2fr)",
-          gap: 8,
-          background: SURFACE_ALT,
-          padding: "10px 12px",
-          fontSize: 10,
-          fontWeight: 700,
-          color: TEXT_MUTED,
-          letterSpacing: "0.08em",
-          borderBottom: `1px solid ${BORDER}`,
-        }}>
-          {C.thCols.map((h, i) => <div key={i}>{h}</div>)}
-        </div>
-        {/* Table rows */}
-        {C.rows.map((row, i) => (
-          <div key={i} style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(90px, 1.1fr) minmax(120px, 1.6fr) minmax(80px, 1fr) minmax(90px, 1.1fr) minmax(140px, 2.2fr)",
-            gap: 8,
-            padding: "10px 12px",
-            fontSize: 12.5,
-            color: TEXT_STRONG,
-            borderBottom: i === C.rows.length - 1 ? "none" : `1px solid ${BORDER}`,
-            lineHeight: 1.45,
-          }}>
-            <div style={{ fontWeight: 700, color: TEXT }}>{row[0]}</div>
-            <div>{row[1]}</div>
-            <div style={{ fontWeight: 700, color: TEXT }}>{row[2]}</div>
-            <div style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 12, color: TEXT }}>{row[3]}</div>
-            <div style={{ color: TEXT_SOFT }}>{row[4]}</div>
-          </div>
-        ))}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+        {C.rows.map((row, i) => {
+          const [sensor, app, source, freq, sees] = row;
+          const fields: Array<[string, string, boolean]> = [
+            [C.thCols[1], app,  false],
+            [C.thCols[3], freq, true],
+            [C.thCols[4], sees, false],
+          ];
+          return (
+            <div key={i} style={{
+              background: SURFACE,
+              border: `1px solid ${BORDER}`,
+              borderRadius: 12,
+              padding: "12px 14px",
+            }}>
+              {/* Header row: sensor name + source pill */}
+              <div style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 10,
+                marginBottom: 10,
+              }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: TEXT, letterSpacing: "-0.01em" }}>
+                  {sensor}
+                </div>
+                <div style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: ACCENT,
+                  background: `${ACCENT}1A`,
+                  padding: "3px 8px",
+                  borderRadius: 999,
+                  letterSpacing: "0.02em",
+                  whiteSpace: "nowrap",
+                }}>
+                  {source}
+                </div>
+              </div>
+              {/* Field rows */}
+              {fields.map(([k, v, mono], j) => (
+                <div key={j} style={{
+                  display: "flex",
+                  gap: 10,
+                  fontSize: 12.5,
+                  lineHeight: 1.5,
+                  marginTop: j === 0 ? 0 : 6,
+                }}>
+                  <div style={{
+                    width: 92,
+                    flexShrink: 0,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.06em",
+                    color: TEXT_MUTED,
+                    paddingTop: 2,
+                  }}>
+                    {k}
+                  </div>
+                  <div style={{
+                    flex: 1,
+                    color: TEXT_STRONG,
+                    ...(mono ? { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 12 } : null),
+                  }}>
+                    {v}
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })}
       </div>
 
       {/* Callout */}
