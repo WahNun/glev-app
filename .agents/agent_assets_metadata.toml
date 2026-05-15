@@ -102,3 +102,15 @@ id = "AaygHduzYvVmsK6Jpzkdx"
 uri = "file://exports/glev-cgm-quellen-matrix.pdf"
 type = "pdf"
 title = "Glev · CGM-Quellen-Matrix"
+
+[[outputs]]
+id = "xg5w0xRMpSEPnTqwTawT-"
+uri = "file://exports/glev-cgm-quellen-matrix-de.pdf"
+type = "pdf"
+title = "Glev · CGM-Quellen-Matrix (DE)"
+
+[[outputs]]
+id = "lwIoNChBC6kVw2XnoJAxw"
+uri = "file://exports/glev-cgm-source-matrix-en.pdf"
+type = "pdf"
+title = "Glev · CGM source matrix (EN)"
