@@ -398,6 +398,7 @@ export function InsulinForm() {
             unit={t("units_unit")}
             accent={GREEN}
             ariaLabel={t("units_label")}
+            showSteppers
           />
         </div>
         <div>
