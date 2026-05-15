@@ -629,6 +629,8 @@
     "engine_label_icr": "KH-FAKTOR",
     "engine_user_icr_label": "DEIN FAKTOR",
     "engine_user_icr_value": "1:{value}",
+    "engine_window_active": "Jetzt aktiv: {label} → 1:{icr}",
+    "engine_window_unnamed": "Fenster {n}",
     "header_subtitle": "Karte tippen zum Umdrehen · halten zum Umordnen · {n, plural, one {# Mahlzeit} other {# Mahlzeiten}} ausgewertet",
     "flip_hint_back": "↺ zurück zur Karte",
     "insufficient_data": "Nicht genug Daten",

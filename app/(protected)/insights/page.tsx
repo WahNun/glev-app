@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { fetchMeals, fetchMealsForEngine, unifiedOutcome, type Meal } from "@/lib/meals";
 import { TYPE_COLORS, chipLabelsFrom } from "@/lib/mealTypes";
 import { computeAdaptiveICR } from "@/lib/engine/adaptiveICR";
+import { fetchIcrSchedule, findActiveSlot, EMPTY_ICR_SCHEDULE, type IcrSchedule } from "@/lib/icrSchedule";
 import { fetchInsulinSettings, persistEngineIcr, DEFAULT_INSULIN_SETTINGS } from "@/lib/userSettings";
 import { pairBolusesToMeals } from "@/lib/engine/pairing";
 import { updateInsulinLogLink } from "@/lib/insulin";
@@ -267,6 +268,25 @@ export default function InsightsPage() {
   const [userIcr, setUserIcr] = useState<number>(DEFAULT_INSULIN_SETTINGS.icr);
   useEffect(() => {
     fetchInsulinSettings().then(s => setUserIcr(s.icr)).catch(() => {});
+  }, []);
+
+  // ICR schedule (Phase B2): when the user has time-banded ICRs
+  // configured AND the master toggle is on, the Adaptive Engine card
+  // surfaces the currently-active window so the user sees which value
+  // the engine is actually using right now. `nowMinute` is recomputed
+  // every 60s so the badge auto-flips when a window boundary passes
+  // (e.g. lunch → dinner at 17:00) without a page reload.
+  const [icrSchedule, setIcrSchedule] = useState<IcrSchedule>(EMPTY_ICR_SCHEDULE);
+  const [nowMinute, setNowMinute]     = useState<number>(() => {
+    const d = new Date(); return d.getHours() * 60 + d.getMinutes();
+  });
+  useEffect(() => {
+    fetchIcrSchedule().then(s => setIcrSchedule(s)).catch(() => {});
+    const id = setInterval(() => {
+      const d = new Date();
+      setNowMinute(d.getHours() * 60 + d.getMinutes());
+    }, 60_000);
+    return () => clearInterval(id);
   }, []);
   // Persist the engine-computed ICR back to user_settings whenever the
   // engine data window changes. Fire-and-forget — `persistEngineIcr`
@@ -1744,6 +1764,42 @@ export default function InsightsPage() {
                       {tInsights("engine_user_icr_value", { value: Math.round(userIcr * 10) / 10 })}
                     </span>
                   </div>
+                  {/* Phase B2 active-window badge — only renders when the
+                      user has the schedule master toggle on AND a slot
+                      currently covers `nowMinute`. Tells the user which
+                      value the engine is actually using right now (since
+                      Phase B1, the recommender resolves the slot value
+                      via getEffectiveICR). Slot label can be empty —
+                      fall back to "Fenster N" so the badge is never
+                      blank. Quiet styling: small, GREEN-tinted pill so
+                      it reads as a status indicator, not a primary value. */}
+                  {(() => {
+                    const slot = findActiveSlot(icrSchedule, nowMinute);
+                    if (!slot) return null;
+                    const label = slot.label?.trim()
+                      ? slot.label
+                      : tInsights("engine_window_unnamed", { n: slot.slotIndex });
+                    return (
+                      <div style={{
+                        display:"inline-flex", alignSelf:"flex-start",
+                        alignItems:"center", gap:6,
+                        padding:"3px 8px", borderRadius:99,
+                        background: `${GREEN}18`,
+                        border: `1px solid ${GREEN}55`,
+                        fontSize:11, fontWeight:600, lineHeight:1.2,
+                        color: GREEN, marginTop:2,
+                      }}>
+                        <span style={{
+                          width:6, height:6, borderRadius:"50%",
+                          background: GREEN, boxShadow: `0 0 6px ${GREEN}`,
+                        }}/>
+                        {tInsights("engine_window_active", {
+                          label,
+                          icr: Math.round(slot.icrGPerUnit * 10) / 10,
+                        })}
+                      </div>
+                    );
+                  })()}
                   {/* ENGINE — adaptive, ebenfalls ACCENT-blau aber
                       kleiner, damit visuelle Hierarchie klar bleibt
                       (User = primär, Engine = sekundär). Der "X Mahl-

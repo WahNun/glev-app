@@ -621,6 +621,8 @@
     "engine_label_icr": "ICR",
     "engine_user_icr_label": "YOUR RATIO",
     "engine_user_icr_value": "1:{value}",
+    "engine_window_active": "Active now: {label} → 1:{icr}",
+    "engine_window_unnamed": "Window {n}",
     "header_subtitle": "Tap any card to flip · hold to reorder · {n, plural, one {# meal} other {# meals}} analyzed",
     "flip_hint_back": "↺ tap to flip back",
     "insufficient_data": "Not enough data",
