@@ -280,6 +280,10 @@ export default function InsightsPage() {
   const [nowMinute, setNowMinute]     = useState<number>(() => {
     const d = new Date(); return d.getHours() * 60 + d.getMinutes();
   });
+  // Phase B3: collapsed by default — keeps the engine card visually
+  // calm. User taps "Alle Fenster ansehen ↓" to reveal per-window
+  // learned ICRs + status pills (TUNED/LEARNING/WARMING UP).
+  const [windowsExpanded, setWindowsExpanded] = useState<boolean>(false);
   useEffect(() => {
     fetchIcrSchedule().then(s => setIcrSchedule(s)).catch(() => {});
     const id = setInterval(() => {
@@ -303,9 +307,11 @@ export default function InsightsPage() {
   // state and not on a derived object that gets rebuilt every render.
   useEffect(() => {
     if (loading) return;
-    const a = computeAdaptiveICR(engineMeals, engineBoluses);
+    // Persist only the global learned ICR — slot-level values stay
+    // display-only for now (they live in `windows[]` on the result).
+    const a = computeAdaptiveICR(engineMeals, engineBoluses, icrSchedule);
     persistEngineIcr(a.global, a.sampleSize);
-  }, [loading, engineMeals, engineBoluses]);
+  }, [loading, engineMeals, engineBoluses, icrSchedule]);
   useEffect(() => {
     fetchUserProfile().then((p) => setSex(p.sex)).catch(() => {});
   }, []);
@@ -1018,7 +1024,7 @@ export default function InsightsPage() {
   // (`engineMeals`) so the morning/afternoon/evening ICR buckets and the
   // pattern detector's recent-window stats aren't dragged off course by
   // year-old rows. Long-term tiles below continue to read from `meals`.
-  const adaptiveICR  = computeAdaptiveICR(engineMeals, engineBoluses);
+  const adaptiveICR  = computeAdaptiveICR(engineMeals, engineBoluses, icrSchedule);
   const enginePattern = detectPattern(engineMeals);
   const settings: AdaptiveSettings = {
     icr: adaptiveICR.global ? Math.round(adaptiveICR.global * 10) / 10 : 15,
@@ -1824,6 +1830,110 @@ export default function InsightsPage() {
                       <span style={{ fontSize:10, color:"var(--text-faint)", marginLeft:"auto", textAlign:"right", lineHeight:1.3, opacity: 0.7 }}>
                         {tInsights("engine_final_meals", { n: enginePattern.sampleSize })}
                       </span>
+                    </div>
+                  )}
+                  {/* Phase B3+B4 — per-window learned ICRs. Collapsed by
+                      default so the card stays calm; only renders when
+                      the schedule master toggle is on AND the engine
+                      returned at least one window. Each row shows:
+                        • slot label (falls back to "Fenster N")
+                        • the user's manual slot ICR (Du 1:X)
+                        • the engine's learned slot ICR (1:Y) or status
+                          text when there aren't enough samples
+                        • a status pill: TUNED ≥8, LEARNING 3-7, WARMING
+                          UP <3 (Phase B4 thresholds — keeps parity with
+                          the engine-wide ≥3 floor used for adaptiveICR
+                          buckets while adding a higher "tuned" bar). */}
+                  {adaptiveICR.windows.length > 0 && (
+                    <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:4 }}>
+                      <button
+                        type="button"
+                        onClick={() => setWindowsExpanded(v => !v)}
+                        style={{
+                          alignSelf:"flex-start",
+                          background:"transparent", border:"none", padding:0,
+                          color:"var(--text-dim)", fontSize:11, fontWeight:600,
+                          letterSpacing:"0.05em", cursor:"pointer",
+                          textDecoration:"underline", textUnderlineOffset:3,
+                        }}
+                      >
+                        {tInsights(
+                          windowsExpanded ? "engine_windows_close" : "engine_windows_open",
+                        )}
+                      </button>
+                      {windowsExpanded && (
+                        <div style={{
+                          display:"flex", flexDirection:"column", gap:6,
+                          padding:"8px 10px", borderRadius:8,
+                          background:"var(--card-2, rgba(255,255,255,0.03))",
+                          border:"1px solid var(--border)",
+                        }}>
+                          {adaptiveICR.windows.map(w => {
+                            const label = w.label?.trim()
+                              ? w.label
+                              : tInsights("engine_window_unnamed", { n: w.slotIndex });
+                            const TUNED_MIN = 8;
+                            const statusKey =
+                              w.sampleSize >= TUNED_MIN ? "engine_status_tuned" :
+                              w.sampleSize >= 3         ? "engine_status_learning" :
+                                                          "engine_status_warming_up";
+                            const statusColor =
+                              w.sampleSize >= TUNED_MIN ? GREEN :
+                              w.sampleSize >= 3         ? ACCENT :
+                                                          "var(--text-faint)";
+                            const learnedText = w.learnedIcr != null
+                              ? `1:${Math.round(w.learnedIcr * 10) / 10}`
+                              : "—";
+                            return (
+                              <div key={w.slotIndex} style={{
+                                display:"flex", alignItems:"center",
+                                gap:8, fontSize:12, lineHeight:1.3,
+                                flexWrap:"wrap",
+                              }}>
+                                <span style={{
+                                  fontWeight:700, color:"var(--text)",
+                                  minWidth:64,
+                                }}>
+                                  {label}
+                                </span>
+                                <span style={{
+                                  color:"var(--text-dim)",
+                                  fontFamily:"var(--font-mono)",
+                                }}>
+                                  {tInsights("engine_window_manual_short", {
+                                    icr: Math.round(w.manualIcr * 10) / 10,
+                                  })}
+                                </span>
+                                <span style={{
+                                  color: ACCENT, opacity: 0.85,
+                                  fontFamily:"var(--font-mono)", fontWeight:700,
+                                }}>
+                                  {tInsights("engine_window_learned_short", {
+                                    icr: learnedText,
+                                  })}
+                                </span>
+                                <span style={{
+                                  marginLeft:"auto",
+                                  display:"inline-flex", alignItems:"center", gap:6,
+                                }}>
+                                  <span style={{
+                                    fontSize:10, fontWeight:700, letterSpacing:"0.08em",
+                                    padding:"2px 6px", borderRadius:99,
+                                    background: `${statusColor}18`,
+                                    color: statusColor,
+                                    border: `1px solid ${statusColor}55`,
+                                  }}>
+                                    {tInsights(statusKey)}
+                                  </span>
+                                  <span style={{ fontSize:10, color:"var(--text-faint)" }}>
+                                    {tInsights("engine_final_meals", { n: w.sampleSize })}
+                                  </span>
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

@@ -122,6 +122,7 @@ export function makeAdaptiveICR(overrides: Partial<AdaptiveICR> = {}): AdaptiveI
     pairedCount: 0,
     pairedExplicitCount: 0,
     pairedTimeWindowCount: 0,
+    windows: [],
     ...overrides,
   };
 }
