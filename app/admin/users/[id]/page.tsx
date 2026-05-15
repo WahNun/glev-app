@@ -262,6 +262,7 @@ export default async function AdminUserDetailPage({
         currentRole={(profile?.role as string) ?? "user"}
         currentManualPlan={(profile?.manual_plan_override as string | null) ?? null}
         currentManualPlanNote={(profile?.manual_plan_note as string | null) ?? null}
+        currentLanguage={(profile?.language as string | null) ?? null}
         emailConfirmed={!!authUser.email_confirmed_at}
         cgmConnected={!!cgm || !!profile?.cgm_connected || !!profile?.nightscout_url}
         deleted={!!profile?.deleted_at}

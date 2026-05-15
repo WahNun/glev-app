@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import {
   setManualPlanAction,
   clearManualPlanAction,
+  setLanguageAction,
   confirmEmailAction,
   disconnectCgmAction,
   softDeleteAction,
@@ -31,6 +32,7 @@ export default function UserActions({
   currentRole,
   currentManualPlan,
   currentManualPlanNote,
+  currentLanguage,
   emailConfirmed,
   cgmConnected,
   deleted,
@@ -40,6 +42,7 @@ export default function UserActions({
   currentRole: string;
   currentManualPlan: string | null;
   currentManualPlanNote: string | null;
+  currentLanguage: string | null;
   emailConfirmed: boolean;
   cgmConnected: boolean;
   deleted: boolean;
@@ -105,6 +108,21 @@ export default function UserActions({
             </button>
           </form>
         ) : null}
+
+        <form action={setLanguageAction} style={{ ...row, marginTop: 16 }}>
+          <input type="hidden" name="userId" value={userId} />
+          <span style={lbl}>Sprache (UI):</span>
+          <select name="language" defaultValue={currentLanguage ?? "de"} style={input}>
+            <option value="de">Deutsch (de)</option>
+            <option value="en">English (en)</option>
+          </select>
+          <button type="submit" style={btnPrimary}>
+            Sprache setzen
+          </button>
+          <span style={{ ...muted, fontSize: 12 }}>
+            Unabhängig von Currency — z.B. CHF-User auf Englisch ist ok.
+          </span>
+        </form>
 
         <form action={setRoleAction} style={{ ...row, marginTop: 16 }}>
           <input type="hidden" name="userId" value={userId} />

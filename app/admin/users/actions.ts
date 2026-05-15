@@ -483,6 +483,53 @@ export async function setManualPlanAction(formData: FormData): Promise<void> {
   revalidateUserPaths(userId);
 }
 
+/**
+ * Sprache (UI-Locale) eines Users manuell setzen — `de` oder `en`.
+ * Schreibt `profiles.language`, das ist die Quelle für `next-intl`'s
+ * Locale-Resolution (vor Cookie + Accept-Language-Header). Ändert
+ * NICHTS an Stripe/Currency — die zwei sind absichtlich entkoppelt,
+ * z.B. ein Schweizer User kann CHF zahlen aber UI auf Englisch wollen.
+ */
+export async function setLanguageAction(formData: FormData): Promise<void> {
+  const adminToken = await requireAdminToken();
+  const userId = String(formData.get("userId") ?? "");
+  const language = String(formData.get("language") ?? "");
+  if (!userId) throw new Error("userId fehlt");
+  if (!["de", "en"].includes(language)) {
+    throw new Error("language muss 'de' oder 'en' sein");
+  }
+
+  const sb = getSupabaseAdmin();
+  const { data: before } = await sb
+    .from("profiles")
+    .select("user_id, language")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const { error } = await sb
+    .from("profiles")
+    .update({ language })
+    .eq("user_id", userId);
+
+  if (error) {
+    if (isSchemaMissingError(error)) {
+      redirect(`/admin/users/${userId}?err=migration`);
+    }
+    throw new Error("supabase: " + error.message);
+  }
+
+  await writeAuditLog({
+    action: "set_language",
+    targetUserId: userId,
+    before,
+    after: { language },
+    note: `${(before as { language?: string | null } | null)?.language ?? "—"} → ${language}`,
+    adminToken,
+  });
+
+  revalidateUserPaths(userId);
+}
+
 export async function clearManualPlanAction(formData: FormData): Promise<void> {
   const adminToken = await requireAdminToken();
   const userId = String(formData.get("userId") ?? "");
