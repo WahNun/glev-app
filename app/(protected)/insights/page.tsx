@@ -10,6 +10,7 @@ import { fetchIcrSchedule, findActiveSlot, saveIcrSchedule, EMPTY_ICR_SCHEDULE, 
 import { fetchInsulinSettings, persistEngineIcr, DEFAULT_INSULIN_SETTINGS } from "@/lib/userSettings";
 import { pairBolusesToMeals } from "@/lib/engine/pairing";
 import { updateInsulinLogLink } from "@/lib/insulin";
+import { fetchRejectedPairs, addRejectedPair, pairKey, type RejectedPairKey } from "@/lib/rejectedPairs";
 import { detectPattern } from "@/lib/engine/patterns";
 import { suggestAdjustment, type AdaptiveSettings, type AdjustmentSuggestion } from "@/lib/engine/adjustment";
 import SortableCardGrid, { type SortableItem } from "@/components/SortableCardGrid";
@@ -2866,13 +2867,18 @@ function RelinkSourceLine({
     onToggle(typeof next === "function" ? next(open) : next);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [errorId, setErrorId] = useState<string | null>(null);
-  // "Nein, war anders" only hides the row locally for this session — we
-  // don't have a `rejected_pairs` table yet, so persisting the dismissal
-  // would need a schema migration. Reload re-evaluates the heuristic and
-  // the row may reappear; that's acceptable for now and called out in the
-  // matrix doc. If users start asking for sticky dismissal we add a
-  // dedicated table (Lucas: ask before major changes).
-  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  // "Nein, war anders" persists to the `rejected_pairs` table (added
+  // 2026-05-15) keyed on (meal_id, bolus_id) so a dismissal sticks
+  // across reloads. We hold the set in component state and seed it
+  // from `fetchRejectedPairs` on mount; new rejections are written
+  // optimistically (UI hides immediately) and rolled back on error
+  // so the user can retry. Keying on the pair (not just bolus_id)
+  // lets the same bolus still be suggested for a different meal in
+  // the ±30-min window — only the rejected combination is poisoned.
+  const [rejectedPairs, setRejectedPairs] = useState<Set<RejectedPairKey>>(new Set());
+  useEffect(() => {
+    fetchRejectedPairs().then(setRejectedPairs).catch(() => {});
+  }, []);
 
   // Recompute the time-window pairs from the same primitives the
   // engine uses, then keep only the ones whose pairing came from the
@@ -2880,7 +2886,7 @@ function RelinkSourceLine({
   const allPairs = pairBolusesToMeals(engineBoluses, engineMeals);
   const timeWindowPairs = allPairs
     .filter(p => p.source === "time-window")
-    .filter(p => !dismissedIds.has(p.bolus.id));
+    .filter(p => !rejectedPairs.has(pairKey(p.meal.id, p.bolus.id)));
   const hasTimeWindow = timeWindowPairs.length > 0;
   const mealColumn = Math.max(0, adaptiveICR.sampleSize - adaptiveICR.pairedCount);
 
@@ -3001,13 +3007,27 @@ function RelinkSourceLine({
                   <button
                     type="button"
                     disabled={isBusy}
-                    onClick={() => {
-                      setDismissedIds(prev => {
+                    onClick={async () => {
+                      // Optimistic add — UI hides the row instantly.
+                      // Roll back if the persist fails so the user
+                      // can retry; surface the error inline.
+                      const key = pairKey(p.meal.id, p.bolus.id);
+                      setRejectedPairs(prev => {
                         const next = new Set(prev);
-                        next.add(p.bolus.id);
+                        next.add(key);
                         return next;
                       });
                       setErrorId(null);
+                      try {
+                        await addRejectedPair(p.meal.id, p.bolus.id);
+                      } catch {
+                        setRejectedPairs(prev => {
+                          const next = new Set(prev);
+                          next.delete(key);
+                          return next;
+                        });
+                        setErrorId(p.bolus.id);
+                      }
                     }}
                     style={{
                       padding: "6px 12px", borderRadius: 8,
