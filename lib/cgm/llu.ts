@@ -316,7 +316,17 @@ function mapMeasurement(m: LluMeasurement | undefined | null): Reading | null {
   return {
     value: m.ValueInMgPerDl ?? m.Value ?? null,
     unit: "mg/dL",
-    timestamp: m.Timestamp || null,
+    // FactoryTimestamp bevorzugen — das ist Abbotts echte UTC-Zeit vom
+    // Sensor. Das ältere Timestamp-Feld ist Lokalzeit des Patienten-
+    // Phones (CEST/CET in DE) ohne TZ-Suffix; parseLluTs() interpretiert
+    // M/D/YYYY-Strings als UTC, was zu einem 1–2 h Versatz nach rechts
+    // führt sobald Lokal ≠ UTC. Bestätigt 2026-05-15 mit Lucas's
+    // Diagnose-Log: Timestamp = "12:58:05 PM", FactoryTimestamp =
+    // "10:58:05 AM", serverNowUtc = 10:58:35Z → FactoryTimestamp passt
+    // exakt, Timestamp läuft 2h voraus.
+    // Fallback auf Timestamp falls eine Region kein FactoryTimestamp
+    // schickt (dann immer noch verschoben, aber nicht null).
+    timestamp: m.FactoryTimestamp || m.Timestamp || null,
     trend: TREND[m.TrendArrow ?? 3] || "stable",
   };
 }
