@@ -242,7 +242,11 @@ const buildDoc = (C) => React.createElement(Document, {},
     React.createElement(Text, { style: s.h2, minPresenceAhead: 60, key: 'h2c' }, C.th2c),
     ...C.bullets.map((b, i) => Bullet(b, `bul${i}`)),
 
-    React.createElement(Text, { style: s.h2, minPresenceAhead: 60, key: 'h2d' }, C.th2d),
+    // Hard page break before "Welche Quelle passt zu dir?": Lucas-spec
+    // 2026-05-15 — section must sit complete on its own page (was
+    // splitting LLU/Apple Health on p.2 and orphaning Nightscout on
+    // p.3). marginTop=0 since heading is at page top.
+    React.createElement(Text, { style: [s.h2, { marginTop: 0 }], break: true, key: 'h2d' }, C.th2d),
     ...C.help.map(([k, v], i) => HelpRow(k, v, `hp${i}`)),
 
     React.createElement(View, { style: s.footer, fixed: true, key: 'f' }, [
