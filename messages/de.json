@@ -93,7 +93,16 @@
     "type_fast_carbs": "Schnelle Kohlenhydrate",
     "type_high_protein": "Eiweißreich",
     "type_high_fat": "Fettreich",
-    "type_balanced": "Ausgewogen"
+    "type_balanced": "Ausgewogen",
+    "boluses_title": "Zugehörige Boluses",
+    "boluses_hint": "Boluses im Zeitfenster ±2 Std. um diese Mahlzeit. Haken setzen, um einen Bolus dieser Mahlzeit zuzuordnen.",
+    "boluses_loading": "Lade Boluses…",
+    "boluses_empty": "Keine Boluses im Zeitfenster ±2 Std.",
+    "boluses_linked_other": "Bereits einer anderen Mahlzeit zugeordnet",
+    "boluses_unit_suffix": "IE",
+    "boluses_save_failed": "Verknüpfung fehlgeschlagen: {message}",
+    "boluses_load_failed": "Boluses konnten nicht geladen werden: {message}",
+    "boluses_retry": "Erneut versuchen"
   },
   "log": {
     "title": "Mahlzeit loggen",

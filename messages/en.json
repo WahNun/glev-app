@@ -93,7 +93,16 @@
     "type_fast_carbs": "Fast Carbs",
     "type_high_protein": "High Protein",
     "type_high_fat": "High Fat",
-    "type_balanced": "Balanced"
+    "type_balanced": "Balanced",
+    "boluses_title": "Linked boluses",
+    "boluses_hint": "Boluses in the ±2 h window around this meal. Tick to link a bolus to this meal.",
+    "boluses_loading": "Loading boluses…",
+    "boluses_empty": "No boluses in the ±2 h window.",
+    "boluses_linked_other": "Already linked to another meal",
+    "boluses_unit_suffix": "u",
+    "boluses_save_failed": "Linking failed: {message}",
+    "boluses_load_failed": "Could not load boluses: {message}",
+    "boluses_retry": "Try again"
   },
   "log": {
     "title": "Log Meal",

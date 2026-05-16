@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { updateMeal, type Meal } from "@/lib/meals";
 import { TYPE_COLORS, chipLabelsFrom } from "@/lib/mealTypes";
@@ -9,6 +9,12 @@ import { renderEngineMessage, renderEngineMessages } from "@/lib/engineMessages"
 import { parseDbDate, parseDbTs } from "@/lib/time";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
 import TrendArrowIcon from "@/components/TrendArrowIcon";
+import {
+  fetchInsulinLogs,
+  updateInsulinLogLink,
+  type InsulinLog,
+} from "@/lib/insulin";
+import { hapticSelection, hapticSuccess, hapticError } from "@/lib/haptics";
 
 /** Map the stored 5-state device trend string to the 3-state arrow we
  *  render. Anything else (null, undefined, unknown future buckets like
@@ -310,6 +316,8 @@ export default function MealEntryLightExpand({
           </Field>
         </div>
 
+        <BolusPickerSection meal={meal} locale={locale} />
+
         {err && (
           <div style={{ fontSize: 13, color: PINK, padding: "6px 10px", background: `${PINK}10`, border: `1px solid ${PINK}30`, borderRadius: 8 }}>
             {err}
@@ -432,6 +440,162 @@ export default function MealEntryLightExpand({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Picker section rendered inside the meal edit form. Lists all bolus
+ * `insulin_logs` of the current user within ±2 h of the meal time and
+ * lets the user toggle the link by setting/clearing
+ * `related_entry_id`. Boluses already linked to a *different* meal are
+ * rendered disabled with a label so they can't be silently relinked.
+ *
+ * Network strategy:
+ *   - Initial fetch on mount (and whenever `meal.id` changes) via
+ *     `fetchInsulinLogs(fromIso, toIso)` — supabase-js + RLS scope this
+ *     to the calling user automatically.
+ *   - Toggle does an optimistic UI update, PATCHes /api/insulin/[id],
+ *     and rolls back on error with a haptic error + inline message.
+ */
+function BolusPickerSection({ meal, locale }: { meal: Meal; locale: string }) {
+  const tm = useTranslations("mealEdit");
+  const WINDOW_MS = 2 * 60 * 60 * 1000;
+
+  const mealMs = parseDbTs(meal.meal_time ?? meal.created_at);
+  const fromIso = new Date(mealMs - WINDOW_MS).toISOString();
+  const toIso   = new Date(mealMs + WINDOW_MS).toISOString();
+
+  const [loading,  setLoading]  = useState(true);
+  const [boluses,  setBoluses]  = useState<InsulinLog[]>([]);
+  const [busyId,   setBusyId]   = useState<string | null>(null);
+  const [pickErr,  setPickErr]  = useState<string | null>(null);
+  // Distinguish a real "empty window" from a failed fetch — the empty
+  // state is reassuring, the error state needs an explicit retry hint
+  // so users don't mistakenly believe there are no candidate boluses.
+  const [loadErr,  setLoadErr]  = useState<string | null>(null);
+  const [reloadId, setReloadId] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setLoadErr(null);
+    fetchInsulinLogs(fromIso, toIso)
+      .then(rows => {
+        if (cancelled) return;
+        // Only bolus rows are meaningful here. Sort by time ascending so
+        // an earlier pre-bolus is presented above a later correction.
+        const filtered = rows
+          .filter(b => b.insulin_type === "bolus")
+          .sort((a, b) => parseDbTs(a.created_at) - parseDbTs(b.created_at));
+        setBoluses(filtered);
+      })
+      .catch(e => {
+        if (cancelled) return;
+        setBoluses([]);
+        setLoadErr(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [meal.id, fromIso, toIso, reloadId]);
+
+  async function toggleLink(b: InsulinLog, nextChecked: boolean) {
+    if (busyId) return;
+    setPickErr(null);
+    hapticSelection();
+    const prev = boluses;
+    // Optimistic update — flip the row to the target state immediately.
+    setBoluses(prev.map(x => x.id === b.id
+      ? { ...x, related_entry_id: nextChecked ? meal.id : null }
+      : x));
+    setBusyId(b.id);
+    try {
+      await updateInsulinLogLink(b.id, nextChecked ? meal.id : null);
+      hapticSuccess();
+      // Let the dashboard / engine refresh once the link changed so any
+      // open ICR / Recent card reflects the new pairing.
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("glev:insulin-updated"));
+      }
+    } catch (e) {
+      hapticError();
+      setBoluses(prev);
+      setPickErr(tm("boluses_save_failed", {
+        message: e instanceof Error ? e.message : String(e),
+      }));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 8, borderTop: `1px solid ${BORDER}` }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <span style={{ fontSize: 12, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 700 }}>
+          {tm("boluses_title")}
+        </span>
+        <span style={{ fontSize: 12, color: "var(--text-faint)", lineHeight: 1.4 }}>
+          {tm("boluses_hint")}
+        </span>
+      </div>
+
+      {loading ? (
+        <div style={{ fontSize: 13, color: "var(--text-dim)" }}>{tm("boluses_loading")}</div>
+      ) : loadErr ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", background: `${PINK}10`, border: `1px solid ${PINK}30`, borderRadius: 8, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 13, color: PINK, flex: 1, minWidth: 140 }}>
+            {tm("boluses_load_failed", { message: loadErr })}
+          </span>
+          <button
+            type="button"
+            onClick={() => setReloadId(n => n + 1)}
+            style={{ background: "transparent", border: `1px solid ${PINK}66`, borderRadius: 8, color: PINK, fontSize: 12, fontWeight: 700, padding: "6px 12px", cursor: "pointer" }}
+          >
+            {tm("boluses_retry")}
+          </button>
+        </div>
+      ) : boluses.length === 0 ? (
+        <div style={{ fontSize: 13, color: "var(--text-faint)", fontStyle: "italic" }}>{tm("boluses_empty")}</div>
+      ) : (
+        <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+          {boluses.map(b => {
+            const linkedHere   = b.related_entry_id === meal.id;
+            const linkedOther  = b.related_entry_id != null && b.related_entry_id !== meal.id;
+            const disabled     = linkedOther || busyId === b.id;
+            const ts = parseDbDate(b.created_at);
+            const timeLabel = ts.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+            return (
+              <li key={b.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", border: `1px solid ${BORDER}`, borderRadius: 10, background: linkedHere ? `${ACCENT}10` : "var(--input-bg)", opacity: linkedOther ? 0.65 : 1 }}>
+                <input
+                  type="checkbox"
+                  checked={linkedHere}
+                  disabled={disabled}
+                  onChange={e => toggleLink(b, e.target.checked)}
+                  aria-label={`${timeLabel} — ${b.units} ${tm("boluses_unit_suffix")}`}
+                  style={{ width: 18, height: 18, accentColor: ACCENT, cursor: disabled ? "not-allowed" : "pointer", flexShrink: 0 }}
+                />
+                <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+                  <span style={{ fontSize: 14, color: "var(--text-strong)", fontFamily: "var(--font-mono)", fontWeight: 600 }}>
+                    {timeLabel} — {b.units} {tm("boluses_unit_suffix")}
+                    {b.insulin_name ? <span style={{ marginLeft: 6, color: "var(--text-muted)", fontFamily: "system-ui, sans-serif", fontWeight: 500 }}>· {b.insulin_name}</span> : null}
+                  </span>
+                  {linkedOther && (
+                    <span style={{ fontSize: 12, color: "var(--text-faint)", marginTop: 2 }}>
+                      {tm("boluses_linked_other")}
+                    </span>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {pickErr && (
+        <div style={{ fontSize: 12, color: PINK, padding: "6px 10px", background: `${PINK}10`, border: `1px solid ${PINK}30`, borderRadius: 8 }}>
+          {pickErr}
+        </div>
+      )}
     </div>
   );
 }
