@@ -15,7 +15,7 @@ import { computeAdaptiveICR } from "@/lib/engine/adaptiveICR";
 import { getEffectiveICR } from "@/lib/icrSchedule";
 import { detectPattern } from "@/lib/engine/patterns";
 import { suggestAdjustment, type AdaptiveSettings } from "@/lib/engine/adjustment";
-import { applyAdjustmentToSettings, getInsulinSettings } from "@/lib/userSettings";
+import { applyAdjustmentToSettings, getInsulinSettings, persistEngineIcr } from "@/lib/userSettings";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
 import EngineLogTab, { InsulinForm, ExerciseForm } from "@/components/EngineLogTab";
 import FingerstickLogCard from "@/components/FingerstickLogCard";
@@ -1071,6 +1071,17 @@ export default function EnginePage() {
         //   2. Hard cap at 25 made it impossible to converge on the
         //      empirical 1:37.5 some users actually need.
         const adaptive = computeAdaptiveICR(fetched, bolusesForPairing);
+        // Persist the engine-computed ICR back to user_settings — same
+        // fire-and-forget pattern as Insights (lib/userSettings.ts
+        // `persistEngineIcr`). Without this call, users who only use
+        // the Engine tab (without ever opening Insights) never get an
+        // engine ICR persisted, so the Two-Value system stays inert
+        // for them. The helper is idempotent (no-op when nothing
+        // changed), guards `engine_icr_auto_apply=FALSE` so it never
+        // touches the user column on its own, and appends an audit
+        // entry to `adjustment_history` when the user opted into
+        // auto-apply AND sample size ≥10.
+        persistEngineIcr(adaptive.global, adaptive.sampleSize).catch(() => {});
         if (adaptive.global !== null && adaptive.sampleSize >= 3) {
           // Round to 1 decimal — matches Insights display precision and
           // keeps `runGlevEngine`'s `carbs / icr` math stable.
