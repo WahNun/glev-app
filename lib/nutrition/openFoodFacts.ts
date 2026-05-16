@@ -1,4 +1,5 @@
 import type { NutritionPer100 } from "./types";
+import { cacheGet, cacheSet } from "./cache";
 
 /**
  * Open Food Facts client. Public, no API key required, generous rate
@@ -40,6 +41,14 @@ export async function lookupOpenFoodFacts(
   const term = searchTerm.trim();
   if (!term) return null;
 
+  // Per-process LRU (see lib/nutrition/cache.ts). Returns a fresh
+  // positive OR negative hit; undefined means cold/expired. Caches
+  // both outcomes so repeat lookups of the same term — common across
+  // a single chat session AND across users on the same warm Vercel
+  // function instance — skip the 1.2s p95 HTTP round-trip entirely.
+  const cached = cacheGet("off", term);
+  if (cached !== undefined) return cached.value;
+
   const url = new URL(OFF_BASE);
   url.searchParams.set("search_terms", term);
   url.searchParams.set("search_simple", "1");
@@ -63,7 +72,11 @@ export async function lookupOpenFoodFacts(
       // values for a given branded product change rarely if ever.
       next: { revalidate: 86400 },
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // Transient HTTP errors are NOT cached — we don't want a 5xx
+      // burst to suppress legitimate lookups for the next hour.
+      return null;
+    }
     // OFF occasionally returns an HTML error page with a 200 (CDN
     // maintenance, error pass-through). Detect non-JSON content type up
     // front so the JSON parse can't blow up inside the await.
@@ -88,8 +101,14 @@ export async function lookupOpenFoodFacts(
     );
     for (const p of matching) {
       const macros = extractOffNutriments(p?.nutriments ?? {});
-      if (macros) return macros;
+      if (macros) {
+        cacheSet("off", term, macros);
+        return macros;
+      }
     }
+    // Definitive miss (OFF replied with products, none yielded usable
+    // macros) — cache the negative so we don't re-query for an hour.
+    cacheSet("off", term, null);
     return null;
   } catch {
     return null;

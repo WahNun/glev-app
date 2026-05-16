@@ -1,4 +1,5 @@
 import type { NutritionPer100 } from "./types";
+import { cacheGet, cacheSet } from "./cache";
 
 /**
  * USDA FoodData Central client. Best coverage for GENERIC ingredients
@@ -39,6 +40,12 @@ export async function lookupUSDA(
   const term = searchTerm.trim();
   if (!term) return null;
 
+  // Per-process LRU (see lib/nutrition/cache.ts). Skips the live USDA
+  // HTTP call for repeat lookups — common across a single voice/text
+  // parse and across users on the same warm Vercel function instance.
+  const cached = cacheGet("usda", term);
+  if (cached !== undefined) return cached.value;
+
   const apiKey = process.env.USDA_API_KEY || "DEMO_KEY";
   const url = new URL(USDA_BASE);
   url.searchParams.set("api_key", apiKey);
@@ -64,7 +71,10 @@ export async function lookupUSDA(
       signal: ctrl.signal,
       next: { revalidate: 86400 },
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // Transient HTTP errors (5xx, DEMO_KEY 429s) are NOT cached.
+      return null;
+    }
     const data = (await res.json()) as UsdaSearchResponse;
     const foods = Array.isArray(data.foods) ? data.foods : [];
 
@@ -82,8 +92,14 @@ export async function lookupUSDA(
 
     for (const c of ranked) {
       const macros = extractUsdaMacros(c.food?.foodNutrients ?? []);
-      if (macros) return macros;
+      if (macros) {
+        cacheSet("usda", term, macros);
+        return macros;
+      }
     }
+    // Definitive miss (USDA replied, no ranked candidate yielded macros)
+    // — cache the negative so we don't re-query the same term repeatedly.
+    cacheSet("usda", term, null);
     return null;
   } catch {
     return null;

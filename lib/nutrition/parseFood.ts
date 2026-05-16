@@ -11,57 +11,63 @@ import type { ParsedFoodItem } from "./types";
  *   - flag branded vs generic (drives smart-routing in aggregate.ts)
  *   - emit bilingual search terms for OFF (DE-strong) and USDA (EN)
  */
-const PARSER_PROMPT = `You are a multilingual food-text parser for a Type 1 Diabetes app.
-Given a free-form meal description in any language, return ONLY valid JSON
-matching this exact schema (no markdown, no code fence, no commentary):
+// Trimmed prompt (was ~600 input tokens, now ~210). The schema itself
+// is enforced by OpenAI's strict json_schema response_format below, so
+// the prompt no longer has to describe field types or "return JSON
+// only" — it focuses on the BEHAVIORAL rules the schema can't express
+// (what to put in each field, quantity defaults, branded heuristics).
+//
+// Fewer input tokens → lower TTFB → faster voice→form path. We were
+// careful to keep every quantity default the previous prompt listed —
+// the parser hallucinates portion sizes when those are removed.
+const PARSER_PROMPT = `You parse free-form meal text (any language) for a T1D app.
+Do NOT estimate macros, classify meals, or recommend insulin.
 
-{
-  "items": [
-    {
-      "name": string,            // original-language label, lowercase
-      "grams": number,            // weight in grams (ml treated as g for liquids)
-      "is_branded": boolean,      // true for named products, false for generic foods
-      "search_term_en": string,  // concise English search term for USDA lookup
-      "search_term_de": string   // concise German search term for Open Food Facts lookup
-    }
-  ],
-  "description": string          // clean comma-separated "<grams>g <name>" list
-}
+For each item:
+- name: original-language label, lowercase.
+- grams: weight (treat ml as g for liquids).
+- is_branded: TRUE for named products (Coca Cola, Yfood, Activia, Bettery,
+  McDonald's, etc.); FALSE for generic ingredients (apple, rice, chicken
+  breast), restaurant-style descriptions (döner, kafta), home-made dishes.
+- search_term_en / search_term_de: 1-4 words, no quantities, faithful
+  translation (Hähnchenbrust ↔ chicken breast). Keep the brand in BOTH
+  terms for branded items.
 
-QUANTITY DEFAULTS when vague:
-- "a banana" / "eine Banane" = 120g
-- "an apple" / "ein Apfel" = 180g
-- "a slice of bread" / "eine Scheibe Brot" = 30g
-- "handful of nuts" / "Handvoll Nüsse" = 28g
-- "a glass of juice" / "ein Glas Saft" = 200g
-- "a cup of rice" / "eine Tasse Reis" = 150g (cooked)
-- "a tbsp" / "ein EL" = 15g
-- "a tsp" / "ein TL" = 5g
+Quantity defaults when vague:
+banana 120g · apple 180g · slice of bread 30g · handful of nuts 28g ·
+glass of juice 200ml · cup of rice 150g (cooked) · tbsp/EL 15g · tsp/TL 5g.
 
-is_branded RULES:
-- TRUE for: brand-prefixed products ("Bettery protein shake", "McRoyal burger",
-  "Coca Cola", "Yfood", "Activia"), specific commercial cereals, named bars,
-  ready-meals with brand or distinct product name.
-- FALSE for: generic ingredients ("apple", "broccoli", "chicken breast",
-  "rice", "olive oil", "yogurt"), restaurant-style descriptions ("kafta",
-  "döner meat"), home-made dishes.
+description: comma-separated "<grams>g <name>" for the FULL meal, ml for
+liquids, lowercase names, no leading/trailing punctuation.`;
 
-search_term_* RULES:
-- Keep concise (1-4 words). Drop quantities and brand/store qualifiers
-  unless they DEFINE the product.
-- Translate to the target language faithfully ("Hähnchenbrust" ↔
-  "chicken breast", "Vollkornbrot" ↔ "wholegrain bread").
-- For branded products keep the brand in BOTH terms (search engines
-  match on it): "Bettery vanilla protein powder".
-
-description RULES:
-- Required. Clean comma-separated list "<grams>g <name>" reflecting the
-  FULL meal exactly as parsed. Use grams for solids and ml for liquids
-  ("250ml ayran"). Lowercase ingredient names. No leading/trailing
-  punctuation.
-
-IMPORTANT: You only parse and structure. Do NOT estimate macros. Do NOT
-classify the meal type. Do NOT recommend insulin. Strict JSON only.`;
+// Strict JSON schema for OpenAI structured outputs. With strict:true the
+// model is GUARANTEED to return JSON matching this shape — no more
+// /```json/ fences, no "LLM returned unparseable JSON" throws, no
+// silent shape drift. additionalProperties:false and every property in
+// `required` are mandatory for strict mode.
+const PARSER_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["items", "description"],
+  properties: {
+    items: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["name", "grams", "is_branded", "search_term_en", "search_term_de"],
+        properties: {
+          name:           { type: "string" },
+          grams:          { type: "number" },
+          is_branded:     { type: "boolean" },
+          search_term_en: { type: "string" },
+          search_term_de: { type: "string" },
+        },
+      },
+    },
+    description: { type: "string" },
+  },
+} as const;
 
 export interface ParseFoodResult {
   items: ParsedFoodItem[];
@@ -80,7 +86,19 @@ export async function parseFoodText(text: string): Promise<ParseFoodResult> {
   const completion = await openai.chat.completions.create(
     {
       model: "gpt-4o-mini",
-      response_format: { type: "json_object" },
+      // Strict json_schema response_format (vs the previous json_object
+      // mode) guarantees a schema-conformant payload from the model.
+      // No more markdown fence cleanup, no more parse-failure throws,
+      // and the model spends fewer tokens negotiating shape — directly
+      // shaving latency vs the old free-form JSON prompt.
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "parsed_food",
+          strict: true,
+          schema: PARSER_SCHEMA,
+        },
+      },
       temperature: 0.1,
       // 350 tokens fits a 4-5 item meal (~70 tokens per item including
       // bilingual search terms). Lowered from 600 — fewer output
@@ -94,11 +112,16 @@ export async function parseFoodText(text: string): Promise<ParseFoodResult> {
     { timeout: PARSE_TIMEOUT_MS },
   );
   const raw = completion.choices[0]?.message?.content ?? "";
-  const cleaned = raw.replace(/```json\s*|\s*```/g, "").trim();
 
   let parsed: { items?: unknown[]; description?: string } = {};
-  try { parsed = JSON.parse(cleaned); }
-  catch { throw new Error("LLM returned unparseable JSON: " + cleaned.slice(0, 200)); }
+  try { parsed = JSON.parse(raw); }
+  catch {
+    // Defensive: strict json_schema mode should make this unreachable,
+    // but if the model refuses or produces a `refusal` message the raw
+    // content can still be non-JSON. Preserve the prior error shape so
+    // upstream handlers (/api/parse-food, voice flow) keep working.
+    throw new Error("LLM returned unparseable JSON: " + raw.slice(0, 200));
+  }
 
   const rawItems = Array.isArray(parsed.items) ? parsed.items : [];
   const items: ParsedFoodItem[] = rawItems

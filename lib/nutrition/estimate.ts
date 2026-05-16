@@ -22,15 +22,27 @@ export class NutritionEstimateError extends Error {
   }
 }
 
-const ESTIMATE_PROMPT = `You are a USDA nutrition estimator. Given ONE food item
-(name and bilingual search terms), return ONLY valid JSON of typical per-100g
-values from USDA or food-label data:
+// Trimmed prompt — schema is now enforced by strict json_schema below,
+// so the prompt only describes intent. The previous IMPOSSIBLE-string
+// escape hatch is gone; the existing "all zeros = decline" guard at
+// the bottom of this file still catches "I don't know" responses
+// without breaking the strict JSON contract.
+const ESTIMATE_PROMPT = `You are a USDA nutrition estimator. Given ONE food
+item (name plus bilingual search terms), return typical per-100g values from
+USDA / food-label data. Round to one decimal. If you cannot estimate
+confidently, return all zeros — the caller will treat that as a decline.`;
 
-{"carbs_g": number, "protein_g": number, "fat_g": number, "fiber_g": number}
-
-All values are grams per 100g of the product. Round to one decimal. If the
-item is impossible to estimate from the input, omit the JSON entirely and
-reply with the literal string IMPOSSIBLE. No markdown, no commentary.`;
+const ESTIMATE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["carbs_g", "protein_g", "fat_g", "fiber_g"],
+  properties: {
+    carbs_g:   { type: "number" },
+    protein_g: { type: "number" },
+    fat_g:     { type: "number" },
+    fiber_g:   { type: "number" },
+  },
+} as const;
 
 const ESTIMATE_TIMEOUT_MS = 4000;
 
@@ -52,7 +64,14 @@ export async function estimateItemNutrition(
     const completion = await openai.chat.completions.create(
       {
         model: "gpt-4o-mini",
-        response_format: { type: "json_object" },
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "per100g_nutrition",
+            strict: true,
+            schema: ESTIMATE_SCHEMA,
+          },
+        },
         temperature: 0.1,
         max_tokens: 100,
         messages: [
@@ -71,13 +90,9 @@ export async function estimateItemNutrition(
     throw new NutritionEstimateError(`Estimator API failed: ${msg}`, item.name);
   }
 
-  const cleaned = raw.replace(/```json\s*|\s*```/g, "").trim();
-  if (/^IMPOSSIBLE$/i.test(cleaned)) {
-    throw new NutritionEstimateError(`Estimator declined: ${item.name}`, item.name);
-  }
   let parsed: Partial<NutritionPer100>;
   try {
-    parsed = JSON.parse(cleaned) as Partial<NutritionPer100>;
+    parsed = JSON.parse(raw) as Partial<NutritionPer100>;
   } catch {
     throw new NutritionEstimateError(`Estimator returned malformed JSON for ${item.name}`, item.name);
   }
