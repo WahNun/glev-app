@@ -383,6 +383,19 @@
     "tab_symptoms": "Symptoms",
     "tab_influences": "Influences"
   },
+  "scopeHeader": {
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "this_week": "This Week",
+    "mode_day": "Day",
+    "mode_week": "Week",
+    "mode_month": "Month",
+    "mode_year": "Year",
+    "prev_aria": "Back",
+    "next_aria": "Next",
+    "open_aria": "Open time range",
+    "close_aria": "Close time range"
+  },
   "engineLog": {
     "insulin_card_title": "Log Insulin",
     "exercise_card_title": "Log Exercise",

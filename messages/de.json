@@ -383,6 +383,19 @@
     "tab_symptoms": "Symptome",
     "tab_influences": "Einflussfaktoren"
   },
+  "scopeHeader": {
+    "today": "Heute",
+    "yesterday": "Gestern",
+    "this_week": "Diese Woche",
+    "mode_day": "Tag",
+    "mode_week": "Woche",
+    "mode_month": "Monat",
+    "mode_year": "Jahr",
+    "prev_aria": "Zurück",
+    "next_aria": "Weiter",
+    "open_aria": "Zeitraum öffnen",
+    "close_aria": "Zeitraum schließen"
+  },
   "engineLog": {
     "insulin_card_title": "Insulin loggen",
     "exercise_card_title": "Übung loggen",

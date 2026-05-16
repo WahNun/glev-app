@@ -507,6 +507,7 @@ function ScopeHeaderChip({
   setAnchor: (d: Date) => void;
 }) {
   const locale = useLocale();
+  const t = useTranslations("scopeHeader");
   const scope  = computeScopeWindow(mode, anchor);
   const nowMs  = Date.now();
   const isCurrent = scope.endMs > nowMs && scope.startMs <= nowMs;
@@ -526,15 +527,15 @@ function ScopeHeaderChip({
   const labelFor = (): string => {
     if (mode === "day") {
       const today = startOfToday().getTime();
-      if (scope.startMs === today) return "Heute";
+      if (scope.startMs === today) return t("today");
       const yesterday = startOfDaysAgo(1).getTime();
-      if (scope.startMs === yesterday) return "Gestern";
+      if (scope.startMs === yesterday) return t("yesterday");
       return new Intl.DateTimeFormat(locale, {
         day: "numeric", month: "short", timeZone: userTimezone,
       }).format(new Date(scope.startMs));
     }
     if (mode === "week") {
-      if (isCurrent) return "Diese Woche";
+      if (isCurrent) return t("this_week");
       const start = new Date(scope.startMs);
       const end   = new Date(scope.endMs - 86400000);
       const fmt = new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", timeZone: userTimezone });
@@ -570,10 +571,10 @@ function ScopeHeaderChip({
   }, [open]);
 
   const modes: { key: ScopeMode; label: string }[] = [
-    { key: "day",   label: "Tag"   },
-    { key: "week",  label: "Woche" },
-    { key: "month", label: "Monat" },
-    { key: "year",  label: "Jahr"  },
+    { key: "day",   label: t("mode_day")   },
+    { key: "week",  label: t("mode_week")  },
+    { key: "month", label: t("mode_month") },
+    { key: "year",  label: t("mode_year")  },
   ];
 
   return (
@@ -581,7 +582,7 @@ function ScopeHeaderChip({
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        aria-label={open ? "Zeitraum schließen" : "Zeitraum öffnen"}
+        aria-label={open ? t("close_aria") : t("open_aria")}
         aria-expanded={open}
         aria-haspopup="menu"
         style={{
@@ -656,7 +657,7 @@ function ScopeHeaderChip({
             <button
               type="button"
               onClick={() => stepAnchor(-1)}
-              aria-label="Zurück"
+              aria-label={t("prev_aria")}
               style={{
                 width: 32, height: 32, borderRadius: 8,
                 background: "transparent", border: `1px solid var(--border)`,
@@ -673,7 +674,7 @@ function ScopeHeaderChip({
               type="button"
               onClick={() => canNext && stepAnchor(1)}
               disabled={!canNext}
-              aria-label="Weiter"
+              aria-label={t("next_aria")}
               style={{
                 width: 32, height: 32, borderRadius: 8,
                 background: "transparent", border: `1px solid var(--border)`,
