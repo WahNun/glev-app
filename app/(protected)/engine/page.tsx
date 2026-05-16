@@ -30,6 +30,7 @@ import { fetchLatestFingerstick, FS_OVERRIDE_WINDOW_MS } from "@/lib/fingerstick
 import { parseDbTs, parseDbDate, parseLluTs } from "@/lib/time";
 import { hapticSuccess, hapticError } from "@/lib/haptics";
 import SnapSlider from "@/components/log/SnapSlider";
+import ReviewMacrosCards from "@/components/ReviewMacrosCards";
 
 // datetime-local needs "YYYY-MM-DDTHH:mm" in the *local* timezone (the input
 // strips the offset). Using toISOString() would silently shift the value to
@@ -2229,55 +2230,35 @@ export default function EnginePage() {
                     );
                   })()}
                 </div>
-                {/* Macro grid — auto-fit collapses 4 fields to 2 cols on
-                    desktop, 1 col on narrow phones. minmax(180px, 1fr) keeps
-                    placeholder + opt. labels readable without forcing a fixed
-                    2-col that wraps awkwardly on tablets. Mirrors /log's
-                    macro-grid pattern. */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, rowGap: 14 }}>
-                  <div>
-                    {/* KH SnapSlider — snap step + max scale automatically
-                        with the user's carb unit (5g / 0.5 BE / 0.5 KE).
-                        Empty input still allowed → falls back to 0 in the
-                        slider but state stays "" so submit-validation can
-                        distinguish "not entered" from "0 g". */}
-                    <label style={{ fontSize: 13, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>{tEngine("carbs_label")} ({carbUnit.label})</label>
-                    {(() => {
-                      const numeric = parseFloat(carbs);
-                      const safeVal = Number.isFinite(numeric) ? numeric : 0;
-                      const maxInUnit = Math.max(10, Math.round(carbUnit.fromGrams(200)));
-                      const stepInUnit = carbUnit.unit === "g" ? 5 : carbUnit.step;
-                      const decimals = carbUnit.unit === "g" ? 0 : 1;
-                      return (
-                        <SnapSlider
-                          value={safeVal}
-                          onChange={(n) => setCarbs(String(n))}
-                          min={0}
-                          max={maxInUnit}
-                          step={stepInUnit}
-                          accent={ACCENT}
-                          decimals={decimals}
-                          unit={carbUnit.label}
-                          ariaLabel={tEngine("carbs_label")}
-                        />
-                      );
-                    })()}
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 13, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>
-                      {tEngine("fiber_label")} <span style={{ textTransform: "none", color: "var(--text-faint)", fontSize: 12, fontWeight: 500 }}>{tEngine("optional_short")}</span>
-                    </label>
-                    <input style={inp} type="number" placeholder={tEngine("placeholder_fiber")} value={fiber} onChange={(e) => setFiber(e.target.value)}/>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 13, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>{tEngine("protein_label")}</label>
-                    <input style={inp} type="number" placeholder={tEngine("placeholder_protein")} value={protein} onChange={(e) => setProtein(e.target.value)}/>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 13, color: "var(--text-dim)", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>{tEngine("fat_label")}</label>
-                    <input style={inp} type="number" placeholder={tEngine("placeholder_fat")} value={fat} onChange={(e) => setFat(e.target.value)}/>
-                  </div>
-                </div>
+                {/* Macros as tap-able ring cards mirroring the dashboard's
+                    "TODAY'S MACROS" section. Tap a card → its 0.5 g slider
+                    folds out underneath (5 g / 0.5 BE / 0.5 KE for carbs).
+                    State (`carbs`, `protein`, `fat`, `fiber`) is kept here
+                    and threaded through unchanged, so all downstream
+                    validation / save / bolus math keeps working. */}
+                <ReviewMacrosCards
+                  carbs={carbs}
+                  protein={protein}
+                  fat={fat}
+                  fiber={fiber}
+                  setCarbs={setCarbs}
+                  setProtein={setProtein}
+                  setFat={setFat}
+                  setFiber={setFiber}
+                  carbUnit={{
+                    unit: carbUnit.unit,
+                    label: carbUnit.label,
+                    step: carbUnit.step,
+                    toGrams: carbUnit.toGrams,
+                    fromGrams: carbUnit.fromGrams,
+                  }}
+                  labels={{
+                    carbs:   tEngine("carbs_label"),
+                    protein: tEngine("protein_label"),
+                    fat:     tEngine("fat_label"),
+                    fiber:   tEngine("fiber_label"),
+                  }}
+                />
               </div>
 
               {/* Section header: Glukose & Zeit — glucose + CGM pull pill, meal time */}

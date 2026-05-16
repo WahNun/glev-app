@@ -15,6 +15,7 @@ import MealEntryLightExpand from "@/components/MealEntryLightExpand";
 import CurrentDayGlucoseCard from "@/components/CurrentDayGlucoseCard";
 import GlucoseTrendFront from "@/components/GlucoseTrendChart";
 import SortableCardGrid, { type SortableItem } from "@/components/SortableCardGrid";
+import MacroRing from "@/components/MacroRing";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import { useCardOrder } from "@/lib/cardOrder";
 import { parseDbDate, parseDbTs, localeToBcp47 } from "@/lib/time";
@@ -1042,75 +1043,10 @@ function DailyMacrosCard({ meals, targets }: { meals: Meal[]; targets: MacroTarg
   );
 }
 
-// Single circular progress ring used by `DailyMacrosCard`. Big colored arc
-// over a faint track, bold mono number in the centre, CAPS label below, and
-// a small "/ {target}{unit}" hint underneath. The SVG renders at 100% of its
-// (capped) container width so the rings stay legible across viewports.
-function MacroRing({
-  label,
-  value,
-  target,
-  color,
-  unit,
-}: {
-  label: string;
-  value: number;
-  target: number;
-  color: string;
-  unit: string;
-}) {
-  const r = 32;                                     // SVG-unit radius
-  const circ = 2 * Math.PI * r;                     // ring circumference
-  const pct = target > 0 ? Math.min(1, value / target) : 0;
-
-  return (
-    <div style={{
-      display:"flex", flexDirection:"column", alignItems:"center", gap:6,
-      // CRITICAL: width:"100%" + aspectRatio:"1" guarantees identical
-      // outer-circle diameter for all 4 rings regardless of macro
-      // value. Without aspectRatio the cell height could vary with
-      // the value text length below the SVG (e.g. "128" vs "17"),
-      // visually shrinking some rings — the bug screenshot from the
-      // user showed exactly that asymmetry.
-      width:"100%", maxWidth:96,
-    }}>
-      <div style={{ width:"100%", aspectRatio:"1" }}>
-        <svg width="100%" height="100%" viewBox="0 0 80 80" style={{ display:"block" }}>
-        {/* Background track — bumped from 0.06 → 0.14 so the FULL outer
-            circle stays clearly visible even when the colored arc covers
-            only a small fraction (e.g. PROTEIN at 24%). Previously the
-            faint track effectively disappeared, making low-fill rings
-            look smaller than full-fill rings. */}
-        <circle cx="40" cy="40" r={r} fill="none" stroke="var(--border-strong)" strokeWidth="8" />
-        {/* Progress arc — rotate -90deg so 0% sits at 12 o'clock and the arc
-            grows clockwise; rounded cap so the leading edge looks polished. */}
-        <circle
-          cx="40" cy="40" r={r}
-          fill="none" stroke={color} strokeWidth="8" strokeLinecap="round"
-          strokeDasharray={`${(circ * pct).toFixed(2)} ${circ.toFixed(2)}`}
-          transform="rotate(-90 40 40)"
-        />
-        {/* Centre value — bold mono, theme-aware (var(--text)) so it
-            stays legible whether the dashboard is in dark or light mode. */}
-        <text
-          x="40" y="46"
-          textAnchor="middle"
-          fontSize="20" fontWeight="800" fill="var(--text)"
-          fontFamily="var(--font-mono)"
-        >
-          {value}
-        </text>
-        </svg>
-      </div>
-      <div style={{ fontSize:12, color:"var(--text-muted)", textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700 }}>
-        {label}
-      </div>
-      <div style={{ fontSize:11, color:"var(--text-faint)", fontFamily:"var(--font-mono)" }}>
-        / {target}{unit}
-      </div>
-    </div>
-  );
-}
+// `MacroRing` is shared with the Engine wizard review-step — see
+// `components/MacroRing.tsx`. The dashboard imports it at the top of
+// this file so both surfaces stay pixel-identical and the macro palette
+// is sourced from a single place.
 
 // -----------------------------------------------------------------------------
 // RecentRow union + non-meal row renderer
