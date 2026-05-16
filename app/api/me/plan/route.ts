@@ -66,9 +66,21 @@ export async function GET(req: NextRequest) {
   }
 
   const admin = getSupabaseAdmin();
+  // Two-step read: the always-required columns first, then the optional
+  // legacy `subscription_status` column separately. Production Supabase
+  // doesn't always have `subscription_status` (the column is referenced
+  // throughout the code as a legacy beta pathway, but the migration that
+  // was supposed to add it never landed in prod). If we put it in the
+  // SAME `.select(...)` as the required columns and the column is
+  // missing, the entire SELECT fails with PostgREST 42703, the catch
+  // returns `{ plan: "free" }` and every Pro / override user sees "Free"
+  // in the account modal regardless of what admin set. Splitting the
+  // read keeps the route resilient: if the optional column is gone, we
+  // simply treat it as null and let manual_plan_override / profiles.plan
+  // do their job.
   const { data: row, error } = await admin
     .from("profiles")
-    .select("manual_plan_override, manual_plan_expires_at, plan, subscription_status")
+    .select("manual_plan_override, manual_plan_expires_at, plan")
     .eq("user_id", a.user.id)
     .maybeSingle();
   if (error) {
@@ -76,6 +88,20 @@ export async function GET(req: NextRequest) {
       { plan: "free", warning: `profiles read failed: ${error.message}` },
       { status: 200, headers: { "cache-control": "no-store" } },
     );
+  }
+
+  let subscriptionStatus: string | null = null;
+  try {
+    const { data: subRow, error: subErr } = await admin
+      .from("profiles")
+      .select("subscription_status")
+      .eq("user_id", a.user.id)
+      .maybeSingle();
+    if (!subErr && subRow && typeof (subRow as { subscription_status?: unknown }).subscription_status === "string") {
+      subscriptionStatus = (subRow as { subscription_status: string }).subscription_status;
+    }
+  } catch {
+    /* column missing in this environment — fall through with null */
   }
 
   // Single source of truth: `profiles.plan` is now kept in sync by the
@@ -88,7 +114,7 @@ export async function GET(req: NextRequest) {
     manual_plan_override: row?.manual_plan_override ?? null,
     manual_plan_expires_at: row?.manual_plan_expires_at ?? null,
     plan: row?.plan ?? null,
-    subscription_status: row?.subscription_status ?? null,
+    subscription_status: subscriptionStatus,
   });
 
   return NextResponse.json(
