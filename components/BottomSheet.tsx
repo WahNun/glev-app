@@ -51,6 +51,55 @@ export default function BottomSheet({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  // Focus trap. While the sheet is open, keep keyboard focus inside the
+  // dialog: cycle Tab/Shift+Tab between the first and last focusable
+  // element so users can't accidentally tab back to the underlying page
+  // (a11y requirement for aria-modal dialogs). On open we also move
+  // focus into the sheet, and on close we restore it to the previously
+  // focused element so the trigger button regains focus naturally.
+  const sheetRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const root = sheetRef.current;
+    if (!root) return;
+    const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+    function focusables(): HTMLElement[] {
+      if (!root) return [];
+      return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE))
+        .filter((el) => !el.hasAttribute("disabled") && el.offsetParent !== null);
+    }
+    // Move focus into the sheet on open (first focusable element).
+    const initial = focusables()[0];
+    if (initial) initial.focus();
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Tab") return;
+      const els = focusables();
+      if (els.length === 0) return;
+      const first = els[0];
+      const last = els[els.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (e.shiftKey) {
+        if (active === first || !root!.contains(active)) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (active === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      if (previouslyFocused && typeof previouslyFocused.focus === "function") {
+        previouslyFocused.focus();
+      }
+    };
+  }, [open]);
+
   // Body scroll lock so the page underneath doesn't scroll while the sheet
   // is up. Restore the prior overflow value (not just "") so we don't clobber
   // a parent that had its own override.
@@ -107,6 +156,7 @@ export default function BottomSheet({
         }
       `}</style>
       <div
+        ref={sheetRef}
         className="glev-bottom-sheet"
         onClick={(e) => e.stopPropagation()}
         style={{

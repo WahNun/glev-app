@@ -10,6 +10,7 @@ import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
 import { evaluateExercise, exerciseTypeLabelI18n } from "@/lib/exerciseEval";
 import { fetchMacroTargets, DEFAULT_MACRO_TARGETS, type MacroTargets } from "@/lib/userSettings";
 import { TYPE_COLORS, getEvalColor, chipLabelsFrom } from "@/lib/mealTypes";
+import DashboardQuickAddSheet from "@/components/DashboardQuickAddSheet";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
 import MealEntryLightExpand from "@/components/MealEntryLightExpand";
 import CurrentDayGlucoseCard from "@/components/CurrentDayGlucoseCard";
@@ -345,6 +346,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const dateLocale = localeToBcp47(useLocale());
   const t = useTranslations("dashboard");
+  const tQuick = useTranslations("quickAdd");
   const [meals, setMeals]     = useState<Meal[]>([]);
   const [insulin, setInsulin] = useState<InsulinLog[]>([]);
   const [exercise, setExercise] = useState<ExerciseLog[]>([]);
@@ -354,6 +356,9 @@ export default function DashboardPage() {
   // the rings always render even before the row exists or for signed-out
   // SSR. Edited via Settings → "Daily Macro Targets".
   const [macroTargets, setMacroTargets] = useState<MacroTargets>(DEFAULT_MACRO_TARGETS);
+  // Bottom-sheet/modal listing all quick-log entry points (mirrors the
+  // header "+" QuickAddMenu). Opened by the dashboard hero "+" button.
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
 
   useEffect(() => {
     fetchMacroTargets().then(setMacroTargets).catch(() => {});
@@ -483,10 +488,20 @@ export default function DashboardPage() {
             {t("subtitle_count", { n: totalEntries })}
           </p>
         </div>
-        <button onClick={() => router.push("/engine")} style={{ padding:"10px 20px", borderRadius:10, border:"none", background:ACCENT, color:"var(--text)", cursor:"pointer", fontSize:14, fontWeight:600, boxShadow:`0 4px 20px ${ACCENT}40` }}>
-          {t("log_meal_cta")}
+        <button
+          onClick={() => setQuickAddOpen(true)}
+          aria-label={tQuick("open_aria")}
+          aria-haspopup="dialog"
+          aria-expanded={quickAddOpen}
+          style={{ width:44, height:44, padding:0, borderRadius:12, border:"none", background:ACCENT, color:"var(--text)", cursor:"pointer", boxShadow:`0 4px 20px ${ACCENT}40`, display:"flex", alignItems:"center", justifyContent:"center" }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
         </button>
       </div>
+      <DashboardQuickAddSheet open={quickAddOpen} onClose={() => setQuickAddOpen(false)} />
 
       <DashboardSortable items={items}/>
     </div>
