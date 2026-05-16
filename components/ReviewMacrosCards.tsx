@@ -13,9 +13,6 @@ import SnapSlider from "@/components/log/SnapSlider";
 import { TYPE_COLORS } from "@/lib/mealTypes";
 import { hapticSelection } from "@/lib/haptics";
 
-const SURFACE = "var(--surface)";
-const BORDER  = "var(--border)";
-
 type MacroKey = "carbs" | "protein" | "fat" | "fiber";
 
 interface CarbUnitInfo {
@@ -131,46 +128,48 @@ export default function ReviewMacrosCards({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      {/* 4 cards on a single row on desktop / typical phones (393px
-          and up easily fits 4 × ~90px). On very narrow widths the
-          auto-fit wraps to 2 cols so the rings + labels never get
-          squashed below readability. */}
+      {/* Mirrors the dashboard's "TODAY'S MACROS" row 1:1 — same wrapper
+          padding (22px 16px 24px), same 4-column grid with minmax(0, 1fr)
+          so all rings render at identical diameter regardless of
+          label/value width, same gap:8, and per-cell flex wrapper that
+          centers the ring with minWidth:0 (collapses min-content floor).
+          See app/(protected)/dashboard/page.tsx ~line 980. */}
       <div style={{
+        padding: "22px 16px 24px",
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))",
-        gap: 10,
+        gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+        gap: 8,
       }}>
         {cards.map(c => {
           const active = open === c.key;
           return (
-            <button
-              key={c.key}
-              type="button"
-              onClick={() => selectCard(c.key)}
-              aria-pressed={active}
-              aria-label={c.label}
-              style={{
-                all: "unset",
-                cursor: "pointer",
-                boxSizing: "border-box",
-                background: SURFACE,
-                border: `1px solid ${active ? c.color : BORDER}`,
-                borderRadius: 14,
-                padding: "14px 8px 12px",
-                display: "flex",
-                justifyContent: "center",
-                minWidth: 0,
-                transition: "border-color 160ms ease, box-shadow 160ms ease",
-                boxShadow: active ? `0 0 0 1px ${c.color}55` : "none",
-              }}
-            >
-              <MacroRing
-                label={c.label}
-                value={c.value}
-                color={c.color}
-                unit={c.unit}
-              />
-            </button>
+            <div key={c.key} style={{ display: "flex", justifyContent: "center", minWidth: 0 }}>
+              <button
+                type="button"
+                onClick={() => selectCard(c.key)}
+                aria-pressed={active}
+                aria-label={c.label}
+                style={{
+                  all: "unset",
+                  cursor: "pointer",
+                  boxSizing: "border-box",
+                  display: "flex",
+                  justifyContent: "center",
+                  width: "100%",
+                  minWidth: 0,
+                  paddingBottom: 4,
+                  borderBottom: `2px solid ${active ? c.color : "transparent"}`,
+                  transition: "border-color 160ms ease",
+                }}
+              >
+                <MacroRing
+                  label={c.label}
+                  value={c.value}
+                  color={c.color}
+                  unit={c.unit}
+                />
+              </button>
+            </div>
           );
         })}
       </div>
