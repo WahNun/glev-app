@@ -1,0 +1,27 @@
+#302 - Universal "+" Log-Button mit Popup
+What & Why
+Der Dashboard-Hero-Button „+ Mahlzeit loggen" wird zu einem generischen „+"-Button. Beim Tippen öffnet sich ein Popup mit allen Log-Optionen (Mahlzeit/Glev, Insulin, Glukose, Aktivität, Zyklus, Symptome, Einflussfaktor) — identisch zur Liste, die heute hinter dem Chevron im Header steckt. Ziel: ein zweiter, prominenter Einstiegspunkt vom Dashboard aus, ohne das bestehende Header-Menü oder die Tab-Leiste anzufassen.
+
+Done looks like
+Auf dem Dashboard steht an der gleichen Position und im gleichen visuellen Stil wie heute ein „+"-Button (statt „+ Mahlzeit loggen").
+Klick auf „+" öffnet ein Bottom Sheet / Modal mit denselben Einträgen wie das Header-Chevron-Menü (QUICK_ADD_ITEMS), in derselben Reihenfolge, mit denselben Icons und Labels.
+Die Cycle-Gating-Logik (Zyklus nur sichtbar bei passendem Profil + Opt-in) verhält sich genau wie im Header-Menü — dieselbe Single Source of Truth.
+Tippen auf einen Eintrag navigiert zum gleichen Ziel wie der Header-Eintrag (z.B. /engine?tab=bolus) und schließt das Popup.
+Header-Chevron-Menü (QuickAddMenu) und Mobile-Tab-Leiste bleiben unverändert; der „+"-Button ist additiv.
+pnpm --filter <dashboard-package> exec tsc --noEmit (bzw. das Root-typecheck) bleibt clean.
+Out of scope
+Kein Umbau des Header-QuickAddMenu oder der mobilen Tab-Leiste.
+Keine neuen Log-Typen, keine Änderung an QUICK_ADD_ITEMS selbst (außer, falls nötig, einer kleinen Erweiterung der bestehenden Hook-Signatur — z.B. damit auch ein Sheet das Re-Sync-Verhalten beim Öffnen mitnutzen kann; Liste/Reihenfolge/Keys bleiben gleich).
+Keine Änderung des Entries-Page-CTAs (EntryAddCTA) — der nutzt bereits sein eigenes Menü.
+Keine i18n-/Übersetzungs-Reorganisation; bestehende Keys aus dem Header-Menü weiterverwenden.
+Steps
+„+"-Button auf dem Dashboard — Den bestehenden Button (t("log_meal_cta") → router.push("/engine")) durch einen Icon-only „+"-Button an gleicher Stelle und mit gleichem Stil (Accent-Hintergrund, Radius, Shadow, Größe) ersetzen. Aria-Label sinnvoll setzen (z.B. wiederverwendbarer Key für „Loggen").
+Wiederverwendbares Popup — Eine neue Client-Komponente bauen, die das Bottom Sheet / Modal rendert und intern die bestehende useQuickAddVisibleItems(open) aus components/quickAddShared.tsx als Single Source of Truth verwendet (gleiche Icons, gleiche hrefs, gleiche Cycle-Gating-Logik wie QuickAddMenu). Labels über dieselben i18n-Keys wie im Header-Menü auflösen. Klick auf einen Eintrag: hapticLight() + router.push(href) + Schließen — analog zum bestehenden go(href) im Header-Menü.
+Verdrahtung & UX-Details — Popup an den neuen „+"-Button hängen, Schließen via Backdrop-Tap / ESC / Swipe-Down (sofern Bottom Sheet), Focus-Trap und aria-modal korrekt setzen, mobil als Bottom Sheet, Desktop als zentriertes Modal/Popover (am bestehenden Header-Menü-Stil orientieren, damit es visuell konsistent wirkt).
+Typecheck — pnpm run typecheck sauber halten.
+Relevant files
+app/(protected)/dashboard/page.tsx:478-488
+components/quickAddShared.tsx
+components/QuickAddMenu.tsx
+components/Layout.tsx
+lib/haptics.ts

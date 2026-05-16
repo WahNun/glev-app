@@ -1,0 +1,43 @@
+Audit: Compliance-Sprache — alle Hinweise, Disclaimers & Card-Backs in der App
+Hintergrund:
+Glev ist kein Medizinprodukt und keine klinische Anwendung. Dieser Audit soll sicherstellen, dass alle Texte in der App dieser Linie entsprechen — inklusive Hinweisbanner, Disclaimers, Tooltips, Info-Texte und die Rückseiten von Karten.
+Konkretes Beispiel das den Audit ausgelöst hat:
+Nach dem Speichern eines Einflussfaktor-Eintrags erscheint:
+
+„Glev wertet Einflussfaktoren nicht klinisch aus — die Einträge dienen dir als persönliches Tagebuch und beeinflussen keine Insulin-Empfehlung."
+
+Probleme: „klinisch" impliziert dass Glev anderswo klinisch auswertet. „Insulin-Empfehlung" klingt nach Medical Device. Beides muss weg.
+
+Was zu durchsuchen ist:
+Durchsuche vollständig alle Komponenten, i18n-Dateien (de.json, en.json), API-Responses und Card-Komponenten nach Texten die folgende Begriffe oder Muster enthalten:
+
+„klinisch" / „clinical"
+„Empfehlung" / „recommendation" im medizinischen oder Dosierungskontext
+„Medizinprodukt", „Diagnose", „Therapie", „Behandlung" / die englischen Entsprechungen
+„basierend auf deinen Daten empfehlen wir" oder ähnliche Formulierungen
+Aussagen über Insulin-Dosierung die wie eine Anweisung oder Empfehlung klingen
+„Ziel", „klinisches Ziel", „Zielwert" im therapeutischen Sinne
+
+Zusätzlich — Card-Backs:
+Die App hat Karten mit einer Rückseite (Flip-Side / Card Back) die erklärenden Text und Kontext enthalten (z.B. in Insights, Engine-Karten). Diese sind genauso Teil des Audits. Suche explizit nach Komponenten mit back, flip, reverse, detail im Namen oder entsprechenden CSS-Klassen, sowie allen Texten die auf Card-Backs gerendert werden.
+
+Leitlinie für konforme Sprache:
+✅ Erlaubt:
+
+„Glev zeigt dir..."
+„als Orientierung" / „zur Information"
+„persönliches Tagebuch"
+„Richtwert"
+„Kontext für dein Gespräch mit dem Arzt"
+
+❌ Nicht erlaubt:
+
+„klinisch" in jeder Form
+„Empfehlung" im Dosierungs- oder Therapiekontext
+„Diagnose", „Therapie", „Behandlung"
+Formulierungen die implizieren, dass die App in irgendeinem Bereich klinisch bewertet oder empfiehlt
+
+
+Ausgabe:
+Für jeden gefundenen Text: Datei + Zeile + aktueller Text + konkreter Vorschlag für eine konforme Umformulierung.
+Kein Code ändern — nur Audit + Vorschlagsliste. Ich entscheide dann was umgesetzt wird.
