@@ -457,26 +457,31 @@ function MobileGlevFab({
         aria-hidden="true"
         style={{
           display: "inline-flex", alignItems: "center", justifyContent: "center",
-          width: 48, height: 48, borderRadius: "50%",
+          // Sized to read as "the same family" as the other nav tabs
+          // (22px icons) rather than a heavy outsize FAB: 38px circle
+          // with a 20px brand mark keeps the icon area in proportion
+          // with neighbouring tabs, just framed by a ring + lifted by
+          // 8px so it still reads as the centre / primary affordance.
+          width: 38, height: 38, borderRadius: "50%",
           background: recording ? `${ACCENT}1f` : SURFACE,
           border: `1px solid ${recording ? ACCENT : `${ACCENT}66`}`,
           boxShadow: recording
             ? undefined
-            : `0 0 0 1px ${ACCENT}22, 0 8px 20px rgba(0,0,0,0.40)`,
-          // Lift the bubble above the nav row so it visually pops into the
-          // page content area — same elevation pattern as iOS/Material FABs.
-          transform: "translateY(-14px)",
-          filter: `drop-shadow(0 0 ${recording ? 8 : 4}px ${ACCENT}${recording ? "cc" : "55"})`,
+            : `0 0 0 1px ${ACCENT}22, 0 4px 12px rgba(0,0,0,0.32)`,
+          transform: "translateY(-8px)",
+          filter: `drop-shadow(0 0 ${recording ? 6 : 3}px ${ACCENT}${recording ? "cc" : "55"})`,
           animation: recording ? "glevMicPulse 1.4s ease-in-out infinite" : undefined,
         }}
       >
-        <GlevLogo size={24} color={ACCENT} bg="transparent" />
+        <GlevLogo size={20} color={ACCENT} bg="transparent" />
       </span>
       <span
         style={{
-          // Negative margin pulls the label back up to where a regular
-          // MobileTab label sits, even though the icon was lifted by -14px.
-          marginTop: -10,
+          // Pull the label back toward the baseline shared with the other
+          // nav tabs' labels (since the icon was lifted by -8px). Tuned
+          // so the "Glev" caption sits exactly in line with neighbouring
+          // captions, not floating mid-row.
+          marginTop: -6,
           lineHeight: 1.1, whiteSpace: "nowrap",
           overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%",
         }}
