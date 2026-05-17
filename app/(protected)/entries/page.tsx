@@ -3034,8 +3034,90 @@ function MealEditor({ meal, onSaved, onCancel }: {
     return new Date(d.getTime() - off).toISOString().slice(0, 16);
   });
   const [mealTimeSeed] = useState<string>(mealTimeLocal);
+  // Editable glucose_before — auto-populated from the CGM history
+  // when the user changes the meal time (user request 2026-05-17:
+  // "ich will dass wenn man nach voice log die zeit verändert
+  // entsprechend der cgm wert passend zu dieser ausgewählten zeit
+  // aus der historie gezogen wird und autopopuliert"). We seed from
+  // the persisted glucose_before; the auto-fill below replaces it
+  // with the CGM sample closest to the new meal_time within a ±15
+  // minute window. `glucoseSource` powers a small "auto / manual"
+  // hint under the field so the user knows whether the current
+  // number was hand-typed or pulled from the CGM stream.
+  const [glucose,       setGlucose]       = useState<string>(meal.glucose_before != null ? String(meal.glucose_before) : "");
+  const [glucoseSource, setGlucoseSource] = useState<"manual" | "cgm-auto" | "cgm-miss" | "cgm-error" | "cgm-loading" | null>(null);
+  // Bumped on every manual onChange. The debounced CGM fetch
+  // captures the value at request-start; if it changes before the
+  // response lands, we drop the response so a late-arriving CGM
+  // value cannot clobber what the user just typed (architect-found
+  // race, 2026-05-17).
+  const manualEditCounter = useRef(0);
   const [busy,    setBusy]    = useState(false);
   const [err,     setErr]     = useState<string | null>(null);
+
+  // Debounced CGM auto-fetch: whenever the user picks a new meal time
+  // (and it actually differs from the seed), look for the CGM sample
+  // closest to that wallclock within ±15 min and write its value into
+  // the glucose field. Skips when the time is unchanged so we don't
+  // clobber a manual edit on every render. /api/cgm/samples returns
+  // continuous readings across both source tables (cgm_samples +
+  // apple_health_readings) so this works for LLU, Nightscout, and
+  // HealthKit users alike.
+  useEffect(() => {
+    if (mealTimeLocal.trim() === mealTimeSeed.trim()) return;
+    if (mealTimeLocal.trim() === "") return;
+    if (busy) return; // freeze auto-fill while a save is in flight
+    const candidate = new Date(mealTimeLocal);
+    if (Number.isNaN(candidate.getTime())) return;
+    let cancelled = false;
+    const editVersionAtStart = manualEditCounter.current;
+    const ctrl = new AbortController();
+    setGlucoseSource("cgm-loading");
+    const id = window.setTimeout(async () => {
+      const targetMs = candidate.getTime();
+      const windowMs = 15 * 60_000;
+      const fromIso  = new Date(targetMs - windowMs).toISOString();
+      const toIso    = new Date(targetMs + windowMs).toISOString();
+      try {
+        const r = await fetch(
+          `/api/cgm/samples?from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}`,
+          { cache: "no-store", signal: ctrl.signal },
+        );
+        if (cancelled) return;
+        if (!r.ok) { setGlucoseSource("cgm-error"); return; }
+        const body = await r.json() as { samples?: Array<{ v: number; t: number }> };
+        if (cancelled) return;
+        // Manual-dirty guard: if the user typed something into the
+        // glucose field between request-start and now, never clobber
+        // it — only update the status hint.
+        if (manualEditCounter.current !== editVersionAtStart) return;
+        const samples = Array.isArray(body.samples) ? body.samples : [];
+        if (samples.length === 0) {
+          setGlucoseSource("cgm-miss");
+          return;
+        }
+        // Pick the sample whose timestamp is closest to the chosen
+        // meal time. Ties (rare) break by the earlier sample.
+        let best = samples[0];
+        let bestDelta = Math.abs(best.t - targetMs);
+        for (const s of samples) {
+          const d = Math.abs(s.t - targetMs);
+          if (d < bestDelta) { best = s; bestDelta = d; }
+        }
+        setGlucose(String(Math.round(best.v)));
+        setGlucoseSource("cgm-auto");
+      } catch (e) {
+        if (cancelled) return;
+        if ((e as { name?: string })?.name === "AbortError") return;
+        setGlucoseSource("cgm-error");
+      }
+    }, 450);
+    return () => {
+      cancelled = true;
+      ctrl.abort();
+      window.clearTimeout(id);
+    };
+  }, [mealTimeLocal, mealTimeSeed, busy]);
 
   // Auto-scroll the editor into view when it mounts. The list is long and
   // the editor often opens far below the fold (depending on which entry the
@@ -3122,6 +3204,24 @@ function MealEditor({ meal, onSaved, onCancel }: {
         mealTimeIso = d.toISOString();
       }
     }
+    // Glucose: empty → leave unchanged (don't clear an existing value
+    // by accident), otherwise require a finite positive number. Only
+    // patch when the value actually differs from the persisted one to
+    // avoid spurious lifecycle recomputes.
+    const glucoseSeed = meal.glucose_before != null ? String(meal.glucose_before) : "";
+    let glucoseToWrite: number | null | undefined;
+    if (glucose.trim() !== glucoseSeed.trim()) {
+      if (glucose.trim() === "") {
+        glucoseToWrite = undefined; // leave column unchanged on blank
+      } else {
+        const gv = parseNum(glucose);
+        if (gv === null || gv <= 0) {
+          setErr("Glukose muss eine positive Zahl sein.");
+          return;
+        }
+        glucoseToWrite = gv;
+      }
+    }
     setBusy(true);
     try {
       const updated = await updateMeal(meal.id, {
@@ -3130,7 +3230,8 @@ function MealEditor({ meal, onSaved, onCancel }: {
         fat_grams:     f,
         fiber_grams:   fb,
         insulin_units: i,
-        ...(mealTimeIso !== undefined ? { meal_time: mealTimeIso } : null),
+        ...(mealTimeIso   !== undefined ? { meal_time:      mealTimeIso }   : null),
+        ...(glucoseToWrite !== undefined ? { glucose_before: glucoseToWrite } : null),
       });
       onSaved(updated);
     } catch (e) {
@@ -3175,7 +3276,10 @@ function MealEditor({ meal, onSaved, onCancel }: {
       {/* Editable meal time — native datetime-local picker so iOS /
           Android render their wheel + calendar UI without us needing
           a custom widget. Same styling as EditField below to keep
-          the form visually consistent. */}
+          the form visually consistent. Whenever the user picks a new
+          time, the effect above queries /api/cgm/samples in a ±15min
+          window around that wallclock and auto-populates the glucose
+          field with the closest CGM reading from the user's history. */}
       <label style={{ display:"flex", flexDirection:"column", gap:4 }}>
         <span style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>
           UHRZEIT
@@ -3199,6 +3303,58 @@ function MealEditor({ meal, onSaved, onCancel }: {
             boxSizing:"border-box",
           }}
         />
+      </label>
+
+      {/* Editable glucose_before — manual edit OR auto-populated
+          from the CGM history when the meal time changes (see
+          effect above). The small hint under the input reflects
+          provenance so the user knows whether the current number
+          was hand-typed or pulled from the stream. */}
+      <label style={{ display:"flex", flexDirection:"column", gap:4 }}>
+        <span style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>
+          GLUKOSE VORHER (mg/dL)
+        </span>
+        <input
+          type="number"
+          inputMode="decimal"
+          value={glucose}
+          onChange={(e) => {
+            setGlucose(e.target.value);
+            setGlucoseSource("manual");
+            manualEditCounter.current += 1; // invalidate any pending CGM fetch
+          }}
+          placeholder="z.B. 110"
+          style={{
+            background:"var(--surface-soft)",
+            border:`1px solid ${GREEN}40`,
+            borderRadius:8,
+            padding:"10px 12px",
+            color:"var(--text)",
+            fontSize:14,
+            fontWeight:600,
+            fontFamily:"var(--font-mono)",
+            outline:"none",
+            colorScheme:"dark",
+            width:"100%",
+            boxSizing:"border-box",
+          }}
+        />
+        {glucoseSource && (
+          <span style={{
+            fontSize:11, color:
+              glucoseSource === "cgm-auto"    ? GREEN :
+              glucoseSource === "cgm-loading" ? "var(--text-dim)" :
+              glucoseSource === "cgm-miss"    ? PINK :
+              glucoseSource === "cgm-error"   ? PINK : "var(--text-dim)",
+            letterSpacing:"0.02em", marginTop:2,
+          }}>
+            {glucoseSource === "cgm-auto"    && "✓ automatisch aus CGM-Historie übernommen"}
+            {glucoseSource === "cgm-loading" && "Suche CGM-Messung zur gewählten Uhrzeit…"}
+            {glucoseSource === "cgm-miss"    && "Keine CGM-Messung ±15 min um diese Zeit gefunden — bitte manuell eintragen."}
+            {glucoseSource === "cgm-error"   && "CGM gerade nicht erreichbar — bitte manuell eintragen oder später erneut versuchen."}
+            {glucoseSource === "manual"      && "Manuell überschrieben"}
+          </span>
+        )}
       </label>
 
       {err && (
