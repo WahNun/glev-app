@@ -607,7 +607,18 @@ function MobileGlevFab({
             transform: "translate(-50%, calc(-50% - 20px))",
             display: "inline-flex", alignItems: "center", justifyContent: "center",
             width: 52, height: 52, borderRadius: "50%",
-            background: recording ? `${ACCENT}1f` : SURFACE,
+            // Always paint a solid SURFACE base so the nav's top
+            // hair-line border (drawn on the parent <nav>) NEVER
+            // bleeds through the bubble. Previously the recording
+            // state used `${ACCENT}1f` (12% opacity) directly, which
+            // let the nav edge show as a horizontal line cutting
+            // through the bubble (user feedback 2026-05-17 screenshot).
+            // The accent tint that conveys "recording" is now layered
+            // ON TOP of the opaque SURFACE as a translucent overlay,
+            // so the visual cue is preserved without any see-through.
+            background: recording
+              ? `linear-gradient(${ACCENT}33, ${ACCENT}33), ${SURFACE}`
+              : SURFACE,
             border: `1px solid ${recording ? ACCENT : `${ACCENT}66`}`,
             boxShadow: recording
               ? undefined
