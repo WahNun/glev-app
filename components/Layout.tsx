@@ -372,7 +372,15 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       <nav className="glev-mobile-nav" style={{
         position: "fixed", bottom: 0, left: 0, right: 0,
         background: NAV_SURFACE, borderTop: `1px solid ${NAV_BORDER}`,
-        padding: "6px 4px env(safe-area-inset-bottom, 0px)", zIndex: 100,
+        // Bottom padding: previously the full env(safe-area-inset-bottom)
+        // (~34 px on notched iPhones) which left a noticeably tall dark
+        // band below the tab labels — Instagram/X/TikTok pull their nav
+        // icons MUCH closer to the home indicator. We now subtract 18 px
+        // from the inset (clamped to 4 px minimum on non-safe-area
+        // devices) so labels sit a comfortable ~16 px above the home
+        // indicator instead of ~34 px (user feedback 2026-05-17).
+        padding: "6px 4px max(4px, calc(env(safe-area-inset-bottom, 0px) - 18px))",
+        zIndex: 100,
       }}>
         <MobileTab
           label={tNav("dashboard")}
