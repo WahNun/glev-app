@@ -580,7 +580,26 @@ export default function DashboardPage() {
              cluster horizontally to see the alternate card; on mobile
              the dashboard is also not reorder-driven. */
           .glev-cluster-bar    { display: none !important; }
-          .glev-quickadd-cta   { margin-top: 4px !important; height: 44px !important; }
+          /* Floating-bubble FAB on phones: lift the quick-add button
+             out of the cluster flow, pin it bottom-right above the
+             mobile bottom-nav (56px nav + safe-area inset), make it a
+             solid-accent circle so it reads as a primary action. The
+             control cluster keeps its place; the button just stops
+             taking layout space, freeing those ~50px for the score. */
+          .glev-quickadd-cta {
+            position: fixed !important;
+            right: 16px !important;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 72px) !important;
+            width: 56px !important;
+            height: 56px !important;
+            margin-top: 0 !important;
+            border-radius: 50% !important;
+            background: #4F6EF7 !important;
+            border: 1px solid rgba(255,255,255,0.12) !important;
+            box-shadow: 0 10px 28px rgba(0,0,0,0.45), 0 0 0 1px rgba(79,110,247,0.35) !important;
+            z-index: 60 !important;
+          }
+          .glev-quickadd-cta svg line { stroke: #fff !important; }
           .glev-control-front  { padding: 12px 16px 14px !important; }
           .glev-control-front .glev-control-header { margin-bottom: 8px !important; }
           .glev-macros-front   { padding: 12px 16px 10px !important; }
