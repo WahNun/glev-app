@@ -942,7 +942,7 @@
     "swipe_default_title": "Tap or swipe to see more",
     "swipe_default_body": "Swipe horizontally to move between insights. A short explanation appears here for each card.",
     "swipe_ctx_time-in-range_title": "Time in range",
-    "swipe_ctx_time-in-range_body": "The share of your glucose readings between 70 and 180 mg/dL. Clinical benchmark: ≥ 70%. A rising number means steadier days; a falling number points to more excursions or gaps in insulin coverage.",
+    "swipe_ctx_time-in-range_body": "Clinical benchmark: ≥ 70 % in range and < 4 % below 70 mg/dL. A stable or slowly rising number over several weeks is the goal — a sudden drop of several points is a signal to review basal, ICR, or bolus timing with your care team. The definition and how it's computed live on the back of the card.",
     "swipe_ctx_gmi-a1c_title": "Estimated long-term metrics",
     "swipe_ctx_gmi-a1c_body": "Average glucose and GMI (estimated A1c) over the selected window. GMI is derived from your CGM data — not the same as a lab A1c, but a useful trend indicator between clinic visits.",
     "swipe_ctx_glucose-trend_title": "Glucose trend",

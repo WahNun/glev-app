@@ -950,7 +950,7 @@
     "swipe_default_title": "Tippe oder wische, um mehr zu sehen",
     "swipe_default_body": "Wische horizontal, um zwischen Erkenntnissen zu wechseln. Hier erscheint zu jeder Karte eine kurze Erklärung.",
     "swipe_ctx_time-in-range_title": "Zeit im Zielbereich",
-    "swipe_ctx_time-in-range_body": "Der Anteil deiner Glukosewerte zwischen 70 und 180 mg/dL. Klinischer Richtwert: ≥ 70%. Ein steigender Wert bedeutet stabilere Tage; ein fallender Wert deutet auf häufigere Ausschläge oder Lücken in der Insulinabdeckung hin.",
+    "swipe_ctx_time-in-range_body": "Klinischer Richtwert: ≥ 70 % im Bereich und < 4 % unter 70 mg/dL. Ein stabiler oder leicht steigender Wert über mehrere Wochen ist das Ziel — ein plötzlicher Abfall um mehrere Prozentpunkte ist Anlass, Basal, ICR oder das Timing der Bolus-Gabe mit deinem Team zu besprechen. Die Definition und Berechnung findest du auf der Kartenrückseite.",
     "swipe_ctx_gmi-a1c_title": "Geschätzte Langzeitwerte",
     "swipe_ctx_gmi-a1c_body": "Ø Glukose und GMI (geschätztes HbA1c) im gewählten Zeitraum. GMI ist eine Schätzung aus deinen CGM-Daten — nicht identisch mit einem Labor-A1c, aber ein guter Indikator für den Trend zwischen Arztterminen.",
     "swipe_ctx_glucose-trend_title": "Glukose-Trend",
