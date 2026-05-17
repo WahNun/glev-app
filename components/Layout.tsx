@@ -115,6 +115,20 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // tap means "stop recording" (not "open quick-add"), and a "Speak"
   // pill appears in the header as a global cue + secondary stop tap.
   const voice = useVoiceRecording();
+  // Footer-nav helper: always navigate, but gracefully stop any active
+  // voice recording first (2026-05-17 user request: "footer navigation
+  // sollte zu jeder zeit erlaubt sein egal welchen zustand bestimmte
+  // tabs gerade repräsentieren"). Without this, tapping Dashboard /
+  // Entries / Insights / Settings while recording would leave the mic
+  // stream and the pulsing header pill running on the next screen.
+  // The centre Glev FAB keeps its own behaviour (tap = stop recording)
+  // and is intentionally NOT routed through navTo.
+  const navTo = (path: string) => {
+    if (voice.recording) {
+      try { voice.requestStop(); } catch {}
+    }
+    router.push(path);
+  };
   // Mobile bottom-nav: tapping the Glev slot now goes STRAIGHT to the
   // engine voice screen (the meal log flow) instead of popping a
   // pick-your-flow action sheet. The two secondary flows (Glukose
@@ -494,7 +508,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         <MobileTab
           label={tNav("dashboard")}
           active={pathname.startsWith("/dashboard")}
-          onClick={() => router.push("/dashboard")}
+          onClick={() => navTo("/dashboard")}
           icon={(a) => (
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : NAV_INACTIVE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 11l9-8 9 8" />
@@ -505,7 +519,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         <MobileTab
           label={tNav("entries")}
           active={pathname.startsWith("/entries")}
-          onClick={() => router.push("/entries")}
+          onClick={() => navTo("/entries")}
           icon={(a) => (
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : NAV_INACTIVE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="20" x2="18" y2="10"/>
@@ -558,7 +572,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         <MobileTab
           label={tNav("insights")}
           active={pathname.startsWith("/insights")}
-          onClick={() => router.push("/insights")}
+          onClick={() => navTo("/insights")}
           icon={(a) => (
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : NAV_INACTIVE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 18h6"/>
@@ -570,7 +584,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         <MobileTab
           label={tNav("settings")}
           active={pathname.startsWith("/settings")}
-          onClick={() => router.push("/settings")}
+          onClick={() => navTo("/settings")}
           icon={(a) => (
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : NAV_INACTIVE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="3" />

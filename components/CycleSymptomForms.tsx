@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 import {
   insertMenstrualLog,
   CYCLE_PHASES,
@@ -410,6 +411,16 @@ export function CycleForm() {
 
 export function SymptomForm() {
   const t = useTranslations("engineLog");
+  const router = useRouter();
+  // Holds the post-save auto-redirect timer so we can cancel it on
+  // unmount (e.g. user taps a bottom-nav tab during the 1.1s delay)
+  // and avoid yanking them to /entries after they already navigated
+  // somewhere else. Architect flagged the unmanaged setTimeout as a
+  // race-condition regression — this ref is the fix.
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
+  }, []);
   const [selected, setSelected] = useState<Set<SymptomType>>(new Set());
   const [severity, setSeverity] = useState<number>(3);
   const [occurredAt, setOccurredAt] = useState<string>(() => nowLocalDt());
@@ -501,6 +512,20 @@ export function SymptomForm() {
       setOccurredAt(nowLocalDt());
       setSeverity(3);
       try { window.dispatchEvent(new CustomEvent("glev:symptom-updated")); } catch {}
+      // After a successful symptom log, auto-redirect to /entries so
+      // the user sees their fresh entry in the timeline (2026-05-17
+      // user request: "wenn ich gerade ein symptom geloggt habe sollte
+      // ich eigentlich direkt zum entries screen weitergeleitet werden
+      // kurz nach der erfolgsbestätigung"). 1100 ms gives the success
+      // banner + SaveButton tick animation time to register; longer
+      // delays felt like the form was stuck. Timer id is tracked in
+      // redirectTimerRef so the unmount effect can cancel it if the
+      // user navigates away first (footer-nav tap during the delay).
+      if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
+      redirectTimerRef.current = setTimeout(() => {
+        redirectTimerRef.current = null;
+        try { router.push("/entries"); } catch {}
+      }, 1100);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       hapticError();
