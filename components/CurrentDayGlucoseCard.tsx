@@ -12,6 +12,7 @@ import {
   FS_OVERRIDE_WINDOW_MS,
   type FingerstickReading,
 } from "@/lib/fingerstick";
+import { getTargetRange, fetchTargetRange, DEFAULT_TARGET_RANGE, type TargetRange } from "@/lib/userSettings";
 
 const ACCENT = "#4F6EF7";
 const GREEN = "#22D3A0";
@@ -20,8 +21,13 @@ const ORANGE = "#FF9500";
 const SURFACE = "var(--surface)";
 const BORDER = "var(--border)";
 
-const RANGE_LOW = 70;
-const RANGE_HIGH = 180;
+// Defaults match `DEFAULT_TARGET_RANGE` (lib/userSettings.ts) — used
+// as the initial sync band before each component's `getTargetRange()`
+// call resolves the user's saved value. Every consumer (HeroFront big
+// value color, RollingChart in-range band, BackStats TIR/TAR/TBR
+// tiles) reads its own range so we don't have to prop-drill it.
+const DEFAULT_RANGE_LOW  = DEFAULT_TARGET_RANGE.low;
+const DEFAULT_RANGE_HIGH = DEFAULT_TARGET_RANGE.high;
 
 type Reading = { value: number | null; unit: string; timestamp: string | null; trend: string };
 
@@ -278,7 +284,14 @@ function HeroFront({
   const fsOverride = latestFs && (now - latestFs.t) <= FS_OVERRIDE_WINDOW_MS
     ? latestFs : null;
   const current = fsOverride ?? cgmCurrent;
-  const valueColor = current ? colorFor(current.v) : "var(--text-dim)";
+  // Use the user's saved target band (user_settings.target_min_mgdl /
+  // target_max_mgdl, Migration 20260517) so the big-value colour
+  // agrees with the rest of the app (Today's Summary tile,
+  // Dashboard Trend Breakdown, Insights TIR card, PDF). Sync seed
+  // from localStorage mirror avoids first-paint colour flicker.
+  const [heroRange, setHeroRange] = useState<TargetRange>(() => getTargetRange());
+  useEffect(() => { fetchTargetRange().then(setHeroRange).catch(() => {}); }, []);
+  const valueColor = current ? colorFor(current.v, heroRange.low, heroRange.high) : "var(--text-dim)";
   const ageLabel = current ? formatAge(now - current.t) : null;
 
   // Trend delta is CGM-derived: fingersticks are too sparse to drive a
@@ -431,6 +444,14 @@ function computeDelta15m(
    `glucoseLineColor(last.v)`. */
 function RollingChart({ readings }: { readings: ChartPoint[] }) {
   const t = useTranslations("insights");
+  // User-saved TIR band drives the green "in-range" shaded rectangle
+  // overlay and the Y-axis hint at top/bottom of the band so the chart
+  // reads in lock-step with the user's Settings choice rather than the
+  // 70/180 default.
+  const [chartRange, setChartRange] = useState<TargetRange>(() => getTargetRange());
+  useEffect(() => { fetchTargetRange().then(setChartRange).catch(() => {}); }, []);
+  const RANGE_LOW  = chartRange.low;
+  const RANGE_HIGH = chartRange.high;
   // Measure the container so the SVG always renders in true pixel space.
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState<{ w: number; h: number }>({ w: 720, h: 200 });
@@ -665,6 +686,13 @@ function RollingChart({ readings }: { readings: ChartPoint[] }) {
 }
 
 function BackStats({ readings }: { readings: Array<{ t: number; v: number }> }) {
+  // Today's-Summary TIR/TAR/TBR tiles use the same user-saved band
+  // (user_settings.target_min_mgdl / target_max_mgdl, Migration
+  // 20260517) as Insights + the PDF so all three surfaces agree.
+  const [statsRange, setStatsRange] = useState<TargetRange>(() => getTargetRange());
+  useEffect(() => { fetchTargetRange().then(setStatsRange).catch(() => {}); }, []);
+  const RANGE_LOW  = statsRange.low;
+  const RANGE_HIGH = statsRange.high;
   // The parent now feeds us a rolling 12h window (so the front-card
   // chart never has a midnight hole). The "Today's summary" tile is
   // semantically still about *today*, so we filter back down here.
@@ -693,10 +721,10 @@ function BackStats({ readings }: { readings: Array<{ t: number; v: number }> }) 
   const fmtTime = (t: number) => new Date(t).toLocaleTimeString("en", { hour: "numeric", minute: "2-digit" });
 
   const stats: Array<{ l: string; v: string; c?: string }> = [
-    { l: "Daily avg", v: `${avg} mg/dL`, c: colorFor(avg) },
+    { l: "Daily avg", v: `${avg} mg/dL`, c: colorFor(avg, RANGE_LOW, RANGE_HIGH) },
     { l: "Time in range", v: `${tir}%`, c: tir >= 70 ? GREEN : tir >= 50 ? ORANGE : PINK },
-    { l: "Time above 180", v: `${tar}%`, c: tar > 25 ? ORANGE : "var(--text-strong)" },
-    { l: "Time below 70", v: `${tbr}%`, c: tbr > 4 ? PINK : "var(--text-strong)" },
+    { l: `Time above ${RANGE_HIGH}`, v: `${tar}%`, c: tar > 25 ? ORANGE : "var(--text-strong)" },
+    { l: `Time below ${RANGE_LOW}`,  v: `${tbr}%`, c: tbr > 4 ? PINK : "var(--text-strong)" },
     { l: "Highest", v: `${Math.round(max.v)}`, c: ORANGE },
     { l: "Lowest", v: `${Math.round(min.v)}`, c: PINK },
   ];
@@ -721,9 +749,9 @@ function BackStats({ readings }: { readings: Array<{ t: number; v: number }> }) 
   );
 }
 
-function colorFor(v: number) {
-  if (v < RANGE_LOW) return PINK;
-  if (v > RANGE_HIGH) return ORANGE;
+function colorFor(v: number, low: number = DEFAULT_RANGE_LOW, high: number = DEFAULT_RANGE_HIGH) {
+  if (v < low)  return PINK;
+  if (v > high) return ORANGE;
   return GREEN;
 }
 

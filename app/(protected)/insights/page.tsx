@@ -7,7 +7,7 @@ import { fetchMeals, fetchMealsForEngine, unifiedOutcome, type Meal } from "@/li
 import { TYPE_COLORS, chipLabelsFrom } from "@/lib/mealTypes";
 import { computeAdaptiveICR } from "@/lib/engine/adaptiveICR";
 import { fetchIcrSchedule, findActiveSlot, saveIcrSchedule, EMPTY_ICR_SCHEDULE, type IcrSchedule } from "@/lib/icrSchedule";
-import { fetchInsulinSettings, persistEngineIcr, DEFAULT_INSULIN_SETTINGS } from "@/lib/userSettings";
+import { fetchInsulinSettings, persistEngineIcr, DEFAULT_INSULIN_SETTINGS, fetchTargetRange, getTargetRange, DEFAULT_TARGET_RANGE } from "@/lib/userSettings";
 import { pairBolusesToMeals } from "@/lib/engine/pairing";
 import { updateInsulinLogLink } from "@/lib/insulin";
 import { fetchRejectedPairs, addRejectedPair, pairKey, type RejectedPairKey } from "@/lib/rejectedPairs";
@@ -111,8 +111,15 @@ const EVAL_NORM = (ev: string|null): EvalBucket => {
 // standard defaults below.
 const HYPO_THRESHOLD_MGDL  = 70;   // BG < 70 → hypo
 const HYPER_THRESHOLD_MGDL = 250;  // BG > 250 → hyper
-const TIR_LOW_MGDL         = 70;   // TIR target band lower bound (TBR < this)
-const TIR_HIGH_MGDL        = 180;  // TIR target band upper bound (TAR > this)
+// TIR_LOW_MGDL / TIR_HIGH_MGDL are now read from the user's saved
+// target range (user_settings.target_min_mgdl / target_max_mgdl,
+// Migration 20260517) and threaded through as `tirLow` / `tirHigh`
+// locals inside the component. The default constants below are only
+// used as the initial sync value before the async DB load lands;
+// they match DEFAULT_TARGET_RANGE so the first paint never shows a
+// different band than what the user will see after the fetch.
+const TIR_LOW_MGDL         = DEFAULT_TARGET_RANGE.low;
+const TIR_HIGH_MGDL        = DEFAULT_TARGET_RANGE.high;
 const CV_STABLE_PCT        = 36;   // < this = stable (green)
 const CV_HIGH_PCT          = 50;   // > this = unstable (red); between = yellow
 const MIN_DATAPOINTS       = 3;    // < this in window → "Nicht genug Daten"
@@ -271,6 +278,19 @@ export default function InsightsPage() {
   useEffect(() => {
     fetchInsulinSettings().then(s => setUserIcr(s.icr)).catch(() => {});
   }, []);
+  // Personal TIR target range (user_settings.target_min_mgdl /
+  // target_max_mgdl, Migration 20260517). Initialised synchronously
+  // from the localStorage mirror so the very first paint already
+  // uses the right band when the user has previously saved one on
+  // this device; then refreshed from the DB so cross-device sessions
+  // converge to the persisted value. Threaded through as `tirLow`
+  // / `tirHigh` everywhere the page used to hardcode 70 / 180.
+  const [targetRange, setTargetRange] = useState(() => getTargetRange());
+  useEffect(() => {
+    fetchTargetRange().then(setTargetRange).catch(() => {});
+  }, []);
+  const tirLow  = targetRange.low;
+  const tirHigh = targetRange.high;
 
   // ICR schedule (Phase B2): when the user has time-banded ICRs
   // configured AND the master toggle is on, the Adaptive Engine card
@@ -506,9 +526,13 @@ export default function InsightsPage() {
   const bucket = (arr: number[]) => {
     const n = arr.length;
     if (n === 0) return { vlow: 0, lo: 0, inR: 0, hi: 0, n: 0 };
+    // Severe hypo band stays anchored at 54 mg/dL (clinical "Level 2
+    // hypoglycaemia" cutoff — non-negotiable, not user-configurable).
+    // The TBR / TAR bounds follow the user's saved target range so the
+    // bar agrees with the rest of the app.
     const cVlow = arr.filter(g => g < 54).length;
-    const cLo   = arr.filter(g => g >= 54 && g < 70).length;
-    const cHi   = arr.filter(g => g > 180).length;
+    const cLo   = arr.filter(g => g >= 54 && g < tirLow).length;
+    const cHi   = arr.filter(g => g > tirHigh).length;
     const pct = (c: number) => c === 0 ? 0 : Math.max(1, Math.round((c / n) * 100));
     const vlow = pct(cVlow);
     const lo   = pct(cLo);
@@ -780,8 +804,8 @@ export default function InsightsPage() {
   const currentBgAgoMin = currentBgT != null ? Math.max(0, Math.round((Date.now() - currentBgT) / 60000)) : null;
   const currentBgZone: "tbr" | "tir" | "tar" | null = currentBg == null
     ? null
-    : currentBg < TIR_LOW_MGDL ? "tbr"
-    : currentBg <= TIR_HIGH_MGDL ? "tir"
+    : currentBg < tirLow ? "tbr"
+    : currentBg <= tirHigh ? "tir"
     : "tar";
   // Position the crosshair within the bar so it lands inside the
   // band that matches its value. Each segment's WIDTH represents
@@ -790,14 +814,14 @@ export default function InsightsPage() {
   // off-the-chart edges.
   let currentMarkerPct: number | null = null;
   if (currentBg != null) {
-    if (currentBg < TIR_LOW_MGDL) {
-      const within = Math.max(0, Math.min(1, (currentBg - 40) / (TIR_LOW_MGDL - 40)));
+    if (currentBg < tirLow) {
+      const within = Math.max(0, Math.min(1, (currentBg - 40) / (tirLow - 40)));
       currentMarkerPct = tbrPct * within;
-    } else if (currentBg <= TIR_HIGH_MGDL) {
-      const within = (currentBg - TIR_LOW_MGDL) / (TIR_HIGH_MGDL - TIR_LOW_MGDL);
+    } else if (currentBg <= tirHigh) {
+      const within = (currentBg - tirLow) / (tirHigh - tirLow);
       currentMarkerPct = tbrPct + tirPct * within;
     } else {
-      const within = Math.max(0, Math.min(1, (currentBg - TIR_HIGH_MGDL) / (300 - TIR_HIGH_MGDL)));
+      const within = Math.max(0, Math.min(1, (currentBg - tirHigh) / (300 - tirHigh)));
       currentMarkerPct = tbrPct + tirPct + tarPct * within;
     }
   }
@@ -1075,7 +1099,7 @@ export default function InsightsPage() {
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
             <CardLabel text={tInsights("card_time_in_range_title")}/>
-            <div style={{ fontSize:11, color:"var(--text-dim)" }}>70–180 mg/dL</div>
+            <div style={{ fontSize:11, color:"var(--text-dim)" }}>{tirLow}–{tirHigh} mg/dL</div>
           </div>
           {b7.n === 0 ? (
             <div style={{ padding:"18px 0", textAlign:"center", color:"var(--text-faint)", fontSize:13 }}>

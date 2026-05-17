@@ -21,6 +21,7 @@ import {
 } from "@/lib/export";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
 import { fetchAppointments, type Appointment } from "@/lib/appointments";
+import { getTargetRange, fetchTargetRange, type TargetRange } from "@/lib/userSettings";
 import { localeToBcp47 } from "@/lib/time";
 
 const ACCENT  = "#4F6EF7";
@@ -384,6 +385,16 @@ export default function ExportPanel() {
   // they pressed the export button.
   const [icrGperIE, setIcrGperIE] = useState<number | null>(null);
   const [cfMgdlPerIE, setCfMgdlPerIE] = useState<number | null>(null);
+  // Personal TIR target band (user_settings.target_min_mgdl /
+  // target_max_mgdl, Migration 20260517). Sync seed from localStorage
+  // mirror so the very first PDF render uses the right band even if
+  // the user opens the export panel before the DB fetch resolves;
+  // then refreshed from the DB so cross-device sessions converge to
+  // the persisted value. Threaded into <GlevReport> so every
+  // TIR/TAR/TBR percentage and per-row glucose colour in the PDF
+  // matches Insights + Dashboard.
+  const [targetRange, setTargetRange] = useState<TargetRange>(() => getTargetRange());
+  useEffect(() => { fetchTargetRange().then(setTargetRange).catch(() => {}); }, []);
 
   // Pull the signed-in user's email so the PDF report can show it on
   // the cover page. Soft-fail: if supabase is unavailable we just
@@ -733,6 +744,7 @@ export default function ExportPanel() {
           cfMgdlPerIE={cfMgdlPerIE}
           range={display}
           appointmentNote={appointmentNote}
+          targetRange={targetRange}
         />,
       ).toBlob();
 

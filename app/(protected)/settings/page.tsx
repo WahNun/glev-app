@@ -13,6 +13,8 @@ import {
   DEFAULT_MACRO_TARGETS,
   type MacroTargets,
   fetchInsulinSettings,
+  fetchTargetRange,
+  saveTargetRange,
   saveInsulinSettings,
   DEFAULT_INSULIN_SETTINGS,
   fetchAdjustmentHistory,
@@ -309,6 +311,21 @@ export default function SettingsPage() {
     // localStorage so the sync `getInsulinSettings()` mirror stays in
     // lock-step. The saved targetMin/targetMax range is not touched
     // here because it isn't yet DB-backed.
+    // Personal TIR target range — lives in user_settings.target_min_mgdl
+    // / target_max_mgdl (Migration 20260517). Mirror the DB value into
+    // local state + localStorage so every TIR card across the app
+    // (Insights, Today's Summary, Trend Breakdown, PDF report) pulls
+    // the same band the user configured here.
+    fetchTargetRange()
+      .then((range) => {
+        if (insulinTouchedRef.current) return;
+        setSettings((prev) => {
+          const next = { ...prev, targetMin: range.low, targetMax: range.high };
+          saveSettings(next);
+          return next;
+        });
+      })
+      .catch(() => {});
     fetchInsulinSettings()
       .then((ins) => {
         // Bail out if the user has already started editing — they would
@@ -523,10 +540,57 @@ export default function SettingsPage() {
         targetBg: Math.min(200, Math.max(60, Math.round(settings.targetBg))),
       };
       await saveInsulinSettings(clamped);
+      // Persist the TIR target range alongside the insulin params so
+      // every TIR card across the app (Insights, Today's Summary,
+      // Trend Breakdown, PDF) sees the same band on the next read.
+      // Defensive clamp matches the migration's CHECK constraints
+      // (each bound 40–250, spread ≥ 20).
+      try {
+        const rangeLow  = Math.min(250, Math.max(40, Math.round(settings.targetMin)));
+        const rangeHigh = Math.min(250, Math.max(rangeLow + 20, Math.round(settings.targetMax)));
+        await saveTargetRange({ low: rangeLow, high: rangeHigh });
+      } catch (rangeErr) {
+        // Non-fatal: the insulin save already succeeded. We surface
+        // the range failure as a soft console.warn rather than a
+        // hard error so the user still sees their ICR/CF/targetBg
+        // change land.
+        // eslint-disable-next-line no-console
+        console.warn("[glev] saveTargetRange failed:", rangeErr instanceof Error ? rangeErr.message : rangeErr);
+      }
       // Mirror the clamped values back into local state + localStorage
       // so the sync `getInsulinSettings()` caller (engine evaluation
       // path) and the row subtitles see exactly what we just wrote.
       const next = { ...settings, ...clamped };
+      setSettings(next);
+      saveSettings(next);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1800);
+      setDraftSnapshot(null);
+      return true;
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : tSettings("save_failed"));
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }, [settings, tSettings]);
+
+  /** Persist the TIR target range (user_settings.target_min_mgdl /
+   *  target_max_mgdl, Migration 20260517). Clamp matches the
+   *  migration's CHECK constraints (each bound 40–250, spread ≥ 20)
+   *  so a Postgres rejection only fires for a truly malformed write,
+   *  then mirror the clamped values into local state + localStorage
+   *  so the sync `getTargetRange()` consumers (Dashboard Trend
+   *  Breakdown, CurrentDayGlucoseCard, Insights initial paint) see
+   *  exactly what we just wrote. */
+  const saveTargetRangeAction = useCallback(async (): Promise<boolean> => {
+    setSaving(true);
+    setSaveError("");
+    try {
+      const rangeLow  = Math.min(250, Math.max(40, Math.round(settings.targetMin)));
+      const rangeHigh = Math.min(250, Math.max(rangeLow + 20, Math.round(settings.targetMax)));
+      await saveTargetRange({ low: rangeLow, high: rangeHigh });
+      const next = { ...settings, targetMin: rangeLow, targetMax: rangeHigh };
       setSettings(next);
       saveSettings(next);
       setSaved(true);
@@ -928,7 +992,7 @@ export default function SettingsPage() {
           </div>
         </div>
       ),
-      footer: <SaveFooter onSave={saveLocalSettings} />,
+      footer: <SaveFooter onSave={saveTargetRangeAction} />,
     },
     units: {
       title: tSettings("sheet_units_title"),

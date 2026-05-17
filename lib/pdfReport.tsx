@@ -444,10 +444,21 @@ function fmtNum(n: number | null | undefined, digits = 0): string {
   return n.toFixed(digits);
 }
 
-function colorForGlucose(v: number | null | undefined): string {
+/** Target-band typing kept loose-but-explicit here so this server-
+ *  side renderer doesn't need to import the client-only
+ *  `lib/userSettings` module (which pulls in `supabase`, `window`,
+ *  etc.). The Settings/Export panel reads the saved band on the
+ *  client and passes it down via `GlevReport`'s `targetRange` prop. */
+export interface PdfTargetRange { low: number; high: number }
+const DEFAULT_PDF_TARGET_RANGE: PdfTargetRange = { low: 70, high: 180 };
+
+function colorForGlucose(
+  v: number | null | undefined,
+  range: PdfTargetRange = DEFAULT_PDF_TARGET_RANGE,
+): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return MUTED;
-  if (v < 70) return PINK;
-  if (v > 180) return ORANGE;
+  if (v < range.low)  return PINK;
+  if (v > range.high) return ORANGE;
   return GREEN;
 }
 function pillColorForInsulin(t: "bolus" | "basal"): string {
@@ -487,6 +498,7 @@ function computeAggregates(
   insulin: InsulinLog[],
   exercise: ExerciseLog[],
   fingersticks: FingerstickReading[],
+  targetRange: PdfTargetRange = DEFAULT_PDF_TARGET_RANGE,
 ): Aggregates {
   // Bolus is stored in two places:
   //   1. `meals.insulin_units` — bolus given at meal time via the /log
@@ -519,9 +531,12 @@ function computeAggregates(
     }
   }
   const glucoseSamples = allGlucose.length;
-  const inRange  = allGlucose.filter(v => v >= 70 && v <= 180).length;
-  const belowRange = allGlucose.filter(v => v < 70).length;
-  const aboveRange = allGlucose.filter(v => v > 180).length;
+  // TIR/TAR/TBR follow the user's saved target band (threaded in via
+  // the GlevReport `targetRange` prop, default 70/180 for back-compat)
+  // so the PDF agrees with Insights + the Dashboard Today's Summary.
+  const inRange    = allGlucose.filter(v => v >= targetRange.low && v <= targetRange.high).length;
+  const belowRange = allGlucose.filter(v => v <  targetRange.low).length;
+  const aboveRange = allGlucose.filter(v => v >  targetRange.high).length;
   const tir = glucoseSamples > 0 ? (inRange / glucoseSamples) * 100 : 0;
   const tbr = glucoseSamples > 0 ? (belowRange / glucoseSamples) * 100 : 0;
   const tar = glucoseSamples > 0 ? (aboveRange / glucoseSamples) * 100 : 0;
@@ -605,6 +620,13 @@ interface ReportProps {
   // metadata. Omitted/empty hides the meta line entirely so a user
   // who never set a note never sees a stray empty row.
   appointmentNote?: string;
+  // Personal TIR target band the user configured in Settings
+  // (user_settings.target_min_mgdl / target_max_mgdl, Migration
+  // 20260517). When provided, every TIR/TAR/TBR percentage AND the
+  // per-row glucose colour-coding in the tables follows this band so
+  // the PDF agrees with what the user sees in Insights + Dashboard.
+  // Omitting it (legacy callers) defaults to the clinical 70–180 band.
+  targetRange?: PdfTargetRange;
 }
 
 const Footer = ({ email, generatedAt }: { email: string; generatedAt: string }) => (
@@ -741,7 +763,7 @@ function computeInsightsMetrics(
   };
 }
 
-export function GlevReport({ email, meals, insulin, exercise, fingersticks, carbUnit = "g", icrGperIE = null, cfMgdlPerIE = null, range: chosenRange, appointmentNote }: ReportProps) {
+export function GlevReport({ email, meals, insulin, exercise, fingersticks, carbUnit = "g", icrGperIE = null, cfMgdlPerIE = null, range: chosenRange, appointmentNote, targetRange = DEFAULT_PDF_TARGET_RANGE }: ReportProps) {
   // Cache the unit's display label once so we can compose KH column
   // headers (e.g. "KH (BE)") without recomputing. Uses the short form
   // ("g" / "BE" / "KE") rather than the verbose CARB_UNITS label
@@ -785,7 +807,7 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks, carb
   const cfLabel = hasCF
     ? `${Number((cfMgdlPerIE as number).toFixed(1))} mg/dL/IE`
     : null;
-  const agg = computeAggregates(meals, insulin, exercise, fingersticks);
+  const agg = computeAggregates(meals, insulin, exercise, fingersticks, targetRange);
   const ins = computeInsightsMetrics(meals, insulin, fingersticks);
   // Cover "Zeitraum" line: prefer the user-chosen export window when
   // it was passed explicitly (so the printed slice matches the slice
@@ -1034,11 +1056,11 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks, carb
               <Text style={[styles.kpiValue, { color: GREEN }]}>{fmtNum(agg.tir, 0)}<Text style={styles.kpiUnit}>%</Text></Text>
             </View>
             <View style={styles.kpi}>
-              <Text style={styles.kpiLabel}>Time below 70</Text>
+              <Text style={styles.kpiLabel}>Time below {targetRange.low}</Text>
               <Text style={[styles.kpiValue, { color: PINK }]}>{fmtNum(agg.tbr, 0)}<Text style={styles.kpiUnit}>%</Text></Text>
             </View>
             <View style={styles.kpi}>
-              <Text style={styles.kpiLabel}>Time above 180</Text>
+              <Text style={styles.kpiLabel}>Time above {targetRange.high}</Text>
               <Text style={[styles.kpiValue, { color: ORANGE }]}>{fmtNum(agg.tar, 0)}<Text style={styles.kpiUnit}>%</Text></Text>
             </View>
             <View style={styles.kpi}>
@@ -1089,10 +1111,10 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks, carb
                 </Text>
                 <Text style={[styles.td, { width: "9%", textAlign: "right" }]}>{fmtCarbsValue(m.carbs_grams)}</Text>
                 <Text style={[styles.td, { width: "9%", textAlign: "right" }]}>{fmtNum(m.insulin_units, 1)}</Text>
-                <Text style={[styles.td, { width: "13%", textAlign: "right", color: colorForGlucose(m.glucose_before) }]}>
+                <Text style={[styles.td, { width: "13%", textAlign: "right", color: colorForGlucose(m.glucose_before, targetRange) }]}>
                   {fmtNum(m.glucose_before, 0)}
                 </Text>
-                <Text style={[styles.td, { width: "13%", textAlign: "right", color: colorForGlucose(m.bg_2h) }]}>
+                <Text style={[styles.td, { width: "13%", textAlign: "right", color: colorForGlucose(m.bg_2h, targetRange) }]}>
                   {fmtNum(m.bg_2h, 0)}
                 </Text>
               </View>
@@ -1135,13 +1157,13 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks, carb
                 </View>
                 <Text style={[styles.td, { width: "20%" }]}>{l.insulin_name || "—"}</Text>
                 <Text style={[styles.td, { width: "10%", textAlign: "right" }]}>{fmtNum(l.units, 1)}</Text>
-                <Text style={[styles.td, { width: "12%", textAlign: "right", color: colorForGlucose(l.cgm_glucose_at_log) }]}>
+                <Text style={[styles.td, { width: "12%", textAlign: "right", color: colorForGlucose(l.cgm_glucose_at_log, targetRange) }]}>
                   {fmtNum(l.cgm_glucose_at_log, 0)}
                 </Text>
-                <Text style={[styles.td, { width: "13%", textAlign: "right", color: colorForGlucose(l.glucose_after_1h ?? null) }]}>
+                <Text style={[styles.td, { width: "13%", textAlign: "right", color: colorForGlucose(l.glucose_after_1h ?? null, targetRange) }]}>
                   {fmtNum(l.glucose_after_1h ?? null, 0)}
                 </Text>
-                <Text style={[styles.td, { width: "13%", textAlign: "right", color: colorForGlucose(l.glucose_after_2h ?? null) }]}>
+                <Text style={[styles.td, { width: "13%", textAlign: "right", color: colorForGlucose(l.glucose_after_2h ?? null, targetRange) }]}>
                   {fmtNum(l.glucose_after_2h ?? null, 0)}
                 </Text>
               </View>
@@ -1172,7 +1194,7 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks, carb
             {showFingersticks.map((r, i) => (
               <View key={r.id} style={[styles.tr, ...(i % 2 === 1 ? [styles.trAlt] : [])]} wrap={false}>
                 <Text style={[styles.tdMuted, { width: "30%" }]}>{fmtDateTime(r.measured_at)}</Text>
-                <Text style={[styles.td, { width: "20%", textAlign: "right", color: colorForGlucose(Number(r.value_mg_dl)), fontFamily: "Helvetica-Bold" }]}>
+                <Text style={[styles.td, { width: "20%", textAlign: "right", color: colorForGlucose(Number(r.value_mg_dl), targetRange), fontFamily: "Helvetica-Bold" }]}>
                   {fmtNum(Number(r.value_mg_dl), 0)}
                 </Text>
                 <Text style={[styles.td, { width: "50%" }]}>{r.notes || ""}</Text>
@@ -1210,10 +1232,10 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks, carb
                 <Text style={[styles.td, { width: "20%" }]}>{e.exercise_type}</Text>
                 <Text style={[styles.td, { width: "12%", textAlign: "right" }]}>{e.duration_minutes} min</Text>
                 <Text style={[styles.td, { width: "12%" }]}>{e.intensity}</Text>
-                <Text style={[styles.td, { width: "17%", textAlign: "right", color: colorForGlucose(e.cgm_glucose_at_log) }]}>
+                <Text style={[styles.td, { width: "17%", textAlign: "right", color: colorForGlucose(e.cgm_glucose_at_log, targetRange) }]}>
                   {fmtNum(e.cgm_glucose_at_log, 0)}
                 </Text>
-                <Text style={[styles.td, { width: "17%", textAlign: "right", color: colorForGlucose(e.glucose_at_end ?? null) }]}>
+                <Text style={[styles.td, { width: "17%", textAlign: "right", color: colorForGlucose(e.glucose_at_end ?? null, targetRange) }]}>
                   {fmtNum(e.glucose_at_end ?? null, 0)}
                 </Text>
               </View>

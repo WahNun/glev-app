@@ -235,6 +235,128 @@ export async function saveInsulinSettings(settings: InsulinSettings): Promise<vo
   if (error) throw new Error(error.message);
 }
 
+/* ── Personal glucose target range (TIR band) ─────────────────────── */
+//
+// Lives in `user_settings.target_min_mgdl` / `target_max_mgdl`
+// (Migration 20260517). Prior to that migration the range only lived
+// in localStorage, which meant every TIR card across the app silently
+// used a different band than the user had configured the moment they
+// switched browsers / devices. Persisting it makes the DB the
+// cross-device source of truth.
+//
+// As with `getInsulinSettings()` we expose BOTH a sync localStorage
+// reader (`getTargetRange()`) for hot-path render callers that cannot
+// await a DB round-trip, AND an async DB reader (`fetchTargetRange()`)
+// for code paths where the freshest cross-device value matters. The
+// Settings page keeps the two in lock-step by mirroring every
+// successful save back into `glev_settings.targetMin/targetMax`.
+
+export interface TargetRange {
+  /** Lower bound of the TIR target band (mg/dL). */
+  low: number;
+  /** Upper bound of the TIR target band (mg/dL). */
+  high: number;
+}
+
+/** Clinical consensus (ATTD/ADA) — used whenever the user hasn't
+ *  saved a custom range yet. */
+export const DEFAULT_TARGET_RANGE: TargetRange = { low: 70, high: 180 };
+
+/** Same per-field warn-once latch pattern as the insulin helpers. */
+const warnedRange = { low: false, high: false };
+function warnRangeDefault(field: keyof typeof warnedRange, value: number): void {
+  if (warnedRange[field]) return;
+  warnedRange[field] = true;
+  // eslint-disable-next-line no-console
+  console.warn(`[glev] user_settings.target_${field === "low" ? "min" : "max"}_mgdl missing — falling back to default ${value}. Set it in Settings to silence this warning.`);
+}
+
+/**
+ * Synchronous read of the user's TIR target band from the localStorage
+ * mirror (key "glev_settings", fields `targetMin` / `targetMax`).
+ * Server-side / no-window returns DEFAULT_TARGET_RANGE without warning.
+ * Each missing field warns at most once per session.
+ *
+ * Used by hot-path render callers (Dashboard Trend Breakdown,
+ * CurrentDayGlucoseCard) that cannot await an async DB read on every
+ * paint. The Settings page mirrors every successful DB save back into
+ * localStorage so this stays in lock-step with the persisted value.
+ */
+export function getTargetRange(): TargetRange {
+  if (typeof window === "undefined") return DEFAULT_TARGET_RANGE;
+  let raw: string | null = null;
+  try { raw = window.localStorage.getItem(SETTINGS_KEY); }
+  catch { /* localStorage disabled */ }
+  if (!raw) {
+    warnRangeDefault("low",  DEFAULT_TARGET_RANGE.low);
+    warnRangeDefault("high", DEFAULT_TARGET_RANGE.high);
+    return DEFAULT_TARGET_RANGE;
+  }
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    let low: number;
+    if (isFiniteNumber(parsed.targetMin) && parsed.targetMin > 0) low = parsed.targetMin;
+    else { warnRangeDefault("low", DEFAULT_TARGET_RANGE.low); low = DEFAULT_TARGET_RANGE.low; }
+    let high: number;
+    if (isFiniteNumber(parsed.targetMax) && parsed.targetMax > low) high = parsed.targetMax;
+    else { warnRangeDefault("high", DEFAULT_TARGET_RANGE.high); high = DEFAULT_TARGET_RANGE.high; }
+    return { low, high };
+  } catch {
+    return DEFAULT_TARGET_RANGE;
+  }
+}
+
+/**
+ * Async DB read of the user's TIR target band from `user_settings`.
+ * Falls back to DEFAULT_TARGET_RANGE on any failure (signed out,
+ * Supabase unreachable, missing row, NULL columns) so callers don't
+ * have to handle missing-data states. Use from initial-load
+ * useEffects where the freshest cross-device value matters.
+ */
+export async function fetchTargetRange(): Promise<TargetRange> {
+  if (!supabase) return DEFAULT_TARGET_RANGE;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return DEFAULT_TARGET_RANGE;
+
+  const { data, error } = await supabase
+    .from("user_settings")
+    .select("target_min_mgdl, target_max_mgdl")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (error || !data) return DEFAULT_TARGET_RANGE;
+
+  const lowOk  = isFiniteNumber(data.target_min_mgdl) && data.target_min_mgdl > 0;
+  const highOk = isFiniteNumber(data.target_max_mgdl) && data.target_max_mgdl > (lowOk ? data.target_min_mgdl : 0);
+  if (!lowOk || !highOk) return DEFAULT_TARGET_RANGE;
+  return { low: data.target_min_mgdl, high: data.target_max_mgdl };
+}
+
+/**
+ * Persist the user's TIR target band. Clamps to the migration's CHECK
+ * constraints (each bound 40–250, spread ≥ 20) before the upsert so a
+ * Postgres rejection only fires for a truly malformed write. Throws
+ * on auth/DB error so the Settings UI can surface a save-failed state.
+ */
+export async function saveTargetRange(range: TargetRange): Promise<void> {
+  if (!supabase) throw new Error("Supabase not configured");
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) throw new Error("Not signed in");
+
+  const clampedLow  = Math.min(250, Math.max(40, Math.round(range.low)));
+  const clampedHigh = Math.min(250, Math.max(clampedLow + 20, Math.round(range.high)));
+
+  const { error } = await supabase
+    .from("user_settings")
+    .upsert({
+      user_id:         user.id,
+      target_min_mgdl: clampedLow,
+      target_max_mgdl: clampedHigh,
+    }, { onConflict: "user_id" });
+
+  if (error) throw new Error(error.message);
+}
+
 /* ── Engine-computed ICR (separate from user-set ICR) ─────────────── */
 //
 // Lucas-Spec May 14 split the single ICR column into two values that

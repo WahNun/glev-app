@@ -8,7 +8,8 @@ import { computeControlScore } from "@/lib/controlScore";
 import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
 import { evaluateExercise, exerciseTypeLabelI18n } from "@/lib/exerciseEval";
-import { fetchMacroTargets, DEFAULT_MACRO_TARGETS, type MacroTargets } from "@/lib/userSettings";
+import { fetchMacroTargets, DEFAULT_MACRO_TARGETS, type MacroTargets, getTargetRange, fetchTargetRange, type TargetRange } from "@/lib/userSettings";
+import { fetchCgmSamples } from "@/lib/cgmSamplesClient";
 import { TYPE_COLORS, getEvalColor, chipLabelsFrom } from "@/lib/mealTypes";
 import DashboardQuickAddSheet from "@/components/DashboardQuickAddSheet";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
@@ -174,6 +175,25 @@ function TrendChart({ meals }: { meals: Meal[] }) {
   const DAYS = 14;
   const [flipped, setFlipped] = useState(false);
   const t = useTranslations("dashboard");
+  // Personal TIR band (user_settings.target_min_mgdl /
+  // target_max_mgdl, Migration 20260517). Was hardcoded 80–180 here,
+  // which mismatched Insights + Today's Summary (both 70–180) so the
+  // same user saw three different TIR percentages on three cards. Now
+  // every card reads the same user-saved band.
+  const [trendRange, setTrendRange] = useState<TargetRange>(() => getTargetRange());
+  useEffect(() => { fetchTargetRange().then(setTrendRange).catch(() => {}); }, []);
+  // CGM samples for the last 7 days — these are the dense readings the
+  // Insights TIR card already uses (288/day vs ~3 meal pre-glucose
+  // values/day), so anchoring TIR here on them brings the Dashboard
+  // Trend Breakdown into agreement with Insights. Falls back to the
+  // sparse meal pre-glucose set when the user has no CGM connected so
+  // the tile never reads "—%" for non-CGM users.
+  const [cgm7d, setCgm7d] = useState<Array<{ v: number }>>([]);
+  useEffect(() => {
+    const to = Date.now();
+    const from = to - 7 * 86400000;
+    fetchCgmSamples(from, to).then(s => setCgm7d(s)).catch(() => {});
+  }, []);
   const now = Date.now();
   const buckets: Record<string, number[]> = {};
   for (let i = 0; i < DAYS; i++) {
@@ -223,8 +243,23 @@ function TrendChart({ meals }: { meals: Meal[] }) {
   }
   const recentAvg = last7.length ? Math.round(last7.reduce((s, p) => s + p.v, 0) / last7.length) : null;
   const overallAvg = real.length ? Math.round(real.reduce((s, p) => s + p.v, 0) / real.length) : null;
-  const inRange = real.filter(p => p.v >= 80 && p.v <= 180).length;
-  const tirPct = real.length ? Math.round((inRange / real.length) * 100) : 0;
+  // Prefer dense CGM samples (288/day) for the TIR percentage when
+  // the user has a CGM connected — this matches Insights so the two
+  // surfaces now agree. Fall back to the **raw** 7-day meal
+  // pre-glucose readings (not the daily-averaged `real` series — that
+  // would silently smooth out a single in-range day across many spikes
+  // and inflate TIR) so non-CGM users still see a meaningful number.
+  const rawMealPreGlu7d: number[] = [];
+  meals.forEach(m => {
+    if (typeof m.glucose_before !== "number") return;
+    const ts = parseDbDate(m.created_at).getTime();
+    if (now - ts > 7 * 86400000) return;
+    rawMealPreGlu7d.push(m.glucose_before);
+  });
+  const tirSource = cgm7d.length > 0 ? cgm7d.map(s => s.v) : rawMealPreGlu7d;
+  const tirDenom  = tirSource.length;
+  const tirInRange = tirSource.filter(v => v >= trendRange.low && v <= trendRange.high).length;
+  const tirPct = tirDenom > 0 ? Math.round((tirInRange / tirDenom) * 100) : 0;
 
   // Card height: a bit taller on mobile so the chart stays comfortably
   // readable when stacked under the stat tiles.
@@ -255,7 +290,7 @@ function TrendChart({ meals }: { meals: Meal[] }) {
             {[
               { l:t("trend_overall_avg"), v: overallAvg ? `${overallAvg} mg/dL` : "—", c: overallAvg ? (overallAvg>140?ORANGE:overallAvg<80?PINK:GREEN) : undefined },
               { l:t("trend_7day_avg"), v: recentAvg ? `${recentAvg} mg/dL` : "—", c: recentAvg ? (recentAvg>140?ORANGE:recentAvg<80?PINK:GREEN) : undefined },
-              { l:t("trend_tir_label"), v: real.length ? `${tirPct}%` : "—", c: tirPct>=70?GREEN:tirPct>=50?ORANGE:PINK },
+              { l:t("trend_tir_label"), v: tirDenom > 0 ? `${tirPct}%` : "—", c: tirPct>=70?GREEN:tirPct>=50?ORANGE:PINK },
               { l:t("trend_highest"), v: hiPt ? `${Math.round(hiPt.v)} mg/dL` : "—", c: ORANGE },
               { l:t("trend_lowest"), v: loPt ? `${Math.round(loPt.v)} mg/dL` : "—", c: PINK },
               { l:t("trend_7day_slope"), v: last7.length>=2 ? `${slope>0?"+":""}${slope.toFixed(1)}${t("trend_slope_per_day")}` : "—", c: Math.abs(slope)<2 ? GREEN : slope>0 ? ORANGE : ACCENT },
