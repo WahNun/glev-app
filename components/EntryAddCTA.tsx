@@ -7,6 +7,7 @@ import { hapticLight, hapticSelection } from "@/lib/haptics";
 import {
   useQuickAddVisibleItems,
   QA_ICONS,
+  decorateQuickAddHref,
 } from "@/components/quickAddShared";
 
 const ACCENT = "#4F6EF7";
@@ -138,7 +139,7 @@ export default function EntryAddCTA({ onManualMeal }: Props) {
               key={it.key}
               type="button"
               role="menuitem"
-              onClick={() => go(it.href)}
+              onClick={() => go(decorateQuickAddHref(it.href))}
               style={menuItemStyle}
               onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-soft)")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}

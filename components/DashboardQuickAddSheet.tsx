@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import BottomSheet from "@/components/BottomSheet";
 import { hapticLight } from "@/lib/haptics";
-import { useQuickAddVisibleItems } from "@/components/quickAddShared";
+import { useQuickAddVisibleItems, decorateQuickAddHref } from "@/components/quickAddShared";
 
 const TEXT = "var(--text-strong)";
 const TEXT_DIM = "var(--text-muted)";
@@ -40,7 +40,7 @@ export default function DashboardQuickAddSheet({ open, onClose }: Props) {
             key={it.key}
             type="button"
             role="menuitem"
-            onClick={() => go(it.href)}
+            onClick={() => go(decorateQuickAddHref(it.href))}
             style={{
               display: "flex", alignItems: "center", gap: 12,
               width: "100%", padding: "12px 12px",

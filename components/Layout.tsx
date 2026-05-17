@@ -508,7 +508,14 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               return;
             }
             if (voice.hasSpoken) {
-              router.push("/engine?tab=engine&voice=1");
+              // The `vt` (voice-token) cache-buster guarantees the
+              // engine page treats every tap as a fresh trigger even
+              // when the user is already on /engine — without it, the
+              // searchParams shape (?tab=engine&voice=1) is identical
+              // across taps and the auto-start effect's de-dup guard
+              // would swallow the second tap. See engine/page.tsx
+              // voiceLastTokenRef.
+              router.push(`/engine?tab=engine&voice=1&vt=${Date.now()}`);
               return;
             }
             setQuickAddOpen(true);

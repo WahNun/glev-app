@@ -409,18 +409,32 @@ export default function EnginePage() {
   // voiceRecordingContext + Layout.tsx). We only fire once per landing
   // — a guard ref prevents StrictMode double-invoke and prevents a
   // second take if the user navigates back without a fresh ?voice=1.
-  const voiceAutoStartedRef = useRef(false);
+  // Per-trigger signature. We do NOT use a plain `hasFired` boolean
+  // because the URL gets stripped via window.history.replaceState
+  // below — that doesn't notify Next, so a later `router.push(...?voice=1)`
+  // from the bottom-nav Glev FAB would update searchParams but a
+  // boolean latch would still be true and we'd skip the auto-start.
+  // Result before this fix: after the first take, tapping the Glev FAB
+  // again did nothing (user report 2026-05-17: "dann ist es aktuell
+  // unmöglich die spracheingabe per einfachen klick auf glev button
+  // fortzusetzen sobald einmal angehalten hat"). We now stamp a
+  // monotonically growing token into the URL (?voice=1&vt=<ts>) on
+  // every push and remember the last token we acted on — every fresh
+  // FAB tap carries a new token and therefore re-triggers.
+  const voiceLastTokenRef = useRef<string | null>(null);
   useEffect(() => {
     if (!searchParams) return;
-    if (searchParams.get("voice") !== "1") { voiceAutoStartedRef.current = false; return; }
-    if (voiceAutoStartedRef.current) return;
-    voiceAutoStartedRef.current = true;
+    if (searchParams.get("voice") !== "1") return;
+    const token = searchParams.get("vt") ?? "init";
+    if (voiceLastTokenRef.current === token) return;
+    voiceLastTokenRef.current = token;
     // Strip the ?voice=1 from the URL so a refresh / back-navigation
     // doesn't auto-record a second time. History replace keeps the
     // current scroll position and doesn't add to the back stack.
     if (typeof window !== "undefined") {
       const u = new URL(window.location.href);
       u.searchParams.delete("voice");
+      u.searchParams.delete("vt");
       // Preserve the existing window.history.state payload (Next App
       // Router stores its own routing state there for back/forward +
       // cache restoration). Passing `null` here would wipe that and
@@ -970,6 +984,14 @@ export default function EnginePage() {
   }, []);
 
   async function startRecording() {
+    // Idempotency guard: never start a second recorder while one is
+    // already live or being torn down. Without this, the StrictMode
+    // double-invoke of the auto-start effect (or a real double-tap
+    // of the Glev FAB before `recording=true` propagates) could race
+    // two getUserMedia calls and leave one MediaRecorder orphaned.
+    if (recording) return;
+    const live = mediaRecRef.current;
+    if (live && live.state !== "inactive") return;
     setVoiceErr(""); setTranscript("");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -1005,6 +1027,16 @@ export default function EnginePage() {
       rec.start();
       mediaRecRef.current = rec;
       setRecording(true);
+      // Flip the "has spoken at least once" flag as soon as the mic
+      // actually starts capturing — not only after a non-empty blob
+      // lands (markSpoken below in onstop). Otherwise a user whose
+      // first take produced no speech ("Keine Sprache erkannt") would
+      // leave hasSpoken=false, and the bottom-nav Glev FAB would
+      // fall back to opening the quick-add sheet instead of starting
+      // a fresh take on a simple tap (user report 2026-05-17). The
+      // markSpoken in onstop is now redundant but harmless and we
+      // keep it as a belt-and-braces guarantee.
+      voiceCtx.markSpoken();
     } catch (e) {
       setVoiceErr(e instanceof Error ? e.message : tEngine("voice_mic_failed"));
       setRecording(false);

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter, usePathname } from "next/navigation";
 import { hapticLight, hapticSelection } from "@/lib/haptics";
-import { useQuickAddVisibleItems } from "@/components/quickAddShared";
+import { useQuickAddVisibleItems, decorateQuickAddHref } from "@/components/quickAddShared";
 
 const ACCENT = "#4F6EF7";
 const SHEET_BG = "var(--surface-alt)";
@@ -136,7 +136,7 @@ export default function QuickAddMenu() {
               key={it.key}
               type="button"
               role="menuitem"
-              onClick={() => go(it.href)}
+              onClick={() => go(decorateQuickAddHref(it.href))}
               style={{
                 display: "flex", alignItems: "center", gap: 10,
                 width: "100%", padding: "10px 12px",
