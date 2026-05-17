@@ -9,6 +9,7 @@ import GlevLogo from "@/components/GlevLogo";
 import AboutGlevModal from "@/components/AboutGlevModal";
 import AccountSheet from "@/components/AccountSheet";
 import QuickAddMenu from "@/components/QuickAddMenu";
+import DashboardQuickAddSheet from "@/components/DashboardQuickAddSheet";
 import { EngineHeaderProvider, useEngineHeader } from "@/lib/engineHeaderContext";
 import {
   ScopeHeaderProvider, useScopeHeader,
@@ -102,6 +103,10 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // "Einstellungen" (preferences) are now visually + conceptually
   // separated per the iOS-style settings refactor.
   const [accountOpen, setAccountOpen] = useState(false);
+  // Bottom-nav "Glev" slot is no longer a direct route to /engine — it now
+  // opens the shared quick-add sheet (Engine + all logging entry points).
+  // State lives here so the sheet works from every protected screen.
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
   // Mobile bottom-nav: tapping the Glev slot now goes STRAIGHT to the
   // engine voice screen (the meal log flow) instead of popping a
   // pick-your-flow action sheet. The two secondary flows (Glukose
@@ -349,13 +354,10 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             </svg>
           )}
         />
-        <MobileTab
+        <MobileGlevFab
           label={tNav("glev")}
-          active={pathname.startsWith("/engine")}
-          onClick={() => router.push("/engine")}
-          icon={(a) => (
-            <GlevLogo size={22} color={a ? ACCENT : NAV_INACTIVE} bg="transparent"/>
-          )}
+          active={quickAddOpen}
+          onClick={() => setQuickAddOpen(true)}
         />
         <MobileTab
           label={tNav("insights")}
@@ -382,15 +384,76 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         />
       </nav>
 
-      {/* The mobile Glev action sheet was removed: the bottom-nav Glev
-          tap now routes straight to /engine, which defaults to the
-          engine sub-tab on Step 1 (voice input). The Mahlzeit /
-          Glukose / Aktivität input flows live in the header "+"
-          dropdown (QuickAddMenu) and in the engine header tabs-chip
-          dropdown. The matching SheetItem helper was deleted along
-          with the overlay. */}
+      {/* Shared quick-add sheet, triggered by the centre Glev slot in
+          the bottom nav. Same component (and same `useQuickAddVisibleItems`
+          source of truth) the dashboard CTA opens — so Engine, Insulin,
+          Fingerstick, Activity, Cycle, Symptoms and Influences all sit
+          one tap away regardless of which screen the user is on. */}
+      <DashboardQuickAddSheet open={quickAddOpen} onClose={() => setQuickAddOpen(false)} />
 
     </div>
+  );
+}
+
+/**
+ * Centre nav slot that visually replaces a normal MobileTab with a raised
+ * Glev-branded bubble (round, accent ring + soft halo, same look as the
+ * Engine "Speak" button). Tapping it opens the shared quick-add sheet
+ * (Engine + logging shortcuts) instead of routing — per the 2026-05-17
+ * UX revision the bottom-nav Glev slot no longer points at /engine
+ * directly; the sheet hosts that link plus everything else.
+ */
+function MobileGlevFab({
+  label, active, onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-haspopup="dialog"
+      aria-expanded={active}
+      aria-label={label}
+      style={{
+        flex: "1 1 0",
+        minWidth: 0,
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "flex-end",
+        gap: 2, padding: "0 2px", height: 56,
+        border: "none", background: "transparent", cursor: "pointer",
+        color: ACCENT,
+        fontSize: 11, fontWeight: 600, letterSpacing: "0.005em",
+        WebkitTapHighlightColor: "transparent",
+      }}
+    >
+      <span
+        aria-hidden="true"
+        style={{
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          width: 48, height: 48, borderRadius: "50%",
+          background: SURFACE,
+          border: `1px solid ${ACCENT}66`,
+          boxShadow: `0 0 0 1px ${ACCENT}22, 0 8px 20px rgba(0,0,0,0.40)`,
+          // Lift the bubble above the nav row so it visually pops into the
+          // page content area — same elevation pattern as iOS/Material FABs.
+          transform: "translateY(-14px)",
+          filter: `drop-shadow(0 0 4px ${ACCENT}55)`,
+        }}
+      >
+        <GlevLogo size={24} color={ACCENT} bg="transparent" />
+      </span>
+      <span
+        style={{
+          // Negative margin pulls the label back up to where a regular
+          // MobileTab label sits, even though the icon was lifted by -14px.
+          marginTop: -10,
+          lineHeight: 1.1, whiteSpace: "nowrap",
+          overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%",
+        }}
+      >{label}</span>
+    </button>
   );
 }
 

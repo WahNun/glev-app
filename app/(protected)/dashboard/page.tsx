@@ -587,27 +587,12 @@ export default function DashboardPage() {
              solid-accent circle so it reads as a primary action. The
              control cluster keeps its place; the button just stops
              taking layout space, freeing those ~50px for the score. */
-          /* Floating Glev-mark bubble on phones: centered horizontally
-             above the bottom nav (56px nav + safe-area inset). Visual
-             language matches the Engine "Speak" button — dark surface,
-             accent ring + soft accent halo — just round and icon-only. */
-          .glev-quickadd-cta {
-            position: fixed !important;
-            left: 50% !important;
-            transform: translateX(-50%) !important;
-            right: auto !important;
-            bottom: calc(env(safe-area-inset-bottom, 0px) + 72px) !important;
-            width: 56px !important;
-            height: 56px !important;
-            margin-top: 0 !important;
-            border-radius: 50% !important;
-            background: var(--surface) !important;
-            border: 1px solid rgba(79,110,247,0.55) !important;
-            box-shadow:
-              0 0 0 1px rgba(79,110,247,0.22),
-              0 10px 28px rgba(0,0,0,0.45) !important;
-            z-index: 60 !important;
-          }
+          /* On phones the centre slot of the bottom nav is now the
+             raised Glev-bubble (see MobileGlevFab in Layout.tsx) and
+             opens the same quick-add sheet — so the inline dashboard
+             CTA would be a duplicate. Hide it on mobile only; on
+             desktop the wide pill under the control score stays. */
+          .glev-quickadd-cta { display: none !important; }
           .glev-control-front  { padding: 12px 16px 14px !important; }
           .glev-control-front .glev-control-header { margin-bottom: 8px !important; }
           .glev-macros-front   { padding: 12px 16px 10px !important; }
