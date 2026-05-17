@@ -401,13 +401,31 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           label={tNav("glev")}
           active={quickAddOpen || voice.recording}
           recording={voice.recording}
-          onClick={() => {
-            // While a voice take is running, the FAB is the primary
-            // STOP control — don't double-open the quick-add sheet,
-            // just end the recording. Otherwise it's the normal
-            // quick-add entry-point.
+          // Short-tap behaviour. Three states:
+          //   1. Recording in progress  → stop (any tap length).
+          //   2. User already spoke once this session → jump straight
+          //      into a fresh voice take. Done by deep-linking to
+          //      /engine?tab=engine&voice=1, which the engine page
+          //      auto-starts on (see app/(protected)/engine/page.tsx).
+          //   3. First-time / never spoken → open the quick-add sheet
+          //      so the user can discover the entry-points.
+          onShortPress={() => {
             if (voice.recording) {
               voice.requestStop();
+              return;
+            }
+            if (voice.hasSpoken) {
+              router.push("/engine?tab=engine&voice=1");
+              return;
+            }
+            setQuickAddOpen(true);
+          }}
+          // Long-press always opens the menu, regardless of session
+          // state — that's the "secondary" affordance per 2026-05-17
+          // user request: short tap = repeat voice, long press = menu.
+          onLongPress={() => {
+            if (voice.recording) {
+              // Don't yank focus away mid-recording.
               return;
             }
             setQuickAddOpen(true);
@@ -458,16 +476,79 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
  * directly; the sheet hosts that link plus everything else.
  */
 function MobileGlevFab({
-  label, active, onClick, recording = false,
+  label, active, onShortPress, onLongPress, recording = false,
 }: {
   label: string;
   active: boolean;
-  onClick: () => void;
+  onShortPress: () => void;
+  onLongPress: () => void;
   recording?: boolean;
 }) {
+  // Long-press detection: 500 ms threshold matches the iOS/Material
+  // convention for context-menu-style long presses. We intentionally
+  // do NOT debounce a separate onClick handler because pointer events
+  // already cover mouse + touch + pen; the onClick prop on the button
+  // is kept only as a keyboard-activation fallback (Enter / Space)
+  // and is gated by `pointerHandledRef` so taps don't double-fire.
+  const timerRef = useRef<number | null>(null);
+  const longFiredRef = useRef(false);
+  const pointerHandledRef = useRef(false);
+
+  const clearTimer = () => {
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+
+  const handlePointerDown = () => {
+    pointerHandledRef.current = true;
+    longFiredRef.current = false;
+    clearTimer();
+    timerRef.current = window.setTimeout(() => {
+      longFiredRef.current = true;
+      // Tiny haptic confirms the long-press fired even without UI
+      // change (e.g. user is on /dashboard when they long-press).
+      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+        try { navigator.vibrate?.(15); } catch { /* noop */ }
+      }
+      onLongPress();
+    }, 500);
+  };
+
+  const handlePointerUp = () => {
+    clearTimer();
+    if (!longFiredRef.current) {
+      onShortPress();
+    }
+  };
+
+  const handlePointerCancel = () => {
+    // Cancel = scroll started, finger moved out, pen lifted abnormally,
+    // etc. Discard the gesture entirely so we don't fire either action.
+    clearTimer();
+    longFiredRef.current = false;
+  };
+
+  const handleClick = () => {
+    // Pointer cycle already handled this gesture; swallow the synthetic
+    // click that browsers fire after pointerup so the action doesn't
+    // run twice. Reset the flag so a subsequent KEYBOARD activation
+    // (where no pointer events fire) still goes through.
+    if (pointerHandledRef.current) {
+      pointerHandledRef.current = false;
+      return;
+    }
+    onShortPress();
+  };
+
   return (
     <button
-      onClick={onClick}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
+      onPointerLeave={handlePointerCancel}
+      onClick={handleClick}
       aria-haspopup="dialog"
       aria-expanded={active}
       aria-label={recording ? `${label} — Aufnahme beenden` : label}

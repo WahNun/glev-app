@@ -15,6 +15,15 @@ import { createContext, useContext, useState, useCallback, useRef, type ReactNod
  * the engine page registers itself here on mount and the chrome reads
  * `recording` + calls `requestStop()` without importing engine code.
  *
+ * The `hasSpoken` flag flips to true after the user has completed at
+ * least one voice take in the current session (set by the engine page
+ * when MediaRecorder.onstop fires with non-empty audio). The FAB
+ * uses this to switch its short-tap behaviour: before the first take,
+ * a short tap on the FAB opens the quick-add sheet (the user needs to
+ * discover the entry-points); after at least one take, a short tap
+ * jumps straight back into a fresh voice take while long-pressing the
+ * FAB always opens the quick-add sheet as the secondary menu.
+ *
  * Safe no-op fallback in the hook: components rendered outside the
  * provider (unit tests, marketing/landing surfaces) get a dead stub
  * instead of throwing.
@@ -25,12 +34,15 @@ export interface VoiceRecordingState {
   registerStopHandler: (h: () => void) => void;
   unregisterStopHandler: () => void;
   requestStop: () => void;
+  hasSpoken: boolean;
+  markSpoken: () => void;
 }
 
 const Ctx = createContext<VoiceRecordingState | null>(null);
 
 export function VoiceRecordingProvider({ children }: { children: ReactNode }) {
   const [recording, setRecording] = useState(false);
+  const [hasSpoken, setHasSpoken] = useState(false);
   const stopRef = useRef<(() => void) | null>(null);
 
   const registerStopHandler = useCallback((h: () => void) => {
@@ -42,9 +54,16 @@ export function VoiceRecordingProvider({ children }: { children: ReactNode }) {
   const requestStop = useCallback(() => {
     stopRef.current?.();
   }, []);
+  const markSpoken = useCallback(() => {
+    setHasSpoken(true);
+  }, []);
 
   return (
-    <Ctx.Provider value={{ recording, setRecording, registerStopHandler, unregisterStopHandler, requestStop }}>
+    <Ctx.Provider value={{
+      recording, setRecording,
+      registerStopHandler, unregisterStopHandler, requestStop,
+      hasSpoken, markSpoken,
+    }}>
       {children}
     </Ctx.Provider>
   );
@@ -59,6 +78,8 @@ export function useVoiceRecording(): VoiceRecordingState {
       registerStopHandler: () => {},
       unregisterStopHandler: () => {},
       requestStop: () => {},
+      hasSpoken: false,
+      markSpoken: () => {},
     };
   }
   return ctx;

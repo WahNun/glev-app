@@ -964,6 +964,11 @@ export default function EnginePage() {
         const actualType = rec.mimeType || preferred || "audio/webm";
         const blob = new Blob(audioChunksRef.current, { type: actualType });
         if (blob.size === 0) return;
+        // Flip the global "user has spoken at least once" flag so the
+        // bottom-nav Glev FAB switches its short-tap action from
+        // "open quick-add menu" to "start a new voice take" (see
+        // lib/voiceRecordingContext + Layout.tsx MobileGlevFab).
+        voiceCtx.markSpoken();
         const tBlob = Date.now();
         const tStop = recordingStopTsRef.current ?? tBlob;
         // eslint-disable-next-line no-console
@@ -2221,16 +2226,26 @@ export default function EnginePage() {
           {stepIndex === 0 && (
             <div style={{
               display: "flex", flexDirection: "column", alignItems: "stretch",
-              gap: 10, padding: "12px 0 8px",
+              gap: 10,
+              // Bottom padding bumped on mobile (8 → 48) so the
+              // "Weiter zu Makros" CTA never sits directly under the
+              // bottom-nav Glev FAB's protruding upper half. The FAB
+              // overlaps the nav top edge by ~26 px (half its 52 px
+              // diameter); without extra clearance, the blue CTA bar
+              // peeked out from under the FAB and looked like the FAB
+              // was being "hidden behind a black bar" (user feedback
+              // 2026-05-17).
+              padding: isMobile ? "12px 0 48px" : "12px 0 8px",
               // Mobile: stretch the column so the chat panel (flex:1
               // inside) fills the available viewport between the fixed
               // app header (~64 + safe-area-top) and the fixed bottom-
-              // nav. ~140px reservation now that the Sprechen pill is
-              // gone (step indicator pills ~80 + gaps + safe-area
-              // bottom). Desktop keeps natural height since the chat
-              // lives in a sticky right sidebar instead.
+              // nav. ~180px reservation (was 140) accounts for the new
+              // 48 px bottom padding above plus the step indicator
+              // pills and safe-area-bottom. Desktop keeps natural
+              // height since the chat lives in a sticky right sidebar
+              // instead.
               minHeight: isMobile
-                ? "calc(100svh - 140px - env(safe-area-inset-top, 0px))"
+                ? "calc(100svh - 180px - env(safe-area-inset-top, 0px))"
                 : undefined,
             }}>
               {/* Desktop fallback start/stop control. Mobile users always
