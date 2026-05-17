@@ -170,7 +170,37 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           .glev-mobile-nav  { display: flex !important; }
           .glev-mobile-fab  { display: flex !important; }
           .glev-mobile-head { display: flex !important; }
-          .glev-main        { padding: calc(env(safe-area-inset-top) + 76px) 16px calc(env(safe-area-inset-bottom) + 110px) !important; }
+          /* Lock the document so iOS WKWebView cannot rubber-band the
+             whole page. overscroll-behavior on html/body alone is NOT
+             honoured reliably in WKWebView (= the Capacitor iOS shell),
+             so the document-level bounce kept making the fixed header
+             grow at top-scroll and the fixed footer grow at bottom-
+             scroll. By position:fixed-locking html+body we forbid any
+             document scroll, and move the actual scrolling into the
+             <main> container below — which then can't bounce because
+             its content fits inside a fixed-size viewport with
+             overscroll-behavior: contain. */
+          html, body {
+            position: fixed !important;
+            inset: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            overflow: hidden !important;
+            overscroll-behavior: none !important;
+          }
+          .glev-main        {
+            /* Take the full viewport so we can scroll INSIDE this
+               element instead of letting the document scroll. dvh
+               (dynamic viewport height) tracks iOS keyboard / status-
+               bar overlays better than 100vh in WKWebView. Padding
+               still reserves space for the fixed header (top) and
+               fixed nav (bottom) so children clear the chrome. */
+            height: 100dvh !important;
+            overflow-y: auto !important;
+            overscroll-behavior-y: contain !important;
+            -webkit-overflow-scrolling: auto !important;
+            padding: calc(env(safe-area-inset-top) + 76px) 16px calc(env(safe-area-inset-bottom) + 110px) !important;
+          }
           .glev-entry-row   { grid-template-columns: 1fr auto auto !important; gap: 10px !important; padding: 14px 16px !important; }
           .glev-entry-hide-mobile { display: none !important; }
           .glev-entry-bolus { display: flex !important; }
