@@ -212,6 +212,17 @@ textarea,
   0%, 100% { transform: rotate(-0.6deg); }
   50%      { transform: rotate(0.6deg); }
 }
+
+/* Bottom-nav tap-pending spinner. Drawn on top of the tapped tab's icon
+   while React is mid-transition to the new route, so on slow iOS WKWebView
+   transitions the tap doesn't feel dead. Kept dependency-free (no Tailwind)
+   because Layout.tsx uses inline styles throughout. */
+@keyframes glevTabSpin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [style*="glevTabSpin"] { animation: none !important; }
+}
 .glev-wiggle {
   animation: glev-wiggle 0.22s ease-in-out infinite;
   transform-origin: center;

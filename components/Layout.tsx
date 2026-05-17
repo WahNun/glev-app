@@ -1,7 +1,8 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { hapticSelection } from "@/lib/haptics";
 import { useTranslations, useLocale } from "next-intl";
 import { signOut } from "@/lib/auth";
 import GlevLockup from "@/components/GlevLockup";
@@ -123,11 +124,36 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // stream and the pulsing header pill running on the next screen.
   // The centre Glev FAB keeps its own behaviour (tap = stop recording)
   // and is intentionally NOT routed through navTo.
+  //
+  // 2026-05-17 round 6 (TestFlight feedback: "einstellungen und insights
+  // laden sehr verzögert") — heavy routes like /insights and /settings
+  // can take 1-2 s to swap in on iOS WKWebView, and during that gap the
+  // tap looked dead. We now fire INSTANT feedback the moment the user
+  // taps:
+  //   1. Selection haptic (native click feel).
+  //   2. Optimistic active highlight on the tapped tab (`pendingPath`).
+  //   3. A small spinner on top of the tab icon while React is in the
+  //      transition.
+  // Once the new route's RSC payload streams in, `pathname` updates and
+  // we clear `pendingPath`, so the active highlight returns to being
+  // sourced from the URL.
+  const [isPending, startTransition] = useTransition();
+  const [pendingPath, setPendingPath] = useState<string | null>(null);
+  useEffect(() => {
+    if (pendingPath && pathname.startsWith(pendingPath)) {
+      setPendingPath(null);
+    }
+  }, [pathname, pendingPath]);
+
   const navTo = (path: string) => {
+    hapticSelection();
     if (voice.recording) {
       try { voice.requestStop(); } catch {}
     }
-    router.push(path);
+    setPendingPath(path);
+    startTransition(() => {
+      router.push(path);
+    });
   };
   // Mobile bottom-nav: tapping the Glev slot now goes STRAIGHT to the
   // engine voice screen (the meal log flow) instead of popping a
@@ -521,6 +547,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         <MobileTab
           label={tNav("dashboard")}
           active={pathname.startsWith("/dashboard")}
+          pending={isPending && pendingPath === "/dashboard"}
           onClick={() => navTo("/dashboard")}
           icon={(a) => (
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : NAV_INACTIVE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -532,6 +559,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         <MobileTab
           label={tNav("entries")}
           active={pathname.startsWith("/entries")}
+          pending={isPending && pendingPath === "/entries"}
           onClick={() => navTo("/entries")}
           icon={(a) => (
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : NAV_INACTIVE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -581,6 +609,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         <MobileTab
           label={tNav("insights")}
           active={pathname.startsWith("/insights")}
+          pending={isPending && pendingPath === "/insights"}
           onClick={() => navTo("/insights")}
           icon={(a) => (
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : NAV_INACTIVE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -593,6 +622,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         <MobileTab
           label={tNav("settings")}
           active={pathname.startsWith("/settings")}
+          pending={isPending && pendingPath === "/settings"}
           onClick={() => navTo("/settings")}
           icon={(a) => (
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : NAV_INACTIVE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -796,17 +826,28 @@ function MobileGlevFab({
  * doesn't fit the tab shape, so a simple map() no longer made sense.
  */
 function MobileTab({
-  label, active, onClick, icon,
+  label, active, onClick, icon, pending = false,
 }: {
   label: string;
   active: boolean;
   onClick: () => void;
   icon: (active: boolean) => React.ReactNode;
+  /**
+   * 2026-05-17 round 6: when the user has tapped this tab but the new
+   * route hasn't finished streaming in yet, we visually treat the tab
+   * as active AND overlay a small spinner on the icon — so on slow
+   * iOS WKWebView transitions the tap doesn't look dead.
+   */
+  pending?: boolean;
 }) {
+  // Treat pending as visually active so the highlight lands the instant
+  // the finger lifts, not after RSC streaming finishes.
+  const visualActive = active || pending;
   return (
     <button
       onClick={onClick}
       aria-current={active ? "page" : undefined}
+      aria-busy={pending || undefined}
       style={{
         flex: "1 1 0",
         minWidth: 0,
@@ -814,14 +855,34 @@ function MobileTab({
         alignItems: "center", justifyContent: "center",
         gap: 4, padding: "6px 2px", height: 56,
         border: "none", background: "transparent", cursor: "pointer",
-        color: active ? ACCENT : NAV_INACTIVE,
-        fontSize: 11, fontWeight: active ? 600 : 500, letterSpacing: "0.005em",
+        color: visualActive ? ACCENT : NAV_INACTIVE,
+        fontSize: 11, fontWeight: visualActive ? 600 : 500, letterSpacing: "0.005em",
         borderRadius: 10,
         transition: "color 0.15s",
+        // Subtle scale-down on press for tactile feedback on iOS where
+        // the WebkitTapHighlightColor is invisible against the dark nav.
+        WebkitTapHighlightColor: "transparent",
       }}
     >
-      <span style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 22, width: 22 }}>
-        {icon(active)}
+      <span style={{
+        position: "relative",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        height: 22, width: 22,
+      }}>
+        {icon(visualActive)}
+        {pending ? (
+          <span
+            aria-hidden="true"
+            style={{
+              position: "absolute", inset: -3,
+              borderRadius: "50%",
+              border: `2px solid ${ACCENT}33`,
+              borderTopColor: ACCENT,
+              animation: "glevTabSpin 0.7s linear infinite",
+              pointerEvents: "none",
+            }}
+          />
+        ) : null}
       </span>
       <span style={{
         lineHeight: 1.1, whiteSpace: "nowrap",
