@@ -2165,25 +2165,17 @@ export default function EnginePage() {
                 disabled={parsing || !speechAvail}
                 aria-label={recording ? tEngine("voice_aria_stop") : tEngine("voice_aria_start")}
                 style={{
-                  // Primary CTA (Task #315): the Sprechen pill is the
-                  // unmistakable primary action on Step 1 of the cockpit.
-                  // Filled ACCENT background + larger touch target (64px)
-                  // give it clear visual dominance over secondary chips,
-                  // tab pills and the chat panel input — so the user
-                  // never has to hunt for "what do I do next?". When
-                  // recording, the fill softens to a translucent halo so
-                  // the pulsing border + glow can carry the "listening"
-                  // feedback without competing with the icon.
                   display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 12,
-                  width: "100%", maxWidth: 320, height: 64, borderRadius: 32,
-                  background: recording ? `${ACCENT}1f` : ACCENT,
-                  border: `1px solid ${ACCENT}`,
-                  color: recording ? "var(--text)" : "#fff",
-                  fontSize: 17, fontWeight: 700, letterSpacing: "-0.01em",
+                  width: "100%", maxWidth: 280, height: 56, borderRadius: 28,
+                  background: recording ? `${ACCENT}1f` : SURFACE,
+                  border: `1px solid ${recording ? ACCENT : `${ACCENT}55`}`,
+                  color:"var(--text)",
+                  fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
                   cursor: parsing || !speechAvail ? "not-allowed" : "pointer",
                   animation: recording ? "engRecHalo 1.4s ease-in-out infinite" : undefined,
-                  boxShadow: recording ? undefined : `0 8px 24px -10px ${ACCENT}aa`,
+                  boxShadow: recording ? undefined : `0 0 0 1px ${ACCENT}22`,
                   opacity: parsing || !speechAvail ? 0.55 : 1,
+                  transition: "background 0.2s, border-color 0.2s, opacity 0.2s",
                   WebkitTapHighlightColor: "transparent",
                 }}
               >
@@ -2200,7 +2192,7 @@ export default function EnginePage() {
                     transition: "filter 0.25s",
                   }}
                 >
-                  <GlevLogo size={22} color={recording ? ACCENT : "#fff"} bg="transparent"/>
+                  <GlevLogo size={22} color={ACCENT} bg="transparent"/>
                 </span>
                 {recording ? tEngine("voice_btn_stop") : parsing ? tEngine("voice_btn_processing") : tEngine("voice_btn_speak")}
               </button>
