@@ -804,6 +804,70 @@ export default function EnginePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── Cockpit lock (Task #315) ────────────────────────────────────────
+  // The Engine screen should behave like a fixed analysis instrument,
+  // not a scrollable webpage. While this page is mounted we suppress:
+  //  - vertical/horizontal scroll on html + body
+  //  - iOS rubber-band / Android overscroll glow (overscroll-behavior)
+  //  - the Layout `<main>` wrapper's own scroll/padding fallback so the
+  //    engine content can claim the full viewport between the fixed
+  //    app header and the fixed bottom nav.
+  // Pinch-zoom and double-tap-zoom are already handled globally by
+  // <PreventZoom /> (mounted in app/layout.tsx), so we don't redo that
+  // here. Everything is restored on unmount so other routes are
+  // unaffected.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const html = document.documentElement;
+    const body = document.body;
+    const main = document.querySelector(".glev-main") as HTMLElement | null;
+
+    const prev = {
+      htmlOverflow:    html.style.overflow,
+      htmlOverscroll:  html.style.overscrollBehavior,
+      bodyOverflow:    body.style.overflow,
+      bodyOverscroll:  body.style.overscrollBehavior,
+      bodyTouchAction: body.style.touchAction,
+      mainOverflow:    main?.style.overflow ?? "",
+      mainHeight:      main?.style.height ?? "",
+      mainPaddingTop:  main?.style.paddingTop ?? "",
+      mainPaddingBot:  main?.style.paddingBottom ?? "",
+    };
+
+    html.style.overflow = "hidden";
+    html.style.overscrollBehavior = "none";
+    body.style.overflow = "hidden";
+    body.style.overscrollBehavior = "none";
+    // touch-action: manipulation keeps taps/inner scroll usable while
+    // killing the page-level pinch/double-tap zoom paths that ignore
+    // the viewport meta on iOS Safari.
+    body.style.touchAction = "manipulation";
+    if (main) {
+      main.style.overflow = "hidden";
+      main.style.height   = "100svh";
+      // Layout.tsx normally pads the main wrapper top/bottom to
+      // reserve room for the fixed app header + bottom nav. While
+      // cockpit-locked, we keep that padding so the engine surface
+      // sits in the same safe area; we only force overflow:hidden +
+      // a hard viewport height so nothing can grow the document or
+      // surface a page-level scrollbar.
+    }
+
+    return () => {
+      html.style.overflow = prev.htmlOverflow;
+      html.style.overscrollBehavior = prev.htmlOverscroll;
+      body.style.overflow = prev.bodyOverflow;
+      body.style.overscrollBehavior = prev.bodyOverscroll;
+      body.style.touchAction = prev.bodyTouchAction;
+      if (main) {
+        main.style.overflow = prev.mainOverflow;
+        main.style.height   = prev.mainHeight;
+        main.style.paddingTop    = prev.mainPaddingTop;
+        main.style.paddingBottom = prev.mainPaddingBot;
+      }
+    };
+  }, []);
+
   async function startRecording() {
     setVoiceErr(""); setTranscript("");
     try {
@@ -1740,7 +1804,22 @@ export default function EnginePage() {
   );
 
   return (
-    <div style={{ maxWidth: 1100, margin:"0 auto" }}>
+    <div
+      data-engine-cockpit
+      style={{
+        // Cockpit frame (Task #315): claim the full inner viewport
+        // between the Layout's fixed header + bottom nav and forbid
+        // page-level scroll/bounce. Inner scroll, where unavoidable
+        // (long forms, chat history), is delegated to the dedicated
+        // scroll region below this header strip.
+        maxWidth: 1100, margin:"0 auto",
+        height: "100%",
+        display: "flex", flexDirection: "column",
+        overflow: "hidden",
+        overscrollBehavior: "none",
+        touchAction: "manipulation",
+      }}
+    >
       {/* The previous "Glev Engine" h1 + subtitle block was removed per
           UX request — page identification now comes from the global app
           header (logo top-left) and the tab chip (top-right chevron),
@@ -1832,11 +1911,27 @@ export default function EnginePage() {
         ) : null;
       })()}
 
+      {/* Cockpit content area (Task #315): a non-scrolling flex column
+          that fills whatever the locked viewport leaves below the tab
+          strip. The Engine tab's chat panel does its own internal
+          scrolling; the form tabs each mount a bounded scroll
+          subregion. The cockpit frame itself never scrolls or
+          rubber-bands. */}
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          overscrollBehavior: "contain",
+        }}
+      >
       {tab === "engine" && (
         <div
           style={
             isMobile
-              ? { maxWidth: 720, margin: "0 auto" }
+              ? { maxWidth: 720, margin: "0 auto", width: "100%", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }
               : {
                   // Desktop 2-column layout mirrors /log's old
                   // `minmax(0, 1fr) 400px` grid: wizard left, sticky
@@ -1853,10 +1948,28 @@ export default function EnginePage() {
                   gridTemplateColumns: "minmax(0, 1fr) 400px",
                   gap: 24,
                   alignItems: "start",
+                  flex: 1,
+                  minHeight: 0,
+                  width: "100%",
+                  overflow: "hidden",
                 }
           }
         >
-          <div style={{ maxWidth: 720, margin: "0 auto", width: "100%", minWidth: 0 }}>
+          <div
+            style={{
+              maxWidth: 720, margin: "0 auto", width: "100%", minWidth: 0,
+              // Bounded scroll subregion (Task #315): the wizard column
+              // is the only place inside the engine cockpit that may
+              // genuinely overflow on small viewports (long Step 2 form,
+              // chips, banners). Scrolling stays inside this column, with
+              // overscroll-behavior:contain so it never bubbles up to the
+              // locked page frame.
+              flex: 1, minHeight: 0,
+              overflowY: "auto", overflowX: "hidden",
+              overscrollBehavior: "contain",
+              WebkitOverflowScrolling: "touch",
+            }}
+          >
           {adjustmentVisible && currentAdjustment && (
             <div
               role="region"
@@ -1931,7 +2044,6 @@ export default function EnginePage() {
               so input rows stay comfortable to scan even when the wider
               outer grid gives the column extra breathing room. */}
           <style>{`
-            @keyframes engVPulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.06)} }
             @keyframes engSpin   { to { transform: rotate(360deg) } }
             /* Wizard step pills — base size for mobile, larger on desktop.
                Sizing lives in CSS (not the inline style object) so we can
@@ -2053,17 +2165,25 @@ export default function EnginePage() {
                 disabled={parsing || !speechAvail}
                 aria-label={recording ? tEngine("voice_aria_stop") : tEngine("voice_aria_start")}
                 style={{
+                  // Primary CTA (Task #315): the Sprechen pill is the
+                  // unmistakable primary action on Step 1 of the cockpit.
+                  // Filled ACCENT background + larger touch target (64px)
+                  // give it clear visual dominance over secondary chips,
+                  // tab pills and the chat panel input — so the user
+                  // never has to hunt for "what do I do next?". When
+                  // recording, the fill softens to a translucent halo so
+                  // the pulsing border + glow can carry the "listening"
+                  // feedback without competing with the icon.
                   display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 12,
-                  width: "100%", maxWidth: 280, height: 56, borderRadius: 28,
-                  background: recording ? `${ACCENT}1f` : SURFACE,
-                  border: `1px solid ${recording ? ACCENT : `${ACCENT}55`}`,
-                  color:"var(--text)",
-                  fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
+                  width: "100%", maxWidth: 320, height: 64, borderRadius: 32,
+                  background: recording ? `${ACCENT}1f` : ACCENT,
+                  border: `1px solid ${ACCENT}`,
+                  color: recording ? "var(--text)" : "#fff",
+                  fontSize: 17, fontWeight: 700, letterSpacing: "-0.01em",
                   cursor: parsing || !speechAvail ? "not-allowed" : "pointer",
                   animation: recording ? "engRecHalo 1.4s ease-in-out infinite" : undefined,
-                  boxShadow: recording ? undefined : `0 0 0 1px ${ACCENT}22`,
+                  boxShadow: recording ? undefined : `0 8px 24px -10px ${ACCENT}aa`,
                   opacity: parsing || !speechAvail ? 0.55 : 1,
-                  transition: "background 0.2s, border-color 0.2s, opacity 0.2s",
                   WebkitTapHighlightColor: "transparent",
                 }}
               >
@@ -2080,7 +2200,7 @@ export default function EnginePage() {
                     transition: "filter 0.25s",
                   }}
                 >
-                  <GlevLogo size={22} color={ACCENT} bg="transparent"/>
+                  <GlevLogo size={22} color={recording ? ACCENT : "#fff"} bg="transparent"/>
                 </span>
                 {recording ? tEngine("voice_btn_stop") : parsing ? tEngine("voice_btn_processing") : tEngine("voice_btn_speak")}
               </button>
@@ -2721,13 +2841,32 @@ export default function EnginePage() {
         </div>
         )}
 
-              {tab === "log"         && <EngineLogTab />}
-      {tab === "bolus"       && <InsulinForm />}
-      {tab === "exercise"    && <ExerciseForm />}
-      {tab === "fingerstick" && <FingerstickLogCard />}
-      {tab === "cycle" && showCycleTab && <CycleForm />}
-      {tab === "symptoms"    && <SymptomForm />}
-      {tab === "influences"  && <InfluenceForm />}
+              {/* Non-engine tabs each render inside a bounded scroll subregion
+          (Task #315). The cockpit frame itself stays fixed; if a given
+          form is taller than the available cockpit height, only the
+          form card scrolls — not the page. overscroll-behavior:contain
+          prevents iOS rubber-band from leaking back to the document. */}
+      {tab !== "engine" && (
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: "auto",
+            overflowX: "hidden",
+            overscrollBehavior: "contain",
+            WebkitOverflowScrolling: "touch",
+          }}
+        >
+          {tab === "log"         && <EngineLogTab />}
+          {tab === "bolus"       && <InsulinForm />}
+          {tab === "exercise"    && <ExerciseForm />}
+          {tab === "fingerstick" && <FingerstickLogCard />}
+          {tab === "cycle" && showCycleTab && <CycleForm />}
+          {tab === "symptoms"    && <SymptomForm />}
+          {tab === "influences"  && <InfluenceForm />}
+        </div>
+      )}
+      </div>
     </div>
   );
 }
