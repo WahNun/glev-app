@@ -1395,6 +1395,7 @@
     "cluster_rates": "Verlaufs-Verteilung & Quoten",
     "cluster_score_trend": "Control Score & Glukose-Trend",
     "cluster_recents": "Zuletzt",
+    "reorder_cluster_aria": "Zum Umsortieren ziehen",
     "log_meal_cta": "+ Mahlzeit loggen",
     "flip_back": "↺ zurück",
     "flip_hint_short": "↺",

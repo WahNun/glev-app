@@ -1387,6 +1387,7 @@
     "cluster_rates": "Outcome distribution & rates",
     "cluster_score_trend": "Control Score & glucose trend",
     "cluster_recents": "Recents",
+    "reorder_cluster_aria": "Drag to reorder section",
     "log_meal_cta": "+ Log meal",
     "flip_back": "↺ back",
     "flip_hint_short": "↺",

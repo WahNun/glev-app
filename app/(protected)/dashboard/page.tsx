@@ -21,6 +21,27 @@ import { hapticSelection } from "@/lib/haptics";
 import { parseDbDate, parseDbTs, localeToBcp47 } from "@/lib/time";
 import { useLocale, useTranslations } from "next-intl";
 import { isToday, startOfDaysAgo } from "@/lib/utils/datetime";
+import {
+  DndContext,
+  type DragEndEvent,
+  KeyboardSensor,
+  PointerSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { useCardOrder } from "@/lib/cardOrder";
+
+const DASHBOARD_CLUSTER_DEFAULT_ORDER = ["glucose", "macros", "rates", "score-trend", "recents"];
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="var(--surface)", BORDER="var(--border)";
@@ -431,11 +452,11 @@ export default function DashboardPage() {
   const cards = buildCards(meals, t);
   const rateCards = cards.filter(c => c.key !== "control");
 
-  // The dashboard is now organised into five fixed clusters, each one a
-  // horizontal swipe pager. Vertical scrolling between clusters is still
-  // allowed but each cluster owns its own mental context — no more
-  // endless data-wall feed. Order is fixed by spec (Glucose → Makros →
-  // Rates → Score/Trend → Recents) and intentionally not user-sortable.
+  // The dashboard is organised into five clusters, each a horizontal swipe
+  // pager. Default order is spec'd (Glucose → Makros → Rates → Score/Trend
+  // → Recents) but power users can long-press the grip handle in each
+  // cluster header to drag the section up or down. Persisted per user via
+  // `useCardOrder("dashboard", …)`.
   const clusters: Array<{ id: string; title: string; cards: ClusterCard[] }> = [
     {
       id: "glucose",
@@ -502,11 +523,111 @@ export default function DashboardPage() {
       </div>
       <DashboardQuickAddSheet open={quickAddOpen} onClose={() => setQuickAddOpen(false)} />
 
-      <div style={{ display:"flex", flexDirection:"column", gap:28 }}>
-        {clusters.map(cl => (
-          <DashboardCluster key={cl.id} clusterId={cl.id} title={cl.title} cards={cl.cards} />
-        ))}
-      </div>
+      <ReorderableClusters clusters={clusters} />
+    </div>
+  );
+}
+
+/** Wraps the cluster list in a dnd-kit vertical sortable context. The user
+ *  drags from the grip handle in each cluster header to reorder; the new
+ *  order is persisted per-user via `useCardOrder("dashboard", …)`. Unknown
+ *  saved IDs are dropped and newly-added clusters are appended in their
+ *  declared position so future additions show up without breaking layouts. */
+function ReorderableClusters({
+  clusters,
+}: {
+  clusters: Array<{ id: string; title: string; cards: ClusterCard[] }>;
+}) {
+  const { order, setOrder } = useCardOrder("dashboard", DASHBOARD_CLUSTER_DEFAULT_ORDER);
+
+  const resolved = useMemo(() => {
+    const byId = new Map(clusters.map(c => [c.id, c]));
+    const seen = new Set<string>();
+    const out: typeof clusters = [];
+    for (const id of order) {
+      const c = byId.get(id);
+      if (c && !seen.has(id)) { out.push(c); seen.add(id); }
+    }
+    for (const c of clusters) if (!seen.has(c.id)) out.push(c);
+    return out;
+  }, [clusters, order]);
+
+  const sensors = useSensors(
+    // 280ms hold before a drag starts so a normal tap or swipe inside the
+    // cluster (the horizontal card pager lives below the header) is never
+    // hijacked. Matches the iOS feel without being slow.
+    useSensor(PointerSensor, { activationConstraint: { delay: 280, tolerance: 5 } }),
+    useSensor(TouchSensor,   { activationConstraint: { delay: 280, tolerance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  function handleDragEnd(ev: DragEndEvent) {
+    const { active, over } = ev;
+    if (!over || active.id === over.id) return;
+    const ids = resolved.map(c => c.id);
+    const oldIndex = ids.indexOf(String(active.id));
+    const newIndex = ids.indexOf(String(over.id));
+    if (oldIndex < 0 || newIndex < 0) return;
+    setOrder(arrayMove(ids, oldIndex, newIndex));
+  }
+
+  return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <SortableContext items={resolved.map(c => c.id)} strategy={verticalListSortingStrategy}>
+        <div style={{ display:"flex", flexDirection:"column", gap:28 }}>
+          {resolved.map(cl => (
+            <SortableCluster key={cl.id} clusterId={cl.id} title={cl.title} cards={cl.cards} />
+          ))}
+        </div>
+      </SortableContext>
+    </DndContext>
+  );
+}
+
+function SortableCluster({
+  clusterId,
+  title,
+  cards,
+}: {
+  clusterId: string;
+  title: string;
+  cards: ClusterCard[];
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: clusterId });
+  const t = useTranslations("dashboard");
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+    zIndex: isDragging ? 5 : undefined,
+  };
+
+  const handle = (
+    <button
+      type="button"
+      aria-label={t("reorder_cluster_aria")}
+      {...attributes}
+      {...listeners}
+      style={{
+        width: 28, height: 28, padding: 0,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        background: "transparent", border: "none",
+        color: "var(--text-ghost)", cursor: "grab",
+        touchAction: "none",
+      }}
+    >
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+        <circle cx="5" cy="3"  r="1.3"/><circle cx="11" cy="3"  r="1.3"/>
+        <circle cx="5" cy="8"  r="1.3"/><circle cx="11" cy="8"  r="1.3"/>
+        <circle cx="5" cy="13" r="1.3"/><circle cx="11" cy="13" r="1.3"/>
+      </svg>
+    </button>
+  );
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <DashboardCluster clusterId={clusterId} title={title} cards={cards} headerHandle={handle} />
     </div>
   );
 }
@@ -523,10 +644,12 @@ function DashboardCluster({
   clusterId,
   title,
   cards,
+  headerHandle,
 }: {
   clusterId: string;
   title: string;
   cards: ClusterCard[];
+  headerHandle?: React.ReactNode;
 }) {
   const [active, setActive] = useState(0);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -557,13 +680,16 @@ function DashboardCluster({
       aria-label={title}
       style={{ display:"flex", flexDirection:"column", gap:10 }}
     >
-      <h2 style={{
-        fontSize:12, fontWeight:700, letterSpacing:"0.12em",
-        textTransform:"uppercase", color:"var(--text-dim)",
-        margin:"0 4px",
-      }}>
-        {title}
-      </h2>
+      <div style={{ display:"flex", alignItems:"center", gap:6, margin:"0 4px" }}>
+        <h2 style={{
+          fontSize:12, fontWeight:700, letterSpacing:"0.12em",
+          textTransform:"uppercase", color:"var(--text-dim)",
+          margin:0, flex:1, minWidth:0,
+        }}>
+          {title}
+        </h2>
+        {headerHandle}
+      </div>
       <div
         ref={scrollerRef}
         onScroll={cards.length > 1 ? onScroll : undefined}
