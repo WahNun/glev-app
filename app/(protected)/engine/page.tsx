@@ -2863,18 +2863,37 @@ export default function EnginePage() {
                           KE/IE") so we drop the legacy "1:" prefix —
                           the unit suffix already conveys the ratio. */}
                       <span style={{ color: "var(--text-muted)" }}>{tEngine("icr_label")}: {carbUnit.displayICR(adaptedICR)}</span>
-                      <span style={{
-                        padding: "2px 10px", borderRadius: 99,
-                        fontSize: 12, fontWeight: 700, letterSpacing: "0.05em",
-                        background: `${CONF_COLOR[result.confidence]}22`,
-                        color: CONF_COLOR[result.confidence],
-                        border: `1px solid ${CONF_COLOR[result.confidence]}40`,
-                      }}>
-                        {result.confidence}
+                      <span
+                        title={tEngine(`conf_explain_${result.confidence}` as never)}
+                        aria-label={tEngine(`conf_explain_${result.confidence}` as never)}
+                        style={{
+                          padding: "2px 10px", borderRadius: 99,
+                          fontSize: 12, fontWeight: 700, letterSpacing: "0.05em",
+                          background: `${CONF_COLOR[result.confidence]}22`,
+                          color: CONF_COLOR[result.confidence],
+                          border: `1px solid ${CONF_COLOR[result.confidence]}40`,
+                          cursor: "help",
+                        }}
+                      >
+                        {tEngine(`conf_label_${result.confidence}` as never)}
                       </span>
                       <span style={{ color: "var(--text-faint)", fontSize: 13 }}>
                         {result.source === "historical" ? tEngine("source_historical") : result.source === "blended" ? tEngine("source_blended") : tEngine("source_formula")}
                       </span>
+                    </div>
+                    {/* Plain-language explanation of what the confidence
+                        chip means, rendered as a dim subtitle so the
+                        user doesn't have to hover/tap the chip to find
+                        out what "HIGH" / "MEDIUM" / "LOW" represent
+                        (2026-05-17 user request: "wenn da high im chip
+                        steht sollte da auch stehen warum high oder
+                        wofür das steht"). Same copy lives in the chip
+                        title attribute for desktop hover affordance. */}
+                    <div style={{
+                      marginTop: 8, fontSize: 12, lineHeight: 1.4,
+                      color: "var(--text-muted)",
+                    }}>
+                      {tEngine(`conf_explain_${result.confidence}` as never)}
                     </div>
                     {/* ICR source breakdown — tells the user how many of
                         the meals feeding the adaptive ICR took insulin
