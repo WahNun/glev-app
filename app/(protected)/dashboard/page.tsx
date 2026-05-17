@@ -566,6 +566,16 @@ export default function DashboardPage() {
         @media (max-width: 768px) {
           .glev-dash-head { display: none !important; }
         }
+        /* Mobile compression — iPhone 13 mini (375×812) and similar.
+           Goal: pull the glucose + metabolic + control clusters and
+           the quick-add CTA into a single viewport without scrolling.
+           We trim only inter-cluster gaps + CTA chrome, never the
+           card content itself, so the data stays legible. */
+        @media (max-width: 430px) {
+          .glev-cluster-stack { gap: 8px !important; }
+          .glev-cluster        { gap: 6px !important; }
+          .glev-quickadd-cta   { margin-top: 6px !important; height: 44px !important; }
+        }
       `}</style>
 
       {/* Desktop-only page title. The previous hero "+" button that
@@ -587,12 +597,14 @@ export default function DashboardPage() {
       <ReorderableClusters
         clusters={clusters}
         clusterFooters={{
-          // Quick-add CTA glued to the bottom of whichever cluster
-          // contains the live glucose card. Keyed by cluster id so it
-          // travels with the glucose cluster if the user reorders the
-          // dashboard — the button always sits right under the glucose
-          // window, never floating to a random position.
-          glucose: (
+          // Quick-add CTA glued to the bottom of the CONTROL cluster
+          // (Control Score is the headline card there). Putting it
+          // under the control score makes the whole dashboard —
+          // glucose, metabolic, control + add-button — fit on small
+          // phones (iPhone 13 mini 375×812) in a single viewport.
+          // Keyed by cluster id so it travels with the control
+          // cluster if the user reorders the dashboard.
+          control: (
             <DashboardQuickAddCTA
               onClick={() => setQuickAddOpen(true)}
               ariaLabel={tQuick("open_aria")}
@@ -681,7 +693,7 @@ function ReorderableClusters({
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={resolved.map(c => c.id)} strategy={verticalListSortingStrategy}>
-        <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+        <div className="glev-cluster-stack" style={{ display:"flex", flexDirection:"column", gap:16 }}>
           {resolved.map(cl => (
             <SortableCluster
               key={cl.id}
@@ -771,6 +783,7 @@ function DashboardQuickAddCTA({
       aria-label={ariaLabel}
       aria-haspopup="dialog"
       aria-expanded={expanded}
+      className="glev-quickadd-cta"
       style={{
         marginTop: 12,
         width: "100%",
@@ -1000,6 +1013,7 @@ function DashboardCluster({
   return (
     <section
       aria-label={title}
+      className="glev-cluster"
       style={{ display:"flex", flexDirection:"column", gap:10 }}
     >
       {/* Cluster title is intentionally hidden from view (per user
