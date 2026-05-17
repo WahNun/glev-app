@@ -2057,6 +2057,12 @@ export default function EnginePage() {
               overflowY: "auto", overflowX: "hidden",
               overscrollBehavior: "contain",
               WebkitOverflowScrolling: "touch",
+              // Flex column so step cards (Step 2 macros, post-save
+              // confirmation) can claim `flex: 1` and stretch all the
+              // way from just below the header to flush against the
+              // nav top edge on mobile — no dark page-bg band visible
+              // around the card (user feedback 2026-05-17).
+              display: "flex", flexDirection: "column",
             }}
           >
           {adjustmentVisible && currentAdjustment && (
@@ -2343,7 +2349,15 @@ export default function EnginePage() {
 
           {/* ───────── STEP 2: Makros prüfen (or post-save confirmation) ───────── */}
           {stepIndex === 1 && wizardSavedDose !== null && (
-            <div style={{ ...card, padding: 24 }}>
+            <div style={{
+              ...card, padding: 24,
+              // Stretch the post-save confirmation card to fill the
+              // wizard scroll-region's full height on mobile so it
+              // butts up against both the header and nav edges — the
+              // SURFACE-coloured card then visually replaces the
+              // page-bg band the user used to see around it.
+              ...(isMobile ? { flex: 1, minHeight: 0 } : null),
+            }}>
               <div
                 style={{
                   width: "100%", padding: "14px 18px",
@@ -2375,7 +2389,22 @@ export default function EnginePage() {
             </div>
           )}
           {stepIndex === 1 && wizardSavedDose === null && (
-            <div style={{ ...card, padding: 18 }}>
+            <div style={{
+              ...card, padding: 18,
+              // Stretch the Step 2 macros card to fill the wizard
+              // column on mobile (flex:1 inside the column-flex
+              // scroll region declared above). Eliminates the dark
+              // page-bg gap between card and nav top edge — the
+              // SURFACE-coloured card runs flush from below the
+              // header to the nav top border. The card's interactive
+              // rows (Macros / Glucose / Time / Save) cluster at the
+              // top, so the FAB's ~26 px protrusion above the nav
+              // hovers harmlessly over the empty bottom area of the
+              // stretched card. paddingBottom bumped (18 → 80) so
+              // even when the form is fully expanded the Save CTA
+              // never sits directly under the FAB.
+              ...(isMobile ? { flex: 1, minHeight: 0, paddingBottom: 80 } : null),
+            }}>
               {/* Step-2 page title removed — the wizard step pill at the
                   top ("2 Makros") already names the screen. Dropping it
                   reclaims ~50px and keeps everything (Macros + Glucose

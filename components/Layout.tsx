@@ -213,11 +213,21 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
                Nav total height = 6 (top pad) + 22 (icon) + 4 (gap) +
                12 (label) + max(4, safe-area-bottom - 18) ≈ safe-area-
                bottom + 26 (notched) or 48 (no safe area). Bottom
-               padding adds +60 over safe-area-bottom — covers the
-               nav height plus the Glev FAB's ~26 px protrusion above
-               the nav top edge so the floating button never clips
-               the last interactive row of a card. */
-            padding: calc(env(safe-area-inset-top) + 48px) 16px calc(env(safe-area-inset-bottom) + 60px) !important;
+               padding matches that EXACTLY so the scroll region's
+               content edge sits flush against the nav's top border
+               — no dark page-bg band between card and nav, the same
+               way Instagram / TikTok / X render their feeds. The
+               Glev FAB still protrudes ~26 px above the nav top edge
+               but it's a floating button: it hovers over the bottom
+               of the content, which is acceptable for list / scroll
+               surfaces (last list row scrolls past). Pages that pin
+               interactive buttons at the bottom of a card (Engine
+               Step 1 advance CTA, Step 2 Save row) add their own
+               inner padding-bottom to keep those buttons clear of
+               the FAB. The max() floor keeps non-safe-area devices
+               (Android browsers, desktop) at the nav's intrinsic
+               48 px height. */
+            padding: calc(env(safe-area-inset-top) + 48px) 16px max(48px, calc(env(safe-area-inset-bottom) + 26px)) !important;
           }
           .glev-entry-row   { grid-template-columns: 1fr auto auto !important; gap: 10px !important; padding: 14px 16px !important; }
           .glev-entry-hide-mobile { display: none !important; }
