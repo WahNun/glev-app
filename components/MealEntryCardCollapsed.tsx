@@ -7,6 +7,7 @@ import { chipForMeal } from "@/lib/engine/chipState";
 import { renderEngineMessage, renderEngineMessages } from "@/lib/engineMessages";
 import { parseDbDate } from "@/lib/time";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
+import { useTimeFormat } from "@/hooks/useTimeFormat";
 import { useTranslations, useLocale } from "next-intl";
 
 const ACCENT = "#4F6EF7";
@@ -30,15 +31,14 @@ export default function MealEntryCardCollapsed({
   const tChips = useTranslations("chips");
   const chipLabels = chipLabelsFrom(tChips);
   const locale = useLocale();
+  // Per-user time format pref (auto → 24h for DE, AM/PM for EN; can be
+  // overridden in Settings → Zeitformat). One hook call shared by every
+  // row via the module cache in `useTimeFormat`.
+  const { format: fmtTime } = useTimeFormat();
   const ts = meal.meal_time ?? meal.created_at;
   const d = parseDbDate(ts);
   const dateStr = d.toLocaleDateString(locale, { month: "short", day: "numeric" });
-  // 24h time (hour12:false) for medical-log consistency — matches the
-  // format used on Influence/Cycle/Symptom header rows so every entry
-  // card in the stream displays time the same way regardless of the
-  // user's interface locale (EN users no longer see "10:06 PM" on
-  // meals while the influence above shows "22:18").
-  const timeStr = d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", hour12: false });
+  const timeStr = fmtTime(d);
 
   const catColor = meal.meal_type ? TYPE_COLORS[meal.meal_type] || "var(--text-dim)" : null;
   const catLabel = meal.meal_type ? chipLabels.typeLabel(meal.meal_type) : null;

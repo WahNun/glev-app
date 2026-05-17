@@ -31,6 +31,7 @@ import EntryAddCTA from "@/components/EntryAddCTA";
 import { CgmCountdownPair } from "@/components/CgmCountdownChip";
 import { parseDbDate, parseDbTs, parseLluTs } from "@/lib/time";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
+import { useTimeFormat } from "@/hooks/useTimeFormat";
 import { formatICR } from "@/lib/carbUnits";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
@@ -208,6 +209,10 @@ export default function EntriesPage() {
   // converted (out of scope for the rollout).
   const carbUnit = useCarbUnit();
   const locale = useLocale();
+  // Per-user clock format (auto → DE 24h / EN AM-PM, user-overridable in
+  // Settings → Zeitformat). One hook call shared by every collapsed-meal
+  // header via the module cache in `useTimeFormat`.
+  const { format: fmtTime } = useTimeFormat();
   const tNav = useTranslations("nav");
   const tHistory = useTranslations("history");
   // i18n for the meal-expanded view (section labels, mini-card labels,
@@ -980,7 +985,7 @@ export default function EntriesPage() {
                     <div style={{ fontSize:13, color:"var(--text-muted)", letterSpacing:"0.02em" }}>
                       {dateStr}
                       <span style={{ color:"var(--text-ghost)", margin:"0 8px" }}>·</span>
-                      {date.toLocaleTimeString(locale, { hour:"2-digit", minute:"2-digit", hour12:false })}
+                      {fmtTime(date)}
                     </div>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-faint)" strokeWidth="2.5" strokeLinecap="round" style={{ transform:"rotate(90deg)", transition:"transform 0.2s", flexShrink:0 }}>
                       <polyline points="9 6 15 12 9 18"/>
@@ -1115,7 +1120,7 @@ export default function EntriesPage() {
                           <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
                             {corrections.map(c => {
                               const t = parseDbDate(c.meal_time ?? c.created_at);
-                              const timeStr = t.toLocaleTimeString(locale, { hour:"2-digit", minute:"2-digit", hour12:false });
+                              const timeStr = fmtTime(t);
                               return (
                                 <div key={c.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, fontSize:13.5, color:"var(--text-muted)" }}>
                                   <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{timeStr}</span>
@@ -1585,6 +1590,7 @@ function InsulinReadingsBackfill({ logId, slots }: {
 function BolusMealLinkPanel({ log, meals }: { log: InsulinLog; meals: Meal[] }) {
   const tx = useTranslations("entriesExpand");
   const locale = useLocale();
+  const { format: fmtTime } = useTimeFormat();
   const [picking, setPicking] = useState(false);
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -1641,7 +1647,7 @@ function BolusMealLinkPanel({ log, meals }: { log: InsulinLog; meals: Meal[] }) 
     if (!refIso) return { title, sub: "" };
     const d = parseDbDate(refIso);
     const date = d.toLocaleDateString(locale, { month: "short", day: "numeric" });
-    const time = d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", hour12: false });
+    const time = fmtTime(d);
     return { title, sub: `${date} · ${time}` };
   }
 
@@ -1771,10 +1777,10 @@ function BolusRowCard({ log, meals, isOpen, onToggle, onDelete, deleting }: {
 }) {
   const tx = useTranslations("entriesExpand");
   const locale = useLocale();
+  const { format: fmtTime } = useTimeFormat();
   const d = parseDbDate(log.created_at);
   const dateStr = d.toLocaleDateString(locale, { month:"short", day:"numeric" });
-  // 24h to match MealEntryCardCollapsed + Influence row (see harmonization note 2026-05-17).
-  const timeStr = d.toLocaleTimeString(locale, { hour:"2-digit", minute:"2-digit", hour12:false });
+  const timeStr = fmtTime(d);
 
   const accent  = INSULIN_ACCENT;
   const evalInfo = evaluateBolus(log);
@@ -1941,10 +1947,10 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
 }) {
   const tx = useTranslations("entriesExpand");
   const locale = useLocale();
+  const { format: fmtTime } = useTimeFormat();
   const d = parseDbDate(log.created_at);
   const dateStr = d.toLocaleDateString(locale, { month:"short", day:"numeric" });
-  // 24h to match MealEntryCardCollapsed + Influence row (see harmonization note 2026-05-17).
-  const timeStr = d.toLocaleTimeString(locale, { hour:"2-digit", minute:"2-digit", hour12:false });
+  const timeStr = fmtTime(d);
 
   const accent = BASAL_ACCENT;
   const before = numOrNull(log.cgm_glucose_at_log);
@@ -2197,16 +2203,16 @@ function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting, o
   const tIns = useTranslations("insights");
   const tx = useTranslations("entriesExpand");
   const locale = useLocale();
+  const { format: fmtTime } = useTimeFormat();
   const start = parseDbDate(log.created_at);
   const end   = new Date(start.getTime() + log.duration_minutes * 60_000);
   const dateStr = start.toLocaleDateString(locale, { month:"short", day:"numeric" });
-  // 24h to match MealEntryCardCollapsed + Influence row (see harmonization note 2026-05-17).
-  const timeStr = start.toLocaleTimeString(locale, { hour:"2-digit", minute:"2-digit", hour12:false });
+  const timeStr = fmtTime(start);
   // End-side date is computed independently so workouts that cross
   // midnight (e.g. start 23:50, run 30 min) display the next day's
   // date for ENDED instead of duplicating the start date.
   const endDateStr = end.toLocaleDateString(locale, { month:"short", day:"numeric" });
-  const endTimeStr = end.toLocaleTimeString(locale, { hour:"2-digit", minute:"2-digit", hour12:false });
+  const endTimeStr = fmtTime(end);
 
   const accent  = EXERCISE_ACCENT;
   const typeLbl = exerciseTypeLabelI18n(tIns, log.exercise_type);
@@ -2618,9 +2624,9 @@ function intensityLabel(v: string): string {
 }
 
 function pendingLabel(expectedAt: Date): string {
-  // Once the CGM job's 3 h window has elapsed, the job is finalised
-  // as 'skipped' server-side. Mirror that exact wording in the UI
-  // so the displayed state matches the backend job status.
+  // Currently unused (kept for the future "Pending CGM data" hint on
+  // exercise rows). Falls back to 24h since there is no React hook
+  // context here and the label is dev-facing today.
   if (Date.now() - expectedAt.getTime() > EXERCISE_NO_DATA_AFTER_MS) {
     return "Skipped";
   }
@@ -3221,18 +3227,16 @@ function fmtDateShort(s: string, locale: string): string {
   return d.toLocaleDateString(locale, { day: "numeric", month: "short" });
 }
 
-function fmtDateTimeShort(iso: string, locale: string): string {
-  // Date + 24h time. Locale drives the date format (EN: "May 16",
-  // DE: "16. Mai"); hour12:false forces 24h universally so the
-  // Influence/Symptom timestamp matches the Meal/Bolus timestamp
-  // across every locale instead of switching between "10:06 PM" and
-  // "22:18" depending on where the formatter is called from.
+function fmtDateTimeShort(iso: string, locale: string, fmtTime: (d: Date) => string): string {
+  // Date + locale/pref-aware time. Date portion follows locale ("May 16"
+  // vs "16. Mai"); time portion is delegated to the caller's
+  // useTimeFormat().format helper so the user's auto/24h/12h pref
+  // (Settings → Zeitformat) decides AM-PM vs 24h consistently with the
+  // Meal/Bolus/Basal/Exercise cards.
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString(locale, {
-    day: "numeric", month: "short",
-    hour: "2-digit", minute: "2-digit", hour12: false,
-  });
+  const datePart = d.toLocaleDateString(locale, { day: "numeric", month: "short" });
+  return `${datePart}, ${fmtTime(d)}`;
 }
 
 function CycleRowCard({ log, onDelete, deleting }: {
@@ -3300,6 +3304,7 @@ function InfluenceRowCard({ log, onDelete, deleting }: {
 }) {
   const t = useTranslations("engineLog");
   const locale = useLocale();
+  const { format: fmtTime } = useTimeFormat();
   const accent = "#F5A524";
   const typeLabel = t(`influence_type_${log.influence_type}` as never);
   const subParts: string[] = [];
@@ -3328,7 +3333,7 @@ function InfluenceRowCard({ log, onDelete, deleting }: {
           }}>{typeLabel}</span>
         </div>
         <div style={{ fontSize:13, color:"var(--text-faint)", marginTop:6, display:"flex", gap:8, flexWrap:"wrap" }}>
-          <span>{fmtDateTimeShort(log.occurred_at, locale)}</span>
+          <span>{fmtDateTimeShort(log.occurred_at, locale, fmtTime)}</span>
           {subParts.length > 0 && <span style={{ color:"var(--text-dim)" }}>· {subParts.join(" · ")}</span>}
           {log.notes && <span style={{ color:"var(--text-dim)" }}>· {log.notes}</span>}
         </div>
@@ -3358,6 +3363,7 @@ function SymptomRowCard({ log, onDelete, deleting }: {
 }) {
   const t = useTranslations("engineLog");
   const locale = useLocale();
+  const { format: fmtTime } = useTimeFormat();
   const accent = "#A78BFA";
   return (
     <div style={{
@@ -3406,7 +3412,7 @@ function SymptomRowCard({ log, onDelete, deleting }: {
           ))}
         </div>
         <div style={{ fontSize:13, color:"var(--text-faint)", marginTop:6, display:"flex", gap:8, flexWrap:"wrap" }}>
-          <span>{fmtDateTimeShort(log.occurred_at, locale)}</span>
+          <span>{fmtDateTimeShort(log.occurred_at, locale, fmtTime)}</span>
           {log.notes && <span style={{ color:"var(--text-dim)" }}>· {log.notes}</span>}
         </div>
       </div>

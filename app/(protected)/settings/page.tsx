@@ -44,6 +44,8 @@ import { useTheme } from "@/components/ThemeProvider";
 import type { ThemeChoice } from "@/lib/theme";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
 import type { CarbUnit } from "@/lib/carbUnits";
+import { useTimeFormat } from "@/hooks/useTimeFormat";
+import { isTimeFormatPref } from "@/lib/timeFormat";
 import {
   fetchNotificationPrefs,
   saveNotificationPrefs,
@@ -111,6 +113,7 @@ type SheetKey =
   | "dexcom"
   | "notifications"
   | "language"
+  | "timeFormat"
   | "carbUnit"
   | "export"
   | "appearance"
@@ -186,6 +189,8 @@ export default function SettingsPage() {
   // profiles.carb_unit; the hook exposes display/conversion helpers used
   // throughout the engine, entries, and insights surfaces.
   const carbUnit = useCarbUnit();
+  // Time-format pref (auto / 24h / 12h). DB-backed via profiles.time_format.
+  const timeFormat = useTimeFormat();
   const [macroTargets, setMacroTargets] = useState<MacroTargets>(DEFAULT_MACRO_TARGETS);
   // Opt-in cycle-logging shortcut (gated row in the header "+" menu).
   // DB-backed via `user_settings.cycle_logging_enabled`. Default false
@@ -857,6 +862,13 @@ export default function SettingsPage() {
     : tSettings("theme_system")
   ), [themeChoice, tSettings]);
   const localeSub = currentLocale === "de" ? tSettings("subtitle_language_de") : tSettings("subtitle_language_en");
+  // Subtitle for the Zeitformat row — mirrors the user's pref so the
+  // row at-a-glance shows whether they're on auto, 24h, or 12h.
+  const timeFormatSub = (
+    timeFormat.pref === "24h" ? tSettings("subtitle_time_format_24h") :
+    timeFormat.pref === "12h" ? tSettings("subtitle_time_format_12h") :
+    tSettings("subtitle_time_format_auto")
+  );
   const notifSub = notifPrefs.criticalAlerts
     ? tSettings("subtitle_notif_on", { from: notifPrefs.quietStart, to: notifPrefs.quietEnd })
     : tSettings("subtitle_notif_off");
@@ -1711,6 +1723,38 @@ export default function SettingsPage() {
       ),
       footer: closeFooter,
     },
+    timeFormat: {
+      title: tSettings("time_format_card_title"),
+      body: (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <select
+            value={timeFormat.pref}
+            onChange={(e) => {
+              const next = e.target.value;
+              if (isTimeFormatPref(next)) timeFormat.setPref(next);
+            }}
+            style={{
+              padding: "12px 14px", borderRadius: 10,
+              border: `1px solid ${BORDER}`, background: "var(--surface)",
+              color: "var(--text)", fontSize: 14, fontWeight: 500, cursor: "pointer",
+              appearance: "none", WebkitAppearance: "none",
+              backgroundImage: "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path fill='%23888' d='M2 4l4 4 4-4z'/></svg>\")",
+              backgroundRepeat: "no-repeat",
+              backgroundPosition: "right 14px center",
+              paddingRight: 36,
+            }}
+          >
+            <option value="auto">{tSettings("time_format_opt_auto")}</option>
+            <option value="24h">{tSettings("time_format_opt_24h")}</option>
+            <option value="12h">{tSettings("time_format_opt_12h")}</option>
+          </select>
+          <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5 }}>
+            {tSettings("time_format_hint")}
+          </div>
+        </div>
+      ),
+      footer: closeFooter,
+    },
     export: {
       title: tSettings("row_export"),
       body: <ExportPanel />,
@@ -2166,6 +2210,14 @@ export default function SettingsPage() {
           subtitle={localeSub}
           ariaLabel={tSettings("row_open_aria", { label: tSettings("row_language") })}
           onClick={() => openSheetWith("language")}
+        />
+        <SettingsRow
+          iconColor={ACCENT}
+          icon={ICON.globe}
+          label={tSettings("row_time_format")}
+          subtitle={timeFormatSub}
+          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_time_format") })}
+          onClick={() => openSheetWith("timeFormat")}
         />
         <SettingsRow
           iconColor={ACCENT}
