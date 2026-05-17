@@ -7,10 +7,9 @@ import { signOut } from "@/lib/auth";
 import GlevLockup from "@/components/GlevLockup";
 import GlevLogo from "@/components/GlevLogo";
 import AboutGlevModal from "@/components/AboutGlevModal";
-import AccountSheet from "@/components/AccountSheet";
-import QuickAddMenu from "@/components/QuickAddMenu";
 import DashboardQuickAddSheet from "@/components/DashboardQuickAddSheet";
 import { EngineHeaderProvider, useEngineHeader } from "@/lib/engineHeaderContext";
+import { VoiceRecordingProvider, useVoiceRecording } from "@/lib/voiceRecordingContext";
 import {
   ScopeHeaderProvider, useScopeHeader,
   computeScopeWindow, type ScopeMode,
@@ -86,7 +85,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <EngineHeaderProvider>
       <ScopeHeaderProvider>
-        <LayoutInner>{children}</LayoutInner>
+        <VoiceRecordingProvider>
+          <LayoutInner>{children}</LayoutInner>
+        </VoiceRecordingProvider>
       </ScopeHeaderProvider>
     </EngineHeaderProvider>
   );
@@ -97,16 +98,20 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   const router   = useRouter();
   const tNav = useTranslations("nav");
   const [aboutOpen, setAboutOpen] = useState(false);
-  // AccountSheet — opened by tapping the avatar/profile chip in the
-  // mobile header. Replaces the previous behaviour of routing straight
-  // to /settings, since "Konto" (profile/stats/upgrade/sign-out) and
-  // "Einstellungen" (preferences) are now visually + conceptually
-  // separated per the iOS-style settings refactor.
-  const [accountOpen, setAccountOpen] = useState(false);
+  // The mobile-header AccountSheet trigger was removed in the
+  // 2026-05-17 header-decluttering revision (header now only carries
+  // the brand lockup + the recording-state pill). Konto/Profil flows
+  // are reachable via the Settings bottom-nav tab. AccountSheet
+  // import + render were dropped along with the trigger so we don't
+  // leave dead code behind.
   // Bottom-nav "Glev" slot is no longer a direct route to /engine — it now
   // opens the shared quick-add sheet (Engine + all logging entry points).
   // State lives here so the sheet works from every protected screen.
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  // Voice-recording bridge: while the engine is recording, the FAB's
+  // tap means "stop recording" (not "open quick-add"), and a "Speak"
+  // pill appears in the header as a global cue + secondary stop tap.
+  const voice = useVoiceRecording();
   // Mobile bottom-nav: tapping the Glev slot now goes STRAIGHT to the
   // engine voice screen (the meal log flow) instead of popping a
   // pick-your-flow action sheet. The two secondary flows (Glukose
@@ -227,33 +232,41 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               setAnchor={scopeHdr.setAnchor}
             />
           )}
-          <div style={{ fontSize: 13, padding: "5px 12px", borderRadius: 99, background: `${GREEN}18`, color: GREEN, fontWeight: 600 }}>Live</div>
-          {/* QuickAddMenu — the three primary logging shortcuts
-              (Mahlzeit / Glukose / Aktivität) live here in the header
-              as a small dropdown behind a 32×32 "+" button. This is
-              the only home for the Glukose + Aktivität flows on
-              mobile now that the bottom-nav Glev tap routes straight
-              to /engine (which defaults to the engine sub-tab on
-              Step 1 voice input); Mahlzeit is intentionally
-              duplicated here so the header "+" stays self-sufficient. */}
-          <QuickAddMenu />
-          <button
-            onClick={() => setAccountOpen(true)}
-            aria-label="Open account"
-            style={{
-              width: 32, height: 32, borderRadius: 99, padding: 0,
-              background: accountOpen ? `${ACCENT}25` : "var(--surface-soft)",
-              border: `1px solid ${accountOpen ? ACCENT : "var(--border-strong)"}`,
-              display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={accountOpen ? ACCENT : "var(--text-muted)"} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-          </button>
+          {/* Per 2026-05-17 UX revision the header "+" QuickAddMenu and
+              the account avatar were removed: the centre bottom-nav
+              Glev FAB now hosts the quick-add sheet (single global
+              entry-point), and account/settings live in the bottom-nav
+              Settings tab. The header keeps the brand lockup on the
+              left and a recording-state pill on the right — only
+              visible while the engine is actively listening. */}
+          {voice.recording && (
+            <button
+              type="button"
+              onClick={voice.requestStop}
+              aria-label="Sprachaufnahme beenden"
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 8,
+                height: 32, padding: "0 12px", borderRadius: 99,
+                background: `${ACCENT}1f`,
+                border: `1px solid ${ACCENT}`,
+                color: ACCENT,
+                fontSize: 13, fontWeight: 700, letterSpacing: "-0.005em",
+                cursor: "pointer",
+                animation: "glevMicPulse 1.4s ease-in-out infinite",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              <span style={{
+                width: 8, height: 8, borderRadius: "50%", background: ACCENT,
+                boxShadow: `0 0 8px ${ACCENT}`,
+              }} aria-hidden="true" />
+              Speak
+            </button>
+          )}
         </div>
       </header>
 
       <AboutGlevModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
-      <AccountSheet open={accountOpen} onClose={() => setAccountOpen(false)} />
 
       <aside className="glev-sidebar" style={{
         width: 224, flexShrink: 0, background: SURFACE,
@@ -356,8 +369,19 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         />
         <MobileGlevFab
           label={tNav("glev")}
-          active={quickAddOpen}
-          onClick={() => setQuickAddOpen(true)}
+          active={quickAddOpen || voice.recording}
+          recording={voice.recording}
+          onClick={() => {
+            // While a voice take is running, the FAB is the primary
+            // STOP control — don't double-open the quick-add sheet,
+            // just end the recording. Otherwise it's the normal
+            // quick-add entry-point.
+            if (voice.recording) {
+              voice.requestStop();
+              return;
+            }
+            setQuickAddOpen(true);
+          }}
         />
         <MobileTab
           label={tNav("insights")}
@@ -404,18 +428,19 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
  * directly; the sheet hosts that link plus everything else.
  */
 function MobileGlevFab({
-  label, active, onClick,
+  label, active, onClick, recording = false,
 }: {
   label: string;
   active: boolean;
   onClick: () => void;
+  recording?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
       aria-haspopup="dialog"
       aria-expanded={active}
-      aria-label={label}
+      aria-label={recording ? `${label} — Aufnahme beenden` : label}
       style={{
         flex: "1 1 0",
         minWidth: 0,
@@ -433,13 +458,16 @@ function MobileGlevFab({
         style={{
           display: "inline-flex", alignItems: "center", justifyContent: "center",
           width: 48, height: 48, borderRadius: "50%",
-          background: SURFACE,
-          border: `1px solid ${ACCENT}66`,
-          boxShadow: `0 0 0 1px ${ACCENT}22, 0 8px 20px rgba(0,0,0,0.40)`,
+          background: recording ? `${ACCENT}1f` : SURFACE,
+          border: `1px solid ${recording ? ACCENT : `${ACCENT}66`}`,
+          boxShadow: recording
+            ? undefined
+            : `0 0 0 1px ${ACCENT}22, 0 8px 20px rgba(0,0,0,0.40)`,
           // Lift the bubble above the nav row so it visually pops into the
           // page content area — same elevation pattern as iOS/Material FABs.
           transform: "translateY(-14px)",
-          filter: `drop-shadow(0 0 4px ${ACCENT}55)`,
+          filter: `drop-shadow(0 0 ${recording ? 8 : 4}px ${ACCENT}${recording ? "cc" : "55"})`,
+          animation: recording ? "glevMicPulse 1.4s ease-in-out infinite" : undefined,
         }}
       >
         <GlevLogo size={24} color={ACCENT} bg="transparent" />

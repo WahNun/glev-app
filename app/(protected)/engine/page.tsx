@@ -24,6 +24,7 @@ import { InfluenceForm } from "@/components/InfluenceLogForm";
 import GlevLogo from "@/components/GlevLogo";
 import EngineChatPanel, { type SeedMessage } from "@/components/EngineChatPanel";
 import { useEngineHeader } from "@/lib/engineHeaderContext";
+import { useVoiceRecording } from "@/lib/voiceRecordingContext";
 import { fetchLatestCgm } from "@/components/CgmFetchButton";
 import { classifyPreReferenceTrend, type TrendClass, type TrendSample } from "@/lib/engine/trend";
 import { fetchLatestFingerstick, FS_OVERRIDE_WINDOW_MS } from "@/lib/fingerstick";
@@ -401,6 +402,42 @@ export default function EnginePage() {
       setTab(t);
     }
   }, [searchParams]);
+  // Auto-start the voice recording when the user lands on /engine via
+  // the quick-add "Voice" entry (?voice=1). The bottom-nav Glev FAB
+  // doubles as the STOP control once recording is live (see
+  // voiceRecordingContext + Layout.tsx). We only fire once per landing
+  // — a guard ref prevents StrictMode double-invoke and prevents a
+  // second take if the user navigates back without a fresh ?voice=1.
+  const voiceAutoStartedRef = useRef(false);
+  useEffect(() => {
+    if (!searchParams) return;
+    if (searchParams.get("voice") !== "1") { voiceAutoStartedRef.current = false; return; }
+    if (voiceAutoStartedRef.current) return;
+    voiceAutoStartedRef.current = true;
+    // Strip the ?voice=1 from the URL so a refresh / back-navigation
+    // doesn't auto-record a second time. History replace keeps the
+    // current scroll position and doesn't add to the back stack.
+    if (typeof window !== "undefined") {
+      const u = new URL(window.location.href);
+      u.searchParams.delete("voice");
+      // Preserve the existing window.history.state payload (Next App
+      // Router stores its own routing state there for back/forward +
+      // cache restoration). Passing `null` here would wipe that and
+      // corrupt subsequent navigation; reusing the current state is
+      // the documented escape hatch when you only want to mutate the
+      // URL without triggering a Next navigation.
+      window.history.replaceState(window.history.state, "", u.pathname + (u.search ? u.search : "") + u.hash);
+    }
+    // Defer one tick so the rest of the engine page (mediaRec refs,
+    // speechAvail probe) has a chance to settle before we kick off
+    // getUserMedia.
+    const id = setTimeout(() => { void startRecording(); }, 0);
+    return () => clearTimeout(id);
+    // startRecording reads stable refs / state setters, so it doesn't
+    // need to be in the dep list and re-running on its identity would
+    // just create an extra auto-start race.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
   const [isMobile, setIsMobile] = useState(false);
   const [meals, setMeals]     = useState<Meal[]>([]);
   const [adaptedICR, setAdaptedICR] = useState(15);
@@ -523,6 +560,47 @@ export default function EnginePage() {
   const mediaRecRef    = useRef<MediaRecorder | null>(null);
   const recordingStopTsRef = useRef<number | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  // Bridge local recording state up to the global chrome so the
+  // bottom-nav Glev FAB can act as the stop control and the header
+  // can render the "Speak" pill (see lib/voiceRecordingContext).
+  const voiceCtx = useVoiceRecording();
+  useEffect(() => {
+    voiceCtx.setRecording(recording);
+  }, [recording, voiceCtx]);
+  useEffect(() => {
+    voiceCtx.registerStopHandler(() => {
+      // Guard: only stop if a recording is actually live; otherwise
+      // ignore so a stray FAB tap can't dispatch into the MediaRecorder.
+      if (mediaRecRef.current && mediaRecRef.current.state !== "inactive") {
+        stopRecording();
+      }
+    });
+    return () => voiceCtx.unregisterStopHandler();
+    // stopRecording is a stable in-component function; including it
+    // would re-register on every render with no behavioural change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voiceCtx]);
+  // Defensive unmount cleanup: if the user navigates away from /engine
+  // while a recording is still live, we must (1) stop the MediaRecorder
+  // so its onstop fires and tracks are released, (2) hard-stop any
+  // surviving stream tracks so the OS mic indicator goes away, and
+  // (3) reset the global recording flag — otherwise the bottom-nav
+  // Glev FAB would stay stuck in "stop" mode globally, blocking the
+  // quick-add sheet on every other screen.
+  useEffect(() => {
+    return () => {
+      const rec = mediaRecRef.current;
+      if (rec && rec.state !== "inactive") {
+        try { rec.stop(); } catch { /* noop */ }
+        try { rec.stream?.getTracks().forEach(t => t.stop()); } catch { /* noop */ }
+      }
+      voiceCtx.setRecording(false);
+    };
+    // We intentionally run this cleanup ONLY on unmount, not on every
+    // render. The cleanup reads refs/setters that are stable across
+    // renders, so an empty dep list is the correct contract here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Confirm-Log + integrated chat state. mealTime defaults to "now"; insulin
   // is left blank until a recommendation arrives or the user types one in.
@@ -2125,85 +2203,76 @@ export default function EnginePage() {
             </div>
           )}
 
-          {/* ───────── STEP 1: Pill-FAB Mikrofon + AI Chat-Panel.
-              Voice path: tap mic → record → handleVoice → /api/parse-food
-              → fields fill → auto-advance to Step 2.
-              Chat path: user types into EngineChatPanel → /api/chat-macros
-              → AI replies in the message thread → onPatch fills the form
-              → if macros come back populated, auto-advance to Step 2.
-              Both inputs are visible without scrolling so the user can
-              choose freely between speaking or chatting. ───────── */}
+          {/* ───────── STEP 1: AI Chat-Panel (full screen).
+              The page-content Sprechen button was removed (2026-05-17):
+              the bottom-nav Glev FAB now owns the start/stop voice
+              gesture (start via quick-add "Voice" with ?voice=1
+              auto-start, stop by tapping the FAB again), and the
+              global header surfaces the "Speak" recording-state pill.
+              That frees Step 1 to be a single full-screen AI parser
+              field — the EngineChatPanel — so the user can chat or
+              dictate without competing controls on the same screen.
+              Voice path: quick-add → /engine?voice=1 → auto-record →
+              handleVoice → /api/parse-food → fields fill → auto-
+              advance to Step 2.
+              Chat path: user types into EngineChatPanel → /api/chat-
+              macros → AI replies → onPatch fills the form → if
+              macros come back populated, auto-advance to Step 2. */}
           {stepIndex === 0 && (
             <div style={{
-              display: "flex", flexDirection: "column", alignItems: "center",
-              gap: 14, padding: "24px 0 8px",
-              // Mobile: stretch to fill the viewport between the fixed
-              // app header and fixed bottom-nav so the chat panel
-              // (flex:1 inside) closes flush against the nav. The
-              // 220px reservation covers the app header (~64 + safe-
-              // area-top), the step indicator pills (~80), the
-              // Sprechen pill row (~80) and small gaps. Bottom-nav is
-              // outside the page scroll (position:fixed) so we don't
-              // subtract it. Desktop keeps natural height since the
-              // chat lives in a sticky right sidebar instead.
+              display: "flex", flexDirection: "column", alignItems: "stretch",
+              gap: 10, padding: "12px 0 8px",
+              // Mobile: stretch the column so the chat panel (flex:1
+              // inside) fills the available viewport between the fixed
+              // app header (~64 + safe-area-top) and the fixed bottom-
+              // nav. ~140px reservation now that the Sprechen pill is
+              // gone (step indicator pills ~80 + gaps + safe-area
+              // bottom). Desktop keeps natural height since the chat
+              // lives in a sticky right sidebar instead.
               minHeight: isMobile
-                ? "calc(100svh - 220px - env(safe-area-inset-top, 0px))"
+                ? "calc(100svh - 140px - env(safe-area-inset-top, 0px))"
                 : undefined,
             }}>
-
-              {/* Sprechen / Voice-input button. Now styled as a dark
-                  pill carrying the brand-mark icon (Glev hexagon) instead
-                  of a generic mic glyph, so the primary call-to-action on
-                  Step 1 is unmistakably "Glev listening" rather than just
-                  "another mic". When the recording flag flips on, an
-                  ACCENT halo + pulsing outer glow radiate into the dark
-                  page background to give the user unambiguous "yes, we
-                  are listening" feedback even from a glance. */}
-              <style>{`
-                @keyframes engRecHalo {
-                  0%,100% { box-shadow: 0 0 0 1px ${ACCENT}66, 0 0 22px ${ACCENT}55, 0 0 48px ${ACCENT}22; }
-                  50%     { box-shadow: 0 0 0 1px ${ACCENT}cc, 0 0 36px ${ACCENT}aa, 0 0 80px ${ACCENT}44; }
-                }
-              `}</style>
-              <button
-                type="button"
-                onClick={() => recording ? stopRecording() : startRecording()}
-                disabled={parsing || !speechAvail}
-                aria-label={recording ? tEngine("voice_aria_stop") : tEngine("voice_aria_start")}
-                style={{
-                  display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 12,
-                  width: "100%", maxWidth: 280, height: 56, borderRadius: 28,
-                  background: recording ? `${ACCENT}1f` : SURFACE,
-                  border: `1px solid ${recording ? ACCENT : `${ACCENT}55`}`,
-                  color:"var(--text)",
-                  fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
-                  cursor: parsing || !speechAvail ? "not-allowed" : "pointer",
-                  animation: recording ? "engRecHalo 1.4s ease-in-out infinite" : undefined,
-                  boxShadow: recording ? undefined : `0 0 0 1px ${ACCENT}22`,
-                  opacity: parsing || !speechAvail ? 0.55 : 1,
-                  transition: "background 0.2s, border-color 0.2s, opacity 0.2s",
-                  WebkitTapHighlightColor: "transparent",
-                }}
-              >
-                {/* Glev brand mark — same component used in the nav,
-                    rendered in ACCENT so it reads as "Glev is listening"
-                    on the dark pill. Drop-shadow glow strengthens while
-                    the recording flag is on for additional feedback
-                    beyond the outer halo animation. */}
-                <span
-                  aria-hidden="true"
+              {/* Desktop fallback start/stop control. Mobile users always
+                  reach the engine via the bottom-nav Glev FAB → quick-add
+                  → Voice path (which deep-links with ?voice=1 and auto-
+                  records), and use the same FAB to stop. Desktop has no
+                  bottom nav, so without this inline pill a user landing
+                  on /engine via sidebar/deep-link would have no
+                  discoverable way to record. Hidden on mobile so the
+                  AI chat panel can own the full screen there. */}
+              {!isMobile && (
+                <button
+                  type="button"
+                  onClick={() => recording ? stopRecording() : startRecording()}
+                  disabled={parsing || !speechAvail}
+                  aria-label={recording ? tEngine("voice_aria_stop") : tEngine("voice_aria_start")}
                   style={{
+                    display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 12,
+                    width: "100%", maxWidth: 280, height: 52, borderRadius: 26,
+                    alignSelf: "center",
+                    background: recording ? `${ACCENT}1f` : SURFACE,
+                    border: `1px solid ${recording ? ACCENT : `${ACCENT}55`}`,
+                    color: "var(--text)",
+                    fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
+                    cursor: parsing || !speechAvail ? "not-allowed" : "pointer",
+                    boxShadow: recording ? `0 0 0 1px ${ACCENT}66, 0 0 22px ${ACCENT}33` : `0 0 0 1px ${ACCENT}22`,
+                    opacity: parsing || !speechAvail ? 0.55 : 1,
+                    transition: "background 0.2s, border-color 0.2s, opacity 0.2s, box-shadow 0.2s",
+                  }}
+                >
+                  <span aria-hidden="true" style={{
                     display: "inline-flex",
                     filter: `drop-shadow(0 0 ${recording ? 8 : 4}px ${ACCENT}${recording ? "cc" : "55"})`,
                     transition: "filter 0.25s",
-                  }}
-                >
-                  <GlevLogo size={22} color={ACCENT} bg="transparent"/>
-                </span>
-                {recording ? tEngine("voice_btn_stop") : parsing ? tEngine("voice_btn_processing") : tEngine("voice_btn_speak")}
-              </button>
+                  }}>
+                    <GlevLogo size={22} color={ACCENT} bg="transparent"/>
+                  </span>
+                  {recording ? tEngine("voice_btn_stop") : parsing ? tEngine("voice_btn_processing") : tEngine("voice_btn_speak")}
+                </button>
+              )}
               {voiceErr && (
-                <div style={{ fontSize: 13, color: PINK, textAlign: "center", maxWidth: 360 }}>{voiceErr}</div>
+                <div style={{ fontSize: 13, color: PINK, textAlign: "center", maxWidth: 360, alignSelf: "center" }}>{voiceErr}</div>
               )}
               {/* FIX B: Explain WHY the Sprechen button is disabled when the
                   browser doesn't expose MediaRecorder + getUserMedia (iOS
