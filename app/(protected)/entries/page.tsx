@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { fetchMeals, deleteMeal, updateMeal, type Meal } from "@/lib/meals";
-import { fetchRecentInsulinLogs, deleteInsulinLog, updateInsulinReadings, type InsulinLog } from "@/lib/insulin";
+import { fetchRecentInsulinLogs, deleteInsulinLog, updateInsulinReadings, updateInsulinLogLink, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, deleteExerciseLog, updateExerciseLog, type ExerciseLog, type ExerciseType, type ExerciseIntensity } from "@/lib/exercise";
 import SnapSlider from "@/components/log/SnapSlider";
 import CollapsibleField from "@/components/log/CollapsibleField";
@@ -811,6 +811,7 @@ export default function EntriesPage() {
                 <BolusRowCard
                   key={i.id}
                   log={i}
+                  meals={meals}
                   isOpen={isOpen}
                   onToggle={() => expandRow(isOpen ? null : i.id)}
                   onDelete={() => handleDeleteInsulin(i.id)}
@@ -1564,9 +1565,200 @@ function InsulinReadingsBackfill({ logId, slots }: {
   );
 }
 
+// ──────────────── BOLUS ↔ MEAL retroactive link panel ────────────────
+// Sits inside the expanded BolusRowCard. Three states:
+//   1. linked    → shows the meal's snippet + time, "Andere wählen" / "Lösen"
+//   2. unlinked  → single "Mit Mahlzeit verknüpfen…" button
+//   3. picker    → searchable list of meals within ±14 days of the bolus,
+//                  closest in time first (most likely candidate at the top)
+// Writes via PATCH /api/insulin/[id] → `updateInsulinLogLink`, then
+// dispatches `glev:insulin-updated` so the entries page reloads its rows
+// and the new link is reflected immediately without a manual refresh.
+function BolusMealLinkPanel({ log, meals }: { log: InsulinLog; meals: Meal[] }) {
+  const tx = useTranslations("entriesExpand");
+  const locale = useLocale();
+  const [picking, setPicking] = useState(false);
+  const [query, setQuery] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const bolusMs = parseDbDate(log.created_at).getTime();
+  const linked = useMemo(
+    () => meals.find(m => m.id === log.related_entry_id) ?? null,
+    [meals, log.related_entry_id],
+  );
+
+  // Candidate meals: ±14 days around the bolus, sorted by absolute
+  // distance to the bolus timestamp (closest first). 14d is a wide net
+  // for the rare "I forgot for a week" case but keeps the list small
+  // enough to scroll on a phone.
+  const WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+  const candidates = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return meals
+      .map(m => {
+        const refIso = m.meal_time ?? (m as unknown as { created_at?: string }).created_at;
+        const ms = refIso ? parseDbDate(refIso).getTime() : NaN;
+        return { m, ms, dist: Number.isFinite(ms) ? Math.abs(ms - bolusMs) : Infinity };
+      })
+      .filter(({ m, dist }) => {
+        if (dist > WINDOW_MS) return false;
+        if (m.id === log.related_entry_id) return false;
+        if (!q) return true;
+        return (m.input_text ?? "").toLowerCase().includes(q);
+      })
+      .sort((a, b) => a.dist - b.dist)
+      .slice(0, 30);
+  }, [meals, query, bolusMs, log.related_entry_id, WINDOW_MS]);
+
+  async function setLink(newId: string | null) {
+    setBusy(newId ?? "__unlink__");
+    setErr(null);
+    try {
+      await updateInsulinLogLink(log.id, newId);
+      setPicking(false);
+      setQuery("");
+      window.dispatchEvent(new CustomEvent("glev:insulin-updated"));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function fmtMealLine(m: Meal): { title: string; sub: string } {
+    const raw = (m.input_text ?? "").trim();
+    const title = raw.length > 0 ? (raw.length > 60 ? raw.slice(0, 60) + "…" : raw) : "—";
+    const refIso = m.meal_time ?? (m as unknown as { created_at?: string }).created_at;
+    if (!refIso) return { title, sub: "" };
+    const d = parseDbDate(refIso);
+    const date = d.toLocaleDateString(locale, { month: "short", day: "numeric" });
+    const time = d.toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
+    return { title, sub: `${date} · ${time}` };
+  }
+
+  return (
+    <ExPanel title={tx("panel_meal_link")}>
+      {linked && (
+        <div style={{
+          display:"flex", alignItems:"center", justifyContent:"space-between",
+          gap:8, padding:"8px 0",
+        }}>
+          <div style={{ minWidth:0, flex:1 }}>
+            <div style={{ fontSize:14, color:"var(--text-strong)", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+              {fmtMealLine(linked).title}
+            </div>
+            <div style={{ fontSize:12, color:"var(--text-faint)", marginTop:2 }}>
+              {fmtMealLine(linked).sub}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setLink(null)}
+            disabled={busy != null}
+            style={{
+              padding:"6px 10px", borderRadius:8, fontSize:12, fontWeight:600,
+              background:"transparent", color:PINK,
+              border:`1px solid ${PINK}40`, cursor:"pointer",
+              opacity: busy != null ? 0.5 : 1,
+            }}
+          >
+            {busy === "__unlink__" ? tx("link_unlinking") : tx("link_unlink")}
+          </button>
+        </div>
+      )}
+
+      {!picking && (
+        <button
+          type="button"
+          onClick={() => setPicking(true)}
+          style={{
+            width:"100%", padding:"10px 12px", marginTop: linked ? 8 : 0,
+            borderRadius:10, fontSize:13, fontWeight:600,
+            background:`${ACCENT}14`, color:ACCENT,
+            border:`1px solid ${ACCENT}40`, cursor:"pointer",
+          }}
+        >
+          {linked ? tx("link_change") : tx("link_attach")}
+        </button>
+      )}
+
+      {picking && (
+        <div style={{ display:"flex", flexDirection:"column", gap:8, marginTop:8 }}>
+          <input
+            type="text"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder={tx("link_search_placeholder")}
+            autoFocus
+            style={{
+              width:"100%", padding:"10px 12px", borderRadius:10,
+              background:"var(--surface-soft)", border:`1px solid ${BORDER}`,
+              color:"var(--text-strong)", fontSize:14, outline:"none",
+            }}
+          />
+          <div style={{ maxHeight:260, overflowY:"auto", display:"flex", flexDirection:"column", gap:6 }}>
+            {candidates.length === 0 ? (
+              <div style={{ fontSize:13, color:"var(--text-faint)", textAlign:"center", padding:"16px 8px" }}>
+                {tx("link_empty")}
+              </div>
+            ) : candidates.map(({ m }) => {
+              const { title, sub } = fmtMealLine(m);
+              const isBusy = busy === m.id;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setLink(m.id)}
+                  disabled={busy != null}
+                  style={{
+                    display:"flex", alignItems:"center", justifyContent:"space-between",
+                    gap:8, width:"100%", padding:"10px 12px",
+                    background:"var(--surface-soft)", border:`1px solid ${BORDER}`,
+                    borderRadius:10, cursor: busy != null ? "default" : "pointer",
+                    opacity: busy != null && !isBusy ? 0.4 : 1,
+                    textAlign:"left",
+                  }}
+                >
+                  <div style={{ minWidth:0, flex:1 }}>
+                    <div style={{ fontSize:14, color:"var(--text-strong)", fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                      {title}
+                    </div>
+                    <div style={{ fontSize:12, color:"var(--text-faint)", marginTop:2 }}>
+                      {sub}
+                    </div>
+                  </div>
+                  <span style={{ fontSize:12, color:isBusy ? "var(--text-faint)" : ACCENT, fontWeight:600, flexShrink:0 }}>
+                    {isBusy ? tx("link_saving") : tx("link_select")}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={() => { setPicking(false); setQuery(""); setErr(null); }}
+            disabled={busy != null}
+            style={{
+              padding:"8px 12px", borderRadius:8, fontSize:13,
+              background:"transparent", color:"var(--text-faint)",
+              border:`1px solid ${BORDER}`, cursor:"pointer",
+            }}
+          >
+            {tx("link_cancel")}
+          </button>
+        </div>
+      )}
+
+      {err && <div style={{ fontSize:12, color:PINK, marginTop:6 }}>{err}</div>}
+    </ExPanel>
+  );
+}
+
 // ──────────────── BOLUS — full expanded view with badge ────────────────
-function BolusRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
+function BolusRowCard({ log, meals, isOpen, onToggle, onDelete, deleting }: {
   log: InsulinLog;
+  meals: Meal[];
   isOpen: boolean; onToggle: () => void; onDelete: () => void; deleting: boolean;
 }) {
   const tx = useTranslations("entriesExpand");
@@ -1639,6 +1831,13 @@ function BolusRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
               <Detail label="ICR AT LOG" value={icrLabel ?? "—"}/>
             </div>
           </ExPanel>
+
+          {/* 1b) Meal link — retroactive bolus↔meal pairing.
+                 Lets the user attach any meal from the last ~14 days
+                 to this bolus, change the existing link, or detach it
+                 entirely. Writes via PATCH /api/insulin/[id]; the
+                 `glev:insulin-updated` event triggers a reload. */}
+          <BolusMealLinkPanel log={log} meals={meals} />
 
           {/* 2) Glucose tracking ----------------------------------- */}
           <ExPanel title="GLUCOSE TRACKING">
