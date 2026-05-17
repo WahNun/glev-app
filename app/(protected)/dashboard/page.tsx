@@ -729,7 +729,6 @@ function DashboardQuickAddCTA({
   ariaLabel: string;
   expanded: boolean;
 }) {
-  const t = useTranslations("quickAdd");
   return (
     <button
       type="button"
@@ -741,31 +740,21 @@ function DashboardQuickAddCTA({
         marginTop: 12,
         width: "100%",
         height: 48,
-        padding: "0 16px",
         borderRadius: 14,
-        // Subtle accent-tinted surface instead of a solid accent
-        // block — keeps the page feeling light, matches the macro-
-        // card active-state language we just unified on, and lets the
-        // glucose card above it stay the focal point of the cluster.
         background: `${ACCENT}14`,
         border: `1px solid ${ACCENT}40`,
-        color: "var(--text)",
+        color: ACCENT,
         cursor: "pointer",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        gap: 8,
-        fontSize: 14,
-        fontWeight: 600,
-        letterSpacing: "0.01em",
         transition: "background 160ms ease, border-color 160ms ease",
       }}
     >
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2.5" strokeLinecap="round" aria-hidden>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2.5" strokeLinecap="round" aria-hidden>
         <line x1="12" y1="5" x2="12" y2="19" />
         <line x1="5" y1="12" x2="19" y2="12" />
       </svg>
-      <span>{t("trigger_label")}</span>
     </button>
   );
 }
