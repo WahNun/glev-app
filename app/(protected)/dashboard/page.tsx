@@ -469,17 +469,21 @@ export default function DashboardPage() {
   // so the user moves laterally through related cards rather than
   // vertically through a widget wall.
   //
-  // 1. Glucose         — primary instrument, single card today
-  // 2. Metabolic       — Macros + Outcome distribution + Good / Spike
-  //                      / Hypo rates merged into one connected
-  //                      "meal-response" stack. Card order intentionally
-  //                      follows the user-facing narrative: today's
-  //                      macros → how those outcomes split → which
-  //                      specific rate you're hitting.
-  // 3. Control         — Control Score paired with the Glucose Trend
-  //                      chart so the two analytical readouts live
-  //                      together as one performance area.
-  // 4. Recents         — chronological tail.
+  // 1. Glucose      — Live CGM glucose paired with the multi-day
+  //                   Glucose Trend chart so the two glucose-shaped
+  //                   readouts live together in the primary instrument
+  //                   cluster at the top of the screen.
+  // 2. Metabolic    — Today's macros + Outcome distribution: the
+  //                   meal-input and meal-response summary side by
+  //                   side, separated from the per-outcome rates
+  //                   below so this cluster stays focused on the
+  //                   "what / how it landed" overview.
+  // 3. Control      — Control Score as the lead card followed by the
+  //                   Good / Spike / Hypo rate cards. The score is
+  //                   the headline number; the rates are the
+  //                   breakdown that explains it. Grouping them in
+  //                   one cluster makes that relationship explicit.
+  // 4. Recents      — Chronological tail.
   //
   // Reordering still works via the grip handle in each cluster header;
   // persisted per user via `useCardOrder("dashboard", …)`.
@@ -487,7 +491,10 @@ export default function DashboardPage() {
     {
       id: "glucose",
       title: t("cluster_glucose"),
-      cards: [{ id: "today-glucose", node: <CurrentDayGlucoseCard/> }],
+      cards: [
+        { id: "today-glucose", node: <CurrentDayGlucoseCard/> },
+        { id: "glucose-trend", node: <TrendChart meals={meals}/> },
+      ],
     },
     {
       id: "metabolic",
@@ -495,10 +502,6 @@ export default function DashboardPage() {
       cards: [
         { id: "today-macros", node: <DailyMacrosCard meals={meals} targets={macroTargets}/> },
         { id: "outcome-dist", node: <OutcomeChart meals={meals}/> },
-        // rateCards = buildCards(...) minus the "control" entry, so
-        // this expands to Good → Spike → Hypo rate cards, matching the
-        // order requested in the spec.
-        ...rateCards.map<ClusterCard>(c => ({ id: c.key, node: <FlipCard card={c}/> })),
       ],
     },
     {
@@ -506,7 +509,10 @@ export default function DashboardPage() {
       title: t("cluster_control"),
       cards: [
         { id: "control-score", node: <ControlScoreCard meals={meals}/> },
-        { id: "glucose-trend", node: <TrendChart meals={meals}/> },
+        // rateCards = buildCards(...) minus the "control" entry, so
+        // this expands to Good → Spike → Hypo rate cards as the
+        // breakdown trailing the headline Control Score above.
+        ...rateCards.map<ClusterCard>(c => ({ id: c.key, node: <FlipCard card={c}/> })),
       ],
     },
     {
