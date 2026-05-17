@@ -275,6 +275,36 @@ export async function saveMeal(input: SaveMealInput): Promise<Meal> {
     throw new Error(error.message);
   }
   logDebug("MEAL_INSERT", { id: data.id, carbs: input.carbsGrams, protein: input.proteinGrams, fat: input.fatGrams, fiber: input.fiberGrams, calories: input.calories, insulin: input.insulinUnits, glucose: input.glucoseBefore, mealType: input.mealType, evaluation: input.evaluation });
+
+  // Phase B (per-user food history): passively record each parsed
+  // item into the personalised cache so the next parse of the same
+  // ingredient can short-circuit OFF/USDA/GPT and use THIS user's
+  // typical portion + macros. Source='history' uses a running
+  // weighted average — it will NOT overwrite an existing
+  // 'user_confirmed' row (those come from the chat-macros correction
+  // flow and are sticky). Best-effort, fire-and-forget: a failure
+  // here cannot interfere with the meal save.
+  if (Array.isArray(input.parsedJson) && input.parsedJson.length > 0) {
+    void (async () => {
+      try {
+        const { recordItemsToHistory } = await import("./nutrition/userFoodHistory");
+        const items = input.parsedJson.map((p) => ({
+          name:    p.name,
+          grams:   p.grams,
+          carbs:   p.carbs,
+          protein: p.protein,
+          fat:     p.fat,
+          fiber:   p.fiber,
+          // Older rows without `source` are pre-pipeline (manual entry)
+          // and treated as plain history data. Items tagged 'unknown'
+          // are filtered out inside recordItemsToHistory's safety check.
+          source:  p.source ?? "open_food_facts",
+        }));
+        await recordItemsToHistory(supabase!, user.id, items, { source: "history" });
+      } catch { /* see contract above */ }
+    })();
+  }
+
   return data as Meal;
 }
 

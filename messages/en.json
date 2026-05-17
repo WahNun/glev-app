@@ -2298,6 +2298,27 @@
     "save_error": "Save failed",
     "phase_a_note": "Phase A: values are stored. The engine will pick the windows up in a later update."
   },
+  "foodHistory": {
+    "page_title": "My foods",
+    "page_subtitle": "What the app has learned about your typical portions and macros. Edits here stay sticky — passive learning from later meals won't overwrite them.",
+    "back_to_settings": "Back to settings",
+    "loading": "Loading …",
+    "empty": "No foods learned yet. Log a few meals and they'll show up here.",
+    "source_history": "Learned from your meals",
+    "source_confirmed": "You confirmed this",
+    "occurrences": "{n, plural, one {# time} other {# times}}",
+    "typical_grams": "Typical portion",
+    "carbs_per_100": "Carbs / 100g",
+    "protein_per_100": "Protein / 100g",
+    "fat_per_100": "Fat / 100g",
+    "fiber_per_100": "Fiber / 100g",
+    "edit": "Edit",
+    "delete": "Delete",
+    "save": "Save",
+    "saving": "Saving …",
+    "cancel": "Cancel",
+    "confirm_delete": "Delete '{name}' from your learned foods?"
+  },
   "chips": {
     "eval_GOOD": "Good",
     "eval_LOW": "Under Dose",

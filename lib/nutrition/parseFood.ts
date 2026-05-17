@@ -32,6 +32,10 @@ For each item:
 - search_term_en / search_term_de: 1-4 words, no quantities, faithful
   translation (Hähnchenbrust ↔ chicken breast). Keep the brand in BOTH
   terms for branded items.
+- quantity_specified: TRUE if the user gave an explicit quantity (a
+  number with unit, "two slices", "a handful", "half a", "ein Glas",
+  etc.). FALSE if you had to fall back on the defaults below because
+  the user just named the item ("Banane", "apple", "bread").
 
 Quantity defaults when vague:
 banana 120g · apple 180g · slice of bread 30g · handful of nuts 28g ·
@@ -55,13 +59,14 @@ const PARSER_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["name", "grams", "is_branded", "search_term_en", "search_term_de"],
+        required: ["name", "grams", "is_branded", "search_term_en", "search_term_de", "quantity_specified"],
         properties: {
-          name:           { type: "string" },
-          grams:          { type: "number" },
-          is_branded:     { type: "boolean" },
-          search_term_en: { type: "string" },
-          search_term_de: { type: "string" },
+          name:               { type: "string" },
+          grams:              { type: "number" },
+          is_branded:         { type: "boolean" },
+          search_term_en:     { type: "string" },
+          search_term_de:     { type: "string" },
+          quantity_specified: { type: "boolean" },
         },
       },
     },
@@ -141,6 +146,13 @@ export async function parseFoodText(text: string): Promise<ParseFoodResult> {
         is_branded: !!r.is_branded,
         search_term_en: sEn,
         search_term_de: sDe,
+        // Default to FALSE for older response shapes that don't carry
+        // the flag — safer to ASSUME a default portion was used (so
+        // history can substitute a personal typical_grams) than to
+        // assume the user typed an explicit weight.
+        quantity_specified: typeof r.quantity_specified === "boolean"
+          ? r.quantity_specified
+          : false,
       };
     })
     .filter((x): x is ParsedFoodItem => x !== null);

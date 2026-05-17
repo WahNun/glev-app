@@ -10,6 +10,8 @@ import type {
   NutritionSource,
   ParsedFoodItem,
 } from "./types";
+import type { UserFoodHistoryHit } from "./userFoodHistory";
+import { normalizeFoodName } from "./userFoodHistory";
 
 const ZERO: NutritionPer100 = { carbs_g: 0, protein_g: 0, fat_g: 0, fiber_g: 0 };
 
@@ -39,7 +41,28 @@ interface ResolvedItem {
   source: NutritionSource;
 }
 
-async function resolveItem(item: ParsedFoodItem): Promise<ResolvedItem> {
+async function resolveItem(
+  item: ParsedFoodItem,
+  history?: Map<string, UserFoodHistoryHit>,
+): Promise<ResolvedItem> {
+  // Phase B: per-user food history wins over every other source.
+  // The history table is per-user and RLS-protected, so a hit here
+  // is by definition the user's own historical data (or their
+  // chat-macros correction). Skipping OFF/USDA/GPT for these items
+  // is THE main latency + accuracy win of this phase.
+  if (history) {
+    const key = normalizeFoodName(item.name);
+    const hit = key ? history.get(key) : undefined;
+    if (hit) {
+      // Safety: the history loader already filtered out all-zero rows
+      // and impossible per-100g values, so this hit is trustworthy.
+      return {
+        per100: hit.per100,
+        source: hit.source === "user_confirmed" ? "user_confirmed" : "user_history",
+      };
+    }
+  }
+
   // SPECULATIVE PARALLEL DB lookups — up to 2026-05-04 these ran
   // sequentially (OFF then USDA, or USDA then OFF depending on
   // is_branded). When both DBs MISS, that meant up to 6s of
@@ -114,14 +137,36 @@ function topLevelSource(items: NutritionItem[]): AggregateSource {
   // DB lookups AND the GPT estimate fell over means the totals can't
   // be trusted for insulin dosing. The UI MUST surface this clearly.
   if (items.some((i) => i.source === "unknown")) return "unknown";
+  // user_history / user_confirmed count as "database" for the UI
+  // badge — they're DB-backed and skipped the GPT estimator. Same
+  // confidence semantics for the dose recommender.
+  const isDbLike = (s: NutritionSource) =>
+    s === "open_food_facts" || s === "usda" ||
+    s === "user_history"   || s === "user_confirmed";
   const allEstimated = items.every((i) => i.source === "estimated");
   if (allEstimated) return "estimated";
   const anyEstimated = items.some((i) => i.source === "estimated");
-  return anyEstimated ? "mixed" : "database";
+  if (anyEstimated && items.some((i) => isDbLike(i.source))) return "mixed";
+  return anyEstimated ? "estimated" : "database";
+}
+
+export interface AggregateOptions {
+  /**
+   * Per-user food memory map (Phase B). Build via
+   * lookupUserFoodHistory(sb, userId, names). When a parsed item's
+   * normalized name is a key in this map, the aggregator uses the
+   * cached per-100g values and skips OFF/USDA/GPT entirely.
+   *
+   * Optional — when absent the aggregator falls back to the
+   * pre-Phase-B behaviour (pure OFF/USDA/GPT cascade). Old callers
+   * that don't pass this option keep working unchanged.
+   */
+  userHistory?: Map<string, UserFoodHistoryHit>;
 }
 
 export async function aggregateNutrition(
   items: ParsedFoodItem[],
+  opts: AggregateOptions = {},
 ): Promise<AggregatedNutrition> {
   if (items.length === 0) {
     return {
@@ -133,15 +178,31 @@ export async function aggregateNutrition(
 
   // Parallel resolve — each item makes at most 2 HTTP calls + 1 GPT call,
   // each with its own 3-4s timeout. With N items the total wall time is
-  // bounded by the slowest item, not N × budget.
-  const resolved = await Promise.all(items.map((it) => resolveItem(it)));
+  // bounded by the slowest item, not N × budget. History hits short-
+  // circuit before any HTTP call and resolve synchronously.
+  const resolved = await Promise.all(
+    items.map((it) => resolveItem(it, opts.userHistory)),
+  );
 
   const finalItems: NutritionItem[] = items.map((it, i) => {
     const r = resolved[i];
-    const scaled = scale(r.per100, it.grams);
+    // Phase B: substitute the user's typical portion size when the
+    // parser indicates the grams came from a global default (e.g.
+    // "Banane" → 120g) AND we have a personalised history entry.
+    // If the user explicitly typed "150g Banane" we honour that.
+    let grams = it.grams;
+    if (
+      opts.userHistory &&
+      it.quantity_specified === false &&
+      (r.source === "user_history" || r.source === "user_confirmed")
+    ) {
+      const hit = opts.userHistory.get(normalizeFoodName(it.name));
+      if (hit && hit.typicalGrams > 0) grams = Math.round(hit.typicalGrams);
+    }
+    const scaled = scale(r.per100, grams);
     return {
       name:    it.name,
-      grams:   it.grams,
+      grams,
       carbs:   scaled.carbs,
       protein: scaled.protein,
       fat:     scaled.fat,

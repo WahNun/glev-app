@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { parseFoodText } from "@/lib/nutrition/parseFood";
 import { aggregateNutrition } from "@/lib/nutrition/aggregate";
 import { classifyMeal } from "@/lib/meals";
+import { lookupUserFoodHistory } from "@/lib/nutrition/userFoodHistory";
+import { authedClient } from "@/app/api/insulin/_helpers";
 
 /**
  * Two-stage nutrition pipeline:
@@ -46,8 +48,27 @@ export async function POST(req: NextRequest) {
   // eslint-disable-next-line no-console
   console.log("[PERF parse-food] stage 1 (GPT parser):", tParse - t0, "ms · items:", parsed.items.length);
 
-  // Stage 2: smart routing → OFF / USDA / GPT-estimate fallback
-  const aggregated = await aggregateNutrition(parsed.items);
+  // Phase B: load this user's food history so the aggregator can
+  // short-circuit OFF/USDA/GPT for items they've logged before.
+  // Best-effort — if auth or the lookup fails (anon user, table not
+  // migrated, RLS denial) we proceed with an empty map and fall back
+  // to the pre-Phase-B behaviour.
+  let userHistory: Awaited<ReturnType<typeof lookupUserFoodHistory>> | undefined;
+  try {
+    const auth = await authedClient(req);
+    if (auth.user && auth.sb) {
+      userHistory = await lookupUserFoodHistory(
+        auth.sb,
+        auth.user.id,
+        parsed.items.map((it) => it.name),
+      );
+    }
+  } catch {
+    /* no-op — history is an optimisation, not a correctness gate */
+  }
+
+  // Stage 2: smart routing → user history → OFF / USDA / GPT-estimate fallback
+  const aggregated = await aggregateNutrition(parsed.items, { userHistory });
   const tAgg = Date.now();
   // eslint-disable-next-line no-console
   console.log("[PERF parse-food] stage 2 (aggregator):", tAgg - tParse, "ms · source:", aggregated.nutritionSource);

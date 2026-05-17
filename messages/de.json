@@ -2307,6 +2307,27 @@
     "save_error": "Fehler beim Speichern",
     "phase_a_note": "Phase A: Werte werden gespeichert. Die Engine berücksichtigt die Fenster in einem späteren Update."
   },
+  "foodHistory": {
+    "page_title": "Meine Lebensmittel",
+    "page_subtitle": "Was die App über deine typischen Portionen und Makros gelernt hat. Änderungen hier bleiben fest — automatisches Lernen aus späteren Mahlzeiten überschreibt sie nicht.",
+    "back_to_settings": "Zurück zu den Einstellungen",
+    "loading": "Lädt …",
+    "empty": "Noch keine Lebensmittel gelernt. Logge ein paar Mahlzeiten, dann tauchen sie hier auf.",
+    "source_history": "Aus deinen Mahlzeiten gelernt",
+    "source_confirmed": "Von dir bestätigt",
+    "occurrences": "{n, plural, one {# Mal} other {# Mal}}",
+    "typical_grams": "Typische Portion",
+    "carbs_per_100": "Kohlenhydrate / 100g",
+    "protein_per_100": "Eiweiß / 100g",
+    "fat_per_100": "Fett / 100g",
+    "fiber_per_100": "Ballaststoffe / 100g",
+    "edit": "Bearbeiten",
+    "delete": "Löschen",
+    "save": "Speichern",
+    "saving": "Speichert …",
+    "cancel": "Abbrechen",
+    "confirm_delete": "„{name}“ aus deinen gelernten Lebensmitteln entfernen?"
+  },
   "chips": {
     "eval_GOOD": "Gut",
     "eval_LOW": "Unterdosis",

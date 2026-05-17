@@ -154,6 +154,7 @@ function useNightscoutConnected(): boolean {
 export default function SettingsPage() {
   const tSettings = useTranslations("settings");
   const tCommon = useTranslations("common");
+  const tFoodHistory = useTranslations("foodHistory");
   const router = useRouter();
   const [settings, setSettings] = useState<Settings>(DEFAULTS);
   // Tracks whether the user has manually touched any insulin field
@@ -2109,6 +2110,14 @@ export default function SettingsPage() {
           subtitle={carbUnit.label}
           ariaLabel={tSettings("row_open_aria", { label: tSettings("row_carb_unit") })}
           onClick={() => openSheetWith("carbUnit")}
+        />
+        <SettingsRow
+          iconColor={ACCENT}
+          icon={ICON.carbs}
+          label={tFoodHistory("page_title")}
+          subtitle={tFoodHistory("page_subtitle")}
+          ariaLabel={tSettings("row_open_aria", { label: tFoodHistory("page_title") })}
+          onClick={() => router.push("/settings/food-history")}
         />
         <SettingsRow
           iconColor={ACCENT}

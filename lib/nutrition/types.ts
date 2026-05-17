@@ -16,7 +16,17 @@
 // the item so the UI can list it, but with carbs/protein/fat/fiber=0
 // and the source flag tells the UI to refuse to populate the form
 // fields automatically — manual entry is required for T1D safety.
-export type NutritionSource = "open_food_facts" | "usda" | "estimated" | "unknown";
+export type NutritionSource =
+  | "open_food_facts"
+  | "usda"
+  | "estimated"
+  | "unknown"
+  // Resolved from the per-user food cache (lib/nutrition/userFoodHistory).
+  // 'user_history' = passive average from prior saveMeal() writes.
+  // 'user_confirmed' = explicit correction from the chat-macros flow
+  // (sticky against future passive overwrites).
+  | "user_history"
+  | "user_confirmed";
 
 // 'unknown' means at least one item failed even GPT estimate. The UI
 // must NOT silently use the totals for insulin dosing — it shows a
@@ -37,6 +47,14 @@ export interface ParsedFoodItem {
                            // false for generic foods ("apple", "broccoli")
   search_term_en: string;  // English query for USDA
   search_term_de: string;  // German query for OFF (OFF has solid DE coverage)
+  // Phase B (per-user food history): TRUE when the user explicitly
+  // mentioned a quantity ("150g Banane", "two slices of bread"); FALSE
+  // when the parser fell back to a default portion ("Banane" → 120g).
+  // When FALSE and a personal history hit exists, the aggregator
+  // substitutes the user's typical_grams so "Banane" yields THEIR
+  // typical 150g instead of the global default. Optional for
+  // backward-compat with older callers that don't supply it.
+  quantity_specified?: boolean;
 }
 
 /**

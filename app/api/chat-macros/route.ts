@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getOpenAIClient } from "@/lib/ai/openaiClient";
 import { parseFoodText } from "@/lib/nutrition/parseFood";
 import { aggregateNutrition } from "@/lib/nutrition/aggregate";
+import {
+  lookupUserFoodHistory,
+  recordItemsToHistory,
+} from "@/lib/nutrition/userFoodHistory";
+import { authedClient } from "@/app/api/insulin/_helpers";
 
 /**
  * Chat-macros refines an already-logged meal. The flow is:
@@ -127,14 +132,42 @@ food databases, not guesses):
     });
   }
 
+  // Phase B: refining a meal in chat is the strongest signal we get
+  // that the user has reviewed the macros and considers them correct.
+  // Load history so re-aggregation sees personal cache hits, then
+  // record the resulting items back as source='user_confirmed' so the
+  // refined values stick (passive saveMeal writes won't downgrade them).
+  let userId: string | null = null;
+  let sb: Awaited<ReturnType<typeof authedClient>>["sb"] = null;
+  try {
+    const auth = await authedClient(req);
+    if (auth.user && auth.sb) { userId = auth.user.id; sb = auth.sb; }
+  } catch { /* no auth → behave like before Phase B */ }
+
   // DB-backed re-aggregation: parse the chat description with the same
-  // structured GPT parser, then route through OFF + USDA. If parsing or
-  // aggregation explodes for any reason, fall through with a null macros
-  // payload so the UI keeps its previous values rather than overwriting
-  // them with garbage.
+  // structured GPT parser, then route through history → OFF → USDA. If
+  // parsing or aggregation explodes for any reason, fall through with
+  // a null macros payload so the UI keeps its previous values rather
+  // than overwriting them with garbage.
   try {
     const parsedDesc = await parseFoodText(chatDescription);
-    const aggregated = await aggregateNutrition(parsedDesc.items);
+    let userHistory: Awaited<ReturnType<typeof lookupUserFoodHistory>> | undefined;
+    if (userId && sb) {
+      try {
+        userHistory = await lookupUserFoodHistory(
+          sb, userId, parsedDesc.items.map((it) => it.name),
+        );
+      } catch { /* best effort */ }
+    }
+    const aggregated = await aggregateNutrition(parsedDesc.items, { userHistory });
+
+    // Best-effort: record the corrected items as user_confirmed so the
+    // refinement is honoured on the next parse. Skips items the
+    // recorder considers unsafe (zero macros, impossible densities).
+    if (userId && sb) {
+      // Fire-and-forget; do not block the response on this.
+      void recordItemsToHistory(sb, userId, aggregated.items, { source: "user_confirmed" });
+    }
 
     return NextResponse.json({
       reply: chatReply,
