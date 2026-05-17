@@ -1,0 +1,53 @@
+DIAGNOSE: Vollständiges Feature-Inventar
+
+Ziel: Erstelle eine vollständige, strukturierte Bestandsaufnahme aller Features die in der Glev-App aktuell existieren — produktseitig beschrieben, nicht technisch. Diese Liste wird für die Pricing-Struktur (Pläne S / M / L) und das Marketing verwendet.
+
+Was du tun sollst — durchsuche den gesamten Codebase systematisch:
+
+1. Alle App-Routes (app/(protected)/*/page.tsx) — was macht jede Seite aus User-Sicht?
+2. Alle API-Routes (app/api/**) — welche Features stehen dahinter?
+3. Alle Datenbank-Tabellen (aus Supabase Migrations-Dateien oder Schema-Kommentaren) — welche Daten werden gespeichert?
+4. Alle lib/*.ts Dateien — welche Funktionen / Business-Logic existiert?
+5. Alle UI-Komponenten die sichtbare Features repräsentieren
+6. Alle Integrationen (CGM, Apple Health, Stripe, OpenAI, Nightscout, Libre etc.)
+
+Output-Format: Gib die Features als produktseitige Feature-Liste aus — so wie man sie einem User erklären würde, nicht als technische Funktionsnamen.
+
+Strukturiere sie in folgende Cluster:
+
+📝 Logging
+(Was kann der User erfassen?)
+
+📊 Auswertung & Insights
+(Was sieht der User an Daten, Trends, Aggregationen?)
+
+🧠 Engine / KI
+(Was berechnet oder empfiehlt die App?)
+
+📡 Integrationen & Sync
+(Was verbindet sich mit externen Systemen?)
+
+🏃 Aktivität & Gesundheit
+(Sport, Schritte, Apple Health etc.)
+
+📤 Export & Sharing
+(Was kann der User rausnehmen?)
+
+⚙️ Einstellungen & Personalisierung
+(Was kann der User konfigurieren?)
+
+🔐 Account & Auth
+(Login, Profil, Subscription)
+
+🚧 Gebaut aber noch nicht sichtbar / halbfertig
+(Features die im Code existieren aber noch nicht voll funktional oder nicht in der Nav erreichbar sind)
+
+---
+
+Für jedes Feature bitte angeben:
+- Name (kurz, produktseitig)
+- Status: ✅ live / ⚠️ teilweise / 🚧 gebaut, nicht erreichbar / ❌ nur Stub
+- Kurzbeschreibung (1 Satz was es tut)
+- Abhängigkeiten falls relevant (z.B. "benötigt CGM-Verbindung", "nur iOS")
+
+Keine Erklärung, keine Einleitung — direkt die strukturierte Liste.
