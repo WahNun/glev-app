@@ -199,7 +199,25 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             overflow-y: auto !important;
             overscroll-behavior-y: contain !important;
             -webkit-overflow-scrolling: auto !important;
-            padding: calc(env(safe-area-inset-top) + 76px) 16px calc(env(safe-area-inset-bottom) + 110px) !important;
+            /* Vertical paddings now match the ACTUAL fixed chrome
+               heights so the scrollable content sits visually flush
+               with the header's bottom border and the nav's top
+               border (user feedback 2026-05-17: previously a wide
+               dark page-bg band was visible above & below cards).
+
+               Header total height = safe-area-top + 10 (top pad) +
+               26 (GlevLockup svg) + 12 (bottom pad) = safe-area-top
+               + 48px → top padding matches exactly so card top
+               touches header bottom border.
+
+               Nav total height = 6 (top pad) + 22 (icon) + 4 (gap) +
+               12 (label) + max(4, safe-area-bottom - 18) ≈ safe-area-
+               bottom + 26 (notched) or 48 (no safe area). Bottom
+               padding adds +60 over safe-area-bottom — covers the
+               nav height plus the Glev FAB's ~26 px protrusion above
+               the nav top edge so the floating button never clips
+               the last interactive row of a card. */
+            padding: calc(env(safe-area-inset-top) + 48px) 16px calc(env(safe-area-inset-bottom) + 60px) !important;
           }
           .glev-entry-row   { grid-template-columns: 1fr auto auto !important; gap: 10px !important; padding: 14px 16px !important; }
           .glev-entry-hide-mobile { display: none !important; }
