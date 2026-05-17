@@ -1389,7 +1389,12 @@
   "dashboard": {
     "loading": "Lade Dashboard…",
     "title": "Dashboard",
-    "subtitle_count": "{n} Einträge geloggt. Halte eine Karte für die Reihenfolge · tippen zum Drehen.",
+    "subtitle_count": "{n} Einträge geloggt. Wische horizontal durch jeden Cluster · tippen zum Drehen.",
+    "cluster_glucose": "Glukose",
+    "cluster_macros": "Makros",
+    "cluster_rates": "Verlaufs-Verteilung & Quoten",
+    "cluster_score_trend": "Control Score & Glukose-Trend",
+    "cluster_recents": "Zuletzt",
     "log_meal_cta": "+ Mahlzeit loggen",
     "flip_back": "↺ zurück",
     "flip_hint_short": "↺",

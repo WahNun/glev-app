@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import useSWR, { mutate as swrMutate } from "swr";
 import { useRouter } from "next/navigation";
 import { fetchMeals, computeCalories, unifiedOutcome, type Meal } from "@/lib/meals";
@@ -15,17 +15,12 @@ import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
 import MealEntryLightExpand from "@/components/MealEntryLightExpand";
 import CurrentDayGlucoseCard from "@/components/CurrentDayGlucoseCard";
 import GlucoseTrendFront from "@/components/GlucoseTrendChart";
-import SortableCardGrid, { type SortableItem } from "@/components/SortableCardGrid";
 import MacroRing from "@/components/MacroRing";
 import SkeletonBlock from "@/components/SkeletonBlock";
-import { useCardOrder } from "@/lib/cardOrder";
+import { hapticSelection } from "@/lib/haptics";
 import { parseDbDate, parseDbTs, localeToBcp47 } from "@/lib/time";
 import { useLocale, useTranslations } from "next-intl";
 import { isToday, startOfDaysAgo } from "@/lib/utils/datetime";
-
-/** Default top-to-bottom order of dashboard sections. Each ID also appears
- *  as a key in the items array below — keep them in sync. */
-const DASHBOARD_DEFAULT_ORDER = ["today-glucose", "today-macros", "stats", "charts", "recent-entries"];
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="var(--surface)", BORDER="var(--border)";
@@ -434,50 +429,54 @@ export default function DashboardPage() {
   );
 
   const cards = buildCards(meals, t);
+  const rateCards = cards.filter(c => c.key !== "control");
 
-  // Each entry is one draggable section on the dashboard. Long-press any of
-  // them to enter edit mode; drag to reorder; tap blank space to save.
-  const items: SortableItem[] = [
-    { id: "today-glucose", node: <CurrentDayGlucoseCard/> },
-    { id: "today-macros",  node: <DailyMacrosCard meals={meals} targets={macroTargets}/> },
+  // The dashboard is now organised into five fixed clusters, each one a
+  // horizontal swipe pager. Vertical scrolling between clusters is still
+  // allowed but each cluster owns its own mental context — no more
+  // endless data-wall feed. Order is fixed by spec (Glucose → Makros →
+  // Rates → Score/Trend → Recents) and intentionally not user-sortable.
+  const clusters: Array<{ id: string; title: string; cards: ClusterCard[] }> = [
     {
-      id: "stats",
-      node: (
-        // Hero ControlScoreCard sits on top; the legacy good/spike/hypo
-        // FlipCards stay below as supporting detail. The "control" entry is
-        // filtered out because the new hero card replaces it.
-        <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-          <ControlScoreCard meals={meals}/>
-          <div className="glev-dash-grid" style={{ display:"grid", gap:14 }}>
-            {cards.filter(c => c.key !== "control").map(c => <FlipCard key={c.key} card={c}/>)}
-          </div>
-        </div>
-      ),
+      id: "glucose",
+      title: t("cluster_glucose"),
+      cards: [{ id: "today-glucose", node: <CurrentDayGlucoseCard/> }],
     },
     {
-      id: "charts",
-      node: (
-        <div className="glev-dash-charts" style={{ display:"grid", gap:14 }}>
-          <TrendChart meals={meals}/>
-          <OutcomeChart meals={meals}/>
-        </div>
-      ),
+      id: "macros",
+      title: t("cluster_macros"),
+      cards: [{ id: "today-macros", node: <DailyMacrosCard meals={meals} targets={macroTargets}/> }],
     },
-    { id: "recent-entries", node: <RecentEntries rows={recentRows} locale={dateLocale} onViewAll={() => router.push("/entries")} onViewEntry={(id) => router.push(`/entries#${id}`)} onMealUpdated={(m) => setMeals(prev => prev.map(x => x.id === m.id ? m : x))}/> },
+    {
+      id: "rates",
+      title: t("cluster_rates"),
+      cards: [
+        ...rateCards.map<ClusterCard>(c => ({ id: c.key, node: <FlipCard card={c}/> })),
+        { id: "outcome-dist", node: <OutcomeChart meals={meals}/> },
+      ],
+    },
+    {
+      id: "score-trend",
+      title: t("cluster_score_trend"),
+      cards: [
+        { id: "control-score", node: <ControlScoreCard meals={meals}/> },
+        { id: "glucose-trend", node: <TrendChart meals={meals}/> },
+      ],
+    },
+    {
+      id: "recents",
+      title: t("cluster_recents"),
+      cards: [{ id: "recent-entries", node: <RecentEntries rows={recentRows} locale={dateLocale} onViewAll={() => router.push("/entries")} onViewEntry={(id) => router.push(`/entries#${id}`)} onMealUpdated={(m) => setMeals(prev => prev.map(x => x.id === m.id ? m : x))}/> }],
+    },
   ];
 
   return (
     <div style={{ maxWidth:1480, margin:"0 auto", width:"100%", overflowX:"hidden", boxSizing:"border-box" }}>
       <style>{`
         html, body { overflow-x: hidden; }
-        .glev-dash-head    { display: flex; }
-        .glev-dash-grid    { grid-template-columns: repeat(3,1fr) !important; }
-        .glev-dash-charts  { grid-template-columns: 3fr 2fr !important; }
+        .glev-dash-head { display: flex; }
         @media (max-width: 768px) {
-          .glev-dash-head   { display: none !important; }
-          .glev-dash-grid   { grid-template-columns: 1fr !important; gap: 12px !important; }
-          .glev-dash-charts { grid-template-columns: 1fr !important; }
-          .glev-dash-stack  { gap: 14px !important; }
+          .glev-dash-head { display: none !important; }
         }
       `}</style>
 
@@ -503,23 +502,130 @@ export default function DashboardPage() {
       </div>
       <DashboardQuickAddSheet open={quickAddOpen} onClose={() => setQuickAddOpen(false)} />
 
-      <DashboardSortable items={items}/>
+      <div style={{ display:"flex", flexDirection:"column", gap:28 }}>
+        {clusters.map(cl => (
+          <DashboardCluster key={cl.id} clusterId={cl.id} title={cl.title} cards={cl.cards} />
+        ))}
+      </div>
     </div>
   );
 }
 
-/** Thin wrapper so we can call the useCardOrder hook without re-rendering
- *  the whole DashboardPage on every persisted change. */
-function DashboardSortable({ items }: { items: SortableItem[] }) {
-  const { order, setOrder } = useCardOrder("dashboard", DASHBOARD_DEFAULT_ORDER);
+type ClusterCard = { id: string; node: React.ReactNode };
+
+/** Horizontal snap pager used by every dashboard cluster. Reuses the same
+ *  mechanics as the Insights screen's `InsightsSwipePager` — one slide per
+ *  card at 100% container width, scroll-snap mandatory, dot indicators
+ *  below. Clusters with only one card hide the indicator (per spec).
+ *  Active index follows the scroll position via rAF + clientWidth rounding;
+ *  changing slide triggers a light selection haptic on mobile. */
+function DashboardCluster({
+  clusterId,
+  title,
+  cards,
+}: {
+  clusterId: string;
+  title: string;
+  cards: ClusterCard[];
+}) {
+  const [active, setActive] = useState(0);
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const rafRef = useRef<number | null>(null);
+
+  const updateActive = useCallback(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const w = el.clientWidth || 1;
+    const idx = Math.max(0, Math.min(cards.length - 1, Math.round(el.scrollLeft / w)));
+    setActive(prev => {
+      if (prev === idx) return prev;
+      hapticSelection();
+      return idx;
+    });
+  }, [cards.length]);
+
+  const onScroll = useCallback(() => {
+    if (rafRef.current != null) return;
+    rafRef.current = window.requestAnimationFrame(() => {
+      rafRef.current = null;
+      updateActive();
+    });
+  }, [updateActive]);
+
   return (
-    <SortableCardGrid
-      items={items}
-      order={order}
-      onOrderChange={setOrder}
-      gridClassName="glev-dash-stack"
-      gridStyle={{ display:"flex", flexDirection:"column", gap:22 }}
-    />
+    <section
+      aria-label={title}
+      style={{ display:"flex", flexDirection:"column", gap:10 }}
+    >
+      <h2 style={{
+        fontSize:12, fontWeight:700, letterSpacing:"0.12em",
+        textTransform:"uppercase", color:"var(--text-dim)",
+        margin:"0 4px",
+      }}>
+        {title}
+      </h2>
+      <div
+        ref={scrollerRef}
+        onScroll={cards.length > 1 ? onScroll : undefined}
+        style={{
+          display:"flex",
+          overflowX: cards.length > 1 ? "auto" : "hidden",
+          overflowY:"hidden",
+          scrollSnapType: cards.length > 1 ? "x mandatory" : "none",
+          overscrollBehaviorX:"contain",
+          WebkitOverflowScrolling:"touch",
+          touchAction:"pan-x pan-y",
+        }}
+      >
+        {cards.map((c, i) => (
+          <div
+            key={c.id}
+            id={`${clusterId}-slide-${i}`}
+            role="tabpanel"
+            aria-label={c.id}
+            style={{
+              flex:"0 0 100%",
+              width:"100%",
+              minWidth:0,
+              scrollSnapAlign:"center",
+              scrollSnapStop:"always",
+            }}
+          >
+            {c.node}
+          </div>
+        ))}
+      </div>
+      {cards.length > 1 && (
+        <div
+          role="tablist"
+          aria-label={title}
+          style={{ display:"flex", justifyContent:"center", alignItems:"center", gap:5, marginTop:2 }}
+        >
+          {cards.map((c, i) => (
+            <button
+              key={c.id}
+              type="button"
+              role="tab"
+              aria-selected={i === active}
+              aria-controls={`${clusterId}-slide-${i}`}
+              onClick={() => {
+                const el = scrollerRef.current;
+                if (!el) return;
+                el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
+              }}
+              style={{
+                width: i === active ? 18 : 6,
+                height: 6,
+                borderRadius: 99,
+                background: i === active ? "var(--text)" : "var(--text-ghost)",
+                border:"none", padding:0, cursor:"pointer",
+                transition:"width 200ms ease, background 200ms ease",
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
