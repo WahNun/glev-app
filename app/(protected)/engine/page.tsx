@@ -1173,7 +1173,13 @@ export default function EnginePage() {
     // carbs input lives in the user's chosen unit (g/BE/KE); engine
     // operates in grams, so convert at the boundary.
     const g = parseFloat(glucose)||110, c = carbUnit.toGrams(parseFloat(carbs)||0);
-    if (!c) return;
+    // NOTE: previously bailed silently with `if (!c) return;` — that
+    // contradicted the button comment ("Always clickable; never
+    // carbs-gated") and caused the user-reported bug where the button
+    // looked alive but did nothing when carbs were 0 or empty. The
+    // engine handles c=0 correctly (correction-only bolus when BG is
+    // high, or "0 IE — keine KH und BG im Zielbereich" otherwise), so
+    // we let it run unconditionally and surface the real result.
     setRunning(true);
     // Pre-Meal-Trend (Task #195): Frische Samples ziehen und gegen die
     // jeweils aktive `mealTime` klassifizieren — sonst würde ein älterer,
