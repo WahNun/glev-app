@@ -444,44 +444,66 @@ function MobileGlevFab({
       style={{
         flex: "1 1 0",
         minWidth: 0,
+        // IDENTICAL flex layout to MobileTab on purpose — that's how the
+        // "Glev" caption ends up on the exact same baseline as the
+        // captions of the surrounding tabs. The lifted bubble is drawn
+        // OUTSIDE the flex flow (position: absolute inside a normal
+        // 22×22 icon slot) so it can overlap the nav top edge without
+        // pushing the label around.
         display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "flex-end",
-        gap: 2, padding: "0 2px", height: 56,
+        alignItems: "center", justifyContent: "center",
+        gap: 4, padding: "6px 2px", height: 56,
         border: "none", background: "transparent", cursor: "pointer",
         color: ACCENT,
         fontSize: 11, fontWeight: 600, letterSpacing: "0.005em",
         WebkitTapHighlightColor: "transparent",
+        // The bubble protrudes above this button (overflowing the nav
+        // top border by design, per 2026-05-17 user request). overflow
+        // must stay visible — the parent <nav> already defaults to
+        // overflow: visible too, so the bubble paints freely.
+        overflow: "visible",
       }}
     >
+      {/* Outer icon slot: 22×22 — same dimensions as a regular MobileTab
+          icon container. Acts purely as a positioning anchor + flex
+          placeholder so the label below lines up with the rest of the
+          nav. The bubble itself is rendered as an absolute child and
+          lifted up so it overlaps the footer top edge. */}
       <span
         aria-hidden="true"
         style={{
+          position: "relative",
           display: "inline-flex", alignItems: "center", justifyContent: "center",
-          // Sized to read as "the same family" as the other nav tabs
-          // (22px icons) rather than a heavy outsize FAB: 38px circle
-          // with a 20px brand mark keeps the icon area in proportion
-          // with neighbouring tabs, just framed by a ring + lifted by
-          // 8px so it still reads as the centre / primary affordance.
-          width: 38, height: 38, borderRadius: "50%",
-          background: recording ? `${ACCENT}1f` : SURFACE,
-          border: `1px solid ${recording ? ACCENT : `${ACCENT}66`}`,
-          boxShadow: recording
-            ? undefined
-            : `0 0 0 1px ${ACCENT}22, 0 4px 12px rgba(0,0,0,0.32)`,
-          transform: "translateY(-8px)",
-          filter: `drop-shadow(0 0 ${recording ? 6 : 3}px ${ACCENT}${recording ? "cc" : "55"})`,
-          animation: recording ? "glevMicPulse 1.4s ease-in-out infinite" : undefined,
+          width: 22, height: 22,
         }}
       >
-        <GlevLogo size={20} color={ACCENT} bg="transparent" />
+        <span
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: "50%",
+            // -50% centres the bubble on the anchor, the extra -16px
+            // lifts the circle so its lower half sits inside the nav
+            // row while its upper half overlaps the page content above
+            // the nav top border — the "the radius may overlap the
+            // footer" requirement.
+            transform: "translate(-50%, calc(-50% - 16px))",
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            width: 44, height: 44, borderRadius: "50%",
+            background: recording ? `${ACCENT}1f` : SURFACE,
+            border: `1px solid ${recording ? ACCENT : `${ACCENT}66`}`,
+            boxShadow: recording
+              ? undefined
+              : `0 0 0 1px ${ACCENT}22, 0 6px 16px rgba(0,0,0,0.38)`,
+            filter: `drop-shadow(0 0 ${recording ? 6 : 3}px ${ACCENT}${recording ? "cc" : "55"})`,
+            animation: recording ? "glevMicPulse 1.4s ease-in-out infinite" : undefined,
+          }}
+        >
+          <GlevLogo size={22} color={ACCENT} bg="transparent" />
+        </span>
       </span>
       <span
         style={{
-          // Pull the label back toward the baseline shared with the other
-          // nav tabs' labels (since the icon was lifted by -8px). Tuned
-          // so the "Glev" caption sits exactly in line with neighbouring
-          // captions, not floating mid-row.
-          marginTop: -6,
           lineHeight: 1.1, whiteSpace: "nowrap",
           overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%",
         }}
