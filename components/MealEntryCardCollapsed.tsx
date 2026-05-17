@@ -33,7 +33,12 @@ export default function MealEntryCardCollapsed({
   const ts = meal.meal_time ?? meal.created_at;
   const d = parseDbDate(ts);
   const dateStr = d.toLocaleDateString(locale, { month: "short", day: "numeric" });
-  const timeStr = d.toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
+  // 24h time (hour12:false) for medical-log consistency — matches the
+  // format used on Influence/Cycle/Symptom header rows so every entry
+  // card in the stream displays time the same way regardless of the
+  // user's interface locale (EN users no longer see "10:06 PM" on
+  // meals while the influence above shows "22:18").
+  const timeStr = d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", hour12: false });
 
   const catColor = meal.meal_type ? TYPE_COLORS[meal.meal_type] || "var(--text-dim)" : null;
   const catLabel = meal.meal_type ? chipLabels.typeLabel(meal.meal_type) : null;
