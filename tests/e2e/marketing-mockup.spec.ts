@@ -203,8 +203,8 @@ test.describe("Marketing AppMockupPhone — interactive bottom nav", () => {
       /Time in Range · 7T/,
       /Ø Glukose/,
       /GMI · gesch\. A1c/,
-      /7-Tage-Trend/,
-      /Mahlzeiten-Bewertung · 7T/,
+      /Trend · 7 Tage/,
+      /Mahlzeiten-Bewertung · 7 Tage/,
     ]);
 
     // ── Verlauf · Einträge (sub-toggle) ──────────────────────────────
@@ -281,7 +281,7 @@ test.describe("Marketing AppMockupPhone — pixel snapshots per screen", () => {
     // The 7-Tage-Trend sparkline is one of the things the task spec
     // calls out as a "clipped sparkline" risk to catch.
     await navButton(phone, NAV.verlauf).click();
-    await expect(phone.getByText(/7-Tage-Trend/)).toBeVisible();
+    await expect(phone.getByText(/Trend · 7 Tage/)).toBeVisible();
     await prepareForSnapshot(page);
     await expect(phone).toHaveScreenshot("phone-verlauf-insights.png");
 
@@ -374,8 +374,8 @@ test.describe("Marketing AppMockupPhone — locked-tab variants on mobile", () =
     await lockedInsights.scrollIntoViewIfNeeded();
     await expectAllVisible(lockedInsights, [
       /Time in Range · 7T/,
-      /7-Tage-Trend/,
-      /Mahlzeiten-Bewertung · 7T/,
+      /Trend · 7 Tage/,
+      /Mahlzeiten-Bewertung · 7 Tage/,
     ]);
     await expect(lockedInsights.getByRole("button", { name: "Einträge" })).toHaveCount(0);
   });

@@ -372,19 +372,33 @@ export default function InsightsPage() {
   // background. The `loading` flag only stays true on the very first
   // visit (when the cache is empty); afterwards the page paints
   // immediately with stale data and silently refreshes.
+  // Pull a window wide enough to cover the LARGEST supported scope
+  // (Year) PLUS its previous comparable period for delta calculations,
+  // so every card can render correctly when the user toggles
+  // Day/Week/Month/Year. 730 days = 12 months current + 12 months prev,
+  // capped at the wider of 90 days (engine floor) and the scope need.
+  // Pull is keyed on `scopeMode` so the request is small for Day/Week
+  // and only widens when the user actually picks Month/Year.
+  const fetchDaysForScope: Record<typeof scopeMode, number> = {
+    day:   14,   // today + prev day + small buffer (event-pool needs ≥7d for rolling stats)
+    week:  21,   // 7d current + 7d prev + buffer
+    month: 75,   // 30d current + 30d prev + buffer
+    year:  760,  // 365 current + 365 prev + buffer
+  };
+  const insightsFetchDays = Math.max(90, fetchDaysForScope[scopeMode]);
   const { data: insightsSWR } = useSWR(
-    "insights:meals+engine+insulin14+insulin90+exercise30+fs+menstrual+symptoms",
+    `insights:scope:${scopeMode}:days:${insightsFetchDays}`,
     async () => {
-      const fingerstickFromIso = startOfDaysAgo(13).toISOString();
+      const fingerstickFromIso = startOfDaysAgo(insightsFetchDays - 1).toISOString();
       const [m, em, il, ilEngine, ex, fs, ml, sl] = await Promise.all([
-        fetchMeals().catch(() => [] as Meal[]),
+        fetchMeals({ sinceDays: insightsFetchDays }).catch(() => [] as Meal[]),
         fetchMealsForEngine().catch(() => [] as Meal[]),
-        fetchRecentInsulinLogs(14).catch(() => [] as InsulinLog[]),
+        fetchRecentInsulinLogs(insightsFetchDays).catch(() => [] as InsulinLog[]),
         fetchRecentInsulinLogs(90).catch(() => [] as InsulinLog[]),
-        fetchRecentExerciseLogs(30).catch(() => [] as ExerciseLog[]),
+        fetchRecentExerciseLogs(insightsFetchDays).catch(() => [] as ExerciseLog[]),
         fetchFingersticks(fingerstickFromIso).catch(() => [] as FingerstickReading[]),
-        fetchRecentMenstrualLogs(60).catch(() => [] as MenstrualLog[]),
-        fetchRecentSymptomLogs(30).catch(() => [] as SymptomLog[]),
+        fetchRecentMenstrualLogs(insightsFetchDays).catch(() => [] as MenstrualLog[]),
+        fetchRecentSymptomLogs(insightsFetchDays).catch(() => [] as SymptomLog[]),
       ]);
       return { meals: m, engineMeals: em, insulinLogs: il, engineBoluses: ilEngine, exerciseLogs: ex, fingersticks: fs, menstrualLogs: ml, symptomLogs: sl };
     },
@@ -405,7 +419,7 @@ export default function InsightsPage() {
 
   // Revalidate when other parts of the app log new entries.
   useEffect(() => {
-    const key = "insights:meals+engine+insulin14+insulin90+exercise30+fs+menstrual+symptoms";
+    const key = `insights:scope:${scopeMode}:days:${insightsFetchDays}`;
     function onUpdated() { swrMutate(key); }
     window.addEventListener("glev:meals-updated",    onUpdated);
     window.addEventListener("glev:insulin-updated",  onUpdated);
@@ -415,21 +429,23 @@ export default function InsightsPage() {
       window.removeEventListener("glev:insulin-updated",  onUpdated);
       window.removeEventListener("glev:exercise-updated", onUpdated);
     };
-  }, []);
+    // Re-key the listener when the scope changes so we invalidate the
+    // active cache key, not a stale one from the previous scope.
+  }, [scopeMode, insightsFetchDays]);
 
   // Continuous CGM samples — Option B (see
-  // supabase/migrations/20260514_add_cgm_samples.sql). Pull a fixed
-  // wide window (last 60 days) so the scope-picker's "month" mode
-  // also has data without re-fetching when the user changes scope.
-  // 60d ≈ 17_280 readings/user max — well under our 5_000-per-source
-  // cap (lib/cgm/samples.ts limits per source) so we'll get ~60 days
-  // even for a Nightscout user with 1-min granularity. SWR cached so
-  // the page stays snappy.
+  // supabase/migrations/20260514_add_cgm_samples.sql). The backend API
+  // (`/api/cgm/samples`) hard-rejects windows > 60 days, so we cap the
+  // client request at 60d regardless of the scope picker. For Month
+  // and Year scopes the CGM-derived cards (TIR, GMI, etc.) fall back
+  // to the event-pool readings outside the 60-day continuous window —
+  // tracked as follow-up #334.
+  const cgmFetchDays = 60;
   const { data: continuousSamples } = useSWR(
-    "insights:cgm-samples-60d",
+    `insights:cgm-samples-${cgmFetchDays}d`,
     async () => {
       const toMs = Date.now();
-      const fromMs = toMs - 60 * 24 * 3600 * 1000;
+      const fromMs = toMs - cgmFetchDays * 24 * 3600 * 1000;
       return fetchCgmSamples(fromMs, toMs);
     },
     { revalidateOnFocus: false, refreshInterval: 5 * 60 * 1000 },
@@ -482,6 +498,21 @@ export default function InsightsPage() {
   const now = scope.endMs;
   const wkAgo  = scope.startMs;       // start of selected period
   const wk2Ago = scope.prevStartMs;   // start of previous comparable period
+  // ── Scope-coupling helpers (Task #332) ──
+  // Every card title/subtitle that used to say "7T" / "30T" pulls its
+  // human label from `rangeLabel`. `prevRangeLabel` keeps the delta
+  // copy ("ggü. Vorwoche/Vormonat/…") consistent with the active scope.
+  // `rangeDays` is the period length in days — used as the denominator
+  // for any per-day average the cards display.
+  const RANGE_LABEL_KEY = { day: "range_label_day", week: "range_label_week", month: "range_label_month", year: "range_label_year" } as const;
+  const PREV_RANGE_LABEL_KEY = { day: "range_delta_prev_day", week: "range_delta_prev_week", month: "range_delta_prev_month", year: "range_delta_prev_year" } as const;
+  const rangeLabel = tInsights(RANGE_LABEL_KEY[scopeMode]);
+  const prevRangeLabel = tInsights(PREV_RANGE_LABEL_KEY[scopeMode]);
+  const rangeDays = Math.max(1, Math.round((now - wkAgo) / 86400000));
+  // Day-scope is intentionally permissive: a single logged day is the
+  // only data the card can ever show, so we drop the ≥3 floor for that
+  // mode to avoid every tile sitting on "Nicht genug Daten" all day.
+  const minDatapointsForScope = scopeMode === "day" ? 1 : MIN_DATAPOINTS;
   const last7 = meals.filter(m => {
     const t = parseDbTs(m.created_at);
     return t >= wkAgo && t < now;
@@ -722,18 +753,13 @@ export default function InsightsPage() {
   // we skip a meal's insulin if any insulin_log row already points to
   // it via `related_entry_id`.
   //
-  // Window: TDD ALWAYS uses a rolling 7-day window regardless of the
-  // global scope picker, because the card label literally promises
-  // "7T" (see card_tdd_title) and a Mon-anchored "Diese Woche" scope
-  // can never reach MIN_DATAPOINTS=3 days early in the week — Lucas
-  // hit "Nicht genug Daten" on Tuesday morning despite logging 120+
-  // meals (2026-05-12 bug report). startOfDaysAgo(6) gives the 7
-  // calendar days inclusive of today.
-  // Use Date.now() (NOT scope.endMs) so navigating to a past week/month
-  // still shows the rolling 7d ending today — the card promises "7T",
-  // not "7 days ending at the scope cursor".
-  const tddFromMs = startOfDaysAgo(6).getTime();
-  const tddNowMs  = Date.now();
+  // Window: TDD follows the global scope picker (Task #332). The card
+  // title is dynamic ("Tagesgesamtdosis · {range}") so the window must
+  // match. Lucas's earlier complaint about Tuesday-morning empty state
+  // is solved by `minDatapointsForScope` (day-scope drops the ≥3 floor)
+  // rather than by hard-coding a 7d window here.
+  const tddFromMs = wkAgo;
+  const tddNowMs  = now;
   const linkedMealIds = new Set<string>();
   for (const il of insulinLogs) {
     if (il.related_entry_id) linkedMealIds.add(il.related_entry_id);
@@ -771,7 +797,7 @@ export default function InsightsPage() {
     addToDay(key, "bolus", u);
   }
   const tddDayCount    = tddByDay.size;
-  const tddEnough      = tddDayCount >= MIN_DATAPOINTS;
+  const tddEnough      = tddDayCount >= minDatapointsForScope;
   const tddTodayKey    = startOfToday().toISOString().slice(0, 10);
   const tddTodayBuckets = tddByDay.get(tddTodayKey) ?? { bolus: 0, basal: 0 };
   const tddToday       = tddTodayBuckets.bolus + tddTodayBuckets.basal;
@@ -782,12 +808,12 @@ export default function InsightsPage() {
     { bolus: 0, basal: 0 },
   );
   const tddSum7        = tddSumsAll.bolus + tddSumsAll.basal;
-  const tddAvg7        = tddEnough ? +(tddSum7 / 7).toFixed(1) : null;
-  // Per-leg 7-day averages — divide by full 7 (not by tddDayCount) to
-  // mirror tddAvg7's denominator so bolus + basal averages add up to
-  // the headline TDD average exactly.
-  const tddAvg7Bolus   = tddEnough ? +(tddSumsAll.bolus / 7).toFixed(1) : null;
-  const tddAvg7Basal   = tddEnough ? +(tddSumsAll.basal / 7).toFixed(1) : null;
+  // Denominator = full days in the active scope (rangeDays), NOT the
+  // count of days that happened to have logs. Dividing by tddDayCount
+  // would inflate the per-day average when the user skipped some days.
+  const tddAvg7        = tddEnough ? +(tddSum7 / rangeDays).toFixed(1) : null;
+  const tddAvg7Bolus   = tddEnough ? +(tddSumsAll.bolus / rangeDays).toFixed(1) : null;
+  const tddAvg7Basal   = tddEnough ? +(tddSumsAll.basal / rangeDays).toFixed(1) : null;
 
   // ── Extended TIR (TBR / TIR / TAR three-color view, reuses b7 buckets) ──
   const tbrPct = b7.vlow + b7.lo;     // < 70
@@ -828,10 +854,12 @@ export default function InsightsPage() {
       currentMarkerPct = tbrPct + tirPct + tarPct * within;
     }
   }
-  // Convert "% of 7d" → human-readable hours (24h × 7 = 168h total).
-  const tbrHours = +(tbrPct / 100 * 168).toFixed(1);
-  const tirHours = +(tirPct / 100 * 168).toFixed(1);
-  const tarHours = +(tarPct / 100 * 168).toFixed(1);
+  // Convert "% of selected scope" → human-readable hours. Scope-driven
+  // (Task #332) so Day shows ~24h max, Week ~168h, Month ~720h, Year ~8760h.
+  const scopeHoursTotal = rangeDays * 24;
+  const tbrHours = +(tbrPct / 100 * scopeHoursTotal).toFixed(1);
+  const tirHours = +(tirPct / 100 * scopeHoursTotal).toFixed(1);
+  const tarHours = +(tarPct / 100 * scopeHoursTotal).toFixed(1);
 
   // ── Workout (exercise) analytics — scope-aware ──
   const thirtyAgo = wkAgo;
@@ -990,14 +1018,18 @@ export default function InsightsPage() {
   // denominator is `meals.length` (everything fetched), exactly like
   // dashboard. Pending rows resolve to a `null` bucket via
   // `unifiedOutcome` so they don't get miscounted as GOOD.
-  const normed   = meals.map(m => ({ ...m, ev: EVAL_NORM(unifiedOutcome(m)) }));
+  // Deeper-analysis aggregates derive from the in-scope meal slice
+  // (`last7`) so they respect the active range picker (Task #332).
+  // The numerator (`goodAll`) and the denominator (`last7.length`) both
+  // come from the same scoped slice so the rate is internally consistent.
+  const normed   = last7.map(m => ({ ...m, ev: EVAL_NORM(unifiedOutcome(m)) }));
   const goodAll  = normed.filter(m => m.ev==="GOOD").length;
-  const goodRate = total ? goodAll/total*100 : 0;
-  const avgGlucose = Math.round(meals.filter(m=>m.glucose_before).reduce((s,m)=>s+(m.glucose_before||0),0) / Math.max(meals.filter(m=>m.glucose_before).length,1));
-  const avgCarbs   = Math.round(meals.filter(m=>m.carbs_grams).reduce((s,m)=>s+(m.carbs_grams||0),0) / Math.max(meals.filter(m=>m.carbs_grams).length,1));
-  const avgInsulin = (meals.filter(m=>m.insulin_units).reduce((s,m)=>s+(m.insulin_units||0),0) / Math.max(meals.filter(m=>m.insulin_units).length,1)).toFixed(1);
-  const icr7 = meals.slice(0,7).filter(m=>m.carbs_grams&&m.insulin_units).map(m=>(m.carbs_grams||0)/(m.insulin_units||1));
-  const estICR = icr7.length ? Math.round(icr7.reduce((a,b)=>a+b,0)/icr7.length) : 15;
+  const goodRate = last7.length ? goodAll/last7.length*100 : 0;
+  const avgGlucose = Math.round(last7.filter(m=>m.glucose_before).reduce((s,m)=>s+(m.glucose_before||0),0) / Math.max(last7.filter(m=>m.glucose_before).length,1));
+  const avgCarbs   = Math.round(last7.filter(m=>m.carbs_grams).reduce((s,m)=>s+(m.carbs_grams||0),0) / Math.max(last7.filter(m=>m.carbs_grams).length,1));
+  const avgInsulin = (last7.filter(m=>m.insulin_units).reduce((s,m)=>s+(m.insulin_units||0),0) / Math.max(last7.filter(m=>m.insulin_units).length,1)).toFixed(1);
+  const icrScope = last7.filter(m=>m.carbs_grams&&m.insulin_units).map(m=>(m.carbs_grams||0)/(m.insulin_units||1));
+  const estICR = icrScope.length ? Math.round(icrScope.reduce((a,b)=>a+b,0)/icrScope.length) : 15;
 
   // Meal type breakdown (FAST_CARBS / HIGH_PROTEIN / HIGH_FAT / BALANCED)
   const types: Record<string, {count:number; totalCarbs:number; totalInsulin:number; good:number}> = {
@@ -1006,7 +1038,7 @@ export default function InsightsPage() {
     HIGH_FAT:     {count:0,totalCarbs:0,totalInsulin:0,good:0},
     BALANCED:     {count:0,totalCarbs:0,totalInsulin:0,good:0},
   };
-  meals.forEach(m => {
+  last7.forEach(m => {
     const t = m.meal_type || "BALANCED";
     if (t in types) {
       types[t].count++;
@@ -1024,7 +1056,7 @@ export default function InsightsPage() {
     "Evening (17–21)":   {count:0,good:0},
     "Night (21–5)":      {count:0,good:0},
   };
-  meals.forEach(m => {
+  last7.forEach(m => {
     const h = parseDbDate(m.created_at).getHours();
     const key = h >= 5 && h < 11 ? "Morning (5–11)"
               : h >= 11 && h < 17 ? "Afternoon (11–17)"
@@ -1034,10 +1066,13 @@ export default function InsightsPage() {
     if (EVAL_NORM(unifiedOutcome(m))==="GOOD") timeGroups[key].good++;
   });
 
-  // Pattern detection (last 10 meals + time-of-day cross-check).
+  // Pattern detection — uses the in-scope meal slice so the signals
+  // track the active range picker (Task #332). Capped at 30 rows so
+  // Month/Year scopes don't drown out recent signals; for Day/Week the
+  // cap is naturally ≤ in-scope length.
   // SPIKE bucket = SPIKE+UNDERDOSE+LOW (BG ended too high → under-dosed).
   // HYPO  bucket = OVERDOSE+HIGH       (BG ended too low  → over-dosed).
-  const recentMeals = meals.slice(0, 10);
+  const recentMeals = last7.slice(0, 30);
   const recentGood  = recentMeals.filter(m=>EVAL_NORM(unifiedOutcome(m))==="GOOD").length;
   const recentLow   = recentMeals.filter(m=>EVAL_NORM(unifiedOutcome(m))==="SPIKE").length;
   const recentHigh  = recentMeals.filter(m=>EVAL_NORM(unifiedOutcome(m))==="HYPO").length;
@@ -1054,7 +1089,7 @@ export default function InsightsPage() {
   // hint ("log more"). >=15 meals → mixed-signal hint (Lucas reported
   // seeing the "log 15+" copy with 113 meals on 2026-05-12).
   if (patterns.length === 0) {
-    if (meals.length >= 15) {
+    if (last7.length >= 15) {
       patterns.push({ icon:"→", title:tInsights("pattern_mixed_title"), desc:tInsights("pattern_mixed_desc"), color:"var(--text-faint)" });
     } else {
       patterns.push({ icon:"→", title:tInsights("pattern_no_signals_title"), desc:tInsights("pattern_no_signals_desc"), color:"var(--text-faint)" });
@@ -1095,7 +1130,7 @@ export default function InsightsPage() {
               paragraphs={[
                 tInsights("tir_back_p1"),
                 tInsights("tir_back_p2"),
-                tInsights("tir_back_p3", { n: b7.n }),
+                tInsights("tir_back_p3", { n: b7.n, range: rangeLabel, prev: prevRangeLabel }),
               ]}
             />
           }
@@ -1117,7 +1152,7 @@ export default function InsightsPage() {
                 <div style={{ fontSize:14, color:GREEN, fontWeight:700 }}>%</div>
                 {prev7Bg.length > 0 && (
                   <div style={{ marginLeft:"auto", fontSize:11, color: tirDelta >= 0 ? GREEN : ORANGE, fontWeight:600 }}>
-                    {tirDelta >= 0 ? "+" : ""}{tirDelta} {tInsights("delta_vs_prev_week")}
+                    {tirDelta >= 0 ? "+" : ""}{tirDelta} {tInsights("delta_vs_prev_week", { prev: prevRangeLabel })}
                   </div>
                 )}
               </div>
@@ -1271,9 +1306,9 @@ export default function InsightsPage() {
                   marker is tapped. Tap the same target again to close. */}
               {tirSelected != null && (() => {
                 const cfg =
-                  tirSelected === "tbr" ? { color: PINK,        title: tInsights("tir_detail_tbr_title"),  body: tInsights("tir_detail_tbr_body",  { pct: tbrPct, hours: tbrHours, mini: hypoEvents7d.mini, clinical: hypoEvents7d.clinical }) } :
-                  tirSelected === "tir" ? { color: GREEN,       title: tInsights("tir_detail_tir_title"),  body: tInsights("tir_detail_tir_body",  { pct: tirPct, hours: tirHours }) } :
-                  tirSelected === "tar" ? { color: HIGH_YELLOW, title: tInsights("tir_detail_tar_title"),  body: tInsights("tir_detail_tar_body",  { pct: tarPct, hours: tarHours }) } :
+                  tirSelected === "tbr" ? { color: PINK,        title: tInsights("tir_detail_tbr_title"),  body: tInsights("tir_detail_tbr_body",  { pct: tbrPct, hours: tbrHours, mini: hypoEvents7d.mini, clinical: hypoEvents7d.clinical, range: rangeLabel }) } :
+                  tirSelected === "tir" ? { color: GREEN,       title: tInsights("tir_detail_tir_title"),  body: tInsights("tir_detail_tir_body",  { pct: tirPct, hours: tirHours, range: rangeLabel }) } :
+                  tirSelected === "tar" ? { color: HIGH_YELLOW, title: tInsights("tir_detail_tar_title"),  body: tInsights("tir_detail_tar_body",  { pct: tarPct, hours: tarHours, range: rangeLabel }) } :
                   /* now */              { color: "var(--text)", title: tInsights("tir_detail_now_title"),
                                             body: currentBg == null
                                               ? tInsights("tir_detail_now_empty")
@@ -1337,9 +1372,9 @@ export default function InsightsPage() {
                 title={tInsights("avg_bg_back_title")}
                 accent={ACCENT}
                 paragraphs={[
-                  tInsights("avg_bg_back_p1"),
-                  tInsights("avg_bg_back_p2"),
-                  tInsights("avg_bg_back_p3", { n: last7Bg.length }),
+                  tInsights("avg_bg_back_p1", { range: rangeLabel }),
+                  tInsights("avg_bg_back_p2", { prev: prevRangeLabel }),
+                  tInsights("avg_bg_back_p3", { n: last7Bg.length, range: rangeLabel }),
                 ]}
               />
             }
@@ -1357,7 +1392,7 @@ export default function InsightsPage() {
                 </div>
                 {bgDelta != null && (
                   <div style={{ fontSize:11, color: bgDelta < 0 ? GREEN : bgDelta > 0 ? ORANGE : "var(--text-dim)", marginTop:2, fontWeight:600 }}>
-                    {bgDelta > 0 ? "+" : bgDelta < 0 ? "−" : ""}{Math.abs(bgDelta)} {tInsights("delta_vs_prev")}
+                    {bgDelta > 0 ? "+" : bgDelta < 0 ? "−" : ""}{Math.abs(bgDelta)} {tInsights("delta_vs_prev", { prev: prevRangeLabel })}
                   </div>
                 )}
                 {/* Cockpit density pass (Task #329): the AVG BG mini
@@ -1387,8 +1422,8 @@ export default function InsightsPage() {
                   tInsights("gmi_back_p1"),
                   tInsights("gmi_back_p2"),
                   last7Avg != null
-                    ? tInsights("gmi_back_p3_with_avg", { avg: Math.round(last7Avg), n: last7Bg.length })
-                    : tInsights("gmi_back_p3_no_avg"),
+                    ? tInsights("gmi_back_p3_with_avg", { avg: Math.round(last7Avg), n: last7Bg.length, range: rangeLabel })
+                    : tInsights("gmi_back_p3_no_avg", { range: rangeLabel }),
                 ]}
               />
             }
@@ -1406,7 +1441,7 @@ export default function InsightsPage() {
                 </div>
                 {gmiDelta != null && (
                   <div style={{ fontSize:11, color: gmiDelta < 0 ? GREEN : gmiDelta > 0 ? ORANGE : "var(--text-dim)", marginTop:2, fontWeight:600 }}>
-                    {gmiDelta > 0 ? "+" : gmiDelta < 0 ? "−" : ""}{Math.abs(gmiDelta).toFixed(1)} {tInsights("delta_vs_prev")}
+                    {gmiDelta > 0 ? "+" : gmiDelta < 0 ? "−" : ""}{Math.abs(gmiDelta).toFixed(1)} {tInsights("delta_vs_prev", { prev: prevRangeLabel })}
                   </div>
                 )}
               </>
@@ -1425,7 +1460,7 @@ export default function InsightsPage() {
               title={tInsights("trend_back_title")}
               accent={ACCENT}
               paragraphs={[
-                tInsights("trend_back_p1"),
+                tInsights("trend_back_p1", { range: rangeLabel }),
                 tInsights("trend_back_p2"),
               ]}
             />
@@ -1440,7 +1475,7 @@ export default function InsightsPage() {
               low. Falls back to "—" while we don't yet have ≥2 days of
               data so the slot doesn't disappear. */}
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
-            <CardLabel text={tInsights("card_glucose_trend_title")}/>
+            <CardLabel text={tInsights("card_glucose_trend_title", { range: rangeLabel })}/>
             <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end" }}>
               <div style={{ fontSize:11, color:"var(--text-dim)" }}>{tInsights("card_glucose_trend_sub")}</div>
               <div style={{
@@ -1500,21 +1535,21 @@ export default function InsightsPage() {
             accent={accent}
             back={
               <ThresholdBack
-                title={tInsights("hypo_label")}
+                title={tInsights("hypo_label", { range: rangeLabel })}
                 accent={accent}
                 paragraphs={[
-                  tInsights("hypo_back_p1"),
+                  tInsights("hypo_back_p1", { range: rangeLabel }),
                   tInsights("hypo_back_p2"),
                   tInsights("hypo_back_p3_clusters"),
                   hypoEnough
-                    ? tInsights("readings_window_p3", { n: readings7.length })
-                    : tInsights("min_readings_window_required", { min: MIN_DATAPOINTS }),
+                    ? tInsights("readings_window_p3", { n: readings7.length, range: rangeLabel })
+                    : tInsights("min_readings_window_required", { min: MIN_DATAPOINTS, range: rangeLabel }),
                 ]}
               />
             }
           >
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-              <CardLabel text={tInsights("card_hypo_events_title")}/>
+              <CardLabel text={tInsights("card_hypo_events_title", { range: rangeLabel })}/>
               <div style={{ fontSize:11, color:"var(--text-dim)" }}>&lt; {HYPO_THRESHOLD_MGDL} mg/dL</div>
             </div>
             {!hypoEnough ? (
@@ -1589,20 +1624,20 @@ export default function InsightsPage() {
             accent={accent}
             back={
               <ThresholdBack
-                title={tInsights("hyper_label")}
+                title={tInsights("hyper_label", { range: rangeLabel })}
                 accent={accent}
                 paragraphs={[
-                  tInsights("hyper_back_p1"),
+                  tInsights("hyper_back_p1", { range: rangeLabel }),
                   tInsights("hyper_back_p2"),
                   hyperEnough
-                    ? tInsights("readings_window_p3", { n: readings7.length })
-                    : tInsights("min_readings_window_required", { min: MIN_DATAPOINTS }),
+                    ? tInsights("readings_window_p3", { n: readings7.length, range: rangeLabel })
+                    : tInsights("min_readings_window_required", { min: MIN_DATAPOINTS, range: rangeLabel }),
                 ]}
               />
             }
           >
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-              <CardLabel text={tInsights("card_hyper_events_title")}/>
+              <CardLabel text={tInsights("card_hyper_events_title", { range: rangeLabel })}/>
               <div style={{ fontSize:11, color:"var(--text-dim)" }}>&gt; {HYPER_THRESHOLD_MGDL} mg/dL</div>
             </div>
             {!hyperEnough ? (
@@ -1700,12 +1735,12 @@ export default function InsightsPage() {
               paragraphs={[
                 tInsights("meal_eval_back_p1"),
                 tInsights("meal_eval_back_p2"),
-                tInsights("meal_eval_back_p3", { n: totalN }),
+                tInsights("meal_eval_back_p3", { n: totalN, range: rangeLabel }),
               ]}
             />
           }
         >
-          <CardLabel text={tInsights("card_meal_evaluation_title")}/>
+          <CardLabel text={tInsights("card_meal_evaluation_title", { range: rangeLabel })}/>
           {totalN === 0 ? (
             <div style={{ padding:"18px 0", textAlign:"center", color:"var(--text-faint)", fontSize:13 }}>
               {tInsights("card_meal_evaluation_empty")}
@@ -1887,6 +1922,13 @@ export default function InsightsPage() {
                       </span>
                     </div>
                   )}
+                  {/* Scope-coupling badge (Task #332). The engine itself
+                      keeps its 90-day learning window — but we surface
+                      how many in-scope meals the user has so the card's
+                      relationship to the global range picker is honest. */}
+                  <div style={{ fontSize:10, color:"var(--text-faint)", marginTop:2, opacity:0.8 }}>
+                    {tInsights("engine_meals_in_range", { n: last7.length })}
+                  </div>
                   {/* Phase B3+B4 — per-window learned ICRs. Collapsed by
                       default so the card stays calm; only renders when
                       the schedule master toggle is on AND the engine
@@ -2237,26 +2279,26 @@ export default function InsightsPage() {
           accent={ACCENT}
           back={
             <ThresholdBack
-              title={tInsights("tdd_label")}
+              title={tInsights("tdd_label", { range: rangeLabel })}
               accent={ACCENT}
               paragraphs={[
                 tInsights("tdd_back_p1"),
-                tInsights("tdd_back_p2"),
+                tInsights("tdd_back_p2", { range: rangeLabel, days: rangeDays }),
                 tddEnough
-                  ? tInsights("tdd_back_p3", { logs: insulinLogs.filter(il => { const t = parseDbTs(il.created_at); return t >= tddFromMs && t < tddNowMs; }).length, days: tddDayCount })
-                  : tInsights("tdd_back_p3_insufficient", { min: MIN_DATAPOINTS }),
+                  ? tInsights("tdd_back_p3", { logs: insulinLogs.filter(il => { const t = parseDbTs(il.created_at); return t >= tddFromMs && t < tddNowMs; }).length, days: tddDayCount, range: rangeLabel })
+                  : tInsights("tdd_back_p3_insufficient", { min: minDatapointsForScope, range: rangeLabel }),
               ]}
             />
           }
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-            <CardLabel text={tInsights("card_tdd_title")}/>
+            <CardLabel text={tInsights("card_tdd_title", { range: rangeLabel })}/>
             <div style={{ fontSize:11, color:"var(--text-dim)" }}>{tInsights("card_tdd_sub")}</div>
           </div>
           {!tddEnough || tddAvg7 == null ? (
             <div style={{ padding:"18px 0", textAlign:"center" }}>
               <div style={{ fontSize:14, color:"var(--text-dim)", fontWeight:600 }}>{tInsights("insufficient_data")}</div>
-              <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:4 }}>{tInsights("tdd_min_required", { min: MIN_DATAPOINTS })}</div>
+              <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:4 }}>{tInsights("tdd_min_required", { min: minDatapointsForScope })}</div>
             </div>
           ) : (
             <>
@@ -2265,7 +2307,7 @@ export default function InsightsPage() {
                   {tddAvg7.toFixed(1)}
                 </div>
                 <div style={{ fontSize:14, color:"var(--text-dim)", fontWeight:700 }}>{tInsights("tdd_unit_main")}</div>
-                <div style={{ marginLeft:"auto", fontSize:11, color:"var(--text-dim)" }}>{tInsights("tdd_avg_7d")}</div>
+                <div style={{ marginLeft:"auto", fontSize:11, color:"var(--text-dim)" }}>{tInsights("tdd_avg_7d", { range: rangeLabel })}</div>
               </div>
               {/* Bolus / Basal split for the 7-day average. Helps Lucas
                   see whether his TDD is dominated by carb-cover boluses
@@ -2390,20 +2432,20 @@ export default function InsightsPage() {
                 tInsights("workout_outcomes_back_p1"),
                 tInsights("workout_outcomes_back_p2"),
                 workoutOutcomeEnough
-                  ? tInsights("workout_outcomes_back_p3", { total: workoutTotal30, classified: workoutClassifiedTotal })
-                  : tInsights("workout_outcomes_back_p3_insufficient", { min: MIN_DATAPOINTS }),
+                  ? tInsights("workout_outcomes_back_p3", { total: workoutTotal30, classified: workoutClassifiedTotal, range: rangeLabel })
+                  : tInsights("workout_outcomes_back_p3_insufficient", { min: MIN_DATAPOINTS, range: rangeLabel }),
               ]}
             />
           }
         >
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
-            <CardLabel text={tInsights("card_workout_outcomes_title")}/>
+            <CardLabel text={tInsights("card_workout_outcomes_title", { range: rangeLabel })}/>
             <div style={{ fontSize:11, color:"var(--text-dim)" }}>{tInsights("card_workout_outcomes_sub")}</div>
           </div>
           {!workoutOutcomeEnough ? (
             <div style={{ padding:"18px 0", textAlign:"center" }}>
               <div style={{ fontSize:14, color:"var(--text-dim)", fontWeight:600 }}>{tInsights("insufficient_data")}</div>
-              <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:4 }}>{tInsights("workout_outcomes_min_required", { min: MIN_DATAPOINTS })}</div>
+              <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:4 }}>{tInsights("workout_outcomes_min_required", { min: MIN_DATAPOINTS, range: rangeLabel })}</div>
             </div>
           ) : (
             <>
@@ -2411,7 +2453,7 @@ export default function InsightsPage() {
                 <div style={{ fontSize:36, fontWeight:800, color:"var(--text)", letterSpacing:"-0.04em", fontFamily:"var(--font-mono)", lineHeight:1 }}>
                   {workoutTotal30}
                 </div>
-                <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>{tInsights("workout_outcomes_total_30d")}</div>
+                <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:600 }}>{tInsights("workout_outcomes_total_30d", { range: rangeLabel })}</div>
               </div>
               <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                 {RANKED_OUTCOMES.map(oc => {
@@ -2514,7 +2556,7 @@ export default function InsightsPage() {
               paragraphs={[
                 tInsights("workout_patterns_back_p1"),
                 tInsights("workout_patterns_back_p2"),
-                tInsights("workout_patterns_back_p3", { patterns: workoutPatterns.length, evaluated: exerciseEvaluated.length }),
+                tInsights("workout_patterns_back_p3", { patterns: workoutPatterns.length, evaluated: exerciseEvaluated.length, range: rangeLabel }),
               ]}
             />
           }
@@ -2651,15 +2693,17 @@ export default function InsightsPage() {
     // Hidden when there's no data so users without cycle/symptom logging
     // don't see an empty placeholder.
     (() => {
-      const WINDOW_MS = 30 * 86400 * 1000;
-      const nowMs = Date.now();
-      const windowStartMs = nowMs - WINDOW_MS;
+      // Window: follows the global scope picker (Task #332) instead of a
+      // fixed 30 days, so the Cycle & Symptoms card stays coherent when
+      // the user switches between Heute/7T/30T/12M.
+      const windowStartMs = wkAgo;
+      const windowEndMs = now;
       const windowStartDay = new Date(windowStartMs);
       const ws = windowStartDay.toISOString().slice(0, 10);
 
-      // Bleeding days = sum of (end_date ?? today) - max(start_date, window_start)
-      // for each row that has a flow_intensity, capped to today.
-      const todayStr = new Date().toISOString().slice(0, 10);
+      // Bleeding days = sum of (end_date ?? window_end) - max(start_date, window_start)
+      // for each row that has a flow_intensity, capped to the window end.
+      const todayStr = new Date(windowEndMs - 1).toISOString().slice(0, 10);
       let bleedingDays = 0;
       const phaseCounts: Record<string, number> = {};
       for (const r of menstrualLogs) {
@@ -2688,7 +2732,7 @@ export default function InsightsPage() {
       let totalSymptomEntries = 0;
       for (const s of symptomLogs) {
         const occ = new Date(s.occurred_at).getTime();
-        if (occ < windowStartMs) continue;
+        if (occ < windowStartMs || occ >= windowEndMs) continue;
         totalSymptomEntries += 1;
         for (const sym of s.symptom_types || []) {
           const cur = symStats[sym] ||= { count: 0, sevSum: 0 };
@@ -2721,7 +2765,7 @@ export default function InsightsPage() {
                 title={tInsights("cycle_symptoms_back_title")}
                 accent={PINK}
                 paragraphs={[
-                  tInsights("cycle_symptoms_back_p1"),
+                  tInsights("cycle_symptoms_back_p1", { range: rangeLabel }),
                   tInsights("cycle_symptoms_back_p2"),
                 ]}
               />
@@ -2730,7 +2774,7 @@ export default function InsightsPage() {
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
               <CardLabel text={tInsights(showCycle ? "card_cycle_symptoms_title" : "card_symptoms_only_title")}/>
               <div style={{ fontSize:11, color:"var(--text-dim)" }}>
-                {tInsights("card_cycle_symptoms_window")}
+                {tInsights("card_cycle_symptoms_window", { range: rangeLabel })}
               </div>
             </div>
 
@@ -2797,7 +2841,7 @@ export default function InsightsPage() {
               </div>
             ) : (
               <div style={{ fontSize:13, color:"var(--text-faint)", fontStyle:"italic" }}>
-                {tInsights("symptom_top_empty")}
+                {tInsights("symptom_top_empty", { range: rangeLabel })}
               </div>
             )}
           </FlipCard>
@@ -2832,7 +2876,7 @@ export default function InsightsPage() {
             { label:tInsights("tile_avg_glucose_label"),  val:`${avgGlucose}`, sub:tInsights("tile_avg_glucose_sub"),           color:"var(--text)",
               formula:tInsights("tile_avg_glucose_formula"),      explain:tInsights("tile_avg_glucose_explain") },
             // Good rate (Trefferquote) — in-target metric → GREEN.
-            { label:tInsights("tile_good_rate_label"),    val:`${goodRate.toFixed(1)}%`,  sub:tInsights("tile_good_rate_sub", { good: goodAll, total }),   color:GREEN,
+            { label:tInsights("tile_good_rate_label"),    val:`${goodRate.toFixed(1)}%`,  sub:tInsights("tile_good_rate_sub", { good: goodAll, total: last7.length }),   color:GREEN,
               formula:tInsights("tile_good_rate_formula"),            explain:tInsights("tile_good_rate_explain") },
             { label:tInsights("tile_avg_insulin_label"),  val:`${avgInsulin}u`, sub:tInsights("tile_avg_insulin_sub", { carbs: carbUnit.display(avgCarbs) }), color:"var(--text)",
               formula:tInsights("tile_avg_insulin_formula"),               explain:tInsights("tile_avg_insulin_explain") },
