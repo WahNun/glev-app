@@ -1,0 +1,59 @@
+GLEV UI/UX RESTRUCTURE — Kompletter Build
+Dies ist ein fundamentaler UX-Richtungswechsel. Kein inkrementeller Fix — kompletter Umbau von drei Screens. Die Reihenfolge ist verbindlich: Engine Screen zuerst (einfachster Scope), dann Insights Screen, dann Dashboard.
+
+ÜBERGREIFENDES PRINZIP (für alle drei Screens)
+Weg von: Feed-UI, vertikales Scrollen, gleichgewichtete Informationsblöcke, Health-Dashboard-Optik.
+Hin zu: State-basierter Navigation, horizontalem Swipen, staged Card Discovery, fokussierter Informationsarchitektur.
+Psychologische Kernregel: Scrollen = Konsum. Swipen = Entscheidung. Das ist der zentrale Unterschied zur bisherigen UX.
+Die App soll sich anfühlen wie ein intelligentes Instrument / Cockpit / metabolisches Betriebssystem — nicht wie ein Social Feed oder Analytics-Dashboard.
+
+SCREEN 1 — GLEV ENGINE SCREEN (Priorität 1)
+Aktuell: Positiver erster Eindruck, aber scrollbar/zoombar mit Bounce-Physics.
+Zielzustand:
+
+Screen ist vollständig fixiert — kein Scroll, kein Zoom, kein Bounce, keine Overscroll-Physics
+Der erste Zustand des Screens ist stabil und kontrolliert
+Wirkt wie: Analyseprozess, laufender Systemzustand, Terminal
+Wirkt nicht wie: Webcontent, Content-Seite, Dashboard-Feed
+Wenige Interaktionspunkte, idealerweise ein klarer Hauptfokus/Button
+Keine unnötigen Bewegungen
+
+
+SCREEN 2 — INSIGHTS SCREEN (Priorität 2)
+Aktuell: Vertikal scrollbare Kartenliste mit gleich gewichteten Elementen — wirkt wie billiger Feed.
+Zielzustand — Screen-Aufteilung:
+Oberer Bereich (ca. 55–60% des Screens):
+
+Eine dominante Hauptkarte, groß, zentriert, viel White Space
+Jeweils NUR EIN Fokus gleichzeitig sichtbar
+Navigation: horizontal swipen/flicken zwischen Karten
+Klare Typografie, starke visuelle Gewichtung
+
+Unterer Bereich (ca. 40–45%):
+
+Dynamischer Kontext zur aktuell aktiven Karte
+Zeigt: Erklärung, analytischer Kontext, Trend-Zusatzinfos, Timestamp, „Why this matters"
+Prinzip: oben = Fokus, unten = Kontext
+
+Kein primäres vertikales Scrollen mehr. Stattdessen bewusstes horizontales Navigieren zwischen Erkenntnissen.
+
+SCREEN 3 — DASHBOARD (Priorität 3)
+Aktuell: Klassische vertikale Widget-Liste, Data-Wall-Feeling.
+Zielzustand — Cluster-basierter Aufbau mit exakter Reihenfolge:
+
+Glucose Screen — ganz oben, eigener Cluster
+Makros — direkt darunter, eigener Cluster
+Outcome Distribution + Rates — gemeinsam geclustert (Good Rate, Spike Rate, Hypo Rate, Outcome Distribution)
+Control Score + Glucose Trend — gemeinsam geclustert
+Recents — ganz unten (letzte Mahlzeiten, Aktivitäten, Logs)
+
+Jeder Cluster: horizontal swipebar, als Kartenstapel, jeweils ein mentaler Kontext gleichzeitig sichtbar. Keine Scroll-Datenwand.
+
+Technische Anforderungen für alle drei Screens:
+
+Bestehende Komponenten wiederverwenden wo möglich, kein neues Design-System einführen
+i18n (DE/EN) muss für alle neuen/geänderten Labels gepflegt werden
+tsc --noEmit muss nach jedem Screen clean sein
+Kein Bruch bestehender Datenanbindungen — nur UI-Schicht ändern
+
+Vorgehen: Screen 1 fertig + clean → Screen 2 → Screen 3. Nicht alles gleichzeitig.
