@@ -3419,6 +3419,7 @@ function InsightsSwipePager({
           {items.map((it, idx) => (
             <div
               key={it.id}
+              data-card-id={it.id}
               style={{
                 // border-box pins the slot's outer width to exactly
                 // the scroller's clientWidth despite the inner 6px
