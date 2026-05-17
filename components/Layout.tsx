@@ -316,34 +316,50 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               replaced: green = DB, orange = mixed, pink = estimated,
               red+pulse = unknown (hard warning before dosing). */}
           {sourceHdr.source && (() => {
-            const palette = sourceHdr.source === "database"
-              ? { bg: "#22D3A015", border: "#22D3A040", color: "#22D3A0" }
+            // Slimmed-down provenance indicator (2026-05-17 user
+            // request: "dürfte dünner und unauffälliger werden, vom
+            // style lieber wie die Leiste im Insights-Screen"). The
+            // previous version was a 28-px filled pill with bg+border
+            // that competed with the brand lockup; this rendition
+            // drops bg/border for the three benign states and renders
+            // the label in the dot's semantic colour itself (which
+            // passes WCAG AA on the dark header surface for all three
+            // and is more meaningful than neutral grey). The unknown
+            // state KEEPS its filled bg + border because it is a hard
+            // pre-dose safety warning whose salience must not be
+            // diluted — architect flagged this explicitly. The
+            // "Source:" prefix is dropped (context = engine header).
+            const isUnknown = sourceHdr.source === "unknown";
+            const dotColor = sourceHdr.source === "database"
+              ? "#22D3A0"
               : sourceHdr.source === "mixed"
-                ? { bg: "#FF950015", border: "#FF950040", color: "#FF9500" }
+                ? "#FF9500"
                 : sourceHdr.source === "estimated"
-                  ? { bg: "#FF2D7815", border: "#FF2D7840", color: "#FF2D78" }
-                  : { bg: "#FF2D2D22", border: "#FF2D2D80", color: "#FF6B6B" };
+                  ? "#FF2D78"
+                  : "#FF6B6B";
             const label = tEngineHdr(`nutrition_source_${sourceHdr.source}`);
             const tip   = tEngineHdr(`nutrition_source_explain_${sourceHdr.source}`);
             return (
               <div
                 title={tip}
+                aria-label={`${tEngineHdr("nutrition_source_label")}: ${label}`}
                 style={{
                   display: "inline-flex", alignItems: "center", gap: 6,
-                  height: 28, padding: "0 10px", borderRadius: 99,
-                  background: palette.bg,
-                  border: `1px solid ${palette.border}`,
-                  color: palette.color,
-                  fontSize: 12, fontWeight: 700, letterSpacing: "0.04em",
+                  height: isUnknown ? 24 : "auto",
+                  padding: isUnknown ? "0 10px" : 0,
+                  borderRadius: isUnknown ? 99 : 0,
+                  background: isUnknown ? "#FF2D2D22" : "transparent",
+                  border: isUnknown ? "1px solid #FF2D2D80" : "none",
+                  color: dotColor,
+                  fontSize: 11, fontWeight: 600, letterSpacing: "0.02em",
                   flexShrink: 0, whiteSpace: "nowrap",
                 }}
               >
                 <span style={{
                   width: 6, height: 6, borderRadius: "50%",
-                  background: palette.color,
-                  boxShadow: `0 0 6px ${palette.color}`,
+                  background: dotColor,
                 }} aria-hidden="true" />
-                {tEngineHdr("nutrition_source_label")}: {label}
+                {label}
               </div>
             );
           })()}
