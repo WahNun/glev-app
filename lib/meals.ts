@@ -324,6 +324,18 @@ export interface UpdateMealInput {
   bg_1h?:          number | null;
   bg_2h?:          number | null;
   meal_type?:      string | null;
+  /** ISO timestamp for `meals.meal_time` — when the user actually ate.
+   *  Editable from the Entries → expand → editor row so users can
+   *  correct a stale "Now" stamp after-the-fact (user request
+   *  2026-05-17: "wenn ich entries expande und bearbeite will ich
+   *  auch zeit editieren können"). Caller passes a full ISO string
+   *  (e.g. via `new Date(localDateTime).toISOString()`). Passing
+   *  `null` clears the column so the row falls back to `created_at`
+   *  for lifecycle / sort. The downstream `lifecycleFor` recompute
+   *  below uses the *merged* meal_time so outcome / evaluation are
+   *  re-evaluated against the new timing anchor — not against the
+   *  stale pre-edit value. */
+  meal_time?:      string | null;
 }
 
 /**
@@ -394,6 +406,12 @@ export async function updateMeal(id: string, patch: UpdateMealInput): Promise<Me
     bg_2h:          merged.bg_2h,
     bg_2h_at:       bg2hAtAfter,
     meal_type:      newMealType,
+    // CRITICAL: feed the patched meal_time into lifecycleFor so
+    // age/window calculations (FS-override window, bg_2h ≥120 min
+    // gate, evaluation finalisation) use the corrected anchor. Without
+    // this, an Entries-page time edit would persist a stale evaluation
+    // computed against the pre-edit timestamp.
+    meal_time:      patch.meal_time !== undefined ? patch.meal_time : cur.meal_time,
   };
   const lc = lifecycleFor(mergedMeal, new Date(), settings);
   const finalEvaluation = lc.state === "final" ? lc.outcome : null;
@@ -415,6 +433,7 @@ export async function updateMeal(id: string, patch: UpdateMealInput): Promise<Me
     dbPatch.bg_2h = patch.bg_2h;
     dbPatch.bg_2h_at = bg2hAtAfter;
   }
+  if (patch.meal_time !== undefined) dbPatch.meal_time = patch.meal_time;
   dbPatch.meal_type = newMealType;
   dbPatch.evaluation = finalEvaluation;
   // calories follow the macros — recompute regardless of which macro changed.

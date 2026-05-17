@@ -3019,6 +3019,21 @@ function MealEditor({ meal, onSaved, onCancel }: {
   // means "0u given". We preserve that distinction in the editor even
   // though the collapsed list shows both as "0u" by request.
   const [bolus,   setBolus]   = useState<string>(meal.insulin_units != null ? String(meal.insulin_units) : "");
+  // Editable meal time — seeded from `meal.meal_time` (or created_at
+  // fallback) and shown as a native datetime-local input. User
+  // request 2026-05-17 ("wenn ich entries expande und bearbeite will
+  // ich auch zeit editieren können") — sub-headline used to say
+  // "Glukose-Werte und Uhrzeit bleiben unverändert" but the time is
+  // now editable too, so the help text below was updated. We seed
+  // with the local-wallclock format the input expects (no TZ shift).
+  const initialMealTimeIso = meal.meal_time ?? meal.created_at;
+  const [mealTimeLocal, setMealTimeLocal] = useState<string>(() => {
+    const d = new Date(initialMealTimeIso);
+    if (Number.isNaN(d.getTime())) return "";
+    const off = d.getTimezoneOffset() * 60_000;
+    return new Date(d.getTime() - off).toISOString().slice(0, 16);
+  });
+  const [mealTimeSeed] = useState<string>(mealTimeLocal);
   const [busy,    setBusy]    = useState(false);
   const [err,     setErr]     = useState<string | null>(null);
 
@@ -3087,6 +3102,26 @@ function MealEditor({ meal, onSaved, onCancel }: {
     const carbsGramsToWrite = carbsUnchanged
       ? meal.carbs_grams!
       : carbUnit.toGrams(c);
+    // Meal-time: only send if the user actually changed it (avoids
+    // overwriting a precise meal_time with a re-roundtripped wall-clock
+    // string that differs only in second-precision). datetime-local has
+    // no timezone, so we interpret it as the user's local wall clock
+    // and convert to a real ISO instant for storage — same approach
+    // the engine wizard uses on save.
+    let mealTimeIso: string | undefined;
+    if (mealTimeLocal.trim() !== mealTimeSeed.trim()) {
+      const trimmed = mealTimeLocal.trim();
+      if (trimmed === "") {
+        mealTimeIso = undefined; // leave unchanged if user blanked it
+      } else {
+        const d = new Date(trimmed);
+        if (Number.isNaN(d.getTime())) {
+          setErr("Ungültige Uhrzeit. Bitte Datum und Zeit prüfen.");
+          return;
+        }
+        mealTimeIso = d.toISOString();
+      }
+    }
     setBusy(true);
     try {
       const updated = await updateMeal(meal.id, {
@@ -3095,6 +3130,7 @@ function MealEditor({ meal, onSaved, onCancel }: {
         fat_grams:     f,
         fiber_grams:   fb,
         insulin_units: i,
+        ...(mealTimeIso !== undefined ? { meal_time: mealTimeIso } : null),
       });
       onSaved(updated);
     } catch (e) {
@@ -3116,9 +3152,9 @@ function MealEditor({ meal, onSaved, onCancel }: {
       </div>
 
       <div style={{ fontSize:13, color:"var(--text-dim)", lineHeight:1.5 }}>
-        Korrigiert Makros + Bolus nachträglich. Outcome-Klassifikation und
-        Calories werden automatisch neu berechnet. Glukose-Werte und Uhrzeit
-        bleiben unverändert.
+        Korrigiert Makros, Bolus und Uhrzeit nachträglich.
+        Outcome-Klassifikation und Calories werden automatisch neu berechnet.
+        Glukose-Werte bleiben unverändert.
       </div>
 
       <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8 }}>
@@ -3135,6 +3171,35 @@ function MealEditor({ meal, onSaved, onCancel }: {
         accent={ACCENT}
         placeholder="z.B. 2.5"
       />
+
+      {/* Editable meal time — native datetime-local picker so iOS /
+          Android render their wheel + calendar UI without us needing
+          a custom widget. Same styling as EditField below to keep
+          the form visually consistent. */}
+      <label style={{ display:"flex", flexDirection:"column", gap:4 }}>
+        <span style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>
+          UHRZEIT
+        </span>
+        <input
+          type="datetime-local"
+          value={mealTimeLocal}
+          onChange={(e) => setMealTimeLocal(e.target.value)}
+          style={{
+            background:"var(--surface-soft)",
+            border:`1px solid ${ACCENT}40`,
+            borderRadius:8,
+            padding:"10px 12px",
+            color:"var(--text)",
+            fontSize:14,
+            fontWeight:600,
+            fontFamily:"var(--font-mono)",
+            outline:"none",
+            colorScheme:"dark",
+            width:"100%",
+            boxSizing:"border-box",
+          }}
+        />
+      </label>
 
       {err && (
         <div style={{ fontSize:13, color:PINK, padding:"8px 10px", background:`${PINK}10`, border:`1px solid ${PINK}30`, borderRadius:8 }}>
