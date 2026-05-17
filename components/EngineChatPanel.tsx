@@ -290,7 +290,7 @@ export default function EngineChatPanel({
   void expanded; void onToggleExpanded; void hasUsedVoice;
   if (isMobile) {
     return (
-      <div style={{
+      <div data-allow-select="true" style={{
         background: SURFACE,
         border: `1px solid ${BORDER}`,
         borderRadius: 16,
@@ -317,7 +317,7 @@ export default function EngineChatPanel({
 
   // ---- Desktop: same combined-header card --------------------------------
   return (
-    <div style={{
+    <div data-allow-select="true" style={{
       background: SURFACE,
       border: `1px solid ${BORDER}`,
       borderRadius: 16,
