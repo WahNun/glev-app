@@ -2351,7 +2351,7 @@ export default function EnginePage() {
                 )}
                 {/* Macros as tap-able ring cards mirroring the dashboard's
                     "TODAY'S MACROS" section. Tap a card → its 0.5 g slider
-                    folds out underneath (5 g / 0.5 BE / 0.5 KE for carbs).
+                    folds out underneath (0.5 step in every unit, g / BE / KE).
                     State (`carbs`, `protein`, `fat`, `fiber`) is kept here
                     and threaded through unchanged, so all downstream
                     validation / save / bolus math keeps working. */}

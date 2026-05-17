@@ -87,14 +87,30 @@ export default function ReviewMacrosCards({
     { key: "fiber",   label: labels.fiber,   value: Math.round(fiberNum),           color: TYPE_COLORS.BALANCED,     unit: "g" },
   ];
 
-  // Slider config for the currently expanded card. Carbs respects the
-  // user's carb-unit preference (5 g / 0.5 BE / 0.5 KE); the three
-  // protein/fat/fiber sliders are fixed at 0.5 g steps.
+  // Slider config for the currently expanded card. All four rings
+  // (carbs / protein / fat / fiber) share the same 0.5 step granularity
+  // so the scrubbing feel is identical regardless of which macro the
+  // user is correcting. Carbs still respects the unit label (g / BE /
+  // KE) and max derives from the user's carb-unit preference.
   function sliderFor(key: MacroKey) {
     if (key === "carbs") {
-      const max = Math.max(10, Math.round(carbUnit.fromGrams(200)));
-      const step = carbUnit.unit === "g" ? 5 : carbUnit.step;
-      const decimals = carbUnit.unit === "g" ? 0 : 1;
+      // Carbs max: 200 g covers any realistic single meal (giant pizza,
+      // big pasta plate). In BE this is 20 BE; in KE 20 KE — both still
+      // within plausible bounds for a single bolus decision. Anything
+      // larger is almost certainly split across multiple meals.
+      // `Math.floor` (not round) so the cap never converts back to
+      // more than 200 g in BE-mode (200/12 = 16.67 → floor 16 → 192 g
+      // ≤ 200 g, whereas round 17 would yield ~204 g).
+      const max = Math.max(10, Math.floor(carbUnit.fromGrams(200) * 2) / 2);
+      // Step parity with protein/fat/fiber sliders: 0.5 in every unit
+      // mode (was 5 g in g-mode for BE/KE consistency — Lucas wanted
+      // the same fine granularity across all four macro rings). For
+      // BE/KE this matches the existing `carbUnit.step` (0.5), for g
+      // it's a 10× finer scrub than before.
+      const step = carbUnit.unit === "g" ? 0.5 : carbUnit.step;
+      // Always one decimal so the displayed value matches the slider
+      // tick (e.g. "47.5 g" instead of rounding to "48 g" mid-scrub).
+      const decimals = 1;
       return {
         value: carbsNum,
         onChange: (n: number) => setCarbs(String(n)),
