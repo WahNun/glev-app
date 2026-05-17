@@ -189,6 +189,21 @@ textarea,
   user-select: text;
   -webkit-touch-callout: default;
 }
+/* Inside the chat container the cascade above would also re-enable
+   selection on every button/label/icon, so long-pressing the Send
+   button (or any chat-internal control) could pop a text highlight.
+   Re-disable selection on interactive affordances within any
+   data-allow-select region so only message text stays copyable.
+   Architect 2026-05-17 callout. */
+[data-allow-select] button,
+[data-allow-select] button *,
+[data-allow-select] label,
+[data-allow-select] [role="button"],
+[data-allow-select] [role="button"] * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
 
 /* iOS-home-screen "edit mode" wiggle. Applied to every sortable card while the
    user is reordering. The two-keyframe rotate creates a subtle jitter without
