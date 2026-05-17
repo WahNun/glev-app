@@ -2804,10 +2804,28 @@ export default function InsightsPage() {
     // 480px max-width keeps the cards in their natural mockup
     // proportions on tablet/desktop instead of stretching them out.
     <div style={{ maxWidth:480, margin:"0 auto" }}>
-      <div style={{ marginBottom:18 }}>
-        <h1 style={{ fontSize:22, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>Insights</h1>
-        <p style={{ color:"var(--text-faint)", fontSize:13 }}>{tInsights("header_subtitle", { n: total })}</p>
-      </div>
+      {/* Persistent semantic heading for screen readers — keeps a
+          stable `h1` landmark on the page even after the transient
+          banner below unmounts. Visually hidden via the
+          screen-reader-only style snippet, matches the title that the
+          banner displays. */}
+      <h1
+        style={{
+          position: "absolute",
+          width: 1, height: 1, padding: 0, margin: -1,
+          overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", border: 0,
+        }}
+      >
+        Insights
+      </h1>
+      {/* Transient header hint: shows the page title + interaction
+          subtitle briefly on entry, then auto-dismisses on the user's
+          first interaction (or after a backstop timeout) so the swipe
+          pager can claim the vertical space below. Wrapped in its own
+          component so the listener wiring stays scoped. */}
+      <InsightsHeaderHint
+        subtitle={tInsights("header_subtitle", { n: total })}
+      />
 
       {/* Swipe-focused layout (Task #316). Replaces the legacy vertical
           SortableCardGrid feed: a single dominant card sits in the top
@@ -2899,6 +2917,75 @@ export default function InsightsPage() {
         })()}
         locale={locale}
       />
+    </div>
+  );
+}
+
+/** Transient page-title banner for the Insights screen.
+ *  Shows "Insights" + the interaction subtitle ("Tap any card to flip ·
+ *  hold to reorder · N meals analyzed") briefly on mount, then fades
+ *  itself out — and collapses out of the layout — on the user's first
+ *  interaction anywhere in the document. A 4s backstop timer also
+ *  dismisses it for users who just look without touching, so the swipe
+ *  pager always ends up reclaiming the vertical space.
+ *
+ *  The banner uses `pointer-events: none` so it never absorbs the
+ *  dismissing tap itself — the touch passes straight through to the
+ *  card beneath. A single `pointerdown` listener covers touch + mouse
+ *  + pen; we also listen on `keydown` so keyboard users can dismiss
+ *  by typing/tab. All listeners are `once: true` and torn down in the
+ *  effect cleanup. */
+function InsightsHeaderHint({ subtitle }: { subtitle: string }) {
+  const [open, setOpen] = useState(true);
+  const [mounted, setMounted] = useState(true);
+
+  // Wire the dismiss listeners. They only attach while the hint is
+  // still open — once it's been dismissed we don't keep them around.
+  useEffect(() => {
+    if (!open) return;
+    const dismiss = () => setOpen(false);
+    window.addEventListener("pointerdown", dismiss, { once: true });
+    window.addEventListener("keydown",     dismiss, { once: true });
+    // Backstop: even if the user never touches the screen, the hint
+    // shouldn't linger forever and crowd the swipe pager. 4 seconds
+    // is long enough to read "Tap any card to flip · hold to reorder
+    // · N meals analyzed" comfortably.
+    const auto = window.setTimeout(dismiss, 4000);
+    return () => {
+      window.removeEventListener("pointerdown", dismiss);
+      window.removeEventListener("keydown",     dismiss);
+      window.clearTimeout(auto);
+    };
+  }, [open]);
+
+  // After the fade-out finishes, fully unmount so the banner reserves
+  // no layout space at all. Matches the 400ms CSS transition below.
+  useEffect(() => {
+    if (open) return;
+    const t = window.setTimeout(() => setMounted(false), 450);
+    return () => window.clearTimeout(t);
+  }, [open]);
+
+  if (!mounted) return null;
+  return (
+    <div
+      aria-hidden={!open}
+      style={{
+        overflow: "hidden",
+        maxHeight: open ? 80 : 0,
+        opacity: open ? 1 : 0,
+        marginBottom: open ? 18 : 0,
+        transition: "max-height 400ms ease, opacity 400ms ease, margin-bottom 400ms ease",
+        // Critical: the banner must NOT absorb the dismissing tap.
+        // Pointer events pass through to the swipe pager underneath
+        // so the user's first card-tap also flips that card.
+        pointerEvents: "none",
+      }}
+    >
+      <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.03em", marginBottom: 4 }}>
+        Insights
+      </h1>
+      <p style={{ color: "var(--text-faint)", fontSize: 13 }}>{subtitle}</p>
     </div>
   );
 }
