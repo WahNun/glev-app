@@ -579,7 +579,7 @@
     "tile_avg_insulin_explain": "Mean insulin per meal. Track against carbs to validate your ratio.",
     "pattern_balanced_label": "Balanced dosing",
     "pattern_balanced_explanation": "{pct}% of your last {n} meals landed in target — keep it up.",
-    "card_time_in_range_title": "Time in range · 7d",
+    "card_time_in_range_title": "Time in range",
     "card_avg_bg_title": "Avg BG",
     "card_gmi_title": "GMI / est. A1C",
     "card_glucose_trend_title": "7-day trend",

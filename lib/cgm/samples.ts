@@ -30,6 +30,15 @@ export type ContinuousReading = { v: number; t: number };
  * so the cap covers the standard Insights window with headroom but
  * keeps a runaway query bounded if a future caller asks for "all of
  * 2027". Bump this if you start passing larger windows.
+ *
+ * IMPORTANT: orders DESCENDING (newest first) before applying the cap,
+ * then sorts ASCENDING in JS for return. This guarantees that when a
+ * caller asks for a window bigger than 5_000 samples (e.g. the
+ * 60-day Insights fetch for a Libre user @ ~288 samples/day ≈ 17_280
+ * rows) we keep the MOST RECENT 5_000 instead of the oldest 5_000.
+ * Bug fix 2026-05-17: previously ordered ASC + limited, which dropped
+ * roughly the last 6 weeks of CGM data for high-volume users and made
+ * the Day-scope TIR show 100% because today's samples never arrived.
  */
 export async function getCgmSamples(
   userId: string,
@@ -50,7 +59,7 @@ export async function getCgmSamples(
       .eq("user_id", userId)
       .gte("timestamp", fromIso)
       .lt("timestamp", toIso)
-      .order("timestamp", { ascending: true })
+      .order("timestamp", { ascending: false })
       .limit(5000),
     admin
       .from("apple_health_readings")
@@ -58,7 +67,7 @@ export async function getCgmSamples(
       .eq("user_id", userId)
       .gte("timestamp", fromIso)
       .lt("timestamp", toIso)
-      .order("timestamp", { ascending: true })
+      .order("timestamp", { ascending: false })
       .limit(5000),
   ]);
 
