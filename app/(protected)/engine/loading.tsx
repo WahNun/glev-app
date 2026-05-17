@@ -1,6 +1,6 @@
 export default function EngineLoading() {
   return (
-    <div style={{ padding: "16px 16px 96px", display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style={{ padding: "16px 16px 0", display: "flex", flexDirection: "column", gap: 16 }}>
       <Block height={56} />
       <Block height={120} />
       <Block height={300} />

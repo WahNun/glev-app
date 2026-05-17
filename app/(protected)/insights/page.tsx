@@ -467,7 +467,7 @@ export default function InsightsPage() {
   // old centered spinner because a layout-shaped skeleton feels much
   // faster to the user than a blank screen with a tiny spinner.
   if (loading) return (
-    <div style={{ padding:"16px 16px 96px", display:"flex", flexDirection:"column", gap:16 }}>
+    <div style={{ padding:"16px 16px 0", display:"flex", flexDirection:"column", gap:16 }}>
       <style>{`@keyframes glevPulse{0%,100%{opacity:.55}50%{opacity:.85}}`}</style>
       <SkeletonBlock height={48} />
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>

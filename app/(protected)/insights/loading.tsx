@@ -1,6 +1,6 @@
 export default function InsightsLoading() {
   return (
-    <div style={{ padding: "16px 16px 96px", display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style={{ padding: "16px 16px 0", display: "flex", flexDirection: "column", gap: 16 }}>
       <Block height={48} />
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Block height={96} />

@@ -535,7 +535,7 @@ export default function DashboardPage() {
   // than the old centered spinner because the user sees the page shape
   // immediately instead of staring at a tiny spinner on a blank screen.
   if (loading) return (
-    <div style={{ padding:"16px 16px 96px", display:"flex", flexDirection:"column", gap:16 }}>
+    <div style={{ padding:"16px 16px 0", display:"flex", flexDirection:"column", gap:16 }}>
       <style>{`@keyframes glevPulse{0%,100%{opacity:.55}50%{opacity:.85}}`}</style>
       <SkeletonBlock height={56} />
       <SkeletonBlock height={180} />
