@@ -621,6 +621,15 @@ export default function DashboardPage() {
            We trim only inter-cluster gaps + CTA chrome, never the
            card content itself, so the data stays legible. */
         @media (max-width: 430px) {
+          /* Dashboard-only override: pull the cluster cards closer to
+             the screen edges so the cards themselves get wider. We
+             intentionally don't change the global .glev-main rule in
+             Layout.tsx (other pages keep their 16 px breathing room);
+             this <style> block is unmounted when the user navigates
+             away, so the override is scoped to the dashboard route.
+             User request 2026-05-17: "Karten breiter, näher an die
+             Ränder, gleichmäßiges Padding rundum". */
+          .glev-main           { padding-left: 10px !important; padding-right: 10px !important; }
           .glev-cluster-stack  { gap: 6px !important; }
           .glev-cluster        { gap: 4px !important; }
           /* Hide the per-cluster bottom bar entirely on phones — both
@@ -641,9 +650,14 @@ export default function DashboardPage() {
              CTA would be a duplicate. Hide it on mobile only; on
              desktop the wide pill under the control score stays. */
           .glev-quickadd-cta { display: none !important; }
-          .glev-control-front  { padding: 12px 16px 14px !important; }
+          /* Equal 12 px on all four sides — was asymmetric
+             (12/16/14 and 12/16/10) which gave the cards more
+             horizontal padding than vertical and a slightly heavier
+             bottom edge. User request 2026-05-17: "etwas niedriger,
+             gleichmäßiges Padding auf allen 4 Seiten". */
+          .glev-control-front  { padding: 12px !important; }
           .glev-control-front .glev-control-header { margin-bottom: 8px !important; }
-          .glev-macros-front   { padding: 12px 16px 10px !important; }
+          .glev-macros-front   { padding: 12px !important; }
         }
       `}</style>
 
