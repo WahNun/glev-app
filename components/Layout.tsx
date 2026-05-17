@@ -482,14 +482,18 @@ function MobileGlevFab({
             position: "absolute",
             left: "50%",
             top: "50%",
-            // -50% centres the bubble on the anchor, the extra -18px
-            // lifts the circle so its lower half sits inside the nav
-            // row while its upper half overlaps the page content above
-            // the nav top border — the "the radius may overlap the
-            // footer" requirement. Lift slightly higher (was -16) to
-            // keep the same overlap ratio now that the bubble is +20%
-            // larger (was 44 → now 52).
-            transform: "translate(-50%, calc(-50% - 18px))",
+            // -50% centres the bubble on the anchor, the extra -20px
+            // lifts the circle so its CENTRE lands exactly on the nav's
+            // top border — i.e. the bubble overlaps the footer edge by
+            // exactly half (upper hemisphere above the nav, lower
+            // hemisphere inside it). Geometry: nav row is 56px tall
+            // with 6px top padding → 44px content area; the icon anchor
+            // (22×22) is centred in that with the 4px gap + 12px label
+            // below, so its centre sits ~20px below the nav top edge.
+            // Lifting by 20 puts the circle centre exactly on that
+            // edge regardless of circle size. Per 2026-05-17 user
+            // request "genau zur Hälfte überlappt die Kante".
+            transform: "translate(-50%, calc(-50% - 20px))",
             display: "inline-flex", alignItems: "center", justifyContent: "center",
             width: 52, height: 52, borderRadius: "50%",
             background: recording ? `${ACCENT}1f` : SURFACE,
