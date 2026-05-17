@@ -533,6 +533,12 @@ export default function DashboardPage() {
         }
       `}</style>
 
+      {/* Desktop-only page title. The previous hero "+" button that
+          used to sit at the right edge of this row was removed — its
+          job is now done by the dedicated quick-add CTA mounted right
+          underneath the glucose cluster (see `clusterFooters` below),
+          which is reachable on every viewport and sits exactly where
+          the user looks first when opening the dashboard. */}
       <div className="glev-dash-head" style={{ marginBottom:28, justifyContent:"space-between", alignItems:"flex-end", flexWrap:"wrap", gap:12 }}>
         <div>
           <h1 style={{ fontSize:24, fontWeight:800, letterSpacing:"-0.03em", marginBottom:4 }}>{t("title")}</h1>
@@ -540,22 +546,26 @@ export default function DashboardPage() {
             {t("subtitle_count", { n: totalEntries })}
           </p>
         </div>
-        <button
-          onClick={() => setQuickAddOpen(true)}
-          aria-label={tQuick("open_aria")}
-          aria-haspopup="dialog"
-          aria-expanded={quickAddOpen}
-          style={{ width:44, height:44, padding:0, borderRadius:12, border:"none", background:ACCENT, color:"var(--text)", cursor:"pointer", boxShadow:`0 4px 20px ${ACCENT}40`, display:"flex", alignItems:"center", justifyContent:"center" }}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-        </button>
       </div>
       <DashboardQuickAddSheet open={quickAddOpen} onClose={() => setQuickAddOpen(false)} />
 
-      <ReorderableClusters clusters={clusters} />
+      <ReorderableClusters
+        clusters={clusters}
+        clusterFooters={{
+          // Quick-add CTA glued to the bottom of whichever cluster
+          // contains the live glucose card. Keyed by cluster id so it
+          // travels with the glucose cluster if the user reorders the
+          // dashboard — the button always sits right under the glucose
+          // window, never floating to a random position.
+          glucose: (
+            <DashboardQuickAddCTA
+              onClick={() => setQuickAddOpen(true)}
+              ariaLabel={tQuick("open_aria")}
+              expanded={quickAddOpen}
+            />
+          ),
+        }}
+      />
     </div>
   );
 }
@@ -567,8 +577,15 @@ export default function DashboardPage() {
  *  declared position so future additions show up without breaking layouts. */
 function ReorderableClusters({
   clusters,
+  clusterFooters,
 }: {
   clusters: Array<{ id: string; title: string; cards: ClusterCard[] }>;
+  /** Optional footer rendered immediately under a cluster's swipe
+   *  pager + indicator, keyed by cluster id. Used by the dashboard
+   *  to glue the quick-add CTA to the bottom of the glucose cluster
+   *  so the button always sits directly under the live-glucose card,
+   *  regardless of where the user reorders that cluster to. */
+  clusterFooters?: Record<string, React.ReactNode>;
 }) {
   const { order, setOrder } = useCardOrder("dashboard", DASHBOARD_CLUSTER_DEFAULT_ORDER);
 
@@ -631,7 +648,13 @@ function ReorderableClusters({
       <SortableContext items={resolved.map(c => c.id)} strategy={verticalListSortingStrategy}>
         <div style={{ display:"flex", flexDirection:"column", gap:28 }}>
           {resolved.map(cl => (
-            <SortableCluster key={cl.id} clusterId={cl.id} title={cl.title} cards={cl.cards} />
+            <SortableCluster
+              key={cl.id}
+              clusterId={cl.id}
+              title={cl.title}
+              cards={cl.cards}
+              footer={clusterFooters?.[cl.id]}
+            />
           ))}
         </div>
       </SortableContext>
@@ -643,10 +666,14 @@ function SortableCluster({
   clusterId,
   title,
   cards,
+  footer,
 }: {
   clusterId: string;
   title: string;
   cards: ClusterCard[];
+  /** Optional footer node — rendered by DashboardCluster directly
+   *  underneath the swipe pager + indicator. */
+  footer?: React.ReactNode;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: clusterId });
   const t = useTranslations("dashboard");
@@ -682,8 +709,64 @@ function SortableCluster({
 
   return (
     <div ref={setNodeRef} style={style}>
-      <DashboardCluster clusterId={clusterId} title={title} cards={cards} headerHandle={handle} />
+      <DashboardCluster clusterId={clusterId} title={title} cards={cards} headerHandle={handle} footer={footer} />
     </div>
+  );
+}
+
+/** Primary quick-add CTA on the dashboard. Lives right under the
+ *  glucose cluster (replacing the old desktop-only hero "+" in the
+ *  page header and the global header `QuickAddMenu` on this route)
+ *  so the entry point is exactly where the eye lands first. Full
+ *  width, accent-tinted, with the same plus icon family used
+ *  throughout the app. Opens `DashboardQuickAddSheet`. */
+function DashboardQuickAddCTA({
+  onClick,
+  ariaLabel,
+  expanded,
+}: {
+  onClick: () => void;
+  ariaLabel: string;
+  expanded: boolean;
+}) {
+  const t = useTranslations("quickAdd");
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={ariaLabel}
+      aria-haspopup="dialog"
+      aria-expanded={expanded}
+      style={{
+        marginTop: 12,
+        width: "100%",
+        height: 48,
+        padding: "0 16px",
+        borderRadius: 14,
+        // Subtle accent-tinted surface instead of a solid accent
+        // block — keeps the page feeling light, matches the macro-
+        // card active-state language we just unified on, and lets the
+        // glucose card above it stay the focal point of the cluster.
+        background: `${ACCENT}14`,
+        border: `1px solid ${ACCENT}40`,
+        color: "var(--text)",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        fontSize: 14,
+        fontWeight: 600,
+        letterSpacing: "0.01em",
+        transition: "background 160ms ease, border-color 160ms ease",
+      }}
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2.5" strokeLinecap="round" aria-hidden>
+        <line x1="12" y1="5" x2="12" y2="19" />
+        <line x1="5" y1="12" x2="19" y2="12" />
+      </svg>
+      <span>{t("trigger_label")}</span>
+    </button>
   );
 }
 
@@ -694,17 +777,23 @@ type ClusterCard = { id: string; node: React.ReactNode };
  *  card at 100% container width, scroll-snap mandatory, dot indicators
  *  below. Clusters with only one card hide the indicator (per spec).
  *  Active index follows the scroll position via rAF + clientWidth rounding;
- *  changing slide triggers a light selection haptic on mobile. */
+ *  changing slide triggers a light selection haptic on mobile.
+ *
+ *  An optional `footer` slot lets the caller glue a node (e.g. the
+ *  dashboard quick-add CTA) directly underneath the pager + indicator,
+ *  so that node travels with the cluster when the user reorders it. */
 function DashboardCluster({
   clusterId,
   title,
   cards,
   headerHandle,
+  footer,
 }: {
   clusterId: string;
   title: string;
   cards: ClusterCard[];
   headerHandle?: React.ReactNode;
+  footer?: React.ReactNode;
 }) {
   const [active, setActive] = useState(0);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -875,6 +964,7 @@ function DashboardCluster({
         label={title}
         controlsId={(i) => `${clusterId}-slide-${i}`}
       />
+      {footer}
     </section>
   );
 }

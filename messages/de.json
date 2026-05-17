@@ -1363,7 +1363,8 @@
     "log_symptoms": "Symptome loggen",
     "log_influences": "Einflussfaktoren loggen",
     "add_meal_manual": "Mahlzeit manuell eintragen",
-    "cta_add_entry": "Eintrag"
+    "cta_add_entry": "Eintrag",
+    "trigger_label": "Neuer Eintrag"
   },
   "about": {
     "row_version": "Version",

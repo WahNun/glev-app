@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { hapticLight, hapticSelection } from "@/lib/haptics";
 import { useQuickAddVisibleItems } from "@/components/quickAddShared";
 
@@ -23,8 +23,21 @@ const BORDER = "var(--border)";
 export default function QuickAddMenu() {
   const t = useTranslations("quickAdd");
   const router = useRouter();
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // The dashboard now ships its own large "+ Neuer Eintrag" CTA
+  // glued to the bottom of the glucose cluster (see
+  // app/(protected)/dashboard/page.tsx → DashboardQuickAddCTA), so
+  // the duplicate "+" in the global header is intentionally hidden
+  // on that route only. Every other page keeps the header menu
+  // since it's still the only quick-log entry point there.
+  // Pathname can be prefixed with a locale segment ("/de/dashboard"),
+  // so we match by suffix instead of exact equality. The early-return
+  // happens *after* every hook is called so we don't violate the
+  // rules of hooks when the route changes.
+  const onDashboard = !!pathname && /(^|\/)dashboard\/?$/.test(pathname);
 
   // Items + cycle gating live in a shared module so the Entries-page
   // "+ Eintrag" CTA mirrors this menu automatically.
@@ -55,6 +68,10 @@ export default function QuickAddMenu() {
     setOpen(false);
     router.push(href);
   }
+
+  // Suppress render on /dashboard — all hooks above ran first, so the
+  // rules of hooks stay intact across route changes.
+  if (onDashboard) return null;
 
   return (
     <div ref={wrapperRef} style={{ position: "relative" }}>

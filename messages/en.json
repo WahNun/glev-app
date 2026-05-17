@@ -1355,7 +1355,8 @@
     "log_symptoms": "Log symptoms",
     "log_influences": "Log influences",
     "add_meal_manual": "Add meal manually",
-    "cta_add_entry": "Entry"
+    "cta_add_entry": "Entry",
+    "trigger_label": "New entry"
   },
   "about": {
     "row_version": "Version",
