@@ -1160,6 +1160,16 @@ function DashboardCluster({
               minWidth:0,
               scrollSnapAlign:"start",
               scrollSnapStop:"always",
+              // 2026-05-17 UX: give each swiped card breathing room
+              // so adjacent cards don't look glued together as the
+              // next one peeks in during a swipe. 14px each side
+              // yields ~28px visible gap between adjacent slides
+              // while the slot still snaps on multiples of the
+              // container width (border-box keeps width = 100% of
+              // the scroller). Same value used in the Insights
+              // cockpit pager below for visual consistency across
+              // the app.
+              padding: "0 14px",
             }}
           >
             {c.node}

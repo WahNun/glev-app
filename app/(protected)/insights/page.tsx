@@ -3434,7 +3434,13 @@ function InsightsSwipePager({
                 width: "100%",
                 scrollSnapAlign: "start",
                 scrollSnapStop: "always",
-                padding: "6px 6px",
+                // 2026-05-17 UX: bump horizontal slot padding from
+                // 6 → 14 so adjacent cards have a clearly visible
+                // gap (~28px) during swipe transitions and don't
+                // look glued together. Matches the dashboard
+                // ClusterFrame slot padding so the swipe behaviour
+                // feels identical across screens.
+                padding: "6px 14px",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
