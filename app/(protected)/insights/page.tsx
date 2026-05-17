@@ -2737,7 +2737,22 @@ export default function InsightsPage() {
         for (const sym of s.symptom_types || []) {
           const cur = symStats[sym] ||= { count: 0, sevSum: 0 };
           cur.count += 1;
-          cur.sevSum += s.severity;
+          // Per-symptom severity from the severities map. Fall back to
+          // the row average when a legacy / mis-keyed entry is missing
+          // its per-symptom value so we still produce a sensible avg.
+          const perSym = (s.severities ?? {})[sym];
+          if (typeof perSym === "number") {
+            cur.sevSum += perSym;
+          } else {
+            const fallbackVals: number[] = [];
+            for (const v of Object.values(s.severities ?? {})) {
+              if (typeof v === "number") fallbackVals.push(v);
+            }
+            const fallback = fallbackVals.length > 0
+              ? fallbackVals.reduce((a, b) => a + b, 0) / fallbackVals.length
+              : 3;
+            cur.sevSum += fallback;
+          }
         }
       }
       const topSymptoms = Object.entries(symStats)

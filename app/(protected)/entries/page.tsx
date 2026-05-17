@@ -9,7 +9,7 @@ import SnapSlider from "@/components/log/SnapSlider";
 import CollapsibleField from "@/components/log/CollapsibleField";
 import SaveButton from "@/components/log/SaveButton";
 import { fetchRecentMenstrualLogs, deleteMenstrualLog, type MenstrualLog } from "@/lib/menstrual";
-import { fetchRecentSymptomLogs, deleteSymptomLog, updateSymptomLog, SYMPTOM_TYPES, type SymptomLog, type SymptomType } from "@/lib/symptoms";
+import { fetchRecentSymptomLogs, deleteSymptomLog, updateSymptomLog, SYMPTOM_TYPES, avgSeverity, type SymptomLog, type SymptomType, type SeveritiesMap, type SeverityValue } from "@/lib/symptoms";
 import { fetchRecentInfluenceLogs, deleteInfluenceLog, updateInfluenceLog, INFLUENCE_TYPES, type InfluenceLog, type InfluenceType } from "@/lib/influences";
 import { evaluateExercise, exerciseTypeLabel, exerciseTypeLabelI18n, patternNote, interimMessage, finalMessage, deltaColor, aggregateExerciseTypeStats, personalPatternHeadline, PATTERN_MIN_SESSIONS } from "@/lib/exerciseEval";
 import {
@@ -3659,7 +3659,20 @@ function SymptomRowCard({ log, isOpen, onToggle, onDelete, deleting, onUpdated }
       dateStr={dateStr}
       timeStr={timeStr}
       primaryLabel={tx("row_severity")}
-      primaryValue={`${log.severity}/5`}
+      primaryValue={(() => {
+        // Per-symptom severities (Task: per-symptom severity).
+        // Row primary cell collapses to one number: show the exact
+        // value if every symptom shares the same severity, else show
+        // "Ø {mean}/5" so the user knows it's an aggregate.
+        const vals: number[] = [];
+        for (const v of Object.values(log.severities ?? {})) {
+          if (typeof v === "number") vals.push(v);
+        }
+        if (vals.length === 0) return "—";
+        const allSame = vals.every(v => v === vals[0]);
+        const avg = avgSeverity(log) ?? vals[0];
+        return allSame ? `${vals[0]}/5` : `Ø ${avg}/5`;
+      })()}
       primaryColor={SYMPTOM_ACCENT}
       primaryMono
       secondaryLabel={tx("row_symptoms")}
@@ -3673,38 +3686,48 @@ function SymptomRowCard({ log, isOpen, onToggle, onDelete, deleting, onUpdated }
       ) : (
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
           <ExPanel title={tx("panel_session_details")}>
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, marginBottom:8 }}>
-              <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, textTransform:"uppercase" }}>
-                {tx("row_severity")}
-              </div>
-              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                <div style={{ display:"flex", gap:3 }} aria-label={`Severity ${log.severity} of 5`}>
-                  {[1,2,3,4,5].map(n => (
-                    <span key={n} style={{
-                      width:8, height:8, borderRadius:99,
-                      background: n <= log.severity ? SYMPTOM_ACCENT : "var(--border-strong)",
-                    }}/>
-                  ))}
-                </div>
-                <span style={{ fontSize:13, fontWeight:700, color:SYMPTOM_ACCENT, fontFamily:"var(--font-mono)" }}>
-                  {log.severity}/5
-                </span>
-              </div>
-            </div>
             <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, textTransform:"uppercase", marginBottom:6 }}>
               {tx("row_symptoms")}
             </div>
-            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-              {types.length === 0 ? (
-                <span style={{ fontSize:13, color:"var(--text-faint)" }}>—</span>
-              ) : types.map(s => (
-                <span key={s} style={{
-                  fontSize:12, fontWeight:600, padding:"4px 10px",
-                  borderRadius:99, background:`${SYMPTOM_ACCENT}14`, color:SYMPTOM_ACCENT,
-                  border:`1px solid ${SYMPTOM_ACCENT}28`,
-                }}>{t(`symptom_${s}` as never)}</span>
-              ))}
-            </div>
+            {types.length === 0 ? (
+              <span style={{ fontSize:13, color:"var(--text-faint)" }}>—</span>
+            ) : (
+              // One row per symptom — label on the left, severity dots
+              // + numeric value on the right. Replaces the legacy
+              // single "row severity" line now that each symptom
+              // carries its own 1..5 value.
+              <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                {types.map(s => {
+                  const sev = (log.severities ?? {})[s];
+                  const sevNum = typeof sev === "number" ? sev : null;
+                  return (
+                    <div key={s} style={{
+                      display:"flex", alignItems:"center", justifyContent:"space-between",
+                      gap:10, padding:"6px 10px", borderRadius:10,
+                      background:`${SYMPTOM_ACCENT}10`, border:`1px solid ${SYMPTOM_ACCENT}26`,
+                    }}>
+                      <span style={{
+                        fontSize:13, fontWeight:600, color:SYMPTOM_ACCENT,
+                        minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                      }}>{t(`symptom_${s}` as never)}</span>
+                      <div style={{ display:"flex", alignItems:"center", gap:8, flex:"0 0 auto" }}>
+                        <div style={{ display:"flex", gap:3 }} aria-label={`Severity ${sevNum ?? "?"} of 5`}>
+                          {[1,2,3,4,5].map(n => (
+                            <span key={n} style={{
+                              width:7, height:7, borderRadius:99,
+                              background: sevNum != null && n <= sevNum ? SYMPTOM_ACCENT : "var(--border-strong)",
+                            }}/>
+                          ))}
+                        </div>
+                        <span style={{ fontSize:13, fontWeight:700, color:SYMPTOM_ACCENT, fontFamily:"var(--font-mono)", minWidth:32, textAlign:"right" }}>
+                          {sevNum != null ? `${sevNum}/5` : "—"}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </ExPanel>
           {log.notes && (
             <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
@@ -3835,15 +3858,42 @@ function SymptomEditor({ log, onSaved, onCancel }: {
   onCancel: () => void;
 }) {
   const t = useTranslations("engineLog");
-  const tCommon = useTranslations();
-  const [severity, setSeverity] = useState<number>(log.severity);
-  const [types, setTypes]       = useState<SymptomType[]>([...(log.symptom_types || [])]);
-  const [notes, setNotes]       = useState<string>(log.notes ?? "");
+  // Per-symptom severity (Task: per-symptom severity in the edit
+  // sheet). Each chip carries its own 1..5 value; toggling a chip
+  // off drops its entry, toggling on (re)adds with the row's old
+  // value if we still have it, otherwise default 3.
+  const [types, setTypes] = useState<SymptomType[]>([...(log.symptom_types || [])]);
+  const [severities, setSeverities] = useState<SeveritiesMap>(() => {
+    const src = (log.severities ?? {}) as SeveritiesMap;
+    const out: SeveritiesMap = {};
+    for (const s of log.symptom_types || []) {
+      const v = src[s];
+      out[s] = (typeof v === "number" ? v : 3) as SeverityValue;
+    }
+    return out;
+  });
+  const [notes, setNotes] = useState<string>(log.notes ?? "");
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState<string | null>(null);
 
   function toggleType(s: SymptomType) {
-    setTypes(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
+    const wasOn = types.includes(s);
+    setTypes(prev => wasOn ? prev.filter(x => x !== s) : [...prev, s]);
+    setSeverities(prev => {
+      const next: SeveritiesMap = { ...prev };
+      if (wasOn) {
+        delete next[s];
+      } else {
+        // Restore the row's original value if it had one, else 3.
+        const orig = (log.severities ?? {})[s];
+        next[s] = (typeof orig === "number" ? orig : 3) as SeverityValue;
+      }
+      return next;
+    });
+  }
+
+  function setSymptomSeverity(s: SymptomType, v: SeverityValue) {
+    setSeverities(prev => ({ ...prev, [s]: v }));
   }
 
   async function handleSave() {
@@ -3852,11 +3902,25 @@ function SymptomEditor({ log, onSaved, onCancel }: {
     if (types.length === 0) { setErr("Mindestens ein Symptom erforderlich."); return; }
     setBusy(true);
     try {
-      const patch: { severity?: number; symptom_types?: SymptomType[]; notes?: string | null } = {};
-      if (severity !== log.severity) patch.severity = severity;
+      const patch: { severities?: SeveritiesMap; symptom_types?: SymptomType[]; notes?: string | null } = {};
       const prevTypes = [...(log.symptom_types || [])].sort().join(",");
       const nextTypes = [...types].sort().join(",");
-      if (prevTypes !== nextTypes) patch.symptom_types = types;
+      const typesChanged = prevTypes !== nextTypes;
+      // Did any severity value change? Compare on the final type
+      // list so a removed chip doesn't trigger a spurious diff.
+      const prevSev = (log.severities ?? {}) as SeveritiesMap;
+      const sevChanged = typesChanged || types.some(
+        s => severities[s] !== prevSev[s],
+      );
+      if (typesChanged) patch.symptom_types = types;
+      if (sevChanged) {
+        const clean: SeveritiesMap = {};
+        for (const s of types) {
+          const v = severities[s];
+          clean[s] = (typeof v === "number" ? v : 3) as SeverityValue;
+        }
+        patch.severities = clean;
+      }
       const n = notes.trim(); const nn = n.length > 0 ? n : null;
       if (nn !== (log.notes ?? null)) patch.notes = nn;
 
@@ -3885,34 +3949,6 @@ function SymptomEditor({ log, onSaved, onCancel }: {
       </div>
 
       <div>
-        <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:8, textTransform:"uppercase" }}>
-          {t("symptom_severity_label", { value: severity })}
-        </div>
-        <div style={{ display:"flex", gap:6 }}>
-          {[1,2,3,4,5].map(n => (
-            <button
-              key={n}
-              type="button"
-              onClick={() => setSeverity(n)}
-              aria-label={`Severity ${n} of 5`}
-              style={{
-                flex:1, padding:"10px 0", borderRadius:10,
-                background: n === severity ? `${SYMPTOM_ACCENT}22` : "var(--surface-soft)",
-                color: n === severity ? SYMPTOM_ACCENT : "var(--text-body)",
-                border: `1px solid ${n === severity ? `${SYMPTOM_ACCENT}50` : BORDER}`,
-                fontSize:14, fontWeight:700, cursor:"pointer",
-                fontFamily:"var(--font-mono)",
-              }}
-            >{n}</button>
-          ))}
-        </div>
-        <div style={{ display:"flex", justifyContent:"space-between", marginTop:4, fontSize:11, color:"var(--text-faint)" }}>
-          <span>{t("symptom_severity_min")}</span>
-          <span>{t("symptom_severity_max")}</span>
-        </div>
-      </div>
-
-      <div>
         <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:6, textTransform:"uppercase" }}>
           {t("symptom_row_title")}
         </div>
@@ -3937,6 +3973,60 @@ function SymptomEditor({ log, onSaved, onCancel }: {
         </div>
       </div>
 
+      {types.length > 0 && (
+        <div>
+          <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:8, textTransform:"uppercase" }}>
+            {t("symptom_severity_per_chip_label")}
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            {types.map(s => {
+              const v = (severities[s] ?? 3) as SeverityValue;
+              return (
+                <div key={s} style={{
+                  display:"flex", alignItems:"center", gap:10,
+                  background:"var(--surface-soft)", border:`1px solid ${BORDER}`,
+                  borderRadius:10, padding:"8px 10px",
+                }}>
+                  <div style={{
+                    flex:"1 1 auto", minWidth:0,
+                    fontSize:13, fontWeight:600, color:SYMPTOM_ACCENT,
+                    whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis",
+                  }}>
+                    {t(`symptom_${s}` as never)}
+                  </div>
+                  <div role="radiogroup" aria-label={t(`symptom_${s}` as never)} style={{ display:"flex", gap:4 }}>
+                    {[1,2,3,4,5].map(n => {
+                      const on = n === v;
+                      return (
+                        <button
+                          key={n}
+                          type="button"
+                          role="radio"
+                          aria-checked={on}
+                          onClick={() => setSymptomSeverity(s, n as SeverityValue)}
+                          style={{
+                            width:32, height:32, borderRadius:8,
+                            background: on ? `${SYMPTOM_ACCENT}22` : "transparent",
+                            color: on ? SYMPTOM_ACCENT : "var(--text-body)",
+                            border: `1px solid ${on ? `${SYMPTOM_ACCENT}50` : BORDER}`,
+                            fontSize:13, fontWeight:700, cursor:"pointer",
+                            fontFamily:"var(--font-mono)", padding:0,
+                          }}
+                        >{n}</button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ display:"flex", justifyContent:"space-between", marginTop:6, fontSize:11, color:"var(--text-faint)" }}>
+            <span>{t("symptom_severity_min")}</span>
+            <span>{t("symptom_severity_max")}</span>
+          </div>
+        </div>
+      )}
+
       <EditorField label="NOTES" value={notes} onChange={setNotes} placeholder="" multiline/>
 
       {err && <div style={{ fontSize:12, color:PINK }}>{err}</div>}
@@ -3946,7 +4036,7 @@ function SymptomEditor({ log, onSaved, onCancel }: {
           padding:"12px", borderRadius:10, border:`1px solid ${BORDER}`,
           background:"var(--surface-soft)", color:"var(--text-body)",
           fontSize:14, fontWeight:600, cursor:busy?"not-allowed":"pointer",
-        }}>{tCommon("cancel_btn")}</button>
+        }}>{t("cancel_btn")}</button>
         <button onClick={handleSave} disabled={busy} style={{
           padding:"12px", borderRadius:10, border:"none",
           background:SYMPTOM_ACCENT, color:"#fff",

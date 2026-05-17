@@ -13,8 +13,11 @@ import {
   insertSymptomLog,
   SYMPTOM_TYPES,
   PMS_SYMPTOM_TYPES,
+  avgSeverity,
   type SymptomType,
   type SymptomCategory,
+  type SeveritiesMap,
+  type SeverityValue,
 } from "@/lib/symptoms";
 import { hapticSelection, hapticSuccess, hapticError } from "@/lib/haptics";
 import SnapSlider from "@/components/log/SnapSlider";
@@ -422,7 +425,11 @@ export function SymptomForm() {
     if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
   }, []);
   const [selected, setSelected] = useState<Set<SymptomType>>(new Set());
-  const [severity, setSeverity] = useState<number>(3);
+  // Per-symptom severity map. Each selected chip gets its own 1..5
+  // value (default 3 on first toggle-on). When a chip is toggled off
+  // we drop the key so the map mirrors `selected` exactly — that's
+  // what the API/DB constraint expects.
+  const [severities, setSeverities] = useState<SeveritiesMap>({});
   const [occurredAt, setOccurredAt] = useState<string>(() => nowLocalDt());
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
@@ -457,6 +464,7 @@ export function SymptomForm() {
     hapticSelection();
     setCategory(c);
     setSelected(new Set());
+    setSeverities({});
   };
 
   const toggle = (s: SymptomType) => {
@@ -466,9 +474,29 @@ export function SymptomForm() {
       if (next.has(s)) next.delete(s); else next.add(s);
       return next;
     });
+    setSeverities(prev => {
+      const next = { ...prev };
+      if (next[s] != null) {
+        delete next[s];
+      } else {
+        next[s] = 3;
+      }
+      return next;
+    });
   };
 
-  const valid = selected.size > 0 && severity >= 1 && severity <= 5 && !!occurredAt;
+  const setSymptomSeverity = (s: SymptomType, v: SeverityValue) => {
+    hapticSelection();
+    setSeverities(prev => ({ ...prev, [s]: v }));
+  };
+
+  // Every selected chip must have a 1..5 entry. Toggling logic above
+  // keeps the two in sync; this is a defensive belt-and-suspenders
+  // check so a bad state can never reach the API.
+  const severitiesComplete = Array.from(selected).every(
+    s => typeof severities[s] === "number",
+  );
+  const valid = selected.size > 0 && severitiesComplete && !!occurredAt;
 
   async function handleSubmit() {
     if (!valid) return;
@@ -485,9 +513,18 @@ export function SymptomForm() {
       const isNow = Math.abs(Date.now() - new Date(occurredAt).getTime()) <= NOW_WINDOW_MS;
       const cgm = isNow ? await pullCurrentCgm() : null;
       const types = Array.from(selected);
+      // Build a clean severities map containing ONLY the selected
+      // types — even though toggle() keeps them in sync, an extra
+      // pass here makes the payload bulletproof against future state
+      // drift (e.g. if a future feature mutates one without the other).
+      const cleanSeverities: SeveritiesMap = {};
+      for (const tk of types) {
+        const v = severities[tk];
+        cleanSeverities[tk] = (typeof v === "number" ? v : 3) as SeverityValue;
+      }
       await insertSymptomLog({
         symptom_types: types,
-        severity,
+        severities: cleanSeverities,
         occurred_at: occurredIso,
         cgm_glucose_at_log: cgm,
         category,
@@ -501,16 +538,19 @@ export function SymptomForm() {
       const okKey = cgm != null
         ? (isPms ? "symptom_logged_pms_ok_with_cgm" : "symptom_logged_ok_with_cgm")
         : (isPms ? "symptom_logged_pms_ok" : "symptom_logged_ok");
+      // Toast still shows ONE severity number for compactness — use
+      // the rounded mean across all per-symptom values.
+      const avgSev = avgSeverity({ severities: cleanSeverities }) ?? 3;
       setStatus({
         kind: "ok",
         message: cgm != null
-          ? t(okKey, { count: types.length, severity, cgm: Math.round(cgm) })
-          : t(okKey, { count: types.length, severity }),
+          ? t(okKey, { count: types.length, severity: avgSev, cgm: Math.round(cgm) })
+          : t(okKey, { count: types.length, severity: avgSev }),
       });
       setSelected(new Set());
+      setSeverities({});
       setNotes("");
       setOccurredAt(nowLocalDt());
-      setSeverity(3);
       try { window.dispatchEvent(new CustomEvent("glev:symptom-updated")); } catch {}
       // After a successful symptom log, auto-redirect to /entries so
       // the user sees their fresh entry in the timeline (2026-05-17
@@ -616,25 +656,65 @@ export function SymptomForm() {
           </div>
         </div>
 
-        <div>
-          <label style={labelStyle}>{t("symptom_severity_label", { value: severity })}</label>
-          <SnapSlider
-            value={severity}
-            onChange={setSeverity}
-            min={1}
-            max={5}
-            step={1}
-            accent={PURPLE}
-            ariaLabel={t("symptom_severity_label", { value: severity })}
-          />
-          <div style={{
-            display: "flex", justifyContent: "space-between",
-            fontSize: 12, color: "var(--text-faint)", marginTop: 4,
-          }}>
-            <span>{t("symptom_severity_min")}</span>
-            <span>{t("symptom_severity_max")}</span>
+        {selected.size > 0 && (
+          <div>
+            <label style={labelStyle}>{t("symptom_severity_per_chip_label")}</label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {Array.from(selected).map(s => {
+                const v = (severities[s] ?? 3) as SeverityValue;
+                return (
+                  <div key={s} style={{
+                    display: "flex", alignItems: "center", gap: 10,
+                    background: "var(--input-bg)", border: `1px solid ${BORDER}`,
+                    borderRadius: 10, padding: "8px 10px",
+                  }}>
+                    <div style={{
+                      flex: "1 1 auto", minWidth: 0,
+                      fontSize: 13, fontWeight: 600, color: PURPLE,
+                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                    }}>
+                      {t(`symptom_${s}` as never)}
+                    </div>
+                    <div
+                      role="radiogroup"
+                      aria-label={t(`symptom_${s}` as never)}
+                      style={{ display: "flex", gap: 4, flex: "0 0 auto" }}
+                    >
+                      {([1, 2, 3, 4, 5] as const).map(n => {
+                        const on = n === v;
+                        return (
+                          <button
+                            key={n}
+                            type="button"
+                            role="radio"
+                            aria-checked={on}
+                            onClick={() => setSymptomSeverity(s, n)}
+                            style={{
+                              width: 32, height: 32, borderRadius: 8,
+                              background: on ? `${PURPLE}22` : "transparent",
+                              color: on ? PURPLE : "var(--text-muted)",
+                              border: `1px solid ${on ? `${PURPLE}50` : BORDER}`,
+                              fontSize: 13, fontWeight: 700, cursor: "pointer",
+                              fontFamily: "var(--font-mono)",
+                              padding: 0,
+                            }}
+                          >{n}</button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{
+              display: "flex", justifyContent: "space-between",
+              fontSize: 12, color: "var(--text-faint)", marginTop: 6,
+            }}>
+              <span>{t("symptom_severity_min")}</span>
+              <span>{t("symptom_severity_max")}</span>
+            </div>
           </div>
-        </div>
+        )}
 
         <div>
           <label style={labelStyle}>{t("symptom_when_label")}</label>

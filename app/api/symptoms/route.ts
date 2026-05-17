@@ -3,6 +3,7 @@ import { authedClient, isMissingTable } from "../insulin/_helpers";
 import {
   SYMPTOM_TYPES,
   SYMPTOM_CATEGORIES,
+  validateSeverities,
   type SymptomType,
   type SymptomCategory,
 } from "@/lib/symptoms";
@@ -11,7 +12,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const COLS =
-  "id,user_id,created_at,occurred_at,symptom_types,severity,cgm_glucose_at_log,category,notes";
+  "id,user_id,created_at,occurred_at,symptom_types,severities,cgm_glucose_at_log,category,notes";
 
 const VALID_SYMPTOMS: Set<string> = new Set(SYMPTOM_TYPES);
 const VALID_CATEGORIES: Set<string> = new Set(SYMPTOM_CATEGORIES);
@@ -45,7 +46,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ logs: data || [] });
 }
 
-/** POST /api/symptoms — body: { symptom_types[], severity, occurred_at?, notes? } */
+/** POST /api/symptoms — body: { symptom_types[], severities{token:1..5}, occurred_at?, notes? } */
 export async function POST(req: NextRequest) {
   const auth = await authedClient(req);
   if (!auth.user) return NextResponse.json({ error: auth.error }, { status: 401 });
@@ -65,9 +66,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "symptom_types must include at least one valid symptom" }, { status: 400 });
   }
 
-  const sev = Math.round(Number(body.severity));
-  if (!Number.isFinite(sev) || sev < 1 || sev > 5) {
-    return NextResponse.json({ error: "severity must be an integer 1..5" }, { status: 400 });
+  const severities = validateSeverities(uniqTypes, body.severities);
+  if (!severities) {
+    return NextResponse.json(
+      { error: "severities must be an object {symptom: 1..5} covering every symptom_types entry" },
+      { status: 400 },
+    );
   }
 
   const occurredRaw = body.occurred_at;
@@ -115,7 +119,7 @@ export async function POST(req: NextRequest) {
   const row = {
     user_id: auth.user.id,
     symptom_types: uniqTypes,
-    severity: sev,
+    severities,
     occurred_at,
     cgm_glucose_at_log: cgmAtLog,
     category,
