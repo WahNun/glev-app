@@ -282,6 +282,7 @@ function SortableCell({
       ref={setNodeRef}
       style={style}
       data-glev-sortable="1"
+      data-card-id={id}
       {...attributes}
       {...listeners}
       // Keyboard a11y: dnd-kit wires Space/Enter to pick up & arrows to move
