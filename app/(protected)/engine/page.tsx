@@ -2411,13 +2411,22 @@ export default function EnginePage() {
           {stepIndex === 1 && wizardSavedDose !== null && (
             <div style={{
               ...card, padding: 24,
-              // Stretch the post-save confirmation card to fill the
-              // wizard scroll-region's full height on mobile so it
-              // butts up against both the header and nav edges — the
-              // SURFACE-coloured card then visually replaces the
-              // page-bg band the user used to see around it.
-              ...(isMobile ? { flex: 1, minHeight: 0 } : null),
+              // Natural height (NOT flex:1) per 2026-05-17 user
+              // report "wenn ich in diesem screen hier bin gehen die
+              // anderen footer nav elemente irgendwie nicht mehr".
+              // The previous flex:1+minHeight:0 stretch made this
+              // confirmation card claim the entire wizard column —
+              // its bottom edge butted right up against the nav and,
+              // on iOS Capacitor WebView, the resulting overlap layer
+              // intercepted taps that were aimed at the surrounding
+              // Dashboard/Entries/Insights/Settings tabs. Shrinking
+              // the card to fit its content (status banner + New
+              // meal CTA) leaves a clean page-bg gap above the nav so
+              // the tabs are unambiguously the topmost paint there.
             }}>
+              {/* Subtle hint that this is a transient confirmation —
+                  the New meal CTA is the only action; the bottom-nav
+                  is reachable below the card. */}
               <div
                 style={{
                   width: "100%", padding: "14px 18px",
