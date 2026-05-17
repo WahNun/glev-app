@@ -9,6 +9,7 @@ import GlevLogo from "@/components/GlevLogo";
 import AboutGlevModal from "@/components/AboutGlevModal";
 import DashboardQuickAddSheet from "@/components/DashboardQuickAddSheet";
 import { EngineHeaderProvider, useEngineHeader } from "@/lib/engineHeaderContext";
+import { EngineSourceHeaderProvider, useEngineSourceHeader } from "@/lib/engineSourceHeaderContext";
 import { VoiceRecordingProvider, useVoiceRecording } from "@/lib/voiceRecordingContext";
 import {
   ScopeHeaderProvider, useScopeHeader,
@@ -84,11 +85,13 @@ const NAV: NavItem[] = [
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <EngineHeaderProvider>
-      <ScopeHeaderProvider>
-        <VoiceRecordingProvider>
-          <LayoutInner>{children}</LayoutInner>
-        </VoiceRecordingProvider>
-      </ScopeHeaderProvider>
+      <EngineSourceHeaderProvider>
+        <ScopeHeaderProvider>
+          <VoiceRecordingProvider>
+            <LayoutInner>{children}</LayoutInner>
+          </VoiceRecordingProvider>
+        </ScopeHeaderProvider>
+      </EngineSourceHeaderProvider>
     </EngineHeaderProvider>
   );
 }
@@ -119,8 +122,10 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // (QuickAddMenu) so the bottom-nav tap stays a single decisive
   // gesture. The old `glevSheetOpen` state + bottom action sheet
   // were removed in this same change.
-  const engineHdr = useEngineHeader();
-  const scopeHdr  = useScopeHeader();
+  const engineHdr  = useEngineHeader();
+  const scopeHdr   = useScopeHeader();
+  const sourceHdr  = useEngineSourceHeader();
+  const tEngineHdr = useTranslations("engine");
 
   useEffect(() => {
     fetch("/api/debug/state").then(r => r.json()).then(d => console.log("[DEBUG:STATE]", d)).catch(() => {});
@@ -146,6 +151,17 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       scopeHdr.setVisible(false);
     }
   }, [pathname, scopeHdr]);
+
+  // And the engine nutrition-source pill — only ever relevant while
+  // the user is on /engine; clear defensively on every other route
+  // so a leftover Step-2 source doesn't bleed onto Dashboard /
+  // Settings / etc. if Next's streaming defers the engine page's
+  // unmount cleanup.
+  useEffect(() => {
+    if (!pathname.startsWith("/engine")) {
+      sourceHdr.setSource(null);
+    }
+  }, [pathname, sourceHdr]);
 
   // Horizontal swipe-to-switch-tabs disabled (user request 2026-05-17).
   // The Dashboard and Insights screens now own horizontal swipe themselves
@@ -290,6 +306,47 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               setAnchor={scopeHdr.setAnchor}
             />
           )}
+          {/* Engine nutrition-source provenance pill — published by
+              the engine page via EngineSourceHeaderProvider whenever
+              /api/parse-food or /api/chat-macros returns a source.
+              Lives here (next to the brand lockup) instead of inside
+              the Step-2 macros card so the card body keeps the full
+              vertical real estate for macros + glucose + time + CTA
+              on iPhone 13 mini. Palette mirrors the in-card pill it
+              replaced: green = DB, orange = mixed, pink = estimated,
+              red+pulse = unknown (hard warning before dosing). */}
+          {sourceHdr.source && (() => {
+            const palette = sourceHdr.source === "database"
+              ? { bg: "#22D3A015", border: "#22D3A040", color: "#22D3A0" }
+              : sourceHdr.source === "mixed"
+                ? { bg: "#FF950015", border: "#FF950040", color: "#FF9500" }
+                : sourceHdr.source === "estimated"
+                  ? { bg: "#FF2D7815", border: "#FF2D7840", color: "#FF2D78" }
+                  : { bg: "#FF2D2D22", border: "#FF2D2D80", color: "#FF6B6B" };
+            const label = tEngineHdr(`nutrition_source_${sourceHdr.source}`);
+            const tip   = tEngineHdr(`nutrition_source_explain_${sourceHdr.source}`);
+            return (
+              <div
+                title={tip}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  height: 28, padding: "0 10px", borderRadius: 99,
+                  background: palette.bg,
+                  border: `1px solid ${palette.border}`,
+                  color: palette.color,
+                  fontSize: 12, fontWeight: 700, letterSpacing: "0.04em",
+                  flexShrink: 0, whiteSpace: "nowrap",
+                }}
+              >
+                <span style={{
+                  width: 6, height: 6, borderRadius: "50%",
+                  background: palette.color,
+                  boxShadow: `0 0 6px ${palette.color}`,
+                }} aria-hidden="true" />
+                {tEngineHdr("nutrition_source_label")}: {label}
+              </div>
+            );
+          })()}
           {/* Per 2026-05-17 UX revision the header "+" QuickAddMenu and
               the account avatar were removed: the centre bottom-nav
               Glev FAB now hosts the quick-add sheet (single global

@@ -24,6 +24,7 @@ import { InfluenceForm } from "@/components/InfluenceLogForm";
 import GlevLogo from "@/components/GlevLogo";
 import EngineChatPanel, { type SeedMessage } from "@/components/EngineChatPanel";
 import { useEngineHeader } from "@/lib/engineHeaderContext";
+import { useEngineSourceHeader } from "@/lib/engineSourceHeaderContext";
 import { useVoiceRecording } from "@/lib/voiceRecordingContext";
 import { fetchLatestCgm } from "@/components/CgmFetchButton";
 import { classifyPreReferenceTrend, type TrendClass, type TrendSample } from "@/lib/engine/trend";
@@ -515,6 +516,14 @@ export default function EnginePage() {
   const engineHdr = useEngineHeader();
   const tabsExpanded    = engineHdr.tabsExpanded;
   const setTabsExpanded = engineHdr.setTabsExpanded;
+  // Source/provenance pill now lives in the global mobile app header
+  // (oben rechts neben dem Glev-Lockup) instead of stealing a row at
+  // the top of the Step-2 macros card — User-Wunsch 2026-05-17 "der
+  // source estimated chip kann in den header wandern so sparen wir
+  // platz". The page publishes the current `nutritionSource` here and
+  // clears it on unmount + on `handleNewMeal` so other routes don't
+  // inherit a stale pill.
+  const sourceHdr = useEngineSourceHeader();
   // FIX C: Tab strip is collapsed by default to give Step 1's voice/text
   // input the full vertical real estate. The chevron control itself now
   // lives in the global mobile app header (see Layout.tsx); this page
@@ -541,6 +550,20 @@ export default function EnginePage() {
   // the macro fields on every new-meal flow.
   const [nutritionSource, setNutritionSource] =
     useState<"database" | "mixed" | "estimated" | "unknown" | null>(null);
+  // Mirror nutritionSource into the global app-header context so the
+  // provenance pill renders next to the brand lockup on mobile (see
+  // Layout.tsx). Clearing on unmount prevents the pill from sticking
+  // around when the user navigates to another route mid-flow.
+  useEffect(() => {
+    sourceHdr.setSource(nutritionSource);
+    // Depend on the stable setter only — the provider value object is
+    // freshly allocated each render, so depending on `sourceHdr` itself
+    // would re-run this effect every render with the same value.
+  }, [nutritionSource, sourceHdr.setSource]);
+  useEffect(() => {
+    return () => { sourceHdr.setSource(null); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Per-item nutrition breakdown from the two-stage pipeline
   // (lib/nutrition/aggregate). Captured from /api/parse-food and
   // /api/chat-macros so the saved meal preserves PER-ITEM provenance
@@ -2411,57 +2434,11 @@ export default function EnginePage() {
                   + Time + 3 action buttons) on one mobile screen. */}
 
               {/* Macros block — eyebrow "MAKROS" label removed; the
-                  source badge alone provides the section context and
-                  the four ring cards self-explain. */}
+                  source badge has moved to the global mobile app
+                  header (Layout.tsx → EngineSourceHeaderProvider)
+                  to reclaim ~30 px at the top of the card. The four
+                  ring cards self-explain the section. */}
               <div style={{ marginBottom: 14 }}>
-                {nutritionSource && (
-                <div style={{
-                  display: "flex", alignItems: "center", justifyContent: "flex-end",
-                  gap: 8, marginBottom: 10,
-                }}>
-                  {/* Provenance badge: shows whether the macros came from
-                      the verified Open Food Facts + USDA databases (green),
-                      a mix of DB + AI estimates (orange), or pure AI
-                      estimation (pink). Red+pulse for 'unknown' when the
-                      pipeline couldn't price even one ingredient — user
-                      must see a hard warning before dosing. Outer
-                      conditional above (`{nutritionSource && (`) drops the
-                      whole row when no source recorded (manual-entry-only
-                      path) so we don't leave a blank header strip. */}
-                  {(() => {
-                    const palette = nutritionSource === "database"
-                      ? { bg: "#22D3A015", border: "#22D3A040", color: "#22D3A0" }
-                      : nutritionSource === "mixed"
-                        ? { bg: "#FF950015", border: "#FF950040", color: "#FF9500" }
-                        : nutritionSource === "estimated"
-                          ? { bg: "#FF2D7815", border: "#FF2D7840", color: "#FF2D78" }
-                          : { bg: "#FF2D2D22", border: "#FF2D2D80", color: "#FF6B6B" };
-                    const label = tEngine(`nutrition_source_${nutritionSource}`);
-                    const tip   = tEngine(`nutrition_source_explain_${nutritionSource}`);
-                    return (
-                      <div
-                        title={tip}
-                        style={{
-                          display: "inline-flex", alignItems: "center", gap: 6,
-                          padding: "4px 10px", borderRadius: 99,
-                          background: palette.bg,
-                          border: `1px solid ${palette.border}`,
-                          color: palette.color,
-                          fontSize: 12, fontWeight: 700, letterSpacing: "0.06em",
-                          flexShrink: 0,
-                        }}
-                      >
-                        <span style={{
-                          width: 6, height: 6, borderRadius: "50%",
-                          background: palette.color,
-                          boxShadow: `0 0 6px ${palette.color}`,
-                        }}/>
-                        {tEngine("nutrition_source_label")}: {label}
-                      </div>
-                    );
-                  })()}
-                </div>
-                )}
                 {/* Macros as tap-able ring cards mirroring the dashboard's
                     "TODAY'S MACROS" section. Tap a card → its 0.5 g slider
                     folds out underneath (0.5 step in every unit, g / BE / KE).
