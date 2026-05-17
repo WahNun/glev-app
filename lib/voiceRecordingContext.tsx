@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, useRef, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useRef, useEffect, type ReactNode } from "react";
 
 /**
  * Cross-screen bridge for the Engine voice-recording flow.
@@ -57,6 +57,46 @@ export function VoiceRecordingProvider({ children }: { children: ReactNode }) {
   const markSpoken = useCallback(() => {
     setHasSpoken(true);
   }, []);
+
+  // Tap-anywhere-to-stop (user request 2026-05-17 "man sollte
+  // sprachaufnahme durch tippen auf bildschirm egal wo beenden
+  // können"): while recording is active, the FIRST pointerdown
+  // anywhere in the document calls the registered stop handler.
+  // - We attach the listener AFTER a 250 ms grace window so the
+  //   same tap that just started the recording (FAB short-press,
+  //   or quick-add Voice path → engine page auto-start) can't
+  //   immediately re-fire and stop it. 250 ms also covers the
+  //   first onstart resolution + setRecording(true) flush.
+  // - Listener uses `capture: true` so it runs even if a child
+  //   element calls stopPropagation on pointerdown.
+  // - We DON'T call preventDefault — the underlying tap (e.g. a
+  //   tab nav, a button) still does its thing. Stop-recording is
+  //   the side-effect; the user's primary intent is preserved.
+  // - We SKIP events originating from the bottom-nav Glev FAB
+  //   (data-glev-fab="true"). The FAB owns its own stop gesture
+  //   (onShortPress checks `recording` and calls requestStop());
+  //   if we also fired on the FAB's pointerdown the gesture would
+  //   stop-then-restart on the same tap (capture-phase stop fires
+  //   first, then FAB's onPointerUp sees recording=false and runs
+  //   onShortPress as a fresh "start voice" action).
+  useEffect(() => {
+    if (!recording) return;
+    let armed = false;
+    const armTimer = window.setTimeout(() => { armed = true; }, 250);
+    const onDown = (e: PointerEvent) => {
+      if (!armed) return;
+      const target = e.target as Element | null;
+      if (target && typeof target.closest === "function" && target.closest('[data-glev-fab="true"]')) {
+        return;
+      }
+      stopRef.current?.();
+    };
+    document.addEventListener("pointerdown", onDown, true);
+    return () => {
+      window.clearTimeout(armTimer);
+      document.removeEventListener("pointerdown", onDown, true);
+    };
+  }, [recording]);
 
   return (
     <Ctx.Provider value={{

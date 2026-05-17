@@ -2305,6 +2305,11 @@ export default function EnginePage() {
               // pills and safe-area-bottom. Desktop keeps natural
               // height since the chat lives in a sticky right sidebar
               // instead.
+              // Position relative so the Step 1 chat panel isn't a
+              // back-button anchor (Step 1 has no back action), but
+              // Steps 2 & 3 reuse the same outer column class so the
+              // anchor doesn't hurt them either.
+              position: "relative",
               minHeight: isMobile
                 ? "calc(100svh - 180px - env(safe-area-inset-top, 0px))"
                 : undefined,
@@ -2453,17 +2458,47 @@ export default function EnginePage() {
               // SURFACE-coloured card runs flush from below the
               // header to the nav top border. The card's interactive
               // rows (Macros / Glucose / Time / Save) cluster at the
-              // top, so the FAB's ~26 px protrusion above the nav
+              // top, so the FAB's ~30 px protrusion above the nav
               // hovers harmlessly over the empty bottom area of the
-              // stretched card. paddingBottom bumped (18 → 80) so
-              // even when the form is fully expanded the Save CTA
-              // never sits directly under the FAB.
-              ...(isMobile ? { flex: 1, minHeight: 0, paddingBottom: 80 } : null),
+              // stretched card. paddingBottom bumped (80 → 104) after
+              // the FAB grew 52 → 60 (user request 2026-05-17 "die
+              // karte sollte nicht mit dem glev button überlappen").
+              position: "relative",
+              ...(isMobile ? { flex: 1, minHeight: 0, paddingBottom: 104 } : null),
             }}>
+              {/* Back chevron — top-left of the card per user request
+                  2026-05-17 ("der back button sollte oben links in der
+                  karte sein"). Replaces the bottom "Zurück" row that
+                  used to live below the action stack. Absolute so it
+                  sits flush in the corner without pushing the card
+                  layout around. */}
+              <button
+                type="button"
+                onClick={() => setStepIndex(0)}
+                disabled={confirming || running}
+                aria-label={tEngine("btn_back")}
+                title={tEngine("btn_back")}
+                style={{
+                  position: "absolute", top: 10, left: 10, zIndex: 2,
+                  width: 36, height: 36, borderRadius: 18,
+                  border: "none", background: "transparent",
+                  color: "var(--text-dim)",
+                  cursor: confirming || running ? "not-allowed" : "pointer",
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  WebkitTapHighlightColor: "transparent",
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="15 18 9 12 15 6"/>
+                </svg>
+              </button>
               {/* Step-2 page title removed — the wizard step pill at the
                   top ("2 Makros") already names the screen. Dropping it
                   reclaims ~50px and keeps everything (Macros + Glucose
-                  + Time + 3 action buttons) on one mobile screen. */}
+                  + Time + 3 action buttons) on one mobile screen.
+                  The back chevron above takes only ~36 px in the upper-
+                  left corner — it overlays the empty space left of the
+                  first macro card, so the layout flow is unchanged. */}
 
               {/* Macros block — eyebrow "MAKROS" label removed; the
                   source badge has moved to the global mobile app
@@ -2737,26 +2772,41 @@ export default function EnginePage() {
                   </div>
                 )}
 
-                {/* BACK ───────────────────────────────────────────── */}
-                <button
-                  onClick={() => setStepIndex(0)}
-                  disabled={running || confirming}
-                  style={{
-                    width: "100%", height: 36, borderRadius: 8,
-                    border: "none", background: "transparent",
-                    color: "var(--text-faint)", fontSize: 14, fontWeight: 500,
-                    cursor: running || confirming ? "not-allowed" : "pointer",
-                  }}
-                >
-                  {tEngine("btn_back")}
-                </button>
+                {/* Bottom "Zurück" row removed 2026-05-17 — the back
+                    action is now the chevron at the top-left of this
+                    card (see absolutely-positioned button at the start
+                    of this card body). */}
               </div>
             </div>
           )}
 
           {/* ───────── STEP 3: Deine Empfehlung ───────── */}
           {stepIndex === 2 && (
-            <div>
+            <div style={{ position: "relative" }}>
+              {/* Back chevron — same top-left placement as Step 2.
+                  Lands the user back on the macros card so they can
+                  tweak inputs and re-run the bolus calc. */}
+              <button
+                type="button"
+                onClick={() => setStepIndex(1)}
+                disabled={confirming}
+                aria-label={tEngine("btn_back")}
+                title={tEngine("btn_back")}
+                style={{
+                  position: "absolute", top: 0, left: 0, zIndex: 2,
+                  width: 36, height: 36, borderRadius: 18,
+                  border: "none", background: "transparent",
+                  color: "var(--text-dim)",
+                  cursor: confirming ? "not-allowed" : "pointer",
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  WebkitTapHighlightColor: "transparent",
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="15 18 9 12 15 6"/>
+                </svg>
+              </button>
+              <div style={{ height: 8 }} />
               <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 16, color:"var(--text)" }}>
                 {tEngine("step_title_result")}
               </h2>
@@ -2899,18 +2949,9 @@ export default function EnginePage() {
                       >
                         {confirming ? tEngine("btn_saving") : tEngine("btn_confirm_save")}
                       </button>
-                      <button
-                        onClick={() => setStepIndex(1)}
-                        disabled={confirming}
-                        style={{
-                          width: "100%", height: 36, borderRadius: 8,
-                          border: "none", background: "transparent",
-                          color: "var(--text-faint)", fontSize: 14, fontWeight: 500,
-                          cursor: confirming ? "not-allowed" : "pointer",
-                        }}
-                      >
-                        {tEngine("btn_adjust_again")}
-                      </button>
+                      {/* "Nochmal anpassen" bottom-row removed
+                          2026-05-17 — back-nav is now the chevron at
+                          the top-left of the Step 3 card. */}
                     </>
                   ) : (
                     <>

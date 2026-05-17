@@ -647,6 +647,7 @@ function MobileGlevFab({
       onPointerCancel={handlePointerCancel}
       onPointerLeave={handlePointerCancel}
       onClick={handleClick}
+      data-glev-fab="true"
       aria-haspopup="dialog"
       aria-expanded={active}
       aria-label={recording ? `${label} — Aufnahme beenden` : label}
@@ -700,11 +701,12 @@ function MobileGlevFab({
             // (22×22) is centred in that with the 4px gap + 12px label
             // below, so its centre sits ~20px below the nav top edge.
             // Lifting by 20 puts the circle centre exactly on that
-            // edge regardless of circle size. Per 2026-05-17 user
-            // request "genau zur Hälfte überlappt die Kante".
+            // edge regardless of circle size — including the 2026-05-17
+            // round-2 bump from 52 → 60 px (~+15% diameter per user
+            // request "der glev button kann nochmal 15% größer werden").
             transform: "translate(-50%, calc(-50% - 20px))",
             display: "inline-flex", alignItems: "center", justifyContent: "center",
-            width: 52, height: 52, borderRadius: "50%",
+            width: 60, height: 60, borderRadius: "50%",
             // Always paint a solid SURFACE base so the nav's top
             // hair-line border (drawn on the parent <nav>) NEVER
             // bleeds through the bubble. Previously the recording
@@ -725,7 +727,7 @@ function MobileGlevFab({
             animation: recording ? "glevMicPulse 1.4s ease-in-out infinite" : undefined,
           }}
         >
-          <GlevLogo size={26} color={ACCENT} bg="transparent" />
+          <GlevLogo size={30} color={ACCENT} bg="transparent" />
         </span>
       </span>
       <span
