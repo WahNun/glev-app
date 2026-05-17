@@ -18,6 +18,7 @@ import CurrentDayGlucoseCard from "@/components/CurrentDayGlucoseCard";
 import GlucoseTrendFront from "@/components/GlucoseTrendChart";
 import MacroRing from "@/components/MacroRing";
 import SkeletonBlock from "@/components/SkeletonBlock";
+import GlevLogo from "@/components/GlevLogo";
 import { hapticSelection } from "@/lib/haptics";
 import { parseDbDate, parseDbTs, localeToBcp47 } from "@/lib/time";
 import { useLocale, useTranslations } from "next-intl";
@@ -586,20 +587,27 @@ export default function DashboardPage() {
              solid-accent circle so it reads as a primary action. The
              control cluster keeps its place; the button just stops
              taking layout space, freeing those ~50px for the score. */
+          /* Floating Glev-mark bubble on phones: centered horizontally
+             above the bottom nav (56px nav + safe-area inset). Visual
+             language matches the Engine "Speak" button — dark surface,
+             accent ring + soft accent halo — just round and icon-only. */
           .glev-quickadd-cta {
             position: fixed !important;
-            right: 16px !important;
+            left: 50% !important;
+            transform: translateX(-50%) !important;
+            right: auto !important;
             bottom: calc(env(safe-area-inset-bottom, 0px) + 72px) !important;
             width: 56px !important;
             height: 56px !important;
             margin-top: 0 !important;
             border-radius: 50% !important;
-            background: #4F6EF7 !important;
-            border: 1px solid rgba(255,255,255,0.12) !important;
-            box-shadow: 0 10px 28px rgba(0,0,0,0.45), 0 0 0 1px rgba(79,110,247,0.35) !important;
+            background: var(--surface) !important;
+            border: 1px solid rgba(79,110,247,0.55) !important;
+            box-shadow:
+              0 0 0 1px rgba(79,110,247,0.22),
+              0 10px 28px rgba(0,0,0,0.45) !important;
             z-index: 60 !important;
           }
-          .glev-quickadd-cta svg line { stroke: #fff !important; }
           .glev-control-front  { padding: 12px 16px 14px !important; }
           .glev-control-front .glev-control-header { margin-bottom: 8px !important; }
           .glev-macros-front   { padding: 12px 16px 10px !important; }
@@ -817,20 +825,30 @@ function DashboardQuickAddCTA({
         width: "100%",
         height: 48,
         borderRadius: 14,
-        background: `${ACCENT}14`,
-        border: `1px solid ${ACCENT}40`,
-        color: ACCENT,
+        background: SURFACE,
+        border: `1px solid ${ACCENT}55`,
+        color: "var(--text)",
         cursor: "pointer",
-        display: "flex",
+        display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
-        transition: "background 160ms ease, border-color 160ms ease",
+        boxShadow: `0 0 0 1px ${ACCENT}22`,
+        transition: "background 160ms ease, border-color 160ms ease, box-shadow 160ms ease",
+        WebkitTapHighlightColor: "transparent",
       }}
     >
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2.5" strokeLinecap="round" aria-hidden>
-        <line x1="12" y1="5" x2="12" y2="19" />
-        <line x1="5" y1="12" x2="19" y2="12" />
-      </svg>
+      {/* Glev brand mark — same component the Engine "Speak" button uses,
+          rendered in ACCENT on the dark surface so the bubble reads as a
+          Glev action. Drop-shadow glow mirrors the Speak button. */}
+      <span
+        aria-hidden="true"
+        style={{
+          display: "inline-flex",
+          filter: `drop-shadow(0 0 4px ${ACCENT}55)`,
+        }}
+      >
+        <GlevLogo size={26} color={ACCENT} bg="transparent" />
+      </span>
     </button>
   );
 }
