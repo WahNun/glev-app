@@ -104,6 +104,13 @@ export interface SaveMealInput {
  *   FAST_CARBS    → carbs >= 45g  AND  (sugars/carbs > 0.5  OR  fiber < 5g)
  *                   (sugar-dominant carb load OR low-fiber carb load:
  *                   bread, rice, juice, candy, fruit)
+ *                 OR (pure-sugar snack): carbs > 0  AND  fat < 3g  AND
+ *                   protein < 3g — catches kleine Snacks aus quasi reinem
+ *                   Zucker (Gummibärchen, Traubenzucker, halbes Glas Saft,
+ *                   ein Bonbon, ein Apfel) unabhängig von der absoluten KH-
+ *                   Menge. Physiologisch ein klassischer Fast-Carb-Spike;
+ *                   ohne diese Regel landet ein 11g-Gummibärchen-Eintrag
+ *                   irreführend in BALANCED (User-Bug 2026-05-16).
  *   HIGH_FAT      → fat_kcal / total_kcal > 0.45
  *                   (fat dominates the energy mix: pizza, fried, cheese,
  *                   nuts, avocado, cream — drives the delayed-rise pizza
@@ -137,6 +144,11 @@ export function classifyMeal(
 ): string {
   const sugarShare = sugars != null && carbs > 0 ? sugars / carbs : null;
   if (carbs >= 45 && ((sugarShare != null && sugarShare > 0.5) || fiber < 5)) return "FAST_CARBS";
+  // Pure-sugar snack: jegliche KH-Menge mit nahezu null Fett & Protein —
+  // Gummibärchen, Traubenzucker, halbes Glas Saft, Bonbon, Apfel.
+  // Bewusst VOR den Macro-Tests, weil ein 11g-Gummibärchen-Snack sonst
+  // in BALANCED rutscht (kein dominantes Macro, Carbs unter 45g-Floor).
+  if (carbs > 0 && fat < 3 && protein < 3) return "FAST_CARBS";
   const totalKcal = computeCalories(carbs, protein, fat);
   if (totalKcal > 0 && (fat * 9) / totalKcal > 0.45) return "HIGH_FAT";
   // (a) Sonderfall reines Protein: wenn carbs + fat praktisch nicht

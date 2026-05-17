@@ -74,6 +74,48 @@ test("classifyMeal: zero carbs with sugars=0 → sugarShare null, never FAST_CAR
 });
 
 /* ──────────────────────────────────────────────────────────────────
+   FAST_CARBS — pure-sugar snack rule (Task #312).
+   `carbs > 0 && fat < 3 && protein < 3` — fires regardless of the
+   45g floor. Catches Gummibärchen, Traubenzucker, ein halbes Glas
+   Saft, ein Bonbon, ein Apfel.
+   ────────────────────────────────────────────────────────────────── */
+
+test("classifyMeal: 14g Gummibärchen-Snack (11c/1p/0f) → FAST_CARBS via pure-sugar rule", () => {
+  // Der konkrete User-Bug vom 16.05.2026: vor der pure-sugar-Regel
+  // landete dieser Eintrag in BALANCED, obwohl er physiologisch ein
+  // klassischer Fast-Carb-Spike ist.
+  expect(classifyMeal(11, 1, 0, 0)).toBe("FAST_CARBS");
+});
+
+test("classifyMeal: Traubenzucker-Würfel (4c/0p/0f) → FAST_CARBS", () => {
+  expect(classifyMeal(4, 0, 0, 0)).toBe("FAST_CARBS");
+});
+
+test("classifyMeal: ganzer Apfel (15c/0p/0f/3 fiber) → FAST_CARBS via pure-sugar rule", () => {
+  // Apfel hat zu wenig Carbs für den 45g-Floor, aber als reiner
+  // Fruchtzucker-Snack triggert die neue Regel.
+  expect(classifyMeal(15, 0, 0, 3)).toBe("FAST_CARBS");
+});
+
+test("classifyMeal: kleine Käse-Portion mit etwas KH (3c/8p/12f) → NOT FAST_CARBS", () => {
+  // Counter-example: Fett > 3g, also greift die pure-sugar-Regel
+  // nicht. Fat dominiert die Kalorien (108/152≈0.71) → HIGH_FAT.
+  expect(classifyMeal(3, 8, 12, 0)).toBe("HIGH_FAT");
+});
+
+test("classifyMeal: Joghurt-Snack mit etwas Protein (10c/5p/2f) → NOT FAST_CARBS", () => {
+  // Counter-example: Protein 5g >= 3g, also greift pure-sugar nicht.
+  // Kein dominantes Macro → BALANCED.
+  expect(classifyMeal(10, 5, 2, 0)).toBe("BALANCED");
+});
+
+test("classifyMeal: zero carbs even with no fat/protein → BALANCED (pure-sugar needs carbs>0)", () => {
+  // Sanity: die pure-sugar-Regel verlangt carbs>0; ohne KH gibt es
+  // nichts zu „spiken".
+  expect(classifyMeal(0, 0, 0, 0)).toBe("BALANCED");
+});
+
+/* ──────────────────────────────────────────────────────────────────
    HIGH_FAT — `fat_kcal / total_kcal > 0.45`.
    Checked AFTER FAST_CARBS, BEFORE HIGH_PROTEIN.
    ────────────────────────────────────────────────────────────────── */

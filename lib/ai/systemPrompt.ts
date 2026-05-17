@@ -18,6 +18,7 @@ populated and stay in sync with the items array.
 
 Classify whole meal (rules checked in order — first match wins, MUST mirror lib/meals.ts classifyMeal exactly):
   FAST_CARBS    -> carbs>=45g && (sugars/carbs>0.5 || fiber<5g): bread, rice, pasta, juice, candy, gummies, fruit, sweets
+                   OR pure-sugar snack: carbs>0 && fat<3g && protein<3g (gummies, dextrose, half a glass of juice, a candy, an apple) — fires regardless of absolute carb amount
   HIGH_FAT      -> fat_kcal/total_kcal>0.45: pizza, fried, cheese-heavy, nuts, avocado, butter, oil, cream
   HIGH_PROTEIN  -> EITHER pure protein (carbs<5g && fat<5g && protein>0: whey shake, protein powder in water, plain chicken breast) OR (protein>carbs && protein>fat && protein>=20g): steak, chicken, fish, eggs, legumes, dairy, shakes
   BALANCED      -> otherwise (no dominant macro). The legacy HIGH_FIBER bucket has been removed; high-fiber meals fall through to BALANCED.
