@@ -2938,6 +2938,23 @@ function InsightsSwipePager({
   const [active, setActive] = useState(0);
   const scrollerRef = React.useRef<HTMLDivElement | null>(null);
   const rafRef = React.useRef<number | null>(null);
+  // Per-card natural-height map (filled by ResizeObserver below). Used
+  // to size the focus pager so the active card fits without inner
+  // scroll — small cards get bumped up to MIN_CARD_H, FlipCard backs
+  // grow the slot organically when expanded.
+  const itemRefs = React.useRef<Array<HTMLDivElement | null>>([]);
+  const [heights, setHeights] = useState<Record<number, number>>({});
+
+  // Sizing budget for the adaptive focus pager. The active card's
+  // measured height (plus slot padding) drives the scroller height,
+  // clamped between MIN_CARD_H (so a tiny KPI tile still feels like
+  // the page's focal point) and a soft upper bound that keeps the
+  // context box visible without page-level scroll. When a FlipCard
+  // back is expanded beyond the soft bound, the scroller is allowed
+  // to grow past it and the page itself starts scrolling — the user
+  // explicitly asked that expanded backs never scroll inside the card.
+  const MIN_CARD_H = 320;
+  const SLOT_PAD_V = 12; // 6px top + 6px bottom on each slot
 
   // Empty-state guard. Suppress dots/position counters and render a
   // dedicated card-shaped placeholder instead of "1 of 0".
@@ -2945,8 +2962,7 @@ function InsightsSwipePager({
     return (
       <div
         style={{
-          height: "calc(100dvh - 230px)",
-          minHeight: 520,
+          minHeight: "calc(100dvh - 230px)",
           display: "flex",
           flexDirection: "column",
           gap: 10,
@@ -3035,6 +3051,50 @@ function InsightsSwipePager({
     if (active >= items.length && items.length > 0) setActive(items.length - 1);
   }, [active, items.length]);
 
+  // Measure each card's natural height. Re-measures automatically when
+  // a FlipCard expands its back (FlipCard renders a hidden ghost in
+  // normal flow that drives parent height) or when underlying data
+  // refreshes. The map key is the slot index; we keep stale entries
+  // around so swiping between already-measured cards is jank-free.
+  React.useLayoutEffect(() => {
+    if (typeof ResizeObserver === "undefined") return;
+    const observers: ResizeObserver[] = [];
+    itemRefs.current.slice(0, items.length).forEach((el, idx) => {
+      if (!el) return;
+      const ro = new ResizeObserver((entries) => {
+        for (const e of entries) {
+          const h = Math.ceil(e.contentRect.height);
+          if (h <= 0) continue;
+          setHeights((prev) => (prev[idx] === h ? prev : { ...prev, [idx]: h }));
+        }
+      });
+      ro.observe(el);
+      observers.push(ro);
+    });
+    return () => observers.forEach((o) => o.disconnect());
+  }, [items.length]);
+
+  // Drop measurements for indices that no longer exist (item count
+  // shrinks, e.g. workout-patterns card disappears). Keeps the state
+  // map from growing unbounded across renders.
+  useEffect(() => {
+    setHeights((prev) => {
+      const next: Record<number, number> = {};
+      for (const k of Object.keys(prev)) {
+        const i = Number(k);
+        if (i < items.length) next[i] = prev[i];
+      }
+      return next;
+    });
+  }, [items.length]);
+
+  // Pager height for the active card. Until a measurement lands we
+  // default to MIN_CARD_H so the layout doesn't jump up from 0.
+  const activeMeasured = heights[active];
+  const pagerHeight = activeMeasured != null
+    ? Math.max(MIN_CARD_H, activeMeasured + SLOT_PAD_V)
+    : MIN_CARD_H;
+
   // Translation helper — returns localized title/body for a given card
   // id, falling back to a generic "swipe to learn more" copy when the
   // id isn't in the catalogue (e.g. a future card added before its
@@ -3054,15 +3114,15 @@ function InsightsSwipePager({
   };
   const activeCtx = ctxFor(items[active]?.id);
 
-  // Fixed-viewport wrapper: the outer page no longer scrolls. The
-  // height calc subtracts the mobile header (76 px) + bottom nav
-  // (110 px) + a small breathing buffer; on desktop the same calc
-  // leaves a comfortable working area inside the sidebar layout.
+  // Adaptive wrapper: the surface tries to fit within one viewport
+  // (~`100dvh - 230px` for header+nav+buffer) but grows beyond it
+  // when a card is taller than the budget — e.g. an expanded FlipCard
+  // back. Page-level scrolling kicks in only in that overflow case;
+  // the *inside* of a card never scrolls, per user request.
   return (
     <div
       style={{
-        height: "calc(100dvh - 230px)",
-        minHeight: 520,
+        minHeight: "calc(100dvh - 230px)",
         display: "flex",
         flexDirection: "column",
         gap: 10,
@@ -3070,23 +3130,26 @@ function InsightsSwipePager({
         touchAction: "pan-x pan-y",
       }}
     >
-      {/* Focus pager — horizontal snap scroll. */}
-      <div style={{ flex: "0 1 58%", minHeight: 220, position: "relative", display: "flex", flexDirection: "column" }}>
+      {/* Focus pager — horizontal snap scroll. Height is driven by the
+          active card's measured natural height (clamped to a minimum so
+          tiny KPI cards still feel like the focal point), not a fixed
+          flex ratio. */}
+      <div style={{ position: "relative", display: "flex", flexDirection: "column" }}>
         <div
           ref={scrollerRef}
           onScroll={onScroll}
           style={{
-            flex: 1,
-            minHeight: 0,
+            height: pagerHeight,
             display: "flex",
             overflowX: "auto",
             overflowY: "hidden",
             scrollSnapType: "x mandatory",
             overscrollBehaviorX: "contain",
             WebkitOverflowScrolling: "touch",
+            transition: "height 220ms ease",
           }}
         >
-          {items.map((it) => (
+          {items.map((it, idx) => (
             <div
               key={it.id}
               style={{
@@ -3098,11 +3161,15 @@ function InsightsSwipePager({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                overflowY: "auto",
-                overflowX: "hidden",
+                overflow: "hidden",
               }}
             >
-              <div style={{ width: "100%" }}>{it.node}</div>
+              <div
+                ref={(el) => { itemRefs.current[idx] = el; }}
+                style={{ width: "100%" }}
+              >
+                {it.node}
+              </div>
             </div>
           ))}
         </div>
@@ -3149,18 +3216,17 @@ function InsightsSwipePager({
         </div>
       </div>
 
-      {/* Context zone — reacts to the active card. Inner-scrolls if
-          long; the outer screen height stays stable. */}
+      {/* Context zone — reacts to the active card. Grows with its own
+          content; takes whatever vertical space is left after the
+          focus pager. No inner scroll. */}
       <div
         style={{
-          flex: "1 1 42%",
-          minHeight: 160,
+          flex: "1 1 auto",
+          minHeight: 180,
           background: "var(--surface)",
           border: "1px solid var(--border-soft)",
           borderRadius: 16,
           padding: "16px 18px",
-          overflowY: "auto",
-          overscrollBehavior: "contain",
           display: "flex",
           flexDirection: "column",
           gap: 8,
