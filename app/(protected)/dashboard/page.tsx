@@ -135,6 +135,53 @@ function buildCards(meals: Meal[], t: DashT): CardData[] {
   ];
 }
 
+/**
+ * Compact 3-up row showing the Good / Spike / Hypo rate cards as a
+ * single horizontal triplet — the layout the user requested back on
+ * the dashboard (screenshot 2026-05-17). Replaces the previous
+ * per-card horizontal pager so all three rates are visible at once
+ * without swiping. Colour tokens stay aligned with the FlipCard
+ * backs and the Outcome distribution (GREEN/ORANGE/PINK).
+ */
+function RateTripletCard({ cards }: { cards: CardData[] }) {
+  return (
+    <div
+      className="glev-stat-card"
+      style={{
+        background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 14,
+        padding: 10, boxSizing: "border-box",
+        display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8,
+      }}
+    >
+      {cards.map(c => (
+        <div key={c.key} style={{
+          background: "var(--surface-soft)", border: `1px solid ${BORDER}`,
+          borderRadius: 12, padding: "12px 12px 10px", boxSizing: "border-box",
+          display: "flex", flexDirection: "column", gap: 6, minWidth: 0,
+        }}>
+          <div style={{
+            fontSize: 10, color: "var(--text-dim)", letterSpacing: "0.08em",
+            fontWeight: 700, textTransform: "uppercase", lineHeight: 1.2,
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>{c.label}</div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 2 }}>
+            <span style={{
+              fontSize: 30, fontWeight: 800, color: c.color,
+              letterSpacing: "-0.02em", lineHeight: 1,
+              fontFamily: "var(--font-mono)",
+            }}>{c.value}</span>
+            <span style={{ fontSize: 12, color: "var(--text-faint)" }}>{c.unit}</span>
+          </div>
+          <div style={{
+            fontSize: 11, color: "var(--text-faint)", lineHeight: 1.25,
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>{c.sub}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function FlipCard({ card }: { card: CardData }) {
   const [flipped, setFlipped] = useState(false);
   const t = useTranslations("dashboard");
@@ -546,10 +593,11 @@ export default function DashboardPage() {
       title: t("cluster_control"),
       cards: [
         { id: "control-score", node: <ControlScoreCard meals={meals}/> },
-        // rateCards = buildCards(...) minus the "control" entry, so
-        // this expands to Good → Spike → Hypo rate cards as the
-        // breakdown trailing the headline Control Score above.
-        ...rateCards.map<ClusterCard>(c => ({ id: c.key, node: <FlipCard card={c}/> })),
+        // rateCards = buildCards(...) minus the "control" entry —
+        // shown as a single compact 3-up triplet (Good / Spike / Hypo)
+        // so the breakdown is glanceable beneath the headline Control
+        // Score without forcing the user to swipe one card at a time.
+        { id: "rate-triplet", node: <RateTripletCard cards={rateCards}/> },
       ],
     },
     {

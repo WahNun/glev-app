@@ -1514,6 +1514,8 @@
     "search_placeholder": "Einträge suchen…",
     "row_when": "Wann",
     "row_type": "Typ",
+    "row_severity": "Schweregrad",
+    "row_symptoms": "Symptome",
     "row_carbs": "KH",
     "row_insulin": "Insulin",
     "row_dose": "Dosis",

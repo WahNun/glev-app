@@ -1506,6 +1506,8 @@
     "search_placeholder": "Search entries…",
     "row_when": "When",
     "row_type": "Type",
+    "row_severity": "Severity",
+    "row_symptoms": "Symptoms",
     "row_carbs": "Carbs",
     "row_insulin": "Insulin",
     "row_dose": "Dose",

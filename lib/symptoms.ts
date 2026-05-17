@@ -175,3 +175,73 @@ export async function deleteSymptomLog(id: string): Promise<void> {
   const { error } = await supabase.from("symptom_logs").delete().eq("id", id);
   if (error) throw new Error(error.message);
 }
+
+/**
+ * Update an existing symptom log. Only the user-facing fields are
+ * exposed (types, severity, occurred_at, notes, category) — server-
+ * side / snapshot columns like `cgm_glucose_at_log` are intentionally
+ * not editable so we never falsify a past CGM reading.
+ *
+ * The caller is expected to pass a sparse `patch` containing only the
+ * fields that actually changed; we validate the same way `insert*`
+ * does so a bad payload never reaches the DB.
+ */
+export interface SymptomLogPatch {
+  symptom_types?: SymptomType[];
+  severity?: number;          // 1..5
+  occurred_at?: string;
+  notes?: string | null;
+  category?: SymptomCategory;
+}
+
+export async function updateSymptomLog(
+  id: string,
+  patch: SymptomLogPatch,
+): Promise<SymptomLog> {
+  if (!supabase) throw new Error("Supabase is not configured");
+
+  const row: Record<string, unknown> = {};
+  if (patch.symptom_types !== undefined) {
+    const types = (patch.symptom_types || []).filter(isSymptomType);
+    if (types.length === 0) throw new Error("Mindestens ein Symptom erforderlich.");
+    row.symptom_types = types;
+  }
+  if (patch.severity !== undefined) {
+    const sev = Math.round(Number(patch.severity));
+    if (!Number.isFinite(sev) || sev < 1 || sev > 5) {
+      throw new Error("Schweregrad muss zwischen 1 und 5 liegen.");
+    }
+    row.severity = sev;
+  }
+  if (patch.occurred_at !== undefined) row.occurred_at = patch.occurred_at;
+  if (patch.notes !== undefined) {
+    row.notes = patch.notes?.trim() ? patch.notes.trim() : null;
+  }
+  if (patch.category !== undefined) {
+    if (!isSymptomCategory(patch.category)) {
+      throw new Error("Ungültige Kategorie.");
+    }
+    row.category = patch.category;
+  }
+
+  if (Object.keys(row).length === 0) {
+    // Nothing to update — refetch the row so callers always get the
+    // canonical shape back.
+    const { data, error } = await supabase
+      .from("symptom_logs").select(COLS).eq("id", id).single();
+    if (error) throw new Error(error.message);
+    return data as SymptomLog;
+  }
+
+  const { data, error } = await supabase
+    .from("symptom_logs")
+    .update(row)
+    .eq("id", id)
+    .select(COLS)
+    .single();
+  if (error) {
+    const code = error.code ? ` [${error.code}]` : "";
+    throw new Error(`${error.message}${code}`);
+  }
+  return data as SymptomLog;
+}

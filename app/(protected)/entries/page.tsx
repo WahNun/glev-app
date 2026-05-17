@@ -9,8 +9,8 @@ import SnapSlider from "@/components/log/SnapSlider";
 import CollapsibleField from "@/components/log/CollapsibleField";
 import SaveButton from "@/components/log/SaveButton";
 import { fetchRecentMenstrualLogs, deleteMenstrualLog, type MenstrualLog } from "@/lib/menstrual";
-import { fetchRecentSymptomLogs, deleteSymptomLog, type SymptomLog } from "@/lib/symptoms";
-import { fetchRecentInfluenceLogs, deleteInfluenceLog, type InfluenceLog } from "@/lib/influences";
+import { fetchRecentSymptomLogs, deleteSymptomLog, updateSymptomLog, SYMPTOM_TYPES, type SymptomLog, type SymptomType } from "@/lib/symptoms";
+import { fetchRecentInfluenceLogs, deleteInfluenceLog, updateInfluenceLog, INFLUENCE_TYPES, type InfluenceLog, type InfluenceType } from "@/lib/influences";
 import { evaluateExercise, exerciseTypeLabel, exerciseTypeLabelI18n, patternNote, interimMessage, finalMessage, deltaColor, aggregateExerciseTypeStats, personalPatternHeadline, PATTERN_MIN_SESSIONS } from "@/lib/exerciseEval";
 import {
   evaluateBolus,
@@ -851,27 +851,42 @@ export default function EntriesPage() {
                 />
               );
             }
-            // SYMPTOM row — chips of the logged symptoms + severity dots.
+            // SYMPTOM row — collapsible NonMealRow with inline editor.
+            // Collapsed view shows date + time on the left (matching
+            // meal entries), expanded view exposes severity + types
+            // and an Edit button (Task: symptom/influence collapsible).
             if (r.kind === "symptoms") {
               const s = r.data;
+              const isOpen = expanded === s.id;
               return (
                 <SymptomRowCard
                   key={s.id}
                   log={s}
+                  isOpen={isOpen}
+                  onToggle={() => expandRow(isOpen ? null : s.id)}
                   onDelete={() => handleDeleteSymptom(s.id)}
                   deleting={deleting === s.id}
+                  onUpdated={(updated) => {
+                    setSymptoms(xs => xs.map(prev => prev.id === updated.id ? updated : prev));
+                  }}
                 />
               );
             }
-            // INFLUENCES row — neutral "Einflussfaktoren" entry.
+            // INFLUENCES row — collapsible NonMealRow with inline editor.
             if (r.kind === "influences") {
               const i = r.data;
+              const isOpen = expanded === i.id;
               return (
                 <InfluenceRowCard
                   key={i.id}
                   log={i}
+                  isOpen={isOpen}
+                  onToggle={() => expandRow(isOpen ? null : i.id)}
                   onDelete={() => handleDeleteInfluence(i.id)}
                   deleting={deleting === i.id}
+                  onUpdated={(updated) => {
+                    setInfluences(xs => xs.map(prev => prev.id === updated.id ? updated : prev));
+                  }}
                 />
               );
             }
@@ -3297,139 +3312,453 @@ function CycleRowCard({ log, onDelete, deleting }: {
   );
 }
 
-function InfluenceRowCard({ log, onDelete, deleting }: {
+// ─────────────────────────────────────────────────────────────────────────
+// InfluenceRowCard / SymptomRowCard — both now reuse NonMealRow so they
+// share the same date/time "When" chip, badge, primary/secondary metric
+// layout, and Edit + Delete action grid that bolus / basal / exercise
+// rows already use. Collapsed view = quick scan; expanded view = full
+// details, with an inline editor toggle (mirrors ExerciseRowCard).
+// ─────────────────────────────────────────────────────────────────────────
+
+const INFLUENCE_ACCENT = "#F5A524";
+const SYMPTOM_ACCENT   = "#A78BFA";
+
+function InfluenceRowCard({ log, isOpen, onToggle, onDelete, deleting, onUpdated }: {
   log: InfluenceLog;
+  isOpen: boolean;
+  onToggle: () => void;
   onDelete: () => void;
   deleting: boolean;
+  onUpdated: (updated: InfluenceLog) => void;
 }) {
   const t = useTranslations("engineLog");
+  const tx = useTranslations("entriesExpand");
   const locale = useLocale();
   const { format: fmtTime } = useTimeFormat();
-  const accent = "#F5A524";
+  const occurred = parseDbDate(log.occurred_at);
+  const dateStr = occurred.toLocaleDateString(locale, { month:"short", day:"numeric" });
+  const timeStr = fmtTime(occurred);
   const typeLabel = t(`influence_type_${log.influence_type}` as never);
-  const subParts: string[] = [];
-  if (log.details) subParts.push(log.details);
-  if (log.amount)  subParts.push(log.amount);
+
+  // Editor state — mirrors ExerciseEditor: open in-place via onEdit,
+  // collapses when the row collapses (parent toggles isOpen).
+  const [editing, setEditing] = useState(false);
+  useEffect(() => { if (!isOpen) setEditing(false); }, [isOpen]);
+
+  // Collapsed metrics: primary = AMOUNT (the most "at-a-glance" value
+  // the user logged), secondary = DETAILS. Both fall back to "—" so
+  // the row keeps its grid shape even for sparse legacy entries.
+  const amountValue  = log.amount  && log.amount.trim()  ? log.amount  : "—";
+  const detailsValue = log.details && log.details.trim() ? log.details : "—";
+
   return (
-    <div style={{
-      background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:12,
-      padding:"12px 14px", display:"flex", alignItems:"flex-start", gap:12,
-    }}>
-      <div style={{
-        width:30, height:30, borderRadius:8,
-        background:`${accent}18`, color:accent,
-        display:"flex", alignItems:"center", justifyContent:"center",
-        fontWeight:800, fontSize:14, flexShrink:0,
-      }}>◆</div>
-      <div style={{ flex:1, minWidth:0 }}>
-        <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-          <div style={{ fontSize:14, fontWeight:700, color:"var(--text-strong)" }}>
-            {t("influence_row_title")}
-          </div>
-          <span style={{
-            fontSize:12, fontWeight:700, padding:"2px 8px",
-            borderRadius:99, background:`${accent}14`, color:accent,
-            border:`1px solid ${accent}28`,
-          }}>{typeLabel}</span>
+    <NonMealRow
+      isOpen={isOpen}
+      onToggle={editing ? () => {} : onToggle}
+      onDelete={onDelete}
+      deleting={deleting}
+      onEdit={editing ? undefined : () => setEditing(true)}
+      accent={INFLUENCE_ACCENT}
+      badge={typeLabel}
+      dateStr={dateStr}
+      timeStr={timeStr}
+      primaryLabel={t("influence_amount_label").replace(/\s*\(.*\)\s*$/, "").toUpperCase()}
+      primaryValue={amountValue}
+      primaryColor={INFLUENCE_ACCENT}
+      secondaryLabel={t("influence_details_label").replace(/\s*\(.*\)\s*$/, "").toUpperCase()}
+      secondaryValue={detailsValue}
+      expandedDetails={editing ? (
+        <InfluenceEditor
+          log={log}
+          onSaved={(updated) => { setEditing(false); onUpdated(updated); }}
+          onCancel={() => setEditing(false)}
+        />
+      ) : (
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          <ExPanel title={tx("panel_session_details")}>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8 }}>
+              <Detail label={t("influence_type_label").toUpperCase()} value={typeLabel} color={INFLUENCE_ACCENT}/>
+              <Detail label={t("influence_amount_label").replace(/\s*\(.*\)\s*$/, "").toUpperCase()} value={amountValue}/>
+              <Detail label={t("influence_details_label").replace(/\s*\(.*\)\s*$/, "").toUpperCase()} value={detailsValue}/>
+              <Detail label={tx("row_when")} value={`${dateStr} · ${timeStr}`}/>
+            </div>
+          </ExPanel>
+          {log.notes && (
+            <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
+              <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>NOTES</div>
+              <div style={{ fontSize:14, color:"var(--text-strong)", lineHeight:1.5 }}>{log.notes}</div>
+            </div>
+          )}
         </div>
-        <div style={{ fontSize:13, color:"var(--text-faint)", marginTop:6, display:"flex", gap:8, flexWrap:"wrap" }}>
-          <span>{fmtDateTimeShort(log.occurred_at, locale, fmtTime)}</span>
-          {subParts.length > 0 && <span style={{ color:"var(--text-dim)" }}>· {subParts.join(" · ")}</span>}
-          {log.notes && <span style={{ color:"var(--text-dim)" }}>· {log.notes}</span>}
+      )}
+    />
+  );
+}
+
+function SymptomRowCard({ log, isOpen, onToggle, onDelete, deleting, onUpdated }: {
+  log: SymptomLog;
+  isOpen: boolean;
+  onToggle: () => void;
+  onDelete: () => void;
+  deleting: boolean;
+  onUpdated: (updated: SymptomLog) => void;
+}) {
+  const t = useTranslations("engineLog");
+  const tx = useTranslations("entriesExpand");
+  const locale = useLocale();
+  const { format: fmtTime } = useTimeFormat();
+  const occurred = parseDbDate(log.occurred_at);
+  const dateStr = occurred.toLocaleDateString(locale, { month:"short", day:"numeric" });
+  const timeStr = fmtTime(occurred);
+
+  const [editing, setEditing] = useState(false);
+  useEffect(() => { if (!isOpen) setEditing(false); }, [isOpen]);
+
+  // Collapsed metrics: primary = SEVERITY (numeric "3/5" so the cell
+  // stays compact under the mono treatment), secondary = TYPES count
+  // + the first type label so the user can scan without expanding.
+  const types = log.symptom_types || [];
+  const firstTypeLabel = types[0] ? t(`symptom_${types[0]}` as never) : "—";
+  const typesValue = types.length <= 1
+    ? firstTypeLabel
+    : `${firstTypeLabel} +${types.length - 1}`;
+  const badgeLabel = log.category === "pms"
+    ? t("symptom_category_pms_badge")
+    : t("symptom_row_title");
+
+  return (
+    <NonMealRow
+      isOpen={isOpen}
+      onToggle={editing ? () => {} : onToggle}
+      onDelete={onDelete}
+      deleting={deleting}
+      onEdit={editing ? undefined : () => setEditing(true)}
+      accent={SYMPTOM_ACCENT}
+      badge={badgeLabel}
+      dateStr={dateStr}
+      timeStr={timeStr}
+      primaryLabel={tx("row_severity")}
+      primaryValue={`${log.severity}/5`}
+      primaryColor={SYMPTOM_ACCENT}
+      primaryMono
+      secondaryLabel={tx("row_symptoms")}
+      secondaryValue={typesValue}
+      expandedDetails={editing ? (
+        <SymptomEditor
+          log={log}
+          onSaved={(updated) => { setEditing(false); onUpdated(updated); }}
+          onCancel={() => setEditing(false)}
+        />
+      ) : (
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          <ExPanel title={tx("panel_session_details")}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, marginBottom:8 }}>
+              <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, textTransform:"uppercase" }}>
+                {tx("row_severity")}
+              </div>
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <div style={{ display:"flex", gap:3 }} aria-label={`Severity ${log.severity} of 5`}>
+                  {[1,2,3,4,5].map(n => (
+                    <span key={n} style={{
+                      width:8, height:8, borderRadius:99,
+                      background: n <= log.severity ? SYMPTOM_ACCENT : "var(--border-strong)",
+                    }}/>
+                  ))}
+                </div>
+                <span style={{ fontSize:13, fontWeight:700, color:SYMPTOM_ACCENT, fontFamily:"var(--font-mono)" }}>
+                  {log.severity}/5
+                </span>
+              </div>
+            </div>
+            <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, textTransform:"uppercase", marginBottom:6 }}>
+              {tx("row_symptoms")}
+            </div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+              {types.length === 0 ? (
+                <span style={{ fontSize:13, color:"var(--text-faint)" }}>—</span>
+              ) : types.map(s => (
+                <span key={s} style={{
+                  fontSize:12, fontWeight:600, padding:"4px 10px",
+                  borderRadius:99, background:`${SYMPTOM_ACCENT}14`, color:SYMPTOM_ACCENT,
+                  border:`1px solid ${SYMPTOM_ACCENT}28`,
+                }}>{t(`symptom_${s}` as never)}</span>
+              ))}
+            </div>
+          </ExPanel>
+          {log.notes && (
+            <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
+              <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>NOTES</div>
+              <div style={{ fontSize:14, color:"var(--text-strong)", lineHeight:1.5 }}>{log.notes}</div>
+            </div>
+          )}
+        </div>
+      )}
+    />
+  );
+}
+
+/**
+ * Inline editor for a single InfluenceLog. Exposes the four user-
+ * facing fields the row card surfaces: type / amount / details /
+ * notes. The CGM snapshot is intentionally not editable.
+ */
+function InfluenceEditor({ log, onSaved, onCancel }: {
+  log: InfluenceLog;
+  onSaved: (updated: InfluenceLog) => void;
+  onCancel: () => void;
+}) {
+  const t = useTranslations("engineLog");
+  const tCommon = useTranslations();
+  const [type, setType]       = useState<InfluenceType>(log.influence_type);
+  const [amount, setAmount]   = useState<string>(log.amount ?? "");
+  const [details, setDetails] = useState<string>(log.details ?? "");
+  const [notes, setNotes]     = useState<string>(log.notes ?? "");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr]   = useState<string | null>(null);
+
+  async function handleSave() {
+    if (busy) return;
+    setErr(null);
+    setBusy(true);
+    try {
+      const patch: {
+        influence_type?: InfluenceType;
+        amount?: string | null;
+        details?: string | null;
+        notes?: string | null;
+      } = {};
+      if (type !== log.influence_type) patch.influence_type = type;
+      const a = amount.trim();  const na = a.length > 0 ? a : null;
+      if (na !== (log.amount  ?? null)) patch.amount = na;
+      const d = details.trim(); const nd = d.length > 0 ? d : null;
+      if (nd !== (log.details ?? null)) patch.details = nd;
+      const n = notes.trim();   const nn = n.length > 0 ? n : null;
+      if (nn !== (log.notes   ?? null)) patch.notes = nn;
+
+      if (Object.keys(patch).length === 0) { setBusy(false); onCancel(); return; }
+      const updated = await updateInfluenceLog(log.id, patch);
+      queueMicrotask(() => window.dispatchEvent(new Event("glev:influence-updated")));
+      onSaved(updated);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Konnte nicht speichern.");
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
+        <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>
+          {t("influence_row_title").toUpperCase()}
+        </div>
+        <span style={{
+          padding:"4px 10px", borderRadius:99, fontSize:12, fontWeight:700,
+          background:`${INFLUENCE_ACCENT}20`, color:INFLUENCE_ACCENT,
+          border:`1px solid ${INFLUENCE_ACCENT}40`,
+        }}>{t(`influence_type_${type}` as never)}</span>
+      </div>
+
+      <div>
+        <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:6, textTransform:"uppercase" }}>
+          {t("influence_type_label")}
+        </div>
+        <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+          {INFLUENCE_TYPES.map(opt => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => setType(opt)}
+              style={{
+                padding:"6px 12px", borderRadius:99, fontSize:13, fontWeight:600,
+                background: opt === type ? `${INFLUENCE_ACCENT}22` : "var(--surface-soft)",
+                color: opt === type ? INFLUENCE_ACCENT : "var(--text-body)",
+                border: `1px solid ${opt === type ? `${INFLUENCE_ACCENT}50` : BORDER}`,
+                cursor:"pointer",
+              }}
+            >{t(`influence_type_${opt}` as never)}</button>
+          ))}
         </div>
       </div>
-      <button
-        onClick={onDelete}
-        disabled={deleting}
-        aria-label={t("row_delete_aria")}
-        style={{
-          background:"transparent", border:"none", cursor:deleting?"wait":"pointer",
-          color:"var(--text-faint)", padding:6, borderRadius:6,
-        }}
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="3 6 5 6 21 6"/>
-          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-        </svg>
-      </button>
+
+      <EditorField label={t("influence_amount_label")}  value={amount}  onChange={setAmount}  placeholder={t("influence_amount_placeholder")}/>
+      <EditorField label={t("influence_details_label")} value={details} onChange={setDetails} placeholder={t("influence_details_placeholder")}/>
+      <EditorField label="NOTES" value={notes} onChange={setNotes} placeholder="" multiline/>
+
+      {err && <div style={{ fontSize:12, color:PINK }}>{err}</div>}
+
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+        <button onClick={onCancel} disabled={busy} style={{
+          padding:"12px", borderRadius:10, border:`1px solid ${BORDER}`,
+          background:"var(--surface-soft)", color:"var(--text-body)",
+          fontSize:14, fontWeight:600, cursor:busy?"not-allowed":"pointer",
+        }}>{tCommon("cancel_btn")}</button>
+        <button onClick={handleSave} disabled={busy} style={{
+          padding:"12px", borderRadius:10, border:"none",
+          background:INFLUENCE_ACCENT, color:"#fff",
+          fontSize:14, fontWeight:700, cursor:busy?"not-allowed":"pointer",
+        }}>{busy ? "…" : t("influence_save_btn")}</button>
+      </div>
     </div>
   );
 }
 
-function SymptomRowCard({ log, onDelete, deleting }: {
+/**
+ * Inline editor for a single SymptomLog. Severity slider (1..5),
+ * toggle chips for the curated symptom vocabulary, plus optional
+ * notes. Category (general/pms) is preserved as-is since switching
+ * it would force re-picking the entire chip set — that belongs to
+ * the dedicated log form, not this in-place corrector.
+ */
+function SymptomEditor({ log, onSaved, onCancel }: {
   log: SymptomLog;
-  onDelete: () => void;
-  deleting: boolean;
+  onSaved: (updated: SymptomLog) => void;
+  onCancel: () => void;
 }) {
   const t = useTranslations("engineLog");
-  const locale = useLocale();
-  const { format: fmtTime } = useTimeFormat();
-  const accent = "#A78BFA";
+  const tCommon = useTranslations();
+  const [severity, setSeverity] = useState<number>(log.severity);
+  const [types, setTypes]       = useState<SymptomType[]>([...(log.symptom_types || [])]);
+  const [notes, setNotes]       = useState<string>(log.notes ?? "");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr]   = useState<string | null>(null);
+
+  function toggleType(s: SymptomType) {
+    setTypes(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
+  }
+
+  async function handleSave() {
+    if (busy) return;
+    setErr(null);
+    if (types.length === 0) { setErr("Mindestens ein Symptom erforderlich."); return; }
+    setBusy(true);
+    try {
+      const patch: { severity?: number; symptom_types?: SymptomType[]; notes?: string | null } = {};
+      if (severity !== log.severity) patch.severity = severity;
+      const prevTypes = [...(log.symptom_types || [])].sort().join(",");
+      const nextTypes = [...types].sort().join(",");
+      if (prevTypes !== nextTypes) patch.symptom_types = types;
+      const n = notes.trim(); const nn = n.length > 0 ? n : null;
+      if (nn !== (log.notes ?? null)) patch.notes = nn;
+
+      if (Object.keys(patch).length === 0) { setBusy(false); onCancel(); return; }
+      const updated = await updateSymptomLog(log.id, patch);
+      queueMicrotask(() => window.dispatchEvent(new Event("glev:symptom-updated")));
+      onSaved(updated);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Konnte nicht speichern.");
+    } finally { setBusy(false); }
+  }
+
   return (
-    <div style={{
-      background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:12,
-      padding:"12px 14px", display:"flex", alignItems:"flex-start", gap:12,
-    }}>
-      <div style={{
-        width:30, height:30, borderRadius:8,
-        background:`${accent}18`, color:accent,
-        display:"flex", alignItems:"center", justifyContent:"center",
-        fontWeight:800, fontSize:14, flexShrink:0,
-      }}>★</div>
-      <div style={{ flex:1, minWidth:0 }}>
-        <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-          <div style={{ fontSize:14, fontWeight:700, color:"var(--text-strong)" }}>
-            {t("symptom_row_title")}
-          </div>
-          <div style={{ display:"flex", gap:2 }} aria-label={`Severity ${log.severity} of 5`}>
-            {[1,2,3,4,5].map(n => (
-              <span key={n} style={{
-                width:6, height:6, borderRadius:99,
-                background: n <= log.severity ? accent : "var(--border-strong)",
-              }}/>
-            ))}
-          </div>
-          {/* PMS badge — surfaces the category bucket inline so the
-              user can spot cycle-tagged entries at a glance without
-              opening the row. Legacy rows have category='general'
-              by default and don't render this. */}
-          {log.category === "pms" && (
-            <span style={{
-              fontSize: 11, fontWeight: 800, padding: "2px 6px",
-              borderRadius: 99, background: `${accent}28`, color: accent,
-              border: `1px solid ${accent}48`, letterSpacing: "0.04em",
-              textTransform: "uppercase",
-            }}>{t("symptom_category_pms_badge")}</span>
-          )}
+    <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
+        <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>
+          {t("symptom_row_title").toUpperCase()}
         </div>
-        <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:6 }}>
-          {(log.symptom_types || []).map(s => (
-            <span key={s} style={{
-              fontSize:12, fontWeight:600, padding:"2px 8px",
-              borderRadius:99, background:`${accent}14`, color:accent,
-              border:`1px solid ${accent}28`,
-            }}>{t(`symptom_${s}` as never)}</span>
+        {log.category === "pms" && (
+          <span style={{
+            padding:"4px 10px", borderRadius:99, fontSize:12, fontWeight:700,
+            background:`${SYMPTOM_ACCENT}20`, color:SYMPTOM_ACCENT,
+            border:`1px solid ${SYMPTOM_ACCENT}40`,
+          }}>{t("symptom_category_pms_badge")}</span>
+        )}
+      </div>
+
+      <div>
+        <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:8, textTransform:"uppercase" }}>
+          {t("symptom_severity_label", { value: severity })}
+        </div>
+        <div style={{ display:"flex", gap:6 }}>
+          {[1,2,3,4,5].map(n => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => setSeverity(n)}
+              aria-label={`Severity ${n} of 5`}
+              style={{
+                flex:1, padding:"10px 0", borderRadius:10,
+                background: n === severity ? `${SYMPTOM_ACCENT}22` : "var(--surface-soft)",
+                color: n === severity ? SYMPTOM_ACCENT : "var(--text-body)",
+                border: `1px solid ${n === severity ? `${SYMPTOM_ACCENT}50` : BORDER}`,
+                fontSize:14, fontWeight:700, cursor:"pointer",
+                fontFamily:"var(--font-mono)",
+              }}
+            >{n}</button>
           ))}
         </div>
-        <div style={{ fontSize:13, color:"var(--text-faint)", marginTop:6, display:"flex", gap:8, flexWrap:"wrap" }}>
-          <span>{fmtDateTimeShort(log.occurred_at, locale, fmtTime)}</span>
-          {log.notes && <span style={{ color:"var(--text-dim)" }}>· {log.notes}</span>}
+        <div style={{ display:"flex", justifyContent:"space-between", marginTop:4, fontSize:11, color:"var(--text-faint)" }}>
+          <span>{t("symptom_severity_min")}</span>
+          <span>{t("symptom_severity_max")}</span>
         </div>
       </div>
-      <button
-        onClick={onDelete}
-        disabled={deleting}
-        aria-label={t("row_delete_aria")}
-        style={{
-          background:"transparent", border:"none", cursor:deleting?"wait":"pointer",
-          color:"var(--text-faint)", padding:6, borderRadius:6,
-        }}
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="3 6 5 6 21 6"/>
-          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-        </svg>
-      </button>
+
+      <div>
+        <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:6, textTransform:"uppercase" }}>
+          {t("symptom_row_title")}
+        </div>
+        <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+          {SYMPTOM_TYPES.map(s => {
+            const active = types.includes(s);
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() => toggleType(s)}
+                style={{
+                  padding:"6px 10px", borderRadius:99, fontSize:12, fontWeight:600,
+                  background: active ? `${SYMPTOM_ACCENT}22` : "var(--surface-soft)",
+                  color: active ? SYMPTOM_ACCENT : "var(--text-body)",
+                  border: `1px solid ${active ? `${SYMPTOM_ACCENT}50` : BORDER}`,
+                  cursor:"pointer",
+                }}
+              >{t(`symptom_${s}` as never)}</button>
+            );
+          })}
+        </div>
+      </div>
+
+      <EditorField label="NOTES" value={notes} onChange={setNotes} placeholder="" multiline/>
+
+      {err && <div style={{ fontSize:12, color:PINK }}>{err}</div>}
+
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+        <button onClick={onCancel} disabled={busy} style={{
+          padding:"12px", borderRadius:10, border:`1px solid ${BORDER}`,
+          background:"var(--surface-soft)", color:"var(--text-body)",
+          fontSize:14, fontWeight:600, cursor:busy?"not-allowed":"pointer",
+        }}>{tCommon("cancel_btn")}</button>
+        <button onClick={handleSave} disabled={busy} style={{
+          padding:"12px", borderRadius:10, border:"none",
+          background:SYMPTOM_ACCENT, color:"#fff",
+          fontSize:14, fontWeight:700, cursor:busy?"not-allowed":"pointer",
+        }}>{busy ? "…" : t("symptom_save_btn")}</button>
+      </div>
     </div>
+  );
+}
+
+/** Small labelled text/textarea field used by the symptom + influence
+ *  inline editors. Keeps the editor visuals consistent with the rest
+ *  of the entries page's surface tokens. */
+function EditorField({ label, value, onChange, placeholder, multiline }: {
+  label: string; value: string; onChange: (v: string) => void;
+  placeholder: string; multiline?: boolean;
+}) {
+  const common: React.CSSProperties = {
+    width:"100%", padding:"10px 12px",
+    background:"var(--surface-soft)", border:`1px solid ${BORDER}`,
+    borderRadius:10, color:"var(--text-strong)", fontSize:14,
+    fontFamily:"inherit", outline:"none",
+  };
+  return (
+    <label style={{ display:"flex", flexDirection:"column", gap:6 }}>
+      <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, textTransform:"uppercase" }}>
+        {label}
+      </div>
+      {multiline ? (
+        <textarea value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} rows={3} style={{ ...common, resize:"vertical" }}/>
+      ) : (
+        <input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={common}/>
+      )}
+    </label>
   );
 }

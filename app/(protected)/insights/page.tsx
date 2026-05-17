@@ -16,7 +16,10 @@ import { suggestAdjustment, type AdaptiveSettings, type AdjustmentSuggestion } f
 import SortableCardGrid, { type SortableItem } from "@/components/SortableCardGrid";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import { useCardOrder } from "@/lib/cardOrder";
-import PagerIndicator from "@/components/PagerIndicator";
+// Note: PagerIndicator was the previous shared dot/segment row. The
+// Insights page now uses its own InsightsCockpitIndicator (defined
+// below) — counter + segment bar — per Task #329. Dashboard still
+// uses the original component.
 import { parseDbTs, parseDbDate } from "@/lib/time";
 import { startOfDay, startOfToday, startOfDaysAgo, userTimezone } from "@/lib/utils/datetime";
 import { fetchUserProfile, cycleSurfacesAvailable, type Sex } from "@/lib/userProfile";
@@ -1355,6 +1358,20 @@ export default function InsightsPage() {
                 {bgDelta != null && (
                   <div style={{ fontSize:11, color: bgDelta < 0 ? GREEN : bgDelta > 0 ? ORANGE : "var(--text-dim)", marginTop:2, fontWeight:600 }}>
                     {bgDelta > 0 ? "+" : bgDelta < 0 ? "−" : ""}{Math.abs(bgDelta)} {tInsights("delta_vs_prev")}
+                  </div>
+                )}
+                {/* Cockpit density pass (Task #329): the AVG BG mini
+                    card used to read as a single number floating in
+                    space. A small 7-day sparkline (reuses the existing
+                    `trendValues` series the Glucose Trend card derives
+                    from the same `last7Bg` source — no extra data
+                    fetch) gives the user instant context for whether
+                    the average is trending up or down. Capped at 8
+                    samples so the line stays legible inside the narrow
+                    mini-card. */}
+                {trendHasData && trendValues.length >= 2 && (
+                  <div style={{ marginTop:6, opacity:0.85 }}>
+                    <Sparkline values={trendValues.slice(-8)} color={ACCENT}/>
                   </div>
                 )}
               </>
@@ -3066,7 +3083,13 @@ function InsightsSwipePager({
   // let short cards stay short. A FlipCard back that expands beyond
   // a viewport's worth simply lets the page scroll, matching the
   // earlier "expanded backs never scroll inside the card" rule.
-  const SLOT_PAD_V = 12; // 6px top + 6px bottom on each slot
+  // Slot padding was 6px top + 6px bottom. Trimmed to 3+3 so the
+  // bottom edge of a short KPI card hugs the cockpit indicator below
+  // even tighter — part of Task #329's "sparse cards shouldn't sit in
+  // an oversized slot" pass. ResizeObserver still drives pagerHeight
+  // from the active card's natural height, so taller cards just grow
+  // the slot as before.
+  const SLOT_PAD_V = 6;
   // First-paint fallback — used only until the ResizeObserver lands
   // the first measurement. Small enough that any real card will
   // measure taller and replace it immediately; large enough that
@@ -3383,10 +3406,17 @@ function InsightsSwipePager({
           ))}
         </div>
 
-        {/* Minimal segmented position indicator — see
-            components/PagerIndicator.tsx. Replaces the previous
-            pill+dots row that read as a clunky scrollbar. */}
-        <PagerIndicator
+        {/* Cockpit position indicator (Task #329). Replaces the
+            generic dot/segment row with a branded readout: zero-padded
+            position counter on the left ("04 / 15", mono font, ACCENT
+            on the current value, dim on the total), thin segment
+            progress bar filling the remaining width. Tap any segment
+            to navigate; role=tablist and aria-selected are preserved
+            so screen readers / keyboards keep working. We picked the
+            counter + bar over a scrollable label rail because it
+            scales gracefully to 15+ cards without horizontal scrolling
+            inside the indicator itself. */}
+        <InsightsCockpitIndicator
           total={items.length}
           active={active}
           onSelect={(i) => {
@@ -3476,22 +3506,170 @@ function InsightsSwipePager({
             })}
           </div>
         )}
+        {/* Footer disclaimer only — the position counter moved up into
+            the cockpit indicator (Task #329) so the bottom of the
+            context block can be devoted entirely to the medical
+            disclaimer instead of repeating "N of M". */}
         <div
           style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 8,
             paddingTop: 8,
             borderTop: "1px solid var(--border-soft)",
           }}
         >
-          <span style={{ fontSize: 11, color: "var(--text-faint)" }}>
-            {tInsights("swipe_position", { current: active + 1, total: items.length })}
-          </span>
-          <span style={{ fontSize: 10, color: "var(--text-faint)", textAlign: "right", lineHeight: 1.4, maxWidth: "70%" }}>
+          <span style={{ fontSize: 10, color: "var(--text-faint)", textAlign: "right", lineHeight: 1.4, display: "block" }}>
             {tInsights("page_medical_disclaimer")}
           </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Cockpit-branded position indicator for the Insights swipe pager
+ * (Task #329). Two parts laid out on a single thin row:
+ *   ┌──────────────────────────────────────────────────────┐
+ *   │ 04 / 15   ▔▔▔▔▔▔██▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔ │
+ *   └──────────────────────────────────────────────────────┘
+ *   • Left:  zero-padded "NN / Total" counter in JetBrains Mono,
+ *            current value tinted ACCENT (brand blue), divider &
+ *            total in --text-faint so the active number reads first.
+ *   • Right: thin segmented track with a single sliding fill (also
+ *            ACCENT) — animates between segments instead of redrawing
+ *            so 15+ cards still feel calm. Invisible tap targets
+ *            stretched across the track (full segment width × ~18px)
+ *            preserve tap-navigation on touch; role=tablist with
+ *            aria-selected/aria-label keeps screen-reader & keyboard
+ *            access on par with the previous shared PagerIndicator.
+ */
+function InsightsCockpitIndicator({
+  total,
+  active,
+  onSelect,
+  label,
+  labelForIndex,
+}: {
+  total: number;
+  active: number;
+  onSelect: (index: number) => void;
+  label?: string;
+  labelForIndex?: (index: number, total: number) => string;
+}) {
+  if (total <= 1) return null;
+  const segPct = 100 / total;
+  // Zero-pad to the width of `total` so the counter never jitters
+  // between 1- and 2-digit positions (e.g. "9/15" → " 9/15"). For
+  // >=10 we keep both numbers 2-digit; >=100 would scale up but
+  // we never approach that with insight cards.
+  const pad = String(total).length;
+  const cur = String(active + 1).padStart(pad, "0");
+  const tot = String(total).padStart(pad, "0");
+  return (
+    <div
+      role="tablist"
+      aria-label={label}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        marginTop: 6,
+        marginBottom: 2,
+        padding: "0 4px",
+      }}
+    >
+      {/* Focus-ring style for the keyboard-visible state. Inline style
+          can't express :focus-visible, so we ship a small scoped block. */}
+      <style>{`
+        .insights-cockpit-tab:focus { outline: none; }
+        .insights-cockpit-tab:focus-visible {
+          outline: 2px solid var(--text);
+          outline-offset: 3px;
+          border-radius: 4px;
+        }
+      `}</style>
+      <div
+        aria-hidden
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 11,
+          fontWeight: 700,
+          letterSpacing: "0.04em",
+          color: "var(--text-faint)",
+          display: "inline-flex",
+          alignItems: "baseline",
+          gap: 2,
+          minWidth: pad * 2 + 6,
+          flexShrink: 0,
+        }}
+      >
+        <span style={{ color: ACCENT }}>{cur}</span>
+        <span>/</span>
+        <span>{tot}</span>
+      </div>
+      <div
+        style={{
+          position: "relative",
+          flex: 1,
+          height: 2,
+          background: "var(--border-soft)",
+          borderRadius: 99,
+        }}
+      >
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            height: "100%",
+            width: `${segPct}%`,
+            background: ACCENT,
+            borderRadius: 99,
+            transform: `translateX(${active * 100}%)`,
+            transition: "transform 240ms cubic-bezier(.2,.7,.2,1)",
+            boxShadow: `0 0 6px ${ACCENT}88`,
+          }}
+        />
+        {/* Invisible tap targets — full-segment-wide × ~18px tall
+            hit area so touch input is comfortable without bulking
+            the visible track. */}
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: -8,
+            bottom: -8,
+            display: "flex",
+          }}
+        >
+          {Array.from({ length: total }, (_, i) => (
+            <button
+              key={i}
+              type="button"
+              role="tab"
+              aria-selected={i === active}
+              aria-label={
+                labelForIndex
+                  ? labelForIndex(i, total)
+                  : `${i + 1} / ${total}`
+              }
+              onClick={() => onSelect(i)}
+              className="insights-cockpit-tab"
+              style={{
+                appearance: "none",
+                background: "transparent",
+                border: 0,
+                padding: 0,
+                margin: 0,
+                flex: 1,
+                cursor: "pointer",
+                height: "100%",
+                color: "inherit",
+                font: "inherit",
+              }}
+            />
+          ))}
         </div>
       </div>
     </div>

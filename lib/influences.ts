@@ -115,3 +115,61 @@ export async function deleteInfluenceLog(id: string): Promise<void> {
   const { error } = await supabase.from("influence_logs").delete().eq("id", id);
   if (error) throw new Error(error.message);
 }
+
+/**
+ * Update an existing influence log. Only the user-facing fields are
+ * exposed (type, occurred_at, details, amount, notes). The CGM
+ * snapshot column is intentionally not editable so a corrected entry
+ * never falsifies the historical CGM reading.
+ */
+export interface InfluenceLogPatch {
+  influence_type?: InfluenceType;
+  occurred_at?: string;
+  details?: string | null;
+  amount?: string | null;
+  notes?: string | null;
+}
+
+export async function updateInfluenceLog(
+  id: string,
+  patch: InfluenceLogPatch,
+): Promise<InfluenceLog> {
+  if (!supabase) throw new Error("Supabase is not configured");
+
+  const row: Record<string, unknown> = {};
+  if (patch.influence_type !== undefined) {
+    if (!isInfluenceType(patch.influence_type)) {
+      throw new Error("Ungültiger Einflussfaktor-Typ.");
+    }
+    row.influence_type = patch.influence_type;
+  }
+  if (patch.occurred_at !== undefined) row.occurred_at = patch.occurred_at;
+  if (patch.details !== undefined) {
+    row.details = patch.details?.trim() ? patch.details.trim() : null;
+  }
+  if (patch.amount !== undefined) {
+    row.amount = patch.amount?.trim() ? patch.amount.trim() : null;
+  }
+  if (patch.notes !== undefined) {
+    row.notes = patch.notes?.trim() ? patch.notes.trim() : null;
+  }
+
+  if (Object.keys(row).length === 0) {
+    const { data, error } = await supabase
+      .from("influence_logs").select(COLS).eq("id", id).single();
+    if (error) throw new Error(error.message);
+    return data as InfluenceLog;
+  }
+
+  const { data, error } = await supabase
+    .from("influence_logs")
+    .update(row)
+    .eq("id", id)
+    .select(COLS)
+    .single();
+  if (error) {
+    const code = error.code ? ` [${error.code}]` : "";
+    throw new Error(`${error.message}${code}`);
+  }
+  return data as InfluenceLog;
+}
