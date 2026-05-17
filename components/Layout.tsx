@@ -545,31 +545,27 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           label={tNav("glev")}
           active={quickAddOpen || voice.recording}
           recording={voice.recording}
-          // Short-tap behaviour. Three states:
-          //   1. Recording in progress  → stop (any tap length).
-          //   2. User already spoke once this session → jump straight
-          //      into a fresh voice take. Done by deep-linking to
-          //      /engine?tab=engine&voice=1, which the engine page
-          //      auto-starts on (see app/(protected)/engine/page.tsx).
-          //   3. First-time / never spoken → open the quick-add sheet
-          //      so the user can discover the entry-points.
+          // Short-tap behaviour (2026-05-17 round 5 — user request:
+          // "der glev button sollte direkt in den engine screen
+          // springen und aufnahme starten wenn man ihn kurz drückt
+          // außerhalb des glev screens"). Two states only now:
+          //   1. Recording in progress → stop (any tap length).
+          //   2. Anything else → jump to /engine and auto-start a
+          //      voice take. The `vt` (voice-token) cache-buster
+          //      guarantees the engine page treats every tap as a
+          //      fresh trigger even when the user is already on
+          //      /engine — without it, the searchParams shape
+          //      (?tab=engine&voice=1) is identical across taps and
+          //      the auto-start effect's de-dup guard would swallow
+          //      repeat taps. See engine/page.tsx voiceLastTokenRef.
+          // The quick-add sheet now lives EXCLUSIVELY behind the
+          // long-press affordance below.
           onShortPress={() => {
             if (voice.recording) {
               voice.requestStop();
               return;
             }
-            if (voice.hasSpoken) {
-              // The `vt` (voice-token) cache-buster guarantees the
-              // engine page treats every tap as a fresh trigger even
-              // when the user is already on /engine — without it, the
-              // searchParams shape (?tab=engine&voice=1) is identical
-              // across taps and the auto-start effect's de-dup guard
-              // would swallow the second tap. See engine/page.tsx
-              // voiceLastTokenRef.
-              router.push(`/engine?tab=engine&voice=1&vt=${Date.now()}`);
-              return;
-            }
-            setQuickAddOpen(true);
+            router.push(`/engine?tab=engine&voice=1&vt=${Date.now()}`);
           }}
           // Long-press always opens the menu, regardless of session
           // state — that's the "secondary" affordance per 2026-05-17
