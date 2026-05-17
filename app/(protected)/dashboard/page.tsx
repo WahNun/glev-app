@@ -787,6 +787,15 @@ function DashboardCluster({
   const [active, setActive] = useState(0);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const rafRef = useRef<number | null>(null);
+  // Debounced scroll-end correction. iOS Safari + Android Chrome
+  // occasionally ignore `scroll-snap-stop: always` after a soft flick
+  // or trackpad swipe, leaving the scroller resting between two
+  // slides (50/50 split). When the user stops scrolling we wait
+  // ~140ms, then if scrollLeft isn't a clean multiple of clientWidth
+  // we smoothly snap to the nearest slide ourselves. The CSS snap
+  // still does most of the work; this is a safety net.
+  const settleTimerRef = useRef<number | null>(null);
+  const programmaticScrollRef = useRef(false);
 
   // Per-card natural-height measurements. Mirrors the InsightsSwipePager
   // pattern: each slide is observed by a ResizeObserver and the
@@ -812,13 +821,99 @@ function DashboardCluster({
     });
   }, [cards.length]);
 
+  // Shared helper for any programmatic scroll (settle-correction OR
+  // PagerIndicator tap). Cancels any pending settle timer, raises
+  // the guard, and refreshes the guard release on each subsequent
+  // scroll tick so slow devices / long animations don't drop the
+  // guard mid-flight (which would let the settle timer fire into
+  // an in-progress smooth scroll and start a snap fight).
+  const programmaticReleaseTimerRef = useRef<number | null>(null);
+  const scheduleProgrammaticRelease = useCallback(() => {
+    if (programmaticReleaseTimerRef.current != null) {
+      window.clearTimeout(programmaticReleaseTimerRef.current);
+    }
+    programmaticReleaseTimerRef.current = window.setTimeout(() => {
+      programmaticReleaseTimerRef.current = null;
+      programmaticScrollRef.current = false;
+    }, 220);
+  }, []);
+  const programmaticScrollTo = useCallback((left: number) => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    if (settleTimerRef.current != null) {
+      window.clearTimeout(settleTimerRef.current);
+      settleTimerRef.current = null;
+    }
+    programmaticScrollRef.current = true;
+    el.scrollTo({ left, behavior: "smooth" });
+    scheduleProgrammaticRelease();
+  }, [scheduleProgrammaticRelease]);
+
+  const settleSnap = useCallback(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const w = el.clientWidth;
+    if (w <= 0) return;
+    const target = Math.round(el.scrollLeft / w) * w;
+    // 1px tolerance handles sub-pixel rounding without thrashing.
+    if (Math.abs(el.scrollLeft - target) > 1) {
+      programmaticScrollTo(target);
+    }
+  }, [programmaticScrollTo]);
+
   const onScroll = useCallback(() => {
     if (rafRef.current != null) return;
     rafRef.current = window.requestAnimationFrame(() => {
       rafRef.current = null;
       updateActive();
     });
-  }, [updateActive]);
+    // While a programmatic scroll is animating, keep refreshing the
+    // release timer so it only fires once the user/browser is truly
+    // idle — never mid-animation.
+    if (programmaticScrollRef.current) {
+      scheduleProgrammaticRelease();
+      return;
+    }
+    // Reset the settle timer on every scroll tick — once scrolling
+    // stops for 140ms we run the correction.
+    if (settleTimerRef.current != null) window.clearTimeout(settleTimerRef.current);
+    settleTimerRef.current = window.setTimeout(() => {
+      settleTimerRef.current = null;
+      settleSnap();
+    }, 140);
+  }, [updateActive, settleSnap, scheduleProgrammaticRelease]);
+
+  // Realign on width change (orientation, container resize, sidebar
+  // collapse). Without this, after a width change the scroller would
+  // still sit at the old scrollLeft and visually show a partial
+  // slide until the user scrolls again. We re-pin scrollLeft to
+  // `active * clientWidth` instantly (jump, no animation) so the
+  // user never sees the misalignment in the first place.
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    let lastW = el.clientWidth;
+    const ro = new ResizeObserver(() => {
+      const w = el.clientWidth;
+      if (w <= 0 || w === lastW) return;
+      lastW = w;
+      const target = active * w;
+      if (Math.abs(el.scrollLeft - target) > 1) {
+        programmaticScrollRef.current = true;
+        el.scrollLeft = target;
+        scheduleProgrammaticRelease();
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [active, scheduleProgrammaticRelease]);
+
+  useEffect(() => {
+    return () => {
+      if (settleTimerRef.current != null) window.clearTimeout(settleTimerRef.current);
+      if (programmaticReleaseTimerRef.current != null) window.clearTimeout(programmaticReleaseTimerRef.current);
+    };
+  }, []);
 
   // Measure each card's natural height. Re-measures automatically when
   // a card's content changes (e.g. a FlipCard expands its back, which
@@ -948,7 +1043,9 @@ function DashboardCluster({
         onSelect={(i) => {
           const el = scrollerRef.current;
           if (!el) return;
-          el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
+          // Go through the shared programmatic helper so the settle
+          // timer can't race with the indicator-driven smooth scroll.
+          programmaticScrollTo(i * el.clientWidth);
         }}
         label={title}
         controlsId={(i) => `${clusterId}-slide-${i}`}

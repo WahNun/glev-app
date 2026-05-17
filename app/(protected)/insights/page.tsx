@@ -3131,13 +3131,92 @@ function InsightsSwipePager({
     });
   }, [items.length]);
 
+  // See DashboardCluster.settleSnap for the rationale — same iOS
+  // Safari / Android Chrome bug where mandatory snap occasionally
+  // leaves the scroller mid-slide after a soft flick. We debounce
+  // after the scroll stops, then snap to the nearest slide ourselves
+  // when the browser failed to. Programmatic motions (settle + the
+  // indicator's onSelect) all flow through one helper so they can't
+  // race each other.
+  const settleTimerRef = React.useRef<number | null>(null);
+  const programmaticScrollRef = React.useRef(false);
+  const programmaticReleaseTimerRef = React.useRef<number | null>(null);
+  const scheduleProgrammaticRelease = React.useCallback(() => {
+    if (programmaticReleaseTimerRef.current != null) {
+      window.clearTimeout(programmaticReleaseTimerRef.current);
+    }
+    programmaticReleaseTimerRef.current = window.setTimeout(() => {
+      programmaticReleaseTimerRef.current = null;
+      programmaticScrollRef.current = false;
+    }, 220);
+  }, []);
+  const programmaticScrollTo = React.useCallback((left: number) => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    if (settleTimerRef.current != null) {
+      window.clearTimeout(settleTimerRef.current);
+      settleTimerRef.current = null;
+    }
+    programmaticScrollRef.current = true;
+    el.scrollTo({ left, behavior: "smooth" });
+    scheduleProgrammaticRelease();
+  }, [scheduleProgrammaticRelease]);
+  const settleSnap = React.useCallback(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const w = el.clientWidth;
+    if (w <= 0) return;
+    const target = Math.round(el.scrollLeft / w) * w;
+    if (Math.abs(el.scrollLeft - target) > 1) {
+      programmaticScrollTo(target);
+    }
+  }, [programmaticScrollTo]);
+
   const onScroll = React.useCallback(() => {
     if (rafRef.current != null) return;
     rafRef.current = window.requestAnimationFrame(() => {
       rafRef.current = null;
       updateActive();
     });
-  }, [updateActive]);
+    if (programmaticScrollRef.current) {
+      scheduleProgrammaticRelease();
+      return;
+    }
+    if (settleTimerRef.current != null) window.clearTimeout(settleTimerRef.current);
+    settleTimerRef.current = window.setTimeout(() => {
+      settleTimerRef.current = null;
+      settleSnap();
+    }, 140);
+  }, [updateActive, settleSnap, scheduleProgrammaticRelease]);
+
+  // Realign on width change (orientation, container resize). Pins
+  // scrollLeft back to `active * clientWidth` instantly so the user
+  // never sees a partial slide after a resize.
+  React.useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    let lastW = el.clientWidth;
+    const ro = new ResizeObserver(() => {
+      const w = el.clientWidth;
+      if (w <= 0 || w === lastW) return;
+      lastW = w;
+      const target = active * w;
+      if (Math.abs(el.scrollLeft - target) > 1) {
+        programmaticScrollRef.current = true;
+        el.scrollLeft = target;
+        scheduleProgrammaticRelease();
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [active, scheduleProgrammaticRelease]);
+
+  React.useEffect(() => {
+    return () => {
+      if (settleTimerRef.current != null) window.clearTimeout(settleTimerRef.current);
+      if (programmaticReleaseTimerRef.current != null) window.clearTimeout(programmaticReleaseTimerRef.current);
+    };
+  }, []);
 
   // Clamp active when item count drops (e.g. workout-patterns disappears).
   useEffect(() => {
@@ -3289,7 +3368,10 @@ function InsightsSwipePager({
           onSelect={(i) => {
             const el = scrollerRef.current;
             if (!el) return;
-            el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
+            // Route through the shared programmatic helper so the
+            // settle timer can't race with the indicator's smooth
+            // scroll.
+            programmaticScrollTo(i * el.clientWidth);
           }}
           label={tInsights("swipe_context_label")}
           labelForIndex={(i, total) =>
