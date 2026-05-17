@@ -41,7 +41,19 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useCardOrder } from "@/lib/cardOrder";
 
-const DASHBOARD_CLUSTER_DEFAULT_ORDER = ["glucose", "macros", "rates", "score-trend", "recents"];
+// Four-cluster cockpit layout (replaces the earlier 5-cluster "widget
+// wall"). Order is intentionally staged: Glucose is the primary
+// instrument at the top, Metabolic merges the meal-response group
+// (macros + outcome distribution + good/spike/hypo rates) into a
+// single horizontally-swipeable card stack, Control combines the
+// score with the trend chart so the two analytical readouts live
+// together, and Recents stays as the chronological tail. Users can
+// still reorder via the grip handle in each cluster header — the
+// `useCardOrder` hook silently drops unknown saved IDs from the
+// pre-refactor era ("macros", "rates", "score-trend") and appends
+// any cluster the saved list doesn't mention, so existing users
+// migrate gracefully without us having to touch their preferences.
+const DASHBOARD_CLUSTER_DEFAULT_ORDER = ["glucose", "metabolic", "control", "recents"];
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="var(--surface)", BORDER="var(--border)";
@@ -452,11 +464,25 @@ export default function DashboardPage() {
   const cards = buildCards(meals, t);
   const rateCards = cards.filter(c => c.key !== "control");
 
-  // The dashboard is organised into five clusters, each a horizontal swipe
-  // pager. Default order is spec'd (Glucose → Makros → Rates → Score/Trend
-  // → Recents) but power users can long-press the grip handle in each
-  // cluster header to drag the section up or down. Persisted per user via
-  // `useCardOrder("dashboard", …)`.
+  // Four-cluster cockpit layout (see DASHBOARD_CLUSTER_DEFAULT_ORDER
+  // above for the rationale). Each cluster is a horizontal swipe pager
+  // so the user moves laterally through related cards rather than
+  // vertically through a widget wall.
+  //
+  // 1. Glucose         — primary instrument, single card today
+  // 2. Metabolic       — Macros + Outcome distribution + Good / Spike
+  //                      / Hypo rates merged into one connected
+  //                      "meal-response" stack. Card order intentionally
+  //                      follows the user-facing narrative: today's
+  //                      macros → how those outcomes split → which
+  //                      specific rate you're hitting.
+  // 3. Control         — Control Score paired with the Glucose Trend
+  //                      chart so the two analytical readouts live
+  //                      together as one performance area.
+  // 4. Recents         — chronological tail.
+  //
+  // Reordering still works via the grip handle in each cluster header;
+  // persisted per user via `useCardOrder("dashboard", …)`.
   const clusters: Array<{ id: string; title: string; cards: ClusterCard[] }> = [
     {
       id: "glucose",
@@ -464,21 +490,20 @@ export default function DashboardPage() {
       cards: [{ id: "today-glucose", node: <CurrentDayGlucoseCard/> }],
     },
     {
-      id: "macros",
-      title: t("cluster_macros"),
-      cards: [{ id: "today-macros", node: <DailyMacrosCard meals={meals} targets={macroTargets}/> }],
-    },
-    {
-      id: "rates",
-      title: t("cluster_rates"),
+      id: "metabolic",
+      title: t("cluster_metabolic"),
       cards: [
-        ...rateCards.map<ClusterCard>(c => ({ id: c.key, node: <FlipCard card={c}/> })),
+        { id: "today-macros", node: <DailyMacrosCard meals={meals} targets={macroTargets}/> },
         { id: "outcome-dist", node: <OutcomeChart meals={meals}/> },
+        // rateCards = buildCards(...) minus the "control" entry, so
+        // this expands to Good → Spike → Hypo rate cards, matching the
+        // order requested in the spec.
+        ...rateCards.map<ClusterCard>(c => ({ id: c.key, node: <FlipCard card={c}/> })),
       ],
     },
     {
-      id: "score-trend",
-      title: t("cluster_score_trend"),
+      id: "control",
+      title: t("cluster_control"),
       cards: [
         { id: "control-score", node: <ControlScoreCard meals={meals}/> },
         { id: "glucose-trend", node: <TrendChart meals={meals}/> },
@@ -541,11 +566,34 @@ function ReorderableClusters({
   const { order, setOrder } = useCardOrder("dashboard", DASHBOARD_CLUSTER_DEFAULT_ORDER);
 
   const resolved = useMemo(() => {
+    // Legacy-ID migration: existing users have saved cluster orders
+    // from the previous 5-cluster layout that referenced
+    // "macros", "rates" and "score-trend" — all three IDs no longer
+    // exist after the cockpit refactor. We remap each legacy ID to
+    // its successor (macros + rates → metabolic, score-trend →
+    // control) BEFORE the unknown-ID drop step below, so an existing
+    // user who never reordered manually still gets glucose →
+    // metabolic → control → recents instead of glucose → recents (with
+    // metabolic + control silently appended to the bottom). Without
+    // this remap the architect review caught that a stock saved order
+    // would resolve to ["glucose","recents","metabolic","control"],
+    // which contradicts the spec narrative.
+    const LEGACY_REMAP: Record<string, string> = {
+      "macros":      "metabolic",
+      "rates":       "metabolic",
+      "score-trend": "control",
+    };
+    const migrated = order.map(id => LEGACY_REMAP[id] ?? id);
+
     const byId = new Map(clusters.map(c => [c.id, c]));
     const seen = new Set<string>();
     const out: typeof clusters = [];
-    for (const id of order) {
+    for (const id of migrated) {
       const c = byId.get(id);
+      // `!seen.has(id)` dedupes the case where two legacy IDs
+      // (macros + rates) both remap to the same new ID (metabolic);
+      // we want the merged cluster to appear once, at the position
+      // of the first legacy occurrence.
       if (c && !seen.has(id)) { out.push(c); seen.add(id); }
     }
     for (const c of clusters) if (!seen.has(c.id)) out.push(c);

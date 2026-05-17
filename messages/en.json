@@ -1386,6 +1386,8 @@
     "cluster_macros": "Macros",
     "cluster_rates": "Outcome distribution & rates",
     "cluster_score_trend": "Control Score & glucose trend",
+    "cluster_metabolic": "Metabolic response",
+    "cluster_control": "Control",
     "cluster_recents": "Recents",
     "reorder_cluster_aria": "Drag to reorder section",
     "log_meal_cta": "+ Log meal",

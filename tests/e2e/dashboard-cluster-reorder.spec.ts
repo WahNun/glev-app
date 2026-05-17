@@ -1,10 +1,14 @@
 // End-to-end coverage for the dashboard cluster reorder flow (Task #320 → #323).
 //
 // Why this exists:
-//   Task #320 re-introduced drag-to-reorder for the five dashboard
-//   clusters (Glucose, Macros, Rates, Score/Trend, Recents) using the
-//   existing `useCardOrder("dashboard", …)` hook + a per-cluster grip
-//   handle in the section header. The persistence path goes:
+//   Task #320 re-introduced drag-to-reorder for the dashboard
+//   clusters using the existing `useCardOrder("dashboard", …)` hook
+//   + a per-cluster grip handle in the section header. Task #329
+//   subsequently collapsed the layout from five clusters down to
+//   four (Glucose, Metabolic, Control, Recents) — Metabolic merges
+//   the old "macros" + "rates" sections and Control replaces
+//   "score-trend". This spec covers the new shape.
+//   The persistence path goes:
 //     grip drag → dnd-kit arrayMove → setOrder(...) → POST
 //     /api/preferences → upsert into `user_preferences` → on next
 //     load GET /api/preferences seeds the order before render.
@@ -15,14 +19,14 @@
 //   end-to-end so each piece is guarded.
 //
 // What this asserts (and why each piece matters):
-//   * Default order on a fresh user: Glucose → Macros → Rates →
-//     Score/Trend → Recents. This pins both the
+//   * Default order on a fresh user: Glucose → Metabolic → Control →
+//     Recents. This pins both the
 //     `DASHBOARD_CLUSTER_DEFAULT_ORDER` constant and the cluster
 //     declaration order — flipping either silently would land users
 //     on a different first screen and we'd never know.
-//   * Dragging the Macros grip above the Glucose grip reorders the
-//     two visible sections (in-memory state proven by reading the
-//     section positions immediately after the drag).
+//   * Dragging the Metabolic grip above the Glucose grip reorders
+//     the two visible sections (in-memory state proven by reading
+//     the section positions immediately after the drag).
 //   * After a hard reload, the new order persists — this is the
 //     part that actually depends on the network round-trip
 //     (`/api/preferences` POST + GET) and the `user_preferences`
@@ -84,11 +88,10 @@ async function resetPreferences(userId: string) {
 // the cluster `<section>` (see `DashboardCluster` in
 // `app/(protected)/dashboard/page.tsx`).
 const CLUSTER_LABELS: Array<{ id: string; re: RegExp }> = [
-  { id: "glucose",     re: /^(Glucose|Glukose)$/ },
-  { id: "macros",      re: /^(Macros|Makros)$/ },
-  { id: "rates",       re: /^(Outcome distribution & rates|Verlaufs-Verteilung & Quoten)$/ },
-  { id: "score-trend", re: /^(Control Score & glucose trend|Control Score & Glukose-Trend)$/ },
-  { id: "recents",     re: /^(Recents|Zuletzt)$/ },
+  { id: "glucose",   re: /^(Glucose|Glukose)$/ },
+  { id: "metabolic", re: /^(Metabolic response|Metabolische Antwort)$/ },
+  { id: "control",   re: /^(Control|Kontrolle)$/ },
+  { id: "recents",   re: /^(Recents|Zuletzt)$/ },
 ];
 
 const GRIP_ARIA = /^(Drag to reorder section|Zum Umsortieren ziehen)$/;
@@ -197,14 +200,14 @@ test.describe("Dashboard cluster reorder", () => {
     // as the cluster headers either way; the section is rendered
     // unconditionally so this is purely a "page hydrated" gate).
     const grips = page.getByRole("button", { name: GRIP_ARIA });
-    await expect(grips).toHaveCount(5);
+    await expect(grips).toHaveCount(4);
 
     // ---- DEFAULT ORDER -----------------------------------------
     expect(await getClusterOrder(page)).toEqual([
-      "glucose", "macros", "rates", "score-trend", "recents",
+      "glucose", "metabolic", "control", "recents",
     ]);
 
-    // ---- DRAG MACROS ABOVE GLUCOSE -----------------------------
+    // ---- DRAG METABOLIC ABOVE GLUCOSE --------------------------
     // Wait for the debounced POST that follows the drag so we know
     // the new order has been persisted before the reload races
     // against the useCardOrder GET on the next page load. The hook
@@ -218,14 +221,14 @@ test.describe("Dashboard cluster reorder", () => {
     // Re-resolve grips after each interaction so locators stay
     // current even if dnd-kit re-mounts items. The "current grip
     // order" mirrors the cluster order, so grips.nth(1) is the
-    // Macros grip and grips.nth(0) is the Glucose grip.
+    // Metabolic grip and grips.nth(0) is the Glucose grip.
     await dragClusterAbove(grips.nth(1), grips.nth(0));
 
-    // In-memory state: Macros is now first.
+    // In-memory state: Metabolic is now first.
     await expect.poll(
       () => getClusterOrder(page),
       { timeout: 10_000 },
-    ).toEqual(["macros", "glucose", "rates", "score-trend", "recents"]);
+    ).toEqual(["metabolic", "glucose", "control", "recents"]);
 
     await savePost;
 
@@ -236,10 +239,10 @@ test.describe("Dashboard cluster reorder", () => {
     // once so the check waits past that re-render rather than racing
     // it.
     await page.reload();
-    await expect(page.getByRole("button", { name: GRIP_ARIA })).toHaveCount(5);
+    await expect(page.getByRole("button", { name: GRIP_ARIA })).toHaveCount(4);
     await expect.poll(
       () => getClusterOrder(page),
       { timeout: 10_000 },
-    ).toEqual(["macros", "glucose", "rates", "score-trend", "recents"]);
+    ).toEqual(["metabolic", "glucose", "control", "recents"]);
   });
 });
