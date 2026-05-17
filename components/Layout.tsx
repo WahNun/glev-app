@@ -215,35 +215,32 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             overflow-y: auto !important;
             overscroll-behavior-y: contain !important;
             -webkit-overflow-scrolling: auto !important;
-            /* Vertical paddings now match the ACTUAL fixed chrome
-               heights so the scrollable content sits visually flush
-               with the header's bottom border and the nav's top
-               border (user feedback 2026-05-17: previously a wide
-               dark page-bg band was visible above & below cards).
+            /* Vertical paddings match the ACTUAL fixed chrome heights
+               so the scrollable content sits visually flush with the
+               header's bottom border and the nav's top border (no dark
+               page-bg band above/below cards).
 
-               Header total height = safe-area-top + 10 (top pad) +
-               26 (GlevLockup svg) + 12 (bottom pad) = safe-area-top
-               + 48px → top padding matches exactly so card top
-               touches header bottom border.
+               2026-05-17 round 2 (user request: "zu viel blank space
+               unter footer nav und über dem header"): header & nav
+               chrome both trimmed by ~10 px and ~4 px respectively.
+               New numbers below.
 
-               Nav total height = 6 (top pad) + 22 (icon) + 4 (gap) +
-               12 (label) + max(4, safe-area-bottom - 18) ≈ safe-area-
-               bottom + 26 (notched) or 48 (no safe area). Bottom
-               padding matches that EXACTLY so the scroll region's
-               content edge sits flush against the nav's top border
-               — no dark page-bg band between card and nav, the same
-               way Instagram / TikTok / X render their feeds. The
-               Glev FAB still protrudes ~26 px above the nav top edge
-               but it's a floating button: it hovers over the bottom
-               of the content, which is acceptable for list / scroll
-               surfaces (last list row scrolls past). Pages that pin
-               interactive buttons at the bottom of a card (Engine
-               Step 1 advance CTA, Step 2 Save row) add their own
-               inner padding-bottom to keep those buttons clear of
-               the FAB. The max() floor keeps non-safe-area devices
-               (Android browsers, desktop) at the nav's intrinsic
-               48 px height. */
-            padding: calc(env(safe-area-inset-top) + 48px) 16px max(48px, calc(env(safe-area-inset-bottom) + 26px)) !important;
+               Header total height = safe-area-top + 4 (top pad) +
+               26 (GlevLockup svg) + 8 (bottom pad) = safe-area-top
+               + 38px. Top padding matches.
+
+               Nav total height = 4 (top pad) + 56 (MobileTab fixed
+               height — NOT 22+4+12; the button is hard-fixed to 56 px
+               regardless of icon/label sizes) + max(2, safe-area-
+               bottom - 22). So:
+                 • notched (sa-bot ≈ 34): 4 + 56 + 12 = 72 px
+                 • non-notched (sa-bot = 0): 4 + 56 + 2 = 62 px
+               Main bottom padding takes the larger of (62, sa-bot+38)
+               so the last card never scrolls under the nav on either
+               class of device. Architect 2026-05-17 caught that the
+               previous math used icon+label dimensions and was
+               under-counting nav height by ~16 px. */
+            padding: calc(env(safe-area-inset-top) + 38px) 16px max(62px, calc(env(safe-area-inset-bottom) + 38px)) !important;
           }
           .glev-entry-row   { grid-template-columns: 1fr auto auto !important; gap: 10px !important; padding: 14px 16px !important; }
           .glev-entry-hide-mobile { display: none !important; }
@@ -264,7 +261,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         // iOS notch / Dynamic Island: push content below the status bar by
         // honouring safe-area-inset-top, with a sensible fallback for
         // browsers that don't expose it (e.g. desktop dev tools).
-        padding: "calc(env(safe-area-inset-top) + 10px) max(18px, env(safe-area-inset-right)) 12px max(18px, env(safe-area-inset-left))",
+        padding: "calc(env(safe-area-inset-top) + 4px) max(18px, env(safe-area-inset-right)) 8px max(18px, env(safe-area-inset-left))",
         background: SURFACE,
         borderBottom: `1px solid ${BORDER}`,
         alignItems: "center", justifyContent: "space-between",
@@ -457,14 +454,15 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       <nav className="glev-mobile-nav" style={{
         position: "fixed", bottom: 0, left: 0, right: 0,
         background: NAV_SURFACE, borderTop: `1px solid ${NAV_BORDER}`,
-        // Bottom padding: previously the full env(safe-area-inset-bottom)
-        // (~34 px on notched iPhones) which left a noticeably tall dark
-        // band below the tab labels — Instagram/X/TikTok pull their nav
-        // icons MUCH closer to the home indicator. We now subtract 18 px
-        // from the inset (clamped to 4 px minimum on non-safe-area
-        // devices) so labels sit a comfortable ~16 px above the home
-        // indicator instead of ~34 px (user feedback 2026-05-17).
-        padding: "6px 4px max(4px, calc(env(safe-area-inset-bottom, 0px) - 18px))",
+        // Bottom padding pulls the tab labels even closer to the home
+        // indicator. After round 1 (-18 px), the user still saw a dark
+        // band below the labels; round 2 (2026-05-17) tightens it to
+        // sa-bot − 22 px so the labels sit ~12 px above the home
+        // indicator. Top padding also trimmed 6→4 to claw back another
+        // 2 px above the icons. Non-safe-area floor stays at 2 px so
+        // desktop / Android browsers keep the nav from kissing the
+        // viewport edge.
+        padding: "4px 4px max(2px, calc(env(safe-area-inset-bottom, 0px) - 22px))",
         zIndex: 100,
       }}>
         <MobileTab

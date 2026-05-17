@@ -60,8 +60,12 @@ const CARD_STYLE_TAG = `
     /* iPhone 13 mini and similar: pull the live-glucose card down
        so glucose + macros + control + plus-button all fit in one
        viewport without scrolling. The chart still gets enough room
-       because the header is unchanged. */
-    .glev-today-card { height: 178px; }
+       because the header is unchanged.
+       2026-05-17 (user request): card bumped 178→210 so the chart
+       claims the visible empty space below the trace; the y-axis tick
+       reduction (4→3 ticks, removed 110) prevents label overlap that
+       came from cramming four labels into the previous short chart. */
+    .glev-today-card { height: 210px; }
   }
 `;
 
@@ -525,7 +529,12 @@ function RollingChart({ readings }: { readings: ChartPoint[] }) {
   const toX = (t: number) => padL + ((t - winStart) / (now - winStart)) * (W - padL - padR);
   const toY = (v: number) => padT + (1 - (v - yMin) / (yMax - yMin)) * (H - padT - padB);
 
-  const yTicks = [70, 110, 180, 250];
+  // 2026-05-17: dropped the 110 tick. On the small (≤430 px) card the
+  // four labels overlapped each other and the trace at the typical
+  // 70–90 px chart height. 3 ticks (low band, high band, hyper marker)
+  // are enough for at-a-glance orientation; the crosshair tooltip
+  // still gives the exact value when the user taps.
+  const yTicks = [70, 180, 250];
   // Relative markers anchored to "now" on the right edge. Computed
   // from `winSpan` so the labels track the adaptive window width
   // (-12h / -8h / -4h / now when full; -4h / -3h / -1h / now when
@@ -606,8 +615,9 @@ function RollingChart({ readings }: { readings: ChartPoint[] }) {
             height={toY(RANGE_LOW) - toY(RANGE_HIGH)}
             fill={GREEN} fillOpacity="0.06"
           />
-          {/* Y axis tick labels (70 / 110 / 180 / 250) — text only,
-              no horizontal gridlines unless the user is touching the chart. */}
+          {/* Y axis tick labels (70 / 180 / 250) — text only,
+              no horizontal gridlines unless the user is touching the chart.
+              110 dropped 2026-05-17, see yTicks comment above. */}
           {yTicks.map((v) => (
             <text key={`yl${v}`} x={padL - 5} y={toY(v) + 3} textAnchor="end" fontSize="9" fill="var(--text-ghost)">{v}</text>
           ))}
