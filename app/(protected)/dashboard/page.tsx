@@ -572,9 +572,18 @@ export default function DashboardPage() {
            We trim only inter-cluster gaps + CTA chrome, never the
            card content itself, so the data stays legible. */
         @media (max-width: 430px) {
-          .glev-cluster-stack { gap: 8px !important; }
-          .glev-cluster        { gap: 6px !important; }
-          .glev-quickadd-cta   { margin-top: 6px !important; height: 44px !important; }
+          .glev-cluster-stack  { gap: 6px !important; }
+          .glev-cluster        { gap: 4px !important; }
+          /* Hide the per-cluster bottom bar entirely on phones — both
+             the pager-indicator line and the drag-handle dots — to free
+             up ~28px between every cluster. Users still swipe each
+             cluster horizontally to see the alternate card; on mobile
+             the dashboard is also not reorder-driven. */
+          .glev-cluster-bar    { display: none !important; }
+          .glev-quickadd-cta   { margin-top: 4px !important; height: 44px !important; }
+          .glev-control-front  { padding: 12px 16px 14px !important; }
+          .glev-control-front .glev-control-header { margin-bottom: 8px !important; }
+          .glev-macros-front   { padding: 12px 16px 10px !important; }
         }
       `}</style>
 
@@ -1096,6 +1105,7 @@ function DashboardCluster({
           card clusters (where PagerIndicator returns null) the bar
           shrinks to just the handle on the right. */}
       <div
+        className="glev-cluster-bar"
         style={{
           display: "grid",
           // Fixed 28px side columns mirror the handle button's footprint

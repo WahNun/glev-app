@@ -56,6 +56,13 @@ const CARD_STYLE_TAG = `
   @media (max-width: 768px) {
     .glev-today-card { height: 220px; }
   }
+  @media (max-width: 430px) {
+    /* iPhone 13 mini and similar: pull the live-glucose card down
+       so glucose + macros + control + plus-button all fit in one
+       viewport without scrolling. The chart still gets enough room
+       because the header is unchanged. */
+    .glev-today-card { height: 178px; }
+  }
 `;
 
 export default function CurrentDayGlucoseCard() {
