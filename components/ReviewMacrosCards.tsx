@@ -142,6 +142,14 @@ export default function ReviewMacrosCards({
       }}>
         {cards.map(c => {
           const active = open === c.key;
+          // Build a soft tint of the macro color for the active
+          // background. `${color}22` ≈ 13% alpha — strong enough to
+          // read as "selected" against the dark surface but light
+          // enough that the ring inside stays the visual hero. The
+          // colored bottom underline is kept so the selection still
+          // reads at a glance even when the tint is subtle on light
+          // mode. A 1px translucent border around the active card
+          // ties it together without looking boxy.
           return (
             <div key={c.key} style={{ display: "flex", justifyContent: "center", minWidth: 0 }}>
               <button
@@ -157,9 +165,14 @@ export default function ReviewMacrosCards({
                   justifyContent: "center",
                   width: "100%",
                   minWidth: 0,
-                  paddingBottom: 4,
+                  padding: "8px 4px 6px",
+                  borderRadius: 14,
+                  background: active ? `${c.color}22` : "transparent",
+                  border: `1px solid ${active ? `${c.color}55` : "transparent"}`,
                   borderBottom: `2px solid ${active ? c.color : "transparent"}`,
-                  transition: "border-color 160ms ease",
+                  boxShadow: active ? `0 0 0 1px ${c.color}22, 0 6px 18px -10px ${c.color}66` : "none",
+                  transition:
+                    "background 180ms ease, border-color 180ms ease, box-shadow 180ms ease",
                 }}
               >
                 <MacroRing

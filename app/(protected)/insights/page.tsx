@@ -16,6 +16,7 @@ import { suggestAdjustment, type AdaptiveSettings, type AdjustmentSuggestion } f
 import SortableCardGrid, { type SortableItem } from "@/components/SortableCardGrid";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import { useCardOrder } from "@/lib/cardOrder";
+import PagerIndicator from "@/components/PagerIndicator";
 import { parseDbTs, parseDbDate } from "@/lib/time";
 import { startOfDay, startOfToday, startOfDaysAgo, userTimezone } from "@/lib/utils/datetime";
 import { fetchUserProfile, cycleSurfacesAvailable, type Sex } from "@/lib/userProfile";
@@ -3249,9 +3250,18 @@ function InsightsSwipePager({
             <div
               key={it.id}
               style={{
+                // border-box pins the slot's outer width to exactly
+                // the scroller's clientWidth despite the inner 6px
+                // horizontal padding — without this, default
+                // content-box made each slot 12px wider than the
+                // viewport, causing scroll-snap to land between
+                // slides (the "stops halfway, shows 3 cards" bug the
+                // user reported). Using "start" alignment is also more
+                // reliable than "center" with mandatory snap on touch.
+                boxSizing: "border-box",
                 flex: "0 0 100%",
                 width: "100%",
-                scrollSnapAlign: "center",
+                scrollSnapAlign: "start",
                 scrollSnapStop: "always",
                 padding: "6px 6px",
                 display: "flex",
@@ -3270,46 +3280,22 @@ function InsightsSwipePager({
           ))}
         </div>
 
-        {/* Position indicator. The active dot stretches into a pill so
-            position is readable at a glance even with many cards. */}
-        <div
-          role="tablist"
-          aria-label={tInsights("swipe_context_label")}
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            gap: 5,
-            marginTop: 6,
-            flexWrap: "wrap",
-            paddingInline: 4,
+        {/* Minimal segmented position indicator — see
+            components/PagerIndicator.tsx. Replaces the previous
+            pill+dots row that read as a clunky scrollbar. */}
+        <PagerIndicator
+          total={items.length}
+          active={active}
+          onSelect={(i) => {
+            const el = scrollerRef.current;
+            if (!el) return;
+            el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
           }}
-        >
-          {items.map((it, i) => (
-            <button
-              key={it.id}
-              type="button"
-              role="tab"
-              aria-selected={i === active}
-              aria-label={tInsights("swipe_position", { current: i + 1, total: items.length })}
-              onClick={() => {
-                const el = scrollerRef.current;
-                if (!el) return;
-                el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
-              }}
-              style={{
-                width: i === active ? 18 : 6,
-                height: 6,
-                borderRadius: 99,
-                background: i === active ? "var(--text)" : "var(--text-ghost)",
-                border: "none",
-                padding: 0,
-                cursor: "pointer",
-                transition: "width 200ms ease, background 200ms ease",
-              }}
-            />
-          ))}
-        </div>
+          label={tInsights("swipe_context_label")}
+          labelForIndex={(i, total) =>
+            tInsights("swipe_position", { current: i + 1, total })
+          }
+        />
       </div>
 
       {/* Context zone — reacts to the active card. Grows with its own

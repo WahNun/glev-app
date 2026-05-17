@@ -40,6 +40,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useCardOrder } from "@/lib/cardOrder";
+import PagerIndicator from "@/components/PagerIndicator";
 
 // Four-cluster cockpit layout (replaces the earlier 5-cluster "widget
 // wall"). Order is intentionally staged: Glucose is the primary
@@ -793,16 +794,28 @@ function DashboardCluster({
       aria-label={title}
       style={{ display:"flex", flexDirection:"column", gap:10 }}
     >
-      <div style={{ display:"flex", alignItems:"center", gap:6, margin:"0 4px" }}>
-        <h2 style={{
-          fontSize:12, fontWeight:700, letterSpacing:"0.12em",
-          textTransform:"uppercase", color:"var(--text-dim)",
-          margin:0, flex:1, minWidth:0,
-        }}>
-          {title}
-        </h2>
-        {headerHandle}
-      </div>
+      {/* Cluster title is intentionally hidden from view (per user
+          request: the "Glucose / Metabolic Response / Control"
+          headings felt redundant once each cluster is a single visual
+          swipe surface). It still ships as a visually-hidden h2 so
+          screen readers and the cluster's aria-label stay informative.
+          The drag handle, when present, remains tappable on the
+          right edge of the cluster. */}
+      <h2
+        style={{
+          position: "absolute",
+          width: 1, height: 1,
+          padding: 0, margin: -1, overflow: "hidden",
+          clip: "rect(0 0 0 0)", whiteSpace: "nowrap", border: 0,
+        }}
+      >
+        {title}
+      </h2>
+      {headerHandle && (
+        <div style={{ display:"flex", justifyContent:"flex-end", margin:"0 4px" }}>
+          {headerHandle}
+        </div>
+      )}
       <div
         ref={scrollerRef}
         onScroll={cards.length > 1 ? onScroll : undefined}
@@ -832,10 +845,18 @@ function DashboardCluster({
             aria-label={c.id}
             ref={el => { itemRefs.current[i] = el; }}
             style={{
+              // border-box guarantees the slot's outer width is
+              // exactly the scroller's clientWidth even if padding is
+              // ever introduced, so scroll-snap lands cleanly on
+              // multiples of clientWidth instead of stopping between
+              // slides. Combined with `scrollSnapAlign:"start"` (more
+              // reliable than "center" on touch with mandatory snap)
+              // this fixes the "stops halfway" issue the user saw.
+              boxSizing:"border-box",
               flex:"0 0 100%",
               width:"100%",
               minWidth:0,
-              scrollSnapAlign:"center",
+              scrollSnapAlign:"start",
               scrollSnapStop:"always",
             }}
           >
@@ -843,36 +864,17 @@ function DashboardCluster({
           </div>
         ))}
       </div>
-      {cards.length > 1 && (
-        <div
-          role="tablist"
-          aria-label={title}
-          style={{ display:"flex", justifyContent:"center", alignItems:"center", gap:5, marginTop:2 }}
-        >
-          {cards.map((c, i) => (
-            <button
-              key={c.id}
-              type="button"
-              role="tab"
-              aria-selected={i === active}
-              aria-controls={`${clusterId}-slide-${i}`}
-              onClick={() => {
-                const el = scrollerRef.current;
-                if (!el) return;
-                el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
-              }}
-              style={{
-                width: i === active ? 18 : 6,
-                height: 6,
-                borderRadius: 99,
-                background: i === active ? "var(--text)" : "var(--text-ghost)",
-                border:"none", padding:0, cursor:"pointer",
-                transition:"width 200ms ease, background 200ms ease",
-              }}
-            />
-          ))}
-        </div>
-      )}
+      <PagerIndicator
+        total={cards.length}
+        active={active}
+        onSelect={(i) => {
+          const el = scrollerRef.current;
+          if (!el) return;
+          el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
+        }}
+        label={title}
+        controlsId={(i) => `${clusterId}-slide-${i}`}
+      />
     </section>
   );
 }
