@@ -48,10 +48,29 @@ export default function SWRProvider({ children }: { children: ReactNode }) {
     <SWRConfig
       value={{
         provider: () => providerRef.current!,
+        // 2026-05-17 round 6 (lever C — data cache for iOS): the worst
+        // perceived "Settings/Insights laden sehr verzögert" case on
+        // TestFlight was: open app → tap Insights → 8 parallel fetches
+        // run → 1-2 s blank-card window → tab home → tap Insights
+        // again → ALL 8 refetch because `revalidateOnFocus` fires on
+        // every webview foreground/back-and-forth. We now:
+        //   • throttle focus revalidation to one burst per 60 s
+        //     (instead of one per focus event) so app-switcher hops
+        //     don't trigger storms;
+        //   • bump dedupingInterval to 30 s so two cards mounting in
+        //     the same render share a single in-flight fetch even when
+        //     keyed slightly differently in the same tick;
+        //   • keep previous data on key change so scope-switching
+        //     (day → week → month) shows the old values dimmed instead
+        //     of flashing skeletons.
+        // Per-hook overrides (e.g. /insights CGM samples already
+        // disable revalidateOnFocus + use a 5-minute poll) still win
+        // over these defaults.
         revalidateOnFocus: true,
+        focusThrottleInterval: 60_000,
         revalidateOnReconnect: true,
         keepPreviousData: true,
-        dedupingInterval: 5_000,
+        dedupingInterval: 30_000,
         errorRetryCount: 2,
       }}
     >

@@ -155,6 +155,38 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       router.push(path);
     });
   };
+
+  // 2026-05-17 round 6 (lever A — prefetch): on iOS WKWebView the very
+  // first tap on a bottom-nav tab pays the full RSC + JS-chunk roundtrip
+  // because there is no `<Link>` hover-prefetch on touch and the app
+  // shell starts with an empty cache. We warm every primary tab once,
+  // shortly after the current route is interactive, so any subsequent
+  // tab tap only re-renders cached chunks. requestIdleCallback isn't
+  // available on iOS Safari/WKWebView, so we fall back to a small
+  // setTimeout. Re-running per `pathname` is intentional — Next.js
+  // de-dupes prefetches internally, but doing it again right after a
+  // navigation makes sure the OTHER three tabs stay warm even after a
+  // cache eviction.
+  useEffect(() => {
+    const tabs = ["/dashboard", "/entries", "/insights", "/settings"];
+    const warm = () => {
+      for (const p of tabs) {
+        if (!pathname.startsWith(p)) {
+          try { router.prefetch(p); } catch {}
+        }
+      }
+    };
+    const w = typeof window !== "undefined" ? (window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }) : null;
+    if (w && typeof w.requestIdleCallback === "function") {
+      const id = w.requestIdleCallback(warm, { timeout: 2000 });
+      return () => {
+        const cancel = (w as unknown as { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
+        if (typeof cancel === "function") cancel(id);
+      };
+    }
+    const id = window.setTimeout(warm, 800);
+    return () => window.clearTimeout(id);
+  }, [pathname, router]);
   // Mobile bottom-nav: tapping the Glev slot now goes STRAIGHT to the
   // engine voice screen (the meal log flow) instead of popping a
   // pick-your-flow action sheet. The two secondary flows (Glukose

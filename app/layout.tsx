@@ -130,6 +130,25 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             mounts so the very first painted frame already has the right
             data-theme attribute and theme-color meta — no FOUC. */}
         <script dangerouslySetInnerHTML={{ __html: NO_FLICKER_THEME_SCRIPT }} />
+        {/* 2026-05-17 round 6 (lever B — handshake pre-warm): every page
+            in the protected zone hits the Supabase REST + Realtime
+            endpoint on first paint. preconnect lets the browser pay the
+            DNS + TLS handshake during the initial HTML stream so the
+            first `fetchMeals` / `fetchCgmSamples` request doesn't
+            additionally wait for the TCP+TLS roundtrip. Particularly
+            visible on iOS WKWebView where the per-launch connection
+            pool starts empty. We read the URL at build time so the
+            preconnect resolves to the actual project subdomain (e.g.
+            `https://xxx.supabase.co`) rather than the generic root.
+            `crossOrigin` matches the fetch credentials mode used by
+            supabase-js (`omit`/`include` are both fine for preconnect
+            — anonymous covers both). */}
+        {process.env.NEXT_PUBLIC_SUPABASE_URL ? (
+          <>
+            <link rel="preconnect" href={process.env.NEXT_PUBLIC_SUPABASE_URL} crossOrigin="anonymous" />
+            <link rel="dns-prefetch" href={process.env.NEXT_PUBLIC_SUPABASE_URL} />
+          </>
+        ) : null}
       </head>
       <body>
         {/* Meta Pixel — fires PageView on every route. Loaded with
