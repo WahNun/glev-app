@@ -4,7 +4,10 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { fetchMeals, deleteMeal, updateMeal, type Meal } from "@/lib/meals";
 import { fetchRecentInsulinLogs, deleteInsulinLog, updateInsulinReadings, type InsulinLog } from "@/lib/insulin";
-import { fetchRecentExerciseLogs, deleteExerciseLog, type ExerciseLog } from "@/lib/exercise";
+import { fetchRecentExerciseLogs, deleteExerciseLog, updateExerciseLog, type ExerciseLog, type ExerciseType, type ExerciseIntensity } from "@/lib/exercise";
+import SnapSlider from "@/components/log/SnapSlider";
+import CollapsibleField from "@/components/log/CollapsibleField";
+import SaveButton from "@/components/log/SaveButton";
 import { fetchRecentMenstrualLogs, deleteMenstrualLog, type MenstrualLog } from "@/lib/menstrual";
 import { fetchRecentSymptomLogs, deleteSymptomLog, type SymptomLog } from "@/lib/symptoms";
 import { fetchRecentInfluenceLogs, deleteInfluenceLog, type InfluenceLog } from "@/lib/influences";
@@ -879,6 +882,9 @@ export default function EntriesPage() {
                   onToggle={() => expandRow(isOpen ? null : x.id)}
                   onDelete={() => handleDeleteExercise(x.id)}
                   deleting={deleting === x.id}
+                  onUpdated={(updated) => {
+                    setExercise(xs => xs.map(prev => prev.id === updated.id ? updated : prev));
+                  }}
                 />
               );
             }
@@ -1303,7 +1309,7 @@ const BASAL_ACCENT   = "#A78BFA";
 const EXERCISE_ACCENT = "#22C55E";
 
 function NonMealRow({
-  isOpen, onToggle, onDelete, deleting, accent, badge, dateStr, timeStr,
+  isOpen, onToggle, onDelete, deleting, onEdit, accent, badge, dateStr, timeStr,
   primaryLabel, primaryValue, primaryColor, primaryMono,
   secondaryLabel, secondaryValue, secondaryColor, secondaryMono,
   secondarySubtitle,
@@ -1313,6 +1319,10 @@ function NonMealRow({
   onToggle: () => void;
   onDelete: () => void;
   deleting: boolean;
+  /** Optional Edit affordance — when provided, an Edit button is
+   *  rendered next to Delete in the expanded action row. Used by
+   *  ExerciseRowCard to surface the inline ExerciseEditor. */
+  onEdit?: () => void;
   accent: string;
   badge: string;
   dateStr: string;
@@ -1436,14 +1446,34 @@ function NonMealRow({
       {isOpen && (
         <div style={{ padding:"4px 16px 16px", borderTop:`1px solid var(--surface-soft)`, display:"flex", flexDirection:"column", gap:12 }}>
           {expandedDetails}
-          <button onClick={onDelete} disabled={deleting} style={{
-            marginTop:4, padding:"12px", borderRadius:10, border:`1px solid ${PINK}40`,
-            background:`${PINK}08`, color:PINK, fontSize:14, fontWeight:600,
-            cursor:deleting ? "wait" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, letterSpacing:"0.02em",
+          <div style={{
+            marginTop:4,
+            display:"grid",
+            gridTemplateColumns: onEdit ? "1fr 1fr" : "1fr",
+            gap:8,
           }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
-            {deleting ? "Deleting…" : "Delete entry"}
-          </button>
+            {onEdit && (
+              <button onClick={onEdit} disabled={deleting} style={{
+                padding:"12px", borderRadius:10, border:`1px solid ${BORDER}`,
+                background:"var(--surface-soft)", color:"var(--text-body)",
+                fontSize:14, fontWeight:600,
+                cursor:deleting ? "not-allowed" : "pointer",
+                display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+                letterSpacing:"0.02em",
+              }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+                Edit entry
+              </button>
+            )}
+            <button onClick={onDelete} disabled={deleting} style={{
+              padding:"12px", borderRadius:10, border:`1px solid ${PINK}40`,
+              background:`${PINK}08`, color:PINK, fontSize:14, fontWeight:600,
+              cursor:deleting ? "wait" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, letterSpacing:"0.02em",
+            }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+              {deleting ? "Deleting…" : "Delete entry"}
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -1939,14 +1969,22 @@ function BolusDeltaPill({ label, delta }: { label: string; delta: number | null 
   );
 }
 
-function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting }: {
+function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting, onUpdated }: {
   log: ExerciseLog;
   /** Full pool of recently fetched exercise logs. Powers the
    *  PERSONAL PATTERN panel — needs cross-row context, not just the
    *  current row. */
   allLogs: ExerciseLog[];
   isOpen: boolean; onToggle: () => void; onDelete: () => void; deleting: boolean;
+  /** Replace this row in the parent list after a successful PATCH. */
+  onUpdated: (updated: ExerciseLog) => void;
 }) {
+  // Local "in-place editor open?" state. Kept inside the row (not the
+  // page) so a parent refetch (e.g. another listener firing) cannot
+  // collapse the editor mid-edit. We also auto-close it whenever the
+  // row itself collapses so reopening the row starts in read-only mode.
+  const [editing, setEditing] = useState(false);
+  useEffect(() => { if (!isOpen) setEditing(false); }, [isOpen]);
   const tIns = useTranslations("insights");
   const tx = useTranslations("entriesExpand");
   const locale = useLocale();
@@ -1979,9 +2017,12 @@ function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting }:
   return (
     <NonMealRow
       isOpen={isOpen}
-      onToggle={onToggle}
+      // While the editor is open we ignore header taps so a stray click
+      // doesn't collapse the row mid-edit and discard the user's draft.
+      onToggle={editing ? () => {} : onToggle}
       onDelete={onDelete}
       deleting={deleting}
+      onEdit={editing ? undefined : () => setEditing(true)}
       accent={badgeColor}
       badge={evalInfo.label}
       dateStr={dateStr}
@@ -1992,7 +2033,16 @@ function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting }:
       primaryMono
       secondaryLabel={tx("row_type")}
       secondaryValue={typeLbl}
-      expandedDetails={
+      expandedDetails={editing ? (
+        <ExerciseEditor
+          log={log}
+          onSaved={(updated) => {
+            setEditing(false);
+            onUpdated(updated);
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      ) : (
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
           {/* 1) Session details ------------------------------------ */}
           <ExPanel title={tx("panel_session_details")}>
@@ -2090,8 +2140,251 @@ function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting }:
             For reference only — always consult your care team.
           </div>
         </div>
-      }
+      )}
     />
+  );
+}
+
+/**
+ * Inline editor for a single ExerciseLog. Mirrors the shape of the
+ * Engine log form (ExerciseForm in components/EngineLogTab.tsx) but
+ * scoped to the four user-facing fields that the PATCH route accepts:
+ * exercise_type, duration_minutes, intensity, notes. CGM-derived
+ * columns are intentionally not exposed.
+ *
+ * Local-only state — the parent ExerciseRowCard only learns about the
+ * new row via `onSaved(updated)` AFTER the PATCH resolves, so a partial
+ * save can't half-update the list. While saving the form locks the
+ * Save button and keeps the editor mounted (the parent row also
+ * suppresses its collapse toggle).
+ */
+function ExerciseEditor({ log, onSaved, onCancel }: {
+  log: ExerciseLog;
+  onSaved: (updated: ExerciseLog) => void;
+  onCancel: () => void;
+}) {
+  // Legacy `hypertrophy` rows keep their stored type — we surface it in
+  // the picker as a hidden-by-default option so an old row can be saved
+  // back unchanged. The new form would emit `strength` instead.
+  const initialType: ExerciseType = log.exercise_type;
+  const [type, setType] = useState<ExerciseType>(initialType);
+  const [duration, setDuration] = useState<number>(log.duration_minutes);
+  const [intensity, setIntensity] = useState<ExerciseIntensity>(log.intensity);
+  const [notes, setNotes] = useState<string>(log.notes ?? "");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr]   = useState<string | null>(null);
+  const [savedTick, setSavedTick] = useState<number>(0);
+
+  const tIns = useTranslations("insights");
+
+  // Editor type options: the new taxonomy, plus the row's current
+  // value if it's a legacy `hypertrophy` row, so we never silently
+  // change the type on save.
+  const EDIT_TYPE_OPTIONS: ExerciseType[] = useMemo(() => {
+    const base: ExerciseType[] = [
+      "cardio", "strength", "hiit", "yoga", "cycling", "run", "swimming",
+      "football", "tennis", "volleyball", "basketball",
+      "breathwork", "hot_shower", "cold_shower",
+    ];
+    if (initialType === "hypertrophy" && !base.includes("hypertrophy")) {
+      return ["hypertrophy", ...base];
+    }
+    return base;
+  }, [initialType]);
+
+  async function handleSave() {
+    if (busy) return;
+    setErr(null);
+    if (!Number.isFinite(duration) || !Number.isInteger(duration) || duration <= 0 || duration > 600) {
+      setErr("Dauer muss eine ganze Zahl zwischen 1 und 600 Minuten sein.");
+      return;
+    }
+    setBusy(true);
+    try {
+      // Build a diff so we only PATCH fields that actually changed.
+      // Notes is normalised the same way the API does (trim → null on
+      // empty) so a no-op notes edit isn't sent.
+      const patch: {
+        exercise_type?: ExerciseType;
+        duration_minutes?: number;
+        intensity?: ExerciseIntensity;
+        notes?: string | null;
+      } = {};
+      if (type !== log.exercise_type) patch.exercise_type = type;
+      if (duration !== log.duration_minutes) patch.duration_minutes = duration;
+      if (intensity !== log.intensity) patch.intensity = intensity;
+      const trimmedNotes = notes.trim();
+      const normalizedNotes = trimmedNotes.length > 0 ? trimmedNotes : null;
+      if (normalizedNotes !== (log.notes ?? null)) patch.notes = normalizedNotes;
+
+      if (Object.keys(patch).length === 0) {
+        // No changes — just close the editor without hitting the API.
+        setBusy(false);
+        onCancel();
+        return;
+      }
+
+      const updated = await updateExerciseLog(log.id, patch);
+      setSavedTick(n => n + 1);
+      // Notify other tabs / panels (engine, insights) AFTER the parent
+      // has had a chance to swap in the fresh row. We dispatch from a
+      // microtask so the parent state update isn't immediately
+      // clobbered by a refetch racing with our local replace.
+      queueMicrotask(() => {
+        window.dispatchEvent(new Event("glev:exercise-updated"));
+      });
+      onSaved(updated);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Konnte nicht speichern.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
+        <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>
+          WORKOUT BEARBEITEN
+        </div>
+        <span style={{
+          padding:"4px 10px", borderRadius:99, fontSize:12, fontWeight:700,
+          background:`${EXERCISE_ACCENT}20`, color:EXERCISE_ACCENT,
+          border:`1px solid ${EXERCISE_ACCENT}40`,
+          letterSpacing:"0.04em", textTransform:"uppercase",
+        }}>
+          Editor
+        </span>
+      </div>
+
+      <div style={{ fontSize:13, color:"var(--text-dim)", lineHeight:1.5 }}>
+        Korrigiert Sportart, Dauer, Intensität und Notizen nachträglich.
+        Glukose-Werte und Start-Zeit bleiben unverändert.
+      </div>
+
+      {/* Sportart — simple native select keeps the editor compact and
+          accessible without re-implementing the engine dropdown. */}
+      <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+        <label style={{ fontSize:13, color:"var(--text-dim)" }}>Sportart</label>
+        <select
+          value={type}
+          onChange={e => setType(e.target.value as ExerciseType)}
+          style={{
+            background:"var(--input-bg)",
+            border:`1px solid ${BORDER}`,
+            borderRadius:12,
+            padding:"12px 14px",
+            fontSize:14,
+            fontWeight:600,
+            color:"var(--text-strong)",
+            outline:"none",
+          }}
+        >
+          {EDIT_TYPE_OPTIONS.map(opt => (
+            <option key={opt} value={opt}>{exerciseTypeLabelI18n(tIns, opt)}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Dauer (1–600 min) */}
+      <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+        <label style={{ fontSize:13, color:"var(--text-dim)" }}>Dauer</label>
+        <SnapSlider
+          value={duration}
+          onChange={(n) => setDuration(Math.round(n))}
+          min={1}
+          max={600}
+          step={1}
+          unit="min"
+          accent={EXERCISE_ACCENT}
+          ariaLabel="Dauer"
+        />
+      </div>
+
+      {/* Intensität — 3-stop slider mapped onto low/medium/high. */}
+      <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+        <label style={{ fontSize:13, color:"var(--text-dim)" }}>
+          Intensität —{" "}
+          <span style={{ color:EXERCISE_ACCENT, fontWeight:700 }}>
+            {intensityLabel(intensity)}
+          </span>
+        </label>
+        <SnapSlider
+          value={intensity === "low" ? 1 : intensity === "high" ? 3 : 2}
+          onChange={(n) => setIntensity(n <= 1 ? "low" : n >= 3 ? "high" : "medium")}
+          min={1}
+          max={3}
+          step={1}
+          accent={EXERCISE_ACCENT}
+          ariaLabel="Intensität"
+        />
+      </div>
+
+      <CollapsibleField
+        label="Notiz"
+        accent={EXERCISE_ACCENT}
+        hasValue={notes.trim().length > 0}
+      >
+        <input
+          type="text"
+          value={notes}
+          onChange={e => setNotes(e.target.value)}
+          placeholder="z.B. Intervalle, Outdoor, …"
+          style={{
+            width:"100%",
+            background:"var(--input-bg)",
+            border:`1px solid ${BORDER}`,
+            borderRadius:12,
+            padding:"12px 14px",
+            fontSize:14,
+            color:"var(--text-strong)",
+            outline:"none",
+          }}
+        />
+      </CollapsibleField>
+
+      {err && (
+        <div style={{
+          fontSize:13, color:PINK,
+          padding:"8px 10px",
+          background:`${PINK}10`,
+          border:`1px solid ${PINK}30`,
+          borderRadius:8,
+        }}>
+          {err}
+        </div>
+      )}
+
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, alignItems:"end" }}>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={busy}
+          style={{
+            padding:"13px",
+            borderRadius:12,
+            border:`1px solid ${BORDER}`,
+            background:"var(--surface-soft)",
+            color:"var(--text-body)",
+            fontSize:14,
+            fontWeight:600,
+            cursor:busy ? "not-allowed" : "pointer",
+            letterSpacing:"0.02em",
+            marginTop:18, // align with SaveButton's marginTop
+          }}
+        >
+          Abbrechen
+        </button>
+        <SaveButton
+          onClick={handleSave}
+          disabled={busy}
+          busy={busy}
+          accent={EXERCISE_ACCENT}
+          label="Speichern"
+          successKey={savedTick || null}
+        />
+      </div>
+    </div>
   );
 }
 

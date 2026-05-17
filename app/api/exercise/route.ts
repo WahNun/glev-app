@@ -1,24 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authedClient, isMissingTable } from "../insulin/_helpers";
+import {
+  COLS,
+  parseExerciseType,
+  parseIntensity,
+  parseDuration,
+  parseCgmGlucose,
+  parseNotes,
+} from "./_validate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const COLS =
-  "id,user_id,created_at,exercise_type,duration_minutes,intensity,cgm_glucose_at_log,notes";
-
-// Mirrors lib/exercise.ts ExerciseType: keeps legacy 'hypertrophy' for
-// backward compat, adds the widened taxonomy used by the form.
-const VALID_TYPE = new Set([
-  "hypertrophy", "strength", "cardio", "hiit", "yoga", "cycling", "run",
-  // Team / racquet sports — added in task #203 alongside the
-  // exercise_logs_exercise_type_check widening migration.
-  "football", "tennis", "volleyball", "basketball",
-  // Body-temperature events + swimming + breathwork — must match the
-  // CHECK constraint in supabase/migrations/20260512_add_breathwork_and_swimming_exercise_types.sql.
-  "swimming", "hot_shower", "cold_shower", "breathwork",
-]);
-const VALID_INTENSITY = new Set(["low", "medium", "high"]);
 
 /** GET /api/exercise — caller's exercise_logs, newest first. */
 export async function GET(req: NextRequest) {
@@ -61,40 +53,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const exercise_type = String(body.exercise_type ?? "").toLowerCase();
-  const intensity = String(body.intensity ?? "").toLowerCase();
-  const durRaw = Number(body.duration_minutes);
-  const cgmRaw = body.cgm_glucose_at_log;
-  const notes = body.notes != null ? String(body.notes).trim() : null;
-
-  if (!VALID_TYPE.has(exercise_type)) {
-    return NextResponse.json({
-      error: "exercise_type must be one of: cardio, strength, hiit, yoga, cycling, run, swimming, football, tennis, volleyball, basketball, breathwork, hot_shower, cold_shower (legacy 'hypertrophy' also accepted)",
-    }, { status: 400 });
-  }
-  if (!VALID_INTENSITY.has(intensity)) {
-    return NextResponse.json({ error: "intensity must be 'low', 'medium' or 'high'" }, { status: 400 });
-  }
-  if (!Number.isFinite(durRaw) || !Number.isInteger(durRaw) || durRaw <= 0 || durRaw > 600) {
-    return NextResponse.json({ error: "duration_minutes must be an integer 0 < n ≤ 600" }, { status: 400 });
-  }
-
-  let cgm: number | null = null;
-  if (cgmRaw != null && cgmRaw !== "") {
-    const c = Number(cgmRaw);
-    if (!Number.isFinite(c) || c < 20 || c > 600) {
-      return NextResponse.json({ error: "cgm_glucose_at_log out of range" }, { status: 400 });
-    }
-    cgm = Math.round(c * 10) / 10;
-  }
+  const exercise_type = parseExerciseType(body.exercise_type);
+  if ("error" in exercise_type) return NextResponse.json({ error: exercise_type.error }, { status: 400 });
+  const intensity = parseIntensity(body.intensity);
+  if ("error" in intensity) return NextResponse.json({ error: intensity.error }, { status: 400 });
+  const duration = parseDuration(body.duration_minutes);
+  if ("error" in duration) return NextResponse.json({ error: duration.error }, { status: 400 });
+  const cgm = parseCgmGlucose(body.cgm_glucose_at_log);
+  if ("error" in cgm) return NextResponse.json({ error: cgm.error }, { status: 400 });
 
   const row = {
     user_id: auth.user.id,
-    exercise_type,
-    duration_minutes: durRaw,
-    intensity,
-    cgm_glucose_at_log: cgm,
-    notes: notes || null,
+    exercise_type: exercise_type.value,
+    duration_minutes: duration.value,
+    intensity: intensity.value,
+    cgm_glucose_at_log: cgm.value,
+    notes: parseNotes(body.notes),
   };
 
   const { data, error } = await auth.sb

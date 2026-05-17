@@ -108,6 +108,40 @@ export async function insertExerciseLog(input: ExerciseLogInput): Promise<Exerci
   return data as ExerciseLog;
 }
 
+/**
+ * PATCH /api/exercise/[id] — partial update of an existing exercise log.
+ *
+ * Mirrors `updateInsulinLogLink` (lib/insulin.ts) and is intentionally
+ * routed through the API instead of going straight to Supabase so the
+ * server-side validation (range + enum checks) is the single source of
+ * truth shared with the POST handler.
+ */
+export async function updateExerciseLog(
+  id: string,
+  patch: {
+    exercise_type?: ExerciseType;
+    duration_minutes?: number;
+    intensity?: ExerciseIntensity;
+    notes?: string | null;
+  },
+): Promise<ExerciseLog> {
+  const r = await fetch(`/api/exercise/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!r.ok) {
+    let msg = `HTTP ${r.status}`;
+    try {
+      const j = await r.json();
+      if (j && typeof j.error === "string") msg = j.error;
+    } catch { /* ignore */ }
+    throw new Error(msg);
+  }
+  const j = await r.json();
+  return j.log as ExerciseLog;
+}
+
 export async function fetchExerciseLogs(
   fromIso?: string,
   toIso?: string,
