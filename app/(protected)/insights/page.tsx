@@ -3033,15 +3033,20 @@ function InsightsSwipePager({
   const [heights, setHeights] = useState<Record<number, number>>({});
 
   // Sizing budget for the adaptive focus pager. The active card's
-  // measured height (plus slot padding) drives the scroller height,
-  // clamped between MIN_CARD_H (so a tiny KPI tile still feels like
-  // the page's focal point) and a soft upper bound that keeps the
-  // context box visible without page-level scroll. When a FlipCard
-  // back is expanded beyond the soft bound, the scroller is allowed
-  // to grow past it and the page itself starts scrolling — the user
-  // explicitly asked that expanded backs never scroll inside the card.
-  const MIN_CARD_H = 320;
+  // measured height (plus slot padding) drives the scroller height
+  // exactly — no minimum floor. The user explicitly asked that the
+  // bottom edge of each card hug whatever sits below it (context
+  // box / dots) instead of leaving blank space when a small KPI
+  // tile is in focus, so we removed the previous 320px floor and
+  // let short cards stay short. A FlipCard back that expands beyond
+  // a viewport's worth simply lets the page scroll, matching the
+  // earlier "expanded backs never scroll inside the card" rule.
   const SLOT_PAD_V = 12; // 6px top + 6px bottom on each slot
+  // First-paint fallback — used only until the ResizeObserver lands
+  // the first measurement. Small enough that any real card will
+  // measure taller and replace it immediately; large enough that
+  // the layout doesn't collapse to zero on initial mount.
+  const FIRST_PAINT_H = 160;
 
   // Empty-state guard. Suppress dots/position counters and render a
   // dedicated card-shaped placeholder instead of "1 of 0".
@@ -3175,12 +3180,16 @@ function InsightsSwipePager({
     });
   }, [items.length]);
 
-  // Pager height for the active card. Until a measurement lands we
-  // default to MIN_CARD_H so the layout doesn't jump up from 0.
+  // Pager height for the active card. Tracks the measured natural
+  // height exactly (plus the slot's vertical padding) so the bottom
+  // edge of the card sits flush against the context box below — no
+  // 320px floor, no blank space when a short KPI card is in focus.
+  // The first-paint fallback only applies until the first
+  // measurement arrives.
   const activeMeasured = heights[active];
   const pagerHeight = activeMeasured != null
-    ? Math.max(MIN_CARD_H, activeMeasured + SLOT_PAD_V)
-    : MIN_CARD_H;
+    ? activeMeasured + SLOT_PAD_V
+    : FIRST_PAINT_H;
 
   // Translation helper — returns localized title/body for a given card
   // id, falling back to a generic "swipe to learn more" copy when the

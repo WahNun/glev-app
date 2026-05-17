@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from "react";
 import useSWR, { mutate as swrMutate } from "swr";
 import { useRouter } from "next/navigation";
 import { fetchMeals, computeCalories, unifiedOutcome, type Meal } from "@/lib/meals";
@@ -703,6 +703,18 @@ function DashboardCluster({
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const rafRef = useRef<number | null>(null);
 
+  // Per-card natural-height measurements. Mirrors the InsightsSwipePager
+  // pattern: each slide is observed by a ResizeObserver and the
+  // scroller's height tracks the *active* slide's height instead of
+  // letting flex stretch every slide to the tallest sibling. Without
+  // this, a short card (e.g. Good Rate ~150px) shares its row with a
+  // tall card (e.g. Recents ~400px) and the scroller container ends up
+  // 400px tall, leaving a big blank gap between the card and the dots
+  // pager below it. Adaptive height makes the dots hug the bottom edge
+  // of whichever card is currently in focus.
+  const itemRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const [heights, setHeights] = useState<Record<number, number>>({});
+
   const updateActive = useCallback(() => {
     const el = scrollerRef.current;
     if (!el) return;
@@ -722,6 +734,53 @@ function DashboardCluster({
       updateActive();
     });
   }, [updateActive]);
+
+  // Measure each card's natural height. Re-measures automatically when
+  // a card's content changes (e.g. a FlipCard expands its back, which
+  // renders a hidden ghost in normal flow to drive parent height) or
+  // when underlying data refreshes. Stale entries are kept around so
+  // swiping back to an already-measured slide is jank-free.
+  useLayoutEffect(() => {
+    if (typeof ResizeObserver === "undefined") return;
+    const observers: ResizeObserver[] = [];
+    itemRefs.current.slice(0, cards.length).forEach((el, idx) => {
+      if (!el) return;
+      const ro = new ResizeObserver(entries => {
+        for (const e of entries) {
+          const h = Math.ceil(e.contentRect.height);
+          if (h <= 0) continue;
+          setHeights(prev => (prev[idx] === h ? prev : { ...prev, [idx]: h }));
+        }
+      });
+      ro.observe(el);
+      observers.push(ro);
+    });
+    return () => observers.forEach(o => o.disconnect());
+  }, [cards.length]);
+
+  // Drop measurements for indices that no longer exist (card count
+  // shrinks). Keeps the state map from growing unbounded across
+  // renders.
+  useEffect(() => {
+    setHeights(prev => {
+      const next: Record<number, number> = {};
+      for (const k of Object.keys(prev)) {
+        const i = Number(k);
+        if (i < cards.length) next[i] = prev[i];
+      }
+      return next;
+    });
+  }, [cards.length]);
+
+  // Scroller height = active card's measured height. Until the first
+  // measurement lands the height is `auto` so the very first paint
+  // doesn't collapse to zero (which would cause a brief flash of
+  // missing content before the observer fires). After measurement we
+  // pin the height with a short transition so swiping between cards of
+  // different heights feels smooth instead of snapping.
+  const activeMeasured = heights[active];
+  const scrollerHeight: React.CSSProperties["height"] =
+    activeMeasured != null ? activeMeasured : "auto";
 
   return (
     <section
@@ -743,6 +802,14 @@ function DashboardCluster({
         onScroll={cards.length > 1 ? onScroll : undefined}
         style={{
           display:"flex",
+          // Adaptive height — see the heights/measured logic above for
+          // the rationale. `alignItems:"flex-start"` prevents flex from
+          // stretching slides taller than the container's pinned
+          // height, which would otherwise re-introduce the blank-space
+          // problem the measurement is meant to fix.
+          alignItems:"flex-start",
+          height: scrollerHeight,
+          transition: "height 220ms ease",
           overflowX: cards.length > 1 ? "auto" : "hidden",
           overflowY:"hidden",
           scrollSnapType: cards.length > 1 ? "x mandatory" : "none",
@@ -757,6 +824,7 @@ function DashboardCluster({
             id={`${clusterId}-slide-${i}`}
             role="tabpanel"
             aria-label={c.id}
+            ref={el => { itemRefs.current[i] = el; }}
             style={{
               flex:"0 0 100%",
               width:"100%",
