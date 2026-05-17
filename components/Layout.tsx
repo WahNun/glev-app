@@ -482,14 +482,16 @@ function MobileGlevFab({
             position: "absolute",
             left: "50%",
             top: "50%",
-            // -50% centres the bubble on the anchor, the extra -16px
+            // -50% centres the bubble on the anchor, the extra -18px
             // lifts the circle so its lower half sits inside the nav
             // row while its upper half overlaps the page content above
             // the nav top border — the "the radius may overlap the
-            // footer" requirement.
-            transform: "translate(-50%, calc(-50% - 16px))",
+            // footer" requirement. Lift slightly higher (was -16) to
+            // keep the same overlap ratio now that the bubble is +20%
+            // larger (was 44 → now 52).
+            transform: "translate(-50%, calc(-50% - 18px))",
             display: "inline-flex", alignItems: "center", justifyContent: "center",
-            width: 44, height: 44, borderRadius: "50%",
+            width: 52, height: 52, borderRadius: "50%",
             background: recording ? `${ACCENT}1f` : SURFACE,
             border: `1px solid ${recording ? ACCENT : `${ACCENT}66`}`,
             boxShadow: recording
@@ -499,7 +501,7 @@ function MobileGlevFab({
             animation: recording ? "glevMicPulse 1.4s ease-in-out infinite" : undefined,
           }}
         >
-          <GlevLogo size={22} color={ACCENT} bg="transparent" />
+          <GlevLogo size={26} color={ACCENT} bg="transparent" />
         </span>
       </span>
       <span

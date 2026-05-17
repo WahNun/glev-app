@@ -117,7 +117,17 @@ html, body {
      appear off-center with the right card border clipped. */
   max-width: 100vw;
   overflow-x: hidden;
+  /* Kill iOS / Capacitor rubber-band overscroll on the document.
+     Without this, `position: fixed` header & bottom-nav visually
+     shift along with the rubber-band when the user pulls past the
+     top or bottom edge, making them look like they grow/shrink
+     between "middle scroll" and "scrolled to either end". Anchoring
+     overscroll to `none` keeps the chrome rock-steady at all scroll
+     positions (matches native iOS app behaviour). */
+  overscroll-behavior-y: none;
+  -webkit-overflow-scrolling: auto;
 }
+html { overscroll-behavior-y: none; }
 
 /* Brand spec: Inter Bold (Hero, Headlines, Logo Wordmark) uses -0.03em
    tracking. Scoped to headings only — body copy keeps natural tracking. */
