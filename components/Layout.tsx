@@ -240,11 +240,16 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 
                2026-05-17 round 3 (user request: header "too tall, no
                need for so much mass — cut in half"): header content
-               halved from 38px → 22px. New numbers below.
+               halved from 38px → 22px.
 
-               Header total height = safe-area-top + 3 (top pad) +
-               16 (GlevLockup svg, was 26) + 3 (bottom pad, was 8)
-               = safe-area-top + 22px. Top padding matches.
+               2026-05-17 round 4 (user request: "der header darf
+               schon inetwa so dick wie der footer sein"): header
+               restored to footer-matching mass. Lockup 16 → 32 px,
+               top + bottom pad 3 → 16 px each.
+
+               Header total height = safe-area-top + 16 (top pad) +
+               32 (GlevLockup svg) + 16 (bottom pad)
+               = safe-area-top + 64px. Top padding matches.
 
                Nav total height = 4 (top pad) + 56 (MobileTab fixed
                height — NOT 22+4+12; the button is hard-fixed to 56 px
@@ -257,7 +262,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
                class of device. Architect 2026-05-17 caught that the
                previous math used icon+label dimensions and was
                under-counting nav height by ~16 px. */
-            padding: calc(env(safe-area-inset-top) + 22px) 16px max(62px, calc(env(safe-area-inset-bottom) + 38px)) !important;
+            padding: calc(env(safe-area-inset-top) + 64px) 16px max(62px, calc(env(safe-area-inset-bottom) + 38px)) !important;
           }
           .glev-entry-row   { grid-template-columns: 1fr auto auto !important; gap: 10px !important; padding: 14px 16px !important; }
           .glev-entry-hide-mobile { display: none !important; }
@@ -278,7 +283,15 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         // iOS notch / Dynamic Island: push content below the status bar by
         // honouring safe-area-inset-top, with a sensible fallback for
         // browsers that don't expose it (e.g. desktop dev tools).
-        padding: "calc(env(safe-area-inset-top) + 3px) max(18px, env(safe-area-inset-right)) 3px max(18px, env(safe-area-inset-left))",
+        // 2026-05-17 round 4 (user request: "header darf schon inetwa
+        // so dick wie der footer sein"): top + bottom pad bumped from
+        // 3 → 16 px and the lockup below resized from 16 → 32 px, so
+        // header total = sa-top + 16 + 32 + 16 = sa-top + 64 px. That
+        // matches the footer nav height range (62 px non-notched,
+        // 72 px notched) closely enough to read as the same visual
+        // weight on both edges of the viewport. Keep .glev-main's
+        // padding-top compensator in sync (see media query below).
+        padding: "calc(env(safe-area-inset-top) + 16px) max(18px, env(safe-area-inset-right)) 16px max(18px, env(safe-area-inset-left))",
         background: SURFACE,
         borderBottom: `1px solid ${BORDER}`,
         alignItems: "center", justifyContent: "space-between",
@@ -295,7 +308,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               iOS-Favicon). Wordmark folgt dem Theme via var(--text), aber
               das Logo-Quadrat soll in Light Mode NICHT mit-aufhellen,
               sonst löst es sich vom Header optisch auf. */}
-          <GlevLockup size={16} color="var(--text)" symbolBg="#0F0F14" />
+          <GlevLockup size={32} color="var(--text)" symbolBg="#0F0F14" />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {/* Engine-Pille im Header wurde entfernt (User-Wunsch

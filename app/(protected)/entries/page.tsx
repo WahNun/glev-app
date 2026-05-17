@@ -3242,7 +3242,7 @@ function MealEditor({ meal, onSaved, onCancel }: {
   }
 
   return (
-    <div ref={rootRef} style={{ display:"flex", flexDirection:"column", gap:14, scrollMarginTop:80 }}>
+    <div ref={rootRef} style={{ display:"flex", flexDirection:"column", gap:14, scrollMarginTop:110 }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
         <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>
           EINTRAG BEARBEITEN
