@@ -2809,29 +2809,437 @@ export default function InsightsPage() {
         <p style={{ color:"var(--text-faint)", fontSize:13 }}>{tInsights("header_subtitle", { n: total })}</p>
       </div>
 
-      {/* Global history-scope picker (Variant B). Renders just below the
-          page heading and above all cards so every metric in the grid
-          re-keys to the selected window when the user steps through
-          days/weeks/months/years. State lives in the parent so a card
+      {/* Swipe-focused layout (Task #316). Replaces the legacy vertical
+          SortableCardGrid feed: a single dominant card sits in the top
+          ~58% of the visible area and the user pages horizontally; the
+          bottom ~42% renders a context block tied to the active card. */}
+      <InsightsSwipePager
+        items={items.filter(it => it.node !== null)}
+        dynamicById={(() => {
+          // Per-card live data lines. These are computed from the same
+          // in-scope aggregates the cards themselves use, so the context
+          // panel always mirrors what the user is looking at on the
+          // focused card — not just static copy. When a value isn't
+          // meaningful for the active scope (e.g. CV% with too few
+          // readings) we omit the line entirely.
+          const dyn: Record<string, string | null> = {};
+          if (b7.n >= MIN_DATAPOINTS) {
+            const sign = tirDelta > 0 ? "+" : tirDelta < 0 ? "" : "±";
+            dyn["time-in-range"] = tInsights("swipe_dyn_tir", { pct: b7.inR, delta: `${sign}${tirDelta}` });
+          }
+          if (last7Avg != null) {
+            dyn["gmi-a1c"] = tInsights("swipe_dyn_gmi", {
+              avg: Math.round(last7Avg),
+              gmi: gmi != null ? gmi.toFixed(1) : "—",
+            });
+            dyn["glucose-trend"] = tInsights("swipe_dyn_trend", {
+              avg: Math.round(last7Avg),
+              delta: bgDelta != null ? (bgDelta > 0 ? `+${bgDelta}` : `${bgDelta}`) : "—",
+            });
+          }
+          dyn["hypo-events"] = tInsights("swipe_dyn_hypo", {
+            count: readings7.filter(r => r.v < HYPO_THRESHOLD_MGDL).length,
+          });
+          dyn["hyper-events"] = tInsights("swipe_dyn_hyper", { count: hyperCount7d });
+          if (cvPct != null) {
+            dyn["glucose-variability"] = tInsights("swipe_dyn_cv", { cv: cvPct.toFixed(1) });
+          }
+          if (total > 0) {
+            dyn["meal-evaluation"] = tInsights("swipe_dyn_meal_eval", {
+              good: goodAll, total, rate: goodRate.toFixed(0),
+            });
+            dyn["performance-tiles"] = tInsights("swipe_dyn_perf", {
+              icr: estICR, rate: goodRate.toFixed(0),
+            });
+            dyn["meal-type"] = tInsights("swipe_dyn_meal_count", { n: total });
+            dyn["time-of-day"] = tInsights("swipe_dyn_meal_count", { n: total });
+          }
+          if (adaptiveICR.global != null) {
+            dyn["adaptive-engine"] = tInsights("swipe_dyn_engine", {
+              engine: adaptiveICR.global.toFixed(1),
+              user: userIcr,
+              n: adaptiveICR.sampleSize,
+            });
+          }
+          if (tddAvg7 != null) {
+            dyn["tdd"] = tInsights("swipe_dyn_tdd", {
+              tdd: tddAvg7.toFixed(1),
+              bolus: tddAvg7Bolus != null ? tddAvg7Bolus.toFixed(1) : "—",
+              basal: tddAvg7Basal != null ? tddAvg7Basal.toFixed(1) : "—",
+            });
+          }
+          if (enginePattern.sampleSize > 0) {
+            dyn["patterns"] = tInsights("swipe_dyn_pattern", {
+              type: enginePattern.label,
+              n: enginePattern.sampleSize,
+            });
+          }
+          if (exerciseLogs.length > 0) {
+            dyn["workout-outcomes"] = tInsights("swipe_dyn_workouts", { n: exerciseLogs.length });
+            dyn["workout-bg-response"] = tInsights("swipe_dyn_workouts", { n: exerciseLogs.length });
+            dyn["workout-patterns"] = tInsights("swipe_dyn_workouts", { n: exerciseLogs.length });
+          }
+          if (symptomLogs.length > 0 || menstrualLogs.length > 0) {
+            dyn["cycle-symptoms"] = tInsights("swipe_dyn_cycle", {
+              symptoms: symptomLogs.length, cycle: menstrualLogs.length,
+            });
+          }
+          return dyn;
+        })()}
+        lastDataAtMs={(() => {
+          // Newest timestamp across every data source feeding this page.
+          // Renders as the "Stand: ..." footnote in the context block so
+          // the user knows how fresh the numbers are.
+          const timestamps: number[] = [];
+          for (const m of meals) timestamps.push(parseDbTs(m.created_at));
+          for (const l of insulinLogs) timestamps.push(parseDbTs(l.created_at));
+          for (const l of exerciseLogs) timestamps.push(parseDbTs(l.created_at));
+          for (const f of fingersticks) timestamps.push(parseDbTs(f.measured_at));
+          return timestamps.length > 0 ? Math.max(...timestamps) : null;
+        })()}
+        locale={locale}
+      />
+    </div>
+  );
+}
 
-      {/* Filter out items whose node was set to null (e.g. workout-patterns
-          when fewer than 2 patterns are detected — spec says hide entirely). */}
-      <InsightsSortable items={items.filter(it => it.node !== null)}/>
+/** Horizontal swipe pager + reactive context block.
+ *  Replaces the previous vertical feed on the Insights screen.
+ *
+ *  - Top zone (~58%): horizontal scroll-snap container, one card per
+ *    page. Each card sits in its own slot with generous padding so it
+ *    reads as the single point of focus. Dense cards (e.g. Adaptive
+ *    Engine) can still scroll vertically inside their slot — the
+ *    outer page never scrolls.
+ *  - Bottom zone (~42%): static surface that swaps title + body text
+ *    based on which card is currently snapped. Inner-scrolls if needed.
+ *  - A dot row between the two zones acts as the position indicator.
+ *
+ *  Active index is tracked from the scroll position (rounded by slot
+ *  width) so the indicator and context follow the natural swipe motion. */
+function InsightsSwipePager({
+  items,
+  dynamicById = {},
+  lastDataAtMs = null,
+  locale,
+}: {
+  items: { id: string; node: React.ReactNode }[];
+  /** Per-card dynamic data line, derived from the same aggregates the
+   *  cards themselves render. When a card has no entry, the context
+   *  block falls back to title + body only. */
+  dynamicById?: Record<string, string | null>;
+  /** Timestamp of the newest data point feeding the page; shown as a
+   *  "Stand: ..." footnote so the user can gauge data freshness. */
+  lastDataAtMs?: number | null;
+  /** Active locale — used to format the lastDataAt timestamp. */
+  locale?: string;
+}) {
+  const tInsights = useTranslations("insights");
+  const [active, setActive] = useState(0);
+  const scrollerRef = React.useRef<HTMLDivElement | null>(null);
+  const rafRef = React.useRef<number | null>(null);
 
-      {/* Compliance disclaimer — required at the foot of every
-          analytics surface so users don't read TIR / hypo-counter
-          numbers as medical guidance. Neutral gray, small, no chip. */}
-      <p style={{
-        marginTop: 18,
-        marginBottom: 24,
-        fontSize: 11,
-        lineHeight: 1.5,
-        color: "var(--text-faint)",
-        textAlign: "center",
-        padding: "0 12px",
-      }}>
-        {tInsights("page_medical_disclaimer")}
-      </p>
+  // Empty-state guard. Suppress dots/position counters and render a
+  // dedicated card-shaped placeholder instead of "1 of 0".
+  if (items.length === 0) {
+    return (
+      <div
+        style={{
+          height: "calc(100dvh - 230px)",
+          minHeight: 520,
+          display: "flex",
+          flexDirection: "column",
+          gap: 10,
+        }}
+      >
+        <div
+          style={{
+            flex: "0 1 58%",
+            minHeight: 220,
+            background: "var(--surface)",
+            border: "1px solid var(--border-soft)",
+            borderRadius: 16,
+            padding: "32px 24px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            textAlign: "center",
+            color: "var(--text-faint)",
+            fontSize: 14,
+            lineHeight: 1.6,
+          }}
+        >
+          {tInsights("empty_state_min_meals")}
+        </div>
+        <div
+          style={{
+            flex: "1 1 42%",
+            minHeight: 160,
+            background: "var(--surface)",
+            border: "1px solid var(--border-soft)",
+            borderRadius: 16,
+            padding: "16px 18px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              color: "var(--text-faint)",
+            }}
+          >
+            {tInsights("swipe_context_label")}
+          </div>
+          <div style={{ fontSize: 17, fontWeight: 700, color: "var(--text)" }}>
+            {tInsights("swipe_default_title")}
+          </div>
+          <div style={{ fontSize: 13, lineHeight: 1.6, color: "var(--text-muted)" }}>
+            {tInsights("swipe_default_body")}
+          </div>
+          <div style={{ flex: 1 }} />
+          <div style={{ fontSize: 10, color: "var(--text-faint)", textAlign: "right", lineHeight: 1.4 }}>
+            {tInsights("page_medical_disclaimer")}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const updateActive = React.useCallback(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const w = el.clientWidth || 1;
+    const idx = Math.max(0, Math.min(items.length - 1, Math.round(el.scrollLeft / w)));
+    setActive((prev) => {
+      if (prev === idx) return prev;
+      hapticSelection();
+      return idx;
+    });
+  }, [items.length]);
+
+  const onScroll = React.useCallback(() => {
+    if (rafRef.current != null) return;
+    rafRef.current = window.requestAnimationFrame(() => {
+      rafRef.current = null;
+      updateActive();
+    });
+  }, [updateActive]);
+
+  // Clamp active when item count drops (e.g. workout-patterns disappears).
+  useEffect(() => {
+    if (active >= items.length && items.length > 0) setActive(items.length - 1);
+  }, [active, items.length]);
+
+  // Translation helper — returns localized title/body for a given card
+  // id, falling back to a generic "swipe to learn more" copy when the
+  // id isn't in the catalogue (e.g. a future card added before its
+  // context strings land).
+  const ctxFor = (id: string | undefined) => {
+    if (!id) return { title: tInsights("swipe_default_title"), body: tInsights("swipe_default_body") };
+    const titleKey = `swipe_ctx_${id}_title`;
+    const bodyKey  = `swipe_ctx_${id}_body`;
+    let title: string;
+    let body: string;
+    try { title = tInsights(titleKey); } catch { title = tInsights("swipe_default_title"); }
+    try { body  = tInsights(bodyKey);  } catch { body  = tInsights("swipe_default_body"); }
+    // next-intl returns the key itself when missing — treat that as fallback too.
+    if (title === titleKey) title = tInsights("swipe_default_title");
+    if (body  === bodyKey)  body  = tInsights("swipe_default_body");
+    return { title, body };
+  };
+  const activeCtx = ctxFor(items[active]?.id);
+
+  // Fixed-viewport wrapper: the outer page no longer scrolls. The
+  // height calc subtracts the mobile header (76 px) + bottom nav
+  // (110 px) + a small breathing buffer; on desktop the same calc
+  // leaves a comfortable working area inside the sidebar layout.
+  return (
+    <div
+      style={{
+        height: "calc(100dvh - 230px)",
+        minHeight: 520,
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+        overscrollBehavior: "contain",
+        touchAction: "pan-x pan-y",
+      }}
+    >
+      {/* Focus pager — horizontal snap scroll. */}
+      <div style={{ flex: "0 1 58%", minHeight: 220, position: "relative", display: "flex", flexDirection: "column" }}>
+        <div
+          ref={scrollerRef}
+          onScroll={onScroll}
+          style={{
+            flex: 1,
+            minHeight: 0,
+            display: "flex",
+            overflowX: "auto",
+            overflowY: "hidden",
+            scrollSnapType: "x mandatory",
+            overscrollBehaviorX: "contain",
+            WebkitOverflowScrolling: "touch",
+          }}
+        >
+          {items.map((it) => (
+            <div
+              key={it.id}
+              style={{
+                flex: "0 0 100%",
+                width: "100%",
+                scrollSnapAlign: "center",
+                scrollSnapStop: "always",
+                padding: "6px 6px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                overflowY: "auto",
+                overflowX: "hidden",
+              }}
+            >
+              <div style={{ width: "100%" }}>{it.node}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Position indicator. The active dot stretches into a pill so
+            position is readable at a glance even with many cards. */}
+        <div
+          role="tablist"
+          aria-label={tInsights("swipe_context_label")}
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            gap: 5,
+            marginTop: 6,
+            flexWrap: "wrap",
+            paddingInline: 4,
+          }}
+        >
+          {items.map((it, i) => (
+            <button
+              key={it.id}
+              type="button"
+              role="tab"
+              aria-selected={i === active}
+              aria-label={tInsights("swipe_position", { current: i + 1, total: items.length })}
+              onClick={() => {
+                const el = scrollerRef.current;
+                if (!el) return;
+                el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
+              }}
+              style={{
+                width: i === active ? 18 : 6,
+                height: 6,
+                borderRadius: 99,
+                background: i === active ? "var(--text)" : "var(--text-ghost)",
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                transition: "width 200ms ease, background 200ms ease",
+              }}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Context zone — reacts to the active card. Inner-scrolls if
+          long; the outer screen height stays stable. */}
+      <div
+        style={{
+          flex: "1 1 42%",
+          minHeight: 160,
+          background: "var(--surface)",
+          border: "1px solid var(--border-soft)",
+          borderRadius: 16,
+          padding: "16px 18px",
+          overflowY: "auto",
+          overscrollBehavior: "contain",
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+        }}
+      >
+        <div
+          style={{
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: "var(--text-faint)",
+          }}
+        >
+          {tInsights("swipe_context_label")}
+        </div>
+        <div style={{ fontSize: 17, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.01em" }}>
+          {activeCtx.title}
+        </div>
+        <div style={{ fontSize: 13, lineHeight: 1.6, color: "var(--text-muted)" }}>
+          {activeCtx.body}
+        </div>
+        {/* Dynamic, card-specific data line. Pulled from the same
+            aggregates the focused card itself renders — so the context
+            mirrors live values (TIR%, GMI, CV, TDD, etc.) instead of
+            being a static blurb. Skipped silently when no entry is
+            available for the active card. */}
+        {(() => {
+          const activeId = items[active]?.id;
+          const dyn = activeId ? dynamicById[activeId] : null;
+          if (!dyn) return null;
+          return (
+            <div
+              style={{
+                marginTop: 4,
+                padding: "8px 10px",
+                borderRadius: 10,
+                background: "var(--surface-2, rgba(127,127,127,0.08))",
+                fontSize: 12,
+                fontWeight: 600,
+                color: "var(--text)",
+                lineHeight: 1.5,
+              }}
+            >
+              {dyn}
+            </div>
+          );
+        })()}
+        <div style={{ flex: 1 }} />
+        {/* Data-freshness footnote — shows the newest timestamp across
+            meals, insulin, exercise and fingerstick sources so the
+            user can gauge how current the context numbers really are. */}
+        {lastDataAtMs != null && (
+          <div style={{ fontSize: 10, color: "var(--text-faint)", lineHeight: 1.4 }}>
+            {tInsights("swipe_data_through", {
+              ts: new Intl.DateTimeFormat(locale || "de", {
+                day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+              }).format(new Date(lastDataAtMs)),
+            })}
+          </div>
+        )}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 8,
+            paddingTop: 8,
+            borderTop: "1px solid var(--border-soft)",
+          }}
+        >
+          <span style={{ fontSize: 11, color: "var(--text-faint)" }}>
+            {tInsights("swipe_position", { current: active + 1, total: items.length })}
+          </span>
+          <span style={{ fontSize: 10, color: "var(--text-faint)", textAlign: "right", lineHeight: 1.4, maxWidth: "70%" }}>
+            {tInsights("page_medical_disclaimer")}
+          </span>
+        </div>
+      </div>
     </div>
   );
 }
