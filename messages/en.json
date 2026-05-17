@@ -1377,15 +1377,6 @@
     "cta_add_entry": "Entry",
     "trigger_label": "New entry"
   },
-  "about": {
-    "row_version": "Version",
-    "row_account": "Account",
-    "description": "Glev helps you log meals, track CGM trends, and learn your personal insulin response — every meal becomes better data.",
-    "close_btn": "Close",
-    "signout_idle": "Sign out",
-    "signout_busy": "Signing out…",
-    "open_settings": "Open Settings →"
-  },
   "postMeal": {
     "title": "BG after {label}",
     "dialog_aria": "Enter BG after {label}",
@@ -1900,8 +1891,9 @@
   },
   "account": {
     "title": "Account",
-    "stat_meals_logged": "Meals logged",
+    "stat_meals_logged": "Meals",
     "stat_member_since": "Member since",
+    "stat_version": "Version",
     "plan_free": "Glev Free",
     "plan_pro": "Glev Pro",
     "plan_beta": "Glev Beta",

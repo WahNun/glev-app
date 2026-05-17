@@ -6,7 +6,7 @@ import { useTranslations, useLocale } from "next-intl";
 import { signOut } from "@/lib/auth";
 import GlevLockup from "@/components/GlevLockup";
 import GlevLogo from "@/components/GlevLogo";
-import AboutGlevModal from "@/components/AboutGlevModal";
+import AccountSheet from "@/components/AccountSheet";
 import DashboardQuickAddSheet from "@/components/DashboardQuickAddSheet";
 import { EngineHeaderProvider, useEngineHeader } from "@/lib/engineHeaderContext";
 import { EngineSourceHeaderProvider, useEngineSourceHeader } from "@/lib/engineSourceHeaderContext";
@@ -222,12 +222,15 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 
                2026-05-17 round 2 (user request: "zu viel blank space
                unter footer nav und über dem header"): header & nav
-               chrome both trimmed by ~10 px and ~4 px respectively.
-               New numbers below.
+               chrome both trimmed.
 
-               Header total height = safe-area-top + 4 (top pad) +
-               26 (GlevLockup svg) + 8 (bottom pad) = safe-area-top
-               + 38px. Top padding matches.
+               2026-05-17 round 3 (user request: header "too tall, no
+               need for so much mass — cut in half"): header content
+               halved from 38px → 22px. New numbers below.
+
+               Header total height = safe-area-top + 3 (top pad) +
+               16 (GlevLockup svg, was 26) + 3 (bottom pad, was 8)
+               = safe-area-top + 22px. Top padding matches.
 
                Nav total height = 4 (top pad) + 56 (MobileTab fixed
                height — NOT 22+4+12; the button is hard-fixed to 56 px
@@ -240,7 +243,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
                class of device. Architect 2026-05-17 caught that the
                previous math used icon+label dimensions and was
                under-counting nav height by ~16 px. */
-            padding: calc(env(safe-area-inset-top) + 38px) 16px max(62px, calc(env(safe-area-inset-bottom) + 38px)) !important;
+            padding: calc(env(safe-area-inset-top) + 22px) 16px max(62px, calc(env(safe-area-inset-bottom) + 38px)) !important;
           }
           .glev-entry-row   { grid-template-columns: 1fr auto auto !important; gap: 10px !important; padding: 14px 16px !important; }
           .glev-entry-hide-mobile { display: none !important; }
@@ -261,7 +264,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         // iOS notch / Dynamic Island: push content below the status bar by
         // honouring safe-area-inset-top, with a sensible fallback for
         // browsers that don't expose it (e.g. desktop dev tools).
-        padding: "calc(env(safe-area-inset-top) + 4px) max(18px, env(safe-area-inset-right)) 8px max(18px, env(safe-area-inset-left))",
+        padding: "calc(env(safe-area-inset-top) + 3px) max(18px, env(safe-area-inset-right)) 3px max(18px, env(safe-area-inset-left))",
         background: SURFACE,
         borderBottom: `1px solid ${BORDER}`,
         alignItems: "center", justifyContent: "space-between",
@@ -278,7 +281,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               iOS-Favicon). Wordmark folgt dem Theme via var(--text), aber
               das Logo-Quadrat soll in Light Mode NICHT mit-aufhellen,
               sonst löst es sich vom Header optisch auf. */}
-          <GlevLockup size={26} color="var(--text)" symbolBg="#0F0F14" />
+          <GlevLockup size={16} color="var(--text)" symbolBg="#0F0F14" />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {/* Engine-Pille im Header wurde entfernt (User-Wunsch
@@ -378,7 +381,14 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <AboutGlevModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
+      {/* Wordmark-tap surface — unified with the /settings Account row
+          to a single AccountSheet (2026-05-17). The previous bespoke
+          AboutGlevModal showed only Version + email and looked nothing
+          like the Account sheet; users now see the same avatar + plan
+          pill + stats + change-password + sign-out wherever they enter
+          (header wordmark or settings row), with the app version as a
+          discreet footer in the sheet. */}
+      <AccountSheet open={aboutOpen} onClose={() => setAboutOpen(false)} />
 
       <aside className="glev-sidebar" style={{
         width: 224, flexShrink: 0, background: SURFACE,

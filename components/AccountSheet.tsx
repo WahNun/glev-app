@@ -168,21 +168,35 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
         </div>
       </div>
 
-      {/* Two stat tiles in a row */}
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:18 }}>
+      {/* Three stat tiles in a row — Meals · Member since · App version.
+          Version was added 2026-05-17 when this sheet became the single
+          surface opened from BOTH the header wordmark AND the settings
+          Account row, replacing the standalone AboutGlevModal. Padding
+          on tiles is narrower (12px) so three tiles fit comfortably on
+          393px-wide iPhones without the "Member since" date wrapping. */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:18 }}>
         <div style={{
           background:"var(--surface-soft)", borderRadius:12,
-          border:`1px solid ${BORDER}`, padding:"14px 16px",
+          border:`1px solid ${BORDER}`, padding:"12px 12px",
         }}>
-          <div style={{ fontSize:13, color:"var(--text-faint)", marginBottom:4 }}>{t("stat_meals_logged")}</div>
+          <div style={{ fontSize:12, color:"var(--text-faint)", marginBottom:4 }}>{t("stat_meals_logged")}</div>
           <div style={{ fontSize:20, fontWeight:800, letterSpacing:"-0.02em" }}>{mealCount}</div>
         </div>
         <div style={{
           background:"var(--surface-soft)", borderRadius:12,
-          border:`1px solid ${BORDER}`, padding:"14px 16px",
+          border:`1px solid ${BORDER}`, padding:"12px 12px",
         }}>
-          <div style={{ fontSize:13, color:"var(--text-faint)", marginBottom:4 }}>{t("stat_member_since")}</div>
-          <div style={{ fontSize:14, fontWeight:700, color:"var(--text-strong)" }}>{createdAt || "—"}</div>
+          <div style={{ fontSize:12, color:"var(--text-faint)", marginBottom:4 }}>{t("stat_member_since")}</div>
+          <div style={{ fontSize:13, fontWeight:700, color:"var(--text-strong)", lineHeight:1.2 }}>{createdAt || "—"}</div>
+        </div>
+        <div style={{
+          background:"var(--surface-soft)", borderRadius:12,
+          border:`1px solid ${BORDER}`, padding:"12px 12px",
+        }}>
+          <div style={{ fontSize:12, color:"var(--text-faint)", marginBottom:4 }}>{t("stat_version")}</div>
+          <div style={{ fontSize:14, fontWeight:700, color:"var(--text-strong)", fontVariantNumeric:"tabular-nums" }}>
+            v{process.env.NEXT_PUBLIC_APP_VERSION || "0.4.0"}
+          </div>
         </div>
       </div>
 

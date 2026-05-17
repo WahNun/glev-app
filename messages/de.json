@@ -1385,15 +1385,6 @@
     "cta_add_entry": "Eintrag",
     "trigger_label": "Neuer Eintrag"
   },
-  "about": {
-    "row_version": "Version",
-    "row_account": "Konto",
-    "description": "Glev hilft dir, Mahlzeiten zu loggen, CGM-Trends zu verfolgen und deine persönliche Insulin-Reaktion kennenzulernen — jede Mahlzeit wird zu besseren Daten.",
-    "close_btn": "Schließen",
-    "signout_idle": "Abmelden",
-    "signout_busy": "Melde ab…",
-    "open_settings": "Einstellungen öffnen →"
-  },
   "postMeal": {
     "title": "BG nach {label}",
     "dialog_aria": "BG nach {label} eintragen",
@@ -1908,8 +1899,9 @@
   },
   "account": {
     "title": "Konto",
-    "stat_meals_logged": "Mahlzeiten geloggt",
+    "stat_meals_logged": "Mahlzeiten",
     "stat_member_since": "Mitglied seit",
+    "stat_version": "Version",
     "plan_free": "Glev Free",
     "plan_pro": "Glev Pro",
     "plan_beta": "Glev Beta",
