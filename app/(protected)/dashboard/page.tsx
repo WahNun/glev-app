@@ -404,13 +404,16 @@ function OutcomeChart({ meals }: { meals: Meal[] }) {
       <div style={{ position:"absolute", inset:0, transformStyle:"preserve-3d", transition:"transform 0.55s cubic-bezier(0.4,0,0.2,1)", transform:flipped ? "rotateY(180deg)" : "rotateY(0deg)" }}>
         {/* FRONT */}
         <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"20px 24px", boxSizing:"border-box", display:"flex", flexDirection:"column", overflow:"hidden" }}>
-          <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between" }}>
-            <div>
-              <div style={{ fontSize:14, fontWeight:600, marginBottom:4 }}>{t("outcome_dist")}</div>
-              <div style={{ fontSize:13, color:"var(--text-faint)" }}>{t("outcome_alltime")}</div>
-            </div>
+          {/* 2026-05-17 round 7: heading now mirrors the BACK side's
+              accent-coloured uppercase eyebrow so the flip feels like
+              two views of the same card instead of two different cards.
+              The "alltime" caption stays underneath as the contextual
+              subtitle. */}
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <div style={{ fontSize:13, color:ACCENT, fontWeight:700, letterSpacing:"0.06em", textTransform:"uppercase" }}>{t("outcome_dist")}</div>
             <span style={{ fontSize:11, color:"var(--text-ghost)" }}>{t("flip_hint_short")}</span>
           </div>
+          <div style={{ fontSize:12, color:"var(--text-faint)", marginTop:4 }}>{t("outcome_alltime")}</div>
           <div style={{ flex:1, display:"flex", flexDirection:"column", justifyContent:"center", gap:14 }}>
             {groups.map(g => {
               const pct = Math.round((g.count/total)*100);
