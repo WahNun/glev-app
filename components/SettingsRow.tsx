@@ -17,8 +17,15 @@ interface SettingsSectionProps {
  * outer container and header.
  */
 export function SettingsSection({ title, children }: SettingsSectionProps) {
+  // 2026-05-17 round 7 (user request: "die cards so an den bildschirm
+  // anpassen dass über ihnen und neben ihnen der gleiche abstand ist
+  // und nicht außen mehr als oben und unten"). Vertical gap between
+  // sections (`marginBottom`) now matches the page-side gap defined
+  // by `.glev-main` mobile padding (16 px). Section title nudge to
+  // `4px` left also dropped so the eyebrow aligns flush with the card
+  // edge instead of looking visually pushed in.
   return (
-    <section style={{ marginBottom: 24 }}>
+    <section style={{ marginBottom: 16 }}>
       <h2
         style={{
           fontSize: 13,
@@ -26,7 +33,7 @@ export function SettingsSection({ title, children }: SettingsSectionProps) {
           color: "var(--text-faint)",
           letterSpacing: "0.08em",
           textTransform: "uppercase",
-          margin: "0 0 8px 4px",
+          margin: "0 0 8px 0",
         }}
       >
         {title}

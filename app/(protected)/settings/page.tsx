@@ -2059,7 +2059,10 @@ export default function SettingsPage() {
 
   return (
     <div style={{ maxWidth: 720, margin: "0 auto" }}>
-      <div style={{ marginBottom: 24 }}>
+      {/* 2026-05-17 round 7: page-title bottom margin trimmed 24 → 16
+          to match the new equal-on-all-sides rhythm (see comment in
+          components/SettingsRow.tsx → SettingsSection). */}
+      <div style={{ marginBottom: 16 }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.03em", marginBottom: 4 }}>
           {tSettings("page_title")}
         </h1>
