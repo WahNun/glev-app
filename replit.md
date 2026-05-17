@@ -11,6 +11,16 @@ Glev is a Type 1 Diabetes insulin decision-support system designed to provide pe
 - Ask before making major changes.
 - I prefer detailed explanations.
 
+## Compliance Backlog (nicht akut — vor MDR-Einreichung abarbeiten)
+
+Glev ist aktuell **kein eingereichtes Medizinprodukt**. Primärzielgruppe: erwachsene T1D auf ICT (Pen). Kinder/Schwangere werden nicht aktiv beworben, aber auch nicht aktiv ausgeschlossen. Pump-Träger sind okay (Engine-Empfehlung für sie nicht relevant — wissen sie selbst). Sobald wir Klasse IIa anstreben, folgendes erledigen:
+
+1. **Quellen-Pflicht in Insights-Texten** — alle Konsensus-Bänder (TIR ≥ 70 %, < 4 % unter 70 mg/dL, CV < 36 %, Level-2-Hypo < 54 mg/dL, ATTD-Konsensus 2019) brauchen geprüfte Quellenangabe direkt am Wert (z. B. Battelino et al., Diabetes Care 2019). Aktuell stehen die Werte in `swipe_ctx_*_body` (klinische Interpretation) und `*_back_p*` (Methodik) in `messages/{de,en}.json` ohne explizite Zitate.
+2. **Disclaimer-Footer prominenter** — `page_medical_disclaimer` aktuell klein im Kontext-Footer der Insights-Swipe-Pager (`app/(protected)/insights/page.tsx` ~L3586). Bei MDR-Pflicht: einmal pro Session als Modal beim Insights-Erstaufruf zeigen.
+3. **Zielgruppen-Hinweise per Karte** — falls Kinder/Schwangere explizit ausgeschlossen werden müssen, in den jeweiligen Karten (Adaptive Engine, TDD, Patterns) gesonderten Hinweis ergänzen.
+
+**Compliance-Prinzip in allen User-facing Texten (gilt schon jetzt):** keine direkten Dosis-Anweisungen, jede Auffälligkeit wird als Gesprächs-Thema fürs Diabetologen-Team gerahmt, keine Diagnose.
+
 ## Deployment & Infrastructure (CRITICAL)
 
 **Production runs on Vercel, NOT on Replit.**
