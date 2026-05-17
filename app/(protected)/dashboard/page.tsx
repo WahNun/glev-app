@@ -646,7 +646,7 @@ function ReorderableClusters({
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={resolved.map(c => c.id)} strategy={verticalListSortingStrategy}>
-        <div style={{ display:"flex", flexDirection:"column", gap:28 }}>
+        <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
           {resolved.map(cl => (
             <SortableCluster
               key={cl.id}
@@ -984,11 +984,12 @@ function DashboardCluster({
       >
         {title}
       </h2>
-      {headerHandle && (
-        <div style={{ display:"flex", justifyContent:"flex-end", margin:"0 4px" }}>
-          {headerHandle}
-        </div>
-      )}
+      {/* Drag handle moved out of its own top row and into the bottom
+          control bar (see below) — having a dedicated handle row above
+          every cluster was eating ~38px of vertical space (28px button +
+          10px section gap) and leaving the handle visually floating in
+          the empty space between clusters, which the user flagged as
+          excessive blank space on the dashboard. */}
       <div
         ref={scrollerRef}
         onScroll={cards.length > 1 ? onScroll : undefined}
@@ -1037,19 +1038,45 @@ function DashboardCluster({
           </div>
         ))}
       </div>
-      <PagerIndicator
-        total={cards.length}
-        active={active}
-        onSelect={(i) => {
-          const el = scrollerRef.current;
-          if (!el) return;
-          // Go through the shared programmatic helper so the settle
-          // timer can't race with the indicator-driven smooth scroll.
-          programmaticScrollTo(i * el.clientWidth);
+      {/* Unified bottom control bar:
+            ┌──────────────────────────────────────────────────────┐
+            │ [spacer]      [pager indicator]      [drag handle]   │
+            └──────────────────────────────────────────────────────┘
+          The 3-column grid keeps the indicator perfectly centered
+          regardless of whether the handle is present. For single-
+          card clusters (where PagerIndicator returns null) the bar
+          shrinks to just the handle on the right. */}
+      <div
+        style={{
+          display: "grid",
+          // Fixed 28px side columns mirror the handle button's footprint
+          // exactly, so the middle column (and therefore the pager
+          // indicator) is geometrically and visually centered relative
+          // to the cluster — not pushed off-center by the handle's
+          // mass on the right. `justifyItems:"center"` centers the
+          // indicator inside its track even when it's narrower than
+          // the middle column.
+          gridTemplateColumns: "28px 1fr 28px",
+          alignItems: "center",
+          justifyItems: "center",
         }}
-        label={title}
-        controlsId={(i) => `${clusterId}-slide-${i}`}
-      />
+      >
+        <div aria-hidden style={{ width: 28, height: 28 }} /> {/* mirror of handle */}
+        <PagerIndicator
+          total={cards.length}
+          active={active}
+          onSelect={(i) => {
+            const el = scrollerRef.current;
+            if (!el) return;
+            // Go through the shared programmatic helper so the settle
+            // timer can't race with the indicator-driven smooth scroll.
+            programmaticScrollTo(i * el.clientWidth);
+          }}
+          label={title}
+          controlsId={(i) => `${clusterId}-slide-${i}`}
+        />
+        {headerHandle}
+      </div>
       {footer}
     </section>
   );
