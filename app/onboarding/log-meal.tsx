@@ -171,13 +171,18 @@ export default function LogMealStep({
           </span>
         </div>
 
-        {/* Mini bottom-nav with static Glev FAB */}
+        {/* Mini bottom-nav with static Glev mark. Mirrors the real 5-tab
+            layout in components/Layout.tsx (2026-05-17 round 5):
+            Dashboard / Entries / Glev (centre brand mark) / Insights /
+            Settings. The centre slot is a plain brand mark, NOT an
+            elevated FAB — all five tabs share the same visual weight in
+            production. */}
         <div
           style={{
             marginTop: 4,
             background: "rgba(0,0,0,0.55)",
             borderRadius: 14,
-            padding: "10px 18px",
+            padding: "10px 14px",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-around",
@@ -185,21 +190,21 @@ export default function LogMealStep({
           }}
         >
           <NavIconStub variant="dashboard" />
+          <NavIconStub variant="entries" />
           <div
+            aria-hidden
             style={{
-              width: 48,
-              height: 48,
-              borderRadius: 99,
-              background: ACCENT,
+              width: 32,
+              height: 32,
+              borderRadius: 8,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: `0 4px 14px ${ACCENT}66`,
             }}
           >
-            <GlevLogo size={22} color="#fff" bg="transparent" />
+            <GlevLogo size={24} color={ACCENT} bg="transparent" />
           </div>
-          <NavIconStub variant="history" />
+          <NavIconStub variant="insights" />
           <NavIconStub variant="settings" />
         </div>
       </div>
@@ -207,24 +212,34 @@ export default function LogMealStep({
   );
 }
 
-function NavIconStub({ variant }: { variant: "dashboard" | "history" | "settings" }) {
+function NavIconStub({ variant }: { variant: "dashboard" | "entries" | "insights" | "settings" }) {
   const dim = "rgba(255,255,255,0.32)";
+  // Icon glyphs are kept 1:1 in sync with components/Layout.tsx so the
+  // onboarding preview matches the bottom-nav muscle memory the user
+  // will see immediately after finishing the flow.
   if (variant === "dashboard") {
     return (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={dim} strokeWidth="2" strokeLinecap="round">
-        <rect x="3" y="3" width="7" height="7" rx="1" />
-        <rect x="14" y="3" width="7" height="7" rx="1" />
-        <rect x="3" y="14" width="7" height="7" rx="1" />
-        <rect x="14" y="14" width="7" height="7" rx="1" />
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={dim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 11l9-8 9 8" />
+        <path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10" />
       </svg>
     );
   }
-  if (variant === "history") {
+  if (variant === "entries") {
     return (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={dim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M3 12a9 9 0 1 0 3-6.7" />
-        <polyline points="3 4 3 10 9 10" />
-        <polyline points="12 7 12 12 16 14" />
+        <line x1="18" y1="20" x2="18" y2="10"/>
+        <line x1="12" y1="20" x2="12" y2="4"/>
+        <line x1="6" y1="20" x2="6" y2="14"/>
+      </svg>
+    );
+  }
+  if (variant === "insights") {
+    return (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={dim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9 18h6"/>
+        <path d="M10 22h4"/>
+        <path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1.5.5 3 1.5 4 .76.76 1.23 1.52 1.41 2.5"/>
       </svg>
     );
   }

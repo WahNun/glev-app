@@ -33,7 +33,7 @@ export default function InsightsStep({
   const cards = [
     { label: t("card_1_label"), value: t("card_1_value"), unit: "%", color: GREEN, sub: t("card_1_sub"), bar: 75 },
     { label: t("card_2_label"), value: t("card_2_value"), unit: "%", color: ACCENT, sub: t("card_2_sub"), bar: 60 },
-    { label: t("card_3_label"), value: t("card_3_value"), unit: "",  color: GREEN, sub: t("card_3_sub"), bar: 70 },
+    { label: t("card_3_label"), value: t("card_3_value"), unit: "%", color: GREEN, sub: t("card_3_sub"), bar: 38 },
   ];
   const bullets = [t("bullet_1"), t("bullet_2"), t("bullet_3")];
 

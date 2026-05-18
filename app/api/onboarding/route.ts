@@ -11,8 +11,8 @@ import type { User } from "@supabase/supabase-js";
  * POST { action: "reset" }    → set profiles.onboarding_completed_at = NULL
  * POST { action: "profile", sex, birth_year, height_cm?, weight_kg? }
  *   → upsert personal-info fields collected on the "About you" step.
- *     sex + birth_year are mandatory; height/weight are optional and
- *     null clears the column. Validated server-side; out-of-range
+ *     sex, birth_year, height_cm, weight_kg are ALL mandatory (since
+ *     2026-05-18). Validated server-side; out-of-range or missing
  *     values return 400.
  *
  * All actions require an authenticated user and are idempotent. The
@@ -95,9 +95,12 @@ export async function POST(req: NextRequest) {
     }
 
     // ── action: "profile" ─────────────────────────────────────────
-    // Mandatory: sex + birth_year. Optional: height_cm, weight_kg.
-    // Out-of-range or missing mandatory fields return 400 so the
-    // onboarding screen can surface a clear inline error.
+    // 2026-05-18: height & weight became MANDATORY (previously
+    // optional). Old profiles without these values that re-enter the
+    // flow via Settings → "Onboarding wiederholen" must fill them in
+    // before they can advance — same gate as sex + birth_year.
+    // Out-of-range or missing fields return 400 so the onboarding
+    // screen can surface a clear inline error.
     if (action === "profile") {
       const sex = body.sex;
       const birthYear = body.birth_year;
@@ -117,23 +120,19 @@ export async function POST(req: NextRequest) {
           { status: 400 },
         );
       }
-      // Height/weight: undefined = don't touch; null = clear; number = set.
+      // Height & weight: required, must be finite numbers in range.
+      if (typeof heightCm !== "number" || !Number.isFinite(heightCm) || heightCm < 50 || heightCm > 280) {
+        return NextResponse.json({ error: "invalid height_cm — expected number between 50 and 280" }, { status: 400 });
+      }
+      if (typeof weightKg !== "number" || !Number.isFinite(weightKg) || weightKg < 20 || weightKg > 400) {
+        return NextResponse.json({ error: "invalid weight_kg — expected number between 20 and 400" }, { status: 400 });
+      }
       const update: Record<string, unknown> = {
         sex,
         birth_year: birthYear,
+        height_cm: heightCm,
+        weight_kg: weightKg,
       };
-      if (heightCm !== undefined) {
-        if (heightCm !== null && (typeof heightCm !== "number" || heightCm < 50 || heightCm > 280)) {
-          return NextResponse.json({ error: "invalid height_cm — expected 50-280 or null" }, { status: 400 });
-        }
-        update.height_cm = heightCm;
-      }
-      if (weightKg !== undefined) {
-        if (weightKg !== null && (typeof weightKg !== "number" || weightKg < 20 || weightKg > 400)) {
-          return NextResponse.json({ error: "invalid weight_kg — expected 20-400 or null" }, { status: 400 });
-        }
-        update.weight_kg = weightKg;
-      }
 
       const { error: dbErr } = await auth.sb
         .from("profiles")

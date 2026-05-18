@@ -40,7 +40,7 @@ function InsightsMockup() {
           cards: [
             { label: "TIME IN RANGE", value: "75", unit: "%", color: GREEN, sub: "letzte 7 Tage", bar: 75 },
             { label: "GMI / A1c",     value: "6,8", unit: "%", color: ACCENT, sub: "geschätzte HbA1c", bar: 60 },
-            { label: "TREND",         value: "↘",   unit: "",  color: GREEN, sub: "−12 mg/dL ggü. Vorwoche", bar: 70 },
+            { label: "VARIABILITÄT", value: "28",  unit: "%", color: GREEN, sub: "CV % · letzte 14 Tage", bar: 38 },
           ],
           chartTitle: "Glukose-Verlauf",
           chartBadge: "7d",
@@ -59,7 +59,7 @@ function InsightsMockup() {
           cards: [
             { label: "TIME IN RANGE", value: "75", unit: "%", color: GREEN, sub: "last 7 days", bar: 75 },
             { label: "GMI / A1c",     value: "6.8", unit: "%", color: ACCENT, sub: "estimated HbA1c", bar: 60 },
-            { label: "TREND",         value: "↘",   unit: "",  color: GREEN, sub: "−12 mg/dL vs prev week", bar: 70 },
+            { label: "VARIABILITY",  value: "28",  unit: "%", color: GREEN, sub: "CV % · last 14 days", bar: 38 },
           ],
           chartTitle: "Glucose trend",
           chartBadge: "7d",

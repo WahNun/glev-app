@@ -81,15 +81,25 @@ export default function AboutYouStep({
     birthYearNum >= 1900 &&
     birthYearNum <= currentYear;
 
+  // Height & weight became mandatory on 2026-05-18 — every adult on
+  // ICT benefits from these for the upcoming sensitivity defaults, and
+  // collecting them upfront avoids a later "fill this in to unlock"
+  // nag screen. Old profiles without values can still complete the
+  // re-entered onboarding because the pre-fill effect leaves the
+  // fields empty and the form gates Next until they're filled in.
   const heightNum = heightCm.trim() === "" ? null : parseInt(heightCm, 10);
   const heightValid =
-    heightNum === null ||
-    (Number.isInteger(heightNum) && heightNum >= 50 && heightNum <= 280);
+    heightNum !== null &&
+    Number.isInteger(heightNum) &&
+    heightNum >= 50 &&
+    heightNum <= 280;
 
   const weightNum = weightKg.trim() === "" ? null : parseFloat(weightKg.replace(",", "."));
   const weightValid =
-    weightNum === null ||
-    (Number.isFinite(weightNum) && weightNum >= 20 && weightNum <= 400);
+    weightNum !== null &&
+    Number.isFinite(weightNum) &&
+    weightNum >= 20 &&
+    weightNum <= 400;
 
   const canContinue = sex !== null && birthYearValid && heightValid && weightValid;
 
@@ -219,10 +229,12 @@ export default function AboutYouStep({
         )}
       </div>
 
-      {/* ── Height + weight (optional, side-by-side) ───────────── */}
+      {/* ── Height + weight (mandatory since 2026-05-18) ────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={labelStyle}>{t("height_label")}</div>
+          <div style={labelStyle}>
+            {t("height_label")} <span style={{ color: PINK }}>*</span>
+          </div>
           <div style={{ position: "relative" }}>
             <input
               inputMode="numeric"
@@ -242,9 +254,14 @@ export default function AboutYouStep({
               color: TEXT_FAINT, fontSize: 13, fontWeight: 500, pointerEvents: "none",
             }}>cm</span>
           </div>
+          {heightCm.length > 0 && !heightValid && (
+            <div style={{ fontSize: 12, color: PINK }}>{t("height_invalid")}</div>
+          )}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={labelStyle}>{t("weight_label")}</div>
+          <div style={labelStyle}>
+            {t("weight_label")} <span style={{ color: PINK }}>*</span>
+          </div>
           <div style={{ position: "relative" }}>
             <input
               inputMode="decimal"
@@ -263,6 +280,9 @@ export default function AboutYouStep({
               color: TEXT_FAINT, fontSize: 13, fontWeight: 500, pointerEvents: "none",
             }}>kg</span>
           </div>
+          {weightKg.length > 0 && !weightValid && (
+            <div style={{ fontSize: 12, color: PINK }}>{t("weight_invalid")}</div>
+          )}
         </div>
       </div>
 
