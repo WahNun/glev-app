@@ -1081,17 +1081,43 @@ export default function InsightsPage() {
     if (EVAL_NORM(unifiedOutcome(m))==="GOOD") timeGroups[key].good++;
   });
 
-  // Pattern detection — uses the in-scope meal slice so the signals
-  // track the active range picker (Task #332). Capped at 30 rows so
-  // Month/Year scopes don't drown out recent signals; for Day/Week the
-  // cap is naturally ≤ in-scope length.
+  // Pattern detection — FIXED rolling 7-day window (Task 2026-05-18),
+  // matching the dashboard's Control Score so both screens speak the
+  // same language. We intentionally ignore `scopeMode` *and* `now`
+  // (which is `scope.endMs`) here: browsing Month/Year or scrolling
+  // back in time must not redefine what "recent" means. The detector
+  // always answers "what are your last 7 *real* days doing right now?"
   // SPIKE bucket = SPIKE+UNDERDOSE+LOW (BG ended too high → under-dosed).
   // HYPO  bucket = OVERDOSE+HIGH       (BG ended too low  → over-dosed).
-  const recentMeals = last7.slice(0, 30);
+  const patternsNow = Date.now();
+  const patternsWindowStart = startOfDaysAgo(6).getTime();
+  const recentMeals = meals.filter(m => {
+    const t = parseDbTs(m.created_at);
+    return t >= patternsWindowStart && t < patternsNow;
+  });
   const recentTotal = recentMeals.length;
   const recentGood  = recentMeals.filter(m=>EVAL_NORM(unifiedOutcome(m))==="GOOD").length;
   const recentLow   = recentMeals.filter(m=>EVAL_NORM(unifiedOutcome(m))==="SPIKE").length;
   const recentHigh  = recentMeals.filter(m=>EVAL_NORM(unifiedOutcome(m))==="HYPO").length;
+  // Time-of-day groupings used by the morning/evening pattern checks
+  // are derived from the SAME fixed 7-day window — otherwise the card
+  // would mix "rolling-7d" signals with scope-filtered ones and feel
+  // inconsistent (architect review 2026-05-18).
+  const patternTimeGroups: Record<string,{count:number;good:number}> = {
+    "Morning (5–11)":    {count:0,good:0},
+    "Afternoon (11–17)": {count:0,good:0},
+    "Evening (17–21)":   {count:0,good:0},
+    "Night (21–5)":      {count:0,good:0},
+  };
+  recentMeals.forEach(m => {
+    const h = parseDbDate(m.created_at).getHours();
+    const key = h >= 5 && h < 11 ? "Morning (5–11)"
+              : h >= 11 && h < 17 ? "Afternoon (11–17)"
+              : h >= 17 && h < 21 ? "Evening (17–21)"
+              : "Night (21–5)";
+    patternTimeGroups[key].count++;
+    if (EVAL_NORM(unifiedOutcome(m))==="GOOD") patternTimeGroups[key].good++;
+  });
   // Rate-based gates so the cards don't contradict each other (Task 2026-05-18):
   // previously each pattern fired on its absolute count, so "10 under-dosed"
   // and "14 well-dosed" could appear at the same time in a 27-meal window.
@@ -1110,16 +1136,18 @@ export default function InsightsPage() {
   if (!underFires && !overFires && recentGood >= 7 && recentGoodRate >= 0.6) {
     patterns.push({ icon:"✓", title:tInsights("pattern_strong_control_title"), desc:tInsights("pattern_strong_control_desc", { n: recentGood, total: recentTotal }), color:GREEN });
   }
-  const morningSucc = timeGroups["Morning (5–11)"];
-  const eveningSucc = timeGroups["Evening (17–21)"];
+  const morningSucc = patternTimeGroups["Morning (5–11)"];
+  const eveningSucc = patternTimeGroups["Evening (17–21)"];
   if (morningSucc.count >= 3 && morningSucc.good/morningSucc.count < 0.5) patterns.push({ icon:"☀", title:tInsights("pattern_morning_issues_title"),    desc:tInsights("pattern_morning_issues_desc"),    color:ORANGE });
   if (eveningSucc.count >= 3 && eveningSucc.good/eveningSucc.count > 0.8) patterns.push({ icon:"🌙", title:tInsights("pattern_evening_strength_title"), desc:tInsights("pattern_evening_strength_desc"), color:ACCENT });
   // Empty-state copy depends on whether the user has enough meals for
   // the detector to be statistically meaningful. <15 meals → onboarding
   // hint ("log more"). >=15 meals → mixed-signal hint (Lucas reported
-  // seeing the "log 15+" copy with 113 meals on 2026-05-12).
+  // seeing the "log 15+" copy with 113 meals on 2026-05-12). Uses the
+  // fixed 7-day window so the empty-state matches the detector's
+  // semantics (was `last7.length` which followed scopeMode).
   if (patterns.length === 0) {
-    if (last7.length >= 15) {
+    if (recentTotal >= 15) {
       patterns.push({ icon:"→", title:tInsights("pattern_mixed_title"), desc:tInsights("pattern_mixed_desc"), color:"var(--text-faint)" });
     } else {
       patterns.push({ icon:"→", title:tInsights("pattern_no_signals_title"), desc:tInsights("pattern_no_signals_desc"), color:"var(--text-faint)" });
@@ -3557,7 +3585,19 @@ function InsightsSwipePager({
       programmaticScrollRef.current = false;
     }, 220);
   }, []);
-  const programmaticScrollTo = React.useCallback((left: number) => {
+  // 2026-05-18 iOS TestFlight UX: the "cards slowly snap in after
+  // swipe" complaint traced back to two layered animations:
+  //   1. After the user's flick decays, iOS' native snap settles
+  //      within ~1px of the slot; our settleSnap then noticed the
+  //      residual and replayed a *smooth* scroll over another ~300ms.
+  //   2. The 220ms `height` transition on the pager re-animated on
+  //      every active-card change.
+  // Fix: settleSnap now uses instant ("auto") scroll — the user has
+  // already perceived the swipe as complete, so re-animating it
+  // feels like lag. Indicator taps still use smooth (long visible
+  // jump). Debounce dropped from 140 → 70ms so the settle catches
+  // the rest sooner on slower-decaying flicks.
+  const programmaticScrollTo = React.useCallback((left: number, smooth = true) => {
     const el = scrollerRef.current;
     if (!el) return;
     if (settleTimerRef.current != null) {
@@ -3565,7 +3605,7 @@ function InsightsSwipePager({
       settleTimerRef.current = null;
     }
     programmaticScrollRef.current = true;
-    el.scrollTo({ left, behavior: "smooth" });
+    el.scrollTo({ left, behavior: smooth ? "smooth" : "auto" });
     scheduleProgrammaticRelease();
   }, [scheduleProgrammaticRelease]);
   const settleSnap = React.useCallback(() => {
@@ -3575,7 +3615,8 @@ function InsightsSwipePager({
     if (w <= 0) return;
     const target = Math.round(el.scrollLeft / w) * w;
     if (Math.abs(el.scrollLeft - target) > 1) {
-      programmaticScrollTo(target);
+      // Instant snap — see comment above programmaticScrollTo.
+      programmaticScrollTo(target, false);
     }
   }, [programmaticScrollTo]);
 
@@ -3593,7 +3634,7 @@ function InsightsSwipePager({
     settleTimerRef.current = window.setTimeout(() => {
       settleTimerRef.current = null;
       settleSnap();
-    }, 140);
+    }, 70);
   }, [updateActive, settleSnap, scheduleProgrammaticRelease]);
 
   // Realign on width change (orientation, container resize). Pins
@@ -3729,7 +3770,12 @@ function InsightsSwipePager({
             scrollSnapType: "x mandatory",
             overscrollBehaviorX: "contain",
             WebkitOverflowScrolling: "touch",
-            transition: "height 220ms ease",
+            // 2026-05-18: 220 → 120ms. The height re-animation kicked
+            // in *after* the swipe settled and made the whole panel
+            // feel like it was still moving long after the card had
+            // landed. 120ms is short enough to feel snappy but long
+            // enough to avoid a visible step when card heights differ.
+            transition: "height 120ms ease",
           }}
         >
           {items.map((it, idx) => (
