@@ -41,7 +41,20 @@ export default function PreviewHome() {
       style={{
         background: BG,
         color: "var(--text)",
+        // Sticky-footer pattern: main is a column flex container that
+        // always fills at least the dynamic viewport height. Combined
+        // with `marginTop: auto` on the footer below, this pushes the
+        // footer to the bottom edge whenever the content is shorter
+        // than the viewport (large desktop screens, short pages) while
+        // still letting long pages scroll normally without a double
+        // scrollbar. `overflow: hidden` stays here because the
+        // absolute brand-glow background extends slightly past the
+        // section boundaries and would otherwise trigger a horizontal
+        // scrollbar; flex layout is unaffected by the clip.
+        // Task #357 (2026-05-18).
         minHeight: "100dvh",
+        display: "flex",
+        flexDirection: "column",
         fontFamily: "var(--font-inter), Inter, system-ui, sans-serif",
         position: "relative",
         overflow: "hidden",
@@ -958,14 +971,22 @@ export default function PreviewHome() {
         </p>
       </section>
 
-      {/* FOOTER — identisch zur Homepage. */}
+      {/* FOOTER — identisch zur Homepage.
+          `marginTop: auto` pairs with the column-flex `<main>` above to
+          push the footer to the viewport bottom when the page content
+          is shorter than the viewport (Task #357). The inner content
+          stays capped at 1180 px and horizontally centred via the
+          left/right auto margins. */}
       <footer
         style={{
           position: "relative",
           zIndex: 1,
+          marginTop: "auto",
+          width: "100%",
           maxWidth: 1180,
-          margin: "0 auto",
-          padding: "28px 24px 36px",
+          marginLeft: "auto",
+          marginRight: "auto",
+          padding: "28px 24px calc(36px + env(safe-area-inset-bottom))",
           borderTop: `1px solid ${BORDER}`,
           display: "flex",
           flexWrap: "wrap",

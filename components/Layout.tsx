@@ -610,17 +610,17 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       <nav className="glev-mobile-nav" style={{
         position: "fixed", bottom: 0, left: 0, right: 0,
         background: NAV_SURFACE, borderTop: `1px solid ${NAV_BORDER}`,
-        // Bottom padding pulls the tab labels even closer to the home
-        // indicator. History: round 1 −18 px, round 2 −22 px (labels
-        // ~12 px above the home indicator), round 3 (2026-05-18 PM)
-        // tightened to −28 px → labels sit ~6 px above the iOS home
-        // indicator strip after the user reported "noch etwas dunkler
-        // space" below the nav on iOS TestFlight + web preview.
-        // Web floor lowered 8 → 4 px because without a safe-area inset
-        // the floor was visibly thicker than on iOS, so the dark band
-        // looked even worse on desktop preview. 4 px still keeps the
-        // labels from kissing the viewport edge.
-        padding: "4px 4px max(4px, calc(env(safe-area-inset-bottom, 0px) - 28px))",
+        // Bottom padding pulls the tab labels flush against the home
+        // indicator / viewport edge. History: round 1 −18 px, round 2
+        // −22 px, round 3 (2026-05-18 PM) −28 px, round 4 (2026-05-18
+        // late) −34 px after user report "der gesamte footer nav sitzt
+        // nicht ganz unten im bildschirm sondern lässt da noch
+        // ordentlich blank space". sa-bot − 34 on iPhone X+ (sa-bot ≈
+        // 34) → 0 px, labels touch the home-indicator zone top edge.
+        // Web/Android floor 0 px → no dark band below the labels.
+        // Outer top padding kept at 4 px so the labels don't kiss the
+        // top border.
+        padding: "4px 4px max(0px, calc(env(safe-area-inset-bottom, 0px) - 34px))",
         zIndex: 100,
       }}>
         <MobileTab
