@@ -152,8 +152,17 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 
   const navTo = (path: string) => {
     hapticSelection();
+    // 2026-05-18 round 7 (TestFlight tap loss fix): defer voice stop into
+    // a microtask so its setState cascade (recording=false, engine page
+    // teardown, re-render) cannot run synchronously between this call and
+    // the router.push below. Previously a tab tap during an active voice
+    // recording would (a) trigger the capture-phase tap-anywhere-stop
+    // listener in VoiceRecordingProvider AND (b) call requestStop again
+    // here — the resulting double-flush sometimes left React in a state
+    // where the router.push appeared to be queued but never committed on
+    // WKWebView, looking like the tap was "dead".
     if (voice.recording) {
-      try { voice.requestStop(); } catch {}
+      queueMicrotask(() => { try { voice.requestStop(); } catch {} });
     }
     setPendingPath(path);
     router.push(path);
@@ -913,9 +922,82 @@ function MobileTab({
   // Treat pending as visually active so the highlight lands the instant
   // the finger lifts, not after RSC streaming finishes.
   const visualActive = active || pending;
+
+  // 2026-05-18 round 7 (TestFlight footer-tap loss fix):
+  // Previously this tab fired navigation from `onClick` only. On iOS
+  // WKWebView the synthesised click event would intermittently be lost:
+  //   1. Right after a route swap: React re-mounts the entire nav row
+  //      below new RSC output. The button DOM node the WebKit hit-test
+  //      resolved at touchstart is no longer the node that receives the
+  //      click — so the handler never runs, and the tap feels "dead".
+  //   2. While a voice recording is active: VoiceRecordingProvider's
+  //      capture-phase pointerdown listener calls setRecording(false)
+  //      BEFORE the click bubbles. That synchronous state cascade
+  //      tore down the engine page mid-dispatch and the click event
+  //      was sometimes never delivered to this button at all.
+  // Mirror the Glev FAB: act on `pointerup` directly (which fires before
+  // the click is synthesized), with movement/cancel guards so a vertical
+  // scroll gesture started on the nav doesn't accidentally navigate.
+  // `onClick` is kept ONLY as a keyboard activation fallback (Enter /
+  // Space — no pointer events fire for keyboard) and is gated by
+  // `pointerHandledRef` so taps don't double-fire.
+  const pointerHandledRef = useRef(false);
+  const startXRef = useRef(0);
+  const startYRef = useRef(0);
+  const validRef = useRef(false);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    pointerHandledRef.current = true;
+    validRef.current = true;
+    startXRef.current = e.clientX;
+    startYRef.current = e.clientY;
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (!validRef.current) return;
+    // 10 px slop = same threshold iOS uses for tap-vs-pan disambiguation.
+    if (
+      Math.abs(e.clientX - startXRef.current) > 10 ||
+      Math.abs(e.clientY - startYRef.current) > 10
+    ) {
+      validRef.current = false;
+    }
+  };
+
+  const handlePointerUp = () => {
+    if (!validRef.current) return;
+    validRef.current = false;
+    onClick();
+  };
+
+  const handlePointerCancel = () => {
+    validRef.current = false;
+    // Gesture was canceled (scroll/drag) so no synthetic click will
+    // follow. Clear the dedupe flag so a subsequent keyboard activation
+    // (Enter / Space) isn't swallowed by stale state.
+    pointerHandledRef.current = false;
+  };
+
+  const handleClick = () => {
+    // Pointer cycle already handled this gesture; swallow the synthetic
+    // click that browsers fire after pointerup so navTo doesn't run
+    // twice. Reset the flag so a subsequent KEYBOARD activation (where
+    // no pointer events fire) still goes through.
+    if (pointerHandledRef.current) {
+      pointerHandledRef.current = false;
+      return;
+    }
+    onClick();
+  };
+
   return (
     <button
-      onClick={onClick}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
+      onPointerLeave={handlePointerCancel}
+      onClick={handleClick}
       aria-current={active ? "page" : undefined}
       aria-busy={pending || undefined}
       style={{
