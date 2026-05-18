@@ -1388,6 +1388,7 @@ function NonMealRow({
   secondarySubtitle,
   sourceBadge,
   expandedDetails,
+  suppressActions,
 }: {
   isOpen: boolean;
   onToggle: () => void;
@@ -1397,6 +1398,13 @@ function NonMealRow({
    *  rendered next to Delete in the expanded action row. Used by
    *  ExerciseRowCard to surface the inline ExerciseEditor. */
   onEdit?: () => void;
+  /** When true, the bottom Edit/Delete action row is hidden entirely.
+   *  Set by RowCards while their inline editor is open so the editor's
+   *  own Save/Cancel buttons can't be misrouted to Delete on iOS via
+   *  the WKWebView click-race (user-report 2026-05-18: tapping
+   *  Speichern opened the Delete confirm). The editor still has its
+   *  own Cancel; Delete is reachable again after Save/Cancel. */
+  suppressActions?: boolean;
   accent: string;
   badge: string;
   dateStr: string;
@@ -1535,6 +1543,7 @@ function NonMealRow({
       {isOpen && (
         <div style={{ padding:"4px 16px 16px", borderTop:`1px solid var(--surface-soft)`, display:"flex", flexDirection:"column", gap:12 }}>
           {expandedDetails}
+          {!suppressActions && (
           <div style={{
             marginTop:4,
             display:"grid",
@@ -1584,6 +1593,7 @@ function NonMealRow({
               {deleting ? "Deleting…" : "Delete entry"}
             </IosTapButton>
           </div>
+          )}
         </div>
       )}
     </div>
@@ -2345,6 +2355,7 @@ function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting, o
       onDelete={onDelete}
       deleting={deleting}
       onEdit={editing ? undefined : () => setEditing(true)}
+      suppressActions={editing}
       accent={badgeColor}
       badge={evalInfo.label}
       dateStr={dateStr}
@@ -3785,6 +3796,7 @@ function InfluenceRowCard({ log, isOpen, onToggle, onDelete, deleting, onUpdated
       onDelete={onDelete}
       deleting={deleting}
       onEdit={editing ? undefined : () => setEditing(true)}
+      suppressActions={editing}
       accent={INFLUENCE_ACCENT}
       badge={typeLabel}
       dateStr={dateStr}
@@ -3860,6 +3872,7 @@ function SymptomRowCard({ log, isOpen, onToggle, onDelete, deleting, onUpdated }
       onDelete={onDelete}
       deleting={deleting}
       onEdit={editing ? undefined : () => setEditing(true)}
+      suppressActions={editing}
       accent={SYMPTOM_ACCENT}
       badge={badgeLabel}
       dateStr={dateStr}
