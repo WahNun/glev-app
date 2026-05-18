@@ -373,7 +373,8 @@ export default function EnginePage() {
   // the active language ("5,5 IE" in DE, "5.5 u" in EN). Cached against
   // the current locale to avoid rebuilding the Intl.NumberFormat instance
   // on every dose calc / re-render.
-  const bcp47 = localeToBcp47(useLocale());
+  const locale = useLocale();
+  const bcp47 = localeToBcp47(locale);
   const formatNum = useMemo<NumFormatter>(() => {
     const cache = new Map<number, Intl.NumberFormat>();
     return (n: number, digits = 1) => {
@@ -1105,7 +1106,9 @@ export default function EnginePage() {
       const pRes = await fetch("/api/parse-food", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        // locale: ensures the GPT-emitted `description` comes back in the
+        // user's UI language (de/en) instead of always English.
+        body: JSON.stringify({ text, locale }),
       });
       const pData = await pRes.json();
       const tParseDone = Date.now();
@@ -1170,14 +1173,14 @@ export default function EnginePage() {
       // staring at an empty card.
       const chatLines: string[] = [];
       const macroBits: string[] = [];
-      if (t.carbs   != null) macroBits.push(`${t.carbs}g KH`);
-      if (t.protein != null) macroBits.push(`${t.protein}g Protein`);
-      if (t.fat     != null) macroBits.push(`${t.fat}g Fett`);
-      if (t.fiber   != null) macroBits.push(`${t.fiber}g Ballaststoffe`);
+      if (t.carbs   != null) macroBits.push(`${t.carbs}${tEngine("carbs_short")}`);
+      if (t.protein != null) macroBits.push(`${t.protein}${tEngine("protein_short")}`);
+      if (t.fat     != null) macroBits.push(`${t.fat}${tEngine("fat_short")}`);
+      if (t.fiber   != null) macroBits.push(`${t.fiber}${tEngine("fiber_short")}`);
       if (macroBits.length) {
         chatLines.push(macroBits.join(" · "));
       } else {
-        chatLines.push(`Makros konnten nicht automatisch erkannt werden — bitte unten ergänzen.`);
+        chatLines.push(tEngine("voice_chat_no_macros"));
       }
       const descLine = typeof pData.description === "string" && pData.description.trim()
         ? pData.description.trim()
@@ -1212,16 +1215,18 @@ export default function EnginePage() {
     } catch (e) {
       // eslint-disable-next-line no-console
       console.log("[PERF voice/engine] FAILED after:", Date.now() - tStop, "ms");
-      // FIX B: Map cryptic native messages to actionable German hints so the
-      // user knows what to try next. Anything we don't recognise still shows
-      // the raw message rather than a useless generic fallback.
+      // FIX B (locale-aware 2026-05-18): Map cryptic native messages to
+      // actionable hints in the user's UI language. We previously hard-coded
+      // German strings here which surfaced as "Keine Sprache erkannt …" even
+      // when the rest of the UI was English. Anything we don't recognise
+      // still shows the raw message rather than a useless generic fallback.
       const raw = e instanceof Error ? e.message : "";
       const friendly =
-        /empty transcript/i.test(raw)              ? "Keine Sprache erkannt — bitte deutlicher sprechen oder den Chat unten benutzen." :
-        /permission denied|not allowed/i.test(raw) ? "Mikrofon-Zugriff verweigert. Bitte in den Browser-Einstellungen erlauben." :
-        /failed to fetch|networkerror/i.test(raw)  ? "Verbindung fehlgeschlagen — bitte erneut versuchen." :
+        /empty transcript/i.test(raw)              ? tEngine("voice_err_no_speech") :
+        /permission denied|not allowed/i.test(raw) ? tEngine("voice_err_mic_denied") :
+        /failed to fetch|networkerror/i.test(raw)  ? tEngine("voice_err_network") :
         raw                                         ? raw :
-                                                      "Sprach-Verarbeitung fehlgeschlagen.";
+                                                      tEngine("voice_err_processing_failed");
       setVoiceErr(friendly);
     } finally {
       setParsing(false);

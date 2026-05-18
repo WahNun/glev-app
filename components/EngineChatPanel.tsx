@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 
 const ACCENT  = "#4F6EF7";
 const GREEN   = "#22D3A0";
@@ -101,6 +101,7 @@ export default function EngineChatPanel({
   // the missing-key warnings that would otherwise mark the pill as
   // broken (regression caught in code review).
   const tEngine = useTranslations("engine");
+  const locale = useLocale();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput]       = useState("");
   const [sending, setSending]   = useState(false);
@@ -138,6 +139,10 @@ export default function EngineChatPanel({
           messages: next,
           macros,
           description,
+          // locale: GPT mirrors the user's UI language in `reply` and
+          // `description` so a DE user gets German answers and an EN
+          // user gets English answers (was hard-coded to English).
+          locale,
         }),
       });
       const data = await res.json();

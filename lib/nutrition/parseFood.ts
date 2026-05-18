@@ -86,8 +86,22 @@ export interface ParseFoodResult {
 // holding the whole pipeline hostage when OpenAI is degraded.
 const PARSE_TIMEOUT_MS = 6000;
 
-export async function parseFoodText(text: string): Promise<ParseFoodResult> {
+export async function parseFoodText(
+  text: string,
+  // Optional UI locale — when supplied we tell the model which language
+  // the human-readable `description` should be emitted in. The structured
+  // `items` array is unaffected (names stay original-language, search
+  // terms stay bilingual). Defaults to German to preserve prior
+  // behaviour for callers that don't pass a locale.
+  locale: "de" | "en" = "de",
+): Promise<ParseFoodResult> {
   const openai = getOpenAIClient();
+  const langName = locale === "en" ? "English" : "German";
+  const systemPrompt =
+    PARSER_PROMPT +
+    `\n\nLanguage: the "description" field MUST be written in ${langName}. ` +
+    `Item "name" stays in the user's original language; "search_term_en" and ` +
+    `"search_term_de" remain as specified above.`;
   const completion = await openai.chat.completions.create(
     {
       model: "gpt-4o-mini",
@@ -110,7 +124,7 @@ export async function parseFoodText(text: string): Promise<ParseFoodResult> {
       // tokens directly reduces TTFB and total time.
       max_tokens: 350,
       messages: [
-        { role: "system", content: PARSER_PROMPT },
+        { role: "system", content: systemPrompt },
         { role: "user",   content: text },
       ],
     },

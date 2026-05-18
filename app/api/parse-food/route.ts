@@ -26,16 +26,20 @@ import { authedClient } from "@/app/api/insulin/_helpers";
 export async function POST(req: NextRequest) {
   const t0 = Date.now();
   const body = await req.json().catch(() => ({}));
-  const { text } = body as { text?: string };
+  const { text, locale: rawLocale } = body as { text?: string; locale?: string };
 
   if (!text || typeof text !== "string") {
     return NextResponse.json({ error: "text is required" }, { status: 400 });
   }
 
+  // Whitelist the locale to the two languages we ship i18n for; anything
+  // else falls back to German (the historical default for parseFoodText).
+  const locale: "de" | "en" = rawLocale === "en" ? "en" : "de";
+
   // Stage 1: GPT parser
   let parsed;
   try {
-    parsed = await parseFoodText(text);
+    parsed = await parseFoodText(text, locale);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Parser failed";
     // 503 if it's the missing-key sentinel from getOpenAIClient(), else 500.

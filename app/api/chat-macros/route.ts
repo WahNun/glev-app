@@ -73,10 +73,25 @@ export async function POST(req: NextRequest) {
     messages?: ChatMessage[];
     macros?:   { carbs?: number; protein?: number; fat?: number; fiber?: number };
     description?: string;
+    locale?: string;
   };
 
   const history = Array.isArray(body.messages) ? body.messages.filter(m => m && typeof m.content === "string") : [];
   if (history.length === 0) return NextResponse.json({ error: "messages required" }, { status: 400 });
+
+  // Locale-aware reply: previously the SYSTEM_PROMPT was English-only and
+  // GPT answered in English even when the user's UI was set to German.
+  // We now whitelist de/en (default de) and inject a language instruction
+  // into the system prompt so `reply` mirrors the UI language. The
+  // `description` field re-uses parseFoodText's own locale handling
+  // downstream so re-aggregation lands in the same language.
+  const locale: "de" | "en" = body.locale === "en" ? "en" : "de";
+  const langName = locale === "en" ? "English" : "German";
+  const localizedSystemPrompt =
+    SYSTEM_PROMPT +
+    `\n\nLanguage: write the conversational "reply" in ${langName}. ` +
+    `The "description" field must also be in ${langName} (lowercase ingredient ` +
+    `names in that language, e.g. German "haferflocken" or English "oats").`;
 
   const ctx: ChatMessage = {
     role: "system",
@@ -100,7 +115,7 @@ food databases, not guesses):
     const completion = await openai.chat.completions.create({
       model: "gpt-5",
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: localizedSystemPrompt },
         ctx,
         ...history,
       ],
@@ -150,7 +165,7 @@ food databases, not guesses):
   // a null macros payload so the UI keeps its previous values rather
   // than overwriting them with garbage.
   try {
-    const parsedDesc = await parseFoodText(chatDescription);
+    const parsedDesc = await parseFoodText(chatDescription, locale);
     let userHistory: Awaited<ReturnType<typeof lookupUserFoodHistory>> | undefined;
     if (userId && sb) {
       try {
