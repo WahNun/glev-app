@@ -16,8 +16,8 @@ const STRIPE_TRIAL_MIN_LEAD_MS = 48 * 60 * 60 * 1000 + 60 * 60 * 1000;
  * POST /api/checkout/plus
  *
  * Glev+ Lifetime-Lock Checkout (€29 bzw. $29/Monat). Currency per Locale:
- *   `locale: "en"` → USD via STRIPE_PRICE_PLUS_USD_ID
- *   `locale: "de"` (Default) → EUR via STRIPE_PRICE_PLUS_EUR_ID
+ *   `locale: "en"` → USD via STRIPE_PLUS_PRICE_ID_US
+ *   `locale: "de"` (Default) → EUR via STRIPE_PLUS_PRICE_ID
  */
 export async function POST(req: NextRequest) {
   try {
@@ -30,14 +30,14 @@ export async function POST(req: NextRequest) {
     const useUsd = locale === "en";
 
     const priceId = useUsd
-      ? process.env.STRIPE_PRICE_PLUS_USD_ID
-      : process.env.STRIPE_PRICE_PLUS_EUR_ID;
+      ? process.env.STRIPE_PLUS_PRICE_ID_US
+      : process.env.STRIPE_PLUS_PRICE_ID;
 
     if (!priceId) {
       throw new Error(
         useUsd
-          ? "Missing STRIPE_PRICE_PLUS_USD_ID"
-          : "Missing STRIPE_PRICE_PLUS_EUR_ID",
+          ? "Missing STRIPE_PLUS_PRICE_ID_US"
+          : "Missing STRIPE_PLUS_PRICE_ID",
       );
     }
     if (!process.env.NEXT_PUBLIC_APP_URL) {
