@@ -1153,21 +1153,36 @@ function PhoneShell({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-/** Klinik-Karte mit lokalem State für Email-Warteliste. UI-only,
- *  kein Backend — nach Submit Toast-Bestätigung 4s anzeigen. */
+/** Glev+ Karte (L-Tier). CTA POSTet direkt an /api/checkout/plus und
+ *  redirected zur Stripe-hosted Checkout-Page (gleiches Pattern wie
+ *  die /pro Hero-CTA). Kein Email-Feld — Stripe sammelt die Email selbst. */
 function KlinikCard() {
   const t = useTranslations("marketing");
-  const [email, setEmail] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!email.trim()) return;
-    setSubmitted(true);
-    setEmail("");
-    // Toast nach 4s wieder ausblenden, damit das Eingabefeld
-    // erneut interaktiv ist (gut für wiederholte Screenshots).
-    window.setTimeout(() => setSubmitted(false), 4000);
+    if (loading) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/checkout/plus", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ locale: "de" }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+      if (data.url) {
+        window.location.href = data.url;
+        return;
+      }
+      setError(data.error ?? "Checkout konnte nicht gestartet werden.");
+    } catch {
+      setError("Checkout konnte nicht gestartet werden.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -1233,63 +1248,46 @@ function KlinikCard() {
           gap: 8,
         }}
       >
-        <div style={{ display: "flex", gap: 8 }}>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder={t("pricing_klinik_email_placeholder")}
-            required
-            aria-label={t("pricing_klinik_email_placeholder")}
-            style={{
-              flex: 1,
-              minWidth: 0,
-              padding: "11px 14px",
-              borderRadius: 10,
-              background: "var(--bg)",
-              border: `1px solid ${BORDER}`,
-              color: "var(--text)",
-              fontSize: 13,
-              outline: "none",
-              fontFamily: "inherit",
-            }}
-          />
-          <button
-            type="submit"
-            style={{
-              padding: "11px 16px",
-              borderRadius: 10,
-              background: ACCENT,
-              color: "#fff",
-              fontSize: 13,
-              fontWeight: 700,
-              letterSpacing: "-0.005em",
-              border: "none",
-              cursor: "pointer",
-              whiteSpace: "nowrap",
-              fontFamily: "inherit",
-            }}
-          >
-            {t("pricing_klinik_cta")}
-          </button>
-        </div>
-        {submitted && (
+        <button
+          type="submit"
+          disabled={loading}
+          style={{
+            padding: "13px 22px",
+            borderRadius: 12,
+            background: ACCENT,
+            color: "#fff",
+            fontSize: 14,
+            fontWeight: 700,
+            letterSpacing: "-0.005em",
+            border: "none",
+            cursor: loading ? "wait" : "pointer",
+            opacity: loading ? 0.7 : 1,
+            fontFamily: "inherit",
+            boxShadow: `0 6px 18px ${ACCENT}40`,
+          }}
+        >
+          {loading ? "…" : t("pricing_klinik_cta")}
+        </button>
+        {error && (
           <div
-            role="status"
+            role="alert"
             style={{
               padding: "8px 12px",
               borderRadius: 8,
-              background: `${GREEN}1a`,
-              border: `1px solid ${GREEN}55`,
-              color: GREEN,
+              background: "rgba(255,80,80,0.1)",
+              border: "1px solid rgba(255,80,80,0.35)",
+              color: "#ff5050",
               fontSize: 12.5,
               fontWeight: 600,
               textAlign: "center",
             }}
           >
-            {t("pricing_klinik_toast")}
+            {error}
           </div>
         )}
+        <p style={{ margin: "4px 0 0 0", fontSize: 11.5, color: "var(--text-faint)", textAlign: "center", lineHeight: 1.4 }}>
+          B2B-Praxis? <a href="/klinik" style={{ color: "var(--text-muted)", textDecoration: "underline" }}>Glev Klinik (€299/Mo)</a>
+        </p>
       </form>
     </div>
   );

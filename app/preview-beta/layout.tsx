@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Glev Beta — kostenloser Zugang jetzt",
+  title: "Glev Smart — Early Access",
   description:
-    "Glev Beta — kostenloser Zugang jetzt, Billing ab Juli. Erste 3 Monate 4,50 EUR, danach 9 EUR/Monat.",
+    "Glev Smart — kostenloser Early Access jetzt sichern. Billing startet am 1. Juli 2026 mit €9/Monat. Lifetime Lock auf Pro-Tier €14,90/Monat.",
   robots: {
     index: false,
     follow: false,

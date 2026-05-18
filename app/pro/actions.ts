@@ -50,10 +50,10 @@ export async function startProCheckout(
   let status = 0;
   let data: { url?: string; error?: string } = {};
   try {
-    const res = await fetch(`${origin}/api/pro/checkout`, {
+    const res = await fetch(`${origin}/api/checkout/pro`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, locale: "de" }),
       cache: "no-store",
     });
     status = res.status;

@@ -69,7 +69,7 @@ function ProSuccessInner() {
         // the page won't break the moment trials stop being viable. The
         // feature tag — not just `kind` — keeps Beta sessions from being
         // accepted here even though they're also "paid" subscriptions.
-        if (res.ok && data.valid && data.feature === "pro_subscription") {
+        if (res.ok && data.valid && (data.feature === "pro_subscription" || data.feature === "plus_subscription")) {
           setVerify({ kind: "valid", email: typeof data.email === "string" ? data.email : null });
         } else {
           setVerify({ kind: "invalid", reason: data?.reason ?? "not_paid" });

@@ -242,16 +242,22 @@ export default function LegalPage() {
                 <p>Dauerhafter Zugang bis zur Einführung des regulären Abonnements (Juli 2026). Danach Übergang zu einem vergünstigten Tarif.</p>
               </div>
               <div className="price-card">
-                <div className="plan-name">Free → Pro (ab Juli 2026)</div>
-                <div className="price">€ 4,50</div>
-                <div className="price-sub">pro Monat · Einführungspreis</div>
-                <p>Regulärer Monatspreis ab Einführung des Pro-Abonnements.</p>
+                <div className="plan-name">Glev Smart (ab Juli 2026)</div>
+                <div className="price">€ 9</div>
+                <div className="price-sub">pro Monat · Einsteiger-Tier</div>
+                <p>Voice + Text-Logging, Dashboard, 60 Tage Verlauf. Während des Early Access kostenlos; Billing startet am 1. Juli 2026.</p>
               </div>
               <div className="price-card">
-                <div className="plan-name">Pro (Vollpreis)</div>
-                <div className="price">€ 24,90</div>
-                <div className="price-sub">pro Monat</div>
-                <p>Regulärer Pro-Tarif ohne Einführungsrabatt.</p>
+                <div className="plan-name">Glev Pro — Lifetime Lock</div>
+                <div className="price">€ 14,90</div>
+                <div className="price-sub">pro Monat · dauerhaft</div>
+                <p>Adaptive Engine, CGM-Sync, TIR/GMI, 90 Tage Verlauf. Lifetime-Lock-Preis bis zum 1. Juli 2026 buchbar — danach regulärer Preis.</p>
+              </div>
+              <div className="price-card">
+                <div className="plan-name">Glev+</div>
+                <div className="price">€ 29</div>
+                <div className="price-sub">pro Monat · dauerhaft</div>
+                <p>Alles aus Pro + Arzt-PDF, unbegrenzte History, CSV/ZIP-Export. Lifetime-Lock-Preis bis 1. Juli 2026.</p>
               </div>
             </div>
 
