@@ -73,13 +73,21 @@ export async function POST(req: NextRequest) {
     // carry `mode: 'subscription'` but Beta has both subscription and
     // one-time variants, so we can't filter on `mode` alone.
     const feature = session.metadata?.feature;
-    if (feature === 'pro_subscription') {
+    if (feature === 'pro_subscription' || feature === 'plus_subscription') {
+      // Both Pro (€14,90/mo) and Plus (€29/mo lifetime-lock) checkouts are
+      // owned by /api/pro/webhook — that endpoint writes the
+      // pro_subscriptions row and enqueues `pro-welcome`. We must early-
+      // return here otherwise the same checkout.session.completed event
+      // would ALSO be processed by this Beta handler and (a) enqueue a
+      // wrong `beta-welcome` mail and (b) flip profiles.subscription_status
+      // to 'beta', silently downgrading a paying Plus/Pro buyer.
       // eslint-disable-next-line no-console
-      console.log('[webhook] ignoring Pro session — handled by /api/pro/webhook:', {
+      console.log('[webhook] ignoring Pro/Plus session — handled by /api/pro/webhook:', {
         sessionId: session.id,
         eventId: event.id,
+        feature,
       });
-      return NextResponse.json({ received: true, ignored: 'pro_subscription' });
+      return NextResponse.json({ received: true, ignored: feature });
     }
 
     const email = session.customer_email ?? session.customer_details?.email;

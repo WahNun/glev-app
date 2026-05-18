@@ -320,8 +320,22 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ received: true, error: "no_binding_key" });
         }
 
+        // Plus (€29/mo lifetime-lock) and Pro (€14,90/mo) both land here
+        // because /api/checkout/plus and /api/checkout/pro are routed to
+        // the same Stripe webhook endpoint (STRIPE_PRO_WEBHOOK_SECRET).
+        // For access control they're identical → `profiles.plan='pro'`
+        // grants the same gated features. The only difference we persist
+        // is `profiles.subscription_status='plus'` so admin tooling and
+        // future analytics can tell the two SKUs apart without joining
+        // back through pro_subscriptions.stripe_price_id.
+        // EffectivePlan stays "free|beta|pro" — no schema migration
+        // needed, Plus is purely a billing-tier distinction.
+        const isPlus = session.metadata?.feature === "plus_subscription";
+
         // eslint-disable-next-line no-console
-        console.log("[pro/webhook] subscription created:", { email, customerId, subscriptionId, trialEndsAt });
+        console.log(`[pro/webhook${isPlus ? " plus" : ""}] subscription created:`, {
+          email, customerId, subscriptionId, trialEndsAt, feature: session.metadata?.feature ?? null,
+        });
 
         // Mirror the Pro membership onto `profiles.plan` so the rest of the
         // app (paywalls, badges, /api/me/plan) reads a single source of
@@ -330,6 +344,35 @@ export async function POST(req: NextRequest) {
         // checkout just completed, the trial is starting now.
         const planAtCheckout = mapStripeStatusToPlan(stripeStatus) ?? "pro";
         await syncProfilePlanByEmail(sb, email, planAtCheckout);
+
+        // Tag the Plus tier on the profile. Best-effort: do not fail the
+        // webhook if the lookup/update fails (mirrors syncProfilePlanByEmail
+        // semantics). Same email-→userId resolver as above.
+        if (isPlus && email) {
+          try {
+            const userId = await findUserIdByEmail(sb, email);
+            if (userId) {
+              const { error: ssErr } = await sb
+                .from("profiles")
+                .update({ subscription_status: "plus" })
+                .eq("user_id", userId);
+              if (ssErr) {
+                // eslint-disable-next-line no-console
+                console.warn("[pro/webhook plus] subscription_status update failed (non-fatal):", {
+                  userId, code: ssErr.code, message: ssErr.message,
+                });
+              } else {
+                // eslint-disable-next-line no-console
+                console.log("[pro/webhook plus] subscription_status='plus' set", { userId });
+              }
+            }
+          } catch (e) {
+            // eslint-disable-next-line no-console
+            console.warn("[pro/webhook plus] subscription_status sync threw (non-fatal):", {
+              err: e instanceof Error ? e.message : String(e),
+            });
+          }
+        }
 
         // Enqueue the post-checkout welcome email into the durable outbox
         // (lib/emails/outbox.ts). The cron worker (/api/cron/flush-outbox,

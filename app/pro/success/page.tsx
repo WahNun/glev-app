@@ -19,7 +19,7 @@ const TRIAL_END_DISPLAY = "1. Juli 2026";
 
 type VerifyState =
   | { kind: "verifying" }
-  | { kind: "valid"; email: string | null }
+  | { kind: "valid"; email: string | null; feature: "pro_subscription" | "plus_subscription" }
   | { kind: "invalid"; reason: string };
 
 export default function ProSuccessPage() {
@@ -70,7 +70,11 @@ function ProSuccessInner() {
         // feature tag — not just `kind` — keeps Beta sessions from being
         // accepted here even though they're also "paid" subscriptions.
         if (res.ok && data.valid && (data.feature === "pro_subscription" || data.feature === "plus_subscription")) {
-          setVerify({ kind: "valid", email: typeof data.email === "string" ? data.email : null });
+          setVerify({
+            kind: "valid",
+            email: typeof data.email === "string" ? data.email : null,
+            feature: data.feature,
+          });
         } else {
           setVerify({ kind: "invalid", reason: data?.reason ?? "not_paid" });
         }
@@ -88,7 +92,7 @@ function ProSuccessInner() {
     <PageShell>
       {verify.kind === "verifying" && <VerifyingCard />}
       {verify.kind === "invalid" && <InvalidCard reason={verify.reason} />}
-      {verify.kind === "valid" && <ValidCard email={verify.email} />}
+      {verify.kind === "valid" && <ValidCard email={verify.email} feature={verify.feature} />}
     </PageShell>
   );
 }
@@ -298,7 +302,20 @@ function InvalidCard({ reason }: { reason: string }) {
 //                       "back to dashboard" CTA instead of the form.
 type AuthState = "checking" | "needs_signup" | "signed_in";
 
-function ValidCard({ email }: { email: string | null }) {
+function ValidCard({
+  email,
+  feature,
+}: {
+  email: string | null;
+  feature: "pro_subscription" | "plus_subscription";
+}) {
+  // Tier-spezifische Copy: Pro = €14,90/Monat (monatlich kündbar), Plus =
+  // €29/Monat (Lifetime-Lock — Preis bleibt für immer derselbe). Beide
+  // landen auf dieser Seite, weil /api/checkout/plus auf das gleiche
+  // success_url zeigt wie /api/checkout/pro.
+  const isPlus = feature === "plus_subscription";
+  const firstChargeAmount = isPlus ? "€29" : "€14,90";
+  const tierName = isPlus ? "Glev+" : "Glev Pro";
   const router = useRouter();
   const [authState, setAuthState] = useState<AuthState>("checking");
   const [password, setPassword] = useState("");
@@ -552,7 +569,7 @@ function ValidCard({ email }: { email: string | null }) {
         <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 6 }}>
           <li>Bestätigung von Stripe per Email (Mitgliedschaft angelegt, keine Abbuchung).</li>
           <li>App-Zugang am {TRIAL_END_DISPLAY} — wir melden uns zwei Wochen vorher.</li>
-          <li>Erste monatliche Abbuchung am {TRIAL_END_DISPLAY} (€24,90).</li>
+          <li>Erste monatliche Abbuchung am {TRIAL_END_DISPLAY} ({firstChargeAmount} für {tierName}).</li>
           <li>Kündigung jederzeit vor Launch — einfach an hello@glev.app schreiben.</li>
         </ul>
       </div>
