@@ -47,17 +47,16 @@ export default function PreviewHome() {
         // footer to the bottom edge whenever the content is shorter
         // than the viewport (large desktop screens, short pages) while
         // still letting long pages scroll normally without a double
-        // scrollbar. `overflow: hidden` stays here because the
-        // absolute brand-glow background extends slightly past the
-        // section boundaries and would otherwise trigger a horizontal
-        // scrollbar; flex layout is unaffected by the clip.
-        // Task #357 (2026-05-18).
+        // scrollbar. Only clip the X-axis — `overflow: hidden` (both
+        // axes) was clipping the vertical scroll too, so users could
+        // not scroll the page at all (2026-05-18 regression report).
+        // Task #357 (2026-05-18, fixed 2026-05-18).
         minHeight: "100dvh",
         display: "flex",
         flexDirection: "column",
         fontFamily: "var(--font-inter), Inter, system-ui, sans-serif",
         position: "relative",
-        overflow: "hidden",
+        overflowX: "hidden",
         paddingTop: "calc(56px + env(safe-area-inset-top))",
       }}
     >
