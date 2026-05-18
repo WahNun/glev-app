@@ -8,6 +8,20 @@ const PINK = "#FF2D78";
 const SURFACE = "var(--surface)";
 const BORDER = "var(--border)";
 
+// Render a stored ISO timestamp as a local-day YYYY-MM-DD string.
+// We deliberately avoid `new Date(iso).toISOString().slice(0,10)` because
+// that normalises to UTC and shifts the day by the user's timezone offset
+// (a workout finished at 23:30 local can render as the next day). Reading
+// the Y/M/D fields from the parsed Date stays in the user's locale.
+function formatLocalDate(iso: string): string {
+  const t = new Date(iso);
+  if (Number.isNaN(t.getTime())) return "—";
+  const y = t.getFullYear();
+  const m = String(t.getMonth() + 1).padStart(2, "0");
+  const d = String(t.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 function formatRelativeAge(iso: string): string {
   const t = Date.parse(iso);
   if (!Number.isFinite(t)) return "unbekannt";
@@ -134,6 +148,15 @@ export default function CgmSettingsCard() {
   const [appleHealthSubmitting, setAppleHealthSubmitting] = useState(false);
   const [appleHealthMessage, setAppleHealthMessage] =
     useState<{ kind: "success" | "error" | "info"; text: string } | null>(null);
+  // Workout history range (Task #344) — independent from the glucose
+  // status block above because workouts live in `exercise_logs` while
+  // glucose readings live in `apple_health_readings`. Lets power users
+  // see how far back the backfill actually reached.
+  const [workoutsRange, setWorkoutsRange] = useState<{
+    oldest: string | null;
+    newest: string | null;
+    count: number;
+  } | null>(null);
   // Backfill state for older workout history (Task #343). Decoupled
   // from the connect/sync flow so the user can run a deeper one-shot
   // pull even after the initial connect succeeded.
@@ -194,9 +217,10 @@ export default function CgmSettingsCard() {
   // connected" rather than blowing up the whole settings card.
   const loadAppleHealthState = useCallback(async () => {
     try {
-      const [srcRes, statRes] = await Promise.all([
+      const [srcRes, statRes, rangeRes] = await Promise.all([
         fetch("/api/cgm/source", { cache: "no-store" }),
         fetch("/api/cgm/apple-health/sync", { cache: "no-store" }),
+        fetch("/api/health/workouts/range", { cache: "no-store" }),
       ]);
       if (srcRes.ok) {
         const j = (await srcRes.json()) as { source?: string | null };
@@ -212,6 +236,18 @@ export default function CgmSettingsCard() {
           count: j?.count ?? 0,
           lastTimestamp: j?.lastTimestamp ?? null,
           lastValueMgDl: j?.lastValueMgDl ?? null,
+        });
+      }
+      if (rangeRes.ok) {
+        const j = (await rangeRes.json()) as {
+          oldest?: string | null;
+          newest?: string | null;
+          count?: number;
+        };
+        setWorkoutsRange({
+          oldest: j?.oldest ?? null,
+          newest: j?.newest ?? null,
+          count: j?.count ?? 0,
         });
       }
     } catch {
@@ -1473,6 +1509,40 @@ export default function CgmSettingsCard() {
                         }}
                       >
                         {backfillResult.text}
+                      </div>
+                    )}
+                    {workoutsRange && workoutsRange.count > 0 && (
+                      <div
+                        style={{
+                          fontSize: 13,
+                          color: "var(--text-dim)",
+                          borderTop: `1px dashed ${BORDER}`,
+                          paddingTop: 8,
+                          marginTop: 2,
+                        }}
+                      >
+                        Workouts:{" "}
+                        {workoutsRange.oldest
+                          ? formatLocalDate(workoutsRange.oldest)
+                          : "—"}{" "}
+                        →{" "}
+                        {workoutsRange.newest
+                          ? formatLocalDate(workoutsRange.newest)
+                          : "—"}
+                        , {workoutsRange.count} Stück
+                      </div>
+                    )}
+                    {workoutsRange && workoutsRange.count === 0 && (
+                      <div
+                        style={{
+                          fontSize: 13,
+                          color: "var(--text-dim)",
+                          borderTop: `1px dashed ${BORDER}`,
+                          paddingTop: 8,
+                          marginTop: 2,
+                        }}
+                      >
+                        Workouts: noch keine aus Apple Health synchronisiert.
                       </div>
                     )}
                   </div>
