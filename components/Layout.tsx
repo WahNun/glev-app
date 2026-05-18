@@ -410,7 +410,13 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         // contentInset:"never" the BG now paints through the status
         // bar via sa-top, matching how the footer paints through
         // sa-bottom — visually the two chrome bars look equally slim.
-        padding: "calc(env(safe-area-inset-top) + 4px) max(18px, env(safe-area-inset-right)) 4px max(18px, env(safe-area-inset-left))",
+        // 2026-05-18 round 9 (user: "header könnte ein kleines bisschen
+        // mehr blank space unter dem wordmark"): bottom pad 4 → 10 px
+        // so the wordmark has visible breathing room above the header
+        // border instead of kissing it. Top pad stays tight (4 px) —
+        // the status-bar safe-area zone already separates the wordmark
+        // from the clock/battery row above.
+        padding: "calc(env(safe-area-inset-top) + 4px) max(18px, env(safe-area-inset-right)) 10px max(18px, env(safe-area-inset-left))",
         background: SURFACE,
         borderBottom: `1px solid ${BORDER}`,
         alignItems: "center", justifyContent: "space-between",
@@ -632,7 +638,14 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         // (no blank gap under the labels), and labels sit safely above
         // the home indicator pill via the sa-bot bottom padding.
         // Web/Android (sa-bot = 0) → 4 px floor.
-        padding: "4px 4px max(4px, env(safe-area-inset-bottom, 0px))",
+        // 2026-05-18 round 9 (user: "footer ist zu hoch zu viel blank
+        // space unter den icons"): the full sa-bottom (~34 px on iPhone
+        // X+) leaves the home-indicator pill alone but visually creates
+        // a big empty band under the labels. Cut it in half — labels
+        // still clear the home indicator (sa-bot/2 ≈ 17 px is more than
+        // the 8 px pill height + ~6 px breathing room) and the colored
+        // footer band reads compact. Web/Android (sa-bot = 0) → 4 px.
+        padding: "4px 4px max(4px, calc(env(safe-area-inset-bottom, 0px) / 2))",
         zIndex: 100,
       }}>
         <MobileTab
