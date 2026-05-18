@@ -127,7 +127,25 @@ export default function SnapSlider({
             min={min}
             max={max}
             value={draft}
-            onChange={e => setDraft(e.target.value)}
+            onChange={e => {
+              const v = e.target.value;
+              setDraft(v);
+              // Live-commit on every keystroke so the parent's state is
+              // always in sync with what the user sees. Fixes an iOS
+              // WKWebView race where tapping Save fires before the
+              // input's onBlur → commitDraft path runs, causing the
+              // PATCH to send the stale (unedited) value. User-report
+              // 2026-05-18 ("Dauer ändern klappt manchmal nicht").
+              const parsed = Number((v ?? "").replace(",", "."));
+              if (Number.isFinite(parsed)) {
+                const clamped = Math.max(min, Math.min(max, parsed));
+                const rounded = Number(clamped.toFixed(dec));
+                if (rounded !== lastValueRef.current) {
+                  lastValueRef.current = rounded;
+                  onChange(rounded);
+                }
+              }
+            }}
             onBlur={commitDraft}
             onKeyDown={e => {
               if (e.key === "Enter") { e.preventDefault(); commitDraft(); }

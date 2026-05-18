@@ -6,6 +6,7 @@ import { fetchMeals, deleteMeal, updateMeal, type Meal } from "@/lib/meals";
 import { fetchRecentInsulinLogs, deleteInsulinLog, updateInsulinReadings, updateInsulinLogLink, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, deleteExerciseLog, updateExerciseLog, type ExerciseLog, type ExerciseType, type ExerciseIntensity } from "@/lib/exercise";
 import SnapSlider from "@/components/log/SnapSlider";
+import SegmentedChoice from "@/components/log/SegmentedChoice";
 import CollapsibleField from "@/components/log/CollapsibleField";
 import SaveButton from "@/components/log/SaveButton";
 import { fetchRecentMenstrualLogs, deleteMenstrualLog, type MenstrualLog } from "@/lib/menstrual";
@@ -2708,7 +2709,9 @@ function ExerciseEditor({ log, onSaved, onCancel }: {
         )}
       </div>
 
-      {/* Intensität — 3-stop slider mapped onto low/medium/high. */}
+      {/* Intensität — segmented 3-button control. Vorher: 3-stop
+          SnapSlider, der auf iOS WKWebView mit native range input
+          beim Drag „zurücksprang" (User-Report 2026-05-18). */}
       <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
         <label style={{ fontSize:13, color:"var(--text-dim)" }}>
           Intensität —{" "}
@@ -2716,14 +2719,16 @@ function ExerciseEditor({ log, onSaved, onCancel }: {
             {intensityLabel(intensity)}
           </span>
         </label>
-        <SnapSlider
-          value={intensity === "low" ? 1 : intensity === "high" ? 3 : 2}
-          onChange={(n) => setIntensity(n <= 1 ? "low" : n >= 3 ? "high" : "medium")}
-          min={1}
-          max={3}
-          step={1}
+        <SegmentedChoice<ExerciseIntensity>
+          value={intensity}
+          onChange={setIntensity}
           accent={EXERCISE_ACCENT}
           ariaLabel="Intensität"
+          options={[
+            { value: "low",    label: intensityLabel("low") },
+            { value: "medium", label: intensityLabel("medium") },
+            { value: "high",   label: intensityLabel("high") },
+          ]}
         />
       </div>
 

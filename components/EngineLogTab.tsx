@@ -14,6 +14,7 @@ import { BOLUS_MEAL_WINDOW_MS } from "@/lib/engine/pairing";
 import { hapticSelection, hapticSuccess, hapticError } from "@/lib/haptics";
 import TimeQuickChips from "@/components/log/TimeQuickChips";
 import SnapSlider from "@/components/log/SnapSlider";
+import SegmentedChoice from "@/components/log/SegmentedChoice";
 import NumberField from "@/components/log/NumberField";
 import CollapsibleField from "@/components/log/CollapsibleField";
 import SaveButton from "@/components/log/SaveButton";
@@ -947,17 +948,19 @@ export function ExerciseForm() {
                   : tEng("exercise_intensity_medium")}
             </span>
           </label>
-          {/* 3-stop slider mapped onto the low/medium/high DB enum. */}
-          <SnapSlider
-            value={intensity === "low" ? 1 : intensity === "high" ? 3 : 2}
-            onChange={(n) =>
-              setIntensity(n <= 1 ? "low" : n >= 3 ? "high" : "medium")
-            }
-            min={1}
-            max={3}
-            step={1}
+          {/* Segmented 3-button control. Vorher: 3-stop SnapSlider,
+              der auf iOS WKWebView mit native range input beim Drag
+              „zurücksprang" (User-Report 2026-05-18). */}
+          <SegmentedChoice<"low" | "medium" | "high">
+            value={intensity}
+            onChange={setIntensity}
             accent={ORANGE}
             ariaLabel={tEng("exercise_intensity_label")}
+            options={[
+              { value: "low",    label: tEng("exercise_intensity_low") },
+              { value: "medium", label: tEng("exercise_intensity_medium") },
+              { value: "high",   label: tEng("exercise_intensity_high") },
+            ]}
           />
         </div>
         <CollapsibleField
