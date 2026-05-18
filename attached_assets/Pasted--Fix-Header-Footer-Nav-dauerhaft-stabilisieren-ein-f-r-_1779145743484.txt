@@ -1,0 +1,158 @@
+# Fix: Header + Footer-Nav dauerhaft stabilisieren — ein für alle Mal
+
+## Problem
+
+Der Footer-Nav bricht immer wieder weil es keinen zentralen Wert für die Nav-Höhe gibt.
+Jede Seite, jeder Prompt, jeder Agent der Layout-Code anfasst, überschreibt irgendwas.
+Das wird jetzt systemisch gefixt — nicht gepacht.
+
+Gleiches gilt für den Header: der hat bereits einmal regressiert (10px statt 4px Padding).
+
+Ziel: Nach diesem Commit gibt es EINE Stelle für Header-Höhe und EINE Stelle für Footer-Höhe.
+Kein Screen muss selbst rechnen. Kein Agent kann es versehentlich kaputt machen.
+
+---
+
+## STEP 0 — Ist-Zustand vollständig erfassen
+
+```bash
+grep -rn "safe-area-inset-bottom\|safe-area-inset-top" \
+  app/ components/ --include="*.tsx" --include="*.ts" --include="*.css" \
+  | grep -v "node_modules\|.next" | sort
+
+grep -rn "paddingBottom\|padding-bottom\|marginBottom\|margin-bottom" \
+  app/ components/ --include="*.tsx" --include="*.ts" \
+  | grep -v "node_modules\|.next" | head -40
+
+find app/ components/ -name "*.tsx" | xargs grep -l "fixed.*bottom\|bottom.*0.*left.*0\|position.*fixed" 2>/dev/null | grep -v node_modules
+```
+
+Lies ALLE gefundenen Dateien komplett durch bevor du etwas änderst.
+
+---
+
+## STEP 1 — CSS Custom Properties in globals.css verankern
+
+Füge am Anfang von app/globals.css in :root ein:
+
+```css
+:root {
+  /* ─── Navigation ──────────────────────────────────────────── */
+  --nav-bottom-height: 56px;
+  --nav-bottom-safe: env(safe-area-inset-bottom, 0px);
+  --nav-bottom-total: calc(var(--nav-bottom-height) + var(--nav-bottom-safe));
+
+  --nav-top-height: 52px;
+  --nav-top-safe: env(safe-area-inset-top, 0px);
+  --nav-top-total: calc(var(--nav-top-height) + var(--nav-top-safe));
+}
+```
+
+Diese Werte sind ab jetzt die einzige Quelle der Wahrheit.
+Kein anderer Code darf 56px, 52px oder env(safe-area-inset-bottom) hardcodieren.
+
+---
+
+## STEP 2 — Layout.tsx: globales Padding einmal setzen
+
+Finde den äußersten Content-Wrapper der alle Screens umschließt. Setze dort:
+
+```tsx
+style={{
+  paddingTop: 'var(--nav-top-total)',
+  paddingBottom: 'var(--nav-bottom-total)',
+  // alle anderen vorhandenen styles behalten
+}}
+```
+
+---
+
+## STEP 3 — BottomNav-Komponente auf CSS-Variable umstellen
+
+Der Nav-Container muss so aussehen:
+
+```tsx
+<nav style={{
+  position: 'fixed',
+  bottom: 0,
+  left: 0,
+  right: 0,
+  height: 'var(--nav-bottom-total)',
+  paddingBottom: 'var(--nav-bottom-safe)',
+  paddingTop: '8px',
+  display: 'flex',
+  justifyContent: 'space-around',
+  alignItems: 'flex-start',
+  background: '#111117',
+  borderTop: '1px solid rgba(255,255,255,0.08)',
+  zIndex: 100,
+}}>
+```
+
+KEIN calc(8px + env(safe-area-inset-bottom)) mehr — das macht jetzt die Variable.
+
+---
+
+## STEP 4 — Alle hardcodierten safe-area / padding-bottom aus Screens entfernen
+
+```bash
+grep -rn "safe-area-inset-bottom\|paddingBottom.*[0-9]px\|padding-bottom.*[0-9]px" \
+  app/ components/ --include="*.tsx" --include="*.ts" \
+  | grep -v "node_modules\|.next\|globals.css\|BottomNav\|Navigation\|layout\|Layout"
+```
+
+Für jeden Treffer:
+- Screen-spezifisches paddingBottom → entfernen (Layout-Wrapper übernimmt)
+- Modal / Bottom-Sheet → var(--nav-bottom-safe) statt Hardcode
+- Scroll-Container → paddingBottom: var(--nav-bottom-total)
+
+---
+
+## STEP 5 — Header absichern
+
+Im Header-Container in Layout.tsx:
+
+```tsx
+<header style={{
+  position: 'fixed',
+  top: 0, left: 0, right: 0,
+  height: 'var(--nav-top-total)',
+  paddingTop: 'var(--nav-top-safe)',
+  paddingBottom: '4px',  /* ⚠️ NICHT ändern — war bereits Bug (10px→4px Regression Mai 2026) */
+  paddingLeft: 'max(18px, env(safe-area-inset-left))',
+  paddingRight: 'max(18px, env(safe-area-inset-right))',
+  display: 'flex',
+  alignItems: 'flex-end',
+  background: '#111117',
+  zIndex: 100,
+}}>
+```
+
+Kommentar direkt über paddingBottom setzen:
+```tsx
+{/* ⚠️ paddingBottom NICHT ändern — war bereits Bug (10px→4px Regression Mai 2026) */}
+```
+
+---
+
+## STEP 6 — Smoke-Test
+
+```bash
+grep -rn "env(safe-area-inset-bottom)\|env(safe-area-inset-top)" \
+  app/ components/ --include="*.tsx" --include="*.ts" \
+  | grep -v "node_modules\|.next\|globals.css\|BottomNav\|Navigation\|Layout"
+```
+→ Keine Ausgabe.
+
+```bash
+npx tsc --noEmit
+```
+→ Kein Fehler.
+
+---
+
+## Commit
+
+```bash
+git add -A && git commit -m "fix: centralize nav heights as CSS vars — permanent header/footer regression fix" && git push origin main
+```
