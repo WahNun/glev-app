@@ -410,9 +410,18 @@ export async function POST(req: NextRequest) {
                 ? "en"
                 : "de";
 
+            // Plus vs Pro: Tier-Marker steuert sowohl das Welcome-Template
+            // (plus-welcome zeigt €29/Lifetime-Lock-Copy, pro-welcome zeigt
+            // €14,90/Monat) als auch das Tier-Tag in der Drip-Tabelle. Beide
+            // Käufer-Typen landen im selben Webhook, weil /api/checkout/plus
+            // dieselbe Session-Pipeline benutzt wie /api/checkout/pro — der
+            // Unterschied ist nur metadata.feature.
+            const welcomeTemplate = isPlus ? "plus-welcome" : "pro-welcome";
+            const dripTier: "pro" | "plus" = isPlus ? "plus" : "pro";
+
             const { id: outboxId, deduplicated } = await enqueueEmail({
               recipient: email,
-              template: "pro-welcome",
+              template: welcomeTemplate,
               payload: {
                 name,
                 sessionId: session.id,
@@ -426,6 +435,7 @@ export async function POST(req: NextRequest) {
             console.log("[pro/webhook] welcome email enqueued:", {
               to: email,
               sessionId: session.id,
+              template: welcomeTemplate,
               outboxId,
               deduplicated,
             });
@@ -436,7 +446,7 @@ export async function POST(req: NextRequest) {
             // zugehörige Welcome-Mail hinterlässt. scheduleDripEmails
             // wirft nicht — DB-Fehler werden geloggt, der Stripe-Retry-
             // Pfad bleibt unverändert.
-            await scheduleDripEmails(email, name, "pro", locale);
+            await scheduleDripEmails(email, name, dripTier, locale);
           } catch (err) {
             // eslint-disable-next-line no-console
             console.error("[pro/webhook] Outbox enqueue failed — asking Stripe to retry:", {
@@ -528,6 +538,45 @@ export async function POST(req: NextRequest) {
         // user immediately loses Pro access on next page load.
         const rowEmail = (data[0] as { email?: string | null }).email ?? null;
         await syncProfilePlanByEmail(sb, rowEmail, null);
+
+        // Zusätzlich: falls der/die User:in als Glev+ markiert war
+        // (`profiles.subscription_status = 'plus'`), diesen Marker mit
+        // zurücksetzen. Sonst hängt das Plus-Tag in den Admin-Tools
+        // ewig an einem Profil, das gar keine aktive Plus-Subscription
+        // mehr hat. Nur bei Wert 'plus' clearen, damit ein
+        // existierender 'beta'-Marker (theoretisch möglich bei einem
+        // Ex-Beta-User der auch Pro hatte) nicht versehentlich
+        // gelöscht wird. Best-effort/non-fatal — Logik mirror-t
+        // syncProfilePlanByEmail.
+        if (rowEmail) {
+          try {
+            const userId = await findUserIdByEmail(sb, rowEmail);
+            if (userId) {
+              const { error: clearErr } = await sb
+                .from("profiles")
+                .update({ subscription_status: null })
+                .eq("user_id", userId)
+                .eq("subscription_status", "plus");
+              if (clearErr) {
+                // eslint-disable-next-line no-console
+                console.warn("[pro/webhook plus] subscription_status clear failed (non-fatal):", {
+                  userId,
+                  code: clearErr.code,
+                  message: clearErr.message,
+                });
+              } else {
+                // eslint-disable-next-line no-console
+                console.log("[pro/webhook plus] subscription_status cleared (if was 'plus')", { userId });
+              }
+            }
+          } catch (e) {
+            // eslint-disable-next-line no-console
+            console.warn("[pro/webhook plus] subscription_status clear threw (non-fatal):", {
+              email: rowEmail,
+              err: e instanceof Error ? e.message : String(e),
+            });
+          }
+        }
         return NextResponse.json({ received: true });
       }
 

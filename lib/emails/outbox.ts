@@ -25,6 +25,7 @@ import {
   type EmailLocale,
 } from "@/lib/emails/beta-welcome";
 import { proWelcomeHtml, proWelcomeSubject } from "@/lib/emails/pro-welcome";
+import { plusWelcomeHtml, plusWelcomeSubject } from "@/lib/emails/plus-welcome";
 import {
   betaFreeYearWelcomeHtml,
   betaFreeYearWelcomeSubject,
@@ -103,6 +104,7 @@ const FINALIZE_RETRY_DELAY_MS = 250;
 export type EmailTemplate =
   | "beta-welcome"
   | "pro-welcome"
+  | "plus-welcome"
   | "beta-free-year-welcome"
   | "password-reset";
 
@@ -131,6 +133,22 @@ export interface BetaWelcomePayload {
  * first charge happens — see `proWelcomeHtml` in lib/emails/pro-welcome.ts.
  */
 export interface ProWelcomePayload {
+  name?: string | null;
+  sessionId?: string | null;
+  appUrl?: string | null;
+  trialEndsAt?: string | null;
+  /** See `BetaWelcomePayload.locale`. */
+  locale?: EmailLocale;
+}
+
+/**
+ * Glev+-Welcome — identische Payload-Shape wie Pro, aber separates
+ * Template (eigenes HTML mit €29-Preis und Lifetime-Lock-Copy). Eigene
+ * Interface statt Alias, damit künftige Plus-only-Felder (z. B. Lock-
+ * Garantie-Datum) hier ergänzt werden können ohne den Pro-Pfad zu
+ * beeinflussen.
+ */
+export interface PlusWelcomePayload {
   name?: string | null;
   sessionId?: string | null;
   appUrl?: string | null;
@@ -179,6 +197,7 @@ export interface PasswordResetPayload {
 export type EmailPayload =
   | BetaWelcomePayload
   | ProWelcomePayload
+  | PlusWelcomePayload
   | BetaFreeYearWelcomePayload
   | PasswordResetPayload;
 
@@ -199,6 +218,7 @@ export type EmailPayload =
 export interface PayloadByTemplate {
   "beta-welcome": BetaWelcomePayload;
   "pro-welcome": ProWelcomePayload;
+  "plus-welcome": PlusWelcomePayload;
   "beta-free-year-welcome": BetaFreeYearWelcomePayload;
   "password-reset": PasswordResetPayload;
 }
@@ -232,6 +252,21 @@ function renderTemplate(template: EmailTemplate, payload: EmailPayload): Rendere
         from: "Glev <info@glev.app>",
         subject: proWelcomeSubject(p.name ?? null, locale),
         html: proWelcomeHtml(
+          p.name ?? null,
+          p.sessionId ?? null,
+          p.appUrl ?? null,
+          p.trialEndsAt ?? null,
+          locale,
+        ),
+      };
+    }
+    case "plus-welcome": {
+      const p = payload as PlusWelcomePayload;
+      const locale: EmailLocale = p.locale === "en" ? "en" : "de";
+      return {
+        from: "Glev <info@glev.app>",
+        subject: plusWelcomeSubject(p.name ?? null, locale),
+        html: plusWelcomeHtml(
           p.name ?? null,
           p.sessionId ?? null,
           p.appUrl ?? null,

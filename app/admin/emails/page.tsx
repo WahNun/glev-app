@@ -4,6 +4,7 @@ import {
   type EmailLocale,
 } from "@/lib/emails/beta-welcome";
 import { proWelcomeHtml, proWelcomeSubject } from "@/lib/emails/pro-welcome";
+import { plusWelcomeHtml, plusWelcomeSubject } from "@/lib/emails/plus-welcome";
 import {
   betaFreeYearWelcomeHtml,
   betaFreeYearWelcomeSubject,
@@ -95,6 +96,15 @@ function buildTemplates(
         : "Sofort nach Anlage des Pro-Abos via Stripe-Checkout",
       subject: proWelcomeSubject(name, locale),
       html: proWelcomeHtml(name, DEFAULT_SESSION_ID, appUrl, null, locale),
+    },
+    {
+      key: "plus-welcome",
+      label: "Plus — Welcome",
+      whenSent: isEn
+        ? "Immediately after Glev+ subscription is created via Stripe Checkout (€29/mo lifetime-lock)"
+        : "Sofort nach Anlage des Glev+-Abos via Stripe-Checkout (€29/Monat Lifetime-Lock)",
+      subject: plusWelcomeSubject(name, locale),
+      html: plusWelcomeHtml(name, DEFAULT_SESSION_ID, appUrl, null, locale),
     },
     {
       key: "beta-free-year-welcome-existing",

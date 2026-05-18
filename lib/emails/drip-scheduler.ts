@@ -62,15 +62,18 @@ function firstNameFrom(name: string | null | undefined): string | null {
  *              schaffen.
  * @param name  Voller Name aus Stripe (kann null sein); für die
  *              Anrede in den Mails verwendet.
- * @param tier  "beta" | "pro" — wird mitgespeichert für spätere
- *              Auswertungen (z. B. "wie viele Pro-Käufer haben den
+ * @param tier  "beta" | "pro" | "plus" — wird mitgespeichert für spätere
+ *              Auswertungen (z. B. "wie viele Plus-Käufer haben den
  *              Tag-30-Touch erhalten") und falls einzelne Templates
- *              irgendwann tier-spezifisch werden sollen.
+ *              irgendwann tier-spezifisch werden sollen. DB-CHECK in
+ *              `email_drip_schedule.tier` muss alle drei Werte
+ *              akzeptieren — siehe Migration
+ *              `20260518_email_drip_schedule_tier_plus.sql`.
  */
 export async function scheduleDripEmails(
   email: string,
   name: string | null | undefined,
-  tier: "beta" | "pro",
+  tier: "beta" | "pro" | "plus",
   locale: EmailLocale = "de",
 ): Promise<void> {
   if (!email) {

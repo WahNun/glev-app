@@ -94,7 +94,7 @@ const STATUS_VALUES: DripStatusFilter[] = [
   "sent",
 ];
 
-const TIER_VALUES = ["all", "beta", "pro"] as const;
+const TIER_VALUES = ["all", "beta", "pro", "plus"] as const;
 export type TierFilter = (typeof TIER_VALUES)[number];
 
 const TYPE_VALUES = ["all", "day7_insights", "day14_feedback", "day30_trustpilot"] as const;

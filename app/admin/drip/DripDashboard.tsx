@@ -51,6 +51,7 @@ function fmtDate(v: string | null | undefined): string {
 function fmtTier(t: string | null | undefined): string {
   if (t === "beta") return "Beta";
   if (t === "pro") return "Pro";
+  if (t === "plus") return "Plus";
   return t ?? "—";
 }
 
@@ -81,6 +82,7 @@ const TIER_LABEL: Record<TierFilter, string> = {
   all: "Alle Tiers",
   beta: "Beta",
   pro: "Pro",
+  plus: "Plus",
 };
 
 const TYPE_LABEL: Record<TypeFilter, string> = {
