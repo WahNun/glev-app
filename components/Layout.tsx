@@ -324,16 +324,21 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 
                Nav total height = 4 (top pad) + 56 (MobileTab fixed
                height — NOT 22+4+12; the button is hard-fixed to 56 px
-               regardless of icon/label sizes) + max(2, safe-area-
+               regardless of icon/label sizes) + max(8, safe-area-
                bottom - 22). So:
                  • notched (sa-bot ≈ 34): 4 + 56 + 12 = 72 px
-                 • non-notched (sa-bot = 0): 4 + 56 + 2 = 62 px
-               Main bottom padding takes the larger of (62, sa-bot+38)
-               so the last card never scrolls under the nav on either
-               class of device. Architect 2026-05-17 caught that the
-               previous math used icon+label dimensions and was
-               under-counting nav height by ~16 px. */
-            padding: calc(env(safe-area-inset-top) + 56px) 16px max(62px, calc(env(safe-area-inset-bottom) + 38px)) !important;
+                 • non-notched (sa-bot = 0): 4 + 56 + 8 = 68 px
+
+               Main bottom padding must always EXCEED nav height by a
+               safe buffer so sub-pixel scroll rounding can never let
+               the next card peek out below the labels (2026-05-18 user
+               report: thin strip of content visible under the labels).
+               Floor 76 px = 68 nav + 8 buffer. Notched branch
+               sa-bot + 46 = 34 + 46 = 80 → 8 px buffer over 72-px nav.
+               Architect 2026-05-17 caught that the previous math used
+               icon+label dimensions and was under-counting nav height
+               by ~16 px. */
+            padding: calc(env(safe-area-inset-top) + 56px) 16px max(76px, calc(env(safe-area-inset-bottom) + 46px)) !important;
           }
           .glev-entry-row   { grid-template-columns: 1fr auto auto !important; gap: 10px !important; padding: 14px 16px !important; }
           .glev-entry-hide-mobile { display: none !important; }
@@ -583,10 +588,15 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         // band below the labels; round 2 (2026-05-17) tightens it to
         // sa-bot − 22 px so the labels sit ~12 px above the home
         // indicator. Top padding also trimmed 6→4 to claw back another
-        // 2 px above the icons. Non-safe-area floor stays at 2 px so
-        // desktop / Android browsers keep the nav from kissing the
-        // viewport edge.
-        padding: "4px 4px max(2px, calc(env(safe-area-inset-bottom, 0px) - 22px))",
+        // 2 px above the icons.
+        // 2026-05-18: floor raised 2 → 8 px because at 2 px the labels
+        // were kissing the viewport edge on desktop preview and the
+        // user saw a thin strip of page content peeking through below
+        // them ("weiße Punkte ganz unten am rand vom footer? sieht aus
+        // als stünde da noch schrift versteckt ganz unten"). 8 px gives
+        // every label visible breathing room while staying tight enough
+        // not to feel padded.
+        padding: "4px 4px max(8px, calc(env(safe-area-inset-bottom, 0px) - 22px))",
         zIndex: 100,
       }}>
         <MobileTab
