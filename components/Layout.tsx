@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 import { hapticSelection } from "@/lib/haptics";
 import { useTranslations, useLocale } from "next-intl";
 import { signOut } from "@/lib/auth";
@@ -128,16 +128,22 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // 2026-05-17 round 6 (TestFlight feedback: "einstellungen und insights
   // laden sehr verzögert") — heavy routes like /insights and /settings
   // can take 1-2 s to swap in on iOS WKWebView, and during that gap the
-  // tap looked dead. We now fire INSTANT feedback the moment the user
-  // taps:
+  // tap looked dead. We fire INSTANT feedback the moment the user taps:
   //   1. Selection haptic (native click feel).
   //   2. Optimistic active highlight on the tapped tab (`pendingPath`).
-  //   3. A small spinner on top of the tab icon while React is in the
-  //      transition.
+  //   3. A small spinner on top of the tab icon while the new route
+  //      streams in.
   // Once the new route's RSC payload streams in, `pathname` updates and
   // we clear `pendingPath`, so the active highlight returns to being
   // sourced from the URL.
-  const [isPending, startTransition] = useTransition();
+  //
+  // 2026-05-18 (TestFlight feedback: "dashboard und entries gehen nicht
+  // mehr") — we previously wrapped `router.push` in `startTransition`.
+  // On iOS WKWebView that combo can defer the push when the prefetch
+  // loop is hammering the connection in parallel, making the tap feel
+  // dead. router.push is now called synchronously; the pending visual
+  // is driven solely by `pendingPath` (cleared by the pathname effect
+  // when the route lands).
   const [pendingPath, setPendingPath] = useState<string | null>(null);
   useEffect(() => {
     if (pendingPath && pathname.startsWith(pendingPath)) {
@@ -151,9 +157,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       try { voice.requestStop(); } catch {}
     }
     setPendingPath(path);
-    startTransition(() => {
-      router.push(path);
-    });
+    router.push(path);
   };
 
   // 2026-05-17 round 6 (lever A — prefetch): on iOS WKWebView the very
@@ -602,7 +606,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         <MobileTab
           label={tNav("dashboard")}
           active={pathname.startsWith("/dashboard")}
-          pending={isPending && pendingPath === "/dashboard"}
+          pending={pendingPath === "/dashboard"}
           onClick={() => navTo("/dashboard")}
           icon={(a) => (
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : NAV_INACTIVE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -614,7 +618,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         <MobileTab
           label={tNav("entries")}
           active={pathname.startsWith("/entries")}
-          pending={isPending && pendingPath === "/entries"}
+          pending={pendingPath === "/entries"}
           onClick={() => navTo("/entries")}
           icon={(a) => (
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : NAV_INACTIVE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -664,7 +668,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         <MobileTab
           label={tNav("insights")}
           active={pathname.startsWith("/insights")}
-          pending={isPending && pendingPath === "/insights"}
+          pending={pendingPath === "/insights"}
           onClick={() => navTo("/insights")}
           icon={(a) => (
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : NAV_INACTIVE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -677,7 +681,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         <MobileTab
           label={tNav("settings")}
           active={pathname.startsWith("/settings")}
-          pending={isPending && pendingPath === "/settings"}
+          pending={pendingPath === "/settings"}
           onClick={() => navTo("/settings")}
           icon={(a) => (
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : NAV_INACTIVE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
