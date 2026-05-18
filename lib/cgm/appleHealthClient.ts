@@ -93,8 +93,10 @@ export async function requestAuthorization(): Promise<{ ok: boolean; error?: str
     // engine's "daily activity" context signal can read them without a
     // second permission round-trip. iOS only prompts once per install,
     // so bundling the asks is strictly better UX than two prompts.
+    // Also request `workouts` so syncRecentWorkouts() can read
+    // HKWorkout sessions without a second permission round-trip.
     await plugin.requestAuthorization({
-      read: ["bloodGlucose", "stepCount", "activeEnergyBurned"],
+      read: ["bloodGlucose", "stepCount", "activeEnergyBurned", "workouts"],
     });
     return { ok: true };
   } catch (e) {
@@ -224,6 +226,180 @@ export async function syncRecentSteps(): Promise<StepsSyncResult> {
       days: payload.length,
     };
   }
+}
+
+/**
+ * Foreground sync for Apple Health workout sessions (HKWorkout).
+ *
+ * Mirrors `syncRecentSteps()`:
+ *   - dynamic plugin load (web build never imports @capgo/capacitor-health)
+ *   - first sync pulls 30 days, subsequent syncs pull at most 7 days
+ *     with a small overlap so a workout written late by the watch
+ *     gets picked up on the next tick
+ *   - POSTs the raw HealthKit-shaped payload to
+ *     /api/health/workouts/sync, which dedupes by (user_id, source,
+ *     external_id) — re-sending the same uuid is a no-op.
+ *
+ * Throws never — returns a structured result so the Settings card
+ * can render a unified "last sync" status alongside steps + glucose.
+ */
+const LAST_WORKOUTS_SYNC_KEY = "glev:apple-health:last-workouts-sync-iso";
+const WORKOUTS_FIRST_SYNC_DAYS = 30;
+const WORKOUTS_INCREMENTAL_DAYS = 7;
+const WORKOUTS_OVERLAP_HOURS = 6;
+
+export interface WorkoutsSyncResult {
+  ok: boolean;
+  reason?:
+    | "not-native"
+    | "no-permission"
+    | "plugin-missing"
+    | "fetch-failed"
+    | "no-samples";
+  inserted?: number;
+  skipped?: number;
+  fetched?: number;
+  error?: string;
+}
+
+interface PluginWorkout {
+  workoutType: string;
+  startDate: string;
+  endDate: string;
+  platformId?: string;
+  sourceId?: string;
+  metadata?: Record<string, string | number | undefined>;
+}
+
+interface HealthKitWorkoutsPlugin {
+  queryWorkouts(opts: {
+    startDate?: string;
+    endDate?: string;
+    limit?: number;
+    ascending?: boolean;
+  }): Promise<{ workouts: PluginWorkout[] }>;
+}
+
+export async function syncRecentWorkouts(): Promise<WorkoutsSyncResult> {
+  if (!(await isNative())) return { ok: false, reason: "not-native" };
+  const plugin = (await loadPlugin()) as
+    | (HealthKitPlugin & Partial<HealthKitWorkoutsPlugin>)
+    | null;
+  if (!plugin || typeof plugin.queryWorkouts !== "function") {
+    return { ok: false, reason: "plugin-missing" };
+  }
+
+  const now = Date.now();
+  const lastSyncIso =
+    typeof window !== "undefined" ? safeRead(LAST_WORKOUTS_SYNC_KEY) : null;
+  const sinceDays = (() => {
+    if (!lastSyncIso) return WORKOUTS_FIRST_SYNC_DAYS;
+    const lastMs = Date.parse(lastSyncIso);
+    if (!Number.isFinite(lastMs)) return WORKOUTS_FIRST_SYNC_DAYS;
+    const days = (now - lastMs) / 86_400_000;
+    if (days >= WORKOUTS_FIRST_SYNC_DAYS) return WORKOUTS_FIRST_SYNC_DAYS;
+    // Small overlap so a workout the Watch wrote retroactively (it
+    // sometimes back-dates by a few minutes) gets picked up on the
+    // next tick instead of being permanently skipped.
+    const withOverlap = days + WORKOUTS_OVERLAP_HOURS / 24;
+    return Math.max(WORKOUTS_INCREMENTAL_DAYS, Math.ceil(withOverlap));
+  })();
+
+  const startDate = new Date(now - sinceDays * 86_400_000).toISOString();
+  const endDate = new Date(now).toISOString();
+
+  let raw: PluginWorkout[] = [];
+  try {
+    const res = await plugin.queryWorkouts({
+      startDate,
+      endDate,
+      limit: 500,
+      ascending: true,
+    });
+    raw = Array.isArray(res?.workouts) ? res.workouts : [];
+  } catch (e) {
+    return {
+      ok: false,
+      reason: "no-permission",
+      error: e instanceof Error ? e.message : "unknown",
+    };
+  }
+
+  if (raw.length === 0) {
+    safeWrite(LAST_WORKOUTS_SYNC_KEY, new Date(now).toISOString());
+    return { ok: true, reason: "no-samples", fetched: 0 };
+  }
+
+  const payload = raw
+    .map((w) => {
+      const uuid = w.platformId;
+      if (!uuid) return null;
+      if (!w.workoutType || !w.startDate || !w.endDate) return null;
+      const meta = w.metadata || {};
+      const avgHr = readNum(meta.averageHeartRate ?? meta.avgHeartRate);
+      const maxHr = readNum(meta.maxHeartRate);
+      return {
+        uuid,
+        workoutType: w.workoutType,
+        startDate: w.startDate,
+        endDate: w.endDate,
+        ...(avgHr != null ? { avgHeartRate: avgHr } : {}),
+        ...(maxHr != null ? { maxHeartRate: maxHr } : {}),
+      };
+    })
+    .filter((x): x is {
+      uuid: string;
+      workoutType: string;
+      startDate: string;
+      endDate: string;
+      avgHeartRate?: number;
+      maxHeartRate?: number;
+    } => x !== null);
+
+  if (payload.length === 0) {
+    safeWrite(LAST_WORKOUTS_SYNC_KEY, new Date(now).toISOString());
+    return { ok: true, reason: "no-samples", fetched: 0 };
+  }
+
+  try {
+    const res = await fetchWithTimeout("/api/health/workouts/sync", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ workouts: payload }),
+    });
+    if (!res.ok) {
+      return {
+        ok: false,
+        reason: "fetch-failed",
+        error: `http ${res.status}`,
+        fetched: payload.length,
+      };
+    }
+    const j = (await res.json().catch(() => ({}))) as {
+      inserted?: number;
+      skipped?: number;
+    };
+    safeWrite(LAST_WORKOUTS_SYNC_KEY, new Date(now).toISOString());
+    return {
+      ok: true,
+      inserted: j.inserted ?? 0,
+      skipped: j.skipped ?? 0,
+      fetched: payload.length,
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      reason: "fetch-failed",
+      error: e instanceof Error ? e.message : "unknown",
+      fetched: payload.length,
+    };
+  }
+}
+
+function readNum(raw: unknown): number | null {
+  if (raw == null) return null;
+  const n = typeof raw === "number" ? raw : Number(raw);
+  return Number.isFinite(n) ? n : null;
 }
 
 function safeRead(key: string): string | null {

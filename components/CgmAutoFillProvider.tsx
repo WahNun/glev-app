@@ -111,7 +111,7 @@ function startAppleHealthSync(isCancelled: () => boolean): () => void {
     if (isCancelled()) return;
     if (typeof window === "undefined") return;
     try {
-      const { isNative, syncRecent, syncRecentSteps } = await import("@/lib/cgm/appleHealthClient");
+      const { isNative, syncRecent, syncRecentSteps, syncRecentWorkouts } = await import("@/lib/cgm/appleHealthClient");
       if (!(await isNative())) return;
       if (isCancelled()) return;
 
@@ -136,6 +136,16 @@ function startAppleHealthSync(isCancelled: () => boolean): () => void {
           await syncRecentSteps();
         } catch {
           /* swallow — steps are a best-effort context signal */
+        }
+        // Task #337: also pull HKWorkout sessions so the Engine's
+        // "exercise within 4h" hook + Insights workout patterns see
+        // Apple-Watch-logged sessions without manual re-entry.
+        // Independent try/catch so a workout failure never blocks
+        // the steps or glucose loops.
+        try {
+          await syncRecentWorkouts();
+        } catch {
+          /* swallow — workouts are a best-effort enrichment */
         }
       };
 
