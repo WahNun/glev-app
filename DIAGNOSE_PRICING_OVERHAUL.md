@@ -1,163 +1,166 @@
-# Diagnose — Pricing Overhaul: Implementierungs-Status
+# Diagnose Pricing Overhaul — 2026-05-18
 
-**Datum:** 2026-05-18
-**Modus:** Nur Prüfung, keine Code-Änderungen.
-**Branch / HEAD:** `main` @ `0c41fde`
+## Zusammenfassung
 
----
+**Done:**
+- Neue Checkout-Routen `app/api/checkout/beta/route.ts` + `app/api/checkout/pro/route.ts` nutzen `trial_end`.
+- `/beta`- und `/pro`-Page-Code sind sauber auf `useTranslations()` umgestellt (keine harten Preis-Strings im Page-Code).
+- TypeScript für App-Code clean.
 
-## TL;DR
-
-| # | Check | Status |
-|---|-------|--------|
-| 1 | `trial_end` in Checkout-Routen | ⚠️ Teilweise — neue Routen unter `app/api/checkout/{beta,pro}/` OK; alte Route `app/api/pro/checkout/route.ts` nutzt noch `trial_period_days`. `/plus`-Route fehlt komplett. |
-| 2 | €4,50 entfernt | ❌ 16 Treffer in 4 Dateien (Beta-Checkout-Code, Legal, preview-beta Layout, `messages/de.json`). |
-| 3 | Homepage Pricing (S/M/L) | ❌ Keine S/M/L-Karten. Aktuell 3 Karten: **Beta · Pro · Klinik** (über `t("pricing_beta_*")`, `pricing_pro_*`, `pricing_klinik_*`). Kein „Smart"-Tier vorhanden. |
-| 4 | `/beta` Landing | ⚠️ Komplett über i18n-Keys (`previewBeta.*`) — keine direkten Treffer auf „Smart"/„€9"/„Lifetime" im Page-Code. Inhalt steckt in `messages/de.json`, dort steht weiter alte Beta-Reservierungs-Copy + €4,50. |
-| 5 | `/pro` Landing | ⚠️ Komplett über i18n-Keys (`previewPro.*`) — keine direkten Treffer im Page-Code. „14,90" / „Lifetime" nicht im Page-Code (müssen in den Translation-Keys liegen). |
-| 6 | `/klinik` Landing | ❌ Existiert nicht. Klinik-Inhalt nur als Sektion auf der Homepage. |
-| 7 | `/plus` Checkout-Route | ❌ Existiert nicht (`app/api/checkout/plus/` und `app/api/plus/` fehlen). |
-| 8 | AGB / Datenschutz | ❌ `app/legal/page.tsx` enthält noch `€ 4,50` (Z. 246) und `€ 24,90` (Z. 254). |
-| 9 | TypeScript | ✅ Keine **neuen** Fehler. Pre-existing Test-Fehler in `tests/unit/{evaluation,pdfReport,recommendation}.test.ts` (nicht pricing-bezogen). |
+**Fehlt:**
+- Alte Parallel-Route `app/api/pro/checkout/route.ts` lebt noch und nutzt `trial_period_days` (Routen-Duplikat).
+- `/plus`-Checkout-Route existiert nicht.
+- `/klinik`-Page existiert nicht (Inhalt nur als Homepage-Sektion).
+- Homepage zeigt **Beta / Pro / Klinik**, nicht **Smart / Pro / + (S/M/L)**.
+- `messages/de.json` enthält noch 11 alte €4,50-Strings — d.h. die i18n-cleanen Pages rendern weiter alte Copy.
+- `app/legal/page.tsx` zeigt noch €4,50 + €24,90.
+- `app/preview-beta/layout.tsx` Metadata enthält noch „4,50 EUR".
+- Beta-Checkout-Route hat noch 3-Monats-Coupon-Logik auf €4,50/$4.50.
+- Spec-Wert `trial_end: 1751328000` = 2025-07-01 (Vergangenheit, Stripe lehnt ab). Code hat `1782864000` = 2026-07-01 — vermutlich Spec-Tippfehler.
 
 ---
 
-## CHECK 1 — `trial_end` in Checkout-Routen
+## CHECK 1 — `trial_end`
 
-**Erwartung:** `/api/beta/checkout`, `/api/pro/checkout`, `/api/plus/checkout` mit `trial_end: 1751328000`.
+| Route | Status | Befund |
+|---|---|---|
+| `app/api/checkout/beta/route.ts:88` | ✅ | `trial_end: trialEnd` |
+| `app/api/checkout/pro/route.ts:94` | ✅ | `trial_end: PRO_TRIAL_END` (Konstante = `1782864000` = 2026-07-01 UTC) |
+| `app/api/pro/checkout/route.ts:165` | ❌ | **Alte Parallel-Route** nutzt noch `trial_period_days: trialDays > 0 ? trialDays : undefined` |
+| `app/api/checkout/plus/` | ❌ | Existiert nicht |
 
-**Fund:**
-- ✅ `app/api/checkout/beta/route.ts:88` — nutzt `trial_end: trialEnd`.
-- ✅ `app/api/checkout/pro/route.ts:94` — nutzt `trial_end: PRO_TRIAL_END` (Konstante = **`1782864000`**, nicht `1751328000`).
-  - `1751328000` = **2025-07-01** UTC (vergangenes Jahr).
-  - `1782864000` = **2026-07-01** UTC.
-  - → Code-Wert ist konsistent mit „Launch Juli 2026"; der in der Diagnose-Spec genannte Wert `1751328000` wäre **bereits in der Vergangenheit** und würde von Stripe abgelehnt. **Vermutlich Tippfehler in der Spec.** Wenn `1751328000` Absicht ist: bitte klären.
-- ❌ `app/api/pro/checkout/route.ts:165` — **alte Parallel-Route** nutzt noch `trial_period_days: trialDays > 0 ? trialDays : undefined`. Existenz prüfen:
-  - `app/api/pro/checkout/route.ts` (alt) ↔ `app/api/checkout/pro/route.ts` (neu).
-  - → **Routen-Duplikat** → Risiko, dass je nach Frontend-Call die alte Route trifft.
-- ❌ `app/api/checkout/plus/` / `app/api/plus/checkout/` existiert nicht → kein `trial_end` für Plus-Tier.
+**Wertabgleich:** Spec sagt `1751328000` → das ist **2025-07-01** (Vergangenheit, Stripe würde mit „trial_end must be at least 48h in future" rejecten). Code-Wert `1782864000` = 2026-07-01 ist konsistent mit „Launch Juli 2026". → Spec vermutlich Tippfehler.
 
-**Webhook-Treffer in `app/api/pro/webhook/route.ts` (`trial_end`) sind read-side** (Stripe-Subscription auslesen) und korrekt, nicht Teil der Setup-Pflicht.
+**Webhook-Treffer** in `app/api/pro/webhook/route.ts` (`trial_end`-Lesezugriffe auf Stripe-Subscription) sind read-side und korrekt.
 
 ---
 
 ## CHECK 2 — €4,50 entfernt
 
-**Erwartung:** 0 Treffer.
+❌ **16 Treffer in 4 Dateien:**
 
-**Fund: 16 Treffer in 4 Dateien.**
-
-| Datei | Zeile | Kontext |
+| Datei | Zeilen | Kontext |
 |---|---|---|
-| `app/api/checkout/beta/route.ts` | 11, 13, 18, 78 | Kommentare + Coupon-Logik („3-Monats-Coupon auf €4,50/$4.50") |
-| `app/legal/page.tsx` | 246 | Sichtbarer Preis-Block `€ 4,50` für „Free → Pro (ab Juli 2026)" |
-| `app/preview-beta/layout.tsx` | 6 | Metadata-Beschreibung „Erste 3 Monate 4,50 EUR …" |
+| `app/api/checkout/beta/route.ts` | 11, 13, 18, 78 | Kommentare + 3-Monats-Coupon-Logik (`€4,50/$4.50`) |
+| `app/legal/page.tsx` | 246 | Sichtbarer Preis-Block „Free → Pro (ab Juli 2026)" |
+| `app/preview-beta/layout.tsx` | 6 | Metadata-Description „Erste 3 Monate 4,50 EUR …" |
 | `messages/de.json` | 1850, 1886, 2123, 2189, 2193, 2199, 2201, 2203, 2212, 2268, 2496 | UI-Strings: `pricing_beta_price`, `tier_beta_subtext`, `pricing_l2_left`, FAQ-Antworten, Hero-Subtitles, Beta-Bullets |
 
-→ Beta-Coupon-Code in `app/api/checkout/beta/route.ts` ist Stripe-Logik (3-Monats-Discount) und müsste fachlich entschieden werden: Coupon entfernen oder nur Copy ändern?
+→ Beta-Coupon-Code ist Stripe-Logik (kein bloßer Text) — fachlich entscheiden: Coupon weg oder nur Copy anpassen?
 
 ---
 
-## CHECK 3 — Homepage Pricing
+## CHECK 3 — Homepage
 
-**Erwartung:** S/M/L-Karten, altes Klinik-Paket entfernt.
+❌ **Keine S/M/L-Karten.** Aktuelle Struktur (`app/page.tsx`):
 
-**Fund:**
-- Homepage (`app/page.tsx`) hat **3 Karten**:
-  1. **Beta** (`pricing_beta_*` Keys, Z. 699–755): Preis aus `pricing_beta_price` (= `€4,50`), Strike-Through aus `pricing_beta_strike`, CTA → `/beta`.
-  2. **Pro · Founder** (`pricing_pro_*` Keys, Z. 778–854, hervorgehoben mit Badge): 7 Bullets, CTA → `/pro`.
-  3. **Klinik** (`pricing_klinik_*` Keys, Z. 1187–1290): `€299/Monat`, „Coming Soon", Email-Warteliste statt Stripe-Checkout, UI-only Toast.
-- Inline-Kommentar (Z. 638–646) beschreibt diese Struktur explizit.
-- ❌ **Keine S/M/L-Karten** (kein „Smart"-Tier, kein „Plus"-Tier).
-- ❌ **Klinik nicht entfernt** — laut Spec sollte das alte Klinik-Paket weg sein; ist aber noch komplett im Pricing-Block drin.
+| Karte | Zeilen | i18n-Namespace | Status |
+|---|---|---|---|
+| Beta | 699–755 | `pricing_beta_*` | Preis aus `pricing_beta_price` = `€4,50`, CTA → `/beta` |
+| Pro · Founder (hervorgehoben) | 778–854 | `pricing_pro_*` | 7 Bullets, CTA → `/pro` |
+| Klinik (Coming Soon) | 1187–1290 | `pricing_klinik_*` | `€299/Monat`, Email-Warteliste, kein Stripe |
 
----
-
-## CHECK 4 — `/beta` Landing Page
-
-**Erwartung:** Kein 4,50, kein „Beta-Reservierung", „Glev Smart" + €9 vorhanden.
-
-**Fund:**
-- `app/beta/page.tsx` rendert **ausschließlich über `useTranslations("previewBeta")`** — keine harten Preis-Strings im Page-Code.
-- Direkte `grep`-Suche im Page-Code: **0 Treffer** für `4,50`, `Beta-Reservierung`, `Smart`, `€9`, `Lifetime`.
-- Inhalt liegt in `messages/de.json` Namespace `previewBeta` (ab Z. 2187), dort steht **weiter alte Copy**:
-  - Z. 2189 `hero_subtitle`: „Ab Juli: 4,50 € statt 9 €."
-  - Z. 2193 `positioning`: „Die ersten 3 Monate zahlst du 4,50 €. Danach 9 €."
-  - Z. 2201 `pricing_headline`: „Ab 1. Juli 2026: 4,50 € / Monat"
-  - Kein „Smart"-Tier-Key gefunden.
-- → Page-Code ist ready, **Translation-Keys sind nicht migriert**.
+- Inline-Kommentar Z. 638–646 dokumentiert diese 3-Karten-Struktur explizit.
+- ❌ Kein „Smart"-Tier, kein „Plus"-Tier.
+- ❌ Klinik nicht entfernt — laut Spec sollte das alte Klinik-Paket weg sein.
 
 ---
 
-## CHECK 5 — `/pro` Landing Page
+## CHECK 4 — `/beta`
 
-**Erwartung:** Kein 4,50, kein 24,90 — 14,90 + „Lifetime Lock" vorhanden.
+✅ **Page-Code sauber** — `app/beta/page.tsx` rendert ausschließlich über `useTranslations("previewBeta")`. Direkte grep-Suche im Page-Code: 0 Treffer für `4,50`, `Beta-Reservierung`, `Smart`, `€9`, `Lifetime`.
 
-**Fund:**
-- `app/pro/page.tsx` rendert **ausschließlich über `useTranslations("previewPro")`** — keine harten Preis-Strings im Page-Code.
-- Direkte `grep`-Suche im Page-Code: **0 Treffer** für `4,50`, `24,90`, `14,90`, `Lifetime`, „Glev Pro" (alles in i18n).
-- Inhaltlich nicht in dieser Diagnose geprüft, da Spec-Check sich auf Page-Code bezog. Translation-Werte für `previewPro.*` müssten separat reviewed werden (Namespace startet bei `messages/de.json:2230`).
-- **Hinweis:** Die alte Route `app/api/pro/checkout/route.ts` ist noch da und akzeptiert wahrscheinlich die alte €24,90-Logik.
+❌ **Translation-Keys nicht migriert** — Inhalt liegt in `messages/de.json` Namespace `previewBeta` (ab Z. 2187):
 
----
+| Key | Zeile | Inhalt |
+|---|---|---|
+| `hero_subtitle` | 2189 | „Ab Juli: 4,50 € statt 9 €." |
+| `positioning` | 2193 | „Die ersten 3 Monate zahlst du 4,50 €. Danach 9 €." |
+| `flow_3_text` | 2199 | „4,50 € statt 9 €." |
+| `pricing_headline` | 2201 | „Ab 1. Juli 2026: 4,50 € / Monat" |
+| `pricing_bullet_2` | 2203 | „Erste 3 Monate: 4,50 € / Monat" |
+| `faq_a3` | 2212 | „Die ersten 3 Monate 4,50 €, danach 9 €/Monat — dauerhaft." |
 
-## CHECK 6 — `/klinik` Landing Page
-
-**Erwartung:** Eigene Seite, €299 + `mailto:klinik@glev.app`, kein Stripe-Checkout.
-
-**Fund:**
-- ❌ `find app -path "*/klinik*" -name "*.tsx"` → **leer**. Keine Klinik-Seite vorhanden.
-- Klinik-Inhalt existiert nur **als Sektion auf der Homepage** (`app/page.tsx` Z. 1187–1290) mit Email-Warteliste + UI-Toast.
+Kein „Glev Smart"-Key im Beta-Namespace gefunden.
 
 ---
 
-## CHECK 7 — `/plus` Checkout-Route
+## CHECK 5 — `/pro`
 
-**Erwartung:** Route existiert, liest `STRIPE_PLUS_PRICE_ID` + `STRIPE_PLUS_PRICE_ID_US`, hat `trial_end`.
+✅ **Page-Code sauber** — `app/pro/page.tsx` rendert ausschließlich über `useTranslations("previewPro")`. Direkte grep-Suche im Page-Code: 0 Treffer für `4,50`, `24,90`, `14,90`, `Lifetime`, „Glev Pro".
 
-**Fund:**
-- ❌ `find app -path "*/plus/checkout*" -name "*.ts"` → **leer**.
-- Weder `app/api/checkout/plus/` noch `app/api/plus/checkout/` existiert.
-- → **Plus-Tier-Backend ist nicht implementiert.**
+⚠️ **Translation-Keys nicht in dieser Diagnose verifiziert** — Namespace `previewPro` startet bei `messages/de.json:2230`, müsste separat auf „14,90" + „Lifetime Lock" geprüft werden.
+
+⚠️ **Backend-Risiko:** alte Route `app/api/pro/checkout/route.ts` (siehe CHECK 1) könnte vom Frontend weiter angesprochen werden und alte €24,90-Logik triggern.
 
 ---
 
-## CHECK 8 — AGB / Datenschutz / Legal
+## CHECK 6 — `/klinik`
 
-**Erwartung:** Keine alten Preise.
+❌ **Page existiert nicht.**
 
-**Fund:**
-- ❌ `app/legal/page.tsx` enthält:
-  - Z. 246: `<div className="price">€ 4,50</div>` — „Free → Pro (ab Juli 2026), Einführungspreis"
-  - Z. 254: `<div className="price">€ 24,90</div>` — „Pro (Vollpreis), regulärer Pro-Tarif"
-- Keine weiteren Hits in `terms`, `datenschutz`, `privacy`, `impressum` (Dateien nicht gefunden — vermutlich alle in `app/legal/page.tsx` konsolidiert).
+```
+$ find app -path "*/klinik*" -name "*.tsx"
+(leer)
+```
+
+Klinik-Inhalt existiert nur als Sektion auf der Homepage (`app/page.tsx` Z. 1187–1290) mit Email-Warteliste + UI-only Toast statt Stripe-Checkout. Kein `mailto:klinik@glev.app` im Repo gefunden.
+
+---
+
+## CHECK 7 — `/plus` Checkout
+
+❌ **Route existiert nicht.**
+
+```
+$ find app -path "*/plus/checkout*" -name "*.ts"
+(leer)
+$ ls app/api/plus/  →  No such file or directory
+$ ls app/api/checkout/  →  beta  pro     (kein plus/)
+```
+
+→ Plus-Tier-Backend ist komplett nicht implementiert. Auch keine Page (`app/plus/`).
+
+---
+
+## CHECK 8 — AGB / Datenschutz
+
+❌ **`app/legal/page.tsx` enthält alte Preise:**
+
+| Zeile | Inhalt |
+|---|---|
+| 246 | `<div className="price">€ 4,50</div>` — „Free → Pro (ab Juli 2026), Einführungspreis" |
+| 254 | `<div className="price">€ 24,90</div>` — „Pro (Vollpreis), regulärer Pro-Tarif" |
+
+Keine separaten `terms`-/`datenschutz`-/`privacy`-/`impressum`-Dateien gefunden — vermutlich alle in `app/legal/page.tsx` konsolidiert.
 
 ---
 
 ## CHECK 9 — TypeScript
 
-**Erwartung:** Kein Fehler.
+✅ **Keine neuen pricing-bezogenen Fehler.** App-Code (`app/`) typecheckt clean.
 
-**Fund:**
-- ✅ **Keine neuen** pricing-bezogenen Fehler.
-- Pre-existing Test-Fehler (nicht relevant für Pricing-Overhaul):
-  - `tests/unit/evaluation.test.ts` — `reasoning` fehlt auf `EvaluateEntryResult` (4×)
-  - `tests/unit/pdfReport.test.ts` — `children` / `ExerciseType` Mismatch (7×)
-  - `tests/unit/recommendation.test.ts` — `reasoning` fehlt auf `RecommendOutput` (9×)
-- App-Code (`app/`) selbst typecheckt sauber.
+⚠️ Pre-existing Test-Fehler (**nicht pricing-relevant**, separate Baustelle):
+
+| Datei | Fehler |
+|---|---|
+| `tests/unit/evaluation.test.ts` | `reasoning` fehlt auf `EvaluateEntryResult` (4×) |
+| `tests/unit/pdfReport.test.ts` | `children` / `ExerciseType` Mismatch (7×) |
+| `tests/unit/recommendation.test.ts` | `reasoning` fehlt auf `RecommendOutput` (9×) |
 
 ---
 
-## Empfohlene Reihenfolge der Fixes (Priorität)
+## Offene Punkte (priorisiert)
 
-1. **Trial-End-Wert klären** (Spec sagt `1751328000` = 2025-07-01; Code hat `1782864000` = 2026-07-01). Spec ist vermutlich Tippfehler — bitte bestätigen.
-2. **Alte Parallel-Route entfernen:** `app/api/pro/checkout/route.ts` löschen oder zur neuen `app/api/checkout/pro/route.ts` umleiten — sonst greift das Frontend evtl. weiter den `trial_period_days`-Pfad.
-3. **`/plus`-Checkout-Route bauen** (komplett fehlend).
-4. **`/klinik`-Page bauen** (komplett fehlend) ODER Klinik-Sektion auf Homepage als die endgültige Lösung dokumentieren.
-5. **Homepage-Pricing migrieren** auf S/M/L (Smart/Pro/+) ODER Spec anpassen, falls das aktuelle Beta/Pro/Klinik-Layout final ist.
-6. **`messages/de.json` Pricing-Strings** auf neue Tarife migrieren (alle €4,50 / €9 / €24,90 / „Beta-Reservierung"-Wordings).
-7. **`app/legal/page.tsx`** Preisblöcke aktualisieren.
-8. **`app/preview-beta/layout.tsx`** Metadata-Beschreibung aktualisieren.
-9. **`app/api/checkout/beta/route.ts`** Coupon-Logik fachlich entscheiden (Coupon weiter nutzen oder ersatzlos streichen).
+1. **`trial_end`-Wert klären:** Spec sagt `1751328000` (2025-07-01, Vergangenheit). Code hat `1782864000` (2026-07-01). Bestätigen, dass Code-Wert gemeint ist.
+2. **Routen-Duplikat auflösen:** `app/api/pro/checkout/route.ts` löschen oder auf `app/api/checkout/pro/route.ts` umleiten — sonst greift das Frontend evtl. weiter den `trial_period_days`-Pfad.
+3. **`/plus`-Checkout-Route bauen** (komplett fehlend) inkl. `STRIPE_PLUS_PRICE_ID` + `STRIPE_PLUS_PRICE_ID_US` + `trial_end`.
+4. **`/klinik`-Page bauen** ODER Entscheidung dokumentieren, dass Klinik-Sektion auf Homepage die finale Lösung ist + `mailto:klinik@glev.app` ergänzen.
+5. **Homepage-Pricing migrieren** auf S/M/L (Smart/Pro/+) ODER Spec anpassen, falls Beta/Pro/Klinik der finale Stand ist.
+6. **`messages/de.json` Pricing-Strings** auf neue Tarife migrieren (alle `€4,50`-, `€9`-, `€24,90`- und „Beta-Reservierung"-Wordings).
+7. **`previewPro`-Namespace** in `messages/de.json` separat auf „€14,90" + „Lifetime Lock" prüfen — diese Diagnose hat nur den Page-Code abgedeckt.
+8. **`app/legal/page.tsx`** Preisblöcke aktualisieren.
+9. **`app/preview-beta/layout.tsx`** Metadata-Description aktualisieren.
+10. **`app/api/checkout/beta/route.ts`** 3-Monats-Coupon fachlich entscheiden: weiter nutzen, oder ersatzlos streichen?
 
 Pre-existing Test-Fehler in `tests/unit/` sind **separate Baustelle**, kein Pricing-Thema.
