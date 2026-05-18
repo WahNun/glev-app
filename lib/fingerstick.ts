@@ -97,6 +97,49 @@ export async function fetchLatestFingerstick(): Promise<FingerstickReading | nul
   return (data && data[0]) ? (data[0] as FingerstickReading) : null;
 }
 
+/**
+ * Update an existing fingerstick reading. Editable fields:
+ * measured_at (wallclock) + value_mg_dl + notes. Direct supabase
+ * write — RLS confines the update to the owner row.
+ */
+export interface FingerstickPatch {
+  measured_at?: string;
+  value_mg_dl?: number;
+  notes?: string | null;
+}
+
+export async function updateFingerstick(
+  id: string,
+  patch: FingerstickPatch,
+): Promise<FingerstickReading> {
+  if (!supabase) throw new Error("Supabase is not configured");
+  const row: Record<string, unknown> = {};
+  if (patch.measured_at !== undefined) row.measured_at = patch.measured_at;
+  if (patch.value_mg_dl !== undefined) {
+    if (!Number.isFinite(patch.value_mg_dl) || patch.value_mg_dl < 20 || patch.value_mg_dl > 600) {
+      throw new Error("Glucose value must be between 20 and 600 mg/dL");
+    }
+    row.value_mg_dl = patch.value_mg_dl;
+  }
+  if (patch.notes !== undefined) {
+    row.notes = patch.notes?.trim() ? patch.notes.trim() : null;
+  }
+  if (Object.keys(row).length === 0) {
+    const { data, error } = await supabase
+      .from("fingerstick_readings").select(COLS).eq("id", id).single();
+    if (error) throw error;
+    return data as FingerstickReading;
+  }
+  const { data, error } = await supabase
+    .from("fingerstick_readings")
+    .update(row)
+    .eq("id", id)
+    .select(COLS)
+    .single();
+  if (error) throw error;
+  return data as FingerstickReading;
+}
+
 export async function deleteFingerstick(id: string): Promise<void> {
   if (!supabase) throw new Error("Supabase is not configured");
   const { error } = await supabase.from("fingerstick_readings").delete().eq("id", id);

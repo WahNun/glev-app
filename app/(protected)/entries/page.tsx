@@ -3,13 +3,14 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { fetchMeals, deleteMeal, updateMeal, type Meal } from "@/lib/meals";
-import { fetchRecentInsulinLogs, deleteInsulinLog, updateInsulinReadings, updateInsulinLogLink, type InsulinLog } from "@/lib/insulin";
+import { fetchRecentInsulinLogs, deleteInsulinLog, updateInsulinReadings, updateInsulinLogLink, updateInsulinEntry, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, deleteExerciseLog, updateExerciseLog, type ExerciseLog, type ExerciseType, type ExerciseIntensity } from "@/lib/exercise";
 import SnapSlider from "@/components/log/SnapSlider";
 import SegmentedChoice from "@/components/log/SegmentedChoice";
 import CollapsibleField from "@/components/log/CollapsibleField";
 import SaveButton from "@/components/log/SaveButton";
-import { fetchRecentMenstrualLogs, deleteMenstrualLog, type MenstrualLog } from "@/lib/menstrual";
+import DateTimeField, { isoToLocal, localToIso } from "@/components/log/DateTimeField";
+import { fetchRecentMenstrualLogs, deleteMenstrualLog, updateMenstrualLog, type MenstrualLog, type FlowIntensity } from "@/lib/menstrual";
 import { fetchRecentSymptomLogs, deleteSymptomLog, updateSymptomLog, SYMPTOM_TYPES, avgSeverity, type SymptomLog, type SymptomType, type SeveritiesMap, type SeverityValue } from "@/lib/symptoms";
 import { fetchRecentInfluenceLogs, deleteInfluenceLog, updateInfluenceLog, INFLUENCE_TYPES, type InfluenceLog, type InfluenceType } from "@/lib/influences";
 import { evaluateExercise, exerciseTypeLabel, exerciseTypeLabelI18n, patternNote, interimMessage, finalMessage, deltaColor, aggregateExerciseTypeStats, personalPatternHeadline, PATTERN_MIN_SESSIONS } from "@/lib/exerciseEval";
@@ -885,6 +886,9 @@ export default function EntriesPage() {
                   log={c}
                   onDelete={() => handleDeleteCycle(c.id)}
                   deleting={deleting === c.id}
+                  onUpdated={(updated) => {
+                    setCycle(xs => xs.map(prev => prev.id === updated.id ? updated : prev));
+                  }}
                 />
               );
             }
@@ -1881,6 +1885,8 @@ function BolusRowCard({ log, meals, isOpen, onToggle, onDelete, deleting }: {
   meals: Meal[];
   isOpen: boolean; onToggle: () => void; onDelete: () => void; deleting: boolean;
 }) {
+  const [editing, setEditing] = useState(false);
+  useEffect(() => { if (!isOpen) setEditing(false); }, [isOpen]);
   const tx = useTranslations("entriesExpand");
   const locale = useLocale();
   const { format: fmtTime } = useTimeFormat();
@@ -1922,9 +1928,11 @@ function BolusRowCard({ log, meals, isOpen, onToggle, onDelete, deleting }: {
   return (
     <NonMealRow
       isOpen={isOpen}
-      onToggle={onToggle}
+      onToggle={editing ? () => {} : onToggle}
       onDelete={onDelete}
       deleting={deleting}
+      onEdit={editing ? undefined : () => setEditing(true)}
+      suppressActions={editing}
       accent={badgeColor}
       badge={evalInfo.label}
       dateStr={dateStr}
@@ -1937,7 +1945,13 @@ function BolusRowCard({ log, meals, isOpen, onToggle, onDelete, deleting }: {
       secondaryColor={accent}
       secondaryMono
       secondarySubtitle={icrSubtitle}
-      expandedDetails={
+      expandedDetails={editing ? (
+        <InsulinEntryEditor
+          log={log}
+          onSaved={() => setEditing(false)}
+          onCancel={() => setEditing(false)}
+        />
+      ) : (
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
           {/* 1) Session details ------------------------------------ */}
           <ExPanel title={tx("panel_session_details")}>
@@ -2041,7 +2055,7 @@ function BolusRowCard({ log, meals, isOpen, onToggle, onDelete, deleting }: {
             For reference only — always consult your care team.
           </div>
         </div>
-      }
+      )}
     />
   );
 }
@@ -2051,6 +2065,8 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
   log: InsulinLog;
   isOpen: boolean; onToggle: () => void; onDelete: () => void; deleting: boolean;
 }) {
+  const [editing, setEditing] = useState(false);
+  useEffect(() => { if (!isOpen) setEditing(false); }, [isOpen]);
   const tx = useTranslations("entriesExpand");
   const locale = useLocale();
   const { format: fmtTime } = useTimeFormat();
@@ -2130,9 +2146,11 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
   return (
     <NonMealRow
       isOpen={isOpen}
-      onToggle={onToggle}
+      onToggle={editing ? () => {} : onToggle}
       onDelete={onDelete}
       deleting={deleting}
+      onEdit={editing ? undefined : () => setEditing(true)}
+      suppressActions={editing}
       accent={accent}
       badge={tx("type_basal").toUpperCase()}
       dateStr={dateStr}
@@ -2144,7 +2162,13 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
       secondaryValue={`${log.units}u`}
       secondaryColor={accent}
       secondaryMono
-      expandedDetails={
+      expandedDetails={editing ? (
+        <InsulinEntryEditor
+          log={log}
+          onSaved={() => setEditing(false)}
+          onCancel={() => setEditing(false)}
+        />
+      ) : (
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
           {/* 1) Session details ------------------------------------ */}
           <ExPanel title={tx("panel_session_details")}>
@@ -2264,7 +2288,7 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
             Basal is continuous — Glev does not score individual injections. For reference only.
           </div>
         </div>
-      }
+      )}
     />
   );
 }
@@ -2536,6 +2560,14 @@ function ExerciseEditor({ log, onSaved, onCancel }: {
   const [duration, setDuration] = useState<number>(log.duration_minutes);
   const [intensity, setIntensity] = useState<ExerciseIntensity>(log.intensity);
   const [notes, setNotes] = useState<string>(log.notes ?? "");
+  // Editable start time. Manual rows use started_at when present
+  // (newer column added 2026-05-18) and fall back to created_at for
+  // legacy rows that pre-date it. Apple-Health rows always have
+  // started_at populated from the workout — and the field is locked
+  // there anyway, so the fallback is harmless.
+  const initialStartedIso = log.started_at ?? log.created_at;
+  const [startedAtLocal, setStartedAtLocal] = useState<string>(() => isoToLocal(initialStartedIso));
+  const [startedAtSeed] = useState<string>(() => isoToLocal(initialStartedIso));
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState<string | null>(null);
   const [savedTick, setSavedTick] = useState<number>(0);
@@ -2544,7 +2576,8 @@ function ExerciseEditor({ log, onSaved, onCancel }: {
   const tx = useTranslations("entriesExpand");
   // Apple-Health-synced rows lock type/duration (and HR/time-window —
   // not edited here anyway). Intensity + notes stay editable per the
-  // migration's agreed UI policy.
+  // migration's agreed UI policy. Time is also locked for synced rows
+  // because the watch's wallclock is authoritative.
   const isSynced = log.source === "apple_health";
   const lockedHint = tx("field_locked_synced");
 
@@ -2580,15 +2613,25 @@ function ExerciseEditor({ log, onSaved, onCancel }: {
         duration_minutes?: number;
         intensity?: ExerciseIntensity;
         notes?: string | null;
+        started_at?: string;
       } = {};
-      // Synced rows: type/duration are read-only in the UI, so never
-      // include them in the PATCH even if local state somehow diverged.
+      // Synced rows: type/duration/time are read-only in the UI, so
+      // never include them in the PATCH even if local state somehow
+      // diverged.
       if (!isSynced && type !== log.exercise_type) patch.exercise_type = type;
       if (!isSynced && duration !== log.duration_minutes) patch.duration_minutes = duration;
       if (intensity !== log.intensity) patch.intensity = intensity;
       const trimmedNotes = notes.trim();
       const normalizedNotes = trimmedNotes.length > 0 ? trimmedNotes : null;
       if (normalizedNotes !== (log.notes ?? null)) patch.notes = normalizedNotes;
+      // Time diff — manual rows only. When the user picks a new
+      // wallclock the server re-anchors `cgm_glucose_at_log` to the
+      // CGM history within ±15 min of the new time.
+      if (!isSynced && startedAtLocal.trim() !== startedAtSeed.trim() && startedAtLocal.trim() !== "") {
+        const iso = localToIso(startedAtLocal);
+        if (!iso) { setErr("Ungültige Uhrzeit."); setBusy(false); return; }
+        patch.started_at = iso;
+      }
 
       if (Object.keys(patch).length === 0) {
         // No changes — just close the editor without hitting the API.
@@ -2631,8 +2674,10 @@ function ExerciseEditor({ log, onSaved, onCancel }: {
       </div>
 
       <div style={{ fontSize:13, color:"var(--text-dim)", lineHeight:1.5 }}>
-        Korrigiert Sportart, Dauer, Intensität und Notizen nachträglich.
-        Glukose-Werte und Start-Zeit bleiben unverändert.
+        Korrigiert Sportart, Dauer, Intensität, Start-Zeit und Notizen.
+        Wenn du die Zeit änderst, wird der Glukose-Wert beim Logging
+        aus der CGM-Historie der neuen Uhrzeit nachgezogen (sofern
+        verfügbar — sonst leer).
       </div>
 
       {/* Synced-from-Apple-Health hint banner — locks type/duration. */}
@@ -2719,6 +2764,23 @@ function ExerciseEditor({ log, onSaved, onCancel }: {
           />
         )}
       </div>
+
+      {/* Start-Zeit — datetime-local. Apple-Health-Rows sind gesperrt
+          (die Watch-Wallclock ist authoritative). Beim Save dreht der
+          Server eine CGM-Historie-Abfrage für die neue Uhrzeit. */}
+      <DateTimeField
+        label="Start-Zeit"
+        value={startedAtLocal}
+        onChange={setStartedAtLocal}
+        accent={EXERCISE_ACCENT}
+        disabled={isSynced}
+        disabledHint={lockedHint}
+        hint={
+          !isSynced && startedAtLocal.trim() !== startedAtSeed.trim()
+            ? "Glukose-Wert wird beim Speichern für die neue Zeit aus der CGM-Historie nachgezogen."
+            : undefined
+        }
+      />
 
       {/* Intensität — segmented 3-button control. Vorher: 3-stop
           SnapSlider, der auf iOS WKWebView mit native range input
@@ -3692,15 +3754,32 @@ function fmtDateTimeShort(iso: string, locale: string, fmtTime: (d: Date) => str
   return `${datePart}, ${fmtTime(d)}`;
 }
 
-function CycleRowCard({ log, onDelete, deleting }: {
+function CycleRowCard({ log, onDelete, deleting, onUpdated }: {
   log: MenstrualLog;
   onDelete: () => void;
   deleting: boolean;
+  onUpdated: (updated: MenstrualLog) => void;
 }) {
   const t = useTranslations("engineLog");
   const locale = useLocale();
+  const [editing, setEditing] = useState(false);
   const isBleeding = log.flow_intensity != null;
   const accent = "#FF2D78";
+
+  if (editing) {
+    return (
+      <div style={{
+        background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:12,
+        padding:"14px 14px",
+      }}>
+        <CycleEditor
+          log={log}
+          onSaved={(updated) => { setEditing(false); onUpdated(updated); }}
+          onCancel={() => setEditing(false)}
+        />
+      </div>
+    );
+  }
   // Prefer the new 4-phase enum; fall back to the legacy phase_marker
   // for pre-refactor rows so the entries log keeps rendering history
   // entries (notably 'pms' / 'other') under their original label.
@@ -3732,6 +3811,19 @@ function CycleRowCard({ log, onDelete, deleting }: {
           {log.notes && <span style={{ color:"var(--text-dim)" }}>· {log.notes}</span>}
         </div>
       </div>
+      <button
+        onClick={() => setEditing(true)}
+        aria-label="Bearbeiten"
+        style={{
+          background:"transparent", border:"none", cursor:"pointer",
+          color:"var(--text-faint)", padding:6, borderRadius:6,
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+        </svg>
+      </button>
       <button
         onClick={onDelete}
         disabled={deleting}
@@ -3976,6 +4068,8 @@ function InfluenceEditor({ log, onSaved, onCancel }: {
   const [amount, setAmount]   = useState<string>(log.amount ?? "");
   const [details, setDetails] = useState<string>(log.details ?? "");
   const [notes, setNotes]     = useState<string>(log.notes ?? "");
+  const [occurredLocal, setOccurredLocal] = useState<string>(() => isoToLocal(log.occurred_at));
+  const [occurredSeed] = useState<string>(() => isoToLocal(log.occurred_at));
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState<string | null>(null);
 
@@ -3989,6 +4083,7 @@ function InfluenceEditor({ log, onSaved, onCancel }: {
         amount?: string | null;
         details?: string | null;
         notes?: string | null;
+        occurred_at?: string;
       } = {};
       if (type !== log.influence_type) patch.influence_type = type;
       const a = amount.trim();  const na = a.length > 0 ? a : null;
@@ -3997,6 +4092,11 @@ function InfluenceEditor({ log, onSaved, onCancel }: {
       if (nd !== (log.details ?? null)) patch.details = nd;
       const n = notes.trim();   const nn = n.length > 0 ? n : null;
       if (nn !== (log.notes   ?? null)) patch.notes = nn;
+      if (occurredLocal.trim() !== occurredSeed.trim() && occurredLocal.trim() !== "") {
+        const iso = localToIso(occurredLocal);
+        if (!iso) { setErr("Ungültige Uhrzeit."); setBusy(false); return; }
+        patch.occurred_at = iso;
+      }
 
       if (Object.keys(patch).length === 0) { setBusy(false); onCancel(); return; }
       const updated = await updateInfluenceLog(log.id, patch);
@@ -4042,6 +4142,12 @@ function InfluenceEditor({ log, onSaved, onCancel }: {
         </div>
       </div>
 
+      <DateTimeField
+        label="Zeitpunkt"
+        value={occurredLocal}
+        onChange={setOccurredLocal}
+        accent={INFLUENCE_ACCENT}
+      />
       <EditorField label={t("influence_amount_label")}  value={amount}  onChange={setAmount}  placeholder={t("influence_amount_placeholder")}/>
       <EditorField label={t("influence_details_label")} value={details} onChange={setDetails} placeholder={t("influence_details_placeholder")}/>
       <EditorField label="NOTES" value={notes} onChange={setNotes} placeholder="" multiline/>
@@ -4092,6 +4198,8 @@ function SymptomEditor({ log, onSaved, onCancel }: {
     return out;
   });
   const [notes, setNotes] = useState<string>(log.notes ?? "");
+  const [occurredLocal, setOccurredLocal] = useState<string>(() => isoToLocal(log.occurred_at));
+  const [occurredSeed] = useState<string>(() => isoToLocal(log.occurred_at));
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState<string | null>(null);
 
@@ -4121,7 +4229,7 @@ function SymptomEditor({ log, onSaved, onCancel }: {
     if (types.length === 0) { setErr("Mindestens ein Symptom erforderlich."); return; }
     setBusy(true);
     try {
-      const patch: { severities?: SeveritiesMap; symptom_types?: SymptomType[]; notes?: string | null } = {};
+      const patch: { severities?: SeveritiesMap; symptom_types?: SymptomType[]; notes?: string | null; occurred_at?: string } = {};
       const prevTypes = [...(log.symptom_types || [])].sort().join(",");
       const nextTypes = [...types].sort().join(",");
       const typesChanged = prevTypes !== nextTypes;
@@ -4142,6 +4250,11 @@ function SymptomEditor({ log, onSaved, onCancel }: {
       }
       const n = notes.trim(); const nn = n.length > 0 ? n : null;
       if (nn !== (log.notes ?? null)) patch.notes = nn;
+      if (occurredLocal.trim() !== occurredSeed.trim() && occurredLocal.trim() !== "") {
+        const iso = localToIso(occurredLocal);
+        if (!iso) { setErr("Ungültige Uhrzeit."); setBusy(false); return; }
+        patch.occurred_at = iso;
+      }
 
       if (Object.keys(patch).length === 0) { setBusy(false); onCancel(); return; }
       const updated = await updateSymptomLog(log.id, patch);
@@ -4246,6 +4359,12 @@ function SymptomEditor({ log, onSaved, onCancel }: {
         </div>
       )}
 
+      <DateTimeField
+        label="Zeitpunkt"
+        value={occurredLocal}
+        onChange={setOccurredLocal}
+        accent={SYMPTOM_ACCENT}
+      />
       <EditorField label="NOTES" value={notes} onChange={setNotes} placeholder="" multiline/>
 
       {err && <div style={{ fontSize:12, color:PINK }}>{err}</div>}
@@ -4290,5 +4409,320 @@ function EditorField({ label, value, onChange, placeholder, multiline }: {
         <input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={common}/>
       )}
     </label>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// InsulinEntryEditor — shared inline editor for both BOLUS and BASAL rows.
+// Editable fields: wallclock, units, insulin name, notes. When the
+// wallclock changes the server re-fetches `cgm_glucose_at_log` from the
+// CGM history (bolus only — basal rows don't surface that column
+// meaningfully). All edits dispatch `glev:insulin-updated` so the
+// entries page reloads the row in-place.
+// ─────────────────────────────────────────────────────────────────────────
+function InsulinEntryEditor({ log, onSaved, onCancel }: {
+  log: InsulinLog;
+  onSaved: () => void;
+  onCancel: () => void;
+}) {
+  const accent = log.insulin_type === "bolus" ? INSULIN_ACCENT : BASAL_ACCENT;
+  const [createdLocal, setCreatedLocal] = useState<string>(() => isoToLocal(log.created_at));
+  const [createdSeed] = useState<string>(() => isoToLocal(log.created_at));
+  const [units, setUnits] = useState<number>(log.units);
+  const [name, setName]   = useState<string>(log.insulin_name ?? "");
+  const [notes, setNotes] = useState<string>(log.notes ?? "");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr]   = useState<string | null>(null);
+  const [savedTick, setSavedTick] = useState<number>(0);
+
+  async function handleSave() {
+    if (busy) return;
+    setErr(null);
+    if (!Number.isFinite(units) || units < 0 || units > 200) {
+      setErr("Dosis muss zwischen 0 und 200 U liegen."); return;
+    }
+    setBusy(true);
+    try {
+      const patch: { created_at?: string; units?: number; insulin_name?: string | null; notes?: string | null } = {};
+      if (units !== log.units) patch.units = units;
+      const trimmedName = name.trim();
+      const normName = trimmedName.length > 0 ? trimmedName : null;
+      if (normName !== (log.insulin_name ?? null)) patch.insulin_name = normName;
+      const trimmedNotes = notes.trim();
+      const normNotes = trimmedNotes.length > 0 ? trimmedNotes : null;
+      if (normNotes !== (log.notes ?? null)) patch.notes = normNotes;
+      if (createdLocal.trim() !== createdSeed.trim() && createdLocal.trim() !== "") {
+        const iso = localToIso(createdLocal);
+        if (!iso) { setErr("Ungültige Uhrzeit."); setBusy(false); return; }
+        patch.created_at = iso;
+      }
+      if (Object.keys(patch).length === 0) { setBusy(false); onCancel(); return; }
+      await updateInsulinEntry(log.id, patch);
+      setSavedTick(n => n + 1);
+      queueMicrotask(() => window.dispatchEvent(new Event("glev:insulin-updated")));
+      onSaved();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Konnte nicht speichern.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const timeChanged = createdLocal.trim() !== createdSeed.trim();
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
+        <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>
+          {log.insulin_type === "bolus" ? "BOLUS BEARBEITEN" : "BASAL BEARBEITEN"}
+        </div>
+        <span style={{
+          padding:"4px 10px", borderRadius:99, fontSize:12, fontWeight:700,
+          background:`${accent}20`, color:accent,
+          border:`1px solid ${accent}40`,
+          letterSpacing:"0.04em", textTransform:"uppercase",
+        }}>Editor</span>
+      </div>
+
+      <div style={{ fontSize:13, color:"var(--text-dim)", lineHeight:1.5 }}>
+        Korrigiert Dosis, Insulin-Name, Uhrzeit und Notiz nachträglich.
+        {log.insulin_type === "bolus" &&
+          " Wenn du die Zeit änderst, wird der Glukose-Wert beim Logging aus der CGM-Historie der neuen Uhrzeit nachgezogen (sofern verfügbar)."}
+      </div>
+
+      <DateTimeField
+        label="Uhrzeit"
+        value={createdLocal}
+        onChange={setCreatedLocal}
+        accent={accent}
+        hint={
+          timeChanged && log.insulin_type === "bolus"
+            ? "Glukose-Wert wird beim Speichern für die neue Zeit aus der CGM-Historie nachgezogen."
+            : undefined
+        }
+      />
+
+      <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+        <label style={{ fontSize:13, color:"var(--text-dim)" }}>
+          Dosis —{" "}
+          <span style={{ color:accent, fontWeight:700, fontFamily:"var(--font-mono)" }}>
+            {units.toFixed(units % 1 === 0 ? 0 : 1)} U
+          </span>
+        </label>
+        <SnapSlider
+          value={units}
+          onChange={(n) => setUnits(Math.round(n * 2) / 2)}
+          min={0}
+          max={50}
+          step={0.5}
+          unit="U"
+          accent={accent}
+          ariaLabel="Dosis"
+        />
+      </div>
+
+      <CollapsibleField label="Insulin-Name" accent={accent} hasValue={name.trim().length > 0}>
+        <input
+          type="text"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          placeholder="z.B. Novorapid, Tresiba, …"
+          maxLength={80}
+          style={{
+            width:"100%", background:"var(--input-bg)",
+            border:`1px solid ${BORDER}`, borderRadius:12,
+            padding:"12px 14px", fontSize:14, color:"var(--text-strong)", outline:"none",
+          }}
+        />
+      </CollapsibleField>
+
+      <CollapsibleField label="Notiz" accent={accent} hasValue={notes.trim().length > 0}>
+        <input
+          type="text"
+          value={notes}
+          onChange={e => setNotes(e.target.value)}
+          placeholder=""
+          style={{
+            width:"100%", background:"var(--input-bg)",
+            border:`1px solid ${BORDER}`, borderRadius:12,
+            padding:"12px 14px", fontSize:14, color:"var(--text-strong)", outline:"none",
+          }}
+        />
+      </CollapsibleField>
+
+      {err && (
+        <div style={{ fontSize:13, color:PINK, padding:"8px 10px", background:`${PINK}10`, border:`1px solid ${PINK}30`, borderRadius:8 }}>
+          {err}
+        </div>
+      )}
+
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, alignItems:"end" }}>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={busy}
+          style={{
+            padding:"13px", borderRadius:12,
+            border:`1px solid ${BORDER}`, background:"var(--surface-soft)",
+            color:"var(--text-body)", fontSize:14, fontWeight:600,
+            cursor:busy ? "not-allowed" : "pointer", letterSpacing:"0.02em",
+            marginTop:18,
+          }}
+        >Abbrechen</button>
+        <SaveButton
+          onClick={handleSave}
+          disabled={busy}
+          busy={busy}
+          accent={accent}
+          label="Speichern"
+          successKey={savedTick || null}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// CycleEditor — inline editor for menstrual / cycle rows. start_date is a
+// pure DATE column (no time), so a native date input is used instead of
+// the datetime-local field. Bleeding rows expose flow_intensity; phase
+// rows expose cycle_phase. Notes always editable.
+// ─────────────────────────────────────────────────────────────────────────
+function CycleEditor({ log, onSaved, onCancel }: {
+  log: MenstrualLog;
+  onSaved: (updated: MenstrualLog) => void;
+  onCancel: () => void;
+}) {
+  const t = useTranslations("engineLog");
+  const accent = "#FF2D78";
+  const isBleeding = log.flow_intensity != null;
+  const [startDate, setStartDate] = useState<string>(log.start_date);
+  const [flow, setFlow] = useState<FlowIntensity | null>(log.flow_intensity);
+  const [notes, setNotes] = useState<string>(log.notes ?? "");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr]   = useState<string | null>(null);
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const minIso = new Date(Date.now() - 365 * 86400_000).toISOString().slice(0, 10);
+
+  async function handleSave() {
+    if (busy) return;
+    setErr(null);
+    if (!startDate || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+      setErr("Datum ungültig."); return;
+    }
+    if (startDate > todayIso) { setErr("Datum darf nicht in der Zukunft liegen."); return; }
+    setBusy(true);
+    try {
+      const patch: { start_date?: string; flow_intensity?: FlowIntensity | null; notes?: string | null } = {};
+      if (startDate !== log.start_date) patch.start_date = startDate;
+      if (isBleeding && flow !== log.flow_intensity) patch.flow_intensity = flow;
+      const n = notes.trim(); const nn = n.length > 0 ? n : null;
+      if (nn !== (log.notes ?? null)) patch.notes = nn;
+      if (Object.keys(patch).length === 0) { setBusy(false); onCancel(); return; }
+      const updated = await updateMenstrualLog(log.id, patch);
+      queueMicrotask(() => window.dispatchEvent(new Event("glev:menstrual-updated")));
+      onSaved(updated);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Konnte nicht speichern.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
+        <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>
+          ZYKLUS BEARBEITEN
+        </div>
+        <span style={{
+          padding:"4px 10px", borderRadius:99, fontSize:12, fontWeight:700,
+          background:`${accent}20`, color:accent,
+          border:`1px solid ${accent}40`,
+          letterSpacing:"0.04em", textTransform:"uppercase",
+        }}>Editor</span>
+      </div>
+
+      <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+        <label style={{ fontSize:13, color:"var(--text-dim)" }}>Datum</label>
+        <input
+          type="date"
+          value={startDate}
+          onChange={e => setStartDate(e.target.value)}
+          min={minIso}
+          max={todayIso}
+          style={{
+            background:"var(--input-bg)",
+            border:`1px solid ${BORDER}`, borderRadius:12,
+            padding:"12px 14px", fontSize:14, fontWeight:600,
+            color:"var(--text-strong)", outline:"none",
+            fontFamily:"var(--font-mono)", letterSpacing:"0.01em",
+            minHeight:44, colorScheme:"dark",
+          }}
+        />
+      </div>
+
+      {isBleeding && (
+        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+          <label style={{ fontSize:13, color:"var(--text-dim)" }}>Stärke</label>
+          <SegmentedChoice<FlowIntensity>
+            value={flow ?? "medium"}
+            onChange={setFlow}
+            accent={accent}
+            ariaLabel="Stärke"
+            options={[
+              { value: "light",  label: t("cycle_flow_light") },
+              { value: "medium", label: t("cycle_flow_medium") },
+              { value: "heavy",  label: t("cycle_flow_heavy") },
+            ]}
+          />
+        </div>
+      )}
+
+      <CollapsibleField label="Notiz" accent={accent} hasValue={notes.trim().length > 0}>
+        <input
+          type="text"
+          value={notes}
+          onChange={e => setNotes(e.target.value)}
+          placeholder=""
+          style={{
+            width:"100%", background:"var(--input-bg)",
+            border:`1px solid ${BORDER}`, borderRadius:12,
+            padding:"12px 14px", fontSize:14, color:"var(--text-strong)", outline:"none",
+          }}
+        />
+      </CollapsibleField>
+
+      {err && (
+        <div style={{ fontSize:13, color:PINK, padding:"8px 10px", background:`${PINK}10`, border:`1px solid ${PINK}30`, borderRadius:8 }}>
+          {err}
+        </div>
+      )}
+
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, alignItems:"end" }}>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={busy}
+          style={{
+            padding:"13px", borderRadius:12,
+            border:`1px solid ${BORDER}`, background:"var(--surface-soft)",
+            color:"var(--text-body)", fontSize:14, fontWeight:600,
+            cursor:busy ? "not-allowed" : "pointer", letterSpacing:"0.02em",
+          }}
+        >Abbrechen</button>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={busy}
+          style={{
+            padding:"13px", borderRadius:12, border:"none",
+            background:accent, color:"#fff",
+            fontSize:14, fontWeight:700, cursor:busy?"not-allowed":"pointer",
+          }}
+        >{busy ? "…" : "Speichern"}</button>
+      </div>
+    </div>
   );
 }

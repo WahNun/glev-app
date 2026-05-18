@@ -139,6 +139,60 @@ export async function fetchRecentMenstrualLogs(days: number): Promise<MenstrualL
   return fetchMenstrualLogs(fromIso);
 }
 
+/**
+ * Update editable fields on an existing menstrual / cycle log. The
+ * supported fields are: start_date, end_date (bleeding rows only),
+ * flow_intensity, cycle_phase, notes. Direct supabase write since
+ * the table is tightly scoped with RLS — no server route needed.
+ *
+ * Note: `phase_marker` (legacy) is intentionally NOT writable here —
+ * it's read-only for back-compat with pre-refactor rows.
+ */
+export interface MenstrualLogPatch {
+  start_date?: string;
+  end_date?: string | null;
+  flow_intensity?: FlowIntensity | null;
+  cycle_phase?: CyclePhase | null;
+  notes?: string | null;
+}
+
+export async function updateMenstrualLog(
+  id: string,
+  patch: MenstrualLogPatch,
+): Promise<MenstrualLog> {
+  if (!supabase) throw new Error("Supabase is not configured");
+  const row: Record<string, unknown> = {};
+  if (patch.start_date !== undefined) row.start_date = patch.start_date;
+  if (patch.end_date !== undefined) row.end_date = patch.end_date;
+  if (patch.flow_intensity !== undefined) row.flow_intensity = patch.flow_intensity;
+  if (patch.cycle_phase !== undefined) {
+    if (patch.cycle_phase !== null && !isCyclePhase(patch.cycle_phase)) {
+      throw new Error("Ungültige Zyklus-Phase.");
+    }
+    row.cycle_phase = patch.cycle_phase;
+  }
+  if (patch.notes !== undefined) {
+    row.notes = patch.notes?.trim() ? patch.notes.trim() : null;
+  }
+  if (Object.keys(row).length === 0) {
+    const { data, error } = await supabase
+      .from("menstrual_logs").select(COLS).eq("id", id).single();
+    if (error) throw new Error(error.message);
+    return data as MenstrualLog;
+  }
+  const { data, error } = await supabase
+    .from("menstrual_logs")
+    .update(row)
+    .eq("id", id)
+    .select(COLS)
+    .single();
+  if (error) {
+    const code = error.code ? ` [${error.code}]` : "";
+    throw new Error(`${error.message}${code}`);
+  }
+  return data as MenstrualLog;
+}
+
 export async function deleteMenstrualLog(id: string): Promise<void> {
   if (!supabase) throw new Error("Supabase is not configured");
   const { error } = await supabase.from("menstrual_logs").delete().eq("id", id);

@@ -135,6 +135,12 @@ export async function updateExerciseLog(
     duration_minutes?: number;
     intensity?: ExerciseIntensity;
     notes?: string | null;
+    /** ISO. Re-anchors `cgm_glucose_at_log` to the new wallclock via the
+     *  CGM-historical lookup on the server. Apple-Health-synced rows
+     *  reject this — the watch's wallclock is authoritative. */
+    started_at?: string;
+    /** ISO or null. Must be > started_at when both are present. */
+    ended_at?: string | null;
   },
 ): Promise<ExerciseLog> {
   const r = await fetch(`/api/exercise/${encodeURIComponent(id)}`, {

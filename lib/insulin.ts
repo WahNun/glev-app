@@ -208,6 +208,41 @@ export async function updateInsulinLogLink(
  * the auto-fetch worker would have populated. Pass `null` to clear a
  * value. Only the keys present in `readings` are touched.
  */
+/**
+ * Update editable fields on an existing insulin (bolus or basal) log.
+ * Goes through PATCH /api/insulin/[id] which:
+ *   • Validates ranges + types server-side.
+ *   • Re-fetches `cgm_glucose_at_log` from CGM history when
+ *     `created_at` changes on a bolus row (so a corrected wallclock
+ *     pulls the right historical glucose snapshot, not a stale one).
+ *
+ * All fields optional — pass only what changed. Empty patch returns
+ * an error; the editor diffs against the seed before calling.
+ */
+export async function updateInsulinEntry(
+  id: string,
+  patch: {
+    created_at?: string;
+    units?: number;
+    insulin_name?: string | null;
+    notes?: string | null;
+  },
+): Promise<void> {
+  const r = await fetch(`/api/insulin/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!r.ok) {
+    let msg = `HTTP ${r.status}`;
+    try {
+      const j = await r.json();
+      if (j && typeof j.error === "string") msg = j.error;
+    } catch { /* ignore */ }
+    throw new Error(msg);
+  }
+}
+
 export async function updateInsulinReadings(
   id: string,
   readings: {
