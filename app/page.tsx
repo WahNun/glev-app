@@ -57,7 +57,7 @@ export default function PreviewHome() {
         fontFamily: "var(--font-inter), Inter, system-ui, sans-serif",
         position: "relative",
         overflowX: "hidden",
-        paddingTop: "calc(56px + env(safe-area-inset-top))",
+        paddingTop: "calc(56px + var(--safe-top))",
       }}
     >
       {/* Soft brand glow background */}
@@ -146,7 +146,7 @@ export default function PreviewHome() {
           backdropFilter: "saturate(180%) blur(14px)",
           WebkitBackdropFilter: "saturate(180%) blur(14px)",
           borderBottom: `1px solid ${BORDER}`,
-          paddingTop: "env(safe-area-inset-top)",
+          paddingTop: "var(--safe-top)",
         }}
       >
         <div
@@ -985,7 +985,7 @@ export default function PreviewHome() {
           maxWidth: 1180,
           marginLeft: "auto",
           marginRight: "auto",
-          padding: "28px 24px calc(36px + env(safe-area-inset-bottom))",
+          padding: "28px 24px calc(36px + var(--safe-bottom))",
           borderTop: `1px solid ${BORDER}`,
           display: "flex",
           flexWrap: "wrap",

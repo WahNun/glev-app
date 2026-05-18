@@ -93,7 +93,7 @@ export default function PostMealPrompt() {
         .glev-postmeal-banner > * { pointer-events: auto; }
         @media (max-width: 768px) {
           .glev-postmeal-banner {
-            bottom: calc(env(safe-area-inset-bottom, 0px) + 80px);
+            bottom: calc(var(--nav-bottom-total) + 16px);
           }
         }
       `}</style>

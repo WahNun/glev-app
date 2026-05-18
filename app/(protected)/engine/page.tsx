@@ -2353,7 +2353,7 @@ export default function EnginePage() {
               // anchor doesn't hurt them either.
               position: "relative",
               minHeight: isMobile
-                ? "calc(100svh - 180px - env(safe-area-inset-top, 0px))"
+                ? "calc(100svh - 180px - var(--nav-top-safe))"
                 : undefined,
             }}>
               {/* Desktop fallback start/stop control. Mobile users always

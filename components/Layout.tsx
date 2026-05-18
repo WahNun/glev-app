@@ -370,17 +370,13 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
                Architect 2026-05-17 caught that the previous math used
                icon+label dimensions and was under-counting nav height
                by ~16 px. */
-            /* 2026-05-18 round 8:
-               - Header content band shrunk to 36 px (4 + 28 lockup + 4).
-               - Footer content band 4 + 56 (MobileTab) + max(4, sa-bot)
-                 = 64 + sa-bot. Capacitor contentInset "never" now
-                 reports the real sa-bottom (~34 on notched iPhones) so
-                 the footer reserves it instead of floating above the
-                 home indicator.
-               Top compensator: sa-top + 36 + 4 buffer.
-               Bottom compensator: 64 + sa-bot + 8 buffer.
-                 Floor 80 px = 64 + 8 + 8 covers Web/Android (sa-bot=0). */
-            padding: calc(env(safe-area-inset-top) + 40px) 16px max(80px, calc(env(safe-area-inset-bottom) + 72px)) !important;
+            /* Task #363: vertical padding is now derived from the
+               --nav-top-total / --nav-bottom-total CSS variables
+               defined in app/globals.css — single source of truth for
+               header & footer chrome geometry. Buffer of 8 px under
+               the footer prevents sub-pixel scroll rounding from
+               leaking a strip of the next card under the labels. */
+            padding: calc(var(--nav-top-total) + 4px) 16px calc(var(--nav-bottom-total) + 8px) !important;
           }
           .glev-entry-row   { grid-template-columns: 1fr auto auto !important; gap: 10px !important; padding: 14px 16px !important; }
           .glev-entry-hide-mobile { display: none !important; }
@@ -424,7 +420,15 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         // border instead of kissing it. Top pad stays tight (4 px) —
         // the status-bar safe-area zone already separates the wordmark
         // from the clock/battery row above.
-        padding: "calc(env(safe-area-inset-top) + 4px) max(18px, env(safe-area-inset-right)) 4px max(18px, env(safe-area-inset-left))",
+        // Task #363: vertical padding now sources from the central
+        // --nav-top-safe variable in app/globals.css. Bottom 4 px is
+        // the known regression hotspot (May 2026 header height bug —
+        // do NOT inflate without re-checking the footer visual match).
+        height: "var(--nav-top-total)",
+        paddingTop: "calc(var(--nav-top-safe) + 4px)",
+        paddingBottom: 4,
+        paddingLeft:  "max(18px, env(safe-area-inset-left))",
+        paddingRight: "max(18px, env(safe-area-inset-right))",
         background: SURFACE,
         borderBottom: `1px solid ${BORDER}`,
         alignItems: "center", justifyContent: "space-between",
@@ -653,7 +657,13 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         // still clear the home indicator (sa-bot/2 ≈ 17 px is more than
         // the 8 px pill height + ~6 px breathing room) and the colored
         // footer band reads compact. Web/Android (sa-bot = 0) → 4 px.
-        padding: "4px 4px max(4px, calc(env(safe-area-inset-bottom, 0px) / 2))",
+        // Task #363: footer geometry now sources from the central
+        // --nav-bottom-* variables in app/globals.css.
+        height: "var(--nav-bottom-total)",
+        paddingTop:    "var(--nav-bottom-top-pad)",
+        paddingBottom: "var(--nav-bottom-safe)",
+        paddingLeft:   4,
+        paddingRight:  4,
         zIndex: 100,
       }}>
         <MobileTab

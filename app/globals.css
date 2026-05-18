@@ -63,6 +63,52 @@
   /* Browser UI tint (matches viewport themeColor; consumed via JS too) */
   --browser-theme: #0A0A0F;
 
+  /* ----------------------------------------------------------------
+     Header & bottom-nav heights (Task #363)
+     ----------------------------------------------------------------
+     Single source of truth for the mobile chrome geometry. The header
+     and bottom nav live in `components/Layout.tsx`, the page body
+     (`.glev-main`) reserves space for them, and modals / bottom
+     sheets (e.g. `components/BottomSheet.tsx`,
+     `components/PostMealPrompt.tsx`) reference these vars instead of
+     re-deriving them. Theme-independent — same on dark + light.
+
+     Header (top chrome):
+       --nav-top-safe   = iOS status-bar safe-area
+       --nav-top-height = 36 px content band (4 pad + 28 lockup + 4 pad)
+       --nav-top-total  = full header height incl. safe-area
+
+     Bottom nav (footer chrome):
+       --nav-bottom-height  = 56 px MobileTab fixed row
+       --nav-bottom-top-pad = 4 px gap above tab row
+       --nav-bottom-safe    = bottom inner padding (half sa-bottom,
+                              floored at 4 px — see Layout.tsx round 9
+                              note: full sa-bottom leaves too much
+                              dead space under the labels)
+       --nav-bottom-total   = full footer height incl. safe-area
+
+     IMPORTANT: do NOT hardcode `env(safe-area-inset-top|bottom)` in
+     screens or shared components — read these variables instead.
+     Layout.tsx, BottomSheet.tsx and PostMealPrompt.tsx are the only
+     allowed exceptions (PostMealPrompt currently uses `--nav-bottom-total`
+     too — it's just legacy comment context). */
+  /* Raw safe-area aliases. Marketing / Onboarding layouts that don't
+     live under the app shell still need access to the iOS notch /
+     home-indicator insets — they read these vars instead of writing
+     `env(safe-area-inset-*)` inline, so the smoke search stays clean
+     and any future safe-area policy change lands in one place. */
+  --safe-top:    env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  --nav-top-safe:    var(--safe-top);
+  --nav-top-height:  36px;
+  --nav-top-total:   calc(var(--nav-top-safe) + var(--nav-top-height));
+
+  --nav-bottom-height:  56px;
+  --nav-bottom-top-pad: 4px;
+  --nav-bottom-safe:    max(4px, calc(var(--safe-bottom) / 2));
+  --nav-bottom-total:   calc(var(--nav-bottom-height) + var(--nav-bottom-top-pad) + var(--nav-bottom-safe));
+
   /* Foreground color for text/icons placed on top of a brand-accent
      fill (orange/pink/yellow/green/blue chips, primary CTAs, etc.).
      Brand colors are bright enough that near-black text reads at AA

@@ -237,7 +237,7 @@ export default function BottomSheet({
             footer itself adds the safe-area padding instead. */}
         <div style={{
           flex: 1, overflowY: "auto",
-          padding: footer ? "8px 20px 20px" : "8px 20px calc(env(safe-area-inset-bottom) + 24px)",
+          padding: footer ? "8px 20px 20px" : "8px 20px calc(var(--nav-bottom-safe) + 24px)",
           WebkitOverflowScrolling: "touch",
         }}>
           {children}
@@ -245,7 +245,7 @@ export default function BottomSheet({
 
         {footer && (
           <div style={{
-            padding: "12px 20px calc(env(safe-area-inset-bottom) + 14px)",
+            padding: "12px 20px calc(var(--nav-bottom-safe) + 14px)",
             borderTop: `1px solid ${BORDER}`,
             background: SURFACE,
             flexShrink: 0,

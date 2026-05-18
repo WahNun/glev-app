@@ -51,7 +51,7 @@ export default function BlogPage() {
         // Identischer Top-Pad-Wert wie auf der Homepage, damit der
         // fixed-positionierte Header beim Wechsel zwischen / und /blog
         // optisch nicht "springt".
-        paddingTop: "calc(56px + env(safe-area-inset-top))",
+        paddingTop: "calc(56px + var(--safe-top))",
       }}
     >
       <style>{`
@@ -110,7 +110,7 @@ export default function BlogPage() {
           backdropFilter: "saturate(180%) blur(14px)",
           WebkitBackdropFilter: "saturate(180%) blur(14px)",
           borderBottom: `1px solid ${BORDER}`,
-          paddingTop: "env(safe-area-inset-top)",
+          paddingTop: "var(--safe-top)",
         }}
       >
         <div
