@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import IosTapButton from "@/components/IosTapButton";
 import { useTranslations } from "next-intl";
 import { insertInsulinLog } from "@/lib/insulin";
 import { insertExerciseLog, type ExerciseType } from "@/lib/exercise";
@@ -658,24 +659,24 @@ function ExerciseTypeDropdown({
             boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
           }}
         >
+          {/* 2026-05-18: IosTapButton — Selecting an option synchronously
+              calls setOpen(false) which unmounts this whole listbox.
+              On iOS WKWebView the synthesised click would otherwise
+              retarget onto whatever was behind the dropdown (often
+              another form field, causing focus jumps). Pointerup-fired
+              activation guarantees the selection runs against the
+              still-mounted option node. */}
           {options.map(opt => {
             const on = opt === value;
             return (
-              <button
+              <IosTapButton
                 key={opt}
-                type="button"
                 role="option"
-                aria-selected={on}
-                onClick={() => {
+                ariaSelected={on}
+                onAct={() => {
                   if (!on) hapticSelection();
                   onChange(opt);
                   setOpen(false);
-                }}
-                onMouseEnter={(e) => {
-                  if (!on) e.currentTarget.style.background = "var(--surface-soft)";
-                }}
-                onMouseLeave={(e) => {
-                  if (!on) e.currentTarget.style.background = "transparent";
                 }}
                 style={{
                   padding: "11px 12px",
@@ -693,7 +694,7 @@ function ExerciseTypeDropdown({
                 }}
               >
                 {renderLabel(opt)}
-              </button>
+              </IosTapButton>
             );
           })}
         </div>

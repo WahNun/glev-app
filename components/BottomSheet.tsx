@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import IosTapButton from "@/components/IosTapButton";
 
 const SURFACE = "var(--surface)";
 const BORDER = "var(--border)";
@@ -205,10 +206,14 @@ export default function BottomSheet({
                 fontSize: 16, fontWeight: 700, letterSpacing: "-0.01em",
                 color: "var(--text-strong)", margin: 0,
               }}>{title}</h2>
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Close"
+              {/* 2026-05-18: IosTapButton — Close synchronously unmounts
+                  the entire sheet, so on iOS WKWebView the synthesised
+                  click would otherwise land on whatever's behind the
+                  sheet ("ghost click"). Pointerup + preventDefault
+                  blocks that. */}
+              <IosTapButton
+                onAct={onClose}
+                ariaLabel="Close"
                 style={{
                   width: 28, height: 28, borderRadius: 99,
                   background: "var(--surface-soft)",
@@ -222,7 +227,7 @@ export default function BottomSheet({
                   <line x1="6" y1="6" x2="18" y2="18"/>
                   <line x1="18" y1="6" x2="6" y2="18"/>
                 </svg>
-              </button>
+              </IosTapButton>
             </div>
           )}
         </div>
