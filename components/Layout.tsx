@@ -182,26 +182,34 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // Now: warm exactly once per session (run on first mount, with the
   // prefetch list captured once). Next.js' own router cache keeps the
   // already-visited tabs warm without us re-firing prefetches.
+  // 2026-05-18 round 10 (TestFlight: "seiten laden langsam"):
+  // Next.js 15 router cache for dynamic prefetched routes expires after
+  // ~30 s. The old code warmed exactly once per session, so after the
+  // first half-minute every tab swap paid the full RSC + Supabase RTT
+  // again — which on iOS WKWebView feels like a 1-2 s freeze. Now we
+  // re-warm after every navigation, but ONLY when the browser is idle
+  // and the new route has settled (idleCallback fires after current
+  // commit + paint). That keeps competing prefetches from clogging the
+  // tiny HTTP/2 pool during the user's NEXT tap.
   useEffect(() => {
     const tabs = ["/dashboard", "/entries", "/insights", "/settings"];
     const warm = () => {
       for (const p of tabs) {
+        if (pathname.startsWith(p)) continue; // current tab already loaded
         try { router.prefetch(p); } catch {}
       }
     };
     const w = typeof window !== "undefined" ? (window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }) : null;
     if (w && typeof w.requestIdleCallback === "function") {
-      const id = w.requestIdleCallback(warm, { timeout: 2000 });
+      const id = w.requestIdleCallback(warm, { timeout: 3000 });
       return () => {
         const cancel = (w as unknown as { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
         if (typeof cancel === "function") cancel(id);
       };
     }
-    const id = window.setTimeout(warm, 800);
+    const id = window.setTimeout(warm, 1200);
     return () => window.clearTimeout(id);
-    // Intentionally empty deps: warm once on mount. router is stable.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [pathname, router]);
   // Mobile bottom-nav: tapping the Glev slot now goes STRAIGHT to the
   // engine voice screen (the meal log flow) instead of popping a
   // pick-your-flow action sheet. The two secondary flows (Glukose
@@ -980,14 +988,24 @@ function MobileTab({
   // gesture, pointerup fires onClick unconditionally (iOS' native
   // scroll detection already cancels the pointer cycle via
   // pointercancel for actual swipes — no manual slop check needed).
+  // 2026-05-18 round 10 (TestFlight: "knöpfe gehen schon wieder nicht
+  // auf anhieb"): the previous version set pointerHandledRef = true in
+  // pointerdown. When iOS WKWebView dropped the pointerup event (which
+  // happens intermittently if React commits a re-render between
+  // pointerdown and pointerup — the underlying DOM node changes
+  // identity and the pointer cycle aborts WITHOUT firing pointercancel),
+  // the synthesized click DID still fire on the new node — but
+  // handleClick saw pointerHandledRef === true and bailed. Dead tap.
+  // Fix: only mark pointerHandled in pointerup. If pointerup never
+  // fires, handleClick falls through and navigates normally.
   const handlePointerDown = () => {
-    pointerHandledRef.current = true;
     validRef.current = true;
   };
 
   const handlePointerUp = () => {
     if (!validRef.current) return;
     validRef.current = false;
+    pointerHandledRef.current = true;
     onClick();
   };
 
