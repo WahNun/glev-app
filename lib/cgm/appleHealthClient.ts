@@ -89,10 +89,160 @@ export async function requestAuthorization(): Promise<{ ok: boolean; error?: str
   try {
     const plugin = await loadPlugin();
     if (!plugin) return { ok: false, error: "plugin-missing" };
-    await plugin.requestAuthorization({ read: ["bloodGlucose"] });
+    // Task #183: also request stepCount + activeEnergyBurned so the
+    // engine's "daily activity" context signal can read them without a
+    // second permission round-trip. iOS only prompts once per install,
+    // so bundling the asks is strictly better UX than two prompts.
+    await plugin.requestAuthorization({
+      read: ["bloodGlucose", "stepCount", "activeEnergyBurned"],
+    });
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "unknown" };
+  }
+}
+
+/**
+ * Task #183: foreground sync for daily HealthKit step counts. Mirrors
+ * `syncRecent()` for blood-glucose:
+ *   - dynamic plugin load (web build never imports @capgo/capacitor-health)
+ *   - first sync pulls 30 days, subsequent syncs pull last 3 days +
+ *     overlap so today's growing partial count keeps overwriting
+ *     yesterday's now-stable value
+ *   - aggregates samples by device-local YYYY-MM-DD and POSTs to
+ *     /api/health/steps/sync, which upserts by (user_id, date, source)
+ */
+const LAST_STEPS_SYNC_KEY = "glev:apple-health:last-steps-sync-iso";
+const STEPS_FIRST_SYNC_DAYS = 30;
+const STEPS_INCREMENTAL_DAYS = 3;
+
+export interface StepsSyncResult {
+  ok: boolean;
+  reason?:
+    | "not-native"
+    | "no-permission"
+    | "plugin-missing"
+    | "fetch-failed"
+    | "no-samples";
+  upserted?: number;
+  skipped?: number;
+  days?: number;
+  error?: string;
+}
+
+export async function syncRecentSteps(): Promise<StepsSyncResult> {
+  if (!(await isNative())) return { ok: false, reason: "not-native" };
+  const plugin = await loadPlugin();
+  if (!plugin) return { ok: false, reason: "plugin-missing" };
+
+  const now = Date.now();
+  const lastSyncIso =
+    typeof window !== "undefined"
+      ? safeRead(LAST_STEPS_SYNC_KEY)
+      : null;
+  const sinceDays = (() => {
+    if (!lastSyncIso) return STEPS_FIRST_SYNC_DAYS;
+    const lastMs = Date.parse(lastSyncIso);
+    if (!Number.isFinite(lastMs)) return STEPS_FIRST_SYNC_DAYS;
+    const days = (now - lastMs) / 86_400_000;
+    if (days >= STEPS_FIRST_SYNC_DAYS) return STEPS_FIRST_SYNC_DAYS;
+    return Math.max(STEPS_INCREMENTAL_DAYS, Math.ceil(days) + 1);
+  })();
+
+  const startDate = new Date(now - sinceDays * 86_400_000).toISOString();
+  const endDate = new Date(now).toISOString();
+
+  let samples: PluginSample[] = [];
+  try {
+    const res = await plugin.readSamples({
+      dataType: "stepCount",
+      startDate,
+      endDate,
+      limit: 5000,
+      ascending: true,
+    });
+    samples = Array.isArray(res?.samples) ? res.samples : [];
+  } catch (e) {
+    return {
+      ok: false,
+      reason: "no-permission",
+      error: e instanceof Error ? e.message : "unknown",
+    };
+  }
+
+  // Bucket per device-local calendar day. HealthKit returns one sample
+  // per source app per ~hourly window — we sum them.
+  const byDate = new Map<string, number>();
+  for (const s of samples) {
+    if (typeof s.value !== "number" || !Number.isFinite(s.value)) continue;
+    const t = s.startDate ? new Date(s.startDate) : null;
+    if (!t || Number.isNaN(t.getTime())) continue;
+    const key = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+    byDate.set(key, (byDate.get(key) ?? 0) + s.value);
+  }
+
+  if (byDate.size === 0) {
+    safeWrite(LAST_STEPS_SYNC_KEY, new Date(now).toISOString());
+    return { ok: true, reason: "no-samples", days: 0 };
+  }
+
+  const payload = [...byDate.entries()].map(([date, steps]) => ({
+    date,
+    steps: Math.round(steps),
+  }));
+
+  try {
+    const res = await fetchWithTimeout("/api/health/steps/sync", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ samples: payload }),
+    });
+    if (!res.ok) {
+      return {
+        ok: false,
+        reason: "fetch-failed",
+        error: `http ${res.status}`,
+        days: payload.length,
+      };
+    }
+    const j = (await res.json().catch(() => ({}))) as {
+      upserted?: number;
+      skipped?: number;
+    };
+    safeWrite(LAST_STEPS_SYNC_KEY, new Date(now).toISOString());
+    return {
+      ok: true,
+      upserted: j.upserted ?? 0,
+      skipped: j.skipped ?? 0,
+      days: payload.length,
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      reason: "fetch-failed",
+      error: e instanceof Error ? e.message : "unknown",
+      days: payload.length,
+    };
+  }
+}
+
+function safeRead(key: string): string | null {
+  try {
+    return typeof window !== "undefined"
+      ? window.localStorage.getItem(key)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function safeWrite(key: string, val: string): void {
+  try {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(key, val);
+    }
+  } catch {
+    /* quota / disabled — next sync just re-pulls the wider window */
   }
 }
 

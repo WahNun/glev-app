@@ -111,7 +111,7 @@ function startAppleHealthSync(isCancelled: () => boolean): () => void {
     if (isCancelled()) return;
     if (typeof window === "undefined") return;
     try {
-      const { isNative, syncRecent } = await import("@/lib/cgm/appleHealthClient");
+      const { isNative, syncRecent, syncRecentSteps } = await import("@/lib/cgm/appleHealthClient");
       if (!(await isNative())) return;
       if (isCancelled()) return;
 
@@ -128,6 +128,14 @@ function startAppleHealthSync(isCancelled: () => boolean): () => void {
           await syncRecent();
         } catch {
           /* swallow — surfaced via Settings card "last sync" status */
+        }
+        // Task #183: piggy-back the per-day step sync on the same
+        // visibility/interval cadence. Independent try/catch so a
+        // steps failure never blocks the glucose loop.
+        try {
+          await syncRecentSteps();
+        } catch {
+          /* swallow — steps are a best-effort context signal */
         }
       };
 

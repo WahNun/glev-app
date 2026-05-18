@@ -1,0 +1,32 @@
+-- Task #183: align exercise_logs identity with the task spec
+-- `(user_id, source, external_uid)` while keeping the column name
+-- `external_id` introduced by migration 20260518.
+--
+-- Why a second unique index, not a swap of the existing one:
+--   * The existing `exercise_logs_user_external_id_uidx` (user_id,
+--     external_id) is functionally equivalent today — only
+--     source='apple_health' rows carry a non-NULL external_id, so
+--     adding `source` to the conflict target cannot reject any row
+--     that the existing index accepts.
+--   * Future sources (`garmin`, etc.) MAY reuse the same uuid space
+--     as Apple Health by coincidence — making the conflict target
+--     source-aware up front means a new source is a one-line CHECK
+--     update (mirroring profiles.cgm_source style) instead of an
+--     index reshuffle that has to be coordinated with the upsert
+--     callers.
+--   * PostgREST's `upsert(..., onConflict: 'user_id,source,external_id')`
+--     needs a matching unique index to exist at all times; keeping
+--     both indexes during the rollout window means there is never a
+--     moment where an in-flight upsert can race with the swap.
+--
+-- The old `exercise_logs_user_external_id_uidx` stays in place — it
+-- is a superset of the new index for the only source that currently
+-- writes external_id, so it costs one extra index entry per Apple
+-- Health row and zero correctness. A follow-up cleanup migration can
+-- drop it once every deployed client has switched its `onConflict`
+-- target.
+--
+-- Idempotent (safe to re-run via npm run db:migrate).
+
+CREATE UNIQUE INDEX IF NOT EXISTS exercise_logs_user_source_external_id_uidx
+  ON exercise_logs (user_id, source, external_id);

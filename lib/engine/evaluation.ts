@@ -2,9 +2,18 @@ import type { InsulinLog } from "../insulin";
 import type { ExerciseLog } from "../exercise";
 import type { AdjustmentMessage } from "./adjustment";
 import type { TrendClass } from "./trend";
+import type { ActivityContext } from "@/lib/dailyActivity";
 import { parseDbTs } from "@/lib/time";
 import { getInsulinSettings, type InsulinSettings } from "@/lib/userSettings";
 import { getEffectiveICR } from "@/lib/icrSchedule";
+
+// Task #183: shared "high activity day" thresholds. Re-used by the
+// pure annotation helper in `lib/exerciseEval.ts` so a single source
+// of truth governs both the evaluator's context message and the
+// pattern-recognition surface — change in one place, change in both.
+export const HIGH_ACTIVITY_RATIO = 1.3;
+export const HIGH_ACTIVITY_MIN_ABS = 8000;
+export const HIGH_ACTIVITY_MIN_SAMPLE = 3;
 
 export type Outcome = "GOOD" | "UNDERDOSE" | "OVERDOSE" | "SPIKE" | "SPIKE_STRONG" | "HYPO_DURING" | "CHECK_CONTEXT";
 
@@ -48,6 +57,14 @@ export interface EvaluateEntryInput {
   speed2?: number | null;
   recentInsulinLogs?: InsulinLog[];
   recentExerciseLogs?: ExerciseLog[];
+  /**
+   * Task #183: optional Apple-Health daily-step context. Surfaces as a
+   * standalone "high activity today" reasoning entry alongside the
+   * existing exercise log message. Outcome math (`Outcome`, `delta`,
+   * `confidence`) is **not** affected — compliance-required: dose
+   * decisions never flow from passive step counts.
+   */
+  activityContext?: ActivityContext | null;
   /**
    * Window-level aggregates from the per-meal CGM curve
    * (`meal_glucose_samples`, Task #187). When provided, the evaluator
@@ -106,9 +123,22 @@ function classKey(cls: Classification): string {
   }
 }
 
+/** Pure predicate — true when the daily-steps signal crosses the
+ *  shared "noteworthy active day" thresholds. Exported so other
+ *  surfaces (Insights cards, pattern recognition) reuse the same gate
+ *  instead of redefining the cutoffs. */
+export function isHighActivityDay(ctx: ActivityContext | null | undefined): boolean {
+  if (!ctx) return false;
+  if (ctx.todaySteps == null || ctx.avgSteps7d == null) return false;
+  if (ctx.sampleSize7d < HIGH_ACTIVITY_MIN_SAMPLE) return false;
+  if (ctx.todaySteps < HIGH_ACTIVITY_MIN_ABS) return false;
+  return ctx.todaySteps >= Math.round(ctx.avgSteps7d * HIGH_ACTIVITY_RATIO);
+}
+
 function contextMessages(
   insulinLogs: InsulinLog[] = [],
   exerciseLogs: ExerciseLog[] = [],
+  activity?: ActivityContext | null,
 ): AdjustmentMessage[] {
   const now = Date.now();
   const dayAgo = now - 24 * 3600_000;
@@ -136,6 +166,19 @@ function contextMessages(
         minutes: recentExercise.duration_minutes,
         type: recentExercise.exercise_type,
         intensity: recentExercise.intensity,
+      },
+    });
+  }
+
+  // Task #183: passive-activity context. Emitted independently of the
+  // active-workout message above — a high step day with no explicit
+  // workout still meaningfully shifts insulin sensitivity.
+  if (isHighActivityDay(activity)) {
+    out.push({
+      key: "engine_ctx_high_activity",
+      params: {
+        steps: activity!.todaySteps!,
+        avg: activity!.avgSteps7d!,
       },
     });
   }
@@ -298,7 +341,7 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
     const messages: AdjustmentMessage[] = [
       { key: "engine_eval_hypo_during", params: { minBg: minBg ?? "<70" } },
       ...speedMessages(input.speed1, input.speed2),
-      ...contextMessages(input.recentInsulinLogs, input.recentExerciseLogs),
+      ...contextMessages(input.recentInsulinLogs, input.recentExerciseLogs, input.activityContext),
       ...trendMessages(input.preTrend),
     ];
     return { outcome: "HYPO_DURING", messages, confidence: "high", delta, netCarbs };
@@ -323,7 +366,7 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
     const messages: AdjustmentMessage[] = [
       spike.primary,
       ...speedMessages(input.speed1, input.speed2),
-      ...contextMessages(input.recentInsulinLogs, input.recentExerciseLogs),
+      ...contextMessages(input.recentInsulinLogs, input.recentExerciseLogs, input.activityContext),
       ...trendMessages(input.preTrend),
     ];
     // Magnitude-backed spikes (peak or Δ_2h known) → high confidence.
@@ -363,7 +406,7 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
     const messages: AdjustmentMessage[] = [
       primary,
       ...speedMessages(input.speed1, input.speed2),
-      ...contextMessages(input.recentInsulinLogs, input.recentExerciseLogs),
+      ...contextMessages(input.recentInsulinLogs, input.recentExerciseLogs, input.activityContext),
       ...trendMessages(input.preTrend),
     ];
     return { outcome, messages, confidence, delta, netCarbs };
@@ -379,7 +422,7 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
     const messages: AdjustmentMessage[] = [
       { key: "engine_eval_no_insulin_no_data" },
       ...speedMessages(input.speed1, input.speed2),
-      ...contextMessages(input.recentInsulinLogs, input.recentExerciseLogs),
+      ...contextMessages(input.recentInsulinLogs, input.recentExerciseLogs, input.activityContext),
       ...trendMessages(input.preTrend),
     ];
     return { outcome: "GOOD", messages, confidence: "low", delta: null, netCarbs };
@@ -410,7 +453,7 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
   const messages: AdjustmentMessage[] = [
     primary,
     ...speedMessages(input.speed1, input.speed2),
-    ...contextMessages(input.recentInsulinLogs, input.recentExerciseLogs),
+    ...contextMessages(input.recentInsulinLogs, input.recentExerciseLogs, input.activityContext),
     ...trendMessages(input.preTrend),
   ];
   return { outcome, messages, confidence: "low", delta: null, netCarbs };

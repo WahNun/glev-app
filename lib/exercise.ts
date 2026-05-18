@@ -142,22 +142,40 @@ export async function updateExerciseLog(
   return j.log as ExerciseLog;
 }
 
+/** Optional source filter for read helpers. Task #183 introduces the
+ *  `apple_health` source alongside the implicit `manual` default. The
+ *  filter is OPTIONAL so every existing caller keeps returning all
+ *  rows regardless of source — change-set is backward-compatible by
+ *  construction. Pass an array to fetch a union (e.g. `["manual",
+ *  "apple_health"]` is identical to omitting the filter today, but
+ *  pre-empts a future third source slipping in silently). */
+export type ExerciseSource = "manual" | "apple_health";
+
 export async function fetchExerciseLogs(
   fromIso?: string,
   toIso?: string,
+  options?: { source?: ExerciseSource | ExerciseSource[] },
 ): Promise<ExerciseLog[]> {
   if (!supabase) throw new Error("Supabase is not configured");
   let q = supabase.from("exercise_logs").select("*").order("created_at", { ascending: false });
   if (fromIso) q = q.gte("created_at", fromIso);
   if (toIso)   q = q.lte("created_at", toIso);
+  if (options?.source) {
+    const list = Array.isArray(options.source) ? options.source : [options.source];
+    if (list.length === 1) q = q.eq("source", list[0]);
+    else                   q = q.in("source", list);
+  }
   const { data, error } = await q;
   if (error) throw error;
   return (data || []) as ExerciseLog[];
 }
 
-export async function fetchRecentExerciseLogs(days: number): Promise<ExerciseLog[]> {
+export async function fetchRecentExerciseLogs(
+  days: number,
+  options?: { source?: ExerciseSource | ExerciseSource[] },
+): Promise<ExerciseLog[]> {
   const fromIso = new Date(Date.now() - days * 86400000).toISOString();
-  return fetchExerciseLogs(fromIso);
+  return fetchExerciseLogs(fromIso, undefined, options);
 }
 
 export async function deleteExerciseLog(id: string): Promise<void> {

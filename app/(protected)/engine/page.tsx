@@ -11,6 +11,8 @@ import { TYPE_COLORS } from "@/lib/mealTypes";
 import { logDebug } from "@/lib/debug";
 import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
+import { fetchRecentActivityClient, summariseActivityContext, type ActivityContext } from "@/lib/dailyActivity";
+import { HIGH_ACTIVITY_RATIO, HIGH_ACTIVITY_MIN_ABS, HIGH_ACTIVITY_MIN_SAMPLE } from "@/lib/engine/evaluation";
 import { computeAdaptiveICR } from "@/lib/engine/adaptiveICR";
 import { getEffectiveICR } from "@/lib/icrSchedule";
 import { detectPattern } from "@/lib/engine/patterns";
@@ -102,6 +104,7 @@ function safetyNotesFromLogs(
   exerciseLogs: ExerciseLog[],
   t: EngineTranslator,
   fmt: NumFormatter,
+  activity?: ActivityContext | null,
 ): string[] {
   const now = Date.now();
   const sixHoursAgo  = now - 6  * 3600_000;
@@ -148,6 +151,25 @@ function safetyNotesFromLogs(
     }));
   }
 
+  // Task #183: passive-activity safety note. Renders the same
+  // compliance-safe wording as the engine recommendation message but
+  // formatted through the engine translator alongside the other
+  // safety notes. Single source of truth for the threshold cutoffs
+  // (`HIGH_ACTIVITY_*` constants live in `lib/engine/evaluation.ts`).
+  if (
+    activity &&
+    activity.todaySteps != null &&
+    activity.avgSteps7d != null &&
+    activity.sampleSize7d >= HIGH_ACTIVITY_MIN_SAMPLE &&
+    activity.todaySteps >= HIGH_ACTIVITY_MIN_ABS &&
+    activity.todaySteps >= Math.round(activity.avgSteps7d * HIGH_ACTIVITY_RATIO)
+  ) {
+    notes.push(t("engine_rec_high_activity", {
+      steps: activity.todaySteps,
+      avg: activity.avgSteps7d,
+    }));
+  }
+
   return notes;
 }
 
@@ -167,6 +189,10 @@ function runGlevEngine(
   // the global one. Falls back to `icr` otherwise (and when called
   // without a time — keeps `recommendDose` parity for older callers).
   mealTime?: Date | null,
+  // Task #183: optional Apple-Health daily-step context. Surfaces as a
+  // safety note inside the recommendation reasoning when today crosses
+  // the shared "high activity day" threshold. Dose math is unchanged.
+  activity?: ActivityContext | null,
 ): Recommendation {
   const cf = 50, target = 110;
   // Resolve which ICR actually grades this meal. If the schedule toggle
@@ -193,7 +219,7 @@ function runGlevEngine(
   // from being re-rendered on locale flip (the engine re-runs on dose
   // input changes anyway). The reason payload, on the other hand, stays
   // raw so the render site can apply ICU plural forms per locale.
-  const safetyNotes = safetyNotesFromLogs(insulinLogs, exerciseLogs, t, fmt);
+  const safetyNotes = safetyNotesFromLogs(insulinLogs, exerciseLogs, t, fmt, activity);
 
   // Pre-Meal-Trend-Hinweis (Task #195) — strikt Doku, Dosis bleibt
   // unverändert. Bei `rising_fast` knapp über dem Ziel zusätzlich der
@@ -467,6 +493,10 @@ export default function EnginePage() {
   const [icrPairedTimeWindowCount, setIcrPairedTimeWindowCount] = useState(0);
   const [insulinLogs, setInsulinLogs] = useState<InsulinLog[]>([]);
   const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([]);
+  // Task #183: passive Apple-Health step context. `null` = not loaded
+  // / no data on this device — the engine then silently skips the
+  // high-activity annotation.
+  const [activityCtx, setActivityCtx] = useState<ActivityContext | null>(null);
   // Adaptive engine adjustment banner state. `dismissedSig` is hydrated
   // from localStorage on mount and bumped whenever the user verwirft
   // (or successfully applies) a suggestion, so the banner doesn't keep
@@ -1305,6 +1335,13 @@ export default function EnginePage() {
     // runs without log context.
     fetchRecentInsulinLogs(7).then(setInsulinLogs).catch(() => setInsulinLogs([]));
     fetchRecentExerciseLogs(7).then(setExerciseLogs).catch(() => setExerciseLogs([]));
+    // Task #183: load Apple-Health daily-step context if the user has
+    // synced any from the iOS shell. Best-effort — silently noop when
+    // the table is empty or the endpoint errors so the Engine still
+    // runs on web / Android.
+    fetchRecentActivityClient(8)
+      .then(res => setActivityCtx(res.context ?? summariseActivityContext(res.rows ?? [])))
+      .catch(() => setActivityCtx(null));
   }, []);
 
   function handleRun() {
@@ -1327,7 +1364,7 @@ export default function EnginePage() {
     refreshTrendSamples().then(samples => {
       const trend = getPreTrendForRef(refMs, samples);
       setTimeout(() => {
-        const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs, adaptedICR, tEngineFn, formatNum, trend, new Date(refMs));
+        const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs, adaptedICR, tEngineFn, formatNum, trend, new Date(refMs), activityCtx);
         setResult(rec);
         setRunning(false);
       // Wizard auto-advance: bump from Step 2 ("Makros prüfen") to Step 3
@@ -1754,7 +1791,7 @@ export default function EnginePage() {
     refreshTrendSamples().then(samples => {
       const trend = getPreTrendForRef(refMs, samples);
       setTimeout(() => {
-        const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs, adaptedICR, tEngineFn, formatNum, trend, new Date(refMs));
+        const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs, adaptedICR, tEngineFn, formatNum, trend, new Date(refMs), activityCtx);
         setDecisionRec(rec);
         setDecisionMode("rec");
         setDecisionBusy(false);

@@ -3,7 +3,12 @@ import type { InsulinLog } from "../insulin";
 import type { ExerciseLog } from "../exercise";
 import type { AdjustmentMessage } from "./adjustment";
 import type { TrendClass } from "./trend";
+import type { ActivityContext } from "@/lib/dailyActivity";
 import { parseDbTs } from "@/lib/time";
+// Task #183: shared "high activity day" predicate. Lives in
+// `./evaluation.ts` so this file, the per-meal evaluator, and the
+// engine page's safetyNotesFromLogs all consult one definition.
+import { isHighActivityDay } from "./evaluation";
 
 export interface RecommendInput {
   carbs: number;
@@ -22,6 +27,14 @@ export interface RecommendInput {
    * ist strikt Doku/Warnung.
    */
   preTrend?: TrendClass;
+  /**
+   * Task #183: Apple-Health-Tagesschritte als reine Kontext-Annotation.
+   * Wenn gesetzt UND deutlich überdurchschnittlich (siehe
+   * HIGH_ACTIVITY_RATIO unten), hängt die Engine einen Awareness-Hinweis
+   * an die Reasoning-Liste — die berechnete Dosis wird **nicht** geändert
+   * (Compliance: keine direkte Dosisanweisung aus Aktivitätsdaten).
+   */
+  activityContext?: ActivityContext | null;
 }
 
 export interface RecommendOutput {
@@ -156,6 +169,21 @@ export function recommendDose(input: RecommendInput): RecommendOutput {
         type: recentExercise.exercise_type,
         intensity: recentExercise.intensity,
         hours: hAgo,
+      },
+    });
+  }
+
+  // Task #183: Apple-Health-Tagesaktivität als reine Annotation.
+  // Threshold logic is delegated to the shared `isHighActivityDay`
+  // predicate so the per-meal evaluator and this recommender always
+  // agree on what counts as "active today".
+  const act = input.activityContext ?? null;
+  if (act && isHighActivityDay(act)) {
+    messages.push({
+      key: "engine_rec_high_activity",
+      params: {
+        steps: act.todaySteps!,
+        avg: act.avgSteps7d!,
       },
     });
   }

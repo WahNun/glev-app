@@ -48,6 +48,10 @@ import { fetchRecentExerciseLogs, type ExerciseLog, type ExerciseType } from "@/
 import { evaluateExercise, type ExerciseOutcome } from "@/lib/exerciseEval";
 import { fetchRecentMenstrualLogs, type MenstrualLog } from "@/lib/menstrual";
 import { fetchRecentSymptomLogs, type SymptomLog, type SymptomType } from "@/lib/symptoms";
+import {
+  fetchRecentActivityClient,
+  type ClientActivityResponse,
+} from "@/lib/dailyActivity";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
 import { fetchCgmSamples, type ContinuousReading } from "@/lib/cgmSamplesClient";
 
@@ -72,6 +76,7 @@ const INSIGHTS_DEFAULT_ORDER = [
   "time-of-day",
   "cycle-symptoms",
   "performance-tiles",
+  "daily-steps",
 ];
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
@@ -252,6 +257,10 @@ export default function InsightsPage() {
   // for meals 15..90 days old.
   const [engineBoluses, setEngineBoluses] = useState<InsulinLog[]>([]);
   const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([]);
+  const [activity, setActivity] = useState<ClientActivityResponse>({
+    rows: [],
+    context: { todaySteps: null, avgSteps7d: null, sampleSize7d: 0 },
+  });
   const [fingersticks, setFingersticks] = useState<FingerstickReading[]>([]);
   const [menstrualLogs, setMenstrualLogs] = useState<MenstrualLog[]>([]);
   const [symptomLogs, setSymptomLogs]     = useState<SymptomLog[]>([]);
@@ -390,7 +399,7 @@ export default function InsightsPage() {
     `insights:scope:${scopeMode}:days:${insightsFetchDays}`,
     async () => {
       const fingerstickFromIso = startOfDaysAgo(insightsFetchDays - 1).toISOString();
-      const [m, em, il, ilEngine, ex, fs, ml, sl] = await Promise.all([
+      const [m, em, il, ilEngine, ex, fs, ml, sl, act] = await Promise.all([
         fetchMeals({ sinceDays: insightsFetchDays }).catch(() => [] as Meal[]),
         fetchMealsForEngine().catch(() => [] as Meal[]),
         fetchRecentInsulinLogs(insightsFetchDays).catch(() => [] as InsulinLog[]),
@@ -399,8 +408,12 @@ export default function InsightsPage() {
         fetchFingersticks(fingerstickFromIso).catch(() => [] as FingerstickReading[]),
         fetchRecentMenstrualLogs(insightsFetchDays).catch(() => [] as MenstrualLog[]),
         fetchRecentSymptomLogs(insightsFetchDays).catch(() => [] as SymptomLog[]),
+        // Task #183: best-effort Apple-Health steps. Always resolves
+        // (the helper swallows fetch errors) so a missing route or
+        // empty table just hides the card.
+        fetchRecentActivityClient(14),
       ]);
-      return { meals: m, engineMeals: em, insulinLogs: il, engineBoluses: ilEngine, exerciseLogs: ex, fingersticks: fs, menstrualLogs: ml, symptomLogs: sl };
+      return { meals: m, engineMeals: em, insulinLogs: il, engineBoluses: ilEngine, exerciseLogs: ex, fingersticks: fs, menstrualLogs: ml, symptomLogs: sl, activity: act };
     },
   );
 
@@ -411,6 +424,7 @@ export default function InsightsPage() {
     setInsulinLogs(insightsSWR.insulinLogs);
     setEngineBoluses(insightsSWR.engineBoluses);
     setExerciseLogs(insightsSWR.exerciseLogs);
+    if (insightsSWR.activity) setActivity(insightsSWR.activity);
     setFingersticks(insightsSWR.fingersticks);
     setMenstrualLogs(insightsSWR.menstrualLogs);
     setSymptomLogs(insightsSWR.symptomLogs);
@@ -2899,6 +2913,96 @@ export default function InsightsPage() {
         </div>
       ),
     },
+    // ── Daily Steps (Task #183) — hidden when no Apple-Health rows ──
+    (() => {
+      const ctx = activity.context;
+      const rows = activity.rows;
+      const visible = rows.length > 0;
+      const todayDisplay =
+        ctx.todaySteps != null ? ctx.todaySteps.toLocaleString(locale) : "—";
+      const avgDisplay =
+        ctx.avgSteps7d != null ? ctx.avgSteps7d.toLocaleString(locale) : "—";
+      const deltaPct =
+        ctx.todaySteps != null && ctx.avgSteps7d != null && ctx.avgSteps7d > 0
+          ? Math.round(((ctx.todaySteps - ctx.avgSteps7d) / ctx.avgSteps7d) * 100)
+          : null;
+      const deltaColor =
+        deltaPct == null ? "var(--text-dim)" :
+        deltaPct >= 30 ? GREEN :
+        deltaPct <= -30 ? ORANGE : "var(--text-dim)";
+      // Mini-sparkline: last 7 days, oldest left → newest right.
+      const last7 = rows.slice(0, 7).slice().reverse();
+      const maxSteps = Math.max(1, ...last7.map(r => r.steps));
+      return {
+        id: "daily-steps",
+        node: visible ? (
+          <FlipCard
+            accent={ACCENT}
+            back={
+              <FlipBack
+                title={tInsights("daily_steps_back_title")}
+                accent={ACCENT}
+                paragraphs={[
+                  tInsights("daily_steps_back_p1"),
+                  tInsights("daily_steps_back_p2"),
+                  tInsights("daily_steps_back_p3"),
+                ]}
+              />
+            }
+          >
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+              <CardLabel text={tInsights("card_daily_steps_title")}/>
+              <div style={{ fontSize:11, color:"var(--text-dim)" }}>
+                {tInsights("card_daily_steps_source")}
+              </div>
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)", gap:8, marginBottom:10 }}>
+              <div style={{ padding:"10px 12px", background:`${ACCENT}10`, border:`1px solid ${ACCENT}25`, borderRadius:10 }}>
+                <div style={{ fontSize:11, color:"var(--text-dim)", fontWeight:600, marginBottom:4 }}>
+                  {tInsights("card_daily_steps_today")}
+                </div>
+                <div style={{ fontSize:20, fontWeight:800, fontFamily:"var(--font-mono)", color:"var(--text)", lineHeight:1 }}>
+                  {todayDisplay}
+                </div>
+              </div>
+              <div style={{ padding:"10px 12px", background:"var(--surface-2)", border:`1px solid ${BORDER}`, borderRadius:10 }}>
+                <div style={{ fontSize:11, color:"var(--text-dim)", fontWeight:600, marginBottom:4 }}>
+                  {tInsights("card_daily_steps_avg7d")}
+                </div>
+                <div style={{ fontSize:20, fontWeight:800, fontFamily:"var(--font-mono)", color:"var(--text)", lineHeight:1 }}>
+                  {avgDisplay}
+                </div>
+                {deltaPct != null && (
+                  <div style={{ fontSize:11, color:deltaColor, fontWeight:600, marginTop:4 }}>
+                    {deltaPct >= 0 ? "+" : ""}{deltaPct}%
+                  </div>
+                )}
+              </div>
+            </div>
+            {last7.length > 0 && (
+              <div style={{ display:"flex", alignItems:"flex-end", gap:4, height:36 }}>
+                {last7.map((r, i) => {
+                  const h = Math.max(2, Math.round((r.steps / maxSteps) * 34));
+                  return (
+                    <div
+                      key={i}
+                      title={`${r.date}: ${r.steps.toLocaleString(locale)}`}
+                      style={{
+                        flex:1,
+                        height:h,
+                        background:ACCENT,
+                        opacity:0.55 + 0.45 * (r.steps / maxSteps),
+                        borderRadius:3,
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </FlipCard>
+        ) : null,
+      };
+    })(),
   ];
 
   return (
@@ -2997,6 +3101,11 @@ export default function InsightsPage() {
             dyn["workout-outcomes"] = tInsights("swipe_dyn_workouts", { n: exerciseLogs.length });
             dyn["workout-bg-response"] = tInsights("swipe_dyn_workouts", { n: exerciseLogs.length });
             dyn["workout-patterns"] = tInsights("swipe_dyn_workouts", { n: exerciseLogs.length });
+          }
+          if (activity.context.todaySteps != null) {
+            dyn["daily-steps"] = tInsights("swipe_dyn_daily_steps", {
+              steps: activity.context.todaySteps.toLocaleString(locale),
+            });
           }
           if (symptomLogs.length > 0 || menstrualLogs.length > 0) {
             dyn["cycle-symptoms"] = tInsights("swipe_dyn_cycle", {
