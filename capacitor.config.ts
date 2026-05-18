@@ -26,7 +26,17 @@ const config: CapacitorConfig = {
     androidScheme: "https",
   },
   ios: {
-    contentInset: "always",
+    // 2026-05-18: switched from "always" → "never" so the WKWebView
+    // fills the ENTIRE screen including the home-indicator + status-bar
+    // zones, and CSS `env(safe-area-inset-{top,bottom})` returns the
+    // real notch / home-indicator insets. With "always" iOS pre-pads
+    // the scroll view and reports inset = 0 to CSS — that's why the
+    // bottom nav floated above the home indicator with blank space
+    // below, and why the header looked dramatically taller than the
+    // footer (only the header reserved sa-top in CSS, footer had no
+    // sa-bottom to reserve). Header + footer now both extend through
+    // their respective safe-area zones with content padded inside.
+    contentInset: "never",
   },
 };
 

@@ -362,7 +362,17 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
                Architect 2026-05-17 caught that the previous math used
                icon+label dimensions and was under-counting nav height
                by ~16 px. */
-            padding: calc(env(safe-area-inset-top) + 44px) 16px max(76px, calc(env(safe-area-inset-bottom) + 46px)) !important;
+            /* 2026-05-18 round 8:
+               - Header content band shrunk to 36 px (4 + 28 lockup + 4).
+               - Footer content band 4 + 56 (MobileTab) + max(4, sa-bot)
+                 = 64 + sa-bot. Capacitor contentInset "never" now
+                 reports the real sa-bottom (~34 on notched iPhones) so
+                 the footer reserves it instead of floating above the
+                 home indicator.
+               Top compensator: sa-top + 36 + 4 buffer.
+               Bottom compensator: 64 + sa-bot + 8 buffer.
+                 Floor 80 px = 64 + 8 + 8 covers Web/Android (sa-bot=0). */
+            padding: calc(env(safe-area-inset-top) + 40px) 16px max(80px, calc(env(safe-area-inset-bottom) + 72px)) !important;
           }
           .glev-entry-row   { grid-template-columns: 1fr auto auto !important; gap: 10px !important; padding: 14px 16px !important; }
           .glev-entry-hide-mobile { display: none !important; }
@@ -395,7 +405,12 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         // to 44 px (6 + 32 + 6) so the visible block under the
         // status bar reads as a slim app bar, not a second header.
         // Keep .glev-main's padding-top compensator in sync above.
-        padding: "calc(env(safe-area-inset-top) + 6px) max(18px, env(safe-area-inset-right)) 6px max(18px, env(safe-area-inset-left))",
+        // 2026-05-18 round 8: header content band 4 + 28 + 4 = 36 px
+        // sits below the safe-area-top zone. With capacitor
+        // contentInset:"never" the BG now paints through the status
+        // bar via sa-top, matching how the footer paints through
+        // sa-bottom — visually the two chrome bars look equally slim.
+        padding: "calc(env(safe-area-inset-top) + 4px) max(18px, env(safe-area-inset-right)) 4px max(18px, env(safe-area-inset-left))",
         background: SURFACE,
         borderBottom: `1px solid ${BORDER}`,
         alignItems: "center", justifyContent: "space-between",
@@ -412,7 +427,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               iOS-Favicon). Wordmark folgt dem Theme via var(--text), aber
               das Logo-Quadrat soll in Light Mode NICHT mit-aufhellen,
               sonst löst es sich vom Header optisch auf. */}
-          <GlevLockup size={32} color="var(--text)" symbolBg="#0F0F14" />
+          <GlevLockup size={28} color="var(--text)" symbolBg="#0F0F14" />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {/* Engine-Pille im Header wurde entfernt (User-Wunsch
@@ -610,17 +625,14 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       <nav className="glev-mobile-nav" style={{
         position: "fixed", bottom: 0, left: 0, right: 0,
         background: NAV_SURFACE, borderTop: `1px solid ${NAV_BORDER}`,
-        // Bottom padding pulls the tab labels flush against the home
-        // indicator / viewport edge. History: round 1 −18 px, round 2
-        // −22 px, round 3 (2026-05-18 PM) −28 px, round 4 (2026-05-18
-        // late) −34 px after user report "der gesamte footer nav sitzt
-        // nicht ganz unten im bildschirm sondern lässt da noch
-        // ordentlich blank space". sa-bot − 34 on iPhone X+ (sa-bot ≈
-        // 34) → 0 px, labels touch the home-indicator zone top edge.
-        // Web/Android floor 0 px → no dark band below the labels.
-        // Outer top padding kept at 4 px so the labels don't kiss the
-        // top border.
-        padding: "4px 4px max(0px, calc(env(safe-area-inset-bottom, 0px) - 34px))",
+        // 2026-05-18 round 8: with capacitor `contentInset: "never"`
+        // the WebView now extends through the home-indicator zone, so
+        // we honour env(safe-area-inset-bottom) properly. The colored
+        // nav surface paints all the way to the physical phone edge
+        // (no blank gap under the labels), and labels sit safely above
+        // the home indicator pill via the sa-bot bottom padding.
+        // Web/Android (sa-bot = 0) → 4 px floor.
+        padding: "4px 4px max(4px, env(safe-area-inset-bottom, 0px))",
         zIndex: 100,
       }}>
         <MobileTab
@@ -942,26 +954,22 @@ function MobileTab({
   // Space — no pointer events fire for keyboard) and is gated by
   // `pointerHandledRef` so taps don't double-fire.
   const pointerHandledRef = useRef(false);
-  const startXRef = useRef(0);
-  const startYRef = useRef(0);
   const validRef = useRef(false);
 
-  const handlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+  // 2026-05-18 round 8 (TestFlight "only Glev button works" fix):
+  // The previous 10 px movement-slop guard was killing every footer
+  // tap on iOS — fingers naturally drift a few pixels between
+  // touchdown and touchup on small tab targets, which flipped
+  // validRef=false in handlePointerMove. pointerup then bailed AND
+  // the click fallback was blocked by pointerHandledRef. Dead tap.
+  // The Glev FAB works precisely because it does NOT have this
+  // guard. Mirror the FAB pattern exactly: pointerdown arms the
+  // gesture, pointerup fires onClick unconditionally (iOS' native
+  // scroll detection already cancels the pointer cycle via
+  // pointercancel for actual swipes — no manual slop check needed).
+  const handlePointerDown = () => {
     pointerHandledRef.current = true;
     validRef.current = true;
-    startXRef.current = e.clientX;
-    startYRef.current = e.clientY;
-  };
-
-  const handlePointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
-    if (!validRef.current) return;
-    // 10 px slop = same threshold iOS uses for tap-vs-pan disambiguation.
-    if (
-      Math.abs(e.clientX - startXRef.current) > 10 ||
-      Math.abs(e.clientY - startYRef.current) > 10
-    ) {
-      validRef.current = false;
-    }
   };
 
   const handlePointerUp = () => {
@@ -971,10 +979,9 @@ function MobileTab({
   };
 
   const handlePointerCancel = () => {
+    // Scroll started / finger lifted out / pen aborted — discard the
+    // gesture so neither pointerup nor the click fallback fires.
     validRef.current = false;
-    // Gesture was canceled (scroll/drag) so no synthetic click will
-    // follow. Clear the dedupe flag so a subsequent keyboard activation
-    // (Enter / Space) isn't swallowed by stale state.
     pointerHandledRef.current = false;
   };
 
@@ -993,7 +1000,6 @@ function MobileTab({
   return (
     <button
       onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerCancel}
       onPointerLeave={handlePointerCancel}
