@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { hapticSelection } from "@/lib/haptics";
-import { useTranslations, useLocale } from "next-intl";
+import { useTranslations } from "next-intl";
 import { signOut } from "@/lib/auth";
 import GlevLockup from "@/components/GlevLockup";
 import GlevLogo from "@/components/GlevLogo";
@@ -14,9 +14,8 @@ import { EngineSourceHeaderProvider, useEngineSourceHeader } from "@/lib/engineS
 import { VoiceRecordingProvider, useVoiceRecording } from "@/lib/voiceRecordingContext";
 import {
   ScopeHeaderProvider, useScopeHeader,
-  computeScopeWindow, type ScopeMode,
+  type ScopeMode,
 } from "@/lib/scopeHeaderContext";
-import { startOfDay, startOfDaysAgo, startOfToday, userTimezone } from "@/lib/utils/datetime";
 
 const ACCENT  = "#4F6EF7";
 const GREEN   = "#22D3A0";
@@ -419,7 +418,6 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           {scopeHdr.visible && (
             <ScopeHeaderChip
               mode={scopeHdr.mode}
-              anchor={scopeHdr.anchor}
               setMode={scopeHdr.setMode}
               setAnchor={scopeHdr.setAnchor}
             />
@@ -966,85 +964,26 @@ function MobileTab({
 
 /**
  * Compact scope picker rendered in the global mobile header while the
- * user is on /insights. Replaces the older "Insights ▾ / Einträge ▾"
- * dropdown — both surfaces are now standalone bottom-nav tabs again,
- * so the header slot is repurposed to hold the time-window selector
- * (Tag / Woche / Monat / Jahr + ◀ ▶) that every Insights card derives
- * its data from. State lives in `ScopeHeaderContext`; the Insights
- * page reads it for window math, this chip reads + writes for UI.
+ * user is on /insights. Renders the four mode chips (Tag / Woche /
+ * Monat / Jahr) INLINE — no dropdown, no extra tap to open. Picking a
+ * mode resets the anchor to "now" so the user always lands on the
+ * current period; date stepping (◀ Today ▶) is rendered separately by
+ * the insights page itself at the top of the body. State lives in
+ * `ScopeHeaderContext`; the page reads it for window math, this chip
+ * group reads + writes for UI.
+ *
+ * 2026-05-18 (user request): "kann im insights screen nicht einfach
+ * gleich im header diese chips gezeigt werden? das dropdown ist
+ * unnötig" — replaced the previous closed-chip-+-popover pattern.
  */
 function ScopeHeaderChip({
-  mode, anchor, setMode, setAnchor,
+  mode, setMode, setAnchor,
 }: {
   mode: ScopeMode;
-  anchor: Date;
   setMode: (m: ScopeMode) => void;
   setAnchor: (d: Date) => void;
 }) {
-  const locale = useLocale();
   const t = useTranslations("scopeHeader");
-  const scope  = computeScopeWindow(mode, anchor);
-  const nowMs  = Date.now();
-  const isCurrent = scope.endMs > nowMs && scope.startMs <= nowMs;
-  const canNext   = scope.endMs <= nowMs;
-
-  // Step the anchor by one period in the active mode.
-  const stepAnchor = (dir: -1 | 1) => {
-    const a = new Date(anchor);
-    if (mode === "day")   a.setDate(a.getDate() + dir);
-    if (mode === "week")  a.setDate(a.getDate() + dir * 7);
-    if (mode === "month") a.setMonth(a.getMonth() + dir);
-    if (mode === "year")  a.setFullYear(a.getFullYear() + dir);
-    setAnchor(a);
-  };
-
-  // Compact label for the closed chip.
-  const labelFor = (): string => {
-    if (mode === "day") {
-      const today = startOfToday().getTime();
-      if (scope.startMs === today) return t("today");
-      const yesterday = startOfDaysAgo(1).getTime();
-      if (scope.startMs === yesterday) return t("yesterday");
-      return new Intl.DateTimeFormat(locale, {
-        day: "numeric", month: "short", timeZone: userTimezone,
-      }).format(new Date(scope.startMs));
-    }
-    if (mode === "week") {
-      if (isCurrent) return t("this_week");
-      const start = new Date(scope.startMs);
-      const end   = new Date(scope.endMs - 86400000);
-      const fmt = new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", timeZone: userTimezone });
-      return `${fmt.format(start)}–${fmt.format(end)}`;
-    }
-    if (mode === "month") {
-      return new Intl.DateTimeFormat(locale, { month: "long", year: "numeric", timeZone: userTimezone })
-        .format(new Date(scope.startMs));
-    }
-    return new Intl.DateTimeFormat(locale, { year: "numeric", timeZone: userTimezone })
-      .format(new Date(scope.startMs));
-  };
-
-  const [open, setOpen] = useState(false);
-  const wrapperRef = useRef<HTMLDivElement>(null);
-
-  // Close on outside pointerdown / Escape — same UX as QuickAddMenu so
-  // the two header popovers feel identical to muscle memory.
-  useEffect(() => {
-    if (!open) return;
-    function onPointerDown(e: PointerEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    function onKey(e: KeyboardEvent) { if (e.key === "Escape") setOpen(false); }
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
   const modes: { key: ScopeMode; label: string }[] = [
     { key: "day",   label: t("mode_day")   },
     { key: "week",  label: t("mode_week")  },
@@ -1053,117 +992,43 @@ function ScopeHeaderChip({
   ];
 
   return (
-    <div ref={wrapperRef} style={{ position: "relative" }}>
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        aria-label={open ? t("close_aria") : t("open_aria")}
-        aria-expanded={open}
-        aria-haspopup="menu"
-        style={{
-          display: "inline-flex", alignItems: "center", gap: 6,
-          padding: "5px 10px", height: 28, borderRadius: 99,
-          background: open ? `${ACCENT}22` : "var(--surface-soft)",
-          border: `1px solid ${open ? ACCENT : "var(--border-strong)"}`,
-          color: open ? ACCENT : "var(--text-body)",
-          fontSize: 13, fontWeight: 700, letterSpacing: "-0.01em",
-          cursor: "pointer", transition: "all 0.15s",
-          maxWidth: 180, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-        }}
-      >
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{labelFor()}</span>
-        <svg
-          width="12" height="12" viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-          aria-hidden="true"
-          style={{ transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0 }}
-        >
-          <polyline points="6 9 12 15 18 9"/>
-        </svg>
-      </button>
-
-      {open && (
-        <div
-          role="menu"
-          style={{
-            position: "fixed",
-            top: 56,
-            left: "50%",
-            transform: "translateX(-50%)",
-            width: 240,
-            background: "var(--surface-alt)",
-            border: `1px solid var(--border)`,
-            borderRadius: 14,
-            boxShadow: "var(--shadow-card)",
-            padding: 10,
-            zIndex: 60,
-            display: "flex", flexDirection: "column", gap: 8,
-          }}
-        >
-          {/* Mode chips row — Tag / Woche / Monat / Jahr */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 4 }}>
-            {modes.map(m => {
-              const isActive = mode === m.key;
-              return (
-                <button
-                  key={m.key}
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={isActive}
-                  onClick={() => { setMode(m.key); setAnchor(new Date()); }}
-                  style={{
-                    padding: "8px 4px",
-                    background: isActive ? ACCENT : "transparent",
-                    color: isActive ? "#fff" : "var(--text-strong)",
-                    border: `1px solid ${isActive ? ACCENT : "var(--border)"}`,
-                    borderRadius: 8,
-                    fontSize: 12.5, fontWeight: isActive ? 700 : 500,
-                    cursor: "pointer",
-                  }}
-                >
-                  {m.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* ◀ label ▶ row */}
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <button
-              type="button"
-              onClick={() => stepAnchor(-1)}
-              aria-label={t("prev_aria")}
-              style={{
-                width: 32, height: 32, borderRadius: 8,
-                background: "transparent", border: `1px solid var(--border)`,
-                color: "var(--text-strong)", cursor: "pointer",
-                display: "inline-flex", alignItems: "center", justifyContent: "center",
-              }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-            </button>
-            <div style={{ flex: 1, textAlign: "center", fontSize: 13, fontWeight: 600, color: "var(--text-strong)" }}>
-              {labelFor()}
-            </div>
-            <button
-              type="button"
-              onClick={() => canNext && stepAnchor(1)}
-              disabled={!canNext}
-              aria-label={t("next_aria")}
-              style={{
-                width: 32, height: 32, borderRadius: 8,
-                background: "transparent", border: `1px solid var(--border)`,
-                color: canNext ? "var(--text-strong)" : "var(--text-faint)",
-                cursor: canNext ? "pointer" : "not-allowed",
-                opacity: canNext ? 1 : 0.4,
-                display: "inline-flex", alignItems: "center", justifyContent: "center",
-              }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-            </button>
-          </div>
-        </div>
-      )}
+    <div
+      role="radiogroup"
+      aria-label={t("open_aria")}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 2,
+        padding: 2, height: 30, borderRadius: 99,
+        background: "var(--surface-soft)",
+        border: `1px solid var(--border-strong)`,
+        flexShrink: 0,
+      }}
+    >
+      {modes.map(m => {
+        const isActive = mode === m.key;
+        return (
+          <button
+            key={m.key}
+            type="button"
+            role="radio"
+            aria-checked={isActive}
+            onClick={() => { setMode(m.key); setAnchor(new Date()); }}
+            style={{
+              padding: "0 9px", height: 24, borderRadius: 99,
+              background: isActive ? ACCENT : "transparent",
+              color: isActive ? "#fff" : "var(--text-body)",
+              border: "none",
+              fontSize: 12, fontWeight: isActive ? 700 : 600,
+              letterSpacing: "-0.01em",
+              cursor: "pointer", transition: "background 0.15s, color 0.15s",
+              WebkitTapHighlightColor: "transparent",
+              touchAction: "manipulation",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {m.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

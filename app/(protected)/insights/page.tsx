@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useId } from "react";
+import React, { useState, useEffect, useId, useCallback } from "react";
 import useSWR, { mutate as swrMutate } from "swr";
 import { useLocale, useTranslations } from "next-intl";
 import { fetchMeals, fetchMealsForEngine, unifiedOutcome, type Meal } from "@/lib/meals";
@@ -369,11 +369,30 @@ export default function InsightsPage() {
   // "week" anchored on today; we register `setVisible(true)` on mount
   // so the chip appears, and `setVisible(false)` on unmount so it goes
   // away when the user navigates to another tab.
-  const { mode: scopeMode, anchor: scopeAnchor, setVisible: setScopeChipVisible } = useScopeHeader();
+  const {
+    mode: scopeMode,
+    anchor: scopeAnchor,
+    setAnchor: setScopeAnchor,
+    setVisible: setScopeChipVisible,
+  } = useScopeHeader();
   useEffect(() => {
     setScopeChipVisible(true);
     return () => setScopeChipVisible(false);
   }, [setScopeChipVisible]);
+
+  // Anchor stepper rendered at the top of the page body. The header
+  // chip group only switches MODE (Day/Week/Month/Year); this inline
+  // ◀ Today ▶ row lets the user walk back/forward through periods
+  // without re-opening any dropdown. Compact so it doesn't push the
+  // first swipe card down on iPhone mini.
+  const stepScopeAnchor = useCallback((dir: -1 | 1) => {
+    const a = new Date(scopeAnchor);
+    if (scopeMode === "day")   a.setDate(a.getDate() + dir);
+    if (scopeMode === "week")  a.setDate(a.getDate() + dir * 7);
+    if (scopeMode === "month") a.setMonth(a.getMonth() + dir);
+    if (scopeMode === "year")  a.setFullYear(a.getFullYear() + dir);
+    setScopeAnchor(a);
+  }, [scopeAnchor, scopeMode, setScopeAnchor]);
 
   // SWR-backed cached fetch — same pattern as Dashboard. The
   // SWRProvider in app/(protected)/layout.tsx persists this cache to
@@ -3242,6 +3261,17 @@ export default function InsightsPage() {
         subtitle={tInsights("header_subtitle", { n: total })}
       />
 
+      {/* Inline anchor stepper — pairs with the 4 mode chips in the
+          mobile header (Day/Week/Month/Year). The chip group only
+          switches mode; this row walks the user back/forward through
+          periods (◀ Today ▶ / ◀ This Week ▶ / …) without any tap-to-
+          open dropdown. 2026-05-18 user request. */}
+      <ScopeAnchorStepper
+        mode={scopeMode}
+        anchor={scopeAnchor}
+        onStep={stepScopeAnchor}
+      />
+
       {/* Swipe-focused layout (Task #316). Replaces the legacy vertical
           SortableCardGrid feed: a single dominant card sits in the top
           ~58% of the visible area and the user pages horizontally; the
@@ -3365,6 +3395,95 @@ export default function InsightsPage() {
  *  + pen; we also listen on `keydown` so keyboard users can dismiss
  *  by typing/tab. All listeners are `once: true` and torn down in the
  *  effect cleanup. */
+/* ScopeAnchorStepper — compact ◀ label ▶ row rendered at the top of
+   the insights body. The mode (Day / Week / Month / Year) is picked
+   from the inline chip group in the global header; this widget only
+   walks the anchor forward/backward through periods. */
+function ScopeAnchorStepper({
+  mode, anchor, onStep,
+}: {
+  mode: import("@/lib/scopeHeaderContext").ScopeMode;
+  anchor: Date;
+  onStep: (dir: -1 | 1) => void;
+}) {
+  const locale = useLocale();
+  const t = useTranslations("scopeHeader");
+  const scope = computeScopeWindow(mode, anchor);
+  const nowMs = Date.now();
+  const isCurrent = scope.endMs > nowMs && scope.startMs <= nowMs;
+  const canNext = scope.endMs <= nowMs;
+
+  const label = (() => {
+    if (mode === "day") {
+      const today = startOfToday().getTime();
+      if (scope.startMs === today) return t("today");
+      const yesterday = startOfDaysAgo(1).getTime();
+      if (scope.startMs === yesterday) return t("yesterday");
+      return new Intl.DateTimeFormat(locale, {
+        day: "numeric", month: "short", timeZone: userTimezone,
+      }).format(new Date(scope.startMs));
+    }
+    if (mode === "week") {
+      if (isCurrent) return t("this_week");
+      const start = new Date(scope.startMs);
+      const end = new Date(scope.endMs - 86400000);
+      const fmt = new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", timeZone: userTimezone });
+      return `${fmt.format(start)}–${fmt.format(end)}`;
+    }
+    if (mode === "month") {
+      return new Intl.DateTimeFormat(locale, { month: "long", year: "numeric", timeZone: userTimezone })
+        .format(new Date(scope.startMs));
+    }
+    return new Intl.DateTimeFormat(locale, { year: "numeric", timeZone: userTimezone })
+      .format(new Date(scope.startMs));
+  })();
+
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 6,
+      padding: "6px 4px 10px",
+    }}>
+      <button
+        type="button"
+        onClick={() => onStep(-1)}
+        aria-label={t("prev_aria")}
+        style={{
+          width: 32, height: 32, borderRadius: 8,
+          background: "transparent", border: "1px solid var(--border)",
+          color: "var(--text-strong)", cursor: "pointer",
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          WebkitTapHighlightColor: "transparent", touchAction: "manipulation",
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div style={{
+        flex: 1, textAlign: "center", fontSize: 13, fontWeight: 600,
+        color: "var(--text-strong)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+      }}>
+        {label}
+      </div>
+      <button
+        type="button"
+        onClick={() => canNext && onStep(1)}
+        disabled={!canNext}
+        aria-label={t("next_aria")}
+        style={{
+          width: 32, height: 32, borderRadius: 8,
+          background: "transparent", border: "1px solid var(--border)",
+          color: canNext ? "var(--text-strong)" : "var(--text-faint)",
+          cursor: canNext ? "pointer" : "not-allowed",
+          opacity: canNext ? 1 : 0.4,
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          WebkitTapHighlightColor: "transparent", touchAction: "manipulation",
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </div>
+  );
+}
+
 function InsightsHeaderHint({ subtitle }: { subtitle: string }) {
   const [open, setOpen] = useState(true);
   const [mounted, setMounted] = useState(true);
