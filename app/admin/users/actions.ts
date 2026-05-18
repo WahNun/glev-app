@@ -674,6 +674,123 @@ export async function softDeleteAction(formData: FormData): Promise<void> {
   revalidateUserPaths(userId);
 }
 
+/**
+ * „Sperren & Abo kündigen" — eine kombinierte Aktion für den Fall
+ * dass ein Operator eine:n User:in komplett ausserdienstlich machen
+ * will (z.B. Missbrauch, Erstattung + Hinauswurf):
+ *
+ *   1) Stripe-Subscription SOFORT kündigen (`subscriptions.cancel`,
+ *      kein period_end-Grace), falls eine aktive Pro-Sub existiert.
+ *      Best-effort: wenn Stripe ablehnt (z.B. schon cancelled), läuft
+ *      der Ban trotzdem durch — die User:in soll auf jeden Fall raus.
+ *   2) Supabase-User für 100 Jahre bannen (`ban_duration`), was den
+ *      Login-Refresh blockiert. Aktive Access-Tokens (JWT) bleiben
+ *      bis zu ~1h gültig — danach kann der Refresh nicht mehr
+ *      erneuern und der User fliegt automatisch raus. Wir können
+ *      JWTs server-seitig nicht früher invalidieren (Supabase hat
+ *      keinen Admin-`deleteSessions`-Endpoint).
+ *   3) `profiles.deleted_at` setzen — gleicher Marker wie Soft-Delete,
+ *      damit existing Code (z.B. /admin/users-Liste) den User als
+ *      „gelöscht" sieht und Restore über denselben Button geht.
+ *
+ * Reversibel via `restoreUserAction` (unbannt + `deleted_at` clear).
+ * Die Stripe-Sub wird beim Restore NICHT reaktiviert — der User
+ * müsste sich neu via Checkout abonnieren.
+ */
+export async function cancelAndBanAction(formData: FormData): Promise<void> {
+  const adminToken = await requireAdminToken();
+  const userId = String(formData.get("userId") ?? "");
+  const confirmEmail = String(formData.get("confirmEmail") ?? "").trim().toLowerCase();
+  if (!userId) throw new Error("userId fehlt");
+  if (!confirmEmail) throw new Error("E-Mail-Bestätigung fehlt");
+
+  const sb = getSupabaseAdmin();
+  const { data: authData } = await sb.auth.admin.getUserById(userId);
+  const realEmail = authData?.user?.email?.toLowerCase() ?? "";
+  if (realEmail !== confirmEmail) {
+    throw new Error("E-Mail-Bestätigung passt nicht zur User-E-Mail");
+  }
+
+  // 1) Stripe-Sub kündigen (best-effort). Wir suchen die letzte
+  //    nicht-bereits-gekündigte Pro-Sub für diese E-Mail. Wenn keine
+  //    existiert (z.B. Free-User), überspringen wir diesen Schritt
+  //    komplett — der Ban läuft trotzdem.
+  let stripeResult: { subId: string; status: string } | null = null;
+  let stripeError: string | null = null;
+  try {
+    const { data: subRow } = await sb
+      .from("pro_subscriptions")
+      .select("stripe_subscription_id, status")
+      .eq("email", realEmail)
+      .neq("status", "cancelled")
+      .maybeSingle();
+
+    const subId = (subRow as { stripe_subscription_id?: string | null } | null)
+      ?.stripe_subscription_id;
+    if (subId) {
+      const stripe = getStripe();
+      const cancelled = await stripe.subscriptions.cancel(subId);
+      stripeResult = { subId, status: cancelled.status };
+
+      // Lokal spiegeln, damit /admin sofort „cancelled" zeigt ohne auf
+      // den customer.subscription.deleted-Webhook warten zu müssen.
+      await sb
+        .from("pro_subscriptions")
+        .update({ status: "cancelled" })
+        .eq("stripe_subscription_id", subId);
+    }
+  } catch (e) {
+    // Stripe-Fehler darf den Ban NICHT verhindern. Wir loggen ihn in
+    // den Audit-Log und gehen weiter — der Operator sieht den Fehler
+    // im Audit-Log-Block der Detail-Seite.
+    stripeError = e instanceof Error ? e.message : String(e);
+    // eslint-disable-next-line no-console
+    console.warn("[admin/users/cancelAndBan] stripe cancel failed:", stripeError);
+  }
+
+  // 2) Supabase-Ban (gleicher Mechanismus wie softDeleteAction).
+  const { error: banErr } = await sb.auth.admin.updateUserById(userId, {
+    ban_duration: "876000h",
+  });
+  if (banErr) throw new Error("auth: " + banErr.message);
+
+  // 3) `deleted_at` setzen, damit Listen/UI den User als gesperrt
+  //    rendern und der Restore-Button erscheint.
+  const { error: softErr } = await sb
+    .from("profiles")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("user_id", userId);
+  if (softErr && isSchemaMissingError(softErr)) {
+    redirect(`/admin/users/${userId}?err=migration`);
+  }
+
+  // Auch die `profiles.plan` direkt auf free zurücksetzen, falls der
+  // Stripe-Cancel-Webhook noch nicht durchgelaufen ist — sonst sieht
+  // der gesperrte User beim nächsten Token-Refresh kurz vor Ban-Wirkung
+  // noch „pro" und das ist verwirrend in den Audit-Logs.
+  await sb
+    .from("profiles")
+    .update({ plan: "free", subscription_status: "cancelled" })
+    .eq("user_id", userId);
+
+  await writeAuditLog({
+    action: "cancel_and_ban",
+    targetUserId: userId,
+    targetEmail: realEmail,
+    after: stripeResult
+      ? { stripe_sub: stripeResult.subId, stripe_status: stripeResult.status }
+      : { stripe_sub: null, reason: "no active sub" },
+    note: stripeError
+      ? `Stripe-Cancel fehlgeschlagen: ${stripeError} — Ban trotzdem gesetzt`
+      : stripeResult
+        ? "Sub gekündigt + User gebannt (Login ≤1h JWT-Restlaufzeit)"
+        : "Keine aktive Sub gefunden — nur User gebannt",
+    adminToken,
+  });
+
+  revalidateUserPaths(userId);
+}
+
 export async function restoreUserAction(formData: FormData): Promise<void> {
   const adminToken = await requireAdminToken();
   const userId = String(formData.get("userId") ?? "");

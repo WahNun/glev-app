@@ -266,6 +266,9 @@ export default async function AdminUserDetailPage({
         emailConfirmed={!!authUser.email_confirmed_at}
         cgmConnected={!!cgm || !!profile?.cgm_connected || !!profile?.nightscout_url}
         deleted={!!profile?.deleted_at}
+        hasActiveStripeSub={
+          !!pro?.stripe_subscription_id && (pro?.status ?? "") !== "cancelled"
+        }
       />
 
       {/* Audit */}

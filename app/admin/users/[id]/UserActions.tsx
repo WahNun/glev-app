@@ -10,6 +10,7 @@ import {
   softDeleteAction,
   restoreUserAction,
   hardDeleteAction,
+  cancelAndBanAction,
   setRoleAction,
   sendMagicLinkAction,
   sendPasswordResetAction,
@@ -36,6 +37,7 @@ export default function UserActions({
   emailConfirmed,
   cgmConnected,
   deleted,
+  hasActiveStripeSub,
 }: {
   userId: string;
   email: string;
@@ -46,8 +48,9 @@ export default function UserActions({
   emailConfirmed: boolean;
   cgmConnected: boolean;
   deleted: boolean;
+  hasActiveStripeSub: boolean;
 }) {
-  const [confirmKind, setConfirmKind] = useState<"soft" | "hard" | null>(null);
+  const [confirmKind, setConfirmKind] = useState<"soft" | "hard" | "cancel_ban" | null>(null);
   const [confirmEmail, setConfirmEmail] = useState("");
   // Bestätigungs-Dialog für Magic-Link & Passwort-Reset. Beide
   // schicken eine echte E-Mail an den User und sollten nicht aus
@@ -206,35 +209,57 @@ export default function UserActions({
         </p>
 
         {!deleted ? (
-          <button
-            type="button"
-            style={btnDanger}
-            onClick={() => {
-              setConfirmKind("soft");
-              setConfirmEmail("");
-            }}
-          >
-            Soft-Delete (Login sperren, Daten bleiben)
-          </button>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <button
+              type="button"
+              style={btnDanger}
+              onClick={() => {
+                setConfirmKind("cancel_ban");
+                setConfirmEmail("");
+              }}
+            >
+              {hasActiveStripeSub
+                ? "Sperren & Abo kündigen (Stripe sofort)"
+                : "Sperren (kein aktives Abo)"}
+            </button>
+
+            <button
+              type="button"
+              style={btnDanger}
+              onClick={() => {
+                setConfirmKind("soft");
+                setConfirmEmail("");
+              }}
+            >
+              Soft-Delete (Login sperren, Stripe unberührt)
+            </button>
+
+            <button
+              type="button"
+              style={{ ...btnDanger, background: "#7f1d1d" }}
+              onClick={() => {
+                setConfirmKind("hard");
+                setConfirmEmail("");
+              }}
+            >
+              Hard-Delete (alles weg, irreversibel)
+            </button>
+          </div>
         ) : (
           <form action={restoreUserAction} style={row}>
             <input type="hidden" name="userId" value={userId} />
             <button type="submit" style={btnPrimary}>
-              User wiederherstellen
+              User wiederherstellen (entbannt — Stripe-Abo wird NICHT reaktiviert)
             </button>
           </form>
         )}
 
-        <button
-          type="button"
-          style={{ ...btnDanger, marginLeft: 8, background: "#7f1d1d" }}
-          onClick={() => {
-            setConfirmKind("hard");
-            setConfirmEmail("");
-          }}
-        >
-          Hard-Delete (alles weg, irreversibel)
-        </button>
+        <p style={{ ...muted, fontSize: 12, margin: "12px 0 0" }}>
+          Hinweis: Aktive Login-Sessions können nach „Sperren" noch bis zu
+          ~1h weiterleben (JWT-Restlaufzeit). Token-Refresh ist sofort
+          blockiert, neuer Login auch — nur das aktuell ausgestellte
+          Access-Token läuft erst regulär ab.
+        </p>
       </section>
 
       {confirmKind ? (
@@ -246,12 +271,20 @@ export default function UserActions({
         >
           <div style={modalCard} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: "0 0 8px", fontSize: 18 }}>
-              {confirmKind === "soft" ? "Soft-Delete bestätigen" : "Hard-Delete bestätigen"}
+              {confirmKind === "soft"
+                ? "Soft-Delete bestätigen"
+                : confirmKind === "hard"
+                  ? "Hard-Delete bestätigen"
+                  : "Sperren & Abo kündigen bestätigen"}
             </h3>
             <p style={{ margin: "0 0 12px", fontSize: 14, color: "#444" }}>
               {confirmKind === "soft"
-                ? 'Login wird gesperrt, Daten bleiben in der DB. Reversibel über „Wiederherstellen".'
-                : "Der Account UND alle Mahlzeiten / Insulin / CGM-Credentials werden unwiderruflich gelöscht."}
+                ? 'Login wird gesperrt, Daten bleiben in der DB. Stripe-Abo läuft normal weiter. Reversibel über „Wiederherstellen".'
+                : confirmKind === "hard"
+                  ? "Der Account UND alle Mahlzeiten / Insulin / CGM-Credentials werden unwiderruflich gelöscht."
+                  : hasActiveStripeSub
+                    ? "Stripe-Subscription wird SOFORT gekündigt (kein period-end Grace) UND Login gesperrt. Reversibel — aber Stripe-Abo muss der User selbst neu abschließen."
+                    : 'Kein aktives Stripe-Abo gefunden — nur Login wird gesperrt. Reversibel über „Wiederherstellen".'}
             </p>
             <p style={{ margin: "0 0 8px", fontSize: 13, color: "#666" }}>
               Tippe zur Bestätigung die volle E-Mail des Users:
@@ -267,7 +300,13 @@ export default function UserActions({
               style={{ ...input, width: "100%", marginBottom: 12 }}
             />
             <form
-              action={confirmKind === "soft" ? softDeleteAction : hardDeleteAction}
+              action={
+                confirmKind === "soft"
+                  ? softDeleteAction
+                  : confirmKind === "hard"
+                    ? hardDeleteAction
+                    : cancelAndBanAction
+              }
               style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}
             >
               <input type="hidden" name="userId" value={userId} />
@@ -293,7 +332,12 @@ export default function UserActions({
                   background: confirmKind === "hard" ? "#7f1d1d" : "#b91c1c",
                 }}
               >
-                {confirmKind === "soft" ? "Soft-Delete" : "Hard-Delete"} bestätigen
+                {confirmKind === "soft"
+                  ? "Soft-Delete"
+                  : confirmKind === "hard"
+                    ? "Hard-Delete"
+                    : "Sperren & Kündigen"}{" "}
+                bestätigen
               </button>
             </form>
           </div>
