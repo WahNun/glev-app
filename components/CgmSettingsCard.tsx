@@ -88,6 +88,7 @@ const label: React.CSSProperties = {
 
 export default function CgmSettingsCard() {
   const tAh = useTranslations("cgmSettings.appleHealth");
+  const t = useTranslations("cgmSettings");
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [statusError, setStatusError] = useState("");
@@ -200,17 +201,17 @@ export default function CgmSettingsCard() {
       const res = await fetch("/api/cgm/status", { cache: "no-store" });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body?.error || `Fehler ${res.status}`);
+        throw new Error(body?.error || t("errors.http", { status: res.status }));
       }
       const data = (await res.json()) as StatusResponse;
       setStatus(data);
       setShowForm(!data.connected);
     } catch (e) {
-      setStatusError(e instanceof Error ? e.message : "Unbekannter Fehler");
+      setStatusError(e instanceof Error ? e.message : t("errors.unknown"));
     } finally {
       setLoadingStatus(false);
     }
-  }, []);
+  }, [t]);
 
   // Junction state fetcher — silent on error (the route itself returns
   // { connected: false } for any failure, so 5xx here is genuine network/auth
@@ -334,22 +335,22 @@ export default function CgmSettingsCard() {
     if (flag === "connected") {
       setCgmType("libreview-junction");
       setShowForm(true);
-      setJunctionMessage({ kind: "success", text: "LibreView verbunden — Glev liest jetzt deine Werte." });
+      setJunctionMessage({ kind: "success", text: t("junction.callback_success") });
       void loadJunctionState();
       const url = new URL(window.location.href);
       url.searchParams.delete("cgm");
       window.history.replaceState({}, "", url.toString());
     } else if (flag === "error") {
-      const detail = params.get("detail") || "Unbekannter Fehler";
+      const detail = params.get("detail") || t("errors.unknown");
       setCgmType("libreview-junction");
       setShowForm(true);
-      setJunctionMessage({ kind: "error", text: `LibreView-Verbindung abgebrochen: ${detail}` });
+      setJunctionMessage({ kind: "error", text: t("junction.callback_error", { detail }) });
       const url = new URL(window.location.href);
       url.searchParams.delete("cgm");
       url.searchParams.delete("detail");
       window.history.replaceState({}, "", url.toString());
     }
-  }, [loadJunctionState]);
+  }, [loadJunctionState, t]);
 
   function validateEmail(s: string) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
@@ -366,7 +367,7 @@ export default function CgmSettingsCard() {
     setFormError("");
     setFormSuccess("");
     if (cgmType !== "librelinkup") {
-      setFormError("Dieser CGM-Typ ist noch nicht verfügbar.");
+      setFormError(t("form.type_unavailable"));
       return;
     }
     // Inline-first validation: route field errors back to the per-field
@@ -375,16 +376,16 @@ export default function CgmSettingsCard() {
     // reserved for true server failures.
     let invalid = false;
     if (!validateEmail(email)) {
-      setEmailError("Bitte eine gültige E-Mail-Adresse eingeben.");
+      setEmailError(t("form.email_invalid"));
       invalid = true;
     }
     if (!validatePassword(password)) {
-      setPasswordError("Passwort darf nicht leer sein.");
+      setPasswordError(t("form.password_empty"));
       invalid = true;
     }
     if (invalid) return;
     if (region !== "EU" && region !== "US") {
-      setFormError("Region muss EU oder US sein.");
+      setFormError(t("form.region_invalid"));
       return;
     }
     setSubmitting(true);
@@ -397,15 +398,15 @@ export default function CgmSettingsCard() {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body?.error || `Fehler ${res.status}`);
+        throw new Error(body?.error || t("errors.http", { status: res.status }));
       }
-      setFormSuccess(`Verbunden als ${email}`);
+      setFormSuccess(t("form.connected_as", { email }));
       setPassword("");
       await loadStatus();
       setShowForm(false);
       setTimeout(() => setFormSuccess(""), 4000);
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Speichern fehlgeschlagen");
+      setFormError(err instanceof Error ? err.message : t("form.save_failed"));
     } finally {
       setSubmitting(false);
     }
@@ -417,12 +418,12 @@ export default function CgmSettingsCard() {
     try {
       const res = await fetch("/api/cgm/latest", { cache: "no-store" });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body?.error || `Fehler ${res.status}`);
+      if (!res.ok) throw new Error(body?.error || t("errors.http", { status: res.status }));
       const cur = (body as LatestResponse).current;
-      if (!cur || cur.value == null) throw new Error("Keine Werte erhalten");
+      if (!cur || cur.value == null) throw new Error(t("errors.test_no_values"));
       setTestResult({ ok: true, msg: `${cur.value} mg/dL · ${cur.trend}` });
     } catch (err) {
-      setTestResult({ ok: false, msg: err instanceof Error ? err.message : "Fehler" });
+      setTestResult({ ok: false, msg: err instanceof Error ? err.message : t("errors.test_generic") });
     } finally {
       setTesting(false);
     }
@@ -454,14 +455,14 @@ export default function CgmSettingsCard() {
             : body.detail
             ? JSON.stringify(body.detail)
             : "";
-        const msg = body.error || `Fehler ${res.status}`;
+        const msg = body.error || t("errors.http", { status: res.status });
         throw new Error(detailText ? `${msg}: ${detailText}` : msg);
       }
       window.location.href = body.link_url;
     } catch (err) {
       setJunctionMessage({
         kind: "error",
-        text: err instanceof Error ? err.message : "Verbindung fehlgeschlagen",
+        text: err instanceof Error ? err.message : t("errors.connection_failed"),
       });
       setJunctionConnecting(false);
     }
@@ -473,7 +474,7 @@ export default function CgmSettingsCard() {
     if (!/^https?:\/\//i.test(url)) {
       setNightscoutMessage({
         kind: "error",
-        text: "URL muss mit http:// oder https:// beginnen.",
+        text: t("nightscout.url_invalid"),
       });
       return;
     }
@@ -495,7 +496,7 @@ export default function CgmSettingsCard() {
         current?: { value: number | null } | null;
         error?: string;
       };
-      if (!res.ok) throw new Error(body?.error || `Fehler ${res.status}`);
+      if (!res.ok) throw new Error(body?.error || t("errors.http", { status: res.status }));
       setNightscoutConnected(true);
       // Update hasToken flag: if user just sent a token OR they preserved
       // an existing one, we have a token now.
@@ -507,13 +508,13 @@ export default function CgmSettingsCard() {
         kind: "success",
         text:
           cur?.value != null
-            ? `✓ Verbunden — letzter Wert: ${cur.value} mg/dL`
-            : "✓ Verbunden — noch keine Werte verfügbar.",
+            ? t("nightscout.connected_value", { value: cur.value })
+            : t("nightscout.connected_no_value"),
       });
     } catch (err) {
       setNightscoutMessage({
         kind: "error",
-        text: err instanceof Error ? err.message : "Verbindung fehlgeschlagen",
+        text: err instanceof Error ? err.message : t("errors.connection_failed"),
       });
     } finally {
       setNightscoutSubmitting(false);
@@ -521,7 +522,7 @@ export default function CgmSettingsCard() {
   }
 
   async function handleNightscoutDisconnect() {
-    if (!confirm("Nightscout-Verbindung wirklich trennen?")) return;
+    if (!confirm(t("nightscout.disconnect_confirm"))) return;
     setNightscoutSubmitting(true);
     try {
       const res = await fetch("/api/cgm/nightscout/sync", {
@@ -529,7 +530,7 @@ export default function CgmSettingsCard() {
         cache: "no-store",
       });
       const body = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) throw new Error(body?.error || `Fehler ${res.status}`);
+      if (!res.ok) throw new Error(body?.error || t("errors.http", { status: res.status }));
       setNightscoutConnected(false);
       setNightscoutHasToken(false);
       setNightscoutUrl("");
@@ -539,7 +540,7 @@ export default function CgmSettingsCard() {
     } catch (err) {
       setNightscoutMessage({
         kind: "error",
-        text: err instanceof Error ? err.message : "Trennen fehlgeschlagen",
+        text: err instanceof Error ? err.message : t("errors.disconnect_failed"),
       });
     } finally {
       setNightscoutSubmitting(false);
@@ -700,7 +701,7 @@ export default function CgmSettingsCard() {
     if (!isNativePlatform) {
       setStepsBackfillResult({
         kind: "error",
-        text: "Verfügbar nur in der iOS-App.",
+        text: t("steps.only_ios"),
       });
       return;
     }
@@ -725,22 +726,27 @@ export default function CgmSettingsCard() {
           text:
             res.error ||
             (res.reason === "no-permission"
-              ? "Zugriff auf Apple Health nicht erlaubt."
-              : "Backfill fehlgeschlagen."),
+              ? t("steps.no_permission")
+              : t("steps.failed")),
         });
       } else {
         setStepsBackfillResult({
           kind: "success",
           text:
             res.days > 0
-              ? `✓ ${res.days} Tage Schritt-Historie importiert (bis ca. ${Math.round(res.daysCovered)} Tage zurück).`
-              : `✓ Keine weiteren Schritt-Daten in Apple Health gefunden (bis ca. ${Math.round(res.daysCovered)} Tage zurück geprüft).`,
+              ? t("steps.success_with_count", {
+                  days: res.days,
+                  daysCovered: Math.round(res.daysCovered),
+                })
+              : t("steps.success_empty", {
+                  daysCovered: Math.round(res.daysCovered),
+                }),
         });
       }
     } catch (err) {
       setStepsBackfillResult({
         kind: "error",
-        text: err instanceof Error ? err.message : "Backfill fehlgeschlagen",
+        text: err instanceof Error ? err.message : t("steps.failed"),
       });
     } finally {
       setStepsBackfillRunning(false);
@@ -782,12 +788,7 @@ export default function CgmSettingsCard() {
   }
 
   async function handleDisconnect() {
-    if (
-      !confirm(
-        "Verbindung zu LibreLinkUp wirklich trennen? Du kannst sie jederzeit neu einrichten.",
-      )
-    )
-      return;
+    if (!confirm(t("status.disconnect_confirm"))) return;
     setDisconnecting(true);
     setStatusError("");
     try {
@@ -797,14 +798,14 @@ export default function CgmSettingsCard() {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body?.error || `Fehler ${res.status}`);
+        throw new Error(body?.error || t("errors.http", { status: res.status }));
       }
       setTestResult(null);
       setEmail("");
       setPassword("");
       await loadStatus();
     } catch (err) {
-      setStatusError(err instanceof Error ? err.message : "Trennen fehlgeschlagen");
+      setStatusError(err instanceof Error ? err.message : t("errors.disconnect_failed"));
     } finally {
       setDisconnecting(false);
     }
@@ -817,15 +818,15 @@ export default function CgmSettingsCard() {
       {/* STATUS CARD */}
       <div style={card}>
         <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>
-          CGM-Verbindung
+          {t("status.title")}
         </div>
 
         {loadingStatus ? (
           <div style={{ fontSize: 14, color: "var(--text-dim)" }}>
-            Status wird geladen…
+            {t("status.loading")}
           </div>
         ) : statusError ? (
-          <div style={{ fontSize: 14, color: PINK }}>Fehler: {statusError}</div>
+          <div style={{ fontSize: 14, color: PINK }}>{t("status.error_prefix", { message: statusError })}</div>
         ) : connected ? (
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
@@ -840,7 +841,7 @@ export default function CgmSettingsCard() {
                 }}
               />
               <div style={{ fontSize: 14, fontWeight: 600 }}>
-                Verbunden mit LibreLinkUp
+                {t("status.connected_libre")}
               </div>
             </div>
             {/* Session-Health-Indicator */}
@@ -849,25 +850,25 @@ export default function CgmSettingsCard() {
               if (!h || h === "never_tested") {
                 return (
                   <div style={{ fontSize: 13, color: "var(--text-faint)", marginBottom: 14 }}>
-                    Noch nie getestet – klicke "Verbindung testen" um den Status zu prüfen.
+                    {t("status.session_never_tested")}
                   </div>
                 );
               }
               const cfg: Record<string, { color: string; label: string }> = {
-                active:        { color: GREEN,    label: "Session aktiv" },
-                expiring_soon: { color: "#FF9500", label: "Session läuft bald ab – bitte testen" },
-                expired:       { color: PINK,     label: "Session abgelaufen – bitte erneut verbinden" },
+                active:        { color: GREEN,    label: t("status.session_active") },
+                expiring_soon: { color: "#FF9500", label: t("status.session_expiring_soon") },
+                expired:       { color: PINK,     label: t("status.session_expired") },
               };
               const { color, label } = cfg[h] ?? cfg.expired;
               const expiresAt = status?.tokenExpiresAt ? new Date(status.tokenExpiresAt) : null;
               const diffMin = expiresAt ? Math.round((expiresAt.getTime() - Date.now()) / 60_000) : null;
               const suffix =
                 h === "active" && diffMin !== null && diffMin > 0
-                  ? ` (noch ${diffMin} min)`
+                  ? t("status.session_in_min", { min: diffMin })
                   : h === "expiring_soon" && diffMin !== null && diffMin > 0
-                  ? ` (noch ${diffMin} min)`
+                  ? t("status.session_in_min", { min: diffMin })
                   : h === "expired" && diffMin !== null
-                  ? ` (vor ${Math.abs(diffMin)} min)`
+                  ? t("status.session_ago_min", { min: Math.abs(diffMin) })
                   : "";
               return (
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 14 }}>
@@ -879,11 +880,11 @@ export default function CgmSettingsCard() {
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
               <div style={{ background: "var(--surface-soft)", borderRadius: 10, padding: "12px 14px" }}>
-                <div style={{ fontSize: 13, color: "var(--text-faint)", marginBottom: 4 }}>E-Mail</div>
+                <div style={{ fontSize: 13, color: "var(--text-faint)", marginBottom: 4 }}>{t("status.field_email")}</div>
                 <div style={{ fontSize: 14, fontWeight: 600, wordBreak: "break-all" }}>{status?.email}</div>
               </div>
               <div style={{ background: "var(--surface-soft)", borderRadius: 10, padding: "12px 14px" }}>
-                <div style={{ fontSize: 13, color: "var(--text-faint)", marginBottom: 4 }}>Region</div>
+                <div style={{ fontSize: 13, color: "var(--text-faint)", marginBottom: 4 }}>{t("status.field_region")}</div>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{status?.region}</div>
               </div>
             </div>
@@ -900,7 +901,7 @@ export default function CgmSettingsCard() {
                   color: testResult.ok ? GREEN : PINK,
                 }}
               >
-                {testResult.ok ? "Letzter Wert: " : "Fehler: "}
+                {testResult.ok ? t("status.last_value_prefix") : t("status.error_inline_prefix")}
                 {testResult.msg}
               </div>
             )}
@@ -921,7 +922,7 @@ export default function CgmSettingsCard() {
                   opacity: testing ? 0.6 : 1,
                 }}
               >
-                {testing ? "Teste…" : "Verbindung testen"}
+                {testing ? t("status.btn_testing") : t("status.btn_test")}
               </button>
               <button
                 onClick={() => {
@@ -940,7 +941,7 @@ export default function CgmSettingsCard() {
                   fontWeight: 500,
                 }}
               >
-                {showForm ? "Abbrechen" : "Zugangsdaten ändern"}
+                {showForm ? t("status.btn_cancel") : t("status.btn_change_credentials")}
               </button>
               <button
                 onClick={handleDisconnect}
@@ -957,7 +958,7 @@ export default function CgmSettingsCard() {
                   opacity: disconnecting ? 0.6 : 1,
                 }}
               >
-                {disconnecting ? "Trenne…" : "Verbindung trennen"}
+                {disconnecting ? t("status.btn_disconnecting") : t("status.btn_disconnect")}
               </button>
             </div>
           </div>
@@ -973,11 +974,10 @@ export default function CgmSettingsCard() {
                   background: "var(--text-ghost)",
                 }}
               />
-              <div style={{ fontSize: 14, fontWeight: 600 }}>Nicht verbunden</div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>{t("status.not_connected")}</div>
             </div>
             <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5 }}>
-              Verbinde dein LibreLinkUp-Konto unten, damit Glev deine Glukosewerte
-              automatisch abrufen kann.
+              {t("status.not_connected_hint")}
             </div>
           </div>
         )}
@@ -995,7 +995,7 @@ export default function CgmSettingsCard() {
               color: "var(--text-strong)",
             }}
           >
-            Was ist LibreLinkUp und was brauche ich?
+            {t("help.summary")}
           </summary>
           <div
             style={{
@@ -1009,25 +1009,22 @@ export default function CgmSettingsCard() {
             }}
           >
             <p style={{ margin: 0 }}>
-              <strong style={{ color: "var(--text-strong)" }}>LibreLinkUp</strong> ist die
-              Follower-App von Abbott. Glev nutzt sie, um deine Glukosewerte
-              anzuzeigen.
+              <strong style={{ color: "var(--text-strong)" }}>{t("help.p1_app")}</strong>{" "}
+              {t("help.p1_text")}
             </p>
             <p style={{ margin: 0 }}>
-              <strong style={{ color: "var(--text-strong)" }}>Voraussetzung:</strong> Du
-              hast die LibreLink-App mit deinem Sensor eingerichtet UND in der
-              LibreLink-App eine Verbindung zu einem LibreLinkUp-Konto geteilt
-              (Einstellungen → Konten → LibreLinkUp → Follower hinzufügen).
+              <strong style={{ color: "var(--text-strong)" }}>{t("help.p2_label")}</strong>{" "}
+              {t("help.p2_text")}
             </p>
             <p style={{ margin: 0 }}>
-              In dieses Formular gibst du die <strong style={{ color: "var(--text-strong)" }}>
-                E-Mail und das Passwort des LibreLinkUp-Follower-Kontos
+              {t("help.p3_intro")}{" "}
+              <strong style={{ color: "var(--text-strong)" }}>
+                {t("help.p3_strong")}
               </strong>{" "}
-              ein – nicht die deines Haupt-LibreLink-Kontos.
+              {t("help.p3_outro")}
             </p>
             <p style={{ margin: 0, fontSize: 13, color: "var(--text-dim)" }}>
-              Hinweis zur Sicherheit: Das Passwort wird serverseitig mit
-              AES-256-GCM verschlüsselt gespeichert.
+              {t("help.security")}
             </p>
           </div>
         </details>
@@ -1037,12 +1034,12 @@ export default function CgmSettingsCard() {
       {showForm && (
         <form onSubmit={handleSubmit} style={card}>
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>
-            {connected ? "Zugangsdaten ändern" : "Zugangsdaten eingeben"}
+            {connected ? t("form.title_change") : t("form.title_enter")}
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div>
-              <label style={label} htmlFor="cgm-type">CGM-Typ</label>
+              <label style={label} htmlFor="cgm-type">{t("form.label_cgm_type")}</label>
               <select
                 id="cgm-type"
                 value={cgmType}
@@ -1050,20 +1047,20 @@ export default function CgmSettingsCard() {
                 style={inp}
               >
                 <option value="librelinkup">LibreLinkUp</option>
-                <option value="libreview-junction">LibreView (Junction) — Bald verfügbar</option>
+                <option value="libreview-junction">{t("form.option_junction_coming_soon")}</option>
                 <option value="nightscout">Nightscout</option>
                 <option value="apple-health" disabled={!isNativePlatform}>
                   {tAh("dropdown_option")}
                   {isNativePlatform ? "" : tAh("dropdown_option_ios_only_suffix")}
                 </option>
-                <option value="dexcom" disabled>Dexcom (bald verfügbar)</option>
+                <option value="dexcom" disabled>{t("form.option_dexcom_coming_soon")}</option>
               </select>
             </div>
 
             {cgmType === "librelinkup" && (
               <>
                 <div>
-                  <label style={label} htmlFor="cgm-email">LibreLinkUp E-Mail</label>
+                  <label style={label} htmlFor="cgm-email">{t("form.label_email")}</label>
                   <input
                     id="cgm-email"
                     style={{
@@ -1082,7 +1079,7 @@ export default function CgmSettingsCard() {
                     }}
                     onBlur={() => {
                       if (email.length > 0 && !validateEmail(email)) {
-                        setEmailError("Bitte eine gültige E-Mail-Adresse eingeben.");
+                        setEmailError(t("form.email_invalid"));
                       }
                     }}
                     aria-invalid={!!emailError}
@@ -1097,7 +1094,7 @@ export default function CgmSettingsCard() {
                   )}
                 </div>
                 <div>
-                  <label style={label} htmlFor="cgm-password">LibreLinkUp Passwort</label>
+                  <label style={label} htmlFor="cgm-password">{t("form.label_password")}</label>
                   <input
                     id="cgm-password"
                     style={{
@@ -1113,7 +1110,7 @@ export default function CgmSettingsCard() {
                     }}
                     onBlur={() => {
                       if (!validatePassword(password)) {
-                        setPasswordError("Passwort darf nicht leer sein.");
+                        setPasswordError(t("form.password_empty"));
                       }
                     }}
                     aria-invalid={!!passwordError}
@@ -1127,7 +1124,7 @@ export default function CgmSettingsCard() {
                   )}
                 </div>
                 <div>
-                  <label style={label} htmlFor="cgm-region">Region</label>
+                  <label style={label} htmlFor="cgm-region">{t("form.label_region")}</label>
                   <select
                     id="cgm-region"
                     value={region}
@@ -1155,7 +1152,7 @@ export default function CgmSettingsCard() {
                     marginTop: 4,
                   }}
                 >
-                  {submitting ? "Verbinde…" : "Speichern & verbinden"}
+                  {submitting ? t("form.btn_saving") : t("form.btn_submit")}
                 </button>
                 {formError && (
                   <div style={{ fontSize: 14, color: PINK, marginTop: 4 }}>{formError}</div>
@@ -1196,13 +1193,10 @@ export default function CgmSettingsCard() {
                       padding: "3px 9px",
                     }}
                   >
-                    Bald verfügbar
+                    {t("junction.badge_coming_soon")}
                   </span>
                   <span>
-                    Verbinde dein LibreView-Konto über Junction. Du wirst kurz auf
-                    die Junction-Seite weitergeleitet, meldest dich dort mit deinen
-                    LibreView-Zugangsdaten an, und kommst danach zurück. Glev liest
-                    dann deinen aktuellen Glukosewert automatisch in den Engine-Tab.
+                    {t("junction.description")}
                   </span>
                 </div>
                 {junctionState?.connected && junctionState.glucose != null && (
@@ -1216,7 +1210,7 @@ export default function CgmSettingsCard() {
                       padding: "10px 14px",
                     }}
                   >
-                    ✓ Verbunden — letzter Wert: {junctionState.glucose} mg/dL
+                    {t("junction.connected_value", { value: junctionState.glucose })}
                   </div>
                 )}
                 {/* Junction integration is feature-frozen for now — button is
@@ -1231,7 +1225,7 @@ export default function CgmSettingsCard() {
                   onClick={handleJunctionConnect}
                   disabled
                   aria-disabled="true"
-                  title="Bald verfügbar"
+                  title={t("junction.badge_coming_soon")}
                   style={{
                     padding: "12px 18px",
                     borderRadius: 12,
@@ -1246,7 +1240,7 @@ export default function CgmSettingsCard() {
                     marginTop: 4,
                   }}
                 >
-                  Bald verfügbar
+                  {t("junction.badge_coming_soon")}
                 </button>
                 {junctionMessage && (
                   <div
@@ -1275,10 +1269,7 @@ export default function CgmSettingsCard() {
                     padding: "12px 14px",
                   }}
                 >
-                  Verbinde dein Nightscout-Konto. Kompatibel mit Dexcom,
-                  FreeStyle Libre, Accu-Chek SmartGuide und anderen. Den Token
-                  findest du in deiner Nightscout-Adminoberfläche unter
-                  „Authorization → Subjects". Test-Instanz ohne Token:{" "}
+                  {t("nightscout.description_pre")}{" "}
                   <code
                     style={{
                       color: "var(--text-body)",
@@ -1293,7 +1284,7 @@ export default function CgmSettingsCard() {
 
                 <div>
                   <label style={label} htmlFor="ns-url">
-                    Nightscout URL
+                    {t("nightscout.label_url")}
                   </label>
                   <input
                     id="ns-url"
@@ -1308,14 +1299,14 @@ export default function CgmSettingsCard() {
 
                 <div>
                   <label style={label} htmlFor="ns-token">
-                    API Secret / Token{" "}
+                    {t("nightscout.label_token")}{" "}
                     {nightscoutHasToken && nightscoutConnected ? (
                       <span style={{ color: "var(--text-dim)" }}>
-                        — gespeichert (leer lassen um zu behalten)
+                        {t("nightscout.token_saved_hint")}
                       </span>
                     ) : (
                       <span style={{ color: "var(--text-dim)" }}>
-                        — optional
+                        {t("nightscout.token_optional_hint")}
                       </span>
                     )}
                   </label>
@@ -1326,8 +1317,8 @@ export default function CgmSettingsCard() {
                     onChange={(e) => setNightscoutToken(e.target.value)}
                     placeholder={
                       nightscoutHasToken
-                        ? "•••••••• (gespeichert)"
-                        : "Frei lassen wenn keiner gesetzt"
+                        ? t("nightscout.token_placeholder_saved")
+                        : t("nightscout.token_placeholder_empty")
                     }
                     style={inp}
                     autoComplete="off"
@@ -1345,7 +1336,7 @@ export default function CgmSettingsCard() {
                       padding: "10px 14px",
                     }}
                   >
-                    ✓ Verbunden — letzter Wert: {nightscoutLatest} mg/dL
+                    {t("nightscout.connected_value", { value: nightscoutLatest })}
                   </div>
                 )}
 
@@ -1368,10 +1359,10 @@ export default function CgmSettingsCard() {
                     }}
                   >
                     {nightscoutSubmitting
-                      ? "Verbinde…"
+                      ? t("nightscout.btn_connecting")
                       : nightscoutConnected
-                      ? "Aktualisieren"
-                      : "Verbinden"}
+                      ? t("nightscout.btn_update")
+                      : t("nightscout.btn_connect")}
                   </button>
                   {nightscoutConnected && (
                     <button
@@ -1389,7 +1380,7 @@ export default function CgmSettingsCard() {
                         cursor: nightscoutSubmitting ? "wait" : "pointer",
                       }}
                     >
-                      Trennen
+                      {t("nightscout.btn_disconnect")}
                     </button>
                   )}
                 </div>
@@ -1635,15 +1626,10 @@ export default function CgmSettingsCard() {
                       }}
                     >
                       <strong style={{ color: "var(--text)" }}>
-                        Schritt-Historie nachladen
+                        {t("steps.heading")}
                       </strong>
                       <div style={{ marginTop: 4 }}>
-                        Beim ersten Sync werden nur die letzten 30 Tage
-                        Schritte geholt. Mit diesem Knopf liest Glev deine
-                        älteren Apple-Health-Schrittdaten in 30-Tage-Schritten
-                        nach — so hat die „Tägliche Aktivität"-Kontext der
-                        Engine mehr Mustergrundlage. Mehrfaches Ausführen ist
-                        sicher (pro Tag überschreibt der neuere Wert).
+                        {t("steps.description")}
                       </div>
                     </div>
                     <div>
@@ -1651,7 +1637,7 @@ export default function CgmSettingsCard() {
                         type="button"
                         onClick={handleBackfillSteps}
                         disabled={!isNativePlatform || stepsBackfillRunning}
-                        title={!isNativePlatform ? "Nur in der iOS-App" : undefined}
+                        title={!isNativePlatform ? t("steps.ios_only_tooltip") : undefined}
                         style={{
                           padding: "10px 16px",
                           borderRadius: 10,
@@ -1669,16 +1655,18 @@ export default function CgmSettingsCard() {
                         }}
                       >
                         {stepsBackfillRunning
-                          ? "Lade ältere Schritte…"
-                          : "Schritt-Historie nachladen"}
+                          ? t("steps.btn_running")
+                          : t("steps.btn_idle")}
                       </button>
                     </div>
                     {stepsBackfillRunning && stepsBackfillProgress && (
                       <div style={{ fontSize: 13, color: "var(--text-dim)" }}>
-                        {stepsBackfillProgress.days} Tage importiert ·{" "}
-                        {stepsBackfillProgress.upserted} Einträge · ca.{" "}
-                        {stepsBackfillProgress.daysBack} Tage zurück
-                        {" "}({stepsBackfillProgress.chunks} Blöcke)
+                        {t("steps.progress", {
+                          days: stepsBackfillProgress.days,
+                          upserted: stepsBackfillProgress.upserted,
+                          daysBack: stepsBackfillProgress.daysBack,
+                          chunks: stepsBackfillProgress.chunks,
+                        })}
                       </div>
                     )}
                     {!stepsBackfillRunning && stepsBackfillResult && (
