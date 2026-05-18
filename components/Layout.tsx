@@ -424,7 +424,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         // border instead of kissing it. Top pad stays tight (4 px) —
         // the status-bar safe-area zone already separates the wordmark
         // from the clock/battery row above.
-        padding: "calc(env(safe-area-inset-top) + 4px) max(18px, env(safe-area-inset-right)) 10px max(18px, env(safe-area-inset-left))",
+        padding: "calc(env(safe-area-inset-top) + 4px) max(18px, env(safe-area-inset-right)) 4px max(18px, env(safe-area-inset-left))",
         background: SURFACE,
         borderBottom: `1px solid ${BORDER}`,
         alignItems: "center", justifyContent: "space-between",
