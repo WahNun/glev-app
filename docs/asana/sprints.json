@@ -1,0 +1,2272 @@
+{
+  "generated_at": "2026-05-18T23:48:15.198Z",
+  "workspace_gid": "1213452700618853",
+  "include_completed": false,
+  "sprints": [
+    {
+      "gid": "1214277281208518",
+      "name": "Glev — Sprint 1: Migration + Stripe Test-Mode",
+      "tasks": [
+        {
+          "gid": "1214918876412804",
+          "name": "FIX P0: Plus-Webhook → Supabase update für plus_subscription",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Glev+-Käufer sehen Confirmation-Screen, aber Webhook updated Supabase ggf. nicht korrekt mit plus_subscription. Wenn nicht gefixt: User hat kein aktives Plus-Abo in der DB.\n\nDiagnose:\nfind app/ -name \"*.ts\" | xargs grep -l \"webhook\\|checkout.session.completed\" 2>/dev/null | grep -v node_modules\ngrep -n \"plus_subscription\\|STRIPE_PLUS_PRICE_ID\" <webhook-datei>\n\nFix:\n1. Price-ID Matching: STRIPE_PLUS_PRICE_ID + STRIPE_PLUS_PRICE_ID_US müssen als Case erkannt werden → plan = 'plus_subscription'\n2. Supabase-Update für plus_subscription ergänzen (analog pro_subscription):\n   await supabase.from('profiles').update({ subscription_type: 'plus_subscription', subscription_active: true }).eq('id', userId)\n\nVerify:\ngrep -n \"plus_subscription\\|STRIPE_PLUS_PRICE_ID\" <webhook-datei>\n→ Beide env vars + Supabase-Update vorhanden.\n\nCommit: git add -A && git commit -m \"fix: webhook handles plus_subscription -> supabase update\" && git push origin main"
+        },
+        {
+          "gid": "1214918945284677",
+          "name": "FIX P0: messages/en.json — $4.50 / $24.90 Strings bereinigen",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Alle alten Preisangaben aus messages/en.json entfernen.\n\nPrompt für Replit Agent:\n\ngrep -n \"4\\.50\\|4\\.90\\|24\\.90\" messages/en.json\n\nErsatz-Logik:\n- $4.50 / $4.90 → entfernen oder durch \"$9\" ersetzen (je nach Kontext)\n- $24.90 → \"$19\" (Launch) oder \"$14.90\" (Early Access) — Kontext prüfen\n- Preisstufentexte wie \"First 3 months $4.50, then $9\" → \"From July 1: $9/month\"\n\nVerify:\ngrep -n \"4\\.50\\|4\\.90\\|24\\.90\" messages/en.json\n→ Keine Ausgabe.\n\nCommit: git add messages/en.json && git commit -m \"fix: remove legacy $4.50 / $24.90 strings from en.json\" && git push origin main"
+        },
+        {
+          "gid": "1214917855719900",
+          "name": "[Stripe] STRIPE_PLUS_PRICE_ID in Vercel + Replit als neues Secret anlegen",
+          "completed": false,
+          "due_on": "2026-05-23",
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Backlog",
+          "notes": "Voraussetzung: Glev+ Produkt + EUR Price ID vorhanden.\n\nSCHRITTE:\n1. Vercel: Project Settings → Environment Variables → STRIPE_PLUS_PRICE_ID (neu) mit EUR price_xxx anlegen → Save → Redeploy\n2. Replit: Secrets Tab → STRIPE_PLUS_PRICE_ID anlegen\n3. Optional: STRIPE_PLUS_PRICE_ID_US für USD falls US-Checkout separat"
+        },
+        {
+          "gid": "1214917710907872",
+          "name": "[Stripe] Early Access Coupon — 50% Rabatt erste 3 Monate anlegen",
+          "completed": false,
+          "due_on": "2026-05-25",
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Backlog",
+          "notes": "COUPON-DETAILS:\n- Rabatt: 50% für genau 3 Monate\n- Code: EARLYACCESS50 (oder auto-generiert)\n- Gültigkeit: bis 30. Juni 2026\n\nSCHRITTE:\n1. Stripe → Gutscheine → Neuen Coupon erstellen\n2. Typ: Prozentsatz, Wert: 50%, Dauer: 3 Monate\n3. Coupon-ID notieren\n4. In Replit Secrets: STRIPE_BETA_COUPON_ID befüllen (Secret existiert bereits laut Screenshot)\n\nHINWEIS: Gilt für Glev Smart (€4,50 statt €9 in den ersten 3 Monaten)."
+        },
+        {
+          "gid": "1214917731524638",
+          "name": "[Stripe] Glev Pro — neue Price ID €14,90/Mo EUR anlegen + alte archivieren",
+          "completed": false,
+          "due_on": "2026-05-22",
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Backlog",
+          "notes": "SCHRITTE:\n1. Stripe Dashboard → Produktkatalog → Glev Beta Access (EUR)\n2. Neuen Preis hinzufügen: €14,90 / Monat / EUR / wiederkehrend\n3. Alten Preis (€24,90) archivieren (nicht löschen)\n4. Neue price_xxx ID notieren — nötig für Vercel/Replit Update\n\nPRODUKTBESCHREIBUNG (Stripe):\nGlev Pro — Lifetime Lock für Typ-1-Diabetiker. Sprachlogging, KI-Bolusvorschlag der aus deiner eigenen Geschichte lernt, CGM-Integration, 60 Tage Datenhistorie, direkter Kontakt zum Gründer. Preis bleibt dauerhaft gesperrt.\n\nMARKETING-FUNKTIONSLISTE:\n1. Sprechen statt tippen — Voice-Logging\n2. KI-Bolusvorschlag lernt aus deiner Geschichte\n3. CGM-Integration (Libre 2 + 3, Nightscout)\n4. 60 Tage Datenhistorie\n5. Direkter Draht zum Gründer"
+        },
+        {
+          "gid": "1214917855719743",
+          "name": "[Stripe] Glev+ Produkt anlegen — EUR + USD Preise",
+          "completed": false,
+          "due_on": "2026-05-22",
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Backlog",
+          "notes": "PRODUKTNAME: Glev+\n\nBESCHREIBUNG DE:\nGlev+ — Premium Early Access für Typ-1-Diabetiker. Alles aus Glev Pro plus automatische Arztgespräch-Vorbereitung (PDF-Report in 3 Minuten), Caregiver-Ansicht (in Vorbereitung) und direkter Draht zum Gründer. Lifetime Lock: dein Einstiegspreis bleibt für immer.\n\nBESCHREIBUNG EN:\nGlev+ — Premium Early Access for Type 1 diabetics. Everything in Glev Pro plus automated doctor visit prep (PDF report in 3 minutes), caregiver view (coming soon), and direct line to the founder. Lifetime Lock: your early price stays forever.\n\nMARKETING-FUNKTIONSLISTE DE:\n1. Alles aus Glev Pro\n2. Arztgespräch in 3 Min vorbereitet (PDF-Report)\n3. Caregiver-Ansicht (in Vorbereitung)\n4. Direkter Draht zum Gründer\n5. Lifetime Lock — Preis bleibt für immer\n\nMARKETING-FUNKTIONSLISTE EN:\n1. Everything in Glev Pro\n2. Doctor visit prep in 3 min (PDF report)\n3. Caregiver view (coming soon)\n4. Direct line to the founder\n5. Lifetime Lock — price stays forever\n\nPREISE ANLEGEN:\n- EUR: €29,00 / Monat / wiederkehrend\n- USD: $32,00 / month / recurring\n- Beide price_xxx IDs notieren"
+        },
+        {
+          "gid": "1214917778580693",
+          "name": "[Replit] /api/plus/checkout/ Route bauen",
+          "completed": false,
+          "due_on": "2026-05-25",
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Backlog",
+          "notes": "Neue API Route analog zu /api/pro/checkout/route.ts.\nVerwendet STRIPE_PLUS_PRICE_ID statt STRIPE_PRO_PRICE_ID.\n\nREPLIT AGENT PROMPT:\nCreate app/api/plus/checkout/route.ts identical in structure to app/api/pro/checkout/route.ts but using process.env.STRIPE_PLUS_PRICE_ID. Also wire the Glev+ CTA button to POST to /api/plus/checkout.\n\nVoraussetzung: STRIPE_PLUS_PRICE_ID in Vercel + Replit gesetzt."
+        },
+        {
+          "gid": "1214917731687779",
+          "name": "[Stripe] STRIPE_PRO_PRICE_ID in Vercel + Replit updaten",
+          "completed": false,
+          "due_on": "2026-05-22",
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Backlog",
+          "notes": "Voraussetzung: neue €14,90 Price ID vorhanden.\n\nSCHRITTE:\n1. Vercel: Project Settings → Environment Variables → STRIPE_PRO_PRICE_ID auf neue price_xxx setzen → Save → Redeploy\n2. Replit: Secrets Tab → STRIPE_PRO_PRICE_ID auf denselben Wert updaten\n\nOhne diesen Schritt bucht der Checkout noch den alten Preis."
+        },
+        {
+          "gid": "1214916572403502",
+          "name": "[Glev+] Backend: account_shares Tabelle + Share-Token-Generierung",
+          "completed": false,
+          "due_on": "2026-06-07",
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Backlog",
+          "notes": "Voraussetzung: Scope-Entscheidung aus Analyse-Task.\n\nWenn Option A (Caregiver View):\n- Supabase Migration: account_shares(id, owner_id, viewer_id, token uuid, created_at, accepted_at, expires_at)\n- RLS: owner kann eigene shares sehen + löschen; viewer kann bei accepted_at != null lesen\n- API Route: POST /api/share/create → generiert token, gibt Share-URL zurück\n- API Route: GET /api/share/accept?token=xxx → verknüpft viewer-account\n- API Route: DELETE /api/share/:id → owner löscht share\n\nGestimated: 2-3 Tage"
+        },
+        {
+          "gid": "1214916577067590",
+          "name": "[Glev+] Familienzugang — Scope & Architektur definieren",
+          "completed": false,
+          "due_on": "2026-05-25",
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Backlog",
+          "notes": "Bevor wir bauen: klären was genau 'Familienzugang' für Typ-1-Diabetiker bedeutet.\n\nOptionen:\nA) Caregiver-View (read-only): Partner/Elternteil sieht Glucose, Mahlzeiten, Control Score in Echtzeit — kein eigenes Logging\nB) Multi-User-Konto: mehrere Nutzer loggen unter 1 Abo — z.B. zwei Typ-1er in einer Familie\nC) Beides\n\nEmpfehlung Option A für Juli 1 — deutlich einfacher.\n\nInfrastruktur für Option A:\n- Tabelle: account_shares (owner_user_id, viewer_user_id, share_token, accepted_at)\n- Share-Link generieren (z.B. glev.app/join?token=xxx)\n- Viewer-Auth: eigener Glev-Account oder anonym?\n- Read-only Dashboard View für den Viewer\n- Keine eigene Billing-Verknüpfung nötig\n\nInfrastruktur für Option B (komplexer):\n- Tabelle: account_members (primary_user_id, member_user_id, role, invited_at)\n- Invite-per-Email Flow\n- Subscription-Check: member erbt Abo von primary\n- Eigenes Logging pro Member mit getrennten Daten\n- UI: Mitglieder verwalten in Einstellungen\n\nDue: Entscheidung bis 25. Mai"
+        },
+        {
+          "gid": "1214916734160769",
+          "name": "[Glev+] 'Direkter Draht zum Gründer' — Kanal einrichten",
+          "completed": false,
+          "due_on": "2026-05-22",
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Backlog",
+          "notes": "Einfachste Feature-Implementierung: Glev+ Subscriber kriegen einen direkten Kontaktweg zu Lucas.\n\nOptionen (aufsteigend komplex):\nA) Email-Alias: lucas+plus@glev.app — weiterleitung zu normalem Postfach (1h Setup)\nB) Telegram-Link: persönlicher Telegram-Link, nur an Glev+ Subscriber ausgegeben (1h Setup)\nC) Dedicated Slack-Workspace für Glev+ User (2-3h Setup)\n\nEmpfehlung: Option B oder C — Telegram Link ist am einfachsten.\nIn App: nur sichtbar wenn subscription_tier === 'plus'\nIn Einstellungen-Seite einbauen.\n\nDue: 22. Mai — diese Woche erledigen"
+        },
+        {
+          "gid": "1214916577067526",
+          "name": "[Glev+] PDF-Report: Produktionsbereitschaft prüfen",
+          "completed": false,
+          "due_on": "2026-05-22",
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Backlog",
+          "notes": "Feature steht im Glev+ Versprechen: 'Arztgespräch in 3 Min vorbereitet (PDF-Report)'\n\nPrüfen:\n- Existiert /api/report oder ähnlicher Endpoint?\n- Was enthält der Report aktuell? (Glucose-Verlauf, Mahlzeiten, Control Score?)\n- Ist er druckbar / als PDF exportierbar?\n- Fehlt noch: automatischer 14-Tage-Zusammenschnitt für Arztgespräch?\n\nFalls nicht production-ready: eigener Implementierungs-Task.\n\nDue: 22. Mai — schnelle Bestandsaufnahme"
+        },
+        {
+          "gid": "1214916572575260",
+          "name": "[Glev+] Frontend: Caregiver-Dashboard (read-only View)",
+          "completed": false,
+          "due_on": "2026-06-14",
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Backlog",
+          "notes": "Wenn jemand auf einen Share-Link klickt und akzeptiert, sieht er ein vereinfachtes Dashboard:\n- Live-Glucose des Besitzers\n- Letzte 5 Mahlzeiten\n- Control Score (7 Tage)\n- KEIN Logging, KEINE Einstellungen, KEIN Zugang zu Engine\n\nRoute: /shared/:token oder /caregiver/:userId\nAuth: muss eigenen Glev-Account haben (einfach) ODER tokenbasiert anonym (komplexer)\n\nEmpfehlung: Eigener Account erforderlich — sicherer, einfacher zu bauen.\n\nGestimated: 3-4 Tage"
+        },
+        {
+          "gid": "1214916639767695",
+          "name": "[Glev+] Feature Gate: Familienzugang nur für Glev+ Subscriber",
+          "completed": false,
+          "due_on": "2026-06-14",
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Backlog",
+          "notes": "Share-Link kann nur von Glev+ Subscribern erstellt werden.\n- In POST /api/share/create: prüfen ob user.subscription_tier === 'plus'\n- Falls nicht: 403 mit Upgrade-Prompt\n- UI: Share-Button in Einstellungen nur sichtbar wenn Glev+ aktiv\n\nBenötigt: Glev+ Subscription-Check Middleware (separater Task)"
+        },
+        {
+          "gid": "1214860284366580",
+          "name": "#299 Phase B — Offene Entscheidungen vor dem Build",
+          "completed": false,
+          "due_on": "2026-05-18",
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Vor dem Build von Per-User Food History (Phase B) müssen diese 5 Fragen entschieden werden. Danach kann Replit direkt loslegen.\n\n---\n\n1. MITTELUNG vs. LAST-WINS\nWenn Lucas 'Banane' zweimal loggt — einmal 120g, einmal 150g — was gilt beim dritten Mal?\n   a) Mittelwert (135g)\n   b) Exponentiell geglätteter Durchschnitt (neuere Einträge zählen mehr)\n   c) Letzter Wert gewinnt immer\n   d) User-bestätigte Korrekturen gewinnen immer, sonst Mittelwert\n\n2. FUZZY-MATCHING-SCHÄRFE\nWie genau muss der Name übereinstimmen für einen Cache-Hit?\n   a) Exakt: 'Banane' ≠ 'Bananen' (getrennte Einträge)\n   b) Normalisiert: Singular/Plural zusammenfassen, Groß/Klein ignorieren\n   c) Fuzzy: 'Banane reif' und 'Banane' gelten als dasselbe\n   → Empfehlung: Option b als Start, c später nachrüsten\n\n3. KONTEXT-MATCH\nReicht der Lebensmittelname als Treffer-Kriterium, oder soll auch der Mahlzeit-Kontext zählen?\n   a) Nur Name (einfacher, weniger Daten nötig)\n   b) Name + Mahlzeitkontext (z.B. 'Banane im Müsli' vs 'Banane als Snack') — kommt später wenn Datenlage reicht\n   → Empfehlung: jetzt nur a, b als Backlog\n\n4. SETTINGS-UI 'Meine Lebensmittel'\nSoll es einen sichtbaren Tab/Bereich geben wo Lucas sehen kann was die App über seine Lebensmittel gelernt hat?\n   a) Ja — Liste mit Bearbeiten/Löschen-Funktion (höherer Aufwand)\n   b) Nur intern — kein UI, App lernt still im Hintergrund (schneller zu bauen)\n   c) Minimal-UI: Liste lesbar, aber noch kein Edit (Kompromiss)\n\n5. BACKFILL JETZT ODER WARTEN?\nSoll der einmalige Backfill-Job sofort über alle historischen meals.parsed_json laufen?\n   a) Ja, sofort — maximiert Datenbasis vom ersten Tag\n   b) Nein, nur frisch sammeln ab Go-Live — sauberer Start, weniger Risiko durch alte Eingabefehler\n   c) Ja, aber mit strengem Outlier-Filter (wie im Plan beschrieben)\n   → Empfehlung: Option c"
+        },
+        {
+          "gid": "1214860137541273",
+          "name": "Compliance-Sweep Prio 2: i18n-Sweep + Hard-coded Strings + AI Prompt",
+          "completed": false,
+          "due_on": "2026-05-30",
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Zweite Stufe des Sprach-Audits — nach Prio 1 erledigt.\n\nGlobale Ersetzungen:\n- 'Empfehlung' / 'recommendation' → 'Richtwert' / 'reference value'\n- 'empfohlen' / 'recommended' → 'berechnet' / 'calculated'\n- 'klinisch' / 'clinical' → streichen oder 'zur Information'\n- Handlungsanweisungen ('...reduzieren', '...spritzen', '...dosieren') → beobachtende Sprache\n\nKonkret:\n- de.json Z.160: 'Glev Einschätzung' → 'Glev Orientierung'\n- de.json Z.165: '{units} IE geschätzt' → '{units} IE (historischer Vergleichswert)'\n- de.json Z.372: '...nicht dosieren.' → '...zusätzliches Insulin vermeiden.'\n- de.json Z.375: '...keine Dosis empfohlen.' → '...kein Richtwert berechnet.'\n- de.json Z.601: '...klinische Hypo (ATTD-Konsensus).' → '...längeres Ereignis (Fach-Standard als Orientierung).'\n- de.json Z.1008: '...Empfehlungen besser auf dich abzustimmen.' → '...Richtwerte besser anzupassen.'\n- en.json Z.160: 'Glev Estimate' → 'Glev Insight'\n- en.json Z.445: '...make insulin recommendations' → '...calculate insulin doses'\n- en.json Z.551: '...affect any insulin recommendation.' → '...affect any reference values.'\n\nHard-coded Strings:\n- mockups/onboarding/log-meal/page.tsx Z.59: '8 IE empfohlen' → '8 IE (Beispiel)'\n- mockups/onboarding/log-meal/page.tsx Z.80: 'recommends insulin based on' → 'shows values based on'\n- mockups/dark-cockpit/page.tsx Z.1286: 'AI-powered insulin recommendations' → 'AI-powered personal dosing insights'\n\nAI System Prompt (lib/ai/systemPrompt.ts):\n- Alle 'recommend'-Muster ersetzen durch 'show / compute reference'\n- Explizite Leitlinie ergänzen: 'Glev calculates reference values and never gives medical advice.'\n\ntsc --noEmit muss clean bleiben."
+        },
+        {
+          "gid": "1214860280248144",
+          "name": "Compliance-Sweep Prio 1: Kritische Disclaimers + Card-Backs",
+          "completed": false,
+          "due_on": "2026-05-23",
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Umsetzung der kritischsten Compliance-Fixes aus dem Sprach-Audit.\n\nBetrifft:\n1. Disclaimer (de.json Z.506 + Z.551): 'klinisch' und 'Insulin-Empfehlung' entfernen\n   → Neu: 'Diese Einträge dienen rein der persönlichen Dokumentation in deinem Tagebuch. Sie werden nicht für Berechnungen oder Auswertungen herangezogen.'\n\n2. Card-Backs (FlipCard-System, dashboard/page.tsx):\n   - hypo_interpretation: 'Ziel <10%. Wenn steigend, Korrekturfaktor reduzieren.' → 'Richtwert zur Information. Besprich deine Faktoren mit dem Arzt.'\n   - outcome_under_desc: '...mehr Insulin oder früher spritzen.' → '...als Kontext für das Gespräch mit dem Arzt.'\n   - outcome_over_desc: '...weniger Insulin oder später spritzen.' → '...als Orientierung fürs Tagebuch.'\n   - hypo_explanation: '...Überdosierung birgt Hypo-Risiko...' → '...kann mit niedrigeren Werten zusammenhängen.'\n\n3. de.json Z.301 'Empfohlene Dosis' → 'Berechneter Richtwert'\n   en.json Z.301 'Recommended dose' → 'Reference value'\n\ntsc --noEmit muss clean bleiben."
+        },
+        {
+          "gid": "1214860279942163",
+          "name": "#184 - Libre App Daten-Import (Backlog)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Backlog-Item — wird später aufgegriffen, jetzt nur als Plan abgelegt.\n\nWhat & Why\nNutzerinnen tragen Daten manuell in die LibreLink-App ein (z.B. Mahlzeiten, Notizen). Es wäre wertvoll, diese Daten auch in Glev verfügbar zu machen, ohne dass alles doppelt eingetragen werden muss. Konzeptuell verwandt mit #183 (Apple Health Steps) — beide erweitern die Datenquellen um externe Sync-Pfade.\n\nDone looks like\n- Technische Machbarkeit geklärt: LibreLinkUp API prüfen ob manuell eingetragene Werte (nicht nur CGM-Samples) über die API verfügbar sind\n- Falls ja: Sync-Endpoint und Mapping auf Glev-Datenmodell definiert\n- User kann Libre-Account in Einstellungen verknüpfen\n- Importierte Daten sind in Einträgen sichtbar und als source = 'libre' markiert\n\nOut of scope\n- CGM-Polling aus LibreLink (wird bereits separat gehandhabt)\n- Android / andere CGM-Systeme\n\nOpen questions\n- Unterstützt die LibreLinkUp API auch manuell eingetragene Einträge oder nur CGM-Samples?\n- Überschneidung mit bestehender CGM-Anbindung klären (keine Doppel-Imports)\n\nVerwandt: #183 Apple Health Daily Steps (gleiches Muster: externe Datenquelle → source-Flag → De-Dup)"
+        },
+        {
+          "gid": "1214858202041018",
+          "name": "Per-User Food History (Phase B)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "ZIEL\nWenn User 'Banane' eingibt, erinnert sich Glev an SEINE Banane — typisch 150g statt Default 120g, eigene Makros aus früheren Korrekturen. Lookup <100ms statt 2-3s GPT-Pipeline.\n\nEMPFOHLENE ARCHITEKTUR: Variante 2 — neue Tabelle user_food_history\n(user_id, normalized_name) → (typical_grams, carbs/protein/fat/fiber per 100g, source: history|user_confirmed, occurrences, last_seen_at)\n\nKOMPONENTEN:\n1. Migration: Tabelle user_food_history anlegen\n2. Hook in saveMeal: Upsert nach jedem Speichern (EMA-Mittelwert, neueste Eingabe 20% Gewicht)\n3. Hook in Chat-Macros: Explizite Korrekturen = source=user_confirmed, höchste Priorität\n4. Lookup-Schicht: Vor GPT-Parser prüfen ob Item in user_food_history — Hit = Pipeline überspringen\n5. Backfill-Job: Bestehende meals.parsed_json rückwirkend einlesen\n6. Settings-Tab 'Meine Lebensmittel': User sieht was die App gelernt hat, kann Einträge korrigieren/löschen\n\nOFFENE ENTSCHEIDUNGEN (vor Umsetzung klären):\n1. Mittelung: EMA (neueste Eingaben wiegen mehr) vs. letzter Wert wins vs. echter Mittelwert?\n2. Fuzzy-Matching: 'Banane' / 'Bananen' / 'Banane reif' — zusammenfassen oder getrennt?\n3. Kontext: Name-Match only oder auch 'Banane im Müsli' vs 'Banane als Snack' unterscheiden?\n4. User-Sichtbarkeit: Settings-Tab 'Meine Lebensmittel' — ja (empfohlen) oder nein?\n5. Backfill: Sofort (erbt alte Fehler) oder erst nach 2 Wochen frischer Daten?\n\nSAFETY-HINWEIS:\nUI muss immer anzeigen dass Werte aus der History kommen + 1-Klick-Override für aktuelle Mahlzeit. Outlier-Filter im Backfill (>2σ verwerfen).\n\nPRIORITÄT: Backlog — nach Beta-Launch und wenn User-Basis gross genug für Personalisierung."
+        },
+        {
+          "gid": "1214850699850947",
+          "name": "[Feature] Laborwerte + Gewicht erfassen und einpflegen",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Feature-Request von Beta-User Francisco (15. Mai 2026).\n\nUser möchte:\n- Laborwerte (HbA1c, Cholesterin, etc.) manuell eintragen und im Verlauf tracken\n- Gewichtsmessungen erfassen\n- Beides idealerweise exportierbar\n\nAuf lange Sicht: Import aus Laborberichten (PDF-Upload oder Texteingabe).\n\nPRIORITÄT: Backlog — nach Beta-Launch evaluieren wie viele User das anfragen."
+        },
+        {
+          "gid": "1214844144310293",
+          "name": "[CGM] Server-seitiges LLU-Polling — eigene hochaufgelöste Glukosekurve aufbauen",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Update 16. Mai 2026:\n- Cron Job: */2 Minuten (war */5)\n- Bug gefixt: out.current aus LLU getHistory() wird jetzt in cgm_samples geschrieben\n- cgm_samples Tabelle: (user_id, timestamp UNIQUE, value_mgdl, source)\n- Ergebnis: ~2-min Granularität für alle LLU-User\n- Vercel Pro Plan bestätigt: */2 cron jobs unterstützt\n\nWahrscheinlich in Replit implementiert — Status im Code prüfen."
+        },
+        {
+          "gid": "1214804928356435",
+          "name": "[Android] Google Play Internal Testing einrichten",
+          "completed": false,
+          "due_on": "2026-05-17",
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "ZIEL: Bis Ende KW20 funktionsfähiger Android-Build im Google Play Internal Testing Track.\n\nSchritte:\n1. Android Studio installieren (falls nicht vorhanden) + JDK 17+\n2. npx cap add android (im Glev-Repo: ~/Documents/glev-app)\n3. npx cap sync android\n4. Android Studio öffnen: npx cap open android\n5. Build → Generate Signed Bundle/APK → Android App Bundle (.aab)\n6. Google Play Console → Glev-App anlegen (https://play.google.com/console)\n7. Internal Testing Track → .aab hochladen\n8. Tester per E-Mail einladen\n\nHINWEIS: Android-Build ist NICHT von macOS-Update/Xcode abhängig — kann parallel zur iOS-Vorbereitung laufen.\n\nAndroid braucht: Bundle ID com.glev.app (identisch mit iOS), Signing Keystore (neu anlegen via Android Studio)."
+        },
+        {
+          "gid": "1214801744105774",
+          "name": "Feature: Zeitbasierte IC-Ratios (Insulin-KH-Verhältnis nach Tageszeit)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "HINTERGRUND\nEin Beta-Nutzer hat gemeldet, dass sein 9-jähriger Sohn (T1D) unterschiedliche Insulin-Kohlenhydrat-Verhältnisse je nach Tageszeit hat — z.B. morgens 1:8, mittags 1:12, abends 1:10. Glev erlaubt aktuell nur ein einziges globales IC-Ratio. Das ist bei Kindern und vielen erwachsenen T1D-Patienten nicht ausreichend.\n\nWARUM WICHTIG\n- Zeitbasierte IC-Ratios sind Standard in der T1D-Behandlung (alle modernen Insulinpumpen und AID-Systeme unterstützen das)\n- Die Engine rechnet aktuell mit einem fixen Wert — Insulinempfehlungen sind für Teile des Tages falsch\n- Betrifft nicht nur Kinder, sondern alle T1D-Patienten mit Dawn-Phänomen oder tageszeit-abhängiger Insulinsensitivität\n- Direkt aus Beta-User-Feedback — hohe Glaubwürdigkeit\n\nFEATURE-ANFORDERUNG\nUser können mehrere IC-Ratio-Einträge anlegen, jeweils mit:\n- Startuhrzeit (z.B. 06:00)\n- Enduhrzeit (z.B. 11:00)\n- Verhältnis (z.B. 1:10 = 10g KH pro 1 IE Insulin)\n\nDie Engine wählt automatisch den passenden Wert zur aktuellen Uhrzeit.\n\nACCEPTANCE CRITERIA\n- Einstellungen-Seite: User kann beliebig viele Zeitfenster mit IC-Ratio anlegen, bearbeiten und löschen\n- Zeitfenster dürfen sich nicht überlappen (Validierung)\n- 24h müssen nicht vollständig abgedeckt sein (Fallback auf globalen Wert wenn keine Regel greift)\n- Engine-Modul nutzt zur Berechnungszeit den passenden IC-Ratio-Wert\n- UI zeigt im Mahlzeit-Log-Screen welches Verhältnis gerade aktiv ist\n\nDB-SCHEMA (Vorschlag)\nTabelle: ic_ratio_rules\n- id uuid PK\n- user_id text NOT NULL\n- start_time time NOT NULL (z.B. '06:00')\n- end_time time NOT NULL (z.B. '11:00')\n- ratio_carbs_per_unit numeric(5,1) NOT NULL (z.B. 10.0 = 1:10)\n- label text (optional, z.B. 'Morgens')\n- created_at timestamptz\n\nPRIORITÄT: Hoch — direkt aus Beta-Feedback, betrifft Kernfunktion der Engine"
+        },
+        {
+          "gid": "1214722324689891",
+          "name": "Feature: Einflussfaktoren-Log (Substances/Influences)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "ZIEL\nUser können Alkohol, Cannabis, Medikamente und sonstige Einflussfaktoren loggen, um lebensnah zu tracken wie verschiedene Substanzen den Blutzucker beeinflussen.\n\nAPP STORE COMPLIANCE\n- Neutrale UI-Bezeichnung: \"Einflussfaktoren\" (nicht \"Drogen\", \"Substances\" etc.)\n- Keine spezifischen illegalen Substanzen beim Namen nennen — Freitext-Feld reicht\n\nFELDER\n- Typ (Dropdown): Alkohol / Cannabis / Medikament / Sonstiges\n- Details: Freitext, optional (z. B. Medikamentenname oder eigene Notiz)\n- Zeitstempel: Datum + Uhrzeit (Standard: jetzt)\n- Menge: optional (z. B. \"2 Gläser\", \"50mg\" — Freitext oder Zahl+Einheit)\n\nPATTERN\nSoll dem gleichen DB- und UI-Pattern folgen wie bestehende Log-Typen (Mahlzeiten, Insulin, Sport, Zyklus, Symptome). Diagnose-Prompt für Replit liegt unter: diagnose_einflussfaktoren.md im Workspace-Ordner.\n\nAKZEPTANZKRITERIEN\n- Log-Eintrag erscheint im Timeline-Feed\n- BZ-Korrelation in Statistiken berücksichtigt Einflussfaktoren als Segment\n- App Store Review: keine Erwähnung illegaler Substanzen in UI-Strings oder Metadaten\n- Supabase RLS: nur eigene Einträge sichtbar"
+        },
+        {
+          "gid": "1214441276072044",
+          "name": "[Nightscout] Caching-Tabelle nightscout_readings anlegen",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Analog zu apple_health_readings.\n\nProblem: Jeder Dashboard-Refresh macht einen Live-Round-Trip zur Nightscout-Instanz. Bei self-hosted fly.dev/Heroku Free-Tier-Instanzen (häufig down) zeigt Glev keinen Wert.\n\nLösung:\n- Neue Tabelle nightscout_readings (analog apple_health_readings) mit RLS und idempotenter Upsert per Zeitstempel\n- /api/cgm/nightscout/sync schreibt Readings in die Tabelle\n- /api/cgm/history liest für Nightscout-User aus der Tabelle statt live\n\nPrio: Hoch — Nightscout-Instanzen sind oft instabil."
+        },
+        {
+          "gid": "1214441383198264",
+          "name": "[Nightscout] Live-Status in Settings-Card aktualisieren",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Problem: Settings-Card zeigt nur 'Verbunden' + URL nach dem ersten Save. Kein aktueller Glukose-Wert beim erneuten Öffnen.\n\nLösung:\n- Beim Öffnen des Settings-Sheets: einmaliger GET /api/cgm/latest für Nightscout-User\n- Anzeige: 'Letzter Wert: 142 mg/dL vor 3 Min'\n- Optional: Pull-to-Refresh-Button\n\nPrio: Mittel — user-spürbar aber kein Blocker."
+        },
+        {
+          "gid": "1214441276858110",
+          "name": "[Nightscout] Background-Sync Job — entries.json alle 5–15 Min",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Problem: Post-Meal-CGM-Werte werden nur gefüllt wenn der User die App aktiv öffnet. LLU hat cgm-jobs/process.\n\nLösung:\n- Periodischer Job (Vercel Cron oder separater Service) der /api/v1/entries.json zieht\n- Schreibt in nightscout_readings-Caching-Tabelle\n- Post-Meal-Werte werden automatisch gefüllt auch wenn App geschlossen ist\n\nHängt von: nightscout_readings-Caching-Tabelle\nPrio: Mittel — erst nach Caching-Task sinnvoll."
+        },
+        {
+          "gid": "1214441104556221",
+          "name": "[Push] VAPID Keys einrichten — Notifications Phase 2 freischalten",
+          "completed": false,
+          "due_on": "2026-05-04",
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "VAPID Keys eingetragen (01.05.2026). Agent kann Notifications Phase 2 (Service Worker + Push-Dispatch) jetzt implementieren."
+        },
+        {
+          "gid": "1214441092898651",
+          "name": "[Apple Health] Erweiterte Gesundheitsdaten — Gewicht, Schritte, Workouts",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Zusätzlich zu Blutglukose weitere HealthKit-Daten lesen:\n\n- Gewicht (HKQuantityTypeIdentifierBodyMass) — Insulinbedarf-Einschätzung\n- Schritte / aktive Energie (HKQuantityTypeIdentifierStepCount, HKQuantityTypeIdentifierActiveEnergyBurned) — Sport beeinflusst Insulinsensitivität\n- Workout-Sessions (HKWorkoutType) — Typ + Dauer für adaptiven ICR\n\nVerwendung: Als Kontext-Signale für die adaptive Engine, nicht nur zur Anzeige.\nPrio: Mittel — nach Nightscout Deploy."
+        },
+        {
+          "gid": "1214329564986910",
+          "name": "[P1] ops.glev.app auf VPS-Agent umstellen (2 min)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "In ops.glev.app (Replit) die Chat-Endpoint-URL ändern:\n\nVon: https://cold-snowflake-59c0.lucas-23f.workers.dev/chat\nAuf: https://agent.glev.app/chat\n\nRequest-Format bleibt gleich:\n  POST /chat\n  Body: { message: '...', sessionId: 'lucas', cardContext: '...' }\n  Header: x-api-key: [Anthropic Key]\n\nDev 2 ist bereits gebrieft — der Code-Umbau passiert automatisch."
+        },
+        {
+          "gid": "1214329899431678",
+          "name": "[P1] Cloudflare Tunnel für VPS einrichten (5 min)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Damit ops.glev.app den VPS-Agent erreichen kann:\n\n1. Auf VPS:\n   curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb\n   sudo dpkg -i cloudflared.deb\n\n2. Cloudflare Dashboard → Zero Trust → Networks → Tunnels → Create Tunnel\n3. Tunnel Name: glev-agent\n4. Install connector: den angezeigten Befehl auf dem VPS ausführen\n5. Public Hostname: agent.glev.app → Service: http://localhost:3001\n\nFertig wenn: https://agent.glev.app aufgerufen werden kann und {status: 'Glev Agent OK'} zurückgibt."
+        },
+        {
+          "gid": "1214329469676859",
+          "name": "[P1] Glev Agent Backend auf VPS deployen (10 min)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "1. SSH in VPS: ssh root@DEINE-IP\n2. Dateien hochladen:\n   - Lokal: scp -r /Users/lucas/Documents/Claude/Projects/Glev/vps-agent root@DEINE-IP:~/glev-agent\n3. Auf VPS: cd ~/glev-agent && bash setup.sh\n4. .env öffnen: nano .env\n5. ANTHROPIC_API_KEY eintragen (dein Key aus console.anthropic.com)\n6. ADMIN_KEY: ein eigenes sicheres Passwort wählen\n7. pm2 restart glev-agent\n8. Test: curl http://localhost:3001  →  muss {status: 'Glev Agent OK'} zurückgeben"
+        },
+        {
+          "gid": "1214329461986794",
+          "name": "[P2] Sprint-Filter ins Kanban Dashboard einbauen",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Feature-Anforderung für Glev_Dashboard.html UND ops.glev.app:\n\nFilter-Leiste oben im Kanban:\n- Alle Sprints (default)\n- Sprint 1: Migration + Stripe\n- Sprint 2: Legal + Account\n- Sprint 3: Capacitor\n... etc.\n\nFilter nach Asana-Projekt-GID. Wenn Sprint ausgewählt: nur Tasks aus diesem Projekt anzeigen.\n\nAuch in Makro-Ansicht verfügbar — dann Brand-Filter UND Sprint-Filter kombinierbar.\n\nDev 2 zugewiesen."
+        },
+        {
+          "gid": "1214329899431614",
+          "name": "[P1] VPS aufsetzen — DigitalOcean Droplet erstellen (5 min)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "1. digitalocean.com → Create Droplet\n2. Ubuntu 22.04 · Basic · $6/mo (1GB RAM reicht)\n3. SSH Key hinzufügen (oder Passwort notieren)\n4. Droplet-IP notieren — brauchst du für Schritt 2\n\nFertig wenn: du die IP-Adresse hast und per SSH rein kannst."
+        },
+        {
+          "gid": "1214329565168493",
+          "name": "[P1] Erster Live-Test des VPS-Agenten (3 min)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Im Dashboard (ops.glev.app) eintippen:\n'Was sind meine P1-Tasks für heute?'\n\nErwartete Antwort: knappe deutsche Antwort mit Stripe-Bug, DNS, Dexcom als Top-Prioritäten — ohne Markdown, ohne Bullet-Listen.\n\nDann testen mit Delegation:\n'Was ist der aktuelle Stand beim Stripe-Bug?'\n→ Agent sollte an OPS delegieren und technische Antwort geben.\n\nFertig wenn: Antwort in unter 5 Sekunden kommt und sinnvoll klingt."
+        },
+        {
+          "gid": "1214324212996503",
+          "name": "Post-Meal Feedback Loop — BG-Check 2h nach Mahlzeit",
+          "completed": false,
+          "due_on": null,
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Backlog",
+          "notes": "FEATURE: Post-Meal Glucose Feedback Loop\n\n== ZIEL ==\nUser loggt eine Mahlzeit → 2 Stunden später wird er nach seinem aktuellen Blutzucker gefragt → Eingabe wird in glucose_2h gespeichert → Wert fließt in den Adaptive ICR und die Engine-Auswertung ein.\n\n== USER FLOW ==\n1. User loggt Mahlzeit über /log (Wizard Step 3 → Speichern)\n2. App setzt intern einen Timer / Reminder: T+2h\n3. Nach 2 Stunden erscheint ein Prompt (In-App Banner oder Push-Notification):\n   \"Deine Mahlzeit von vor 2h — wie ist dein BG jetzt?\"\n   [Eingabefeld: mg/dL] [Speichern]\n4. Eingabe wird in meals.glucose_2h gespeichert (Spalte existiert bereits in DB)\n5. Optional: Auch glucose_1h (T+1h) und glucose_3h (T+3h) per gleichem Mechanismus\n\n== UI-KOMPONENTEN ==\n- PostMealPrompt Banner: fixiertes Banner am unteren Rand (über dem Nav), erscheint wenn T+2h vergangen und glucose_2h noch NULL\n- Felder: Nur eine Zahl (mg/dL) + Speichern-Button + Schließen-Button (\"später\")\n- Persistenz: localStorage-Timestamp des letzten Meal-Logs, check auf glucose_2h IS NULL\n- Mehrere offene Mahlzeiten: Nur die jüngste wird prompted\n\n== TRIGGER-LOGIK ==\n- Bei App-Öffnung: prüfe ob eine Mahlzeit der letzten 3h in der DB existiert mit glucose_2h IS NULL\n- Falls ja UND T+2h seit meal_time vergangen: Prompt anzeigen\n- Client-seitig (kein Scheduler nötig für V1) — beim App-Öffnen/Focus-Event\n- V2: Push Notification via Capacitor/FCM (für native App, Sprint 3)\n\n== DB-FELDER (bereits vorhanden) ==\n- meals.glucose_2h int4\n- meals.glucose_1h int4\n- meals.glucose_30min int4\n- meals.glucose_90min int4\n- meals.glucose_3h int4\n\n== ENGINE-INTEGRATION ==\n- glucose_2h-Wert fließt in Adaptive ICR Outcome-Gewichtung:\n  Gutes Outcome = glucose_2h zwischen 70-140 mg/dL\n  Schlechtes Outcome = glucose_2h > 180 (Spike) oder < 70 (Hypo)\n- Engine-Neuberechnung des ICR nach Eingabe des 2h-Werts\n\n== TECHNISCHE UMSETZUNG ==\n- Komponente: components/PostMealPrompt.tsx (Client Component)\n- Hook: hooks/usePostMealCheck.ts — prüft beim Mount ob Prompt nötig\n- API Route: PATCH /api/meals/[id]/glucose — nimmt {timepoint: '2h', value: 140} entgegen\n- Layout.tsx: PostMealPrompt einbinden (rendert nur wenn aktiv)\n\n== AKZEPTANZKRITERIEN ==\n- [ ] Banner erscheint ~2h nach Mahlzeit-Log beim App-Öffnen\n- [ ] Eingabe wird korrekt in glucose_2h gespeichert\n- [ ] Engine-ICR berücksichtigt den neuen Wert\n- [ ] Banner verschwindet nach Speichern oder \"später\"\n- [ ] Kein Banner wenn glucose_2h bereits gefüllt\n- [ ] tsc --noEmit clean\n\n== PRIORITÄT ==\nSprint 1 — Core Data Loop. Ohne diesen Loop hat der Adaptive ICR keine Outcome-Daten zum Lernen."
+        },
+        {
+          "gid": "1214321337290698",
+          "name": "[CGM] Post-Meal Autofetch — 30min / 1h / 90min / 2h / 3h",
+          "completed": false,
+          "due_on": "2026-05-13",
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "STATUS: Ausstehend ohne Replit-Prompt — kein Prompt bereit, Implementierung steht noch aus.\n\nZIEL: Nach einer Mahlzeit automatisch CGM-Werte zum Zeitpunkt T+30min, T+1h, T+90min, T+2h, T+3h aus LibreLinkUp/Nightscout holen und in glucose_readings + meals-Tabelle persistieren.\n\nWarum wichtig: Adaptive ICR-Engine braucht Post-Meal-BG-Verläufe zum Lernen. Ohne Autofetch müssen User manuell eingeben (Friction = Datenlücken).\n\nAusführung: Scheduled Supabase Function oder Vercel Cron Job (alle 5 Minuten), triggered nach meal_time + 30min Window.\n\nAbhängigkeit: CGM-Integration (LibreLinkUp) muss stabil sein."
+        },
+        {
+          "gid": "1214320751360967",
+          "name": "[CGM] Settings — CGM Provider Selection + Credential Input UI",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Settings-Screen: User wählt CGM-Hersteller (Libre 2/3, Dexcom G6/G7, Medtronic). Je nach Auswahl: LibreLinkUp E-Mail+PW oder Dexcom Share E-Mail+PW. Inkl. Verbindung testen Button. Nightscout als optionaler Advanced-Modus (ausgeblendet, Post-Launch)."
+        },
+        {
+          "gid": "1214320751358441",
+          "name": "[CGM] Medtronic CareLink Integration (Beta)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "CareLink API ist inoffiziell / reverse-engineered. Als Beta-Feature labeln beim Launch. Niedrigere Prio als LibreLinkUp und Dexcom Share."
+        },
+        {
+          "gid": "1214321337259853",
+          "name": "[DB] Meal-Klassen auf 5 erweitert — DONE",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Erledigt 2026-04-28: FAST_CARBS, HIGH_PROTEIN, HIGH_FAT, HIGH_FIBER, BALANCED. lib/meals.ts + systemPrompt.ts aktualisiert. Farben: BALANCED=#22D3A0, HIGH_FIBER=#4DB6AC. DB-Migration (glucose_30min, glucose_1h, glucose_90min, glucose_2h, glucose_3h, glucose_curve, protein_grams, fat_grams, fiber_grams, calories, meal_type) vom User im Supabase SQL-Editor ausgeführt."
+        },
+        {
+          "gid": "1214288386177479",
+          "name": "[CGM] Libre 2 Integration — Stabilität + Edge Cases",
+          "completed": false,
+          "due_on": null,
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Backlog",
+          "notes": "Integration läuft via LibreLinkUp-Login (kein offizieller Abbott API-Zugang). User loggen sich mit ihrem LibreLinkUp-Account ein → Daten werden gezogen.\n\n**Update 16. Mai 2026 — CGM Resolution Verbesserung:**\nCron Job (app/api/cron/cgm-poll/route.ts) wurde von */5 auf */2 Minuten umgestellt.\nBug gefixt: pollOne() hat zuvor nur history (15-min Aggregates) gespeichert und out.current (Live-Wert) verworfen. Fix: out.current wird jetzt ebenfalls in cgm_samples geschrieben.\nErgebnis: DACH LLU-User bekommen jetzt ~2-min CGM-Auflösung statt 15-min Aggregates.\n\nInoffizieller Endpoint — kann sich bei Abbott-Updates ändern. Task = Stabilität und Edge Cases absichern."
+        },
+        {
+          "gid": "1214288386454220",
+          "name": "[DACH] DiaDigital-Qualitätssiegel — Antragsprozess recherchieren und vorbereiten",
+          "completed": false,
+          "due_on": "2026-06-30",
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Backlog",
+          "notes": "FRUEH STARTEN — Gesamtprozess dauert schaetzungsweise 3-5 Monate\n\n--- WAS IST DIADIGITAL? ---\nQualitatssigel von DDG (Deutsche Diabetes Gesellschaft), diabetesDE, VDBD und DDH-M unter Leitung der AGDT (Arbeitsgruppe Diabetes & Technologie). Seit 2017. Aerztpraxen und Kliniken orientieren sich daran bei App-Empfehlungen. MyTherapy traegt es aktiv. Wichtigstes HCP-Trust-Signal im DACH-Diabetes-Markt.\n\nKOSTEN: Offiziell kostenlos fuer Hersteller. Eigenaufwand: Selbstauskunft (ca. 1-2 Tage) + DSGVO-Check (ggf. Anwaltskosten 500-2.000 EUR).\n\n--- PROZESSSCHRITTE ---\n1. Selbstauskunft ausfuellen — detaillierter Fragebogen, SEPARAT fuer iOS UND Android. Download: https://www.diadigital.de\n2. Technische Pruefung durch ZTG Bochum — Zentrum fuer Telematik und Telemedizin prueft: DSGVO-Datenschutz, technische App-Qualitaet, Korrektheit der Hersteller-Angaben.\n3. 4-Wochen Testphase — mind. 5 HCPs (Aerzte/Diabetesberater) + 5 Betroffene (T1D/T2D) nutzen die App 4 Wochen lang und bewerten anhand Kriterienkatalog. App muss waehrend dieser Zeit stabil und im Store oeffentlich verfuegbar sein.\n4. Abschlusskonferenz — alle Beteiligten diskutieren Ergebnisse gemeinsam. Konsensentscheidung ueber Siegelvergabe.\n5. Ergebnis — Siegel + Veroffentlichung auf diadigital.de mit Selbstauskunft und Evaluationsbericht. Bei Ablehnung: Feedback + erneuter Antrag moeglich.\n\n--- BEWERTUNGSDIMENSIONEN (Kriterienkatalog) ---\n- Medizinische Inhalte: klinische Korrektheit, DDG-Leitlinien-Konformitaet, keine gefaehrlichen Empfehlungen\n- Datenschutz (DSGVO): Datenschutzerklaerung, Einwilligungsmanagement, Datenminimierung, kein unkontrolliertes Drittparteien-Sharing\n- Usability / UX: Bedienbarkeit im Alltag mit T1D, nicht nur theoretisch gut; praktische Alltagstests\n- Technische Qualitaet: App-Programmierung, Stabilitaet, Performance, Fehlerfreiheit\n- Barrierefreiheit: Zugaenglichkeit\n- Transparenz: Hersteller-Angaben verifizierbar und korrekt, keine irrefuehrenden Claims\n- Wissenschaftliche Basis: Evidenzbasis fuer medizinische Aussagen\n\n--- BEST PRACTICES (aus Erfahrungen anderer Hersteller) ---\n[1] DSGVO-Datenschutzerklaerung FIT machen BEVOR man einreicht — ZTG prueft das als erstes. Rechtsanwalt oder Tool wie iubenda.com nutzen.\n[2] Medizinische Inhalte gegen DDG-Leitlinien abgleichen — speziell BE-Berechnung, KH-Angaben, Insulindosierungshinweise muessen leitlinienkonform sein oder klar als nicht-medizinisch deklariert werden.\n[3] Selbsttest vor Einreichung — intern mit echten T1D-Nutzern testen, Pain Points dokumentieren und beheben. Tester werden das in 4 Wochen finden.\n[4] HCP-Netzwerk aufbauen VOR dem Antrag — mind. 5 HCPs (Diabetologen, Diabetesberater) als potenzielle Tester identifizieren. ZTG rekrutiert aus eigenem Pool, eigene Kontakte beschleunigen Prozess.\n[5] App muss 4 Wochen lang stabil live sein — kein Major-Release waehrend Testphase. Feature-Freeze einplanen.\n[6] Separate Selbstauskunft fuer iOS und Android — doppelten Aufwand einkalkulieren.\n[7] Antrag stellen sobald Beta stabil ist — nicht auf perfekte v1.0 warten.\n[8] Kontakt zu AGDT/DDG vorab aufnehmen — informelles Vorab-Gespraech moeglich. Zeigt Engagement und klaert offene Fragen.\n\n--- ZEITSCHIENE (realistisch fuer Siegel bis Oktober 2026) ---\nMai 2026:   Selbstauskunft vorbereiten, DSGVO-Check, Gap-Analyse\nJuni 2026:  Antrag einreichen bei diadigital.de\nJul-Aug 2026: ZTG-Pruefung + 4-Wochen Testphase (Feature-Freeze!)\nSep 2026:   Abschlusskonferenz + Ergebnis\nOkt 2026:   Siegel zur DACH-Haupteinfuehrung verfuegbar\n\n--- AKTIONEN ---\n1. Selbstauskunft-Dokument herunterladen: https://www.diadigital.de\n2. Gap-Analyse: Glev vs. DiaDigital-Kriterien (1-Seiter)\n3. Datenschutzerklaerung DSGVO-Check (Anwalt oder iubenda.com)\n4. Medizinische Inhalte gegen DDG-Leitlinien abgleichen (BE, KH, Insulin-Hinweise)\n5. Mind. 5 HCP-Kontakte identifizieren (Diabetologen DE/AT/CH)\n6. Antrag formal einreichen\n7. Feature-Freeze fuer 4-Wochen Testfenster kommunizieren\n\nExpected Output: 1-Seiter 'Glev vs. DiaDigital-Anforderungen' mit Gap-Analyse + Go/No-Go fuer Antrag. Ziel: Siegel bis Oktober 2026."
+        },
+        {
+          "gid": "1214288453347985",
+          "name": "[UX] Onboarding-Flow für frisch Diagnostizierte (T1D-Neulinge)",
+          "completed": false,
+          "due_on": null,
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Backlog",
+          "notes": "PRIORITÄT: Kurzfristig — direkt aus Kompetitor-Analyse als unbesetzte Marktlücke identifiziert\n\nKontext:\nKeine der analysierten Apps (mySugr, diabetes:m, etc.) begleitet frisch diagnostizierte T1D-Patienten wirklich. Die Lernkurve ist steil — ICR, Korrekturfaktor, Carb Counting, CGM-Setup — und Neulinge sind überfordert. Das ist ein expliziter Glev-Differenziator laut Kompetitor-Analyse (Skripts #05 und #09).\n\nScope (vorläufig):\n1. Welcome-Screens / Onboarding-Wizard (3-5 Screens) bei erstem Login\n2. 'Ich bin neu diagnostiziert' vs. 'Ich manage schon länger' — unterschiedliche Flows\n3. Für Neulinge: schrittweise Erklärung von ICR, Bolus, CGM-Setup\n4. Contextual Tooltips in der App (erste Wochen)\n5. Glossar-Funktion (BE, ICR, Korrekturfaktor, TIR, GMI)\n\nHinweis: Dieser Task überschneidet sich mit dem Setup-Wizard-Task der bereits in Asana existiert — ggf. zusammenführen."
+        },
+        {
+          "gid": "1214287850002783",
+          "name": "[CGM] developer.dexcom.com — Developer Account registrieren",
+          "completed": false,
+          "due_on": "2026-05-20",
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Backlog",
+          "notes": "Antrag auf Developer Account gestellt. Warte auf Freigabe durch Dexcom. Rückmeldung ausstehend (Stand: 8. Mai 2026)."
+        },
+        {
+          "gid": "1214287868109489",
+          "name": "[CGM] Dexcom Share API Integration (EU)",
+          "completed": false,
+          "due_on": null,
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Backlog",
+          "notes": "API-Approval bei Dexcom angefragt (April 2026). Follow-up beschleunigen. Apple Health ist inzwischen als 3. CGM-Quelle live (Task #69, 30.04.2026)."
+        },
+        {
+          "gid": "1214287800346435",
+          "name": "[CGM] Accu-Chek SmartGuide — xDrip+ Integration beobachten",
+          "completed": false,
+          "due_on": null,
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Backlog",
+          "notes": "PRIORITÄT: Monitoring — kein Aufwand jetzt, Trigger-basiert\n\nStatus (April 2026):\n- Kein öffentliches API von Roche\n- Einzige bekannte Integration: Glooko (kommerzielle Partnerschaft)\n- xDrip+ arbeitet aktiv an SmartGuide-Support: https://github.com/NightscoutFoundation/xDrip/discussions/3995\n- BLE: Gerät nutzt vermutlich Bluetooth SIG Glucose Profile (GATT 0x1808) — offen, kein Encryption required\n\nAktion wenn xDrip+ SmartGuide-Support fertig ist:\n→ User installiert xDrip+ auf Android\n→ xDrip+ → Nightscout Upload aktivieren\n→ Glev liest über Nightscout Bridge automatisch — KEIN weiterer Glev-Dev-Aufwand\n\nMonitoring:\n- GitHub Discussion #3995 beobachten\n- xDrip+ Release Notes verfolgen\n\nLangfristig: Roche Commercial Partnership anfragen (ähnlich wie Glooko) wenn Nutzerbasis groß genug."
+        },
+        {
+          "gid": "1214287241267420",
+          "name": "[Backlog] Arztbericht — PDF + CSV Report (Pro Founder Exclusive)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Geplant als Pro-Founder-exklusives Feature.\n\nFeature-Beschreibung:\n- Benutzerdefinierter Zeitraum-Picker (z.B. letzte 30 Tage)\n- AI-generierter PDF-Bericht mit Glukose-Trend, Mahlzeiten, Insulin-Dosen\n- CSV-Export für Arzt-Software\n- Nur für Pro-Founder-User freigeschaltet (paywall_check)\n\nPricing-Logik:\n- Beta-User: kein Zugang\n- Standard: kein Zugang  \n- Pro Founder (€24,90/mo): voll freigeschaltet\n\nNach Google Sheets Sync umsetzen."
+        },
+        {
+          "gid": "1214287246210714",
+          "name": "[Backlog] Google Sheets Sync — Import-Feature fertig bauen",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Settings zeigt bereits 'COMING SOON' unter Integrations.\n\nPlan (aus REPLIT_PROMPT_SHEETS_IMPORT.md):\n- lib/sheets.ts: readAllFromSheet()-Funktion\n- app/api/import/sheets/route.ts: neue API-Route\n- Button auf /import: 'Google Sheets importieren'\n\nKein Paywall (Core-Feature für Beta + Standard + Pro).\nNachdem Fix A/B/C + LibreView stabil sind."
+        },
+        {
+          "gid": "1214287250889206",
+          "name": "[Entscheidung] Junction CGM UI — 'Coming Soon' bis Revenue trägt",
+          "completed": false,
+          "due_on": "2026-05-15",
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "ENTSCHEIDUNG (28.04.2026): Junction kündigen — noch nicht ausgeführt, muss Lucas manuell tun.\n\nNachdem gekündigt: LibreView UI auf 'Coming Soon' setzen, Nightscout Bridge deployen (Prompt: REPLIT_PROMPT_NIGHTSCOUT_BRIDGE.md).\n\nAlternativen falls Junction zu teuer: Terra API, Dexcom API direkt (kostenlos)."
+        },
+        {
+          "gid": "1214286395533079",
+          "name": "Onboarding Welcome Screens — Setup Wizard für neue User",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Beim ersten Login eines neuen Users soll ein mehrstufiger Welcome-Flow erscheinen (Wizard-Style).\n\nVorgeschlagene Screens:\n1. Willkommen bei Glev — kurze App-Vorstellung, Founder-Note\n2. CGM verbinden — Libre 2 via LibreLinkUp einrichten (oder überspringen)\n3. Erstes Profil — Diabetestyp bestätigen (T1D), ggf. Zielwerte\n4. Voice-Input Demo — kurze interaktive Demo: 'Sag was du gegessen hast'\n5. Fertig — CTA: 'Erste Mahlzeit loggen'\n\nAnforderungen:\n- Nur beim allerersten Login anzeigen (localStorage oder Supabase-Flag: onboarding_completed)\n- Überspringen-Option auf jedem Screen außer Screen 1\n- Fortschrittsbalken oben (z.B. Schritt 2 von 5)\n- Dark Theme, Brand-Farben (#111117, #4F6EF7)\n- Kein Modal — eigene Route z.B. /onboarding\n- Nach Abschluss: redirect auf /dashboard\n- tsc --noEmit muss sauber bleiben\n\nCompliance: Kein Bezug zu Insulindosierung oder medizinischen Entscheidungen im Onboarding."
+        },
+        {
+          "gid": "1214281055174385",
+          "name": "[Backlog] Parsing-Pipeline: Geschwindigkeit massiv verbessern bei gleichbleibender Genauigkeit",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Ziel: Latenz zwischen Voice-Input und Macro-Population deutlich reduzieren ohne Genauigkeit zu opfern.\n\nAnsätze zu evaluieren:\n\n1. Whisper streaming — Transkription beginnt während Aufnahme noch läuft (falls Whisper API das unterstützt)\n2. GPT-4o mini statt größerer Modelle — bereits aktiv, weiter optimieren via System-Prompt-Kompression\n3. Parallelisierung — Whisper-Transkription + Vorverarbeitung parallel starten\n4. Response-Streaming — Macro-Felder einzeln einblenden sobald sie geparsed sind (statt alles auf einmal warten)\n5. Prompt-Optimierung — kürzerer System-Prompt = weniger Token = schneller\n6. Edge Runtime — API-Route auf edge statt nodejs wenn möglich (kältere Starts eliminieren)\n7. Caching — häufige Lebensmittel (z.B. 'Pasta 250g') lokal cachen, kein API-Call nötig\n\nAktueller Bottleneck zuerst messen (Whisper vs. GPT-Parsing vs. Netzwerk) bevor geändert wird."
+        },
+        {
+          "gid": "1214295829269543",
+          "name": "Cleanup: /beta/success auf /welcome redirecten oder entfernen",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Die /beta/success Seite wird durch den aktuellen Checkout-Flow nicht mehr angesprungen (success_url zeigt jetzt auf /welcome).\n\nOptionen:\n- Redirect: app/(public)/beta/success/page.tsx → redirect('/welcome')\n- Oder: Seite komplett entfernen\n\nKein Security-Problem, aber sauber wäre es aufzuräumen."
+        },
+        {
+          "gid": "1214280940651427",
+          "name": "QA: T6 Decision-Panel end-to-end testen",
+          "completed": false,
+          "due_on": "2026-04-28",
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Nach Mahlzeit loggen:\n1. Mahlzeit eintragen → Bestätigen\n2. Decision-Panel erscheint: Bolus / Empfehlung / Abbrechen\n3. URL-Handler /log?bolusFor=<mealId> funktioniert\n4. decisionBusy-Reset korrekt nach Abbrechen\n5. Alle drei Aktionen durchklicken + Ergebnis prüfen"
+        },
+        {
+          "gid": "1214281112255968",
+          "name": "QA: Datenexport + PDF-Report verifizieren",
+          "completed": false,
+          "due_on": "2026-04-28",
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Commit a7f9e32\n\n1. Export-Funktion triggern\n2. PDF-Report öffnen — Inhalt korrekt?\n3. Alle Werte vorhanden (BG, Mahlzeiten, Insulin)?\n4. Format + Lesbarkeit prüfen"
+        },
+        {
+          "gid": "1214279221380368",
+          "name": "Font-Inkonsistenz: Große Zahlen im Dashboard (Makros, Glucose) auf JetBrains Mono vereinheitlichen",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Die großen farbigen Zahlen im Dashboard (Carbs, Protein, Fat, Fiber, Glucose-Wert) rendern inkonsistent weil JetBrains Mono noch nicht als Web-Font geladen ist. Hängt zusammen mit dem Font-Sync-Task (JetBrains Mono via next/font). Nach Font-Sync prüfen ob sich das Problem von selbst löst, sonst explizit font-mono Klasse auf alle numerischen Werte setzen."
+        },
+        {
+          "gid": "1214279300633282",
+          "name": "Macro-Circle Farben korrigieren: Protein → Blau, Fat → Lila",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Aktuell ist der Protein-Circle lila — muss Blau sein (#3B82F6). Fat-Circle muss Lila sein (#A855F7). Entspricht dem Brand-System:\n- Carbs: #FF9500 (Orange)\n- Protein: #3B82F6 (Blau)\n- Fat: #A855F7 (Lila)\n- Fiber: #22D3A0 (Grün) oder nach bestehendem Wert"
+        },
+        {
+          "gid": "1214293063620621",
+          "name": "App-Texte: Compliance-Review + Deutsch-Übersetzung aller UI-Strings",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Alle sichtbaren Texte in der App (Buttons, Labels, Navigation, Screens) auf Deutsch und Compliance prüfen.\n\nPrioritäten:\n- 'Smart insulin decisions' vollständig aus allen Screens entfernen\n- 'Get Recommendation' → 'Empfehlung berechnen'\n- Alle englischen Button-Labels auf Deutsch\n- Navigation-Labels (DASHBOARD, ENTRY LOG, GLEV, INSIGHTS, SETTINGS) auf Deutsch\n- Keine medizinischen Versprechen in UI-Texten\n- Disclaimer in Settings oder Footer: 'Glev ist ein Dokumentations-Tool, kein Medizinprodukt.'\n\nScreens die betroffen sind:\n- Glev Engine Screen\n- Log Screen\n- Entries Screen\n- Dashboard\n- Settings\n- Import Screen"
+        },
+        {
+          "gid": "1214278486147084",
+          "name": "Tagline 'Smart insulin decisions' — für spätere Phase evaluieren",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Lucas findet 'Smart insulin decisions' als Tagline/Vision stark und will das nicht fallen lassen.\n\nAktuell aus Compliance-Gründen entfernt (kein Medizinprodukt-Status).\n\nSobald Medizinrechts-Beratung stattgefunden hat und ggf. MDR-Pfad geklärt ist: evaluieren ob und wie diese Positionierung legal darstellbar ist.\n\nKann ein starkes Differenzierungsmerkmal für Phase 2/3 werden."
+        },
+        {
+          "gid": "1214278680922375",
+          "name": "OpenAI Spending Hard Limit setzen",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Im OpenAI Dashboard unter Billing → Limits:\n- Soft Limit (Email-Warnung): $150/Monat\n- Hard Limit (API stoppt): $300/Monat\n\nRealistischer Kostenrahmen bei 500 Users:\n- GPT-4o mini Parsing: ~$2/Monat\n- Whisper Voice: ~$90/Monat\n- Total: ~$100/Monat — Hard Limit bei $300 gibt Puffer für Spitzen\n\nAuch Usage-Alerts aktivieren damit Anomalien sofort auffallen."
+        },
+        {
+          "gid": "1214278889326396",
+          "name": "OpenAI Kosten-Monitoring einbauen",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Monatliche API-Kosten sollten sichtbar sein ohne manuell im OpenAI Dashboard nachzuschauen.\n\nOptionen:\n- OpenAI Usage API abfragen und in /api/debug/state ausgeben\n- Oder einfach: Token-Count pro Request in Supabase loggen (input_tokens, output_tokens Spalten in debug_logs)\n\nZiel: bei 1.000+ Users sofort sehen ob Kosten linear oder exponentiell skalieren."
+        },
+        {
+          "gid": "1214278680958570",
+          "name": "Rate-Limiting pro User einbauen (OpenAI-Schutz)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Verhindert Missbrauch und unkontrollierte API-Kosten.\n\nVorschlag:\n- Max. 50 Meal-Logs pro User pro Tag\n- Max. 30 Voice-Requests pro User pro Tag (Whisper ist teurer)\n- Bei Überschreitung: 429-Response mit Meldung 'Tageslimit erreicht'\n- Tracking über Supabase: request_count Tabelle oder direkt auf meals-Tabelle via COUNT\n\nImplementierung: Middleware oder direkt am Anfang jeder API-Route prüfen."
+        },
+        {
+          "gid": "1214278702789700",
+          "name": "OpenAI Modell-Audit: richtiges Modell pro Feature sicherstellen",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Audit welches OpenAI-Modell für welchen Feature-Bereich verwendet wird und ob das optimal ist.\n\nEmpfehlung:\n- Macro-Parsing (parse-food): GPT-4o mini ✅ behalten\n- Engine Chat (chat-macros): GPT-4o mini ✅ behalten\n- Voice Transcription: Whisper-1 ✅ einzige Option\n- Falls Qualitätsprobleme auftauchen: auf GPT-4o upgraden, aber nur dann\n\nAction: alle API-Calls im Code prüfen ob wirklich überall mini verwendet wird und nicht versehentlich gpt-4o oder gpt-4-turbo aufgerufen wird."
+        },
+        {
+          "gid": "1214278702919416",
+          "name": "Recibos Verdes aktivieren (Portugal) — nach Launch bei ~€1k MRR",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Sobald Glev genug Umsatz generiert um ~€1.000/Monat netto rauszuziehen:\n\n1. Als Einzelunternehmer (ENI) beim Finanzamt anmelden: portal das finanças → Atividade aberta → Code 62010 (Softwareentwicklung)\n2. Recibos Verdes ausstellen für alle Stripe-Einnahmen\n3. Steuerberater für erstes Jahr empfohlen (~€150 Erstberatung)\n\nWichtige Schwellen:\n- Unter €15k Jahresumsatz: keine MwSt. fällig\n- Simplified Regime bis €200k: 75% des Umsatzes ist steuerpflichtig\n- Social Security: 21,4% auf Einkommen\n\nEntity (Unipessoal Lda) erst evaluieren wenn Steuerersparnis > Buchhalterkosten (~€150-200/Monat)."
+        },
+        {
+          "gid": "1214278765254968",
+          "name": "EU MDR CE-Zulassung SaMD evaluieren — nach Launch",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Sobald Cashflow stabil: CE-Zulassungsprozess für Glev Engine (Bolus-Kalkulator) starten.\n\nEinordnung:\n- Klassifikation: wahrscheinlich Class IIa SaMD (Software as Medical Device) unter EU MDR 2017/745\n- Timeline: 18–24 Monate realistisch\n- Kosten: €80.000–300.000+\n- Notified Bodies sind 2026/2027 im Bottleneck — früh anmelden\n\nErster Schritt: Gespräch mit Fraunhofer MEVIS (Bremen) — spezialisiert auf medizinische Software und SaMD. Günstiger als kommerzielle Regulatory Berater, gut vernetzt.\n\nFraunhofer MEVIS: https://www.mevis.fraunhofer.de\n\nWichtig: Bis CE-Zulassung läuft muss Glev Engine als Dokumentations-Tool positioniert bleiben — keine Insulin-Empfehlungs-Claims in Marketing oder UI."
+        },
+        {
+          "gid": "1214316444394111",
+          "name": "[DACH] Beta-Launch — 500 Early-Access Plätze, DACH-fokussiert",
+          "completed": false,
+          "due_on": "2026-06-15",
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Backlog",
+          "notes": "Pricing-Modell (aktualisiert Mai 2026):\n- Kein Payment bei Signup\n- Billing startet 1. Juli 2026\n- Erste 3 Monate: €4,50/Monat (Coupon BETA3MONTHS)\n- Danach: €9/Monat dauerhaft\n\nStripe: eingerichtet. Coupon BETA3MONTHS aktiv. Checkout-Code deployed.\n\n**WICHTIG — Naming:**\n- Extern NIEMALS 'Beta' sagen (Reddit-Backlash: 'Zahlen für eine Beta')\n- Extern kommunizieren als: 'Early Access'\n- Intern darf 'Beta' als Label weiter genutzt werden bis Tier-Naming mit Agentur steht\n\n**iOS TestFlight:**\nBuild 1.0(1) am 16. Mai 2026 hochgeladen und auf Lucas iPhone installiert. TestFlight läuft.\n\nZiel: 300–500 Early-Access-User vor Juli."
+        },
+        {
+          "gid": "1214319372537494",
+          "name": "[Marketing] Social Proof — 3-5 Beta-Tester aus T1D-Community rekrutieren",
+          "completed": false,
+          "due_on": "2026-05-31",
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Backlog",
+          "notes": "ZIEL: 3-5 echte T1D-Nutzer gewinnen die Glev testen und im Gegenzug ein ehrliches Testimonial liefern.\n\nAngebot an Tester:\n- 1 Jahr kostenloser Pro-Zugang (Lifetime-Preis-Lock)\n- Kein Skript, kein Druck — ein ehrlicher Satz reicht\n- Optional: kurzes Video-Testimonial fuer Instagram\n\nKANAELE fuer die Suche:\n- Facebook-Gruppen: DACH T1D Communities (z.B. 'Typ 1 Diabetes Deutschland', 'Leben mit Typ 1')\n- Reddit: r/diabetes_t1 (Founder-Post, kein Spam)\n- Instagram: DMs an kleine T1D-Creator (1k-10k Follower, hoehere Authentizitaet)\n\nWAS ein gutes Testimonial ausmacht:\n- Konkret (was hat sich verbessert / was war anders als erwartet)\n- Nicht uebertrieben positiv (klingt fake)\n- Kurz: 1-3 Saetze\n- Echt: Name + CGM-Typ wenn moeglich\n\nPROZESS:\n1. 10-15 potenzielle Tester identifizieren und anschreiben\n2. Onboarding per TestFlight / direktem App-Link\n3. Nach 1-2 Wochen Nutzung: Feedback-Gespraech (15 min) + Testimonial-Bitte\n4. Testimonials auf Beta- und Pro-Seite einbauen\n\nACHTUNG: Testimonial-Geber muessen echte T1D-Erfahrung haben — keine Freunde ohne Diabetes, kein gefaktes Social Proof."
+        },
+        {
+          "gid": "1214320471272029",
+          "name": "[Pro] Feature-Cards Layout + Farben im Code finalisieren (nach UX-Update)",
+          "completed": false,
+          "due_on": null,
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Backlog",
+          "notes": "KONTEXT: Feature-Cards auf glev.app/pro wurden per JS temporaer angepasst (2x2 Grid, Arztbericht=Blau #4F6EF7, Du behaeltst die Kontrolle=Pink #FF2D78). Muss nach dem naechsten UX-Designer-Update permanent in den Code eingepflegt werden.\n\nACHTIONS:\n1. Section-Container: display:grid, grid-template-columns: repeat(2,1fr), gap:16px\n2. Arztbericht-Card: Dot-Farbe #4F6EF7 (Blau)\n3. 'Du behaeltst die Kontrolle'-Card: Dot-Farbe #FF2D78 (Pink) oder nach UX-Vorgabe\n4. Sprach-Input + CGM: bleiben gruen #22D3A0\n5. Sicherstellen dass auf Mobile die Cards weiterhin 1-spaltig bleiben (responsive)\n\nABHAENGIGKEIT: Erst umsetzen NACHDEM UX-Update abgeschlossen — nicht vorher anfassen."
+        },
+        {
+          "gid": "1214388018367034",
+          "name": "i18n Card Backs — Rückseiten der Karten übersetzen/fertigstellen",
+          "completed": false,
+          "due_on": "2026-05-12",
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "STATUS: Ausstehend ohne Replit-Prompt.\n\nScope: Alle Karten-Rückseiten (Engine-Karten, Insights, Dashboard-Tiles) auf vollständiges Deutsch bringen und inhaltlich fertigstellen.\n\nPrioritäten:\n1. ICR-Tile-Rückseiten (Task #16 war erledigt — Qualitätssicherung der Texte)\n2. Workout-Insight-Karten Rückseiten\n3. Fingerstick-Karte Rückseite\n4. Post-Meal-Karte Rückseite\n\nAkzeptanzkriterien:\n- Kein englischer Text auf Karten-Rückseiten\n- Medizinische Texte leitlinienkonform formuliert\n- Kein Angst-Framing (immer 'besser verstehen', nie 'gefährlich')"
+        },
+        {
+          "gid": "1214384037318459",
+          "name": "[Ads] Instagram Static + Reel — Performance-Monitoring (keine Conversions bisher)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "UPDATE 29.04.2026: Erste Beta-Zahlung eingegangen — €19, 1 Beta-Tester. Erster bezahlter Kunde. Ads laufen weiter, neue Kampagne (4 Ads, 2 Formate × /beta + /pro) in Vorbereitung."
+        },
+        {
+          "gid": "1214865743662043",
+          "name": "[FEATURE] Workout-Bibliothek — Strukturierte Workouts im Engine-Log-Tab",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "User pickt eine Workout-Session statt Dauer+Intensität manuell einzutippen.\n\nScope:\n- Workout-Katalog mit Sportarten + Intensitätsprofilen\n- Favoriten speicherbar\n- 'Letzte 5 verwendet' als Schnellauswahl\n\nMehrtages-Feature, eigenes Planning nötig.\n\nQuelle: BACKLOG.md"
+        },
+        {
+          "gid": "1214865850778836",
+          "name": "[PERF] fetchMeals ohne Limit — 90-Tage-Cap + Suspense-Boundary + useMemo",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "lib/meals.ts fetchMeals lädt aktuell alle Meals des Users ohne Limit in einem Request.\n\nMaßnahmen (erste Welle A+D+E):\n- 90-Tage-Limit auf fetchMeals einführen\n- Suspense-Boundary\n- useMemo für abgeleitete Berechnungen\n\nQuelle: AGENT_STATUS.md Offen-Sektion"
+        },
+        {
+          "gid": "1214865743586103",
+          "name": "[FEATURE] Whoop-Integration — Strain, Recovery, Sleep, HRV in Engine-Kontext",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Scope:\n- OAuth-Flow für Whoop\n- Daily-Cron für Daten-Sync\n- Recovery-Tile in Engine-Cockpit\n- Whoop-Card in Insights\n\nWICHTIG: Whoop-Daten kommentieren nur das Reasoning — ändern NIE direkt eine Dosis-Empfehlung.\n\nMehrtages-Feature, eigenes Planning nötig.\n\nQuelle: BACKLOG.md"
+        },
+        {
+          "gid": "1214865850781205",
+          "name": "[UX] Einflussfaktoren-Tab auffindbarer machen — Quick-Log-Tile auf Dashboard",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Tab ist vorhanden aber hinter Chevron-Pill im Header versteckt — User finden ihn nicht (Notiz 16.05.).\n\nGewählte Variante: Quick-Log-Tile auf dem Dashboard (meistgenutzter Screen).\n\nWICHTIG: Existierenden Einstieg aus engine/page.tsx:2749 NICHT entfernen — bleibt zusätzlich bestehen.\n\nQuelle: .local/backlog.md"
+        },
+        {
+          "gid": "1214865743662107",
+          "name": "[DB] Cleanup bg_1h / bg_2h → glucose_1h / glucose_2h",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Alte Spaltennamen bg_1h / bg_2h durch glucose_1h / glucose_2h ersetzen, alte Spalten droppen.\n\nLow-Prio, keine User-sichtbare Auswirkung.\n\nQuelle: AGENT_STATUS.md Offen-Sektion"
+        },
+        {
+          "gid": "1214865744142388",
+          "name": "[UX] Parsing-Timer im Log-Screen — Erfassungszeit anzeigen",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Nach dem Voice-/Text-Parsing die vergangene Zeit anzeigen: z.B. \"✓ Erfasst · 7s\"\n\nZiel: User spüren die Geschwindigkeit des Voice-first Loggings bewusst — macht den Kernvorteil sichtbar und messbar erlebbar.\n\nAnzeige auf dem Parsing/Confirmation-Screen nach dem Log, nicht dauerhaft.\n\nQuelle: Frictionless UI/UX Maßnahmen (Roadmap-Tab Marketing Hub)"
+        },
+        {
+          "gid": "1214865851262482",
+          "name": "[UX] Presale Feedback-Frage — In-App Survey was L-User zu €39 bewegt",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Während Early Access (bis 30. Juni): In-App-Frage an alle User stellen:\n\"Was würde dich bewegen, €39/Mo zu zahlen?\"\n\nFormat: Single-Choice, 4–5 Optionen z.B.:\n- Arzt-Export / PDF-Bericht\n- KI-Pattern-Alerts\n- Wearable-Integration (Whoop etc.)\n- Teamfunktion (Arzt-Zugang)\n- Keines davon\n\nZiel: Daten für L-Killer-Feature-Entscheidung. 2 Wochen reichen für aussagekräftige Signale.\n\nQuelle: Pricing-Strategie Übergreifende Empfehlungen"
+        },
+        {
+          "gid": "1214865851262354",
+          "name": "[MARKETING] L-Naming entscheiden — Glev Clinic oder Glev Insight",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Kandidaten:\n- \"Glev Clinic\" → wenn Arzt-Cockpit das Killer-Feature wird\n- \"Glev Insight\" → wenn KI-Pattern-Alerts das Killer-Feature werden\n\nName erst festlegen NACHDEM L-Killer-Feature entschieden ist.\n\nAbhängigkeit: [PRODUCT] L-Killer-Feature entscheiden\n\nQuelle: Pricing-Strategie Übergreifende Empfehlungen"
+        },
+        {
+          "gid": "1214866047790082",
+          "name": "[PRODUCT] L-Trial — 7 Tage automatisch nach M-Monat 1 freischalten",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Nach dem ersten vollen Monat auf M-Plan: automatisch 7 Tage L freischalten.\n\nBedingungen:\n- Kein Opt-in nötig\n- Kein Kreditkarten-Gate\n- User sieht PDF-Export + L-Killer-Feature (sobald definiert)\n\nZiel: Upgrade-Pull ohne Verkaufsdruck.\n\nAbhängigkeit: L-Killer-Feature muss zuerst entschieden sein (anderer Task).\n\nQuelle: Pricing-Strategie Übergreifende Empfehlungen"
+        },
+        {
+          "gid": "1214866021785136",
+          "name": "[PRODUCT] L-Killer-Feature entscheiden — Arzt-Cockpit oder KI-Pattern-Alerts",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Aktuell rechtfertigt L (€39) vs M (€27) den +44 % Aufpreis nicht ausreichend.\n\nZwei Kandidaten:\n(A) Arzt-Cockpit — Sharing-Link für Diabetologen, Read-only-Dashboard ohne App-Download nötig\n(B) KI-Pattern-Alerts — proaktive Warnung wenn Engine schleichende Muster erkennt (z.B. konsistent hohe Post-Mahlzeit-Werte Di/Do)\n\nEntscheidung blockiert L-Naming und L-Trial-Planung. Vorher Presale-Feedback (Task 5) nutzen.\n\nQuelle: Pricing-Strategie Übergreifende Empfehlungen"
+        },
+        {
+          "gid": "1214866021784944",
+          "name": "[PRODUCT] S → M Upgrade-Flow — Engine-Sneak-Peek nach 7 Tagen",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Nach 7 Tagen auf S-Plan: einmalige, nicht-wiederholbare Bolus-Empfehlung für die letzte geloggte Mahlzeit anzeigen.\n\nIn-App-Karte mit CTA: \"Das kann Glev Connect jeden Tag für dich.\"\n\nKein Upgrade-Druck, aber konkreter Vorgeschmack auf die Engine.\nErwarteter Uplift: +15–25 % Upgrade-Rate S → M Trial.\n\nQuelle: Pricing-Strategie Übergreifende Empfehlungen"
+        },
+        {
+          "gid": "1214866766177736",
+          "name": "[FEATURE] Adaptiver Correction Factor (CF) — Lernender ISF",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Aktuell: CF wird manuell in Settings gesetzt und statisch von der Engine genutzt.\n\nZiel: CF adaptiv aus echten Korrektur-Episoden lernen — analog zur adaptiven ICR-Logik.\n\n--- WIE ES FUNKTIONIERT ---\nBeobachteter CF = tatsächlicher BZ-Abfall ÷ gegebene Korrektur-IE\n\nBedingungen für eine gültige Episode (\"reine Korrektur\"):\n- Kein Essen ±3h um die Korrektur\n- Kein aktives IOB aus vorherigem Bolus (kein Stacking)\n- Kein Sport kurz davor\nMindeststichprobe: ≥5–7 saubere Episoden\n\n--- UI-SURFACING (3 Stellen) ---\n\n1. Engine-Cockpit — Source-Info-Chip im Header\nBei Korrekturberechnung: \"CF: 42 (adaptiv)\" oder \"CF: 40 (Arzt)\"\nTransparenz welcher Wert aktiv ist — analog zu ICR-Chip.\n\n2. Settings — erweiterte CF-Karte\n- Arzt-CF: editierbares Feld\n- Beobachteter CF: read-only + Sample-Count\n- Toggle: Arzt | Adaptiv\n- Bestätigungs-Button zum Übernehmen\nGleiche Architektur wie ICR-Settings-Karte.\n\n3. Engine-Hinweis-Banner\nWenn beobachteter CF >15% vom Arzt-CF abweicht:\n→ Banner: \"Deine Insulinsensitivität scheint sich verändert zu haben — Vorschlag: CF 38 statt 40.\"\nGleiche Pattern wie ICR-Abweichungs-Banner.\n\n--- KLINISCHE HINWEISE ---\n- CF variiert nach Tageszeit (Morgen ≠ Abend, Dawn-Phänomen / Cortisol)\n- CF schwankt stärker als ICR bei Aktivität, Stress, Zyklus\n- Auto-apply NICHT empfohlen — Vorschlag zeigen, User/Arzt bestätigt\n- Arzt-CF bleibt immer Fallback\n- Langfristig: CF-Zeitfenster (Morgen/Abend-Slots) sinnvoll\n\n--- OPTIONAL LANGFRISTIG ---\nCF-Trendkarte in Insights: Sensitivität über Woche + Tageszeit visualisiert — eher L-tier Feature.\n\nAbhängigkeit: ICR-Settings als Referenz-Implementierung (bereits live)\n\nQuelle: Pricing-/Engine-Diskussion 17.05.2026"
+        },
+        {
+          "gid": "1214867031658088",
+          "name": "[FEATURE] Apple Health — Körpergewicht-Sync (BodyMass)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Körpergewicht aus HealthKit lesen und passiv im Hintergrund tracken.\n\nKlinischer Nutzen: Gewichtsveränderungen können ICR und CF verschieben. Engine kann Gewichts-Trend als Kontext-Signal für Faktor-Anpassungsvorschläge nutzen.\n\nAbhängigkeit: Apple Health Fundament aus #183.\n\nQuelle: Apple Health Hub-Strategie 17.05.2026"
+        },
+        {
+          "gid": "1214867073983193",
+          "name": "[FEATURE] Apple Health — VO2 Max Sync",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "VO2 Max aus HealthKit lesen (wird von Apple Watch berechnet).\n\nKlinischer Nutzen: Fitnesstrend über Monate — User mit höherem VO2 Max haben tendenziell bessere Insulinsensitivität. Langfristiger Kontext für Engine-Kalibrierung.\n\nNice-to-have, langfristig. Erst sinnvoll wenn Workout-Sync + HRV live sind.\n\nQuelle: Apple Health Hub-Strategie 17.05.2026"
+        },
+        {
+          "gid": "1214867031643274",
+          "name": "[FEATURE] Apple Health — HRV-Sync (HeartRateVariability)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "HRV (Heart Rate Variability) aus HealthKit lesen — Stressindikator, relevant für Insulinresistenz-Einschätzung.\n\nKlinischer Nutzen: Niedrige HRV → erhöhter Stress → potentiell höhere Insulinresistenz. Langfristig für L-tier Pattern-Alerts nutzbar.\n\nKomplexer zu interpretieren als Schlaf oder Schritte — eher L-tier Feature / langfristig.\n\nAbhängigkeit: Schlaf-Sync + Workout-Sync sollten zuerst live sein.\n\nQuelle: Apple Health Hub-Strategie 17.05.2026"
+        },
+        {
+          "gid": "1214866932669824",
+          "name": "[FEATURE] Apple Health — Zyklus-Sync (MenstrualFlow)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Menstruationszyklus wird aktuell manuell in der App geloggt. Auto-Sync aus Apple Health / HealthKit würde den manuellen Eintrag überflüssig machen.\n\nGeringe Implementierungskomplexität (Permission + Read analog zu Schritt-Sync), direkte Friction-Reduktion für weibliche User.\n\nAbhängigkeit: Apple Health Fundament aus #183 (source/external_uid auf exercise_logs, daily_activity_summary).\n\nQuelle: Apple Health Hub-Strategie 17.05.2026"
+        },
+        {
+          "gid": "1214867205131292",
+          "name": "[COMPLIANCE] DiaDigital-Siegel Anfrage gesendet — Rückmeldung abwarten",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Anfrage an diabetesDE.org gesendet am 18. Mai 2026. Warten auf: Kriterienkatalog Tab.1/2/3, Bewerbungsprozess-Info, Zeitrahmen. Kontakt: info@diabetesde.org. Nächster Schritt: Sobald Antwort kommt, Checkliste im Marketing Hub ausfüllen und Bewerbung vorbereiten."
+        },
+        {
+          "gid": "1214867207754099",
+          "name": "[MARKETING] Canva Renderings updaten — Landing & Homepage",
+          "completed": false,
+          "due_on": "2026-05-20",
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Die Mockup-Renderings auf der Landing Page und Homepage müssen auf den aktuellen App-Stand gebracht werden. Screenshots/Designs in Canva aktualisieren und in die jeweiligen Seiten einbauen."
+        },
+        {
+          "gid": "1214869988424978",
+          "name": "Landing-Page-Footer dauerhaft am unteren Rand verankern (#359)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Folgevorschlag zu #357 (Footer-Fix gemergt). Sicherstellen dass der Footer auf allen Geräten/Viewports zuverlässig am unteren Rand sitzt — nicht nur Hotfix sondern robuste Lösung."
+        },
+        {
+          "gid": "1214870121510446",
+          "name": "Alte Pure-Sugar-Snacks rückwirkend als Fast Carbs labeln (#313)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Pure-Sugar-Klassifikation (#312 gemergt) wirkt nur auf neue Einträge. Bestehende Snacks in der Food-History rückwirkend migrieren / neulabeln. Datenqualität für bestehende Beta-User."
+        },
+        {
+          "gid": "1214869912937134",
+          "name": "Active-Day-Outcomes aufgeteilt nach Mahlzeit-Typ (#341)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Outcomes der Engine-Kalkulation pro Mahlzeit-Typ anzeigen (Frühstück / Mittagessen / Abendessen / Snack). Follow-up zur Engine-Cockpit-Arbeit."
+        },
+        {
+          "gid": "1214869988428312",
+          "name": "Alle Insights-Karten einheitlich im Cockpit-Stil (#330)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Einige Insights-Karten haben noch alten Stil. Alle auf Cockpit-Design (wie #329 eingeführt) vereinheitlichen. Wichtig für visuellen Gesamteindruck vor TestFlight-Release."
+        },
+        {
+          "gid": "1214870155813295",
+          "name": "Settings-Übersetzungen automatisch per E2E fangen (#355)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Nach den EN-Übersetzungs-PRs (#346, #350, #352, #353) sicherstellen dass neue deutsche Strings in CGM/Apple-Health-Settings automatisch erkannt werden. Verhindert Regressions vor Launch."
+        },
+        {
+          "gid": "1214869988597834",
+          "name": "Reset-to-Default für Dashboard-Section-Reihenfolge (#322)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Nutzer können Dashboard-Cluster umsortieren (#320 gemergt). Fehlt noch: 'Auf Standard zurücksetzen'-Funktion. UX-Qualität für Early Access."
+        },
+        {
+          "gid": "1214869912889323",
+          "name": "Apple-Health-Badge auch im Dashboard-Expanded (#347)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Apple-Health-Badge ist auf Karten in der Kompaktansicht (#342 gemergt), fehlt aber in der ausgeklappten Dashboard-Card-Ansicht. Konsistenz sicherstellen."
+        },
+        {
+          "gid": "1214912032627507",
+          "name": "[Pricing] Stripe Pläne aktualisieren — M auf €14,90 Presale / €19 Launch, L TBD",
+          "completed": false,
+          "due_on": "2026-05-23",
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Popcorn-Modell beschlossen (19. Mai 2026 mit Agentur).\n\nStripe-Pläne:\n- S: Early Access 3× €4,50 → €9/Mo (unverändert)\n- M Presale: €14,90/Mo (Lifetime Lock — bleibt für immer)\n- M Launch (neue User ab 1. Juli): €19/Mo\n- L Presale: TBD (Sprung M→L muss spürbar größer sein als S→M = +€10)\n- L Launch: TBD\n\nAuch: Checkout-Flow anpassen so dass Presale-User den Lifetime-Lock sehen."
+        },
+        {
+          "gid": "1214912032706977",
+          "name": "[UX] Control Score aufpolieren — prominenter, visuell stärker, Shiny Object für M",
+          "completed": false,
+          "due_on": "2026-05-28",
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Control Score (0–100, proprietärer Stoffwechsel-Index) ist eines der zwei 'Shiny Objects' für Plan M (beschlossen 19. Mai 2026 mit Agentur/Marketer).\n\nZiel: Control Score muss der Screenshot sein den User auf Instagram posten. Aktuell zu wenig prominent.\n\nMaßnahmen:\n- Größere Darstellung auf Dashboard (eigene Karte, nicht versteckt)\n- Erklärung was die Zahl bedeutet (Tooltip / Breakdown)\n- Animierter Übergang bei Score-Änderung\n- Farbskala (0–40 rot, 41–70 gelb, 71–100 grün)\n- 'Dein Score diese Woche: 74 → +6' als Push-Notification-Idee\n\nAbhängigkeit: Nach ICR Engine Fix (#858) da Score auf korrekten Engine-Daten basiert."
+        },
+        {
+          "gid": "1214277217324881",
+          "name": "State-Logic für /beta-voll und /pro-voll prüfen",
+          "completed": false,
+          "due_on": "2026-04-29",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Lifecycle-State-Prompt wurde abgesetzt — Output reviewen, Sold-Out-States simulieren mit hardgecodetem count, Screenshots dokumentieren."
+        },
+        {
+          "gid": "1214279299685721",
+          "name": "Mobile View: Kartengrößen überarbeiten (inspiriert aus Hero-Section Clickable Render)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "To-Do",
+          "notes": "Kartengrößen im Mobile View überarbeiten. Inspiration: der clickable Render im Hero-Bereich der Landing Page. Mobile-first überarbeiten."
+        },
+        {
+          "gid": "1214279067859735",
+          "name": "Settings: Dosierungs-Raster konfigurierbar (Bolus/Basal + Schritte 0.1/0.5/1er)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "To-Do",
+          "notes": "User soll in Settings einstellen können:\n- Target-Dosierung laut Arzt für Bolus und Basal\n- Applizierungsraster: 0.1er / 0.5er / 1er Schritte (weil manche Pens nur glatte Einheiten können)\n\nAus diesen Konfigurationsdaten können neue Insights / Arzt-Dashboard-Werte abgeleitet werden."
+        },
+        {
+          "gid": "1214388018362494",
+          "name": "[Replit] Good Rate Fix — Prompt bereit, deployen",
+          "completed": false,
+          "due_on": "2026-04-30",
+          "assignee": null,
+          "section": "To-Do",
+          "notes": "STATUS: Replit-Prompt bereit — nur noch deployen.\nKein neuer Prompt nötig, direkt in Replit ausführen."
+        },
+        {
+          "gid": "1214380121535293",
+          "name": "[Replit] Copy /pro — Prompt bereit, deployen",
+          "completed": false,
+          "due_on": "2026-04-30",
+          "assignee": null,
+          "section": "To-Do",
+          "notes": "STATUS: Replit-Prompt bereit — nur noch deployen.\nKein neuer Prompt nötig, direkt in Replit ausführen."
+        },
+        {
+          "gid": "1214384329516097",
+          "name": "[Replit] Copy /beta — Prompt bereit, deployen",
+          "completed": false,
+          "due_on": "2026-04-30",
+          "assignee": null,
+          "section": "To-Do",
+          "notes": "STATUS: Replit-Prompt bereit — nur noch deployen.\nKein neuer Prompt nötig, direkt in Replit ausführen."
+        },
+        {
+          "gid": "1214384037444329",
+          "name": "Resend Setup — E-Mail-Infrastruktur aufsetzen",
+          "completed": false,
+          "due_on": "2026-05-08",
+          "assignee": null,
+          "section": "To-Do",
+          "notes": "STATUS: Ausstehend ohne Replit-Prompt.\n\nSchritte:\n1. Resend Account anlegen (resend.com)\n2. Domain verifizieren (glev.app → DNS TXT-Record)\n3. API Key in Vercel ENV eintragen (RESEND_API_KEY)\n4. Transaktionale E-Mails konfigurieren:\n   - Beta-Willkommens-E-Mail\n   - Pro-Willkommens-E-Mail\n   - Password-Reset\n5. Absenderadresse: noreply@glev.app oder hello@glev.app\n\nAbhängigkeit: DNS-Fix erledigt ✅ — Domain sollte korrekt konfiguriert sein."
+        },
+        {
+          "gid": "1214380121824841",
+          "name": "[Replit] Post-Meal Granularität — Prompt bereit, deployen",
+          "completed": false,
+          "due_on": "2026-04-30",
+          "assignee": null,
+          "section": "To-Do",
+          "notes": "STATUS: Replit-Prompt bereit — nur noch deployen.\nKein neuer Prompt nötig, direkt in Replit ausführen."
+        },
+        {
+          "gid": "1214380122037633",
+          "name": "[Replit] Post-Meal Badge — Prompt bereit, deployen",
+          "completed": false,
+          "due_on": "2026-04-30",
+          "assignee": null,
+          "section": "To-Do",
+          "notes": "STATUS: Replit-Prompt bereit — nur noch deployen.\nKein neuer Prompt nötig, direkt in Replit ausführen."
+        },
+        {
+          "gid": "1214380122041069",
+          "name": "Stripe Webhook (Live-Mode) — konfigurieren und testen",
+          "completed": false,
+          "due_on": "2026-05-09",
+          "assignee": null,
+          "section": "To-Do",
+          "notes": "STATUS: Ausstehend ohne Replit-Prompt. Stripe Test-Mode Webhook bereits erledigt.\n\nSchritte:\n1. Stripe Dashboard → Webhooks → Live-Mode Endpoint hinzufügen\n2. Endpoint: https://glev.app/api/stripe/webhook\n3. Events abonnieren: checkout.session.completed, customer.subscription.deleted, invoice.payment_failed\n4. Webhook Secret in Vercel ENV eintragen (STRIPE_WEBHOOK_SECRET_LIVE)\n5. End-to-End testen mit echter Karte (1€ Test-Transaktion)\n\nABHÄNGIGKEIT: Stripe KYC (BLOCKED bis 6. Mai) + Stripe Live-Mode aktivieren (Sprint 2)"
+        },
+        {
+          "gid": "1214865987039865",
+          "name": "[DEV] Test-Suite reparieren — Typecheck-Fehler bereinigen",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "To-Do",
+          "notes": "evaluation.test.ts, pdfReport.test.ts, recommendation.test.ts haben Typecheck-Fehler weil zugehörige Schemata sich geändert haben. Workflow test ist deshalb aktuell failed.\n\nAls Hygiene-Task vor dem nächsten Feature-Batch erledigen. Schnell — sollte priorisiert werden.\n\nQuelle: Übergabeprotokoll 15.–17. Mai 2026"
+        },
+        {
+          "gid": "1214865743606982",
+          "name": "[DEV] Nav-Tab Verifikation auf iOS — Saved-Screen Fix (Commit 165544)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "To-Do",
+          "notes": "User-Report: Nav-Tabs (Dashboard/Entries/Insights/Settings) waren auf Engine-Saved-Screen unresponsive.\n\nFix deployed (Commit 165544): Saved-Karte schrumpft auf natürliche Höhe (minHeight:0, kein flex:1).\n\nVerifizierung noch offen — User muss auf iOS-Device bestätigen ob Tabs wieder klickbar sind.\n\nFalls nicht: iOS-Capacitor-WebView tiefer untersuchen (touch-action: manipulation auf Nav-Buttons oder z-index-Audit aller fixed-Elemente).\n\nQuelle: Übergabeprotokoll 17.05."
+        }
+      ]
+    },
+    {
+      "gid": "1214277323457898",
+      "name": "Glev — Sprint 2: Legal + Account-Setup",
+      "tasks": [
+        {
+          "gid": "1214304286751827",
+          "name": "[FUNDING] KfW StartGeld — Machbarkeit prüfen (requires DE entity)",
+          "completed": false,
+          "due_on": "2026-05-31",
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Unbenannter Abschnitt",
+          "notes": "PRIORITÄT: Mittelfristig — nur relevant wenn deutsche UG/GmbH gegründet wird\n\nWas: KfW StartGeld — zinsgünstiger Kredit bis €200.000 (seit Dez 2025 erhöht von €125k)\nBedingungen:\n- Unternehmen muss in Deutschland registriert sein\n- Max. 5 Jahre seit Gründung\n- 80% Haftungsfreistellung durch KfW (Hausbank trägt nur 20% Risiko)\n- Keine persönlichen Sicherheiten nötig\n- Zinssatz: aktuell ca. 5-6% p.a. (variiert)\n\nSchritte wenn DE-Entity entschieden:\n1. Hausbank kontaktieren (Sparkasse, DKB, oder digital: Commerzbank)\n2. Businessplan einreichen (Glev-Pitch + Finanzplan)\n3. KfW-Antrag läuft immer über die Hausbank, nicht direkt über KfW\n\nLink: https://www.kfw.de/inlandsfoerderung/Unternehmen/Gründen-Nachfolgen/Finanzierungsangebote/KfW-StartGeld/\n\nEntscheidung hängt ab von: Entity-Task — erst wenn Portugal Lda NICHT gewählt wird."
+        },
+        {
+          "gid": "1214304287201271",
+          "name": "[FUNDING] Entity-Entscheidung — Portugal Lda vs. Deutschland UG vs. Estland e-Residency",
+          "completed": false,
+          "due_on": "2026-06-28",
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Unbenannter Abschnitt",
+          "notes": "ENTSCHEIDUNG: Verschoben auf Ende Juni 2026.\n\nBegründung: Für die ersten Verkäufe reicht Recibo Verde (ENI). Keine Entity nötig bis ~€1k MRR. Meta Ads + Agentur laufen an — erst schauen was konvertiert, dann Entity-Entscheidung basierend auf Umsatz und IEFP-Antrag.\n\nWieder aufnehmen: Ende Juni 2026 wenn erste Stripe-Einnahmen sichtbar sind."
+        },
+        {
+          "gid": "1214277598640237",
+          "name": "Stripe KYC vollständig abschließen",
+          "completed": false,
+          "due_on": "2026-05-06",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "BLOCKED bis 6. Mai — Stripe KYC-Überprüfung läuft. Live-Mode (Task: Stripe Live-Mode aktivieren) erst danach freischaltbar.\n\nStripe hat zusätzliche Identitätsverifizierung angefordert. Deadline Stripe: 6. Mai 2026.\nNächster Schritt: Dokumente hochladen sobald Anfrage im Dashboard erscheint."
+        },
+        {
+          "gid": "1214277743395734",
+          "name": "Stripe Live-Mode aktivieren — Live-Keys in Vercel ENV",
+          "completed": false,
+          "due_on": "2026-05-08",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Erst nach KYC-Approval möglich. Live-Products für €19 Beta + €24,90/M Pro neu anlegen (Live-Mode hat eigene Price-IDs!). Webhooks nochmal für Live-URL registrieren."
+        },
+        {
+          "gid": "1214277323421742",
+          "name": "Apple Developer Program registrieren (99 USD/Jahr)",
+          "completed": false,
+          "due_on": "2026-05-04",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "BLOCKED — Registrierung fehlgeschlagen, Apple Support kontaktiert (29.04.2026). Warten auf Rückmeldung. Tel. Fallback: +49 800 6645 451"
+        },
+        {
+          "gid": "1214277323429660",
+          "name": "Impressum-Text generieren und auf glev.app/impressum live",
+          "completed": false,
+          "due_on": "2026-05-04",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Pflicht in DE. Muss Vor- und Nachname, Adresse, Email enthalten. Falls Sociedade Unipessoal in PT: dort registrieren mit PT-Adresse als Hauptsitz."
+        },
+        {
+          "gid": "1214277323470925",
+          "name": "iubenda oder eRecht24 Account anlegen (~€25-50/Jahr)",
+          "completed": false,
+          "due_on": "2026-05-03",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Beide vergleichen: iubenda (~€27/Jahr) ist DSGVO-Standard, eRecht24 (~€10/Monat) hat mehr Templates. Für Health-Adjacent-App empfiehlt sich kurzes anwaltliches Review danach (~€150)."
+        }
+      ]
+    },
+    {
+      "gid": "1214277323463248",
+      "name": "Glev — Sprint 3: Capacitor + Native Setup",
+      "tasks": [
+        {
+          "gid": "1214277574739094",
+          "name": "Splash-Screens für iOS und Android",
+          "completed": false,
+          "due_on": "2026-05-12",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "2732x2732 Source mit glev.-Wordmark zentriert auf Page-BG #09090B. Brand-Konsistenz mit Brandbook."
+        },
+        {
+          "gid": "1214277598698551",
+          "name": "Erste lokale Android-Build via Android Studio erfolgreich",
+          "completed": false,
+          "due_on": "2026-05-15",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "npx cap open android → Run auf Emulator. Gleiche Verifikation wie iOS."
+        },
+        {
+          "gid": "1214277574720842",
+          "name": "AndroidManifest.xml Permissions setzen",
+          "completed": false,
+          "due_on": "2026-05-13",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "INTERNET, RECORD_AUDIO (Voice), CAMERA optional. usesCleartextTraffic=false."
+        },
+        {
+          "gid": "1214277574756248",
+          "name": "Erste lokale iOS-Build via Xcode erfolgreich",
+          "completed": false,
+          "due_on": "2026-05-14",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Xcode öffnen via npx cap open ios. Build → Run auf iOS-Simulator. Glev-Web-App muss in WebView laden mit korrekter Status-Bar und Splash."
+        },
+        {
+          "gid": "1214277574808519",
+          "name": "iOS Info.plist Permissions setzen",
+          "completed": false,
+          "due_on": "2026-05-13",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "NSMicrophoneUsageDescription für Voice-Input ist Pflicht. NSCameraUsageDescription optional falls später Mahlzeiten-Bilder. Texte auf Deutsch."
+        },
+        {
+          "gid": "1214277524754127",
+          "name": "Privacy Manifest für iOS 17+ erstellen",
+          "completed": false,
+          "due_on": "2026-05-13",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "ios/App/App/PrivacyInfo.xcprivacy mit NSPrivacyCollectedDataTypeEmailAddress, NSPrivacyCollectedDataTypeHealthFitness, NSPrivacyAccessedAPICategoryUserDefaults. Pflicht für iOS 17+ App-Submission."
+        },
+        {
+          "gid": "1214277743466008",
+          "name": "Capacitor-Setup-Prompt an Replit absetzen (Phase 1)",
+          "completed": false,
+          "due_on": "2026-05-09",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Existierender Prompt aus Cowork-Konversation. Replit installiert Capacitor + Plugins, konfiguriert capacitor.config.ts mit server.url, generiert iOS- und Android-Project-Files."
+        },
+        {
+          "gid": "1214277524775226",
+          "name": "App-Icons aus public/icon.svg in alle iOS- und Android-Größen generieren",
+          "completed": false,
+          "due_on": "2026-05-12",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Via @capacitor/assets oder sharp-Script. Source: public/icon.svg (32x32 viewBox auf 1024x1024 rendern). iOS braucht 20-1024px, Android braucht mdpi-xxxhdpi-Buckets."
+        },
+        {
+          "gid": "1214277598746110",
+          "name": "iOS-Platform via npx cap add ios auf Mac",
+          "completed": false,
+          "due_on": "2026-05-11",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Replit kann iOS-Platform NICHT adden (kein CocoaPods). Muss auf lokalem Mac passieren. npx cap add ios + npx cap sync."
+        },
+        {
+          "gid": "1214277598671462",
+          "name": "Android-Platform via npx cap add android",
+          "completed": false,
+          "due_on": "2026-05-11",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Kann auch in Replit oder auf jedem System mit Android Studio passieren. npx cap add android."
+        }
+      ]
+    },
+    {
+      "gid": "1214277743482207",
+      "name": "Glev — Sprint 4: TestFlight + Internal Testing",
+      "tasks": [
+        {
+          "gid": "1214277323544037",
+          "name": "Tester-Sync: 1:1 oder Group-Call mit den 5-10 Testern",
+          "completed": false,
+          "due_on": "2026-05-22",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "30 Min Group-Call via Whereby/Meet. Qualitatives Feedback einholen, danke sagen, Loyalität aufbauen für Launch-Word-of-Mouth."
+        },
+        {
+          "gid": "1214277574808753",
+          "name": "TestFlight-Build hochladen",
+          "completed": false,
+          "due_on": "2026-05-17",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Xcode → Product → Archive → Distribute → App Store Connect. Build erscheint in TestFlight nach 10-30 Min Processing."
+        },
+        {
+          "gid": "1214277323552140",
+          "name": "Top-3 Critical-Bugs fixen + neuen Build pushen",
+          "completed": false,
+          "due_on": "2026-05-22",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Critical = App-Crash, Subscription-Flow blockiert, CGM-Integration kaputt. Andere Bugs in Sprint 8 Bug-Sprint."
+        },
+        {
+          "gid": "1214277524709496",
+          "name": "Bug-Backlog aus Tester-Reports sammeln",
+          "completed": false,
+          "due_on": "2026-05-21",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Eigene Section in diesem Sprint-Board oder neuer Asana-Tag \"bug-from-test\". Kategorisieren nach Severity (Critical/High/Medium/Low)."
+        },
+        {
+          "gid": "1214277524753347",
+          "name": "Beta-Tester per Email einladen mit TestFlight-Link + Play-Internal-Link",
+          "completed": false,
+          "due_on": "2026-05-19",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Persönliche Email mit kurzer Anleitung. TestFlight-Public-Link funktioniert via apple.com/testflight, Play-Internal via Email-Whitelist."
+        },
+        {
+          "gid": "1214277524819216",
+          "name": "Liste von 5-10 T1D-Bekannten als Beta-Tester zusammenstellen",
+          "completed": false,
+          "due_on": "2026-05-18",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Persönliche Kontakte aus T1D-Community, dedoc-Kontakte, evtl. ein-zwei T1D-Influencer mit denen du schon im Kontakt bist."
+        },
+        {
+          "gid": "1214277524819280",
+          "name": "Feedback-Sammelpunkt einrichten (Google Form oder Tally)",
+          "completed": false,
+          "due_on": "2026-05-19",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Strukturiertes Feedback: Was funktioniert, was bricht, was fehlt, was nervt. Kurze Form (5-7 Fragen) damit Tester sie ausfüllen."
+        },
+        {
+          "gid": "1214277323514828",
+          "name": "Google Play Internal Testing Track Build hochladen",
+          "completed": false,
+          "due_on": "2026-05-17",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Android Studio → Build → Generate Signed Bundle → .aab. In Play Console → Internal Testing Track hochladen."
+        }
+      ]
+    },
+    {
+      "gid": "1214277743533142",
+      "name": "Glev — Sprint 5: Marketing + Pre-Launch-Push",
+      "tasks": [
+        {
+          "gid": "1214320582647004",
+          "name": "[Content] Knowledge Base — CGM Setup Guide pro Hersteller",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Unbenannter Abschnitt",
+          "notes": "In-App Wissensdatenbank: Kurze Schritt-für-Schritt Anleitung pro CGM wie der User seine API-Zugangsdaten findet und in Glev einträgt. Libre 2/3 via LibreLinkUp, Dexcom via Dexcom Share. Screenshots + max. 3 Schritte pro Guide. Content-Arbeit, kein Dev."
+        },
+        {
+          "gid": "1214303982925067",
+          "name": "[FUNDING] Startnext — Kampagnenvideo + Seite produzieren",
+          "completed": false,
+          "due_on": "2026-06-20",
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Unbenannter Abschnitt",
+          "notes": "Voraussetzung: Strategie & Konzept-Task abgeschlossen\n\n**Video (60-90 Sekunden):**\n- Hook: Ein konkreter T1D-Moment der alle kennen ('Du stehst im Restaurant und weißt nicht was du bolust')\n- Problem: Warum existierende Apps nicht reichen\n- Lösung: Glev in Aktion (Voice-Demo, CGM-Integration, Adaptive Engine)\n- Founder-Moment: Wer du bist, warum du das baust\n- CTA: 'Werde Founding Member'\n- Stil: Authentisch, direkt, kein Hochglanz — Founder-Kamera reicht\n\n**Kampagnenseite Struktur:**\n1. Headline + Subheadline\n2. Das Problem (T1D-Alltag ohne gutes Tool)\n3. Glev-Demo (Screenshots/GIFs)\n4. Adaptive Engine erklären (USP)\n5. Wer ist Lucas (Founder-Story)\n6. Reward-Tiers\n7. Roadmap (was mit dem Geld passiert)\n8. FAQ (Datenschutz, DSGVO, Medizinprodukt-Status)\n9. Social Proof (Beta-User-Zitate)\n\n**Assets needed:**\n- App-Screenshots\n- Founder-Foto\n- Produkt-Demo-GIF (Voice-Input → Makros)\n- Logo in Kampagnen-Format"
+        },
+        {
+          "gid": "1214304040628167",
+          "name": "[FUNDING] Pre-Launch-Liste aufbauen für Startnext (Ziel: 200 Leads)",
+          "completed": false,
+          "due_on": "2026-06-30",
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Unbenannter Abschnitt",
+          "notes": "PRIORITÄT: Läuft parallel zu Marketing — entscheidend für Kampagnen-Erfolg\n\nWarum wichtig: Crowdfunding-Kampagnen die in den ersten 48h mehr als 30% ihres Ziels erreichen haben eine ~80% Erfolgsquote. Dafür braucht man eine vorgewärmte Liste.\n\nKanäle zum Aufbau:\n1. Instagram-Follower aktivieren: 'Trag dich ein wenn du dabei sein willst'\n2. T1D-Communities DACH: Facebook-Gruppen (Typ-1 Diabetiker Deutschland etc.), Reddit r/diabetes_t1\n3. Beta-Nutzer die schon drin sind → direkt anschreiben\n4. diabetesDE, DDG-Patienteninitiative, Diabetes-Blogger DACH\n5. Waitlist-Funktion auf glev.app/beta einbauen (E-Mail capture)\n\nZiel: 200 vorgemerkte Interessenten vor Kampagnenstart\nDavon realistisch: 10-15% konvertieren → 20-30 sofortige Backer am Tag 1\n\nTracking: Einfache Google-Sheet-Liste mit Quelle + Datum reicht"
+        },
+        {
+          "gid": "1214304021497748",
+          "name": "[FUNDING] Startnext-Kampagne vorbereiten — Strategie & Konzept",
+          "completed": false,
+          "due_on": "2026-06-01",
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Unbenannter Abschnitt",
+          "notes": "PRIORITÄT: Parallel zu Launch-Vorbereitung (Kampagne live = App-Launch)\n\nZiel: €30.000–€60.000 über Startnext Crowdfunding\nPlatform: startnext.com (DACH-fokussiert, kein Medizinprodukt-Ausschluss wie Kickstarter)\nModell: Rewards-based (kein Equity)\n\n**Reward-Tiers (Vorschlag):**\n- €19 → Beta-Zugang 6 Monate (Early Bird)\n- €49 → 1 Jahr Premium + Name im Credits\n- €99 → Lifetime-Zugang + persönlicher Onboarding-Call (30 Min)\n- €299 → Lifetime + 'Founding Member' Badge + Einfluss auf Feature-Roadmap\n\n**Was für eine erfolgreiche Kampagne nötig ist:**\n1. Kampagnenvideo (60-90 Sek) — Founder-Story + Produkt-Demo\n2. Kampagnenseite schreiben (Problem → Lösung → Team → Roadmap → Rewards)\n3. Pre-Launch-Liste aufbauen (Ziel: 200+ Interessenten vor Start)\n4. Community-Aktivierung: T1D-Gruppen DACH, Instagram-Follower\n5. Pressearbeit: Diabetes-Fachmedien, Patientenorganisationen (DDG, diabetesDE)\n\n**Timing:**\n- Kampagnenstart = App-Launch (1. Juli 2026)\n- Laufzeit: 30-45 Tage\n- Pre-Launch-Phase: Juni 2026\n\n**Nächster Schritt:** Startnext-Account anlegen + Kampagnenseite im Entwurf starten\nLink: https://www.startnext.com/kampagne-starten"
+        },
+        {
+          "gid": "1214280768842635",
+          "name": "Instagram Account einrichten + 3 erste Posts live",
+          "completed": false,
+          "due_on": "2026-04-30",
+          "assignee": null,
+          "section": "Unbenannter Abschnitt",
+          "notes": "Handle: @glev.app oder @glevapp\n\nBio:\nTyp-1-Diabetes. Neu gedacht.\nMahlzeiten tracken. CGM verknüpfen. Arzt-Export.\n🇩🇪🇦🇹🇨🇭 · Beta jetzt offen\n👇 glev.app/beta\n\nErste 3 Posts vor Paid Ads schalten:\n1. Static: Brand-Intro (Di 28. Apr · 19:00)\n2. Reel: Founder-Story Tokio/514 (Fr 1. Mai · 12:00)\n3. Static oder Story als Puffer\n\n📎 Content Plan: computer:///Users/lucas/Documents/Claude/Projects/Glev/Glev_Content_Plan.pdf"
+        },
+        {
+          "gid": "1214280772347167",
+          "name": "Sprint 5 Final Push (23.–29. Mai) — 4 Posts vorbereiten",
+          "completed": false,
+          "due_on": "2026-05-22",
+          "assignee": null,
+          "section": "Unbenannter Abschnitt",
+          "notes": "4 Posts für die letzte Woche vor Sprint-5-Ende:\n\nSa 23. Mai · 10:00 · Reel: 'Beta schließt bald. Warum ich das gebaut habe.' (Founder, direkt)\nDi 26. Mai · 19:00 · Story: Umfrage 'Trackst du deine Mahlzeiten?' + Link-Sticker glev.app/beta\nDo 28. Mai · 12:00 · Carousel: 'Warum Excel für T1D nicht funktioniert'\nFr 29. Mai · 19:00 · Static: 'Final Push — 500 Plätze. Beta endet 1. Juli.'\n\nZiel Sprint 5: 50–100 Beta-Reservierungen\n\n📎 Content Plan: computer:///Users/lucas/Documents/Claude/Projects/Glev/Glev_Content_Plan.pdf"
+        },
+        {
+          "gid": "1214280821519313",
+          "name": "Static erstellen: Brand-Intro 'Typ 1. Neu gedacht.'",
+          "completed": false,
+          "due_on": "2026-04-27",
+          "assignee": null,
+          "section": "Unbenannter Abschnitt",
+          "notes": "Format: 4:5 · 1080×1350 · Instagram + Facebook\n\nGestaltung:\n- Schwarzer Hintergrund (#0A0A0A)\n- Glev Logo mittig\n- Tagline: 'Typ 1. Neu gedacht.'\n- Primärfarbe #4F6EF7 (Blau)\n\nCaption: Kurze Founder-Intro + CTA glev.app/beta\n\nPosting: Di 28. Apr · 19:00 · Instagram\n\n📎 Content Plan: computer:///Users/lucas/Documents/Claude/Projects/Glev/Glev_Content_Plan.pdf"
+        },
+        {
+          "gid": "1214280821597707",
+          "name": "Reel produzieren: UGC-Style 'Ryder' — Ich hab aufgehört zu tracken",
+          "completed": false,
+          "due_on": "2026-05-05",
+          "assignee": null,
+          "section": "Unbenannter Abschnitt",
+          "notes": "Script (EN, 130 Zeichen max):\n'I have T1D. I stopped tracking — too much effort. With Glev I just speak it. The rest happens automatically.'\n\nZeely Avatar: Ryder\nPrompt: Ryder sits at a kitchen table, casual home setting, morning light. White t-shirt. Holds smartphone with Glev app dashboard visible. Looks directly into camera, relaxed and natural.\n\nPosting: Di 6. Mai · 19:00 · Instagram + TikTok\n\n📎 Content Plan: computer:///Users/lucas/Documents/Claude/Projects/Glev/Glev_Content_Plan.pdf"
+        },
+        {
+          "gid": "1214280821579538",
+          "name": "Carousel erstellen: 'Warum Excel für T1D-Tracking nicht funktioniert'",
+          "completed": false,
+          "due_on": "2026-05-27",
+          "assignee": null,
+          "section": "Unbenannter Abschnitt",
+          "notes": "Format: 1:1 · 1080×1080 · 4 Slides · Instagram + Facebook\n\nSlide 1 (Cover): 'Warum ich aufgehört habe mein Diabetes in Excel zu tracken'\nSlide 2: Manuell tippen. Timer stellen. ChatGPT fragen. Alles zusammenkopieren.\nSlide 3: Das Problem: Kein Hub. Kein Überblick. Keine Zeit.\nSlide 4: Glev — alles in einem. CTA: glev.app/beta\n\nPosting: Do 28. Mai · 12:00 · Instagram + Facebook\n\n📎 Content Plan: computer:///Users/lucas/Documents/Claude/Projects/Glev/Glev_Content_Plan.pdf"
+        },
+        {
+          "gid": "1214280652105599",
+          "name": "Carousel erstellen: '5 Dinge nach T1D-Diagnose'",
+          "completed": false,
+          "due_on": "2026-05-07",
+          "assignee": null,
+          "section": "Unbenannter Abschnitt",
+          "notes": "Format: 1:1 · 1080×1080 · 5 Slides · Instagram + Facebook\n\nSlide 1 (Cover): '5 Dinge die ich nach meiner T1D-Diagnose sofort wissen wollte'\nSlide 2: Was bedeuten die CGM-Zahlen wirklich?\nSlide 3: Carbs zählen — so geht's einfacher\nSlide 4: Warum Tracking so wichtig ist (und warum es nervt)\nSlide 5: Tools die mir geholfen haben — Glev + CTA\n\n⚠ Compliance: Keine Dosierungs-Claims, kein 'verbessert deinen HbA1c'\n\nPosting: Do 8. Mai · 12:00 · Instagram + Facebook\n\n📎 Content Plan: computer:///Users/lucas/Documents/Claude/Projects/Glev/Glev_Content_Plan.pdf"
+        },
+        {
+          "gid": "1214280821597771",
+          "name": "Screen-Recording Reel: App-Demo Voice Input → Makros",
+          "completed": false,
+          "due_on": "2026-05-12",
+          "assignee": null,
+          "section": "Unbenannter Abschnitt",
+          "notes": "Format: Screen-Recording vom Handy + Voiceover\n9:16 · 15–20 Sek.\n\nFlow zeigen:\n1. Mikrofon-Icon antippen\n2. 'Pasta mit Pesto, 250 Gramm' einsprechen\n3. Makros erscheinen (Carbs, Protein, Fett)\n4. CGM-Wert daneben\n\nVoiceover: 'Kein Tippen. Kein Suchen. In Sekunden fertig.'\nCTA: 'Glev Beta. Link in Bio.'\n\nPosting: Di 13. Mai · 19:00 · Instagram + TikTok\n\n📎 Content Plan: computer:///Users/lucas/Documents/Claude/Projects/Glev/Glev_Content_Plan.pdf"
+        },
+        {
+          "gid": "1214280768841511",
+          "name": "Facebook Business Manager + Page einrichten",
+          "completed": false,
+          "due_on": "2026-05-03",
+          "assignee": null,
+          "section": "Unbenannter Abschnitt",
+          "notes": "Schritte:\n1. business.facebook.com → Business Manager anlegen\n2. Facebook Page 'Glev' erstellen\n3. Instagram Account verknüpfen\n4. Ad Account anlegen (für Paid Ads ab 10. Mai)\n\nWichtig für Paid Ads: ohne verknüpften Business Manager kein Meta Ads Manager.\n\n📎 Content Plan: computer:///Users/lucas/Documents/Claude/Projects/Glev/Glev_Content_Plan.pdf"
+        },
+        {
+          "gid": "1214280821543918",
+          "name": "Carousel erstellen: 'So tracke ich mit Glev' — Step-by-Step",
+          "completed": false,
+          "due_on": "2026-05-12",
+          "assignee": null,
+          "section": "Unbenannter Abschnitt",
+          "notes": "Format: 1:1 · 1080×1080 · 4–5 Slides · Instagram + Facebook\n\nSlide 1 (Cover): 'So tracke ich meine Mahlzeiten mit Glev'\nSlide 2: Schritt 1 — Mahlzeit einsprechen\nSlide 3: Schritt 2 — KI berechnet Makros\nSlide 4: Schritt 3 — CGM-Wert automatisch dabei\nSlide 5: CTA — 'Beta. 19 Euro. glev.app/beta'\n\nPosting: Fr 16. Mai · 12:00 · Instagram + Facebook\n\n📎 Content Plan: computer:///Users/lucas/Documents/Claude/Projects/Glev/Glev_Content_Plan.pdf"
+        },
+        {
+          "gid": "1214280651879090",
+          "name": "Reel produzieren: Founder-Story 'Tokio · 514 · Notaufnahme'",
+          "completed": false,
+          "due_on": "2026-05-01",
+          "assignee": null,
+          "section": "Unbenannter Abschnitt",
+          "notes": "Hook: '514. Das war mein Blutzucker. Ich war in Tokio. Und ich hatte keine Ahnung.'\n\nStruktur:\n→ Reise nach Japan. Komische Symptome. Ignoriert.\n→ Notaufnahme. 514. Ketone.\n→ Erste Reaktion: ruhig. Dann die Traurigkeit.\n→ Ich hab Glev gebaut weil mir die App gefehlt hat.\n→ CTA: Link in Bio. Beta offen.\n\nFormat: 9:16 · 30–45 Sek. · Kein Schnitt · Direkt in Kamera\nPosting: Fr 1. Mai · 12:00 · Instagram + TikTok\n\n📎 Content Plan: computer:///Users/lucas/Documents/Claude/Projects/Glev/Glev_Content_Plan.pdf\n📎 Founder Scripts: computer:///Users/lucas/Documents/Claude/Projects/Glev/Glev_Founder_Video_Scripts.pdf"
+        },
+        {
+          "gid": "1214280768762155",
+          "name": "Reel produzieren: UGC-Style 'Christopher' — Pasta eingesprochen",
+          "completed": false,
+          "due_on": "2026-05-18",
+          "assignee": null,
+          "section": "Unbenannter Abschnitt",
+          "notes": "Script (EN, 130 Zeichen max):\n'Had pasta, said it out loud. Glev calculated the macros, glucose right there. No typing — done in seconds.'\n\nZeely Avatar: Christopher\nPrompt: Christopher stands outside a café, daytime, urban setting. Black t-shirt, casual. Holds smartphone with Glev app macro screen visible, speaks directly to camera.\n\nPosting: Di 19. Mai · 19:00 · Instagram + TikTok\n\n📎 Content Plan: computer:///Users/lucas/Documents/Claude/Projects/Glev/Glev_Content_Plan.pdf"
+        },
+        {
+          "gid": "1214280652055693",
+          "name": "Static erstellen: 'Noch X Beta-Plätze' Countdown",
+          "completed": false,
+          "due_on": "2026-05-20",
+          "assignee": null,
+          "section": "Unbenannter Abschnitt",
+          "notes": "Format: 4:5 · 1080×1350 · Instagram + Facebook\n\nGestaltung:\n- Dunkler Hintergrund\n- Große Zahl: verbleibende Beta-Plätze\n- Text: 'Beta-Reservierung · €19 · glev.app/beta'\n- Akzentfarbe #22D3A0 (Mint-Grün) für die Zahl\n\nPosting: Do 21. Mai · 18:00\n\n📎 Content Plan: computer:///Users/lucas/Documents/Claude/Projects/Glev/Glev_Content_Plan.pdf"
+        },
+        {
+          "gid": "1214280772287618",
+          "name": "TikTok Account anlegen + verifizieren",
+          "completed": false,
+          "due_on": "2026-04-30",
+          "assignee": null,
+          "section": "Unbenannter Abschnitt",
+          "notes": "Handle: @glev.app oder @glevapp (gleich wie Instagram)\nProfil-Bio analog Instagram\nLink in Bio: glev.app/beta\n\nErste Videos: Reels von Instagram können direkt als TikTok gepostet werden (kein Wasserzeichen — direkt aus der Kamera hochladen, nicht von Instagram exportieren)\n\n📎 Content Plan: computer:///Users/lucas/Documents/Claude/Projects/Glev/Glev_Content_Plan.pdf"
+        },
+        {
+          "gid": "1214280706883510",
+          "name": "Paid Ads einrichten: Meta Ads Manager · €300 Budget",
+          "completed": false,
+          "due_on": "2026-05-09",
+          "assignee": null,
+          "section": "Unbenannter Abschnitt",
+          "notes": "Start: 10. Mai · Ende: 31. Mai · ~€14/Tag\n\nStruktur:\n1 Kampagne: 'Beta Reservierungen' → Traffic → glev.app/beta\n\nAd Group 1 — T1D Community DACH · €5/Tag\n- Interessen: Diabetes, FreeStyle Libre, CGM, Insulinpumpe\n- Alter: 22–45 · DE/AT/CH\n- Ads: Reel Ryder + Static Dashboard\n\nAd Group 2 — Health Tech DACH · €5/Tag\n- Interessen: Health Apps, Wearables, Quantified Self\n- Alter: 25–40 · DE/AT/CH\n- Ads: Reel Christopher + Carousel\n\nAd Group 3 — Broad · €4/Tag (erst nach Woche 1 aktivieren)\n\nKPIs: CPM <€12 · CTR >1,5% · CPC <€0,80 · Cost/Sign-up <€6\n\n📎 Content Plan: computer:///Users/lucas/Documents/Claude/Projects/Glev/Glev_Content_Plan.pdf"
+        },
+        {
+          "gid": "1214280652130875",
+          "name": "Meta Pixel auf glev.app/beta installieren",
+          "completed": false,
+          "due_on": "2026-05-07",
+          "assignee": null,
+          "section": "Unbenannter Abschnitt",
+          "notes": "Voraussetzung für Paid Ads.\n\nSchritte:\n1. Meta Events Manager → Pixel erstellen\n2. Pixel-Code in app/layout.tsx einbetten (oder via Vercel Integration)\n3. Conversion Event 'Lead' oder 'Purchase' auf /beta/success feuern\n4. Mit Meta Pixel Helper Chrome Extension verifizieren\n\nOhne Pixel: Paid Ads laufen blind, kein Conversion-Tracking.\n\n📎 Content Plan: computer:///Users/lucas/Documents/Claude/Projects/Glev/Glev_Content_Plan.pdf"
+        },
+        {
+          "gid": "1214277574882462",
+          "name": "Liste von 20 deutschen T1D-Influencern recherchieren",
+          "completed": false,
+          "due_on": "2026-05-27",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Hashtags #typ1diabetes, #t1dlife, #typ1leben durchsuchen. 5-50k Followers, regelmäßig posten, authentische T1D-Stimmen. Spreadsheet mit Handle, Followers, Engagement-Rate, Email/DM-Adresse."
+        },
+        {
+          "gid": "1214277524750760",
+          "name": "Reddit-Beobachtung in r/diabetes_t1 starten (Lurking, kein Posting)",
+          "completed": false,
+          "due_on": "2026-05-26",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Erste Woche nur lesen, Community verstehen, Tone matchen. KEIN Glev-Erwähnen — das ist Banhammer-Garantie. Hilfreiche Kommentare in Diabetes-bezogenen Threads abgeben."
+        },
+        {
+          "gid": "1214277323514654",
+          "name": "Erste 5 Influencer per DM mit Beta-Access-Angebot anschreiben",
+          "completed": false,
+          "due_on": "2026-05-28",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Personalisierte DM (kein Bulk-Spam). Free Beta-Access als Angebot, ehrliche Reviews erbeten, kein Sponsored-Post-Druck. Ziel: 2-3 Antworten."
+        },
+        {
+          "gid": "1214277323552499",
+          "name": "Email-Liste-Builder einrichten (Resend oder ConvertKit)",
+          "completed": false,
+          "due_on": "2026-05-26",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Resend ist developer-friendly + günstig. ConvertKit ist Marketing-stronger. Für Solo-Founder Glev: Resend reicht. Welcome-Email-Sequenz vorbereiten."
+        },
+        {
+          "gid": "1214277524736277",
+          "name": "Ziel-Tracking: 50-100 Beta-Reservierungen diese Woche",
+          "completed": false,
+          "due_on": "2026-05-29",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Täglich Stripe-Dashboard checken. Bei <20 nach Mitte der Woche: Strategie nachschärfen (Founder-Story-Post wiederholen, anderen Hook ausprobieren)."
+        },
+        {
+          "gid": "1214277524871001",
+          "name": "Facebook-Page /glev.app einrichten mit Impressum-Link",
+          "completed": false,
+          "due_on": "2026-05-24",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Impressum-Link Pflicht in DE. Page-Beschreibung aus Brandbook übernehmen. Verlinkung zu glev.app/impressum und /datenschutz."
+        },
+        {
+          "gid": "1214277574809982",
+          "name": "TikTok-Profil @glev.app einrichten",
+          "completed": false,
+          "due_on": "2026-05-24",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Bio: 'Typ 1 Diabetes 🩸 per Sprache loggen. Beta drop ↓'. Gleiche Profilbild-Konvention."
+        },
+        {
+          "gid": "1214277743464908",
+          "name": "Instagram-Profil @glev.app einrichten mit Bio aus Brandbook",
+          "completed": false,
+          "due_on": "2026-05-24",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Bio: 'Typ 1 Diabetes, neu gedacht. Mahlzeiten per Sprache. KI-Makros. CGM live. ↓ Beta-Platz sichern'. Profilbild: glev-symbol-512.png aus Brand-Assets."
+        },
+        {
+          "gid": "1214277574885741",
+          "name": "Erstes Founder-Reel posten (Instagram + TikTok)",
+          "completed": false,
+          "due_on": "2026-05-25",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "30-60 Sek. Founder-Story: 'Im April 2026 wurde bei mir Typ 1 diagnostiziert, hier ist warum ich Glev baue.' Kurze Demo vom Voice-Input. Authentic, kein Polish."
+        }
+      ]
+    },
+    {
+      "gid": "1214277524921773",
+      "name": "Glev — Sprint 6: App-Store-Listings vorbereiten",
+      "tasks": [
+        {
+          "gid": "1214277743508281",
+          "name": "Screenshots Android Phone (3-5 Stück)",
+          "completed": false,
+          "due_on": "2026-06-04",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Auch für Tablet optional. Material-Design-Look respektieren falls Android-spezifische Elemente."
+        },
+        {
+          "gid": "1214277323470865",
+          "name": "Screenshots iPhone 6.5\" (3-5 Stück)",
+          "completed": false,
+          "due_on": "2026-06-03",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Gleiche Szenen wie 6.7\", angepasste Auflösung. Designer kann beide Sets zusammen liefern."
+        },
+        {
+          "gid": "1214277574846421",
+          "name": "Optional: Promo-Video 30 Sekunden",
+          "completed": false,
+          "due_on": "2026-06-05",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Nicht zwingend, aber boostet Conversion auf App-Store-Listings um ~20%. Screen-Recording vom Voice-Input-Flow + Founder-Outro. Tools: ScreenStudio (Mac), CapCut, oder Designer."
+        },
+        {
+          "gid": "1214277524890811",
+          "name": "App-Store-Beschreibung Google Play auf Deutsch",
+          "completed": false,
+          "due_on": "2026-05-31",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Ähnlich iOS-Text aber etwas länger möglich (4000 Zeichen). Google legt mehr Wert auf Keywords im Text als Apple."
+        },
+        {
+          "gid": "1214277323514681",
+          "name": "Keywords-Set für ASO recherchieren",
+          "completed": false,
+          "due_on": "2026-06-01",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Tools: AppTweak (Free-Tier), AppFollow. Hauptkeywords: 'typ 1 diabetes', 'cgm', 'mahlzeiten tracker', 'kohlenhydrate', 'insulin', 'libre 2'. iOS hat 100-Char-Limit, Google indexiert die Beschreibung."
+        },
+        {
+          "gid": "1214277524821643",
+          "name": "App-Store-Beschreibung iOS auf Deutsch (max 4000 Zeichen)",
+          "completed": false,
+          "due_on": "2026-05-31",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Headline-Sentence 30 Zeichen, dann lange Beschreibung. Aus Brandbook-Tone schreiben: tech-forward, empowering, NIE medizinische Wirkungsversprechen. Disclaimer: 'Glev ist ein Dokumentations-Tool, kein Medizinprodukt.'"
+        },
+        {
+          "gid": "1214277323595152",
+          "name": "Screenshots iPhone 5.5\" (3-5 Stück)",
+          "completed": false,
+          "due_on": "2026-06-03",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Für Apple-Submission Pflicht (alte iPhones). Gleiche Szenen, gestauchte Auflösung."
+        },
+        {
+          "gid": "1214277323514847",
+          "name": "Privacy Policy URL für beide App-Stores hinterlegen (glev.app/datenschutz)",
+          "completed": false,
+          "due_on": "2026-06-05",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Pflicht-Feld in beiden Stores. URL muss erreichbar sein und DSGVO-konform. Aus Sprint 2 sollte das schon live sein."
+        },
+        {
+          "gid": "1214277743582680",
+          "name": "Screenshots iPhone 6.7\" (3-5 Stück)",
+          "completed": false,
+          "due_on": "2026-06-03",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Hauptscreens: Dashboard mit Live-Glukose, Voice-Input-Flow, Insights mit Meal-Type-Analyse, Settings mit CGM-Verbindung. Designer-Outsource: Fiverr ~150€, sucht 'app store screenshot designer'."
+        }
+      ]
+    },
+    {
+      "gid": "1214277606359339",
+      "name": "Glev — Sprint 7: Public Submission",
+      "tasks": [
+        {
+          "gid": "1214277743519191",
+          "name": "iOS App-Listing in App Store Connect ausfüllen",
+          "completed": false,
+          "due_on": "2026-06-08",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Aus Sprint 6: Beschreibung, Keywords, Screenshots hochladen. App-Kategorie: Health & Fitness oder Medical (NICHT Medical wenn nicht zertifiziert!). Age-Rating: 17+ wegen unrestricted web access."
+        },
+        {
+          "gid": "1214277574885583",
+          "name": "Android-Listing in Play Console ausfüllen",
+          "completed": false,
+          "due_on": "2026-06-10",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Aus Sprint 6: Beschreibung, Screenshots. Content Rating completen. Data Safety Form ausfüllen — wichtig für Health-Apps: deklarieren was an Health-Daten gesammelt wird."
+        },
+        {
+          "gid": "1214277524949736",
+          "name": "Android-AAB final bauen und signieren",
+          "completed": false,
+          "due_on": "2026-06-09",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Generate Signed Bundle in Android Studio. Production-Keystore (sicher backuppen — wenn weg, kann App nie wieder updated werden!)."
+        },
+        {
+          "gid": "1214277574964460",
+          "name": "iOS-Submission absenden",
+          "completed": false,
+          "due_on": "2026-06-09",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Submit for Review. Review-Notes für Apple: Demo-Account-Login für Reviewer, Disclaimer dass App keine medizinischen Entscheidungen trifft, Hinweis auf LibreLinkUp als CGM-Quelle."
+        },
+        {
+          "gid": "1214277323606790",
+          "name": "iOS-Build final via Xcode bauen und signieren",
+          "completed": false,
+          "due_on": "2026-06-08",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Production-Build mit allen finalen Permissions, Privacy Manifest, Distribution-Certificate. Archive → Validate → Distribute."
+        },
+        {
+          "gid": "1214277743595004",
+          "name": "Stripe-Webhook-URLs für Live-Domain verifizieren",
+          "completed": false,
+          "due_on": "2026-06-12",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Webhooks zeigen jetzt auf glev.app/api/beta/webhook und glev.app/api/pro/webhook. Test mit Stripe CLI 'stripe trigger checkout.session.completed'. Beide Endpoints müssen 200 zurückgeben."
+        },
+        {
+          "gid": "1214277574962699",
+          "name": "Android-Submission absenden",
+          "completed": false,
+          "due_on": "2026-06-10",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Submit to Production track. Closed Testing Track parallel laufen lassen falls Reviewer zusätzliches möchten."
+        },
+        {
+          "gid": "1214277598905360",
+          "name": "Customer-Support-Email-Templates schreiben",
+          "completed": false,
+          "due_on": "2026-06-11",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Templates für: Beta-Reservation-Bestätigung, Pro-Subscription-Bestätigung, Trial-Started, Trial-Ending-Reminder, Subscription-Cancelled, CGM-Connection-Issues, Refund-Request."
+        },
+        {
+          "gid": "1214277606361634",
+          "name": "Resend oder Postmark für transactional Emails einrichten",
+          "completed": false,
+          "due_on": "2026-06-11",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Resend hat besseres DX für Next.js, Postmark hat bessere Deliverability. Für <10k Emails/Monat reicht Resend Free-Tier. Domain-Verifikation per DNS-TXT-Record (24h Wartezeit einplanen)."
+        }
+      ]
+    },
+    {
+      "gid": "1214277743704291",
+      "name": "Glev — Sprint 8: Review-Buffer + Standard-Tier",
+      "tasks": [
+        {
+          "gid": "1214277574885599",
+          "name": "Standard-Tier €9/Monat mit 7-Tage-Trial bauen (Phase-B-Replit-Prompt)",
+          "completed": false,
+          "due_on": "2026-06-16",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Stripe Subscription Mode mit trial_period_days: 7. Neuer API-Route /api/standard/checkout. Neue Supabase-Tabelle standard_subscriptions. Replit-Prompt schreibe ich dir näher dran wenn Stripe Live-Mode steht."
+        },
+        {
+          "gid": "1214277743582152",
+          "name": "Reagieren auf Apple-Reviewer-Feedback",
+          "completed": false,
+          "due_on": "2026-06-15",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Apple meldet sich meist nach 3-7 Tagen. Häufige Punkte bei Health-Apps: Medical-Disclaimer-Klarheit, Privacy-Manifest-Vollständigkeit, Permissions-Begründung. Schnelle Antworten halten den Review-Loop kurz."
+        },
+        {
+          "gid": "1214277743704693",
+          "name": "Beta-Redirect-Logik /beta → /signup für 1. Juli aktivieren",
+          "completed": false,
+          "due_on": "2026-06-18",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Datums-basierter 301-Redirect. Ab 2026-07-01 leitet /beta auf /signup weiter. Code: if (Date.now() >= LAUNCH_DATE) redirect('/signup')."
+        },
+        {
+          "gid": "1214277524788352",
+          "name": "/signup-Page als public Marketing-Page für Standard-Tier",
+          "completed": false,
+          "due_on": "2026-06-17",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Klar getrennt von /login. Pricing: €9/M mit 7-Tage-Trial. CTA: 'Jetzt 7 Tage gratis testen'. Kein Lock-in, jederzeit kündbar."
+        },
+        {
+          "gid": "1214277574966643",
+          "name": "Mögliche Re-Submissions falls Probleme",
+          "completed": false,
+          "due_on": "2026-06-18",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Bug fixen, neuen Build hochladen, neuer Review-Cycle. Plane mit 2-3 Tagen extra."
+        },
+        {
+          "gid": "1214277524992167",
+          "name": "Bug-Fixes aus letzten Test-User-Reports + Sprint 4 Backlog",
+          "completed": false,
+          "due_on": "2026-06-18",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Restbestände aus Sprint 4 Bug-Backlog. Medium- und Low-Severity-Bugs. Critical war schon in Sprint 4."
+        },
+        {
+          "gid": "1214277743590659",
+          "name": "Reagieren auf Google-Play-Reviewer-Feedback",
+          "completed": false,
+          "due_on": "2026-06-17",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Google ist langsamer (5-10 Tage). Häufige Punkte: Data Safety Form, App-Bundle-Signing, Permissions im Manifest."
+        },
+        {
+          "gid": "1214277743704629",
+          "name": "Performance-Tuning für Cold-Start",
+          "completed": false,
+          "due_on": "2026-06-19",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Vercel-Functions Cold-Start ist potentielles Problem. /api/cgm/latest sollte unter 2 Sekunden antworten. Lighthouse-Score für Mobile checken."
+        }
+      ]
+    },
+    {
+      "gid": "1214277743593557",
+      "name": "Glev — Sprint 9: Soft-Launch-Vorbereitung",
+      "tasks": [
+        {
+          "gid": "1214325895159175",
+          "name": "Post-Meal BZ-Erinnerung für Fingerstick-User (opt-in in Settings)",
+          "completed": false,
+          "due_on": null,
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Unbenannter Abschnitt",
+          "notes": "BACKLOG — Post-Beta\n\nFür User ohne CGM (cgm_provider = 'fingerstick') optional eine Erinnerung aktivieren: X Stunden nach einer geloggten Mahlzeit erscheint eine Push-Notification / In-App-Reminder mit der Aufforderung den BZ-Wert manuell einzutragen.\n\nZiel: Fingerstick-User liefern die gleichen Post-Meal-Datenpunkte wie CGM-User (über Autofetch), damit der Adaptive ICR für alle User gleich gut lernen kann.\n\nSettings-Toggle: Einstellungen → Erinnerungen → 'BZ-Erinnerung nach Mahlzeit' (on/off) + Zeitfenster wählbar (z.B. 1h, 2h, 3h).\n\nNicht für Beta-Launch — erst wenn CGM-Autofetch stabil läuft und Fingerstick als Segment groß genug ist."
+        },
+        {
+          "gid": "1214304022527384",
+          "name": "[FUNDING] EIC Accelerator — Short Application vorbereiten (Q3 2026)",
+          "completed": false,
+          "due_on": "2026-09-30",
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Unbenannter Abschnitt",
+          "notes": "PRIORITÄT: Mittelfristig — nächste Deadline voraussichtlich Herbst 2026\n\nWas: European Innovation Council Accelerator\n- Grant bis €2,5 Millionen (non-dilutive) + optional Equity bis €15M\n- Für deep-tech / high-impact Startups\n- Glev-Angle: Digital Health, T1D, KI-gestützte adaptive Dosierungsunterstützung\n\nVoraussetzungen:\n- Registriertes EU-Unternehmen (Portugal Lda oder DE UG reichen)\n- Short Application zuerst (Video + Pitch Deck + Summary)\n- Wenn Short App durch: Full Application + Interview in Brüssel\n\nWarum Glev relevant sein könnte:\n- Adaptive Engine = KI-Komponente\n- Medizinischer Impact (Hypo-Reduktion)\n- Skalierbar auf ganz Europa\n- Solo-Founder ist kein K.O.-Kriterium beim EIC\n\nVorbereitung ab September:\n1. Traktionsdaten nach Launch sammeln (TIR-Verbesserung, User-Retention)\n2. Pitch Deck EIC-Format erstellen\n3. 3-Minuten-Pitch-Video produzieren\n4. Budget: Kein Antragsgeld, aber ~20h Aufwand für Short App\n\nLink: https://eic.ec.europa.eu/eic-funding-opportunities/eic-accelerator_en"
+        },
+        {
+          "gid": "1214288453545514",
+          "name": "[CGM] Libre 3 + Dexcom G7 — Direkte Integration (ohne Nightscout)",
+          "completed": false,
+          "due_on": null,
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Unbenannter Abschnitt",
+          "notes": "PRIORITÄT: Mittelfristig — schließt Sensoragnostik-Versprechen vollständig\n\nKontext aus Kompetitor-Analyse:\nGlev positioniert sich als 'sensoragnostisch' — aber aktuell nur Libre 2 nativ. Nightscout Bridge (kurzfristiger Task) schließt die Lücke technisch. Für langfristiges Vertrauen braucht Glev jedoch direkte Integrationen ohne Nightscout-Abhängigkeit.\n\nLibre 3 (Abbott):\n- Abbott hat ein offizielles Developer Program: libreview.com/developer\n- API-Partnerschaft beantragen (wie LibreLinkUp, aber für Libre 3)\n- GKV-erstattet in Deutschland — größte Nutzerbasis wächst weiter\n\nDexcom G7 (Dexcom):\n- GKV-erstattet in Deutschland + Österreich\n- developer.dexcom.com — Developer Account (separater Task: due 30.04)\n- OAuth 2.0 + offizielle API (3h EU-Delay für historische Daten, Share API für real-time)\n- NovoPen 6 Integration in Deutschland = wichtige Zielgruppe\n\nVoraussetzung: developer.dexcom.com Account (Task läuft) + Nightscout Bridge (kurzfristiger Task) als Fallback."
+        },
+        {
+          "gid": "1214288428935050",
+          "name": "[STRATEGIE] DiGA-Pathway — Machbarkeitsanalyse und Vorbereitung",
+          "completed": false,
+          "due_on": null,
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Unbenannter Abschnitt",
+          "notes": "PRIORITÄT: Mittelfristig (2027) — größter struktureller Wettbewerbsvorteil im DACH-Markt\n\nKontext aus Kompetitor-Analyse:\nDeutschland hat ein weltweit einzigartiges Erstattungssystem für Apps (DiGA). Zertifizierte Apps können per Rezept verschrieben und von der GKV vollständig erstattet werden. UNA Health, Vitadio und Esysta sind bereits zugelassen. DiGA-Zulassung macht Glev für DACH-Nutzer effektiv kostenlos und öffnet den HCP-Kanal.\n\nErste Schritte (bereits 2026 vorbereiten):\n1. BfArM DiGA-Leitfaden lesen + Anforderungen verstehen: https://www.bfarm.de/diga\n2. Medizinprodukt-Klassifizierung klären: Welche Klasse würde Glev fallen?\n3. Klinische Evidenz-Anforderungen: Was braucht Glev für positive Versorgungseffekte (pvE)?\n4. Kosten + Timeline schätzen: Typisch 12-24 Monate + 100k-500k€ Aufwand\n5. Partnergespräche: Diabetologen oder Unikliniken als Studien-Partner identifizieren\n\nEntscheidung 2026: Go / No-Go für DiGA-Antrag 2027."
+        },
+        {
+          "gid": "1214288386261527",
+          "name": "[STRATEGIE] Roche / mySugr — Komplementär-Positionierung kommunizieren",
+          "completed": false,
+          "due_on": null,
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Unbenannter Abschnitt",
+          "notes": "PRIORITÄT: Mittelfristig — strategische Kommunikation statt Direktkonfrontation\n\nKontext aus Kompetitor-Analyse:\nMySugr ist Marktführer DACH. Direkte Konfrontation ist ineffizient. Aber: mySugr deckt Abbott/FreeStyle-Nutzer nicht nativ ab (kein FreeStyle-Libre-Import auf Android). LibreView deckt kein Mahlzeiten-Logging ab. Dexcom Clarity hat kein Bolus-Kalkulator.\n\nGlev-Positionierung:\n'Glev ergänzt deine CGM-App — wir sind das was mySugr/LibreView nicht kann: Voice-Input, adaptive Lernlogik, sensoragnostisch.'\n\nAktionen:\n1. Landing Page /beta: Explizit 'kompatibel mit FreeStyle Libre + Dexcom' erwähnen\n2. App Store Beschreibung: 'Ergänze deine CGM-App mit Voice-First Tracking'\n3. Content: 'Warum ich LibreView UND Glev nutze' — Influencer-Angle\n4. Technisch: Deep-Link aus LibreView/Clarity heraus zu Glev (langfristig)\n\nZiel: In der DACH-Community als 'die App die du zu deiner CGM-App brauchst' bekannt werden."
+        },
+        {
+          "gid": "1214288403554744",
+          "name": "[STRATEGIE] HCP-Kanal erschließen — Arzt-Reporting-Funktion",
+          "completed": false,
+          "due_on": null,
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Unbenannter Abschnitt",
+          "notes": "Aktiv. Lucas' eigener Diabetologe ist interessiert und will die App testen. Flyer bereits gedruckt für Verteilung an Diabetologen-Praxen. HCP-Kanal ist real — nicht nur Strategie. Nächste Schritte: Diabetologe als erster HCP-Beta-Tester onboarden, Flyer-Verteilung starten."
+        },
+        {
+          "gid": "1214277323440090",
+          "name": "Verifizieren: beide Apps approved und live in Stores",
+          "completed": false,
+          "due_on": "2026-06-22",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Falls noch nicht approved: in Apple/Google direkt nachfragen via Resolution Center. Backup-Plan: Launch um 1-2 Wochen nach hinten verschieben (auf August)."
+        },
+        {
+          "gid": "1214277743720065",
+          "name": "Customer-Support-Setup verifizieren (Email-Auto-Responder)",
+          "completed": false,
+          "due_on": "2026-06-25",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "hello@glev.app testweise eine Email schicken, Auto-Responder-Antwort verifizieren. Resend-Konfiguration für alle Trigger-Mails (Welcome, Trial, Cancel) durchlaufen."
+        },
+        {
+          "gid": "1214277606398557",
+          "name": "Beta-Tester-Welcome-Email mit App-Store-Links vorbereiten",
+          "completed": false,
+          "due_on": "2026-06-22",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Personalisierte Email an alle Beta-Reservation-Holder. Inhalt: 'Du warst einer der ersten, hier ist dein App-Store-Link, danke fürs Vertrauen, los geht's am 1. Juli'. Versand-Zeit: 1. Juli 8:00."
+        },
+        {
+          "gid": "1214277525036702",
+          "name": "Pressemitteilung schreiben (1-Pager DE)",
+          "completed": false,
+          "due_on": "2026-06-24",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Aufbau: Headline, 1-Satz-Pitch, was ist Glev, Founder-Story, Launch-Datum, Pricing, Quote von Lucas, Boilerplate über Glev, Pressekontakt. Max 1 Seite."
+        },
+        {
+          "gid": "1214277743744985",
+          "name": "Final Pre-Launch Social-Media-Push planen",
+          "completed": false,
+          "due_on": "2026-06-25",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Countdown-Posts ab Tag -7. Founder-Reel mit 'Launch in einer Woche' am Tag -7, Re-Push am Tag -3, finaler Hype-Post am Tag -1. Stories täglich."
+        },
+        {
+          "gid": "1214277743758251",
+          "name": "Stripe Live-Mode für Pro-Subscriptions verifizieren",
+          "completed": false,
+          "due_on": "2026-06-26",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Eine echte Test-Subscription mit eigener Karte (€0,01 minimaler Betrag oder echter €24,90 mit eigener Refund). Webhook fires, Row in pro_subscriptions, Trial-End-Datum stimmt. Danach refunden."
+        },
+        {
+          "gid": "1214277743720356",
+          "name": "Press-Kit zusammenstellen",
+          "completed": false,
+          "due_on": "2026-06-24",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "ZIP mit: Founder-Photo (300dpi), 5-10 App-Screenshots, Brandbook-PDF, Logo-Files (SVG + PNG aus glev-brand-assets), Pressemitteilung 1-Pager auf DE."
+        },
+        {
+          "gid": "1214277575028918",
+          "name": "Press-Outreach-Liste finalisieren",
+          "completed": false,
+          "due_on": "2026-06-23",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Diabetes-Online (DDG), dedoc°, Typ-1-Blog, mein-diabetes-blog.de, diabetes-online.de, plus DACH-Tech-Press: Gründerszene, t3n. 15-20 Kontakte mit Email-Adressen."
+        }
+      ]
+    },
+    {
+      "gid": "1214277599041372",
+      "name": "Glev — Sprint 10: LAUNCH",
+      "tasks": [
+        {
+          "gid": "1214277743728977",
+          "name": "Beta-Tester-Email mit App-Store-Links versenden",
+          "completed": false,
+          "due_on": "2026-07-01",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "8:00 Uhr morgens — vor dem Public-Launch um 9:00. Beta-Tester sollen sich besonders fühlen, kriegen App vor allen anderen. Resend-Versand an alle aus beta_reservations + beta_waitlist."
+        },
+        {
+          "gid": "1214277743831455",
+          "name": "Erste 24h-Metrics dokumentieren",
+          "completed": false,
+          "due_on": "2026-07-02",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Spreadsheet mit: Downloads (iOS/Android), Sign-ups, Conversions zu Pro/Standard, Beta-Tester-Activations, Press-Erwähnungen, Top-Bug-Reports. Baseline für alle künftigen Metriken."
+        },
+        {
+          "gid": "1214277525100184",
+          "name": "Stripe Pro-Mitgliedschaften: erste echte Abrechnung läuft",
+          "completed": false,
+          "due_on": "2026-07-01",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Pro-Subscriptions die in Sprint 5+ angelegt wurden mit Trial bis 2026-07-01 werden heute zum ersten Mal abgerechnet. Monitoring im Stripe-Dashboard, Failed-Payment-Rate checken."
+        },
+        {
+          "gid": "1214277743845414",
+          "name": "Launch-Day-Monitoring: Crash-Reports, Webhooks, Customer-Support",
+          "completed": false,
+          "due_on": "2026-07-01",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Stundenweise Check in Sentry/Crashlytics, Stripe-Dashboard, hello@glev.app-Inbox. Notfall-Kontakt zu Vercel-Support falls Infrastruktur kippt. Mindestens 9-21 Uhr aktiv."
+        },
+        {
+          "gid": "1214277575217214",
+          "name": "3. Juli: Erste Launch-Retro (1 Stunde)",
+          "completed": false,
+          "due_on": "2026-07-03",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Was lief gut, was lief schlecht, was ändere ich nächste Woche. Document für spätere Marketing-Iteration. Beginne Phase-2-Roadmap-Brainstorm (Glev Basic, Dexcom, etc)."
+        },
+        {
+          "gid": "1214277575217278",
+          "name": "1. Juli 9:00 Uhr: Apps öffentlich verfügbar machen (Phased Rollout)",
+          "completed": false,
+          "due_on": "2026-07-01",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "iOS: Manual Release wenn approved → Make Available. Android: Phased Rollout mit 20% Start, schrittweise hochsetzen. Sicherheits-Halt falls Crash-Reports steigen."
+        },
+        {
+          "gid": "1214277575217342",
+          "name": "Press-Outreach-Emails an Diabetes-Press absenden",
+          "completed": false,
+          "due_on": "2026-07-01",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Personalisierte Emails an die 15-20 Press-Kontakte aus Sprint 9. Press-Kit als Attachment oder Dropbox-Link. Embargo bis 9:00 wenn nötig oder direkt nach Launch-Schaltung."
+        },
+        {
+          "gid": "1214277599045305",
+          "name": "Launch-Post auf allen Social-Media-Channels",
+          "completed": false,
+          "due_on": "2026-07-01",
+          "assignee": {
+            "gid": "1210184723294607",
+            "name": "lucas@wahnon-connect.com"
+          },
+          "section": "To-Do",
+          "notes": "Instagram, TikTok, Facebook — koordinierter Launch-Post 9:30 Uhr (nach App-Live-Schaltung). Foto/Video, App-Store-Badges, Founder-Statement."
+        }
+      ]
+    }
+  ]
+}

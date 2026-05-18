@@ -20,7 +20,8 @@
     "android:open": "npx cap open android",
     "android:build:debug": "npx cap sync android && cd android && ./gradlew assembleDebug",
     "android:version": "node scripts/bump-android-version.mjs show",
-    "android:bump:build": "node scripts/bump-android-version.mjs build"
+    "android:bump:build": "node scripts/bump-android-version.mjs build",
+    "asana:sync": "node scripts/sync-asana-sprints.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.1",

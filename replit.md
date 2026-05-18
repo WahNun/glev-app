@@ -64,6 +64,9 @@ Glev ist aktuell **kein eingereichtes Medizinprodukt**. Primärzielgruppe: erwac
 - `meals` table stores meal details, including `input_text`, `parsed_json`, glucose levels, carbs, insulin, meal type, and evaluation.
 - `user_preferences` table stores per-user UI preferences like dashboard and insights card order.
 
+**Asana Sprint Snapshot:**
+- `scripts/sync-asana-sprints.mjs` (npm: `pnpm asana:sync`) pulls all "Glev — Sprint X:" projects from Asana and writes `docs/asana/sprints.json` (raw) + `docs/asana/sprints.md` (grouped Markdown with overdue highlight). Default zieht nur offene Tickets; `--include-completed` schaltet den Filter ab. Token via `https://app.asana.com/0/my-apps` → in Replit Secrets als `ASANA_PAT` ablegen (Vercel braucht ihn nicht). Snapshot regelmäßig refreshen, damit der Agent in jeder Session den aktuellen Sprint-Stand sehen kann.
+
 **Marketing Mockups Refresh:**
 - `scripts/refresh-mockups.mjs` (Playwright) loggt einen Test-Account ein, klickt das Onboarding weg, erzwingt Dark-Theme via `localStorage.glev_theme=dark` und zieht frische 393×852 @ 2× Screenshots nach `public/mockups/{dashboard,engine,entries,insights}.png` — diese vier werden in der Homepage-Deepdive-Sektion (`app/page.tsx` `FeatureImageRow`) gezeigt. Aufruf: `MOCKUP_USER_EMAIL=… MOCKUP_USER_PASSWORD=… node scripts/refresh-mockups.mjs`. Die Engine-Step-2-Pille ist `<div role="listitem">` ohne Click-Handler, daher zeigen wir bewusst nur Step 1 und nutzen `entries.png` (Mahlzeitenliste mit Makros) für die „Macros"-Reihe.
 
