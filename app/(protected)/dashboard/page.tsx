@@ -633,7 +633,12 @@ export default function DashboardPage() {
              User request 2026-05-17: "Karten breiter, näher an die
              Ränder, gleichmäßiges Padding rundum". */
           .glev-main           { padding-left: 10px !important; padding-right: 10px !important; }
-          .glev-cluster-stack  { gap: 6px !important; }
+          /* 2026-05-18 user request: cards looked glued together —
+             wanted the inter-card breathing room to match the gap
+             between the header's bottom edge and the topmost
+             Glucose-Live card (~16-18 px). Was 6 px which felt too
+             tight after the cluster-bar was hidden on mobile. */
+          .glev-cluster-stack  { gap: 16px !important; }
           .glev-cluster        { gap: 4px !important; }
           /* Hide the per-cluster bottom bar entirely on phones — both
              the pager-indicator line and the drag-handle dots — to free
