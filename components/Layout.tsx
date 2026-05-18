@@ -164,20 +164,21 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // first tap on a bottom-nav tab pays the full RSC + JS-chunk roundtrip
   // because there is no `<Link>` hover-prefetch on touch and the app
   // shell starts with an empty cache. We warm every primary tab once,
-  // shortly after the current route is interactive, so any subsequent
-  // tab tap only re-renders cached chunks. requestIdleCallback isn't
-  // available on iOS Safari/WKWebView, so we fall back to a small
-  // setTimeout. Re-running per `pathname` is intentional — Next.js
-  // de-dupes prefetches internally, but doing it again right after a
-  // navigation makes sure the OTHER three tabs stay warm even after a
-  // cache eviction.
+  // shortly after the app is interactive, so the very first bottom-nav
+  // tap only re-renders cached chunks.
+  //
+  // 2026-05-18 TestFlight fix: previously the warm loop re-ran on every
+  // `pathname` change, so each tab tap kicked off 3 fresh RSC prefetches
+  // that competed with the user's NEXT tap for WKWebView's small HTTP/2
+  // connection pool. That looked like "sporadic" footer-tap response.
+  // Now: warm exactly once per session (run on first mount, with the
+  // prefetch list captured once). Next.js' own router cache keeps the
+  // already-visited tabs warm without us re-firing prefetches.
   useEffect(() => {
     const tabs = ["/dashboard", "/entries", "/insights", "/settings"];
     const warm = () => {
       for (const p of tabs) {
-        if (!pathname.startsWith(p)) {
-          try { router.prefetch(p); } catch {}
-        }
+        try { router.prefetch(p); } catch {}
       }
     };
     const w = typeof window !== "undefined" ? (window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }) : null;
@@ -190,7 +191,9 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     }
     const id = window.setTimeout(warm, 800);
     return () => window.clearTimeout(id);
-  }, [pathname, router]);
+    // Intentionally empty deps: warm once on mount. router is stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Mobile bottom-nav: tapping the Glev slot now goes STRAIGHT to the
   // engine voice screen (the meal log flow) instead of popping a
   // pick-your-flow action sheet. The two secondary flows (Glukose
@@ -203,8 +206,16 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   const sourceHdr  = useEngineSourceHeader();
   const tEngineHdr = useTranslations("engine");
 
+  // 2026-05-18: this debug ping previously ran on every Layout mount
+  // (i.e. every client-side navigation) and pulled the last 20 meals
+  // + an exact count from Supabase. On iOS WKWebView's small HTTP
+  // connection pool that was enough to make the very next bottom-nav
+  // tap feel "sporadic" — router.push had to wait behind the debug
+  // request. Now gated to localhost dev only.
   useEffect(() => {
-    fetch("/api/debug/state").then(r => r.json()).then(d => console.log("[DEBUG:STATE]", d)).catch(() => {});
+    if (process.env.NODE_ENV !== "production" && typeof window !== "undefined" && /^localhost(:|$)/.test(window.location.host)) {
+      fetch("/api/debug/state").then(r => r.json()).then(d => console.log("[DEBUG:STATE]", d)).catch(() => {});
+    }
   }, []);
 
   // Auto-clear the engine-header marker whenever we navigate away from
@@ -918,6 +929,11 @@ function MobileTab({
         // Subtle scale-down on press for tactile feedback on iOS where
         // the WebkitTapHighlightColor is invisible against the dark nav.
         WebkitTapHighlightColor: "transparent",
+        // 2026-05-18: `manipulation` disables iOS' 300ms double-tap-to-zoom
+        // delay AND the browser's gesture-recognition wait, so the first
+        // tap registers immediately even when the WKWebView main thread
+        // is still settling after the previous route swap.
+        touchAction: "manipulation",
       }}
     >
       <span style={{
