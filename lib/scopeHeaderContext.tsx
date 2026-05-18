@@ -52,12 +52,19 @@ export function computeScopeWindow(mode: ScopeMode, anchor: Date): ScopeWindow {
     return { startMs, endMs, prevStartMs, prevEndMs: startMs };
   }
   if (mode === "week") {
-    const wkdIdx: Record<string, number> = { Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6, Sun:7 };
-    const idx = wkdIdx[wkdShort] ?? 1;
-    const monD = d - (idx - 1);
-    const startMs = midnight(y, mo, monD);
-    const endMs = midnight(y, mo, monD + 7);
-    const prevStartMs = midnight(y, mo, monD - 7);
+    // Rolling 7-day window ending at end-of-anchor-day (Lucas
+    // 2026-05-17): the previous Mon–Sun calendar-week implementation
+    // collapsed to "today only" every Monday 00:00, hiding all data
+    // from the cards until enough days accumulated again. Rolling 7d
+    // matches what the user expects from a "letzte 7 Tage"-label and
+    // never goes empty on a weekday boundary. ◀ ▶ navigation moves
+    // the anchor by 7 days, so the previous window is exactly the 7
+    // days before that. `wkdShort` is no longer needed for week mode
+    // — kept around because Month/Year still snap to calendar
+    // boundaries.
+    const endMs = midnight(y, mo, d + 1);          // start of tomorrow (exclusive upper bound)
+    const startMs = midnight(y, mo, d + 1 - 7);    // 7 days back, inclusive
+    const prevStartMs = midnight(y, mo, d + 1 - 14);
     return { startMs, endMs, prevStartMs, prevEndMs: startMs };
   }
   if (mode === "month") {
