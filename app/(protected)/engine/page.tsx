@@ -2597,48 +2597,73 @@ export default function EnginePage() {
                   three label+input pairs while keeping every interaction
                   (CGM pull pill, trend arrow, native datetime picker) in
                   place. */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
-                {/* Glucose row: input on the left (flex:1), CGM pill on
-                    the right. Trend arrow sits inline at the start of
-                    the input as an absolutely-positioned overlay so the
-                    whole row stays on a single line. */}
-                <div style={{ display: "flex", alignItems: "stretch", gap: 8 }}>
-                  <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
-                    <input
-                      style={{ ...inp, paddingRight: currentTrend ? 36 : undefined }}
-                      type="number"
-                      placeholder={`${tEngine("placeholder_glucose")} (mg/dL)`}
-                      value={glucose}
-                      onChange={(e) => setGlucose(e.target.value)}
-                      aria-label={tEngine("glucose_before_label")}
-                    />
-                    {currentTrend && (
-                      <div style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", display: "flex", alignItems: "center" }}>
-                        <TrendArrow trend={currentTrend} t={tEngine}/>
-                      </div>
-                    )}
-                  </div>
+              {/* 2026-05-18 simplified glucose + meal-time block per user:
+                  "es soll einfach unter dem cgm wert stehen, dieser soll
+                  vom style auch so werden ohne chip drum herum simpel
+                  gehalten". Big mono number for the glucose value, mono
+                  date underneath — matches the MacroRing value typography
+                  so the whole step reads as one visual family. CGM-pull
+                  becomes a small text link to the right of the value
+                  (still tappable, no longer dominates the row). */}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, marginBottom: 14 }}>
+                {/* Glucose value row — borderless, centered, big mono.
+                    CGM pull link sits to the right; trend arrow appears
+                    inline left of the value when CGM has a fresh trend. */}
+                <div style={{ position: "relative", width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+                  {currentTrend && (
+                    <div style={{ display: "flex", alignItems: "center", color: "var(--text-muted)" }}>
+                      <TrendArrow trend={currentTrend} t={tEngine}/>
+                    </div>
+                  )}
+                  <input
+                    style={{
+                      background: "transparent", border: "none", outline: "none",
+                      width: glucose ? `${Math.max(2, glucose.length)}ch` : "5ch",
+                      textAlign: "center",
+                      fontFamily: "var(--font-mono)", fontWeight: 800, fontSize: 32,
+                      color: "var(--text)", padding: "4px 0",
+                      MozAppearance: "textfield",
+                    }}
+                    type="number"
+                    placeholder="—"
+                    value={glucose}
+                    onChange={(e) => setGlucose(e.target.value)}
+                    aria-label={tEngine("glucose_before_label")}
+                  />
                   <button
                     onClick={handlePullCgm}
                     disabled={cgmPulling}
                     title={lastReading ? `${tEngine("glucose_last_prefix")}: ${lastReading}` : undefined}
                     aria-label={tEngine("cgm_button")}
                     style={{
-                      display: "flex", alignItems: "center", gap: 6,
-                      padding: "0 12px", borderRadius: 10, border: `1px solid ${ACCENT}40`,
-                      background: `${ACCENT}15`, color: ACCENT, fontSize: 13, fontWeight: 600,
-                      cursor: cgmPulling ? "wait" : "pointer", flexShrink: 0,
+                      display: "inline-flex", alignItems: "center", gap: 5,
+                      padding: "4px 6px", borderRadius: 6,
+                      border: "none", background: "transparent",
+                      color: ACCENT, fontSize: 12, fontWeight: 600, letterSpacing: "0.02em",
+                      cursor: cgmPulling ? "wait" : "pointer",
+                      textTransform: "uppercase",
                     }}
                   >
-                    <span style={{ width: 7, height: 7, borderRadius: "50%", background: GREEN, boxShadow: `0 0 6px ${GREEN}` }}/>
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: GREEN, boxShadow: `0 0 5px ${GREEN}` }}/>
                     {cgmPulling ? tEngine("cgm_pulling") : tEngine("cgm_button")}
                   </button>
                 </div>
-                {/* Meal-time row: no eyebrow label — the datetime field
-                    displays "17. Mai 2026, 14:36" inline (native browser
-                    formatting) and opens the native picker on tap. */}
+                {/* mg/dL unit label, faint */}
+                <div style={{ fontSize: 11, color: "var(--text-faint)", fontFamily: "var(--font-mono)", letterSpacing: "0.05em", marginTop: -2 }}>
+                  mg/dL
+                </div>
+                {/* Meal-time — same mono treatment as the macro-ring
+                    centre values, smaller. Borderless, centered. Tap
+                    opens the native iOS / Android picker. */}
                 <input
-                  style={{ ...inp, fontFamily: "inherit", textAlign: "center" }}
+                  style={{
+                    background: "transparent", border: "none", outline: "none",
+                    width: "auto", minWidth: 200,
+                    textAlign: "center",
+                    fontFamily: "var(--font-mono)", fontWeight: 700, fontSize: 15,
+                    color: "var(--text-muted)", padding: "6px 0",
+                    marginTop: 6,
+                  }}
                   type="datetime-local"
                   value={mealTime}
                   onChange={(e) => setMealTime(e.target.value)}

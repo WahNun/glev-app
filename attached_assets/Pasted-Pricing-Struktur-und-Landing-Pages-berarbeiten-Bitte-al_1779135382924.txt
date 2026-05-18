@@ -1,0 +1,31 @@
+Pricing-Struktur und Landing Pages überarbeiten. Bitte alle Marketing-/Landing-Pages und die Homepage in diesem Projekt suchen und folgende Änderungen durchführen:
+
+**Neue Plan-Namen und Preise:**
+- Plan S = "Glev Smart" | Early Access: 3× €4,50 dann €9/Mo | kein Billing vor 1. Juli 2026
+- Plan M = "Glev Pro" | Presale: €14,90/Mo (Lifetime Lock — dieser Preis bleibt für immer) | Launch ab 1. Juli: €19/Mo
+- Plan L = "Glev+" | Presale: €29/Mo (Lifetime Lock) | Launch ab 1. Juli: €39/Mo
+
+**Messaging-Änderungen:**
+- "Lifetime Lock" als zentrales FOMO-Argument für M und L: "Dieser Preis verschwindet am 1. Juli. Für immer."
+- Niemals "Beta" — immer "Early Access"
+- Anker-Feature für Plan M (das Haupt-Upgrade-Argument): "🧠 KI-Bolusvorschlag — lernt aus deiner eigenen Geschichte" (Adaptive Engine). Dieses Feature prominent hervorheben.
+- Emotionaler Hook für Plan L: "Arztgespräch in 3 Minuten vorbereitet" — nicht PDF-Export, sondern Zeit und Sicherheit beim nächsten Termin
+
+**Feature-Namen in User-Sprache (überall ersetzen):**
+- "Adaptive ICR" → "Korrekturfaktor passt sich automatisch an"
+- "ICR-Zeitfenster (3 Slots)" → "KH-Verhältnis für Früh / Mittag / Abend"
+- "Mustererkennung" → "BZ-Muster erkennen & verstehen"
+- "Auto-Apply ICR" → "Korrekturfaktor wird automatisch gesetzt"
+- "Vorausschauende Warnungen" → "Warnung bevor der BZ absäuft"
+- "CGM Auto-Fill" → "BZ-Werte automatisch eingetragen"
+- "GMI / HbA1c-Schätzung" → "HbA1c-Schätzung ohne Blutabnahme"
+- "TIR-Analyse" → "Zeit im Zielbereich (TIR)"
+- "Mahlzeiten-Evaluation" → "War diese Mahlzeit gut für deinen BZ?"
+- "PDF-Arztbericht" → "Arztgespräch in 3 Min vorbereitet (PDF-Report)"
+- "Priority Support" → "Direkter Draht zum Gründer"
+- "Voice/Text-Logging" → "Einfach eintippen oder einsprechen"
+- "30 Tage History" → "60 Tage History"
+
+**Feature Governance:** Komplett aus allen öffentlichen Feature-Listen entfernen. Es gehört nicht in die Pricing-Tabelle.
+
+Bitte alle betroffenen Dateien identifizieren, Änderungen durchführen und dann git push origin main.
