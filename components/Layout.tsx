@@ -308,15 +308,19 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 
                2026-05-17 round 5 (user request: "wieso ist es so
                schwer den header genauso dick wie footer nav zu
-               machen"): header content band locked to 72 px — exactly
-               matches the notched-iPhone footer (4 + 56 + 12 = 72) so
-               both chrome edges read as one visual weight on every
-               device class. Lockup bumped to 40 px so the header
-               content has the same visual density as a footer tab
-               (22-px icon + 12-px label + paddings ≈ 38 px of "stuff").
+               machen"): header content band raised to 72 px.
 
-               Header total height = safe-area-top + 72 px
-                 (16 top pad + 40 lockup + 16 bottom pad).
+               2026-05-17 round 6 (user request: "der header sollte
+               aber auf die dicke des footers schrumpfen weil zu
+               dick"): the 72-px total felt heavy because the *button
+               band* of the footer is hard-fixed to 56 px (see
+               MobileTab L888) — the extra 6-16 px of "footer height"
+               is just safe-area-bottom padding that exists for the
+               home-bar, not visible mass. Header now matches the
+               actual content band: 12 + 32 + 12 = 56 px = MobileTab.
+
+               Header total height = safe-area-top + 56 px
+                 (12 top pad + 32 lockup + 12 bottom pad).
 
                Nav total height = 4 (top pad) + 56 (MobileTab fixed
                height — NOT 22+4+12; the button is hard-fixed to 56 px
@@ -329,7 +333,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
                class of device. Architect 2026-05-17 caught that the
                previous math used icon+label dimensions and was
                under-counting nav height by ~16 px. */
-            padding: calc(env(safe-area-inset-top) + 72px) 16px max(62px, calc(env(safe-area-inset-bottom) + 38px)) !important;
+            padding: calc(env(safe-area-inset-top) + 56px) 16px max(62px, calc(env(safe-area-inset-bottom) + 38px)) !important;
           }
           .glev-entry-row   { grid-template-columns: 1fr auto auto !important; gap: 10px !important; padding: 14px 16px !important; }
           .glev-entry-hide-mobile { display: none !important; }
@@ -350,16 +354,15 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         // iOS notch / Dynamic Island: push content below the status bar by
         // honouring safe-area-inset-top, with a sensible fallback for
         // browsers that don't expose it (e.g. desktop dev tools).
-        // 2026-05-17 round 5 (user request: "wieso ist es so schwer
-        // den header genauso dick wie footer nav zu machen"): the
-        // round-4 64-px header still read thinner than the 72-px
-        // notched footer because the 32-px lockup was visually lighter
-        // than a 22-icon + 12-label tab. Lockup is now 40 px (≈ same
-        // visual density as a footer tab) and the top/bottom paddings
-        // stay at 16, so header content = 16 + 40 + 16 = 72 px —
-        // pixel-identical to the notched footer. Keep .glev-main's
-        // padding-top compensator in sync (see media query above).
-        padding: "calc(env(safe-area-inset-top) + 16px) max(18px, env(safe-area-inset-right)) 16px max(18px, env(safe-area-inset-left))",
+        // 2026-05-17 round 6 (user request: "der header sollte aber
+        // auf die dicke des footers schrumpfen weil zu dick"): the
+        // round-5 72-px header felt heavy because the footer's
+        // *visible* button band is only 56 px (MobileTab fixed height)
+        // — the extra px just pad the home-bar. Header now matches the
+        // button band: paddings 12/12 + lockup 32 = 56 px content.
+        // Keep .glev-main's padding-top compensator in sync (see media
+        // query above).
+        padding: "calc(env(safe-area-inset-top) + 12px) max(18px, env(safe-area-inset-right)) 12px max(18px, env(safe-area-inset-left))",
         background: SURFACE,
         borderBottom: `1px solid ${BORDER}`,
         alignItems: "center", justifyContent: "space-between",
@@ -376,7 +379,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               iOS-Favicon). Wordmark folgt dem Theme via var(--text), aber
               das Logo-Quadrat soll in Light Mode NICHT mit-aufhellen,
               sonst löst es sich vom Header optisch auf. */}
-          <GlevLockup size={40} color="var(--text)" symbolBg="#0F0F14" />
+          <GlevLockup size={32} color="var(--text)" symbolBg="#0F0F14" />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {/* Engine-Pille im Header wurde entfernt (User-Wunsch
