@@ -2564,10 +2564,10 @@
   },
   "pricing_beta_title": "Glev Smart — Early Access",
   "pricing_beta_cta": "Secure Early Access",
-  "pricing_beta_b1": "Type or speak your entries",
-  "pricing_beta_b2": "60-day history",
-  "pricing_beta_b3": "Basic dashboard",
-  "pricing_beta_b4": "Food memory",
+  "pricing_beta_b1": "🎙️ Voice logging — no typing",
+  "pricing_beta_b2": "📊 CGM integration (Libre, Nightscout)",
+  "pricing_beta_b3": "📈 Control Score & history",
+  "pricing_beta_b4": "60 days of data history",
   "pricing_beta_b5": "Billing starts July 1 — free until then",
   "pricing_pro_title": "Glev Pro — Lifetime Lock",
   "pricing_pro_price": "€14.90",
@@ -2593,5 +2593,7 @@
   "pricing_klinik_b4": "Unlimited history",
   "pricing_klinik_b5": "CSV / ZIP raw data export",
   "pricing_klinik_cta": "Secure Glev+",
-  "pricing_klinik_subtext": "This price disappears July 1. Forever. Lifetime Lock: €29 forever."
+  "pricing_klinik_subtext": "This price disappears July 1. Forever. Lifetime Lock: €29 forever.",
+  "pricing_beta_badge": "Lifetime Lock",
+  "pricing_beta_subtext": "This price stays forever."
 }
