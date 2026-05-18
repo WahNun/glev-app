@@ -1364,6 +1364,81 @@ const INSULIN_ACCENT = ACCENT;
 const BASAL_ACCENT   = "#A78BFA";
 const EXERCISE_ACCENT = "#22C55E";
 
+/**
+ * 2026-05-18: Pointer-up-fired action button used by the Edit / Delete
+ * row inside expanded NonMealRow cards. Mirrors the MobileTab pattern
+ * (Task #356) — on iOS WKWebView the synthesised click occasionally
+ * misses after React re-renders the button node (`setEditing(true)`
+ * swaps the JSX subtree), and the tap lands on a parent element
+ * instead. Firing on `pointerup` with stopPropagation guarantees the
+ * action runs against the original DOM target before the re-render,
+ * and prevents any ancestor click handler from also reacting to the
+ * same tap. `onClick` stays as the keyboard-activation fallback,
+ * gated by `pointerHandledRef` so we don't double-fire from the
+ * synthesised click on touch devices.
+ */
+function RowActionButton({
+  onAct, disabled, ariaLabel, style, children,
+}: {
+  onAct: () => void;
+  disabled: boolean;
+  ariaLabel: string;
+  style: React.CSSProperties;
+  children: React.ReactNode;
+}) {
+  const pointerHandledRef = useRef(false);
+  const startRef = useRef<{ x: number; y: number } | null>(null);
+  const SLOP = 10;
+  return (
+    <button
+      type="button"
+      aria-label={ariaLabel}
+      disabled={disabled}
+      onPointerDown={(e) => {
+        // Mouse: only react to primary button (0). Touch/pen always
+        // report button = 0 so this also covers iOS taps.
+        if (e.pointerType === "mouse" && e.button !== 0) return;
+        pointerHandledRef.current = false;
+        startRef.current = { x: e.clientX, y: e.clientY };
+      }}
+      onPointerUp={(e) => {
+        if (disabled) return;
+        if (e.pointerType === "mouse" && e.button !== 0) return;
+        const s = startRef.current;
+        startRef.current = null;
+        if (s) {
+          const dx = Math.abs(e.clientX - s.x);
+          const dy = Math.abs(e.clientY - s.y);
+          if (dx > SLOP || dy > SLOP) return; // treat as scroll, not tap
+        }
+        e.stopPropagation();
+        // Suppress any trailing synthetic click (WKWebView edge case)
+        // — onClick still runs as keyboard fallback via the dedupe ref.
+        e.preventDefault();
+        pointerHandledRef.current = true;
+        onAct();
+      }}
+      onPointerCancel={() => { startRef.current = null; }}
+      onPointerLeave={() => { startRef.current = null; }}
+      onClick={(e) => {
+        // Keyboard / non-pointer activation fallback. Pointer-driven
+        // taps already ran in onPointerUp; skip the synthesised click
+        // so we don't fire twice.
+        if (pointerHandledRef.current) {
+          pointerHandledRef.current = false;
+          return;
+        }
+        if (disabled) return;
+        e.stopPropagation();
+        onAct();
+      }}
+      style={{ ...style, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+    >
+      {children}
+    </button>
+  );
+}
+
 function NonMealRow({
   isOpen, onToggle, onDelete, deleting, onEdit, accent, badge, dateStr, timeStr,
   primaryLabel, primaryValue, primaryColor, primaryMono,
@@ -1524,27 +1599,48 @@ function NonMealRow({
             gridTemplateColumns: onEdit ? "1fr 1fr" : "1fr",
             gap:8,
           }}>
+            {/* 2026-05-18: User-Report "edit entry auf expanded exercise
+                log springt nicht in edit mode sondern collapsed alle
+                entries". Root cause = gleiche iOS-WKWebView Click-Race
+                wie Task #356 (Footer-Nav): `setEditing(true)` rendert
+                den Button-DOM-Knoten neu, und der synthetisierte Click
+                wird auf WKWebView unzuverlässig auf den neuen Node
+                gemapped — manchmal landet er stattdessen auf dem
+                darunterliegenden Card-Body oder triggert das parent
+                onToggle. Fix mirrors MobileTab: feuere onEdit/onDelete
+                auf pointerup mit stopPropagation, `onClick` bleibt nur
+                Tastatur-Fallback (gated via pointerHandledRef). */}
             {onEdit && (
-              <button onClick={onEdit} disabled={deleting} style={{
-                padding:"12px", borderRadius:10, border:`1px solid ${BORDER}`,
-                background:"var(--surface-soft)", color:"var(--text-body)",
-                fontSize:14, fontWeight:600,
-                cursor:deleting ? "not-allowed" : "pointer",
-                display:"flex", alignItems:"center", justifyContent:"center", gap:6,
-                letterSpacing:"0.02em",
-              }}>
+              <RowActionButton
+                onAct={onEdit}
+                disabled={deleting}
+                ariaLabel="Edit entry"
+                style={{
+                  padding:"12px", borderRadius:10, border:`1px solid ${BORDER}`,
+                  background:"var(--surface-soft)", color:"var(--text-body)",
+                  fontSize:14, fontWeight:600,
+                  cursor:deleting ? "not-allowed" : "pointer",
+                  display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+                  letterSpacing:"0.02em",
+                }}
+              >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
                 Edit entry
-              </button>
+              </RowActionButton>
             )}
-            <button onClick={onDelete} disabled={deleting} style={{
-              padding:"12px", borderRadius:10, border:`1px solid ${PINK}40`,
-              background:`${PINK}08`, color:PINK, fontSize:14, fontWeight:600,
-              cursor:deleting ? "wait" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, letterSpacing:"0.02em",
-            }}>
+            <RowActionButton
+              onAct={onDelete}
+              disabled={deleting}
+              ariaLabel={deleting ? "Deleting" : "Delete entry"}
+              style={{
+                padding:"12px", borderRadius:10, border:`1px solid ${PINK}40`,
+                background:`${PINK}08`, color:PINK, fontSize:14, fontWeight:600,
+                cursor:deleting ? "wait" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, letterSpacing:"0.02em",
+              }}
+            >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
               {deleting ? "Deleting…" : "Delete entry"}
-            </button>
+            </RowActionButton>
           </div>
         </div>
       )}
