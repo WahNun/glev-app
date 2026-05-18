@@ -324,17 +324,18 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
                schwer den header genauso dick wie footer nav zu
                machen"): header content band raised to 72 px.
 
-               2026-05-17 round 6 (user request: "der header sollte
-               aber auf die dicke des footers schrumpfen weil zu
-               dick"): the 72-px total felt heavy because the *button
-               band* of the footer is hard-fixed to 56 px (see
-               MobileTab L888) — the extra 6-16 px of "footer height"
-               is just safe-area-bottom padding that exists for the
-               home-bar, not visible mass. Header now matches the
-               actual content band: 12 + 32 + 12 = 56 px = MobileTab.
+               2026-05-18 round 7 (user request: "header ist immer
+               noch zu dick im ios testflight … genau die dicke wie
+               der footer"): a 56-px content band still ended up
+               visually taller than the footer because the iOS safe-
+               area-top (47–59 px on notched phones) sits ON TOP of
+               that band — the footer only carries ~34 px of safe-
+               area-bottom. Header content band trimmed to 44 px
+               (6 + 32 + 6) so the visible chrome below the status
+               bar reads slimmer than the footer's tab strip.
 
-               Header total height = safe-area-top + 56 px
-                 (12 top pad + 32 lockup + 12 bottom pad).
+               Header total height = safe-area-top + 44 px
+                 (6 top pad + 32 lockup + 6 bottom pad).
 
                Nav total height = 4 (top pad) + 56 (MobileTab fixed
                height — NOT 22+4+12; the button is hard-fixed to 56 px
@@ -352,7 +353,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
                Architect 2026-05-17 caught that the previous math used
                icon+label dimensions and was under-counting nav height
                by ~16 px. */
-            padding: calc(env(safe-area-inset-top) + 56px) 16px max(76px, calc(env(safe-area-inset-bottom) + 46px)) !important;
+            padding: calc(env(safe-area-inset-top) + 44px) 16px max(76px, calc(env(safe-area-inset-bottom) + 46px)) !important;
           }
           .glev-entry-row   { grid-template-columns: 1fr auto auto !important; gap: 10px !important; padding: 14px 16px !important; }
           .glev-entry-hide-mobile { display: none !important; }
@@ -373,15 +374,19 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         // iOS notch / Dynamic Island: push content below the status bar by
         // honouring safe-area-inset-top, with a sensible fallback for
         // browsers that don't expose it (e.g. desktop dev tools).
-        // 2026-05-17 round 6 (user request: "der header sollte aber
-        // auf die dicke des footers schrumpfen weil zu dick"): the
-        // round-5 72-px header felt heavy because the footer's
-        // *visible* button band is only 56 px (MobileTab fixed height)
-        // — the extra px just pad the home-bar. Header now matches the
-        // button band: paddings 12/12 + lockup 32 = 56 px content.
-        // Keep .glev-main's padding-top compensator in sync (see media
-        // query above).
-        padding: "calc(env(safe-area-inset-top) + 12px) max(18px, env(safe-area-inset-right)) 12px max(18px, env(safe-area-inset-left))",
+        // 2026-05-18 round 7 (user request: "header ist immer noch zu
+        // dick im ios testflight, wir haben doch schon tausendmal
+        // gesagt er soll genau die dicke wie der footer bekommen"):
+        // The 12/12 + 32 = 56 px content band matched the MobileTab
+        // numerically, but on iPhone the `safe-area-inset-top` adds
+        // another ~47–59 px of header chrome above the lockup that
+        // the footer simply doesn't have (its sab is only ~34 px).
+        // Net result: header ended up ~30–40 px taller than the
+        // footer in actual screen pixels. Shrink the content band
+        // to 44 px (6 + 32 + 6) so the visible block under the
+        // status bar reads as a slim app bar, not a second header.
+        // Keep .glev-main's padding-top compensator in sync above.
+        padding: "calc(env(safe-area-inset-top) + 6px) max(18px, env(safe-area-inset-right)) 6px max(18px, env(safe-area-inset-left))",
         background: SURFACE,
         borderBottom: `1px solid ${BORDER}`,
         alignItems: "center", justifyContent: "space-between",
