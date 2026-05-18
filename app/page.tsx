@@ -57,7 +57,7 @@ export default function PreviewHome() {
         fontFamily: "var(--font-inter), Inter, system-ui, sans-serif",
         position: "relative",
         overflowX: "hidden",
-        paddingTop: "calc(56px + var(--safe-top))",
+        paddingTop: "var(--marketing-header-total)",
       }}
     >
       {/* Soft brand glow background */}

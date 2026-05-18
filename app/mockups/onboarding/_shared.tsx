@@ -202,10 +202,10 @@ export function Shell({
         :root { --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace; }
         body { margin: 0; }
         .ob-content { padding: 24px 22px 32px; max-width: 460px; margin: 0 auto; width: 100%; box-sizing: border-box; flex: 1; display: flex; flex-direction: column; gap: 22px; }
-        .ob-footer { padding: 18px 22px calc(var(--safe-bottom) + 22px); border-top: 1px solid ${BORDER}; background: ${BG}; }
+        .ob-footer { padding: 18px 22px var(--onboarding-footer-bottom); border-top: 1px solid ${BORDER}; background: ${BG}; }
         .ob-footer-row { display: flex; gap: 12px; max-width: 460px; margin: 0 auto; align-items: center; justify-content: space-between; }
-        .ob-skip { position: absolute; top: calc(var(--safe-top) + 18px); right: 22px; z-index: 2; }
-        .ob-progress { padding: calc(var(--safe-top) + 26px) 0 14px; }
+        .ob-skip { position: absolute; top: var(--onboarding-skip-top); right: 22px; z-index: 2; }
+        .ob-progress { padding: var(--onboarding-progress-top) 0 14px; }
         @media (min-width: 768px) {
           .ob-content   { max-width: 680px; padding: 56px 56px 48px; gap: 28px; }
           .ob-footer    { padding: 24px 56px 32px; }

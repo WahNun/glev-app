@@ -51,7 +51,7 @@ export default function BlogPage() {
         // Identischer Top-Pad-Wert wie auf der Homepage, damit der
         // fixed-positionierte Header beim Wechsel zwischen / und /blog
         // optisch nicht "springt".
-        paddingTop: "calc(56px + var(--safe-top))",
+        paddingTop: "var(--marketing-header-total)",
       }}
     >
       <style>{`

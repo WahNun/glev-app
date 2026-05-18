@@ -104,6 +104,26 @@
   --nav-top-height:  36px;
   --nav-top-total:   calc(var(--nav-top-safe) + var(--nav-top-height));
 
+  /* Marketing chrome (Homepage `app/page.tsx`, Blog `app/blog/page.tsx`).
+     Those screens render their own fixed top nav outside the app shell,
+     so they can't reuse `--nav-top-*` directly (the app nav is 36 px,
+     the marketing nav is taller because it carries the full logo lockup
+     + sign-in CTA). Centralising them here means a marketing-header
+     height change lands in one place instead of two route files. */
+  --marketing-header-height: 56px;
+  --marketing-header-total:  calc(var(--safe-top) + var(--marketing-header-height));
+
+  /* Onboarding chrome (`app/onboarding/_shared.tsx`,
+     `app/mockups/onboarding/_shared.tsx`). The onboarding shell renders
+     a top progress bar + skip button and a bottom action footer outside
+     the app shell. Both edges add a fixed gap on top of the iOS safe-
+     area inset; centralising the totals here means tweaking the gap
+     (e.g. moving the skip button down a few pixels) lands in one place
+     instead of both onboarding layouts. */
+  --onboarding-skip-top:      calc(var(--safe-top) + 18px);
+  --onboarding-progress-top:  calc(var(--safe-top) + 26px);
+  --onboarding-footer-bottom: calc(var(--safe-bottom) + 22px);
+
   --nav-bottom-height:  56px;
   --nav-bottom-top-pad: 4px;
   --nav-bottom-safe:    max(4px, calc(var(--safe-bottom) / 2));
