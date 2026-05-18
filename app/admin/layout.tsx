@@ -27,10 +27,27 @@ export default async function AdminLayout({
 }) {
   const authed = await isAdminAuthed();
 
+  // Defensive scroll container: every /admin/* page lives inside its
+  // own `overflow-y: auto` viewport-tall wrapper so admin scrolling
+  // works even if some other route (e.g. /engine) left a stale
+  // `overflow: hidden` on html/body, or a browser extension / iOS
+  // WebView quirk has locked the document scroll. Without this, the
+  // user-detail page (which renders far past 100vh) appears clipped
+  // and the mouse wheel does nothing — exactly the bug reported on
+  // 2026-05-18. Using 100dvh (dynamic viewport height) keeps the
+  // scroll area correct on iOS Safari as the URL bar collapses.
   return (
-    <>
+    <div
+      style={{
+        height: "100dvh",
+        overflowY: "auto",
+        overflowX: "hidden",
+        WebkitOverflowScrolling: "touch",
+        background: "#fafafa",
+      }}
+    >
       {authed ? <AdminNav /> : null}
       {children}
-    </>
+    </div>
   );
 }
