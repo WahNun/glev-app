@@ -77,6 +77,7 @@ const INSIGHTS_DEFAULT_ORDER = [
   "cycle-symptoms",
   "performance-tiles",
   "daily-steps",
+  "active-day-outcomes",
 ];
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
@@ -3003,6 +3004,172 @@ export default function InsightsPage() {
         ) : null,
       };
     })(),
+    // ── Active-day outcomes (Task #336) ──
+    // Compares meal evaluation distribution on the user's most active
+    // days (≥ 1.3 × median daily steps) vs typical days. Requires at
+    // least 14 days of step data AND at least MIN_DATAPOINTS classified
+    // meals on EACH side — otherwise the comparison would be noise.
+    // Compliance-safe: pure observation, no dose advice.
+    (() => {
+      const stepRows = activity.rows;
+      if (stepRows.length < 14) return { id: "active-day-outcomes", node: null };
+
+      // Build a per-day step lookup. We only consider days that the
+      // iOS shell actually reported, so an idle day without a row is
+      // not silently treated as "0 steps".
+      const stepsByDay = new Map<string, number>();
+      for (const r of stepRows) stepsByDay.set(r.date, r.steps);
+
+      // Median across the reported window — robust to one big outlier
+      // day. Threshold mirrors the existing daily-steps card's "+30%
+      // vs baseline → high" colour rule.
+      const stepValues = stepRows.map(r => r.steps).sort((a, b) => a - b);
+      const mid = Math.floor(stepValues.length / 2);
+      const medianSteps = stepValues.length % 2 === 0
+        ? Math.round((stepValues[mid - 1] + stepValues[mid]) / 2)
+        : stepValues[mid];
+      const HIGH_FACTOR = 1.3;
+      const highThreshold = Math.round(medianSteps * HIGH_FACTOR);
+
+      // Match each in-pool meal to its local-day step count. Meals on
+      // days without a step row are excluded (we have no signal to
+      // group them).
+      const dateIso = (d: Date) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${y}-${m}-${day}`;
+      };
+      const buckets = {
+        active: { good: 0, spike: 0, hypo: 0 },
+        typical: { good: 0, spike: 0, hypo: 0 },
+      };
+      for (const m of meals) {
+        const iso = dateIso(parseDbDate(m.created_at));
+        const steps = stepsByDay.get(iso);
+        if (steps == null) continue;
+        const ev = EVAL_NORM(unifiedOutcome(m));
+        if (!ev) continue;
+        const slot = steps >= highThreshold ? buckets.active : buckets.typical;
+        if (ev === "GOOD") slot.good++;
+        else if (ev === "SPIKE") slot.spike++;
+        else if (ev === "HYPO") slot.hypo++;
+      }
+      const activeN = buckets.active.good + buckets.active.spike + buckets.active.hypo;
+      const typicalN = buckets.typical.good + buckets.typical.spike + buckets.typical.hypo;
+      if (activeN < MIN_DATAPOINTS || typicalN < MIN_DATAPOINTS) {
+        return { id: "active-day-outcomes", node: null };
+      }
+
+      const pct = (num: number, denom: number) =>
+        denom > 0 ? Math.round((num / denom) * 100) : 0;
+      const activeGoodPct  = pct(buckets.active.good,  activeN);
+      const typicalGoodPct = pct(buckets.typical.good, typicalN);
+      const goodDelta = activeGoodPct - typicalGoodPct;
+      // Signed share of meals that ran "low risk" (over-dosed) on
+      // active days vs typical — the most actionable signal.
+      const activeHypoPct  = pct(buckets.active.hypo,  activeN);
+      const typicalHypoPct = pct(buckets.typical.hypo, typicalN);
+      const hypoDelta = activeHypoPct - typicalHypoPct;
+
+      const rowsFor = (b: { good: number; spike: number; hypo: number }, n: number) => [
+        { label: tInsights("eval_label_on_target"), count: b.good,  color: GREEN,  pct: pct(b.good,  n) },
+        { label: tInsights("eval_label_spiked"),    count: b.spike, color: ORANGE, pct: pct(b.spike, n) },
+        { label: tInsights("eval_label_low_risk"),  count: b.hypo,  color: PINK,   pct: pct(b.hypo,  n) },
+      ];
+
+      const headline =
+        Math.abs(goodDelta) < 5
+          ? tInsights("active_day_outcomes_headline_flat", {
+              active: activeGoodPct, typical: typicalGoodPct,
+            })
+          : goodDelta > 0
+            ? tInsights("active_day_outcomes_headline_better", {
+                delta: Math.abs(goodDelta), active: activeGoodPct, typical: typicalGoodPct,
+              })
+            : tInsights("active_day_outcomes_headline_worse", {
+                delta: Math.abs(goodDelta), active: activeGoodPct, typical: typicalGoodPct,
+              });
+
+      const hypoNote =
+        Math.abs(hypoDelta) >= 10
+          ? (hypoDelta > 0
+              ? tInsights("active_day_outcomes_hypo_more", { delta: Math.abs(hypoDelta) })
+              : tInsights("active_day_outcomes_hypo_less", { delta: Math.abs(hypoDelta) }))
+          : null;
+
+      const renderGroup = (
+        title: string,
+        sub: string,
+        b: { good: number; spike: number; hypo: number },
+        n: number,
+      ) => (
+        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
+            <div style={{ fontSize:12, color:"var(--text)", fontWeight:700 }}>{title}</div>
+            <div style={{ fontSize:11, color:"var(--text-faint)" }}>{sub}</div>
+          </div>
+          {rowsFor(b, n).map(r => (
+            <div key={r.label} style={{ display:"flex", alignItems:"center", gap:8 }}>
+              <div style={{ width:60, fontSize:11, color:r.color }}>{r.label}</div>
+              <div style={{ flex:1, height:5, background:"var(--surface-soft)", borderRadius:99, overflow:"hidden" }}>
+                <div style={{ height:"100%", width:`${r.pct}%`, background:r.color, borderRadius:99, transition:"width 0.3s" }}/>
+              </div>
+              <div style={{ width:30, textAlign:"right", fontSize:11, color:"var(--text)", fontFamily:"var(--font-mono)", fontWeight:600 }}>
+                {r.pct}%
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+
+      return {
+        id: "active-day-outcomes",
+        node: (
+          <FlipCard
+            accent={GREEN}
+            back={
+              <FlipBack
+                title={tInsights("active_day_outcomes_back_title")}
+                accent={GREEN}
+                paragraphs={[
+                  tInsights("active_day_outcomes_back_p1"),
+                  tInsights("active_day_outcomes_back_p2", { threshold: highThreshold.toLocaleString(locale) }),
+                  tInsights("active_day_outcomes_back_p3"),
+                ]}
+              />
+            }
+          >
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+              <CardLabel text={tInsights("card_active_day_outcomes_title")}/>
+              <div style={{ fontSize:11, color:"var(--text-dim)" }}>
+                {tInsights("card_active_day_outcomes_threshold", {
+                  threshold: highThreshold.toLocaleString(locale),
+                })}
+              </div>
+            </div>
+            <div style={{ fontSize:12, color:"var(--text-muted)", lineHeight:1.5, marginBottom:12 }}>
+              {headline}
+              {hypoNote && (
+                <> <span style={{ color: hypoDelta > 0 ? PINK : GREEN }}>{hypoNote}</span></>
+              )}
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+              {renderGroup(
+                tInsights("active_day_outcomes_active_label"),
+                tInsights("active_day_outcomes_meal_count", { n: activeN }),
+                buckets.active, activeN,
+              )}
+              {renderGroup(
+                tInsights("active_day_outcomes_typical_label"),
+                tInsights("active_day_outcomes_meal_count", { n: typicalN }),
+                buckets.typical, typicalN,
+              )}
+            </div>
+          </FlipCard>
+        ),
+      };
+    })(),
   ];
 
   return (
@@ -3105,6 +3272,16 @@ export default function InsightsPage() {
           if (activity.context.todaySteps != null) {
             dyn["daily-steps"] = tInsights("swipe_dyn_daily_steps", {
               steps: activity.context.todaySteps.toLocaleString(locale),
+            });
+          }
+          // Only surface the swipe-pager context line when the card
+          // itself is actually rendering — `items` already encodes
+          // the full gating (14+ step days AND ≥3 classified meals
+          // on EACH side), so checking node !== null keeps the
+          // dynamic line and the card in lock-step.
+          if (items.find(it => it.id === "active-day-outcomes")?.node) {
+            dyn["active-day-outcomes"] = tInsights("swipe_dyn_active_day_outcomes", {
+              days: activity.rows.length,
             });
           }
           if (symptomLogs.length > 0 || menstrualLogs.length > 0) {
