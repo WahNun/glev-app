@@ -1341,6 +1341,33 @@ function RecentEntries({
 // monospaced numeric font for value chips ("4.2u", "32m") so digits
 // align nicely; the meal eval chip stays in the system font so labels
 // like "ON TARGET" read as plain copy.
+/** Compact "Apple Health" pill for dashboard recent-entries rows — same
+ *  visual contract as the entries-page badge, just sized to sit next to
+ *  the eval chip without crowding the row's right column. */
+function AppleHealthMiniChip() {
+  const tIns = useTranslations("entriesExpand");
+  const label = tIns("source_apple_health");
+  const COLOR = "#FF2D55";
+  return (
+    <span
+      title={tIns("source_apple_health_synced")}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 4,
+        padding: "4px 8px", borderRadius: 99,
+        fontSize: 11, fontWeight: 700, letterSpacing: "0.06em",
+        textTransform: "uppercase", whiteSpace: "nowrap",
+        background: `${COLOR}1a`, color: COLOR,
+        border: `1px solid ${COLOR}40`, lineHeight: 1.1,
+      }}
+    >
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M12 21s-7-4.5-9.5-9C.8 8.5 2.6 4 7 4c2 0 3.5 1 5 3 1.5-2 3-3 5-3 4.4 0 6.2 4.5 4.5 8-2.5 4.5-9.5 9-9.5 9z"/>
+      </svg>
+      {label}
+    </span>
+  );
+}
+
 function RecentChip({ text, color, mono = false }: { text: string; color: string; mono?: boolean }) {
   return (
     <span style={{
@@ -1394,7 +1421,17 @@ function UnifiedRecentRow({ row, locale, onClick }: { row: RecentRow; locale: st
     title = exerciseTypeLabelI18n(tIns, x.exercise_type);
     subtitle = `${timeStr} · ${x.duration_minutes}m`;
     const evalInfo = evaluateExercise(x);
-    rightSlot = <RecentChip text={evalInfo.label} color={evalInfo.color} />;
+    // Synced rows surface an additional Apple-Health pill next to the
+    // eval chip so the provenance is visible at a glance in the
+    // dashboard's compact recent-entries list.
+    rightSlot = x.source === "apple_health" ? (
+      <span style={{ display:"inline-flex", alignItems:"center", gap:6 }}>
+        <AppleHealthMiniChip/>
+        <RecentChip text={evalInfo.label} color={evalInfo.color} />
+      </span>
+    ) : (
+      <RecentChip text={evalInfo.label} color={evalInfo.color} />
+    );
   } else {
     const i = row.insulin!;
     title = i.insulin_name || (row.kind === "bolus" ? t("ins_bolus") : t("ins_basal"));

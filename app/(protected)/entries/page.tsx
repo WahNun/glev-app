@@ -41,6 +41,41 @@ const SURFACE="var(--surface)", BORDER="var(--border)";
 function evC(ev: string|null) { return getEvalColor(ev); }
 function evL(ev: string|null) { return getEvalLabel(ev); }
 
+/** Small "Apple Health" pill rendered next to exercise rows whose
+ *  `source = 'apple_health'`. Mirrors the existing chip rhythm used by
+ *  the entries timeline (translucent fill + accent text + uppercase
+ *  tracking). The heart glyph is inline SVG so it inherits `currentColor`
+ *  and doesn't drag in an icon library. */
+function AppleHealthBadge({ label, compact = false }: { label: string; compact?: boolean }) {
+  const COLOR = "#FF2D55"; // Apple Health red — matches the system app icon
+  return (
+    <span
+      title={label}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        padding: compact ? "2px 6px" : "3px 8px",
+        borderRadius: 99,
+        fontSize: compact ? 10 : 11,
+        fontWeight: 700,
+        letterSpacing: "0.06em",
+        textTransform: "uppercase",
+        background: `${COLOR}1a`,
+        color: COLOR,
+        border: `1px solid ${COLOR}40`,
+        whiteSpace: "nowrap",
+        lineHeight: 1.1,
+      }}
+    >
+      <svg width={compact ? 9 : 10} height={compact ? 9 : 10} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M12 21s-7-4.5-9.5-9C.8 8.5 2.6 4 7 4c2 0 3.5 1 5 3 1.5-2 3-3 5-3 4.4 0 6.2 4.5 4.5 8-2.5 4.5-9.5 9-9.5 9z"/>
+      </svg>
+      {label}
+    </span>
+  );
+}
+
 // Multi-select filter sections. Selections are AND-ed across sections; OR-ed
 // within a section. Meal-kind / outcome implicitly restrict to meal rows;
 // exercise-kind implicitly restricts to exercise rows.
@@ -1334,6 +1369,7 @@ function NonMealRow({
   primaryLabel, primaryValue, primaryColor, primaryMono,
   secondaryLabel, secondaryValue, secondaryColor, secondaryMono,
   secondarySubtitle,
+  sourceBadge,
   expandedDetails,
 }: {
   isOpen: boolean;
@@ -1367,6 +1403,10 @@ function NonMealRow({
    *  to surface the historic ICR snapshot (e.g. "@ 2 BE/IE"). Rendered
    *  in muted text and elided on small screens to avoid layout shifts. */
   secondarySubtitle?: string;
+  /** Optional small chip rendered under the kind badge on the collapsed
+   *  row — used by the exercise row to surface the "Apple Health"
+   *  provenance pill for `source = 'apple_health'`. */
+  sourceBadge?: React.ReactNode;
   expandedDetails: React.ReactNode;
 }) {
   const tx = useTranslations("entriesExpand");
@@ -1409,6 +1449,9 @@ function NonMealRow({
               <span style={{ width:7, height:7, borderRadius:99, background:accent, opacity:0.85, flexShrink:0 }}/>
               <span style={{ fontSize:13, fontWeight:700, color:accent, letterSpacing:"0.04em", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{badge}</span>
             </div>
+            {sourceBadge && (
+              <div style={{ marginTop:4 }}>{sourceBadge}</div>
+            )}
           </div>
           {/* Col 3: Primary metric (Dose / Duration) */}
           <div style={{ minWidth:0 }}>
@@ -2219,8 +2262,14 @@ function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting, o
   const tx = useTranslations("entriesExpand");
   const locale = useLocale();
   const { format: fmtTime } = useTimeFormat();
-  const start = parseDbDate(log.created_at);
-  const end   = new Date(start.getTime() + log.duration_minutes * 60_000);
+  // Apple-Health-synced rows carry the real workout window in
+  // started_at / ended_at — prefer those when present so the displayed
+  // STARTED / ENDED reflect what the watch recorded, not the
+  // created_at + duration approximation used for manual rows.
+  const start = log.started_at ? parseDbDate(log.started_at) : parseDbDate(log.created_at);
+  const end   = log.ended_at
+    ? parseDbDate(log.ended_at)
+    : new Date(start.getTime() + log.duration_minutes * 60_000);
   const dateStr = start.toLocaleDateString(locale, { month:"short", day:"numeric" });
   const timeStr = fmtTime(start);
   // End-side date is computed independently so workouts that cross
@@ -2233,6 +2282,10 @@ function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting, o
   const typeLbl = exerciseTypeLabelI18n(tIns, log.exercise_type);
   const evalInfo = evaluateExercise(log);
   const badgeColor = evalInfo.color;
+  const isSynced = log.source === "apple_health";
+  const ahLabel = tx("source_apple_health");
+  const ahSyncedLabel = tx("source_apple_health_synced");
+  const ahLockedHint = tx("source_apple_health_locked_hint");
 
   // Glucose deltas (Before → AtEnd, Before → +1h).
   const before  = numOrNull(log.cgm_glucose_at_log);
@@ -2264,6 +2317,7 @@ function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting, o
       primaryMono
       secondaryLabel={tx("row_type")}
       secondaryValue={typeLbl}
+      sourceBadge={isSynced ? <AppleHealthBadge label={ahLabel} compact/> : undefined}
       expandedDetails={editing ? (
         <ExerciseEditor
           log={log}
@@ -2275,14 +2329,45 @@ function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting, o
         />
       ) : (
         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {/* Apple Health provenance banner — shown only for synced rows.
+              Surfaces WHERE the data came from + WHY some fields are
+              read-only, per the migration's UI policy (notes + intensity
+              stay editable, type/duration/HR/time-window are locked). */}
+          {isSynced && (
+            <div style={{
+              display:"flex", alignItems:"flex-start", gap:10,
+              background:"#FF2D5510",
+              border:"1px solid #FF2D5540",
+              borderRadius:12, padding:"10px 12px",
+            }}>
+              <div style={{ flexShrink:0, marginTop:1 }}>
+                <AppleHealthBadge label={ahLabel}/>
+              </div>
+              <div style={{ display:"flex", flexDirection:"column", gap:4, minWidth:0 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:"var(--text-strong)" }}>
+                  {ahSyncedLabel}
+                </div>
+                <div style={{ fontSize:12, color:"var(--text-dim)", lineHeight:1.5 }}>
+                  {ahLockedHint}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* 1) Session details ------------------------------------ */}
           <ExPanel title={tx("panel_session_details")}>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8 }}>
-              <Detail label={tx("detail_type")} value={typeLbl}/>
-              <Detail label={tx("detail_duration")} value={`${log.duration_minutes} min`} color={accent}/>
+              <Detail label={tx("detail_type")} value={typeLbl} locked={isSynced} lockedHint={ahLockedHint}/>
+              <Detail label={tx("detail_duration")} value={`${log.duration_minutes} min`} color={accent} locked={isSynced} lockedHint={ahLockedHint}/>
               <Detail label={tx("detail_intensity")} value={intensityLabel(log.intensity)}/>
-              <Detail label={tx("detail_started")} value={`${dateStr} · ${timeStr}`}/>
-              <Detail label={tx("detail_ended")} value={`${endDateStr} · ${endTimeStr}`}/>
+              <Detail label={tx("detail_started")} value={`${dateStr} · ${timeStr}`} locked={isSynced} lockedHint={ahLockedHint}/>
+              <Detail label={tx("detail_ended")} value={`${endDateStr} · ${endTimeStr}`} locked={isSynced} lockedHint={ahLockedHint}/>
+              {log.avg_heart_rate != null && (
+                <Detail label={tx("detail_avg_hr")} value={`${log.avg_heart_rate} bpm`} locked={isSynced} lockedHint={ahLockedHint}/>
+              )}
+              {log.max_heart_rate != null && (
+                <Detail label={tx("detail_max_hr")} value={`${log.max_heart_rate} bpm`} locked={isSynced} lockedHint={ahLockedHint}/>
+              )}
             </div>
           </ExPanel>
 
@@ -2407,6 +2492,12 @@ function ExerciseEditor({ log, onSaved, onCancel }: {
   const [savedTick, setSavedTick] = useState<number>(0);
 
   const tIns = useTranslations("insights");
+  const tx = useTranslations("entriesExpand");
+  // Apple-Health-synced rows lock type/duration (and HR/time-window —
+  // not edited here anyway). Intensity + notes stay editable per the
+  // migration's agreed UI policy.
+  const isSynced = log.source === "apple_health";
+  const lockedHint = tx("field_locked_synced");
 
   // Editor type options: the new taxonomy, plus the row's current
   // value if it's a legacy `hypertrophy` row, so we never silently
@@ -2441,8 +2532,10 @@ function ExerciseEditor({ log, onSaved, onCancel }: {
         intensity?: ExerciseIntensity;
         notes?: string | null;
       } = {};
-      if (type !== log.exercise_type) patch.exercise_type = type;
-      if (duration !== log.duration_minutes) patch.duration_minutes = duration;
+      // Synced rows: type/duration are read-only in the UI, so never
+      // include them in the PATCH even if local state somehow diverged.
+      if (!isSynced && type !== log.exercise_type) patch.exercise_type = type;
+      if (!isSynced && duration !== log.duration_minutes) patch.duration_minutes = duration;
       if (intensity !== log.intensity) patch.intensity = intensity;
       const trimmedNotes = notes.trim();
       const normalizedNotes = trimmedNotes.length > 0 ? trimmedNotes : null;
@@ -2493,13 +2586,35 @@ function ExerciseEditor({ log, onSaved, onCancel }: {
         Glukose-Werte und Start-Zeit bleiben unverändert.
       </div>
 
+      {/* Synced-from-Apple-Health hint banner — locks type/duration. */}
+      {isSynced && (
+        <div style={{
+          display:"flex", alignItems:"flex-start", gap:10,
+          background:"#FF2D5510",
+          border:"1px solid #FF2D5540",
+          borderRadius:10, padding:"8px 10px",
+        }}>
+          <div style={{ flexShrink:0, marginTop:1 }}>
+            <AppleHealthBadge label={tx("source_apple_health")} compact/>
+          </div>
+          <div style={{ fontSize:12, color:"var(--text-dim)", lineHeight:1.5 }}>
+            {tx("source_apple_health_locked_hint")}
+          </div>
+        </div>
+      )}
+
       {/* Sportart — simple native select keeps the editor compact and
           accessible without re-implementing the engine dropdown. */}
       <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-        <label style={{ fontSize:13, color:"var(--text-dim)" }}>Sportart</label>
+        <label style={{ fontSize:13, color:"var(--text-dim)", display:"flex", alignItems:"center", gap:6 }}>
+          <span>Sportart</span>
+          {isSynced && <LockGlyph hint={lockedHint}/>}
+        </label>
         <select
           value={type}
           onChange={e => setType(e.target.value as ExerciseType)}
+          disabled={isSynced}
+          title={isSynced ? lockedHint : undefined}
           style={{
             background:"var(--input-bg)",
             border:`1px solid ${BORDER}`,
@@ -2509,6 +2624,8 @@ function ExerciseEditor({ log, onSaved, onCancel }: {
             fontWeight:600,
             color:"var(--text-strong)",
             outline:"none",
+            opacity: isSynced ? 0.6 : 1,
+            cursor: isSynced ? "not-allowed" : undefined,
           }}
         >
           {EDIT_TYPE_OPTIONS.map(opt => (
@@ -2519,17 +2636,39 @@ function ExerciseEditor({ log, onSaved, onCancel }: {
 
       {/* Dauer (1–600 min) */}
       <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-        <label style={{ fontSize:13, color:"var(--text-dim)" }}>Dauer</label>
-        <SnapSlider
-          value={duration}
-          onChange={(n) => setDuration(Math.round(n))}
-          min={1}
-          max={600}
-          step={1}
-          unit="min"
-          accent={EXERCISE_ACCENT}
-          ariaLabel="Dauer"
-        />
+        <label style={{ fontSize:13, color:"var(--text-dim)", display:"flex", alignItems:"center", gap:6 }}>
+          <span>Dauer</span>
+          {isSynced && <LockGlyph hint={lockedHint}/>}
+        </label>
+        {isSynced ? (
+          <div
+            title={lockedHint}
+            style={{
+              background:"var(--input-bg)",
+              border:`1px solid ${BORDER}`,
+              borderRadius:12,
+              padding:"12px 14px",
+              fontSize:14,
+              fontWeight:700,
+              color:"var(--text-strong)",
+              opacity:0.7,
+              fontFamily:"var(--font-mono)",
+            }}
+          >
+            {duration} min
+          </div>
+        ) : (
+          <SnapSlider
+            value={duration}
+            onChange={(n) => setDuration(Math.round(n))}
+            min={1}
+            max={600}
+            step={1}
+            unit="min"
+            accent={EXERCISE_ACCENT}
+            ariaLabel="Dauer"
+          />
+        )}
       </div>
 
       {/* Intensität — 3-stop slider mapped onto low/medium/high. */}
@@ -2723,10 +2862,35 @@ function EvalBlock({ heading, unlocked, body, color, outcomeLabel }: {
   );
 }
 
-function Detail({ label, value, color }: { label: string; value: string; color?: string }) {
+/** Tiny padlock glyph used by editor labels and read-only Detail tiles
+ *  to signal "synced from Apple Health → locked here". Renders inline
+ *  inside a label, inherits color/opacity from its parent. */
+function LockGlyph({ hint }: { hint?: string }) {
   return (
-    <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
-      <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{label}</div>
+    <span title={hint} style={{ display:"inline-flex", alignItems:"center", color:"var(--text-faint)" }} aria-label={hint}>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+      </svg>
+    </span>
+  );
+}
+
+function Detail({ label, value, color, locked, lockedHint }: { label: string; value: string; color?: string; locked?: boolean; lockedHint?: string }) {
+  return (
+    <div
+      title={locked && lockedHint ? lockedHint : undefined}
+      style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}
+    >
+      <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4, display:"flex", alignItems:"center", gap:4 }}>
+        <span>{label}</span>
+        {locked && (
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ opacity:0.75 }}>
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        )}
+      </div>
       <div style={{ fontSize:14, fontWeight:700, color: color || "var(--text-strong)", letterSpacing:"-0.01em" }}>{value}</div>
     </div>
   );

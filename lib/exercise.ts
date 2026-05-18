@@ -61,6 +61,18 @@ export interface ExerciseLog {
   auc_180?: number | null;
   had_hypo_window?: boolean | null;
   min_bg_60_180?: number | null;
+  // Task #183/#342: Apple Health workout sync columns (Migration
+  // 20260518_extend_exercise_logs_apple_health). `source` defaults to
+  // 'manual' on legacy rows; 'apple_health' rows additionally carry
+  // started_at / ended_at / heart-rate fields that are LOCKED in the
+  // UI (per the migration's agreed policy — only notes + intensity
+  // remain editable on synced rows).
+  source?: ExerciseSource | null;
+  external_id?: string | null;
+  avg_heart_rate?: number | null;
+  max_heart_rate?: number | null;
+  started_at?: string | null;
+  ended_at?: string | null;
 }
 
 export interface ExerciseLogInput {
