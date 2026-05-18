@@ -588,19 +588,16 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         position: "fixed", bottom: 0, left: 0, right: 0,
         background: NAV_SURFACE, borderTop: `1px solid ${NAV_BORDER}`,
         // Bottom padding pulls the tab labels even closer to the home
-        // indicator. After round 1 (-18 px), the user still saw a dark
-        // band below the labels; round 2 (2026-05-17) tightens it to
-        // sa-bot − 22 px so the labels sit ~12 px above the home
-        // indicator. Top padding also trimmed 6→4 to claw back another
-        // 2 px above the icons.
-        // 2026-05-18: floor raised 2 → 8 px because at 2 px the labels
-        // were kissing the viewport edge on desktop preview and the
-        // user saw a thin strip of page content peeking through below
-        // them ("weiße Punkte ganz unten am rand vom footer? sieht aus
-        // als stünde da noch schrift versteckt ganz unten"). 8 px gives
-        // every label visible breathing room while staying tight enough
-        // not to feel padded.
-        padding: "4px 4px max(8px, calc(env(safe-area-inset-bottom, 0px) - 22px))",
+        // indicator. History: round 1 −18 px, round 2 −22 px (labels
+        // ~12 px above the home indicator), round 3 (2026-05-18 PM)
+        // tightened to −28 px → labels sit ~6 px above the iOS home
+        // indicator strip after the user reported "noch etwas dunkler
+        // space" below the nav on iOS TestFlight + web preview.
+        // Web floor lowered 8 → 4 px because without a safe-area inset
+        // the floor was visibly thicker than on iOS, so the dark band
+        // looked even worse on desktop preview. 4 px still keeps the
+        // labels from kissing the viewport edge.
+        padding: "4px 4px max(4px, calc(env(safe-area-inset-bottom, 0px) - 28px))",
         zIndex: 100,
       }}>
         <MobileTab
