@@ -172,6 +172,21 @@ export default function CgmSettingsCard() {
     | { kind: "error"; text: string }
     | null
   >(null);
+  // Backfill state for older step-count history (Task #345). Same
+  // decoupling as the workouts backfill so the user can run a deeper
+  // one-shot pull even after the initial connect succeeded.
+  const [stepsBackfillRunning, setStepsBackfillRunning] = useState(false);
+  const [stepsBackfillProgress, setStepsBackfillProgress] = useState<{
+    daysBack: number;
+    days: number;
+    upserted: number;
+    chunks: number;
+  } | null>(null);
+  const [stepsBackfillResult, setStepsBackfillResult] = useState<
+    | { kind: "success"; text: string }
+    | { kind: "error"; text: string }
+    | null
+  >(null);
 
   const loadStatus = useCallback(async () => {
     setLoadingStatus(true);
@@ -667,6 +682,61 @@ export default function CgmSettingsCard() {
       });
     } finally {
       setBackfillRunning(false);
+    }
+  }
+
+  // One-shot deeper step-count history pull. Walks Apple Health
+  // backwards in 30-day chunks until exhausted (or capped at 5 years).
+  // Re-runs are safe — the steps endpoint upserts by
+  // (user_id, date, source) so duplicates just overwrite.
+  async function handleBackfillSteps() {
+    if (!isNativePlatform) {
+      setStepsBackfillResult({
+        kind: "error",
+        text: "Verfügbar nur in der iOS-App.",
+      });
+      return;
+    }
+    setStepsBackfillResult(null);
+    setStepsBackfillProgress({ daysBack: 0, days: 0, upserted: 0, chunks: 0 });
+    setStepsBackfillRunning(true);
+    try {
+      const { backfillSteps } = await import("@/lib/cgm/appleHealthClient");
+      const res = await backfillSteps({
+        onProgress: (p) => {
+          setStepsBackfillProgress({
+            daysBack: p.daysBack,
+            days: p.totalDays,
+            upserted: p.totalUpserted,
+            chunks: Math.max(1, Math.ceil(p.daysBack / 30)),
+          });
+        },
+      });
+      if (!res.ok) {
+        setStepsBackfillResult({
+          kind: "error",
+          text:
+            res.error ||
+            (res.reason === "no-permission"
+              ? "Zugriff auf Apple Health nicht erlaubt."
+              : "Backfill fehlgeschlagen."),
+        });
+      } else {
+        setStepsBackfillResult({
+          kind: "success",
+          text:
+            res.days > 0
+              ? `✓ ${res.days} Tage Schritt-Historie importiert (bis ca. ${Math.round(res.daysCovered)} Tage zurück).`
+              : `✓ Keine weiteren Schritt-Daten in Apple Health gefunden (bis ca. ${Math.round(res.daysCovered)} Tage zurück geprüft).`,
+        });
+      }
+    } catch (err) {
+      setStepsBackfillResult({
+        kind: "error",
+        text: err instanceof Error ? err.message : "Backfill fehlgeschlagen",
+      });
+    } finally {
+      setStepsBackfillRunning(false);
     }
   }
 
@@ -1543,6 +1613,75 @@ export default function CgmSettingsCard() {
                         }}
                       >
                         Workouts: noch keine aus Apple Health synchronisiert.
+                      </div>
+                    )}
+
+                    <div
+                      style={{
+                        marginTop: 8,
+                        paddingTop: 12,
+                        borderTop: `1px solid ${BORDER}`,
+                        fontSize: 13,
+                        color: "var(--text-muted)",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      <strong style={{ color: "var(--text)" }}>
+                        Schritt-Historie nachladen
+                      </strong>
+                      <div style={{ marginTop: 4 }}>
+                        Beim ersten Sync werden nur die letzten 30 Tage
+                        Schritte geholt. Mit diesem Knopf liest Glev deine
+                        älteren Apple-Health-Schrittdaten in 30-Tage-Schritten
+                        nach — so hat die „Tägliche Aktivität"-Kontext der
+                        Engine mehr Mustergrundlage. Mehrfaches Ausführen ist
+                        sicher (pro Tag überschreibt der neuere Wert).
+                      </div>
+                    </div>
+                    <div>
+                      <button
+                        type="button"
+                        onClick={handleBackfillSteps}
+                        disabled={!isNativePlatform || stepsBackfillRunning}
+                        title={!isNativePlatform ? "Nur in der iOS-App" : undefined}
+                        style={{
+                          padding: "10px 16px",
+                          borderRadius: 10,
+                          border: `1px solid ${ACCENT}80`,
+                          background: "transparent",
+                          color: ACCENT,
+                          fontSize: 13,
+                          fontWeight: 700,
+                          cursor: !isNativePlatform
+                            ? "not-allowed"
+                            : stepsBackfillRunning
+                            ? "wait"
+                            : "pointer",
+                          opacity: !isNativePlatform || stepsBackfillRunning ? 0.5 : 1,
+                        }}
+                      >
+                        {stepsBackfillRunning
+                          ? "Lade ältere Schritte…"
+                          : "Schritt-Historie nachladen"}
+                      </button>
+                    </div>
+                    {stepsBackfillRunning && stepsBackfillProgress && (
+                      <div style={{ fontSize: 13, color: "var(--text-dim)" }}>
+                        {stepsBackfillProgress.days} Tage importiert ·{" "}
+                        {stepsBackfillProgress.upserted} Einträge · ca.{" "}
+                        {stepsBackfillProgress.daysBack} Tage zurück
+                        {" "}({stepsBackfillProgress.chunks} Blöcke)
+                      </div>
+                    )}
+                    {!stepsBackfillRunning && stepsBackfillResult && (
+                      <div
+                        style={{
+                          fontSize: 13,
+                          color:
+                            stepsBackfillResult.kind === "success" ? GREEN : PINK,
+                        }}
+                      >
+                        {stepsBackfillResult.text}
                       </div>
                     )}
                   </div>

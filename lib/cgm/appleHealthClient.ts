@@ -618,6 +618,209 @@ export function readBackfillDoneAt(): string | null {
   return safeRead(BACKFILL_DONE_KEY);
 }
 
+/**
+ * One-shot deeper backfill for Apple Health daily step counts.
+ *
+ * Mirrors `backfillWorkouts()` but for `stepCount` samples. The
+ * regular `syncRecentSteps()` only reaches 30 days back on the first
+ * sync; users with years of iPhone step data benefit from a deeper
+ * baseline so the engine's "daily activity" context signal has more
+ * pattern recognition fuel.
+ *
+ * Strategy:
+ *   - Walk backwards in `STEPS_BACKFILL_CHUNK_DAYS` (30-day) windows.
+ *     Smaller than the workouts chunk because step samples are far
+ *     more numerous (iPhone writes ~hourly, Watch on top of that).
+ *   - For each window read samples from HealthKit, bucket per
+ *     device-local calendar day, and POST the per-day totals to
+ *     /api/health/steps/sync, which upserts by
+ *     (user_id, date, source='apple_health') — re-runs are safe.
+ *   - Stop when we hit `STEPS_BACKFILL_MAX_DAYS` (5-year hard cap),
+ *     `STEPS_BACKFILL_EMPTY_CHUNK_STOP` consecutive empty windows
+ *     (history exhausted), or the optional `signal` is aborted.
+ */
+const STEPS_BACKFILL_CHUNK_DAYS = 30;
+const STEPS_BACKFILL_MAX_DAYS = 365 * 5; // 5 years — hard safety cap
+// Stop after this many consecutive empty 30-day windows (~6 months
+// of zero steps). Tight enough to wrap up quickly for fresh-install
+// users with limited history, loose enough to skip over realistic
+// off-periods (long hospitalisation, lost phone).
+const STEPS_BACKFILL_EMPTY_CHUNK_STOP = 6;
+// HEALTH_STEPS_MAX_BATCH in lib/healthStepsNormalise.ts is 400 — a
+// 30-day window POSTs at most 30 daily rows, well within budget.
+// Kept as a local literal so this client stays free of server-only imports.
+const STEPS_BACKFILL_POST_BATCH = 400;
+// HealthKit sample read cap per chunk query — generous enough to
+// cover one 30-day window with multiple source apps (iPhone + Watch
+// + third-party) writing hourly.
+const STEPS_BACKFILL_READ_LIMIT = 10_000;
+const STEPS_BACKFILL_DONE_KEY = "glev:apple-health:steps-backfill-done-iso";
+
+export interface BackfillStepsProgress {
+  chunkStartIso: string;
+  chunkEndIso: string;
+  daysBack: number;
+  daysThisChunk: number;
+  totalDays: number;
+  totalUpserted: number;
+}
+
+export interface BackfillStepsResult {
+  ok: boolean;
+  reason?:
+    | "not-native"
+    | "no-permission"
+    | "plugin-missing"
+    | "fetch-failed";
+  upserted: number;
+  days: number;
+  chunks: number;
+  daysCovered: number;
+  error?: string;
+}
+
+export async function backfillSteps(opts?: {
+  onProgress?: (p: BackfillStepsProgress) => void;
+  signal?: AbortSignal;
+}): Promise<BackfillStepsResult> {
+  if (!(await isNative())) {
+    return { ok: false, reason: "not-native", upserted: 0, days: 0, chunks: 0, daysCovered: 0 };
+  }
+  const plugin = await loadPlugin();
+  if (!plugin) {
+    return { ok: false, reason: "plugin-missing", upserted: 0, days: 0, chunks: 0, daysCovered: 0 };
+  }
+
+  const now = Date.now();
+  let totalUpserted = 0;
+  let totalDays = 0;
+  let chunks = 0;
+  let emptyStreak = 0;
+  let daysBack = 0;
+
+  while (daysBack < STEPS_BACKFILL_MAX_DAYS) {
+    if (opts?.signal?.aborted) break;
+    const chunkEndMs = now - daysBack * 86_400_000;
+    const nextDaysBack = Math.min(
+      daysBack + STEPS_BACKFILL_CHUNK_DAYS,
+      STEPS_BACKFILL_MAX_DAYS,
+    );
+    const chunkStartMs = now - nextDaysBack * 86_400_000;
+    const chunkStartIso = new Date(chunkStartMs).toISOString();
+    const chunkEndIso = new Date(chunkEndMs).toISOString();
+
+    let samples: PluginSample[] = [];
+    try {
+      const res = await plugin.readSamples({
+        dataType: "stepCount",
+        startDate: chunkStartIso,
+        endDate: chunkEndIso,
+        limit: STEPS_BACKFILL_READ_LIMIT,
+        ascending: true,
+      });
+      samples = Array.isArray(res?.samples) ? res.samples : [];
+    } catch (e) {
+      return {
+        ok: false,
+        reason: "no-permission",
+        error: e instanceof Error ? e.message : "unknown",
+        upserted: totalUpserted,
+        days: totalDays,
+        chunks,
+        daysCovered: daysBack,
+      };
+    }
+
+    // Bucket per device-local calendar day (same rule as syncRecentSteps).
+    const byDate = new Map<string, number>();
+    for (const s of samples) {
+      if (typeof s.value !== "number" || !Number.isFinite(s.value)) continue;
+      const t = s.startDate ? new Date(s.startDate) : null;
+      if (!t || Number.isNaN(t.getTime())) continue;
+      const key = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+      byDate.set(key, (byDate.get(key) ?? 0) + s.value);
+    }
+
+    const payload = [...byDate.entries()].map(([date, steps]) => ({
+      date,
+      steps: Math.round(steps),
+    }));
+    const daysThisChunk = payload.length;
+
+    let upsertedThisChunk = 0;
+    for (let i = 0; i < payload.length; i += STEPS_BACKFILL_POST_BATCH) {
+      if (opts?.signal?.aborted) break;
+      const slice = payload.slice(i, i + STEPS_BACKFILL_POST_BATCH);
+      try {
+        const res = await fetchWithTimeout("/api/health/steps/sync", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ samples: slice }),
+        });
+        if (!res.ok) {
+          return {
+            ok: false,
+            reason: "fetch-failed",
+            error: `http ${res.status}`,
+            upserted: totalUpserted + upsertedThisChunk,
+            days: totalDays + daysThisChunk,
+            chunks,
+            daysCovered: daysBack,
+          };
+        }
+        const j = (await res.json().catch(() => ({}))) as { upserted?: number };
+        upsertedThisChunk += j.upserted ?? 0;
+      } catch (e) {
+        return {
+          ok: false,
+          reason: "fetch-failed",
+          error: e instanceof Error ? e.message : "unknown",
+          upserted: totalUpserted + upsertedThisChunk,
+          days: totalDays + daysThisChunk,
+          chunks,
+          daysCovered: daysBack,
+        };
+      }
+    }
+
+    totalUpserted += upsertedThisChunk;
+    totalDays += daysThisChunk;
+    chunks++;
+    daysBack = nextDaysBack;
+
+    opts?.onProgress?.({
+      chunkStartIso,
+      chunkEndIso,
+      daysBack,
+      daysThisChunk,
+      totalDays,
+      totalUpserted,
+    });
+
+    if (daysThisChunk === 0) {
+      emptyStreak++;
+      if (emptyStreak >= STEPS_BACKFILL_EMPTY_CHUNK_STOP) break;
+    } else {
+      emptyStreak = 0;
+    }
+
+    if (daysBack >= STEPS_BACKFILL_MAX_DAYS) break;
+  }
+
+  safeWrite(STEPS_BACKFILL_DONE_KEY, new Date(now).toISOString());
+  return {
+    ok: true,
+    upserted: totalUpserted,
+    days: totalDays,
+    chunks,
+    daysCovered: daysBack,
+  };
+}
+
+export function readStepsBackfillDoneAt(): string | null {
+  return safeRead(STEPS_BACKFILL_DONE_KEY);
+}
+
 function readNum(raw: unknown): number | null {
   if (raw == null) return null;
   const n = typeof raw === "number" ? raw : Number(raw);
