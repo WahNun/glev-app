@@ -1088,13 +1088,28 @@ export default function InsightsPage() {
   // SPIKE bucket = SPIKE+UNDERDOSE+LOW (BG ended too high → under-dosed).
   // HYPO  bucket = OVERDOSE+HIGH       (BG ended too low  → over-dosed).
   const recentMeals = last7.slice(0, 30);
+  const recentTotal = recentMeals.length;
   const recentGood  = recentMeals.filter(m=>EVAL_NORM(unifiedOutcome(m))==="GOOD").length;
   const recentLow   = recentMeals.filter(m=>EVAL_NORM(unifiedOutcome(m))==="SPIKE").length;
   const recentHigh  = recentMeals.filter(m=>EVAL_NORM(unifiedOutcome(m))==="HYPO").length;
+  // Rate-based gates so the cards don't contradict each other (Task 2026-05-18):
+  // previously each pattern fired on its absolute count, so "10 under-dosed"
+  // and "14 well-dosed" could appear at the same time in a 27-meal window.
+  // We still keep the floor counts (≥4 / ≥3 / ≥7) so a tiny sample can't
+  // trip any card; on top of that we require a majority rate for the
+  // dosing-issue cards and demote "Strong recent control" so it only shows
+  // when no issue card fired AND the GOOD share is ≥60%.
+  const recentUnderRate = recentTotal > 0 ? recentLow  / recentTotal : 0;
+  const recentOverRate  = recentTotal > 0 ? recentHigh / recentTotal : 0;
+  const recentGoodRate  = recentTotal > 0 ? recentGood / recentTotal : 0;
   const patterns: {icon:string;title:string;desc:string;color:string}[] = [];
-  if (recentLow >= 4)  patterns.push({ icon:"↑", title:tInsights("pattern_under_dosing_title"),     desc:tInsights("pattern_under_dosing_desc",    { n: recentLow  }), color:ORANGE });
-  if (recentHigh >= 3) patterns.push({ icon:"↓", title:tInsights("pattern_over_dosing_title"),      desc:tInsights("pattern_over_dosing_desc",     { n: recentHigh }), color:PINK   });
-  if (recentGood >= 7) patterns.push({ icon:"✓", title:tInsights("pattern_strong_control_title"),   desc:tInsights("pattern_strong_control_desc",  { n: recentGood }), color:GREEN  });
+  const underFires = recentLow  >= 4 && recentUnderRate >= 0.4;
+  const overFires  = recentHigh >= 3 && recentOverRate  >= 0.3;
+  if (underFires) patterns.push({ icon:"↑", title:tInsights("pattern_under_dosing_title"), desc:tInsights("pattern_under_dosing_desc", { n: recentLow,  total: recentTotal }), color:ORANGE });
+  if (overFires)  patterns.push({ icon:"↓", title:tInsights("pattern_over_dosing_title"),  desc:tInsights("pattern_over_dosing_desc",  { n: recentHigh, total: recentTotal }), color:PINK   });
+  if (!underFires && !overFires && recentGood >= 7 && recentGoodRate >= 0.6) {
+    patterns.push({ icon:"✓", title:tInsights("pattern_strong_control_title"), desc:tInsights("pattern_strong_control_desc", { n: recentGood, total: recentTotal }), color:GREEN });
+  }
   const morningSucc = timeGroups["Morning (5–11)"];
   const eveningSucc = timeGroups["Evening (17–21)"];
   if (morningSucc.count >= 3 && morningSucc.good/morningSucc.count < 0.5) patterns.push({ icon:"☀", title:tInsights("pattern_morning_issues_title"),    desc:tInsights("pattern_morning_issues_desc"),    color:ORANGE });
