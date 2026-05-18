@@ -25,6 +25,17 @@ const config: CapacitorConfig = {
     cleartext: false,
     androidScheme: "https",
   },
+  plugins: {
+    // Glev ist Portrait-only — Querformat ist auf Pen-T1D-Logs nicht
+    // sinnvoll (Sliders, BG-Eingabe, Engine-Chat sind alle vertikal
+    // gedacht) und produziert Header/Footer-Regressionen, die nicht
+    // mehr eintreten können wenn das System die Rotation hart sperrt.
+    // iOS-Pendant: UISupportedInterfaceOrientations in Info.plist.
+    // Android-Pendant: android:screenOrientation="portrait" im Manifest.
+    ScreenOrientation: {
+      default: "portrait",
+    },
+  },
   ios: {
     // 2026-05-18: switched from "always" → "never" so the WKWebView
     // fills the ENTIRE screen including the home-indicator + status-bar
