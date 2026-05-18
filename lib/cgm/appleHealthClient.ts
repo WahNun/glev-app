@@ -396,6 +396,228 @@ export async function syncRecentWorkouts(): Promise<WorkoutsSyncResult> {
   }
 }
 
+/**
+ * One-shot deeper backfill for Apple Health workouts.
+ *
+ * `syncRecentWorkouts()` only reaches ~30 days back on the first pull
+ * (and 7 days on subsequent ticks). Users with years of Apple Watch
+ * history benefit from a deeper baseline so the engine + Insights
+ * have richer pattern data from day one. This function pages
+ * backwards in `BACKFILL_CHUNK_DAYS` windows until either:
+ *   - it hits `BACKFILL_MAX_DAYS` (5-year hard safety cap), or
+ *   - it encounters `BACKFILL_EMPTY_CHUNK_STOP` consecutive empty
+ *     90-day windows (history exhausted, allowing for ~1.5 years of
+ *     legitimate off-period inside it), or
+ *   - the optional `signal` is aborted.
+ *
+ * Re-runs are safe: the server dedupes by (user_id, source, external_id),
+ * so a second backfill is a no-op on the database side and only costs
+ * the HealthKit reads.
+ *
+ * Reports per-chunk progress via the optional callback so the UI can
+ * show a live "Synced X workouts (Y days back)" line.
+ */
+const BACKFILL_CHUNK_DAYS = 90;
+const BACKFILL_MAX_DAYS = 365 * 5; // 5 years — hard safety cap
+// Stop after this many consecutive empty 90-day windows — i.e. ~1.5
+// years of zero workouts. Big enough to absorb realistic off-periods
+// (injury, pregnancy, post-partum, long sabbatical) without giving
+// up early, small enough that a fresh-install user with only the
+// last few months of history finishes the backfill quickly instead
+// of grinding through 5 years of empty queries.
+const BACKFILL_EMPTY_CHUNK_STOP = 6;
+// Must stay <= HEALTH_WORKOUTS_MAX_BATCH in lib/healthWorkoutsNormalise.ts
+// (the /api/health/workouts/sync route returns 413 for larger batches).
+// Kept as a local literal so this client module stays free of server-only
+// imports.
+const BACKFILL_POST_BATCH = 200;
+const BACKFILL_DONE_KEY = "glev:apple-health:workouts-backfill-done-iso";
+
+export interface BackfillProgress {
+  chunkStartIso: string;
+  chunkEndIso: string;
+  daysBack: number;
+  insertedThisChunk: number;
+  fetchedThisChunk: number;
+  totalInserted: number;
+  totalFetched: number;
+}
+
+export interface BackfillWorkoutsResult {
+  ok: boolean;
+  reason?:
+    | "not-native"
+    | "no-permission"
+    | "plugin-missing"
+    | "fetch-failed";
+  inserted: number;
+  fetched: number;
+  chunks: number;
+  daysCovered: number;
+  error?: string;
+}
+
+export async function backfillWorkouts(opts?: {
+  onProgress?: (p: BackfillProgress) => void;
+  signal?: AbortSignal;
+}): Promise<BackfillWorkoutsResult> {
+  if (!(await isNative())) {
+    return { ok: false, reason: "not-native", inserted: 0, fetched: 0, chunks: 0, daysCovered: 0 };
+  }
+  const plugin = (await loadPlugin()) as
+    | (HealthKitPlugin & Partial<HealthKitWorkoutsPlugin>)
+    | null;
+  if (!plugin || typeof plugin.queryWorkouts !== "function") {
+    return { ok: false, reason: "plugin-missing", inserted: 0, fetched: 0, chunks: 0, daysCovered: 0 };
+  }
+
+  const now = Date.now();
+  let totalInserted = 0;
+  let totalFetched = 0;
+  let chunks = 0;
+  let emptyStreak = 0;
+  let daysBack = 0;
+
+  // Walk backwards through 90-day windows. Stop only when we've seen
+  // BACKFILL_EMPTY_CHUNK_STOP consecutive empty windows (i.e. the
+  // user's HealthKit history has truly been exhausted, with a wide
+  // enough tolerance to skip over realistic off-periods) or when we
+  // hit the absolute 5-year safety cap.
+  while (daysBack < BACKFILL_MAX_DAYS) {
+    if (opts?.signal?.aborted) break;
+    const chunkEndMs = now - daysBack * 86_400_000;
+    const nextDaysBack = Math.min(daysBack + BACKFILL_CHUNK_DAYS, BACKFILL_MAX_DAYS);
+    const chunkStartMs = now - nextDaysBack * 86_400_000;
+    const chunkStartIso = new Date(chunkStartMs).toISOString();
+    const chunkEndIso = new Date(chunkEndMs).toISOString();
+
+    let raw: PluginWorkout[] = [];
+    try {
+      const res = await plugin.queryWorkouts({
+        startDate: chunkStartIso,
+        endDate: chunkEndIso,
+        limit: 1000,
+        ascending: true,
+      });
+      raw = Array.isArray(res?.workouts) ? res.workouts : [];
+    } catch (e) {
+      return {
+        ok: false,
+        reason: "no-permission",
+        error: e instanceof Error ? e.message : "unknown",
+        inserted: totalInserted,
+        fetched: totalFetched,
+        chunks,
+        daysCovered: daysBack,
+      };
+    }
+
+    const payload = raw
+      .map((w) => {
+        const uuid = w.platformId;
+        if (!uuid) return null;
+        if (!w.workoutType || !w.startDate || !w.endDate) return null;
+        const meta = w.metadata || {};
+        const avgHr = readNum(meta.averageHeartRate ?? meta.avgHeartRate);
+        const maxHr = readNum(meta.maxHeartRate);
+        return {
+          uuid,
+          workoutType: w.workoutType,
+          startDate: w.startDate,
+          endDate: w.endDate,
+          ...(avgHr != null ? { avgHeartRate: avgHr } : {}),
+          ...(maxHr != null ? { maxHeartRate: maxHr } : {}),
+        };
+      })
+      .filter((x): x is {
+        uuid: string;
+        workoutType: string;
+        startDate: string;
+        endDate: string;
+        avgHeartRate?: number;
+        maxHeartRate?: number;
+      } => x !== null);
+
+    let insertedThisChunk = 0;
+    const fetchedThisChunk = payload.length;
+    // The ingest route caps each POST at HEALTH_WORKOUTS_MAX_BATCH (200)
+    // and rejects oversized batches with 413. Split into sub-batches
+    // so power users with hundreds of workouts in a single 90-day
+    // window don't dead-end the entire backfill.
+    for (let i = 0; i < payload.length; i += BACKFILL_POST_BATCH) {
+      if (opts?.signal?.aborted) break;
+      const slice = payload.slice(i, i + BACKFILL_POST_BATCH);
+      try {
+        const res = await fetchWithTimeout("/api/health/workouts/sync", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ workouts: slice }),
+        });
+        if (!res.ok) {
+          return {
+            ok: false,
+            reason: "fetch-failed",
+            error: `http ${res.status}`,
+            inserted: totalInserted + insertedThisChunk,
+            fetched: totalFetched + fetchedThisChunk,
+            chunks,
+            daysCovered: daysBack,
+          };
+        }
+        const j = (await res.json().catch(() => ({}))) as { inserted?: number };
+        insertedThisChunk += j.inserted ?? 0;
+      } catch (e) {
+        return {
+          ok: false,
+          reason: "fetch-failed",
+          error: e instanceof Error ? e.message : "unknown",
+          inserted: totalInserted + insertedThisChunk,
+          fetched: totalFetched + fetchedThisChunk,
+          chunks,
+          daysCovered: daysBack,
+        };
+      }
+    }
+
+    totalInserted += insertedThisChunk;
+    totalFetched += fetchedThisChunk;
+    chunks++;
+    daysBack = nextDaysBack;
+
+    opts?.onProgress?.({
+      chunkStartIso,
+      chunkEndIso,
+      daysBack,
+      insertedThisChunk,
+      fetchedThisChunk,
+      totalInserted,
+      totalFetched,
+    });
+
+    if (fetchedThisChunk === 0) {
+      emptyStreak++;
+      if (emptyStreak >= BACKFILL_EMPTY_CHUNK_STOP) break;
+    } else {
+      emptyStreak = 0;
+    }
+
+    if (daysBack >= BACKFILL_MAX_DAYS) break;
+  }
+
+  safeWrite(BACKFILL_DONE_KEY, new Date(now).toISOString());
+  return {
+    ok: true,
+    inserted: totalInserted,
+    fetched: totalFetched,
+    chunks,
+    daysCovered: daysBack,
+  };
+}
+
+export function readBackfillDoneAt(): string | null {
+  return safeRead(BACKFILL_DONE_KEY);
+}
+
 function readNum(raw: unknown): number | null {
   if (raw == null) return null;
   const n = typeof raw === "number" ? raw : Number(raw);

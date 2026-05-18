@@ -134,6 +134,21 @@ export default function CgmSettingsCard() {
   const [appleHealthSubmitting, setAppleHealthSubmitting] = useState(false);
   const [appleHealthMessage, setAppleHealthMessage] =
     useState<{ kind: "success" | "error" | "info"; text: string } | null>(null);
+  // Backfill state for older workout history (Task #343). Decoupled
+  // from the connect/sync flow so the user can run a deeper one-shot
+  // pull even after the initial connect succeeded.
+  const [backfillRunning, setBackfillRunning] = useState(false);
+  const [backfillProgress, setBackfillProgress] = useState<{
+    daysBack: number;
+    inserted: number;
+    fetched: number;
+    chunks: number;
+  } | null>(null);
+  const [backfillResult, setBackfillResult] = useState<
+    | { kind: "success"; text: string }
+    | { kind: "error"; text: string }
+    | null
+  >(null);
 
   const loadStatus = useCallback(async () => {
     setLoadingStatus(true);
@@ -559,6 +574,63 @@ export default function CgmSettingsCard() {
       });
     } finally {
       setAppleHealthSubmitting(false);
+    }
+  }
+
+  // One-shot deeper workout history pull. Walks Apple Health backwards
+  // in 90-day chunks until exhausted (or capped at 5 years). Re-runs
+  // are safe because the server dedupes by HKWorkout uuid — so the
+  // button stays clickable even after a successful run for users who
+  // bought a new Watch and want to top up.
+  async function handleBackfillWorkouts() {
+    if (!isNativePlatform) {
+      setBackfillResult({
+        kind: "error",
+        text: "Verfügbar nur in der iOS-App.",
+      });
+      return;
+    }
+    setBackfillResult(null);
+    setBackfillProgress({ daysBack: 0, inserted: 0, fetched: 0, chunks: 0 });
+    setBackfillRunning(true);
+    try {
+      const { backfillWorkouts } = await import("@/lib/cgm/appleHealthClient");
+      const res = await backfillWorkouts({
+        onProgress: (p) => {
+          setBackfillProgress({
+            daysBack: p.daysBack,
+            inserted: p.totalInserted,
+            fetched: p.totalFetched,
+            chunks: Math.max(1, Math.ceil(p.daysBack / 90)),
+          });
+        },
+      });
+      if (!res.ok) {
+        setBackfillResult({
+          kind: "error",
+          text:
+            res.error ||
+            (res.reason === "no-permission"
+              ? "Zugriff auf Apple Health nicht erlaubt."
+              : "Backfill fehlgeschlagen."),
+        });
+      } else {
+        setBackfillResult({
+          kind: "success",
+          text:
+            res.inserted > 0
+              ? `✓ ${res.inserted} ältere Workouts importiert (bis ca. ${Math.round(res.daysCovered)} Tage zurück).`
+              : `✓ Keine weiteren Workouts in Apple Health gefunden (bis ca. ${Math.round(res.daysCovered)} Tage zurück geprüft).`,
+        });
+        await loadAppleHealthState();
+      }
+    } catch (err) {
+      setBackfillResult({
+        kind: "error",
+        text: err instanceof Error ? err.message : "Backfill fehlgeschlagen",
+      });
+    } finally {
+      setBackfillRunning(false);
     }
   }
 
@@ -1331,6 +1403,80 @@ export default function CgmSettingsCard() {
                     </button>
                   )}
                 </div>
+
+                {appleHealthSelected && (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      padding: "12px 14px",
+                      borderRadius: 10,
+                      border: `1px solid ${BORDER}`,
+                      background: "var(--surface-soft)",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 8,
+                    }}
+                  >
+                    <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                      <strong style={{ color: "var(--text)" }}>
+                        Workout-Historie nachladen
+                      </strong>
+                      <div style={{ marginTop: 4 }}>
+                        Beim ersten Sync werden nur die letzten 30 Tage geholt.
+                        Mit diesem Knopf liest Glev deine älteren Apple-Watch-Workouts
+                        in 90-Tage-Schritten nach — so hat die Engine sofort eine
+                        breitere Mustergrundlage. Mehrfaches Ausführen ist sicher
+                        (Duplikate werden serverseitig erkannt).
+                      </div>
+                    </div>
+                    <div>
+                      <button
+                        type="button"
+                        onClick={handleBackfillWorkouts}
+                        disabled={!isNativePlatform || backfillRunning}
+                        title={!isNativePlatform ? "Nur in der iOS-App" : undefined}
+                        style={{
+                          padding: "10px 16px",
+                          borderRadius: 10,
+                          border: `1px solid ${ACCENT}80`,
+                          background: "transparent",
+                          color: ACCENT,
+                          fontSize: 13,
+                          fontWeight: 700,
+                          cursor: !isNativePlatform
+                            ? "not-allowed"
+                            : backfillRunning
+                            ? "wait"
+                            : "pointer",
+                          opacity: !isNativePlatform || backfillRunning ? 0.5 : 1,
+                        }}
+                      >
+                        {backfillRunning
+                          ? "Lade ältere Workouts…"
+                          : "Workout-Historie nachladen"}
+                      </button>
+                    </div>
+                    {backfillRunning && backfillProgress && (
+                      <div style={{ fontSize: 13, color: "var(--text-dim)" }}>
+                        {backfillProgress.inserted} neue Workouts ·{" "}
+                        {backfillProgress.fetched} geprüft · ca.{" "}
+                        {backfillProgress.daysBack} Tage zurück
+                        {" "}({backfillProgress.chunks} Blöcke)
+                      </div>
+                    )}
+                    {!backfillRunning && backfillResult && (
+                      <div
+                        style={{
+                          fontSize: 13,
+                          color:
+                            backfillResult.kind === "success" ? GREEN : PINK,
+                        }}
+                      >
+                        {backfillResult.text}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {appleHealthMessage && (
                   <div
