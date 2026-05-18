@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useTranslations } from "next-intl";
 
 const ACCENT = "#4F6EF7";
 const GREEN = "#22D3A0";
@@ -22,17 +23,20 @@ function formatLocalDate(iso: string): string {
   return `${y}-${m}-${d}`;
 }
 
-function formatRelativeAge(iso: string): string {
+function formatRelativeAge(
+  iso: string,
+  tAh: ReturnType<typeof useTranslations>,
+): string {
   const t = Date.parse(iso);
-  if (!Number.isFinite(t)) return "unbekannt";
+  if (!Number.isFinite(t)) return tAh("age_unknown");
   const diffSec = Math.max(0, Math.floor((Date.now() - t) / 1000));
-  if (diffSec < 60) return "gerade eben";
+  if (diffSec < 60) return tAh("age_just_now");
   const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `vor ${diffMin} min`;
+  if (diffMin < 60) return tAh("age_minutes", { n: diffMin });
   const diffH = Math.floor(diffMin / 60);
-  if (diffH < 24) return `vor ${diffH} Std.`;
+  if (diffH < 24) return tAh("age_hours", { n: diffH });
   const diffD = Math.floor(diffH / 24);
-  return `vor ${diffD} Tagen`;
+  return tAh("age_days", { n: diffD });
 }
 
 interface StatusResponse {
@@ -83,6 +87,7 @@ const label: React.CSSProperties = {
 };
 
 export default function CgmSettingsCard() {
+  const tAh = useTranslations("cgmSettings.appleHealth");
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [statusError, setStatusError] = useState("");
@@ -556,7 +561,7 @@ export default function CgmSettingsCard() {
     if (!isNativePlatform) {
       setAppleHealthMessage({
         kind: "info",
-        text: "Apple Health ist nur in der iOS-App verfügbar.",
+        text: tAh("connect_only_ios"),
       });
       return;
     }
@@ -573,8 +578,7 @@ export default function CgmSettingsCard() {
         // open Health → Glev directly.
         setAppleHealthMessage({
           kind: "error",
-          text:
-            "Berechtigung verweigert. Bitte unter Einstellungen → Datenschutz → Health → Glev erlauben und erneut versuchen.",
+          text: tAh("permission_denied"),
         });
         return;
       }
@@ -588,7 +592,7 @@ export default function CgmSettingsCard() {
         const body = (await patchRes.json().catch(() => ({}))) as {
           error?: string;
         };
-        throw new Error(body?.error || `Fehler ${patchRes.status}`);
+        throw new Error(body?.error || tAh("http_error", { status: patchRes.status }));
       }
       setAppleHealthSelected(true);
       // Notify the auto-fill provider so it re-arms the background
@@ -607,21 +611,19 @@ export default function CgmSettingsCard() {
         setAppleHealthMessage({
           kind: "success",
           text: sync.fetched
-            ? `✓ Verbunden — ${sync.inserted ?? 0} neue Werte synchronisiert.`
-            : "✓ Verbunden — bisher keine Werte in Apple Health gefunden.",
+            ? tAh("connect_success_with_count", { count: sync.inserted ?? 0 })
+            : tAh("connect_success_no_values"),
         });
       } else {
         setAppleHealthMessage({
           kind: "error",
-          text:
-            sync.error ||
-            "Verbunden, aber initiale Synchronisierung ist fehlgeschlagen.",
+          text: sync.error || tAh("connect_sync_failed"),
         });
       }
     } catch (err) {
       setAppleHealthMessage({
         kind: "error",
-        text: err instanceof Error ? err.message : "Verbindung fehlgeschlagen",
+        text: err instanceof Error ? err.message : tAh("connect_failed"),
       });
     } finally {
       setAppleHealthSubmitting(false);
@@ -637,7 +639,7 @@ export default function CgmSettingsCard() {
     if (!isNativePlatform) {
       setBackfillResult({
         kind: "error",
-        text: "Verfügbar nur in der iOS-App.",
+        text: tAh("backfill_only_ios"),
       });
       return;
     }
@@ -662,23 +664,28 @@ export default function CgmSettingsCard() {
           text:
             res.error ||
             (res.reason === "no-permission"
-              ? "Zugriff auf Apple Health nicht erlaubt."
-              : "Backfill fehlgeschlagen."),
+              ? tAh("backfill_no_permission")
+              : tAh("backfill_failed")),
         });
       } else {
         setBackfillResult({
           kind: "success",
           text:
             res.inserted > 0
-              ? `✓ ${res.inserted} ältere Workouts importiert (bis ca. ${Math.round(res.daysCovered)} Tage zurück).`
-              : `✓ Keine weiteren Workouts in Apple Health gefunden (bis ca. ${Math.round(res.daysCovered)} Tage zurück geprüft).`,
+              ? tAh("backfill_success_with_count", {
+                  inserted: res.inserted,
+                  days: Math.round(res.daysCovered),
+                })
+              : tAh("backfill_success_empty", {
+                  days: Math.round(res.daysCovered),
+                }),
         });
         await loadAppleHealthState();
       }
     } catch (err) {
       setBackfillResult({
         kind: "error",
-        text: err instanceof Error ? err.message : "Backfill fehlgeschlagen",
+        text: err instanceof Error ? err.message : tAh("backfill_failed"),
       });
     } finally {
       setBackfillRunning(false);
@@ -741,7 +748,7 @@ export default function CgmSettingsCard() {
   }
 
   async function handleAppleHealthDisconnect() {
-    if (!confirm("Apple-Health-Verbindung wirklich trennen?")) return;
+    if (!confirm(tAh("disconnect_confirm"))) return;
     setAppleHealthSubmitting(true);
     try {
       // Clearing the source pin reverts the dispatcher to the legacy
@@ -756,7 +763,7 @@ export default function CgmSettingsCard() {
         cache: "no-store",
       });
       const body = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) throw new Error(body?.error || `Fehler ${res.status}`);
+      if (!res.ok) throw new Error(body?.error || tAh("http_error", { status: res.status }));
       setAppleHealthSelected(false);
       setAppleHealthMessage(null);
       if (typeof window !== "undefined") {
@@ -767,7 +774,7 @@ export default function CgmSettingsCard() {
     } catch (err) {
       setAppleHealthMessage({
         kind: "error",
-        text: err instanceof Error ? err.message : "Trennen fehlgeschlagen",
+        text: err instanceof Error ? err.message : tAh("disconnect_failed"),
       });
     } finally {
       setAppleHealthSubmitting(false);
@@ -1046,7 +1053,8 @@ export default function CgmSettingsCard() {
                 <option value="libreview-junction">LibreView (Junction) — Bald verfügbar</option>
                 <option value="nightscout">Nightscout</option>
                 <option value="apple-health" disabled={!isNativePlatform}>
-                  Apple Health{isNativePlatform ? "" : " — nur in der iOS-App"}
+                  {tAh("dropdown_option")}
+                  {isNativePlatform ? "" : tAh("dropdown_option_ios_only_suffix")}
                 </option>
                 <option value="dexcom" disabled>Dexcom (bald verfügbar)</option>
               </select>
@@ -1414,11 +1422,7 @@ export default function CgmSettingsCard() {
                     padding: "12px 14px",
                   }}
                 >
-                  Lies deine Glukosewerte direkt aus Apple Health — egal welcher
-                  Sensor sie schreibt (Libre 3, Dexcom G7, Accu-Chek …). Beim
-                  ersten Verbinden fragt iOS einmalig die Berechtigung ab.
-                  Danach holt Glev neue Werte automatisch, solange die App
-                  geöffnet ist.
+                  {tAh("description")}
                 </div>
 
                 {!isNativePlatform && (
@@ -1432,8 +1436,7 @@ export default function CgmSettingsCard() {
                       padding: "10px 14px",
                     }}
                   >
-                    Apple Health funktioniert nur in der iOS-App von Glev. Im
-                    Web-Vorschau-Modus ist diese Option deaktiviert.
+                    {tAh("web_preview_hint")}
                   </div>
                 )}
 
@@ -1449,12 +1452,19 @@ export default function CgmSettingsCard() {
                     }}
                   >
                     {appleHealthStatus.lastValueMgDl != null
-                      ? `✓ Verbunden — letzter Wert: ${appleHealthStatus.lastValueMgDl} mg/dL`
-                      : "✓ Verbunden — noch keine Werte synchronisiert."}
+                      ? tAh("status_connected_with_value", {
+                          value: appleHealthStatus.lastValueMgDl,
+                        })
+                      : tAh("status_connected_no_values")}
                     <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 4 }}>
-                      {appleHealthStatus.count} Werte gespeichert
+                      {tAh("status_count", { count: appleHealthStatus.count })}
                       {appleHealthStatus.lastTimestamp
-                        ? ` · zuletzt ${formatRelativeAge(appleHealthStatus.lastTimestamp)}`
+                        ? tAh("status_last_sync_suffix", {
+                            age: formatRelativeAge(
+                              appleHealthStatus.lastTimestamp,
+                              tAh,
+                            ),
+                          })
                         : ""}
                     </div>
                   </div>
@@ -1465,7 +1475,7 @@ export default function CgmSettingsCard() {
                     type="button"
                     onClick={handleAppleHealthConnect}
                     disabled={!isNativePlatform || appleHealthSubmitting}
-                    title={!isNativePlatform ? "Nur in der iOS-App" : undefined}
+                    title={!isNativePlatform ? tAh("ios_only_tooltip") : undefined}
                     style={{
                       padding: "12px 18px",
                       borderRadius: 12,
@@ -1484,10 +1494,10 @@ export default function CgmSettingsCard() {
                     }}
                   >
                     {appleHealthSubmitting
-                      ? "Verbinde…"
+                      ? tAh("btn_connecting")
                       : appleHealthSelected
-                      ? "Jetzt synchronisieren"
-                      : "Apple Health verbinden"}
+                      ? tAh("btn_sync_now")
+                      : tAh("btn_connect")}
                   </button>
                   {appleHealthSelected && (
                     <button
@@ -1505,7 +1515,7 @@ export default function CgmSettingsCard() {
                         cursor: appleHealthSubmitting ? "wait" : "pointer",
                       }}
                     >
-                      Trennen
+                      {tAh("btn_disconnect")}
                     </button>
                   )}
                 </div>
@@ -1525,14 +1535,10 @@ export default function CgmSettingsCard() {
                   >
                     <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5 }}>
                       <strong style={{ color: "var(--text)" }}>
-                        Workout-Historie nachladen
+                        {tAh("backfill_heading")}
                       </strong>
                       <div style={{ marginTop: 4 }}>
-                        Beim ersten Sync werden nur die letzten 30 Tage geholt.
-                        Mit diesem Knopf liest Glev deine älteren Apple-Watch-Workouts
-                        in 90-Tage-Schritten nach — so hat die Engine sofort eine
-                        breitere Mustergrundlage. Mehrfaches Ausführen ist sicher
-                        (Duplikate werden serverseitig erkannt).
+                        {tAh("backfill_description")}
                       </div>
                     </div>
                     <div>
@@ -1540,7 +1546,7 @@ export default function CgmSettingsCard() {
                         type="button"
                         onClick={handleBackfillWorkouts}
                         disabled={!isNativePlatform || backfillRunning}
-                        title={!isNativePlatform ? "Nur in der iOS-App" : undefined}
+                        title={!isNativePlatform ? tAh("ios_only_tooltip") : undefined}
                         style={{
                           padding: "10px 16px",
                           borderRadius: 10,
@@ -1558,16 +1564,18 @@ export default function CgmSettingsCard() {
                         }}
                       >
                         {backfillRunning
-                          ? "Lade ältere Workouts…"
-                          : "Workout-Historie nachladen"}
+                          ? tAh("backfill_btn_running")
+                          : tAh("backfill_btn_idle")}
                       </button>
                     </div>
                     {backfillRunning && backfillProgress && (
                       <div style={{ fontSize: 13, color: "var(--text-dim)" }}>
-                        {backfillProgress.inserted} neue Workouts ·{" "}
-                        {backfillProgress.fetched} geprüft · ca.{" "}
-                        {backfillProgress.daysBack} Tage zurück
-                        {" "}({backfillProgress.chunks} Blöcke)
+                        {tAh("backfill_progress", {
+                          inserted: backfillProgress.inserted,
+                          fetched: backfillProgress.fetched,
+                          daysBack: backfillProgress.daysBack,
+                          chunks: backfillProgress.chunks,
+                        })}
                       </div>
                     )}
                     {!backfillRunning && backfillResult && (
@@ -1591,15 +1599,15 @@ export default function CgmSettingsCard() {
                           marginTop: 2,
                         }}
                       >
-                        Workouts:{" "}
-                        {workoutsRange.oldest
-                          ? formatLocalDate(workoutsRange.oldest)
-                          : "—"}{" "}
-                        →{" "}
-                        {workoutsRange.newest
-                          ? formatLocalDate(workoutsRange.newest)
-                          : "—"}
-                        , {workoutsRange.count} Stück
+                        {tAh("workouts_range", {
+                          oldest: workoutsRange.oldest
+                            ? formatLocalDate(workoutsRange.oldest)
+                            : "—",
+                          newest: workoutsRange.newest
+                            ? formatLocalDate(workoutsRange.newest)
+                            : "—",
+                          count: workoutsRange.count,
+                        })}
                       </div>
                     )}
                     {workoutsRange && workoutsRange.count === 0 && (
@@ -1612,7 +1620,7 @@ export default function CgmSettingsCard() {
                           marginTop: 2,
                         }}
                       >
-                        Workouts: noch keine aus Apple Health synchronisiert.
+                        {tAh("workouts_range_empty")}
                       </div>
                     )}
 
