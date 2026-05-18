@@ -566,6 +566,13 @@ export interface FetchMealsOptions {
    */
   sinceDays?: number;
   /**
+   * Hard cap on number of rows. Used by the entries screen to render
+   * the most-recent 5 meals on first paint while the full history
+   * loads in the background (2026-05-18 perceived-performance fix).
+   * Omit for the full window.
+   */
+  limit?: number;
+  /**
    * Test seam — lets unit tests inject a stub Supabase client
    * (`tests/unit/meals.test.ts`) without going through the module
    * singleton. Production callers should never pass this.
@@ -588,11 +595,17 @@ export async function fetchMeals(opts: FetchMealsOptions = {}): Promise<Meal[]> 
   const applyCutoff = <T extends { gte: (col: string, val: string) => T }>(q: T): T =>
     cutoffIso ? q.gte("created_at", cutoffIso) : q;
 
-  let { data, error } = await applyCutoff(
+  // Row cap applied AFTER cutoff + ordering so we always get the
+  // newest N within the window, not a random first-N. Skipped when
+  // opts.limit is undefined / non-positive.
+  const applyLimit = <T extends { limit: (n: number) => T }>(q: T): T =>
+    opts.limit && opts.limit > 0 ? q.limit(opts.limit) : q;
+
+  let { data, error } = await applyLimit(applyCutoff(
     client
       .from("meals")
       .select(FULL_COLS)
-  ).order("created_at", { ascending: false });
+  ).order("created_at", { ascending: false }));
 
   // Fall back when the new bg_1h/bg_2h/outcome_state columns are missing.
   // Supabase / PostgREST returns several phrasings for missing columns —
@@ -603,13 +616,13 @@ export async function fetchMeals(opts: FetchMealsOptions = {}): Promise<Meal[]> 
       || /could not find (the )?column/i.test(e.message ?? "")
       || /column .* does not exist/i.test(e.message ?? ""));
   if (isMissingCol(error)) {
-    const mid = await applyCutoff(
+    const mid = await applyLimit(applyCutoff(
       client.from("meals").select(MID_COLS)
-    ).order("created_at", { ascending: false });
+    ).order("created_at", { ascending: false }));
     if (mid.error && mid.error.message?.toLowerCase().includes("does not exist")) {
-      const core = await applyCutoff(
+      const core = await applyLimit(applyCutoff(
         client.from("meals").select(CORE_COLS)
-      ).order("created_at", { ascending: false });
+      ).order("created_at", { ascending: false }));
       if (core.error) throw new Error(core.error.message);
       data = (core.data ?? []).map((r: Record<string, unknown>) => ({
         ...r, glucose_after: null, protein_grams: null, fat_grams: null, fiber_grams: null, calories: null,

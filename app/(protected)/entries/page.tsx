@@ -418,7 +418,32 @@ export default function EntriesPage() {
 
   useEffect(() => {
     let cancelled = false;
-    async function load(initial: boolean) {
+    // 2026-05-18 perceived-perf split (user: "die ersten 5 sollen
+    // gecached werden, rest im hintergrund"): on initial mount we
+    // kick off TWO fetches in parallel —
+    //   1. fast: just the newest 5 meals (single PostgREST call,
+    //      typically <150 ms) → unblocks the page so the user sees
+    //      a filled list immediately.
+    //   2. full: every event type for the regular windows → replaces
+    //      the placeholder list and fills bolus / basal / exercise
+    //      / cycle / symptom / influence rows.
+    // The full-fetch result always wins because it dispatches AFTER
+    // the fast one resolves. For "load(false)" calls (triggered by
+    // the cross-screen update events) we skip the fast path and go
+    // straight to the full refresh — no need to flash a 5-row
+    // placeholder when the user already has the list rendered.
+    async function loadFast() {
+      try {
+        const top5 = await fetchMeals({ limit: 5 });
+        if (cancelled) return;
+        // Only seed the placeholder when the user hasn't already
+        // received the full payload (race: full fetch may resolve
+        // first on a warm Supabase connection — don't clobber it).
+        setMeals(prev => (prev.length > 0 ? prev : top5));
+        setLoading(false);
+      } catch (e) { console.error(e); }
+    }
+    async function loadFull(initial: boolean) {
       try {
         const [m, ins, ex, cy, sy, inf] = await Promise.all([
           fetchMeals(),
@@ -438,6 +463,10 @@ export default function EntriesPage() {
         }
       } catch (e) { console.error(e); }
       finally { if (!cancelled && initial) setLoading(false); }
+    }
+    function load(initial: boolean) {
+      if (initial) loadFast();
+      loadFull(initial);
     }
     load(true);
     function onUpdated() { load(false); }

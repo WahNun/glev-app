@@ -415,17 +415,39 @@ export default function InsightsPage() {
     year:  760,  // 365 current + 365 prev + buffer
   };
   const insightsFetchDays = Math.max(90, fetchDaysForScope[scopeMode]);
-  const { data: insightsSWR } = useSWR(
-    `insights:scope:${scopeMode}:days:${insightsFetchDays}`,
+  // 2026-05-18 perceived-perf split (user: "geht sowas auch bei insights"):
+  // The previous single SWR fetched 9 datasets in parallel and only
+  // resolved when ALL nine returned. The TIR / GMI / CV cards visually
+  // dominate first paint but only need meals + insulin + fingersticks.
+  // Now we run TWO SWRs:
+  //   • primary: meals + insulin + fingersticks — gates the loading
+  //     spinner, unblocks the page as soon as the first three queries
+  //     return (typically <250 ms on a warm connection).
+  //   • secondary: engineMeals + engineBoluses + exerciseLogs +
+  //     menstrualLogs + symptomLogs + activity — fills the
+  //     Adaptive-Engine, Patterns, Exercise, Cycle, Symptom and
+  //     Activity cards once they arrive. The page is already
+  //     interactive while these stream in.
+  const { data: primarySWR } = useSWR(
+    `insights:primary:scope:${scopeMode}:days:${insightsFetchDays}`,
     async () => {
       const fingerstickFromIso = startOfDaysAgo(insightsFetchDays - 1).toISOString();
-      const [m, em, il, ilEngine, ex, fs, ml, sl, act] = await Promise.all([
+      const [m, il, fs] = await Promise.all([
         fetchMeals({ sinceDays: insightsFetchDays }).catch(() => [] as Meal[]),
-        fetchMealsForEngine().catch(() => [] as Meal[]),
         fetchRecentInsulinLogs(insightsFetchDays).catch(() => [] as InsulinLog[]),
+        fetchFingersticks(fingerstickFromIso).catch(() => [] as FingerstickReading[]),
+      ]);
+      return { meals: m, insulinLogs: il, fingersticks: fs };
+    },
+  );
+
+  const { data: secondarySWR } = useSWR(
+    `insights:secondary:scope:${scopeMode}:days:${insightsFetchDays}`,
+    async () => {
+      const [em, ilEngine, ex, ml, sl, act] = await Promise.all([
+        fetchMealsForEngine().catch(() => [] as Meal[]),
         fetchRecentInsulinLogs(90).catch(() => [] as InsulinLog[]),
         fetchRecentExerciseLogs(insightsFetchDays).catch(() => [] as ExerciseLog[]),
-        fetchFingersticks(fingerstickFromIso).catch(() => [] as FingerstickReading[]),
         fetchRecentMenstrualLogs(insightsFetchDays).catch(() => [] as MenstrualLog[]),
         fetchRecentSymptomLogs(insightsFetchDays).catch(() => [] as SymptomLog[]),
         // Task #183: best-effort Apple-Health steps. Always resolves
@@ -433,28 +455,36 @@ export default function InsightsPage() {
         // empty table just hides the card.
         fetchRecentActivityClient(14),
       ]);
-      return { meals: m, engineMeals: em, insulinLogs: il, engineBoluses: ilEngine, exerciseLogs: ex, fingersticks: fs, menstrualLogs: ml, symptomLogs: sl, activity: act };
+      return { engineMeals: em, engineBoluses: ilEngine, exerciseLogs: ex, menstrualLogs: ml, symptomLogs: sl, activity: act };
     },
   );
 
   useEffect(() => {
-    if (!insightsSWR) return;
-    setMeals(insightsSWR.meals);
-    setEngineMeals(insightsSWR.engineMeals);
-    setInsulinLogs(insightsSWR.insulinLogs);
-    setEngineBoluses(insightsSWR.engineBoluses);
-    setExerciseLogs(insightsSWR.exerciseLogs);
-    if (insightsSWR.activity) setActivity(insightsSWR.activity);
-    setFingersticks(insightsSWR.fingersticks);
-    setMenstrualLogs(insightsSWR.menstrualLogs);
-    setSymptomLogs(insightsSWR.symptomLogs);
+    if (!primarySWR) return;
+    setMeals(primarySWR.meals);
+    setInsulinLogs(primarySWR.insulinLogs);
+    setFingersticks(primarySWR.fingersticks);
     setLoading(false);
-  }, [insightsSWR]);
+  }, [primarySWR]);
+
+  useEffect(() => {
+    if (!secondarySWR) return;
+    setEngineMeals(secondarySWR.engineMeals);
+    setEngineBoluses(secondarySWR.engineBoluses);
+    setExerciseLogs(secondarySWR.exerciseLogs);
+    if (secondarySWR.activity) setActivity(secondarySWR.activity);
+    setMenstrualLogs(secondarySWR.menstrualLogs);
+    setSymptomLogs(secondarySWR.symptomLogs);
+  }, [secondarySWR]);
 
   // Revalidate when other parts of the app log new entries.
   useEffect(() => {
-    const key = `insights:scope:${scopeMode}:days:${insightsFetchDays}`;
-    function onUpdated() { swrMutate(key); }
+    const primaryKey   = `insights:primary:scope:${scopeMode}:days:${insightsFetchDays}`;
+    const secondaryKey = `insights:secondary:scope:${scopeMode}:days:${insightsFetchDays}`;
+    function onUpdated() {
+      swrMutate(primaryKey);
+      swrMutate(secondaryKey);
+    }
     window.addEventListener("glev:meals-updated",    onUpdated);
     window.addEventListener("glev:insulin-updated",  onUpdated);
     window.addEventListener("glev:exercise-updated", onUpdated);
