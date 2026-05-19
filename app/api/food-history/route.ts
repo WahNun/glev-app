@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authedClient } from "@/app/api/insulin/_helpers";
+import { authedClient, isMissingTable } from "@/app/api/insulin/_helpers";
 
 /**
  * /api/food-history
@@ -29,8 +29,9 @@ export async function GET(req: NextRequest) {
   if (error) {
     // Missing table (migration not applied yet) → respond with an
     // empty list so the UI can show a friendly empty state instead
-    // of a 500. Other errors bubble up.
-    if (/does not exist/i.test(error.message) || error.code === "42P01") {
+    // of a 500. Covers 42P01 (postgres), PGRST205 (PostgREST) and
+    // any "does not exist / could not find" message variants.
+    if (isMissingTable(error)) {
       return NextResponse.json({ items: [] });
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
