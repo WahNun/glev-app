@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-19T00:15:44.405Z",
+  "generated_at": "2026-05-19T11:14:54.979Z",
   "workspace_gid": "1213452700618853",
   "include_completed": false,
   "sprints": [
@@ -8,13 +8,52 @@
       "name": "Glev — Sprint 1: Migration + Stripe Test-Mode",
       "tasks": [
         {
-          "gid": "1214918945284677",
-          "name": "FIX P0: messages/en.json — $4.50 / $24.90 Strings bereinigen",
+          "gid": "1214931190767274",
+          "name": "[Glev+] Remote-Bolus-Empfehlung: Eltern-kontrollierter Flow (MDR-safe Architektur)",
           "completed": false,
           "due_on": null,
-          "assignee": null,
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
           "section": "Backlog",
-          "notes": "Alle alten Preisangaben aus messages/en.json entfernen.\n\nPrompt für Replit Agent:\n\ngrep -n \"4\\.50\\|4\\.90\\|24\\.90\" messages/en.json\n\nErsatz-Logik:\n- $4.50 / $4.90 → entfernen oder durch \"$9\" ersetzen (je nach Kontext)\n- $24.90 → \"$19\" (Launch) oder \"$14.90\" (Early Access) — Kontext prüfen\n- Preisstufentexte wie \"First 3 months $4.50, then $9\" → \"From July 1: $9/month\"\n\nVerify:\ngrep -n \"4\\.50\\|4\\.90\\|24\\.90\" messages/en.json\n→ Keine Ausgabe.\n\nCommit: git add messages/en.json && git commit -m \"fix: remove legacy $4.50 / $24.90 strings from en.json\" && git push origin main"
+          "notes": "Architektur-Entscheidung: App berechnet KEINEN Bolus autonom. Elternteil entscheidet — App ist Messenger.\n\nFlow:\n1. Kind loggt Mahlzeit (oder CGM-Wert ändert sich signifikant)\n2. Eltern-App zeigt adaptiven Vorschlag: 'Basierend auf CGM + Mahlzeit: ~2 IE' (berechnet aus hinterlegtem ICR + aktueller Glucose)\n3. Elternteil bestätigt ODER ändert den Wert manuell\n4. NACH Bestätigung: Push-Notification an Betreuer mit IE-Zahl + Kontext\n5. Betreuer gibt Insulin, bestätigt in App\n6. Eltern sehen Bestätigung live\n\nWichtig (MDR-safe):\n- Entscheidung liegt immer beim Elternteil — App schlägt vor, Mensch entscheidet\n- Adaptiver Modus: App-Vorschlag sichtbar, editierbar\n- Manueller Modus: Elternteil tippt IE direkt ein (kein App-Vorschlag)\n- Betreuer sieht nur finale Zahl + Kontext, NICHT 'App empfiehlt'\n- Disclaimer bei Setup: Diese Funktion ersetzt keine medizinische Beratung\n\nAccount-Typen die dafür nötig sind:\n- Eltern-Account (bestehend, erweitert um Sende-Recht)\n- Betreuer-Account (neu, empfängt Push + bestätigt)\n- Kind-Account (neu, vereinfachte UI)\n\nPhase: Phase 2 (nach Juli Caregiver read-only)"
+        },
+        {
+          "gid": "1214930958396110",
+          "name": "[Glev+] Betreuer-Account: eigener Account-Typ mit Bestätigungsrecht",
+          "completed": false,
+          "due_on": null,
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Backlog",
+          "notes": "Neuer Account-Typ: 'caregiver' (Schulbegleiter, Kita-Betreuer, etc.)\n\nRechte:\n- Empfängt Push-Notifications mit Bolus-Empfehlung von Elternteil\n- Kann Insulin-Gabe bestätigen (Timestamp + ggf. tatsächliche IE)\n- Sieht vereinfachtes Read-only Dashboard: Glucose + letzte Empfehlung + Bestätigungs-Status\n- KEIN Logging, KEINE Einstellungen, KEIN Zugang zu historischen Daten\n\nOnboarding:\n- Elternteil lädt Betreuer per Link/Code ein\n- Betreuer erstellt eigenen Account (kein shared login)\n- Elternteil bestätigt Verknüpfung\n\nDB: caregiver_links Tabelle (owner_user_id, caregiver_user_id, child_profile_id, accepted_at)\n\nPhase: Phase 2"
+        },
+        {
+          "gid": "1214930911551692",
+          "name": "[Glev+] Kind-Account: vereinfachte UI + CGM-Weiterleitung an Eltern",
+          "completed": false,
+          "due_on": null,
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Backlog",
+          "notes": "Neuer Account-Typ: 'child' mit stark vereinfachter UI (Kinder-Modus)\n\nFunktionen:\n- Mahlzeit-Logging: große Karten (von Eltern vorkonfiguriert), Spracheingabe 'Ich esse...'\n- CGM verbinden + Glucose-Wert sehen (altersgerecht, kein Analytics)\n- Kein Zugang zu Einstellungen, History, Insights\n- Jedes Log triggert automatisch Eltern-Notification\n\nVerknüpfung:\n- Kind-Account wird von Elternteil angelegt und verknüpft\n- Elternteil kontrolliert welche Mahlzeiten im Kind-UI sichtbar sind\n- Kein shared login — Kind hat eigenes Gerät/Account\n\nUI-Prinzip:\n- Maximale Reduktion: 3 Hauptaktionen (Mahlzeit loggen, Glucose sehen, Hilfe)\n- Keine Zahlen die Kind stressen (kein Score, kein 'schlecht')\n- Bestätigung nach Insulin-Gabe durch Betreuer erscheint als grüner Haken im Kind-UI\n\nDB: child_profiles Tabelle (parent_user_id, child_user_id, display_name, meal_presets[])\n\nPhase: Phase 2"
+        },
+        {
+          "gid": "1214930939962045",
+          "name": "Control Score Labels: Empowerment-Sprache einbauen (SCHWACH → IM AUFBAU)",
+          "completed": false,
+          "due_on": "2026-05-19",
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Backlog",
+          "notes": "Ziel: Die Bewertungs-Labels im Control Score Chip auf empowernde Sprache umstellen. Die Zahl straft bereits — das Label soll nicht nochmal urteilen.\n\nAktuelle Labels:\n≥ 80 → STARK / STRONG (Grün) ✓ bleibt\n≥ 60 → GUT / GOOD (Blau)\n< 60 → SCHWACH / POOR (Pink/Rot)\n\nNeue Labels:\n≥ 80 → STARK / STRONG (Grün) — unverändert\n≥ 60 → AUF KURS / ON TRACK (Blau)\n< 60 → IM AUFBAU / BUILDING (Pink/Rot)\n\nDateien:\n- messages/de.json — Label-Keys für Control Score Badge\n- messages/en.json — englische Entsprechungen\n- Ggf. Komponente die den Badge rendert (Badge-Farbe bleibt, nur Text ändert sich)\n\nHintergrund: Identity Evolution Prinzip — Glev framt Nutzer als resilient + adaptiv, nicht als krank oder versagend. \"IM AUFBAU\" beschreibt den Zustand ohne zu urteilen und impliziert Bewegung und Richtung."
         },
         {
           "gid": "1214917710907872",
@@ -50,7 +89,7 @@
             "name": "rave pickle"
           },
           "section": "Backlog",
-          "notes": "Bevor wir bauen: klären was genau 'Familienzugang' für Typ-1-Diabetiker bedeutet.\n\nOptionen:\nA) Caregiver-View (read-only): Partner/Elternteil sieht Glucose, Mahlzeiten, Control Score in Echtzeit — kein eigenes Logging\nB) Multi-User-Konto: mehrere Nutzer loggen unter 1 Abo — z.B. zwei Typ-1er in einer Familie\nC) Beides\n\nEmpfehlung Option A für Juli 1 — deutlich einfacher.\n\nInfrastruktur für Option A:\n- Tabelle: account_shares (owner_user_id, viewer_user_id, share_token, accepted_at)\n- Share-Link generieren (z.B. glev.app/join?token=xxx)\n- Viewer-Auth: eigener Glev-Account oder anonym?\n- Read-only Dashboard View für den Viewer\n- Keine eigene Billing-Verknüpfung nötig\n\nInfrastruktur für Option B (komplexer):\n- Tabelle: account_members (primary_user_id, member_user_id, role, invited_at)\n- Invite-per-Email Flow\n- Subscription-Check: member erbt Abo von primary\n- Eigenes Logging pro Member mit getrennten Daten\n- UI: Mitglieder verwalten in Einstellungen\n\nDue: Entscheidung bis 25. Mai"
+          "notes": "Bevor wir bauen: klären was genau 'Familienzugang' für Typ-1-Diabetiker bedeutet.\n\n🎯 HAUPTANWENDUNGSFALL (Marketing-Winkel, Stand Mai 2026):\nT1D-Kind hat Glev → Eltern bekommen Caregiver-View.\nEltern sehen: Live-Glukosewerte, was das Kind geloggt hat (Mahlzeiten, Insulin), Wochenmuster.\nKein geteilter Login. Keine WhatsApp-Screenshots mehr.\nTagline: \"Kind hat Glev — Eltern sehen alles. Live.\"\n\n== JULI SCOPE (machbar) ==\n✅ Caregiver-View read-only via Share-Link\n   - Glev+ Nutzer generiert Share-Token (glev.app/share?token=xxx)\n   - Viewer öffnet Link → sieht read-only: Live-Glucose, letzte Mahlzeit, letzte Insulindosis\n   - Kein eigener Glev-Account nötig für Viewer\n   - Tech: account_shares Tabelle (owner_user_id, viewer_user_id, share_token, accepted_at)\n\n✅ Push-Benachrichtigung bei Meal-Log an hinterlegte Kontakte\n   - Owner loggt Mahlzeit → Push an z.B. Elternteil/Schulbegleiter\n   - Nur Info: \"Lena hat Banane geloggt\" — KEINE Dosisempfehlung (MDR!)\n   - Tech: Expo Push Notifications via Capacitor\n\n== PHASE 2 (nach Juli) ==\n🔜 Kinder-Modus: vereinfachte Oberfläche für Kinder in der Schule\n   - Große Mahlzeit-Karten, von Eltern vorkonfiguriert\n   - Kein Zugang zu Einstellungen/Billing\n   - Eigener Account-Typ 'child'\n\n🔜 Schulbegleiter-Bestätigung: Insulingabe quittieren in App\n   - Bestätigung landet bei Eltern: 'Gegeben 14:23'\n   - Braucht eigenen caregiver Account-Typ mit Schreibrecht nur auf confirmation\n\n🔜 Kein Bolus-Empfehlung im Schul-Kontext → MDR-Territorium, erst nach Validierung\n\n== COMPLIANCE ==\nKinder-Modus + Caregiver-View = reines Logging/Monitoring-Tool → compliance-sicher\nKeine Handlungsempfehlung an Schulbegleiter → kein Medizinprodukt\n\nVon Lucas beschrieben: 19. Mai 2026"
         },
         {
           "gid": "1214916734160769",
@@ -98,7 +137,7 @@
             "name": "rave pickle"
           },
           "section": "Backlog",
-          "notes": "Share-Link kann nur von Glev+ Subscribern erstellt werden.\n- In POST /api/share/create: prüfen ob user.subscription_tier === 'plus'\n- Falls nicht: 403 mit Upgrade-Prompt\n- UI: Share-Button in Einstellungen nur sichtbar wenn Glev+ aktiv\n\nBenötigt: Glev+ Subscription-Check Middleware (separater Task)"
+          "notes": "Share-Link kann nur von Glev+ Subscribern erstellt werden.\n- In POST /api/share/create: prüfen ob user.subscription_tier === 'plus'\n- Falls nicht: 403 mit Upgrade-Prompt\n- UI: Share-Button in Einstellungen nur sichtbar wenn Glev+ aktiv\n\nMarketing-Kontext: Der Share-Button ist der Einstieg in den Caregiver-Flow.\nElternteil bekommt Link → öffnet read-only Dashboard mit Live-Glucose + Logs des Kindes.\nTagline: \"Kind hat Glev — Eltern sehen alles. Live.\"\n\nJULI SCOPE: Share-Token generieren + read-only View. KEINE Kinder-Modus-UI, KEINE Bestätigung.\n\nBenötigt: Glev+ Subscription-Check Middleware (separater Task)"
         },
         {
           "gid": "1214860284366580",
@@ -216,15 +255,6 @@
           "assignee": null,
           "section": "Backlog",
           "notes": "Problem: Post-Meal-CGM-Werte werden nur gefüllt wenn der User die App aktiv öffnet. LLU hat cgm-jobs/process.\n\nLösung:\n- Periodischer Job (Vercel Cron oder separater Service) der /api/v1/entries.json zieht\n- Schreibt in nightscout_readings-Caching-Tabelle\n- Post-Meal-Werte werden automatisch gefüllt auch wenn App geschlossen ist\n\nHängt von: nightscout_readings-Caching-Tabelle\nPrio: Mittel — erst nach Caching-Task sinnvoll."
-        },
-        {
-          "gid": "1214441104556221",
-          "name": "[Push] VAPID Keys einrichten — Notifications Phase 2 freischalten",
-          "completed": false,
-          "due_on": "2026-05-04",
-          "assignee": null,
-          "section": "Backlog",
-          "notes": "VAPID Keys eingetragen (01.05.2026). Agent kann Notifications Phase 2 (Service Worker + Push-Dispatch) jetzt implementieren."
         },
         {
           "gid": "1214441092898651",
@@ -849,6 +879,123 @@
           "assignee": null,
           "section": "Backlog",
           "notes": "Control Score (0–100, proprietärer Stoffwechsel-Index) ist eines der zwei 'Shiny Objects' für Plan M (beschlossen 19. Mai 2026 mit Agentur/Marketer).\n\nZiel: Control Score muss der Screenshot sein den User auf Instagram posten. Aktuell zu wenig prominent.\n\nMaßnahmen:\n- Größere Darstellung auf Dashboard (eigene Karte, nicht versteckt)\n- Erklärung was die Zahl bedeutet (Tooltip / Breakdown)\n- Animierter Übergang bei Score-Änderung\n- Farbskala (0–40 rot, 41–70 gelb, 71–100 grün)\n- 'Dein Score diese Woche: 74 → +6' als Push-Notification-Idee\n\nAbhängigkeit: Nach ICR Engine Fix (#858) da Score auf korrekten Engine-Daten basiert."
+        },
+        {
+          "gid": "1214920434578972",
+          "name": "[Vision] Kinder-Modus: Schul-Workflow für T1D-Kinder mit Schulbegleiter",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "VISION — noch kein Sprint-Commitment, aber festhalten bevor es verloren geht.\n\n== Das Problem ==\nT1D-Kinder in der Schule brauchen jemanden der das Insulin gibt — meistens ein Schulbegleiter.\nHeute: Kind isst, Eltern anrufen, Schulbegleiter fragen, wieviel Insulin — alles manuell, fehleranfällig, stressig.\n\n== Die Vision ==\n1) KIND-MODUS (stark vereinfachte Oberfläche)\n   - Kindgerechtes UI: große Karten, keine Zahlen, keine Einstellungen\n   - Kind loggt: 'Ich esse eine Banane', 'Ich esse mein Brot'\n   - Mahlzeitlisten werden von Eltern zuhause vorkonfiguriert (z.B. Schulkantine-Menü)\n   - Optional: Spracheingabe 'Ich esse...' → KI erkennt Mahlzeit + Kohlenhydrate\n   - Kein Zugang zu Einstellungen / Auswertungen / Billing\n\n2) ALARM-WORKFLOW\n   - Kind loggt Mahlzeit → App berechnet Bolus-Empfehlung (aus KH + CGM-Wert)\n   - Push-Benachrichtigung geht gleichzeitig an:\n     a) Eltern (mit: was wurde gegessen + empfohlene Insulindosis)\n     b) Schulbegleiter (gleiche Info, ggf. vereinfachter Push-Text)\n   - Schulbegleiter sieht: 'Lena hat eine Banane gegessen. Empfehlung: 2,5 IE.'\n   - Schulbegleiter gibt Insulin → bestätigt in App → Eltern sehen: 'Gegeben 14:23'\n\n3) WARUM DAS DER KNALLER IST\n   - Löst einen echten, täglichen Pain Point für hunderte T1D-Familien in DE\n   - Kein anderes Tool macht das in dieser Form\n   - Klarer Glev+ Upsell: Kinder-Modus ist Glev+ Feature\n   - Viraler Effekt: Eltern empfehlen es anderen T1D-Familien\n   - Schulen / Schulbegleiter als neue Zielgruppe (kein eigenes Abo nötig)\n\n== Tech-Scope (grob) ==\n   - Neuer User-Typ: 'child' Account (erstellt von Elternteil)\n   - Neuer User-Typ: 'caregiver' (Schulbegleiter, read + confirm only)\n   - Push-Notification Pipeline: meal logged → berechne KH → sende Alert\n   - Confirmation-Flow: Schulbegleiter bestätigt Gabe in App\n   - Eltern-Dashboard: Timeline Kind-Logs + Bestätigungen + CGM live\n\n== Priorität ==\n   Noch kein Sprint. Zuerst: Caregiver-View (lesen) fertig bauen.\n   Kinder-Modus ist Phase 2 — aber jetzt schon in Architektur berücksichtigen.\n   Kein shared login — eigene Accounts mit eingeschränkten Rollen.\n\nVon Lucas beschrieben: 19. Mai 2026"
+        },
+        {
+          "gid": "1214920598152717",
+          "name": "[Glev+] 7-Tage L-Trial für M-Subscriber — Conversion-Trigger M→L",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Nach 30 Tagen in Plan M: automatisch einen 7-Tage Glev+ (L) Preview freischalten.\n\nZiel: M-User soll L erleben bevor er entscheidet — nicht auf Basis von Versprechen, sondern aus eigener Erfahrung.\n\nWas im Preview freigeschaltet wird:\n- Caregiver-View Share-Link generierbar\n- PDF-Arztbericht (eine Vorschau / Wasserzeichen-Version)\n- Unbegrenzte History (7 Tage lang)\n\nWas NICHT freigeschaltet wird:\n- Kein echter Checkout / keine stille Abbuchung\n- Kein vollständiger Upgrade ohne User-Bestätigung\n\nTrigger:\n- 30 Tage nach erstem aktiven M-Abo\n- ODER wenn User auf gesperrtes L-Feature tippt (Upgrade-Prompt mit Preview-Option)\n\nIn-App Flow:\n1. Push/Banner: 'Du hast 7 Tage Glev+ gratis. Schau was du bekommst.'\n2. Preview-Badge auf L-Features im UI\n3. Nach 7 Tagen: 'Gefiel dir Glev+? Jetzt upgraden für +€14,10/Mo.'\n4. Falls kein Upgrade: sanfter Churn-Blocker ('Erinnerung in 7 Tagen?')\n\nTech:\n- preview_expires_at Feld im User-Profil\n- Middleware prüft: subscription_tier === 'm' AND preview_expires_at > now()\n- Nach Ablauf: automatisch zurück auf M-Features\n\nPriorität: Prio Hoch — direkte Auswirkung auf L-Conversion-Rate.\nPhase: Nach Launch (1. Juli), frühestens August 2026."
+        },
+        {
+          "gid": "1214920414546979",
+          "name": "[Email · L-Trial] Sequenz aufsetzen: Trigger + Provider-Flow (Resend)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Technischer Setup für die 7-Tage Glev+ Trial Drip-Sequenz.\n\nTrigger: User hat 30 Tage aktives M-Abo → preview_expires_at = now() + 7 Tage in Supabase profiles setzen → Resend Webhook / Cron Job löst Sequenz aus.\n\nSequenz-Übersicht:\n- L0: Sofort bei Preview-Start\n- L2: Tag 2 — Caregiver-View Spotlight\n- L4: Tag 4 — Arztbericht Spotlight\n- L6: Tag 6 — Entscheidungshilfe\n- L7: Tag 7 — letzter Tag\n\nProvider: Resend (aktuell). Wenn Klaviyo aufgesetzt: dort als Flow bauen.\nAlle Email-Texte sind im Marketing Hub → Email Flows → Glev+ Trial Drip dokumentiert.\n\nPriorität: Prio Hoch — muss vor erstem M-User der 30-Tage-Marke erreicht live sein."
+        },
+        {
+          "gid": "1214920648564862",
+          "name": "[Email · L-Trial] L0 — 'Du hast 7 Tage Glev+' (Tag 0)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Trigger: Sofort bei Preview-Aktivierung.\nBetreff: Du hast 7 Tage Glev+ — komplett gratis.\n\nInhalt: Welcome to Preview. Was freigeschaltet ist: Caregiver-View, PDF-Arztbericht, unbegrenzte History. Kein Haken, keine automatische Abbuchung. In 7 Tagen Entscheidung.\n\nVollständiger Entwurf im Hub: Email Flows → L-Trial Drip → L0."
+        },
+        {
+          "gid": "1214920414579890",
+          "name": "[Email · L-Trial] L4 — 'Arztbericht: 3 Minuten statt 20' (Tag 4)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Trigger: Tag 4 nach Preview-Start.\nBetreff: Dein nächster Arzttermin dauert 3 Minuten Vorbereitung.\n\nInhalt: PDF-Arztbericht Spotlight. Pain: aus dem Gedächtnis beim Arzt rekonstruieren was die letzten Wochen war. Lösung: Glev generiert TIR, HbA1c-Schätzung, Mahlzeitenmuster als PDF in 3 Minuten. Anleitung: App → Berichte → PDF generieren.\n\nVollständiger Entwurf im Hub: Email Flows → L-Trial Drip → L4."
+        },
+        {
+          "gid": "1214920648535138",
+          "name": "[Email · L-Trial] L2 — 'Jemand in deinem Leben würde das gerne sehen' (Tag 2)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Trigger: Tag 2 nach Preview-Start.\nBetreff: Jemand in deinem Leben würde das gerne sehen.\n\nInhalt: Caregiver-View Spotlight. Emotionaler Winkel: Partner, Elternteil, Schulbegleiter. Kein shared Account, keine WhatsApp-Screenshots mehr. Anleitung: Einstellungen → Glev+ → Share-Link erstellen.\n\nVollständiger Entwurf im Hub: Email Flows → L-Trial Drip → L2."
+        },
+        {
+          "gid": "1214920720430287",
+          "name": "[Email · L-Trial] L6 — Entscheidungshilfe vor Trial-Ende (Tag 6)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Trigger: Tag 6 nach Preview-Start.\nBetreff: Morgen endet dein Glev+ Preview — hier ist was du wissen solltest.\n\nInhalt: Kein Hard-Sell. Drei Fragen als Entscheidungsrahmen: Caregiver-View genutzt? Arztbericht angeschaut? Unbegrenzte History hat etwas gezeigt? 2 von 3 ja = lohnt sich. Preis: €29/Mo, Differenz zu M: €14,10/Mo. Lifetime-Lock-Hinweis. CTA: Upgrade-Link.\n\nVollständiger Entwurf im Hub: Email Flows → L-Trial Drip → L6."
+        },
+        {
+          "gid": "1214920314192178",
+          "name": "[Email · L-Trial] L7 — Letzter Tag, finaler Push (Tag 7)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Trigger: Tag 7 nach Preview-Start (Ablauftag).\nBetreff: Heute ist dein letzter Tag mit Glev+.\n\nInhalt: Kein Druck-Framing. Heute letzter Lifetime-Lock-Preis. CTA: Upgrade-Link. Falls kein Upgrade: kein Datenverlust, nur die 3 Features gehen weg. Persönliche Note von Lucas als T1D-Founder.\n\nVollständiger Entwurf im Hub: Email Flows → L-Trial Drip → L7."
+        },
+        {
+          "gid": "1214920598889621",
+          "name": "[Stripe] Produkt-Beschreibungen in Stripe Dashboard aktualisieren — finaler Stand Hub",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Die Feature-Auflistungen in Stripe (Produktname, Description, Marketing Features) müssen auf den finalen Stand aus dem Marketing Hub (Tab: Pricing Strategie) gebracht werden.\n\nProdukte zu aktualisieren:\n\nS — Glev Smart:\n- Preis: €9/Mo\n- History: 60 Tage (war: 30)\n- Keine Feature Governance mehr\n- DE: Glev Smart — Early Access für Typ-1-Diabetiker. Voice-Logging, CGM-Insights, Control Score & 60 Tage Verlauf. Billing startet 1. Juli 2026. Lifetime Lock.\n- EN: Glev Smart — Early Access for Type 1 diabetics. Voice logging, CGM insights, Control Score & 60 days of history. Billing starts July 1, 2026. Lifetime Lock.\n\nM — Glev Pro:\n- Preis: €14,90/Mo\n- History: 90 Tage (war: 60)\n- Feature Governance: dauerhaft (bleibt)\n- DE: Glev Pro — Lifetime Lock für Typ-1-Diabetiker. KI-Bolusvorschlag, CGM-Integration, 90 Tage Datenhistorie, Adaptive Engine. Preis bleibt dauerhaft gesperrt.\n- EN: Glev Pro — Lifetime Lock for Type 1 diabetics. AI bolus suggestion, CGM integration, 90 days data history, Adaptive Engine. Price locked forever.\n\nL — Glev+:\n- Preis: €29/Mo\n- Kernfeature: Caregiver-View (Eltern sehen Kind live) + PDF-Arztbericht + unbegrenzte History\n- DE: Glev+ — für T1D-Familien. Kind hat Glev — Eltern sehen alles live. Glucose, Mahlzeiten, Insulindosen in Echtzeit. Plus Arztbericht als PDF. Lifetime Lock.\n- EN: Glev+ — for T1D families. Your child has Glev — you see everything live. Glucose, meals, insulin doses in real time. Plus doctor report PDF. Lifetime Lock.\n\nKlinik:\n- Kein Stripe-Checkout — nur überprüfen ob ein Produkt existiert und ggf. archivieren oder als 'coming soon' markieren.\n\nFundstelle im Hub: Tab 'Pricing Strategie' → Sub-Tab 'Stripe Produkte'."
+        },
+        {
+          "gid": "1214920651769348",
+          "name": "[Homepage] Fix: 'Arztbericht als PDF' aus M-Card entfernen",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "In app/page.tsx — Pricing-Sektion, Karte Glev Pro (M):\nEntferne 'Arztbericht als PDF' aus der Feature-Liste.\n\nM-Features sollen sein:\n- Alles aus Smart\n- Erweiterte CGM-Auswertungen  \n- Priorisierter Support\n- Billing ab 1. Juli\n\n'Arztbericht als PDF' gehört ausschließlich in die Glev+ (L) Karte.\n\nPriorität: Hoch — sichtbarer Fehler auf der Homepage."
+        },
+        {
+          "gid": "1214920608525101",
+          "name": "[Feature M] Sport-Auswertung: Wie wirkt Aktivität auf TIR/Glukose?",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Neue Analyse-Funktion exklusiv für Plan M.\n\nWas gebaut werden muss:\n- Korrelation zwischen Activity-Logs (Sporteinträge) und CGM-Daten in den Stunden danach\n- Anzeige: 'Nach intensivem Sport sank dein Glukose im Schnitt um X mg/dl in den ersten 2h'\n- Wochentags-Muster: 'Dienstag/Donnerstag (Trainingstage) → dein TIR ist 12% schlechter als an Ruhetagen'\n- Hypo-Risiko-Warnung nach Sport (wenn Muster erkannt)\n\nLogging bleibt bei S (Sport einloggen ist sicherheitsrelevant).\nAuswertung / Analyse ist M-only.\n\nVoraussetzungen:\n- Activity-Logs bereits in DB vorhanden (Art, Dauer, Intensität)\n- CGM-Daten mit Timestamps vorhanden\n- Korrelationslogik: CGM-Werte X Stunden post-activity aggregieren\n\nKomplexität: Mittel-Hoch. Benötigt saubere Datengrundlage (mind. 2 Wochen Logs + CGM).\nPhase: Post-Launch, Q3 2026.\n\nNicht zu verwechseln mit: Basis-Activity-Logging (bleibt bei S)."
+        },
+        {
+          "gid": "1214920608523885",
+          "name": "[Feature M] Zyklus-Phasen-Auswertung: Glukose-Muster je Phase",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Neue Analyse-Funktion exklusiv für Plan M (für weibliche User mit aktivem Zyklus-Tracking).\n\nWas gebaut werden muss:\n- Zyklus-Phasen automatisch ableiten aus Zyklus-Log-Einträgen:\n  Phase 1: Menstruation (Tag 1–5)\n  Phase 2: Follikelphase (Tag 6–13)\n  Phase 3: Ovulation (Tag 14)\n  Phase 4: Lutealphase (Tag 15–28)\n- CGM-Daten je Phase aggregieren und vergleichen\n- Anzeige: 'In deiner Lutealphase ist dein Ø-Glukose 18 mg/dl höher als in der Follikelphase'\n- Insulin-Bedarf-Muster je Phase (falls Bolus-Logs vorhanden)\n- Empfehlung: 'In Woche 3 könnte ein höherer Korrekturfaktor sinnvoll sein — besprich das mit deinem Arzt'\n\nLogging bleibt bei S (Zyklus einloggen ist sicherheitsrelevant für Insulin-Anpassung).\nAuswertung / Phasen-Analyse ist M-only.\n\nVoraussetzungen:\n- Zyklus-Logging bereits in DB\n- Mind. 2 vollständige Zyklen + CGM-Daten für sinnvolle Auswertung\n- Disclaimer: 'Keine medizinische Beratung — Insulin-Anpassungen nur mit Arzt'\n\nKomplexität: Mittel-Hoch. Emotional sehr starkes Feature für T1D-Frauen — wenig andere Tools machen das.\nPhase: Post-Launch, Q3 2026."
+        },
+        {
+          "gid": "1214920711885022",
+          "name": "[Feature Gate] CGM bei S: Kurve sehen, Analyse bei M",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Backlog",
+          "notes": "Abstufung CGM-Zugang:\n\nS — Glev Smart:\n- CGM verbinden (LibreLinkUp / Nightscout) ✅\n- Live-Glukosekurve sehen ✅\n- Basis-Anzeige: aktueller Wert, Trend-Pfeil ✅\n- KEIN TIR, KEIN GMI, KEIN Control Score, KEIN Variabilitäts-Chart\n\nM — Glev Pro:\n- Alles aus S\n- TIR (Time in Range) Analyse ✅\n- GMI (geschätzter HbA1c) ✅\n- Control Score 0–100 ✅\n- Variabilität & Standardabweichung ✅\n- Wochentags-Vergleich ✅\n- Mahlzeiten-Evaluation (Post-hoc) ✅\n\nLogik: S-User sehen ihre Kurve und bleiben engagiert — wollen aber verstehen WARUM sie so aussieht → natürlicher Upgrade-Pull auf M. Löst Churn-Risiko aus Roast (kein Aha-Moment bei S ohne CGM-Feedback).\n\nImplementierung:\n- CGM-Verbindung (Credentials-Eingabe) bei S erlaubt\n- Raw-Daten werden geladen und gespeichert (für späteres Upgrade)\n- Analytics-Komponenten (TIR, GMI etc.) hinter subscription_tier === 'm' Gate\n- Bei S: Upgrade-CTA direkt unter der Kurve: 'Verstehe warum dein BZ so aussieht → Glev Pro'\n\nPriorität: Hoch — direkte Auswirkung auf S-Retention und M-Conversion."
         },
         {
           "gid": "1214277217324881",
