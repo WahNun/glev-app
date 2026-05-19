@@ -155,23 +155,30 @@ export default function LandscapeGlucoseOverlay() {
   const color   = current ? glucoseColor(current.v) : DIM;
   const now     = Date.now();
 
+  // Chart height is fixed so the centered value stays at true 50% regardless.
+  const CHART_H = 138;
+
   return (
     <div
       aria-label="Live-Glukose Querformat"
       style={{
-        position:      "fixed",
-        inset:         0,
-        background:    SURFACE,
-        zIndex:        9999,
-        display:       "flex",
-        flexDirection: "column",
-        padding:       "8px 18px 4px",
-        boxSizing:     "border-box",
-        gap:           0,
+        position:   "fixed",
+        inset:      0,
+        background: SURFACE,
+        zIndex:     9999,
       }}
     >
-      {/* ── Header ────────────────────────────────────────── */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+      {/* ── Header — absolute top strip ───────────────────── */}
+      <div style={{
+        position:       "absolute",
+        top:            0,
+        left:           0,
+        right:          0,
+        padding:        "9px 18px 0",
+        display:        "flex",
+        alignItems:     "center",
+        justifyContent: "space-between",
+      }}>
         <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: GREEN, textTransform: "uppercase" }}>
           GLUCOSE · LIVE
         </span>
@@ -185,19 +192,22 @@ export default function LandscapeGlucoseOverlay() {
         </div>
       </div>
 
-      {/* ── Big value ─────────────────────────────────────── */}
+      {/* ── Big value — truly centered on screen ──────────── */}
       <div style={{
+        position:       "absolute",
+        top:            "50%",
+        left:           0,
+        right:          0,
+        transform:      "translateY(-50%)",
         display:        "flex",
         alignItems:     "center",
         justifyContent: "center",
-        gap:            14,
-        flexShrink:     0,
-        padding:        "4px 0 2px",
+        gap:            16,
       }}>
         {current ? (
           <>
             <span style={{
-              fontSize:      80,
+              fontSize:      96,
               fontWeight:    800,
               letterSpacing: "-0.04em",
               color,
@@ -206,23 +216,31 @@ export default function LandscapeGlucoseOverlay() {
             }}>
               {Math.round(current.v)}
             </span>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
-              <span style={{ fontSize: 13, color: DIM, fontWeight: 500 }}>mg/dL</span>
-              <TrendSvg direction={trend} color={color} size={28} />
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 5 }}>
+              <span style={{ fontSize: 14, color: DIM, fontWeight: 500 }}>mg/dL</span>
+              <TrendSvg direction={trend} color={color} size={30} />
             </div>
           </>
         ) : state.kind === "loading" ? (
-          <span style={{ color: FAINT, fontSize: 28, letterSpacing: "0.2em" }}>· · ·</span>
+          <span style={{ color: FAINT, fontSize: 32, letterSpacing: "0.2em" }}>· · ·</span>
         ) : (
-          <span style={{ color: FAINT, fontSize: 15 }}>Keine CGM-Daten</span>
+          <span style={{ color: FAINT, fontSize: 16 }}>Keine CGM-Daten</span>
         )}
       </div>
 
-      {/* ── Rolling chart with crosshair ───────────────────── */}
-      <div style={{ flex: 1, minHeight: 0 }}>
+      {/* ── Rolling chart — absolute bottom strip ─────────── */}
+      <div style={{
+        position: "absolute",
+        bottom:   0,
+        left:     0,
+        right:    0,
+        height:   CHART_H,
+        padding:  "0 18px 6px",
+        boxSizing: "border-box",
+      }}>
         {history.length > 0
           ? <LandscapeChart history={history} />
-          : <div style={{ height: "100%" }} />
+          : null
         }
       </div>
     </div>
