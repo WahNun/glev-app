@@ -1048,11 +1048,11 @@ export default function PreviewHome() {
             </Link>
             {" · "}
             <Link
-              href="/brand"
+              href="/legal"
               style={{ color: "inherit", textDecoration: "none" }}
-              aria-label={t("footer_brand_aria")}
+              aria-label={t("footer_impressum_aria")}
             >
-              {t("footer_brand")}
+              {t("footer_impressum")}
             </Link>
           </span>
         </div>
