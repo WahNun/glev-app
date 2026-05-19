@@ -1581,7 +1581,7 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
         {/* ────────── Front ────────── */}
         <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"18px 24px 22px", boxSizing:"border-box" }}>
           {/* Header — title left, badge right (hidden when no data). */}
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:22 }}>
             <div style={{ fontSize:13, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:"var(--text-muted)" }}>
               {t("control_score_label")}
             </div>
