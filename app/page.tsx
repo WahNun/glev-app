@@ -831,6 +831,7 @@ export default function PreviewHome() {
                 t("pricing_pro_b2"),
                 t("pricing_pro_b3"),
                 t("pricing_pro_b4"),
+                t("pricing_pro_b5"),
               ].map((bullet) => (
                 <PricingBullet key={bullet} text={bullet} />
               ))}
