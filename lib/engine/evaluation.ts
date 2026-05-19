@@ -112,6 +112,9 @@ export interface EvaluateEntryResult {
   confidence: "high" | "medium" | "low";
   delta: number | null;
   netCarbs: number;
+  /** Plain-text English/German summary for developer tooling and unit tests.
+   *  Do NOT use for user-facing UI — use `messages` + `t()` instead. */
+  reasoning: string;
 }
 
 function classKey(cls: Classification): string {
@@ -189,6 +192,54 @@ function contextMessages(
 function trendMessages(preTrend?: TrendClass): AdjustmentMessage[] {
   if (!preTrend) return [];
   return [{ key: `engine_eval_trend_${preTrend}` }];
+}
+
+function classReasoning(cls: Classification): string {
+  if (cls === "FAST_CARBS")   return "fast-carb meals";
+  if (cls === "HIGH_FAT")     return "high-fat meals";
+  if (cls === "HIGH_PROTEIN") return "high-protein meals";
+  return "balanced meals";
+}
+
+function speedReasoning(speed1?: number | null, speed2?: number | null): string {
+  const parts: string[] = [];
+  if (speed1 != null && Number.isFinite(speed1)) {
+    const s = `${speed1 >= 0 ? "+" : ""}${speed1.toFixed(2)}`;
+    parts.push(speed1 >= 0
+      ? `BG rose at ${s} mg/dL/min in the first hour.`
+      : `BG fell at ${s} mg/dL/min in the first hour.`);
+  }
+  if (speed2 != null && Number.isFinite(speed2)) {
+    const s = `${speed2 >= 0 ? "+" : ""}${speed2.toFixed(2)}`;
+    parts.push(speed2 >= 0
+      ? `BG rose at ${s} mg/dL/min over the 2-hour window.`
+      : `BG fell at ${s} mg/dL/min over the 2-hour window.`);
+  }
+  return parts.join(" ");
+}
+
+function contextReasoning(
+  insulinLogs: InsulinLog[] = [],
+  exerciseLogs: ExerciseLog[] = [],
+): string {
+  const now = Date.now();
+  const dayAgo = now - 24 * 3600_000;
+  const fourHoursAgo = now - 4 * 3600_000;
+  const parts: string[] = [];
+  const recentBasal = insulinLogs.find(l =>
+    l.insulin_type === "basal" && parseDbTs(l.created_at) >= dayAgo,
+  );
+  if (recentBasal) {
+    const h = Math.max(0, Math.round((now - parseDbTs(recentBasal.created_at)) / 3600_000));
+    parts.push(`Basal-Kontext: ${recentBasal.units}u ${recentBasal.insulin_name ?? ""} vor ${h}h`.trimEnd());
+  }
+  const recentExercise = exerciseLogs.find(l =>
+    parseDbTs(l.created_at) >= fourHoursAgo,
+  );
+  if (recentExercise) {
+    parts.push(`Bewegung: ${recentExercise.duration_minutes} min ${recentExercise.exercise_type} (${recentExercise.intensity}) in den letzten 4h`);
+  }
+  return parts.join(" ");
 }
 
 interface SpikeDetection {
@@ -344,7 +395,8 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
       ...contextMessages(input.recentInsulinLogs, input.recentExerciseLogs, input.activityContext),
       ...trendMessages(input.preTrend),
     ];
-    return { outcome: "HYPO_DURING", messages, confidence: "high", delta, netCarbs };
+    return { outcome: "HYPO_DURING", messages, confidence: "high", delta, netCarbs,
+      reasoning: `HYPO_DURING — BG dipped below 70 mg/dL post-meal. ${speedReasoning(input.speed1, input.speed2)} ${contextReasoning(input.recentInsulinLogs, input.recentExerciseLogs)}`.trim() };
   }
 
   // Unified spike detection (Task #251): combines peakRise + Δ_2h + slope.
@@ -379,6 +431,7 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
       confidence: hasMagnitudeSignal ? "high" : "medium",
       delta,
       netCarbs,
+      reasoning: `BG spiked — above threshold for ${classReasoning(cls)}. ${speedReasoning(input.speed1, input.speed2)} ${contextReasoning(input.recentInsulinLogs, input.recentExerciseLogs)}`.trim(),
     };
   }
 
@@ -409,7 +462,8 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
       ...contextMessages(input.recentInsulinLogs, input.recentExerciseLogs, input.activityContext),
       ...trendMessages(input.preTrend),
     ];
-    return { outcome, messages, confidence, delta, netCarbs };
+    const reasoning = `Δ${delta > 0 ? "+" : ""}${delta} mg/dL — ${outcome === "GOOD" ? "dose matched" : outcome.toLowerCase()}. ${speedReasoning(input.speed1, input.speed2)} ${contextReasoning(input.recentInsulinLogs, input.recentExerciseLogs)}`.trim();
+    return { outcome, messages, confidence, delta, netCarbs, reasoning };
   }
 
   // No bgAfter: fallback ICR-ratio heuristic using personal settings.
@@ -425,7 +479,8 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
       ...contextMessages(input.recentInsulinLogs, input.recentExerciseLogs, input.activityContext),
       ...trendMessages(input.preTrend),
     ];
-    return { outcome: "GOOD", messages, confidence: "low", delta: null, netCarbs };
+    return { outcome: "GOOD", messages, confidence: "low", delta: null, netCarbs,
+      reasoning: `No insulin logged — no dose evaluation. ${speedReasoning(input.speed1, input.speed2)} ${contextReasoning(input.recentInsulinLogs, input.recentExerciseLogs)}`.trim() };
   }
   // Phase B (Matildav window-ICR): when a meal time is supplied AND
   // the user has the schedule master toggle on with an active window
@@ -456,5 +511,8 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
     ...contextMessages(input.recentInsulinLogs, input.recentExerciseLogs, input.activityContext),
     ...trendMessages(input.preTrend),
   ];
-  return { outcome, messages, confidence: "low", delta: null, netCarbs };
+  const icrPrimary = outcome === "GOOD" ? "Dose within ICR-expected range."
+    : outcome === "OVERDOSE" ? "ICR-ratio overdose." : "ICR-ratio underdose.";
+  const reasoning = `${icrPrimary} ${speedReasoning(input.speed1, input.speed2)} ${contextReasoning(input.recentInsulinLogs, input.recentExerciseLogs)}`.trim();
+  return { outcome, messages, confidence: "low", delta: null, netCarbs, reasoning };
 }

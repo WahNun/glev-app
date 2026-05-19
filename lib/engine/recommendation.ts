@@ -47,6 +47,9 @@ export interface RecommendOutput {
   confidence: "high" | "medium" | "low";
   icrUsed: number;
   icrSource: "morning" | "afternoon" | "evening" | "global" | "default";
+  /** Plain-text English/German summary for developer tooling and unit tests.
+   *  Do NOT use for user-facing UI — use `messages` + `t()` instead. */
+  reasoning: string;
 }
 
 const DEFAULT_ICR = 15;
@@ -82,6 +85,7 @@ export function recommendDose(input: RecommendInput): RecommendOutput {
       blocked: true,
       messages: [{ key: "engine_rec_below_safety", params: { bg: input.currentBG, floor: SAFETY_BG_MIN } }],
       confidence: "high", icrUsed, icrSource,
+      reasoning: `BG at ${input.currentBG} mg/dL — below safety floor of ${SAFETY_BG_MIN} mg/dL. No dose recommended.`,
     };
   }
 
@@ -188,6 +192,24 @@ export function recommendDose(input: RecommendInput): RecommendOutput {
     });
   }
 
+  const reasoningParts: string[] = [];
+  if (carbs === 0 && correctionDose === 0) {
+    reasoningParts.push("No carbs and BG within target — no dose calculated.");
+  }
+  if (clamped) {
+    reasoningParts.push(`Clamped to safety ceiling of ${MAX_DOSE_UNITS}u.`);
+  }
+  if (recentBolusCount > 2) {
+    reasoningParts.push(`${recentBolusCount} Bolus-Dosen in den letzten 6h — Active Insulin beachten.`);
+  }
+  if (lastBasal) {
+    const basalHAgo = Math.max(0, Math.round((nowMs - parseDbTs(lastBasal.created_at)) / 3600_000));
+    reasoningParts.push(`Basal: ${lastBasal.units}u ${lastBasal.insulin_name || ""} vor ${basalHAgo}h`.trimEnd());
+  }
+  if (recentExercise) {
+    reasoningParts.push(`${recentExercise.duration_minutes} min ${recentExercise.exercise_type} (${recentExercise.intensity}) — erhöhte Insulin-Sensitivität möglich.`);
+  }
+
   return {
     recommendedUnits: Math.round(total * 2) / 2,
     carbDose: Math.round(carbDose * 10) / 10,
@@ -197,5 +219,6 @@ export function recommendDose(input: RecommendInput): RecommendOutput {
     confidence,
     icrUsed,
     icrSource,
+    reasoning: reasoningParts.join(" "),
   };
 }

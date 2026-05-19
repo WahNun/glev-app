@@ -188,9 +188,9 @@ function collectStrings(node: ReactNode): string[] {
 
 function findElements(
   node: ReactNode,
-  predicate: (el: ReactElement) => boolean,
-): ReactElement[] {
-  const out: ReactElement[] = [];
+  predicate: (el: ReactElement<{ children?: ReactNode }>) => boolean,
+): ReactElement<{ children?: ReactNode }>[] {
+  const out: ReactElement<{ children?: ReactNode }>[] = [];
   function walk(n: ReactNode) {
     if (n == null || typeof n === "boolean") return;
     if (typeof n === "string" || typeof n === "number") return;
@@ -453,9 +453,9 @@ test.describe("GlevReport — per-section detail tables", () => {
   test("Sport table: 6 column headers + one row per fixture log", () => {
     const exercise = [
       makeExercise({ id: "e1", exercise_type: "run",   duration_minutes: 30 }),
-      makeExercise({ id: "e2", exercise_type: "swim",  duration_minutes: 45 }),
-      makeExercise({ id: "e3", exercise_type: "yoga",  duration_minutes: 20 }),
-      makeExercise({ id: "e4", exercise_type: "cycle", duration_minutes: 60 }),
+      makeExercise({ id: "e2", exercise_type: "swimming",  duration_minutes: 45 }),
+      makeExercise({ id: "e3", exercise_type: "yoga",      duration_minutes: 20 }),
+      makeExercise({ id: "e4", exercise_type: "cycling",   duration_minutes: 60 }),
     ];
     const tree = GlevReport({ ...baseProps, exercise }) as ReactElement;
     const table = findTable(tree, [
