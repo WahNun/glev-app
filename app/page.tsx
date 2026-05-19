@@ -1259,6 +1259,7 @@ function PlusCard() {
           t("pricing_klinik_b3"),
           t("pricing_klinik_b4"),
           t("pricing_klinik_b5"),
+          t("pricing_klinik_b6"),
         ].map((b) => (
           <PricingBullet key={b} text={b} />
         ))}
