@@ -25,3 +25,19 @@ pnpm asana:sync -- --include-completed  # include completed tickets too
 Re-run whenever you want a fresh sprint view (e.g. start of a planning session,
 after moving tickets in Asana, or before asking the agent to reason about sprint
 state). The script is idempotent — it overwrites both files cleanly.
+
+## Auto-refresh
+
+A GitHub Actions workflow (`.github/workflows/refresh-asana-snapshot.yml`) runs
+`pnpm asana:sync` **once per day** (06:17 UTC) and commits any changes to
+`docs/asana/sprints.{json,md}` back to `main`. So in normal use the snapshot is
+already at most ~24 h old when you start a session — no manual refresh needed.
+
+You can also trigger an on-demand refresh from GitHub → Actions → "Refresh Asana
+sprint snapshot" → **Run workflow**.
+
+Requirements:
+
+- Repo secret `ASANA_PAT` (same token shape as the Replit Secret).
+- Settings → Actions → General → Workflow permissions set to "Read and write
+  permissions" so the job can push the snapshot commit back to `main`.

@@ -1,0 +1,95 @@
+name: Refresh Asana sprint snapshot
+
+# Re-runs `pnpm asana:sync` on a daily schedule and commits any changes
+# to docs/asana/sprints.{json,md} back to main. This keeps the snapshot
+# the agent reads at session start up to date without anyone running the
+# script manually.
+#
+# Setup (one-time):
+#   1. Create an Asana Personal Access Token at https://app.asana.com/0/my-apps
+#   2. GitHub repo → Settings → Secrets and variables → Actions
+#      Add repo secret `ASANA_PAT` with that token.
+#   3. Settings → Actions → General → Workflow permissions:
+#      ensure "Read and write permissions" is enabled so the job can
+#      push the snapshot commit back to main.
+#
+# Notes:
+#   - GitHub Actions cron is best-effort; the daily cadence is plenty for
+#     a sprint snapshot that humans only consult between planning sessions.
+#   - `workflow_dispatch` lets you trigger an on-demand refresh from the
+#     Actions tab (e.g. right before a planning meeting).
+#   - The commit step is a no-op when nothing changed, so we don't spam
+#     main with empty commits.
+
+on:
+  schedule:
+    # 06:17 UTC daily — odd minute to dodge the top-of-hour Actions surge.
+    - cron: "17 6 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-asana-snapshot
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: Refresh snapshot
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Guard against non-main dispatch
+        # Belt-and-braces: the push step targets `main`, so refuse to run if
+        # this workflow was dispatched from any other ref. Prevents a manual
+        # `workflow_dispatch` on a feature branch from pushing that branch's
+        # HEAD onto main alongside the snapshot deltas.
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::This workflow may only run on main (got: ${{ github.ref }})."
+          exit 1
+
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Run asana:sync
+        env:
+          ASANA_PAT: ${{ secrets.ASANA_PAT }}
+        run: |
+          set -u
+          if [ -z "${ASANA_PAT}" ]; then
+            echo "::error::Repo secret ASANA_PAT not set — see workflow header for setup."
+            exit 1
+          fi
+          pnpm asana:sync
+
+      - name: Commit snapshot changes
+        run: |
+          set -eu
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add docs/asana/sprints.json docs/asana/sprints.md
+
+          if git diff --cached --quiet; then
+            echo "No snapshot changes — nothing to commit."
+            exit 0
+          fi
+
+          git commit -m "chore(asana): refresh sprint snapshot [skip ci]"
+          git push origin HEAD:main
