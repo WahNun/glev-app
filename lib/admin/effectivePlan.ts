@@ -1,4 +1,4 @@
-export type EffectivePlan = "free" | "beta" | "pro";
+export type EffectivePlan = "free" | "beta" | "pro" | "plus";
 
 export type PlanInputs = {
   manual_plan_override?: string | null;
@@ -42,18 +42,24 @@ export function computeEffectivePlan(p: PlanInputs): EffectivePlan {
   const sub = (p.subscription_status ?? "").toLowerCase();
   if (sub === "pro") return "pro";
   if (sub === "beta") return "beta";
+  // Glev+ is stored as subscription_status = 'plus' by the Stripe webhook
+  // (/api/pro/webhook). It was not previously mapped here, causing plus
+  // users to fall through to "free". Fixed.
+  if (sub === "plus") return "plus";
 
   return "free";
 }
 
 export function planLabel(p: EffectivePlan): string {
   if (p === "pro") return "Pro";
+  if (p === "plus") return "Glev+";
   if (p === "beta") return "Beta";
   return "Free";
 }
 
 export function planColor(p: EffectivePlan): { bg: string; fg: string } {
   if (p === "pro") return { bg: "#5b6cff22", fg: "#3b4cdc" };
+  if (p === "plus") return { bg: "#a78bfa22", fg: "#7c3aed" };
   if (p === "beta") return { bg: "#10b98122", fg: "#047857" };
   return { bg: "#e5e7eb", fg: "#374151" };
 }

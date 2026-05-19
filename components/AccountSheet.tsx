@@ -147,8 +147,9 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
             {/* Plan pill — colour matches the plan: Pro = purple (premium),
                 Beta = green (active reservation), Free = blue (default). */}
             {(() => {
-              const pillColor = plan === "pro" ? PURPLE : plan === "beta" ? GREEN : ACCENT;
+              const pillColor = plan === "pro" ? PURPLE : plan === "plus" ? PURPLE : plan === "beta" ? GREEN : ACCENT;
               const pillLabel = plan === "pro" ? t("plan_pro")
+                : plan === "plus" ? t("plan_plus")
                 : plan === "beta" ? t("plan_beta")
                 : t("plan_free");
               return (
@@ -203,7 +204,7 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
       {/* Upgrade card — only shown when the user is NOT already on Pro.
           Beta users still see it (Beta is the reservation tier; the
           actual Pro subscription is the upgrade target). */}
-      {plan !== "pro" && (
+      {plan !== "pro" && plan !== "plus" && (
       <button
         onClick={() => { onClose(); router.push("/pro"); }}
         style={{

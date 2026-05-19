@@ -1261,7 +1261,10 @@
     "onboarding_replay_desc": "Plays the 4-step introduction again on next visit.",
     "onboarding_replay_btn": "Replay",
     "onboarding_replay_confirm": "Are you sure? You'll be taken through the introduction next.",
-    "onboarding_replay_error": "Something went wrong — please try again later."
+    "onboarding_replay_error": "Something went wrong — please try again later.",
+    "section_glev_plus": "Glev+",
+    "row_founder_contact": "Direct line to the founder",
+    "subtitle_founder_contact": "As a Glev+ member you have direct access to Lucas."
   },
   "cgmSettings": {
     "appleHealth": {
@@ -2087,6 +2090,7 @@
     "stat_version": "Version",
     "plan_free": "Glev Free",
     "plan_pro": "Glev Pro",
+    "plan_plus": "Glev+",
     "plan_beta": "Glev Beta",
     "upgrade_title": "Upgrade to Glev Pro",
     "upgrade_body": "Free until public launch — secure your beta seat now.",

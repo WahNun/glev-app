@@ -24,6 +24,7 @@ import {
   type EngineIcrInfo,
 } from "@/lib/userSettings";
 import type { AdjustmentRecord } from "@/lib/engine/adjustment";
+import type { EffectivePlan } from "@/lib/admin/effectivePlan";
 import {
   fetchAppointments,
   addAppointment,
@@ -257,6 +258,9 @@ export default function SettingsPage() {
   const [accountCreatedAt, setAccountCreatedAt] = useState<string>("");
   const [accountMealCount, setAccountMealCount] = useState<number>(0);
   const [signingOut, setSigningOut] = useState(false);
+  // Effective plan — fetched from /api/me/plan once on mount. Used to gate
+  // Glev+-only features like the "Direkter Draht zum Gründer" section.
+  const [plan, setPlan] = useState<EffectivePlan>("free");
   // Engine adjustment audit history. The full list lives in
   // `user_settings.adjustment_history` (JSONB); we surface only the
   // most recent ~10 entries on the row subtitle / sheet so the user
@@ -391,6 +395,16 @@ export default function SettingsPage() {
         if (!cancelled) setAccountMealCount(count ?? 0);
       } catch { /* leave count at 0 */ }
     })();
+    // Plan fetch — uses the same /api/me/plan endpoint as AccountSheet
+    // so the gate is driven by the same server-side logic (manual_plan_override
+    // → profiles.plan → subscription_status → free). Failure leaves plan
+    // at the "free" default so the Glev+ section simply stays hidden.
+    fetch("/api/me/plan", { credentials: "include" })
+      .then((r) => r.ok ? r.json() : { plan: "free" })
+      .then((j: { plan?: EffectivePlan }) => {
+        if (!cancelled && j.plan) setPlan(j.plan);
+      })
+      .catch(() => {});
     return () => { cancelled = true; };
   }, [bcp47]);
 
@@ -2308,6 +2322,20 @@ export default function SettingsPage() {
           onClick={() => openSheetWith("googleSheets")}
         />
       </SettingsSection>
+
+      {plan === "plus" && (
+        <SettingsSection title={tSettings("section_glev_plus")}>
+          <SettingsRow
+            first
+            iconColor={PURPLE}
+            icon={ICON.sparkle}
+            label={tSettings("row_founder_contact")}
+            subtitle={tSettings("subtitle_founder_contact")}
+            ariaLabel={tSettings("row_open_aria", { label: tSettings("row_founder_contact") })}
+            onClick={() => window.open("mailto:lucas+plus@glev.app", "_blank", "noopener,noreferrer")}
+          />
+        </SettingsSection>
+      )}
 
       <SettingsSection title={tSettings("section_support")}>
         <SettingsRow
