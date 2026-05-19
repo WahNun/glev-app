@@ -2317,7 +2317,7 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
           <div style={{
             fontSize:13, color:"var(--text-faint)",
             textAlign:"center", letterSpacing:"0.02em", lineHeight:1.5,
-            paddingTop:2,
+            paddingTop:2, paddingBottom:8,
           }}>
             Basal is continuous — Glev does not score individual injections. For reference only.
           </div>

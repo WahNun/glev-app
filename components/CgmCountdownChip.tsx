@@ -199,10 +199,13 @@ function PendingDisplay({ startAtMs, expectedAtMs, now, themeColor }: {
   const elapsedMs = Math.max(0, Math.min(totalMs, now - startAtMs));
   const pct = elapsedMs / totalMs;
   const remainMs = Math.max(0, expectedAtMs - now);
+  const totalMin = Math.floor(remainMs / 60_000);
   const totalSec = Math.ceil(remainMs / 1_000);
-  const mm = String(Math.floor(totalSec / 60)).padStart(2, "0");
-  const ss = String(totalSec % 60).padStart(2, "0");
-  const text = `${mm}:${ss}`;
+  // Show "Xh Ym" for waits longer than 60 min (e.g. 12h/24h post-basal
+  // checkpoints) so we never render a 3-digit minute like "391:12".
+  const text = totalMin >= 60
+    ? `${Math.floor(totalMin / 60)}h ${totalMin % 60}m`
+    : `${String(totalMin).padStart(2, "0")}:${String(totalSec % 60).padStart(2, "0")}`;
   const expectedDate = new Date(expectedAtMs);
   return (
     <>
