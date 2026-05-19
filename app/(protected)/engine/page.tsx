@@ -2660,8 +2660,8 @@ export default function EnginePage() {
                     background: "transparent", border: "none", outline: "none",
                     width: "auto", minWidth: 200,
                     textAlign: "center",
-                    fontFamily: "var(--font-mono)", fontWeight: 700, fontSize: 15,
-                    color: "var(--text-muted)", padding: "6px 0",
+                    fontFamily: "var(--font-mono)", fontWeight: 800, fontSize: 20,
+                    color: "var(--text)", padding: "6px 0",
                     marginTop: 6,
                   }}
                   type="datetime-local"
