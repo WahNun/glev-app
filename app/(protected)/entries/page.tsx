@@ -2131,9 +2131,13 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
   useEffect(() => {
     if (!isOpen || trend.state !== "idle") return;
     setTrend({ state: "loading", points: [], fingersticks: [] });
+    const ctrl = new AbortController();
+    // Abort automatically after 10 s so the card never hangs in
+    // "Loading CGM history…" when LLU / Nightscout is slow or down.
+    const timer = setTimeout(() => ctrl.abort(new Error("CGM history timeout")), 10_000);
     let cancelled = false;
     Promise.all([
-      fetch("/api/cgm/history", { cache: "no-store" }).then(async r => {
+      fetch("/api/cgm/history", { cache: "no-store", signal: ctrl.signal }).then(async r => {
         if (!r.ok) throw new Error(`history ${r.status}`);
         const out = await r.json() as { history?: { timestamp?: string | null; value?: number | null }[] };
         return (out.history || [])
@@ -2159,8 +2163,9 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
       })
       .catch(e => {
         if (!cancelled) setTrend({ state: "error", points: [], fingersticks: [], error: (e as Error)?.message || "fetch failed" });
-      });
-    return () => { cancelled = true; };
+      })
+      .finally(() => clearTimeout(timer));
+    return () => { cancelled = true; ctrl.abort(); clearTimeout(timer); };
   }, [isOpen, trend.state, fromMs, toMs]);
 
   // Stats for the 6 h pre-injection window.
