@@ -1086,9 +1086,15 @@ export default function InsightsPage() {
   // (`last7`) so they respect the active range picker (Task #332).
   // The numerator (`goodAll`) and the denominator (`last7.length`) both
   // come from the same scoped slice so the rate is internally consistent.
-  const normed   = last7.map(m => ({ ...m, ev: EVAL_NORM(unifiedOutcome(m)) }));
-  const goodAll  = normed.filter(m => m.ev==="GOOD").length;
-  const goodRate = last7.length ? goodAll/last7.length*100 : 0;
+  const normed         = last7.map(m => ({ ...m, ev: EVAL_NORM(unifiedOutcome(m)) }));
+  const goodAll        = normed.filter(m => m.ev==="GOOD").length;
+  // Good Rate Fix: only meals with a non-null EVAL_NORM outcome count in the
+  // denominator. A pending row (ev===null) stays in the meal list for other
+  // metrics but must not inflate the denominator here — 7 meals where 2 are
+  // still pending should read 2/5=40%, not 2/7=29%, when both evaluated are
+  // GOOD. The EVAL_NORM comment already states this intent; now enforced.
+  const evaluatedCount = normed.filter(m => m.ev !== null).length;
+  const goodRate       = evaluatedCount ? goodAll/evaluatedCount*100 : 0;
   const avgGlucose = Math.round(last7.filter(m=>m.glucose_before).reduce((s,m)=>s+(m.glucose_before||0),0) / Math.max(last7.filter(m=>m.glucose_before).length,1));
   const avgCarbs   = Math.round(last7.filter(m=>m.carbs_grams).reduce((s,m)=>s+(m.carbs_grams||0),0) / Math.max(last7.filter(m=>m.carbs_grams).length,1));
   const avgInsulin = (last7.filter(m=>m.insulin_units).reduce((s,m)=>s+(m.insulin_units||0),0) / Math.max(last7.filter(m=>m.insulin_units).length,1)).toFixed(1);
@@ -2998,7 +3004,7 @@ export default function InsightsPage() {
             { label:tInsights("tile_avg_glucose_label"),  val:`${avgGlucose}`, sub:tInsights("tile_avg_glucose_sub"),           color:"var(--text)",
               formula:tInsights("tile_avg_glucose_formula"),      explain:tInsights("tile_avg_glucose_explain") },
             // Good rate (Trefferquote) — in-target metric → GREEN.
-            { label:tInsights("tile_good_rate_label"),    val:`${goodRate.toFixed(1)}%`,  sub:tInsights("tile_good_rate_sub", { good: goodAll, total: last7.length }),   color:GREEN,
+            { label:tInsights("tile_good_rate_label"),    val:`${goodRate.toFixed(1)}%`,  sub:tInsights("tile_good_rate_sub", { good: goodAll, total: evaluatedCount }),   color:GREEN,
               formula:tInsights("tile_good_rate_formula"),            explain:tInsights("tile_good_rate_explain") },
             { label:tInsights("tile_avg_insulin_label"),  val:`${avgInsulin}u`, sub:tInsights("tile_avg_insulin_sub", { carbs: carbUnit.display(avgCarbs) }), color:"var(--text)",
               formula:tInsights("tile_avg_insulin_formula"),               explain:tInsights("tile_avg_insulin_explain") },

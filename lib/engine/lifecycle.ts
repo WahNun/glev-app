@@ -50,15 +50,25 @@ export function lifecycleFor(m: Meal, now: Date = new Date(), settings?: Insulin
   const mealMs = created.getTime();
   const ageMinutes = Math.max(0, (now.getTime() - mealMs) / 60000);
   const bgBefore = m.glucose_before;
-  const bg1h     = m.bg_1h;
-  const bg2hRaw  = m.bg_2h ?? m.glucose_after;
-  const delta1   = bgBefore != null && bg1h     != null ? bg1h     - bgBefore : null;
-  const delta2   = bgBefore != null && bg2hRaw  != null ? bg2hRaw  - bgBefore : null;
+  // Post-Meal Granularität fix: cascade to new glucose_* columns written by
+  // PendingGlucoseStrip / CgmAutoFillProvider (5-timepoint schema added
+  // 2026-04-29). The legacy bg_1h / bg_2h columns remain the primary source
+  // for backwards compatibility; new reads entered via the badge land in
+  // glucose_1h / glucose_2h and must feed the evaluator too.
+  const bg1h        = m.bg_1h ?? m.glucose_1h;
+  const bg1h_at_str = m.bg_1h != null ? m.bg_1h_at : m.glucose_1h_at;
+  const bg2hRaw     = m.bg_2h ?? m.glucose_2h ?? m.glucose_after;
+  const has_bg2h    = m.bg_2h != null || m.glucose_2h != null;
+  const bg2h_at_str = m.bg_2h != null ? m.bg_2h_at
+                    : m.glucose_2h != null ? m.glucose_2h_at
+                    : null;
+  const delta1   = bgBefore != null && bg1h    != null ? bg1h    - bgBefore : null;
+  const delta2   = bgBefore != null && bg2hRaw != null ? bg2hRaw - bgBefore : null;
   const speed1   = delta1 != null ? delta1 / 60  : null;
   const speed2   = delta2 != null ? delta2 / 120 : null;
 
-  const gap1h = bg1h != null ? gapFromExpected(m.bg_1h_at, mealMs, ONE_HOUR) : null;
-  const gap2h = bg2hRaw != null && m.bg_2h != null ? gapFromExpected(m.bg_2h_at, mealMs, TWO_HOURS) : null;
+  const gap1h = bg1h != null ? gapFromExpected(bg1h_at_str, mealMs, ONE_HOUR) : null;
+  const gap2h = bg2hRaw != null && has_bg2h ? gapFromExpected(bg2h_at_str, mealMs, TWO_HOURS) : null;
   const out1h = gap1h != null && Math.abs(gap1h) > WINDOW_TOLERANCE_MIN;
   const out2h = gap2h != null && Math.abs(gap2h) > WINDOW_TOLERANCE_MIN;
 

@@ -76,14 +76,14 @@ export default function MealEntryLightExpand({
     ?? (Array.isArray(meal.parsed_json) ? meal.parsed_json.reduce((s, f) => s + (f.fat || 0), 0) : 0);
   const carbs  = meal.carbs_grams ?? 0;
   const before = meal.glucose_before ?? null;
-  // BG AFTER cascades through the same priority as the Verlauf/entries view
-  // so the auto-fetched CGM values (bg_2h / bg_1h) populate the Recent card
-  // without the user having to manually log a post-meal glucose. Prefer 2h
-  // (more authoritative) over 1h over the legacy glucose_after column.
+  // BG AFTER cascades through both old (bg_1h/bg_2h) and new (glucose_1h/
+  // glucose_2h) columns — the 5-timepoint badge writes to glucose_* columns.
+  // Prefer 2h (more authoritative) over 1h over the legacy glucose_after.
   const after: number | null =
-    meal.bg_2h ?? meal.bg_1h ?? meal.glucose_after ?? null;
+    meal.bg_2h ?? meal.glucose_2h ?? meal.bg_1h ?? meal.glucose_1h ?? meal.glucose_after ?? null;
   const afterTag: "1H" | "2H" | null =
-    meal.bg_2h != null ? "2H" : meal.bg_1h != null ? "1H" : null;
+    (meal.bg_2h != null || meal.glucose_2h != null) ? "2H" :
+    (meal.bg_1h != null || meal.glucose_1h != null) ? "1H" : null;
   const delta  = before != null && after != null ? after - before : null;
 
   const beforeColor = before != null

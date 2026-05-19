@@ -14,6 +14,7 @@ import { TYPE_COLORS, getEvalColor, chipLabelsFrom } from "@/lib/mealTypes";
 import DashboardQuickAddSheet from "@/components/DashboardQuickAddSheet";
 import MealEntryCardCollapsed from "@/components/MealEntryCardCollapsed";
 import MealEntryLightExpand from "@/components/MealEntryLightExpand";
+import PendingGlucoseStrip from "@/components/PendingGlucoseStrip";
 import CurrentDayGlucoseCard from "@/components/CurrentDayGlucoseCard";
 import GlucoseTrendFront from "@/components/GlucoseTrendChart";
 import MacroRing from "@/components/MacroRing";
@@ -1294,6 +1295,17 @@ function RecentEntries({
             return (
               <div key={r.id}>
                 <UnifiedRecentRow row={r} locale={locale} onClick={() => toggle(r.id)} />
+                {/* Post-Meal Badge — mirrors the entries page: renders when
+                    the meal is inside a 30min/1h/90min/2h/3h window and the
+                    matching glucose_* column is still null. Always visible
+                    (not gated on isOpen) so the prompt shows on the compact
+                    row without requiring the user to expand first. */}
+                {r.kind === "meal" && r.meal && (
+                  <PendingGlucoseStrip
+                    meal={r.meal}
+                    onSaved={(patch) => onMealUpdated({ ...r.meal!, ...patch })}
+                  />
+                )}
                 {isOpen && (
                   <div style={{ paddingBottom:8 }}>
                     {r.kind === "meal" ? (
