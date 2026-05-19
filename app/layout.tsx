@@ -7,6 +7,7 @@ import { cookies, headers } from "next/headers";
 import "./globals.css";
 import { PreventZoom } from "@/components/PreventZoom";
 import PushNotificationsProvider from "@/components/PushNotificationsProvider";
+import LandscapeGlucoseOverlay from "@/components/LandscapeGlucoseOverlay";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { APP_ROUTE_REGEX_SOURCE, isAppRoute, PATHNAME_HEADER } from "@/lib/appRoutes";
 
@@ -196,6 +197,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <ThemeProvider>
             <PreventZoom />
             <PushNotificationsProvider />
+            <LandscapeGlucoseOverlay />
             {children}
           </ThemeProvider>
         </NextIntlClientProvider>

@@ -332,28 +332,6 @@ textarea,
    nativen Lock — wir blenden bei Landscape eine Overlay-Karte ein,
    damit das vertikal designte Layout nicht unleserlich gestaucht
    wird. ::before deckt den Hintergrund ab, ::after platziert den
-   Hinweistext. pointer-events:none würde Klicks DAHINTER durchlassen
-   und Touch-Logging triggern → bewusst NICHT gesetzt am ::before. */
-@media (orientation: landscape) and (max-height: 500px) {
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background: var(--bg, #09090B);
-    z-index: 9999;
-  }
-  body::after {
-    content: 'Bitte drehe dein Gerät aufrecht.';
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    color: var(--text-muted, #8b949e);
-    font-size: 16px;
-    font-family: var(--font-sans), system-ui, sans-serif;
-    text-align: center;
-    z-index: 10000;
-    pointer-events: none;
-    padding: 0 24px;
-  }
-}
+   Hinweistext. Das React-Component LandscapeGlucoseOverlay übernimmt
+   die Darstellung im Querformat (zeigt Live-Glukose). Das CSS-Overlay
+   wird nicht mehr benötigt — entfernt 2026-05-19. */
