@@ -64,16 +64,20 @@ export default function MealEntryCardCollapsed({
     >
       <style>{`
         .glev-mec-cell-label{ font-size:9px; color:var(--text-faint); letter-spacing:0.08em; font-weight:600; margin-bottom:3px; text-transform:uppercase; }
-        /* Default (desktop / >= 720px): 4 equal cols + fixed-width eval pill on the right.
-           Fixed eval column ensures the 4 data columns line up vertically across all rows
-           regardless of pill text width (GOOD vs UNDER DOSE vs OVER DOSE). */
-        .glev-mec { display:grid; gap:14px; grid-template-columns: 1fr 1fr 1fr 1fr; }
+        /* Default (desktop / >= 720px): 4 equal cols + fixed-width eval pill on the right. */
+        .glev-mec { display:grid; gap:14px; grid-template-columns: 1fr 1fr 1fr 1fr; position:relative; }
         .glev-mec.glev-mec--with-eval { grid-template-columns: 1fr 1fr 1fr 1fr 140px; }
         .glev-mec-eval{ justify-self:end; }
-        /* Tablet/mobile (< 720px): hide eval pill and keep 4 evenly distributed columns */
+        /* Mobile (< 720px): keep 4-column grid, float eval pill top-right as absolute badge */
         @media (max-width: 720px) {
           .glev-mec, .glev-mec.glev-mec--with-eval { grid-template-columns: 1fr 1fr 1fr 1fr !important; gap: 10px; }
-          .glev-mec-eval{ display:none !important; }
+          .glev-mec-eval{
+            position: absolute;
+            top: 0;
+            right: 0;
+            font-size: 10px !important;
+            padding: 3px 8px !important;
+          }
         }
         /* Tight phones: keep 4 columns but reduce gap */
         @media (max-width: 380px) {
