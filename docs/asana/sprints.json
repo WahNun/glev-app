@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-18T23:48:15.198Z",
+  "generated_at": "2026-05-19T00:15:44.405Z",
   "workspace_gid": "1213452700618853",
   "include_completed": false,
   "sprints": [
@@ -8,15 +8,6 @@
       "name": "Glev — Sprint 1: Migration + Stripe Test-Mode",
       "tasks": [
         {
-          "gid": "1214918876412804",
-          "name": "FIX P0: Plus-Webhook → Supabase update für plus_subscription",
-          "completed": false,
-          "due_on": null,
-          "assignee": null,
-          "section": "Backlog",
-          "notes": "Glev+-Käufer sehen Confirmation-Screen, aber Webhook updated Supabase ggf. nicht korrekt mit plus_subscription. Wenn nicht gefixt: User hat kein aktives Plus-Abo in der DB.\n\nDiagnose:\nfind app/ -name \"*.ts\" | xargs grep -l \"webhook\\|checkout.session.completed\" 2>/dev/null | grep -v node_modules\ngrep -n \"plus_subscription\\|STRIPE_PLUS_PRICE_ID\" <webhook-datei>\n\nFix:\n1. Price-ID Matching: STRIPE_PLUS_PRICE_ID + STRIPE_PLUS_PRICE_ID_US müssen als Case erkannt werden → plan = 'plus_subscription'\n2. Supabase-Update für plus_subscription ergänzen (analog pro_subscription):\n   await supabase.from('profiles').update({ subscription_type: 'plus_subscription', subscription_active: true }).eq('id', userId)\n\nVerify:\ngrep -n \"plus_subscription\\|STRIPE_PLUS_PRICE_ID\" <webhook-datei>\n→ Beide env vars + Supabase-Update vorhanden.\n\nCommit: git add -A && git commit -m \"fix: webhook handles plus_subscription -> supabase update\" && git push origin main"
-        },
-        {
           "gid": "1214918945284677",
           "name": "FIX P0: messages/en.json — $4.50 / $24.90 Strings bereinigen",
           "completed": false,
@@ -24,18 +15,6 @@
           "assignee": null,
           "section": "Backlog",
           "notes": "Alle alten Preisangaben aus messages/en.json entfernen.\n\nPrompt für Replit Agent:\n\ngrep -n \"4\\.50\\|4\\.90\\|24\\.90\" messages/en.json\n\nErsatz-Logik:\n- $4.50 / $4.90 → entfernen oder durch \"$9\" ersetzen (je nach Kontext)\n- $24.90 → \"$19\" (Launch) oder \"$14.90\" (Early Access) — Kontext prüfen\n- Preisstufentexte wie \"First 3 months $4.50, then $9\" → \"From July 1: $9/month\"\n\nVerify:\ngrep -n \"4\\.50\\|4\\.90\\|24\\.90\" messages/en.json\n→ Keine Ausgabe.\n\nCommit: git add messages/en.json && git commit -m \"fix: remove legacy $4.50 / $24.90 strings from en.json\" && git push origin main"
-        },
-        {
-          "gid": "1214917855719900",
-          "name": "[Stripe] STRIPE_PLUS_PRICE_ID in Vercel + Replit als neues Secret anlegen",
-          "completed": false,
-          "due_on": "2026-05-23",
-          "assignee": {
-            "gid": "1213432759001229",
-            "name": "rave pickle"
-          },
-          "section": "Backlog",
-          "notes": "Voraussetzung: Glev+ Produkt + EUR Price ID vorhanden.\n\nSCHRITTE:\n1. Vercel: Project Settings → Environment Variables → STRIPE_PLUS_PRICE_ID (neu) mit EUR price_xxx anlegen → Save → Redeploy\n2. Replit: Secrets Tab → STRIPE_PLUS_PRICE_ID anlegen\n3. Optional: STRIPE_PLUS_PRICE_ID_US für USD falls US-Checkout separat"
         },
         {
           "gid": "1214917710907872",
@@ -48,54 +27,6 @@
           },
           "section": "Backlog",
           "notes": "COUPON-DETAILS:\n- Rabatt: 50% für genau 3 Monate\n- Code: EARLYACCESS50 (oder auto-generiert)\n- Gültigkeit: bis 30. Juni 2026\n\nSCHRITTE:\n1. Stripe → Gutscheine → Neuen Coupon erstellen\n2. Typ: Prozentsatz, Wert: 50%, Dauer: 3 Monate\n3. Coupon-ID notieren\n4. In Replit Secrets: STRIPE_BETA_COUPON_ID befüllen (Secret existiert bereits laut Screenshot)\n\nHINWEIS: Gilt für Glev Smart (€4,50 statt €9 in den ersten 3 Monaten)."
-        },
-        {
-          "gid": "1214917731524638",
-          "name": "[Stripe] Glev Pro — neue Price ID €14,90/Mo EUR anlegen + alte archivieren",
-          "completed": false,
-          "due_on": "2026-05-22",
-          "assignee": {
-            "gid": "1213432759001229",
-            "name": "rave pickle"
-          },
-          "section": "Backlog",
-          "notes": "SCHRITTE:\n1. Stripe Dashboard → Produktkatalog → Glev Beta Access (EUR)\n2. Neuen Preis hinzufügen: €14,90 / Monat / EUR / wiederkehrend\n3. Alten Preis (€24,90) archivieren (nicht löschen)\n4. Neue price_xxx ID notieren — nötig für Vercel/Replit Update\n\nPRODUKTBESCHREIBUNG (Stripe):\nGlev Pro — Lifetime Lock für Typ-1-Diabetiker. Sprachlogging, KI-Bolusvorschlag der aus deiner eigenen Geschichte lernt, CGM-Integration, 60 Tage Datenhistorie, direkter Kontakt zum Gründer. Preis bleibt dauerhaft gesperrt.\n\nMARKETING-FUNKTIONSLISTE:\n1. Sprechen statt tippen — Voice-Logging\n2. KI-Bolusvorschlag lernt aus deiner Geschichte\n3. CGM-Integration (Libre 2 + 3, Nightscout)\n4. 60 Tage Datenhistorie\n5. Direkter Draht zum Gründer"
-        },
-        {
-          "gid": "1214917855719743",
-          "name": "[Stripe] Glev+ Produkt anlegen — EUR + USD Preise",
-          "completed": false,
-          "due_on": "2026-05-22",
-          "assignee": {
-            "gid": "1213432759001229",
-            "name": "rave pickle"
-          },
-          "section": "Backlog",
-          "notes": "PRODUKTNAME: Glev+\n\nBESCHREIBUNG DE:\nGlev+ — Premium Early Access für Typ-1-Diabetiker. Alles aus Glev Pro plus automatische Arztgespräch-Vorbereitung (PDF-Report in 3 Minuten), Caregiver-Ansicht (in Vorbereitung) und direkter Draht zum Gründer. Lifetime Lock: dein Einstiegspreis bleibt für immer.\n\nBESCHREIBUNG EN:\nGlev+ — Premium Early Access for Type 1 diabetics. Everything in Glev Pro plus automated doctor visit prep (PDF report in 3 minutes), caregiver view (coming soon), and direct line to the founder. Lifetime Lock: your early price stays forever.\n\nMARKETING-FUNKTIONSLISTE DE:\n1. Alles aus Glev Pro\n2. Arztgespräch in 3 Min vorbereitet (PDF-Report)\n3. Caregiver-Ansicht (in Vorbereitung)\n4. Direkter Draht zum Gründer\n5. Lifetime Lock — Preis bleibt für immer\n\nMARKETING-FUNKTIONSLISTE EN:\n1. Everything in Glev Pro\n2. Doctor visit prep in 3 min (PDF report)\n3. Caregiver view (coming soon)\n4. Direct line to the founder\n5. Lifetime Lock — price stays forever\n\nPREISE ANLEGEN:\n- EUR: €29,00 / Monat / wiederkehrend\n- USD: $32,00 / month / recurring\n- Beide price_xxx IDs notieren"
-        },
-        {
-          "gid": "1214917778580693",
-          "name": "[Replit] /api/plus/checkout/ Route bauen",
-          "completed": false,
-          "due_on": "2026-05-25",
-          "assignee": {
-            "gid": "1213432759001229",
-            "name": "rave pickle"
-          },
-          "section": "Backlog",
-          "notes": "Neue API Route analog zu /api/pro/checkout/route.ts.\nVerwendet STRIPE_PLUS_PRICE_ID statt STRIPE_PRO_PRICE_ID.\n\nREPLIT AGENT PROMPT:\nCreate app/api/plus/checkout/route.ts identical in structure to app/api/pro/checkout/route.ts but using process.env.STRIPE_PLUS_PRICE_ID. Also wire the Glev+ CTA button to POST to /api/plus/checkout.\n\nVoraussetzung: STRIPE_PLUS_PRICE_ID in Vercel + Replit gesetzt."
-        },
-        {
-          "gid": "1214917731687779",
-          "name": "[Stripe] STRIPE_PRO_PRICE_ID in Vercel + Replit updaten",
-          "completed": false,
-          "due_on": "2026-05-22",
-          "assignee": {
-            "gid": "1213432759001229",
-            "name": "rave pickle"
-          },
-          "section": "Backlog",
-          "notes": "Voraussetzung: neue €14,90 Price ID vorhanden.\n\nSCHRITTE:\n1. Vercel: Project Settings → Environment Variables → STRIPE_PRO_PRICE_ID auf neue price_xxx setzen → Save → Redeploy\n2. Replit: Secrets Tab → STRIPE_PRO_PRICE_ID auf denselben Wert updaten\n\nOhne diesen Schritt bucht der Checkout noch den alten Preis."
         },
         {
           "gid": "1214916572403502",
@@ -677,15 +608,6 @@
           "notes": "KONTEXT: Feature-Cards auf glev.app/pro wurden per JS temporaer angepasst (2x2 Grid, Arztbericht=Blau #4F6EF7, Du behaeltst die Kontrolle=Pink #FF2D78). Muss nach dem naechsten UX-Designer-Update permanent in den Code eingepflegt werden.\n\nACHTIONS:\n1. Section-Container: display:grid, grid-template-columns: repeat(2,1fr), gap:16px\n2. Arztbericht-Card: Dot-Farbe #4F6EF7 (Blau)\n3. 'Du behaeltst die Kontrolle'-Card: Dot-Farbe #FF2D78 (Pink) oder nach UX-Vorgabe\n4. Sprach-Input + CGM: bleiben gruen #22D3A0\n5. Sicherstellen dass auf Mobile die Cards weiterhin 1-spaltig bleiben (responsive)\n\nABHAENGIGKEIT: Erst umsetzen NACHDEM UX-Update abgeschlossen — nicht vorher anfassen."
         },
         {
-          "gid": "1214388018367034",
-          "name": "i18n Card Backs — Rückseiten der Karten übersetzen/fertigstellen",
-          "completed": false,
-          "due_on": "2026-05-12",
-          "assignee": null,
-          "section": "Backlog",
-          "notes": "STATUS: Ausstehend ohne Replit-Prompt.\n\nScope: Alle Karten-Rückseiten (Engine-Karten, Insights, Dashboard-Tiles) auf vollständiges Deutsch bringen und inhaltlich fertigstellen.\n\nPrioritäten:\n1. ICR-Tile-Rückseiten (Task #16 war erledigt — Qualitätssicherung der Texte)\n2. Workout-Insight-Karten Rückseiten\n3. Fingerstick-Karte Rückseite\n4. Post-Meal-Karte Rückseite\n\nAkzeptanzkriterien:\n- Kein englischer Text auf Karten-Rückseiten\n- Medizinische Texte leitlinienkonform formuliert\n- Kein Angst-Framing (immer 'besser verstehen', nie 'gefährlich')"
-        },
-        {
           "gid": "1214384037318459",
           "name": "[Ads] Instagram Static + Reel — Performance-Monitoring (keine Conversions bisher)",
           "completed": false,
@@ -920,15 +842,6 @@
           "notes": "Apple-Health-Badge ist auf Karten in der Kompaktansicht (#342 gemergt), fehlt aber in der ausgeklappten Dashboard-Card-Ansicht. Konsistenz sicherstellen."
         },
         {
-          "gid": "1214912032627507",
-          "name": "[Pricing] Stripe Pläne aktualisieren — M auf €14,90 Presale / €19 Launch, L TBD",
-          "completed": false,
-          "due_on": "2026-05-23",
-          "assignee": null,
-          "section": "Backlog",
-          "notes": "Popcorn-Modell beschlossen (19. Mai 2026 mit Agentur).\n\nStripe-Pläne:\n- S: Early Access 3× €4,50 → €9/Mo (unverändert)\n- M Presale: €14,90/Mo (Lifetime Lock — bleibt für immer)\n- M Launch (neue User ab 1. Juli): €19/Mo\n- L Presale: TBD (Sprung M→L muss spürbar größer sein als S→M = +€10)\n- L Launch: TBD\n\nAuch: Checkout-Flow anpassen so dass Presale-User den Lifetime-Lock sehen."
-        },
-        {
           "gid": "1214912032706977",
           "name": "[UX] Control Score aufpolieren — prominenter, visuell stärker, Shiny Object für M",
           "completed": false,
@@ -975,33 +888,6 @@
           "assignee": null,
           "section": "To-Do",
           "notes": "STATUS: Replit-Prompt bereit — nur noch deployen.\nKein neuer Prompt nötig, direkt in Replit ausführen."
-        },
-        {
-          "gid": "1214380121535293",
-          "name": "[Replit] Copy /pro — Prompt bereit, deployen",
-          "completed": false,
-          "due_on": "2026-04-30",
-          "assignee": null,
-          "section": "To-Do",
-          "notes": "STATUS: Replit-Prompt bereit — nur noch deployen.\nKein neuer Prompt nötig, direkt in Replit ausführen."
-        },
-        {
-          "gid": "1214384329516097",
-          "name": "[Replit] Copy /beta — Prompt bereit, deployen",
-          "completed": false,
-          "due_on": "2026-04-30",
-          "assignee": null,
-          "section": "To-Do",
-          "notes": "STATUS: Replit-Prompt bereit — nur noch deployen.\nKein neuer Prompt nötig, direkt in Replit ausführen."
-        },
-        {
-          "gid": "1214384037444329",
-          "name": "Resend Setup — E-Mail-Infrastruktur aufsetzen",
-          "completed": false,
-          "due_on": "2026-05-08",
-          "assignee": null,
-          "section": "To-Do",
-          "notes": "STATUS: Ausstehend ohne Replit-Prompt.\n\nSchritte:\n1. Resend Account anlegen (resend.com)\n2. Domain verifizieren (glev.app → DNS TXT-Record)\n3. API Key in Vercel ENV eintragen (RESEND_API_KEY)\n4. Transaktionale E-Mails konfigurieren:\n   - Beta-Willkommens-E-Mail\n   - Pro-Willkommens-E-Mail\n   - Password-Reset\n5. Absenderadresse: noreply@glev.app oder hello@glev.app\n\nAbhängigkeit: DNS-Fix erledigt ✅ — Domain sollte korrekt konfiguriert sein."
         },
         {
           "gid": "1214380121824841",
@@ -1157,54 +1043,6 @@
           "notes": "2732x2732 Source mit glev.-Wordmark zentriert auf Page-BG #09090B. Brand-Konsistenz mit Brandbook."
         },
         {
-          "gid": "1214277598698551",
-          "name": "Erste lokale Android-Build via Android Studio erfolgreich",
-          "completed": false,
-          "due_on": "2026-05-15",
-          "assignee": {
-            "gid": "1210184723294607",
-            "name": "lucas@wahnon-connect.com"
-          },
-          "section": "To-Do",
-          "notes": "npx cap open android → Run auf Emulator. Gleiche Verifikation wie iOS."
-        },
-        {
-          "gid": "1214277574720842",
-          "name": "AndroidManifest.xml Permissions setzen",
-          "completed": false,
-          "due_on": "2026-05-13",
-          "assignee": {
-            "gid": "1210184723294607",
-            "name": "lucas@wahnon-connect.com"
-          },
-          "section": "To-Do",
-          "notes": "INTERNET, RECORD_AUDIO (Voice), CAMERA optional. usesCleartextTraffic=false."
-        },
-        {
-          "gid": "1214277574756248",
-          "name": "Erste lokale iOS-Build via Xcode erfolgreich",
-          "completed": false,
-          "due_on": "2026-05-14",
-          "assignee": {
-            "gid": "1210184723294607",
-            "name": "lucas@wahnon-connect.com"
-          },
-          "section": "To-Do",
-          "notes": "Xcode öffnen via npx cap open ios. Build → Run auf iOS-Simulator. Glev-Web-App muss in WebView laden mit korrekter Status-Bar und Splash."
-        },
-        {
-          "gid": "1214277574808519",
-          "name": "iOS Info.plist Permissions setzen",
-          "completed": false,
-          "due_on": "2026-05-13",
-          "assignee": {
-            "gid": "1210184723294607",
-            "name": "lucas@wahnon-connect.com"
-          },
-          "section": "To-Do",
-          "notes": "NSMicrophoneUsageDescription für Voice-Input ist Pflicht. NSCameraUsageDescription optional falls später Mahlzeiten-Bilder. Texte auf Deutsch."
-        },
-        {
           "gid": "1214277524754127",
           "name": "Privacy Manifest für iOS 17+ erstellen",
           "completed": false,
@@ -1215,54 +1053,6 @@
           },
           "section": "To-Do",
           "notes": "ios/App/App/PrivacyInfo.xcprivacy mit NSPrivacyCollectedDataTypeEmailAddress, NSPrivacyCollectedDataTypeHealthFitness, NSPrivacyAccessedAPICategoryUserDefaults. Pflicht für iOS 17+ App-Submission."
-        },
-        {
-          "gid": "1214277743466008",
-          "name": "Capacitor-Setup-Prompt an Replit absetzen (Phase 1)",
-          "completed": false,
-          "due_on": "2026-05-09",
-          "assignee": {
-            "gid": "1210184723294607",
-            "name": "lucas@wahnon-connect.com"
-          },
-          "section": "To-Do",
-          "notes": "Existierender Prompt aus Cowork-Konversation. Replit installiert Capacitor + Plugins, konfiguriert capacitor.config.ts mit server.url, generiert iOS- und Android-Project-Files."
-        },
-        {
-          "gid": "1214277524775226",
-          "name": "App-Icons aus public/icon.svg in alle iOS- und Android-Größen generieren",
-          "completed": false,
-          "due_on": "2026-05-12",
-          "assignee": {
-            "gid": "1210184723294607",
-            "name": "lucas@wahnon-connect.com"
-          },
-          "section": "To-Do",
-          "notes": "Via @capacitor/assets oder sharp-Script. Source: public/icon.svg (32x32 viewBox auf 1024x1024 rendern). iOS braucht 20-1024px, Android braucht mdpi-xxxhdpi-Buckets."
-        },
-        {
-          "gid": "1214277598746110",
-          "name": "iOS-Platform via npx cap add ios auf Mac",
-          "completed": false,
-          "due_on": "2026-05-11",
-          "assignee": {
-            "gid": "1210184723294607",
-            "name": "lucas@wahnon-connect.com"
-          },
-          "section": "To-Do",
-          "notes": "Replit kann iOS-Platform NICHT adden (kein CocoaPods). Muss auf lokalem Mac passieren. npx cap add ios + npx cap sync."
-        },
-        {
-          "gid": "1214277598671462",
-          "name": "Android-Platform via npx cap add android",
-          "completed": false,
-          "due_on": "2026-05-11",
-          "assignee": {
-            "gid": "1210184723294607",
-            "name": "lucas@wahnon-connect.com"
-          },
-          "section": "To-Do",
-          "notes": "Kann auch in Replit oder auf jedem System mit Android Studio passieren. npx cap add android."
         }
       ]
     },
