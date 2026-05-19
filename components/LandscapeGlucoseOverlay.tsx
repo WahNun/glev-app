@@ -155,25 +155,21 @@ export default function LandscapeGlucoseOverlay() {
   const color   = current ? glucoseColor(current.v) : DIM;
   const now     = Date.now();
 
-  // Chart height is fixed so the centered value stays at true 50% regardless.
-  const CHART_H = 138;
-
   return (
     <div
       aria-label="Live-Glukose Querformat"
       style={{
-        position:   "fixed",
-        inset:      0,
-        background: SURFACE,
-        zIndex:     9999,
+        position:      "fixed",
+        inset:         0,
+        background:    SURFACE,
+        zIndex:        9999,
+        display:       "flex",
+        flexDirection: "column",
       }}
     >
-      {/* ── Header — absolute top strip ───────────────────── */}
+      {/* ── Header — thin strip, shrinks to its content ────── */}
       <div style={{
-        position:       "absolute",
-        top:            0,
-        left:           0,
-        right:          0,
+        flexShrink:     0,
         padding:        "9px 18px 0",
         display:        "flex",
         alignItems:     "center",
@@ -192,13 +188,9 @@ export default function LandscapeGlucoseOverlay() {
         </div>
       </div>
 
-      {/* ── Big value — truly centered on screen ──────────── */}
+      {/* ── Big value — fills free space, centred within it ── */}
       <div style={{
-        position:       "absolute",
-        top:            "50%",
-        left:           0,
-        right:          0,
-        transform:      "translateY(-50%)",
+        flex:           1,
         display:        "flex",
         alignItems:     "center",
         justifyContent: "center",
@@ -228,15 +220,12 @@ export default function LandscapeGlucoseOverlay() {
         )}
       </div>
 
-      {/* ── Rolling chart — absolute bottom strip ─────────── */}
+      {/* ── Rolling chart — fixed height at bottom ────────── */}
       <div style={{
-        position: "absolute",
-        bottom:   0,
-        left:     0,
-        right:    0,
-        height:   CHART_H,
-        padding:  "0 18px 6px",
-        boxSizing: "border-box",
+        flexShrink: 0,
+        height:     138,
+        padding:    "0 18px 6px",
+        boxSizing:  "border-box",
       }}>
         {history.length > 0
           ? <LandscapeChart history={history} />
@@ -332,7 +321,12 @@ function LandscapeChart({ history }: { history: CgmPoint[] }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, W, H]);
 
-  const { active, handlers } = useCrosshair(crosshairPoints);
+  const { active: rawActive, handlers } = useCrosshair(crosshairPoints);
+  // Always show crosshair on the latest point; touch snaps to any point.
+  const lastCrosshairPt = crosshairPoints.length > 0
+    ? crosshairPoints[crosshairPoints.length - 1]
+    : null;
+  const active = rawActive ?? lastCrosshairPt;
 
   return (
     <div
