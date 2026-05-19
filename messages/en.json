@@ -569,7 +569,9 @@
     "influence_disclaimer": "These entries are purely for personal journaling. They are not used for calculations or evaluations.",
     "influence_logged_ok": "{type} saved.",
     "influence_logged_ok_with_cgm": "{type} saved · glucose {cgm} mg/dL.",
-    "influence_row_title": "Influence"
+    "influence_row_title": "Influence",
+    "influence_toggle_show": "Add influence factor",
+    "influence_toggle_hide": "Hide influence factor"
   },
   "history": {
     "title": "History",

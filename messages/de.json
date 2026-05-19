@@ -569,7 +569,9 @@
     "influence_disclaimer": "Diese Einträge dienen rein der persönlichen Dokumentation in deinem Tagebuch. Sie werden nicht für Berechnungen oder Auswertungen herangezogen.",
     "influence_logged_ok": "{type} gespeichert.",
     "influence_logged_ok_with_cgm": "{type} gespeichert · Glukose {cgm} mg/dL.",
-    "influence_row_title": "Einflussfaktor"
+    "influence_row_title": "Einflussfaktor",
+    "influence_toggle_show": "Einflussfaktor hinzufügen",
+    "influence_toggle_hide": "Einflussfaktor ausblenden"
   },
   "history": {
     "title": "Verlauf",

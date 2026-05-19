@@ -18,6 +18,7 @@ import SegmentedChoice from "@/components/log/SegmentedChoice";
 import NumberField from "@/components/log/NumberField";
 import CollapsibleField from "@/components/log/CollapsibleField";
 import SaveButton from "@/components/log/SaveButton";
+import { InfluenceForm } from "@/components/InfluenceLogForm";
 
 // Builds the dropdown label for a meal in the "Zu Mahlzeit verknüpfen"
 // picker — "HH:MM — <first food name or meal_type> (Xg C)". Defensive
@@ -233,6 +234,7 @@ export function InsulinForm() {
   const t = useTranslations("engineLog");
   const [type, setType] = useState<"bolus" | "basal">("bolus");
   const [name, setName] = useState("");
+  const [showInfluence, setShowInfluence] = useState(false);
   // Default starting positions: "5" IE bolus, "20" IE basal. Stored
   // as a string so the user can type free-form (e.g. "7,5"); parsed
   // and clamped to 0.5–100 IE on submit.
@@ -535,6 +537,34 @@ export function InsulinForm() {
         fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5,
       }}>
         {t("insulin_disclaimer")}
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <button
+          type="button"
+          onClick={() => { hapticSelection(); setShowInfluence(v => !v); }}
+          style={{
+            display: "flex", alignItems: "center", gap: 8,
+            width: "100%", padding: "11px 14px",
+            background: showInfluence ? "#F5A52414" : "var(--surface-soft)",
+            border: `1px solid ${showInfluence ? "#F5A52440" : BORDER}`,
+            borderRadius: 10,
+            color: showInfluence ? "#F5A524" : "var(--text-muted)",
+            fontSize: 14, fontWeight: 600, cursor: "pointer",
+            transition: "all 0.15s", textAlign: "left",
+          }}
+        >
+          <span>🔬</span>
+          <span style={{ flex: 1 }}>
+            {showInfluence ? t("influence_toggle_hide") : t("influence_toggle_show")}
+          </span>
+          <span style={{ fontSize: 11, opacity: 0.6 }}>{showInfluence ? "▲" : "▼"}</span>
+        </button>
+        {showInfluence && (
+          <div style={{ marginTop: 8 }}>
+            <InfluenceForm />
+          </div>
+        )}
       </div>
     </div>
   );
