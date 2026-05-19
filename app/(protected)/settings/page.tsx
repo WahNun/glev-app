@@ -2332,7 +2332,7 @@ export default function SettingsPage() {
             label={tSettings("row_founder_contact")}
             subtitle={tSettings("subtitle_founder_contact")}
             ariaLabel={tSettings("row_open_aria", { label: tSettings("row_founder_contact") })}
-            onClick={() => window.open("mailto:lucas+plus@glev.app", "_blank", "noopener,noreferrer")}
+            onClick={() => window.open("mailto:lucas@glev.app", "_blank", "noopener,noreferrer")}
           />
         </SettingsSection>
       )}
