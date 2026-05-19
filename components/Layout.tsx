@@ -11,6 +11,7 @@ import AccountSheet from "@/components/AccountSheet";
 import DashboardQuickAddSheet from "@/components/DashboardQuickAddSheet";
 import { EngineHeaderProvider, useEngineHeader } from "@/lib/engineHeaderContext";
 import { EngineSourceHeaderProvider, useEngineSourceHeader } from "@/lib/engineSourceHeaderContext";
+import { EngineWizardStepProvider, useEngineWizardStep } from "@/lib/engineWizardStepContext";
 import { VoiceRecordingProvider, useVoiceRecording } from "@/lib/voiceRecordingContext";
 import {
   ScopeHeaderProvider, useScopeHeader,
@@ -86,11 +87,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <EngineHeaderProvider>
       <EngineSourceHeaderProvider>
-        <ScopeHeaderProvider>
-          <VoiceRecordingProvider>
-            <LayoutInner>{children}</LayoutInner>
-          </VoiceRecordingProvider>
-        </ScopeHeaderProvider>
+        <EngineWizardStepProvider>
+          <ScopeHeaderProvider>
+            <VoiceRecordingProvider>
+              <LayoutInner>{children}</LayoutInner>
+            </VoiceRecordingProvider>
+          </ScopeHeaderProvider>
+        </EngineWizardStepProvider>
       </EngineSourceHeaderProvider>
     </EngineHeaderProvider>
   );
@@ -220,6 +223,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   const engineHdr  = useEngineHeader();
   const scopeHdr   = useScopeHeader();
   const sourceHdr  = useEngineSourceHeader();
+  const wizardStep = useEngineWizardStep();
   const tEngineHdr = useTranslations("engine");
 
   // 2026-05-18: this debug ping previously ran on every Layout mount
@@ -263,8 +267,9 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!pathname.startsWith("/engine")) {
       sourceHdr.setSource(null);
+      wizardStep.setStep(null);
     }
-  }, [pathname, sourceHdr]);
+  }, [pathname, sourceHdr, wizardStep]);
 
   // Horizontal swipe-to-switch-tabs disabled (user request 2026-05-17).
   // The Dashboard and Insights screens now own horizontal swipe themselves
@@ -393,7 +398,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
 
       {/* MOBILE HEADER — solid surface bg always; logo opens About modal, account icon opens Settings */}
       <header className="glev-mobile-head" style={{
-        position: "fixed", top: 0, left: 0, right: 0, zIndex: 99,
+        position: "fixed", top: 0, left: 0, right: 0, zIndex: 99, overflow: "visible",
         // iOS notch / Dynamic Island: push content below the status bar by
         // honouring safe-area-inset-top, with a sensible fallback for
         // browsers that don't expose it (e.g. desktop dev tools).
@@ -469,6 +474,88 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               setAnchor={scopeHdr.setAnchor}
             />
           )}
+          {/* Engine wizard step indicator — slim 3-segment track
+              centered in the header. Published by the engine page
+              via EngineWizardStepProvider; cleared on route change.
+              Style mirrors InsightsCockpitIndicator: thin 2 px track,
+              ACCENT sliding fill with glow, faint labels below.
+              Uses position:absolute so it doesn't disturb the logo
+              (flex:1) or the right chip group (flex-shrink:0). */}
+          {pathname.startsWith("/engine") && wizardStep.step !== null && (() => {
+            const ACCENT_HDR = "#4F6EF7";
+            const labels = [
+              tEngineHdr("step_label_food"),
+              tEngineHdr("step_label_macros"),
+              tEngineHdr("step_label_result"),
+            ];
+            const total = labels.length;
+            const active = wizardStep.step;
+            const segPct = 100 / total;
+            return (
+              <div
+                aria-hidden
+                style={{
+                  position: "absolute",
+                  left: "50%",
+                  bottom: 6,
+                  transform: "translateX(-50%)",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 3,
+                  pointerEvents: "none",
+                  width: 148,
+                }}
+              >
+                {/* Step labels row */}
+                <div style={{ display: "flex", width: "100%", justifyContent: "space-between" }}>
+                  {labels.map((label, i) => (
+                    <span
+                      key={label}
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 9,
+                        fontWeight: 700,
+                        letterSpacing: "0.06em",
+                        textTransform: "uppercase",
+                        color: i === active ? ACCENT_HDR : "var(--text-faint)",
+                        transition: "color 240ms ease",
+                        width: `${segPct}%`,
+                        textAlign: "center",
+                      }}
+                    >
+                      {label}
+                    </span>
+                  ))}
+                </div>
+                {/* Segmented track */}
+                <div
+                  style={{
+                    position: "relative",
+                    width: "100%",
+                    height: 2,
+                    background: "var(--border-soft)",
+                    borderRadius: 99,
+                  }}
+                >
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      height: "100%",
+                      width: `${segPct}%`,
+                      background: ACCENT_HDR,
+                      borderRadius: 99,
+                      transform: `translateX(${active * 100}%)`,
+                      transition: "transform 240ms cubic-bezier(.2,.7,.2,1)",
+                      boxShadow: `0 0 6px ${ACCENT_HDR}88`,
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })()}
           {/* Engine nutrition-source provenance pill — published by
               the engine page via EngineSourceHeaderProvider whenever
               /api/parse-food or /api/chat-macros returns a source.

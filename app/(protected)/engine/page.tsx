@@ -19,6 +19,7 @@ import { detectPattern } from "@/lib/engine/patterns";
 import { suggestAdjustment, type AdaptiveSettings } from "@/lib/engine/adjustment";
 import { applyAdjustmentToSettings, getInsulinSettings, persistEngineIcr } from "@/lib/userSettings";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
+import { useEngineWizardStep } from "@/lib/engineWizardStepContext";
 import EngineLogTab, { InsulinForm, ExerciseForm } from "@/components/EngineLogTab";
 import FingerstickLogCard from "@/components/FingerstickLogCard";
 import { CycleForm, SymptomForm } from "@/components/CycleSymptomForms";
@@ -569,6 +570,16 @@ export default function EnginePage() {
   // clears it on unmount + on `handleNewMeal` so other routes don't
   // inherit a stale pill.
   const sourceHdr = useEngineSourceHeader();
+  // Wizard step indicator now lives in the global mobile app header
+  // (centred between the brand lockup and right chips) — same pattern
+  // as the source provenance pill. Publish the active stepIndex so
+  // the header can render the slim 3-segment track without stealing
+  // vertical space from the wizard content area.
+  const wizardStepHdr = useEngineWizardStep();
+  useEffect(() => {
+    wizardStepHdr.setStep(stepIndex);
+    return () => { wizardStepHdr.setStep(null); };
+  }, [stepIndex, wizardStepHdr.setStep]);
   // FIX C: Tab strip is collapsed by default to give Step 1's voice/text
   // input the full vertical real estate. The chevron control itself now
   // lives in the global mobile app header (see Layout.tsx); this page
@@ -2237,66 +2248,7 @@ export default function EnginePage() {
               outer grid gives the column extra breathing room. */}
           <style>{`
             @keyframes engSpin   { to { transform: rotate(360deg) } }
-            /* Wizard step pills — base size for mobile, larger on desktop.
-               Sizing lives in CSS (not the inline style object) so we can
-               respond to viewport without an isMobile state hook. The 768px
-               threshold matches Layout.tsx's sidebar breakpoint (which uses
-               max-width:768px for the mobile rail). The "min-width:769px"
-               desktop query is the strict complement of Layout's
-               "max-width:768px" rule (no gap, no overlap at the 768/769
-               boundary). Values (12px / 14px font, 8px-22px horizontal
-               padding) are inherited from the previous /log wizard's
-               .wizard-pill CSS — /log itself is now a redirect to /engine,
-               so this is the canonical home of the pattern going forward. */
-            .wizard-pill { font-size: 12px; padding: 8px 12px; }
-            @media (min-width: 769px) {
-              .wizard-pill { font-size: 14px; padding: 10px 22px; }
-            }
           `}</style>
-
-          {/* PILL TABS — display-only step indicator. They surface
-              progress through the wizard; navigation happens exclusively
-              via the per-step Weiter/Zurück buttons rendered inside each
-              step body below. Active pill: filled with ACCENT. Inactive:
-              transparent background with a translucent ACCENT55 border and
-              ACCENTcc text (alpha-tinted on purpose so the inactive state
-              recedes visually from the active fill). Replaces the previous
-              numbered-circles + connector + label-row indicator. Pattern
-              and styling were lifted from the historical /log wizard
-              (commit 5fc7970, before /log became a redirect) so /engine
-              now owns the canonical pill-tab vocabulary. Uses role="list"
-              / role="listitem" + aria-current="step" rather than
-              tab/tablist because the pills are intentionally not keyboard-
-              interactive — list semantics are honest about that. */}
-          <div role="list" aria-label={tEngine("wizard_steps")} style={{
-            display: "flex", gap: 8, padding: "4px 0", marginBottom: 28,
-          }}>
-            {(["step_label_food", "step_label_macros", "step_label_result"] as const).map((key, i) => {
-              const active = i === stepIndex;
-              return (
-                <div
-                  key={key}
-                  role="listitem"
-                  aria-current={active ? "step" : undefined}
-                  className="wizard-pill"
-                  style={{
-                    flex: "1 1 0",
-                    borderRadius: 99,
-                    border: `1px solid ${active ? ACCENT : `${ACCENT}55`}`,
-                    background: active ? ACCENT : "transparent",
-                    color: active ? "#fff" : `${ACCENT}cc`,
-                    fontWeight: 700,
-                    letterSpacing: "0.04em",
-                    textAlign: "center",
-                    userSelect: "none",
-                  }}
-                >
-                  <span style={{ opacity: 0.7, marginRight: 6 }}>{i + 1}</span>
-                  {tEngine(key)}
-                </div>
-              );
-            })}
-          </div>
 
           {/* Page-level success toast (post-save) and error banner. Rendered
               above the active step so they're visible regardless of current step. */}
