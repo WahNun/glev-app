@@ -452,7 +452,7 @@ function PreviewProContent() {
             [
               { label: t("tier_compact_beta_label"), tagline: t("tier_compact_beta_tagline") },
               { label: t("tier_compact_pro_label"), tagline: t("tier_compact_pro_tagline") },
-              { label: t("tier_compact_clinic_label"), tagline: t("tier_compact_clinic_tagline") },
+              { label: t("tier_compact_plus_label"), tagline: t("tier_compact_plus_tagline") },
             ] as const
           ).map((row) => (
             <div
