@@ -1303,7 +1303,7 @@ function RecentEntries({
                 {r.kind === "meal" && r.meal && (
                   <PendingGlucoseStrip
                     meal={r.meal}
-                    onSaved={(patch) => onMealUpdated({ ...r.meal!, ...patch })}
+                    onSaved={(patch) => onMealUpdated?.({ ...r.meal!, ...patch })}
                   />
                 )}
                 {isOpen && (
