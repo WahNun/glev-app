@@ -1,0 +1,46 @@
+Die Homepage zeigt noch die alte Pricing-Sektion mit Clinic. Fix:
+
+```bash
+find app -maxdepth 3 -name "page.tsx" | xargs grep -l "clinic\|Clinic\|klinik\|Klinik\|pricing\|Pricing\|€299\|€9\|€14" 2>/dev/null | grep -v "beta/\|pro/\|klinik/\|plus/"
+```
+
+Lies app/page.tsx (oder wo die Homepage liegt) vollständig.
+
+Ersetze die gesamte Pricing-Sektion durch folgende 3 Karten (S/M/L) + einen B2B-Link:
+
+**Glev Smart — S (€9/Mo):**
+- Titel: "Glev Smart"
+- Badge: "Early Access"
+- Preis DE: "€9 / Monat" · EN: "€9 / month"
+- Subtext DE: "Lifetime Lock — jetzt sichern" · EN: "Lifetime Lock — lock in now"
+- Features: Kein Tippen — alles per Sprache · Mahlzeit + Insulin + Glukose verknüpft · CGM-basierte Insights · Billing ab 1. Juli
+- CTA: "Early Access sichern" → /beta
+
+**Glev Pro — M (€14,90/Mo):**
+- Titel: "Glev Pro"
+- Badge: "Most Popular"
+- Preis DE: "€14,90 / Monat" · EN: "€14.90 / month"
+- Subtext DE: "Lifetime Lock — jetzt sichern" · EN: "Lifetime Lock — lock in now"
+- Features: Alles aus Smart · Erweiterte CGM-Auswertungen · Arztbericht als PDF · Priorisierter Support · Billing ab 1. Juli
+- CTA: "Pro sichern" → /pro
+
+**Glev+ — L (€29/Mo):**
+- Titel: "Glev+"
+- Preis DE: "€29 / Monat" · EN: "€29 / month"
+- Subtext DE: "Für Eltern & Betreuungspersonen" · EN: "For parents & caregivers"
+- Features: Alles aus Pro · Caregiver-Ansicht (in Vorbereitung) · Für Familien mit T1D-Kindern · Billing ab 1. Juli
+- CTA: "Glev+ sichern" → POST /api/checkout/plus (gleiche fetch-Logik wie Beta/Pro-CTA)
+
+**B2B-Link unter den Karten:**
+- DE: "Für Diabetespraxen & Kliniken → Glev Klinik entdecken" → /klinik
+- EN: "For diabetes practices & clinics → Discover Glev Clinic" → /klinik
+
+Das alte Clinic/Klinik-Paket als eigene Karte auf der Homepage entfernen — es hat jetzt eine eigene Landing Page unter /klinik.
+
+Verify:
+```bash
+grep -n "clinic\|Clinic\|Klinik-Paket\|€299" $(find app -maxdepth 2 -name "page.tsx" | grep -v "beta/\|pro/\|klinik/\|plus/")
+```
+→ Keine Karte mehr mit €299 auf der Homepage. Nur noch der /klinik-Link.
+
+Commit: git add app/page.tsx && git commit -m "fix: homepage pricing — replace clinic card with S/M/L presale structure" && git push origin main

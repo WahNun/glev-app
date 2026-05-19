@@ -636,13 +636,12 @@ export default function PreviewHome() {
         </div>
       </section>
 
-      {/* PRICING — 3 Karten: Beta-Reservierung (kostenlos jetzt /
-          Subscription ab Juli), Pro · Founder-Tier (hervorgehoben,
-          €24,90/Mo, 7 Bullets), Klinik (€299/Mo, Coming Soon —
-          Email-Warteliste statt CTA, UI-only Toast bei Submit).
-          Strings inline statt aus messages, weil das eine schnelle
-          Iteration über die Preview ist und Lucas die Copy häufig
-          dreht — Promotion in messages erst bei Live-Schaltung. */}
+      {/* PRICING — S/M/L-Struktur für Presale-Tiers:
+          Smart (€9/Mo, Early-Access-Badge) → Pro (€14,90/Mo, Most-Popular-
+          Badge, hervorgehoben) → Glev+ (€29/Mo, für Eltern/Caregiver).
+          B2B-Klinik (€299/Mo) ist als eigene Landing Page /klinik
+          ausgelagert und wird nur noch als Text-Link unter dem Grid
+          referenziert — sie passt nicht ins B2C-Tier-Ranking. */}
       <section
         id="pricing"
         style={{
@@ -681,7 +680,7 @@ export default function PreviewHome() {
         </div>
 
         <div className="glev-pricing-grid">
-          {/* Karte 1 — Beta-Reservierung */}
+          {/* Karte 1 — Glev Smart (S, €9/Mo, Early-Access-Badge) */}
           <div
             style={{
               background: SURFACE,
@@ -694,6 +693,26 @@ export default function PreviewHome() {
               position: "relative",
             }}
           >
+            <div
+              aria-label={t("pricing_beta_badge")}
+              style={{
+                position: "absolute",
+                top: -12,
+                left: 24,
+                background: "var(--surface-soft, #232329)",
+                color: "var(--text-muted)",
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                padding: "4px 10px",
+                borderRadius: 999,
+                border: `1px solid ${BORDER}`,
+              }}
+            >
+              {t("pricing_beta_badge")}
+            </div>
+
             <div>
               <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--text)" }}>
                 {t("pricing_beta_title")}
@@ -701,7 +720,6 @@ export default function PreviewHome() {
               <div style={{ marginTop: 14, display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text)" }}>{t("pricing_beta_price")}</span>
                 <span style={{ fontSize: 15, color: "var(--text-muted)" }}>{t("pricing_beta_period")}</span>
-                <span style={{ fontSize: 18, color: "var(--text-muted)", textDecoration: "line-through", textDecorationThickness: "2px", textDecorationColor: "var(--text-muted)", marginLeft: 6, opacity: 0.9 }}>{t("pricing_beta_strike")}</span>
               </div>
               <p style={{ margin: "6px 0 0 0", fontSize: 12.5, color: "var(--text-muted)", letterSpacing: "-0.005em" }}>
                 {t("pricing_beta_sublabel")}
@@ -802,6 +820,9 @@ export default function PreviewHome() {
                 <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text)" }}>{t("pricing_pro_price")}</span>
                 <span style={{ fontSize: 15, color: "var(--text-muted)" }}>{t("pricing_pro_period")}</span>
               </div>
+              <p style={{ margin: "6px 0 0 0", fontSize: 12.5, color: "var(--text-muted)", letterSpacing: "-0.005em" }}>
+                {t("pricing_pro_sublabel")}
+              </p>
             </div>
 
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
@@ -811,8 +832,6 @@ export default function PreviewHome() {
                 t("pricing_pro_b3"),
                 t("pricing_pro_b4"),
                 t("pricing_pro_b5"),
-                t("pricing_pro_b6"),
-                t("pricing_pro_b7"),
               ].map((bullet) => (
                 <PricingBullet key={bullet} text={bullet} />
               ))}
@@ -859,8 +878,28 @@ export default function PreviewHome() {
             </Link>
           </div>
 
-          {/* Karte 3 — Klinik (Coming Soon, Email-Warteliste statt CTA) */}
-          <KlinikCard />
+          {/* Karte 3 — Glev+ (L, €29/Mo, Caregiver-Tier). CTA POSTet an
+              /api/checkout/plus und redirected zur Stripe-Hosted-Page. */}
+          <PlusCard />
+        </div>
+
+        {/* B2B-Link unter dem Tier-Grid — der Klinik-Tarif (€299/Mo)
+            wird nicht mehr als eigene Karte gezeigt, sondern hat eine
+            dedizierte Landing Page. */}
+        <div style={{ marginTop: 32, textAlign: "center" }}>
+          <Link
+            href="/klinik"
+            style={{
+              fontSize: 14,
+              color: "var(--text-muted)",
+              textDecoration: "none",
+              borderBottom: "1px solid var(--border)",
+              paddingBottom: 2,
+              letterSpacing: "-0.005em",
+            }}
+          >
+            {t("pricing_b2b_link")}
+          </Link>
         </div>
       </section>
 
@@ -1153,10 +1192,11 @@ function PhoneShell({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-/** Glev+ Karte (L-Tier). CTA POSTet direkt an /api/checkout/plus und
- *  redirected zur Stripe-hosted Checkout-Page (gleiches Pattern wie
- *  die /pro Hero-CTA). Kein Email-Feld — Stripe sammelt die Email selbst. */
-function KlinikCard() {
+/** Glev+ Karte (L-Tier, €29/Mo, für Eltern & Caregiver). CTA POSTet
+ *  direkt an /api/checkout/plus und redirected zur Stripe-Hosted-Page
+ *  (gleiches Pattern wie die /pro Hero-CTA). Kein Email-Feld — Stripe
+ *  sammelt die Email selbst. */
+function PlusCard() {
   const t = useTranslations("marketing");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1198,26 +1238,6 @@ function KlinikCard() {
         position: "relative",
       }}
     >
-      <div
-        aria-label={t("pricing_klinik_badge")}
-        style={{
-          position: "absolute",
-          top: -12,
-          left: 24,
-          background: "var(--surface-soft, #232329)",
-          color: "var(--text-muted)",
-          fontSize: 11,
-          fontWeight: 700,
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          padding: "4px 10px",
-          borderRadius: 999,
-          border: `1px solid ${BORDER}`,
-        }}
-      >
-        {t("pricing_klinik_badge")}
-      </div>
-
       <div>
         <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--text)" }}>
           {t("pricing_klinik_title")}
@@ -1226,6 +1246,9 @@ function KlinikCard() {
           <span style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.02em", color: "var(--text)" }}>{t("pricing_klinik_price")}</span>
           <span style={{ fontSize: 15, color: "var(--text-muted)" }}>{t("pricing_klinik_period")}</span>
         </div>
+        <p style={{ margin: "6px 0 0 0", fontSize: 12.5, color: "var(--text-muted)", letterSpacing: "-0.005em" }}>
+          {t("pricing_klinik_sublabel")}
+        </p>
       </div>
 
       <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
@@ -1285,9 +1308,6 @@ function KlinikCard() {
             {error}
           </div>
         )}
-        <p style={{ margin: "4px 0 0 0", fontSize: 11.5, color: "var(--text-faint)", textAlign: "center", lineHeight: 1.4 }}>
-          B2B-Praxis? <a href="/klinik" style={{ color: "var(--text-muted)", textDecoration: "underline" }}>Glev Klinik (€299/Mo)</a>
-        </p>
       </form>
     </div>
   );

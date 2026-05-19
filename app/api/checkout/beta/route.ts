@@ -8,16 +8,13 @@ export const dynamic = 'force-dynamic';
 /**
  * Beta-Checkout — currency wird per Locale aus dem Request-Body gewählt.
  *
- * `locale: "en"` → USD-Charge ($9/Monat, mit Coupon erste 3 Monate $4.50)
- * `locale: "de"` (Default + Fallback) → EUR-Charge (€9/Monat, mit Coupon
- * erste 3 Monate €4,50)
+ * `locale: "en"` → USD-Charge ($9/Monat)
+ * `locale: "de"` (Default + Fallback) → EUR-Charge (€9/Monat)
  *
- * Setup-Gebühr fällt komplett weg. Statt eines reduzierten Preises läuft
- * die Subscription auf den Vollpreis (€9/$9), und ein 3-Monats-Coupon
- * (`STRIPE_BETA_COUPON_ID` / `STRIPE_BETA_COUPON_ID_US`) macht die ersten
- * 3 Monate auf €4,50/$4.50 günstiger. Erste Abbuchung erfolgt am
- * `STRIPE_BILLING_ANCHOR` (Launch-Datum, z.B. 2026-07-01T00:00:00Z) —
- * heute wird die Karte hinterlegt, aber nichts gebucht.
+ * Keine Coupons mehr — Subscription läuft direkt auf dem Vollpreis (€9/$9)
+ * pro Monat. Erste Abbuchung erfolgt am `STRIPE_BILLING_ANCHOR` (Launch-
+ * Datum, z.B. 2026-07-01T00:00:00Z) — heute wird die Karte hinterlegt,
+ * aber nichts gebucht.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -33,22 +30,11 @@ export async function POST(req: NextRequest) {
       ? process.env.STRIPE_PRICE_BETA_ID_US
       : process.env.STRIPE_PRICE_BETA_ID;
 
-    const couponId = useUsd
-      ? process.env.STRIPE_BETA_COUPON_ID_US
-      : process.env.STRIPE_BETA_COUPON_ID;
-
     if (!subscriptionPriceId) {
       throw new Error(
         useUsd
           ? 'Missing STRIPE_PRICE_BETA_ID_US'
           : 'Missing STRIPE_PRICE_BETA_ID',
-      );
-    }
-    if (!couponId) {
-      throw new Error(
-        useUsd
-          ? 'Missing STRIPE_BETA_COUPON_ID_US'
-          : 'Missing STRIPE_BETA_COUPON_ID',
       );
     }
     if (!process.env.NEXT_PUBLIC_APP_URL) {
@@ -75,9 +61,6 @@ export async function POST(req: NextRequest) {
           quantity: 1,
         },
       ],
-      // 3-Monats-Coupon (Beta-Discount auf €4,50/$4.50). Stripe wendet ihn
-      // automatisch auf die ersten 3 Rechnungen der Subscription an.
-      discounts: [{ coupon: couponId }],
       // Karte heute hinterlegen, erste Abbuchung am Launch-Tag.
       payment_method_collection: 'always',
       subscription_data: {
