@@ -486,6 +486,7 @@ export default function EnginePage() {
   const [isMobile, setIsMobile] = useState(false);
   const [meals, setMeals]     = useState<Meal[]>([]);
   const [adaptedICR, setAdaptedICR] = useState(15);
+  const [selectedICR, setSelectedICR] = useState<'static' | 'adaptive'>('adaptive');
   const [icrConfidence, setIcrConfidence] = useState<"low" | "medium" | "high">("low");
   const [icrSampleSize, setIcrSampleSize] = useState(0);
   // How many of the contributing meals took their insulin value from a
@@ -853,6 +854,22 @@ export default function EnginePage() {
   // explicit invalidator: bumping it after a successful apply forces
   // `getInsulinSettings()` to be re-read against the freshly persisted
   // values. The dependency on `meals.length` covers new logged meals.
+  // staticICR = time-window-adjusted ICR from user Settings (sync localStorage
+  // read). Recomputed when mealTime or adjustmentTick changes so that an ICR
+  // schedule change that the user just applied is reflected immediately.
+  const { staticICR, staticICRWindowLabel } = useMemo(() => {
+    const ins = getInsulinSettings();
+    const base = ins.icr;
+    const at = mealTime ? (new Date(mealTime) as Date) : new Date();
+    const { icr, slot } = getEffectiveICR(at, base);
+    return { staticICR: icr, staticICRWindowLabel: slot?.label || null };
+  }, [mealTime, adjustmentTick]);
+
+  // effectiveICR: the value actually fed into runGlevEngine. When the user
+  // picks "Einstellungen" it uses the time-window-adjusted static ICR;
+  // otherwise it uses the engine-computed adaptive value.
+  const effectiveICR = selectedICR === 'static' ? staticICR : adaptedICR;
+
   const currentAdjustment = useMemo(() => {
     if (meals.length === 0) return null;
     const ins = getInsulinSettings();
@@ -1428,7 +1445,7 @@ export default function EnginePage() {
     refreshTrendSamples().then(samples => {
       const trend = getPreTrendForRef(refMs, samples);
       setTimeout(() => {
-        const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs, adaptedICR, tEngineFn, formatNum, trend, new Date(refMs), activityCtx);
+        const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs, effectiveICR, tEngineFn, formatNum, trend, new Date(refMs), activityCtx);
         setResult(rec);
         setRunning(false);
       // Wizard auto-advance: bump from Step 2 ("Makros prüfen") to Step 3
@@ -1857,7 +1874,7 @@ export default function EnginePage() {
     refreshTrendSamples().then(samples => {
       const trend = getPreTrendForRef(refMs, samples);
       setTimeout(() => {
-        const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs, adaptedICR, tEngineFn, formatNum, trend, new Date(refMs), activityCtx);
+        const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs, effectiveICR, tEngineFn, formatNum, trend, new Date(refMs), activityCtx);
         setDecisionRec(rec);
         setDecisionMode("rec");
         setDecisionBusy(false);
@@ -2814,6 +2831,92 @@ export default function EnginePage() {
                       <div style={{ fontSize: 11, color: "var(--text-faint)", fontFamily: "var(--font-mono)", letterSpacing: "0.05em" }}>
                         mg/dL
                       </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ICR selector — shown only when adaptive and static
+                  differ meaningfully (>0.5 g/IE apart) AND the engine
+                  has enough data (≥3 meals) to offer an adaptive value.
+                  Edge cases:
+                  · No adaptive data (icrSampleSize < 3): cards hidden,
+                    engine silently uses staticICR.
+                  · Static === adaptive (±0.5): single card, no choice.
+                  · No valid static (should not happen — default = 15):
+                    warning text instead of static card. */}
+              {icrSampleSize >= 3 && Math.abs(adaptedICR - staticICR) > 0.5 && (() => {
+                const showStatic = staticICR > 0;
+                return (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{
+                      fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+                      textTransform: "uppercase", color: "var(--text-faint)",
+                      marginBottom: 8,
+                    }}>
+                      {tEngine("icr_comparison_title")}
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {/* Adaptive card */}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedICR('adaptive')}
+                        style={{
+                          flex: 1, padding: "10px 12px", borderRadius: 12,
+                          border: `2px solid ${selectedICR === 'adaptive' ? ACCENT : 'var(--border)'}`,
+                          background: selectedICR === 'adaptive' ? `${ACCENT}14` : "var(--surface-soft)",
+                          textAlign: "left", cursor: "pointer",
+                          transition: "border-color 150ms ease, background 150ms ease",
+                          display: "flex", flexDirection: "column", gap: 3,
+                        }}
+                      >
+                        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: selectedICR === 'adaptive' ? ACCENT : "var(--text-faint)" }}>
+                          {tEngine("icr_adaptive_label")}
+                        </div>
+                        <div style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 800, color: selectedICR === 'adaptive' ? ACCENT : "var(--text-strong)", letterSpacing: "-0.02em" }}>
+                          1 : {Math.round(adaptedICR * 10) / 10}
+                        </div>
+                        <div style={{ fontSize: 11, color: "var(--text-faint)" }}>
+                          {tEngine("icr_calculated")}
+                        </div>
+                      </button>
+
+                      {/* Static card */}
+                      {showStatic ? (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedICR('static')}
+                          style={{
+                            flex: 1, padding: "10px 12px", borderRadius: 12,
+                            border: `2px solid ${selectedICR === 'static' ? ACCENT : 'var(--border)'}`,
+                            background: selectedICR === 'static' ? `${ACCENT}14` : "var(--surface-soft)",
+                            textAlign: "left", cursor: "pointer",
+                            transition: "border-color 150ms ease, background 150ms ease",
+                            display: "flex", flexDirection: "column", gap: 3,
+                          }}
+                        >
+                          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: selectedICR === 'static' ? ACCENT : "var(--text-faint)" }}>
+                            {tEngine("icr_static_label")}
+                          </div>
+                          <div style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 800, color: selectedICR === 'static' ? ACCENT : "var(--text-strong)", letterSpacing: "-0.02em" }}>
+                            1 : {Math.round(staticICR * 10) / 10}
+                          </div>
+                          {staticICRWindowLabel && (
+                            <div style={{ fontSize: 11, color: "var(--text-faint)" }}>
+                              {staticICRWindowLabel}
+                            </div>
+                          )}
+                        </button>
+                      ) : (
+                        <div style={{
+                          flex: 1, padding: "10px 12px", borderRadius: 12,
+                          border: "1px solid var(--border)", background: "var(--surface-soft)",
+                          fontSize: 12, color: "var(--text-faint)", display: "flex",
+                          alignItems: "center",
+                        }}>
+                          {tEngine("icr_no_static_configured")}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
