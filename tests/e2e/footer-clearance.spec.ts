@@ -186,6 +186,49 @@ test.describe("Footer clearance — content must not hide behind bottom nav", ()
     }
   });
 
+  test(".glev-main padding-bottom meets the --nav-bottom-total + 8px floor on every screen", async ({ page }) => {
+    await loginAsTestUser(page);
+
+    for (const screen of SCREENS) {
+      await page.goto(screen.path, { waitUntil: "domcontentloaded", timeout: 60_000 });
+      await page.waitForURL(new RegExp(screen.path), { timeout: 60_000 });
+      await expect(page.locator(".glev-main")).toBeVisible({ timeout: 30_000 });
+      await expect(page.locator("nav.glev-mobile-nav")).toBeVisible({ timeout: 15_000 });
+
+      // Allow dynamic content / CSS variables to settle.
+      await page.waitForTimeout(300);
+
+      const { paddingBottomPx, navBottomTotalPx, meetsFloor } = await page.evaluate(() => {
+        // Resolve --nav-bottom-total to a plain pixel number using a probe
+        // element (the same technique used by the CSS-variable sanity test).
+        const probe = document.createElement("div");
+        probe.style.cssText =
+          "position:fixed;visibility:hidden;height:var(--nav-bottom-total)";
+        document.body.appendChild(probe);
+        const navBottomTotalPx = parseFloat(getComputedStyle(probe).height);
+        document.body.removeChild(probe);
+
+        // Read the COMPUTED padding-bottom of .glev-main so inline-style
+        // overrides (e.g. `padding-bottom: 10px !important` injected by a
+        // page-level <style> block) are reflected in the value we check.
+        const main = document.querySelector(".glev-main") as HTMLElement | null;
+        const paddingBottomPx = main
+          ? parseFloat(getComputedStyle(main).paddingBottom)
+          : 0;
+
+        // Floor: nav height + 8 px buffer (matches Layout.tsx definition).
+        const floor = navBottomTotalPx + 8;
+        // 1 px tolerance for sub-pixel rounding.
+        return { paddingBottomPx, navBottomTotalPx, meetsFloor: paddingBottomPx >= floor - 1 };
+      });
+
+      expect(
+        meetsFloor,
+        `[${screen.name}] .glev-main padding-bottom (${paddingBottomPx}px) is below the required floor of --nav-bottom-total (${navBottomTotalPx}px) + 8px = ${navBottomTotalPx + 8}px. A page-level style override may be zeroing out footer clearance.`,
+      ).toBe(true);
+    }
+  });
+
   test("--nav-bottom-total CSS variable matches the rendered nav bar height", async ({ page }) => {
     await loginAsTestUser(page);
     await page.goto("/dashboard", { waitUntil: "domcontentloaded", timeout: 60_000 });
