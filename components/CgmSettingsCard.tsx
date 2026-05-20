@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useTranslations } from "next-intl";
+import { useGlucoseUnit, mgdlToMmol } from "@/hooks/useGlucoseUnit";
 
 const ACCENT = "#4F6EF7";
 const GREEN = "#22D3A0";
@@ -88,6 +89,7 @@ const label: React.CSSProperties = {
 
 export default function CgmSettingsCard() {
   const tAh = useTranslations("cgmSettings.appleHealth");
+  const { unit: glucoseUnit } = useGlucoseUnit();
   const t = useTranslations("cgmSettings");
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(true);
@@ -154,6 +156,10 @@ export default function CgmSettingsCard() {
   const [appleHealthSubmitting, setAppleHealthSubmitting] = useState(false);
   const [appleHealthMessage, setAppleHealthMessage] =
     useState<{ kind: "success" | "error" | "info"; text: string } | null>(null);
+  // Set to true when requestAuthorization() returns ok:false — persists until
+  // a successful connect so the "Open iOS Settings" hint stays visible.
+  const [appleHealthPermissionDenied, setAppleHealthPermissionDenied] =
+    useState(false);
   // Workout history range (Task #344) — independent from the glucose
   // status block above because workouts live in `exercise_logs` while
   // glucose readings live in `apple_health_readings`. Lets power users
@@ -577,12 +583,15 @@ export default function CgmSettingsCard() {
         // typically means the user already denied. Surface the path to
         // re-enable in the iOS Settings app — Apple does not let us
         // open Health → Glev directly.
+        setAppleHealthPermissionDenied(true);
         setAppleHealthMessage({
           kind: "error",
           text: tAh("permission_denied"),
         });
         return;
       }
+      // Permission granted — clear any previous denial flag.
+      setAppleHealthPermissionDenied(false);
       const patchRes = await fetch("/api/cgm/source", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
@@ -1431,6 +1440,107 @@ export default function CgmSettingsCard() {
                   </div>
                 )}
 
+                {/* Source toggle — iOS-style switch to enable/disable Apple Health
+                    as the active CGM source. Mirrors the connect/disconnect
+                    flow but in a toggle metaphor users are familiar with. */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                    padding: "10px 14px",
+                    borderRadius: 10,
+                    border: `1px solid ${BORDER}`,
+                    background: "var(--surface-soft)",
+                  }}
+                >
+                  <span style={{ fontSize: 14, color: "var(--text)", fontWeight: 500 }}>
+                    {tAh("source_toggle_label")}
+                  </span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={appleHealthSelected}
+                    disabled={appleHealthSubmitting}
+                    onClick={() =>
+                      appleHealthSelected
+                        ? void handleAppleHealthDisconnect()
+                        : void handleAppleHealthConnect()
+                    }
+                    style={{
+                      position: "relative",
+                      width: 50,
+                      height: 28,
+                      borderRadius: 14,
+                      border: "none",
+                      background: appleHealthSelected ? GREEN : "var(--border)",
+                      cursor: appleHealthSubmitting ? "wait" : "pointer",
+                      flexShrink: 0,
+                      transition: "background 0.2s",
+                      opacity: appleHealthSubmitting ? 0.5 : 1,
+                    }}
+                  >
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: 3,
+                        left: appleHealthSelected ? 25 : 3,
+                        width: 22,
+                        height: 22,
+                        borderRadius: "50%",
+                        background: "#fff",
+                        boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+                        transition: "left 0.2s",
+                      }}
+                    />
+                  </button>
+                </div>
+
+                {/* Permission denied banner — shown after iOS rejects
+                    requestAuthorization(). Includes a deep-link into
+                    System Settings so the user can grant access without
+                    hunting through menus manually. */}
+                {appleHealthPermissionDenied && isNativePlatform && (
+                  <div
+                    style={{
+                      fontSize: 13,
+                      color: PINK,
+                      background: `${PINK}10`,
+                      border: `1px solid ${PINK}30`,
+                      borderRadius: 10,
+                      padding: "10px 14px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 8,
+                    }}
+                  >
+                    <span>{tAh("permission_denied")}</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        window.open(
+                          "App-Prefs:root=Privacy&path=HEALTH",
+                          "_system",
+                        )
+                      }
+                      style={{
+                        alignSelf: "flex-start",
+                        padding: "6px 12px",
+                        borderRadius: 8,
+                        border: `1px solid ${PINK}50`,
+                        background: "transparent",
+                        color: PINK,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {tAh("open_ios_settings")}
+                    </button>
+                  </div>
+                )}
+
                 {appleHealthSelected && appleHealthStatus && (
                   <div
                     style={{
@@ -1443,9 +1553,13 @@ export default function CgmSettingsCard() {
                     }}
                   >
                     {appleHealthStatus.lastValueMgDl != null
-                      ? tAh("status_connected_with_value", {
-                          value: appleHealthStatus.lastValueMgDl,
-                        })
+                      ? glucoseUnit === "mmol/L"
+                        ? tAh("status_connected_with_value_mmol", {
+                            value: mgdlToMmol(appleHealthStatus.lastValueMgDl),
+                          })
+                        : tAh("status_connected_with_value", {
+                            value: appleHealthStatus.lastValueMgDl,
+                          })
                       : tAh("status_connected_no_values")}
                     <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 4 }}>
                       {tAh("status_count", { count: appleHealthStatus.count })}
@@ -1465,13 +1579,13 @@ export default function CgmSettingsCard() {
                   <button
                     type="button"
                     onClick={handleAppleHealthConnect}
-                    disabled={!isNativePlatform || appleHealthSubmitting}
+                    disabled={!isNativePlatform || appleHealthSubmitting || appleHealthSelected}
                     title={!isNativePlatform ? tAh("ios_only_tooltip") : undefined}
                     style={{
                       padding: "12px 18px",
                       borderRadius: 12,
                       border: "none",
-                      cursor: !isNativePlatform
+                      cursor: !isNativePlatform || appleHealthSelected
                         ? "not-allowed"
                         : appleHealthSubmitting
                         ? "wait"
@@ -1481,7 +1595,7 @@ export default function CgmSettingsCard() {
                       fontSize: 14,
                       fontWeight: 700,
                       boxShadow: `0 4px 20px ${ACCENT}40`,
-                      opacity: !isNativePlatform || appleHealthSubmitting ? 0.5 : 1,
+                      opacity: !isNativePlatform || appleHealthSubmitting || appleHealthSelected ? 0.5 : 1,
                     }}
                   >
                     {appleHealthSubmitting

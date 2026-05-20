@@ -4,7 +4,19 @@ import { useTranslations } from "next-intl";
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import CgmFetchButton, { type CgmFetchResult } from "@/components/CgmFetchButton";
-import TrendArrow from "@/components/TrendArrowIcon";
+import TrendArrow, { type TrendDirection } from "@/components/TrendArrowIcon";
+
+// Maps the adapter-provided 5-category trend string to the TrendDirection
+// enum used by TrendArrowIcon. Unknown or undefined values default to "flat".
+function trendStringToDirection(trend: string): TrendDirection {
+  switch (trend) {
+    case "risingQuickly": return "up-fast";
+    case "rising":        return "up";
+    case "falling":       return "down";
+    case "fallingQuickly":return "down-fast";
+    default:              return "flat";
+  }
+}
 import { useCrosshair, CrosshairOverlay, CrosshairTooltip, type CrosshairPoint } from "@/components/ChartCrosshair";
 import { parseLluTs as _parseLluTs } from "@/lib/time";
 import {
@@ -44,7 +56,10 @@ type State =
       kind: "ok";
       cgm: Array<{ t: number; v: number }>;
       fingersticks: Array<{ t: number; v: number }>;
-      cgmCurrent: { v: number; t: number } | null;
+      /** trend: adapter-provided 5-category string
+       *  (risingQuickly / rising / stable / falling / fallingQuickly).
+       *  Undefined when the CGM source doesn't supply a per-reading trend. */
+      cgmCurrent: { v: number; t: number; trend?: string } | null;
     };
 
 // The chart fills the remaining space inside the card via the DayChart's
@@ -117,10 +132,16 @@ export default function CurrentDayGlucoseCard() {
         ? { v: data.current.value, t: parseLluTs(data.current.timestamp) }
         : null;
       const newestHistory = cgm.length ? { v: cgm[cgm.length - 1].v, t: cgm[cgm.length - 1].t } : null;
-      const cgmCurrent =
+      const cgmCurrentBase =
         officialCurrent && newestHistory
           ? (newestHistory.t > officialCurrent.t ? newestHistory : officialCurrent)
           : (officialCurrent ?? newestHistory);
+      // Thread the adapter-provided trend string (5-category: risingQuickly /
+      // rising / stable / falling / fallingQuickly) through so HeroFront can
+      // display a more precise arrow than the 3-state computeDelta15m result.
+      const cgmCurrent = cgmCurrentBase
+        ? { ...cgmCurrentBase, trend: data.current?.trend ?? undefined }
+        : null;
 
       if (!signal?.cancelled) setS({ kind: "ok", cgm, fingersticks, cgmCurrent });
     } catch (e) {
@@ -313,6 +334,21 @@ function HeroFront({
     [cgm, cgmCurrent, fsOverride],
   );
 
+  // 5-category trend direction: prefer the adapter-provided trend string
+  // (Apple Health / Nightscout use the same risingQuickly…fallingQuickly
+  // vocabulary set in lib/cgm/appleHealth.ts + lib/cgm/nightscout.ts).
+  // Falls back to the 3-state computeDelta15m result so LLU readings
+  // (which don't carry a per-reading slope) still show an arrow.
+  const trendDirection: TrendDirection | null = useMemo(() => {
+    if (fsOverride) return null;
+    const adapterTrend = cgmCurrent?.trend;
+    if (adapterTrend) return trendStringToDirection(adapterTrend);
+    if (!delta) return null;
+    if (delta.direction === "up") return "up";
+    if (delta.direction === "down") return "down";
+    return "flat";
+  }, [cgmCurrent, delta, fsOverride]);
+
   // Merged points handed to the chart, sorted chronologically. The chart
   // distinguishes them visually (CGM = connected line + circle on last,
   // fingersticks = standalone squares with white outline).
@@ -381,13 +417,13 @@ function HeroFront({
               FS
             </span>
           )}
-          {delta && (
+          {trendDirection && (
             <span style={{
               marginLeft: "auto", display: "flex", alignItems: "center", gap: 4,
               color: valueColor, fontSize: 13, fontWeight: 600,
             }}>
-              <TrendArrow direction={delta.direction} color={valueColor} />
-              {delta.label}
+              <TrendArrow direction={trendDirection} color={valueColor} />
+              {delta?.label}
             </span>
           )}
         </div>

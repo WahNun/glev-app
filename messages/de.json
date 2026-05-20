@@ -1314,7 +1314,10 @@
       "age_days": "vor {n} Tagen",
       "workouts_range": "Workouts: {oldest} → {newest}, {count} Stück",
       "workouts_range_empty": "Workouts: noch keine aus Apple Health synchronisiert.",
-      "http_error": "Fehler {status}"
+      "http_error": "Fehler {status}",
+      "source_toggle_label": "Apple Health als BG-Quelle nutzen",
+      "open_ios_settings": "iOS-Einstellungen öffnen",
+      "status_connected_with_value_mmol": "✓ Verbunden — letzter Wert: {value} mmol/L"
     },
     "status": {
       "title": "CGM-Verbindung",

@@ -1,17 +1,20 @@
-/* Trend arrow icon — three flavours (NE up, SE down, →flat) matching
-   the hero mockup's stroke style. Color is passed in so it tracks the
-   current value's range color (GREEN / ORANGE / PINK).
+/* Trend arrow icon — five flavours matching CGM conventions:
+   up-fast  (↑↑ steep double)  risingQuickly
+   up       (↗ diagonal)       rising
+   flat     (→ horizontal)     stable
+   down     (↘ diagonal)       falling
+   down-fast (↓↓ steep double) fallingQuickly
 
-   Extracted from CurrentDayGlucoseCard so the same SVG can be reused on
-   the meal expanded view (Task #265) without duplicating markup. The
-   prop shape and SVG output are intentionally identical to the previous
-   inline component so the live widget remains byte-for-byte unchanged. */
+   Backward compat: callers using "up" | "down" | "flat" still work.
+   Color is passed in so it tracks the current value's range color. */
+
+export type TrendDirection = "up-fast" | "up" | "flat" | "down" | "down-fast";
 
 export default function TrendArrowIcon({
   direction,
   color,
 }: {
-  direction: "up" | "down" | "flat";
+  direction: TrendDirection | "up" | "down" | "flat";
   color: string;
 }) {
   const common = {
@@ -19,6 +22,17 @@ export default function TrendArrowIcon({
     stroke: color, strokeWidth: 2.5,
     strokeLinecap: "round" as const, strokeLinejoin: "round" as const,
   };
+
+  if (direction === "up-fast") {
+    return (
+      <svg {...common}>
+        <line x1="5" y1="19" x2="12" y2="5" />
+        <polyline points="8 5 12 5 12 9" />
+        <line x1="12" y1="19" x2="19" y2="5" />
+        <polyline points="15 5 19 5 19 9" />
+      </svg>
+    );
+  }
   if (direction === "up") {
     return (
       <svg {...common}>
@@ -32,6 +46,16 @@ export default function TrendArrowIcon({
       <svg {...common}>
         <line x1="7" y1="7" x2="17" y2="17" />
         <polyline points="9 17 17 17 17 9" />
+      </svg>
+    );
+  }
+  if (direction === "down-fast") {
+    return (
+      <svg {...common}>
+        <line x1="5" y1="5" x2="12" y2="19" />
+        <polyline points="8 19 12 19 12 15" />
+        <line x1="12" y1="5" x2="19" y2="19" />
+        <polyline points="15 19 19 19 19 15" />
       </svg>
     );
   }
