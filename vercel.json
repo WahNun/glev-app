@@ -8,6 +8,10 @@
     {
       "path": "/api/cron/cgm-poll",
       "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/cgm/nightscout/cron",
+      "schedule": "*/10 * * * *"
     }
   ]
 }

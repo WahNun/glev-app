@@ -228,6 +228,51 @@ export async function verifyCredentials(
   return { current: entries[0] ? mapEntry(entries[0]) : null };
 }
 
+// ---------------------------------------------------------------------------
+// Cache helpers — read from / write to nightscout_readings
+// ---------------------------------------------------------------------------
+
+interface CacheRow {
+  value_mgdl: number;
+  recorded_at: string;
+  direction: string | null;
+}
+
+function cacheRowToReading(r: CacheRow): Reading {
+  return {
+    value: r.value_mgdl,
+    unit: "mg/dL",
+    timestamp: r.recorded_at,
+    trend: mapTrend(r.direction),
+  };
+}
+
+/**
+ * Write a batch of entries into nightscout_readings (upsert — idempotent).
+ * Silently swallows errors so a cache failure never breaks the main flow.
+ */
+export async function writeCacheEntries(
+  userId: string,
+  entries: NsEntry[]
+): Promise<void> {
+  const rows = entries
+    .filter((e) => typeof e.sgv === "number" && (e.date || e.dateString))
+    .map((e) => ({
+      user_id: userId,
+      recorded_at: e.dateString ?? new Date(e.date!).toISOString(),
+      value_mgdl: e.sgv as number,
+      direction: e.direction ?? null,
+      source: "nightscout",
+    }));
+  if (rows.length === 0) return;
+  const { error } = await adminClient()
+    .from("nightscout_readings")
+    .upsert(rows, { onConflict: "user_id,recorded_at" });
+  if (error) {
+    console.error("[nightscout] cache write failed:", error.message);
+  }
+}
+
 export async function getLatest(
   userId: string
 ): Promise<{ current: Reading | null }> {
@@ -237,17 +282,34 @@ export async function getLatest(
     e.status = 404;
     throw e;
   }
+
+  // Cache-first: if we have a reading from the last 30 min, use it.
+  const cutoff = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  const { data: cached } = await adminClient()
+    .from("nightscout_readings")
+    .select("value_mgdl, recorded_at, direction")
+    .eq("user_id", userId)
+    .gte("recorded_at", cutoff)
+    .order("recorded_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (cached) {
+    return { current: cacheRowToReading(cached as CacheRow) };
+  }
+
+  // Cache miss — live fetch and write to cache.
   const entries = await fetchEntries(creds.url, creds.token, 1);
+  await writeCacheEntries(userId, entries);
   return { current: entries[0] ? mapEntry(entries[0]) : null };
 }
 
 /**
  * Returns the last 12h of readings (~144 entries at 5-min cadence) plus the
- * single most-recent reading as `current`. Same shape as llu.getHistory()
- * so callers (cgm-jobs/process, dispatcher) can swap freely between
- * sources without branching on shape. Entries from Nightscout arrive in
- * DESCENDING date order — we keep that order so callers that want the
- * latest (history[0]) match LLU semantics.
+ * single most-recent reading as `current`. Cache-first: reads from
+ * nightscout_readings if available, falls back to live fetch and writes
+ * the result into the cache so subsequent calls are instant even when the
+ * Nightscout instance is down.
  */
 export async function getHistory(
   userId: string
@@ -258,15 +320,26 @@ export async function getHistory(
     e.status = 404;
     throw e;
   }
-  // 144 ≈ 12h at 5-min cadence — enough for the +1h / +2h post-meal job
-  // lookups even if the user's last meal was logged hours ago when the
-  // worker fires.
+
+  const since = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+  const { data: cached } = await adminClient()
+    .from("nightscout_readings")
+    .select("value_mgdl, recorded_at, direction")
+    .eq("user_id", userId)
+    .gte("recorded_at", since)
+    .order("recorded_at", { ascending: false });
+
+  if (cached && cached.length > 0) {
+    const history = (cached as CacheRow[]).map(cacheRowToReading);
+    return { current: history[0] ?? null, history };
+  }
+
+  // Cache miss — live fetch and populate cache.
+  // 144 ≈ 12h at 5-min cadence.
   const entries = await fetchEntries(creds.url, creds.token, 144);
+  await writeCacheEntries(userId, entries);
   const history = entries
     .map(mapEntry)
     .filter((x): x is Reading => x !== null);
-  return {
-    current: history[0] ?? null,
-    history,
-  };
+  return { current: history[0] ?? null, history };
 }

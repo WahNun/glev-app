@@ -1,0 +1,180 @@
+CONTEXT
+Nightscout is integrated as a CGM source in Glev (lib/cgm/nightscout.ts, dispatcher in lib/cgm/index.ts). It currently works by making a live HTTP call to the user's Nightscout instance on every /api/cgm/history or /api/cgm/latest request.
+Problem: self-hosted Nightscout instances (fly.dev, Heroku free-tier) go down frequently. When they do, Glev shows no glucose data at all — even if we fetched readings 5 minutes ago. Apple Health solves this with a local apple_health_readings table (idempotent upsert per source_uuid). We need the same for Nightscout.
+
+GOAL
+Add a nightscout_readings Supabase table that acts as a local cache. The sync endpoint writes into it; the history/latest endpoints read from it instead of making live calls. The Nightscout instance only needs to be reachable at sync time, not at read time.
+
+STEP 1 — Find the apple_health_readings table as reference
+Search the codebase for apple_health_readings to understand the exact column names, RLS, and upsert conflict key. Use this as the model for nightscout_readings.
+bashgrep -r "apple_health_readings" --include="*.ts" --include="*.sql" -l
+
+STEP 2 — Create the Supabase migration
+Create file: supabase/migrations/20260501_add_nightscout_readings.sql
+sqlcreate table if not exists nightscout_readings (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid not null references auth.users(id) on delete cascade,
+  recorded_at   timestamptz not null,
+  value_mgdl    integer not null,
+  direction     text,
+  source        text not null default 'nightscout',
+  created_at    timestamptz not null default now(),
+  unique (user_id, recorded_at)
+);
+
+alter table nightscout_readings enable row level security;
+
+create policy "Users can read own nightscout readings"
+  on nightscout_readings for select
+  using (auth.uid() = user_id);
+
+create policy "Service role can insert nightscout readings"
+  on nightscout_readings for insert
+  with check (true);
+
+create index if not exists nightscout_readings_user_time
+  on nightscout_readings (user_id, recorded_at desc);
+
+STEP 3 — Update the sync route to write into the cache
+Open app/api/cgm/nightscout/sync/route.ts. After fetching entries from Nightscout API, add upsert into cache:
+tsconst rowsToInsert = entries
+  .filter((e: any) => e.sgv && e.date)
+  .map((e: any) => ({
+    user_id: userId,
+    recorded_at: new Date(e.date).toISOString(),
+    value_mgdl: e.sgv,
+    direction: e.direction ?? null,
+    source: 'nightscout',
+  }))
+
+if (rowsToInsert.length > 0) {
+  const { error: cacheError } = await serviceClient
+    .from('nightscout_readings')
+    .upsert(rowsToInsert, { onConflict: 'user_id,recorded_at' })
+  if (cacheError) console.error('[Nightscout] Cache write failed:', cacheError.message)
+}
+
+STEP 4 — Update getHistory() and getLatest() to read from cache
+Open lib/cgm/nightscout.ts. Replace live-fetch with cache-first:
+tsexport async function getNightscoutHistory(userId: string, hours = 12): Promise<CgmReading[]> {
+  const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString()
+
+  const { data: cached } = await serviceClient
+    .from('nightscout_readings')
+    .select('value_mgdl, recorded_at, direction')
+    .eq('user_id', userId)
+    .gte('recorded_at', since)
+    .order('recorded_at', { ascending: false })
+
+  if (cached && cached.length > 0) {
+    return cached.map(r => ({
+      sgv: r.value_mgdl,
+      date: new Date(r.recorded_at).getTime(),
+      direction: r.direction ?? undefined,
+      source: 'nightscout' as const,
+    }))
+  }
+
+  // Cache miss — fall back to live fetch
+  // ... existing live fetch logic here
+}
+For getLatest(): read single most recent row from nightscout_readings. Fall back to live only if cache has nothing in last 30 minutes.
+
+STEP 5 — Verify
+bashnpx supabase db push
+tsc --noEmit
+git add -A && git commit -m "feat(nightscout): add nightscout_readings cache table, cache-first history" && git push origin main
+DO NOT change: NightscoutSettingsCard UI, dispatcher in index.ts, LLU/Apple Health integrations, token encryption.
+
+
+PROMPT 2 — danach in Replit eingeben (erst wenn Prompt 1 durch ist):
+
+CONTEXT
+Nightscout sync currently only runs when a user actively opens the Glev app. Post-meal CGM readings (1h and 2h values used by the Engine) only get filled if the user happens to open the app in that window. We need a server-side job that periodically fetches readings for all connected users.
+PREREQUISITE: nightscout_readings table must exist (run Prompt 1 first).
+
+GOAL
+A Vercel Cron job runs every 10 minutes, fetches readings for all users with Nightscout configured, upserts into nightscout_readings. No user interaction required.
+
+STEP 1 — Find existing LLU background job as reference
+bashgrep -r "cgm-jobs\|cron\|vercel.json\|schedule" --include="*.ts" --include="*.json" -l | head -20
+Understand how Vercel Cron is configured, how it authenticates, how it fetches all users. Use as template.
+
+STEP 2 — Create the cron endpoint
+Create file: app/api/cgm/nightscout/cron/route.ts
+tsimport { NextRequest, NextResponse } from 'next/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { decryptToken } from '@/lib/encryption'
+
+export async function GET(req: NextRequest) {
+  const authHeader = req.headers.get('authorization')
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const serviceClient = createServiceClient()
+
+  const { data: profiles, error } = await serviceClient
+    .from('profiles')
+    .select('user_id, nightscout_url, nightscout_token_enc')
+    .not('nightscout_url', 'is', null)
+    .not('nightscout_token_enc', 'is', null)
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  const results = { success: 0, failed: 0, skipped: 0 }
+
+  for (const profile of profiles ?? []) {
+    try {
+      const token = profile.nightscout_token_enc ? decryptToken(profile.nightscout_token_enc) : null
+      const baseUrl = profile.nightscout_url.replace(/\/$/, '')
+      const url = `${baseUrl}/api/v1/entries.json?count=30${token ? `&token=${token}` : ''}`
+
+      const res = await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(8000) })
+      if (!res.ok) { results.failed++; continue }
+
+      const entries = await res.json()
+      const rows = entries
+        .filter((e: any) => e.sgv && e.date)
+        .map((e: any) => ({ user_id: profile.user_id, recorded_at: new Date(e.date).toISOString(), value_mgdl: e.sgv, direction: e.direction ?? null, source: 'nightscout' }))
+
+      if (rows.length === 0) { results.skipped++; continue }
+
+      const { error: upsertError } = await serviceClient
+        .from('nightscout_readings')
+        .upsert(rows, { onConflict: 'user_id,recorded_at' })
+
+      upsertError ? results.failed++ : results.success++
+    } catch (e: any) {
+      console.error(`[Nightscout Cron] Error for user ${profile.user_id}:`, e.message)
+      results.failed++
+    }
+  }
+
+  return NextResponse.json({ ok: true, ...results })
+}
+Check: Column name für user_id in profiles (könnte id statt user_id sein). Decrypt-Funktion an bestehende anpassen.
+
+STEP 3 — Register in vercel.json
+json{
+  "crons": [
+    {
+      "path": "/api/cgm/nightscout/cron",
+      "schedule": "*/10 * * * *"
+    }
+  ]
+}
+Falls bereits ein "crons"-Array existiert (z.B. für LLU) — dazu adden, nicht ersetzen.
+
+STEP 4 — CRON_SECRET in Replit Secrets
+Key: CRON_SECRET — falls bereits vorhanden (LLU nutzt es), denselben Wert verwenden.
+
+STEP 5 — Verify
+bashcurl -X GET http://localhost:5000/api/cgm/nightscout/cron \
+  -H "Authorization: Bearer <your_CRON_SECRET>"
+# Expected: {"ok":true,"success":N,"failed":0,"skipped":0}
+
+tsc --noEmit
+git add -A && git commit -m "feat(nightscout): add background cron sync every 10min" && git push origin main
+Nach Deploy: Vercel Dashboard → Cron Jobs → /api/cgm/nightscout/cron sollte erscheinen.
+DO NOT change: LLU cron, Apple Health sync, NightscoutSettingsCard, Token-Encryption, bestehende vercel.json cron entries.
