@@ -22,6 +22,7 @@ import {
   bolusPendingLabel,
 } from "@/lib/insulinEval";
 import CgmSparkline, { type SparklinePoint } from "@/components/CgmSparkline";
+import GlucoseMiniSparkline from "@/components/GlucoseMiniSparkline";
 import IosTapButton from "@/components/IosTapButton";
 import { fetchFingersticks } from "@/lib/fingerstick";
 import { TYPE_COLORS, TYPE_LABELS, TYPE_EXPLAIN, getEvalColor, getEvalLabel, chipLabelsFrom } from "@/lib/mealTypes";
@@ -2037,6 +2038,22 @@ function BolusRowCard({ log, meals, isOpen, onToggle, onDelete, deleting }: {
                 <BolusDeltaPill label="Δ AT LOG → +2H" delta={d2h}/>
               </div>
             )}
+            {/* Mini glucose trend — visible once ≥2 readings exist so the
+                user can see the shape of their response at a glance and
+                tap/hover to inspect exact values (crosshair). */}
+            {(() => {
+              const pts = [
+                before != null ? { t: d.getTime(),        v: before, label: "AT LOG" } : null,
+                at1h   != null ? { t: expect1h.getTime(), v: at1h,   label: "+1H"    } : null,
+                at2h   != null ? { t: expect2h.getTime(), v: at2h,   label: "+2H"    } : null,
+              ].filter((p): p is { t: number; v: number; label: string } => p !== null);
+              if (pts.length < 2) return null;
+              return (
+                <div style={{ marginTop:8, background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
+                  <GlucoseMiniSparkline points={pts} color={accent} locale={locale}/>
+                </div>
+              );
+            })()}
             {/* Manual backfill — appears once expected time has passed
                 and the auto-fetch hasn't filled in the value yet. */}
             <div style={{ marginTop:8 }}>
@@ -2521,6 +2538,21 @@ function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting, o
                 <DeltaPill label="Δ BEFORE → +1H"    delta={d1h}/>
               </div>
             )}
+            {/* Mini glucose trend — visible once ≥2 readings exist.
+                Tap/hover shows exact value at each checkpoint via crosshair. */}
+            {(() => {
+              const pts = [
+                before  != null ? { t: start.getTime(),       v: before,  label: "BEFORE"  } : null,
+                atEnd   != null ? { t: end.getTime(),         v: atEnd,   label: "AT END"  } : null,
+                after1h != null ? { t: expect1h.getTime(),    v: after1h, label: "+1H"     } : null,
+              ].filter((p): p is { t: number; v: number; label: string } => p !== null);
+              if (pts.length < 2) return null;
+              return (
+                <div style={{ marginTop:8, background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
+                  <GlucoseMiniSparkline points={pts} color={accent} locale={locale}/>
+                </div>
+              );
+            })()}
           </ExPanel>
 
           {/* 3) Evaluation panel ----------------------------------- */}
