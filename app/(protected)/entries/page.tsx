@@ -3071,8 +3071,8 @@ function Detail({ label, value, color, locked, lockedHint }: { label: string; va
       title={locked && lockedHint ? lockedHint : undefined}
       style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px", minWidth:0, overflow:"hidden" }}
     >
-      <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4, display:"flex", alignItems:"center", gap:4 }}>
-        <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{label}</span>
+      <div style={{ fontSize:"clamp(9px, 2.8vw, 11px)", color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4, display:"flex", alignItems:"center", gap:4, flexWrap:"wrap" }}>
+        <span style={{ whiteSpace:"nowrap" }}>{label}</span>
         {locked && (
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ opacity:0.75 }}>
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
