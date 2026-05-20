@@ -1,5 +1,9 @@
 # See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
 
+# Local env files — never commit real secrets
+.env.local
+.env*.local
+
 # compiled output
 dist
 tmp
