@@ -1217,10 +1217,7 @@ function ScopeHeaderChip({
       role="radiogroup"
       aria-label={t("open_aria")}
       style={{
-        display: "inline-flex", alignItems: "center", gap: 2,
-        padding: 2, height: 30, borderRadius: 99,
-        background: "var(--surface-soft)",
-        border: `1px solid var(--border-strong)`,
+        display: "inline-flex", alignItems: "center", gap: 0,
         flexShrink: 0,
       }}
     >
@@ -1234,19 +1231,31 @@ function ScopeHeaderChip({
             aria-checked={isActive}
             onClick={() => { setMode(m.key); setAnchor(new Date()); }}
             style={{
-              padding: "0 9px", height: 24, borderRadius: 99,
-              background: isActive ? ACCENT : "transparent",
-              color: isActive ? "#fff" : "var(--text-body)",
+              padding: "0 10px", height: 30,
+              background: "transparent",
+              color: isActive ? "#fff" : "var(--text-faint)",
               border: "none",
-              fontSize: 12, fontWeight: isActive ? 700 : 600,
-              letterSpacing: "-0.01em",
-              cursor: "pointer", transition: "background 0.15s, color 0.15s",
+              fontSize: 12, fontWeight: isActive ? 700 : 500,
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+              cursor: "pointer",
+              transition: "color 0.15s",
               WebkitTapHighlightColor: "transparent",
               touchAction: "manipulation",
               whiteSpace: "nowrap",
+              position: "relative",
             }}
           >
             {m.label}
+            {isActive && (
+              <span style={{
+                position: "absolute", bottom: 2, left: "50%",
+                transform: "translateX(-50%)",
+                width: 4, height: 4, borderRadius: "50%",
+                background: ACCENT,
+                display: "block",
+              }} />
+            )}
           </button>
         );
       })}
