@@ -70,8 +70,24 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Get Playwright version
+        id: playwright-version
+        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+
       - name: Install Playwright Chromium + system deps
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: pnpm exec playwright install chromium --with-deps
+
+      - name: Install Playwright system deps only (cache hit)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm exec playwright install-deps chromium
 
       - name: Run android-chrome SnapSlider tests
         run: pnpm exec playwright test --project=android-chrome tests/e2e/snap-slider.spec.ts
