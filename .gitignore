@@ -89,3 +89,4 @@ fastlane/README.html
 *.ipa
 *.dSYM.zip
 *.xcarchive
+attached_assets/
