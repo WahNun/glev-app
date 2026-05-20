@@ -82,9 +82,9 @@
        --nav-bottom-height  = 56 px MobileTab fixed row
        --nav-bottom-top-pad = 4 px gap above tab row
        --nav-bottom-safe    = bottom inner padding (half sa-bottom,
-                              floored at 4 px — see Layout.tsx round 9
-                              note: full sa-bottom leaves too much
-                              dead space under the labels)
+                              floored at 16 px — Task #382: 4 px was
+                              too small on Web where sa-bottom = 0,
+                              leaving a visible gap below the nav bar)
        --nav-bottom-total   = full footer height incl. safe-area
 
      IMPORTANT: do NOT hardcode `env(safe-area-inset-top|bottom)` in
@@ -126,7 +126,7 @@
 
   --nav-bottom-height:  56px;
   --nav-bottom-top-pad: 4px;
-  --nav-bottom-safe:    max(4px, calc(var(--safe-bottom) / 2));
+  --nav-bottom-safe:    max(16px, calc(var(--safe-bottom) / 2));
   --nav-bottom-total:   calc(var(--nav-bottom-height) + var(--nav-bottom-top-pad) + var(--nav-bottom-safe));
 
   /* Foreground color for text/icons placed on top of a brand-accent

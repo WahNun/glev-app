@@ -426,12 +426,12 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         // the status-bar safe-area zone already separates the wordmark
         // from the clock/battery row above.
         // Task #363: vertical padding now sources from the central
-        // --nav-top-safe variable in app/globals.css. Bottom 4 px is
-        // the known regression hotspot (May 2026 header height bug —
-        // do NOT inflate without re-checking the footer visual match).
+        // --nav-top-safe variable in app/globals.css.
+        // Task #382: bottom pad implemented (was documented but stayed
+        // at 4 px — now correctly set to 10 px).
         height: "var(--nav-top-total)",
         paddingTop: "calc(var(--nav-top-safe) + 4px)",
-        paddingBottom: 4,
+        paddingBottom: 10,
         paddingLeft:  "max(18px, env(safe-area-inset-left))",
         paddingRight: "max(18px, env(safe-area-inset-right))",
         background: SURFACE,
