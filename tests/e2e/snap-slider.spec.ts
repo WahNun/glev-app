@@ -249,4 +249,109 @@ test.describe("SnapSlider interaction", () => {
     await expect(slider).toHaveAttribute("aria-valuenow", "3", { timeout: 3_000 });
     await expect(numberInput).not.toBeVisible({ timeout: 3_000 });
   });
+
+  // ── Test 5: Android Chrome — slow drag with spurious pointercancel ──────
+  // Context (why this test exists):
+  //   Some Android OEM WebView builds fire a spurious `pointercancel` after
+  //   ~300 ms of continuous touch, terminating pointer capture and dropping the
+  //   drag. The SnapSlider delegates `onPointerCancel` to `handlePointerUp`,
+  //   which commits `valueFromPointer(e.clientX)`. If the delegation is ever
+  //   removed or broken, the drag silently terminates at the last pointermove
+  //   position and the final touch position is lost.
+  //
+  // Why the test is structured this way (critical):
+  //   The `pointercancel` is injected INSTEAD OF the final mouse move to
+  //   the target position — not after it. This is the key design choice:
+  //
+  //   Phase 1 drag stops at the MID-POINT (57.5 %) → last pointermove commits
+  //   raw=3.3 → snap→3 → CycleForm "medium" → aria-valuenow="3".
+  //
+  //   Then pointercancel fires with clientX=targetX (65 %) — which is the
+  //   real Android OEM pattern (cancel carries the last known touch position).
+  //
+  //   handlePointerUp(cancel_event) calls commit(valueFromPointer(65%)) →
+  //   raw=3.6 → snap→4 → CycleForm "heavy" → aria-valuenow="4".
+  //
+  //   Regression table (why "4" is the only correct outcome):
+  //     onPointerCancel ignored / broken → last committed = "3" (mid-point) → FAIL
+  //     onPointerCancel commits at clientX=0 → raw=1 → "light"→"2"        → FAIL
+  //     onPointerCancel correctly commits at clientX=targetX → "4"         → PASS
+  //
+  // Project coverage:
+  //   Runs in both `chromium` (desktop baseline) and `android-chrome`
+  //   (devices["Pixel 7"], hasTouch:true — primary regression target).
+  test("slow drag (350 ms hold) with spurious pointercancel commits value from cancel clientX", async ({ page }) => {
+    test.setTimeout(180_000);
+    const slider = await openCycleSlider(page);
+
+    // Baseline: flow="medium" → value=3.
+    await expect(slider).toHaveAttribute("aria-valuenow", "3", { timeout: 5_000 });
+
+    const box = await slider.boundingBox();
+    if (!box) throw new Error("slider bounding box is null — slider not rendered?");
+
+    const midY   = box.y + box.height / 2;
+    const startX  = box.x + box.width * 0.50; // thumb at value=3 (50 %)
+    // Mid-point of the drag: 57.5 % → raw=3.3 → snap→3 → CycleForm "medium" → 3.
+    // This is where the pointermove sequence intentionally stops — the final
+    // commit to "4" must come from the pointercancel handler, not from a move.
+    const midX   = box.x + box.width * 0.575;
+    // Target that the cancel event will report as the last touch position.
+    // 65 % → raw=3.6 → snap→4 → CycleForm "heavy" → 4.
+    const targetX = box.x + box.width * 0.65;
+
+    // ── Phase 1: start drag at the thumb position.
+    await page.mouse.move(startX, midY);
+    await page.mouse.down();
+
+    // ── Phase 2: move to the MID-POINT only (not all the way to targetX).
+    //   Last committed value after this loop: 3 (snap of raw 3.3 at 57.5 %).
+    const STEPS = 4;
+    for (let i = 1; i <= STEPS; i++) {
+      await page.mouse.move(
+        startX + (midX - startX) * (i / STEPS),
+        midY,
+      );
+    }
+
+    // ── Phase 3: hold for 350 ms — past the ~300 ms Android OEM cancel window.
+    await page.waitForTimeout(350);
+
+    // ── Phase 4: inject the spurious pointercancel with clientX=targetX.
+    //   Real Android OEM events carry the last known touch X at the moment
+    //   of cancellation. We simulate the finger having drifted to targetX
+    //   during the hold. The component must commit that position.
+    //
+    //   `composed:true`  — crosses shadow-DOM boundaries (future-proofing).
+    //   `isPrimary:true` — matches the isPrimary guard in handlePointerDown.
+    //   `pointerId:1`    — matches the capture ID set on pointerdown.
+    //
+    //   NOTE: no page.mouse.move(targetX) is called before this dispatch.
+    //   The value=4 outcome is only reachable via this cancel handler.
+    await page.evaluate((cx: number) => {
+      const el = document.querySelector('[role="slider"]') as HTMLElement | null;
+      if (!el) throw new Error("slider element not found in DOM");
+      el.dispatchEvent(
+        new PointerEvent("pointercancel", {
+          bubbles: true,
+          cancelable: false,
+          composed: true,
+          isPrimary: true,
+          clientX: cx,
+          pointerId: 1,
+        }),
+      );
+    }, targetX);
+
+    // ── Phase 5: assert the cancel-committed value.
+    //   ONLY the cancel path can produce "4" — pointermove last committed "3".
+    await expect(slider).toHaveAttribute("aria-valuenow", "4", { timeout: 3_000 });
+
+    // ── Phase 6: clean up Playwright's internal mouse state.
+    //   After the synthetic cancel, isDraggingRef is false, so this mouseup
+    //   hits the `if (!isDraggingRef.current) return;` guard in handlePointerUp
+    //   and is a no-op for the slider. Necessary to keep Playwright's mouse
+    //   state consistent for subsequent tests in the same browser context.
+    await page.mouse.up();
+  });
 });

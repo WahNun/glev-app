@@ -88,6 +88,26 @@ export default defineConfig({
           : {},
       },
     },
+    // Android Chrome device emulation — exercises the pointer-event drag path
+    // under mobile viewport + hasTouch conditions.  Some Android OEM WebView
+    // builds fire a spurious `pointercancel` after ~300 ms of touch, which
+    // drops pointer capture and terminates the drag prematurely.
+    //
+    // `testMatch` scopes this project to the SnapSlider spec only. The rest of
+    // the e2e suite (visual snapshots, marketing mockups, etc.) has baselines
+    // recorded against the `chromium` project and must not run here — running
+    // them under android-chrome would fail immediately because no Android
+    // snapshot baselines exist.
+    {
+      name: "android-chrome",
+      testMatch: "**/snap-slider.spec.ts",
+      use: {
+        ...devices["Pixel 7"],
+        launchOptions: process.env.REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE
+          ? { executablePath: process.env.REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE }
+          : {},
+      },
+    },
   ],
   // Boot the dev server (or reuse an existing one) for the e2e specs.
   // Pure-function unit suites under `tests/unit/` don't need the
