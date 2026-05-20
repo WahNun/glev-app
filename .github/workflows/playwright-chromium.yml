@@ -1,0 +1,85 @@
+name: Playwright — chromium suite
+
+# Runs the full Playwright chromium project (visual snapshot tests, marketing
+# mockup tests, e2e login/dashboard flows) on every push to main and on every
+# pull request.  Failures will block merge when this workflow is added to the
+# repository's branch-protection required-status-checks list.
+#
+# Required GitHub repository secrets:
+#   NEXT_PUBLIC_SUPABASE_URL       — Supabase project URL
+#   NEXT_PUBLIC_SUPABASE_ANON_KEY  — public anon key (safe to expose in JS)
+#   SUPABASE_SERVICE_ROLE_KEY      — service-role key used by global-setup
+#                                    to provision the playwright test user
+#
+# The job installs Playwright's bundled Chromium (--with-deps) so it is
+# fully self-contained and does not rely on REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE
+# (that env var is only set inside the Replit dev container).
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: playwright-chromium-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  playwright-chromium:
+    name: Playwright — chromium
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      PORT: 5000
+      PLAYWRIGHT_BASE_URL: http://localhost:5000
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Get pnpm store path
+        id: pnpm-cache
+        run: echo "store=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.store }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium + system deps
+        run: pnpm exec playwright install chromium --with-deps
+
+      - name: Run full chromium test suite
+        run: pnpm exec playwright test --project=chromium
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-chromium
+          path: playwright-report/
+          retention-days: 14
