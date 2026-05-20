@@ -161,6 +161,13 @@ export default function SnapSlider({
     startXRef.current = e.clientX;
     startYRef.current = e.clientY;
     axisLockedRef.current = false;
+    // Suppress Android pull-to-refresh at the document level while dragging.
+    // overscrollBehavior on the element itself only affects overscroll within
+    // that element; Android OEM pull-to-refresh fires at the body/document
+    // level before pointer events propagate, so we must suppress it there too.
+    if (typeof document !== "undefined") {
+      document.body.style.overscrollBehaviorY = "none";
+    }
     // Capture so pointermove/pointerup fire on this element even when the
     // finger leaves it — critical for fast swipes on iOS.
     (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
@@ -192,6 +199,10 @@ export default function SnapSlider({
     e.preventDefault();
     isDraggingRef.current = false;
     axisLockedRef.current = false;
+    // Restore body overscroll behaviour now that the drag is complete.
+    if (typeof document !== "undefined") {
+      document.body.style.overscrollBehaviorY = "";
+    }
     commit(valueFromPointer(e.clientX));
   }, [valueFromPointer]); // eslint-disable-line react-hooks/exhaustive-deps
 
