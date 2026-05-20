@@ -2557,71 +2557,100 @@ export default function EnginePage() {
                   so the whole step reads as one visual family. CGM-pull
                   becomes a small text link to the right of the value
                   (still tappable, no longer dominates the row). */}
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, marginBottom: 14 }}>
-                {/* Glucose value row — borderless, centered, big mono.
-                    CGM pull link sits to the right; trend arrow appears
-                    inline left of the value when CGM has a fresh trend. */}
-                <div style={{ position: "relative", width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
-                  {currentTrend && (
-                    <div style={{ display: "flex", alignItems: "center", color: "var(--text-muted)" }}>
-                      <TrendArrow trend={currentTrend} t={tEngine}/>
+              {/* 2-row info block:
+                    Left  col: date (accent) / time (green) — tapping opens native picker
+                    Right col: glucose value + CGM badge / mg/dL label
+                  Saves ~16px vertical vs the old stacked layout. */}
+              {(() => {
+                // Parse the datetime-local string ("YYYY-MM-DDTHH:mm") for
+                // custom coloured display. Falls back to "—" on bad input.
+                const mealDate = (() => {
+                  const d = parseLocalDt(mealTime);
+                  if (!d) return "—";
+                  return d.toLocaleDateString("de-DE", { day: "numeric", month: "short", year: "numeric" });
+                })();
+                const mealTimeFmt = (() => {
+                  const d = parseLocalDt(mealTime);
+                  if (!d) return "—";
+                  return d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+                })();
+                return (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, alignItems: "center", marginBottom: 14 }}>
+                    {/* LEFT — date + time (coloured), tap → native picker */}
+                    <div style={{ position: "relative", paddingLeft: 4 }}>
+                      <div style={{ fontFamily: "var(--font-mono)", fontWeight: 700, fontSize: 15, color: ACCENT, lineHeight: 1.5 }}>
+                        {mealDate}
+                      </div>
+                      <div style={{ fontFamily: "var(--font-mono)", fontWeight: 700, fontSize: 15, color: GREEN, lineHeight: 1.5 }}>
+                        {mealTimeFmt}
+                      </div>
+                      {/* Transparent datetime-local input overlaid so tapping the
+                          coloured text opens the native iOS / Android picker. */}
+                      <input
+                        type="datetime-local"
+                        value={mealTime}
+                        min={oneYearAgoLocalDt()}
+                        max={nowLocalDt()}
+                        onChange={(e) => setMealTime(e.target.value)}
+                        aria-label={tEngine("meal_time_label")}
+                        style={{
+                          position: "absolute", inset: 0,
+                          opacity: 0, width: "100%", height: "100%",
+                          cursor: "pointer",
+                        }}
+                      />
                     </div>
-                  )}
-                  <input
-                    style={{
-                      background: "transparent", border: "none", outline: "none",
-                      width: glucose ? `${Math.max(2, glucose.length)}ch` : "5ch",
-                      textAlign: "center",
-                      fontFamily: "var(--font-mono)", fontWeight: 800, fontSize: 32,
-                      color: "var(--text)", padding: "4px 0",
-                      MozAppearance: "textfield",
-                    }}
-                    type="number"
-                    placeholder="—"
-                    value={glucose}
-                    onChange={(e) => setGlucose(e.target.value)}
-                    aria-label={tEngine("glucose_before_label")}
-                  />
-                  <button
-                    onClick={handlePullCgm}
-                    disabled={cgmPulling}
-                    title={lastReading ? `${tEngine("glucose_last_prefix")}: ${lastReading}` : undefined}
-                    aria-label={tEngine("cgm_button")}
-                    style={{
-                      display: "inline-flex", alignItems: "center", gap: 5,
-                      padding: "4px 6px", borderRadius: 6,
-                      border: "none", background: "transparent",
-                      color: ACCENT, fontSize: 12, fontWeight: 600, letterSpacing: "0.02em",
-                      cursor: cgmPulling ? "wait" : "pointer",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: GREEN, boxShadow: `0 0 5px ${GREEN}` }}/>
-                    {cgmPulling ? tEngine("cgm_pulling") : tEngine("cgm_button")}
-                  </button>
-                </div>
-                {/* mg/dL unit label, faint */}
-                <div style={{ fontSize: 11, color: "var(--text-faint)", fontFamily: "var(--font-mono)", letterSpacing: "0.05em", marginTop: -2 }}>
-                  mg/dL
-                </div>
-                {/* Meal-time — same mono treatment as the macro-ring
-                    centre values, smaller. Borderless, centered. Tap
-                    opens the native iOS / Android picker. */}
-                <input
-                  style={{
-                    background: "transparent", border: "none", outline: "none",
-                    width: "auto", minWidth: 200,
-                    textAlign: "center",
-                    fontFamily: "var(--font-mono)", fontWeight: 800, fontSize: 20,
-                    color: "var(--text)", padding: "6px 0",
-                    marginTop: 6,
-                  }}
-                  type="datetime-local"
-                  value={mealTime}
-                  onChange={(e) => setMealTime(e.target.value)}
-                  aria-label={tEngine("meal_time_label")}
-                />
-              </div>
+
+                    {/* RIGHT — glucose value (row 1) + mg/dL (row 2) */}
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+                      {/* Row 1: trend arrow + glucose input + CGM badge */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        {currentTrend && (
+                          <div style={{ color: "var(--text-muted)", display: "flex", alignItems: "center" }}>
+                            <TrendArrow trend={currentTrend} t={tEngine}/>
+                          </div>
+                        )}
+                        <input
+                          type="number"
+                          placeholder="—"
+                          value={glucose}
+                          onChange={(e) => setGlucose(e.target.value)}
+                          aria-label={tEngine("glucose_before_label")}
+                          style={{
+                            background: "transparent", border: "none", outline: "none",
+                            width: glucose ? `${Math.max(2, glucose.length)}ch` : "4ch",
+                            textAlign: "right",
+                            fontFamily: "var(--font-mono)", fontWeight: 800, fontSize: 28,
+                            color: "var(--text)", padding: 0,
+                            MozAppearance: "textfield",
+                          }}
+                        />
+                        <button
+                          onClick={handlePullCgm}
+                          disabled={cgmPulling}
+                          title={lastReading ? `${tEngine("glucose_last_prefix")}: ${lastReading}` : undefined}
+                          aria-label={tEngine("cgm_button")}
+                          style={{
+                            display: "inline-flex", alignItems: "center", gap: 4,
+                            padding: "3px 6px", borderRadius: 6,
+                            border: "none", background: "transparent",
+                            color: ACCENT, fontSize: 11, fontWeight: 600, letterSpacing: "0.02em",
+                            cursor: cgmPulling ? "wait" : "pointer",
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          <span style={{ width: 5, height: 5, borderRadius: "50%", background: GREEN, boxShadow: `0 0 4px ${GREEN}` }}/>
+                          {cgmPulling ? tEngine("cgm_pulling") : tEngine("cgm_button")}
+                        </button>
+                      </div>
+                      {/* Row 2: unit */}
+                      <div style={{ fontSize: 11, color: "var(--text-faint)", fontFamily: "var(--font-mono)", letterSpacing: "0.05em" }}>
+                        mg/dL
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Three-path action row, visually tiered:
                     1. PRIMARY  — "Speichern (ohne Bolus)" full-width

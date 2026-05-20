@@ -184,18 +184,23 @@ export default function SnapSlider({
         )}
       </div>
 
-      <div style={{ position: "relative", height: 24 }}>
-        {/* Track background + filled track */}
+      {/* 36 px tall so the iOS touch target is large enough.
+          The native thumb can extend beyond the custom track; keeping
+          overflow visible prevents iOS WKWebView from clipping it. */}
+      <div style={{ position: "relative", height: 36 }}>
+        {/* Track background + filled track — vertically centred */}
         <div style={{
           position: "absolute", left: 0, right: 0, top: "50%",
           height: 6, transform: "translateY(-50%)",
           borderRadius: 999, background: "var(--surface-soft)",
+          pointerEvents: "none",
         }} />
         <div style={{
           position: "absolute", left: 0, top: "50%",
           width: `${pct}%`, height: 6, transform: "translateY(-50%)",
           borderRadius: 999, background: accent, opacity: 0.85,
           transition: "width 60ms linear",
+          pointerEvents: "none",
         }} />
         <input
           type="range"
@@ -207,12 +212,11 @@ export default function SnapSlider({
           aria-label={ariaLabel ?? "Value slider"}
           style={{
             position: "absolute", left: 0, right: 0, top: 0,
-            width: "100%", height: 24, margin: 0,
+            width: "100%", height: 36, margin: 0,
             background: "transparent",
             accentColor: accent,
-            // Native thumb still renders on top — track is purely visual.
-            // `appearance: none` on track is intentionally NOT set, so
-            // each browser/native still renders its accessible thumb.
+            cursor: "pointer",
+            touchAction: "none",
           }}
         />
       </div>

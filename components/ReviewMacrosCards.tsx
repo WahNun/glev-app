@@ -151,21 +151,16 @@ export default function ReviewMacrosCards({
           centers the ring with minWidth:0 (collapses min-content floor).
           See app/(protected)/dashboard/page.tsx ~line 980. */}
       <div style={{
-        padding: "22px 16px 24px",
+        padding: "16px 12px 8px",
         display: "grid",
         gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-        gap: 8,
+        gap: 6,
       }}>
         {cards.map(c => {
           const active = open === c.key;
-          // Build a soft tint of the macro color for the active
-          // background. `${color}22` ≈ 13% alpha — strong enough to
-          // read as "selected" against the dark surface but light
-          // enough that the ring inside stays the visual hero. The
-          // colored bottom underline is kept so the selection still
-          // reads at a glance even when the tint is subtle on light
-          // mode. A 1px translucent border around the active card
-          // ties it together without looking boxy.
+          // Strip the unit suffix "(g)" / "(BE)" / "(KE)" from the label —
+          // the unit is shown globally below the grid instead.
+          const displayLabel = c.label.replace(/\s*\([^)]+\)\s*$/i, "").trim();
           return (
             <div key={c.key} style={{ display: "flex", justifyContent: "center", minWidth: 0 }}>
               <button
@@ -181,7 +176,7 @@ export default function ReviewMacrosCards({
                   justifyContent: "center",
                   width: "100%",
                   minWidth: 0,
-                  padding: "8px 4px 6px",
+                  padding: "8px 10px 8px",
                   borderRadius: 14,
                   background: active ? `${c.color}22` : "transparent",
                   border: `1px solid ${active ? `${c.color}55` : "transparent"}`,
@@ -192,7 +187,7 @@ export default function ReviewMacrosCards({
                 }}
               >
                 <MacroRing
-                  label={c.label}
+                  label={displayLabel}
                   value={c.value}
                   color={c.color}
                   unit={c.unit}
@@ -201,6 +196,17 @@ export default function ReviewMacrosCards({
             </div>
           );
         })}
+      </div>
+      {/* Global unit hint — replaces the per-ring "(g)" suffix */}
+      <div style={{
+        textAlign: "center",
+        fontSize: 11,
+        color: "var(--text-faint)",
+        letterSpacing: "0.06em",
+        textTransform: "uppercase",
+        paddingBottom: 12,
+      }}>
+        Angaben in g
       </div>
 
       {open && (() => {
