@@ -1,0 +1,67 @@
+name: Flush CGM jobs (5-min)
+
+# Processes pending cgm_fetch_jobs for all users server-side, so post-meal
+# glucose readings (+30min, +1h, +90min, +2h, +3h) are filled even when
+# the user has the app closed.
+#
+# Setup (one-time):
+#   The workflow reuses the existing `CRON_SECRET` repo secret — no extra
+#   secret needed. Ensure CRON_SECRET is set in both:
+#     • GitHub → Settings → Secrets and variables → Actions → CRON_SECRET
+#     • Vercel → Project Settings → Environment Variables → CRON_SECRET
+#
+# Frequency: every 5 minutes. GitHub Actions cron is best-effort; actual
+# firing is typically 5–10 min. Acceptable since jobs are retried on every
+# pass and the shortest window we care about is 30 min post-meal.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cgm-jobs-flush
+  cancel-in-progress: false
+
+jobs:
+  flush:
+    name: Flush CGM jobs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Hit /api/cron/cgm-jobs-flush
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          PROD_APP_URL: ${{ vars.PROD_APP_URL || 'https://glev.app' }}
+        run: |
+          set -u
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "::error::Repo secret CRON_SECRET not set — see flush-outbox.yml for setup."
+            exit 1
+          fi
+
+          url="${PROD_APP_URL%/}/api/cron/cgm-jobs-flush"
+          echo "GET -> ${url}"
+
+          response_file="$(mktemp)"
+          status=$(curl -sS -X GET \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "Accept: application/json" \
+            -o "${response_file}" \
+            -w "%{http_code}" \
+            --max-time 60 \
+            "${url}" || echo "000")
+
+          echo "HTTP ${status}"
+          echo "--- response body ---"
+          cat "${response_file}" || true
+          echo
+          echo "--- end response ---"
+
+          if [ "${status}" != "200" ]; then
+            echo "::error::cgm-jobs-flush returned HTTP ${status}"
+            exit 1
+          fi

@@ -74,10 +74,34 @@ function pickReadingNear(history: Reading[], targetMs: number, windowMs: number)
  * try to resolve each via the CGM history, and update both the job row
  * and the corresponding log row's target column.
  */
+// ── Admin/cron entry point ────────────────────────────────────────────────
+// Called by /api/cron/cgm-jobs-flush with Bearer CRON_SECRET + ?userId=xxx.
+// Runs the exact same pipeline as the user-session path so the two code
+// paths never diverge.
+export async function GET(req: NextRequest) {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret || cronSecret.length < 16) {
+    return NextResponse.json({ error: "Server misconfiguration" }, { status: 500 });
+  }
+  const auth = req.headers.get("authorization") ?? "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+  if (!token || token !== cronSecret) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const userId = req.nextUrl.searchParams.get("userId");
+  if (!userId) {
+    return NextResponse.json({ error: "userId required" }, { status: 400 });
+  }
+  return runForUser(userId);
+}
+
 export async function POST(req: NextRequest) {
   const { user, error } = await authenticate(req);
   if (!user) return NextResponse.json({ error: error || "unauthorized" }, { status: 401 });
+  return runForUser(user.id);
+}
 
+async function runForUser(userId: string): Promise<NextResponse> {
   const admin = adminClient();
   const nowMs = Date.now();
   const nowIso = new Date(nowMs).toISOString();
@@ -87,13 +111,13 @@ export async function POST(req: NextRequest) {
   // meals from the last 24h that don't already have a curve job). This
   // backfills meals logged BEFORE the feature shipped without needing
   // a separate cron.
-  await backfillMealCurveJobs(admin, user.id, nowIso);
+  await backfillMealCurveJobs(admin, userId, nowIso);
   // Task #194: same pattern for bolus and exercise curve jobs — the
   // feature shipped after some users already had logs in flight, so
   // we self-heal by enqueueing the +3h backfill jobs for any
   // bolus / exercise log from the last 24h that doesn't have one.
-  await backfillBolusCurveJobs(admin, user.id, nowIso);
-  await backfillExerciseCurveJobs(admin, user.id, nowIso);
+  await backfillBolusCurveJobs(admin, userId, nowIso);
+  await backfillExerciseCurveJobs(admin, userId, nowIso);
   // Throttle re-attempts: a job that already failed once this pass
   // shouldn't be retried again until RETRY_DELAY_MS has elapsed.
   // We compare against `updated_at` (which is bumped on every retry)
@@ -107,7 +131,7 @@ export async function POST(req: NextRequest) {
   const { data: jobs, error: qErr } = await admin
     .from("cgm_fetch_jobs")
     .select("*")
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .eq("status", "pending")
     .lte("fetch_time", nowIso)
     .or(`retry_count.eq.0,updated_at.lte.${retryCutoffIso}`)
@@ -127,7 +151,7 @@ export async function POST(req: NextRequest) {
   let current: Reading | null = null;
   let cgmAvailable = true;
   try {
-    const out = await getHistory(user.id);
+    const out = await getHistory(userId);
     history = out?.history || [];
     current = out?.current || null;
   } catch (e) {
