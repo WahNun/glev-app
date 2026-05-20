@@ -2165,8 +2165,16 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
         if (!cancelled) setTrend({ state: "error", points: [], fingersticks: [], error: (e as Error)?.message || "fetch failed" });
       })
       .finally(() => clearTimeout(timer));
-    return () => { cancelled = true; ctrl.abort(); clearTimeout(timer); };
-  }, [isOpen, trend.state, fromMs, toMs]);
+    return () => {
+      cancelled = true;
+      ctrl.abort();
+      clearTimeout(timer);
+      // Reset to idle so the next open can start a fresh fetch.
+      // Without this, an aborted in-flight request leaves state="loading"
+      // forever because the guard `trend.state !== "idle"` blocks the retry.
+      setTrend({ state: "idle", points: [], fingersticks: [] });
+    };
+  }, [isOpen, fromMs, toMs]);
 
   // Stats for the 6 h pre-injection window.
   const inWindow = trend.points.filter(p => p.t >= fromMs && p.t <= toMs);
