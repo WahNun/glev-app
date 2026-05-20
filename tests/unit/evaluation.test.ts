@@ -20,7 +20,14 @@
 
 import { test, expect } from "@playwright/test";
 
-import { evaluateEntry } from "@/lib/engine/evaluation";
+import {
+  evaluateEntry,
+  HYPO_THRESHOLD,
+  SPIKE_CUTOFF_FAST_CARBS,
+  SPIKE_CUTOFF_HIGH_FAT,
+  SPIKE_CUTOFF_HIGH_PROTEIN,
+  SPIKE_CUTOFF_BALANCED,
+} from "@/lib/engine/evaluation";
 import { makeInsulinLog, makeExerciseLog } from "../support/engineFixtures";
 
 // ── delta-based outcomes (bgAfter present) ──────────────────────────
@@ -325,4 +332,122 @@ test("evaluateEntry: preTrend appends trend message, outcome unchanged", () => {
 test("evaluateEntry: no preTrend → no trend message", () => {
   const r = evaluateEntry({ carbs: 50, insulin: 4, bgBefore: 100, bgAfter: 110 });
   expect(r.messages.some(m => m.key.startsWith("engine_eval_trend_"))).toBe(false);
+});
+
+// ── Spike cutoff boundary tests (Task #426) ─────────────────────────
+//
+// Each test imports the exported constant directly and probes both sides
+// of the boundary. If a constant value changes (e.g. SPIKE_CUTOFF_FAST_CARBS
+// from 70 to 65), the "exactly at cutoff" assertion flips outcome and
+// the test breaks immediately.
+//
+// Implementation note: spike detection uses strict `>` (delta > spikeCutoff),
+// so delta === cutoff is NOT a spike — it falls into the UNDERDOSE branch
+// (delta 40–70 > 30). delta === cutoff + 1 crosses the threshold and is SPIKE.
+
+test("spike boundary FAST_CARBS: delta = cutoff → UNDERDOSE, delta = cutoff + 1 → SPIKE", () => {
+  const bgBefore = 100;
+  const atCutoff = evaluateEntry({
+    carbs: 50, insulin: 4,
+    bgBefore,
+    bgAfter: bgBefore + SPIKE_CUTOFF_FAST_CARBS,
+    classification: "FAST_CARBS",
+  });
+  expect(atCutoff.outcome).toBe("UNDERDOSE");
+
+  const justAbove = evaluateEntry({
+    carbs: 50, insulin: 4,
+    bgBefore,
+    bgAfter: bgBefore + SPIKE_CUTOFF_FAST_CARBS + 1,
+    classification: "FAST_CARBS",
+  });
+  expect(justAbove.outcome).toBe("SPIKE");
+  expect(justAbove.reasoning).toMatch(/fast-carb meals/);
+});
+
+test("spike boundary HIGH_FAT: delta = cutoff → UNDERDOSE, delta = cutoff + 1 → SPIKE", () => {
+  const bgBefore = 100;
+  const atCutoff = evaluateEntry({
+    carbs: 50, insulin: 4,
+    bgBefore,
+    bgAfter: bgBefore + SPIKE_CUTOFF_HIGH_FAT,
+    classification: "HIGH_FAT",
+  });
+  expect(atCutoff.outcome).toBe("UNDERDOSE");
+
+  const justAbove = evaluateEntry({
+    carbs: 50, insulin: 4,
+    bgBefore,
+    bgAfter: bgBefore + SPIKE_CUTOFF_HIGH_FAT + 1,
+    classification: "HIGH_FAT",
+  });
+  expect(justAbove.outcome).toBe("SPIKE");
+  expect(justAbove.reasoning).toMatch(/high-fat meals/);
+});
+
+test("spike boundary HIGH_PROTEIN: delta = cutoff → UNDERDOSE, delta = cutoff + 1 → SPIKE", () => {
+  const bgBefore = 100;
+  const atCutoff = evaluateEntry({
+    carbs: 50, insulin: 4,
+    bgBefore,
+    bgAfter: bgBefore + SPIKE_CUTOFF_HIGH_PROTEIN,
+    classification: "HIGH_PROTEIN",
+  });
+  expect(atCutoff.outcome).toBe("UNDERDOSE");
+
+  const justAbove = evaluateEntry({
+    carbs: 50, insulin: 4,
+    bgBefore,
+    bgAfter: bgBefore + SPIKE_CUTOFF_HIGH_PROTEIN + 1,
+    classification: "HIGH_PROTEIN",
+  });
+  expect(justAbove.outcome).toBe("SPIKE");
+  expect(justAbove.reasoning).toMatch(/high-protein meals/);
+});
+
+test("spike boundary BALANCED: delta = cutoff → UNDERDOSE, delta = cutoff + 1 → SPIKE", () => {
+  const bgBefore = 100;
+  const atCutoff = evaluateEntry({
+    carbs: 50, insulin: 4,
+    bgBefore,
+    bgAfter: bgBefore + SPIKE_CUTOFF_BALANCED,
+    classification: "BALANCED",
+  });
+  expect(atCutoff.outcome).toBe("UNDERDOSE");
+
+  const justAbove = evaluateEntry({
+    carbs: 50, insulin: 4,
+    bgBefore,
+    bgAfter: bgBefore + SPIKE_CUTOFF_BALANCED + 1,
+    classification: "BALANCED",
+  });
+  expect(justAbove.outcome).toBe("SPIKE");
+  expect(justAbove.reasoning).toMatch(/balanced meals/);
+});
+
+// ── HYPO_THRESHOLD boundary test (Task #426) ────────────────────────
+//
+// Hypo detection uses strict `<` (bgAfter < HYPO_THRESHOLD), so:
+//   bgAfter = HYPO_THRESHOLD     → NOT a hypo (already covered by the
+//                                   "exactly at 70 is NOT a hypo" test above,
+//                                   but here we pin it to the imported constant)
+//   bgAfter = HYPO_THRESHOLD - 1 → HYPO_DURING (crosses the threshold)
+
+test("HYPO_THRESHOLD boundary: bgAfter = threshold → not a hypo, bgAfter = threshold - 1 → HYPO_DURING", () => {
+  const bgBefore = 100;
+
+  const atThreshold = evaluateEntry({
+    carbs: 50, insulin: 4,
+    bgBefore,
+    bgAfter: HYPO_THRESHOLD,
+  });
+  expect(atThreshold.outcome).not.toBe("HYPO_DURING");
+
+  const justBelow = evaluateEntry({
+    carbs: 50, insulin: 4,
+    bgBefore,
+    bgAfter: HYPO_THRESHOLD - 1,
+  });
+  expect(justBelow.outcome).toBe("HYPO_DURING");
+  expect(justBelow.messages.some(m => m.key === "engine_eval_hypo_during")).toBe(true);
 });

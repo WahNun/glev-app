@@ -16,7 +16,7 @@
 
 import { test, expect } from "@playwright/test";
 
-import { recommendDose } from "@/lib/engine/recommendation";
+import { recommendDose, SAFETY_BG_MIN } from "@/lib/engine/recommendation";
 import { makeAdaptiveICR, makeInsulinLog, makeExerciseLog } from "../support/engineFixtures";
 
 // ── safety floor ────────────────────────────────────────────────────
@@ -310,4 +310,33 @@ test("recommendDose: no preTrend → no trend message", () => {
     adaptiveICR: makeAdaptiveICR({ global: 15, sampleSize: 20 }),
   });
   expect(r.messages.some(m => m.key.startsWith("engine_rec_trend_"))).toBe(false);
+});
+
+// ── SAFETY_BG_MIN boundary test (Task #426) ──────────────────────────
+//
+// The safety floor uses strict `<` (currentBG < SAFETY_BG_MIN), so:
+//   currentBG = SAFETY_BG_MIN     → NOT blocked (80 < 80 = false)
+//   currentBG = SAFETY_BG_MIN - 1 → blocked     (79 < 80 = true)
+//
+// Tests import SAFETY_BG_MIN directly so any rename or value change
+// (e.g. 80 → 85) breaks the test immediately.
+
+test("SAFETY_BG_MIN boundary: currentBG = floor → not blocked, currentBG = floor - 1 → blocked", () => {
+  const icr = makeAdaptiveICR({ global: 15, sampleSize: 20 });
+
+  const atFloor = recommendDose({
+    carbs: 40,
+    currentBG: SAFETY_BG_MIN,
+    adaptiveICR: icr,
+  });
+  expect(atFloor.blocked).toBe(false);
+
+  const justBelow = recommendDose({
+    carbs: 40,
+    currentBG: SAFETY_BG_MIN - 1,
+    adaptiveICR: icr,
+  });
+  expect(justBelow.blocked).toBe(true);
+  expect(justBelow.recommendedUnits).toBe(0);
+  expect(justBelow.reasoning).toMatch(/safety floor/);
 });
