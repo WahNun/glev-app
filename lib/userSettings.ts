@@ -235,6 +235,33 @@ export async function saveInsulinSettings(settings: InsulinSettings): Promise<vo
   if (error) throw new Error(error.message);
 }
 
+/* ── Insulin type (rapid / regular) ──────────────────────────────── */
+
+export async function fetchInsulinType(): Promise<import('./iob').InsulinType> {
+  if (!supabase) return 'rapid';
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return 'rapid';
+  const { data, error } = await supabase
+    .from("user_settings")
+    .select("insulin_type")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (error || !data) return 'rapid';
+  const t = data.insulin_type;
+  if (t === 'rapid' || t === 'regular' || t === 'unknown') return t;
+  return 'rapid';
+}
+
+export async function saveInsulinType(insulinType: import('./iob').InsulinType): Promise<void> {
+  if (!supabase) throw new Error("Supabase not configured");
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) throw new Error("Not signed in");
+  const { error } = await supabase
+    .from("user_settings")
+    .upsert({ user_id: user.id, insulin_type: insulinType }, { onConflict: "user_id" });
+  if (error) throw new Error(error.message);
+}
+
 /* ── Personal glucose target range (TIR band) ─────────────────────── */
 //
 // Lives in `user_settings.target_min_mgdl` / `target_max_mgdl`

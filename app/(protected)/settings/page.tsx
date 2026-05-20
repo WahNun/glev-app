@@ -22,7 +22,10 @@ import {
   setEngineIcrAutoApply,
   DEFAULT_ENGINE_ICR_INFO,
   type EngineIcrInfo,
+  fetchInsulinType,
+  saveInsulinType,
 } from "@/lib/userSettings";
+import type { InsulinType } from "@/lib/iob";
 import type { AdjustmentRecord } from "@/lib/engine/adjustment";
 import type { EffectivePlan } from "@/lib/admin/effectivePlan";
 import {
@@ -125,7 +128,8 @@ type SheetKey =
   | "onboarding"
   | "adjustmentHistory"
   | "cycleLogging"
-  | "aboutMe";
+  | "aboutMe"
+  | "insulinType";
 
 /** Lightweight CGM status hook — fetches /api/cgm/status once on mount.
  * Silent on error (treats as disconnected). The full CgmSettingsCard owns
@@ -267,6 +271,7 @@ export default function SettingsPage() {
   // can see what the engine has been changing without us paginating.
   // Failures collapse to an empty array — same UI as "nothing yet".
   const [adjustmentHistory, setAdjustmentHistory] = useState<AdjustmentRecord[]>([]);
+  const [insulinType, setInsulinType] = useState<InsulinType>('rapid');
   // Engine-computed ICR info (Lucas-Spec May 14). Surfaced in the ICR
   // sheet as a read-only suggestion line "Engine-Vorschlag: 1:X · …
   // Mahlzeiten" plus an opt-in toggle that lets the engine auto-apply
@@ -370,6 +375,7 @@ export default function SettingsPage() {
     // Engine ICR + auto-apply preference. Failure → zero state, which
     // hides the suggestion line and shows the toggle as off.
     fetchEngineIcrInfo().then(setEngineIcrInfo).catch(() => {});
+    fetchInsulinType().then(setInsulinType).catch(() => {});
     // Load account info (email + sign-up date + total meal count) for the
     // Account row subtitle and sheet. Each piece is best-effort: failures
     // leave the placeholder ("—") in place rather than blocking the row.
@@ -956,6 +962,22 @@ export default function SettingsPage() {
       setSaving(false);
     }
   }, [aboutSexDraft, aboutBirthYearDraft, aboutHeightDraft, aboutWeightDraft, tSettings]);
+
+  const saveInsulinTypeAction = useCallback(async (): Promise<boolean> => {
+    setSaving(true);
+    setSaveError("");
+    try {
+      await saveInsulinType(insulinType);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+      return true;
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : tSettings("save_failed"));
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }, [insulinType, tSettings]);
 
   /* ── shared sheet footers ──────────────────────────────────────── */
   /** Save footer: button calls `onSave()`; sheet only dismisses on a true
@@ -2064,6 +2086,52 @@ export default function SettingsPage() {
       ),
       footer: closeFooter,
     },
+    insulinType: {
+      title: tSettings("sheet_insulin_type_title"),
+      body: (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {(["rapid", "regular"] as const).map((type) => {
+            const isSelected = insulinType === type;
+            const label = type === "rapid"
+              ? tSettings("insulin_type_rapid_label")
+              : tSettings("insulin_type_regular_label");
+            const examples = type === "rapid"
+              ? tSettings("insulin_type_rapid_examples")
+              : tSettings("insulin_type_regular_examples");
+            const dia = type === "rapid"
+              ? tSettings("insulin_type_rapid_dia")
+              : tSettings("insulin_type_regular_dia");
+            return (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setInsulinType(type)}
+                style={{
+                  width: "100%",
+                  padding: "14px 16px",
+                  borderRadius: 14,
+                  border: `2px solid ${isSelected ? ACCENT : BORDER}`,
+                  background: isSelected ? `${ACCENT}14` : "var(--surface-soft)",
+                  textAlign: "left",
+                  cursor: "pointer",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 4,
+                  transition: "border-color 150ms ease, background 150ms ease",
+                }}
+              >
+                <div style={{ fontSize: 15, fontWeight: 700, color: isSelected ? ACCENT : "var(--text-strong)" }}>
+                  {label}
+                </div>
+                <div style={{ fontSize: 13, color: "var(--text-dim)" }}>{examples}</div>
+                <div style={{ fontSize: 12, color: isSelected ? ACCENT : "var(--text-faint)", marginTop: 2 }}>{dia}</div>
+              </button>
+            );
+          })}
+        </div>
+      ),
+      footer: <SaveFooter onSave={saveInsulinTypeAction} />,
+    },
   };
 
   const active = openSheet ? sheetContent[openSheet] : null;
@@ -2148,6 +2216,16 @@ export default function SettingsPage() {
           subtitle={lastAppointmentSub}
           ariaLabel={tSettings("row_open_aria", { label: tSettings("appointments_title") })}
           onClick={() => openSheetWith("lastAppointment")}
+        />
+        <SettingsRow
+          iconColor={ACCENT}
+          icon={ICON.insulin}
+          label={tSettings("row_insulin_type")}
+          subtitle={insulinType === "rapid"
+            ? tSettings("subtitle_insulin_type_rapid")
+            : tSettings("subtitle_insulin_type_regular")}
+          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_insulin_type") })}
+          onClick={() => openSheetWith("insulinType")}
         />
         <SettingsRow
           iconColor={ACCENT}

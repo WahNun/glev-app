@@ -17,7 +17,7 @@ import { computeAdaptiveICR } from "@/lib/engine/adaptiveICR";
 import { getEffectiveICR } from "@/lib/icrSchedule";
 import { detectPattern } from "@/lib/engine/patterns";
 import { suggestAdjustment, type AdaptiveSettings } from "@/lib/engine/adjustment";
-import { applyAdjustmentToSettings, getInsulinSettings, persistEngineIcr } from "@/lib/userSettings";
+import { applyAdjustmentToSettings, getInsulinSettings, persistEngineIcr, fetchInsulinType } from "@/lib/userSettings";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
 import { useEngineWizardStep } from "@/lib/engineWizardStepContext";
 import EngineLogTab, { InsulinForm, ExerciseForm } from "@/components/EngineLogTab";
@@ -514,7 +514,7 @@ export default function EnginePage() {
   const [loading, setLoading] = useState(true);
   const [iob, setIob] = useState<number>(0);
   const [iobDisplay, setIobDisplay] = useState<string | null>(null);
-  const [insulinType] = useState<InsulinType>('rapid');
+  const [insulinType, setInsulinType] = useState<InsulinType>('rapid');
   const [glucose, setGlucose] = useState("");
   // The `carbs` form state holds the user-displayed value in their
   // chosen unit (g / BE / KE) — see useCarbUnit below. All persistence
@@ -684,6 +684,12 @@ export default function EnginePage() {
     // render. The cleanup reads refs/setters that are stable across
     // renders, so an empty dep list is the correct contract here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Load insulin type from user_settings on mount. Falls back to 'rapid'
+  // if not set or the DB is unreachable (fetchInsulinType always resolves).
+  useEffect(() => {
+    fetchInsulinType().then(setInsulinType).catch(() => {});
   }, []);
 
   // Confirm-Log + integrated chat state. mealTime defaults to "now"; insulin
