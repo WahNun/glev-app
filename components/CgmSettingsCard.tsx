@@ -152,7 +152,10 @@ export default function CgmSettingsCard() {
     count: number;
     lastTimestamp: string | null;
     lastValueMgDl: number | null;
+    lastTrend: string | null;
   } | null>(null);
+  const [appleHealthPermissionRevoked, setAppleHealthPermissionRevoked] =
+    useState(false);
   const [appleHealthSubmitting, setAppleHealthSubmitting] = useState(false);
   const [appleHealthMessage, setAppleHealthMessage] =
     useState<{ kind: "success" | "error" | "info"; text: string } | null>(null);
@@ -258,11 +261,13 @@ export default function CgmSettingsCard() {
           count?: number;
           lastTimestamp?: string | null;
           lastValueMgDl?: number | null;
+          lastTrend?: string | null;
         };
         setAppleHealthStatus({
           count: j?.count ?? 0,
           lastTimestamp: j?.lastTimestamp ?? null,
           lastValueMgDl: j?.lastValueMgDl ?? null,
+          lastTrend: j?.lastTrend ?? null,
         });
       }
       if (rangeRes.ok) {
@@ -294,7 +299,20 @@ export default function CgmSettingsCard() {
           Capacitor?: { isNativePlatform?: () => boolean };
         };
         if (cancelled) return;
-        setIsNativePlatform(!!mod.Capacitor?.isNativePlatform?.());
+        const native = !!mod.Capacitor?.isNativePlatform?.();
+        setIsNativePlatform(native);
+        // If running on native and the user has apple_health selected,
+        // check whether HealthKit permission is still granted. If the
+        // plugin can't be loaded (permission revoked / HealthKit
+        // unavailable) we surface the permission-revoked banner.
+        if (native) {
+          const { isAppleHealthAvailable } = await import(
+            "@/lib/cgm/appleHealthClient"
+          );
+          if (cancelled) return;
+          const available = await isAppleHealthAvailable();
+          if (!cancelled) setAppleHealthPermissionRevoked(!available);
+        }
       } catch {
         if (!cancelled) setIsNativePlatform(false);
       }
@@ -1541,39 +1559,115 @@ export default function CgmSettingsCard() {
                   </div>
                 )}
 
-                {appleHealthSelected && appleHealthStatus && (
+                {appleHealthSelected && appleHealthPermissionRevoked && (
                   <div
                     style={{
-                      fontSize: 14,
-                      color: GREEN,
-                      background: `${GREEN}10`,
-                      border: `1px solid ${GREEN}30`,
+                      fontSize: 13,
+                      color: "var(--orange, #F5A623)",
+                      background: "rgba(245,166,35,0.10)",
+                      border: "1px solid rgba(245,166,35,0.30)",
                       borderRadius: 10,
                       padding: "10px 14px",
                     }}
                   >
-                    {appleHealthStatus.lastValueMgDl != null
-                      ? glucoseUnit === "mmol/L"
-                        ? tAh("status_connected_with_value_mmol", {
-                            value: mgdlToMmol(appleHealthStatus.lastValueMgDl),
-                          })
-                        : tAh("status_connected_with_value", {
-                            value: appleHealthStatus.lastValueMgDl,
-                          })
-                      : tAh("status_connected_no_values")}
-                    <div style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 4 }}>
-                      {tAh("status_count", { count: appleHealthStatus.count })}
-                      {appleHealthStatus.lastTimestamp
-                        ? tAh("status_last_sync_suffix", {
-                            age: formatRelativeAge(
-                              appleHealthStatus.lastTimestamp,
-                              tAh,
-                            ),
-                          })
-                        : ""}
-                    </div>
+                    {tAh("permission_revoked")}
                   </div>
                 )}
+
+                {appleHealthSelected && appleHealthStatus && !appleHealthPermissionRevoked && (() => {
+                  const { lastTimestamp, lastValueMgDl, lastTrend, count } = appleHealthStatus;
+                  const ageMs = lastTimestamp ? Date.now() - Date.parse(lastTimestamp) : null;
+                  const ageMin = ageMs != null ? Math.floor(ageMs / 60_000) : null;
+                  const dotColor =
+                    ageMin == null ? "var(--text-dim)"
+                    : ageMin < 5  ? "#22D3A0"
+                    : ageMin < 15 ? "#F5A623"
+                    : "#FF2D78";
+                  const TREND_ARROWS: Record<string, string> = {
+                    stable: "→",
+                    rising: "↗",
+                    risingQuickly: "↑",
+                    falling: "↘",
+                    fallingQuickly: "↓",
+                  };
+                  const arrow = lastTrend ? (TREND_ARROWS[lastTrend] ?? "→") : null;
+                  const freshnessLabel =
+                    ageMin == null ? ""
+                    : ageMin < 5  ? tAh("freshness_fresh")
+                    : ageMin < 15 ? tAh("freshness_stale", { n: ageMin })
+                    : tAh("freshness_old");
+                  return (
+                    <div
+                      style={{
+                        background: "var(--card-bg, var(--surface))",
+                        border: "1px solid var(--border)",
+                        borderRadius: 12,
+                        padding: "12px 14px",
+                      }}
+                    >
+                      {lastValueMgDl != null ? (
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            marginBottom: 6,
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: 10,
+                              height: 10,
+                              borderRadius: "50%",
+                              background: dotColor,
+                              flexShrink: 0,
+                              boxShadow: `0 0 6px ${dotColor}80`,
+                            }}
+                          />
+                          <span
+                            style={{
+                              fontFamily: "var(--font-mono, monospace)",
+                              fontSize: 22,
+                              fontWeight: 600,
+                              letterSpacing: "-0.5px",
+                              color: "var(--text)",
+                              lineHeight: 1,
+                            }}
+                          >
+                            {glucoseUnit === "mmol/L"
+                              ? `${mgdlToMmol(lastValueMgDl)} mmol/L`
+                              : `${lastValueMgDl} mg/dL`}
+                          </span>
+                          {arrow && (
+                            <span
+                              style={{
+                                fontSize: 20,
+                                color: "var(--text-dim)",
+                                lineHeight: 1,
+                              }}
+                            >
+                              {arrow}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <div
+                          style={{
+                            fontSize: 13,
+                            color: "var(--text-dim)",
+                            marginBottom: 4,
+                          }}
+                        >
+                          {tAh("status_connected_no_values")}
+                        </div>
+                      )}
+                      <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
+                        {tAh("status_count", { count })}
+                        {freshnessLabel ? ` · ${freshnessLabel}` : ""}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <div style={{ display: "flex", gap: 10, marginTop: 4, flexWrap: "wrap" }}>
                   <button

@@ -209,6 +209,7 @@ export async function GET(req: NextRequest) {
       count: status.count,
       lastTimestamp: status.lastTimestamp,
       lastValueMgDl: status.lastValueMgDl,
+      lastTrend: status.lastTrend,
     });
   } catch (e) {
     return errResponse(e);

@@ -1323,7 +1323,11 @@
       "age_days": "{n} days ago",
       "workouts_range": "Workouts: {oldest} → {newest}, {count} total",
       "workouts_range_empty": "Workouts: none synced from Apple Health yet.",
-      "http_error": "Error {status}"
+      "http_error": "Error {status}",
+      "permission_revoked": "Apple Health access missing — please enable in iOS Settings",
+      "freshness_fresh": "less than 5 min ago",
+      "freshness_stale": "{n} min ago",
+      "freshness_old": "more than 15 min ago"
     },
     "status": {
       "title": "CGM connection",

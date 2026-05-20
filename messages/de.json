@@ -1334,7 +1334,11 @@
       "http_error": "Fehler {status}",
       "source_toggle_label": "Apple Health als BG-Quelle nutzen",
       "open_ios_settings": "iOS-Einstellungen öffnen",
-      "status_connected_with_value_mmol": "✓ Verbunden — letzter Wert: {value} mmol/L"
+      "status_connected_with_value_mmol": "✓ Verbunden — letzter Wert: {value} mmol/L",
+      "permission_revoked": "Apple Health Zugriff fehlt — bitte in iOS Einstellungen aktivieren",
+      "freshness_fresh": "vor weniger als 5 Min",
+      "freshness_stale": "vor {n} Min",
+      "freshness_old": "vor mehr als 15 Min"
     },
     "status": {
       "title": "CGM-Verbindung",

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-19T11:14:54.979Z",
+  "generated_at": "2026-05-20T22:34:00.346Z",
   "workspace_gid": "1213452700618853",
   "include_completed": false,
   "sprints": [
@@ -42,18 +42,6 @@
           },
           "section": "Backlog",
           "notes": "Neuer Account-Typ: 'child' mit stark vereinfachter UI (Kinder-Modus)\n\nFunktionen:\n- Mahlzeit-Logging: große Karten (von Eltern vorkonfiguriert), Spracheingabe 'Ich esse...'\n- CGM verbinden + Glucose-Wert sehen (altersgerecht, kein Analytics)\n- Kein Zugang zu Einstellungen, History, Insights\n- Jedes Log triggert automatisch Eltern-Notification\n\nVerknüpfung:\n- Kind-Account wird von Elternteil angelegt und verknüpft\n- Elternteil kontrolliert welche Mahlzeiten im Kind-UI sichtbar sind\n- Kein shared login — Kind hat eigenes Gerät/Account\n\nUI-Prinzip:\n- Maximale Reduktion: 3 Hauptaktionen (Mahlzeit loggen, Glucose sehen, Hilfe)\n- Keine Zahlen die Kind stressen (kein Score, kein 'schlecht')\n- Bestätigung nach Insulin-Gabe durch Betreuer erscheint als grüner Haken im Kind-UI\n\nDB: child_profiles Tabelle (parent_user_id, child_user_id, display_name, meal_presets[])\n\nPhase: Phase 2"
-        },
-        {
-          "gid": "1214930939962045",
-          "name": "Control Score Labels: Empowerment-Sprache einbauen (SCHWACH → IM AUFBAU)",
-          "completed": false,
-          "due_on": "2026-05-19",
-          "assignee": {
-            "gid": "1213432759001229",
-            "name": "rave pickle"
-          },
-          "section": "Backlog",
-          "notes": "Ziel: Die Bewertungs-Labels im Control Score Chip auf empowernde Sprache umstellen. Die Zahl straft bereits — das Label soll nicht nochmal urteilen.\n\nAktuelle Labels:\n≥ 80 → STARK / STRONG (Grün) ✓ bleibt\n≥ 60 → GUT / GOOD (Blau)\n< 60 → SCHWACH / POOR (Pink/Rot)\n\nNeue Labels:\n≥ 80 → STARK / STRONG (Grün) — unverändert\n≥ 60 → AUF KURS / ON TRACK (Blau)\n< 60 → IM AUFBAU / BUILDING (Pink/Rot)\n\nDateien:\n- messages/de.json — Label-Keys für Control Score Badge\n- messages/en.json — englische Entsprechungen\n- Ggf. Komponente die den Badge rendert (Badge-Farbe bleibt, nur Text ändert sich)\n\nHintergrund: Identity Evolution Prinzip — Glev framt Nutzer als resilient + adaptiv, nicht als krank oder versagend. \"IM AUFBAU\" beschreibt den Zustand ohne zu urteilen und impliziert Bewegung und Richtung."
         },
         {
           "gid": "1214917710907872",
@@ -138,15 +126,6 @@
           },
           "section": "Backlog",
           "notes": "Share-Link kann nur von Glev+ Subscribern erstellt werden.\n- In POST /api/share/create: prüfen ob user.subscription_tier === 'plus'\n- Falls nicht: 403 mit Upgrade-Prompt\n- UI: Share-Button in Einstellungen nur sichtbar wenn Glev+ aktiv\n\nMarketing-Kontext: Der Share-Button ist der Einstieg in den Caregiver-Flow.\nElternteil bekommt Link → öffnet read-only Dashboard mit Live-Glucose + Logs des Kindes.\nTagline: \"Kind hat Glev — Eltern sehen alles. Live.\"\n\nJULI SCOPE: Share-Token generieren + read-only View. KEINE Kinder-Modus-UI, KEINE Bestätigung.\n\nBenötigt: Glev+ Subscription-Check Middleware (separater Task)"
-        },
-        {
-          "gid": "1214860284366580",
-          "name": "#299 Phase B — Offene Entscheidungen vor dem Build",
-          "completed": false,
-          "due_on": "2026-05-18",
-          "assignee": null,
-          "section": "Backlog",
-          "notes": "Vor dem Build von Per-User Food History (Phase B) müssen diese 5 Fragen entschieden werden. Danach kann Replit direkt loslegen.\n\n---\n\n1. MITTELUNG vs. LAST-WINS\nWenn Lucas 'Banane' zweimal loggt — einmal 120g, einmal 150g — was gilt beim dritten Mal?\n   a) Mittelwert (135g)\n   b) Exponentiell geglätteter Durchschnitt (neuere Einträge zählen mehr)\n   c) Letzter Wert gewinnt immer\n   d) User-bestätigte Korrekturen gewinnen immer, sonst Mittelwert\n\n2. FUZZY-MATCHING-SCHÄRFE\nWie genau muss der Name übereinstimmen für einen Cache-Hit?\n   a) Exakt: 'Banane' ≠ 'Bananen' (getrennte Einträge)\n   b) Normalisiert: Singular/Plural zusammenfassen, Groß/Klein ignorieren\n   c) Fuzzy: 'Banane reif' und 'Banane' gelten als dasselbe\n   → Empfehlung: Option b als Start, c später nachrüsten\n\n3. KONTEXT-MATCH\nReicht der Lebensmittelname als Treffer-Kriterium, oder soll auch der Mahlzeit-Kontext zählen?\n   a) Nur Name (einfacher, weniger Daten nötig)\n   b) Name + Mahlzeitkontext (z.B. 'Banane im Müsli' vs 'Banane als Snack') — kommt später wenn Datenlage reicht\n   → Empfehlung: jetzt nur a, b als Backlog\n\n4. SETTINGS-UI 'Meine Lebensmittel'\nSoll es einen sichtbaren Tab/Bereich geben wo Lucas sehen kann was die App über seine Lebensmittel gelernt hat?\n   a) Ja — Liste mit Bearbeiten/Löschen-Funktion (höherer Aufwand)\n   b) Nur intern — kein UI, App lernt still im Hintergrund (schneller zu bauen)\n   c) Minimal-UI: Liste lesbar, aber noch kein Edit (Kompromiss)\n\n5. BACKFILL JETZT ODER WARTEN?\nSoll der einmalige Backfill-Job sofort über alle historischen meals.parsed_json laufen?\n   a) Ja, sofort — maximiert Datenbasis vom ersten Tag\n   b) Nein, nur frisch sammeln ab Go-Live — sauberer Start, weniger Risiko durch alte Eingabefehler\n   c) Ja, aber mit strengem Outlier-Filter (wie im Plan beschrieben)\n   → Empfehlung: Option c"
         },
         {
           "gid": "1214860137541273",
@@ -248,15 +227,6 @@
           "notes": "Problem: Settings-Card zeigt nur 'Verbunden' + URL nach dem ersten Save. Kein aktueller Glukose-Wert beim erneuten Öffnen.\n\nLösung:\n- Beim Öffnen des Settings-Sheets: einmaliger GET /api/cgm/latest für Nightscout-User\n- Anzeige: 'Letzter Wert: 142 mg/dL vor 3 Min'\n- Optional: Pull-to-Refresh-Button\n\nPrio: Mittel — user-spürbar aber kein Blocker."
         },
         {
-          "gid": "1214441276858110",
-          "name": "[Nightscout] Background-Sync Job — entries.json alle 5–15 Min",
-          "completed": false,
-          "due_on": null,
-          "assignee": null,
-          "section": "Backlog",
-          "notes": "Problem: Post-Meal-CGM-Werte werden nur gefüllt wenn der User die App aktiv öffnet. LLU hat cgm-jobs/process.\n\nLösung:\n- Periodischer Job (Vercel Cron oder separater Service) der /api/v1/entries.json zieht\n- Schreibt in nightscout_readings-Caching-Tabelle\n- Post-Meal-Werte werden automatisch gefüllt auch wenn App geschlossen ist\n\nHängt von: nightscout_readings-Caching-Tabelle\nPrio: Mittel — erst nach Caching-Task sinnvoll."
-        },
-        {
           "gid": "1214441092898651",
           "name": "[Apple Health] Erweiterte Gesundheitsdaten — Gewicht, Schritte, Workouts",
           "completed": false,
@@ -332,15 +302,6 @@
           "notes": "FEATURE: Post-Meal Glucose Feedback Loop\n\n== ZIEL ==\nUser loggt eine Mahlzeit → 2 Stunden später wird er nach seinem aktuellen Blutzucker gefragt → Eingabe wird in glucose_2h gespeichert → Wert fließt in den Adaptive ICR und die Engine-Auswertung ein.\n\n== USER FLOW ==\n1. User loggt Mahlzeit über /log (Wizard Step 3 → Speichern)\n2. App setzt intern einen Timer / Reminder: T+2h\n3. Nach 2 Stunden erscheint ein Prompt (In-App Banner oder Push-Notification):\n   \"Deine Mahlzeit von vor 2h — wie ist dein BG jetzt?\"\n   [Eingabefeld: mg/dL] [Speichern]\n4. Eingabe wird in meals.glucose_2h gespeichert (Spalte existiert bereits in DB)\n5. Optional: Auch glucose_1h (T+1h) und glucose_3h (T+3h) per gleichem Mechanismus\n\n== UI-KOMPONENTEN ==\n- PostMealPrompt Banner: fixiertes Banner am unteren Rand (über dem Nav), erscheint wenn T+2h vergangen und glucose_2h noch NULL\n- Felder: Nur eine Zahl (mg/dL) + Speichern-Button + Schließen-Button (\"später\")\n- Persistenz: localStorage-Timestamp des letzten Meal-Logs, check auf glucose_2h IS NULL\n- Mehrere offene Mahlzeiten: Nur die jüngste wird prompted\n\n== TRIGGER-LOGIK ==\n- Bei App-Öffnung: prüfe ob eine Mahlzeit der letzten 3h in der DB existiert mit glucose_2h IS NULL\n- Falls ja UND T+2h seit meal_time vergangen: Prompt anzeigen\n- Client-seitig (kein Scheduler nötig für V1) — beim App-Öffnen/Focus-Event\n- V2: Push Notification via Capacitor/FCM (für native App, Sprint 3)\n\n== DB-FELDER (bereits vorhanden) ==\n- meals.glucose_2h int4\n- meals.glucose_1h int4\n- meals.glucose_30min int4\n- meals.glucose_90min int4\n- meals.glucose_3h int4\n\n== ENGINE-INTEGRATION ==\n- glucose_2h-Wert fließt in Adaptive ICR Outcome-Gewichtung:\n  Gutes Outcome = glucose_2h zwischen 70-140 mg/dL\n  Schlechtes Outcome = glucose_2h > 180 (Spike) oder < 70 (Hypo)\n- Engine-Neuberechnung des ICR nach Eingabe des 2h-Werts\n\n== TECHNISCHE UMSETZUNG ==\n- Komponente: components/PostMealPrompt.tsx (Client Component)\n- Hook: hooks/usePostMealCheck.ts — prüft beim Mount ob Prompt nötig\n- API Route: PATCH /api/meals/[id]/glucose — nimmt {timepoint: '2h', value: 140} entgegen\n- Layout.tsx: PostMealPrompt einbinden (rendert nur wenn aktiv)\n\n== AKZEPTANZKRITERIEN ==\n- [ ] Banner erscheint ~2h nach Mahlzeit-Log beim App-Öffnen\n- [ ] Eingabe wird korrekt in glucose_2h gespeichert\n- [ ] Engine-ICR berücksichtigt den neuen Wert\n- [ ] Banner verschwindet nach Speichern oder \"später\"\n- [ ] Kein Banner wenn glucose_2h bereits gefüllt\n- [ ] tsc --noEmit clean\n\n== PRIORITÄT ==\nSprint 1 — Core Data Loop. Ohne diesen Loop hat der Adaptive ICR keine Outcome-Daten zum Lernen."
         },
         {
-          "gid": "1214321337290698",
-          "name": "[CGM] Post-Meal Autofetch — 30min / 1h / 90min / 2h / 3h",
-          "completed": false,
-          "due_on": "2026-05-13",
-          "assignee": null,
-          "section": "Backlog",
-          "notes": "STATUS: Ausstehend ohne Replit-Prompt — kein Prompt bereit, Implementierung steht noch aus.\n\nZIEL: Nach einer Mahlzeit automatisch CGM-Werte zum Zeitpunkt T+30min, T+1h, T+90min, T+2h, T+3h aus LibreLinkUp/Nightscout holen und in glucose_readings + meals-Tabelle persistieren.\n\nWarum wichtig: Adaptive ICR-Engine braucht Post-Meal-BG-Verläufe zum Lernen. Ohne Autofetch müssen User manuell eingeben (Friction = Datenlücken).\n\nAusführung: Scheduled Supabase Function oder Vercel Cron Job (alle 5 Minuten), triggered nach meal_time + 30min Window.\n\nAbhängigkeit: CGM-Integration (LibreLinkUp) muss stabil sein."
-        },
-        {
           "gid": "1214320751360967",
           "name": "[CGM] Settings — CGM Provider Selection + Credential Input UI",
           "completed": false,
@@ -402,18 +363,6 @@
           },
           "section": "Backlog",
           "notes": "PRIORITÄT: Kurzfristig — direkt aus Kompetitor-Analyse als unbesetzte Marktlücke identifiziert\n\nKontext:\nKeine der analysierten Apps (mySugr, diabetes:m, etc.) begleitet frisch diagnostizierte T1D-Patienten wirklich. Die Lernkurve ist steil — ICR, Korrekturfaktor, Carb Counting, CGM-Setup — und Neulinge sind überfordert. Das ist ein expliziter Glev-Differenziator laut Kompetitor-Analyse (Skripts #05 und #09).\n\nScope (vorläufig):\n1. Welcome-Screens / Onboarding-Wizard (3-5 Screens) bei erstem Login\n2. 'Ich bin neu diagnostiziert' vs. 'Ich manage schon länger' — unterschiedliche Flows\n3. Für Neulinge: schrittweise Erklärung von ICR, Bolus, CGM-Setup\n4. Contextual Tooltips in der App (erste Wochen)\n5. Glossar-Funktion (BE, ICR, Korrekturfaktor, TIR, GMI)\n\nHinweis: Dieser Task überschneidet sich mit dem Setup-Wizard-Task der bereits in Asana existiert — ggf. zusammenführen."
-        },
-        {
-          "gid": "1214287850002783",
-          "name": "[CGM] developer.dexcom.com — Developer Account registrieren",
-          "completed": false,
-          "due_on": "2026-05-20",
-          "assignee": {
-            "gid": "1213432759001229",
-            "name": "rave pickle"
-          },
-          "section": "Backlog",
-          "notes": "Antrag auf Developer Account gestellt. Warte auf Freigabe durch Dexcom. Rückmeldung ausstehend (Stand: 8. Mai 2026)."
         },
         {
           "gid": "1214287868109489",
@@ -1178,6 +1127,27 @@
       "name": "Glev — Sprint 3: Capacitor + Native Setup",
       "tasks": [
         {
+          "gid": "1214984553280798",
+          "name": "Android App: Capacitor Android Platform einrichten + erster Build",
+          "completed": false,
+          "due_on": "2026-05-20",
+          "assignee": null,
+          "section": "Unbenannter Abschnitt",
+          "notes": "## Ziel\nDie bestehende Capacitor-App um die Android-Plattform erweitern, sodass ein signierbares AAB für den Google Play Store gebaut werden kann.\n\n## Replit-Part (was Replit macht)\n1. `npx cap add android` — Android-Plattform hinzufügen\n2. `capacitor.config.ts` prüfen: appId, appName, webDir korrekt\n3. `npx cap sync` — Web-Assets in Android-Projekt synchronisieren\n4. `android/app/src/main/AndroidManifest.xml` — nötige Permissions prüfen (INTERNET, CAMERA falls gebraucht, etc.)\n5. `android/app/build.gradle` — versionCode + versionName setzen\n6. Sicherstellen dass alle Capacitor-Plugins (HealthKit-Äquivalent für Android = Health Connect, Push Notifications, etc.) korrekt konfiguriert sind\n\n## Was Lucas danach lokal macht\n1. Android Studio öffnen → `android/` Ordner öffnen\n2. Keystore generieren (einmalig): `keytool -genkey -v -keystore glev.keystore -alias glev -keyalg RSA -keysize 2048 -validity 10000`\n3. In Android Studio: Build → Generate Signed Bundle/APK → AAB wählen → Keystore angeben → Release Build\n4. AAB hochladen auf Google Play Console\n\n## Fix-Report\nNach Abschluss: bash scripts/finalize-task.sh 1214984XXXXXXX\nTask-GID: wird nach Erstellung bekannt"
+        },
+        {
+          "gid": "1214952632474562",
+          "name": "Apple Health Integration — Replit Prompt ausführen",
+          "completed": false,
+          "due_on": null,
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Unbenannter Abschnitt",
+          "notes": "Implementierungsspezifikation liegt fertig vor unter Prompts/REPLIT_PROMPT_APPLE_HEALTH.md (312 Zeilen). Kein Code implementiert bisher.\n\nWas zu tun ist:\n- Capacitor-Plugin @capacitor-community/health-kit installieren\n- lib/cgm/appleHealth.ts erstellen\n- CGM-Dispatcher anpassen (lib/cgm/index.ts)\n- Supabase-Constraint für cgm_type = 'apple_health' setzen\n- Xcode: HealthKit Entitlement aktivieren\n- Test auf physischem Gerät\n\nPrompt direkt copy-paste in Replit Agent eingeben."
+        },
+        {
           "gid": "1214277574739094",
           "name": "Splash-Screens für iOS und Android",
           "completed": false,
@@ -1207,6 +1177,27 @@
       "gid": "1214277743482207",
       "name": "Glev — Sprint 4: TestFlight + Internal Testing",
       "tasks": [
+        {
+          "gid": "1214950039665540",
+          "name": "Praxis-Link: unique URL + Landing Page pro Praxis",
+          "completed": false,
+          "due_on": "2026-06-07",
+          "assignee": null,
+          "section": "Unbenannter Abschnitt",
+          "notes": "Feature: Jede Partnerpraxis bekommt einen eigenen Link (z.B. glev.app/praxis/kopenick) der auf eine Landing Page mit Praxis-Kontext führt. Patienten können Glev von dort direkt starten.\n\nScope:\n- Route /praxis/:slug in der App\n- Landing Page mit Praxis-Name, optionalem Begrüßungstext und CTA-Button\n- Admin-Interface (nur Lucas) um Praxis-Slugs anzulegen\n- Optional: QR-Code-Generator für den Slug\n\nPriorität: nach Launch-Prep, Anfang Juni"
+        },
+        {
+          "gid": "1214966280155351",
+          "name": "Apple Health V2 — Trend Direction + Live Settings Card (Replit)",
+          "completed": false,
+          "due_on": "2026-05-21",
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Unbenannter Abschnitt",
+          "notes": "Apple Health V1 ist live (basic BG reading). V2 fügt hinzu:\n\n**Was Replit bauen soll:**\n\n1. TREND DIRECTION BERECHNEN\nApple Health liefert keine Trendpfeile. Aus den letzten 2 Readings selbst berechnen:\n- Delta in letzten 5 Min → if delta > +1.5 mmol → 'SingleUp', > +0.5 → 'FortyFiveUp', zwischen ±0.5 → 'Flat', < -0.5 → 'FortyFiveDown', < -1.5 → 'SingleDown'\n- Ergebnis in `direction`-Feld des CgmReading-Interface schreiben\n- Funktion: `calculateTrendDirection(readings: CgmReading[]): string`\n- Aufruf in `getAppleHealthReadings()` nach dem Mapping\n\n2. LIVE-WERT IN SETTINGS CARD\nIn der CgmSettingsCard bei aktivem Apple Health anzeigen:\n- Aktueller BZ-Wert (mgdl) + Trend-Pfeil\n- Timestamp des letzten Readings ('vor X Min')\n- Grüner Punkt wenn Wert < 5 Min alt, gelber wenn 5–15 Min, roter wenn > 15 Min\n- Usecase: Nutzer sieht sofort ob Apple Health korrekt verknüpft ist\n\n3. PERMISSION-REVOKED HANDLING\n- Vor jedem Reading `isAppleHealthAvailable()` prüfen\n- Wenn Permission entzogen: Toast-Meldung 'Apple Health Zugriff fehlt — bitte in iOS Einstellungen aktivieren'\n- cgm_type NICHT automatisch zurücksetzen — Nutzer soll bewusst wechseln\n\n4. UNIT-HANDLING (mmol/L Anzeige-Option)\n- Intern bleibt alles mg/dL\n- Wenn User-Profil `unit = 'mmol'`: Anzeige in Settings Card in mmol/L (÷ 18.0182, 1 Dezimalstelle)\n\nNach allen Änderungen: tsc --noEmit + git commit -m 'feat: Apple Health V2 — trend direction, live settings card, permission handling' + push\n\n⚠️ Kein Xcode-Schritt nötig — V1 hat bereits HealthKit Capability und Info.plist Keys. Replit kann alles."
+        },
         {
           "gid": "1214277323544037",
           "name": "Tester-Sync: 1:1 oder Group-Call mit den 5-10 Testern",
@@ -1934,6 +1925,42 @@
       "name": "Glev — Sprint 9: Soft-Launch-Vorbereitung",
       "tasks": [
         {
+          "gid": "1214984555898741",
+          "name": "Offline-First: SQLite lokaler Cache via Capacitor Plugin",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Unbenannter Abschnitt",
+          "notes": "App funktioniert ohne Internetverbindung — Logs werden lokal gespeichert und beim nächsten Online-Moment mit Supabase synct.\n\nUmsetzung:\n- @capacitor-community/sqlite Plugin\n- Lokale SQLite-Tabellen spiegeln: glucose_readings, meal_logs, insulin_logs\n- Sync-Queue: alle Writes gehen zuerst in SQLite, dann async zu Supabase\n- Conflict Resolution: last-write-wins mit server_timestamp\n- Offline-Banner in UI wenn kein Netz erkannt\n- Hintergrund-Sync wenn App wieder online kommt (AppState change listener)\n\nBleibt im Web-Stack (TypeScript), kein Swift nötig."
+        },
+        {
+          "gid": "1214984767576568",
+          "name": "Native Extension: Watch App — BZ anzeigen + Quick-Bolus",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Unbenannter Abschnitt",
+          "notes": "Apple Watch Companion App: BZ-Wert + Trend auf der Uhr, optional Quick-Bolus-Eingabe.\n\nUmsetzung:\n- Separates WatchKit-Target im bestehenden Xcode-Projekt\n- WatchConnectivity (WCSession) für Datenaustausch mit iPhone-App\n- Haupt-Complication: BZ-Wert + Trend-Pfeil\n- Watch-App Screen:\n  - Aktueller BZ + Trend\n  - Letzter Log-Zeitpunkt\n  - Quick-Bolus Button (öffnet Eingabe direkt auf der Uhr)\n- Quick-Bolus: KH-Menge über Digital Crown, Bolus-Empfehlung berechnen, Bestätigung, Log via WCSession an iPhone senden\n\nKein Replit-Prompt — reiner SwiftUI/WatchKit-Code"
+        },
+        {
+          "gid": "1214984804979823",
+          "name": "Native Extension: Live Activity / Dynamic Island — BZ + Trend-Pfeil",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Unbenannter Abschnitt",
+          "notes": "Zeigt aktuellen Blutzucker + Trend-Pfeil live auf dem Sperrbildschirm und in der Dynamic Island — ohne App öffnen.\n\nUmsetzung:\n- Separates Swift-Target im bestehenden Capacitor-Xcode-Projekt\n- ActivityKit (iOS 16.2+) für Live Activities\n- Daten-Sharing via App Groups (shared UserDefaults zwischen Capacitor-App und Extension)\n- Update-Frequenz: alle 5 Minuten via Background App Refresh oder Push-Notification\n- UI: BZ-Wert (mg/dL oder mmol/L je nach Einstellung), Trend-Pfeil (5 Richtungen), Zeitstempel\n- Farb-Codierung: grün (im Ziel), gelb (nah am Limit), rot (außerhalb)\n\nKein Replit-Prompt — reiner Swift-Code, separates Xcode-Target"
+        },
+        {
+          "gid": "1214982349160681",
+          "name": "Food History — Context-Match (Mahlzeitkontext)",
+          "completed": false,
+          "due_on": null,
+          "assignee": null,
+          "section": "Unbenannter Abschnitt",
+          "notes": "Backlog — nach Soft-Launch wenn Datenlage reicht.\n\nIdee: Gleiche Lebensmittel je nach Mahlzeitkontext mit unterschiedlichen Portionsvorschlägen. Beispiel: Banane als Snack = 100g, Banane im Müsli = 60g. Aktuell wird nur nach Name gematcht (ohne Kontext). Wenn Food History-Daten vorhanden, Kontext-Dimension nachrüsten.\n\nVoraussetzung: food_history Tabelle läuft seit min. 4 Wochen + genug Einträge pro Lebensmittel."
+        },
+        {
           "gid": "1214325895159175",
           "name": "Post-Meal BZ-Erinnerung für Fingerstick-User (opt-in in Settings)",
           "completed": false,
@@ -2004,6 +2031,42 @@
           },
           "section": "Unbenannter Abschnitt",
           "notes": "Aktiv. Lucas' eigener Diabetologe ist interessiert und will die App testen. Flyer bereits gedruckt für Verteilung an Diabetologen-Praxen. HCP-Kanal ist real — nicht nur Strategie. Nächste Schritte: Diabetologe als erster HCP-Beta-Tester onboarden, Flyer-Verteilung starten."
+        },
+        {
+          "gid": "1214978669763374",
+          "name": "Arzt-Modus: Engere Begleitung Anfangsphase — automatisiertes Monitoring",
+          "completed": false,
+          "due_on": null,
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Unbenannter Abschnitt",
+          "notes": "Ärztin Köpenick (20. Mai 2026): In der Anfangsphase nach Diagnose muss engere ärztliche Begleitung gewährleistet sein. Problem: Ärztin hat 15 Min/Patient, bräuchte 2h für gründliche Aufbereitung.\n\nGlev-Lösung: Automatischer Tagesbericht (PDF oder Dashboard-Link) der dem Arzt alles aufbereitet — ohne dass der Arzt selbst Kurven lesen muss.\n\nIdeen:\n- Wöchentlicher Auto-Report per E-Mail an Arztpraxis (Opt-in durch Patient)\n- Ampel-System: Glev hebt kritische Tage hervor (Hypos, hohe Spitzen, fehlende Einträge)\n- Praxis-Link (glev.app/praxis/kopenick) als Einstiegspunkt für Arzt"
+        },
+        {
+          "gid": "1214978659265540",
+          "name": "Arzt-Report: Kurz- vs. Langwirksames Insulin — Tagesverhältnis",
+          "completed": false,
+          "due_on": "2026-05-29",
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Unbenannter Abschnitt",
+          "notes": "Ärztin Köpenick (20. Mai 2026) wünscht:\n- Tagesübersicht: wie viel schnellwirksames Insulin gesamt?\n- Wie viel langwirksames Insulin gesamt?\n- Verhältnis Kurz:Lang pro Tag\n- Idealerweise als Wochendurchschnitt und Trendlinie\n\nKontext: Grundlage für Therapieanpassung. Ärztin braucht das als Kennzahl, nicht als Rohdaten."
+        },
+        {
+          "gid": "1214978669389567",
+          "name": "Arzt-Report: 24h-Tagesansicht mit Bolus, Basal & Einflussfaktoren",
+          "completed": false,
+          "due_on": "2026-05-29",
+          "assignee": {
+            "gid": "1213432759001229",
+            "name": "rave pickle"
+          },
+          "section": "Unbenannter Abschnitt",
+          "notes": "Ärztin Köpenick (20. Mai 2026) wünscht:\n- Tagesansicht mit 24h-Glukosekurve\n- Bolus-Injektionen eingeblendet (Zeitpunkt + Dosis)\n- Basal-Rate oder Langzeit-Insulin eingeblendet\n- Einflussfaktoren auf Zeitlinie: Essen, Trinken, Sport, Symptome\n\nZiel: Arzt kann auf einen Blick den Tag rekonstruieren ohne manuelle Nacharbeit. Ärztin sagt: ohne Tool bräuchte sie 2h Nacharbeitung pro Patient, hat aber nur 15 Min.\n\nOutput: PDF-Export oder Live-Dashboard (Share-Link für Arzt)."
         },
         {
           "gid": "1214277323440090",

@@ -62,6 +62,63 @@ export interface SyncResult {
   error?: string;
 }
 
+/**
+ * Derive a Dexcom-style trend string from an ordered array of HealthKit
+ * readings (newest first) using the same slope thresholds as the
+ * server-side deriveTrend() in lib/cgm/appleHealth.ts.
+ *
+ * Used by the Capacitor bridge before POSTing samples — this lets the
+ * client-side display show a trend arrow immediately without waiting for
+ * a server round-trip.
+ */
+export function calculateTrendDirection(
+  readings: Array<{ value_mg_dl: number; timestamp: string }>
+): string {
+  const TREND_MIN_GAP_MS = 5 * 60 * 1000;
+  const TREND_MAX_GAP_MS = 20 * 60 * 1000;
+  const TREND_FLAT_MAX = 1;
+  const TREND_QUICK_MIN = 2;
+  if (readings.length < 2) return "stable";
+  const cur = readings[0];
+  const tCur = Date.parse(cur.timestamp);
+  if (Number.isNaN(tCur)) return "stable";
+  for (let i = 1; i < readings.length; i++) {
+    const prev = readings[i];
+    const tPrev = Date.parse(prev.timestamp);
+    if (Number.isNaN(tPrev)) continue;
+    const gap = tCur - tPrev;
+    if (gap < TREND_MIN_GAP_MS) continue;
+    if (gap > TREND_MAX_GAP_MS) return "stable";
+    const rate = (cur.value_mg_dl - prev.value_mg_dl) / (gap / 60_000);
+    const abs = Math.abs(rate);
+    if (abs < TREND_FLAT_MAX) return "stable";
+    return rate > 0
+      ? abs >= TREND_QUICK_MIN ? "risingQuickly" : "rising"
+      : abs >= TREND_QUICK_MIN ? "fallingQuickly" : "falling";
+  }
+  return "stable";
+}
+
+/**
+ * Returns false if the user has revoked HealthKit permission or if we
+ * are not running inside the Capacitor iOS shell. Called before each
+ * sync attempt — if false and the user has apple_health selected, the
+ * Settings card shows the permission-revoked banner.
+ */
+export async function isAppleHealthAvailable(): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+  try {
+    const mod = (await import("@capacitor/core")) as unknown as {
+      Capacitor?: { isNativePlatform?: () => boolean };
+    };
+    if (!mod.Capacitor?.isNativePlatform?.()) return false;
+    const plugin = await loadPlugin();
+    return !!plugin;
+  } catch {
+    return false;
+  }
+}
+
 /** Cheap synchronous platform check — used by the React provider so it
  *  doesn't even mount the interval on the web. */
 export async function isNative(): Promise<boolean> {

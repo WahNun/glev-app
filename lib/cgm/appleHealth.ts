@@ -172,6 +172,7 @@ export async function getSyncStatus(
   count: number;
   lastTimestamp: string | null;
   lastValueMgDl: number | null;
+  lastTrend: string | null;
 }> {
   const sb = adminClient();
 
@@ -180,13 +181,16 @@ export async function getSyncStatus(
       .from("apple_health_readings")
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId),
+    // Fetch LATEST_LOOKBACK_ROWS so deriveTrend has the older sample
+    // it needs for slope calculation. The trend for the freshest row
+    // (index 0) requires at least one older row within the 5–20 min
+    // window — without it we'd always return "stable".
     sb
       .from("apple_health_readings")
       .select("value_mg_dl, timestamp")
       .eq("user_id", userId)
       .order("timestamp", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      .limit(LATEST_LOOKBACK_ROWS),
   ]);
 
   // Surface DB errors instead of silently returning a "0 readings"
@@ -210,10 +214,13 @@ export async function getSyncStatus(
     throw e;
   }
 
-  const row = latestRes.data as DbRow | null;
+  const rows = (latestRes.data ?? []) as DbRow[];
+  const row = rows[0] ?? null;
+  const lastTrend = rows.length > 0 ? deriveTrend(rows, 0) : null;
   return {
     count: countRes.count ?? 0,
     lastTimestamp: row?.timestamp ?? null,
     lastValueMgDl: row?.value_mg_dl ?? null,
+    lastTrend,
   };
 }
