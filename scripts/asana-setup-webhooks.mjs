@@ -82,18 +82,33 @@ async function main() {
       continue;
     }
 
-    const queueSection = sections.find(
+    let queueSection = sections.find(
       (s) => s.name.trim().toLowerCase() === SECTION_NAME.trim().toLowerCase()
     );
 
     if (queueSection) {
       console.log(`     ✅ "${SECTION_NAME}" gefunden — GID: ${queueSection.gid}`);
-      queueSectionIds.push(queueSection.gid);
     } else {
-      console.log(`     ⏭️  Keine "${SECTION_NAME}"-Sektion — übersprungen`);
+      // Sektion existiert nicht → automatisch anlegen
+      try {
+        const res = await fetch('https://app.asana.com/api/1.0/sections', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ data: { name: SECTION_NAME, project: project.gid } }),
+        });
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+        const created = await res.json();
+        queueSection = created.data;
+        console.log(`     ✨ "${SECTION_NAME}" erstellt — GID: ${queueSection.gid}`);
+      } catch (err) {
+        console.log(`     ⚠️  Sektion konnte nicht erstellt werden: ${err.message}`);
+      }
     }
 
-    // Webhook registrieren (auch wenn keine Queue-Sektion — Asana braucht nur den Projekt-GID)
+    if (queueSection) {
+      queueSectionIds.push(queueSection.gid);
+    }
+
     if (queueSection) {
       try {
         const webhook = await registerWebhook(project.gid);
