@@ -312,10 +312,26 @@ const CURVE_CONFIGS: Partial<Record<LogType, Partial<Record<FetchType, CurveConf
         (row.meal_time as string | null) ?? (row.created_at as string),
       ),
       legacySlots: [
-        { valueCol: "bg_1h", atCol: "bg_1h_at", targetMin:  60, toleranceMin: 15 },
-        { valueCol: "bg_2h", atCol: "bg_2h_at", targetMin: 120, toleranceMin: 15 },
+        // Legacy two-point slots (UI + PDF + export still use these).
+        { valueCol: "bg_1h",        atCol: "bg_1h_at",        targetMin:  60, toleranceMin: 15 },
+        { valueCol: "bg_2h",        atCol: "bg_2h_at",        targetMin: 120, toleranceMin: 15 },
+        // Five-point post-meal curve (glucose_30min … glucose_3h).
+        // Written from the same meal_curve_180 job — no extra jobs needed.
+        { valueCol: "glucose_30min", atCol: "glucose_30min_at", targetMin:  30, toleranceMin: 10 },
+        { valueCol: "glucose_1h",    atCol: "glucose_1h_at",    targetMin:  60, toleranceMin: 10 },
+        { valueCol: "glucose_90min", atCol: "glucose_90min_at", targetMin:  90, toleranceMin: 10 },
+        { valueCol: "glucose_2h",    atCol: "glucose_2h_at",    targetMin: 120, toleranceMin: 10 },
+        { valueCol: "glucose_3h",    atCol: "glucose_3h_at",    targetMin: 180, toleranceMin: 10 },
       ],
-      loadCols: ["meal_time", "created_at", "bg_1h", "bg_2h", "bg_1h_at", "bg_2h_at"],
+      loadCols: [
+        "meal_time", "created_at",
+        "bg_1h", "bg_2h", "bg_1h_at", "bg_2h_at",
+        "glucose_30min", "glucose_30min_at",
+        "glucose_1h",    "glucose_1h_at",
+        "glucose_90min", "glucose_90min_at",
+        "glucose_2h",    "glucose_2h_at",
+        "glucose_3h",    "glucose_3h_at",
+      ],
     },
   },
   bolus: {
