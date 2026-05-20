@@ -450,7 +450,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               iOS-Favicon). Wordmark folgt dem Theme via var(--text), aber
               das Logo-Quadrat soll in Light Mode NICHT mit-aufhellen,
               sonst löst es sich vom Header optisch auf. */}
-          <GlevLockup size={28} color="var(--text)" symbolBg="#0F0F14" />
+          <GlevLockup size={20} color="var(--text)" symbolBg="#0F0F14" />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {/* Engine-Pille im Header wurde entfernt (User-Wunsch
