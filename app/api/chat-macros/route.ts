@@ -5,6 +5,7 @@ import { aggregateNutrition } from "@/lib/nutrition/aggregate";
 import {
   lookupUserFoodHistory,
   recordItemsToHistory,
+  parseFoodName,
 } from "@/lib/nutrition/userFoodHistory";
 import { authedClient } from "@/app/api/insulin/_helpers";
 
@@ -169,9 +170,18 @@ food databases, not guesses):
     let userHistory: Awaited<ReturnType<typeof lookupUserFoodHistory>> | undefined;
     if (userId && sb) {
       try {
-        userHistory = await lookupUserFoodHistory(
-          sb, userId, parsedDesc.items.map((it) => it.name),
-        );
+        // Run each item name through parseFoodName so the lookup uses
+      // the size-aware row ("große Banane" → modifier='groß').
+      const parsedNames = parsedDesc.items.map((it) => ({
+        raw: it.name,
+        ...parseFoodName(it.name),
+      }));
+      const sizeModifiers = new Map<string, string | null>(
+        parsedNames.map((p) => [p.foodName, p.sizeModifier]),
+      );
+      userHistory = await lookupUserFoodHistory(
+        sb, userId, parsedNames.map((p) => p.foodName), sizeModifiers,
+      );
       } catch { /* best effort */ }
     }
     const aggregated = await aggregateNutrition(parsedDesc.items, { userHistory });
@@ -181,7 +191,28 @@ food databases, not guesses):
     // recorder considers unsafe (zero macros, impossible densities).
     if (userId && sb) {
       // Fire-and-forget; do not block the response on this.
-      void recordItemsToHistory(sb, userId, aggregated.items, { source: "user_confirmed" });
+      // Enrich each item with its parsed size modifier before recording.
+      // Use rawBase as name (quantity/size tokens stripped) and keep
+      // the original as displayName for the display_name DB column.
+      // Apply parseFoodName.quantity to grams + macros so "zwei Bananen"
+      // folds the ×2 multiplier into typical_grams (quantity is never
+      // stored as a separate column — it lives in the portion size).
+      const enrichedForRecord = aggregated.items.map((it) => {
+        const p = parseFoodName(it.name);
+        const q = p.quantity;
+        return {
+          ...it,
+          name:         p.rawBase || it.name,
+          displayName:  it.name,
+          grams:        it.grams   * q,
+          carbs:        it.carbs   * q,
+          protein:      it.protein * q,
+          fat:          it.fat     * q,
+          fiber:        (it.fiber  ?? 0) * q,
+          sizeModifier: p.sizeModifier,
+        };
+      });
+      void recordItemsToHistory(sb, userId, enrichedForRecord, { source: "user_confirmed" });
     }
 
     return NextResponse.json({

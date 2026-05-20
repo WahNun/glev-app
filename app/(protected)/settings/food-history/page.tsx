@@ -8,9 +8,13 @@
  * 100g macros), edit the values (writes flip source → user_confirmed
  * so passive saveMeal writes don't overwrite the edit), or delete the
  * row entirely (next parse rebuilds from scratch via OFF/USDA).
+ *
+ * Phase B addition: when the list comes back empty on first load, the
+ * page fires POST /api/food-history/backfill once to seed the table
+ * from the user's historical meal data, then reloads.
  */
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { hapticSelection, hapticSuccess, hapticError } from "@/lib/haptics";
@@ -35,12 +39,16 @@ interface Row {
 export default function FoodHistoryPage() {
   const t = useTranslations("foodHistory");
 
-  const [rows, setRows]       = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [rows, setRows]           = useState<Row[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [backfilling, setBackfilling] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<Partial<Row>>({});
-  const [busy, setBusy]   = useState(false);
-  const [err, setErr]     = useState<string | null>(null);
+  const [draft, setDraft]         = useState<Partial<Row>>({});
+  const [busy, setBusy]           = useState(false);
+  const [err, setErr]             = useState<string | null>(null);
+
+  // Guard: run backfill at most once per page visit.
+  const hasTriedBackfill = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -49,7 +57,25 @@ export default function FoodHistoryPage() {
       const res = await fetch("/api/food-history", { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
-      setRows(Array.isArray(json.items) ? json.items : []);
+      const items: Row[] = Array.isArray(json.items) ? json.items : [];
+      setRows(items);
+
+      // Phase B: on first visit with an empty list, trigger the
+      // backfill from historical meals silently.
+      if (items.length === 0 && !hasTriedBackfill.current) {
+        hasTriedBackfill.current = true;
+        setBackfilling(true);
+        try {
+          await fetch("/api/food-history/backfill", { method: "POST" });
+        } catch { /* silent — backfill is best-effort */ }
+        setBackfilling(false);
+        // Reload the list after backfill.
+        const res2 = await fetch("/api/food-history", { cache: "no-store" });
+        if (res2.ok) {
+          const json2 = await res2.json();
+          setRows(Array.isArray(json2.items) ? json2.items : []);
+        }
+      }
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -131,7 +157,11 @@ export default function FoodHistoryPage() {
         {t("page_subtitle")}
       </p>
 
-      {loading && <div style={{ padding: 24, textAlign: "center", color: "var(--text-muted)" }}>{t("loading")}</div>}
+      {(loading || backfilling) && (
+        <div style={{ padding: 24, textAlign: "center", color: "var(--text-muted)" }}>
+          {backfilling ? "Analysiere frühere Mahlzeiten…" : t("loading")}
+        </div>
+      )}
 
       {err && (
         <div style={{ padding: 12, background: "rgba(255,45,120,0.1)", color: "#FF2D78", borderRadius: 8, marginBottom: 16, fontSize: 13 }}>
@@ -139,13 +169,13 @@ export default function FoodHistoryPage() {
         </div>
       )}
 
-      {!loading && rows.length === 0 && (
+      {!loading && !backfilling && rows.length === 0 && (
         <div style={{ padding: 32, textAlign: "center", border: `1px dashed ${BORDER}`, borderRadius: 12, color: "var(--text-muted)" }}>
           {t("empty")}
         </div>
       )}
 
-      {!loading && rows.map((r) => {
+      {!loading && !backfilling && rows.map((r) => {
         const isEdit = editingId === r.id;
         return (
           <div

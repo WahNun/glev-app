@@ -35,7 +35,7 @@ import { fetchLatestFingerstick, FS_OVERRIDE_WINDOW_MS } from "@/lib/fingerstick
 import { parseDbTs, parseDbDate, parseLluTs } from "@/lib/time";
 import { calcTotalIOB, applyIOBCorrection, formatIOBDisplay, type InsulinType } from "@/lib/iob";
 import { fetchMeals } from "@/lib/meals";
-import { hapticSuccess, hapticError } from "@/lib/haptics";
+import { hapticSuccess, hapticError, hapticSelection } from "@/lib/haptics";
 import SnapSlider from "@/components/log/SnapSlider";
 import ReviewMacrosCards from "@/components/ReviewMacrosCards";
 
@@ -640,6 +640,13 @@ export default function EnginePage() {
     fiber: number;
     source: "open_food_facts" | "usda" | "estimated" | "unknown";
   }>>([]);
+  // Phase B: portion suggestions from user_food_history.
+  // Keyed by raw item name (as returned by /api/parse-food).
+  // Value is { suggestedGrams, displayName } — only populated when
+  // the user has a history row for that item.
+  const [portionSuggestions, setPortionSuggestions] = useState<Map<string, { suggestedGrams: number; displayName: string }>>(new Map());
+  // Set of raw item names the user has dismissed this session.
+  const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
   const [speechAvail, setSpeechAvail] = useState(true);
   const mediaRecRef    = useRef<MediaRecorder | null>(null);
   const recordingStopTsRef = useRef<number | null>(null);
@@ -1156,10 +1163,27 @@ export default function EnginePage() {
       // Capture the per-item breakdown so the saved meal preserves
       // provenance in meals.parsed_json. Falls back to [] when the
       // response shape is malformed (older clients shouldn't break).
-      if (Array.isArray(pData.items)) {
-        setParsedItems(pData.items.filter((it: unknown) => it && typeof it === "object"));
+      const validItems = Array.isArray(pData.items)
+        ? pData.items.filter((it: unknown) => it && typeof it === "object")
+        : [];
+      setParsedItems(validItems);
+      // Phase B: batch-fetch per-user portion suggestions for all
+      // parsed items. Fire-and-forget — failures are silent so they
+      // cannot interfere with the primary parse flow.
+      if (validItems.length > 0) {
+        const names = (validItems as Array<{ name: string }>).map((it) => it.name).join(",");
+        void fetch(`/api/food-history/suggest?names=${encodeURIComponent(names)}`)
+          .then((r) => r.ok ? r.json() : { suggestions: {} })
+          .then((d: { suggestions?: Record<string, { suggestedGrams: number; displayName: string }> }) => {
+            const m = new Map<string, { suggestedGrams: number; displayName: string }>();
+            for (const [k, v] of Object.entries(d.suggestions ?? {})) m.set(k, v);
+            setPortionSuggestions(m);
+            setDismissedSuggestions(new Set());
+          })
+          .catch(() => {});
       } else {
-        setParsedItems([]);
+        setPortionSuggestions(new Map());
+        setDismissedSuggestions(new Set());
       }
       // eslint-disable-next-line no-console
       console.log("[PERF voice/engine] parse response → form fields filled:", Date.now() - tParseDone, "ms");
@@ -1778,6 +1802,8 @@ export default function EnginePage() {
     setAiMealType(null);
     setNutritionSource(null);
     setParsedItems([]);
+    setPortionSuggestions(new Map());
+    setDismissedSuggestions(new Set());
     setMealTime(nowLocalDateTime());
     setConfirmErr("");
     setConfirmedMeal(null);
@@ -2563,6 +2589,109 @@ export default function EnginePage() {
                   }}
                 />
               </div>
+
+              {/* Phase B: portion suggestion chips — shown for each parsed
+                  item that has a user_food_history hit. Tapping
+                  "Übernehmen" recalculates the affected macros using
+                  the history-backed typical_grams. The chip is
+                  dismissible per item. Chips are only shown when there
+                  is at least one non-dismissed suggestion available. */}
+              {(() => {
+                const activeSuggestions = parsedItems
+                  .filter((it) => {
+                    const hit = portionSuggestions.get(it.name);
+                    if (!hit) return false;
+                    if (dismissedSuggestions.has(it.name)) return false;
+                    // Skip suggestion if the current grams already match
+                    return Math.abs(it.grams - hit.suggestedGrams) > 1;
+                  });
+                if (activeSuggestions.length === 0) return null;
+                return (
+                  <div style={{ marginBottom: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+                    {activeSuggestions.map((it) => {
+                      const hit = portionSuggestions.get(it.name)!;
+                      const scaleFactor = hit.suggestedGrams / (it.grams || 1);
+                      return (
+                        <div
+                          key={it.name}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            padding: "7px 10px",
+                            borderRadius: 10,
+                            background: "rgba(79,110,247,0.07)",
+                            border: "1px solid rgba(79,110,247,0.22)",
+                            fontSize: 13,
+                          }}
+                        >
+                          <span style={{ flex: 1, color: "var(--text-muted)", minWidth: 0 }}>
+                            <span style={{ fontWeight: 600, color: "var(--text)" }}>{hit.displayName}</span>
+                            {" "}Zuletzt: {Math.round(hit.suggestedGrams)} g
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              hapticSelection();
+                              // Scale this item's macro contribution in the totals.
+                              const carbsG   = carbUnit.toGrams(parseFloat(carbs)   || 0);
+                              const proteinG = parseFloat(protein) || 0;
+                              const fatG     = parseFloat(fat)     || 0;
+                              const fiberG   = parseFloat(fiber)   || 0;
+                              const newCarbsG   = carbsG   - it.carbs   + it.carbs   * scaleFactor;
+                              const newProteinG = proteinG - it.protein + it.protein * scaleFactor;
+                              const newFatG     = fatG     - it.fat     + it.fat     * scaleFactor;
+                              const newFiberG   = fiberG   - it.fiber   + it.fiber   * scaleFactor;
+                              setCarbs(String(Math.round(carbUnit.fromGrams(Math.max(0, newCarbsG)) * 10) / 10));
+                              setProtein(String(Math.round(Math.max(0, newProteinG) * 10) / 10));
+                              setFat(String(Math.round(Math.max(0, newFatG) * 10) / 10));
+                              setFiber(String(Math.round(Math.max(0, newFiberG) * 10) / 10));
+                              // Update the parsedItem's grams for future suggestion comparisons
+                              setParsedItems((prev) =>
+                                prev.map((p) =>
+                                  p.name === it.name
+                                    ? { ...p, grams: hit.suggestedGrams, carbs: p.carbs * scaleFactor, protein: p.protein * scaleFactor, fat: p.fat * scaleFactor, fiber: p.fiber * scaleFactor }
+                                    : p
+                                )
+                              );
+                              setDismissedSuggestions((prev) => new Set([...prev, it.name]));
+                            }}
+                            style={{
+                              padding: "4px 10px",
+                              borderRadius: 7,
+                              background: ACCENT,
+                              color: "#fff",
+                              border: "none",
+                              fontWeight: 600,
+                              fontSize: 12,
+                              cursor: "pointer",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            Übernehmen
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="Vorschlag verwerfen"
+                            onClick={() => setDismissedSuggestions((prev) => new Set([...prev, it.name]))}
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              color: "var(--text-faint)",
+                              cursor: "pointer",
+                              fontSize: 16,
+                              lineHeight: 1,
+                              padding: "0 2px",
+                            }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
 
               {/* Glucose + Meal-Time block — uppercase section eyebrows
                   ("GLUKOSE & ZEIT", "GLUKOSE VORHER", "MAHLZEIT-ZEIT")

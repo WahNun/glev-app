@@ -287,19 +287,37 @@ export async function saveMeal(input: SaveMealInput): Promise<Meal> {
   if (Array.isArray(input.parsedJson) && input.parsedJson.length > 0) {
     void (async () => {
       try {
-        const { recordItemsToHistory } = await import("./nutrition/userFoodHistory");
-        const items = input.parsedJson.map((p) => ({
-          name:    p.name,
-          grams:   p.grams,
-          carbs:   p.carbs,
-          protein: p.protein,
-          fat:     p.fat,
-          fiber:   p.fiber,
-          // Older rows without `source` are pre-pipeline (manual entry)
-          // and treated as plain history data. Items tagged 'unknown'
-          // are filtered out inside recordItemsToHistory's safety check.
-          source:  p.source ?? "open_food_facts",
-        }));
+        const { recordItemsToHistory, parseFoodName } = await import("./nutrition/userFoodHistory");
+        // Run each raw item name through parseFoodName so we store the
+        // correct size modifier ("große Banane" → modifier='groß') and
+        // fold the quantity multiplier into grams ("zwei Bananen" → ×2).
+        const items = input.parsedJson.map((p) => {
+          // parseFoodName extracts any leading quantity word / size
+          // adjective from the name, e.g. "große Banane" →
+          //   rawBase="banane", sizeModifier="groß", quantity=1
+          // In practice GPT already bakes quantity into `grams` and
+          // uses clean names; parseFoodName is a defensive guard for
+          // user-typed entries that slip through with prefixes.
+          const parsed = parseFoodName(p.name);
+          const gramsWithQty = p.grams * parsed.quantity;
+          return {
+            // `name` (rawBase) is the base food name with qty/size
+            // prefixes stripped; `displayName` keeps the readable
+            // original text for the display_name DB column.
+            name:         parsed.rawBase || p.name,
+            displayName:  p.name,
+            grams:        gramsWithQty,
+            carbs:        p.carbs * parsed.quantity,
+            protein:      p.protein * parsed.quantity,
+            fat:          p.fat * parsed.quantity,
+            fiber:        p.fiber * parsed.quantity,
+            sizeModifier: parsed.sizeModifier,
+            // Older rows without `source` are pre-pipeline (manual entry)
+            // and treated as plain history data. Items tagged 'unknown'
+            // are filtered out inside recordItemsToHistory's safety check.
+            source:       p.source ?? "open_food_facts",
+          };
+        });
         await recordItemsToHistory(supabase!, user.id, items, { source: "history" });
       } catch { /* see contract above */ }
     })();
