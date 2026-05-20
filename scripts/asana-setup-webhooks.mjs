@@ -15,7 +15,7 @@
  */
 
 const PAT           = process.env.ASANA_PAT;
-const PORTFOLIO_GID = process.env.PORTFOLIO_GID;
+const PORTFOLIO_GID = process.env.PORTFOLIO_GID ?? '1214323330851658';
 const TARGET        = process.env.WEBHOOK_TARGET ?? 'https://glev.app/api/asana/webhook';
 const SECTION_NAME  = process.env.REPLIT_QUEUE_SECTION_NAME ?? 'Replit Queue';
 
