@@ -95,31 +95,58 @@ export default function FoodHistoryPage() {
   }
   async function saveEdit() {
     if (!editingId) return;
+    const id = editingId;
+    const savedDraft = { ...draft };
+    const existing = rows.find((r) => r.id === id);
+    if (!existing) return;
+
+    // Build the optimistic row immediately so the UI reflects the edit
+    // without waiting for the network.
+    const optimistic: Row = {
+      ...existing,
+      display_name:    String(savedDraft.display_name    ?? existing.display_name),
+      typical_grams:   Number(savedDraft.typical_grams   ?? existing.typical_grams),
+      carbs_per_100g:  Number(savedDraft.carbs_per_100g  ?? existing.carbs_per_100g),
+      protein_per_100g:Number(savedDraft.protein_per_100g?? existing.protein_per_100g),
+      fat_per_100g:    Number(savedDraft.fat_per_100g    ?? existing.fat_per_100g),
+      fiber_per_100g:  Number(savedDraft.fiber_per_100g  ?? existing.fiber_per_100g),
+      source: "user_confirmed",
+    };
+
+    // Snapshot for rollback, then apply optimistic update + close form.
+    const prevRows = rows;
+    setRows((prev) => prev.map((r) => (r.id === id ? optimistic : r)));
+    cancelEdit();
+
     setBusy(true);
     setErr(null);
     try {
-      const body = {
-        display_name:     draft.display_name,
-        typical_grams:    draft.typical_grams,
-        carbs_per_100g:   draft.carbs_per_100g,
-        protein_per_100g: draft.protein_per_100g,
-        fat_per_100g:     draft.fat_per_100g,
-        fiber_per_100g:   draft.fiber_per_100g,
-      };
-      const res = await fetch(`/api/food-history/${editingId}`, {
+      const res = await fetch(`/api/food-history/${id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          display_name:     savedDraft.display_name,
+          typical_grams:    savedDraft.typical_grams,
+          carbs_per_100g:   savedDraft.carbs_per_100g,
+          protein_per_100g: savedDraft.protein_per_100g,
+          fat_per_100g:     savedDraft.fat_per_100g,
+          fiber_per_100g:   savedDraft.fiber_per_100g,
+        }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         throw new Error(j.error || `HTTP ${res.status}`);
       }
+      // Sync row with server-authoritative values (e.g. trimmed strings,
+      // updated_at). Falls back to the optimistic row if parse fails.
+      const { item } = (await res.json().catch(() => ({}))) as { item?: Row };
+      if (item) {
+        setRows((prev) => prev.map((r) => (r.id === id ? item : r)));
+      }
       hapticSuccess();
-      cancelEdit();
-      await load();
     } catch (e) {
       hapticError();
+      setRows(prevRows); // roll back to pre-edit state
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
