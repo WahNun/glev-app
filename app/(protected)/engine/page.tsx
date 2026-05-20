@@ -2564,13 +2564,27 @@ export default function EnginePage() {
               {(() => {
                 // Parse the datetime-local string ("YYYY-MM-DDTHH:mm") for
                 // custom coloured display. Falls back to "—" on bad input.
+                // (parseLocalDt lives in EngineLogTab, so we inline here.)
+                function parseDtLocal(v: string): Date | null {
+                  if (!v) return null;
+                  const d = new Date(v);
+                  return isNaN(d.getTime()) ? null : d;
+                }
+                function nowDtLocal(): string {
+                  const off = new Date().getTimezoneOffset() * 60_000;
+                  return new Date(Date.now() - off).toISOString().slice(0, 16);
+                }
+                function oneYearAgoDtLocal(): string {
+                  const off = new Date().getTimezoneOffset() * 60_000;
+                  return new Date(Date.now() - 365 * 86400_000 - off).toISOString().slice(0, 16);
+                }
                 const mealDate = (() => {
-                  const d = parseLocalDt(mealTime);
+                  const d = parseDtLocal(mealTime);
                   if (!d) return "—";
                   return d.toLocaleDateString("de-DE", { day: "numeric", month: "short", year: "numeric" });
                 })();
                 const mealTimeFmt = (() => {
-                  const d = parseLocalDt(mealTime);
+                  const d = parseDtLocal(mealTime);
                   if (!d) return "—";
                   return d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
                 })();
@@ -2589,8 +2603,8 @@ export default function EnginePage() {
                       <input
                         type="datetime-local"
                         value={mealTime}
-                        min={oneYearAgoLocalDt()}
-                        max={nowLocalDt()}
+                        min={oneYearAgoDtLocal()}
+                        max={nowDtLocal()}
                         onChange={(e) => setMealTime(e.target.value)}
                         aria-label={tEngine("meal_time_label")}
                         style={{
