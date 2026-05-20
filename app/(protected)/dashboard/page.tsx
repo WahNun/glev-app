@@ -1591,6 +1591,8 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
                 padding:"4px 10px", borderRadius:99,
                 border:`1px solid ${badge.color}55`, background:`${badge.color}18`,
                 letterSpacing:"0.1em",
+                marginLeft: 16,
+                flexShrink: 0,
               }}>
                 {badgeText}
               </div>
