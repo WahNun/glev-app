@@ -136,8 +136,11 @@ export default function SnapSlider({
   }, [value, min, max]);
 
   const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    // Only respond to primary pointer (left mouse button / first touch finger).
-    if (e.button !== 0 && e.pointerType === "mouse") return;
+    // Only respond to the primary pointer.
+    // isPrimary is false for every finger after the first on Android/iOS
+    // multi-touch, and for non-primary mouse buttons on desktop.
+    // Using isPrimary alone is simpler and correct for all pointer types.
+    if (!e.isPrimary) return;
     e.preventDefault();
     isDraggingRef.current = true;
     // Capture so pointermove/pointerup fire on this element even when the
@@ -307,10 +310,18 @@ export default function SnapSlider({
             width: "100%", height: 36,
             background: "transparent",
             cursor: "pointer",
+            // touch-action:none tells both WKWebView (iOS) and Android
+            // WebView not to claim this area for scroll/pinch gestures.
             touchAction: "none",
             // Prevent iOS callout / text selection during drag
             WebkitUserSelect: "none",
             userSelect: "none",
+            // Android Chrome / WebView shows a grey tap-highlight flash on
+            // touch — transparent removes that flicker on the slider surface.
+            WebkitTapHighlightColor: "transparent",
+            // Prevent Android pull-to-refresh from triggering when the
+            // user drags the slider near the top of the page.
+            overscrollBehavior: "none",
           }}
         />
         {/* Invisible <input type="range"> for extra keyboard compat —
