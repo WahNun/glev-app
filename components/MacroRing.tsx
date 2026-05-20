@@ -44,7 +44,7 @@ export default function MacroRing({
       // value. Without aspectRatio the cell height could vary with
       // the value text length below the SVG (e.g. "128" vs "17"),
       // visually shrinking some rings.
-      width:"100%", maxWidth:96,
+      width:"100%", maxWidth:150,
     }}>
       <div style={{ width:"100%", aspectRatio:"1" }}>
         <svg width="100%" height="100%" viewBox="0 0 80 80" style={{ display:"block" }}>
@@ -73,7 +73,7 @@ export default function MacroRing({
           <text
             x="40" y="46"
             textAnchor="middle"
-            fontSize="20" fontWeight="800" fill="var(--text)"
+            fontSize="22" fontWeight="800" fill="var(--text)"
             fontFamily="var(--font-mono)"
           >
             {value}

@@ -151,10 +151,10 @@ export default function ReviewMacrosCards({
           centers the ring with minWidth:0 (collapses min-content floor).
           See app/(protected)/dashboard/page.tsx ~line 980. */}
       <div style={{
-        padding: "16px 12px 8px",
+        padding: "16px 24px 8px",
         display: "grid",
-        gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-        gap: 6,
+        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+        gap: 12,
       }}>
         {cards.map(c => {
           const active = open === c.key;
