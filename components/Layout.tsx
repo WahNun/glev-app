@@ -513,7 +513,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
                     <span
                       key={label}
                       style={{
-                        fontFamily: "var(--font-sans)",
+                        fontFamily: "var(--font-mono)",
                         fontSize: 9,
                         fontWeight: 700,
                         letterSpacing: "0.06em",
@@ -1241,7 +1241,7 @@ function ScopeHeaderChip({
               aria-checked={isActive}
               onClick={() => { setMode(m.key); setAnchor(new Date()); }}
               style={{
-                fontFamily: "var(--font-sans)",
+                fontFamily: "var(--font-mono)",
                 fontSize: 9,
                 fontWeight: 700,
                 letterSpacing: "0.06em",
