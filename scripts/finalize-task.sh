@@ -25,6 +25,45 @@ if ! grep -q "$TASK_GID" DECISIONS.md 2>/dev/null; then
   exit 1
 fi
 
+# ─── Architectural-boundary check ────────────────────────────────────────────
+# Collect all files changed since the last commit (staged + unstaged).
+CHANGED_FILES=$(
+  git diff --name-only HEAD 2>/dev/null
+  git diff --name-only --cached 2>/dev/null
+)
+
+# Patterns that indicate an architectural decision may have been made.
+ARCH_PATTERNS=(
+  "^supabase/"
+  "capacitor\.config\."
+  "(^|/)middleware\.ts$"
+  "^lib/emails/"
+  "next\.config\."
+  "^\.github/workflows/"
+  "^pnpm-workspace\.yaml$"
+  "^package\.json$"
+)
+
+ARCH_HIT=""
+for pattern in "${ARCH_PATTERNS[@]}"; do
+  if echo "$CHANGED_FILES" | grep -qE "$pattern"; then
+    ARCH_HIT="$ARCH_HIT\n  $(echo "$CHANGED_FILES" | grep -E "$pattern" | head -3)"
+  fi
+done
+
+if [ -n "$ARCH_HIT" ]; then
+  echo ""
+  echo "⚠️  Architectural-boundary files were modified in this task:"
+  echo -e "$ARCH_HIT"
+  echo ""
+  echo "   → Does this change warrant a new D-XXX entry in DECISIONS.md?"
+  echo "     Use the self-assessment checklist in replit.md § 'Agent Workflow Rules'."
+  echo "     If yes: add the entry now and re-run finalize-task.sh."
+  echo "     If no: this is just a reminder — finalization continues."
+  echo ""
+fi
+# ─────────────────────────────────────────────────────────────────────────────
+
 # Commit and push
 git add "$REPORT_FILE" DECISIONS.md
 git commit -m "ops: fix report — task $TASK_GID"

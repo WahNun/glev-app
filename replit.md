@@ -15,6 +15,13 @@ Glev is a Type 1 Diabetes insulin decision-support system designed to provide pe
 
 1. **Task-Start:** `DECISIONS.md` lesen — besonders den `## Decisions`-Abschnitt, um bewusste Nicht-Entscheidungen und laufende Architekturvorgaben zu kennen.
 2. **Task-Abschluss:** Direkt **vor** dem Aufruf von `bash scripts/finalize-task.sh TASK_GID` einen neuen Eintrag in die `## Fix Log`-Tabelle in `DECISIONS.md` schreiben (`| Datum | Task-Name | Asana-GID | Beschreibung |`). `finalize-task.sh` prüft das und bricht mit Fehler ab, wenn der Eintrag fehlt.
+3. **DECISIONS.md Self-Assessment (vor Task-Abschluss):** Selbst prüfen, ob die Änderungen einen neuen D-XXX-Eintrag im `## Decisions`-Abschnitt erfordern. Checkliste:
+   - [ ] Wurde eine **Infrastruktur- oder Plattformwahl** getroffen oder geändert? (z. B. neue Auth-Methode, neuer Cloud-Service, Wechsel einer Kernbibliothek)
+   - [ ] Wurde ein **Schema** oder eine **Migration** hinzugefügt, die nicht rückwärtskompatibel ist?
+   - [ ] Wurde ein **Sicherheits- oder Compliance-Prinzip** neu eingeführt oder geändert? (z. B. RLS-Policy, Middleware-Schutz, medizinischer Disclaimer)
+   - [ ] Wurde eine **explizite Nicht-Entscheidung** getroffen — etwas, das bewusst *nicht* gemacht wird und das spätere Agents kennen müssen?
+   - [ ] Wurde eine **E-Mail-, Webhook- oder Cron-Infrastruktur** eingerichtet oder wesentlich verändert?
+   - **Wenn ja zu einer Frage:** neuen `### D-XXX · Titel (YYYY-MM-DD)`-Eintrag in `## Decisions` schreiben, mit Begründung und `**Nicht wieder öffnen:**`-Satz. `finalize-task.sh` erinnert dich, falls du Architektur-Grenz-Dateien (z. B. `supabase/`, `middleware.ts`, `lib/emails/`, `next.config.*`) berührt hast.
 
 ## Compliance Backlog (nicht akut — vor MDR-Einreichung abarbeiten)
 

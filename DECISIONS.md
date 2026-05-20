@@ -34,3 +34,4 @@ Replit-Secrets fließen nicht in den Vercel-Build. Alle Produktions-Envvars lebe
 |-------|-----------|-----------|--------------|
 | 2026-05-20 | DECISIONS.md anlegen und in Abschluss-Flow einbinden | 1209934567890123 | Initiale Anlage von DECISIONS.md, Erweiterung von finalize-task.sh um Pflicht-Check, Prozessregeln in replit.md eingetragen. |
 | 2026-05-20 | Backfill key architecture decisions into DECISIONS.md | 416 | 6 Entscheidungen (D-001–D-006) in ## Decisions eingetragen: Supabase, Capacitor, Kein-Dosis-Imperativ, next-intl, Pump-Ausschluss, Vercel-als-Prod. |
+| 2026-05-20 | Keep the architecture decision log up to date automatically | 417 | finalize-task.sh um Architektur-Grenz-Check erweitert (supabase/, capacitor.config, middleware.ts, lib/emails/, next.config, .github/workflows/, pnpm-workspace.yaml, package.json): bei Treffer Reminder ohne Exit-Code-Fehler. Self-Assessment-Checkliste in replit.md § Agent Workflow Rules (Regel 3) eingetragen. |
