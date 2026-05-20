@@ -124,8 +124,23 @@ export default function SnapSlider({
   // approach that works reliably in both WKWebView (Capacitor/iOS) and
   // regular browsers, because WKWebView's scroll gesture recognizer
   // intercepts native <input type="range"> touch events.
+  //
+  // Axis-lock for Android OEM WebViews:
+  //   Some Android OEMs trigger pull-to-refresh or vertical scroll during a
+  //   horizontal drag even when touchAction:"none" is set, if the finger
+  //   starts with even a slight vertical component. We track the initial
+  //   pointer position and call e.stopPropagation() once we confirm the
+  //   gesture is horizontal (|dx| > |dy|). This prevents the scroll event
+  //   from bubbling to the Android scroll handler without blocking legitimate
+  //   vertical scrolling elsewhere on the page.
   const trackRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
+  // Start coordinates for axis-lock detection (reset on each pointerdown).
+  const startXRef = useRef(0);
+  const startYRef = useRef(0);
+  // Once true for a given drag, we know the gesture is horizontal and
+  // aggressively stop propagation for every subsequent pointermove.
+  const axisLockedRef = useRef(false);
 
   const valueFromPointer = useCallback((clientX: number): number => {
     const el = trackRef.current;
@@ -143,6 +158,9 @@ export default function SnapSlider({
     if (!e.isPrimary) return;
     e.preventDefault();
     isDraggingRef.current = true;
+    startXRef.current = e.clientX;
+    startYRef.current = e.clientY;
+    axisLockedRef.current = false;
     // Capture so pointermove/pointerup fire on this element even when the
     // finger leaves it — critical for fast swipes on iOS.
     (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
@@ -152,6 +170,20 @@ export default function SnapSlider({
   const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (!isDraggingRef.current) return;
     e.preventDefault();
+    // Axis-lock: once the cumulative horizontal delta exceeds the vertical
+    // delta we know this is a horizontal drag. From that point on, call
+    // stopPropagation() for every move so Android OEM scroll handlers (which
+    // sometimes survive preventDefault on touch) cannot claim the gesture.
+    if (!axisLockedRef.current) {
+      const dx = Math.abs(e.clientX - startXRef.current);
+      const dy = Math.abs(e.clientY - startYRef.current);
+      if (dx > dy) {
+        axisLockedRef.current = true;
+      }
+    }
+    if (axisLockedRef.current) {
+      e.stopPropagation();
+    }
     commit(valueFromPointer(e.clientX));
   }, [valueFromPointer]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -159,6 +191,7 @@ export default function SnapSlider({
     if (!isDraggingRef.current) return;
     e.preventDefault();
     isDraggingRef.current = false;
+    axisLockedRef.current = false;
     commit(valueFromPointer(e.clientX));
   }, [valueFromPointer]); // eslint-disable-line react-hooks/exhaustive-deps
 
