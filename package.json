@@ -22,7 +22,8 @@
     "android:version": "node scripts/bump-android-version.mjs show",
     "android:bump:build": "node scripts/bump-android-version.mjs build",
     "asana:sync": "node scripts/sync-asana-sprints.mjs",
-    "telegram:notify": "node scripts/notify-telegram.mjs"
+    "telegram:notify": "node scripts/notify-telegram.mjs",
+    "check:engine-doc": "node scripts/check-engine-doc-thresholds.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.1",

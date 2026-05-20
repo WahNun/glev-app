@@ -52,11 +52,13 @@ export interface RecommendOutput {
   reasoning: string;
 }
 
-const DEFAULT_ICR = 15;
-const DEFAULT_CF  = 50;
-const DEFAULT_TARGET = 100;
-const SAFETY_BG_MIN = 80;
-const MAX_DOSE_UNITS = 25;
+export const DEFAULT_ICR    = 15;
+export const DEFAULT_CF     = 50;
+export const DEFAULT_TARGET = 100;
+/** BG floor: below this threshold the engine blocks all dose recommendations. */
+export const SAFETY_BG_MIN  = 80;
+/** Hard dose ceiling: calculated totals above this value are clamped. */
+export const MAX_DOSE_UNITS = 25;
 
 function safePositive(n: number | null | undefined, fallback: number): number {
   return n != null && Number.isFinite(n) && n > 0 ? n : fallback;

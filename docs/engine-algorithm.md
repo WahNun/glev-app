@@ -92,7 +92,7 @@ Fires **before** spike or delta checks. A meal is labelled `HYPO_DURING` when an
 - `minBg180 < 70` (curve minimum below 70 mg/dL)
 - `bgAfter < 70` (sparse post-meal point is itself below threshold)
 
-Hypo threshold: **70 mg/dL** (hard-coded constant `HYPO_THRESHOLD`).
+Hypo threshold: **70 mg/dL** (constant `HYPO_THRESHOLD` in `lib/engine/evaluation.ts`).
 
 Confidence: always `high` when triggered.
 
@@ -100,23 +100,23 @@ Confidence: always `high` when triggered.
 
 Implemented in the private `detectSpike()` function. Combines three signals:
 
-**Spike cutoffs by meal class:**
+**Spike cutoffs by meal class** (constants `SPIKE_CUTOFF_*` in `lib/engine/evaluation.ts`):
 
-| Class | Spike cutoff |
-|-------|-------------|
-| FAST_CARBS | 70 mg/dL |
-| HIGH_PROTEIN | 50 mg/dL |
-| BALANCED | 55 mg/dL |
-| HIGH_FAT | 40 mg/dL |
+| Class | Spike cutoff | Constant |
+|-------|-------------|----------|
+| FAST_CARBS | 70 mg/dL | `SPIKE_CUTOFF_FAST_CARBS` |
+| HIGH_PROTEIN | 50 mg/dL | `SPIKE_CUTOFF_HIGH_PROTEIN` |
+| BALANCED | 55 mg/dL | `SPIKE_CUTOFF_BALANCED` |
+| HIGH_FAT | 40 mg/dL | `SPIKE_CUTOFF_HIGH_FAT` |
 
 **Trigger conditions (any one suffices):**
 - `peakRise = maxBg180 − bgBefore > cutoff` *(curve peak)*
 - `delta = bgAfter − bgBefore > cutoff` *(legacy 2h delta)*
-- `speed1 ≥ 1.5 mg/dL/min` OR `speed2 ≥ 1.5 mg/dL/min` *(slope — catches brief spikes that recover before the 2h reading)*
+- `speed1 ≥ 1.5 mg/dL/min` OR `speed2 ≥ 1.5 mg/dL/min` *(slope — `SPEED_SPIKE_MGDL_PER_MIN` in `lib/engine/evaluation.ts`)*
 
 **Severity escalation to `SPIKE_STRONG`:**
-- Magnitude: `peakRise > cutoff × 1.5` OR `delta > cutoff × 1.5`
-- Speed: `speed1 ≥ 2.5 mg/dL/min` OR `speed2 ≥ 2.5 mg/dL/min`
+- Magnitude: `peakRise > cutoff × 1.5` OR `delta > cutoff × 1.5` *(multiplier: `SPIKE_STRONG_MAGNITUDE_MULTIPLIER`)*
+- Speed: `speed1 ≥ 2.5 mg/dL/min` OR `speed2 ≥ 2.5 mg/dL/min` *(constant: `SPEED_SPIKE_STRONG_MGDL_PER_MIN`)*
 
 **Confidence:**
 - `high` when magnitude signal (peak or delta) is present
@@ -175,7 +175,8 @@ Only meals with:
 
 ### Outcome weights
 
-Poor outcomes contribute less — they likely reflect a mis-dosed meal rather than the user's true ICR:
+Poor outcomes contribute less — they likely reflect a mis-dosed meal rather than the user's true ICR.  
+Source: `OUTCOME_WEIGHT` in `lib/engine/adaptiveICR.ts`.
 
 | Outcome | Weight |
 |---------|--------|
@@ -204,7 +205,7 @@ Basal logs are always filtered out and never contribute to ICR.
 | afternoon | 11:00 – 16:59 |
 | evening | 17:00 – 23:59 |
 
-Bucket ICR is only emitted when **≥ 3 samples** exist in that bucket. Global ICR is always computed from all samples.
+Bucket ICR is only emitted when **≥ 3 samples** (`MIN_BUCKET_SAMPLES` in `lib/engine/adaptiveICR.ts`) exist in that bucket. Global ICR is always computed from all samples.
 
 ### Per-schedule-window ICR (Phase B3)
 
@@ -236,7 +237,7 @@ When the user has configured an ICR schedule with the master toggle ON, `compute
 
 1. Time-of-day slot (`morning | afternoon | evening`) if `sampleSize ≥ 1` for that slot
 2. `global` ICR if available
-3. Hardcoded default: **15 g/u**
+3. Hardcoded default: **15 g/u** (`DEFAULT_ICR` in `lib/engine/recommendation.ts`)
 
 ### Dose formula
 
@@ -247,17 +248,19 @@ total          = carbDose + correctionDose
 recommendedUnits = round(total × 2) / 2        [rounded to 0.5u]
 ```
 
-**Defaults when user settings are unavailable:**
-- ICR: 15 g/u
-- CF (correction factor): 50 mg/dL per unit
-- Target BG: 100 mg/dL
+**Defaults when user settings are unavailable** (constants in `lib/engine/recommendation.ts`):
+- ICR: 15 g/u (`DEFAULT_ICR`)
+- CF (correction factor): 50 mg/dL per unit (`DEFAULT_CF`)
+- Target BG: 100 mg/dL (`DEFAULT_TARGET`)
 
 ### Safety gates (hard limits — never bypass)
 
-| Gate | Condition | Effect |
-|------|-----------|--------|
-| BG floor | `currentBG < 80 mg/dL` | `blocked = true`, dose = 0, confidence = high |
-| Dose ceiling | `total > 25 units` | Clamp to 25u, add `engine_rec_clamped` message |
+Constants in `lib/engine/recommendation.ts`: `SAFETY_BG_MIN`, `MAX_DOSE_UNITS`.
+
+| Gate | Condition | Constant | Effect |
+|------|-----------|----------|--------|
+| BG floor | `currentBG < 80 mg/dL` | `SAFETY_BG_MIN` | `blocked = true`, dose = 0, confidence = high |
+| Dose ceiling | `total > 25 units` | `MAX_DOSE_UNITS` | Clamp to 25u, add `engine_rec_clamped` message |
 
 When `blocked = true`, no dose number is shown to the user. This is a clinical safety invariant — do not relax the floor or ceiling without explicit sign-off from the medical responsibility team (see D-003).
 
@@ -356,7 +359,7 @@ The following must hold after any change to Engine code. Violations may produce 
 5. **No dose mutation from annotations.** The safety annotation block (preTrend, stacking, exercise, activity) appends messages only. The `total` variable must not change after those blocks.
 6. **classifyMeal and systemPrompt must agree.** When editing classification rules, update both `lib/meals.ts` and `lib/ai/systemPrompt.ts`. A mismatch causes GPT to return a class that the evaluator would never assign, breaking spike cutoff selection.
 7. **Outcome weights ≠ 0 required to feed ICR.** Only outcomes with a positive weight in `OUTCOME_WEIGHT` contribute to the adaptive ICR. Adding a new outcome type requires a deliberate weight assignment.
-8. **`sampleSize` threshold for time-of-day ICR is 3.** Lowering this risks noisy buckets driving recommendations. Raising it silently degrades personalisation for users with sparse logs.
+8. **`sampleSize` threshold for time-of-day ICR is `MIN_BUCKET_SAMPLES` (3).** Lowering this risks noisy buckets driving recommendations. Raising it silently degrades personalisation for users with sparse logs.
 9. **Pump users excluded from dose recommendation.** The Engine page must display a disclaimer or suppress the recommendation number for pump users (D-005). Do not remove that gate.
 
 ---
@@ -379,3 +382,28 @@ The following must hold after any change to Engine code. Violations may produce 
 | `tests/unit/recommendation.test.ts` | Dose formula unit tests |
 | `tests/unit/adaptiveICR.test.ts` | ICR learning unit tests |
 | `tests/unit/classifyMeal.test.ts` | Classification boundary tests |
+
+---
+
+## Threshold Index
+
+> **This table is machine-read by `scripts/check-engine-doc-thresholds.mjs`.**  
+> Run `pnpm run check:engine-doc` to verify every value here matches its source constant.  
+> **When you change a constant in the source, update this table and re-run the check.**
+
+| Constant | Source file | Value |
+|----------|-------------|-------|
+| HYPO_THRESHOLD | lib/engine/evaluation.ts | 70 |
+| SPEED_SPIKE_MGDL_PER_MIN | lib/engine/evaluation.ts | 1.5 |
+| SPEED_SPIKE_STRONG_MGDL_PER_MIN | lib/engine/evaluation.ts | 2.5 |
+| SPIKE_STRONG_MAGNITUDE_MULTIPLIER | lib/engine/evaluation.ts | 1.5 |
+| SPIKE_CUTOFF_FAST_CARBS | lib/engine/evaluation.ts | 70 |
+| SPIKE_CUTOFF_HIGH_FAT | lib/engine/evaluation.ts | 40 |
+| SPIKE_CUTOFF_HIGH_PROTEIN | lib/engine/evaluation.ts | 50 |
+| SPIKE_CUTOFF_BALANCED | lib/engine/evaluation.ts | 55 |
+| DEFAULT_ICR | lib/engine/recommendation.ts | 15 |
+| DEFAULT_CF | lib/engine/recommendation.ts | 50 |
+| DEFAULT_TARGET | lib/engine/recommendation.ts | 100 |
+| SAFETY_BG_MIN | lib/engine/recommendation.ts | 80 |
+| MAX_DOSE_UNITS | lib/engine/recommendation.ts | 25 |
+| MIN_BUCKET_SAMPLES | lib/engine/adaptiveICR.ts | 3 |

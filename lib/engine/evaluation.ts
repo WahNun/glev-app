@@ -42,6 +42,15 @@ export const SPEED_SPIKE_MGDL_PER_MIN          = 1.5;
 export const SPEED_SPIKE_STRONG_MGDL_PER_MIN   = 2.5;
 export const SPIKE_STRONG_MAGNITUDE_MULTIPLIER = 1.5;
 
+/** Hypo threshold shared by all evaluation paths (sparse-bg, curve min, hadHypoWindow). */
+export const HYPO_THRESHOLD = 70;
+
+/** Per-class spike cutoffs (mg/dL BG rise). Referenced by check-engine-doc-thresholds. */
+export const SPIKE_CUTOFF_FAST_CARBS   = 70;
+export const SPIKE_CUTOFF_HIGH_FAT     = 40;
+export const SPIKE_CUTOFF_HIGH_PROTEIN = 50;
+export const SPIKE_CUTOFF_BALANCED     = 55;
+
 export type Classification = "FAST_CARBS" | "HIGH_PROTEIN" | "HIGH_FAT" | "BALANCED" | null | undefined;
 
 export interface EvaluateEntryInput {
@@ -357,10 +366,10 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
   const delta = bgBefore != null && bgAfter != null ? bgAfter - bgBefore : null;
 
   const spikeCutoff =
-    cls === "FAST_CARBS" ? 70 :
-    cls === "HIGH_FAT"   ? 40 :
-    cls === "HIGH_PROTEIN" ? 50 :
-    55;
+    cls === "FAST_CARBS"   ? SPIKE_CUTOFF_FAST_CARBS   :
+    cls === "HIGH_FAT"     ? SPIKE_CUTOFF_HIGH_FAT      :
+    cls === "HIGH_PROTEIN" ? SPIKE_CUTOFF_HIGH_PROTEIN  :
+    SPIKE_CUTOFF_BALANCED;
 
   // Curve-aware + sparse-hypo decisions. A meal must NEVER be labelled
   // GOOD if any post-meal BG (bg_1h, bg_2h, or the 0–180 min curve
@@ -376,7 +385,6 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
   //     fall into the Δ-block and be labelled OVERDOSE while the meal
   //     is plainly in HYPO territory; or 100 → (mid 60) → 100 leaks
   //     into "GOOD" because the in-between dip is invisible.
-  const HYPO_THRESHOLD = 70;
   const sparseHypoBg =
     bgAfter != null && bgAfter < HYPO_THRESHOLD;
   const curveHypo =

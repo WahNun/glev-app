@@ -5,7 +5,10 @@ import { parseDbDate } from "@/lib/time";
 import { pairBolusesToMeals } from "./pairing";
 import { findActiveSlot, type IcrSchedule } from "@/lib/icrSchedule";
 
-const OUTCOME_WEIGHT: Record<string, number> = {
+/** Minimum samples in a time-of-day bucket before a per-bucket ICR is emitted. */
+export const MIN_BUCKET_SAMPLES = 3;
+
+export const OUTCOME_WEIGHT: Record<string, number> = {
   GOOD: 1.0,
   SPIKE: 0.7,
   // Task #251: SPIKE_STRONG carries less weight than a regular SPIKE
@@ -222,7 +225,7 @@ export function computeAdaptiveICR(
           slotIndex:  s.slotIndex,
           label:      s.label,
           manualIcr:  s.icrGPerUnit,
-          learnedIcr: samples.length >= 3 ? weightedAverage(samples) : null,
+          learnedIcr: samples.length >= MIN_BUCKET_SAMPLES ? weightedAverage(samples) : null,
           sampleSize: samples.length,
         };
       })
@@ -230,9 +233,9 @@ export function computeAdaptiveICR(
 
   return {
     global:    weightedAverage(buckets.all),
-    morning:   buckets.morning.length   >= 3 ? weightedAverage(buckets.morning)   : null,
-    afternoon: buckets.afternoon.length >= 3 ? weightedAverage(buckets.afternoon) : null,
-    evening:   buckets.evening.length   >= 3 ? weightedAverage(buckets.evening)   : null,
+    morning:   buckets.morning.length   >= MIN_BUCKET_SAMPLES ? weightedAverage(buckets.morning)   : null,
+    afternoon: buckets.afternoon.length >= MIN_BUCKET_SAMPLES ? weightedAverage(buckets.afternoon) : null,
+    evening:   buckets.evening.length   >= MIN_BUCKET_SAMPLES ? weightedAverage(buckets.evening)   : null,
     sampleSize: buckets.all.length,
     pairedCount,
     pairedExplicitCount,
