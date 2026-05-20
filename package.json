@@ -21,7 +21,8 @@
     "android:build:debug": "npx cap sync android && cd android && ./gradlew assembleDebug",
     "android:version": "node scripts/bump-android-version.mjs show",
     "android:bump:build": "node scripts/bump-android-version.mjs build",
-    "asana:sync": "node scripts/sync-asana-sprints.mjs"
+    "asana:sync": "node scripts/sync-asana-sprints.mjs",
+    "telegram:notify": "node scripts/notify-telegram.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.1",
