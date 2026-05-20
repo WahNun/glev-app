@@ -2,8 +2,19 @@
 
 // Snapping numeric slider with a large tap-to-edit read-out and a
 // light haptic tick at each snap stop. Used across all log forms.
+//
+// The drag track uses a custom Pointer-Event implementation instead of
+// a native <input type="range"> because WKWebView (iOS / Capacitor /
+// TestFlight) intercepts touch events with its own scroll gesture
+// recognizer even when `touchAction: "none"` is set, making the native
+// range completely unusable with a finger.  setPointerCapture ensures
+// drags are tracked even when the finger moves outside the track.
+//
+// Keyboard accessibility is preserved via an invisible <input
+// type="range"> overlay that is reachable only by keyboard (opacity:0,
+// position:absolute, no pointer-events).
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { hapticLight } from "@/lib/haptics";
 
 const BORDER = "var(--border)";
@@ -107,6 +118,60 @@ export default function SnapSlider({
     lastValueRef.current = value;
   }, [value]);
 
+  // ── Custom drag implementation ────────────────────────────────────────
+  // We use pointer events + setPointerCapture so the drag continues even
+  // when the finger moves outside the track bounds. This is the only
+  // approach that works reliably in both WKWebView (Capacitor/iOS) and
+  // regular browsers, because WKWebView's scroll gesture recognizer
+  // intercepts native <input type="range"> touch events.
+  const trackRef = useRef<HTMLDivElement>(null);
+  const isDraggingRef = useRef(false);
+
+  const valueFromPointer = useCallback((clientX: number): number => {
+    const el = trackRef.current;
+    if (!el) return value;
+    const rect = el.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    return min + ratio * (max - min);
+  }, [value, min, max]);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    // Only respond to primary pointer (left mouse button / first touch finger).
+    if (e.button !== 0 && e.pointerType === "mouse") return;
+    e.preventDefault();
+    isDraggingRef.current = true;
+    // Capture so pointermove/pointerup fire on this element even when the
+    // finger leaves it — critical for fast swipes on iOS.
+    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+    commit(valueFromPointer(e.clientX));
+  }, [valueFromPointer]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingRef.current) return;
+    e.preventDefault();
+    commit(valueFromPointer(e.clientX));
+  }, [valueFromPointer]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handlePointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingRef.current) return;
+    e.preventDefault();
+    isDraggingRef.current = false;
+    commit(valueFromPointer(e.clientX));
+  }, [valueFromPointer]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Keyboard handler on the drag div ─────────────────────────────────
+  // Arrow keys adjust by one step so keyboard users don't rely solely on
+  // the invisible <input type="range"> below (belt-and-suspenders).
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "ArrowRight" || e.key === "ArrowUp") {
+      e.preventDefault();
+      commit(snap(value + step));
+    } else if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
+      e.preventDefault();
+      commit(snap(value - step));
+    }
+  }, [value, step]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div style={{
       background: "var(--input-bg)",
@@ -184,17 +249,18 @@ export default function SnapSlider({
         )}
       </div>
 
-      {/* 36 px tall so the iOS touch target is large enough.
-          The native thumb can extend beyond the custom track; keeping
-          overflow visible prevents iOS WKWebView from clipping it. */}
+      {/* 36 px tall touch target — custom pointer-event drag area.
+          overflow:visible keeps the thumb visually outside the track
+          bounds when at min/max without clipping. */}
       <div style={{ position: "relative", height: 36 }}>
-        {/* Track background + filled track — vertically centred */}
+        {/* Track background — non-interactive, purely decorative */}
         <div style={{
           position: "absolute", left: 0, right: 0, top: "50%",
           height: 6, transform: "translateY(-50%)",
           borderRadius: 999, background: "var(--surface-soft)",
           pointerEvents: "none",
         }} />
+        {/* Filled (active) portion of the track */}
         <div style={{
           position: "absolute", left: 0, top: "50%",
           width: `${pct}%`, height: 6, transform: "translateY(-50%)",
@@ -202,6 +268,56 @@ export default function SnapSlider({
           transition: "width 60ms linear",
           pointerEvents: "none",
         }} />
+        {/* Thumb — positioned at the current value percentage */}
+        <div style={{
+          position: "absolute",
+          left: `${pct}%`,
+          top: "50%",
+          width: 22,
+          height: 22,
+          transform: "translate(-50%, -50%)",
+          borderRadius: "50%",
+          background: accent,
+          boxShadow: "0 1px 4px rgba(0,0,0,0.25)",
+          pointerEvents: "none",
+          transition: "left 60ms linear",
+        }} />
+        {/* Drag surface — covers the full 36px hit area.
+            touch-action:none tells the browser (and WKWebView) NOT to
+            claim this area for scroll, handing all pointer events to us.
+            tabIndex allows keyboard focus; arrow keys are handled via
+            onKeyDown.  role="slider" exposes the semantics to a11y
+            tools without needing the native range element to be
+            interactive. */}
+        <div
+          ref={trackRef}
+          role="slider"
+          aria-label={ariaLabel ?? "Value slider"}
+          aria-valuemin={min}
+          aria-valuemax={max}
+          aria-valuenow={value}
+          tabIndex={0}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          onKeyDown={handleKeyDown}
+          style={{
+            position: "absolute", left: 0, right: 0, top: 0,
+            width: "100%", height: 36,
+            background: "transparent",
+            cursor: "pointer",
+            touchAction: "none",
+            // Prevent iOS callout / text selection during drag
+            WebkitUserSelect: "none",
+            userSelect: "none",
+          }}
+        />
+        {/* Invisible <input type="range"> for extra keyboard compat —
+            reachable only via Tab (no pointer-events, opacity:0).
+            This is belt-and-suspenders: the div above already handles
+            Arrow keys, but some AT tools specifically look for a native
+            range role. */}
         <input
           type="range"
           min={min}
@@ -209,14 +325,14 @@ export default function SnapSlider({
           step={step}
           value={value}
           onChange={e => commit(Number(e.target.value))}
-          aria-label={ariaLabel ?? "Value slider"}
+          aria-hidden
+          tabIndex={-1}
           style={{
-            position: "absolute", left: 0, right: 0, top: 0,
-            width: "100%", height: 36, margin: 0,
-            background: "transparent",
-            accentColor: accent,
-            cursor: "pointer",
-            touchAction: "none",
+            position: "absolute", left: 0, top: 0,
+            width: "100%", height: "100%",
+            opacity: 0,
+            pointerEvents: "none",
+            margin: 0,
           }}
         />
       </div>
