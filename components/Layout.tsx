@@ -1205,60 +1205,90 @@ function ScopeHeaderChip({
   setAnchor: (d: Date) => void;
 }) {
   const t = useTranslations("scopeHeader");
+  const ACCENT_HDR = "#4F6EF7";
   const modes: { key: ScopeMode; label: string }[] = [
     { key: "day",   label: t("mode_day")   },
     { key: "week",  label: t("mode_week")  },
     { key: "month", label: t("mode_month") },
     { key: "year",  label: t("mode_year")  },
   ];
+  const total = modes.length;
+  const activeIndex = modes.findIndex(m => m.key === mode);
+  const segPct = 100 / total;
 
   return (
     <div
       role="radiogroup"
       aria-label={t("open_aria")}
       style={{
-        display: "inline-flex", alignItems: "center", gap: 0,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 3,
         flexShrink: 0,
+        width: 148,
       }}
     >
-      {modes.map(m => {
-        const isActive = mode === m.key;
-        return (
-          <button
-            key={m.key}
-            type="button"
-            role="radio"
-            aria-checked={isActive}
-            onClick={() => { setMode(m.key); setAnchor(new Date()); }}
-            style={{
-              padding: "0 10px", height: 30,
-              background: "transparent",
-              color: isActive ? "#fff" : "var(--text-faint)",
-              border: "none",
-              fontSize: 12, fontWeight: isActive ? 700 : 500,
-              letterSpacing: "0.04em",
-              textTransform: "uppercase",
-              cursor: "pointer",
-              transition: "color 0.15s",
-              WebkitTapHighlightColor: "transparent",
-              touchAction: "manipulation",
-              whiteSpace: "nowrap",
-              position: "relative",
-            }}
-          >
-            {m.label}
-            {isActive && (
-              <span style={{
-                position: "absolute", bottom: 2, left: "50%",
-                transform: "translateX(-50%)",
-                width: 4, height: 4, borderRadius: "50%",
-                background: ACCENT,
-                display: "block",
-              }} />
-            )}
-          </button>
-        );
-      })}
+      {/* Labels row — identical style to Engine wizard step labels */}
+      <div style={{ display: "flex", width: "100%" }}>
+        {modes.map((m, i) => {
+          const isActive = mode === m.key;
+          return (
+            <button
+              key={m.key}
+              type="button"
+              role="radio"
+              aria-checked={isActive}
+              onClick={() => { setMode(m.key); setAnchor(new Date()); }}
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+                color: isActive ? ACCENT_HDR : "var(--text-faint)",
+                transition: "color 240ms ease",
+                width: `${segPct}%`,
+                textAlign: "center",
+                background: "transparent",
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                WebkitTapHighlightColor: "transparent",
+                touchAction: "manipulation",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {m.label}
+            </button>
+          );
+        })}
+      </div>
+      {/* Segmented track — identical to Engine wizard step indicator */}
+      <div
+        style={{
+          position: "relative",
+          width: "100%",
+          height: 2,
+          background: "var(--border-soft)",
+          borderRadius: 99,
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            height: "100%",
+            width: `${segPct}%`,
+            background: ACCENT_HDR,
+            borderRadius: 99,
+            transform: `translateX(${activeIndex * 100}%)`,
+            transition: "transform 240ms cubic-bezier(.2,.7,.2,1)",
+            boxShadow: `0 0 6px ${ACCENT_HDR}88`,
+          }}
+        />
+      </div>
     </div>
   );
 }
