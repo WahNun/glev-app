@@ -39,4 +39,18 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+      POST_NOTIFICATIONS is required on Android 13+ (API 33+) for push
+      notifications via FCM / @capacitor/push-notifications.
+      On older API levels this permission is silently ignored.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
+      VIBRATE allows haptic feedback via @capacitor/haptics (SnapSlider,
+      SaveButton, etc.). No runtime prompt is needed — it is a normal
+      permission granted automatically at install time.
+    -->
+    <uses-permission android:name="android.permission.VIBRATE" />
 </manifest>

@@ -9,6 +9,34 @@ The Gradle build itself runs on macOS (or any machine with Java 17+ and the
 Android SDK installed) — Replit does not have Java, so only the project
 preparation and `npx cap sync android` happen here.
 
+## 0. Package identity (read before doing anything else)
+
+The canonical Android package name is **`app.glev`**. This value is set
+consistently in three places — they must always match:
+
+| File | Setting |
+|------|---------|
+| `capacitor.config.ts` | `appId: "app.glev"` |
+| `android/app/build.gradle` | `applicationId "app.glev"` |
+| `android/app/build.gradle` | `namespace = "app.glev"` |
+
+**Do not change the package name** after the first Play Store upload. Google
+ties the package name to the app listing permanently; a rename requires
+creating a new listing from scratch and all previous installs stop updating.
+
+### AndroidManifest permissions
+
+The `android/app/src/main/AndroidManifest.xml` declares:
+
+- `INTERNET` — required for the WebView to reach `https://glev.app`
+- `POST_NOTIFICATIONS` — required on Android 13+ (API 33) for FCM push
+  notifications; silently ignored on older API levels
+- `VIBRATE` — required for `@capacitor/haptics` (log sliders, save buttons);
+  granted automatically at install time, no runtime prompt
+
+If you add new Capacitor plugins that need additional permissions (e.g.
+Camera, Contacts), declare them in `AndroidManifest.xml` before building.
+
 ## 1. Generate the upload keystore (one time)
 
 On your Mac, create an RSA-2048 keystore that is valid for ~27 years (Play

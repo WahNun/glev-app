@@ -17,7 +17,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
  * (Capacitor)".
  */
 const config: CapacitorConfig = {
-  appId: "com.glev.app",
+  appId: "app.glev",
   appName: "Glev",
   webDir: "www",
   server: {
