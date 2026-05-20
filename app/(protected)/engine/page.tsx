@@ -33,6 +33,8 @@ import { fetchLatestCgm } from "@/components/CgmFetchButton";
 import { classifyPreReferenceTrend, type TrendClass, type TrendSample } from "@/lib/engine/trend";
 import { fetchLatestFingerstick, FS_OVERRIDE_WINDOW_MS } from "@/lib/fingerstick";
 import { parseDbTs, parseDbDate, parseLluTs } from "@/lib/time";
+import { calcTotalIOB, applyIOBCorrection, formatIOBDisplay, type InsulinType } from "@/lib/iob";
+import { fetchMeals } from "@/lib/meals";
 import { hapticSuccess, hapticError } from "@/lib/haptics";
 import SnapSlider from "@/components/log/SnapSlider";
 import ReviewMacrosCards from "@/components/ReviewMacrosCards";
@@ -510,6 +512,9 @@ export default function EnginePage() {
   const [dismissedSigs, setDismissedSigs] = useState<Record<string, number>>({});
   const [adjustmentTick, setAdjustmentTick] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [iob, setIob] = useState<number>(0);
+  const [iobDisplay, setIobDisplay] = useState<string | null>(null);
+  const [insulinType] = useState<InsulinType>('rapid');
   const [glucose, setGlucose] = useState("");
   // The `carbs` form state holds the user-displayed value in their
   // chosen unit (g / BE / KE) — see useCarbUnit below. All persistence
@@ -1290,6 +1295,19 @@ export default function EnginePage() {
       setCgmPulling(false);
     }
   }
+
+  // IOB: fetch recent meals (last 5h) and calculate active insulin.
+  useEffect(() => {
+    fetchMeals({ sinceDays: 1 }).then(recent => {
+      const cutoff = Date.now() - 5 * 60 * 60 * 1000;
+      const recentDoses = recent
+        .filter(m => m.insulin_units != null && m.insulin_units > 0 && new Date(m.created_at).getTime() > cutoff)
+        .map(m => ({ units: m.insulin_units as number, administeredAt: m.created_at }));
+      const totalIOB = calcTotalIOB(recentDoses, insulinType);
+      setIob(totalIOB);
+      setIobDisplay(formatIOBDisplay(totalIOB));
+    }).catch(() => { setIob(0); setIobDisplay(null); });
+  }, [insulinType]);
 
   useEffect(() => {
     // Fetch meals AND the recent bolus logs in parallel so the adaptive
@@ -2914,7 +2932,7 @@ export default function EnginePage() {
                     </div>
                     <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 14 }}>
                       <span style={{ fontSize: 32, fontWeight: 800, color:"var(--text)", letterSpacing: "-0.03em", lineHeight: 1 }}>
-                        {formatNum(result.dose, 1)}
+                        {formatNum(applyIOBCorrection(result.dose, iob), 1)}
                       </span>
                       <span style={{ fontSize: 14, color: "var(--text-dim)", fontWeight: 600 }}>{tEngine("units_short")}</span>
                     </div>
@@ -2979,6 +2997,22 @@ export default function EnginePage() {
                       </div>
                     )}
                   </div>
+
+                  {/* IOB badges */}
+                  {iobDisplay && (
+                    <div style={{ marginTop: 10, padding: '8px 14px', background: 'rgba(255,165,0,0.1)', border: '1px solid rgba(255,165,0,0.3)', borderRadius: 10, textAlign: 'center' }}>
+                      <span style={{ fontSize: 12, color: 'rgba(255,200,80,0.85)' }}>
+                        ⚡ Noch aktiv: {iobDisplay} — Empfehlung bereits bereinigt
+                      </span>
+                    </div>
+                  )}
+                  {iob > 0 && applyIOBCorrection(result.dose, iob) === 0 && (
+                    <div style={{ marginTop: 10, padding: '8px 14px', background: 'rgba(0,200,100,0.1)', border: '1px solid rgba(0,200,100,0.3)', borderRadius: 10, textAlign: 'center' }}>
+                      <span style={{ fontSize: 12, color: 'rgba(80,220,140,0.9)' }}>
+                        ✓ Kein zusätzliches Insulin nötig — bestehende Wirkung reicht aus
+                      </span>
+                    </div>
+                  )}
 
                   {/* Collapsible GPT reasoning — chevron toggles the body. */}
                   <div style={{
