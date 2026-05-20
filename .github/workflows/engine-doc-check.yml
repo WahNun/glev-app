@@ -1,0 +1,36 @@
+name: Engine doc threshold check
+
+# Verifies that every constant in the "## Threshold Index" table of
+# docs/engine-algorithm.md matches the exported TypeScript constant in
+# the source file.  A drift (e.g. a developer changes HYPO_THRESHOLD
+# in evaluation.ts but forgets to update the doc) fails the build here
+# before it can reach Vercel.
+#
+# This check also runs automatically as the `prebuild` npm script, so
+# Vercel's own build step will catch any drift that slips through.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  engine-doc-check:
+    name: Engine threshold sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Check Engine doc thresholds
+        run: node scripts/check-engine-doc-thresholds.mjs

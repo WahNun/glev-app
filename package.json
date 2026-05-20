@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 5000",
+    "prebuild": "node scripts/check-engine-doc-thresholds.mjs",
     "build": "next build",
     "start": "next start -p 5000",
     "db:migrate": "node scripts/apply-migration.mjs",
