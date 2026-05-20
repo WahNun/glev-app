@@ -1,0 +1,154 @@
+name: Android release
+
+# Push-button Play Store release. Either:
+#   - click "Run workflow" in the GitHub Actions UI (pick a bump strategy)
+#   - or push a tag matching `android-v*` to ship automatically (always
+#     does a versionCode bump)
+#
+# Prereqs — add these once under GitHub repo → Settings → Secrets and
+# variables → Actions → Repository secrets:
+#
+#   ANDROID_KEYSTORE_BASE64       base64 of ~/glev-release.keystore
+#                                 Generate: base64 -i ~/glev-release.keystore | pbcopy
+#   ANDROID_KEYSTORE_PASSWORD     keystore + key password (same value)
+#   ANDROID_KEY_ALIAS             "glev" (as created in SIGNING_SETUP.md §1)
+#   ANDROID_KEY_PASSWORD          same as ANDROID_KEYSTORE_PASSWORD
+#   ANDROID_GOOGLE_SERVICES_BASE64  base64 of android/app/google-services.json
+#                                 Generate: base64 -i android/app/google-services.json | pbcopy
+#
+# The workflow writes the keystore to /tmp/glev-release.keystore and
+# google-services.json to android/app/google-services.json so Gradle
+# finds both without them ever touching the repo.
+#
+# AAB output: android/app/build/outputs/bundle/release/app-release.aab
+# It is uploaded as a GitHub Actions artifact so you can download and
+# upload to Play Console manually (Internal Testing → Create new release).
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "versionCode bump strategy"
+        type: choice
+        required: true
+        default: "build"
+        options:
+          - build      # increment versionCode by 1 (most common)
+          - patch      # bump versionName patch + reset versionCode to 1
+          - minor      # bump versionName minor + reset versionCode to 1
+          - major      # bump versionName major + reset versionCode to 1
+          - skip       # no version change (re-build same version; rare)
+  push:
+    tags:
+      - "android-v*"
+
+concurrency:
+  group: android-release
+  cancel-in-progress: false   # never cancel a running release build
+
+permissions:
+  contents: write   # needed to push version-bump commit back to branch
+
+jobs:
+  build:
+    name: Build signed AAB
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    env:
+      # Gradle signingConfigs reads exactly these four names (see android/app/build.gradle)
+      KEYSTORE_PATH: /tmp/glev-release.keystore
+      KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17 (required by Gradle / Android build tools)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Install Node deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Decode keystore
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > /tmp/glev-release.keystore
+
+      - name: Decode google-services.json
+        run: echo "${{ secrets.ANDROID_GOOGLE_SERVICES_BASE64 }}" | base64 -d > android/app/google-services.json
+
+      - name: Decide bump
+        id: bump
+        run: |
+          BUMP="${{ github.event.inputs.bump }}"
+          # Tag-triggered runs always do a versionCode bump
+          if [ -z "$BUMP" ]; then BUMP="build"; fi
+          echo "value=$BUMP" >> "$GITHUB_OUTPUT"
+
+      - name: Bump versionCode / versionName
+        if: steps.bump.outputs.value != 'skip'
+        run: |
+          BUMP="${{ steps.bump.outputs.value }}"
+          if [ "$BUMP" = "build" ]; then
+            node scripts/bump-android-version.mjs build
+          else
+            # patch / minor / major: bumps versionName + resets versionCode to 1
+            node scripts/bump-android-version.mjs release "$BUMP"
+          fi
+          echo "New version:"
+          node scripts/bump-android-version.mjs show
+
+      - name: Cap sync (mirror www/ + capacitor.config into android/)
+        run: npm run android:sync
+
+      - name: Build release AAB
+        run: cd android && ./gradlew bundleRelease --no-daemon
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Commit version bump back to branch
+        # Only push back on workflow_dispatch from a branch.
+        # Tag-triggered runs have ref_type == 'tag'; pushing HEAD to a tag
+        # ref would create a confusing detached commit — skip it.
+        if: |
+          github.event_name == 'workflow_dispatch'
+          && github.ref_type == 'branch'
+          && steps.bump.outputs.value != 'skip'
+        run: |
+          if git diff --quiet android/app/build.gradle; then
+            echo "No version changes to commit."
+            exit 0
+          fi
+          git config user.name  "glev-release-bot"
+          git config user.email "release-bot@users.noreply.github.com"
+          NEW_VERSION="$(node scripts/bump-android-version.mjs show | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const o=JSON.parse(s);process.stdout.write(o.versionName+"("+o.versionCode+")")})')"
+          git add android/app/build.gradle
+          git commit -m "chore(android): release $NEW_VERSION [skip ci]"
+          git push origin "HEAD:${{ github.ref_name }}"
