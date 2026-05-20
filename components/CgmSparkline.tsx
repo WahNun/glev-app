@@ -1,6 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import {
+  useCrosshair,
+  CrosshairOverlay,
+  CrosshairTooltip,
+  type CrosshairPoint,
+} from "@/components/ChartCrosshair";
 
 /**
  * Lightweight inline SVG sparkline used in the basal expanded view.
@@ -117,8 +123,25 @@ export default function CgmSparkline({
 
   const fsInWindow = fingersticks.filter((p) => p.t >= fromMs && p.t <= toMs);
 
+  // Build crosshair points from inWindow CGM readings.
+  const crosshairPoints: CrosshairPoint[] = inWindow.map((p) => ({
+    x: xFor(p.t),
+    y: yFor(p.v),
+    color,
+    tooltip: [
+      new Date(p.t).toLocaleTimeString(locale, {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }),
+      `${Math.round(p.v)} mg/dL`,
+    ],
+  }));
+
+  const { active, handlers } = useCrosshair(crosshairPoints);
+
   return (
-    <div ref={containerRef} style={{ width: "100%" }}>
+    <div ref={containerRef} style={{ width: "100%", position: "relative" }} {...handlers}>
       {W > 0 && (
         <svg
           width={W}
@@ -232,8 +255,21 @@ export default function CgmSparkline({
               No CGM readings in this window.
             </text>
           )}
+          {/* Crosshair — rendered last so it draws on top of everything. */}
+          <CrosshairOverlay
+            active={active}
+            top={padY}
+            bottom={H - padY}
+            left={padX}
+            right={W - padX}
+          />
         </svg>
       )}
+      <CrosshairTooltip
+        active={active}
+        containerWidth={W}
+        containerHeight={H}
+      />
     </div>
   );
 }
