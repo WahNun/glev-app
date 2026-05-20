@@ -18,8 +18,15 @@ if [ ! -f "$REPORT_FILE" ]; then
   exit 1
 fi
 
+# Check that DECISIONS.md has an entry for this task
+if ! grep -q "$TASK_GID" DECISIONS.md 2>/dev/null; then
+  echo "Error: No entry for task $TASK_GID found in DECISIONS.md."
+  echo "Add a row to the '## Fix Log' table in DECISIONS.md before finalizing."
+  exit 1
+fi
+
 # Commit and push
-git add "$REPORT_FILE"
+git add "$REPORT_FILE" DECISIONS.md
 git commit -m "ops: fix report — task $TASK_GID"
 git push origin main
 

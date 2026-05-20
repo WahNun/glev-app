@@ -11,6 +11,11 @@ Glev is a Type 1 Diabetes insulin decision-support system designed to provide pe
 - Ask before making major changes.
 - I prefer detailed explanations.
 
+## Agent Workflow Rules
+
+1. **Task-Start:** `DECISIONS.md` lesen — besonders den `## Decisions`-Abschnitt, um bewusste Nicht-Entscheidungen und laufende Architekturvorgaben zu kennen.
+2. **Task-Abschluss:** Direkt **vor** dem Aufruf von `bash scripts/finalize-task.sh TASK_GID` einen neuen Eintrag in die `## Fix Log`-Tabelle in `DECISIONS.md` schreiben (`| Datum | Task-Name | Asana-GID | Beschreibung |`). `finalize-task.sh` prüft das und bricht mit Fehler ab, wenn der Eintrag fehlt.
+
 ## Compliance Backlog (nicht akut — vor MDR-Einreichung abarbeiten)
 
 Glev ist aktuell **kein eingereichtes Medizinprodukt**. Primärzielgruppe: erwachsene T1D auf ICT (Pen). Kinder/Schwangere werden nicht aktiv beworben, aber auch nicht aktiv ausgeschlossen. Pump-Träger sind okay (Engine-Empfehlung für sie nicht relevant — wissen sie selbst). Sobald wir Klasse IIa anstreben, folgendes erledigen:
