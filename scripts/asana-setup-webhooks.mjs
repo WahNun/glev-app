@@ -47,11 +47,13 @@ async function getProjectSections(projectGid) {
 }
 
 async function registerWebhook(projectGid) {
+  const secret = process.env.ASANA_WEBHOOK_SECRET;
+  if (!secret) throw new Error('ASANA_WEBHOOK_SECRET nicht gesetzt');
   const res = await fetch('https://app.asana.com/api/1.0/webhooks', {
     method: 'POST',
     headers,
     body: JSON.stringify({
-      data: { resource: projectGid, target: TARGET },
+      data: { resource: projectGid, target: TARGET, secret },
     }),
   });
   if (!res.ok) {
