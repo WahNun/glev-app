@@ -40,22 +40,8 @@ if (missing.length > 0) {
 
 const supabase = createClient(SB_URL, SB_KEY, { auth: { persistSession: false } });
 
-// Dedup: verhindert doppelte Acks bei Realtime-Doppel-Events
-const ackedIds = new Set();
-
-async function ack(message) {
-  const preview = message.length > 80 ? message.slice(0, 80) + '…' : message;
-  const isFile  = message.startsWith('[file]');
-  const text    = isFile
-    ? `✅ Screenshot erhalten — ich schaue es mir beim nächsten Task an.`
-    : `✅ Verstanden: _"${preview}"_\n\nIch nehme es beim nächsten Task auf.`;
-
-  await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: CHAT_ID, text, parse_mode: 'Markdown' }),
-  }).catch((err) => console.error('[inbox-daemon] Telegram ack failed:', err));
-}
+// Dedup: verhindert doppelte Log-Zeilen bei Realtime-Doppel-Events
+const seenIds = new Set();
 
 console.log('[inbox-daemon] Started — watching agent_messages inbox via Supabase Realtime...');
 
@@ -64,13 +50,13 @@ const channel = supabase
   .on(
     'postgres_changes',
     { event: 'INSERT', schema: 'public', table: 'agent_messages' },
-    async (payload) => {
+    (payload) => {
       const row = payload.new;
       if (row.direction !== 'inbound' || row.task_id !== 'inbox') return;
-      if (ackedIds.has(row.id)) return; // Doppel-Event ignorieren
-      ackedIds.add(row.id);
+      if (seenIds.has(row.id)) return;
+      seenIds.add(row.id);
       console.log('[inbox-daemon] New inbox message:', (row.message ?? '').slice(0, 80));
-      await ack(row.message ?? '');
+      // KI-Antwort wird vom Webhook (glev.app/api/telegram/webhook) gesendet
     },
   )
   .subscribe((status, err) => {
