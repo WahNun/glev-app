@@ -515,10 +515,18 @@ export default function EntriesPage() {
             const uid = data?.user?.id;
             if (!uid) return;
             try {
-              localStorage.setItem(
-                `${ENTRIES_CACHE_KEY_PREFIX}:${uid}`,
-                JSON.stringify({ cachedAt: Date.now(), meals: m, insulin: ins, exercise: ex, cycle: cy, symptoms: sy, influences: inf }),
-              );
+              const CACHE_SIZE_LIMIT = 2 * 1024 * 1024; // 2 MB
+              let cachePayload = { cachedAt: Date.now(), meals: m, insulin: ins, exercise: ex, cycle: cy, symptoms: sy, influences: inf };
+              let serialized = JSON.stringify(cachePayload);
+              // meals are ordered newest-first (created_at DESC); trim from the tail
+              // to drop the oldest entries and preserve recent data for fast revisit.
+              // Use TextEncoder for accurate UTF-8 byte count (matching quota semantics).
+              const byteLength = (s: string) => new TextEncoder().encode(s).length;
+              while (byteLength(serialized) > CACHE_SIZE_LIMIT && cachePayload.meals.length > 0) {
+                cachePayload = { ...cachePayload, meals: cachePayload.meals.slice(0, -1) };
+                serialized = JSON.stringify(cachePayload);
+              }
+              localStorage.setItem(`${ENTRIES_CACHE_KEY_PREFIX}:${uid}`, serialized);
             } catch { /* storage quota exceeded — not critical */ }
           });
         }
