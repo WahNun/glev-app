@@ -445,12 +445,12 @@ export default function EntriesPage() {
       if (!uid) return;
       const cached = readEntriesCache(uid, localStorage);
       if (!cached) return;
-      setMeals(prev => prev.length > 0 ? prev : cached.meals as Parameters<typeof setMeals>[0]);
-      if (Array.isArray(cached.insulin))    setInsulin(prev => prev.length > 0 ? prev : cached.insulin as Parameters<typeof setInsulin>[0]);
-      if (Array.isArray(cached.exercise))   setExercise(prev => prev.length > 0 ? prev : cached.exercise as Parameters<typeof setExercise>[0]);
-      if (Array.isArray(cached.cycle))      setCycle(prev => prev.length > 0 ? prev : cached.cycle as Parameters<typeof setCycle>[0]);
-      if (Array.isArray(cached.symptoms))   setSymptoms(prev => prev.length > 0 ? prev : cached.symptoms as Parameters<typeof setSymptoms>[0]);
-      if (Array.isArray(cached.influences)) setInfluences(prev => prev.length > 0 ? prev : cached.influences as Parameters<typeof setInfluences>[0]);
+      setMeals(prev => prev.length > 0 ? prev : cached.meals as Meal[]);
+      if (Array.isArray(cached.insulin))    setInsulin(prev => prev.length > 0 ? prev : cached.insulin as InsulinLog[]);
+      if (Array.isArray(cached.exercise))   setExercise(prev => prev.length > 0 ? prev : cached.exercise as ExerciseLog[]);
+      if (Array.isArray(cached.cycle))      setCycle(prev => prev.length > 0 ? prev : cached.cycle as MenstrualLog[]);
+      if (Array.isArray(cached.symptoms))   setSymptoms(prev => prev.length > 0 ? prev : cached.symptoms as SymptomLog[]);
+      if (Array.isArray(cached.influences)) setInfluences(prev => prev.length > 0 ? prev : cached.influences as InfluenceLog[]);
       setLoading(false);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
