@@ -413,7 +413,18 @@
     "engine_eval_trend_falling_fast": "Pre-meal trend: glucose fell fast (>1.5 mg/dL/min) in the 15 min before the meal — outcome may be influenced by that drop.",
     "tab_cycle": "Cycle",
     "tab_symptoms": "Symptoms",
-    "tab_influences": "Influences"
+    "tab_influences": "Influences",
+    "carb_unit_eyebrow": "Values in {unit}",
+    "btn_save_with_bolus": "✓ Save — {dose} {units}",
+    "bolus_explainer_link": "Explain the calculation",
+    "bolus_sheet_title": "Bolus Calculation",
+    "bolus_sheet_close": "Close",
+    "bolus_sheet_how_title": "How is this calculated?",
+    "bolus_sheet_adaptive_why": "Why this adaptive value?",
+    "bolus_sheet_static_why": "Why this settings value?",
+    "bolus_sheet_adaptive_detail": "{samples} meals · outcomes weighted (GOOD 1.0 · SPIKE 0.7 · over-/under-dose 0.3) · last 90 days",
+    "bolus_sheet_static_detail": "Manually configured ICR from your settings{slot}.",
+    "bolus_sheet_static_slot": " · slot: {label}"
   },
   "scopeHeader": {
     "today": "Today",

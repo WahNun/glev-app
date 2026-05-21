@@ -561,6 +561,10 @@ export default function EnginePage() {
   // is reset (handleNewMeal) so the next meal starts clean.
   const [directBolusOpen, setDirectBolusOpen] = useState(false);
   const [directBolusValue, setDirectBolusValue] = useState("");
+  // BolusExplainerSheet — bottom-sheet that replaces Step 3 as a
+  // separate wizard page. Opened by handleRun (after engine calc
+  // completes); closed by backdrop tap or the × button.
+  const [bolusExplainerOpen, setBolusExplainerOpen] = useState(false);
   // Tabs-expanded state lives in the global EngineHeaderContext so the
   // chevron control can render in the mobile app header (oben rechts
   // next to Live + user icon) instead of inside this page body. We
@@ -869,6 +873,29 @@ export default function EnginePage() {
   // picks "Einstellungen" it uses the time-window-adjusted static ICR;
   // otherwise it uses the engine-computed adaptive value.
   const effectiveICR = selectedICR === 'static' ? staticICR : adaptedICR;
+
+  // eagerDoses: inline KH÷ICR + correction calc for both ICR sources.
+  // Runs synchronously on every carbs/glucose/ICR change so dose chips
+  // appear instantly without waiting for the async engine call.
+  // Formula mirrors runGlevEngine's carb+correction dose path but
+  // without safety clamps or historical blending — good enough for a
+  // preview label. cf = 50, target = 110 (same defaults as engine).
+  const eagerDoses = useMemo<{ adaptive: number | null; static: number | null }>(() => {
+    const cGrams = carbUnit.toGrams(parseFloat(carbs) || 0);
+    const gNum = parseFloat(glucose) || 0;
+    const cf = 50, target = 110;
+    const calcDose = (icr: number): number => {
+      const carbDose = icr > 0 ? cGrams / icr : 0;
+      const corrDose = gNum > target ? (gNum - target) / cf : 0;
+      return Math.round((carbDose + corrDose) * 10) / 10;
+    };
+    const hasInput = cGrams > 0 || gNum > target;
+    if (!hasInput) return { adaptive: null, static: null };
+    return {
+      adaptive: adaptedICR > 0 ? calcDose(adaptedICR) : null,
+      static:   staticICR  > 0 ? calcDose(staticICR)  : null,
+    };
+  }, [carbs, glucose, adaptedICR, staticICR, carbUnit]);
 
   const currentAdjustment = useMemo(() => {
     if (meals.length === 0) return null;
@@ -1448,11 +1475,10 @@ export default function EnginePage() {
         const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs, effectiveICR, tEngineFn, formatNum, trend, new Date(refMs), activityCtx);
         setResult(rec);
         setRunning(false);
-      // Wizard auto-advance: bump from Step 2 ("Makros prüfen") to Step 3
-      // ("Ergebnis") so the recommendation appears the moment the calc
-      // completes. Functional guard prevents jumping if user navigated
-      // away during the 600ms cosmetic delay.
-      setStepIndex(prev => prev === 1 ? 2 : prev);
+      // Open the BolusExplainerSheet (replaces the old Step 3 page
+      // navigation). Sheet shows dose, confidence, IOB, GPT reasoning,
+      // and ICR methodology without leaving the macros card.
+      setBolusExplainerOpen(true);
       // PRE-FILL ENTFERNT: Insulin wird jetzt erst NACH Confirm Log + binärer
       // Bolus-Entscheidung im Post-Confirm-Flow eingegeben. Kein silent-set
       // mehr in den `insulin`-State, sonst würde beim Save eine Dosis
@@ -1709,6 +1735,64 @@ export default function EnginePage() {
     setConfirmErr("");
     setDirectBolusOpen(false);
     setDirectBolusValue("");
+    setBolusExplainerOpen(false);
+  }
+
+  // Eager-bolus save path: commits the meal with the inline-computed
+  // dose (carbs ÷ ICR + correction, IOB-adjusted by the caller).
+  // No engine run required — the dose was derived synchronously from
+  // eagerDoses[selectedICR] + applyIOBCorrection in the action row.
+  // Mirrors handleSaveWithoutBolus (same pipeline) but sets
+  // insulin_units = dose instead of 0.
+  async function handleSaveWithEagerBolus(dose: number) {
+    setConfirmErr("");
+    const cDisplay = parseFloat(carbs);
+    if (!Number.isFinite(cDisplay) || cDisplay < 0) {
+      setConfirmErr("Bitte Kohlenhydrate eintragen (0 ist erlaubt).");
+      return;
+    }
+    const cNum = carbUnit.toGrams(cDisplay);
+    const pNum  = parseFloat(protein) || 0;
+    const fNum  = parseFloat(fat)     || 0;
+    const fbNum = parseFloat(fiber)   || 0;
+    const gParsed = glucose.trim() === "" ? NaN : parseFloat(glucose);
+    const gNum = Number.isFinite(gParsed) ? gParsed : null;
+    const cls = classifyMeal(cNum, pNum, fNum, fbNum);
+    const cal = computeCalories(cNum, pNum, fNum);
+    const mealIso = mealTime ? new Date(mealTime).toISOString() : new Date().toISOString();
+    setConfirming(true);
+    const preMealTrendEager = await getCurrentTrendArrow();
+    try {
+      const saved = await saveMeal({
+        inputText: desc.trim() || transcript.trim() || "(manual entry)",
+        parsedJson: parsedItems.length > 0
+          ? parsedItems
+          : [{ name: desc.trim() || "meal", grams: 0, carbs: cNum, protein: pNum, fat: fNum, fiber: fbNum }],
+        glucoseBefore: gNum,
+        glucoseAfter: null,
+        carbsGrams: cNum,
+        proteinGrams: pNum,
+        fatGrams: fNum,
+        fiberGrams: fbNum,
+        calories: cal,
+        insulinUnits: dose,
+        mealType: cls,
+        evaluation: null,
+        createdAt: mealIso,
+        mealTime: mealIso,
+        preMealTrend: preMealTrendEager,
+      });
+      void scheduleJobsForLog({ logId: saved.id, logType: "meal", refTimeIso: mealIso });
+      fetchMealsForEngine().then(setMeals).catch(() => {});
+      logDebug("ENGINE.SAVE_EAGER_BOLUS", { id: saved.id, carbs: cNum, glucose: gNum, mealType: cls, insulinUnits: dose });
+      hapticSuccess();
+      setWizardSavedDose(dose);
+    } catch (e) {
+      hapticError();
+      setConfirmErr(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setConfirming(false);
+    }
   }
 
   // Confirm Log writes the full meal+bolus row to the `meals` table via
@@ -2575,6 +2659,15 @@ export default function EnginePage() {
                   header (Layout.tsx → EngineSourceHeaderProvider)
                   to reclaim ~30 px at the top of the card. The four
                   ring cards self-explain the section. */}
+              {/* Eyebrow "Angaben in G" — dezenter Einheiten-Hinweis
+                  oberhalb der Ring-Karten (font 10px, uppercase, faint). */}
+              <div style={{
+                fontSize: 10, fontWeight: 700, letterSpacing: "0.06em",
+                textTransform: "uppercase", color: "var(--text-faint)",
+                marginBottom: 6, paddingLeft: 2,
+              }}>
+                {tEngine("carb_unit_eyebrow", { unit: carbUnit.label.toUpperCase() })}
+              </div>
               <div style={{ marginBottom: 14 }}>
                 {/* Macros as tap-able ring cards mirroring the dashboard's
                     "TODAY'S MACROS" section. Tap a card → its 0.5 g slider
@@ -2862,21 +2955,22 @@ export default function EnginePage() {
                         type="button"
                         onClick={() => setSelectedICR('adaptive')}
                         style={{
-                          flex: 1, padding: "10px 12px", borderRadius: 12,
+                          flex: 1, minWidth: 0, padding: "10px 12px", borderRadius: 12,
                           border: `2px solid ${selectedICR === 'adaptive' ? ACCENT : 'var(--border)'}`,
                           background: selectedICR === 'adaptive' ? `${ACCENT}14` : "var(--surface-soft)",
                           textAlign: "left", cursor: "pointer",
                           transition: "border-color 150ms ease, background 150ms ease",
                           display: "flex", flexDirection: "column", gap: 3,
+                          overflow: "hidden",
                         }}
                       >
-                        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: selectedICR === 'adaptive' ? ACCENT : "var(--text-faint)" }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: selectedICR === 'adaptive' ? ACCENT : "var(--text-faint)", whiteSpace: "nowrap" }}>
                           {tEngine("icr_adaptive_label")}
                         </div>
-                        <div style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 800, color: selectedICR === 'adaptive' ? ACCENT : "var(--text-strong)", letterSpacing: "-0.02em" }}>
+                        <div style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 800, color: selectedICR === 'adaptive' ? ACCENT : "var(--text-strong)", letterSpacing: "-0.02em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           1 : {Math.round(adaptedICR * 10) / 10}
                         </div>
-                        <div style={{ fontSize: 11, color: "var(--text-faint)" }}>
+                        <div style={{ fontSize: 11, color: "var(--text-faint)", whiteSpace: "nowrap" }}>
                           {tEngine("icr_calculated")}
                         </div>
                       </button>
@@ -2887,22 +2981,23 @@ export default function EnginePage() {
                           type="button"
                           onClick={() => setSelectedICR('static')}
                           style={{
-                            flex: 1, padding: "10px 12px", borderRadius: 12,
+                            flex: 1, minWidth: 0, padding: "10px 12px", borderRadius: 12,
                             border: `2px solid ${selectedICR === 'static' ? ACCENT : 'var(--border)'}`,
                             background: selectedICR === 'static' ? `${ACCENT}14` : "var(--surface-soft)",
                             textAlign: "left", cursor: "pointer",
                             transition: "border-color 150ms ease, background 150ms ease",
                             display: "flex", flexDirection: "column", gap: 3,
+                            overflow: "hidden",
                           }}
                         >
-                          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: selectedICR === 'static' ? ACCENT : "var(--text-faint)" }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: selectedICR === 'static' ? ACCENT : "var(--text-faint)", whiteSpace: "nowrap" }}>
                             {tEngine("icr_static_label")}
                           </div>
-                          <div style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 800, color: selectedICR === 'static' ? ACCENT : "var(--text-strong)", letterSpacing: "-0.02em" }}>
+                          <div style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 800, color: selectedICR === 'static' ? ACCENT : "var(--text-strong)", letterSpacing: "-0.02em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                             1 : {Math.round(staticICR * 10) / 10}
                           </div>
                           {staticICRWindowLabel && (
-                            <div style={{ fontSize: 11, color: "var(--text-faint)" }}>
+                            <div style={{ fontSize: 11, color: "var(--text-faint)", whiteSpace: "nowrap" }}>
                               {staticICRWindowLabel}
                             </div>
                           )}
@@ -2922,443 +3017,345 @@ export default function EnginePage() {
                 );
               })()}
 
-              {/* Three-path action row, visually tiered:
-                    1. PRIMARY  — "Speichern (ohne Bolus)" full-width
-                       accent button. Commits insulin_units = 0; lands
-                       in the green Step-2 success state.
-                    2. SECONDARY — "Bolus berechnen →" outline button.
-                       Always clickable (only disabled while another
-                       action is in flight); never carbs-gated since
-                       greying it out makes it feel unavailable. Runs
-                       the engine and advances to Step 3.
-                    3. TERTIARY — "Bolus direkt eingeben" link-style.
-                       For experienced users who know their dose; toggles
-                       a tiny inline number input + "Speichern mit X IE"
-                       which commits with the typed dose and lands in the
-                       same green success state.
-                    4. "← Zurück" stays at the bottom for back-nav.
-                  All three save paths converge on the identical
-                  wizardSavedDose / "✓ Gespeichert — N IE" confirm. */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {/* PRIMARY ────────────────────────────────────────── */}
-                <button
-                  onClick={handleSaveWithoutBolus}
-                  disabled={confirming || running}
-                  style={{
-                    width: "100%", height: 52, borderRadius: 12, border: "none",
-                    background: confirming ? "rgba(79,110,247,0.4)" : ACCENT,
-                    color:"var(--text)", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
-                    cursor: confirming ? "wait" : "pointer",
-                    transition: "background 0.2s",
-                  }}
-                >
-                  {confirming ? tEngine("btn_saving") : tEngine("btn_save_without_bolus")}
-                </button>
-
-                {/* SECONDARY ──────────────────────────────────────── */}
-                {(() => {
-                  // Only blocked by transient busy states; never by
-                  // carbs == 0 — the user explicitly asked for this
-                  // button to always look clickable.
-                  const blocked = running || confirming;
-                  return (
+              {/* ── Dose-preview chips ─────────────────────────────
+                  Shown directly below the ICR selector when both sources
+                  are available and differ. Each chip shows the IOB-
+                  adjusted eager dose for that ICR source. Tapping a
+                  chip also switches the active ICR selection (mirrors
+                  the selector cards above). */}
+              {icrSampleSize >= 3 && Math.abs(adaptedICR - staticICR) > 0.5
+                && (eagerDoses.adaptive !== null || eagerDoses.static !== null) && (
+                <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                  {eagerDoses.adaptive !== null && (
                     <button
-                      onClick={handleRun}
-                      disabled={blocked}
+                      type="button"
+                      onClick={() => setSelectedICR('adaptive')}
                       style={{
-                        width: "100%", height: 48, borderRadius: 10,
-                        border: `1px solid ${ACCENT}60`,
-                        background: "transparent",
-                        color: ACCENT,
-                        fontSize: 14, fontWeight: 700, letterSpacing: "-0.01em",
-                        cursor: blocked ? "wait" : "pointer",
-                        opacity: blocked ? 0.7 : 1,
-                        transition: "all 0.2s",
-                        display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
+                        flex: 1, minWidth: 0, padding: "8px 10px", borderRadius: 20,
+                        border: `2px solid ${selectedICR === 'adaptive' ? ACCENT : 'var(--border)'}`,
+                        background: selectedICR === 'adaptive' ? `${ACCENT}14` : "transparent",
+                        display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                        cursor: "pointer", transition: "all 150ms ease",
+                        WebkitTapHighlightColor: "transparent",
                       }}
                     >
-                      {running && (
-                        <span style={{
-                          display: "inline-block", width: 14, height: 14,
-                          border: `2px solid ${ACCENT}40`, borderTopColor: ACCENT,
-                          borderRadius: "50%", animation: "engSpin 0.7s linear infinite",
-                        }}/>
-                      )}
-                      {running ? tEngine("btn_calculating") : tEngine("btn_calculate_bolus")}
+                      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: selectedICR === 'adaptive' ? ACCENT : "var(--text-faint)", whiteSpace: "nowrap" }}>
+                        {tEngine("icr_adaptive_label")}
+                      </span>
+                      <span style={{ fontFamily: "var(--font-mono)", fontWeight: 800, fontSize: 14, color: selectedICR === 'adaptive' ? ACCENT : "var(--text-strong)", whiteSpace: "nowrap" }}>
+                        {formatNum(applyIOBCorrection(eagerDoses.adaptive, iob), 1)} {tEngine("units_short")}
+                      </span>
+                    </button>
+                  )}
+                  {eagerDoses.static !== null && staticICR > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedICR('static')}
+                      style={{
+                        flex: 1, minWidth: 0, padding: "8px 10px", borderRadius: 20,
+                        border: `2px solid ${selectedICR === 'static' ? ACCENT : 'var(--border)'}`,
+                        background: selectedICR === 'static' ? `${ACCENT}14` : "transparent",
+                        display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                        cursor: "pointer", transition: "all 150ms ease",
+                        WebkitTapHighlightColor: "transparent",
+                      }}
+                    >
+                      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: selectedICR === 'static' ? ACCENT : "var(--text-faint)", whiteSpace: "nowrap" }}>
+                        {tEngine("icr_static_label")}
+                      </span>
+                      <span style={{ fontFamily: "var(--font-mono)", fontWeight: 800, fontSize: 14, color: selectedICR === 'static' ? ACCENT : "var(--text-strong)", whiteSpace: "nowrap" }}>
+                        {formatNum(applyIOBCorrection(eagerDoses.static, iob), 1)} {tEngine("units_short")}
+                      </span>
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* ── Simplified action row ──────────────────────────────
+                  One primary save button (eager dose or "ohne Bolus")
+                  + one text link that opens the BolusExplainerSheet.
+                  Replaces the former three-button stack. */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {/* PRIMARY — save with eager dose, or without bolus as fallback */}
+                {(() => {
+                  const rawEager = selectedICR === 'adaptive' ? eagerDoses.adaptive : eagerDoses.static;
+                  const activeDose = rawEager !== null ? applyIOBCorrection(rawEager, iob) : null;
+                  const hasEager = activeDose !== null;
+                  return (
+                    <button
+                      onClick={() => hasEager ? handleSaveWithEagerBolus(activeDose!) : handleSaveWithoutBolus()}
+                      disabled={confirming || running}
+                      style={{
+                        width: "100%", height: 52, borderRadius: 12, border: "none",
+                        background: confirming ? "rgba(79,110,247,0.4)" : ACCENT,
+                        color: "var(--text)", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
+                        cursor: confirming ? "wait" : "pointer",
+                        transition: "background 0.2s",
+                      }}
+                    >
+                      {confirming
+                        ? tEngine("btn_saving")
+                        : hasEager
+                          ? tEngine("btn_save_with_bolus", { dose: formatNum(activeDose!, 1), units: tEngine("units_short") })
+                          : tEngine("btn_save_without_bolus")}
                     </button>
                   );
                 })()}
 
-                {/* TERTIARY ───────────────────────────────────────── */}
-                {!directBolusOpen ? (
-                  <button
-                    type="button"
-                    onClick={() => setDirectBolusOpen(true)}
-                    disabled={running || confirming}
-                    style={{
-                      width: "100%", height: 32, borderRadius: 6,
-                      border: "none", background: "transparent",
-                      color: "var(--text-muted)",
-                      fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
-                      cursor: running || confirming ? "not-allowed" : "pointer",
-                      textDecoration: "underline", textUnderlineOffset: 3,
-                      textDecorationColor: "var(--text-ghost)",
-                    }}
-                  >
-                    {tEngine("btn_direct_bolus_open")}
-                  </button>
-                ) : (
-                  <div
-                    style={{
-                      display: "flex", flexDirection: "column", gap: 8,
-                      padding: 12, borderRadius: 10,
-                      background: "rgba(79,110,247,0.05)",
-                      border: `1px solid ${ACCENT}30`,
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: ACCENT, letterSpacing: "-0.01em" }}>
-                        {tEngine("direct_bolus_label")}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => { setDirectBolusOpen(false); setDirectBolusValue(""); setConfirmErr(""); }}
-                        disabled={confirming}
-                        aria-label={tEngine("cancel_aria")}
-                        style={{
-                          background: "transparent", border: "none",
-                          color: "var(--text-dim)", fontSize: 18,
-                          lineHeight: 1, cursor: confirming ? "not-allowed" : "pointer",
-                          padding: "0 4px",
-                        }}
-                      >
-                        ×
-                      </button>
-                    </div>
-                    <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
-                      <div style={{ position: "relative", flex: "0 0 110px" }}>
-                        <input
-                          type="number"
-                          inputMode="decimal"
-                          step="0.5"
-                          min="0"
-                          value={directBolusValue}
-                          onChange={(e) => setDirectBolusValue(e.target.value)}
-                          placeholder="0"
-                          disabled={confirming}
-                          autoFocus
-                          style={{
-                            width: "100%", height: 44,
-                            background: "var(--input-bg)",
-                            border: `1px solid ${BORDER}`,
-                            borderRadius: 10,
-                            padding: "0 36px 0 12px",
-                            color:"var(--text)", fontSize: 16, fontWeight: 700,
-                            outline: "none", textAlign: "right",
-                          }}
-                        />
+                {/* "Erkläre mir die Berechnung" link — runs engine + opens sheet */}
+                {(() => {
+                  const blocked = running || confirming;
+                  return (
+                    <button
+                      type="button"
+                      onClick={handleRun}
+                      disabled={blocked}
+                      style={{
+                        width: "100%", height: 36, borderRadius: 6,
+                        border: "none", background: "transparent",
+                        color: blocked ? "var(--text-ghost)" : ACCENT,
+                        fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
+                        cursor: blocked ? "wait" : "pointer",
+                        textDecoration: "underline", textUnderlineOffset: 3,
+                        display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+                        WebkitTapHighlightColor: "transparent",
+                      }}
+                    >
+                      {running && (
                         <span style={{
-                          position: "absolute", right: 12, top: "50%",
-                          transform: "translateY(-50%)",
-                          color: "var(--text-dim)", fontSize: 13, fontWeight: 600,
-                          pointerEvents: "none",
-                        }}>
-                          {tEngine("units_short")}
-                        </span>
-                      </div>
-                      {(() => {
-                        const iNum = parseFloat(directBolusValue);
-                        const valid = Number.isFinite(iNum) && iNum >= 0;
-                        const blocked = confirming || running || !valid;
-                        return (
-                          <button
-                            type="button"
-                            onClick={handleSaveWithDirectBolus}
-                            disabled={blocked}
-                            style={{
-                              flex: 1, height: 44, borderRadius: 10,
-                              border: "none",
-                              background: confirming
-                                ? "rgba(79,110,247,0.4)"
-                                : valid ? ACCENT : "rgba(79,110,247,0.25)",
-                              color:"var(--text)",
-                              fontSize: 14, fontWeight: 700, letterSpacing: "-0.01em",
-                              cursor: blocked ? (confirming ? "wait" : "not-allowed") : "pointer",
-                              transition: "background 0.2s",
-                            }}
-                          >
-                            {confirming
-                              ? tEngine("btn_saving")
-                              : valid
-                                ? tEngine("btn_save_with_dose", { dose: iNum, units: tEngine("units_short") })
-                                : tEngine("btn_save")}
-                          </button>
-                        );
-                      })()}
-                    </div>
-                  </div>
-                )}
-
-                {/* Bottom "Zurück" row removed 2026-05-17 — the back
-                    action is now the chevron at the top-left of this
-                    card (see absolutely-positioned button at the start
-                    of this card body). */}
+                          display: "inline-block", width: 12, height: 12,
+                          border: `2px solid ${ACCENT}40`, borderTopColor: ACCENT,
+                          borderRadius: "50%", animation: "engSpin 0.7s linear infinite",
+                        }}/>
+                      )}
+                      {running ? tEngine("btn_calculating") : tEngine("bolus_explainer_link")}
+                    </button>
+                  );
+                })()}
               </div>
             </div>
           )}
 
-          {/* ───────── STEP 3: Deine Empfehlung ───────── */}
-          {stepIndex === 2 && (
-            <div style={{ position: "relative" }}>
-              {/* Back chevron — same top-left placement as Step 2.
-                  Lands the user back on the macros card so they can
-                  tweak inputs and re-run the bolus calc. */}
-              <button
-                type="button"
-                onClick={() => setStepIndex(1)}
-                disabled={confirming}
-                aria-label={tEngine("btn_back")}
-                title={tEngine("btn_back")}
+          {/* BolusExplainerSheet — fixed bottom-sheet replacing Step 3.
+              Position:fixed so it overlays the entire page regardless of
+              scroll position. Opens when handleRun completes. */}
+          {bolusExplainerOpen && (
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={tEngine("bolus_sheet_title")}
+              style={{
+                position: "fixed", inset: 0, zIndex: 60,
+                display: "flex", flexDirection: "column", justifyContent: "flex-end",
+              }}
+            >
+              {/* Backdrop */}
+              <div
+                onClick={() => setBolusExplainerOpen(false)}
+                style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.52)" }}
+                aria-hidden="true"
+              />
+              {/* Sheet panel */}
+              <div
                 style={{
-                  position: "absolute", top: 0, left: 0, zIndex: 2,
-                  width: 36, height: 36, borderRadius: 18,
-                  border: "none", background: "transparent",
-                  color: "var(--text-dim)",
-                  cursor: confirming ? "not-allowed" : "pointer",
-                  display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  WebkitTapHighlightColor: "transparent",
+                  position: "relative",
+                  background: "var(--surface)",
+                  borderRadius: "18px 18px 0 0",
+                  padding: "20px 20px calc(env(safe-area-inset-bottom, 0px) + 28px)",
+                  maxHeight: "88svh",
+                  overflowY: "auto",
+                  overscrollBehavior: "contain",
+                  WebkitOverflowScrolling: "touch",
                 }}
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <polyline points="15 18 9 12 15 6"/>
-                </svg>
-              </button>
-              <div style={{ height: 8 }} />
-              <h2 style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 16, color:"var(--text)" }}>
-                {tEngine("step_title_result")}
-              </h2>
-
-              {!result ? (
-                // Defensive: should not happen because handleRun gates the
-                // transition on a successful calc, but if state was lost
-                // (e.g. tab switch + reset) give the user a clean way back.
-                <div style={{ ...card, padding: 20, marginBottom: 16 }}>
-                  <div style={{ color: "var(--text-muted)", fontSize: 14, lineHeight: 1.5, marginBottom: 14 }}>
-                    {tEngine("no_estimate_body")}
+                {/* Sheet header row */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+                  <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: "-0.01em", color: "var(--text)" }}>
+                    {tEngine("bolus_sheet_title")}
                   </div>
                   <button
-                    onClick={() => setStepIndex(1)}
+                    type="button"
+                    onClick={() => setBolusExplainerOpen(false)}
+                    aria-label={tEngine("bolus_sheet_close")}
                     style={{
-                      padding: "10px 18px", borderRadius: 10,
-                      border: `1px solid ${BORDER}`, background: "transparent",
-                      color:"var(--text)", fontSize: 14, fontWeight: 600, cursor: "pointer",
+                      background: "transparent", border: "none",
+                      color: "var(--text-dim)", fontSize: 22, lineHeight: 1,
+                      cursor: "pointer", padding: "0 4px",
+                      WebkitTapHighlightColor: "transparent",
                     }}
                   >
-                    {tEngine("btn_back")}
+                    ×
                   </button>
                 </div>
-              ) : (
-                <>
-                  {/* Result card — dose front-and-center, 32px bold white,
-                      confidence chip + ICR ratio underneath. */}
-                  <div style={{
-                    background: "var(--surface)", border: "1px solid var(--border)",
-                    borderRadius: 16, padding: 20, marginBottom: 14,
-                  }}>
-                    <div style={{ fontSize: 13, color: "var(--text-faint)", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700, marginBottom: 8 }}>
-                      {tEngine("recommended_dose_label")}
-                    </div>
-                    <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 14 }}>
-                      <span style={{ fontSize: 32, fontWeight: 800, color:"var(--text)", letterSpacing: "-0.03em", lineHeight: 1 }}>
-                        {formatNum(applyIOBCorrection(result.dose, iob), 1)}
-                      </span>
-                      <span style={{ fontSize: 14, color: "var(--text-dim)", fontWeight: 600 }}>{tEngine("units_short")}</span>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 13, flexWrap: "wrap" }}>
-                      {/* ICR display in the user's chosen unit. displayICR
-                          returns the full formatted string with units
-                          baked in (e.g. "24 g KH/IE", "2 BE/IE", "2.4
-                          KE/IE") so we drop the legacy "1:" prefix —
-                          the unit suffix already conveys the ratio. */}
-                      <span style={{ color: "var(--text-muted)" }}>{tEngine("icr_label")}: {carbUnit.displayICR(adaptedICR)}</span>
-                      <span
-                        title={tEngine(`conf_explain_${result.confidence}` as never)}
-                        aria-label={tEngine(`conf_explain_${result.confidence}` as never)}
-                        style={{
-                          padding: "2px 10px", borderRadius: 99,
-                          fontSize: 12, fontWeight: 700, letterSpacing: "0.05em",
-                          background: `${CONF_COLOR[result.confidence]}22`,
-                          color: CONF_COLOR[result.confidence],
-                          border: `1px solid ${CONF_COLOR[result.confidence]}40`,
-                          cursor: "help",
-                        }}
-                      >
-                        {tEngine(`conf_label_${result.confidence}` as never)}
-                      </span>
-                      <span style={{ color: "var(--text-faint)", fontSize: 13 }}>
-                        {result.source === "historical" ? tEngine("source_historical") : result.source === "blended" ? tEngine("source_blended") : tEngine("source_formula")}
-                      </span>
-                    </div>
-                    {/* Plain-language explanation of what the confidence
-                        chip means, rendered as a dim subtitle so the
-                        user doesn't have to hover/tap the chip to find
-                        out what "HIGH" / "MEDIUM" / "LOW" represent
-                        (2026-05-17 user request: "wenn da high im chip
-                        steht sollte da auch stehen warum high oder
-                        wofür das steht"). Same copy lives in the chip
-                        title attribute for desktop hover affordance. */}
+
+                {!result ? (
+                  <div style={{ color: "var(--text-muted)", fontSize: 14, lineHeight: 1.6 }}>
+                    {tEngine("no_estimate_body")}
+                  </div>
+                ) : (
+                  <>
+                    {/* Dose + confidence card */}
                     <div style={{
-                      marginTop: 8, fontSize: 12, lineHeight: 1.4,
-                      color: "var(--text-muted)",
+                      background: "var(--surface-soft)", border: "1px solid var(--border)",
+                      borderRadius: 16, padding: 18, marginBottom: 14,
                     }}>
-                      {tEngine(`conf_explain_${result.confidence}` as never)}
+                      <div style={{ fontSize: 12, color: "var(--text-faint)", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700, marginBottom: 8 }}>
+                        {tEngine("recommended_dose_label")}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 12 }}>
+                        <span style={{ fontSize: 32, fontWeight: 800, color: "var(--text)", letterSpacing: "-0.03em", lineHeight: 1 }}>
+                          {formatNum(applyIOBCorrection(result.dose, iob), 1)}
+                        </span>
+                        <span style={{ fontSize: 14, color: "var(--text-dim)", fontWeight: 600 }}>{tEngine("units_short")}</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, flexWrap: "wrap" }}>
+                        <span style={{ color: "var(--text-muted)" }}>{tEngine("icr_label")}: {carbUnit.displayICR(adaptedICR)}</span>
+                        <span
+                          title={tEngine(`conf_explain_${result.confidence}` as never)}
+                          style={{
+                            padding: "2px 10px", borderRadius: 99,
+                            fontSize: 11, fontWeight: 700, letterSpacing: "0.05em",
+                            background: `${CONF_COLOR[result.confidence]}22`,
+                            color: CONF_COLOR[result.confidence],
+                            border: `1px solid ${CONF_COLOR[result.confidence]}40`,
+                          }}
+                        >
+                          {tEngine(`conf_label_${result.confidence}` as never)}
+                        </span>
+                      </div>
+                      <div style={{ marginTop: 8, fontSize: 12, lineHeight: 1.4, color: "var(--text-muted)" }}>
+                        {tEngine(`conf_explain_${result.confidence}` as never)}
+                      </div>
+                      {icrSampleSize > 0 && (
+                        <div style={{ marginTop: 8, fontSize: 12, color: "var(--text-faint)", lineHeight: 1.4 }}>
+                          {tEngine("icr_source", {
+                            explicit:   icrPairedExplicitCount,
+                            timeWindow: icrPairedTimeWindowCount,
+                            mealColumn: Math.max(0, icrSampleSize - icrPairedCount),
+                            total:      icrSampleSize,
+                          })}
+                        </div>
+                      )}
                     </div>
-                    {/* ICR source breakdown — tells the user how many of
-                        the meals feeding the adaptive ICR took insulin
-                        from a paired bolus log vs. the legacy
-                        meal.insulin_units column. Only shown once we
-                        actually have contributing meals. */}
-                    {icrSampleSize > 0 && (
-                      <div
-                        title={tEngine("icr_source_tooltip")}
+
+                    {/* IOB badges */}
+                    {iobDisplay && (
+                      <div style={{ marginBottom: 10, padding: "8px 14px", background: "rgba(255,165,0,0.1)", border: "1px solid rgba(255,165,0,0.3)", borderRadius: 10, textAlign: "center" }}>
+                        <span style={{ fontSize: 12, color: "rgba(255,200,80,0.85)" }}>
+                          ⚡ Noch aktiv: {iobDisplay} — Empfehlung bereits bereinigt
+                        </span>
+                      </div>
+                    )}
+                    {iob > 0 && applyIOBCorrection(result.dose, iob) === 0 && (
+                      <div style={{ marginBottom: 10, padding: "8px 14px", background: "rgba(0,200,100,0.1)", border: "1px solid rgba(0,200,100,0.3)", borderRadius: 10, textAlign: "center" }}>
+                        <span style={{ fontSize: 12, color: "rgba(80,220,140,0.9)" }}>
+                          ✓ Kein zusätzliches Insulin nötig — bestehende Wirkung reicht aus
+                        </span>
+                      </div>
+                    )}
+
+                    {/* GPT reasoning collapsible */}
+                    <div style={{ background: "var(--surface-soft)", border: "1px solid var(--border)", borderRadius: 12, marginBottom: 14, overflow: "hidden" }}>
+                      <button
+                        onClick={() => setReasoningExpanded(v => !v)}
+                        aria-expanded={reasoningExpanded}
                         style={{
-                          marginTop: 8, fontSize: 13,
-                          color: "var(--text-faint)", lineHeight: 1.4,
+                          display: "flex", alignItems: "center", justifyContent: "space-between",
+                          width: "100%", padding: "12px 16px",
+                          background: "transparent", border: "none", cursor: "pointer",
+                          color: "var(--text-faint)", fontSize: 12, fontWeight: 700,
+                          letterSpacing: "0.08em", textTransform: "uppercase",
                         }}
                       >
-                        {tEngine("icr_source", {
-                          explicit:    icrPairedExplicitCount,
-                          timeWindow:  icrPairedTimeWindowCount,
-                          mealColumn:  Math.max(0, icrSampleSize - icrPairedCount),
-                          total:       icrSampleSize,
-                        })}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* IOB badges */}
-                  {iobDisplay && (
-                    <div style={{ marginTop: 10, padding: '8px 14px', background: 'rgba(255,165,0,0.1)', border: '1px solid rgba(255,165,0,0.3)', borderRadius: 10, textAlign: 'center' }}>
-                      <span style={{ fontSize: 12, color: 'rgba(255,200,80,0.85)' }}>
-                        ⚡ Noch aktiv: {iobDisplay} — Empfehlung bereits bereinigt
-                      </span>
+                        <span>{tEngine("gpt_reasoning_title")}</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+                          style={{ transition: "transform 0.2s", transform: reasoningExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>
+                          <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                      </button>
+                      {reasoningExpanded && (
+                        <div style={{ padding: "0 16px 14px", fontSize: 13, lineHeight: 1.6, color: "var(--text-body)" }}>
+                          {renderReasoning(result.reasoning, result.safetyNotes, tEngineFn, formatNum)}
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {iob > 0 && applyIOBCorrection(result.dose, iob) === 0 && (
-                    <div style={{ marginTop: 10, padding: '8px 14px', background: 'rgba(0,200,100,0.1)', border: '1px solid rgba(0,200,100,0.3)', borderRadius: 10, textAlign: 'center' }}>
-                      <span style={{ fontSize: 12, color: 'rgba(80,220,140,0.9)' }}>
-                        ✓ Kein zusätzliches Insulin nötig — bestehende Wirkung reicht aus
-                      </span>
-                    </div>
-                  )}
 
-                  {/* Collapsible GPT reasoning — chevron toggles the body. */}
-                  <div style={{
-                    background: "var(--surface)", border: "1px solid var(--border)",
-                    borderRadius: 12, marginBottom: 14, overflow: "hidden",
-                  }}>
-                    <button
-                      onClick={() => setReasoningExpanded(v => !v)}
-                      aria-expanded={reasoningExpanded}
-                      aria-controls="gpt-reasoning-body"
-                      style={{
-                        display: "flex", alignItems: "center", justifyContent: "space-between",
-                        width: "100%", padding: "12px 16px",
-                        background: "transparent", border: "none", cursor: "pointer",
-                        color: "var(--text-faint)", fontSize: 13, fontWeight: 700,
-                        letterSpacing: "0.08em", textTransform: "uppercase",
-                      }}
-                    >
-                      <span>{tEngine("gpt_reasoning_title")}</span>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
-                        style={{ transition: "transform 0.2s", transform: reasoningExpanded ? "rotate(180deg)" : "rotate(0deg)" }}
-                      >
-                        <polyline points="6 9 12 15 18 9"/>
-                      </svg>
-                    </button>
-                    {reasoningExpanded && (
-                      <div id="gpt-reasoning-body" style={{ padding: "0 16px 14px", fontSize: 14, lineHeight: 1.6, color: "var(--text-body)" }}>
-                        {renderReasoning(result.reasoning, result.safetyNotes, tEngineFn, formatNum)}
+                    {/* ICR methodology explanation block */}
+                    <div style={{ background: "var(--surface-soft)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", marginBottom: 14 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-faint)", marginBottom: 10 }}>
+                        {tEngine("bolus_sheet_how_title")}
                       </div>
-                    )}
-                  </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                        {adaptedICR > 0 && (
+                          <div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: ACCENT, marginBottom: 3 }}>
+                              {tEngine("bolus_sheet_adaptive_why")}
+                            </div>
+                            <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                              {tEngine("bolus_sheet_adaptive_detail", { samples: icrSampleSize })}
+                            </div>
+                          </div>
+                        )}
+                        {staticICR > 0 && (
+                          <div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-dim)", marginBottom: 3 }}>
+                              {tEngine("bolus_sheet_static_why")}
+                            </div>
+                            <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                              {tEngine("bolus_sheet_static_detail", {
+                                slot: staticICRWindowLabel
+                                  ? tEngine("bolus_sheet_static_slot", { label: staticICRWindowLabel })
+                                  : "",
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
 
-                  {/* Meal summary line — shows what the user is about to save. */}
-                  <div style={{ marginBottom: 18, fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5, padding: "0 4px" }}>
-                    {/* Meal summary line: render carbs in the user's unit
-                        with the matching short label (g / BE / KE). */}
-                    {(desc.trim() || transcript.trim() || tEngine("meal_fallback"))} · {parseFloat(carbs) ? carbUnit.display(carbUnit.toGrams(parseFloat(carbs))) : `0 ${carbUnit.label}`}
-                  </div>
-
-                  {/* FIX A: Pre-save → show Save + Back. Post-save →
-                      hide both, show green confirmation + "Neues Essen"
-                      reset button. The user must explicitly opt in to
-                      starting a new meal — the save no longer surprises
-                      them by jumping away from this screen. */}
-                  {wizardSavedDose === null ? (
-                    <>
+                    {/* Save button or post-save confirmation */}
+                    {wizardSavedDose === null ? (
                       <button
                         onClick={handleWizardSave}
                         disabled={confirming}
                         style={{
                           width: "100%", height: 52, borderRadius: 12, border: "none",
                           background: confirming ? "rgba(79,110,247,0.4)" : ACCENT,
-                          color:"var(--text)", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
+                          color: "var(--text)", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
                           cursor: confirming ? "wait" : "pointer",
-                          marginBottom: 8,
-                          transition: "background 0.2s",
+                          marginBottom: 12, transition: "background 0.2s",
                         }}
                       >
                         {confirming ? tEngine("btn_saving") : tEngine("btn_confirm_save")}
                       </button>
-                      {/* "Nochmal anpassen" bottom-row removed
-                          2026-05-17 — back-nav is now the chevron at
-                          the top-left of the Step 3 card. */}
-                    </>
-                  ) : (
-                    <>
+                    ) : (
                       <div
                         style={{
-                          width: "100%", padding: "14px 18px",
-                          borderRadius: 12,
-                          background: `${GREEN}12`,
-                          border: `1px solid ${GREEN}40`,
-                          color: GREEN,
-                          fontSize: 14, fontWeight: 700, letterSpacing: "-0.01em",
-                          textAlign: "center",
-                          marginBottom: 10,
+                          width: "100%", padding: "14px 18px", borderRadius: 12,
+                          background: `${GREEN}12`, border: `1px solid ${GREEN}40`,
+                          color: GREEN, fontSize: 14, fontWeight: 700,
+                          textAlign: "center", marginBottom: 12,
                         }}
                         role="status"
                         aria-live="polite"
                       >
                         {tEngine("saved_confirmation", { units: formatNum(wizardSavedDose ?? 0, 1) })}
                       </div>
-                      <button
-                        onClick={handleNewMeal}
-                        style={{
-                          width: "100%", height: 52, borderRadius: 12, border: "none",
-                          background: ACCENT,
-                          color:"var(--text)", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
-                          cursor: "pointer",
-                          transition: "background 0.2s",
-                        }}
-                      >
-                        {tEngine("btn_new_meal")}
-                      </button>
-                    </>
-                  )}
+                    )}
 
-                  {/* Important medical disclaimer — same wording as the legacy result panel. */}
-                  <div style={{ marginTop: 24, padding: "14px 18px", background: "var(--surface-soft)", borderRadius: 12, border: `1px solid ${BORDER}` }}>
-                    <div style={{ fontSize: 13, color: "var(--text-ghost)", lineHeight: 1.6 }}>
-                      <strong style={{ color: "var(--text-dim)" }}>{tEngine("disclaimer_label")}</strong> {tEngine("disclaimer_body")}
+                    {/* Disclaimer */}
+                    <div style={{ padding: "12px 16px", background: "var(--surface-soft)", borderRadius: 12, border: `1px solid ${BORDER}` }}>
+                      <div style={{ fontSize: 12, color: "var(--text-ghost)", lineHeight: 1.6 }}>
+                        <strong style={{ color: "var(--text-dim)" }}>{tEngine("disclaimer_label")}</strong> {tEngine("disclaimer_body")}
+                      </div>
                     </div>
-                  </div>
-                </>
-              )}
+                  </>
+                )}
+              </div>
             </div>
           )}
           </div>
+
           {/* Desktop-only sticky chat sidebar. Mounts the SAME chatPanelNode
               that mobile renders inside Step 1, so all wizard steps share
               one chat session — no remount, no message reset when the user

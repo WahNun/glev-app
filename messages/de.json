@@ -413,7 +413,18 @@
     "engine_eval_trend_falling_fast": "Pre-Meal-Trend: Glukose fiel schnell (>1,5 mg/dL/min) in den 15 min vor der Mahlzeit — Outcome ggf. dadurch beeinflusst.",
     "tab_cycle": "Zyklus",
     "tab_symptoms": "Symptome",
-    "tab_influences": "Einflussfaktoren"
+    "tab_influences": "Einflussfaktoren",
+    "carb_unit_eyebrow": "Angaben in {unit}",
+    "btn_save_with_bolus": "✓ Speichern — {dose} {units}",
+    "bolus_explainer_link": "Erkläre mir die Berechnung",
+    "bolus_sheet_title": "Bolus-Berechnung",
+    "bolus_sheet_close": "Schließen",
+    "bolus_sheet_how_title": "Wie wird das berechnet?",
+    "bolus_sheet_adaptive_why": "Warum dieser Adaptiv-Wert?",
+    "bolus_sheet_static_why": "Warum dieser Einstellungs-Wert?",
+    "bolus_sheet_adaptive_detail": "{samples} Mahlzeiten · Outcomes gewichtet (GOOD 1,0 · SPIKE 0,7 · Über-/Unter-Dosis 0,3) · letzte 90 Tage",
+    "bolus_sheet_static_detail": "Manuell konfigurierter KH-Faktor aus deinen Einstellungen{slot}.",
+    "bolus_sheet_static_slot": " · Slot: {label}"
   },
   "scopeHeader": {
     "today": "Heute",
