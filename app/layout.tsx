@@ -11,7 +11,7 @@ import LandscapeGlucoseOverlay from "@/components/LandscapeGlucoseOverlay";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { APP_ROUTE_REGEX_SOURCE, isAppRoute, PATHNAME_HEADER } from "@/lib/appRoutes";
 
-const META_PIXEL_ID = "984291337254954";
+const META_PIXEL_ID = "960780236789931";
 
 // Inline script that runs BEFORE React hydrates. On in-app routes it
 // reads the THEME cookie (with localStorage / OS-preference fallback)
