@@ -310,15 +310,57 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ok: true });
   }
 
-  // ── 6. task_id aus dem Reply-Kontext extrahieren ─────────────────────────────
-  // Priorität: reply_to_message → caption → ignorieren
-  const replyText = message.reply_to_message?.text ?? "";
+  // ── 6. task_id ermitteln ──────────────────────────────────────────────────────
+  // Priorität:
+  //   1. reply_to_message.text  — expliziter Reply auf eine Agent-Frage
+  //   2. caption                — Bild/Datei mit "Task 123" im Caption
+  //   3. message.text itself    — freie Nachricht mit "Task 123" im Text
+  //   4. most recent pending outbound — freie Antwort ohne Reply-Kontext
+  //   5. "inbox"                — vom Agenten unaufgeforderte Nachricht von Lucas
+  const replyText  = message.reply_to_message?.text ?? "";
   const captionText = message.caption ?? "";
-  const taskId = extractTaskId(replyText) ?? extractTaskId(captionText);
+  const msgText    = message.text ?? "";
+
+  let taskId =
+    extractTaskId(replyText) ??
+    extractTaskId(captionText) ??
+    extractTaskId(msgText);
 
   if (!taskId) {
-    // Weder Reply noch Caption enthält eine Task-ID — ignorieren
-    return NextResponse.json({ ok: true });
+    // Kein expliziter Task-Kontext — suche das jüngste offene Outbound
+    // (d. h. eine Frage des Agenten, auf die noch keine inbound-Antwort kam).
+    const supabase = serviceRoleClient();
+    const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+
+    const { data: pending } = await supabase
+      .from("agent_messages")
+      .select("task_id, created_at")
+      .eq("direction", "outbound")
+      .gte("created_at", cutoff)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (pending) {
+      // Prüfen ob für diesen Task schon eine inbound-Antwort existiert
+      const { data: alreadyAnswered } = await supabase
+        .from("agent_messages")
+        .select("id")
+        .eq("direction", "inbound")
+        .eq("task_id", pending.task_id)
+        .gte("created_at", pending.created_at)
+        .limit(1)
+        .maybeSingle();
+
+      if (!alreadyAnswered) {
+        taskId = pending.task_id;
+      }
+    }
+
+    // Immer noch keine Task-ID → Lucas hat proaktiv geschrieben → Inbox
+    if (!taskId) {
+      taskId = "inbox";
+    }
   }
 
   // ── 7. Nachrichtentext ermitteln (Text, Screenshot oder Voice-Transkript) ──────
@@ -387,7 +429,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   // ── 8. inbound-Zeile in agent_messages schreiben ──────────────────────────────
   try {
-    const supabase = serviceRoleClient();
+    const supabase = serviceRoleClient(); // cheap — cached after first call in step 6
     const { error } = await supabase.from("agent_messages").insert({
       task_id: taskId,
       direction: "inbound",
