@@ -3,7 +3,6 @@
 
     <!-- Base application theme. -->
     <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
-        <!-- Customize your theme here. -->
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
         <item name="colorAccent">@color/colorAccent</item>
@@ -15,8 +14,22 @@
         <item name="android:background">@null</item>
     </style>
 
-
+    <!--
+        Launch theme using the AndroidX SplashScreen API (core-splashscreen 1.x).
+        Rules for Theme.SplashScreen parent:
+          1. windowSplashScreenBackground  — solid color shown behind the icon
+          2. windowSplashScreenAnimatedIcon — the centred icon (≤ 240 dp)
+          3. postSplashScreenTheme         — the theme applied AFTER the splash
+                                             dismisses; MUST be set or the activity
+                                             crashes immediately on Android 12+.
+        MainActivity.onCreate() calls SplashScreen.installSplashScreen(this)
+        before super.onCreate() so the transition is handled by the compat library
+        on all API levels >= 26 (our minSdkVersion).
+    -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:background">@drawable/splash</item>
+        <item name="windowSplashScreenBackground">@color/splashBackground</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
     </style>
+
 </resources>
