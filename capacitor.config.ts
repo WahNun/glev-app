@@ -48,6 +48,14 @@ const config: CapacitorConfig = {
     // sa-bottom to reserve). Header + footer now both extend through
     // their respective safe-area zones with content padded inside.
     contentInset: "never",
+    // 2026-05-21: match the WKWebView native background to the app's
+    // dark page background (#09090B). When contentInset:"always" builds
+    // are still in circulation the iOS-managed safe-area zone below the
+    // nav bar is painted by the native WebView background — without this
+    // it defaults to black (#000000) which creates a visible strip. With
+    // "never" (new builds) the WebView extends to the physical edge so
+    // this value is a no-op, but harmless to keep.
+    backgroundColor: "#09090B",
   },
 };
 
