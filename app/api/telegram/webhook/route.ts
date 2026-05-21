@@ -69,10 +69,18 @@ interface TelegramVoice {
   mime_type?: string;
 }
 
+interface TelegramPhotoSize {
+  file_id: string;
+  width: number;
+  height: number;
+}
+
 interface TelegramMessage {
   message_id: number;
   text?: string;
+  caption?: string;
   voice?: TelegramVoice;
+  photo?: TelegramPhotoSize[];
   reply_to_message?: {
     text?: string;
   };
@@ -204,6 +212,31 @@ async function transcribeVoice(
 }
 
 /**
+ * Lädt ein Bild in Supabase Storage hoch und gibt die öffentliche URL zurück.
+ * Format im agent_messages-Eintrag: "[file] <url>  <caption>"
+ */
+async function uploadImageToStorage(
+  buffer: Buffer,
+  fileId: string,
+  caption?: string,
+): Promise<string> {
+  const url     = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const svcKey  = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  const { createClient: makeClient } = await import("@supabase/supabase-js");
+  const sb = makeClient(url, svcKey, { auth: { persistSession: false } });
+
+  const path = `telegram/${Date.now()}_${fileId}.jpg`;
+  const { error: uploadErr } = await sb.storage
+    .from("agent-files")
+    .upload(path, buffer, { contentType: "image/jpeg", upsert: false });
+
+  if (uploadErr) throw new Error(`Storage upload failed: ${uploadErr.message}`);
+
+  const { data: { publicUrl } } = sb.storage.from("agent-files").getPublicUrl(path);
+  return caption ? `[file] ${publicUrl}  ${caption}` : `[file] ${publicUrl}`;
+}
+
+/**
  * Extrahiert die task_id aus dem Reply-Kontext per Regex.
  * Erwartet das Format "Task <TASK_ID>" irgendwo im Text
  * (z. B. "Agent-Frage (Task: 1234567890):" oder "🤖 Replit-Frage (Task 1234567890)").
@@ -271,23 +304,78 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ok: true });
   }
 
-  // ── 6. task_id aus dem Reply-Kontext extrahieren ─────────────────────────────
-  const replyText = message.reply_to_message?.text ?? "";
-  if (!replyText) {
-    // Keine Antwort auf eine Agent-Nachricht — ignorieren
-    return NextResponse.json({ ok: true });
-  }
+  // ── 6. task_id ermitteln ──────────────────────────────────────────────────────
+  // Priorität:
+  //   1. reply_to_message.text  — expliziter Reply auf eine Agent-Frage
+  //   2. caption                — Bild/Datei mit "Task 123" im Caption
+  //   3. message.text itself    — freie Nachricht mit "Task 123" im Text
+  //   4. most recent pending outbound — freie Antwort ohne Reply-Kontext
+  //   5. "inbox"                — vom Agenten unaufgeforderte Nachricht von Lucas
+  const replyText  = message.reply_to_message?.text ?? "";
+  const captionText = message.caption ?? "";
+  const msgText    = message.text ?? "";
 
-  const taskId = extractTaskId(replyText);
+  let taskId =
+    extractTaskId(replyText) ??
+    extractTaskId(captionText) ??
+    extractTaskId(msgText);
+
   if (!taskId) {
-    // Reply bezieht sich nicht auf eine Agent-Frage — ignorieren
-    return NextResponse.json({ ok: true });
+    // Kein expliziter Task-Kontext — suche das jüngste offene Outbound
+    // (d. h. eine Frage des Agenten, auf die noch keine inbound-Antwort kam).
+    const supabase = serviceRoleClient();
+    const cutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+
+    const { data: pending } = await supabase
+      .from("agent_messages")
+      .select("task_id, created_at")
+      .eq("direction", "outbound")
+      .gte("created_at", cutoff)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (pending) {
+      // Prüfen ob für diesen Task schon eine inbound-Antwort existiert
+      const { data: alreadyAnswered } = await supabase
+        .from("agent_messages")
+        .select("id")
+        .eq("direction", "inbound")
+        .eq("task_id", pending.task_id)
+        .gte("created_at", pending.created_at)
+        .limit(1)
+        .maybeSingle();
+
+      if (!alreadyAnswered) {
+        taskId = pending.task_id;
+      }
+    }
+
+    // Immer noch keine Task-ID → Lucas hat proaktiv geschrieben → Inbox
+    if (!taskId) {
+      taskId = "inbox";
+    }
   }
 
-  // ── 7. Nachrichtentext ermitteln (Text oder Voice-Transkript) ─────────────────
+  // ── 7. Nachrichtentext ermitteln (Text, Screenshot oder Voice-Transkript) ──────
   let inboundText: string | null = null;
 
-  if (message.text) {
+  if (message.photo) {
+    // Telegram sendet mehrere Größen — die letzte ist die höchste Auflösung
+    const largest = message.photo[message.photo.length - 1];
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    if (!botToken) {
+      console.error("[telegram/webhook] TELEGRAM_BOT_TOKEN is not set");
+      return NextResponse.json({ error: "Server misconfiguration" }, { status: 500 });
+    }
+    try {
+      const { buffer } = await downloadTelegramFile(botToken, largest.file_id);
+      inboundText = await uploadImageToStorage(buffer, largest.file_id, captionText || undefined);
+    } catch (err) {
+      console.error("[telegram/webhook] Image upload failed:", err);
+      return NextResponse.json({ error: "Image upload failed" }, { status: 500 });
+    }
+  } else if (message.text) {
     inboundText = message.text;
   } else if (message.voice) {
     // Guard: reject overlong voice notes before touching Whisper.
@@ -335,7 +423,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   // ── 8. inbound-Zeile in agent_messages schreiben ──────────────────────────────
   try {
-    const supabase = serviceRoleClient();
+    const supabase = serviceRoleClient(); // cheap — cached after first call in step 6
     const { error } = await supabase.from("agent_messages").insert({
       task_id: taskId,
       direction: "inbound",
