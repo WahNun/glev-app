@@ -1508,6 +1508,14 @@ export default function EnginePage() {
     });
   }
 
+  // Auto-run the engine as soon as the bolus toggle is switched on so
+  // the chip, Speichern button, and explainer sheet all show the same
+  // value from the start — no stale eager-estimate shown first.
+  useEffect(() => {
+    if (bolusEnabled) handleRun();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bolusEnabled]);
+
   // Wizard Step 3 commit: saves the meal AND the recommended dose in one
   // shot. Mirrors handleConfirmLog's validation/save logic but writes
   // insulin_units = result.dose so the user doesn't need a second
