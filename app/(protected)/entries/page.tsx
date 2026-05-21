@@ -1319,7 +1319,7 @@ function Stat({ label, val, color }: { label: string; val: string; color?: strin
 // neutral (no premature outcome signal), provisional uses muted purple, and
 // final hands off to the per-outcome color via getEvalColor in callers.
 function stateColor(s: OutcomeState) {
-  if (s === "pending")     return "#6B7280";
+  if (s === "pending")     return "#0EA5E9"; // teal = active monitoring
   if (s === "provisional") return "#7C3AED";
   return GREEN;
 }
@@ -1341,25 +1341,33 @@ function LifecycleBlock({ meal, onUpdated }: { meal: Meal; onUpdated: (patch: Pa
   const showOutcomeChip = lc.state === "final" && lc.outcome != null;
   const chipLabel = showOutcomeChip
     ? txSafe(`eval_${lc.outcome}`, getEvalLabel(lc.outcome))
-    : txSafe(`state_${lc.state}`, STATE_LABELS[lc.state]);
+    : lc.state === "pending"
+      ? txSafe("state_monitoring", "Aktive Überwachung")
+      : txSafe(`state_${lc.state}`, STATE_LABELS[lc.state]);
   const c = showOutcomeChip ? getEvalColor(lc.outcome) : stateColor(lc.state);
-
-  // 1h/2h reading inputs intentionally live ONLY in the row-level
-  // "Bearbeiten" editor (toggled by setEditingId at the bottom-left of
-  // the expanded card). This block stays a clean read-only summary —
-  // the countdown chips above carry the pending state, the chip + delta
-  // boxes below carry the resolved one, and the user goes through the
-  // existing edit flow if they want to override anything manually.
+  // Minutes until the 3h final evaluation closes.
+  const minsUntilFinal = lc.state !== "final"
+    ? Math.max(0, Math.round(180 - lc.ageMinutes))
+    : 0;
 
   return (
     <div style={{ marginTop:14, background:`${c}10`, border:`1px solid ${c}40`, borderRadius:12, padding:"12px 14px", display:"flex", flexDirection:"column", gap:10 }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
-        <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>{tx("outcome_state").toUpperCase()}</div>
+        <div style={{ display:"flex", flexDirection:"column", gap:3 }}>
+          <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>{tx("outcome_state").toUpperCase()}</div>
+          {lc.state === "pending" && minsUntilFinal > 0 && (
+            <div style={{ fontSize:11, color:c, fontWeight:600 }}>
+              {txSafe("state_monitoring_countdown", `Finale Bewertung in ${minsUntilFinal} min`).replace("{min}", String(minsUntilFinal))}
+            </div>
+          )}
+        </div>
         <span style={{ padding:"6px 14px", borderRadius:99, fontSize:13, fontWeight:700, background:c, color:"var(--on-accent)", letterSpacing:"0.04em", textTransform:"uppercase" }}>
           {chipLabel}
         </span>
       </div>
-      <div style={{ fontSize:13, color:"var(--text-muted)", lineHeight:1.5 }}>{renderEngineMessages(tEngine, lc.messages)}</div>
+      {lc.state !== "pending" && (
+        <div style={{ fontSize:13, color:"var(--text-muted)", lineHeight:1.5 }}>{renderEngineMessages(tEngine, lc.messages)}</div>
+      )}
       {(lc.delta1 != null || lc.delta2 != null) && (
         <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8, marginTop:2 }}>
           <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:8, padding:"8px 10px" }}>

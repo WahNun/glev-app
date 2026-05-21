@@ -1822,6 +1822,8 @@
     "eval_explain_CHECK_CONTEXT": "Outcome unclear — review context before adjusting.",
     "eval_explain_HYPO_DURING": "Glucose dropped below 70 mg/dL somewhere inside the 3h post-meal window — even if the 2h reading was back in range.",
     "state_pending": "Awaiting glucose data",
+    "state_monitoring": "Active Monitoring",
+    "state_monitoring_countdown": "Final evaluation in {min} min",
     "state_provisional": "Preliminary result (updates after 2h)",
     "state_final": "Final outcome",
     "post_label_1h": "1h Post",

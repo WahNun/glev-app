@@ -1833,6 +1833,8 @@
     "eval_explain_CHECK_CONTEXT": "Verlauf unklar — Kontext prüfen, bevor du die Dosis anpasst.",
     "eval_explain_HYPO_DURING": "Glukose ist innerhalb des 3h-Fensters nach der Mahlzeit unter 70 mg/dL gefallen — auch wenn der 2h-Wert wieder im Zielbereich war.",
     "state_pending": "Wartet auf Glukose-Daten",
+    "state_monitoring": "Aktive Überwachung",
+    "state_monitoring_countdown": "Finale Bewertung in {min} min",
     "state_provisional": "Vorläufiges Ergebnis (aktualisiert nach 2h)",
     "state_final": "Finales Ergebnis",
     "post_label_1h": "1h danach",
