@@ -288,6 +288,7 @@
     "btn_new_meal": "Neues Essen",
     "btn_confirm_save": "✓ Bestätigen & Speichern",
     "btn_save_without_bolus": "✓ Speichern (ohne Bolus)",
+    "bolus_toggle_label": "Bolus berechnen",
     "btn_calculate_bolus": "Bolus berechnen →",
     "btn_calculating": "Berechne…",
     "btn_direct_bolus_open": "Bolus direkt eingeben",

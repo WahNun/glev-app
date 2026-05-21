@@ -565,6 +565,9 @@ export default function EnginePage() {
   // separate wizard page. Opened by handleRun (after engine calc
   // completes); closed by backdrop tap or the × button.
   const [bolusExplainerOpen, setBolusExplainerOpen] = useState(false);
+  // Bolus-toggle in Step 2 (Makros): default OFF = "ohne Bolus speichern".
+  // Resets to false on every new meal so the user always starts clean.
+  const [bolusEnabled, setBolusEnabled] = useState(false);
   // Tabs-expanded state lives in the global EngineHeaderContext so the
   // chevron control can render in the mobile app header (oben rechts
   // next to Live + user icon) instead of inside this page body. We
@@ -1914,6 +1917,7 @@ export default function EnginePage() {
     // starts with enabled buttons. Toast is intentionally NOT cleared — its
     // own setTimeout dismisses it independently.
     setDecisionBusy(false);
+    setBolusEnabled(false);
   }
 
   function handleCancel() {
@@ -2929,6 +2933,34 @@ export default function EnginePage() {
                 );
               })()}
 
+              {/* ── Bolus-berechnen Toggle ─────────────────────────── */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: bolusEnabled ? 12 : 0, padding: "2px 0" }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", letterSpacing: "-0.01em" }}>
+                  {tEngine("bolus_toggle_label")}
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={bolusEnabled}
+                  onClick={() => setBolusEnabled(v => !v)}
+                  style={{
+                    width: 44, height: 26, borderRadius: 13, border: "none",
+                    background: bolusEnabled ? ACCENT : "var(--border)",
+                    position: "relative", cursor: "pointer", flexShrink: 0,
+                    transition: "background 200ms ease",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  <span style={{
+                    position: "absolute", top: 3, borderRadius: "50%",
+                    width: 20, height: 20, background: "var(--text)",
+                    left: bolusEnabled ? 21 : 3,
+                    transition: "left 200ms ease",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+                  }} />
+                </button>
+              </div>
+
               {/* ICR selector — shown only when adaptive and static
                   differ meaningfully (>0.5 g/IE apart) AND the engine
                   has enough data (≥3 meals) to offer an adaptive value.
@@ -2938,7 +2970,7 @@ export default function EnginePage() {
                   · Static === adaptive (±0.5): single card, no choice.
                   · No valid static (should not happen — default = 15):
                     warning text instead of static card. */}
-              {icrSampleSize >= 3 && Math.abs(adaptedICR - staticICR) > 0.5 && (() => {
+              {bolusEnabled && icrSampleSize >= 3 && Math.abs(adaptedICR - staticICR) > 0.5 && (() => {
                 const showStatic = staticICR > 0;
                 return (
                   <div style={{ marginBottom: 12 }}>
@@ -3023,7 +3055,7 @@ export default function EnginePage() {
                   adjusted eager dose for that ICR source. Tapping a
                   chip also switches the active ICR selection (mirrors
                   the selector cards above). */}
-              {icrSampleSize >= 3 && Math.abs(adaptedICR - staticICR) > 0.5
+              {bolusEnabled && icrSampleSize >= 3 && Math.abs(adaptedICR - staticICR) > 0.5
                 && (eagerDoses.adaptive !== null || eagerDoses.static !== null) && (
                 <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
                   {eagerDoses.adaptive !== null && (
@@ -3071,67 +3103,81 @@ export default function EnginePage() {
                 </div>
               )}
 
-              {/* ── Simplified action row ──────────────────────────────
-                  One primary save button (eager dose or "ohne Bolus")
-                  + one text link that opens the BolusExplainerSheet.
-                  Replaces the former three-button stack. */}
+              {/* ── Action row ─────────────────────────────────────────
+                  bolusEnabled=false → single "ohne Bolus" button.
+                  bolusEnabled=true  → "Speichern — X IE" + Explainer link. */}
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {/* PRIMARY — save with eager dose, or without bolus as fallback */}
-                {(() => {
-                  const rawEager = selectedICR === 'adaptive' ? eagerDoses.adaptive : eagerDoses.static;
-                  const activeDose = rawEager !== null ? applyIOBCorrection(rawEager, iob) : null;
-                  const hasEager = activeDose !== null;
-                  return (
-                    <button
-                      onClick={() => hasEager ? handleSaveWithEagerBolus(activeDose!) : handleSaveWithoutBolus()}
-                      disabled={confirming || running}
-                      style={{
-                        width: "100%", height: 52, borderRadius: 12, border: "none",
-                        background: confirming ? "rgba(79,110,247,0.4)" : ACCENT,
-                        color: "var(--text)", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
-                        cursor: confirming ? "wait" : "pointer",
-                        transition: "background 0.2s",
-                      }}
-                    >
-                      {confirming
-                        ? tEngine("btn_saving")
-                        : hasEager
-                          ? tEngine("btn_save_with_bolus", { dose: formatNum(activeDose!, 1), units: tEngine("units_short") })
-                          : tEngine("btn_save_without_bolus")}
-                    </button>
-                  );
-                })()}
-
-                {/* "Erkläre mir die Berechnung" link — runs engine + opens sheet */}
-                {(() => {
-                  const blocked = running || confirming;
-                  return (
-                    <button
-                      type="button"
-                      onClick={handleRun}
-                      disabled={blocked}
-                      style={{
-                        width: "100%", height: 36, borderRadius: 6,
-                        border: "none", background: "transparent",
-                        color: blocked ? "var(--text-ghost)" : ACCENT,
-                        fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
-                        cursor: blocked ? "wait" : "pointer",
-                        textDecoration: "underline", textUnderlineOffset: 3,
-                        display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-                        WebkitTapHighlightColor: "transparent",
-                      }}
-                    >
-                      {running && (
-                        <span style={{
-                          display: "inline-block", width: 12, height: 12,
-                          border: `2px solid ${ACCENT}40`, borderTopColor: ACCENT,
-                          borderRadius: "50%", animation: "engSpin 0.7s linear infinite",
-                        }}/>
-                      )}
-                      {running ? tEngine("btn_calculating") : tEngine("bolus_explainer_link")}
-                    </button>
-                  );
-                })()}
+                {bolusEnabled ? (
+                  <>
+                    {(() => {
+                      const rawEager = selectedICR === 'adaptive' ? eagerDoses.adaptive : eagerDoses.static;
+                      const activeDose = rawEager !== null ? applyIOBCorrection(rawEager, iob) : null;
+                      const hasEager = activeDose !== null;
+                      return (
+                        <button
+                          onClick={() => hasEager ? handleSaveWithEagerBolus(activeDose!) : handleSaveWithoutBolus()}
+                          disabled={confirming || running}
+                          style={{
+                            width: "100%", height: 52, borderRadius: 12, border: "none",
+                            background: confirming ? "rgba(79,110,247,0.4)" : ACCENT,
+                            color: "var(--text)", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
+                            cursor: confirming ? "wait" : "pointer",
+                            transition: "background 0.2s",
+                          }}
+                        >
+                          {confirming
+                            ? tEngine("btn_saving")
+                            : hasEager
+                              ? tEngine("btn_save_with_bolus", { dose: formatNum(activeDose!, 1), units: tEngine("units_short") })
+                              : tEngine("btn_save_without_bolus")}
+                        </button>
+                      );
+                    })()}
+                    {(() => {
+                      const blocked = running || confirming;
+                      return (
+                        <button
+                          type="button"
+                          onClick={handleRun}
+                          disabled={blocked}
+                          style={{
+                            width: "100%", height: 36, borderRadius: 6,
+                            border: "none", background: "transparent",
+                            color: blocked ? "var(--text-ghost)" : ACCENT,
+                            fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
+                            cursor: blocked ? "wait" : "pointer",
+                            textDecoration: "underline", textUnderlineOffset: 3,
+                            display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+                            WebkitTapHighlightColor: "transparent",
+                          }}
+                        >
+                          {running && (
+                            <span style={{
+                              display: "inline-block", width: 12, height: 12,
+                              border: `2px solid ${ACCENT}40`, borderTopColor: ACCENT,
+                              borderRadius: "50%", animation: "engSpin 0.7s linear infinite",
+                            }}/>
+                          )}
+                          {running ? tEngine("btn_calculating") : tEngine("bolus_explainer_link")}
+                        </button>
+                      );
+                    })()}
+                  </>
+                ) : (
+                  <button
+                    onClick={handleSaveWithoutBolus}
+                    disabled={confirming}
+                    style={{
+                      width: "100%", height: 52, borderRadius: 12, border: "none",
+                      background: confirming ? "rgba(79,110,247,0.4)" : ACCENT,
+                      color: "var(--text)", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
+                      cursor: confirming ? "wait" : "pointer",
+                      transition: "background 0.2s",
+                    }}
+                  >
+                    {confirming ? tEngine("btn_saving") : tEngine("btn_save_without_bolus")}
+                  </button>
+                )}
               </div>
             </div>
           )}

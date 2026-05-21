@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import IosTapButton from "@/components/IosTapButton";
 import { useTranslations } from "next-intl";
-import { insertInsulinLog } from "@/lib/insulin";
+import { insertInsulinLog, fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
 import { insertExerciseLog, type ExerciseType } from "@/lib/exercise";
 import { exerciseTypeLabelI18n } from "@/lib/exerciseEval";
 import { scheduleJobsForLog } from "@/lib/cgmJobs";
@@ -264,6 +264,32 @@ export function InsulinForm() {
   // another tab/session shows up without a full reload.
   const [todayMeals, setTodayMeals] = useState<Meal[]>([]);
   const [relatedMealId, setRelatedMealId] = useState<string>("");
+  // Frequent entries: top-3 name+dose combos per type from last 60 days,
+  // sorted by frequency. Used as quick-select chips above the name field.
+  const [recentSuggestions, setRecentSuggestions] = useState<Array<{ name: string; units: number; type: "bolus" | "basal" }>>([]);
+
+  // Load and aggregate frequent insulin entries once on mount.
+  useEffect(() => {
+    let cancelled = false;
+    fetchRecentInsulinLogs(60).then((logs: InsulinLog[]) => {
+      if (cancelled) return;
+      // Count occurrences of each (type, name, rounded-units) combo.
+      const freq = new Map<string, { name: string; units: number; type: "bolus" | "basal"; count: number }>();
+      for (const log of logs) {
+        const n = (log.insulin_name ?? "").trim();
+        if (!n) continue;
+        const u = Math.round((log.units ?? 0) * 2) / 2; // round to 0.5
+        const key = `${log.insulin_type}|${n.toLowerCase()}|${u}`;
+        const existing = freq.get(key);
+        if (existing) { existing.count++; }
+        else { freq.set(key, { name: n, units: u, type: log.insulin_type as "bolus" | "basal", count: 1 }); }
+      }
+      // Top-3 per type by frequency, then alphabetical.
+      const sorted = [...freq.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+      setRecentSuggestions(sorted.slice(0, 6));
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (type !== "bolus") return;
@@ -381,6 +407,33 @@ export function InsulinForm() {
         </div>
         <div>
           <label style={labelStyle}>{t("insulin_name_label")}</label>
+          {/* Quick-select chips — top frequent entries for current type */}
+          {recentSuggestions.filter(s => s.type === type).length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+              {recentSuggestions.filter(s => s.type === type).slice(0, 3).map((s, i) => {
+                const active = name === s.name && units === String(s.units);
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => { setName(s.name); setUnits(String(s.units)); hapticSelection(); }}
+                    style={{
+                      padding: "5px 10px", borderRadius: 20, border: `1.5px solid ${active ? GREEN : "var(--border)"}`,
+                      background: active ? `${GREEN}18` : "var(--surface-soft)",
+                      color: active ? GREEN : "var(--text-dim)",
+                      fontSize: 12, fontWeight: 600, cursor: "pointer",
+                      display: "flex", alignItems: "center", gap: 5,
+                      WebkitTapHighlightColor: "transparent",
+                      transition: "all 150ms ease",
+                    }}
+                  >
+                    <span>{s.name}</span>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, opacity: 0.8 }}>{s.units} IE</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <input
             style={inp}
             placeholder={placeholder}
