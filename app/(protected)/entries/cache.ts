@@ -28,6 +28,47 @@ export interface StorageLike {
   removeItem(key: string): void;
 }
 
+export interface WritableStorageLike extends StorageLike {
+  setItem(key: string, value: string): void;
+}
+
+/** Maximum serialised byte size before oldest meals are trimmed. */
+const CACHE_SIZE_LIMIT = 2 * 1024 * 1024; // 2 MB
+
+/**
+ * Writes the entries cache for `uid` to `storage`.
+ *
+ * Assembles the payload with `cachedAt` set to `now` (injectable for
+ * deterministic tests, defaults to `Date.now()`), trims the oldest meals
+ * when the serialised size would exceed 2 MB, and swallows any
+ * `setItem` error (e.g. QuotaExceededError) so a write failure never
+ * crashes the page.
+ */
+export function writeEntriesCache(
+  uid: string,
+  storage: WritableStorageLike,
+  data: Omit<CachedEntries, "cachedAt">,
+  now: number = Date.now(),
+): void {
+  const cacheKey = `${ENTRIES_CACHE_KEY_PREFIX}:${uid}`;
+  let payload: CachedEntries = { cachedAt: now, ...data };
+  let serialized = JSON.stringify(payload);
+
+  // meals are ordered newest-first; trim from the tail to drop the oldest
+  // entries until the payload fits within the 2 MB quota limit.
+  const byteLength = (s: string) => new TextEncoder().encode(s).length;
+  while (byteLength(serialized) > CACHE_SIZE_LIMIT && payload.meals.length > 0) {
+    payload = { ...payload, meals: payload.meals.slice(0, -1) };
+    serialized = JSON.stringify(payload);
+  }
+
+  try {
+    storage.setItem(cacheKey, serialized);
+  } catch {
+    // Storage quota exceeded — cache write is best-effort; do not crash.
+  }
+}
+
 /**
  * Reads the entries cache for `uid` from `storage`.
  *

@@ -40,8 +40,8 @@ import { useCarbUnit } from "@/hooks/useCarbUnit";
 import { useTimeFormat } from "@/hooks/useTimeFormat";
 import { formatICR } from "@/lib/carbUnits";
 import {
-  ENTRIES_CACHE_KEY_PREFIX,
   readEntriesCache,
+  writeEntriesCache,
 } from "./cache";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
@@ -504,20 +504,14 @@ export default function EntriesPage() {
           supabase.auth.getUser().then(({ data }) => {
             const uid = data?.user?.id;
             if (!uid) return;
-            try {
-              const CACHE_SIZE_LIMIT = 2 * 1024 * 1024; // 2 MB
-              let cachePayload = { cachedAt: Date.now(), meals: m, insulin: ins, exercise: ex, cycle: cy, symptoms: sy, influences: inf };
-              let serialized = JSON.stringify(cachePayload);
-              // meals are ordered newest-first (created_at DESC); trim from the tail
-              // to drop the oldest entries and preserve recent data for fast revisit.
-              // Use TextEncoder for accurate UTF-8 byte count (matching quota semantics).
-              const byteLength = (s: string) => new TextEncoder().encode(s).length;
-              while (byteLength(serialized) > CACHE_SIZE_LIMIT && cachePayload.meals.length > 0) {
-                cachePayload = { ...cachePayload, meals: cachePayload.meals.slice(0, -1) };
-                serialized = JSON.stringify(cachePayload);
-              }
-              localStorage.setItem(`${ENTRIES_CACHE_KEY_PREFIX}:${uid}`, serialized);
-            } catch { /* storage quota exceeded — not critical */ }
+            writeEntriesCache(uid, localStorage, {
+              meals: m,
+              insulin: ins,
+              exercise: ex,
+              cycle: cy,
+              symptoms: sy,
+              influences: inf,
+            });
           });
         }
         // Background: pull older meals (90–FETCH_MEALS_DEFAULT_SINCE_DAYS

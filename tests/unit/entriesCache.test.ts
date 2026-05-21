@@ -19,11 +19,13 @@ import {
   ENTRIES_CACHE_KEY_PREFIX,
   ENTRIES_CACHE_TTL_MS,
   readEntriesCache,
+  writeEntriesCache,
   type StorageLike,
+  type WritableStorageLike,
 } from "@/app/(protected)/entries/cache";
 
 // ---------------------------------------------------------------------------
-// Minimal in-memory localStorage stub
+// Minimal in-memory localStorage stubs
 // ---------------------------------------------------------------------------
 
 function makeStorage(initial: Record<string, string> = {}): StorageLike & {
@@ -41,6 +43,28 @@ function makeStorage(initial: Record<string, string> = {}): StorageLike & {
     removeItem(k) {
       removed.push(k);
       delete store[k];
+    },
+  };
+}
+
+function makeWritableStorage(initial: Record<string, string> = {}): WritableStorageLike & {
+  store: Record<string, string>;
+  removed: string[];
+} {
+  const store = { ...initial };
+  const removed: string[] = [];
+  return {
+    store,
+    removed,
+    getItem(k) {
+      return Object.prototype.hasOwnProperty.call(store, k) ? store[k] : null;
+    },
+    removeItem(k) {
+      removed.push(k);
+      delete store[k];
+    },
+    setItem(k, v) {
+      store[k] = v;
     },
   };
 }
@@ -218,4 +242,78 @@ test("uid isolation — expiring uid-A does not affect uid-B", () => {
   expect(storage.removed).toContain(KEY_A);
   expect(storage.removed).not.toContain(KEY_B);
   expect(resultB).not.toBeNull();
+});
+
+// ---------------------------------------------------------------------------
+// 6. Write path — correct key, cachedAt, all six arrays
+// ---------------------------------------------------------------------------
+
+const EMPTY_DATA = {
+  meals: [] as unknown[],
+  insulin: [] as unknown[],
+  exercise: [] as unknown[],
+  cycle: [] as unknown[],
+  symptoms: [] as unknown[],
+  influences: [] as unknown[],
+};
+
+test("writeEntriesCache — writes to the correct localStorage key", () => {
+  const storage = makeWritableStorage();
+  const now = 5_000_000;
+
+  writeEntriesCache(UID_A, storage, EMPTY_DATA, now);
+
+  expect(Object.prototype.hasOwnProperty.call(storage.store, KEY_A)).toBe(true);
+  expect(Object.prototype.hasOwnProperty.call(storage.store, KEY_B)).toBe(false);
+});
+
+test("writeEntriesCache — written JSON has a numeric cachedAt equal to injected now", () => {
+  const storage = makeWritableStorage();
+  const now = 9_999_999;
+
+  writeEntriesCache(UID_A, storage, EMPTY_DATA, now);
+
+  const written = JSON.parse(storage.store[KEY_A]);
+  expect(typeof written.cachedAt).toBe("number");
+  expect(written.cachedAt).toBe(now);
+});
+
+test("writeEntriesCache — written JSON contains all six data arrays", () => {
+  const storage = makeWritableStorage();
+  const data = {
+    meals:     [{ id: "m1" }],
+    insulin:   [{ id: "i1" }],
+    exercise:  [{ id: "e1" }],
+    cycle:     [{ id: "c1" }],
+    symptoms:  [{ id: "s1" }],
+    influences:[{ id: "inf1" }],
+  };
+
+  writeEntriesCache(UID_A, storage, data, 1_000_000);
+
+  const written = JSON.parse(storage.store[KEY_A]);
+  expect(written.meals).toEqual([{ id: "m1" }]);
+  expect(written.insulin).toEqual([{ id: "i1" }]);
+  expect(written.exercise).toEqual([{ id: "e1" }]);
+  expect(written.cycle).toEqual([{ id: "c1" }]);
+  expect(written.symptoms).toEqual([{ id: "s1" }]);
+  expect(written.influences).toEqual([{ id: "inf1" }]);
+});
+
+// ---------------------------------------------------------------------------
+// 7. Write path — storage-quota errors are swallowed
+// ---------------------------------------------------------------------------
+
+test("writeEntriesCache — setItem quota error is swallowed, page does not crash", () => {
+  const throwingStorage: WritableStorageLike = {
+    getItem: () => null,
+    removeItem: () => {},
+    setItem: () => {
+      throw new Error("QuotaExceededError");
+    },
+  };
+
+  expect(() =>
+    writeEntriesCache(UID_A, throwingStorage, EMPTY_DATA, 1_000_000),
+  ).not.toThrow();
 });
