@@ -162,7 +162,7 @@ export default function ReviewMacrosCards({
           // the unit is shown globally below the grid instead.
           const displayLabel = c.label.replace(/\s*\([^)]+\)\s*$/i, "").trim();
           return (
-            <div key={c.key} style={{ display: "flex", justifyContent: "center", minWidth: 0 }}>
+            <div key={c.key} style={{ display: "flex", justifyContent: "center", minWidth: 0, maxWidth: 128 }}>
               <button
                 type="button"
                 onClick={() => selectCard(c.key)}

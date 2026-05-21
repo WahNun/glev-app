@@ -2607,23 +2607,8 @@ export default function EnginePage() {
             </div>
           )}
           {stepIndex === 1 && wizardSavedDose === null && (
-            <div style={{
-              ...card, padding: 18,
-              // Stretch the Step 2 macros card to fill the wizard
-              // column on mobile (flex:1 inside the column-flex
-              // scroll region declared above). Eliminates the dark
-              // page-bg gap between card and nav top edge — the
-              // SURFACE-coloured card runs flush from below the
-              // header to the nav top border. The card's interactive
-              // rows (Macros / Glucose / Time / Save) cluster at the
-              // top, so the FAB's ~30 px protrusion above the nav
-              // hovers harmlessly over the empty bottom area of the
-              // stretched card. paddingBottom bumped (80 → 104) after
-              // the FAB grew 52 → 60 (user request 2026-05-17 "die
-              // karte sollte nicht mit dem glev button überlappen").
-              position: "relative",
-              ...(isMobile ? { flex: 1, minHeight: 0, paddingBottom: 104 } : null),
-            }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ ...card, padding: 18, position: "relative" }}>
               {/* Back chevron — top-left of the card per user request
                   2026-05-17 ("der back button sollte oben links in der
                   karte sein"). Replaces the bottom "Zurück" row that
@@ -2663,15 +2648,6 @@ export default function EnginePage() {
                   header (Layout.tsx → EngineSourceHeaderProvider)
                   to reclaim ~30 px at the top of the card. The four
                   ring cards self-explain the section. */}
-              {/* Eyebrow "Angaben in G" — dezenter Einheiten-Hinweis
-                  oberhalb der Ring-Karten (font 10px, uppercase, faint). */}
-              <div style={{
-                fontSize: 10, fontWeight: 700, letterSpacing: "0.06em",
-                textTransform: "uppercase", color: "var(--text-faint)",
-                marginBottom: 6, paddingLeft: 2,
-              }}>
-                {tEngine("carb_unit_eyebrow", { unit: carbUnit.label.toUpperCase() })}
-              </div>
               <div style={{ marginBottom: 14 }}>
                 {/* Macros as tap-able ring cards mirroring the dashboard's
                     "TODAY'S MACROS" section. Tap a card → its 0.5 g slider
@@ -2932,8 +2908,9 @@ export default function EnginePage() {
                   </div>
                 );
               })()}
+            </div>
 
-              {/* ── Bolus-berechnen Toggle ─────────────────────────── */}
+            {/* ── Bolus-berechnen Toggle ─────────────────────────── */}
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: bolusEnabled ? 12 : 0, padding: "2px 0" }}>
                 <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", letterSpacing: "-0.01em" }}>
                   {tEngine("bolus_toggle_label")}
@@ -3179,7 +3156,7 @@ export default function EnginePage() {
                   </button>
                 )}
               </div>
-            </div>
+          </div>
           )}
 
           {/* BolusExplainerSheet — fixed bottom-sheet replacing Step 3.
