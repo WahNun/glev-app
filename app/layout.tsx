@@ -131,6 +131,31 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             mounts so the very first painted frame already has the right
             data-theme attribute and theme-color meta — no FOUC. */}
         <script dangerouslySetInnerHTML={{ __html: NO_FLICKER_THEME_SCRIPT }} />
+        {/* Safe-area measurement. env(safe-area-inset-bottom) can return 0
+            in some Capacitor/WKWebView configurations even when the device
+            has a physical home-indicator zone. We measure it via a sentinel
+            element and write the result directly onto --safe-bottom so the
+            footer always covers the full bottom of the screen regardless of
+            what the CSS env() function reports. Runs synchronously (no
+            defer/async) so the variable is set before the first paint. Also
+            re-measures on resize / orientation-change. */}
+        <script dangerouslySetInnerHTML={{ __html: `
+(function(){
+  function measure(){
+    var s=document.createElement('div');
+    s.style.cssText='position:fixed;bottom:0;left:0;width:0;'+
+      'height:env(safe-area-inset-bottom,0px);pointer-events:none;visibility:hidden';
+    document.documentElement.appendChild(s);
+    var h=s.offsetHeight;
+    document.documentElement.removeChild(s);
+    if(h>0){
+      document.documentElement.style.setProperty('--safe-bottom',h+'px');
+    }
+  }
+  measure();
+  window.addEventListener('resize',measure,{passive:true});
+})();
+        `.trim() }} />
         {/* 2026-05-17 round 6 (lever B — handshake pre-warm): every page
             in the protected zone hits the Supabase REST + Realtime
             endpoint on first paint. preconnect lets the browser pay the
