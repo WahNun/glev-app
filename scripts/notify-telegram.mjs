@@ -23,6 +23,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { waitForReply } from './lib/telegramNotify.mjs';
 
 const TIMEOUT_MS = 10 * 60 * 1000; // 10 Minuten
 
@@ -76,11 +77,6 @@ async function sendTelegramMessage(text) {
   }
 }
 
-function finish(answer) {
-  process.stdout.write(answer + '\n');
-  process.exit(0);
-}
-
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -103,44 +99,14 @@ async function main() {
 
   await sendTelegramMessage(telegramText);
 
-  // 3. Realtime-Subscription auf inbound-Antworten für diese task_id
-  //    Wir filtern client-seitig auf created_at > sentAt, weil Realtime-Filter
-  //    nur einfache Gleichheits-Checks unterstützen.
-  let resolved = false;
+  // 3. Warten auf inbound-Antwort via Realtime-Subscription (siehe
+  //    scripts/lib/telegramNotify.mjs für die testbare Kernlogik).
+  const answer = await waitForReply(TASK_ID, sentAt, supabase, {
+    timeoutMs: TIMEOUT_MS,
+  });
 
-  const channel = supabase
-    .channel(`agent_messages:${TASK_ID}`)
-    .on(
-      'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'agent_messages',
-        filter: `task_id=eq.${TASK_ID}`,
-      },
-      (payload) => {
-        const row = payload.new;
-        if (
-          row.direction === 'inbound' &&
-          row.created_at >= sentAt &&
-          !resolved
-        ) {
-          resolved = true;
-          channel.unsubscribe();
-          finish(row.message);
-        }
-      },
-    )
-    .subscribe();
-
-  // 4. Safety-Timeout: nach 10 Minuten TIMEOUT ausgeben
-  setTimeout(() => {
-    if (!resolved) {
-      resolved = true;
-      channel.unsubscribe();
-      finish('TIMEOUT');
-    }
-  }, TIMEOUT_MS);
+  process.stdout.write(answer + '\n');
+  process.exit(0);
 }
 
 main().catch((err) => {
