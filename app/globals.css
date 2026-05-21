@@ -124,8 +124,8 @@
   --onboarding-progress-top:  calc(var(--safe-top) + 26px);
   --onboarding-footer-bottom: calc(var(--safe-bottom) + 22px);
 
-  --nav-bottom-height:  56px;
-  --nav-bottom-top-pad: 4px;
+  --nav-bottom-height:  50px;
+  --nav-bottom-top-pad: 2px;
   --nav-bottom-safe:    max(8px, var(--safe-bottom));
   --nav-bottom-total:   calc(var(--nav-bottom-height) + var(--nav-bottom-top-pad) + var(--nav-bottom-safe));
 
