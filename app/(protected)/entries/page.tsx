@@ -35,6 +35,8 @@ import PendingGlucoseStrip from "@/components/PendingGlucoseStrip";
 import ManualEntryModal from "@/components/ManualEntryModal";
 import EntryAddCTA from "@/components/EntryAddCTA";
 import { CgmCountdownPair } from "@/components/CgmCountdownChip";
+import { calcSingleIOB, getDIAMinutes, type BolusDose, type InsulinType } from "@/lib/iob";
+import { fetchInsulinType } from "@/lib/userSettings";
 import { parseDbDate, parseDbTs, parseLluTs } from "@/lib/time";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
 import { useTimeFormat } from "@/hooks/useTimeFormat";
@@ -317,8 +319,11 @@ export default function EntriesPage() {
   // user can correct values after the fact. Only one entry at a time can be
   // in edit mode; collapsing or switching expansion clears it.
   const [editingId, setEditingId] = useState<string|null>(null);
+  const [insulinType, setInsType]  = useState<InsulinType>("rapid");
   const [manualOpen, setManualOpen] = useState(false);
   const filtersWrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { fetchInsulinType().then(setInsType).catch(() => {}); }, []);
 
   // Restore filters from sessionStorage (per-tab persistence) on first mount.
   // Old single-string values from the previous chip-bar shape are discarded.
@@ -1269,6 +1274,63 @@ export default function EntriesPage() {
                         )}
                       </div>
                     )}
+
+                    {/* IOB SPARKLINE — shows bolus decay profile for this meal */}
+                    {(m.insulin_units ?? 0) > 0 && (() => {
+                      const dose     = m.insulin_units!;
+                      const adminAt  = m.meal_time ?? m.created_at;
+                      const nowMs    = Date.now();
+                      const diaMin   = getDIAMinutes(insulinType);
+                      const elapsedMin = Math.max(0, (nowMs - new Date(adminAt).getTime()) / 60_000);
+                      const iobNow   = calcSingleIOB({ units: dose, administeredAt: adminAt } as BolusDose, nowMs, diaMin);
+                      const cleared  = iobNow < 0.05 || elapsedMin >= diaMin;
+                      const STEPS    = 60;
+                      const W = 220, H = 52, PAD = 4;
+                      const pts = Array.from({ length: STEPS + 1 }, (_, i) => {
+                        const t     = (i / STEPS) * diaMin;
+                        const ratio = Math.pow(1 - Math.min(t, diaMin) / diaMin, 2);
+                        const x     = (i / STEPS) * W;
+                        const y     = PAD + (1 - ratio) * (H - PAD * 2);
+                        return `${x.toFixed(1)},${y.toFixed(1)}`;
+                      }).join(" ");
+                      const elapsedX = Math.min((elapsedMin / diaMin) * W, W);
+                      const chipColor = iobNow < 1 ? GREEN : iobNow < 3 ? "#F59E0B" : ORANGE;
+                      return (
+                        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                          <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.1em", fontWeight:700 }}>
+                            {tx("iob_profile").toUpperCase()}
+                          </div>
+                          <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display:"block", overflow:"visible" }}>
+                            <defs>
+                              <clipPath id={`iob-future-${m.id}`}>
+                                <rect x={elapsedX} y="0" width={W - elapsedX} height={H}/>
+                              </clipPath>
+                            </defs>
+                            {/* full gray curve */}
+                            <polyline points={pts} fill="none" stroke="var(--text-ghost)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.35"/>
+                            {/* colored remaining curve */}
+                            {!cleared && (
+                              <polyline points={pts} fill="none" stroke={chipColor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" clipPath={`url(#iob-future-${m.id})`}/>
+                            )}
+                            {/* current-time marker */}
+                            {!cleared && (
+                              <line x1={elapsedX} y1={PAD - 2} x2={elapsedX} y2={H - PAD + 2} stroke={chipColor} strokeWidth="1.5" strokeDasharray="3 2" opacity="0.8"/>
+                            )}
+                          </svg>
+                          <div>
+                            {cleared ? (
+                              <span style={{ padding:"3px 10px", borderRadius:99, fontSize:11, fontWeight:700, background:"var(--surface-soft)", color:"var(--text-ghost)", letterSpacing:"0.04em" }}>
+                                {tx("iob_fully_cleared")}
+                              </span>
+                            ) : (
+                              <span style={{ padding:"3px 10px", borderRadius:99, fontSize:11, fontWeight:700, background:`${chipColor}22`, color:chipColor, letterSpacing:"0.04em" }}>
+                                {tx("iob_still_active", { units: iobNow.toFixed(1) })}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* MEAL */}
                     {m.input_text && (

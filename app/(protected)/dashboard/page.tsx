@@ -7,9 +7,11 @@ import { useRouter } from "next/navigation";
 import { fetchMeals, computeCalories, unifiedOutcome, type Meal } from "@/lib/meals";
 import { computeControlScore } from "@/lib/controlScore";
 import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
+import { type InsulinType } from "@/lib/iob";
+import IOBCard from "@/components/IOBCard";
 import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
 import { evaluateExercise, exerciseTypeLabelI18n } from "@/lib/exerciseEval";
-import { fetchMacroTargets, DEFAULT_MACRO_TARGETS, type MacroTargets, getTargetRange, fetchTargetRange, type TargetRange } from "@/lib/userSettings";
+import { fetchMacroTargets, DEFAULT_MACRO_TARGETS, type MacroTargets, getTargetRange, fetchTargetRange, type TargetRange, fetchInsulinType } from "@/lib/userSettings";
 import { fetchCgmSamples } from "@/lib/cgmSamplesClient";
 import { TYPE_COLORS, getEvalColor, chipLabelsFrom } from "@/lib/mealTypes";
 import DashboardQuickAddSheet from "@/components/DashboardQuickAddSheet";
@@ -473,12 +475,14 @@ export default function DashboardPage() {
   // the rings always render even before the row exists or for signed-out
   // SSR. Edited via Settings → "Daily Macro Targets".
   const [macroTargets, setMacroTargets] = useState<MacroTargets>(DEFAULT_MACRO_TARGETS);
+  const [insulinType, setInsulinType]   = useState<InsulinType>("rapid");
   // Bottom-sheet/modal listing all quick-log entry points (mirrors the
   // header "+" QuickAddMenu). Opened by the dashboard hero "+" button.
   const [quickAddOpen, setQuickAddOpen] = useState(false);
 
   useEffect(() => {
     fetchMacroTargets().then(setMacroTargets).catch(() => {});
+    fetchInsulinType().then(setInsulinType).catch(() => {});
   }, []);
 
   // SWR-backed cached fetch of meals + insulin + exercise. The
@@ -583,6 +587,7 @@ export default function DashboardPage() {
       cards: [
         { id: "today-glucose", node: <CurrentDayGlucoseCard/> },
         { id: "glucose-trend", node: <TrendChart meals={meals}/> },
+        { id: "iob",           node: <IOBCard insulin={insulin} insulinType={insulinType}/> },
       ],
     },
     {

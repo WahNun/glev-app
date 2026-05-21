@@ -1630,6 +1630,12 @@
     "cluster_metabolic": "Metabolische Antwort",
     "cluster_control": "Kontrolle",
     "cluster_recents": "Zuletzt",
+    "active_insulin": "Aktives Insulin",
+    "iob_cleared_in": "Abgebaut in ~{minutes} min",
+    "iob_fully_cleared": "Vollständig abgebaut",
+    "iob_risk_low": "Kein Stacking-Risiko",
+    "iob_risk_moderate": "Moderates Stacking-Risiko",
+    "iob_risk_high": "Stacking-Risiko — Vorsicht",
     "reorder_cluster_aria": "Zum Umsortieren ziehen",
     "log_meal_cta": "+ Mahlzeit loggen",
     "flip_back": "↺ zurück",
@@ -1734,6 +1740,9 @@
     "saved_flash": "Gespeichert ✓"
   },
   "entriesExpand": {
+    "iob_profile": "Wirkprofil Bolus",
+    "iob_fully_cleared": "Vollständig abgebaut",
+    "iob_still_active": "Noch {units} IE wirksam",
     "search_placeholder": "Einträge suchen…",
     "row_when": "Wann",
     "row_type": "Typ",

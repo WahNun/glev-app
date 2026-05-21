@@ -1619,6 +1619,12 @@
     "cluster_metabolic": "Metabolic response",
     "cluster_control": "Control",
     "cluster_recents": "Recents",
+    "active_insulin": "Active Insulin",
+    "iob_cleared_in": "Clears in ~{minutes} min",
+    "iob_fully_cleared": "Fully cleared",
+    "iob_risk_low": "No stacking risk",
+    "iob_risk_moderate": "Moderate stacking risk",
+    "iob_risk_high": "Stacking risk — caution",
     "reorder_cluster_aria": "Drag to reorder section",
     "log_meal_cta": "+ Log meal",
     "flip_back": "↺ back",
@@ -1723,6 +1729,9 @@
     "saved_flash": "Saved ✓"
   },
   "entriesExpand": {
+    "iob_profile": "Bolus profile",
+    "iob_fully_cleared": "Fully cleared",
+    "iob_still_active": "{units} IE still active",
     "search_placeholder": "Search entries…",
     "row_when": "When",
     "row_type": "Type",
