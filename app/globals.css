@@ -177,12 +177,6 @@ html, body {
      still allowing taps and scrolling. */
   touch-action: manipulation;
   -webkit-text-size-adjust: 100%;
-  /* Safety-net against any single oversized child (hero phone frame
-     with shadow, long unbreakable strings, etc.) pushing the page
-     wider than the viewport — caused content on iPhone 13 mini to
-     appear off-center with the right card border clipped. */
-  max-width: 100vw;
-  overflow-x: hidden;
   /* Kill iOS / Capacitor rubber-band overscroll on the document.
      Without this, `position: fixed` header & bottom-nav visually
      shift along with the rubber-band when the user pulls past the
@@ -192,6 +186,21 @@ html, body {
      positions (matches native iOS app behaviour). */
   overscroll-behavior-y: none;
   -webkit-overflow-scrolling: auto;
+}
+
+body {
+  /* Safety-net against any single oversized child (hero phone frame
+     with shadow, long unbreakable strings, etc.) pushing the page
+     wider than the viewport.
+     IMPORTANT: overflow-x must sit on <body>, NOT on <html>.
+     Setting overflow on the <html> element hands scroll-container
+     control to the viewport, which causes Chrome (and other
+     Blink-based browsers) to block vertical scrolling entirely —
+     users can see content below the fold but cannot scroll to it.
+     On <body> the clip is scoped to the body scroll-box only and
+     vertical scrolling is unaffected. */
+  max-width: 100vw;
+  overflow-x: hidden;
 }
 html { overscroll-behavior-y: none; }
 
