@@ -1470,7 +1470,7 @@ export default function EnginePage() {
       .catch(() => setActivityCtx(null));
   }, []);
 
-  function handleRun() {
+  function handleRun(silent = false) {
     // carbs input lives in the user's chosen unit (g/BE/KE); engine
     // operates in grams, so convert at the boundary.
     const g = parseFloat(glucose)||110, c = carbUnit.toGrams(parseFloat(carbs)||0);
@@ -1496,7 +1496,7 @@ export default function EnginePage() {
       // Open the BolusExplainerSheet (replaces the old Step 3 page
       // navigation). Sheet shows dose, confidence, IOB, GPT reasoning,
       // and ICR methodology without leaving the macros card.
-      setBolusExplainerOpen(true);
+      if (!silent) setBolusExplainerOpen(true);
       // PRE-FILL ENTFERNT: Insulin wird jetzt erst NACH Confirm Log + binärer
       // Bolus-Entscheidung im Post-Confirm-Flow eingegeben. Kein silent-set
       // mehr in den `insulin`-State, sonst würde beim Save eine Dosis
@@ -1512,7 +1512,7 @@ export default function EnginePage() {
   // the chip, Speichern button, and explainer sheet all show the same
   // value from the start — no stale eager-estimate shown first.
   useEffect(() => {
-    if (bolusEnabled) handleRun();
+    if (bolusEnabled) handleRun(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bolusEnabled]);
 
