@@ -100,8 +100,8 @@ function tabLabel(tab: Tab, locale: string): string {
 function tabCaption(tab: Tab, locale: string): string {
   switch (tab) {
     case "dashboard": return pickCopy(locale, {
-      de: "Glukose live, heutige Makros, Control Score.",
-      en: "Live glucose, today's macros, Control Score.",
+      de: "Glukose live, heutige Makros, Adapt Score.",
+      en: "Live glucose, today's macros, Adapt Score.",
     });
     case "entries":   return pickCopy(locale, {
       de: "Chronologisches Log — jede Mahlzeit ein Tap.",

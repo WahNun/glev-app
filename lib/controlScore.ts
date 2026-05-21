@@ -2,7 +2,7 @@ import { unifiedOutcome, type Meal } from "./meals";
 import { parseDbDate } from "./time";
 
 /**
- * Rolling Control Score over a `[sinceMs, untilMs)` window.
+ * Rolling Adapt Score over a `[sinceMs, untilMs)` window.
  *
  * Extracted from `app/(protected)/dashboard/page.tsx` (Task #41) so the
  * formula can be unit-tested without dragging the React-only dashboard
@@ -16,15 +16,19 @@ import { parseDbDate } from "./time";
  *   OVERDOSE   — post-meal low (insulin overshot); incl. legacy "LOW"
  *   OTHER      — null or anything we can't categorise yet (pending /
  *                provisional rows whose lifecycleFor hasn't cached an
- *                evaluation). Stays in the denominator — a still-pending
- *                meal lowers all three displayed rates equally instead
- *                of being silently excluded.
+ *                evaluation).
  *
- * Spec formula:
- *   score = clamp(goodRate*0.7 + (100 - spikeRate - hypoRate)*0.3, 0, 100)
+ * Key change vs. v1: only *evaluated* meals (GOOD + SPIKE + HYPO) enter
+ * the denominator. Pending/OTHER rows are excluded from the rate math so
+ * that active loggers aren't penalised for meals that haven't been
+ * assessed yet. The raw `count` still reflects every in-window meal
+ * (including pending) so the "n entries" display stays accurate.
  *
- * `count` returns the denominator (every in-window meal — pending rows
- * included) so the card's "not enough data" branch still triggers.
+ * Minimum threshold: fewer than 3 evaluated meals → `score: null`.
+ * The dashboard shows "IM AUFBAU" / "BUILDING" in that case.
+ *
+ * Spec formula (applied to evaluated-only denominator):
+ *   score = clamp(goodRate×0.7 + (100 − spikeRate − hypoRate)×0.3, 0, 100)
  *
  * @param now Optional clock injection for tests; defaults to `new Date()`
  *            and is forwarded to `unifiedOutcome` so lifecycle decisions
@@ -35,24 +39,32 @@ export function computeControlScore(
   sinceMs: number,
   untilMs: number = Infinity,
   now: Date = new Date(),
-): { score: number; count: number; good: number; spike: number; hypo: number; other: number } {
+): { score: number | null; count: number; good: number; spike: number; hypo: number; other: number } {
   const inWindow = meals.filter(m => {
     const t = parseDbDate(m.created_at).getTime();
     return t >= sinceMs && t < untilMs;
   });
   const total = inWindow.length;
-  if (!total) return { score: 0, count: 0, good: 0, spike: 0, hypo: 0, other: 0 };
+  if (!total) return { score: null, count: 0, good: 0, spike: 0, hypo: 0, other: 0 };
+
   let good = 0, spike = 0, hypo = 0;
   for (const m of inWindow) {
     const ev = unifiedOutcome(m, now);
-    if      (ev === "GOOD")                                       good++;
+    if      (ev === "GOOD")                                                               good++;
     else if (ev === "SPIKE" || ev === "SPIKE_STRONG" || ev === "UNDERDOSE" || ev === "LOW") spike++;
-    else if (ev === "OVERDOSE" || ev === "HIGH" || ev === "HYPO_DURING") hypo++;
+    else if (ev === "OVERDOSE" || ev === "HIGH" || ev === "HYPO_DURING")                  hypo++;
   }
-  const goodRate  = (good  / total) * 100;
-  const spikeRate = (spike / total) * 100;
-  const hypoRate  = (hypo  / total) * 100;
+
+  const evaluated = good + spike + hypo;
+  const other     = total - evaluated;
+
+  // Not enough evaluated meals — return null so the UI can show "IM AUFBAU".
+  if (evaluated < 3) return { score: null, count: total, good, spike, hypo, other };
+
+  const goodRate  = (good  / evaluated) * 100;
+  const spikeRate = (spike / evaluated) * 100;
+  const hypoRate  = (hypo  / evaluated) * 100;
   const raw   = goodRate * 0.7 + (100 - spikeRate - hypoRate) * 0.3;
   const score = Math.max(0, Math.min(100, Math.round(raw)));
-  return { score, count: total, good, spike, hypo, other: total - good - spike - hypo };
+  return { score, count: total, good, spike, hypo, other };
 }

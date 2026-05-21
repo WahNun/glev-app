@@ -1565,17 +1565,23 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
     const prevStart = startOfDaysAgo(13).getTime();
     const cur  = computeControlScore(meals, wkStart, now);
     const prev = computeControlScore(meals, prevStart, wkStart);
-    const delta = prev.count > 0 && cur.count > 0 ? cur.score - prev.score : null;
+    // delta only meaningful when both windows have a real score (≥3 evaluated each)
+    const delta = prev.score !== null && cur.score !== null ? cur.score - prev.score : null;
     const badge =
-      cur.score >= 80 ? { key: "strong", color: GREEN }
-      : cur.score >= 60 ? { key: "good",   color: ACCENT }
-      :                   { key: "poor",   color: PINK };
+      cur.score === null   ? { key: "poor",   color: PINK   }
+      : cur.score >= 80    ? { key: "strong", color: GREEN  }
+      : cur.score >= 60    ? { key: "good",   color: ACCENT }
+      :                      { key: "poor",   color: PINK   };
     return { score: cur.score, count: cur.count, delta, badge,
              good: cur.good, spike: cur.spike, hypo: cur.hypo, other: cur.other };
   }, [meals]);
 
   const badgeText = t(`badge_${badge.key}`);
-  const hasData   = count > 0;
+  // hasEntries: any meal logged in the window (for showing breakdown + badge)
+  // hasScore:   ≥3 evaluated meals → show numeric score
+  const hasEntries = count > 0;
+  const hasScore   = score !== null;
+  const hasData    = hasEntries; // kept for legacy refs below
 
   const pct = (n: number) => hasData ? Math.round((n / count) * 100) : 0;
   const buckets = [
@@ -1611,15 +1617,20 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
       style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 16,
                padding: "18px 24px 18px", boxSizing: "border-box" }}
     >
-      {/* Header */}
-      <div className="glev-control-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)" }}>
-          {t("control_score_label")}
+      {/* Header — title + sublabel stack, badge right */}
+      <div className="glev-control-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)" }}>
+            {t("adapt_score_title")}
+          </div>
+          <div style={{ fontSize: 11, color: "var(--text-faint)", letterSpacing: "0.06em", marginTop: 2 }}>
+            {t("adapt_score_sublabel")}
+          </div>
         </div>
-        {hasData && (
+        {hasEntries && (
           <div style={{ fontSize: 11, fontWeight: 800, color: badge.color, padding: "4px 10px", borderRadius: 99,
                         border: `1px solid ${badge.color}55`, background: `${badge.color}18`,
-                        letterSpacing: "0.1em", marginLeft: 16, flexShrink: 0 }}>
+                        letterSpacing: "0.1em", marginLeft: 16, flexShrink: 0, marginTop: 2 }}>
             {badgeText}
           </div>
         )}
@@ -1627,15 +1638,15 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
 
       {/* Score row */}
       <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-        <span style={{ fontSize: 56, fontWeight: 800, color: ACCENT, letterSpacing: "-0.03em", fontFamily: "var(--font-mono)", lineHeight: 1 }}>
-          {hasData ? score : "—"}
+        <span style={{ fontSize: 56, fontWeight: 800, color: hasScore ? ACCENT : "var(--text-ghost)", letterSpacing: "-0.03em", fontFamily: "var(--font-mono)", lineHeight: 1 }}>
+          {hasScore ? score : "—"}
         </span>
-        <span style={{ fontSize: 14, color: "var(--text-dim)", fontWeight: 500 }}>/ 100</span>
+        {hasScore && <span style={{ fontSize: 14, color: "var(--text-dim)", fontWeight: 500 }}>/ 100</span>}
         <span style={{
           marginLeft: "auto", fontSize: 12, fontWeight: 600, fontFamily: "var(--font-mono)",
           color: delta == null ? "var(--text-dim)" : delta > 0 ? GREEN : delta < 0 ? PINK : "var(--text-dim)",
         }}>
-          {!hasData
+          {!hasEntries
             ? t("no_entries_7d")
             : delta == null
               ? t("entries_7d", { n: count })
@@ -1643,9 +1654,9 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
         </span>
       </div>
 
-      {/* Progress bar */}
+      {/* Progress bar — only shown when score is available */}
       <div style={{ height: 6, marginTop: 14, background: "var(--border-soft)", borderRadius: 99, overflow: "hidden" }}>
-        <div style={{ height: "100%", width: `${hasData ? Math.max(0, Math.min(100, score)) : 0}%`,
+        <div style={{ height: "100%", width: `${hasScore ? Math.max(0, Math.min(100, score as number)) : 0}%`,
                       background: `linear-gradient(90deg, ${ACCENT}, ${GREEN})`, borderRadius: 99, transition: "width 0.6s ease" }} />
       </div>
 

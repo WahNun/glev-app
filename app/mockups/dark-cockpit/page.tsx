@@ -357,7 +357,7 @@ function Dashboard({ onInsights }: { onInsights?: (stat: string) => void }) {
   return (
     <div style={{display:"flex",flexDirection:"column",gap:12}}>
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
-        <StatCard label="Control Score" value={stats.controlScore.toFixed(0)} unit="/100" sub={`${stats.totalEntries} entries`} color={ACCENT} bar={stats.controlScore} onLearnMore={onInsights?()=>onInsights("Control Score"):undefined}/>
+        <StatCard label="Adapt Score" value={stats.controlScore.toFixed(0)} unit="/100" sub={`${stats.totalEntries} entries`} color={ACCENT} bar={stats.controlScore} onLearnMore={onInsights?()=>onInsights("Adapt Score"):undefined}/>
         <StatCard label="Good Rate" value={(stats.goodRate*100).toFixed(1)} unit="%" sub={`${eb.GOOD} good outcomes`} color={GREEN} bar={stats.goodRate*100} onLearnMore={onInsights?()=>onInsights("Good Rate"):undefined}/>
         <StatCard label="Spike Rate" value={stats.spikeRate.toFixed(1)} unit="%" sub="Hyperglycemia" color={ORANGE} bar={stats.spikeRate} onLearnMore={onInsights?()=>onInsights("Spike Rate"):undefined}/>
         <StatCard label="Hypo Rate" value={stats.hypoRate.toFixed(1)} unit="%" sub="Hypoglycemia" color={PINK} bar={stats.hypoRate} onLearnMore={onInsights?()=>onInsights("Hypo Rate"):undefined}/>
@@ -1168,7 +1168,7 @@ function InsightFlipCard({m,color,label}:{m:MealPattern;color:string;label:strin
 }
 
 const STAT_COLORS: Record<string,string> = {
-  "Control Score": ACCENT,
+  "Adapt Score": ACCENT,
   "Good Rate": GREEN,
   "Spike Rate": ORANGE,
   "Hypo Rate": PINK,
@@ -2037,7 +2037,7 @@ function MobileEntryLog() {
 
 // ─── MOBILE DASHBOARD STAT CARD INFO ──────────────────────────────
 const STAT_INFO: Record<string,{headline:string;detail:string;formula:string}> = {
-  "Control Score":{headline:"Composite insulin control metric",detail:"Rewards GOOD outcomes and penalises OVERDOSE / UNDERDOSE equally. Ranges 0–100 — higher means more consistent glycemic control across all entries.",formula:"(GOOD − 0.5 × spike − 0.5 × hypo) / total × 100"},
+  "Adapt Score":{headline:"Bolus precision score",detail:"Only evaluated meals count — pending meals are excluded. Rewards correctly dosed meals, penalises over- and under-doses. Requires ≥3 evaluated meals. Ranges 0–100.",formula:"Good% × 0.7 + (100 − Spike% − Hypo%) × 0.3 (evaluated meals only)"},
   "Good Rate":{headline:"Post-meal BG in target range",detail:"Share of entries where blood glucose outcome was flagged GOOD. Aim for above 60% to establish a reliable dosing baseline.",formula:"GOOD entries ÷ total entries"},
   "Spike Rate":{headline:"Post-meal glucose too high",detail:"Entries where blood sugar spiked above the upper target. Often signals insufficient insulin dose or too-late injection timing.",formula:"OVERDOSE entries ÷ total entries"},
   "Hypo Rate":{headline:"Post-meal glucose too low",detail:"Entries where blood sugar dropped below the lower target. May indicate excess insulin, incorrect meal estimation, or poor meal timing.",formula:"UNDERDOSE entries ÷ total entries"},
@@ -2097,7 +2097,7 @@ function MobileDashboard({email,name:memberName,onSignOut}:{email?:string;name?:
         {mobilePage==="dashboard"&&(
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
             {stats?[
-              {label:"Control Score",value:stats.controlScore.toFixed(0),unit:"/100",color:ACCENT,bar:stats.controlScore,sub:`${stats.totalEntries} entries`},
+              {label:"Adapt Score",value:stats.controlScore.toFixed(0),unit:"/100",color:ACCENT,bar:stats.controlScore,sub:`${stats.totalEntries} entries`},
               {label:"Good Rate",value:(stats.goodRate*100).toFixed(1),unit:"%",color:GREEN,bar:stats.goodRate*100,sub:`${eb?.GOOD||0} good`},
               {label:"Spike Rate",value:stats.spikeRate.toFixed(1),unit:"%",color:ORANGE,bar:stats.spikeRate,sub:"Hyperglycemia"},
               {label:"Hypo Rate",value:stats.hypoRate.toFixed(1),unit:"%",color:PINK,bar:stats.hypoRate,sub:"Hypoglycemia"},
