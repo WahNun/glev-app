@@ -349,6 +349,13 @@ export default function SnapSlider({
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
           onKeyDown={handleKeyDown}
+          // Belt-and-suspenders for Android WebView: stopPropagation on
+          // touchstart prevents any ancestor overflow:auto scroll container
+          // from claiming the touch before the pointer event fires.
+          // touch-action:none on this element is the primary guard;
+          // this handler is the fallback for OEM WebViews that don't
+          // fully respect touch-action on children of scroll containers.
+          onTouchStart={(e) => e.stopPropagation()}
           style={{
             position: "absolute", left: 0, right: 0, top: 0,
             width: "100%", height: 36,

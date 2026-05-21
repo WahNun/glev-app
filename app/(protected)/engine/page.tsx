@@ -2344,7 +2344,12 @@ export default function EnginePage() {
               flex: 1, minHeight: 0,
               overflowY: "auto", overflowX: "hidden",
               overscrollBehavior: "contain",
-              WebkitOverflowScrolling: "touch",
+              // WebkitOverflowScrolling:"touch" was removed — on Android
+              // WebView it creates a native scroll handler that ignores
+              // touch-action:none on child elements (e.g. SnapSlider drag
+              // surface), causing the slider to be unresponsive to drags.
+              // Modern iOS 14+ and Android WebView handle momentum scrolling
+              // natively without this property, so removing it is safe.
               // Flex column so step cards (Step 2 macros, post-save
               // confirmation) can claim `flex: 1` and stretch all the
               // way from just below the header to flush against the
