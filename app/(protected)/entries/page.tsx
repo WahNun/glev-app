@@ -39,6 +39,10 @@ import { parseDbDate, parseDbTs, parseLluTs } from "@/lib/time";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
 import { useTimeFormat } from "@/hooks/useTimeFormat";
 import { formatICR } from "@/lib/carbUnits";
+import {
+  ENTRIES_CACHE_KEY_PREFIX,
+  readEntriesCache,
+} from "./cache";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const PURPLE="#A78BFA", BLUE="#3B82F6";
@@ -195,8 +199,6 @@ function dateRangeSummary(
 
 const FILTERS_STORAGE_KEY = "glev:entries-filters";
 const LEGACY_FILTER_KEY   = "glev:entries-filter";
-const ENTRIES_CACHE_KEY_PREFIX = "glev:entries-cache";
-const ENTRIES_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 function totalActive(f: FilterState) {
   return f.entryType.length + f.mealKind.length + f.exerciseKind.length + f.outcome.length
@@ -435,30 +437,15 @@ export default function EntriesPage() {
     supabase.auth.getUser().then(({ data }) => {
       const uid = data?.user?.id;
       if (!uid) return;
-      const cacheKey = `${ENTRIES_CACHE_KEY_PREFIX}:${uid}`;
-      try {
-        const raw = localStorage.getItem(cacheKey);
-        if (!raw) return;
-        const cached = JSON.parse(raw);
-        // Discard the cache if it is missing a timestamp or older than TTL.
-        if (
-          !cached ||
-          typeof cached.cachedAt !== "number" ||
-          Date.now() - cached.cachedAt > ENTRIES_CACHE_TTL_MS
-        ) {
-          localStorage.removeItem(cacheKey);
-          return;
-        }
-        if (Array.isArray(cached.meals)) {
-          setMeals(prev => prev.length > 0 ? prev : cached.meals);
-          if (Array.isArray(cached.insulin))    setInsulin(prev => prev.length > 0 ? prev : cached.insulin);
-          if (Array.isArray(cached.exercise))   setExercise(prev => prev.length > 0 ? prev : cached.exercise);
-          if (Array.isArray(cached.cycle))      setCycle(prev => prev.length > 0 ? prev : cached.cycle);
-          if (Array.isArray(cached.symptoms))   setSymptoms(prev => prev.length > 0 ? prev : cached.symptoms);
-          if (Array.isArray(cached.influences)) setInfluences(prev => prev.length > 0 ? prev : cached.influences);
-          setLoading(false);
-        }
-      } catch { /* stale or malformed cache — ignore */ }
+      const cached = readEntriesCache(uid, localStorage);
+      if (!cached) return;
+      setMeals(prev => prev.length > 0 ? prev : cached.meals as Parameters<typeof setMeals>[0]);
+      if (Array.isArray(cached.insulin))    setInsulin(prev => prev.length > 0 ? prev : cached.insulin as Parameters<typeof setInsulin>[0]);
+      if (Array.isArray(cached.exercise))   setExercise(prev => prev.length > 0 ? prev : cached.exercise as Parameters<typeof setExercise>[0]);
+      if (Array.isArray(cached.cycle))      setCycle(prev => prev.length > 0 ? prev : cached.cycle as Parameters<typeof setCycle>[0]);
+      if (Array.isArray(cached.symptoms))   setSymptoms(prev => prev.length > 0 ? prev : cached.symptoms as Parameters<typeof setSymptoms>[0]);
+      if (Array.isArray(cached.influences)) setInfluences(prev => prev.length > 0 ? prev : cached.influences as Parameters<typeof setInfluences>[0]);
+      setLoading(false);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
