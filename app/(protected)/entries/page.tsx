@@ -992,7 +992,8 @@ export default function EntriesPage() {
             // recomputation (Task #253); trust the live `lifecycleFor`
             // outcome and fall back to the cache only when the lifecycle
             // has nothing to say (pending / outside-window / pre-curve).
-            const ev = lifecycleFor(m).outcome ?? m.evaluation;
+            const mLc = lifecycleFor(m);
+            const ev = mLc.outcome ?? m.evaluation;
             const date = parseDbDate(m.meal_time ?? m.created_at);
             const dateStr = date.toLocaleDateString(locale, { month:"short", day:"numeric" });
             const totalProt = m.protein_grams ?? (Array.isArray(m.parsed_json) ? m.parsed_json.reduce((s,f)=>s+(f.protein||0),0) : 0);
@@ -1126,8 +1127,9 @@ export default function EntriesPage() {
                       meal={m}
                       onUpdated={(patch) => setMeals(ms => ms.map(x => x.id === m.id ? { ...x, ...patch } : x))}
                     />
-                    {/* OUTCOME — highlighted card */}
-                    {ev && (
+                    {/* OUTCOME — highlighted card. Hidden when LifecycleBlock
+                        already shows the same final outcome chip above. */}
+                    {ev && !(mLc.state === "final" && mLc.outcome != null) && (
                       <div style={{ marginTop:14, background:`${evColor}10`, border:`1px solid ${evColor}40`, borderRadius:12, padding:"12px 14px", display:"flex", flexDirection:"column", gap:8 }}>
                         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
                           <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>{tx("outcome_section").toUpperCase()}</div>
