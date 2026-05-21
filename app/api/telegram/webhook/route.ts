@@ -75,12 +75,20 @@ interface TelegramPhotoSize {
   height: number;
 }
 
+interface TelegramDocument {
+  file_id: string;
+  file_name?: string;
+  mime_type?: string;
+  file_size?: number;
+}
+
 interface TelegramMessage {
   message_id: number;
   text?: string;
   caption?: string;
   voice?: TelegramVoice;
   photo?: TelegramPhotoSize[];
+  document?: TelegramDocument;
   reply_to_message?: {
     text?: string;
   };
@@ -374,6 +382,34 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     } catch (err) {
       console.error("[telegram/webhook] Image upload failed:", err);
       return NextResponse.json({ error: "Image upload failed" }, { status: 500 });
+    }
+  } else if (message.document) {
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    if (!botToken) {
+      console.error("[telegram/webhook] TELEGRAM_BOT_TOKEN is not set");
+      return NextResponse.json({ error: "Server misconfiguration" }, { status: 500 });
+    }
+    const doc = message.document;
+    const mimeType = doc.mime_type ?? "application/octet-stream";
+    const fileName = doc.file_name ?? `file_${Date.now()}`;
+    const ext = fileName.includes(".") ? fileName.split(".").pop() : "bin";
+    try {
+      const { buffer } = await downloadTelegramFile(botToken, doc.file_id);
+      const url     = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+      const svcKey  = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+      const { createClient: makeClient } = await import("@supabase/supabase-js");
+      const sb = makeClient(url, svcKey, { auth: { persistSession: false } });
+      const storagePath = `telegram/${Date.now()}_${doc.file_id}.${ext}`;
+      const { error: uploadErr } = await sb.storage
+        .from("agent-files")
+        .upload(storagePath, buffer, { contentType: mimeType, upsert: false });
+      if (uploadErr) throw new Error(`Storage upload failed: ${uploadErr.message}`);
+      const { data: { publicUrl } } = sb.storage.from("agent-files").getPublicUrl(storagePath);
+      const label = captionText ? `${fileName}  ${captionText}` : fileName;
+      inboundText = `[file] ${publicUrl}  ${label}`;
+    } catch (err) {
+      console.error("[telegram/webhook] Document upload failed:", err);
+      return NextResponse.json({ error: "Document upload failed" }, { status: 500 });
     }
   } else if (message.text) {
     inboundText = message.text;
