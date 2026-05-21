@@ -1,15 +1,25 @@
-export default function DashboardLoading() {
+export default function EntriesLoading() {
   return (
     <div style={{ padding: "16px 16px 0", display: "flex", flexDirection: "column", gap: 16 }}>
-      <div aria-hidden style={{ display: "flex", justifyContent: "center", paddingTop: 8, paddingBottom: 4 }}>
-        <InlineLogo />
-      </div>
-      <Block height={56} />
-      <Block height={180} />
-      <Block height={140} />
-      <Block height={140} />
-      <Block height={220} />
+      <LogoBlock />
+      <Block height={44} />
+      <Block height={88} />
+      <Block height={88} />
+      <Block height={88} />
+      <Block height={88} />
+      <Block height={88} />
       <style>{`@keyframes glevPulse{0%,100%{opacity:.55}50%{opacity:.85}}`}</style>
+    </div>
+  );
+}
+
+function LogoBlock() {
+  return (
+    <div
+      aria-hidden
+      style={{ display: "flex", justifyContent: "center", paddingTop: 8, paddingBottom: 4 }}
+    >
+      <InlineLogo />
     </div>
   );
 }
@@ -31,6 +41,7 @@ function Block({ height }: { height: number }) {
 
 function InlineLogo() {
   const color = "#4F6EF7";
+  const bg = "var(--surface)";
   const nodes = [
     { cx: 16, cy: 7 }, { cx: 25, cy: 12 }, { cx: 25, cy: 20 },
     { cx: 18, cy: 26 }, { cx: 9, cy: 22 }, { cx: 7, cy: 14 }, { cx: 16, cy: 16 },
@@ -41,7 +52,7 @@ function InlineLogo() {
   ];
   return (
     <svg width={40} height={40} viewBox="0 0 32 32" fill="none" aria-label="Glev">
-      <rect width="32" height="32" rx="9" fill="var(--surface)" />
+      <rect width="32" height="32" rx="9" fill={bg} />
       {edges.map(([a, b], i) => (
         <line
           key={i}

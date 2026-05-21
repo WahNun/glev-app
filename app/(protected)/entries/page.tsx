@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useTranslations, useLocale } from "next-intl";
-import { fetchMeals, deleteMeal, updateMeal, type Meal } from "@/lib/meals";
+import { fetchMeals, deleteMeal, updateMeal, FETCH_MEALS_DEFAULT_SINCE_DAYS, type Meal } from "@/lib/meals";
+import { supabase } from "@/lib/supabase";
 import { fetchRecentInsulinLogs, deleteInsulinLog, updateInsulinReadings, updateInsulinLogLink, updateInsulinEntry, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, deleteExerciseLog, updateExerciseLog, type ExerciseLog, type ExerciseType, type ExerciseIntensity } from "@/lib/exercise";
 import SnapSlider from "@/components/log/SnapSlider";
@@ -193,6 +194,7 @@ function dateRangeSummary(
 
 const FILTERS_STORAGE_KEY = "glev:entries-filters";
 const LEGACY_FILTER_KEY   = "glev:entries-filter";
+const ENTRIES_CACHE_KEY_PREFIX = "glev:entries-cache";
 
 function totalActive(f: FilterState) {
   return f.entryType.length + f.mealKind.length + f.exerciseKind.length + f.outcome.length
@@ -417,6 +419,35 @@ export default function EntriesPage() {
     setExpanded(id);
   }
 
+  // Stale-while-revalidate: on first mount, read the last known
+  // full dataset from sessionStorage so repeat visits show real data
+  // instantly instead of a blank list + spinner. Cache key includes
+  // the user ID to prevent cross-account data leakage on shared
+  // devices. The cache is written after every successful full fetch.
+  useEffect(() => {
+    if (typeof window === "undefined" || !supabase) return;
+    supabase.auth.getUser().then(({ data }) => {
+      const uid = data?.user?.id;
+      if (!uid) return;
+      const cacheKey = `${ENTRIES_CACHE_KEY_PREFIX}:${uid}`;
+      try {
+        const raw = sessionStorage.getItem(cacheKey);
+        if (!raw) return;
+        const cached = JSON.parse(raw);
+        if (cached && Array.isArray(cached.meals)) {
+          setMeals(prev => prev.length > 0 ? prev : cached.meals);
+          if (Array.isArray(cached.insulin))    setInsulin(prev => prev.length > 0 ? prev : cached.insulin);
+          if (Array.isArray(cached.exercise))   setExercise(prev => prev.length > 0 ? prev : cached.exercise);
+          if (Array.isArray(cached.cycle))      setCycle(prev => prev.length > 0 ? prev : cached.cycle);
+          if (Array.isArray(cached.symptoms))   setSymptoms(prev => prev.length > 0 ? prev : cached.symptoms);
+          if (Array.isArray(cached.influences)) setInfluences(prev => prev.length > 0 ? prev : cached.influences);
+          setLoading(false);
+        }
+      } catch { /* stale or malformed cache — ignore */ }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     // 2026-05-18 perceived-perf split (user: "die ersten 5 sollen
@@ -424,10 +455,10 @@ export default function EntriesPage() {
     // kick off TWO fetches in parallel —
     //   1. fast: just the newest 5 meals (single PostgREST call,
     //      typically <150 ms) → unblocks the page so the user sees
-    //      a filled list immediately.
-    //   2. full: every event type for the regular windows → replaces
-    //      the placeholder list and fills bolus / basal / exercise
-    //      / cycle / symptom / influence rows.
+    //      a filled list immediately when no SWR cache is available.
+    //   2. full: every event type for the last 90 days → replaces
+    //      the placeholder list quickly, then a background fetch
+    //      pulls in older data (up to FETCH_MEALS_DEFAULT_SINCE_DAYS).
     // The full-fetch result always wins because it dispatches AFTER
     // the fast one resolves. For "load(false)" calls (triggered by
     // the cross-screen update events) we skip the fast path and go
@@ -446,8 +477,10 @@ export default function EntriesPage() {
     }
     async function loadFull(initial: boolean) {
       try {
+        // Initial fetch covers the last 90 days — fast enough to
+        // unblock the list. Older rows are pulled in background below.
         const [m, ins, ex, cy, sy, inf] = await Promise.all([
-          fetchMeals(),
+          fetchMeals({ sinceDays: 90 }),
           fetchRecentInsulinLogs(60).catch(() => []),
           fetchRecentExerciseLogs(60).catch(() => []),
           fetchRecentMenstrualLogs(120).catch(() => [] as MenstrualLog[]),
@@ -461,6 +494,28 @@ export default function EntriesPage() {
           setCycle(cy);
           setSymptoms(sy);
           setInfluences(inf);
+        }
+        // Persist to sessionStorage so the next visit is instant.
+        if (!cancelled && supabase) {
+          supabase.auth.getUser().then(({ data }) => {
+            const uid = data?.user?.id;
+            if (!uid) return;
+            try {
+              sessionStorage.setItem(
+                `${ENTRIES_CACHE_KEY_PREFIX}:${uid}`,
+                JSON.stringify({ meals: m, insulin: ins, exercise: ex, cycle: cy, symptoms: sy, influences: inf }),
+              );
+            } catch { /* storage quota exceeded — not critical */ }
+          });
+        }
+        // Background: pull older meals (90–FETCH_MEALS_DEFAULT_SINCE_DAYS
+        // days) so historical filters & counts are complete.
+        if (!cancelled && FETCH_MEALS_DEFAULT_SINCE_DAYS > 90) {
+          fetchMeals({ sinceDays: FETCH_MEALS_DEFAULT_SINCE_DAYS }).then(all => {
+            if (!cancelled && all.length > m.length) {
+              setMeals(all);
+            }
+          }).catch(() => { /* best-effort */ });
         }
       } catch (e) { console.error(e); }
       finally { if (!cancelled && initial) setLoading(false); }
