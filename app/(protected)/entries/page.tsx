@@ -1226,9 +1226,14 @@ export default function EntriesPage() {
                       meal={m}
                       onUpdated={(patch) => setMeals(ms => ms.map(x => x.id === m.id ? { ...x, ...patch } : x))}
                     />
-                    {/* OUTCOME — highlighted card. Hidden when LifecycleBlock
-                        already shows the same final outcome chip above. */}
-                    {ev && !(mLc.state === "final" && mLc.outcome != null) && (
+                    {/* OUTCOME — highlighted card. Hidden whenever LifecycleBlock
+                        already has an outcome to show (final OR provisional with
+                        1h reading) — in those cases the chip + explanation are
+                        already rendered above and showing this block too would
+                        be a duplicate. Only shown when lifecycle has no outcome
+                        yet (pending / outside-window) so ev comes from the
+                        DB-cached m.evaluation as a fallback. */}
+                    {ev && mLc.outcome == null && (
                       <div style={{ marginTop:14, background:`${evColor}10`, border:`1px solid ${evColor}40`, borderRadius:12, padding:"12px 14px", display:"flex", flexDirection:"column", gap:8 }}>
                         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
                           <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700 }}>{tx("outcome_section").toUpperCase()}</div>
