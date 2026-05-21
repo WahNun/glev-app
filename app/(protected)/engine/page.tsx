@@ -561,6 +561,9 @@ export default function EnginePage() {
   // is reset (handleNewMeal) so the next meal starts clean.
   const [directBolusOpen, setDirectBolusOpen] = useState(false);
   const [directBolusValue, setDirectBolusValue] = useState("");
+  // manualDose: optional user override for the bolus dose on the Makros tab.
+  // When non-empty, it takes priority over both eagerDoses and result.dose.
+  const [manualDose, setManualDose] = useState("");
   // BolusExplainerSheet — bottom-sheet that replaces Step 3 as a
   // separate wizard page. Opened by handleRun (after engine calc
   // completes); closed by backdrop tap or the × button.
@@ -899,6 +902,18 @@ export default function EnginePage() {
       static:   staticICR  > 0 ? calcDose(staticICR)  : null,
     };
   }, [carbs, glucose, adaptedICR, staticICR, carbUnit]);
+
+  // activeDose: the dose committed by the Speichern button.
+  // Priority: 1) manual override, 2) engine result (after handleRun),
+  // 3) eager ICR estimate (instant, before engine). This ensures the
+  // Speichern button and the Bolus-Berechnung sheet always agree.
+  const activeDose = useMemo<number | null>(() => {
+    const manualNum = parseFloat(manualDose);
+    if (manualDose.trim() !== "" && Number.isFinite(manualNum) && manualNum >= 0) return manualNum;
+    if (result) return applyIOBCorrection(result.dose, iob);
+    const rawEager = selectedICR === 'adaptive' ? eagerDoses.adaptive : eagerDoses.static;
+    return rawEager !== null ? applyIOBCorrection(rawEager, iob) : null;
+  }, [manualDose, result, iob, eagerDoses, selectedICR]);
 
   const currentAdjustment = useMemo(() => {
     if (meals.length === 0) return null;
@@ -1738,6 +1753,7 @@ export default function EnginePage() {
     setConfirmErr("");
     setDirectBolusOpen(false);
     setDirectBolusValue("");
+    setManualDose("");
     setBolusExplainerOpen(false);
   }
 
@@ -1918,6 +1934,7 @@ export default function EnginePage() {
     // own setTimeout dismisses it independently.
     setDecisionBusy(false);
     setBolusEnabled(false);
+    setManualDose("");
   }
 
   function handleCancel() {
@@ -2938,147 +2955,109 @@ export default function EnginePage() {
                 </button>
               </div>
 
-              {/* ICR selector — shown only when adaptive and static
-                  differ meaningfully (>0.5 g/IE apart) AND the engine
-                  has enough data (≥3 meals) to offer an adaptive value.
-                  Edge cases:
-                  · No adaptive data (icrSampleSize < 3): cards hidden,
-                    engine silently uses staticICR.
-                  · Static === adaptive (±0.5): single card, no choice.
-                  · No valid static (should not happen — default = 15):
-                    warning text instead of static card. */}
-              {bolusEnabled && icrSampleSize >= 3 && Math.abs(adaptedICR - staticICR) > 0.5 && (() => {
-                const showStatic = staticICR > 0;
+              {/* ── Combined ICR+dose chips ──────────────────────────
+                  Each chip shows label + ratio + dose in one block,
+                  replacing the previous 4-element layout (2 ICR cards
+                  + 2 separate dose chips). Manual override row below. */}
+              {bolusEnabled && (() => {
+                const showBoth = icrSampleSize >= 3 && Math.abs(adaptedICR - staticICR) > 0.5;
+                type ChipDef = { key: 'adaptive' | 'static'; label: string; icr: number; dose: number | null; sub?: string };
+                const chips: ChipDef[] = [];
+                if (showBoth) {
+                  if (adaptedICR > 0) chips.push({ key: 'adaptive', label: tEngine("icr_adaptive_label"), icr: adaptedICR, dose: eagerDoses.adaptive !== null ? applyIOBCorrection(eagerDoses.adaptive, iob) : null, sub: tEngine("icr_calculated") });
+                  if (staticICR > 0) chips.push({ key: 'static', label: tEngine("icr_static_label"), icr: staticICR, dose: eagerDoses.static !== null ? applyIOBCorrection(eagerDoses.static, iob) : null, sub: staticICRWindowLabel ?? undefined });
+                } else {
+                  const icr = effectiveICR;
+                  const rawEager = selectedICR === 'adaptive' ? eagerDoses.adaptive : eagerDoses.static;
+                  const dose = rawEager !== null ? applyIOBCorrection(rawEager, iob) : null;
+                  if (icr > 0) chips.push({ key: selectedICR, label: selectedICR === 'adaptive' ? tEngine("icr_adaptive_label") : tEngine("icr_static_label"), icr, dose });
+                }
+                if (chips.length === 0) return null;
                 return (
-                  <div style={{ marginBottom: 12 }}>
-                    <div style={{
-                      fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
-                      textTransform: "uppercase", color: "var(--text-faint)",
-                      marginBottom: 8,
-                    }}>
-                      {tEngine("icr_comparison_title")}
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                      {chips.map(chip => {
+                        const isSel = selectedICR === chip.key;
+                        return (
+                          <button
+                            key={chip.key}
+                            type="button"
+                            onClick={() => setSelectedICR(chip.key)}
+                            style={{
+                              flex: 1, minWidth: 0, padding: "10px 12px", borderRadius: 12,
+                              border: `2px solid ${isSel ? ACCENT : 'var(--border)'}`,
+                              background: isSel ? `${ACCENT}14` : "var(--surface-soft)",
+                              textAlign: "left", cursor: "pointer",
+                              transition: "border-color 150ms ease, background 150ms ease",
+                              display: "flex", flexDirection: "column", gap: 2,
+                              overflow: "hidden", WebkitTapHighlightColor: "transparent",
+                            }}
+                          >
+                            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: isSel ? ACCENT : "var(--text-faint)", whiteSpace: "nowrap" }}>
+                              {chip.label}
+                            </span>
+                            <span style={{ fontFamily: "var(--font-mono)", fontSize: 16, fontWeight: 800, color: isSel ? ACCENT : "var(--text-strong)", letterSpacing: "-0.02em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              1 : {Math.round(chip.icr * 10) / 10}
+                            </span>
+                            {chip.dose !== null && (
+                              <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 700, color: isSel ? ACCENT : "var(--text-dim)", whiteSpace: "nowrap" }}>
+                                {formatNum(chip.dose, 1)} {tEngine("units_short")}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      {/* Adaptive card */}
-                      <button
-                        type="button"
-                        onClick={() => setSelectedICR('adaptive')}
-                        style={{
-                          flex: 1, minWidth: 0, padding: "10px 12px", borderRadius: 12,
-                          border: `2px solid ${selectedICR === 'adaptive' ? ACCENT : 'var(--border)'}`,
-                          background: selectedICR === 'adaptive' ? `${ACCENT}14` : "var(--surface-soft)",
-                          textAlign: "left", cursor: "pointer",
-                          transition: "border-color 150ms ease, background 150ms ease",
-                          display: "flex", flexDirection: "column", gap: 3,
-                          overflow: "hidden",
-                        }}
-                      >
-                        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: selectedICR === 'adaptive' ? ACCENT : "var(--text-faint)", whiteSpace: "nowrap" }}>
-                          {tEngine("icr_adaptive_label")}
-                        </div>
-                        <div style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 800, color: selectedICR === 'adaptive' ? ACCENT : "var(--text-strong)", letterSpacing: "-0.02em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          1 : {Math.round(adaptedICR * 10) / 10}
-                        </div>
-                        <div style={{ fontSize: 11, color: "var(--text-faint)", whiteSpace: "nowrap" }}>
-                          {tEngine("icr_calculated")}
-                        </div>
-                      </button>
-
-                      {/* Static card */}
-                      {showStatic ? (
+                    {/* Manual dose override */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-faint)", letterSpacing: "0.06em", textTransform: "uppercase", flexShrink: 0 }}>
+                        Manuell
+                      </span>
+                      <div style={{
+                        display: "flex", alignItems: "center", gap: 4,
+                        background: "var(--surface-soft)",
+                        border: `1px solid ${manualDose.trim() !== "" ? ACCENT : "var(--border)"}`,
+                        borderRadius: 8, padding: "4px 8px", flex: 1, maxWidth: 148,
+                      }}>
                         <button
                           type="button"
-                          onClick={() => setSelectedICR('static')}
-                          style={{
-                            flex: 1, minWidth: 0, padding: "10px 12px", borderRadius: 12,
-                            border: `2px solid ${selectedICR === 'static' ? ACCENT : 'var(--border)'}`,
-                            background: selectedICR === 'static' ? `${ACCENT}14` : "var(--surface-soft)",
-                            textAlign: "left", cursor: "pointer",
-                            transition: "border-color 150ms ease, background 150ms ease",
-                            display: "flex", flexDirection: "column", gap: 3,
-                            overflow: "hidden",
+                          onClick={() => {
+                            const v = Math.max(0, Math.round(((parseFloat(manualDose) || 0) * 10 - 1)) / 10);
+                            setManualDose(v === 0 ? "" : String(v));
                           }}
-                        >
-                          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: selectedICR === 'static' ? ACCENT : "var(--text-faint)", whiteSpace: "nowrap" }}>
-                            {tEngine("icr_static_label")}
-                          </div>
-                          <div style={{ fontFamily: "var(--font-mono)", fontSize: 18, fontWeight: 800, color: selectedICR === 'static' ? ACCENT : "var(--text-strong)", letterSpacing: "-0.02em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            1 : {Math.round(staticICR * 10) / 10}
-                          </div>
-                          {staticICRWindowLabel && (
-                            <div style={{ fontSize: 11, color: "var(--text-faint)", whiteSpace: "nowrap" }}>
-                              {staticICRWindowLabel}
-                            </div>
-                          )}
-                        </button>
-                      ) : (
-                        <div style={{
-                          flex: 1, padding: "10px 12px", borderRadius: 12,
-                          border: "1px solid var(--border)", background: "var(--surface-soft)",
-                          fontSize: 12, color: "var(--text-faint)", display: "flex",
-                          alignItems: "center",
-                        }}>
-                          {tEngine("icr_no_static_configured")}
-                        </div>
+                          style={{ background: "transparent", border: "none", color: "var(--text-dim)", fontSize: 18, cursor: "pointer", padding: "0 2px", lineHeight: 1, WebkitTapHighlightColor: "transparent" }}
+                        >−</button>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          value={manualDose}
+                          onChange={e => setManualDose(e.target.value)}
+                          placeholder="—"
+                          step="0.1"
+                          min="0"
+                          style={{ flex: 1, background: "transparent", border: "none", outline: "none", fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: "var(--text)", textAlign: "center", width: 0, minWidth: 0, MozAppearance: "textfield" } as React.CSSProperties}
+                        />
+                        <span style={{ fontSize: 11, color: "var(--text-faint)", fontFamily: "var(--font-mono)", flexShrink: 0 }}>{tEngine("units_short")}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const v = Math.round(((parseFloat(manualDose) || 0) * 10 + 1)) / 10;
+                            setManualDose(String(v));
+                          }}
+                          style={{ background: "transparent", border: "none", color: "var(--text-dim)", fontSize: 18, cursor: "pointer", padding: "0 2px", lineHeight: 1, WebkitTapHighlightColor: "transparent" }}
+                        >+</button>
+                      </div>
+                      {manualDose.trim() !== "" && (
+                        <button
+                          type="button"
+                          onClick={() => setManualDose("")}
+                          style={{ background: "transparent", border: "none", color: "var(--text-faint)", fontSize: 13, cursor: "pointer", padding: "0 2px", WebkitTapHighlightColor: "transparent" }}
+                        >✕</button>
                       )}
                     </div>
                   </div>
                 );
               })()}
-
-              {/* ── Dose-preview chips ─────────────────────────────
-                  Shown directly below the ICR selector when both sources
-                  are available and differ. Each chip shows the IOB-
-                  adjusted eager dose for that ICR source. Tapping a
-                  chip also switches the active ICR selection (mirrors
-                  the selector cards above). */}
-              {bolusEnabled && icrSampleSize >= 3 && Math.abs(adaptedICR - staticICR) > 0.5
-                && (eagerDoses.adaptive !== null || eagerDoses.static !== null) && (
-                <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                  {eagerDoses.adaptive !== null && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedICR('adaptive')}
-                      style={{
-                        flex: 1, minWidth: 0, padding: "8px 10px", borderRadius: 20,
-                        border: `2px solid ${selectedICR === 'adaptive' ? ACCENT : 'var(--border)'}`,
-                        background: selectedICR === 'adaptive' ? `${ACCENT}14` : "transparent",
-                        display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                        cursor: "pointer", transition: "all 150ms ease",
-                        WebkitTapHighlightColor: "transparent",
-                      }}
-                    >
-                      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: selectedICR === 'adaptive' ? ACCENT : "var(--text-faint)", whiteSpace: "nowrap" }}>
-                        {tEngine("icr_adaptive_label")}
-                      </span>
-                      <span style={{ fontFamily: "var(--font-mono)", fontWeight: 800, fontSize: 14, color: selectedICR === 'adaptive' ? ACCENT : "var(--text-strong)", whiteSpace: "nowrap" }}>
-                        {formatNum(applyIOBCorrection(eagerDoses.adaptive, iob), 1)} {tEngine("units_short")}
-                      </span>
-                    </button>
-                  )}
-                  {eagerDoses.static !== null && staticICR > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedICR('static')}
-                      style={{
-                        flex: 1, minWidth: 0, padding: "8px 10px", borderRadius: 20,
-                        border: `2px solid ${selectedICR === 'static' ? ACCENT : 'var(--border)'}`,
-                        background: selectedICR === 'static' ? `${ACCENT}14` : "transparent",
-                        display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                        cursor: "pointer", transition: "all 150ms ease",
-                        WebkitTapHighlightColor: "transparent",
-                      }}
-                    >
-                      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: selectedICR === 'static' ? ACCENT : "var(--text-faint)", whiteSpace: "nowrap" }}>
-                        {tEngine("icr_static_label")}
-                      </span>
-                      <span style={{ fontFamily: "var(--font-mono)", fontWeight: 800, fontSize: 14, color: selectedICR === 'static' ? ACCENT : "var(--text-strong)", whiteSpace: "nowrap" }}>
-                        {formatNum(applyIOBCorrection(eagerDoses.static, iob), 1)} {tEngine("units_short")}
-                      </span>
-                    </button>
-                  )}
-                </div>
-              )}
 
               {/* ── Action row ─────────────────────────────────────────
                   bolusEnabled=false → single "ohne Bolus" button.
@@ -3086,30 +3065,23 @@ export default function EnginePage() {
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {bolusEnabled ? (
                   <>
-                    {(() => {
-                      const rawEager = selectedICR === 'adaptive' ? eagerDoses.adaptive : eagerDoses.static;
-                      const activeDose = rawEager !== null ? applyIOBCorrection(rawEager, iob) : null;
-                      const hasEager = activeDose !== null;
-                      return (
-                        <button
-                          onClick={() => hasEager ? handleSaveWithEagerBolus(activeDose!) : handleSaveWithoutBolus()}
-                          disabled={confirming || running}
-                          style={{
-                            width: "100%", height: 52, borderRadius: 12, border: "none",
-                            background: confirming ? "rgba(79,110,247,0.4)" : ACCENT,
-                            color: "var(--text)", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
-                            cursor: confirming ? "wait" : "pointer",
-                            transition: "background 0.2s",
-                          }}
-                        >
-                          {confirming
-                            ? tEngine("btn_saving")
-                            : hasEager
-                              ? tEngine("btn_save_with_bolus", { dose: formatNum(activeDose!, 1), units: tEngine("units_short") })
-                              : tEngine("btn_save_without_bolus")}
-                        </button>
-                      );
-                    })()}
+                    <button
+                      onClick={() => activeDose !== null ? handleSaveWithEagerBolus(activeDose) : handleSaveWithoutBolus()}
+                      disabled={confirming || running}
+                      style={{
+                        width: "100%", height: 52, borderRadius: 12, border: "none",
+                        background: confirming ? "rgba(79,110,247,0.4)" : ACCENT,
+                        color: "var(--text)", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em",
+                        cursor: confirming ? "wait" : "pointer",
+                        transition: "background 0.2s",
+                      }}
+                    >
+                      {confirming
+                        ? tEngine("btn_saving")
+                        : activeDose !== null
+                          ? tEngine("btn_save_with_bolus", { dose: formatNum(activeDose, 1), units: tEngine("units_short") })
+                          : tEngine("btn_save_without_bolus")}
+                    </button>
                     {(() => {
                       const blocked = running || confirming;
                       return (
