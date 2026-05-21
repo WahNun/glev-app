@@ -587,7 +587,6 @@ export default function DashboardPage() {
       cards: [
         { id: "today-glucose", node: <CurrentDayGlucoseCard/> },
         { id: "glucose-trend", node: <TrendChart meals={meals}/> },
-        { id: "iob",           node: <IOBCard insulin={insulin} insulinType={insulinType}/> },
       ],
     },
     {
@@ -603,6 +602,7 @@ export default function DashboardPage() {
       title: t("cluster_control"),
       cards: [
         { id: "control-score", node: <ControlScoreCard meals={meals}/> },
+        { id: "iob",           node: <IOBCard insulin={insulin} insulinType={insulinType}/> },
         // rateCards = buildCards(...) minus the "control" entry —
         // shown as a single compact 3-up triplet (Good / Spike / Hypo)
         // so the breakdown is glanceable beneath the headline Control
