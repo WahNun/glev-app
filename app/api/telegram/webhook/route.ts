@@ -69,10 +69,18 @@ interface TelegramVoice {
   mime_type?: string;
 }
 
+interface TelegramPhotoSize {
+  file_id: string;
+  width: number;
+  height: number;
+}
+
 interface TelegramMessage {
   message_id: number;
   text?: string;
+  caption?: string;
   voice?: TelegramVoice;
+  photo?: TelegramPhotoSize[];
   reply_to_message?: {
     text?: string;
   };
@@ -204,6 +212,37 @@ async function transcribeVoice(
 }
 
 /**
+ * Analysiert einen Screenshot via GPT-4o Vision und gibt eine Beschreibung zurück.
+ */
+async function analyzeScreenshot(
+  buffer: Buffer,
+  caption?: string,
+): Promise<string> {
+  const openai = getOpenAIClient();
+  const base64 = buffer.toString("base64");
+  const prompt = caption
+    ? `Caption von Lucas: "${caption}"\n\nBeschreibe diesen Screenshot detailliert. Was ist zu sehen? Fokus auf Fehler, UI-Zustand oder relevante Informationen.`
+    : "Beschreibe diesen Screenshot detailliert. Was ist zu sehen? Fokus auf Fehler, UI-Zustand oder relevante Informationen.";
+
+  const result = await openai.chat.completions.create({
+    model: "gpt-4o",
+    max_tokens: 1000,
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64}` } },
+          { type: "text", text: prompt },
+        ] as never,
+      },
+    ],
+  });
+
+  const description = result.choices[0]?.message?.content ?? "";
+  return caption ? `[Screenshot] ${caption}\n\n${description}` : `[Screenshot] ${description}`;
+}
+
+/**
  * Extrahiert die task_id aus dem Reply-Kontext per Regex.
  * Erwartet das Format "Task <TASK_ID>" irgendwo im Text
  * (z. B. "Agent-Frage (Task: 1234567890):" oder "🤖 Replit-Frage (Task 1234567890)").
@@ -272,22 +311,35 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   // ── 6. task_id aus dem Reply-Kontext extrahieren ─────────────────────────────
+  // Priorität: reply_to_message → caption → ignorieren
   const replyText = message.reply_to_message?.text ?? "";
-  if (!replyText) {
-    // Keine Antwort auf eine Agent-Nachricht — ignorieren
-    return NextResponse.json({ ok: true });
-  }
+  const captionText = message.caption ?? "";
+  const taskId = extractTaskId(replyText) ?? extractTaskId(captionText);
 
-  const taskId = extractTaskId(replyText);
   if (!taskId) {
-    // Reply bezieht sich nicht auf eine Agent-Frage — ignorieren
+    // Weder Reply noch Caption enthält eine Task-ID — ignorieren
     return NextResponse.json({ ok: true });
   }
 
-  // ── 7. Nachrichtentext ermitteln (Text oder Voice-Transkript) ─────────────────
+  // ── 7. Nachrichtentext ermitteln (Text, Screenshot oder Voice-Transkript) ──────
   let inboundText: string | null = null;
 
-  if (message.text) {
+  if (message.photo) {
+    // Telegram sendet mehrere Größen — die letzte ist die höchste Auflösung
+    const largest = message.photo[message.photo.length - 1];
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    if (!botToken) {
+      console.error("[telegram/webhook] TELEGRAM_BOT_TOKEN is not set");
+      return NextResponse.json({ error: "Server misconfiguration" }, { status: 500 });
+    }
+    try {
+      const { buffer } = await downloadTelegramFile(botToken, largest.file_id);
+      inboundText = await analyzeScreenshot(buffer, captionText || undefined);
+    } catch (err) {
+      console.error("[telegram/webhook] Screenshot analysis failed:", err);
+      return NextResponse.json({ error: "Screenshot analysis failed" }, { status: 500 });
+    }
+  } else if (message.text) {
     inboundText = message.text;
   } else if (message.voice) {
     // Guard: reject overlong voice notes before touching Whisper.
