@@ -445,10 +445,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error("[telegram/webhook] Voice transcription failed:", err);
-      return NextResponse.json(
-        { error: "Transcription failed" },
-        { status: 500 },
-      );
+      // Graceful fallback — store a placeholder so the message isn't lost
+      inboundText = "[Sprachnachricht — Transkription fehlgeschlagen. Bitte als Text wiederholen.]";
     }
   }
 
