@@ -193,7 +193,7 @@ async function transcribeVoice(
           ? "webm"
           : "ogg";
 
-  const file = new File([buffer], `voice.${ext}`, { type: mimeType });
+  const file = new File([new Uint8Array(buffer)], `voice.${ext}`, { type: mimeType });
 
   const transcription = await openai.audio.transcriptions.create({
     file,
