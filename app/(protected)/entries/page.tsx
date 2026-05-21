@@ -42,6 +42,7 @@ import { formatICR } from "@/lib/carbUnits";
 import {
   readEntriesCache,
   writeEntriesCache,
+  clearEntriesCache,
 } from "./cache";
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
@@ -447,6 +448,39 @@ export default function EntriesPage() {
       if (Array.isArray(cached.influences)) setInfluences(prev => prev.length > 0 ? prev : cached.influences as Parameters<typeof setInfluences>[0]);
       setLoading(false);
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Clear this user's entries cache immediately on sign-out so a subsequent
+  // sign-in with a different account on the same device never sees stale data
+  // from the previous session (even within the 10-minute TTL window).
+  useEffect(() => {
+    if (typeof window === "undefined" || !supabase) return;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT") {
+        // `session` is null on SIGNED_OUT; use the previous session's user ID
+        // if available, otherwise fall back to getUser() — but since we have no
+        // uid at this point, we iterate known cache keys via the prefix instead.
+        // Supabase fires SIGNED_OUT before nulling the session in some versions,
+        // so we read the uid directly from the event's previous session arg when
+        // available, otherwise clear any key that matches our prefix pattern.
+        const uid = session?.user?.id;
+        if (uid) {
+          clearEntriesCache(uid, localStorage);
+        } else {
+          // Defensive fallback: scan localStorage for all keys matching our
+          // cache prefix and remove them. This covers the case where the session
+          // is already null when the event fires.
+          const keysToRemove: string[] = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith("glev:entries-cache:")) keysToRemove.push(k);
+          }
+          keysToRemove.forEach(k => localStorage.removeItem(k));
+        }
+      }
+    });
+    return () => subscription.unsubscribe();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

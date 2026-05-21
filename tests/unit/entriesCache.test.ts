@@ -20,6 +20,7 @@ import {
   ENTRIES_CACHE_TTL_MS,
   readEntriesCache,
   writeEntriesCache,
+  clearEntriesCache,
   type StorageLike,
   type WritableStorageLike,
 } from "@/app/(protected)/entries/cache";
@@ -381,4 +382,56 @@ test("writeEntriesCache — setItem quota error is swallowed, page does not cras
   expect(() =>
     writeEntriesCache(UID_A, throwingStorage, EMPTY_DATA, 1_000_000),
   ).not.toThrow();
+});
+
+// ---------------------------------------------------------------------------
+// 8. clearEntriesCache — sign-out path
+// ---------------------------------------------------------------------------
+
+test("clearEntriesCache — removes the key for the signed-out UID", () => {
+  const now = 5_000_000;
+  const storage = makeStorage({
+    [KEY_A]: makePayload({ cachedAt: now }),
+  });
+
+  clearEntriesCache(UID_A, storage);
+
+  expect(storage.removed).toContain(KEY_A);
+  expect(storage.store[KEY_A]).toBeUndefined();
+});
+
+test("clearEntriesCache — does not touch the other UID's cache key", () => {
+  const now = 5_000_000;
+  const storage = makeStorage({
+    [KEY_A]: makePayload({ cachedAt: now }),
+    [KEY_B]: makePayload({ cachedAt: now }),
+  });
+
+  clearEntriesCache(UID_A, storage);
+
+  expect(storage.removed).toContain(KEY_A);
+  expect(storage.removed).not.toContain(KEY_B);
+  // UID_B cache is still readable after UID_A is cleared
+  const resultB = readEntriesCache(UID_B, storage, now);
+  expect(resultB).not.toBeNull();
+});
+
+test("clearEntriesCache — is a no-op when the key is already absent", () => {
+  const storage = makeStorage(); // empty
+
+  expect(() => clearEntriesCache(UID_A, storage)).not.toThrow();
+  // removeItem is still called (mirrors localStorage behaviour — no error on missing key)
+  expect(storage.removed).toContain(KEY_A);
+});
+
+test("clearEntriesCache — cleared key is no longer returned by readEntriesCache", () => {
+  const now = 5_000_000;
+  const storage = makeStorage({
+    [KEY_A]: makePayload({ cachedAt: now }),
+  });
+
+  clearEntriesCache(UID_A, storage);
+
+  const result = readEntriesCache(UID_A, storage, now);
+  expect(result).toBeNull();
 });

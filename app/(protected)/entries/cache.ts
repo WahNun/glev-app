@@ -3,12 +3,15 @@
 // Extracted from entries/page.tsx so they can be imported by unit tests
 // without pulling in the full Next.js client component tree.
 //
-// The two exported symbols that page.tsx (and tests) rely on:
+// The exported symbols that page.tsx (and tests) rely on:
 //   ENTRIES_CACHE_KEY_PREFIX  — key namespace, must stay stable (migration would
 //                               leave stale keys in existing users' localStorage)
 //   ENTRIES_CACHE_TTL_MS      — 10-minute window; changing it is a user-visible
 //                               behaviour change and must have a test update.
 //   readEntriesCache          — pure function; no React, no Supabase dependency.
+//   clearEntriesCache         — removes the cache key for a given UID immediately
+//                               (called on SIGNED_OUT to prevent stale data being
+//                               visible to the next sign-in on the same device).
 
 export const ENTRIES_CACHE_KEY_PREFIX = "glev:entries-cache";
 export const ENTRIES_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
@@ -109,4 +112,15 @@ export function readEntriesCache(
   if (!Array.isArray(c.meals)) return null;
 
   return c;
+}
+
+/**
+ * Removes the entries cache for `uid` from `storage`.
+ *
+ * Call this on Supabase `SIGNED_OUT` so the next sign-in (potentially
+ * a different account on the same device) never sees stale data from
+ * the previous session — even within the 10-minute TTL window.
+ */
+export function clearEntriesCache(uid: string, storage: StorageLike): void {
+  storage.removeItem(`${ENTRIES_CACHE_KEY_PREFIX}:${uid}`);
 }
