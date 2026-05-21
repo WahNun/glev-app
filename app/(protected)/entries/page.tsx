@@ -195,6 +195,7 @@ function dateRangeSummary(
 const FILTERS_STORAGE_KEY = "glev:entries-filters";
 const LEGACY_FILTER_KEY   = "glev:entries-filter";
 const ENTRIES_CACHE_KEY_PREFIX = "glev:entries-cache";
+const ENTRIES_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 function totalActive(f: FilterState) {
   return f.entryType.length + f.mealKind.length + f.exerciseKind.length + f.outcome.length
@@ -420,10 +421,13 @@ export default function EntriesPage() {
   }
 
   // Stale-while-revalidate: on first mount, read the last known
-  // full dataset from sessionStorage so repeat visits show real data
-  // instantly instead of a blank list + spinner. Cache key includes
-  // the user ID to prevent cross-account data leakage on shared
-  // devices. The cache is written after every successful full fetch.
+  // full dataset from localStorage so repeat visits show real data
+  // instantly instead of a blank list + spinner — including after a
+  // native-app restart or TestFlight force-quit (sessionStorage would
+  // not survive those). Cache key includes the user ID to prevent
+  // cross-account data leakage on shared devices. The cache is
+  // written after every successful full fetch and carries a `cachedAt`
+  // timestamp; entries older than ENTRIES_CACHE_TTL_MS are discarded.
   useEffect(() => {
     if (typeof window === "undefined" || !supabase) return;
     supabase.auth.getUser().then(({ data }) => {
@@ -431,10 +435,19 @@ export default function EntriesPage() {
       if (!uid) return;
       const cacheKey = `${ENTRIES_CACHE_KEY_PREFIX}:${uid}`;
       try {
-        const raw = sessionStorage.getItem(cacheKey);
+        const raw = localStorage.getItem(cacheKey);
         if (!raw) return;
         const cached = JSON.parse(raw);
-        if (cached && Array.isArray(cached.meals)) {
+        // Discard the cache if it is missing a timestamp or older than TTL.
+        if (
+          !cached ||
+          typeof cached.cachedAt !== "number" ||
+          Date.now() - cached.cachedAt > ENTRIES_CACHE_TTL_MS
+        ) {
+          localStorage.removeItem(cacheKey);
+          return;
+        }
+        if (Array.isArray(cached.meals)) {
           setMeals(prev => prev.length > 0 ? prev : cached.meals);
           if (Array.isArray(cached.insulin))    setInsulin(prev => prev.length > 0 ? prev : cached.insulin);
           if (Array.isArray(cached.exercise))   setExercise(prev => prev.length > 0 ? prev : cached.exercise);
@@ -495,15 +508,16 @@ export default function EntriesPage() {
           setSymptoms(sy);
           setInfluences(inf);
         }
-        // Persist to sessionStorage so the next visit is instant.
+        // Persist to localStorage (with TTL) so the next visit is instant,
+        // including after a native-app restart or TestFlight force-quit.
         if (!cancelled && supabase) {
           supabase.auth.getUser().then(({ data }) => {
             const uid = data?.user?.id;
             if (!uid) return;
             try {
-              sessionStorage.setItem(
+              localStorage.setItem(
                 `${ENTRIES_CACHE_KEY_PREFIX}:${uid}`,
-                JSON.stringify({ meals: m, insulin: ins, exercise: ex, cycle: cy, symptoms: sy, influences: inf }),
+                JSON.stringify({ cachedAt: Date.now(), meals: m, insulin: ins, exercise: ex, cycle: cy, symptoms: sy, influences: inf }),
               );
             } catch { /* storage quota exceeded — not critical */ }
           });
