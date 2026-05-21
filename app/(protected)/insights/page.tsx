@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useId, useCallback } from "react";
 import useSWR, { mutate as swrMutate } from "swr";
+import RefreshingBar from "@/components/RefreshingBar";
 import { useLocale, useTranslations } from "next-intl";
 import { fetchMeals, fetchMealsForEngine, unifiedOutcome, type Meal } from "@/lib/meals";
 import { TYPE_COLORS, chipLabelsFrom } from "@/lib/mealTypes";
@@ -428,7 +429,7 @@ export default function InsightsPage() {
   //     Adaptive-Engine, Patterns, Exercise, Cycle, Symptom and
   //     Activity cards once they arrive. The page is already
   //     interactive while these stream in.
-  const { data: primarySWR } = useSWR(
+  const { data: primarySWR, isValidating: primaryValidating } = useSWR(
     `insights:primary:scope:${scopeMode}:days:${insightsFetchDays}`,
     async () => {
       const fingerstickFromIso = startOfDaysAgo(insightsFetchDays - 1).toISOString();
@@ -3288,6 +3289,7 @@ export default function InsightsPage() {
       >
         Insights
       </h1>
+      <RefreshingBar visible={primaryValidating} />
       {/* Transient header hint: shows the page title + interaction
           subtitle briefly on entry, then auto-dismisses on the user's
           first interaction (or after a backstop timeout) so the swipe

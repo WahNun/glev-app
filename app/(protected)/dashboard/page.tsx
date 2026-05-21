@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from "react";
 import useSWR, { mutate as swrMutate } from "swr";
+import RefreshingBar from "@/components/RefreshingBar";
 import { useRouter } from "next/navigation";
 import { fetchMeals, computeCalories, unifiedOutcome, type Meal } from "@/lib/meals";
 import { computeControlScore } from "@/lib/controlScore";
@@ -487,7 +488,7 @@ export default function DashboardPage() {
   // the background. We hydrate the existing useState mirrors so all
   // downstream optimistic updates (e.g. RecentEntries → onMealUpdated
   // calling setMeals) keep working untouched.
-  const { data: dashSWR } = useSWR(
+  const { data: dashSWR, isValidating: dashValidating } = useSWR(
     "dashboard:meals+insulin60+exercise60",
     async () => {
       const [m, ins, ex] = await Promise.all([
@@ -684,6 +685,7 @@ export default function DashboardPage() {
           </p>
         </div>
       </div>
+      <RefreshingBar visible={dashValidating} />
       <DashboardQuickAddSheet open={quickAddOpen} onClose={() => setQuickAddOpen(false)} />
 
       <ReorderableClusters

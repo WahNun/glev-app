@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
+import RefreshingBar from "@/components/RefreshingBar";
 import { useTranslations, useLocale } from "next-intl";
 import { fetchMeals, deleteMeal, updateMeal, FETCH_MEALS_DEFAULT_SINCE_DAYS, type Meal } from "@/lib/meals";
 import { supabase } from "@/lib/supabase";
@@ -302,6 +303,7 @@ export default function EntriesPage() {
   const [symptoms, setSymptoms] = useState<SymptomLog[]>([]);
   const [influences, setInfluences] = useState<InfluenceLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [search, setSearch]   = useState("");
@@ -489,6 +491,7 @@ export default function EntriesPage() {
       } catch (e) { console.error(e); }
     }
     async function loadFull(initial: boolean) {
+      setIsRefreshing(true);
       try {
         // Initial fetch covers the last 90 days — fast enough to
         // unblock the list. Older rows are pulled in background below.
@@ -540,7 +543,10 @@ export default function EntriesPage() {
           }).catch(() => { /* best-effort */ });
         }
       } catch (e) { console.error(e); }
-      finally { if (!cancelled && initial) setLoading(false); }
+      finally {
+        if (!cancelled && initial) setLoading(false);
+        if (!cancelled) setIsRefreshing(false);
+      }
     }
     function load(initial: boolean) {
       if (initial) loadFast();
@@ -753,6 +759,7 @@ export default function EntriesPage() {
         <p style={{ color:"var(--text-faint)", fontSize:14 }}>{tHistory("entries_subline", { shown: filtered.length, total: rows.length })}</p>
       </div>
 
+      <RefreshingBar visible={isRefreshing} />
       {/* "+ Eintrag" CTA — popup mirrors the header "+" dropdown.
           Manual meal entry is preserved as the first item so the old
           "+ Mahlzeit" sheet stays reachable from this screen. */}
