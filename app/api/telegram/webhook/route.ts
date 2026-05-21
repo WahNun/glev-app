@@ -212,34 +212,28 @@ async function transcribeVoice(
 }
 
 /**
- * Analysiert einen Screenshot via GPT-4o Vision und gibt eine Beschreibung zurück.
+ * Lädt ein Bild in Supabase Storage hoch und gibt die öffentliche URL zurück.
+ * Format im agent_messages-Eintrag: "[file] <url>  <caption>"
  */
-async function analyzeScreenshot(
+async function uploadImageToStorage(
   buffer: Buffer,
+  fileId: string,
   caption?: string,
 ): Promise<string> {
-  const openai = getOpenAIClient();
-  const base64 = buffer.toString("base64");
-  const prompt = caption
-    ? `Caption von Lucas: "${caption}"\n\nBeschreibe diesen Screenshot detailliert. Was ist zu sehen? Fokus auf Fehler, UI-Zustand oder relevante Informationen.`
-    : "Beschreibe diesen Screenshot detailliert. Was ist zu sehen? Fokus auf Fehler, UI-Zustand oder relevante Informationen.";
+  const url     = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const svcKey  = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  const { createClient: makeClient } = await import("@supabase/supabase-js");
+  const sb = makeClient(url, svcKey, { auth: { persistSession: false } });
 
-  const result = await openai.chat.completions.create({
-    model: "gpt-4o",
-    max_tokens: 1000,
-    messages: [
-      {
-        role: "user",
-        content: [
-          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64}` } },
-          { type: "text", text: prompt },
-        ] as never,
-      },
-    ],
-  });
+  const path = `telegram/${Date.now()}_${fileId}.jpg`;
+  const { error: uploadErr } = await sb.storage
+    .from("agent-files")
+    .upload(path, buffer, { contentType: "image/jpeg", upsert: false });
 
-  const description = result.choices[0]?.message?.content ?? "";
-  return caption ? `[Screenshot] ${caption}\n\n${description}` : `[Screenshot] ${description}`;
+  if (uploadErr) throw new Error(`Storage upload failed: ${uploadErr.message}`);
+
+  const { data: { publicUrl } } = sb.storage.from("agent-files").getPublicUrl(path);
+  return caption ? `[file] ${publicUrl}  ${caption}` : `[file] ${publicUrl}`;
 }
 
 /**
@@ -376,10 +370,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
     try {
       const { buffer } = await downloadTelegramFile(botToken, largest.file_id);
-      inboundText = await analyzeScreenshot(buffer, captionText || undefined);
+      inboundText = await uploadImageToStorage(buffer, largest.file_id, captionText || undefined);
     } catch (err) {
-      console.error("[telegram/webhook] Screenshot analysis failed:", err);
-      return NextResponse.json({ error: "Screenshot analysis failed" }, { status: 500 });
+      console.error("[telegram/webhook] Image upload failed:", err);
+      return NextResponse.json({ error: "Image upload failed" }, { status: 500 });
     }
   } else if (message.text) {
     inboundText = message.text;
