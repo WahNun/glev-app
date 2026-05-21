@@ -208,7 +208,7 @@ async function transcribeVoice(
  * Erwartet das Format "Task <TASK_ID>" irgendwo im Text
  * (z. B. "Agent-Frage (Task: 1234567890):" oder "🤖 Replit-Frage (Task 1234567890)").
  */
-function extractTaskId(replyText: string): string | null {
+export function extractTaskId(replyText: string): string | null {
   const match = replyText.match(/Task[:\s`]+(\d+)/i);
   return match?.[1] ?? null;
 }
