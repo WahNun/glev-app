@@ -3101,7 +3101,7 @@ export default function EnginePage() {
                       return (
                         <button
                           type="button"
-                          onClick={handleRun}
+                          onClick={() => handleRun()}
                           disabled={blocked}
                           style={{
                             width: "100%", height: 36, borderRadius: 6,
