@@ -126,7 +126,7 @@
 
   --nav-bottom-height:  50px;
   --nav-bottom-top-pad: 2px;
-  --nav-bottom-safe:    max(8px, min(20px, var(--safe-bottom)));
+  --nav-bottom-safe:    max(8px, var(--safe-bottom));
   --nav-bottom-total:   calc(var(--nav-bottom-height) + var(--nav-bottom-top-pad) + var(--nav-bottom-safe));
 
   /* Foreground color for text/icons placed on top of a brand-accent
