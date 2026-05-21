@@ -69,7 +69,7 @@ async function sendTelegramMessage(text) {
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: CHAT_ID, text, parse_mode: 'Markdown' }),
+    body: JSON.stringify({ chat_id: CHAT_ID, text, parse_mode: 'Markdown', reply_markup: { force_reply: true, selective: false } }),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
