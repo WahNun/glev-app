@@ -2963,14 +2963,20 @@ export default function EnginePage() {
                 const showBoth = icrSampleSize >= 3 && Math.abs(adaptedICR - staticICR) > 0.5;
                 type ChipDef = { key: 'adaptive' | 'static'; label: string; icr: number; dose: number | null; sub?: string };
                 const chips: ChipDef[] = [];
+                // For the SELECTED chip: show activeDose (uses result.dose
+                // once the engine has run, eagerDose before). This keeps
+                // the chip, the Speichern button, and the explainer sheet
+                // in sync — all three show the same number.
+                // For the non-selected chip: always show eagerDose so the
+                // user can still compare the two ICR sources.
+                const eagerAdaptive = eagerDoses.adaptive !== null ? applyIOBCorrection(eagerDoses.adaptive, iob) : null;
+                const eagerStatic   = eagerDoses.static   !== null ? applyIOBCorrection(eagerDoses.static,   iob) : null;
                 if (showBoth) {
-                  if (adaptedICR > 0) chips.push({ key: 'adaptive', label: tEngine("icr_adaptive_label"), icr: adaptedICR, dose: eagerDoses.adaptive !== null ? applyIOBCorrection(eagerDoses.adaptive, iob) : null, sub: tEngine("icr_calculated") });
-                  if (staticICR > 0) chips.push({ key: 'static', label: tEngine("icr_static_label"), icr: staticICR, dose: eagerDoses.static !== null ? applyIOBCorrection(eagerDoses.static, iob) : null, sub: staticICRWindowLabel ?? undefined });
+                  if (adaptedICR > 0) chips.push({ key: 'adaptive', label: tEngine("icr_adaptive_label"), icr: adaptedICR, dose: selectedICR === 'adaptive' ? activeDose : eagerAdaptive, sub: tEngine("icr_calculated") });
+                  if (staticICR > 0) chips.push({ key: 'static', label: tEngine("icr_static_label"), icr: staticICR, dose: selectedICR === 'static' ? activeDose : eagerStatic, sub: staticICRWindowLabel ?? undefined });
                 } else {
                   const icr = effectiveICR;
-                  const rawEager = selectedICR === 'adaptive' ? eagerDoses.adaptive : eagerDoses.static;
-                  const dose = rawEager !== null ? applyIOBCorrection(rawEager, iob) : null;
-                  if (icr > 0) chips.push({ key: selectedICR, label: selectedICR === 'adaptive' ? tEngine("icr_adaptive_label") : tEngine("icr_static_label"), icr, dose });
+                  if (icr > 0) chips.push({ key: selectedICR, label: selectedICR === 'adaptive' ? tEngine("icr_adaptive_label") : tEngine("icr_static_label"), icr, dose: activeDose });
                 }
                 if (chips.length === 0) return null;
                 return (
