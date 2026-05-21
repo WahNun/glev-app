@@ -35,13 +35,13 @@ export function computeControlScore(
   sinceMs: number,
   untilMs: number = Infinity,
   now: Date = new Date(),
-): { score: number; count: number } {
+): { score: number; count: number; good: number; spike: number; hypo: number; other: number } {
   const inWindow = meals.filter(m => {
     const t = parseDbDate(m.created_at).getTime();
     return t >= sinceMs && t < untilMs;
   });
   const total = inWindow.length;
-  if (!total) return { score: 0, count: 0 };
+  if (!total) return { score: 0, count: 0, good: 0, spike: 0, hypo: 0, other: 0 };
   let good = 0, spike = 0, hypo = 0;
   for (const m of inWindow) {
     const ev = unifiedOutcome(m, now);
@@ -54,5 +54,5 @@ export function computeControlScore(
   const hypoRate  = (hypo  / total) * 100;
   const raw   = goodRate * 0.7 + (100 - spikeRate - hypoRate) * 0.3;
   const score = Math.max(0, Math.min(100, Math.round(raw)));
-  return { score, count: total };
+  return { score, count: total, good, spike, hypo, other: total - good - spike - hypo };
 }

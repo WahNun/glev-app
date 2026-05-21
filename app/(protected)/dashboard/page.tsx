@@ -1555,105 +1555,142 @@ function NonMealLightExpand({
 //   POOR < 60) are the user-facing 3-tier mapping spec'd by product.
 // -----------------------------------------------------------------------------
 function ControlScoreCard({ meals }: { meals: Meal[] }) {
-  const [flipped, setFlipped] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+  const [showHow,     setShowHow]     = useState(false);
   const t = useTranslations("dashboard");
-  const { score, count, delta, badge } = useMemo(() => {
+
+  const { score, count, delta, badge, good, spike, hypo, other } = useMemo(() => {
     const now = Date.now();
-    // Calendar-aware 7-day windows: current week starts at midnight 6 days
-    // ago in the user's local TZ; prior week is the 7 days immediately
-    // before that. Replaces the old rolling 168h boundaries.
     const wkStart   = startOfDaysAgo(6).getTime();
     const prevStart = startOfDaysAgo(13).getTime();
     const cur  = computeControlScore(meals, wkStart, now);
     const prev = computeControlScore(meals, prevStart, wkStart);
     const delta = prev.count > 0 && cur.count > 0 ? cur.score - prev.score : null;
-    // Badge text is resolved at render via `t()` so language switches without
-    // re-running the memo; we just store a stable key + color here.
     const badge =
       cur.score >= 80 ? { key: "strong", color: GREEN }
       : cur.score >= 60 ? { key: "good",   color: ACCENT }
       :                   { key: "poor",   color: PINK };
-    return { score: cur.score, count: cur.count, delta, badge };
+    return { score: cur.score, count: cur.count, delta, badge,
+             good: cur.good, spike: cur.spike, hypo: cur.hypo, other: cur.other };
   }, [meals]);
-  const badgeText = t(`badge_${badge.key}`);
 
-  const hasData = count > 0;
+  const badgeText = t(`badge_${badge.key}`);
+  const hasData   = count > 0;
+
+  const pct = (n: number) => hasData ? Math.round((n / count) * 100) : 0;
+  const buckets = [
+    { label: t("cs_good"),    val: good,  color: GREEN,              icon: "✓" },
+    { label: t("cs_spike"),   val: spike, color: ORANGE,             icon: "↑" },
+    { label: t("cs_hypo"),    val: hypo,  color: PINK,               icon: "↓" },
+    { label: t("cs_pending"), val: other, color: "var(--text-ghost)", icon: "⧗" },
+  ];
+
+  const toggleBtn = (label: string, open: boolean, onToggle: () => void) => (
+    <button
+      type="button"
+      onClick={onToggle}
+      style={{
+        flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between",
+        background: open ? `${ACCENT}0f` : "var(--surface-soft)",
+        border: `1px solid ${open ? ACCENT + "44" : BORDER}`,
+        borderRadius: 8, padding: "7px 12px", cursor: "pointer",
+        color: open ? ACCENT : "var(--text-dim)",
+        fontSize: 12, fontWeight: 600,
+        transition: "background 150ms, border-color 150ms, color 150ms",
+        WebkitTapHighlightColor: "transparent",
+      }}
+    >
+      {label}
+      <span style={{ fontSize: 10, marginLeft: 4, display: "inline-block", transition: "transform 200ms", transform: open ? "rotate(180deg)" : "rotate(0deg)" }}>▾</span>
+    </button>
+  );
+
   return (
     <div
-      onClick={() => setFlipped(f => !f)}
-      className="glev-flip-card"
-      style={{ position:"relative", cursor:"pointer", minHeight:158, perspective:1000 }}
+      className="glev-control-front"
+      style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 16,
+               padding: "18px 24px 18px", boxSizing: "border-box" }}
     >
-      <div style={{ position:"absolute", inset:0, transformStyle:"preserve-3d", transition:"transform 0.5s cubic-bezier(0.4,0,0.2,1)", transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)" }}>
-        {/* ────────── Front ────────── */}
-        <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"18px 24px 22px", boxSizing:"border-box" }}>
-          {/* Header — title left, badge right (hidden when no data). */}
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:22 }}>
-            <div style={{ fontSize:13, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:"var(--text-muted)" }}>
-              {t("control_score_label")}
-            </div>
-            {hasData && (
-              <div style={{
-                fontSize:11, fontWeight:800, color:badge.color,
-                padding:"4px 10px", borderRadius:99,
-                border:`1px solid ${badge.color}55`, background:`${badge.color}18`,
-                letterSpacing:"0.1em",
-                marginLeft: 16,
-                flexShrink: 0,
-              }}>
-                {badgeText}
-              </div>
-            )}
-          </div>
-          {/* Big score (56px ACCENT) + "/ 100" + right-aligned delta. */}
-          <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
-            <span style={{ fontSize:56, fontWeight:800, color:ACCENT, letterSpacing:"-0.03em", fontFamily:"var(--font-mono)", lineHeight:1 }}>
-              {hasData ? score : "—"}
-            </span>
-            <span style={{ fontSize:14, color:"var(--text-dim)", fontWeight:500 }}>/ 100</span>
-            <span style={{
-              marginLeft:"auto",
-              fontSize:12, fontWeight:600, fontFamily:"var(--font-mono)",
-              color: delta == null ? "var(--text-dim)"
-                   : delta > 0      ? GREEN
-                   : delta < 0      ? PINK
-                   :                  "var(--text-dim)",
-            }}>
-              {!hasData
-                ? t("no_entries_7d")
-                : delta == null
-                  ? t("entries_7d", { n: count })
-                  : `${delta > 0 ? "+" : ""}${delta} ${t("delta_vs_last_week")}`}
-            </span>
-          </div>
-          {/* Gradient progress bar — accent → green. */}
-          <div style={{ height:6, marginTop:14, background:"var(--border-soft)", borderRadius:99, overflow:"hidden" }}>
-            <div style={{
-              height:"100%",
-              width:`${hasData ? Math.max(0, Math.min(100, score)) : 0}%`,
-              background:`linear-gradient(90deg, ${ACCENT}, ${GREEN})`,
-              borderRadius:99,
-              transition:"width 0.6s ease",
-            }}/>
-          </div>
-          <span style={{ position:"absolute", bottom:8, right:14, fontSize:11, color:"var(--text-ghost)" }}>↺</span>
+      {/* Header */}
+      <div className="glev-control-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)" }}>
+          {t("control_score_label")}
         </div>
-        {/* ────────── Back ────────── */}
-        <div style={{ position:"absolute", inset:0, backfaceVisibility:"hidden", transform:"rotateY(180deg)", background:`linear-gradient(145deg, ${ACCENT}12, ${SURFACE} 65%)`, border:`1px solid ${ACCENT}33`, borderRadius:16, padding:"18px 24px 22px", boxSizing:"border-box", display:"flex", flexDirection:"column", gap:10 }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-            <div style={{ fontSize:13, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:ACCENT }}>
-              {t("control_score_back_title")}
-            </div>
-            <span style={{ fontSize:11, color:"var(--text-ghost)" }}>{t("flip_back")}</span>
+        {hasData && (
+          <div style={{ fontSize: 11, fontWeight: 800, color: badge.color, padding: "4px 10px", borderRadius: 99,
+                        border: `1px solid ${badge.color}55`, background: `${badge.color}18`,
+                        letterSpacing: "0.1em", marginLeft: 16, flexShrink: 0 }}>
+            {badgeText}
           </div>
-          <div style={{ fontSize:13, color:"var(--text-body)", lineHeight:1.5, fontFamily:"var(--font-mono)" }}>
+        )}
+      </div>
+
+      {/* Score row */}
+      <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+        <span style={{ fontSize: 56, fontWeight: 800, color: ACCENT, letterSpacing: "-0.03em", fontFamily: "var(--font-mono)", lineHeight: 1 }}>
+          {hasData ? score : "—"}
+        </span>
+        <span style={{ fontSize: 14, color: "var(--text-dim)", fontWeight: 500 }}>/ 100</span>
+        <span style={{
+          marginLeft: "auto", fontSize: 12, fontWeight: 600, fontFamily: "var(--font-mono)",
+          color: delta == null ? "var(--text-dim)" : delta > 0 ? GREEN : delta < 0 ? PINK : "var(--text-dim)",
+        }}>
+          {!hasData
+            ? t("no_entries_7d")
+            : delta == null
+              ? t("entries_7d", { n: count })
+              : `${delta > 0 ? "+" : ""}${delta} ${t("delta_vs_last_week")}`}
+        </span>
+      </div>
+
+      {/* Progress bar */}
+      <div style={{ height: 6, marginTop: 14, background: "var(--border-soft)", borderRadius: 99, overflow: "hidden" }}>
+        <div style={{ height: "100%", width: `${hasData ? Math.max(0, Math.min(100, score)) : 0}%`,
+                      background: `linear-gradient(90deg, ${ACCENT}, ${GREEN})`, borderRadius: 99, transition: "width 0.6s ease" }} />
+      </div>
+
+      {/* Toggle buttons */}
+      <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+        {toggleBtn(t("cs_details"), showDetails, () => setShowDetails(v => !v))}
+        {toggleBtn(t("cs_how"),     showHow,     () => setShowHow(v => !v))}
+      </div>
+
+      {/* ── Aufschlüsselung ── */}
+      {showDetails && (
+        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 9 }}>
+          {buckets.map(b => (
+            <div key={b.label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 11, color: b.color, width: 14, flexShrink: 0, textAlign: "center" }}>{b.icon}</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dim)", width: 80, flexShrink: 0 }}>{b.label}</span>
+              <div style={{ flex: 1, height: 5, background: "var(--border-soft)", borderRadius: 99, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${pct(b.val)}%`, background: b.color,
+                              borderRadius: 99, transition: "width 0.4s ease", opacity: b.val === 0 ? 0.25 : 1 }} />
+              </div>
+              <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", fontWeight: 700,
+                             color: b.color, width: 32, textAlign: "right", flexShrink: 0 }}>
+                {pct(b.val)}%
+              </span>
+              <span style={{ fontSize: 10, color: "var(--text-ghost)", width: 28, flexShrink: 0 }}>
+                ({b.val})
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Berechnung ── */}
+      {showHow && (
+        <div style={{ marginTop: 12, padding: "12px 14px", background: `${ACCENT}0a`,
+                      border: `1px solid ${ACCENT}22`, borderRadius: 10,
+                      display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ fontSize: 13, color: "var(--text-body)", lineHeight: 1.55, fontFamily: "var(--font-mono)" }}>
             {t("control_score_formula")}
           </div>
-          <div style={{ fontSize:12, color:"var(--text-dim)", lineHeight:1.5 }}>
+          <div style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.55 }}>
             {t("control_score_explain")}
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
