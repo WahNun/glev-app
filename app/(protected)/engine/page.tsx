@@ -2351,6 +2351,11 @@ export default function EnginePage() {
               // nav top edge on mobile — no dark page-bg band visible
               // around the card (user feedback 2026-05-17).
               display: "flex", flexDirection: "column",
+              // Reserve space at the bottom equal to the full nav height
+              // so buttons in the action row (e.g. "Erkläre mir die
+              // Berechnung") can be scrolled ABOVE the fixed bottom nav
+              // and aren't hidden behind it, causing accidental nav taps.
+              paddingBottom: isMobile ? "var(--nav-bottom-total)" : 0,
             }}
           >
           {adjustmentVisible && currentAdjustment && (
