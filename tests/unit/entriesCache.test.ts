@@ -301,7 +301,72 @@ test("writeEntriesCache — written JSON contains all six data arrays", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 7. Write path — storage-quota errors are swallowed
+// 7. Write path — size trimming keeps payload within the 2 MB limit
+// ---------------------------------------------------------------------------
+
+test("writeEntriesCache — oversized payload is trimmed to ≤ 2 MB with oldest meals removed", () => {
+  const LIMIT_BYTES = 2 * 1024 * 1024; // 2 MB — mirrors CACHE_SIZE_LIMIT in cache.ts
+  const storage = makeWritableStorage();
+  const now = 1_000_000;
+
+  // Each meal carries a ~10 KB note (ASCII = 1 byte/char).
+  // 220 meals × ~10 KB ≈ 2.2 MB — comfortably over the limit.
+  const bigNote = "x".repeat(10_000);
+  const meals = Array.from({ length: 220 }, (_, i) => ({
+    id: `meal-${String(i).padStart(3, "0")}`, // meal-000 … meal-219
+    notes: bigNote,
+  }));
+
+  // Non-meal arrays — small but present; must survive trimming completely intact.
+  const insulin    = [{ id: "ins-1" }];
+  const exercise   = [{ id: "exe-1" }];
+  const cycle      = [{ id: "cyc-1" }];
+  const symptoms   = [{ id: "sym-1" }];
+  const influences = [{ id: "inf-1" }];
+
+  writeEntriesCache(UID_A, storage, { meals, insulin, exercise, cycle, symptoms, influences }, now);
+
+  // setItem must have been called — payload was written, no early exit.
+  expect(Object.prototype.hasOwnProperty.call(storage.store, KEY_A)).toBe(
+    true,
+  );
+
+  const raw = storage.store[KEY_A];
+  const writtenBytes = new TextEncoder().encode(raw).length;
+  const written = JSON.parse(raw) as {
+    meals: Array<{ id: string }>;
+    insulin: unknown[];
+    exercise: unknown[];
+    cycle: unknown[];
+    symptoms: unknown[];
+    influences: unknown[];
+  };
+
+  // Written payload must fit within the 2 MB quota.
+  expect(writtenBytes).toBeLessThanOrEqual(LIMIT_BYTES);
+
+  // At least one meal must have been trimmed (the loop ran at least once).
+  expect(written.meals.length).toBeLessThan(meals.length);
+
+  // Trimming removes from the tail (oldest = highest index in newest-first order).
+  // The kept slice must start with the newest entry (meal-000).
+  expect(written.meals[0].id).toBe("meal-000");
+
+  // The dropped entries must all be from the tail — the last kept ID's numeric
+  // suffix must be strictly less than 219 (the original last index).
+  const lastKeptIndex = parseInt(written.meals[written.meals.length - 1].id.split("-")[1], 10);
+  expect(lastKeptIndex).toBeLessThan(219);
+
+  // All non-meal arrays are preserved in full — trimming must not touch them.
+  expect(written.insulin).toEqual(insulin);
+  expect(written.exercise).toEqual(exercise);
+  expect(written.cycle).toEqual(cycle);
+  expect(written.symptoms).toEqual(symptoms);
+  expect(written.influences).toEqual(influences);
+});
+
+// ---------------------------------------------------------------------------
+// 8. Write path — storage-quota errors are swallowed
 // ---------------------------------------------------------------------------
 
 test("writeEntriesCache — setItem quota error is swallowed, page does not crash", () => {
