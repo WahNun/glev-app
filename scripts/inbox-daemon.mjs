@@ -40,6 +40,9 @@ if (missing.length > 0) {
 
 const supabase = createClient(SB_URL, SB_KEY, { auth: { persistSession: false } });
 
+// Dedup: verhindert doppelte Acks bei Realtime-Doppel-Events
+const ackedIds = new Set();
+
 async function ack(message) {
   const preview = message.length > 80 ? message.slice(0, 80) + '…' : message;
   const isFile  = message.startsWith('[file]');
@@ -64,6 +67,8 @@ const channel = supabase
     async (payload) => {
       const row = payload.new;
       if (row.direction !== 'inbound' || row.task_id !== 'inbox') return;
+      if (ackedIds.has(row.id)) return; // Doppel-Event ignorieren
+      ackedIds.add(row.id);
       console.log('[inbox-daemon] New inbox message:', (row.message ?? '').slice(0, 80));
       await ack(row.message ?? '');
     },
