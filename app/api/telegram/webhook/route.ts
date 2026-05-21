@@ -220,78 +220,6 @@ async function transcribeVoice(
 }
 
 /**
- * Lädt den Chat-Verlauf aus agent_messages und generiert eine KI-Antwort.
- * Wird nur aufgerufen wenn task_id === "inbox" (freie Nachrichten von Lucas).
- */
-async function generateAndSendChatReply(
-  userMessage: string,
-  supabase: ReturnType<typeof createClient>,
-): Promise<void> {
-  const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId   = process.env.TELEGRAM_CHAT_ID;
-  if (!botToken || !chatId) return;
-
-  // Letzten 20 Nachrichten als Konversations-History laden
-  const { data: history } = await supabase
-    .from("agent_messages")
-    .select("direction, message, created_at")
-    .eq("task_id", "inbox")
-    .order("created_at", { ascending: false })
-    .limit(20);
-
-  const messages: { role: "system" | "user" | "assistant"; content: string }[] = [
-    {
-      role: "system",
-      content: `Du bist der Replit-Agent für das Glev-Projekt — eine T1D Insulin Decision Support App (Next.js 15, Supabase, Vercel, Capacitor iOS/Android).
-Du chattest mit Lucas, dem Gründer, direkt via Telegram.
-Antworte kurz, direkt und auf Deutsch. Du kennst das Projekt in- und auswendig.
-Aktuell laufende Aufgabe: Android AAB-Build für Google Play Internal Testing.
-Letzter Status: minSdkVersion musste von 24 auf 26 erhöht werden (wegen capgo-capacitor-health). Lucas muss git pull machen oder variables.gradle manuell anpassen, dann Sync Now + Build neu starten.`,
-    },
-  ];
-
-  // History in chronologischer Reihenfolge einbauen (ohne aktuelle Nachricht)
-  if (history && history.length > 1) {
-    const ordered = [...history].reverse().slice(0, -1); // älteste zuerst, letzte (aktuelle) weglassen
-    for (const row of ordered) {
-      messages.push({
-        role: row.direction === "inbound" ? "user" : "assistant",
-        content: row.message ?? "",
-      });
-    }
-  }
-
-  messages.push({ role: "user", content: userMessage });
-
-  try {
-    const openai = getOpenAIClient();
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages,
-      max_tokens: 500,
-    });
-
-    const reply = completion.choices[0]?.message?.content ?? "…";
-
-    // Antwort via Telegram senden
-    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text: reply, parse_mode: "Markdown" }),
-    });
-
-    // Outbound in agent_messages speichern
-    await supabase.from("agent_messages").insert({
-      task_id: "inbox",
-      direction: "outbound",
-      message: reply,
-    });
-  } catch (err) {
-    console.error("[telegram/webhook] Chat reply failed:", err);
-  }
-}
-
-/**
  * Lädt ein Bild in Supabase Storage hoch und gibt die öffentliche URL zurück.
  * Format im agent_messages-Eintrag: "[file] <url>  <caption>"
  */
@@ -550,16 +478,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // eslint-disable-next-line no-console
     console.error("[telegram/webhook] Unexpected DB error:", err);
     return NextResponse.json({ error: "Database error" }, { status: 500 });
-  }
-
-  // ── 9. KI-Antwort für freie Inbox-Nachrichten ────────────────────────────────
-  // Nur wenn Lucas frei schreibt (nicht als Reply auf eine Task-Frage).
-  // Fire-and-forget: Telegram bekommt sofort 200 OK, Antwort kommt asynchron.
-  if (taskId === "inbox" && inboundText && !inboundText.startsWith("[file]")) {
-    const supabase = serviceRoleClient();
-    generateAndSendChatReply(inboundText, supabase).catch((err) =>
-      console.error("[telegram/webhook] generateAndSendChatReply failed:", err),
-    );
   }
 
   return NextResponse.json({ ok: true });
