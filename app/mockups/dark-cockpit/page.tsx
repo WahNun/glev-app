@@ -2063,11 +2063,47 @@ function MobileDashboard({email,name:memberName,onSignOut}:{email?:string;name?:
   const pathD=trendPts.map((g,i)=>`${i===0?"M":"L"} ${toX(i).toFixed(1)} ${toY(g).toFixed(1)}`).join(" ");
   const areaD=pathD+` L ${W} ${H} L 0 ${H} Z`;
 
-  const mobileNavItems = [
-    { id:"dashboard" as const, icon:"⊞", label:"Dashboard" },
-    { id:"entries" as const, icon:"≡", label:"Entries" },
-    { id:"insights" as const, icon:"◈", label:"Insights" },
-    { id:"recommend" as const, icon:"⟲", label:"Engine" },
+  // 5-tab nav matching Layout.tsx mobile nav order:
+  // Dashboard · Einträge · [Glev FAB] · Insights · Einstellungen
+  const mobileNavSideTabs: { id: "dashboard"|"entries"|"insights"|"settings"; label: string; icon: (active: boolean) => React.ReactNode }[] = [
+    {
+      id: "dashboard",
+      label: "Dashboard",
+      icon: a => (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 11l9-8 9 8"/>
+          <path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10"/>
+        </svg>
+      ),
+    },
+    {
+      id: "entries",
+      label: "Einträge",
+      icon: a => (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+        </svg>
+      ),
+    },
+    {
+      id: "insights",
+      label: "Insights",
+      icon: a => (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1.5.5 3 1.5 4 .76.76 1.23 1.52 1.41 2.5"/>
+        </svg>
+      ),
+    },
+    {
+      id: "settings",
+      label: "Einstellungen",
+      icon: a => (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      ),
+    },
   ];
 
   const eb = stats?.evaluationBreakdown;
@@ -2256,25 +2292,32 @@ function MobileDashboard({email,name:memberName,onSignOut}:{email?:string;name?:
         {mobilePage==="settings"&&<ProfilePage email={email} initialName={memberName} onSignOut={()=>{onSignOut?.();}}/>}
       </div>
 
-      <div style={{position:"absolute",bottom:0,left:0,right:0,background:SURFACE,borderTop:`1px solid ${BORDER}`,display:"flex",alignItems:"center",justifyContent:"space-around",padding:"10px 24px 20px",zIndex:10}}>
-        {mobileNavItems.map(item=>(
-          <button key={item.id} onClick={()=>{setMobilePage(item.id);setInsightFocus(null);}} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,background:"none",border:"none",cursor:"pointer",color:mobilePage===item.id?ACCENT:"rgba(255,255,255,0.3)",padding:"4px 12px",borderRadius:10,transition:"all 0.15s",fontSize:20}}>
-            <span>{item.icon}</span>
-            <span style={{fontSize:9,fontWeight:600,letterSpacing:"0.04em"}}>{item.label.toUpperCase()}</span>
+      {/* Bottom nav — 5 tabs matching Layout.tsx mobile nav:
+          Dashboard · Einträge · [Glev FAB] · Insights · Einstellungen */}
+      <div style={{position:"absolute",bottom:0,left:0,right:0,background:SURFACE,borderTop:`1px solid ${BORDER}`,display:"flex",alignItems:"stretch",justifyContent:"space-around",padding:"6px 4px 14px",zIndex:10,overflow:"visible"}}>
+        {/* Left two tabs: Dashboard, Einträge */}
+        {mobileNavSideTabs.slice(0, 2).map(item => (
+          <button key={item.id} onClick={()=>{setMobilePage(item.id as typeof mobilePage);setInsightFocus(null);}} style={{flex:"1 1 0",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,background:"none",border:"none",cursor:"pointer",color:mobilePage===item.id?ACCENT:"rgba(255,255,255,0.3)",padding:"3px 2px",borderRadius:10,transition:"color 0.15s",fontSize:9,fontWeight:600,letterSpacing:"0.04em"}}>
+            {item.icon(mobilePage === item.id)}
+            <span style={{lineHeight:1,fontSize:9,whiteSpace:"nowrap"}}>{item.label.toUpperCase()}</span>
           </button>
         ))}
-        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,marginTop:-20}}>
-          <button onClick={()=>setMobilePage("log")} style={{width:56,height:56,borderRadius:99,background:`linear-gradient(135deg,${ACCENT},#6B8BFF)`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 0 ${mobilePage==="log"?"32px":"20px"} ${ACCENT}${mobilePage==="log"?"88":"55"}`,animation:"micPulse 2.5s ease-in-out infinite",transition:"transform 0.15s"}}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-              <rect x="9" y="2" width="6" height="11" rx="3" fill="rgba(255,255,255,0.95)"/>
-              <path d="M5 10a7 7 0 0 0 14 0" stroke="rgba(255,255,255,0.95)" strokeWidth="1.8" strokeLinecap="round" fill="none"/>
-              <line x1="12" y1="19" x2="12" y2="22" stroke="rgba(255,255,255,0.95)" strokeWidth="1.8" strokeLinecap="round"/>
-              <line x1="9" y1="22" x2="15" y2="22" stroke="rgba(255,255,255,0.95)" strokeWidth="1.8" strokeLinecap="round"/>
-            </svg>
+        {/* Centre Glev FAB — elevated bubble matching MobileGlevFab in Layout.tsx */}
+        <button onClick={()=>setMobilePage("recommend")} style={{flex:"1 1 0",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,background:"none",border:"none",cursor:"pointer",color:ACCENT,padding:"3px 2px",overflow:"visible",fontSize:9,fontWeight:600,letterSpacing:"0.04em"}}>
+          <span style={{position:"relative",display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18}}>
+            <span style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%, calc(-50% - 12px))",display:"inline-flex",alignItems:"center",justifyContent:"center",width:52,height:52,borderRadius:"50%",background:SURFACE,border:`1px solid ${mobilePage==="recommend"?ACCENT:`${ACCENT}66`}`,boxShadow:`0 0 0 1px ${ACCENT}22, 0 5px 14px rgba(0,0,0,0.38)`,filter:`drop-shadow(0 0 4px ${ACCENT}${mobilePage==="recommend"?"cc":"55"})`}}>
+              <GlevLogo size={26} color={ACCENT} bg="transparent"/>
+            </span>
+          </span>
+          <span style={{lineHeight:1,fontSize:9,whiteSpace:"nowrap"}}>GLEV</span>
+        </button>
+        {/* Right two tabs: Insights, Einstellungen */}
+        {mobileNavSideTabs.slice(2).map(item => (
+          <button key={item.id} onClick={()=>{setMobilePage(item.id as typeof mobilePage);setInsightFocus(null);}} style={{flex:"1 1 0",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,background:"none",border:"none",cursor:"pointer",color:mobilePage===item.id?ACCENT:"rgba(255,255,255,0.3)",padding:"3px 2px",borderRadius:10,transition:"color 0.15s",fontSize:9,fontWeight:600,letterSpacing:"0.04em"}}>
+            {item.icon(mobilePage === item.id)}
+            <span style={{lineHeight:1,fontSize:9,whiteSpace:"nowrap"}}>{item.label.toUpperCase()}</span>
           </button>
-          <span style={{fontSize:9,color:mobilePage==="log"?ACCENT:"rgba(255,255,255,0.3)",fontWeight:600,letterSpacing:"0.04em"}}>LOG</span>
-          <style>{`@keyframes micPulse{0%,100%{box-shadow:0 0 20px ${ACCENT}55}50%{box-shadow:0 0 32px ${ACCENT}88,0 0 60px ${ACCENT}33}}`}</style>
-        </div>
+        ))}
       </div>
     </div>
   );

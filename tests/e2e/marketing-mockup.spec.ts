@@ -140,7 +140,6 @@ test.describe("Marketing AppMockupPhone — interactive bottom nav", () => {
       /Spike-Quote/,
       /Hypo-Quote/,
       /Aktuell/,
-      /Mahlzeit loggen/,
     ]);
 
     // ── Glev Engine — Step 1 (Essen) ─────────────────────────────────
@@ -256,9 +255,9 @@ test.describe("Marketing AppMockupPhone — pixel snapshots per screen", () => {
 
     // ── Dashboard ────────────────────────────────────────────────────
     // Anchor on a stable label first so we don't snapshot an in-flight
-    // hydration frame. `Mahlzeit loggen` is the dashboard CTA, only
-    // present on this screen.
-    await expect(phone.getByText(/Mahlzeit loggen/)).toBeVisible();
+    // hydration frame. `Glukose · live` is the live glucose hero label,
+    // only present on the Dashboard screen.
+    await expect(phone.getByText(/Glukose · live/)).toBeVisible();
     await prepareForSnapshot(page);
     await expect(phone).toHaveScreenshot("phone-dashboard.png");
 

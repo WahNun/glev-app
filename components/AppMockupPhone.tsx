@@ -221,7 +221,7 @@ function ScreenInner({ tab, onTab, showBottomNav, excludeTabs, hideTopCog }: {
     <div style={{ display:"flex", flexDirection:"column", height:"100%", background:BG, color:"#fff", fontFamily:"var(--font-inter), Inter, system-ui, sans-serif" }}>
       <TopHeader onAccount={hideTopCog ? undefined : () => onTab("settings")} />
       <div style={{ flex:1, minHeight:0, overflowY:"auto", overflowX:"hidden", padding:"12px 14px 14px" }}>
-        {tab === "dashboard" && <DashboardScreen onLogMeal={() => onTab("engine")}/>}
+        {tab === "dashboard" && <DashboardScreen />}
         {(tab === "entries" || tab === "insights") && (
           <VerlaufScreen
             tab={tab}
@@ -290,19 +290,33 @@ function BottomNav({ tab, onTab, excludeTabs }: {
   excludeTabs: Tab[];
 }) {
   const tNav = useTranslations("nav");
-  // Map a NavId to which Tab it activates and whether it should
-  // be highlighted given the currently-active Tab. Verlauf wraps
-  // both `entries` and `insights` so the button is highlighted
-  // for both sub-views; clicking it always lands on insights first
-  // (the real app's default for /history).
-  const items: { id: NavId; label: string; activeTab: Tab; isActive: boolean; hidden: boolean; render: (active: boolean) => React.ReactNode }[] = [
+
+  type NavTabItem = {
+    id: NavId;
+    label: string;
+    activeTab: Tab;
+    isActive: boolean;
+    hidden: boolean;
+    isGlev?: boolean;
+    icon: (active: boolean) => React.ReactNode;
+  };
+
+  const items: NavTabItem[] = [
     {
       id: "dashboard",
       label: tNav("dashboard").toUpperCase(),
       activeTab: "dashboard",
       isActive: tab === "dashboard",
       hidden: excludeTabs.includes("dashboard"),
-      render: a => <NavIconBox><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={a?ACCENT:"rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></NavIconBox>,
+      // Home icon matching Layout.tsx mobile nav
+      icon: a => (
+        <NavIconBox>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 11l9-8 9 8"/>
+            <path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10"/>
+          </svg>
+        </NavIconBox>
+      ),
     },
     {
       id: "entries",
@@ -310,7 +324,7 @@ function BottomNav({ tab, onTab, excludeTabs }: {
       activeTab: "entries",
       isActive: tab === "entries",
       hidden: excludeTabs.includes("entries"),
-      render: a => <NavIconBox><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={a?ACCENT:"rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></NavIconBox>,
+      icon: a => <NavIconBox><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></NavIconBox>,
     },
     {
       id: "glev",
@@ -318,11 +332,9 @@ function BottomNav({ tab, onTab, excludeTabs }: {
       activeTab: "engine",
       isActive: tab === "engine",
       hidden: excludeTabs.includes("engine"),
-      render: a => (
-        <NavIconBox>
-          <GlevLogo size={16} color={a ? ACCENT : "rgba(255,255,255,0.4)"} bg="transparent"/>
-        </NavIconBox>
-      ),
+      isGlev: true,
+      // Rendered separately as elevated FAB bubble below
+      icon: a => <GlevLogo size={22} color={a ? ACCENT : "rgba(255,255,255,0.4)"} bg="transparent"/>,
     },
     {
       id: "insights",
@@ -330,7 +342,7 @@ function BottomNav({ tab, onTab, excludeTabs }: {
       activeTab: "insights",
       isActive: tab === "insights",
       hidden: excludeTabs.includes("insights"),
-      render: a => <NavIconBox><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={a?ACCENT:"rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1.5.5 3 1.5 4 .76.76 1.23 1.52 1.41 2.5"/></svg></NavIconBox>,
+      icon: a => <NavIconBox><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1.5.5 3 1.5 4 .76.76 1.23 1.52 1.41 2.5"/></svg></NavIconBox>,
     },
     {
       id: "settings",
@@ -338,7 +350,7 @@ function BottomNav({ tab, onTab, excludeTabs }: {
       activeTab: "settings",
       isActive: tab === "settings",
       hidden: excludeTabs.includes("settings"),
-      render: a => <NavIconBox><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={a?ACCENT:"rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></NavIconBox>,
+      icon: a => <NavIconBox><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={a ? ACCENT : "rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></NavIconBox>,
     },
   ];
 
@@ -349,24 +361,68 @@ function BottomNav({ tab, onTab, excludeTabs }: {
     <nav style={{
       background: SURFACE, borderTop:`1px solid ${BORDER}`,
       display:"flex", justifyContent:"space-around", alignItems:"stretch",
-      padding:"8px 8px 12px",
+      padding:"6px 4px 10px",
+      overflow: "visible",
     }}>
-      {visible.map(it => (
-        <button
-          key={it.id}
-          onClick={() => onTab(it.activeTab)}
-          style={{
-            display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"flex-end",
-            gap:3, padding:0, height:42, width:itemWidth,
-            border:"none", background:"transparent", cursor:"pointer",
-            color: it.isActive ? ACCENT : "rgba(255,255,255,0.3)",
-            fontSize:8, fontWeight:600, letterSpacing:"0.04em",
-          }}
-        >
-          {it.render(it.isActive)}
-          <span style={{ lineHeight:1, fontSize:7.5 }}>{it.label}</span>
-        </button>
-      ))}
+      {visible.map(it => {
+        if (it.isGlev) {
+          // Elevated FAB bubble matching the real app's MobileGlevFab —
+          // scaled to the mockup phone dimensions (16px icon tier → 44px bubble).
+          return (
+            <button
+              key={it.id}
+              onClick={() => onTab(it.activeTab)}
+              style={{
+                display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+                gap:3, padding:"3px 2px", height:38, width:itemWidth,
+                border:"none", background:"transparent", cursor:"pointer",
+                color: ACCENT,
+                fontSize:7.5, fontWeight:600, letterSpacing:"0.04em",
+                overflow: "visible",
+              }}
+            >
+              {/* Outer anchor — same 16×16 slot as other tabs; bubble is
+                  absolutely positioned and lifted above the nav top border. */}
+              <span style={{
+                position: "relative",
+                display:"inline-flex", alignItems:"center", justifyContent:"center",
+                width:16, height:16,
+              }}>
+                <span style={{
+                  position:"absolute",
+                  left:"50%", top:"50%",
+                  transform:"translate(-50%, calc(-50% - 10px))",
+                  display:"inline-flex", alignItems:"center", justifyContent:"center",
+                  width:44, height:44, borderRadius:"50%",
+                  background: SURFACE,
+                  border:`1px solid ${ACCENT}66`,
+                  boxShadow:`0 0 0 1px ${ACCENT}22, 0 4px 12px rgba(0,0,0,0.38)`,
+                  filter:`drop-shadow(0 0 3px ${ACCENT}55)`,
+                }}>
+                  <GlevLogo size={22} color={ACCENT} bg="transparent"/>
+                </span>
+              </span>
+              <span style={{ lineHeight:1, fontSize:7.5 }}>{it.label}</span>
+            </button>
+          );
+        }
+        return (
+          <button
+            key={it.id}
+            onClick={() => onTab(it.activeTab)}
+            style={{
+              display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+              gap:3, padding:"3px 2px", height:38, width:itemWidth,
+              border:"none", background:"transparent", cursor:"pointer",
+              color: it.isActive ? ACCENT : "rgba(255,255,255,0.3)",
+              fontSize:7.5, fontWeight:600, letterSpacing:"0.04em",
+            }}
+          >
+            {it.icon(it.isActive)}
+            <span style={{ lineHeight:1, fontSize:7.5 }}>{it.label}</span>
+          </button>
+        );
+      })}
     </nav>
   );
 }
@@ -409,7 +465,7 @@ function Pill({ text, color }: { text: string; color: string }) {
    DASHBOARD — Glukose live, Heutige Makros, Adapt Score · 7T
    (with Treffer-/Spike-/Hypo-Quote tiles), Aktuell.
    ════════════════════════════════════════════════════════════════ */
-function DashboardScreen({ onLogMeal }: { onLogMeal: () => void }) {
+function DashboardScreen() {
   const locale = useLocale();
   const tDash = useTranslations("dashboard");
 
@@ -480,20 +536,6 @@ function DashboardScreen({ onLogMeal }: { onLogMeal: () => void }) {
           <span>{ago2h}</span><span>{ago1h}</span><span>{nowLabel}</span>
         </div>
       </MockCard>
-
-      {/* Log-Mahlzeit CTA — matches the real /dashboard CTA styling */}
-      <button
-        onClick={onLogMeal}
-        style={{
-          width:"100%", padding:"10px 12px", borderRadius:12,
-          border:`1px dashed ${ACCENT}55`, background:`${ACCENT}10`,
-          color:ACCENT, fontSize:11, fontWeight:700, letterSpacing:"-0.01em",
-          display:"flex", alignItems:"center", justifyContent:"center", gap:6,
-          cursor:"pointer",
-        }}
-      >
-        {tDash("log_meal_cta")}
-      </button>
 
       {/* Heutige Makros */}
       <MockCard>
