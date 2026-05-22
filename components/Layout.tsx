@@ -468,8 +468,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         // Task #382: bottom pad implemented (was documented but stayed
         // at 4 px — now correctly set to 10 px).
         height: "var(--nav-top-total)",
-        paddingTop: "calc(var(--nav-top-safe) + 1px)",
-        paddingBottom: 7,
+        paddingTop: "var(--nav-top-safe)",
+        paddingBottom: 11,
         paddingLeft:  "max(18px, env(safe-area-inset-left))",
         paddingRight: "max(18px, env(safe-area-inset-right))",
         background: SURFACE,
@@ -1203,7 +1203,7 @@ function MobileTab({
         minWidth: 0,
         display: "flex", flexDirection: "column",
         alignItems: "center", justifyContent: "center",
-        gap: 3, padding: "3px 2px", height: 44,
+        gap: 3, padding: "3px 2px 0px 2px", height: 38,
         border: "none", background: "transparent", cursor: "pointer",
         color: visualActive ? ACCENT : NAV_INACTIVE,
         fontSize: 11, fontWeight: visualActive ? 600 : 500, letterSpacing: "0.005em",
