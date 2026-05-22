@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /**
- * Sets up GitHub branch protection for `main` with the translation-key-checks
- * workflow as a required status check.
+ * Sets up GitHub branch protection for `main` with:
+ *   - The `Translation key checks` workflow as a required status check.
+ *   - Required pull-request reviews (≥ 1 approving review) before merging.
+ *   - enforce_admins: true — direct pushes are blocked even for admins.
  *
  * Usage:
  *   GITHUB_TOKEN=ghp_... node scripts/setup-branch-protection.mjs
@@ -12,7 +14,9 @@
  * What this script does:
  *   1. Reads the current branch protection settings for `main` (if any).
  *   2. Merges the `Translation key checks` job into the required status checks list.
- *   3. Writes back the full protection payload via PUT.
+ *   3. Ensures required_pull_request_reviews is set (≥ 1 approving review).
+ *   4. Ensures enforce_admins is true so admins cannot bypass the protection.
+ *   5. Writes back the full protection payload via PUT.
  *
  * The check name MUST match the `name:` field of the job in
  * .github/workflows/translation-key-checks.yml exactly:
@@ -69,21 +73,19 @@ function buildPayload(existing) {
       strict: existing?.required_status_checks?.strict ?? false,
       checks,
     },
-    enforce_admins: existing?.enforce_admins?.enabled ?? false,
-    required_pull_request_reviews:
-      existing?.required_pull_request_reviews
-        ? {
-            dismiss_stale_reviews:
-              existing.required_pull_request_reviews.dismiss_stale_reviews ??
-              false,
-            require_code_owner_reviews:
-              existing.required_pull_request_reviews
-                .require_code_owner_reviews ?? false,
-            required_approving_review_count:
-              existing.required_pull_request_reviews
-                .required_approving_review_count ?? 0,
-          }
-        : null,
+    enforce_admins: true,
+    required_pull_request_reviews: {
+      dismiss_stale_reviews:
+        existing?.required_pull_request_reviews?.dismiss_stale_reviews ?? false,
+      require_code_owner_reviews:
+        existing?.required_pull_request_reviews?.require_code_owner_reviews ??
+        false,
+      required_approving_review_count: Math.max(
+        existing?.required_pull_request_reviews
+          ?.required_approving_review_count ?? 0,
+        1
+      ),
+    },
     restrictions: existing?.restrictions
       ? {
           users: existing.restrictions.users?.map((u) => u.login) ?? [],
@@ -126,8 +128,15 @@ async function apply() {
     result.required_status_checks?.checks?.map((c) => c.context) ?? [];
 
   if (applied.includes(REQUIRED_CHECK)) {
-    console.log(`\nDone. "${REQUIRED_CHECK}" is now a required status check on ${BRANCH}.`);
-    console.log("A PR with a failing translation check cannot be merged until it passes.");
+    const reviewCount =
+      result.required_pull_request_reviews?.required_approving_review_count ??
+      "?";
+    const adminsEnforced = result.enforce_admins?.enabled ?? false;
+    console.log(`\nDone. Branch protection applied to ${BRANCH}:`);
+    console.log(`  ✓ Required status check: "${REQUIRED_CHECK}"`);
+    console.log(`  ✓ Required PR reviews: ${reviewCount} approving review(s)`);
+    console.log(`  ✓ enforce_admins: ${adminsEnforced} — direct pushes blocked for admins`);
+    console.log("\nDirect pushes to main are now blocked. All code must go through a PR.");
   } else {
     console.warn("\nWarning: GitHub response did not confirm the check was applied.");
     console.warn("Applied checks:", JSON.stringify(applied));
