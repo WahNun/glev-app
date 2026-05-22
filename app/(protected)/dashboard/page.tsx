@@ -244,7 +244,11 @@ function RateTripletCard({ cards }: { cards: CardData[] }) {
           </div>
 
           {/* Disclaimer — always visible */}
-          <div style={{ fontSize: 10, color: "var(--text-faint)", lineHeight: 1.4 }}>
+          <div style={{
+            marginTop: "auto",
+            borderTop: "1px solid var(--border)", paddingTop: 8,
+            fontSize: 10, color: "var(--text-faint)", lineHeight: 1.4,
+          }}>
             {t("iob_bg_hint")}
           </div>
         </div>
@@ -1671,6 +1675,13 @@ function NonMealLightExpand({
         >
           {t("view_full_entry")}
         </button>
+      </div>
+      {/* Disclaimer — always visible */}
+      <div style={{
+        borderTop: `1px solid var(--border)`, paddingTop: 8,
+        fontSize: 10, color: "var(--text-faint)", lineHeight: 1.4,
+      }}>
+        {t("iob_bg_hint")}
       </div>
     </div>
   );
