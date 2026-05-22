@@ -32,7 +32,7 @@ export interface BolusDose {
 export function calcSingleIOB(dose: BolusDose, nowMs: number, diaMinutes: number): number {
   if (!dose.units || dose.units <= 0) return 0;
   const elapsedMin = (nowMs - new Date(dose.administeredAt).getTime()) / 60_000;
-  if (elapsedMin <= 0) return dose.units;
+  if (elapsedMin < 0) return 0;
   if (elapsedMin >= diaMinutes) return 0;
   const ratio = elapsedMin / diaMinutes;
   return dose.units * Math.pow(1 - ratio, 2);
