@@ -383,7 +383,7 @@ export default function IOBHistoryChart({ insulin, insulinType, meals }: Props) 
                         activeDoses.map((d, di) => {
                           const doseTime = new Date(d.administeredAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
                           const sourceName = d.label
-                            || (d.source === "meal" ? t("iob_peak_popover_meal_label") : "Bolus");
+                            || (d.source === "meal" ? t("iob_peak_popover_meal_label") : t("iob_peak_manual_bolus"));
                           return (
                             <div
                               key={di}
