@@ -1,8 +1,9 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useTranslations } from "next-intl";
-import { calcTotalIOB, getDIAMinutes, type BolusDose, type InsulinType } from "@/lib/iob";
+import { calcTotalIOB, calcSingleIOB, getDIAMinutes, type BolusDose, type InsulinType } from "@/lib/iob";
 import type { InsulinLog } from "@/lib/insulin";
+import type { Meal } from "@/lib/meals";
 
 const GREEN  = "#22D3A0";
 const AMBER  = "#F59E0B";
@@ -17,19 +18,24 @@ function iobColor(iob: number): string {
 const RADIUS = 44;
 const CIRC   = 2 * Math.PI * RADIUS;
 const MAX_IOB = 5;
-const SZ = 116;
+const SZ = 120;
 
-function CircleGauge({ iob, color }: { iob: number; color: string }) {
+function CircleGauge({ iob, color, cleared }: { iob: number; color: string; cleared: boolean }) {
   const filled = Math.min(iob / MAX_IOB, 1) * CIRC;
   return (
-    <svg width={SZ} height={SZ} viewBox={`0 0 ${SZ} ${SZ}`} aria-hidden="true">
+    <svg
+      width={SZ} height={SZ} viewBox={`0 0 ${SZ} ${SZ}`} aria-hidden="true"
+      style={{ filter: cleared ? "none" : `drop-shadow(0 0 10px ${color}55)` }}
+    >
       <circle
         cx={SZ / 2} cy={SZ / 2} r={RADIUS}
-        fill="none" stroke="var(--surface-soft)" strokeWidth={9}
+        fill="none" stroke="var(--surface-soft)" strokeWidth={10}
       />
       <circle
         cx={SZ / 2} cy={SZ / 2} r={RADIUS}
-        fill="none" stroke={color} strokeWidth={9}
+        fill="none"
+        stroke={cleared ? "var(--surface-soft)" : color}
+        strokeWidth={10}
         strokeDasharray={`${filled} ${CIRC}`}
         strokeLinecap="round"
         style={{
@@ -42,14 +48,100 @@ function CircleGauge({ iob, color }: { iob: number; color: string }) {
   );
 }
 
+/** Parabolic decay sparkline covering all active doses combined.
+ *  Gray = elapsed portion, coloured = remaining, dashed line = now. */
+function IOBSparkline({
+  doses, insulinType, now, color, cleared,
+}: {
+  doses: BolusDose[];
+  insulinType: InsulinType;
+  now: number;
+  color: string;
+  cleared: boolean;
+}) {
+  const diaMin = getDIAMinutes(insulinType);
+  const W = 220, H = 48, PAD = 4;
+  const STEPS = 80;
+
+  if (doses.length === 0) {
+    return (
+      <div style={{ height: H, background: "var(--surface-soft)", borderRadius: 8, opacity: 0.5 }} />
+    );
+  }
+
+  const earliestMs       = Math.min(...doses.map(d => new Date(d.administeredAt).getTime()));
+  const latestClearanceMs = Math.max(...doses.map(d => new Date(d.administeredAt).getTime() + diaMin * 60_000));
+  const totalDurationMs  = Math.max(latestClearanceMs - earliestMs, 1);
+
+  const maxIOB = doses.reduce((s, d) => s + d.units, 0);
+
+  const rawPts = Array.from({ length: STEPS + 1 }, (_, i) => {
+    const tMs     = earliestMs + (i / STEPS) * totalDurationMs;
+    const iobAtT  = doses.reduce((s, d) => s + calcSingleIOB(d, tMs, diaMin), 0);
+    const ratio   = maxIOB > 0 ? Math.max(0, Math.min(1, iobAtT / maxIOB)) : 0;
+    const x       = (i / STEPS) * W;
+    const y       = PAD + (1 - ratio) * (H - PAD * 2);
+    return { x, y };
+  });
+
+  const pts   = rawPts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+  const nowX  = Math.max(0, Math.min(W, ((now - earliestMs) / totalDurationMs) * W));
+  const uid   = `iob-card-${Math.round(earliestMs / 1000)}`;
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: "block", overflow: "visible" }}>
+      <defs>
+        <clipPath id={`${uid}-future`}>
+          <rect x={nowX} y="0" width={W - nowX} height={H} />
+        </clipPath>
+      </defs>
+      {/* full gray baseline */}
+      <polyline
+        points={pts}
+        fill="none"
+        stroke="var(--text-ghost)"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity="0.35"
+      />
+      {/* coloured remaining portion */}
+      {!cleared && (
+        <polyline
+          points={pts}
+          fill="none"
+          stroke={color}
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          clipPath={`url(#${uid}-future)`}
+        />
+      )}
+      {/* current-time dashed marker */}
+      {!cleared && (
+        <line
+          x1={nowX} y1={PAD - 2} x2={nowX} y2={H - PAD + 2}
+          stroke={color} strokeWidth="1.5" strokeDasharray="3 2" opacity="0.8"
+        />
+      )}
+    </svg>
+  );
+}
+
 interface Props {
   insulin: InsulinLog[];
   insulinType: InsulinType;
+  /** Today's meals — used to include meal-insulin doses that were never
+   *  mirrored into insulin_logs (the most common case for the meal-log
+   *  wizard path). Deduplicated against linked bolus logs to avoid
+   *  double-counting when the user explicitly tagged a bolus to a meal. */
+  meals?: Meal[];
 }
 
-export default function IOBCard({ insulin, insulinType }: Props) {
+export default function IOBCard({ insulin, insulinType, meals }: Props) {
   const t = useTranslations("dashboard");
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow]       = useState(() => Date.now());
+  const [flipped, setFlipped] = useState(false);
 
   useEffect(() => {
     const tick = () => setNow(Date.now());
@@ -60,67 +152,261 @@ export default function IOBCard({ insulin, insulinType }: Props) {
 
   const diaMin = getDIAMinutes(insulinType);
 
-  const doses: BolusDose[] = insulin
-    .filter(l => l.insulin_type === "bolus" && l.units > 0)
-    .map(l => ({ units: l.units, administeredAt: l.created_at }));
+  /** Combined BolusDose list from both insulin_logs and meals.insulin_units.
+   *  Meals whose `id` is already linked via a bolus log's `related_entry_id`
+   *  are skipped to prevent double-counting. */
+  const doses: BolusDose[] = useMemo(() => {
+    const result: BolusDose[] = [];
+    const linkedMealIds = new Set(
+      insulin
+        .filter(l => l.related_entry_id)
+        .map(l => l.related_entry_id as string),
+    );
+    for (const l of insulin) {
+      if (l.insulin_type === "bolus" && l.units > 0) {
+        result.push({ units: l.units, administeredAt: l.created_at });
+      }
+    }
+    if (meals) {
+      for (const m of meals) {
+        if ((m.insulin_units ?? 0) > 0 && !linkedMealIds.has(m.id)) {
+          result.push({
+            units: m.insulin_units!,
+            administeredAt: m.meal_time ?? m.created_at,
+          });
+        }
+      }
+    }
+    return result;
+  }, [insulin, meals]);
 
   const iob     = calcTotalIOB(doses, insulinType, now);
   const cleared = iob < 0.05;
   const color   = iobColor(iob);
 
-  const clearsInMin = cleared ? 0 : doses.reduce((max, d) => {
+  const activeDoses = doses.filter(d => {
+    const elapsed = (now - new Date(d.administeredAt).getTime()) / 60_000;
+    return elapsed >= 0 && elapsed < diaMin;
+  });
+
+  const clearsInMin = cleared ? 0 : activeDoses.reduce((max, d) => {
     const elapsed = (now - new Date(d.administeredAt).getTime()) / 60_000;
     if (elapsed >= diaMin) return max;
     return Math.max(max, Math.ceil(diaMin - elapsed));
   }, 0);
 
+  const insulinTypeLabel = insulinType === "rapid"
+    ? t("iob_dia_rapid")
+    : t("iob_dia_regular");
+
   return (
-    <div style={{
-      background: "var(--surface)", border: "1px solid var(--border)",
-      borderRadius: 18, padding: "20px 20px 18px",
-      display: "flex", flexDirection: "column", gap: 12, minHeight: 200,
-    }}>
-      <div style={{ fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.1em", fontWeight: 700 }}>
-        {t("active_insulin").toUpperCase()}
-      </div>
-
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
-        <CircleGauge iob={iob} color={cleared ? "var(--surface-soft)" : color} />
-        <div style={{ position: "absolute", display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
-          <div style={{
-            fontSize: 28, fontWeight: 800, lineHeight: 1,
-            fontFamily: "var(--font-mono)",
-            color: cleared ? "var(--text-ghost)" : color,
-          }}>
-            {cleared ? "0.0" : iob.toFixed(1)}
+    <div
+      onClick={() => setFlipped(f => !f)}
+      style={{
+        position: "relative",
+        perspective: 1200,
+        cursor: "pointer",
+        minHeight: 218,
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          transformStyle: "preserve-3d",
+          transition: "transform 0.55s cubic-bezier(0.4,0,0.2,1)",
+          transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
+          minHeight: 218,
+        }}
+      >
+        {/* ── FRONT ── */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            backfaceVisibility: "hidden",
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            borderRadius: 18,
+            padding: "18px 18px 16px",
+            boxSizing: "border-box",
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+            boxShadow: cleared ? "none" : `inset 0 0 28px ${color}09`,
+          }}
+        >
+          {/* header */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{
+              fontSize: 11, color: "var(--text-dim)",
+              letterSpacing: "0.1em", fontWeight: 700,
+            }}>
+              {t("active_insulin").toUpperCase()}
+            </div>
+            <span style={{ fontSize: 11, color: "var(--text-ghost)" }}>↺</span>
           </div>
-          <div style={{ fontSize: 12, color: "var(--text-dim)", fontWeight: 600 }}>IE</div>
+
+          {/* gauge */}
+          <div style={{
+            display: "flex", alignItems: "center",
+            justifyContent: "center", position: "relative",
+          }}>
+            <CircleGauge iob={iob} color={color} cleared={cleared} />
+            <div style={{
+              position: "absolute",
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 1,
+            }}>
+              <div style={{
+                fontSize: 34, fontWeight: 800, lineHeight: 1,
+                fontFamily: "var(--font-mono)",
+                color: cleared ? "var(--text-ghost)" : color,
+                textShadow: cleared ? "none" : `0 0 22px ${color}77`,
+              }}>
+                {cleared ? "0.0" : iob.toFixed(1)}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-dim)", fontWeight: 600 }}>IE</div>
+            </div>
+          </div>
+
+          {/* clearance chip */}
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            {cleared ? (
+              <span style={{
+                padding: "4px 14px", borderRadius: 99, fontSize: 12, fontWeight: 700,
+                background: "var(--surface-soft)", color: "var(--text-ghost)",
+                letterSpacing: "0.04em",
+              }}>
+                {t("iob_fully_cleared")}
+              </span>
+            ) : (
+              <span style={{
+                padding: "4px 14px", borderRadius: 99, fontSize: 12, fontWeight: 700,
+                background: `${color}22`, color, letterSpacing: "0.04em",
+              }}>
+                {t("iob_cleared_in", { minutes: clearsInMin })}
+              </span>
+            )}
+          </div>
+
+          {/* risk label */}
+          {!cleared && (
+            <div style={{
+              textAlign: "center", fontSize: 11,
+              color: "var(--text-ghost)", lineHeight: 1.4,
+            }}>
+              {iob < 1 ? t("iob_risk_low") : iob < 3 ? t("iob_risk_moderate") : t("iob_risk_high")}
+            </div>
+          )}
+        </div>
+
+        {/* ── BACK ── */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            backfaceVisibility: "hidden",
+            transform: "rotateY(180deg)",
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            borderRadius: 18,
+            padding: "16px 18px 14px",
+            boxSizing: "border-box",
+            display: "flex",
+            flexDirection: "column",
+            gap: 9,
+            overflow: "hidden",
+            boxShadow: cleared ? "none" : `inset 0 0 28px ${color}09`,
+          }}
+        >
+          {/* back header */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{
+              fontSize: 11,
+              color: cleared ? "var(--text-dim)" : color,
+              letterSpacing: "0.1em", fontWeight: 700,
+            }}>
+              {t("iob_back_title").toUpperCase()}
+            </div>
+            <span style={{ fontSize: 11, color: "var(--text-ghost)" }}>{t("flip_back")}</span>
+          </div>
+
+          {/* decay sparkline */}
+          <IOBSparkline
+            doses={doses}
+            insulinType={insulinType}
+            now={now}
+            color={color}
+            cleared={cleared}
+          />
+
+          {/* active dose list */}
+          {activeDoses.length > 0 ? (
+            <div style={{
+              display: "flex", flexDirection: "column", gap: 5,
+              flex: 1, minHeight: 0, overflowY: "auto",
+            }}>
+              {activeDoses
+                .slice()
+                .sort((a, b) =>
+                  new Date(b.administeredAt).getTime() - new Date(a.administeredAt).getTime()
+                )
+                .map((d, i) => {
+                  const singleIOB  = calcSingleIOB(d, now, diaMin);
+                  const timeStr    = new Date(d.administeredAt).toLocaleTimeString([], {
+                    hour: "2-digit", minute: "2-digit",
+                  });
+                  return (
+                    <div
+                      key={i}
+                      style={{
+                        display: "flex", alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "5px 8px", borderRadius: 8,
+                        background: "var(--surface-soft)",
+                        border: "1px solid var(--border)",
+                        fontSize: 12, gap: 6,
+                      }}
+                    >
+                      <span style={{
+                        color: "var(--text-dim)",
+                        fontFamily: "var(--font-mono)", flexShrink: 0,
+                      }}>
+                        {timeStr}
+                      </span>
+                      <span style={{ color: "var(--text-muted)", flexShrink: 0 }}>
+                        {d.units.toFixed(1)} IE
+                      </span>
+                      <span style={{
+                        color, fontWeight: 700,
+                        fontFamily: "var(--font-mono)",
+                        marginLeft: "auto", flexShrink: 0,
+                      }}>
+                        {t("iob_dose_remaining", { units: singleIOB.toFixed(1) })}
+                      </span>
+                    </div>
+                  );
+                })}
+            </div>
+          ) : (
+            <div style={{
+              flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <span style={{ fontSize: 12, color: "var(--text-ghost)" }}>
+                {t("iob_no_active_doses")}
+              </span>
+            </div>
+          )}
+
+          {/* DIA info footer */}
+          <div style={{
+            fontSize: 11, color: "var(--text-faint)", textAlign: "center",
+            borderTop: "1px solid var(--border)", paddingTop: 7,
+          }}>
+            {t("iob_dia_info", { minutes: diaMin, type: insulinTypeLabel })}
+          </div>
         </div>
       </div>
-
-      <div style={{ display: "flex", justifyContent: "center" }}>
-        {cleared ? (
-          <span style={{
-            padding: "4px 14px", borderRadius: 99, fontSize: 12, fontWeight: 700,
-            background: "var(--surface-soft)", color: "var(--text-ghost)", letterSpacing: "0.04em",
-          }}>
-            {t("iob_fully_cleared")}
-          </span>
-        ) : (
-          <span style={{
-            padding: "4px 14px", borderRadius: 99, fontSize: 12, fontWeight: 700,
-            background: `${color}22`, color, letterSpacing: "0.04em",
-          }}>
-            {t("iob_cleared_in", { minutes: clearsInMin })}
-          </span>
-        )}
-      </div>
-
-      {!cleared && (
-        <div style={{ textAlign: "center", fontSize: 11, color: "var(--text-ghost)", lineHeight: 1.4 }}>
-          {iob < 1 ? t("iob_risk_low") : iob < 3 ? t("iob_risk_moderate") : t("iob_risk_high")}
-        </div>
-      )}
     </div>
   );
 }
