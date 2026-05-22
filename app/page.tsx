@@ -572,10 +572,19 @@ export default function PreviewHome() {
         </h2>
         <div style={{ display: "flex", flexDirection: "column", gap: 80 }}>
           {[
-            { img: "/mockups/engine.png",    title: t("deepdive_voice_title"),    body: t("deepdive_voice_body") },
-            { img: "/mockups/entries.png",   title: t("deepdive_macro_title"),    body: t("deepdive_macro_body") },
-            { img: "/mockups/dashboard.png", title: t("deepdive_cgm_title"),      body: t("deepdive_cgm_body") },
-            { img: "/mockups/insights.png",  title: t("deepdive_insights_title"), body: t("deepdive_insights_body") },
+            { img: "/mockups/engine.png",   title: t("deepdive_voice_title"),    body: t("deepdive_voice_body") },
+            { img: "/mockups/entries.png",  title: t("deepdive_macro_title"),    body: t("deepdive_macro_body") },
+            {
+              img: "",
+              title: t("deepdive_cgm_title"),
+              body: t("deepdive_cgm_body"),
+              liveNode: (
+                <div style={{ width: "min(320px, 100%)" }}>
+                  <AppMockupPhone lockTab="dashboard" hideTopCog />
+                </div>
+              ),
+            },
+            { img: "/mockups/insights.png", title: t("deepdive_insights_title"), body: t("deepdive_insights_body") },
           ].map((row, i) => (
             <FeatureImageRow key={row.title} row={row} reverse={i % 2 === 1} />
           ))}
@@ -1103,13 +1112,13 @@ function FeatureImageRow({
   row,
   reverse,
 }: {
-  row: { img: string; title: string; body: string };
+  row: { img: string; title: string; body: string; liveNode?: React.ReactNode };
   reverse: boolean;
 }) {
   return (
     <div className={`glev-feat-row${reverse ? " glev-feat-row--rev" : ""}`}>
       <div className="glev-feat-row__img" style={{ display: "flex", justifyContent: "center" }}>
-        <PhoneShell src={row.img} alt={row.title} />
+        {row.liveNode ?? <PhoneShell src={row.img} alt={row.title} />}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <h3
