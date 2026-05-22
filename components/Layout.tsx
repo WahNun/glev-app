@@ -153,6 +153,36 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     }
   }, [pathname, pendingPath]);
 
+  // Header scroll-fade: hide on scroll-down, reveal on scroll-up.
+  // Only active on mobile (the fixed header is only rendered there).
+  // Engine keeps the header always visible — its cockpit doesn't scroll
+  // inside .glev-main so the listener never fires anyway, but we also
+  // reset `headerHidden` whenever the route changes so navigating away
+  // from a long page never leaves the header stuck in the hidden state.
+  const mainRef = useRef<HTMLElement>(null);
+  const [headerHidden, setHeaderHidden] = useState(false);
+  const lastScrollYRef = useRef(0);
+  useEffect(() => {
+    setHeaderHidden(false);
+    lastScrollYRef.current = 0;
+  }, [pathname]);
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const y = el.scrollTop;
+      const delta = y - lastScrollYRef.current;
+      if (delta > 6) {
+        setHeaderHidden(true);
+      } else if (delta < -4) {
+        setHeaderHidden(false);
+      }
+      lastScrollYRef.current = y;
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
   const navTo = (path: string) => {
     hapticSelection();
     // 2026-05-18 round 7 (TestFlight tap loss fix): defer voice stop into
@@ -437,6 +467,13 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         background: SURFACE,
         borderBottom: `1px solid ${BORDER}`,
         alignItems: "center", justifyContent: "space-between",
+        // Scroll-fade: slide up + fade out on scroll-down, reverse on scroll-up.
+        transform: headerHidden ? "translateY(-100%)" : "translateY(0)",
+        opacity: headerHidden ? 0 : 1,
+        transition: "transform 220ms cubic-bezier(.4,0,.2,1), opacity 220ms ease",
+        // Keep pointer-events off when hidden so taps don't land on the
+        // invisible header instead of the content below.
+        pointerEvents: headerHidden ? "none" : undefined,
       }}>
         <div
           onClick={() => setAboutOpen(true)}
@@ -712,7 +749,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         </button>
       </aside>
 
-      <main className="glev-main" style={{ flex: 1, padding: "28px 32px", maxWidth: "100%", overflowX: "hidden", zoom: 1.12 }}>
+      <main ref={mainRef} className="glev-main" style={{ flex: 1, padding: "28px 32px", maxWidth: "100%", overflowX: "hidden", zoom: 1.12 }}>
         {children}
       </main>
 
