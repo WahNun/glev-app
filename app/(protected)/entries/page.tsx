@@ -321,6 +321,7 @@ export default function EntriesPage() {
   const [editingId, setEditingId] = useState<string|null>(null);
   const [insulinType, setInsType]  = useState<InsulinType>("rapid");
   const [manualOpen, setManualOpen] = useState(false);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const filtersWrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { fetchInsulinType().then(setInsType).catch(() => {}); }, []);
@@ -591,37 +592,6 @@ export default function EntriesPage() {
     };
   }, []);
 
-  // Deep-link via URL hash: /entries#<id> auto-expands to the full view so
-  // "View full entry →" from the dashboard lands the user on the right row.
-  // Also handles /entries#insulin-<id> for insulin log rows (navigated from
-  // the IOB peak popover — Task #501).
-  useEffect(() => {
-    const hash = typeof window !== "undefined" ? window.location.hash.replace(/^#/, "") : "";
-    if (!hash) return;
-
-    // Insulin log deep-link: #insulin-<uuid>
-    if (hash.startsWith("insulin-")) {
-      const insulinId = hash.slice("insulin-".length);
-      if (!insulinId || insulin.length === 0) return;
-      if (insulin.some(l => l.id === insulinId)) {
-        setExpanded(insulinId);
-        requestAnimationFrame(() => {
-          document.getElementById(`entry-insulin-${insulinId}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
-        });
-      }
-      return;
-    }
-
-    // Meal deep-link: #<uuid>
-    if (meals.length === 0) return;
-    if (meals.some(m => m.id === hash)) {
-      setExpanded(hash);
-      requestAnimationFrame(() => {
-        document.getElementById(`entry-${hash}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    }
-  }, [meals, insulin]);
-
   async function handleDelete(id: string) {
     if (!confirm("Delete this entry? This cannot be undone.")) return;
     setDeleting(id);
@@ -725,7 +695,7 @@ export default function EntriesPage() {
     [filters.dateRange, filters.dateFrom, filters.dateTo],
   );
 
-  const filtered = rows.filter(r => {
+  const filtered = useMemo(() => rows.filter(r => {
     // Date range — same AND-across-sections rule as the other filters.
     if (dateBounds) {
       const t = parseDbTs(r.ts);
@@ -777,7 +747,52 @@ export default function EntriesPage() {
       if (!txt.toLowerCase().includes(q)) return false;
     }
     return true;
-  });
+  }), [rows, filters, search, dateBounds]);
+
+  // Reset card navigation index to 0 whenever the filtered list changes
+  // (filter change, search change, or underlying data refresh).
+  useEffect(() => {
+    setCurrentIndex(0);
+    setExpanded(null);
+    setEditingId(null);
+  }, [filters, search, rows]);
+
+  // Deep-link via URL hash: /entries#<id> auto-expands to the full view so
+  // "View full entry →" from the dashboard lands the user on the right row.
+  // Also handles /entries#insulin-<id> for insulin log rows (navigated from
+  // the IOB peak popover — Task #501).
+  // With single-card navigation (Task #516), we also set currentIndex so the
+  // linked card becomes the visible one.
+  useEffect(() => {
+    const hash = typeof window !== "undefined" ? window.location.hash.replace(/^#/, "") : "";
+    if (!hash) return;
+
+    // Insulin log deep-link: #insulin-<uuid>
+    if (hash.startsWith("insulin-")) {
+      const insulinId = hash.slice("insulin-".length);
+      if (!insulinId || insulin.length === 0) return;
+      if (insulin.some(l => l.id === insulinId)) {
+        setExpanded(insulinId);
+        const idx = filtered.findIndex(r => r.id === insulinId);
+        if (idx >= 0) setCurrentIndex(idx);
+      }
+      return;
+    }
+
+    // Meal deep-link: #<uuid>
+    if (meals.length === 0) return;
+    if (meals.some(m => m.id === hash)) {
+      setExpanded(hash);
+      const idx = filtered.findIndex(r => r.id === hash);
+      if (idx >= 0) setCurrentIndex(idx);
+    }
+  }, [meals, insulin, filtered]);
+
+  // Render-time clamp: safeIndex never exceeds filtered.length-1 so the
+  // card render and counter are crash-safe even before the reset-useEffect
+  // fires (useEffect runs after render, so a filter change that shrinks the
+  // list causes ONE render with the stale index before it is reset to 0).
+  const safeIndex = filtered.length > 0 ? Math.min(currentIndex, filtered.length - 1) : 0;
 
   const inp: React.CSSProperties = { background:"var(--input-bg)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"9px 14px", color:"var(--text)", fontSize:14, outline:"none" };
 
@@ -1006,10 +1021,40 @@ export default function EntriesPage() {
           )}
         </div>
       ) : (
-        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-          {filtered.map(r => {
-            // BOLUS row — insulin event with 5-state outcome badge.
-            if (r.kind === "bolus") {
+        <div>
+          {/* Arrow nav: ‹ single card › */}
+          <div style={{ display:"flex", alignItems:"flex-start", gap:10 }}>
+            {/* ‹ prev button */}
+            <button
+              onClick={() => { setCurrentIndex(i => Math.max(0, i - 1)); setExpanded(null); setEditingId(null); }}
+              disabled={safeIndex === 0}
+              aria-label="Previous entry"
+              style={{
+                flexShrink:0, width:36, height:36, borderRadius:"50%",
+                border:`1px solid ${BORDER}`, background:"var(--surface)",
+                color:"var(--text-body)", display:"flex", alignItems:"center",
+                justifyContent:"center", marginTop:8,
+                cursor:safeIndex === 0 ? "default" : "pointer",
+                opacity:safeIndex === 0 ? 0.3 : 1,
+                transition:"opacity 0.15s",
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="15 18 9 12 15 6"/>
+              </svg>
+            </button>
+
+            {/* Single card — renders only filtered[safeIndex].
+                safeIndex is computed at render time (see above) and
+                clamps currentIndex so we never access filtered[undefined]
+                during the render that fires before the reset-useEffect
+                runs (e.g. user at index 10, filter narrows list to 3). */}
+            <div style={{ flex:1, minWidth:0 }}>
+              {(() => {
+                const r = filtered[safeIndex];
+                if (!r) return null;
+                // BOLUS row — insulin event with 5-state outcome badge.
+                if (r.kind === "bolus") {
               const i = r.data;
               const isOpen = expanded === i.id;
               return (
@@ -1479,7 +1524,34 @@ export default function EntriesPage() {
                 )}
               </div>
             );
-          })}
+              })()}
+            </div>
+
+            {/* › next button */}
+            <button
+              onClick={() => { setCurrentIndex(i => Math.min(filtered.length - 1, i + 1)); setExpanded(null); setEditingId(null); }}
+              disabled={safeIndex >= filtered.length - 1}
+              aria-label="Next entry"
+              style={{
+                flexShrink:0, width:36, height:36, borderRadius:"50%",
+                border:`1px solid ${BORDER}`, background:"var(--surface)",
+                color:"var(--text-body)", display:"flex", alignItems:"center",
+                justifyContent:"center", marginTop:8,
+                cursor:safeIndex >= filtered.length - 1 ? "default" : "pointer",
+                opacity:safeIndex >= filtered.length - 1 ? 0.3 : 1,
+                transition:"opacity 0.15s",
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="9 6 15 12 9 18"/>
+              </svg>
+            </button>
+          </div>
+
+          {/* Counter: "X / Y" */}
+          <div style={{ textAlign:"center", marginTop:10, fontSize:13, color:"var(--text-faint)", fontVariantNumeric:"tabular-nums" }}>
+            {safeIndex + 1} / {filtered.length}
+          </div>
         </div>
       )}
 
