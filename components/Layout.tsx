@@ -137,6 +137,65 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // tap means "stop recording" (not "open quick-add"), and a "Speak"
   // pill appears in the header as a global cue + secondary stop tap.
   const voice = useVoiceRecording();
+
+  // ── FAB independent hit-area refs ──────────────────────────────────
+  // iOS WKWebView clips pointer hit-testing to the layout bounds of a
+  // position:fixed parent. The 64px Glev bubble protrudes ~19 px above
+  // the nav's top edge, so taps on the upper half of the circle fall
+  // THROUGH to whatever dashboard card sits behind the nav. Fix: the
+  // interactive button for the FAB is its own position:fixed element
+  // (not a child of <nav>). MobileGlevFab is purely visual/decorative.
+  const fabHitRef = useRef<HTMLButtonElement>(null);
+  const fabTimerRef = useRef<number | null>(null);
+  const fabLongFiredRef = useRef(false);
+  const fabPointerHandledRef = useRef(false);
+  const fabClearTimer = () => {
+    if (fabTimerRef.current !== null) {
+      window.clearTimeout(fabTimerRef.current);
+      fabTimerRef.current = null;
+    }
+  };
+  const fabHandlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    fabLongFiredRef.current = false;
+    fabClearTimer();
+    fabTimerRef.current = window.setTimeout(() => {
+      fabLongFiredRef.current = true;
+      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+        try { navigator.vibrate?.(15); } catch { /* noop */ }
+      }
+      if (voice.recording) return;
+      setQuickAddOpen(true);
+    }, 500);
+  };
+  const fabHandlePointerUp = () => {
+    fabClearTimer();
+    if (!fabLongFiredRef.current) {
+      fabPointerHandledRef.current = true;
+      if (voice.recording) {
+        voice.requestStop();
+      } else {
+        router.push("/engine");
+      }
+    }
+  };
+  const fabHandlePointerCancel = () => {
+    fabClearTimer();
+    fabLongFiredRef.current = false;
+    fabPointerHandledRef.current = false;
+  };
+  const fabHandleClick = () => {
+    if (fabPointerHandledRef.current) {
+      fabPointerHandledRef.current = false;
+      return;
+    }
+    if (voice.recording) {
+      voice.requestStop();
+    } else {
+      router.push("/engine");
+    }
+  };
+
   // Footer-nav helper: always navigate, but gracefully stop any active
   // voice recording first (2026-05-17 user request: "footer navigation
   // sollte zu jeder zeit erlaubt sein egal welchen zustand bestimmte
@@ -889,42 +948,14 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
             </svg>
           )}
         />
+        {/* MobileGlevFab is PURELY VISUAL — no pointer events.
+            The actual interactive button is the separate
+            position:fixed fabHitRef button rendered after </nav>.
+            See fabHandle* handlers above for the interaction logic. */}
         <MobileGlevFab
           label={tNav("glev")}
           active={quickAddOpen || voice.recording}
           recording={voice.recording}
-          // Short-tap behaviour (2026-05-17 round 5 — user request:
-          // "der glev button sollte direkt in den engine screen
-          // springen und aufnahme starten wenn man ihn kurz drückt
-          // außerhalb des glev screens"). Two states only now:
-          //   1. Recording in progress → stop (any tap length).
-          //   2. Anything else → jump to /engine and auto-start a
-          //      voice take. The `vt` (voice-token) cache-buster
-          //      guarantees the engine page treats every tap as a
-          //      fresh trigger even when the user is already on
-          //      /engine — without it, the searchParams shape
-          //      (?tab=engine&voice=1) is identical across taps and
-          //      the auto-start effect's de-dup guard would swallow
-          //      repeat taps. See engine/page.tsx voiceLastTokenRef.
-          // The quick-add sheet now lives EXCLUSIVELY behind the
-          // long-press affordance below.
-          onShortPress={() => {
-            if (voice.recording) {
-              voice.requestStop();
-              return;
-            }
-            router.push("/engine");
-          }}
-          // Long-press always opens the menu, regardless of session
-          // state — that's the "secondary" affordance per 2026-05-17
-          // user request: short tap = repeat voice, long press = menu.
-          onLongPress={() => {
-            if (voice.recording) {
-              // Don't yank focus away mid-recording.
-              return;
-            }
-            setQuickAddOpen(true);
-          }}
         />
         <MobileTab
           label={tNav("insights")}
@@ -952,6 +983,53 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           )}
         />
       </nav>
+
+      {/* ── FAB independent hit-area button ─────────────────────────────
+          This transparent button is its own position:fixed element,
+          NOT a child of <nav>. On iOS WKWebView, position:fixed parents
+          clip pointer hit-testing to their own layout bounds, so taps on
+          the 64px bubble that protrudes above the nav fell through to
+          dashboard cards (e.g. the Adaptive Score card flipped on tap).
+          Positioning: bottom = nav-total - 15px places the lower edge of
+          the 64px circle at ~28px from the screen bottom (non-notched),
+          matching exactly where the visual bubble lives in MobileGlevFab.
+          zIndex 101 > nav (100) so it captures all taps on the bubble.
+          ─────────────────────────────────────────────────────────────── */}
+      <button
+        ref={fabHitRef}
+        onPointerDown={fabHandlePointerDown}
+        onPointerUp={fabHandlePointerUp}
+        onPointerCancel={fabHandlePointerCancel}
+        onPointerLeave={fabHandlePointerCancel}
+        onClick={fabHandleClick}
+        data-glev-fab-hit="true"
+        aria-haspopup="dialog"
+        aria-expanded={quickAddOpen || voice.recording}
+        aria-label={voice.recording ? "Glev — Aufnahme beenden" : "Glev"}
+        style={{
+          position: "fixed",
+          bottom: "calc(var(--nav-bottom-total) - 15px)",
+          left: "50%",
+          transform: headerHidden
+            ? "translateX(-50%) translateY(150%)"
+            : "translateX(-50%) translateY(0)",
+          opacity: headerHidden ? 0 : 1,
+          transition: "transform 220ms cubic-bezier(.4,0,.2,1), opacity 220ms ease",
+          pointerEvents: headerHidden ? "none" : undefined,
+          width: 64,
+          height: 64,
+          borderRadius: "50%",
+          border: "none",
+          background: "transparent",
+          padding: 0,
+          margin: 0,
+          cursor: "pointer",
+          zIndex: 101,
+          WebkitTapHighlightColor: "transparent",
+          touchAction: "manipulation",
+          outline: "none",
+        }}
+      />
 
       {/* Shared quick-add sheet, triggered by the centre Glev slot in
           the bottom nav. Same component (and same `useQuickAddVisibleItems`
@@ -1002,110 +1080,34 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
  * UX revision the bottom-nav Glev slot no longer points at /engine
  * directly; the sheet hosts that link plus everything else.
  */
+/**
+ * PURELY VISUAL — no pointer events, no event handlers.
+ * All interaction is handled by the separate position:fixed
+ * fabHitRef button in the parent Layout component.
+ * See "FAB independent hit-area" comment block there.
+ */
 function MobileGlevFab({
-  label, active, onShortPress, onLongPress, recording = false,
+  label, active, recording = false,
 }: {
   label: string;
   active: boolean;
-  onShortPress: () => void;
-  onLongPress: () => void;
   recording?: boolean;
 }) {
-  // Long-press detection: 500 ms threshold matches the iOS/Material
-  // convention for context-menu-style long presses. We intentionally
-  // do NOT debounce a separate onClick handler because pointer events
-  // already cover mouse + touch + pen; the onClick prop on the button
-  // is kept only as a keyboard-activation fallback (Enter / Space)
-  // and is gated by `pointerHandledRef` so taps don't double-fire.
-  const timerRef = useRef<number | null>(null);
-  const longFiredRef = useRef(false);
-  // NOTE: pointerHandledRef is set in pointerUp (NOT pointerDown).
-  // If set in pointerDown, iOS WKWebView drops the pointerUp event when
-  // React commits a re-render between down and up — then handleClick
-  // sees pointerHandledRef=true and bails → dead tap. Setting it only
-  // in pointerUp means a dropped pointerUp still lets the synthetic
-  // click through as fallback (same fix as MobileTab round 10).
-  const pointerHandledRef = useRef(false);
-
-  const clearTimer = () => {
-    if (timerRef.current !== null) {
-      window.clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-  };
-
-  const handlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
-    // setPointerCapture routes ALL pointer events to this element even
-    // if the pointer drifts outside the button boundary between down and
-    // up — prevents pointerLeave from cancelling the gesture prematurely
-    // (same fix as MobileTab round 11).
-    e.currentTarget.setPointerCapture(e.pointerId);
-    longFiredRef.current = false;
-    clearTimer();
-    timerRef.current = window.setTimeout(() => {
-      longFiredRef.current = true;
-      // Tiny haptic confirms the long-press fired.
-      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-        try { navigator.vibrate?.(15); } catch { /* noop */ }
-      }
-      onLongPress();
-    }, 500);
-  };
-
-  const handlePointerUp = () => {
-    clearTimer();
-    if (!longFiredRef.current) {
-      pointerHandledRef.current = true;
-      onShortPress();
-    }
-  };
-
-  const handlePointerCancel = () => {
-    clearTimer();
-    longFiredRef.current = false;
-    pointerHandledRef.current = false;
-  };
-
-  const handleClick = () => {
-    if (pointerHandledRef.current) {
-      pointerHandledRef.current = false;
-      return;
-    }
-    onShortPress();
-  };
-
   return (
-    <button
-      onPointerDown={handlePointerDown}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerCancel}
-      onPointerLeave={handlePointerCancel}
-      onClick={handleClick}
+    <div
+      aria-hidden="true"
       data-glev-fab="true"
-      aria-haspopup="dialog"
-      aria-expanded={active}
-      aria-label={recording ? `${label} — Aufnahme beenden` : label}
       style={{
         flex: "1 1 0",
         minWidth: 0,
-        // IDENTICAL flex layout to MobileTab on purpose — that's how the
-        // "Glev" caption ends up on the exact same baseline as the
-        // captions of the surrounding tabs. The lifted bubble is drawn
-        // OUTSIDE the flex flow (position: absolute inside a normal
-        // 22×22 icon slot) so it can overlap the nav top edge without
-        // pushing the label around.
         display: "flex", flexDirection: "column",
         alignItems: "center", justifyContent: "center",
         gap: 3, padding: "3px 2px", height: 44,
-        border: "none", background: "transparent", cursor: "pointer",
         color: ACCENT,
         fontSize: 11, fontWeight: 600, letterSpacing: "0.005em",
-        WebkitTapHighlightColor: "transparent",
-        // The bubble protrudes above this button (overflowing the nav
-        // top border by design, per 2026-05-17 user request). overflow
-        // must stay visible — the parent <nav> already defaults to
-        // overflow: visible too, so the bubble paints freely.
         overflow: "visible",
+        pointerEvents: "none",
+        userSelect: "none",
       }}
     >
       {/* Outer icon slot: 22×22 — positioning anchor for the Glev AI
@@ -1139,7 +1141,7 @@ function MobileGlevFab({
           overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%",
         }}
       >{label}</span>
-    </button>
+    </div>
   );
 }
 
