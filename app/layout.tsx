@@ -137,14 +137,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {/* Pre-hydration theme bootstrap. Runs synchronously before React
             mounts so the very first painted frame already has the right
             data-theme attribute and theme-color meta — no FOUC. */}
-        <script dangerouslySetInnerHTML={{ __html: NO_FLICKER_THEME_SCRIPT }} />
+        {/* suppressHydrationWarning on each <script>: Replit's devtools
+            proxy modifies these tags in the HTML before React hydrates,
+            causing attribute + innerHTML mismatches. suppressHydrationWarning
+            tells React to skip mismatch checks on this specific element.
+            No effect in production — Vercel doesn't inject anything. */}
+        <script suppressHydrationWarning dangerouslySetInnerHTML={{ __html: NO_FLICKER_THEME_SCRIPT }} />
         {/* Safe-area sentinel: measures env(safe-area-inset-bottom) via a
             sentinel element and writes --safe-bottom onto <html> so the
             footer always covers the home indicator regardless of what
             CSS env() reports in Capacitor/WKWebView. Runs synchronously
             (no defer/async) so the variable is set before the first paint.
             Re-measures on resize / orientation-change. */}
-        <script dangerouslySetInnerHTML={{ __html: `
+        <script suppressHydrationWarning dangerouslySetInnerHTML={{ __html: `
 (function(){
   function measure(){
     var s=document.createElement('div');
