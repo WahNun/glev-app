@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { useTranslations } from "next-intl";
-import { buildDoses, buildIOBHistory, getDIAMinutes, getActiveDosesAtTime, type InsulinType } from "@/lib/iob";
+import { buildDoses, buildIOBHistory, detectIOBPeaks, getDIAMinutes, getActiveDosesAtTime, type InsulinType } from "@/lib/iob";
 import type { InsulinLog } from "@/lib/insulin";
 import type { Meal } from "@/lib/meals";
 
@@ -112,18 +112,14 @@ export default function IOBHistoryChart({ insulin, insulinType, meals }: Props) 
     timeLabels.push({ x, label, i: h });
   }
 
+  // Detect local maxima using the extracted pure function (lib/iob.ts → detectIOBPeaks).
+  // We enrich each IOBPeak with SVG coordinates for rendering.
   const peaks = useMemo(() => {
     if (!hasActivity) return [];
-    const found: Array<{ x: number; y: number; iob: number; tMs: number }> = [];
-    for (let i = 1; i < samples.length - 1; i++) {
-      const cur  = samples[i].iob;
-      const prev = samples[i - 1].iob;
-      const next = samples[i + 1].iob;
-      if (cur > prev && cur > next && cur - Math.min(prev, next) >= 0.5) {
-        found.push({ x: pts[i].x, y: pts[i].y, iob: cur, tMs: samples[i].tMs });
-      }
-    }
-    return found.sort((a, b) => b.iob - a.iob).slice(0, 3);
+    return detectIOBPeaks(samples).map(pk => {
+      const idx = samples.findIndex(s => s.tMs === pk.tMs);
+      return { ...pk, x: idx >= 0 ? pts[idx].x : 0, y: idx >= 0 ? pts[idx].y : 0 };
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [samples, hasActivity]);
 

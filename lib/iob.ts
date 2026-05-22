@@ -157,6 +157,39 @@ export function buildIOBHistory(
   });
 }
 
+/**
+ * A detected local-maximum in an IOB timeline.
+ */
+export interface IOBPeak {
+  iob: number;
+  tMs: number;
+}
+
+/**
+ * Detects local-maximum peaks in an IOB sample array.
+ *
+ * A sample qualifies as a peak when:
+ *   - it is strictly greater than both its immediate neighbours, AND
+ *   - its value exceeds the lower of the two neighbours by at least 0.5 IE
+ *     (suppresses minor bumps on a long plateau).
+ *
+ * At most 3 peaks are returned, ranked by descending IOB value.
+ * Samples at index 0 and the last index can never be peaks.
+ */
+export function detectIOBPeaks(samples: IOBSample[]): IOBPeak[] {
+  if (samples.length < 3) return [];
+  const found: IOBPeak[] = [];
+  for (let i = 1; i < samples.length - 1; i++) {
+    const cur  = samples[i].iob;
+    const prev = samples[i - 1].iob;
+    const next = samples[i + 1].iob;
+    if (cur > prev && cur > next && cur - Math.min(prev, next) >= 0.5) {
+      found.push({ iob: cur, tMs: samples[i].tMs });
+    }
+  }
+  return found.sort((a, b) => b.iob - a.iob).slice(0, 3);
+}
+
 export function applyIOBCorrection(recommendation: number, iob: number): number {
   return Math.max(0, Math.round((recommendation - iob) * 10) / 10);
 }
