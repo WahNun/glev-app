@@ -33,8 +33,37 @@
 
 import { expect, test, type Page, type BrowserContext } from "@playwright/test";
 import fs from "node:fs";
+import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import { TEST_USER_FIXTURE_PATH } from "../global-setup";
+
+// ---------------------------------------------------------------------------
+// Translation-key guard — fails immediately if en.json is missing any of the
+// three keys the English locale variant of this test relies on.  This catches
+// regressions where a key is renamed or accidentally removed before they ever
+// reach the browser.
+// ---------------------------------------------------------------------------
+const EN_MESSAGES = JSON.parse(
+  fs.readFileSync(
+    path.resolve(process.cwd(), "messages/en.json"),
+    "utf8",
+  ),
+) as Record<string, Record<string, string>>;
+
+const REQUIRED_EN_KEYS: Array<[namespace: string, key: string]> = [
+  ["engine", "icr_adaptive_label"],
+  ["engine", "icr_static_label"],
+  ["engine", "btn_save_with_bolus"],
+];
+
+test("messages/en.json contains all ICR-chip translation keys", () => {
+  for (const [ns, key] of REQUIRED_EN_KEYS) {
+    expect(
+      EN_MESSAGES[ns]?.[key],
+      `messages/en.json is missing "${ns}.${key}" — the English ICR-chip test would fail at runtime`,
+    ).toBeTruthy();
+  }
+});
 
 interface TestUser { email: string; password: string; userId: string; }
 
@@ -336,5 +365,64 @@ test.describe("ICR-chip / Speichern-button consistency (Task #580 regression gua
 
     expect(doseOnEinstellungen).not.toBe(doseBackOnAdaptiv);
     expect(doseBackOnAdaptiv, "save button must show a dose after switching back").toMatch(/IE/);
+  });
+
+  // -------------------------------------------------------------------------
+  // English locale variant (Task #585)
+  // Repeats the primary chip-switch assertion with NEXT_LOCALE=en so that a
+  // missing or misspelled translation key for "Adaptive", "Settings", or the
+  // save-button pattern is caught before it reaches users.
+  //
+  // Chip labels in EN:  "Adaptive" / "Settings"  (icr_adaptive_label / icr_static_label)
+  // Save-button in EN:  "✓ Save — X.X u"          (btn_save_with_bolus, units="u")
+  // -------------------------------------------------------------------------
+  test("EN locale: switching from Adaptive to Settings chip updates the Save-button dose", async ({ page, context }) => {
+    await setLocaleCookie(context, "en");
+    await installEngineNetworkMocks(page);
+    await loginAsTestUser(page);
+    await page.goto("/engine");
+
+    await runEngineWithBolusToggle(page);
+
+    // The Adaptive chip is the default selection. It renders a button that
+    // contains both the label "Adaptive" and a numeric dose ("u" unit suffix).
+    // Scoping to buttons with a digit prevents matching the sidebar nav link
+    // that also reads "Adaptive" in some layouts.
+    const adaptiveChip = page
+      .locator("button")
+      .filter({ hasText: /Adaptive/ })
+      .filter({ hasText: /\d/ })
+      .first();
+    await expect(adaptiveChip).toBeVisible({ timeout: 20_000 });
+
+    // Settings chip — appears alongside Adaptive once showBoth = true.
+    // Filtered by /\d/ to exclude any Settings nav button (no dose label there).
+    const settingsChip = page
+      .locator("button")
+      .filter({ hasText: /Settings/ })
+      .filter({ hasText: /\d/ })
+      .first();
+    await expect(settingsChip).toBeVisible({ timeout: 10_000 });
+
+    // Save button in EN: "✓ Save — 4.3 u". Matching "✓ Save" is unique enough
+    // because the unit suffix ("u") differs from any plain "Save" navigation
+    // control that does not carry a dose label.
+    const saveBtn = page
+      .locator("button")
+      .filter({ hasText: /✓ Save/ })
+      .first();
+    await expect(saveBtn).toBeVisible({ timeout: 10_000 });
+    const doseBefore = await saveBtn.textContent();
+    expect(doseBefore, "EN save button must show a dose before chip switch").toMatch(/\d/);
+
+    // Switch to Settings chip — activeDose must update to eagerDoses.static,
+    // NOT stay stuck on result.dose (the pre-fix regression).
+    await settingsChip.click();
+
+    await expect(saveBtn).not.toHaveText(doseBefore ?? "", { timeout: 5_000 });
+
+    const doseAfter = await saveBtn.textContent();
+    expect(doseAfter, "EN save button must still carry a dose after chip switch").toMatch(/\d/);
+    expect(doseBefore).not.toBe(doseAfter);
   });
 });
