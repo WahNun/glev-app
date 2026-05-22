@@ -310,6 +310,34 @@ test.describe("Desktop Sidebar", () => {
     await expect(page).not.toHaveURL(/\/login/);
     await expect(signOutBtn).toBeVisible({ timeout: 5_000 });
   });
+
+  test("Sign Out confirmation resets after navigating away and back", async ({ page }) => {
+    // 1. Start on /dashboard (beforeEach already lands here after login).
+    await expect(page).toHaveURL(/\/dashboard/);
+
+    // 2. Click Sign Out — confirmation row should appear.
+    const signOutBtn = page.locator(".glev-sidebar").getByRole("button", { name: /sign out of glev/i });
+    await expect(signOutBtn).toBeVisible({ timeout: 15_000 });
+    await signOutBtn.click();
+
+    const confirmBtn = page.locator(".glev-sidebar").getByRole("button", { name: /confirm sign out/i });
+    await expect(confirmBtn).toBeVisible({ timeout: 5_000 });
+
+    // 3. Navigate to /settings via the sidebar — without confirming sign out.
+    const settingsBtn = page.locator(".glev-sidebar").getByRole("button", { name: /^Einstell\.$/ });
+    await settingsBtn.click();
+    await expect(page).toHaveURL(/\/settings/, { timeout: 15_000 });
+
+    // 4. Navigate back to /dashboard via the sidebar.
+    const dashboardBtn = page.locator(".glev-sidebar").getByRole("button", { name: /^Dashboard$/ });
+    await dashboardBtn.click();
+    await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
+
+    // 5. The Sign Out button (not the confirm row) must be visible again —
+    //    proving that signOutConfirm state was reset by the re-mount.
+    await expect(signOutBtn).toBeVisible({ timeout: 10_000 });
+    await expect(confirmBtn).toBeHidden();
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
