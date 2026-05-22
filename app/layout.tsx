@@ -139,7 +139,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             what the CSS env() function reports. Runs synchronously (no
             defer/async) so the variable is set before the first paint. Also
             re-measures on resize / orientation-change. */}
-        <script dangerouslySetInnerHTML={{ __html: `
+        {/* Safe-area sentinel: measures env(safe-area-inset-bottom) via a
+            sentinel element and writes --safe-bottom onto <html> so the
+            footer always covers the home indicator. Uses next/script with
+            strategy="beforeInteractive" so Next.js injects it as a plain
+            HTML <script> tag outside the React component tree — which
+            prevents the Replit devtools proxy from causing a hydration
+            mismatch by modifying the raw HTML before React can reconcile. */}
+        <Script id="safe-area-measure" strategy="beforeInteractive">{`
 (function(){
   function measure(){
     var s=document.createElement('div');
@@ -155,7 +162,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   measure();
   window.addEventListener('resize',measure,{passive:true});
 })();
-        `.trim() }} />
+        `}</Script>
         {/* 2026-05-17 round 6 (lever B — handshake pre-warm): every page
             in the protected zone hits the Supabase REST + Realtime
             endpoint on first paint. preconnect lets the browser pay the
