@@ -10,6 +10,10 @@
 //   text silently when a container is too narrow.
 //   Task #575 adds coverage for the Insights screen card labels, which use the
 //   same small font sizes inside fixed-width containers and are locale-translated.
+//   Task #578 adds coverage for the four TIR legend spans in the InsightsScreen
+//   Time-in-Range card. These <span> elements render at fontSize:8 inside a
+//   space-between flex row and carry the same overflow risk as the other small
+//   text elements already guarded here.
 //
 // What we cover:
 //   PART 1 — RateTile chip tiles (original Task #567 coverage)
@@ -44,7 +48,7 @@
 //     "2 · Makros", "3 · Ergebnis"; "Ergebnis" is longer than "Result" and is
 //     the most likely to overflow.
 //
-//   PART 5 — Insights screen card labels (Task #575)
+//   PART 5 — Insights screen card labels and TIR legend spans (Tasks #575, #578)
 //     The Insights screen contains CardLabel texts (card headers at fontSize:9)
 //     and meal-evaluation row labels inside a fixed width:72 container. Both
 //     groups are locale-translated and at overflow risk:
@@ -54,9 +58,13 @@
 //                        "7-day trend", "Avg. / day", "Meal rating · 7d"
 //       DE row labels:   "Im Ziel", "Spike", "Hypo-Risiko"
 //       EN row labels:   "In range", "Spike", "Hypo risk"
+//     The TIR card also renders four coloured legend <span> elements at
+//     fontSize:8 in a space-between flex row (Task #578):
+//       DE: "● Sehr tief 2%", "● Tief 6%", "● Im Ziel 78%", "● Hoch 14%"
+//       EN: "● Very low 2%",  "● Low 6%",  "● In range 78%","● High 14%"
 //
 // Structure:
-//   Ten `test.describe` blocks — two per part (DE + EN each) — so regressions
+//   Twelve `test.describe` blocks — two per part (DE + EN each) — so regressions
 //   are pinpointed to the affected locale and element group.
 //
 // Selector strategy:
@@ -439,7 +447,7 @@ test.describe("Marketing phone Engine step-pill labels — EN locale", () => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// PART 5 — Insights screen card labels (Task #575)
+// PART 5 — Insights screen card labels and TIR legend spans (Tasks #575, #578)
 //
 // The InsightsScreen renders:
 //   • CardLabel elements (fontSize:9, fontWeight:700) as card header titles
@@ -576,6 +584,70 @@ test.describe("Marketing phone Insights card labels — EN locale", () => {
 
       const rawText = (await el.textContent()) ?? "";
       expect(rawText.trim()).toBe(label);
+    }
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PART 5 (continued) — TIR legend spans (Task #578)
+// ══════════════════════════════════════════════════════════════════════════════
+
+test.describe("Marketing phone Insights TIR legend spans — DE locale", () => {
+  test.use({ locale: "de-DE" });
+
+  // Full text content of each <span> in the TIR legend row (DE).
+  // pickCopy(locale, { de: "Sehr tief", en: "Very low" }) etc., combined with
+  // the static bullet and percentage literals in AppMockupPhone.tsx.
+  const DE_TIR_LEGEND = [
+    "● Sehr tief 2%",
+    "● Tief 6%",
+    "● Im Ziel 78%",
+    "● Hoch 14%",
+  ] as const;
+
+  test("TIR legend spans are visible and not overflowing in DE", async ({
+    page,
+  }) => {
+    const phone = await gotoHomeAndFindPhone(page);
+
+    await gotoInsightsScreen(phone, "Time in Range · 7T");
+
+    for (const spanText of DE_TIR_LEGEND) {
+      const el = phone.getByText(spanText, { exact: true }).first();
+      await expect(el).toBeVisible();
+      await assertNoOverflow(el, `TIR legend span "${spanText}" (DE)`);
+
+      const rawText = (await el.textContent()) ?? "";
+      expect(rawText.trim()).toBe(spanText);
+    }
+  });
+});
+
+test.describe("Marketing phone Insights TIR legend spans — EN locale", () => {
+  test.use({ locale: "en-US" });
+
+  // Full text content of each <span> in the TIR legend row (EN).
+  const EN_TIR_LEGEND = [
+    "● Very low 2%",
+    "● Low 6%",
+    "● In range 78%",
+    "● High 14%",
+  ] as const;
+
+  test("TIR legend spans are visible and not overflowing in EN", async ({
+    page,
+  }) => {
+    const phone = await gotoHomeAndFindPhone(page);
+
+    await gotoInsightsScreen(phone, "Time in Range · 7d");
+
+    for (const spanText of EN_TIR_LEGEND) {
+      const el = phone.getByText(spanText, { exact: true }).first();
+      await expect(el).toBeVisible();
+      await assertNoOverflow(el, `TIR legend span "${spanText}" (EN)`);
+
+      const rawText = (await el.textContent()) ?? "";
+      expect(rawText.trim()).toBe(spanText);
     }
   });
 });
