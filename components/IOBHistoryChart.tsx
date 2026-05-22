@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 import { buildDoses, buildIOBHistory, detectIOBPeaks, getDIAMinutes, getActiveDosesAtTime, type InsulinType } from "@/lib/iob";
 import type { InsulinLog } from "@/lib/insulin";
 import type { Meal } from "@/lib/meals";
@@ -27,6 +28,7 @@ interface Props {
 
 export default function IOBHistoryChart({ insulin, insulinType, meals }: Props) {
   const t = useTranslations("dashboard");
+  const router = useRouter();
   const [now, setNow] = useState(() => Date.now());
   const [hours, setHours] = useState<WindowHours>(() => {
     if (typeof window === "undefined") return 24;
@@ -384,36 +386,67 @@ export default function IOBHistoryChart({ insulin, insulinType, meals }: Props) 
                           const doseTime = new Date(d.administeredAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
                           const sourceName = d.label
                             || (d.source === "meal" ? t("iob_peak_popover_meal_label") : t("iob_peak_manual_bolus"));
+                          const isMeal = d.source === "meal" && !!d.mealId;
                           return (
                             <div
                               key={di}
+                              onClick={isMeal ? (e) => {
+                                e.stopPropagation();
+                                router.push(`/entries#${d.mealId}`);
+                              } : undefined}
+                              role={isMeal ? "link" : undefined}
                               style={{
                                 display: "flex",
                                 justifyContent: "space-between",
-                                alignItems: "baseline",
+                                alignItems: "center",
                                 gap: 6,
                                 padding: "1px 0",
                                 borderTop: di > 0 ? "0.5px solid var(--border)" : undefined,
+                                cursor: isMeal ? "pointer" : "default",
                               }}
                             >
                               <span style={{
-                                color: "var(--text-dim)",
+                                color: isMeal ? "var(--text)" : "var(--text-dim)",
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
                                 whiteSpace: "nowrap",
                                 maxWidth: 88,
                                 fontSize: 8.5,
+                                flexShrink: 1,
+                                minWidth: 0,
                               }}>
                                 {doseTime} · {sourceName}
                               </span>
                               <span style={{
-                                color: peakColor,
-                                fontWeight: 700,
-                                whiteSpace: "nowrap",
-                                fontSize: 9,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 3,
                                 flexShrink: 0,
                               }}>
-                                {t("iob_peak_dose_units", { units: d.units.toFixed(1) })}
+                                <span style={{
+                                  color: peakColor,
+                                  fontWeight: 700,
+                                  whiteSpace: "nowrap",
+                                  fontSize: 9,
+                                }}>
+                                  {t("iob_peak_dose_units", { units: d.units.toFixed(1) })}
+                                </span>
+                                {isMeal && (
+                                  <svg
+                                    width="7" height="10"
+                                    viewBox="0 0 6 10"
+                                    fill="none"
+                                    style={{ opacity: 0.45, flexShrink: 0 }}
+                                  >
+                                    <path
+                                      d="M1 1l4 4-4 4"
+                                      stroke="var(--text-dim)"
+                                      strokeWidth="1.5"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    />
+                                  </svg>
+                                )}
                               </span>
                             </div>
                           );

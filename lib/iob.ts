@@ -35,6 +35,8 @@ export interface BolusDose {
   source?: 'insulin' | 'meal';
   /** Human-readable label: insulin_name for boluses, first ~30 chars of input_text for meals */
   label?: string;
+  /** For meal-sourced doses: the originating meal's UUID. Used to deep-link into /entries#<mealId>. */
+  mealId?: string;
 }
 
 export function calcSingleIOB(dose: BolusDose, nowMs: number, diaMinutes: number): number {
@@ -97,6 +99,7 @@ export function buildDoses(
           label: rawLabel && rawLabel.length > 30
             ? rawLabel.slice(0, 28) + '…'
             : rawLabel,
+          mealId: m.id,
         });
       }
     }
