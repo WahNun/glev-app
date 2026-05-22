@@ -1044,19 +1044,16 @@ function MobileGlevFab({
             position: "absolute",
             left: "50%",
             top: "50%",
-            // -50% centres the bubble on the anchor, the extra -20px
-            // lifts the circle so its CENTRE lands exactly on the nav's
-            // top border — i.e. the bubble overlaps the footer edge by
-            // exactly half (upper hemisphere above the nav, lower
-            // hemisphere inside it). Geometry: nav row is 56px tall
-            // with 6px top padding → 44px content area; the icon anchor
-            // (22×22) is centred in that with the 4px gap + 12px label
-            // below, so its centre sits ~20px below the nav top edge.
-            // Lifting by 20 puts the circle centre exactly on that
-            // edge regardless of circle size — including the 2026-05-17
-            // round-2 bump from 52 → 60 px (~+15% diameter per user
-            // request "der glev button kann nochmal 15% größer werden").
-            transform: "translate(-50%, calc(-50% - 14px))",
+            // -50% centres the bubble on the anchor; the extra offset
+            // lifts it so the bubble centre lands exactly on the nav's
+            // top border — upper half above the nav, lower half inside.
+            // Geometry (box-sizing: border-box, no safe-area):
+            //   button: height 44px, paddingTop 3px
+            //   icon anchor centre from button top = 3 + 11 + 0.5 = 14.5px
+            //   nav paddingTop = 2px
+            //   → anchor centre from nav top = 2 + 14.5 = 16.5px
+            //   → lift 17px puts bubble centre at nav top (½ above, ½ below)
+            transform: "translate(-50%, calc(-50% - 17px))",
             display: "inline-flex", alignItems: "center", justifyContent: "center",
             width: 60, height: 60, borderRadius: "50%",
             // Always paint a solid SURFACE base so the nav's top
