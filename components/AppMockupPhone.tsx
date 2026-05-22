@@ -610,13 +610,14 @@ function RateTile({ label, value, sub, color }: { label: string; value: number; 
     <div style={{
       background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:12,
       padding:"10px 10px", display:"flex", flexDirection:"column", gap:4,
+      overflow:"hidden",
     }}>
-      <div style={{ fontSize:8, fontWeight:700, letterSpacing:"0.08em", color:"rgba(255,255,255,0.45)", textTransform:"uppercase" }}>{label}</div>
+      <div style={{ fontSize:8, fontWeight:700, letterSpacing:"0.08em", color:"rgba(255,255,255,0.45)", textTransform:"uppercase", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{label}</div>
       <div style={{ display:"flex", alignItems:"baseline", gap:3 }}>
         <span style={{ fontSize:20, fontWeight:800, color, fontFamily:"var(--font-mono)", letterSpacing:"-0.03em" }}>{value}</span>
         <span style={{ fontSize:10, color, fontWeight:700 }}>%</span>
       </div>
-      <div style={{ fontSize:8, color:"rgba(255,255,255,0.35)" }}>{sub}</div>
+      <div style={{ fontSize:8, color:"rgba(255,255,255,0.35)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{sub}</div>
     </div>
   );
 }
