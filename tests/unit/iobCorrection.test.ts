@@ -74,3 +74,27 @@ test("applyIOBCorrection: iob=0 leaves recommendation unchanged (fractional)", (
 test("applyIOBCorrection: iob=0 with recommendation=0 returns 0", () => {
   expect(applyIOBCorrection(0, 0)).toBe(0);
 });
+
+// ── 5. Near-zero boundary: rounding at the 0.05 threshold ────────────────────
+// applyIOBCorrection rounds to 1 decimal place via Math.round(x * 10) / 10.
+// A recommendation of 0.05 with no IOB → 0.05 * 10 = 0.5 → rounds to 1 → 0.1.
+// A recommendation of 0.04 with no IOB → 0.04 * 10 = 0.4 → rounds to 0 → 0.0.
+// These tests ensure tiny but real recommendations are not silently dropped.
+
+test("applyIOBCorrection: recommendation=0.05, iob=0 rounds up to 0.1 (not silently zeroed)", () => {
+  expect(applyIOBCorrection(0.05, 0)).toBe(0.1);
+});
+
+test("applyIOBCorrection: recommendation=0.04, iob=0 rounds down to 0 (correctly silent)", () => {
+  expect(applyIOBCorrection(0.04, 0)).toBe(0);
+});
+
+test("applyIOBCorrection: recommendation=0.09, iob=0.05 → result=0.04 → rounds to 0.0 (rounding, not clamp)", () => {
+  // 0.09 - 0.05 = 0.04 → Math.round(0.4) = 0 → 0.0
+  // This should be 0 due to rounding, *not* because of the Math.max(0,…) clamp.
+  expect(applyIOBCorrection(0.09, 0.05)).toBe(0);
+});
+
+test("applyIOBCorrection: recommendation=0.15, iob=0.05 → result=0.1 (clean case near threshold)", () => {
+  expect(applyIOBCorrection(0.15, 0.05)).toBe(0.1);
+});
