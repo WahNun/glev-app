@@ -7,8 +7,8 @@
 // Samples at index 0 and the last index are never peaks.
 
 import { test, expect } from "@playwright/test";
-import { detectIOBPeaks } from "@/lib/iob";
-import type { IOBSample } from "@/lib/iob";
+import { detectIOBPeaks, buildDoses } from "@/lib/iob";
+import type { IOBSample, InsulinLike, MealLike } from "@/lib/iob";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -147,4 +147,92 @@ test("three-element array with valid peak returns that peak", () => {
   const result = detectIOBPeaks(samples(1, 3, 1));
   expect(result).toHaveLength(1);
   expect(result[0].iob).toBe(3);
+});
+
+// ── buildDoses: mealId field ──────────────────────────────────────────────────
+//
+// The IOB peak popover uses `BolusDose.mealId` to decide whether a dose row
+// is tappable (navigates to /entries#<mealId>) or inert (manual bolus log).
+// These tests lock in the contract so a silent refactor can never strip mealId
+// from meal-sourced doses or accidentally attach it to insulin-log doses.
+
+function isoMinutesAgo(minutes: number): string {
+  return new Date(Date.now() - minutes * 60_000).toISOString();
+}
+
+test("buildDoses: meal-sourced dose carries mealId equal to meal.id", () => {
+  const meals: MealLike[] = [
+    { id: "meal-abc", insulin_units: 5, created_at: isoMinutesAgo(30) },
+  ];
+  const doses = buildDoses([], meals);
+  expect(doses).toHaveLength(1);
+  expect(doses[0].source).toBe("meal");
+  expect(doses[0].mealId).toBe("meal-abc");
+});
+
+test("buildDoses: insulin-log dose has no mealId (undefined)", () => {
+  const insulin: InsulinLike[] = [
+    {
+      insulin_type: "bolus",
+      units: 4,
+      created_at: isoMinutesAgo(30),
+      related_entry_id: null,
+    },
+  ];
+  const doses = buildDoses(insulin, []);
+  expect(doses).toHaveLength(1);
+  expect(doses[0].source).toBe("insulin");
+  expect(doses[0].mealId).toBeUndefined();
+});
+
+test("buildDoses: when meal and insulin log coexist, only the meal dose has mealId", () => {
+  const insulin: InsulinLike[] = [
+    {
+      insulin_type: "bolus",
+      units: 4,
+      created_at: isoMinutesAgo(60),
+      related_entry_id: null,
+      insulin_name: "Novorapid",
+    },
+  ];
+  const meals: MealLike[] = [
+    { id: "meal-xyz", insulin_units: 3, created_at: isoMinutesAgo(30) },
+  ];
+  const doses = buildDoses(insulin, meals);
+  expect(doses).toHaveLength(2);
+  const mealDose   = doses.find(d => d.source === "meal");
+  const bolusDose  = doses.find(d => d.source === "insulin");
+  expect(mealDose?.mealId).toBe("meal-xyz");
+  expect(bolusDose?.mealId).toBeUndefined();
+});
+
+test("buildDoses: linked meal is excluded entirely — no mealId leaks via meal path", () => {
+  // When an insulin_log carries related_entry_id pointing to a meal, the meal's
+  // insulin_units must NOT produce a second dose row (double-count guard).
+  // Consequently, no dose row with mealId for that meal can appear in the list.
+  const insulin: InsulinLike[] = [
+    {
+      insulin_type: "bolus",
+      units: 4,
+      created_at: isoMinutesAgo(30),
+      related_entry_id: "meal-linked",
+    },
+  ];
+  const meals: MealLike[] = [
+    { id: "meal-linked", insulin_units: 4, created_at: isoMinutesAgo(30) },
+  ];
+  const doses = buildDoses(insulin, meals);
+  // Only the bolus log — no meal dose row
+  expect(doses.every(d => d.mealId === undefined)).toBe(true);
+});
+
+test("buildDoses: mealId is set independently for each unlinked meal", () => {
+  const meals: MealLike[] = [
+    { id: "meal-1", insulin_units: 3, created_at: isoMinutesAgo(20) },
+    { id: "meal-2", insulin_units: 5, created_at: isoMinutesAgo(80) },
+  ];
+  const doses = buildDoses([], meals);
+  const ids = doses.map(d => d.mealId);
+  expect(ids).toContain("meal-1");
+  expect(ids).toContain("meal-2");
 });
