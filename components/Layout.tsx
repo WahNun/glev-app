@@ -9,6 +9,9 @@ import GlevLockup from "@/components/GlevLockup";
 import GlevLogo from "@/components/GlevLogo";
 import AccountSheet from "@/components/AccountSheet";
 import DashboardQuickAddSheet from "@/components/DashboardQuickAddSheet";
+import AiHelperSheet from "@/components/AiHelperSheet";
+import GlevAIButton from "@/components/GlevAIButton";
+import { fetchAiConsent } from "@/lib/userSettings";
 import { EngineHeaderProvider, useEngineHeader } from "@/lib/engineHeaderContext";
 import { EngineSourceHeaderProvider, useEngineSourceHeader } from "@/lib/engineSourceHeaderContext";
 import { EngineWizardStepProvider, useEngineWizardStep } from "@/lib/engineWizardStepContext";
@@ -104,6 +107,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   const router   = useRouter();
   const tNav = useTranslations("nav");
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [signOutConfirm, setSignOutConfirm] = useState(false);
   // The mobile-header AccountSheet trigger was removed in the
   // 2026-05-17 header-decluttering revision (header now only carries
   // the brand lockup + the recording-state pill). Konto/Profil flows
@@ -114,6 +118,13 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // opens the shared quick-add sheet (Engine + all logging entry points).
   // State lives here so the sheet works from every protected screen.
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [aiSheetOpen, setAiSheetOpen] = useState(false);
+  const [aiConsent, setAiConsent] = useState(false);
+  const [aiToast, setAiToast] = useState(false);
+
+  useEffect(() => {
+    fetchAiConsent().then(setAiConsent).catch(() => {});
+  }, []);
   // CGM-source for the "● Live" header pill on /dashboard.
   const [cgmSource, setCgmSource] = useState<string | null>(null);
   useEffect(() => {
@@ -761,14 +772,50 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        <button onClick={handleSignOut} style={{
-          display: "flex", alignItems: "center", gap: 8, padding: "10px 12px",
-          borderRadius: 10, border: "none", cursor: "pointer", background: "transparent",
-          color: "var(--text-ghost)", fontSize: 13, textAlign: "left", width: "100%",
-        }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-          Sign Out
-        </button>
+        <div style={{ marginTop: 16, borderTop: `1px solid ${BORDER}`, paddingTop: 12 }}>
+          {signOutConfirm ? (
+            <div style={{ padding: "6px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+              <span style={{ fontSize: 12, color: "var(--text-dim)", fontWeight: 500 }}>Sign out?</span>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  aria-label="Confirm sign out"
+                  onClick={handleSignOut}
+                  style={{
+                    flex: 1, padding: "7px 0", borderRadius: 8, border: "none",
+                    cursor: "pointer", background: "#ef4444", color: "#fff",
+                    fontSize: 12, fontWeight: 600,
+                  }}
+                >
+                  Confirm
+                </button>
+                <button
+                  aria-label="Cancel sign out"
+                  onClick={() => setSignOutConfirm(false)}
+                  style={{
+                    flex: 1, padding: "7px 0", borderRadius: 8, border: "none",
+                    cursor: "pointer", background: "var(--surface-2, var(--surface))",
+                    color: "var(--text-dim)", fontSize: 12,
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              aria-label="Sign out of Glev"
+              onClick={() => setSignOutConfirm(true)}
+              style={{
+                display: "flex", alignItems: "center", gap: 8, padding: "10px 12px",
+                borderRadius: 10, border: "none", cursor: "pointer", background: "transparent",
+                color: "var(--text-ghost)", fontSize: 13, textAlign: "left", width: "100%",
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              Sign Out
+            </button>
+          )}
+        </div>
       </aside>
 
       <main ref={mainRef} className="glev-main" style={{ flex: 1, padding: "28px 32px", maxWidth: "100%", overflowX: "hidden", zoom: 1.12 }}>
@@ -866,7 +913,12 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               voice.requestStop();
               return;
             }
-            router.push(`/engine?tab=engine&voice=1&vt=${Date.now()}`);
+            if (aiConsent) {
+              setAiSheetOpen(true);
+            } else {
+              setAiToast(true);
+              setTimeout(() => setAiToast(false), 3000);
+            }
           }}
           // Long-press always opens the menu, regardless of session
           // state — that's the "secondary" affordance per 2026-05-17
@@ -912,6 +964,36 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           Fingerstick, Activity, Cycle, Symptoms and Influences all sit
           one tap away regardless of which screen the user is on. */}
       <DashboardQuickAddSheet open={quickAddOpen} onClose={() => setQuickAddOpen(false)} />
+      <AiHelperSheet open={aiSheetOpen} onClose={() => setAiSheetOpen(false)} />
+
+      {/* Coming-soon toast — shown when user taps FAB without ai_consent */}
+      {aiToast && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: "fixed",
+            bottom: 90,
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "rgba(18,20,36,0.95)",
+            border: "1px solid rgba(79,110,247,0.3)",
+            color: "rgba(255,255,255,0.9)",
+            fontSize: 13,
+            fontWeight: 500,
+            padding: "10px 18px",
+            borderRadius: 20,
+            whiteSpace: "nowrap",
+            zIndex: 2000,
+            pointerEvents: "none",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+            boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+          }}
+        >
+          Coming soon — AI-Features in Kürze
+        </div>
+      )}
 
     </div>
   );
@@ -1026,11 +1108,11 @@ function MobileGlevFab({
         overflow: "visible",
       }}
     >
-      {/* Outer icon slot: 22×22 — same dimensions as a regular MobileTab
-          icon container. Acts purely as a positioning anchor + flex
-          placeholder so the label below lines up with the rest of the
-          nav. The bubble itself is rendered as an absolute child and
-          lifted up so it overlaps the footer top edge. */}
+      {/* Outer icon slot: 22×22 — positioning anchor for the Glev AI
+          bubble. The GlevAIButton (64×64) is absolutely positioned and
+          lifted so its centre lands on the nav top edge (½ above, ½
+          below). pointer-events: none so the outer <button> handles
+          all short/long-press interactions. */}
       <span
         aria-hidden="true"
         style={{
@@ -1044,39 +1126,11 @@ function MobileGlevFab({
             position: "absolute",
             left: "50%",
             top: "50%",
-            // -50% centres the bubble on the anchor; the extra offset
-            // lifts it so the bubble centre lands exactly on the nav's
-            // top border — upper half above the nav, lower half inside.
-            // Geometry (box-sizing: border-box, no safe-area):
-            //   button: height 44px, paddingTop 3px
-            //   icon anchor centre from button top = 3 + 11 + 0.5 = 14.5px
-            //   nav paddingTop = 2px
-            //   → anchor centre from nav top = 2 + 14.5 = 16.5px
-            //   → lift 17px puts bubble centre at nav top (½ above, ½ below)
             transform: "translate(-50%, calc(-50% - 17px))",
-            display: "inline-flex", alignItems: "center", justifyContent: "center",
-            width: 60, height: 60, borderRadius: "50%",
-            // Always paint a solid SURFACE base so the nav's top
-            // hair-line border (drawn on the parent <nav>) NEVER
-            // bleeds through the bubble. Previously the recording
-            // state used `${ACCENT}1f` (12% opacity) directly, which
-            // let the nav edge show as a horizontal line cutting
-            // through the bubble (user feedback 2026-05-17 screenshot).
-            // The accent tint that conveys "recording" is now layered
-            // ON TOP of the opaque SURFACE as a translucent overlay,
-            // so the visual cue is preserved without any see-through.
-            background: recording
-              ? `linear-gradient(${ACCENT}33, ${ACCENT}33), ${SURFACE}`
-              : SURFACE,
-            border: `1px solid ${recording ? ACCENT : `${ACCENT}66`}`,
-            boxShadow: recording
-              ? undefined
-              : `0 0 0 1px ${ACCENT}22, 0 6px 16px rgba(0,0,0,0.38)`,
-            filter: `drop-shadow(0 0 ${recording ? 6 : 3}px ${ACCENT}${recording ? "cc" : "55"})`,
-            animation: recording ? "glevMicPulse 1.4s ease-in-out infinite" : undefined,
+            pointerEvents: "none",
           }}
         >
-          <GlevLogo size={30} color={ACCENT} bg="transparent" />
+          <GlevAIButton onPress={() => {}} isListening={recording} />
         </span>
       </span>
       <span

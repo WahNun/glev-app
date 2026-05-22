@@ -808,3 +808,23 @@ export async function applyAdjustmentToSettings(
 
   return nextHistory;
 }
+
+/* ── AI consent ──────────────────────────────────────────────────── */
+
+/**
+ * Read the user's AI-feature consent flag from `user_settings`.
+ * Returns false when the row is absent, the user is signed out, or
+ * Supabase is unreachable. No throw — callers always get a boolean.
+ */
+export async function fetchAiConsent(): Promise<boolean> {
+  if (!supabase) return false;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+  const { data, error } = await supabase
+    .from("user_settings")
+    .select("ai_consent")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (error || !data) return false;
+  return Boolean(data.ai_consent);
+}

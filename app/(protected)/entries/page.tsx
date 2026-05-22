@@ -322,6 +322,20 @@ export default function EntriesPage() {
   const [insulinType, setInsType]  = useState<InsulinType>("rapid");
   const [manualOpen, setManualOpen] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
+  // Anchor to the newest entry (last index) on first load — before any
+  // deep-link useEffect has a chance to override it.
+  const _anchoredRef = useRef(false);
+  useEffect(() => {
+    if (!_anchoredRef.current && filtered.length > 0) {
+      _anchoredRef.current = true;
+      // Only set when no deep-link hash is present — the hash useEffect
+      // will set the index itself.
+      if (typeof window !== "undefined" && !window.location.hash) {
+        setCurrentIndex(filtered.length - 1);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered.length]);
   const filtersWrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { fetchInsulinType().then(setInsType).catch(() => {}); }, []);
@@ -1023,19 +1037,20 @@ export default function EntriesPage() {
       ) : (
         <div>
           {/* Arrow nav: ‹ single card › */}
-          <div style={{ display:"flex", alignItems:"flex-start", gap:10 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
             {/* ‹ prev button */}
             <button
               onClick={() => { setCurrentIndex(i => Math.max(0, i - 1)); setExpanded(null); setEditingId(null); }}
               disabled={safeIndex === 0}
               aria-label="Previous entry"
               style={{
-                flexShrink:0, width:36, height:36, borderRadius:"50%",
-                border:`1px solid ${BORDER}`, background:"var(--surface)",
-                color:"var(--text-body)", display:"flex", alignItems:"center",
-                justifyContent:"center", marginTop:8,
+                flexShrink:0, width:32, height:32, borderRadius:"50%",
+                border:"1px solid rgba(255,255,255,0.1)",
+                background:"rgba(255,255,255,0.06)",
+                color:"#8b949e", display:"flex", alignItems:"center",
+                justifyContent:"center", padding:0,
                 cursor:safeIndex === 0 ? "default" : "pointer",
-                opacity:safeIndex === 0 ? 0.3 : 1,
+                opacity:safeIndex === 0 ? 0.25 : 1,
                 transition:"opacity 0.15s",
               }}
             >
@@ -1533,12 +1548,13 @@ export default function EntriesPage() {
               disabled={safeIndex >= filtered.length - 1}
               aria-label="Next entry"
               style={{
-                flexShrink:0, width:36, height:36, borderRadius:"50%",
-                border:`1px solid ${BORDER}`, background:"var(--surface)",
-                color:"var(--text-body)", display:"flex", alignItems:"center",
-                justifyContent:"center", marginTop:8,
+                flexShrink:0, width:32, height:32, borderRadius:"50%",
+                border:"1px solid rgba(255,255,255,0.1)",
+                background:"rgba(255,255,255,0.06)",
+                color:"#8b949e", display:"flex", alignItems:"center",
+                justifyContent:"center", padding:0,
                 cursor:safeIndex >= filtered.length - 1 ? "default" : "pointer",
-                opacity:safeIndex >= filtered.length - 1 ? 0.3 : 1,
+                opacity:safeIndex >= filtered.length - 1 ? 0.25 : 1,
                 transition:"opacity 0.15s",
               }}
             >
