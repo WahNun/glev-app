@@ -1345,10 +1345,10 @@ function DashboardCluster({
 }
 
 /**
- * Recent Entries — single-entry swipe pager.
- * Shows 1 row at a time; swipe left/right (or tap the dot-indicators)
- * to navigate through the last N entries. Tapping the row toggles the
- * same inline light-expansion as before.
+ * Recent Entries — single-entry arrow navigator.
+ * Shows 1 row at a time; ‹ / › buttons navigate through entries.
+ * Oldest entry = index 0, newest = last index (default view).
+ * Tapping the row toggles the same inline light-expansion as before.
  */
 function RecentEntries({
   rows,
@@ -1363,36 +1363,38 @@ function RecentEntries({
   onViewEntry: (id: string) => void;
   onMealUpdated?: (m: Meal) => void;
 }) {
-  const [idx, setIdx]         = useState(0);
+  // rows arrive sorted newest-first; reverse to oldest-first so index 0 =
+  // oldest and the last index = newest (matches ‹ older / › newer spec).
+  const orderedRows = useMemo(() => [...rows].reverse(), [rows]);
+  const [idx, setIdx]           = useState(() => Math.max(0, orderedRows.length - 1));
   const [expanded, setExpanded] = useState<string | null>(null);
-  const touchStartX = useRef<number | null>(null);
   const t    = useTranslations("dashboard");
   const tIns = useTranslations("insights");
 
-  const clamp = (n: number) => Math.max(0, Math.min(rows.length - 1, n));
-
-  const go = (next: number) => {
-    setIdx(clamp(next));
+  // Re-anchor to the newest entry whenever rows arrive / change length.
+  useEffect(() => {
+    setIdx(Math.max(0, orderedRows.length - 1));
     setExpanded(null);
-  };
+  }, [orderedRows.length]);
 
-  const onTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX;
-  };
-  const onTouchEnd = (e: React.TouchEvent) => {
-    if (touchStartX.current === null) return;
-    const dx = e.changedTouches[0].clientX - touchStartX.current;
-    touchStartX.current = null;
-    if (Math.abs(dx) < 30) return;
-    go(dx < 0 ? idx + 1 : idx - 1);
-  };
+  const clamp = (n: number) => Math.max(0, Math.min(orderedRows.length - 1, n));
+  const go = (next: number) => { setIdx(clamp(next)); setExpanded(null); };
 
-  const r = rows[idx];
+  const r = orderedRows[idx];
+
+  const arrowBase: React.CSSProperties = {
+    flexShrink: 0, width: 32, height: 32, borderRadius: "50%",
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    color: "#8b949e",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    cursor: "pointer", transition: "opacity 0.15s", padding: 0,
+  };
 
   return (
     <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"16px 20px 8px" }}>
       {/* Header */}
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
         <div style={{ fontSize:13, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:"var(--text-dim)" }}>
           {t("recent_label")}
         </div>
@@ -1404,87 +1406,91 @@ function RecentEntries({
         </button>
       </div>
 
-      {rows.length === 0 ? (
+      {orderedRows.length === 0 ? (
         <div style={{ padding:"24px 0 16px", textAlign:"center", color:"var(--text-ghost)", fontSize:14 }}>
           {t("no_entries_yet")}
         </div>
       ) : (
-        <div
-          onTouchStart={onTouchStart}
-          onTouchEnd={onTouchEnd}
-        >
-          {/* Single current row */}
-          <UnifiedRecentRow row={r} locale={locale} onClick={() => setExpanded(prev => prev === r.id ? null : r.id)} />
+        /* ‹ · Card · › */
+        <div style={{ display:"flex", alignItems:"center", gap:8, paddingBottom:10 }}>
 
-          {r.kind === "meal" && r.meal && (
-            <PendingGlucoseStrip
-              meal={r.meal}
-              onSaved={(patch) => onMealUpdated?.({ ...r.meal!, ...patch })}
+          {/* ‹ prev = older */}
+          <button
+            onClick={() => go(idx - 1)}
+            disabled={idx === 0}
+            aria-label="Älterer Eintrag"
+            style={{ ...arrowBase, opacity: idx === 0 ? 0.25 : 1, cursor: idx === 0 ? "default" : "pointer" }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+          </button>
+
+          {/* Entry card — flex:1 */}
+          <div style={{ flex:1, minWidth:0 }}>
+            <UnifiedRecentRow
+              row={r}
+              locale={locale}
+              onClick={() => setExpanded(prev => prev === r.id ? null : r.id)}
             />
-          )}
 
-          {expanded === r.id && (
-            <div style={{ paddingBottom:8 }}>
-              {r.kind === "meal" ? (
-                <MealEntryLightExpand
-                  meal={r.meal!}
-                  locale={locale}
-                  onViewFull={() => onViewEntry(r.meal!.id)}
-                  onUpdated={onMealUpdated}
-                />
-              ) : r.kind === "exercise" ? (
-                <NonMealLightExpand
-                  ts={r.ts}
-                  locale={locale}
-                  stats={[
-                    { label:t("stat_duration"),  value:`${r.exercise!.duration_minutes} min`, color:KIND_ACCENT.exercise.color },
-                    { label:t("stat_type"),      value:exerciseTypeLabelI18n(tIns, r.exercise!.exercise_type) },
-                    { label:t("stat_intensity"), value:r.exercise!.intensity || "—" },
-                    ...(r.exercise!.cgm_glucose_at_log != null ? [{ label:t("stat_cgm_at_log"), value:`${r.exercise!.cgm_glucose_at_log} mg/dL` }] : []),
-                  ]}
-                  onViewFull={() => onViewEntry(r.id)}
-                />
-              ) : (
-                <NonMealLightExpand
-                  ts={r.ts}
-                  locale={locale}
-                  stats={[
-                    { label:t("stat_dose"),    value:`${r.insulin!.units} u`, color:KIND_ACCENT[r.kind].color },
-                    { label:t("stat_insulin"), value:r.insulin!.insulin_name || (r.kind === "bolus" ? t("ins_rapid") : t("ins_long")) },
-                    { label:t("stat_kind"),    value:r.kind === "bolus" ? t("ins_bolus") : t("ins_basal"), color:KIND_ACCENT[r.kind].color },
-                    ...(r.insulin!.cgm_glucose_at_log != null ? [{ label:t("stat_cgm_at_log"), value:`${r.insulin!.cgm_glucose_at_log} mg/dL` }] : []),
-                  ]}
-                  onViewFull={() => onViewEntry(r.id)}
-                />
-              )}
-            </div>
-          )}
+            {r.kind === "meal" && r.meal && (
+              <PendingGlucoseStrip
+                meal={r.meal}
+                onSaved={(patch) => onMealUpdated?.({ ...r.meal!, ...patch })}
+              />
+            )}
 
-          {/* Dot navigation */}
-          {rows.length > 1 && (
-            <div style={{
-              display:"flex", justifyContent:"center", alignItems:"center",
-              gap:6, paddingTop:8, paddingBottom:6,
-            }}>
-              {rows.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => go(i)}
-                  style={{
-                    width: i === idx ? 16 : 6,
-                    height: 6,
-                    borderRadius: 99,
-                    border: "none",
-                    padding: 0,
-                    cursor: "pointer",
-                    background: i === idx ? ACCENT : `${ACCENT}44`,
-                    transition: "width 0.2s ease, background 0.2s ease",
-                  }}
-                  aria-label={`Eintrag ${i + 1}`}
-                />
-              ))}
-            </div>
-          )}
+            {expanded === r.id && (
+              <div style={{ paddingBottom:8 }}>
+                {r.kind === "meal" ? (
+                  <MealEntryLightExpand
+                    meal={r.meal!}
+                    locale={locale}
+                    onViewFull={() => onViewEntry(r.meal!.id)}
+                    onUpdated={onMealUpdated}
+                  />
+                ) : r.kind === "exercise" ? (
+                  <NonMealLightExpand
+                    ts={r.ts}
+                    locale={locale}
+                    stats={[
+                      { label:t("stat_duration"),  value:`${r.exercise!.duration_minutes} min`, color:KIND_ACCENT.exercise.color },
+                      { label:t("stat_type"),      value:exerciseTypeLabelI18n(tIns, r.exercise!.exercise_type) },
+                      { label:t("stat_intensity"), value:r.exercise!.intensity || "—" },
+                      ...(r.exercise!.cgm_glucose_at_log != null ? [{ label:t("stat_cgm_at_log"), value:`${r.exercise!.cgm_glucose_at_log} mg/dL` }] : []),
+                    ]}
+                    onViewFull={() => onViewEntry(r.id)}
+                  />
+                ) : (
+                  <NonMealLightExpand
+                    ts={r.ts}
+                    locale={locale}
+                    stats={[
+                      { label:t("stat_dose"),    value:`${r.insulin!.units} u`, color:KIND_ACCENT[r.kind].color },
+                      { label:t("stat_insulin"), value:r.insulin!.insulin_name || (r.kind === "bolus" ? t("ins_rapid") : t("ins_long")) },
+                      { label:t("stat_kind"),    value:r.kind === "bolus" ? t("ins_bolus") : t("ins_basal"), color:KIND_ACCENT[r.kind].color },
+                      ...(r.insulin!.cgm_glucose_at_log != null ? [{ label:t("stat_cgm_at_log"), value:`${r.insulin!.cgm_glucose_at_log} mg/dL` }] : []),
+                    ]}
+                    onViewFull={() => onViewEntry(r.id)}
+                  />
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* › next = newer */}
+          <button
+            onClick={() => go(idx + 1)}
+            disabled={idx === orderedRows.length - 1}
+            aria-label="Neuerer Eintrag"
+            style={{ ...arrowBase, opacity: idx === orderedRows.length - 1 ? 0.25 : 1, cursor: idx === orderedRows.length - 1 ? "default" : "pointer" }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="9 6 15 12 9 18"/>
+            </svg>
+          </button>
+
         </div>
       )}
     </div>
