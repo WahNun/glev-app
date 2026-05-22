@@ -33,7 +33,7 @@ import { fetchLatestCgm } from "@/components/CgmFetchButton";
 import { classifyPreReferenceTrend, type TrendClass, type TrendSample } from "@/lib/engine/trend";
 import { fetchLatestFingerstick, FS_OVERRIDE_WINDOW_MS } from "@/lib/fingerstick";
 import { parseDbTs, parseDbDate, parseLluTs } from "@/lib/time";
-import { calcTotalIOB, applyIOBCorrection, formatIOBDisplay, type InsulinType } from "@/lib/iob";
+import { calcTotalIOB, applyIOBCorrection, iobCorrectionRoundedToZero, formatIOBDisplay, type InsulinType } from "@/lib/iob";
 import { fetchMeals } from "@/lib/meals";
 import { hapticSuccess, hapticError, hapticSelection } from "@/lib/haptics";
 import SnapSlider from "@/components/log/SnapSlider";
@@ -3265,10 +3265,17 @@ export default function EnginePage() {
                         </span>
                       </div>
                     )}
-                    {iob > 0 && applyIOBCorrection(result.dose, iob) === 0 && (
+                    {iob > 0 && result.dose <= iob && (
                       <div style={{ marginBottom: 10, padding: "8px 14px", background: "rgba(0,200,100,0.1)", border: "1px solid rgba(0,200,100,0.3)", borderRadius: 10, textAlign: "center" }}>
                         <span style={{ fontSize: 12, color: "rgba(80,220,140,0.9)" }}>
                           ✓ Kein zusätzliches Insulin nötig — bestehende Wirkung reicht aus
+                        </span>
+                      </div>
+                    )}
+                    {iobCorrectionRoundedToZero(result.dose, iob) && (
+                      <div style={{ marginBottom: 10, padding: "8px 14px", background: "rgba(100,180,255,0.1)", border: "1px solid rgba(100,180,255,0.3)", borderRadius: 10, textAlign: "center" }}>
+                        <span style={{ fontSize: 12, color: "rgba(140,200,255,0.9)" }}>
+                          ℹ {tEngine("dose_rounded_to_zero")}
                         </span>
                       </div>
                     )}

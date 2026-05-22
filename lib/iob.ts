@@ -201,6 +201,21 @@ export function applyIOBCorrection(recommendation: number, iob: number): number 
   return Math.max(0, Math.round((recommendation - iob) * 10) / 10);
 }
 
+/**
+ * Returns true when `applyIOBCorrection` produces 0 because the pre-rounding
+ * result (recommendation − iob) is positive but smaller than 0.05 — i.e. the
+ * algorithm computed a real, non-zero suggestion that was silently lost to
+ * rounding rather than being zeroed out by the Math.max(0, …) clamp.
+ *
+ * Use this in the UI to show a brief note like
+ * "Recommendation < 0.1 u — no bolus needed" so users understand why they
+ * see no dose suggestion.
+ */
+export function iobCorrectionRoundedToZero(recommendation: number, iob: number): boolean {
+  const raw = recommendation - iob;
+  return raw > 0 && applyIOBCorrection(recommendation, iob) === 0;
+}
+
 export function formatIOBDisplay(iob: number): string | null {
   if (iob < 0.05) return null;
   return `${iob.toFixed(1)} IE`;

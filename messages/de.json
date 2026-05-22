@@ -300,6 +300,7 @@
     "saved_confirmation": "✓ Gespeichert — {units} IE geloggt",
     "toast_meal_saved": "Mahlzeit gespeichert ✓",
     "recommended_dose_label": "Berechneter Richtwert",
+    "dose_rounded_to_zero": "Empfehlung < 0,1 IE — kein Bolus nötig",
     "units_short": "IE",
     "icr_label": "KH-Faktor",
     "icr_comparison_title": "ICR auswählen",
