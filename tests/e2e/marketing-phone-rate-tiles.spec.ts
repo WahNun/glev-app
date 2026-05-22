@@ -8,6 +8,8 @@
 //   in the Settings screen. All of these elements use whiteSpace:nowrap +
 //   overflow:hidden + textOverflow:ellipsis — exactly the pattern that clips
 //   text silently when a container is too narrow.
+//   Task #575 adds coverage for the Insights screen card labels, which use the
+//   same small font sizes inside fixed-width containers and are locale-translated.
 //
 // What we cover:
 //   PART 1 — RateTile chip tiles (original Task #567 coverage)
@@ -33,8 +35,19 @@
 //     "CGM Verbindung" in DE; "Notifications", "CGM Connection", "Macro Targets"
 //     in EN) also use nowrap+ellipsis. We cover the longest label per locale.
 //
+//   PART 4 — Insights screen card labels (Task #575)
+//     The Insights screen contains CardLabel texts (card headers at fontSize:9)
+//     and meal-evaluation row labels inside a fixed width:72 container. Both
+//     groups are locale-translated and at overflow risk:
+//       DE card headers: "Time in Range · 7T", "Ø Glukose", "GMI · gesch. A1c",
+//                        "7-Tage-Trend", "Ø pro Tag", "Mahlzeiten-Bewertung · 7T"
+//       EN card headers: "Time in Range · 7d", "Avg. glucose", "GMI · est. A1c",
+//                        "7-day trend", "Avg. / day", "Meal rating · 7d"
+//       DE row labels:   "Im Ziel", "Spike", "Hypo-Risiko"
+//       EN row labels:   "In range", "Spike", "Hypo risk"
+//
 // Structure:
-//   Six `test.describe` blocks — two per part (DE + EN each) — so regressions
+//   Eight `test.describe` blocks — two per part (DE + EN each) — so regressions
 //   are pinpointed to the affected locale and element group.
 //
 // Selector strategy:
@@ -322,6 +335,148 @@ test.describe("Marketing phone Settings row labels — EN locale", () => {
       await assertNoOverflow(labelEl, `Settings row label "${label}" (EN)`);
 
       const rawText = (await labelEl.textContent()) ?? "";
+      expect(rawText.trim()).toBe(label);
+    }
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PART 4 — Insights screen card labels (Task #575)
+//
+// The InsightsScreen renders:
+//   • CardLabel elements (fontSize:9, fontWeight:700) as card header titles
+//     inside flex containers — the longest DE label is
+//     "Mahlzeiten-Bewertung · 7T" (26 chars).
+//   • Meal-evaluation row labels inside a fixed width:72 container (fontSize:10)
+//     — "Hypo-Risiko" in DE is the at-risk outlier.
+//
+// Navigation: click the "INSIGHTS" BottomNav button (uppercased in both
+// locales) then anchor on the TIR card header before running checks.
+// ══════════════════════════════════════════════════════════════════════════════
+
+/** Click the Insights tab in the marketing phone bottom nav, then wait for a
+ *  known Insights-screen element to be visible before continuing. */
+async function gotoInsightsScreen(
+  phone: Locator,
+  tirHeaderText: string,
+): Promise<void> {
+  // BottomNav uppercases the nav label — "INSIGHTS" in both locales.
+  const insightsBtn = phone.getByRole("button", {
+    name: "INSIGHTS",
+    exact: true,
+  });
+  await insightsBtn.click();
+  // Anchor on the Time-in-Range card header to confirm the screen has loaded.
+  await expect(
+    phone.getByText(tirHeaderText, { exact: true }).first(),
+  ).toBeVisible();
+}
+
+test.describe("Marketing phone Insights card labels — DE locale", () => {
+  test.use({ locale: "de-DE" });
+
+  // CardLabel texts used as card headers in InsightsScreen (DE).
+  // These are hardcoded strings in AppMockupPhone.tsx via pickCopy().
+  const DE_CARD_HEADERS = [
+    "Time in Range · 7T",
+    "Ø Glukose",
+    "GMI · gesch. A1c",
+    "7-Tage-Trend",
+    "Ø pro Tag",
+    "Mahlzeiten-Bewertung · 7T",
+  ] as const;
+
+  // Meal-evaluation row labels inside the fixed width:72 container.
+  // "Hypo-Risiko" is the longest and most at risk of overflow.
+  const DE_MEAL_ROW_LABELS = ["Im Ziel", "Spike", "Hypo-Risiko"] as const;
+
+  test("Insights card headers are visible and not overflowing in DE", async ({
+    page,
+  }) => {
+    const phone = await gotoHomeAndFindPhone(page);
+
+    await gotoInsightsScreen(phone, "Time in Range · 7T");
+
+    for (const header of DE_CARD_HEADERS) {
+      const el = phone.getByText(header, { exact: true }).first();
+      await expect(el).toBeVisible();
+      await assertNoOverflow(el, `Insights card header "${header}" (DE)`);
+
+      const rawText = (await el.textContent()) ?? "";
+      expect(rawText.trim()).toBe(header);
+    }
+  });
+
+  test("Insights meal-evaluation row labels are visible and not overflowing in DE", async ({
+    page,
+  }) => {
+    const phone = await gotoHomeAndFindPhone(page);
+
+    await gotoInsightsScreen(phone, "Time in Range · 7T");
+
+    for (const label of DE_MEAL_ROW_LABELS) {
+      const el = phone.getByText(label, { exact: true }).first();
+      await expect(el).toBeVisible();
+      await assertNoOverflow(
+        el,
+        `Insights meal-eval row label "${label}" (DE)`,
+      );
+
+      const rawText = (await el.textContent()) ?? "";
+      expect(rawText.trim()).toBe(label);
+    }
+  });
+});
+
+test.describe("Marketing phone Insights card labels — EN locale", () => {
+  test.use({ locale: "en-US" });
+
+  // CardLabel texts used as card headers in InsightsScreen (EN).
+  const EN_CARD_HEADERS = [
+    "Time in Range · 7d",
+    "Avg. glucose",
+    "GMI · est. A1c",
+    "7-day trend",
+    "Avg. / day",
+    "Meal rating · 7d",
+  ] as const;
+
+  // Meal-evaluation row labels inside the fixed width:72 container (EN).
+  const EN_MEAL_ROW_LABELS = ["In range", "Spike", "Hypo risk"] as const;
+
+  test("Insights card headers are visible and not overflowing in EN", async ({
+    page,
+  }) => {
+    const phone = await gotoHomeAndFindPhone(page);
+
+    await gotoInsightsScreen(phone, "Time in Range · 7d");
+
+    for (const header of EN_CARD_HEADERS) {
+      const el = phone.getByText(header, { exact: true }).first();
+      await expect(el).toBeVisible();
+      await assertNoOverflow(el, `Insights card header "${header}" (EN)`);
+
+      const rawText = (await el.textContent()) ?? "";
+      expect(rawText.trim()).toBe(header);
+    }
+  });
+
+  test("Insights meal-evaluation row labels are visible and not overflowing in EN", async ({
+    page,
+  }) => {
+    const phone = await gotoHomeAndFindPhone(page);
+
+    await gotoInsightsScreen(phone, "Time in Range · 7d");
+
+    for (const label of EN_MEAL_ROW_LABELS) {
+      const el = phone.getByText(label, { exact: true }).first();
+      await expect(el).toBeVisible();
+      await assertNoOverflow(
+        el,
+        `Insights meal-eval row label "${label}" (EN)`,
+      );
+
+      const rawText = (await el.textContent()) ?? "";
       expect(rawText.trim()).toBe(label);
     }
   });
