@@ -301,6 +301,46 @@ test.describe("Marketing AppMockupPhone — pixel snapshots per screen", () => {
   });
 });
 
+// ──────────────────────────────────────────────────────────────────────────────
+// EN locale pixel snapshots
+//
+// The describe block above is implicitly pinned to `de-DE` (file-level
+// `test.use({ locale: "de-DE" })`). This block overrides that with
+// `en-US` so a purely visual regression that only affects the English
+// rendering of the marketing phone is caught here.
+//
+// Why Dashboard only (for now):
+//   The task that introduced this block (#571) calls for a pixel-snapshot
+//   guard specifically for the Dashboard screen in EN, because the RateTile
+//   label widths differ between locales. The overflow spec
+//   (marketing-phone-rate-tiles.spec.ts) already checks clipping in both
+//   locales via DOM assertions; this snapshot adds the complementary
+//   pixel-level guard (wrong colour, broken layout, misaligned card) that
+//   DOM assertions cannot catch.
+//
+// Anchor strategy:
+//   `Good Rate` is identical in both `messages/de.json` and
+//   `messages/en.json` (see `good_label`), so it is a locale-neutral
+//   anchor that proves the Dashboard is hydrated without depending on a
+//   DE-only string.
+// ──────────────────────────────────────────────────────────────────────────────
+
+test.describe("Marketing AppMockupPhone — pixel snapshots per screen (EN locale)", () => {
+  // Override the file-level `de-DE` with `en-US` so next-intl resolves
+  // English copy for every test in this block.
+  test.use({ locale: "en-US" });
+
+  test("snapshots Dashboard in EN locale", async ({ page }) => {
+    const phone = await gotoHomeAndFindPhone(page);
+
+    // "Good Rate" is the same string in both locales — use it as the
+    // hydration anchor so we don't snapshot a partially-rendered frame.
+    await expect(phone.getByText(/Good Rate/)).toBeVisible();
+    await prepareForSnapshot(page);
+    await expect(phone).toHaveScreenshot("phone-dashboard-en.png");
+  });
+});
+
 test.describe("Marketing AppMockupPhone — locked-tab variants on mobile", () => {
   test("FeatureDeepDive renders one locked phone per feature row", async ({ page }) => {
     // Force a mobile viewport so FeatureLiveMockup's matchMedia
