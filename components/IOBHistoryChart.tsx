@@ -1,7 +1,7 @@
 "use client";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { useTranslations } from "next-intl";
-import { buildDoses, buildIOBHistory, getDIAMinutes, type InsulinType } from "@/lib/iob";
+import { buildDoses, buildIOBHistory, getDIAMinutes, getActiveDosesAtTime, type InsulinType } from "@/lib/iob";
 import type { InsulinLog } from "@/lib/insulin";
 import type { Meal } from "@/lib/meals";
 
@@ -33,6 +33,8 @@ export default function IOBHistoryChart({ insulin, insulinType, meals }: Props) 
     const stored = window.localStorage.getItem(LS_KEY);
     return stored === "12" ? 12 : 24;
   });
+  const [activePeakIdx, setActivePeakIdx] = useState<number | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
     const tick = () => setNow(Date.now());
@@ -40,6 +42,23 @@ export default function IOBHistoryChart({ insulin, insulinType, meals }: Props) 
     window.addEventListener("focus", tick, { passive: true });
     return () => { clearInterval(iv); window.removeEventListener("focus", tick); };
   }, []);
+
+  const closePeakPopover = useCallback(() => setActivePeakIdx(null), []);
+
+  useEffect(() => {
+    if (activePeakIdx === null) return;
+    const handleDoc = (e: MouseEvent | TouchEvent) => {
+      if (svgRef.current && !svgRef.current.contains(e.target as Node)) {
+        closePeakPopover();
+      }
+    };
+    document.addEventListener("mousedown", handleDoc);
+    document.addEventListener("touchstart", handleDoc);
+    return () => {
+      document.removeEventListener("mousedown", handleDoc);
+      document.removeEventListener("touchstart", handleDoc);
+    };
+  }, [activePeakIdx, closePeakPopover]);
 
   function pickWindow(h: WindowHours) {
     setHours(h);
@@ -93,8 +112,6 @@ export default function IOBHistoryChart({ insulin, insulinType, meals }: Props) 
     timeLabels.push({ x, label, i: h });
   }
 
-  // Detect local maxima: peak IOB must be at least 0.5 IE above the lower of its two neighbors.
-  // Cap at 3 peaks (highest values win) to avoid visual clutter.
   const peaks = useMemo(() => {
     if (!hasActivity) return [];
     const found: Array<{ x: number; y: number; iob: number; tMs: number }> = [];
@@ -112,10 +129,13 @@ export default function IOBHistoryChart({ insulin, insulinType, meals }: Props) 
 
   const uid = `iob-hist-${Math.round(now / 60_000)}`;
 
-  // Label pill dimensions
   const PILL_W = 46;
   const PILL_H = 16;
-  const PILL_GAP = 5; // gap between dot and pill bottom
+  const PILL_GAP = 5;
+
+  const POPUP_W = 148;
+  const POPUP_ROW_H = 17;
+  const POPUP_HEAD_H = 18;
 
   return (
     <div
@@ -187,10 +207,12 @@ export default function IOBHistoryChart({ insulin, insulinType, meals }: Props) 
         </div>
       ) : (
         <svg
+          ref={svgRef}
           viewBox={`0 0 ${W} ${H}`}
           width="100%"
           height={H}
           style={{ display: "block", overflow: "visible" }}
+          onClick={closePeakPopover}
         >
           <defs>
             <linearGradient id={`${uid}-fill`} x1="0" y1="0" x2="0" y2="1">
@@ -242,12 +264,39 @@ export default function IOBHistoryChart({ insulin, insulinType, meals }: Props) 
             const timeStr = new Date(pk.tMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
             const label = t("iob_peak_label", { time: timeStr, units: pk.iob.toFixed(1) });
 
-            // Pill top-left corner (pill centered on peak x, sitting above the dot)
             const pillX = Math.max(PAD_L, Math.min(W - PAD_R - PILL_W, pk.x - PILL_W / 2));
             const pillY = pk.y - PILL_GAP - PILL_H;
 
+            const isActive = activePeakIdx === idx;
+
+            const activeDoses = isActive
+              ? getActiveDosesAtTime(doses, pk.tMs, diaMin)
+              : [];
+            const popupH = POPUP_HEAD_H + Math.max(1, activeDoses.length) * POPUP_ROW_H + 6;
+            const popupX = Math.max(0, Math.min(W - POPUP_W, pk.x - POPUP_W / 2));
+            const rawPopupY = pillY - popupH - 4;
+            const popupY = rawPopupY < 0 ? pk.y + 10 : rawPopupY;
+
             return (
-              <g key={idx}>
+              <g
+                key={idx}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActivePeakIdx(prev => prev === idx ? null : idx);
+                }}
+                style={{ cursor: "pointer" }}
+                role="button"
+                aria-label={label}
+              >
+                {/* Wider invisible hit target around the pill + dot */}
+                <rect
+                  x={(pillX - 4).toFixed(1)}
+                  y={(pillY - 4).toFixed(1)}
+                  width={PILL_W + 8}
+                  height={PILL_H + pk.y - pillY + 10}
+                  fill="transparent"
+                />
+
                 {/* Vertical stem from pill to dot */}
                 <line
                   x1={pk.x.toFixed(1)}
@@ -266,9 +315,9 @@ export default function IOBHistoryChart({ insulin, insulinType, meals }: Props) 
                   height={PILL_H}
                   rx="3"
                   ry="3"
-                  fill="var(--surface)"
+                  fill={isActive ? peakColor : "var(--surface)"}
                   stroke={peakColor}
-                  strokeWidth="0.8"
+                  strokeWidth={isActive ? "0" : "0.8"}
                   opacity="0.95"
                 />
                 {/* Pill label text */}
@@ -276,7 +325,7 @@ export default function IOBHistoryChart({ insulin, insulinType, meals }: Props) 
                   x={(pillX + PILL_W / 2).toFixed(1)}
                   y={(pillY + PILL_H / 2 + 3).toFixed(1)}
                   fontSize="6.5"
-                  fill={peakColor}
+                  fill={isActive ? "var(--bg, #0f0f10)" : peakColor}
                   textAnchor="middle"
                   fontWeight="600"
                   fontFamily="var(--font-mono)"
@@ -292,6 +341,91 @@ export default function IOBHistoryChart({ insulin, insulinType, meals }: Props) 
                   stroke="var(--surface)"
                   strokeWidth="1"
                 />
+
+                {/* Dose popover — rendered as foreignObject in SVG space */}
+                {isActive && (
+                  <foreignObject
+                    x={popupX}
+                    y={popupY}
+                    width={POPUP_W}
+                    height={popupH}
+                    style={{ overflow: "visible" }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div
+                      style={{
+                        background: "var(--surface)",
+                        border: `1px solid ${peakColor}`,
+                        borderRadius: 6,
+                        padding: "5px 8px 6px",
+                        boxShadow: "0 4px 16px rgba(0,0,0,0.35)",
+                        fontSize: 9,
+                        fontFamily: "var(--font-mono)",
+                        color: "var(--text)",
+                        width: POPUP_W,
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      {/* Popover header */}
+                      <div style={{
+                        fontSize: 8,
+                        fontWeight: 700,
+                        color: peakColor,
+                        letterSpacing: "0.06em",
+                        marginBottom: 4,
+                        textTransform: "uppercase",
+                      }}>
+                        {t("iob_peak_popover_title", { time: new Date(pk.tMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) })}
+                      </div>
+
+                      {/* Dose rows */}
+                      {activeDoses.length === 0 ? (
+                        <div style={{ color: "var(--text-ghost)", fontSize: 8 }}>
+                          {t("iob_no_active_doses")}
+                        </div>
+                      ) : (
+                        activeDoses.map((d, di) => {
+                          const doseTime = new Date(d.administeredAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                          const sourceName = d.label
+                            || (d.source === "meal" ? t("iob_peak_popover_meal_label") : "Bolus");
+                          return (
+                            <div
+                              key={di}
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "baseline",
+                                gap: 6,
+                                padding: "1px 0",
+                                borderTop: di > 0 ? "0.5px solid var(--border)" : undefined,
+                              }}
+                            >
+                              <span style={{
+                                color: "var(--text-dim)",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                                maxWidth: 88,
+                                fontSize: 8.5,
+                              }}>
+                                {doseTime} · {sourceName}
+                              </span>
+                              <span style={{
+                                color: peakColor,
+                                fontWeight: 700,
+                                whiteSpace: "nowrap",
+                                fontSize: 9,
+                                flexShrink: 0,
+                              }}>
+                                {t("iob_peak_dose_units", { units: d.units.toFixed(1) })}
+                              </span>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </foreignObject>
+                )}
               </g>
             );
           })}

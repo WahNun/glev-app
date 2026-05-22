@@ -6,6 +6,8 @@ export interface InsulinLike {
   units: number;
   created_at: string;
   related_entry_id?: string | null;
+  /** Display name for the popover (e.g. "Novorapid"). Optional — used only for UI. */
+  insulin_name?: string;
 }
 
 /** Minimal shape of a meal entry needed by buildDoses. */
@@ -14,6 +16,8 @@ export interface MealLike {
   insulin_units?: number | null;
   meal_time?: string | null;
   created_at: string;
+  /** Short description for the popover. Optional — used only for UI. */
+  input_text?: string;
 }
 
 export function getDIAMinutes(insulinType: InsulinType): number {
@@ -27,6 +31,10 @@ export function getDIAMinutes(insulinType: InsulinType): number {
 export interface BolusDose {
   units: number;
   administeredAt: string;
+  /** 'insulin' = from an explicit insulin log; 'meal' = inferred from meal.insulin_units */
+  source?: 'insulin' | 'meal';
+  /** Human-readable label: insulin_name for boluses, first ~30 chars of input_text for meals */
+  label?: string;
 }
 
 export function calcSingleIOB(dose: BolusDose, nowMs: number, diaMinutes: number): number {
@@ -70,20 +78,47 @@ export function buildDoses(
   );
   for (const l of insulin) {
     if (l.insulin_type === 'bolus' && l.units > 0) {
-      result.push({ units: l.units, administeredAt: l.created_at });
+      result.push({
+        units: l.units,
+        administeredAt: l.created_at,
+        source: 'insulin',
+        label: l.insulin_name,
+      });
     }
   }
   if (meals) {
     for (const m of meals) {
       if ((m.insulin_units ?? 0) > 0 && !linkedMealIds.has(m.id)) {
+        const rawLabel = m.input_text?.trim();
         result.push({
           units: m.insulin_units!,
           administeredAt: m.meal_time ?? m.created_at,
+          source: 'meal',
+          label: rawLabel && rawLabel.length > 30
+            ? rawLabel.slice(0, 28) + '…'
+            : rawLabel,
         });
       }
     }
   }
   return result;
+}
+
+/**
+ * Returns the subset of doses that still have active IOB at the given
+ * sample time — i.e. the dose was already given AND hasn't fully decayed yet.
+ * Used by the peak-marker popover to show which doses caused a spike.
+ */
+export function getActiveDosesAtTime(
+  doses: BolusDose[],
+  tMs: number,
+  diaMin: number,
+): BolusDose[] {
+  return doses.filter(d => {
+    const doseMs = new Date(d.administeredAt).getTime();
+    const elapsedMin = (tMs - doseMs) / 60_000;
+    return elapsedMin >= 0 && elapsedMin < diaMin;
+  });
 }
 
 export interface IOBSample {
