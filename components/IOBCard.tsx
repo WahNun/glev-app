@@ -317,6 +317,7 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
       {/* ── COLLAPSIBLE DETAIL ── */}
       <div
         ref={detailRef}
+        data-testid="iob-detail-section"
         style={{
           overflow: "hidden",
           maxHeight: expanded ? 600 : 0,
