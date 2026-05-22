@@ -187,7 +187,6 @@ function RateTripletCard({ cards }: { cards: CardData[] }) {
               <div style={{
                 fontSize: 10, color: "var(--text-dim)", letterSpacing: "0.08em",
                 fontWeight: 700, textTransform: "uppercase", lineHeight: 1.2,
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
               }}>{c.label}</div>
               <div style={{ display: "flex", alignItems: "baseline", gap: 2 }}>
                 <span style={{
@@ -199,7 +198,6 @@ function RateTripletCard({ cards }: { cards: CardData[] }) {
               </div>
               <div style={{
                 fontSize: 11, color: "var(--text-faint)", lineHeight: 1.25,
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
               }}>{c.sub}</div>
             </div>
           ))}
