@@ -204,7 +204,7 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
         position: "relative",
         perspective: 1200,
         cursor: "pointer",
-        minHeight: 218,
+        minHeight: 310,
       }}
     >
       <div
@@ -214,7 +214,7 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
           transformStyle: "preserve-3d",
           transition: "transform 0.55s cubic-bezier(0.4,0,0.2,1)",
           transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
-          minHeight: 218,
+          minHeight: 310,
         }}
       >
         {/* ── FRONT ── */}
@@ -313,7 +313,6 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
             display: "flex",
             flexDirection: "column",
             gap: 9,
-            overflow: "hidden",
             boxShadow: cleared ? "none" : `inset 0 0 28px ${color}09`,
           }}
         >
