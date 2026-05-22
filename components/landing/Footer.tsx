@@ -22,7 +22,7 @@ export default function LandingFooter() {
         marginTop: 24,
       }}
     >
-      <a href="/legal" style={{ color: TEXT_FAINT, textDecoration: "none" }}>
+      <a href="/legal?tab=agb" style={{ color: TEXT_FAINT, textDecoration: "none" }}>
         {t("landing_footer_imprint")}
       </a>
       <span aria-hidden>·</span>

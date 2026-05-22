@@ -1,12 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 type Tab = "dse" | "agb";
 
-export default function LegalPage() {
-  const [tab, setTab] = useState<Tab>("dse");
+function LegalPageInner() {
+  const searchParams = useSearchParams();
+  const [tab, setTab] = useState<Tab>(() => {
+    const param = searchParams.get("tab");
+    return param === "agb" ? "agb" : "dse";
+  });
+
+  useEffect(() => {
+    const param = searchParams.get("tab");
+    setTab(param === "agb" ? "agb" : "dse");
+  }, [searchParams]);
 
   return (
     <div className="glev-legal">
@@ -380,6 +390,14 @@ export default function LegalPage() {
         <Link href="/" className="legal-back-link">Zurück zur Startseite</Link>
       </footer>
     </div>
+  );
+}
+
+export default function LegalPage() {
+  return (
+    <Suspense fallback={null}>
+      <LegalPageInner />
+    </Suspense>
   );
 }
 

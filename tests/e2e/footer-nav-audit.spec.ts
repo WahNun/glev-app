@@ -72,11 +72,11 @@ test.describe("Landing Footer", () => {
     await page.goto("/pro", { waitUntil: "domcontentloaded", timeout: 60_000 });
   });
 
-  test("Impressum link points to /legal", async ({ page }) => {
+  test("Impressum link points to /legal?tab=agb", async ({ page }) => {
     const link = page.getByRole("link", { name: /impressum/i });
     await expect(link).toBeVisible();
     const href = await link.getAttribute("href");
-    expect(href).toBe("/legal");
+    expect(href).toBe("/legal?tab=agb");
   });
 
   test("Datenschutz link points to /legal", async ({ page }) => {
@@ -93,9 +93,11 @@ test.describe("Landing Footer", () => {
     expect(href).toBe("mailto:hello@glev.app");
   });
 
-  test("/legal page is reachable via Impressum link", async ({ page }) => {
+  test("/legal page is reachable via Impressum link and lands on AGB tab", async ({ page }) => {
     await page.getByRole("link", { name: /impressum/i }).click();
-    await expect(page).toHaveURL(/\/legal/);
+    await expect(page).toHaveURL(/\/legal\?tab=agb/);
+    await expect(page.locator("#tab-agb")).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#panel-agb")).toBeVisible();
   });
 });
 
@@ -156,6 +158,48 @@ test.describe("Legal Page", () => {
     const link = page.locator("#panel-dse a[href='mailto:info@glev.app']").first();
     await expect(link).toBeVisible();
     await expect(link).toHaveAttribute("href", "mailto:info@glev.app");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// § Legal Page — deep-link behaviour (?tab= query param)
+// ─────────────────────────────────────────────────────────────────────────────
+
+test.describe("Legal Page — deep-link tab selection", () => {
+  test.use({ viewport: DESKTOP_VIEWPORT });
+
+  test("?tab=agb opens AGB tab directly", async ({ context, baseURL, page }) => {
+    await pinLocale(context, baseURL!);
+    await page.goto("/legal?tab=agb", { waitUntil: "domcontentloaded", timeout: 60_000 });
+    await expect(page.locator("#tab-agb")).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#tab-dse")).toHaveAttribute("aria-selected", "false");
+    await expect(page.locator("#panel-agb")).toBeVisible();
+    await expect(page.locator("#panel-dse")).toBeHidden();
+  });
+
+  test("/legal (no tab param) defaults to DSE tab", async ({ context, baseURL, page }) => {
+    await pinLocale(context, baseURL!);
+    await page.goto("/legal", { waitUntil: "domcontentloaded", timeout: 60_000 });
+    await expect(page.locator("#tab-dse")).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#tab-agb")).toHaveAttribute("aria-selected", "false");
+    await expect(page.locator("#panel-dse")).toBeVisible();
+    await expect(page.locator("#panel-agb")).toBeHidden();
+  });
+
+  test("?tab=dse explicitly opens DSE tab", async ({ context, baseURL, page }) => {
+    await pinLocale(context, baseURL!);
+    await page.goto("/legal?tab=dse", { waitUntil: "domcontentloaded", timeout: 60_000 });
+    await expect(page.locator("#tab-dse")).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#panel-dse")).toBeVisible();
+    await expect(page.locator("#panel-agb")).toBeHidden();
+  });
+
+  test("unknown tab param falls back to DSE tab", async ({ context, baseURL, page }) => {
+    await pinLocale(context, baseURL!);
+    await page.goto("/legal?tab=xyz", { waitUntil: "domcontentloaded", timeout: 60_000 });
+    await expect(page.locator("#tab-dse")).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#panel-dse")).toBeVisible();
+    await expect(page.locator("#panel-agb")).toBeHidden();
   });
 });
 
