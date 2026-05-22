@@ -477,6 +477,10 @@ export default function DashboardPage() {
   // SSR. Edited via Settings → "Daily Macro Targets".
   const [macroTargets, setMacroTargets] = useState<MacroTargets>(DEFAULT_MACRO_TARGETS);
   const [insulinType, setInsulinType]   = useState<InsulinType>("rapid");
+  // Latest CGM reading — used by IOBCard to show expected BG drop.
+  // Fetched independently here so DashboardPage owns the value;
+  // TrendChart has its own copy for TIR calculation (no prop-drilling).
+  const [latestCgmBg, setLatestCgmBg] = useState<number | undefined>(undefined);
   // Bottom-sheet/modal listing all quick-log entry points (mirrors the
   // header "+" QuickAddMenu). Opened by the dashboard hero "+" button.
   const [quickAddOpen, setQuickAddOpen] = useState(false);
@@ -484,6 +488,14 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchMacroTargets().then(setMacroTargets).catch(() => {});
     fetchInsulinType().then(setInsulinType).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const to = Date.now();
+    const from = to - 3 * 3600000; // last 3 h is enough for the latest reading
+    fetchCgmSamples(from, to).then(s => {
+      if (s.length > 0) setLatestCgmBg(s[s.length - 1].v);
+    }).catch(() => {});
   }, []);
 
   // SWR-backed cached fetch of meals + insulin + exercise. The
@@ -603,7 +615,7 @@ export default function DashboardPage() {
       title: t("cluster_control"),
       cards: [
         { id: "control-score", node: <ControlScoreCard meals={meals}/> },
-        { id: "iob",           node: <IOBCard insulin={insulin} insulinType={insulinType} meals={meals} currentBg={cgm7d.length > 0 ? cgm7d[cgm7d.length - 1].v : undefined}/> },
+        { id: "iob",           node: <IOBCard insulin={insulin} insulinType={insulinType} meals={meals} currentBg={latestCgmBg}/> },
         { id: "iob-history",   node: <IOBHistoryChart insulin={insulin} insulinType={insulinType} meals={meals} /> },
         // rateCards = buildCards(...) minus the "control" entry —
         // shown as a single compact 3-up triplet (Good / Spike / Hypo)
