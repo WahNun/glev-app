@@ -86,6 +86,42 @@ export function buildDoses(
   return result;
 }
 
+export interface IOBSample {
+  tMs: number;
+  iob: number;
+}
+
+/**
+ * Builds a historical IOB timeline by sampling total active insulin at
+ * regular `intervalMin`-minute intervals over the past `hours` hours.
+ *
+ * Key invariant: doses that have not yet been administered at a given sample
+ * time contribute ZERO IOB — even though `calcSingleIOB` returns `dose.units`
+ * for elapsedMin ≤ 0 (that branch is correct for forward-looking predictions
+ * but wrong for historical reconstruction).  We guard explicitly here so the
+ * timeline is physiologically accurate.
+ */
+export function buildIOBHistory(
+  doses: BolusDose[],
+  diaMin: number,
+  hours: number,
+  nowMs: number,
+  intervalMin = 15,
+): IOBSample[] {
+  const steps = Math.round((hours * 60) / intervalMin);
+  const startMs = nowMs - hours * 60 * 60_000;
+  return Array.from({ length: steps + 1 }, (_, i) => {
+    const tMs = startMs + (i / steps) * (nowMs - startMs);
+    const iob = doses.reduce((sum, d) => {
+      const doseTimeMs = new Date(d.administeredAt).getTime();
+      // Skip doses that haven't been administered yet at this sample time.
+      if (tMs < doseTimeMs) return sum;
+      return sum + calcSingleIOB(d, tMs, diaMin);
+    }, 0);
+    return { tMs, iob: Math.round(iob * 100) / 100 };
+  });
+}
+
 export function applyIOBCorrection(recommendation: number, iob: number): number {
   return Math.max(0, Math.round((recommendation - iob) * 10) / 10);
 }

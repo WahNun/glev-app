@@ -9,6 +9,7 @@ import { computeControlScore } from "@/lib/controlScore";
 import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
 import { type InsulinType } from "@/lib/iob";
 import IOBCard from "@/components/IOBCard";
+import IOBHistoryChart from "@/components/IOBHistoryChart";
 import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
 import { evaluateExercise, exerciseTypeLabelI18n } from "@/lib/exerciseEval";
 import { fetchMacroTargets, DEFAULT_MACRO_TARGETS, type MacroTargets, getTargetRange, fetchTargetRange, type TargetRange, fetchInsulinType } from "@/lib/userSettings";
@@ -603,6 +604,7 @@ export default function DashboardPage() {
       cards: [
         { id: "control-score", node: <ControlScoreCard meals={meals}/> },
         { id: "iob",           node: <IOBCard insulin={insulin} insulinType={insulinType} meals={meals} currentBg={cgm7d.length > 0 ? cgm7d[cgm7d.length - 1].v : undefined}/> },
+        { id: "iob-history",   node: <IOBHistoryChart insulin={insulin} insulinType={insulinType} meals={meals} /> },
         // rateCards = buildCards(...) minus the "control" entry —
         // shown as a single compact 3-up triplet (Good / Spike / Hypo)
         // so the breakdown is glanceable beneath the headline Control
