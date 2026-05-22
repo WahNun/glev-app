@@ -70,8 +70,19 @@ function IOBSparkline({
     );
   }
 
-  const earliestMs       = Math.min(...doses.map(d => new Date(d.administeredAt).getTime()));
-  const latestClearanceMs = Math.max(...doses.map(d => new Date(d.administeredAt).getTime() + diaMin * 60_000));
+  // Only include doses that haven't fully cleared yet at `now`.
+  // This prevents an early-morning dose from stretching the X-axis so far
+  // that a later dose becomes invisible (1–2 px wide).
+  // If everything has cleared (e.g. the card is in "cleared" state), fall back
+  // to all doses so the full decay curve is still visible.
+  const activeDoses = doses.filter(d => {
+    const elapsedMin = (now - new Date(d.administeredAt).getTime()) / 60_000;
+    return elapsedMin >= 0 && elapsedMin < diaMin;
+  });
+  const windowDoses = activeDoses.length > 0 ? activeDoses : doses;
+
+  const earliestMs       = Math.min(...windowDoses.map(d => new Date(d.administeredAt).getTime()));
+  const latestClearanceMs = Math.max(...windowDoses.map(d => new Date(d.administeredAt).getTime() + diaMin * 60_000));
   const totalDurationMs  = Math.max(latestClearanceMs - earliestMs, 1);
 
   const maxIOB = doses.reduce((s, d) => s + d.units, 0);
