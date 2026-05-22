@@ -180,3 +180,51 @@ test("buildIOBHistory: single dose IOB never increases after its peak", () => {
     expect(samples[i].iob).toBeLessThanOrEqual(samples[i - 1].iob + 0.01);
   }
 });
+
+// ─── 11. Dose exactly at DIA boundary contributes 0 ──────────────────────────
+//
+// calcSingleIOB returns 0 when elapsedMin >= diaMin (strict >=).
+// A dose administered exactly diaMin minutes before nowMs must therefore
+// contribute 0 at the last (nowMs) sample.
+
+test("buildIOBHistory: dose at exactly DIA boundary (nowMs - diaMin) has iob=0 at nowMs", () => {
+  const diaMin = getDIAMinutes("rapid"); // 180
+  const dose: BolusDose = { units: 6, administeredAt: msBefore(diaMin) };
+  const samples = buildIOBHistory([dose], diaMin, 4, REF_NOW, 15);
+
+  const lastSample = samples[samples.length - 1];
+  expect(lastSample.iob).toBe(0);
+});
+
+test("buildIOBHistory: regular dose at exactly its DIA boundary (300 min) has iob=0 at nowMs", () => {
+  const diaMin = getDIAMinutes("regular"); // 300
+  const dose: BolusDose = { units: 8, administeredAt: msBefore(diaMin) };
+  const samples = buildIOBHistory([dose], diaMin, 6, REF_NOW, 15);
+
+  const lastSample = samples[samples.length - 1];
+  expect(lastSample.iob).toBe(0);
+});
+
+// ─── 12. nowMs-anchored start and end timestamps ──────────────────────────────
+//
+// The first sample must be anchored at nowMs - hours*60*60_000 and the last
+// sample must be anchored at exactly nowMs, regardless of intervalMin.
+
+test("buildIOBHistory: first sample tMs equals nowMs - hours*60*60000", () => {
+  const samples = buildIOBHistory([], 180, 3, REF_NOW, 15);
+  const expectedStart = REF_NOW - 3 * 60 * 60_000;
+  expect(samples[0].tMs).toBe(expectedStart);
+});
+
+test("buildIOBHistory: last sample tMs equals nowMs", () => {
+  const samples = buildIOBHistory([], 180, 6, REF_NOW, 15);
+  expect(samples[samples.length - 1].tMs).toBe(REF_NOW);
+});
+
+test("buildIOBHistory: first and last timestamps hold for intervalMin=5", () => {
+  const hours = 2;
+  const samples = buildIOBHistory([], 180, hours, REF_NOW, 5);
+  const expectedStart = REF_NOW - hours * 60 * 60_000;
+  expect(samples[0].tMs).toBe(expectedStart);
+  expect(samples[samples.length - 1].tMs).toBe(REF_NOW);
+});
