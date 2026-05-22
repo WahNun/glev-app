@@ -212,7 +212,14 @@ export function unifiedOutcome(meal: Meal, now: Date = new Date()): string | nul
   return lc.outcome ?? null;
 }
 
-export async function saveMeal(input: SaveMealInput): Promise<Meal> {
+/** Optional dependency overrides — used only in unit tests to inject
+ *  spies without reaching the real Supabase client or the insulin module.
+ *  Production callers omit this parameter entirely. */
+export interface SaveMealDeps {
+  _insertInsulinLog?: typeof insertInsulinLog;
+}
+
+export async function saveMeal(input: SaveMealInput, _deps?: SaveMealDeps): Promise<Meal> {
   if (!supabase) throw new Error("Supabase is not configured");
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) throw new Error("Not authenticated");
@@ -329,9 +336,10 @@ export async function saveMeal(input: SaveMealInput): Promise<Meal> {
   // Fire-and-forget: a mirror failure never prevents the meal from saving.
   // IOBCard deduplicates via related_entry_id, so no double-counting occurs.
   if ((input.insulinUnits ?? 0) > 0) {
+    const _doInsertInsulinLog = _deps?._insertInsulinLog ?? insertInsulinLog;
     void (async () => {
       try {
-        await insertInsulinLog({
+        await _doInsertInsulinLog({
           insulin_type: "bolus",
           insulin_name: "Mahlzeit-Bolus",
           units: input.insulinUnits!,
