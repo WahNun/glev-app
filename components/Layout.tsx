@@ -107,6 +107,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   const router   = useRouter();
   const tNav = useTranslations("nav");
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [signOutConfirm, setSignOutConfirm] = useState(false);
   // The mobile-header AccountSheet trigger was removed in the
   // 2026-05-17 header-decluttering revision (header now only carries
   // the brand lockup + the recording-state pill). Konto/Profil flows
@@ -771,14 +772,50 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        <button onClick={handleSignOut} style={{
-          display: "flex", alignItems: "center", gap: 8, padding: "10px 12px",
-          borderRadius: 10, border: "none", cursor: "pointer", background: "transparent",
-          color: "var(--text-ghost)", fontSize: 13, textAlign: "left", width: "100%",
-        }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-          Sign Out
-        </button>
+        <div style={{ marginTop: 16, borderTop: `1px solid ${BORDER}`, paddingTop: 12 }}>
+          {signOutConfirm ? (
+            <div style={{ padding: "6px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+              <span style={{ fontSize: 12, color: "var(--text-dim)", fontWeight: 500 }}>Sign out?</span>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  aria-label="Confirm sign out"
+                  onClick={handleSignOut}
+                  style={{
+                    flex: 1, padding: "7px 0", borderRadius: 8, border: "none",
+                    cursor: "pointer", background: "#ef4444", color: "#fff",
+                    fontSize: 12, fontWeight: 600,
+                  }}
+                >
+                  Confirm
+                </button>
+                <button
+                  aria-label="Cancel sign out"
+                  onClick={() => setSignOutConfirm(false)}
+                  style={{
+                    flex: 1, padding: "7px 0", borderRadius: 8, border: "none",
+                    cursor: "pointer", background: "var(--surface-2, var(--surface))",
+                    color: "var(--text-dim)", fontSize: 12,
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              aria-label="Sign out of Glev"
+              onClick={() => setSignOutConfirm(true)}
+              style={{
+                display: "flex", alignItems: "center", gap: 8, padding: "10px 12px",
+                borderRadius: 10, border: "none", cursor: "pointer", background: "transparent",
+                color: "var(--text-ghost)", fontSize: 13, textAlign: "left", width: "100%",
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              Sign Out
+            </button>
+          )}
+        </div>
       </aside>
 
       <main ref={mainRef} className="glev-main" style={{ flex: 1, padding: "28px 32px", maxWidth: "100%", overflowX: "hidden", zoom: 1.12 }}>

@@ -242,11 +242,29 @@ test.describe("Desktop Sidebar", () => {
     });
   }
 
-  test("Sign Out button signs the user out and redirects to /login", async ({ page }) => {
-    const signOutBtn = page.locator(".glev-sidebar").getByRole("button", { name: /sign out/i });
+  test("Sign Out button shows confirmation and signs out on confirm", async ({ page }) => {
+    const signOutBtn = page.locator(".glev-sidebar").getByRole("button", { name: /sign out of glev/i });
     await expect(signOutBtn).toBeVisible({ timeout: 15_000 });
     await signOutBtn.click();
+
+    const confirmBtn = page.locator(".glev-sidebar").getByRole("button", { name: /confirm sign out/i });
+    await expect(confirmBtn).toBeVisible({ timeout: 5_000 });
+    await confirmBtn.click();
+
     await expect(page).toHaveURL(/\/login/, { timeout: 20_000 });
+  });
+
+  test("Sign Out confirmation can be cancelled", async ({ page }) => {
+    const signOutBtn = page.locator(".glev-sidebar").getByRole("button", { name: /sign out of glev/i });
+    await expect(signOutBtn).toBeVisible({ timeout: 15_000 });
+    await signOutBtn.click();
+
+    const cancelBtn = page.locator(".glev-sidebar").getByRole("button", { name: /cancel sign out/i });
+    await expect(cancelBtn).toBeVisible({ timeout: 5_000 });
+    await cancelBtn.click();
+
+    await expect(page).not.toHaveURL(/\/login/);
+    await expect(signOutBtn).toBeVisible({ timeout: 5_000 });
   });
 });
 
