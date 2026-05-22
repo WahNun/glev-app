@@ -2222,6 +2222,9 @@
     "password_failed": "Failed to send — please try again.",
     "row_sign_out": "Sign out",
     "signing_out": "Signing out…",
+    "sign_out_confirm_question": "Sign out?",
+    "sign_out_confirm_btn": "Confirm",
+    "sign_out_cancel_btn": "Cancel",
     "user_fallback": "User"
   },
   "betaPage": {

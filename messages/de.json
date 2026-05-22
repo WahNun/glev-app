@@ -2225,6 +2225,9 @@
     "password_failed": "Senden fehlgeschlagen — bitte erneut versuchen.",
     "row_sign_out": "Abmelden",
     "signing_out": "Melde ab…",
+    "sign_out_confirm_question": "Wirklich abmelden?",
+    "sign_out_confirm_btn": "Ja, abmelden",
+    "sign_out_cancel_btn": "Abbrechen",
     "user_fallback": "Nutzer"
   },
   "betaPage": {

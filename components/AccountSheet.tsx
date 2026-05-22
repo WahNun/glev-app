@@ -42,6 +42,7 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
   const [mealCount, setMealCount] = useState<number>(0);
   const [plan, setPlan] = useState<EffectivePlan>("free");
   const [signingOut, setSigningOut] = useState(false);
+  const [signOutConfirm, setSignOutConfirm] = useState(false);
   // password-reset request state. "ok"/"err" are sticky labels shown on
   // the row's right-hand side until the sheet re-opens, so the user gets
   // immediate feedback without a separate toast system.
@@ -91,9 +92,10 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
         // with empty placeholders so the user can sign out / upgrade.
       }
     })();
-    // Reset transient password-state every time the sheet re-opens so a
-    // previous "✓ sent" label doesn't linger on the next visit.
+    // Reset transient states every time the sheet re-opens so a
+    // previous "✓ sent" label or pending confirm doesn't linger.
     setPwState("idle");
+    setSignOutConfirm(false);
     return () => { cancelled = true; };
   }, [open, dateLocale]);
 
@@ -271,19 +273,57 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
         </button>
       </div>
 
-      {/* Sign-out CTA — destructive styling matches the About modal button */}
-      <button
-        onClick={handleSignOut}
-        disabled={signingOut}
-        style={{
-          width:"100%", padding:"14px 16px", borderRadius:12,
-          border:`1px solid ${PINK}40`, background:`${PINK}15`,
-          color:PINK, fontSize:14, fontWeight:700,
-          cursor: signingOut ? "wait" : "pointer",
-        }}
-      >
-        {signingOut ? t("signing_out") : t("row_sign_out")}
-      </button>
+      {/* Sign-out CTA — two-step confirmation to prevent accidental logout */}
+      {signOutConfirm ? (
+        <div style={{
+          borderRadius:12, border:`1px solid ${PINK}40`, background:`${PINK}10`,
+          padding:"12px 16px", display:"flex", flexDirection:"column", gap:8,
+        }}>
+          <span style={{ fontSize:13, color:"var(--text-dim)", fontWeight:500 }}>
+            {t("sign_out_confirm_question")}
+          </span>
+          <div style={{ display:"flex", gap:8 }}>
+            <button
+              aria-label="Confirm sign out"
+              onClick={handleSignOut}
+              disabled={signingOut}
+              style={{
+                flex:1, padding:"9px 0", borderRadius:8, border:"none",
+                cursor: signingOut ? "wait" : "pointer",
+                background: PINK, color:"#fff",
+                fontSize:13, fontWeight:700,
+              }}
+            >
+              {signingOut ? t("signing_out") : t("sign_out_confirm_btn")}
+            </button>
+            <button
+              aria-label="Cancel sign out"
+              onClick={() => setSignOutConfirm(false)}
+              disabled={signingOut}
+              style={{
+                flex:1, padding:"9px 0", borderRadius:8, border:"none",
+                cursor:"pointer", background:"var(--surface-2, var(--surface))",
+                color:"var(--text-dim)", fontSize:13,
+              }}
+            >
+              {t("sign_out_cancel_btn")}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          aria-label="Sign out of Glev"
+          onClick={() => setSignOutConfirm(true)}
+          style={{
+            width:"100%", padding:"14px 16px", borderRadius:12,
+            border:`1px solid ${PINK}40`, background:`${PINK}15`,
+            color:PINK, fontSize:14, fontWeight:700,
+            cursor:"pointer",
+          }}
+        >
+          {t("row_sign_out")}
+        </button>
+      )}
     </BottomSheet>
   );
 }

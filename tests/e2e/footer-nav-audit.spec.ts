@@ -348,6 +348,52 @@ test.describe("Mobile Header", () => {
     await expect(dialog).toBeHidden({ timeout: 5_000 });
   });
 
+  test("AccountSheet Sign Out button shows confirmation step before signing out", async ({ page }) => {
+    const logo = page.locator(".glev-mobile-head [aria-label='Open about Glev']");
+    await expect(logo).toBeVisible({ timeout: 10_000 });
+    await logo.tap();
+
+    const dialog = page.locator('[role="dialog"][aria-modal="true"]');
+    await expect(dialog).toBeVisible({ timeout: 8_000 });
+
+    // First tap — must show confirmation, NOT sign out immediately.
+    const signOutBtn = dialog.getByRole("button", { name: /sign out of glev/i });
+    await expect(signOutBtn).toBeVisible({ timeout: 5_000 });
+    await signOutBtn.tap();
+
+    // Confirmation row must appear.
+    const confirmBtn = dialog.getByRole("button", { name: /confirm sign out/i });
+    await expect(confirmBtn).toBeVisible({ timeout: 5_000 });
+
+    // Still on the same page — no navigation yet.
+    await expect(page).not.toHaveURL(/\/login/);
+
+    // Confirm — should now sign out and navigate to /login.
+    await confirmBtn.tap();
+    await expect(page).toHaveURL(/\/login/, { timeout: 20_000 });
+  });
+
+  test("AccountSheet Sign Out confirmation can be cancelled", async ({ page }) => {
+    const logo = page.locator(".glev-mobile-head [aria-label='Open about Glev']");
+    await expect(logo).toBeVisible({ timeout: 10_000 });
+    await logo.tap();
+
+    const dialog = page.locator('[role="dialog"][aria-modal="true"]');
+    await expect(dialog).toBeVisible({ timeout: 8_000 });
+
+    const signOutBtn = dialog.getByRole("button", { name: /sign out of glev/i });
+    await expect(signOutBtn).toBeVisible({ timeout: 5_000 });
+    await signOutBtn.tap();
+
+    // Cancel — confirmation row must disappear and sign-out button must reappear.
+    const cancelBtn = dialog.getByRole("button", { name: /cancel sign out/i });
+    await expect(cancelBtn).toBeVisible({ timeout: 5_000 });
+    await cancelBtn.tap();
+
+    await expect(page).not.toHaveURL(/\/login/);
+    await expect(signOutBtn).toBeVisible({ timeout: 5_000 });
+  });
+
   test("Scope picker radiogroup is visible on /insights", async ({ page }) => {
     await page.goto("/insights", { waitUntil: "domcontentloaded", timeout: 60_000 });
 
