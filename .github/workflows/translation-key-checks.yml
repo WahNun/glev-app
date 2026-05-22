@@ -1,9 +1,13 @@
 name: Translation key checks
 
 # Runs the pure-function unit tests that verify every translation key
-# used in the Engine, Dashboard, and Insights pages exists in both
-# messages/de.json and messages/en.json.  No dev server is needed —
-# the tests import JSON files directly and finish in well under 30 s.
+# used in the Engine, Dashboard, Insights, Entries, and Settings pages
+# exists in both messages/de.json and messages/en.json.  No dev server
+# is needed — the tests import JSON files directly and finish in well
+# under 30 s.
+#
+# New pages: add a tests/unit/*TranslationKeys.test.ts file and it is
+# picked up automatically by the glob pattern below.
 #
 # A failed check blocks merge when this workflow is added to the
 # repository's branch-protection required-status-checks list.
@@ -58,4 +62,4 @@ jobs:
       - name: Run translation key unit tests
         env:
           PLAYWRIGHT_SKIP_WEBSERVER: "1"
-        run: pnpm exec playwright test tests/unit/engineTranslationKeys.test.ts tests/unit/dashboardTranslationKeys.test.ts tests/unit/insightsTranslationKeys.test.ts
+        run: pnpm exec playwright test tests/unit/*TranslationKeys.test.ts
