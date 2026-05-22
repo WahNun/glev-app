@@ -153,10 +153,19 @@ interface Props {
 export default function IOBCard({ insulin, insulinType, meals, currentBg }: Props) {
   const t = useTranslations("dashboard");
   const [now, setNow]           = useState(() => Date.now());
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("glev_iob_expanded") === "true";
+  });
   const detailRef               = useRef<HTMLDivElement>(null);
 
   const cf = useMemo(() => getInsulinSettings().cf, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("glev_iob_expanded", String(expanded));
+    }
+  }, [expanded]);
 
   useEffect(() => {
     const tick = () => setNow(Date.now());
