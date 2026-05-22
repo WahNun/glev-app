@@ -3414,7 +3414,10 @@ export default function EnginePage() {
             overflowY: "auto",
             overflowX: "hidden",
             overscrollBehavior: "contain",
-            WebkitOverflowScrolling: "touch",
+            // WebkitOverflowScrolling:"touch" removed — on iOS WKWebView
+            // (Capacitor / TestFlight) it creates a native momentum scroll
+            // handler that intercepts touch events before pointer events
+            // fire, making SnapSlider drags completely unresponsive.
           }}
         >
           {tab === "log"         && <EngineLogTab />}

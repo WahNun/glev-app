@@ -143,7 +143,7 @@ export default function ReviewMacrosCards({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {/* Mirrors the dashboard's "TODAY'S MACROS" row 1:1 — same wrapper
           padding (22px 16px 24px), same 4-column grid with minmax(0, 1fr)
           so all rings render at identical diameter regardless of
@@ -151,10 +151,10 @@ export default function ReviewMacrosCards({
           centers the ring with minWidth:0 (collapses min-content floor).
           See app/(protected)/dashboard/page.tsx ~line 980. */}
       <div style={{
-        padding: "16px 24px 8px",
+        padding: "8px 24px 4px",
         display: "grid",
         gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-        gap: 12,
+        gap: 8,
       }}>
         {cards.map(c => {
           const active = open === c.key;
@@ -162,7 +162,7 @@ export default function ReviewMacrosCards({
           // the unit is shown globally below the grid instead.
           const displayLabel = c.label.replace(/\s*\([^)]+\)\s*$/i, "").trim();
           return (
-            <div key={c.key} style={{ display: "flex", justifyContent: "center", minWidth: 0, maxWidth: 128 }}>
+            <div key={c.key} style={{ display: "flex", justifyContent: "center", minWidth: 0, maxWidth: 110 }}>
               <button
                 type="button"
                 onClick={() => selectCard(c.key)}
@@ -204,7 +204,7 @@ export default function ReviewMacrosCards({
         color: "var(--text-faint)",
         letterSpacing: "0.06em",
         textTransform: "uppercase",
-        paddingBottom: 12,
+        paddingBottom: 4,
       }}>
         Angaben in g
       </div>
