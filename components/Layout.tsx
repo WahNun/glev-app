@@ -175,7 +175,11 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       if (voice.recording) {
         voice.requestStop();
       } else {
-        router.push("/engine");
+        // ?voice=1&vt=<timestamp> tells the engine page to auto-start
+        // recording. The vt token is a cache-buster so every tap is
+        // treated as a fresh trigger even when the user is already on
+        // /engine (Next.js won't re-mount the page otherwise).
+        router.push(`/engine?voice=1&vt=${Date.now()}`);
       }
     }
   };
@@ -192,7 +196,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     if (voice.recording) {
       voice.requestStop();
     } else {
-      router.push("/engine");
+      router.push(`/engine?voice=1&vt=${Date.now()}`);
     }
   };
 
@@ -1020,7 +1024,11 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           height: 64,
           borderRadius: "50%",
           border: "none",
-          background: "transparent",
+          // iOS WKWebView does NOT fire touch events on elements with
+          // background:transparent and no visible content. Using a
+          // near-invisible background (alpha=0.001) forces the WebKit
+          // hit-test to succeed while remaining visually imperceptible.
+          background: "rgba(0,0,0,0.001)",
           padding: 0,
           margin: 0,
           cursor: "pointer",
@@ -1268,7 +1276,11 @@ function MobileTab({
         display: "flex", flexDirection: "column",
         alignItems: "center", justifyContent: "center",
         gap: 3, padding: "3px 2px 0px 2px", height: 38,
-        border: "none", background: "transparent", cursor: "pointer",
+        border: "none",
+        // Same iOS WKWebView hit-test fix as the FAB hit-area button:
+        // pure transparent backgrounds skip touch dispatch in WebKit.
+        background: "rgba(0,0,0,0.001)",
+        cursor: "pointer",
         color: visualActive ? ACCENT : NAV_INACTIVE,
         fontSize: 11, fontWeight: visualActive ? 600 : 500, letterSpacing: "0.005em",
         borderRadius: 10,
