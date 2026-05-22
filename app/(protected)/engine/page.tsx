@@ -34,6 +34,7 @@ import { classifyPreReferenceTrend, type TrendClass, type TrendSample } from "@/
 import { fetchLatestFingerstick, FS_OVERRIDE_WINDOW_MS } from "@/lib/fingerstick";
 import { parseDbTs, parseDbDate, parseLluTs } from "@/lib/time";
 import { calcTotalIOB, applyIOBCorrection, iobCorrectionRoundedToZero, formatIOBDisplay, type InsulinType } from "@/lib/iob";
+import { resolveActiveDose } from "@/lib/engine/activeDose";
 import { fetchMeals } from "@/lib/meals";
 import { hapticSuccess, hapticError, hapticSelection } from "@/lib/haptics";
 import SnapSlider from "@/components/log/SnapSlider";
@@ -913,13 +914,10 @@ export default function EnginePage() {
   // chips after a run (e.g. Adaptiv → Einstellungen), resultICRSource
   // no longer matches selectedICR and we fall back to eagerDoses for
   // the newly-selected source — so the CTA updates immediately.
-  const activeDose = useMemo<number | null>(() => {
-    const manualNum = parseFloat(manualDose);
-    if (manualDose.trim() !== "" && Number.isFinite(manualNum) && manualNum >= 0) return manualNum;
-    if (result && resultICRSource === selectedICR) return applyIOBCorrection(result.dose, iob);
-    const rawEager = selectedICR === 'adaptive' ? eagerDoses.adaptive : eagerDoses.static;
-    return rawEager !== null ? applyIOBCorrection(rawEager, iob) : null;
-  }, [manualDose, result, resultICRSource, iob, eagerDoses, selectedICR]);
+  const activeDose = useMemo<number | null>(
+    () => resolveActiveDose(result, resultICRSource, selectedICR, eagerDoses, manualDose, iob),
+    [manualDose, result, resultICRSource, iob, eagerDoses, selectedICR]
+  );
 
   const currentAdjustment = useMemo(() => {
     if (meals.length === 0) return null;
