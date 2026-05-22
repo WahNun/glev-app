@@ -45,6 +45,7 @@ Glev ist aktuell **kein eingereichtes Medizinprodukt**. Primärzielgruppe: erwac
 **Production runs on Vercel, NOT on Replit.**
 
 - **Deploy flow:** local `git push origin main` → GitHub `WahNun/glev-app` → Vercel auto-deploys to `https://glev.app`
+- **Web changes reach both platforms automatically:** Android (Play Store) and iOS (TestFlight/App Store) are Capacitor webview shells loading `https://glev.app`. A `git push` deploys to both simultaneously — no new `.aab` or `.ipa` needed. New native builds are only required when native files change (`styles.xml`, `AndroidManifest.xml`, Xcode project, etc.). Always plan and test for both platforms.
 - **Replit is dev-only:** the workspace here is for coding/preview only. Replit Secrets are NOT read by production. Production env vars live in **Vercel Project Settings → Environment Variables**.
 - **After changing any env var in Vercel:** the change only takes effect after a fresh deployment (Vercel caches env vars in serverless functions at build time). Trigger a redeploy via Vercel Dashboard → Deployments → "Redeploy" on the latest build, OR push an empty commit.
 - **Two Stripe webhook endpoints (both on Vercel):**
