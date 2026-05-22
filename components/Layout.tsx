@@ -1019,6 +1019,12 @@ function MobileGlevFab({
   // and is gated by `pointerHandledRef` so taps don't double-fire.
   const timerRef = useRef<number | null>(null);
   const longFiredRef = useRef(false);
+  // NOTE: pointerHandledRef is set in pointerUp (NOT pointerDown).
+  // If set in pointerDown, iOS WKWebView drops the pointerUp event when
+  // React commits a re-render between down and up — then handleClick
+  // sees pointerHandledRef=true and bails → dead tap. Setting it only
+  // in pointerUp means a dropped pointerUp still lets the synthetic
+  // click through as fallback (same fix as MobileTab round 10).
   const pointerHandledRef = useRef(false);
 
   const clearTimer = () => {
@@ -1028,14 +1034,17 @@ function MobileGlevFab({
     }
   };
 
-  const handlePointerDown = () => {
-    pointerHandledRef.current = true;
+  const handlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    // setPointerCapture routes ALL pointer events to this element even
+    // if the pointer drifts outside the button boundary between down and
+    // up — prevents pointerLeave from cancelling the gesture prematurely
+    // (same fix as MobileTab round 11).
+    e.currentTarget.setPointerCapture(e.pointerId);
     longFiredRef.current = false;
     clearTimer();
     timerRef.current = window.setTimeout(() => {
       longFiredRef.current = true;
-      // Tiny haptic confirms the long-press fired even without UI
-      // change (e.g. user is on /dashboard when they long-press).
+      // Tiny haptic confirms the long-press fired.
       if (typeof navigator !== "undefined" && "vibrate" in navigator) {
         try { navigator.vibrate?.(15); } catch { /* noop */ }
       }
@@ -1046,22 +1055,18 @@ function MobileGlevFab({
   const handlePointerUp = () => {
     clearTimer();
     if (!longFiredRef.current) {
+      pointerHandledRef.current = true;
       onShortPress();
     }
   };
 
   const handlePointerCancel = () => {
-    // Cancel = scroll started, finger moved out, pen lifted abnormally,
-    // etc. Discard the gesture entirely so we don't fire either action.
     clearTimer();
     longFiredRef.current = false;
+    pointerHandledRef.current = false;
   };
 
   const handleClick = () => {
-    // Pointer cycle already handled this gesture; swallow the synthetic
-    // click that browsers fire after pointerup so the action doesn't
-    // run twice. Reset the flag so a subsequent KEYBOARD activation
-    // (where no pointer events fire) still goes through.
     if (pointerHandledRef.current) {
       pointerHandledRef.current = false;
       return;

@@ -805,7 +805,6 @@ export default function EntriesPage() {
   // card render and counter are crash-safe even before the reset-useEffect
   // fires (useEffect runs after render, so a filter change that shrinks the
   // list causes ONE render with the stale index before it is reset to 0).
-  const safeIndex = filtered.length > 0 ? Math.min(currentIndex, filtered.length - 1) : 0;
 
   const inp: React.CSSProperties = { background:"var(--input-bg)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"9px 14px", color:"var(--text)", fontSize:14, outline:"none" };
 
@@ -1034,39 +1033,8 @@ export default function EntriesPage() {
           )}
         </div>
       ) : (
-        <div>
-          {/* Arrow nav: ‹ single card › */}
-          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-            {/* ‹ prev button */}
-            <button
-              onClick={() => { setCurrentIndex(i => Math.max(0, i - 1)); setExpanded(null); setEditingId(null); }}
-              disabled={safeIndex === 0}
-              aria-label="Previous entry"
-              style={{
-                flexShrink:0, width:32, height:32, borderRadius:"50%",
-                border:"1px solid rgba(255,255,255,0.1)",
-                background:"rgba(255,255,255,0.06)",
-                color:"#8b949e", display:"flex", alignItems:"center",
-                justifyContent:"center", padding:0,
-                cursor:safeIndex === 0 ? "default" : "pointer",
-                opacity:safeIndex === 0 ? 0.25 : 1,
-                transition:"opacity 0.15s",
-              }}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polyline points="15 18 9 12 15 6"/>
-              </svg>
-            </button>
-
-            {/* Single card — renders only filtered[safeIndex].
-                safeIndex is computed at render time (see above) and
-                clamps currentIndex so we never access filtered[undefined]
-                during the render that fires before the reset-useEffect
-                runs (e.g. user at index 10, filter narrows list to 3). */}
-            <div style={{ flex:1, minWidth:0 }}>
-              {(() => {
-                const r = filtered[safeIndex];
-                if (!r) return null;
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {filtered.map(r => {
                 // BOLUS row — insulin event with 5-state outcome badge.
                 if (r.kind === "bolus") {
               const i = r.data;
@@ -1538,35 +1506,7 @@ export default function EntriesPage() {
                 )}
               </div>
             );
-              })()}
-            </div>
-
-            {/* › next button */}
-            <button
-              onClick={() => { setCurrentIndex(i => Math.min(filtered.length - 1, i + 1)); setExpanded(null); setEditingId(null); }}
-              disabled={safeIndex >= filtered.length - 1}
-              aria-label="Next entry"
-              style={{
-                flexShrink:0, width:32, height:32, borderRadius:"50%",
-                border:"1px solid rgba(255,255,255,0.1)",
-                background:"rgba(255,255,255,0.06)",
-                color:"#8b949e", display:"flex", alignItems:"center",
-                justifyContent:"center", padding:0,
-                cursor:safeIndex >= filtered.length - 1 ? "default" : "pointer",
-                opacity:safeIndex >= filtered.length - 1 ? 0.25 : 1,
-                transition:"opacity 0.15s",
-              }}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polyline points="9 6 15 12 9 18"/>
-              </svg>
-            </button>
-          </div>
-
-          {/* Counter: "X / Y" */}
-          <div style={{ textAlign:"center", marginTop:10, fontSize:13, color:"var(--text-faint)", fontVariantNumeric:"tabular-nums" }}>
-            {safeIndex + 1} / {filtered.length}
-          </div>
+          })}
         </div>
       )}
 
