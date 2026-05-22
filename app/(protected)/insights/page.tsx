@@ -2874,10 +2874,12 @@ export default function InsightsPage() {
         .sort((a, b) => b.count - a.count)
         .slice(0, 3);
 
-      // Male users see a symptoms-only variant: the cycle stat tile and
-      // phase counts are hidden (clinically irrelevant), the card is
-      // retitled to "Symptome", and `hasAny` ignores cycle signals so
-      // the card stays hidden when the only data is cycle-side noise.
+      // The entire card is only shown for users who can menstruate.
+      // Male users have no clinical use for cycle OR symptom context here
+      // — symptom logging without cycle correlation adds no insight.
+      // Null/unset sex (legacy onboarding) defaults to visible so no data is lost.
+      if (sex === "male") return { id: "cycle-symptoms", node: null };
+
       const showCycle = cycleSurfacesAvailable(sex);
       const hasAny = showCycle
         ? (bleedingDays > 0 || Object.keys(phaseCounts).length > 0 || totalSymptomEntries > 0)
