@@ -87,12 +87,21 @@ export interface InsulinSettings {
   cf: number;
   /** Target BG (mg/dL) — midpoint of the user's target range. */
   targetBg: number;
+  /** Duration of insulin action in minutes. Used by all IOB calculations.
+   *  `undefined` when the user has not explicitly set a value — all IOB
+   *  call sites then pass this to `getDIAMinutes(insulinType, diaMinutes)`
+   *  which falls back to the insulin-type default (rapid 180 / regular 300).
+   *  Fiasp/Lyumjev ≈ 120–150 min, NovoRapid/Humalog ≈ 150–180 min,
+   *  regular insulin ≈ 300 min. */
+  diaMinutes?: number;
 }
 
 export const DEFAULT_INSULIN_SETTINGS: InsulinSettings = {
   icr:      15,
   cf:       50,
   targetBg: 110,
+  // diaMinutes intentionally omitted — undefined triggers insulin-type
+  // fallback in getDIAMinutes() (rapid 180 / regular 300).
 };
 
 const SETTINGS_KEY = "glev_settings";
@@ -161,7 +170,17 @@ export function getInsulinSettings(): InsulinSettings {
       else { warnFieldDefault("targetBg", DEFAULT_INSULIN_SETTINGS.targetBg); targetBg = DEFAULT_INSULIN_SETTINGS.targetBg; }
     }
 
-    return { icr, cf, targetBg };
+    // diaMinutes is optional — undefined means "not set by user, use type
+    // fallback in getDIAMinutes()". No warning because absence is expected
+    // for users who haven't visited the DIA setting yet.
+    const diaMinutes =
+      isFiniteNumber(parsed.diaMinutes) &&
+      parsed.diaMinutes >= 60 &&
+      parsed.diaMinutes <= 360
+        ? parsed.diaMinutes
+        : undefined;
+
+    return { icr, cf, targetBg, diaMinutes };
   } catch {
     return DEFAULT_INSULIN_SETTINGS;
   }
@@ -185,7 +204,7 @@ export async function fetchInsulinSettings(): Promise<InsulinSettings> {
 
   const { data, error } = await supabase
     .from("user_settings")
-    .select("icr_g_per_unit, cf_mgdl_per_unit, target_bg_mgdl")
+    .select("icr_g_per_unit, cf_mgdl_per_unit, target_bg_mgdl, dia_minutes")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -203,7 +222,15 @@ export async function fetchInsulinSettings(): Promise<InsulinSettings> {
   if (isFiniteNumber(data.target_bg_mgdl) && data.target_bg_mgdl > 0) targetBg = data.target_bg_mgdl;
   else { warnFieldDefault("targetBg", DEFAULT_INSULIN_SETTINGS.targetBg); targetBg = DEFAULT_INSULIN_SETTINGS.targetBg; }
 
-  return { icr, cf, targetBg };
+  // diaMinutes optional — NULL in DB means "not set, fall back to type default"
+  const diaMinutes =
+    isFiniteNumber(data.dia_minutes) &&
+    data.dia_minutes >= 60 &&
+    data.dia_minutes <= 360
+      ? data.dia_minutes
+      : undefined;
+
+  return { icr, cf, targetBg, diaMinutes };
 }
 
 /**
@@ -230,6 +257,13 @@ export async function saveInsulinSettings(settings: InsulinSettings): Promise<vo
       icr_g_per_unit:   Math.round(settings.icr * 10) / 10,
       cf_mgdl_per_unit: Math.round(settings.cf),
       target_bg_mgdl:   Math.round(settings.targetBg),
+      // dia_minutes is nullable — omit from the upsert payload when
+      // the user has never set it (undefined) so the DB row keeps NULL
+      // and getDIAMinutes() continues to fall back to the insulin-type
+      // default (rapid 180 / regular 300). When set, clamp to 60–360.
+      ...(settings.diaMinutes !== undefined
+        ? { dia_minutes: Math.min(360, Math.max(60, Math.round(settings.diaMinutes))) }
+        : {}),
     }, { onConflict: "user_id" });
 
   if (error) throw new Error(error.message);

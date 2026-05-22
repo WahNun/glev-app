@@ -123,7 +123,7 @@ test("evaluateEntry: netCarbs subtracts fiber from carbs", () => {
 
 test("evaluateEntry fallback: GOOD when dose is within ±35% of expected", () => {
   // 60g / 15g/u = 4u expected; insulin=4u → ratio 1.0
-  const r = evaluateEntry({ carbs: 60, insulin: 4, bgBefore: 110, settings: { icr: 15, cf: 50, targetBg: 110 } });
+  const r = evaluateEntry({ carbs: 60, insulin: 4, bgBefore: 110, settings: { icr: 15, cf: 50, targetBg: 110, diaMinutes: 180 } });
   expect(r.outcome).toBe("GOOD");
   expect(r.delta).toBeNull();
   expect(r.confidence).toBe("low");
@@ -132,20 +132,20 @@ test("evaluateEntry fallback: GOOD when dose is within ±35% of expected", () =>
 
 test("evaluateEntry fallback: OVERDOSE when ratio > 1.35", () => {
   // expected 4u, given 6u → ratio 1.5
-  const r = evaluateEntry({ carbs: 60, insulin: 6, bgBefore: 110, settings: { icr: 15, cf: 50, targetBg: 110 } });
+  const r = evaluateEntry({ carbs: 60, insulin: 6, bgBefore: 110, settings: { icr: 15, cf: 50, targetBg: 110, diaMinutes: 180 } });
   expect(r.outcome).toBe("OVERDOSE");
 });
 
 test("evaluateEntry fallback: UNDERDOSE when ratio < 0.65", () => {
   // expected 4u, given 2u → ratio 0.5
-  const r = evaluateEntry({ carbs: 60, insulin: 2, bgBefore: 110, settings: { icr: 15, cf: 50, targetBg: 110 } });
+  const r = evaluateEntry({ carbs: 60, insulin: 2, bgBefore: 110, settings: { icr: 15, cf: 50, targetBg: 110, diaMinutes: 180 } });
   expect(r.outcome).toBe("UNDERDOSE");
 });
 
 test("evaluateEntry fallback: high BG adds a correction term to expected dose", () => {
   // carbs=15 → 1u; bgBefore=200 → +90/50 = 1.8u correction; expected ≈ 2.8u.
   // insulin=2.8u → ratio ≈ 1.0 → GOOD.
-  const r = evaluateEntry({ carbs: 15, insulin: 2.8, bgBefore: 200, settings: { icr: 15, cf: 50, targetBg: 110 } });
+  const r = evaluateEntry({ carbs: 15, insulin: 2.8, bgBefore: 200, settings: { icr: 15, cf: 50, targetBg: 110, diaMinutes: 180 } });
   expect(r.outcome).toBe("GOOD");
 });
 
@@ -248,7 +248,7 @@ test("evaluateEntry: GOOD with insulin>0 still uses the dose-matched message", (
 });
 
 test("evaluateEntry: ICR fallback with insulin=0 returns neutral GOOD, not UNDERDOSE", () => {
-  const r = evaluateEntry({ carbs: 60, insulin: 0, bgBefore: 110, settings: { icr: 15, cf: 50, targetBg: 110 } });
+  const r = evaluateEntry({ carbs: 60, insulin: 0, bgBefore: 110, settings: { icr: 15, cf: 50, targetBg: 110, diaMinutes: 180 } });
   expect(r.outcome).toBe("GOOD");
   expect(r.messages[0]?.key).toBe("engine_eval_no_insulin_no_data");
   expect(r.delta).toBeNull();

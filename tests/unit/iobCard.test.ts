@@ -199,6 +199,43 @@ test("getDIAMinutes: rapid=180, regular=300, unknown defaults to 180", () => {
   expect(getDIAMinutes("unknown")).toBe(180);
 });
 
+test("getDIAMinutes: userDiaMinutes overrides type-based default when valid", () => {
+  expect(getDIAMinutes("rapid", 240)).toBe(240);
+  expect(getDIAMinutes("regular", 120)).toBe(120);
+});
+
+test("getDIAMinutes: falls back to type-default when userDiaMinutes is below minimum (< 60)", () => {
+  expect(getDIAMinutes("rapid", 30)).toBe(180);
+  expect(getDIAMinutes("regular", 0)).toBe(300);
+});
+
+test("getDIAMinutes: falls back to type-default when userDiaMinutes is NaN or undefined", () => {
+  expect(getDIAMinutes("rapid", NaN)).toBe(180);
+  expect(getDIAMinutes("rapid", undefined)).toBe(180);
+});
+
+test("getDIAMinutes: falls back to type-default when userDiaMinutes exceeds maximum (> 360)", () => {
+  expect(getDIAMinutes("rapid", 361)).toBe(180);
+  expect(getDIAMinutes("regular", 999)).toBe(300);
+});
+
+test("getDIAMinutes: boundary values 60 and 360 are accepted as valid overrides", () => {
+  expect(getDIAMinutes("rapid", 60)).toBe(60);
+  expect(getDIAMinutes("rapid", 360)).toBe(360);
+});
+
+test("calcTotalIOB: custom DIA via userDiaMinutes shortens active window", () => {
+  // With DIA=60 min, a dose given 90 min ago should already be cleared.
+  const doses = buildDoses([], [
+    makeMeal({ id: "m1", insulin_units: 5, meal_time: isoMinutesAgo(90) }),
+  ]);
+  const iobShortDia = calcTotalIOB(doses, "rapid", Date.now(), 60);
+  expect(iobShortDia).toBe(0);
+  // Same dose with default DIA (180 min) is still active at 90 min.
+  const iobDefaultDia = calcTotalIOB(doses, "rapid", Date.now(), 180);
+  expect(iobDefaultDia).toBeGreaterThan(0);
+});
+
 // ── 4. Basal log with related_entry_id — still excluded from IOB ─────────────
 //
 // A basal log linked to a meal via related_entry_id is still a basal log.

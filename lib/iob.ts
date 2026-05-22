@@ -21,7 +21,15 @@ export interface MealLike {
   input_text?: string;
 }
 
-export function getDIAMinutes(insulinType: InsulinType): number {
+export function getDIAMinutes(insulinType: InsulinType, userDiaMinutes?: number): number {
+  if (
+    userDiaMinutes != null &&
+    Number.isFinite(userDiaMinutes) &&
+    userDiaMinutes >= 60 &&
+    userDiaMinutes <= 360
+  ) {
+    return userDiaMinutes;
+  }
   switch (insulinType) {
     case 'rapid':   return 180;
     case 'regular': return 300;
@@ -54,9 +62,10 @@ export function calcSingleIOB(dose: BolusDose, nowMs: number, diaMinutes: number
 export function calcTotalIOB(
   doses: BolusDose[],
   insulinType: InsulinType = 'unknown',
-  nowMs = Date.now()
+  nowMs = Date.now(),
+  userDiaMinutes?: number,
 ): number {
-  const diaMinutes = getDIAMinutes(insulinType);
+  const diaMinutes = getDIAMinutes(insulinType, userDiaMinutes);
   const total = doses.reduce(
     (sum, dose) => sum + calcSingleIOB(dose, nowMs, diaMinutes),
     0

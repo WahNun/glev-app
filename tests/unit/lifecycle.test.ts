@@ -36,7 +36,7 @@ const MEAL_TIME = "2026-04-30T08:00:00Z";
 const MEAL_MS = Date.parse(MEAL_TIME);
 const NOW = new Date(MEAL_MS + 3 * 60 * 60_000);
 
-const SETTINGS: InsulinSettings = { icr: 15, cf: 50, targetBg: 110 };
+const SETTINGS: InsulinSettings = { icr: 15, cf: 50, targetBg: 110, diaMinutes: 180 };
 
 function atOffset(minAfterMeal: number): string {
   return new Date(MEAL_MS + minAfterMeal * 60_000).toISOString();

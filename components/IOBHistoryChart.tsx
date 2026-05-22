@@ -3,6 +3,7 @@ import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { buildDoses, buildIOBHistory, detectIOBPeaks, getDIAMinutes, getActiveDosesAtTime, type InsulinType } from "@/lib/iob";
+import { getInsulinSettings } from "@/lib/userSettings";
 import type { InsulinLog } from "@/lib/insulin";
 import type { Meal } from "@/lib/meals";
 
@@ -69,7 +70,10 @@ export default function IOBHistoryChart({ insulin, insulinType, meals }: Props) 
   }
 
   const doses = useMemo(() => buildDoses(insulin, meals), [insulin, meals]);
-  const diaMin = getDIAMinutes(insulinType);
+  const diaMin = useMemo(() => {
+    const { diaMinutes } = getInsulinSettings();
+    return getDIAMinutes(insulinType, diaMinutes);
+  }, [insulinType]);
 
   const samples = useMemo(
     () => buildIOBHistory(doses, diaMin, hours, now),

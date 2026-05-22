@@ -36,7 +36,7 @@ import ManualEntryModal from "@/components/ManualEntryModal";
 import EntryAddCTA from "@/components/EntryAddCTA";
 import { CgmCountdownPair } from "@/components/CgmCountdownChip";
 import { calcSingleIOB, getDIAMinutes, type BolusDose, type InsulinType } from "@/lib/iob";
-import { fetchInsulinType } from "@/lib/userSettings";
+import { fetchInsulinType, getInsulinSettings } from "@/lib/userSettings";
 import { parseDbDate, parseDbTs, parseLluTs } from "@/lib/time";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
 import { useTimeFormat } from "@/hooks/useTimeFormat";
@@ -1335,7 +1335,7 @@ export default function EntriesPage() {
                       const dose     = m.insulin_units!;
                       const adminAt  = m.meal_time ?? m.created_at;
                       const nowMs    = Date.now();
-                      const diaMin   = getDIAMinutes(insulinType);
+                      const diaMin   = getDIAMinutes(insulinType, getInsulinSettings().diaMinutes);
                       const elapsedMin = Math.max(0, (nowMs - new Date(adminAt).getTime()) / 60_000);
                       const iobNow   = calcSingleIOB({ units: dose, administeredAt: adminAt } as BolusDose, nowMs, diaMin);
                       const cleared  = iobNow < 0.05 || elapsedMin >= diaMin;

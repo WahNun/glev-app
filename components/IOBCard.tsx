@@ -52,15 +52,14 @@ function CircleGauge({ iob, color, cleared }: { iob: number; color: string; clea
 /** Parabolic decay sparkline covering all active doses combined.
  *  Gray = elapsed portion, coloured = remaining, dashed line = now. */
 function IOBSparkline({
-  doses, insulinType, now, color, cleared,
+  doses, diaMin, now, color, cleared,
 }: {
   doses: BolusDose[];
-  insulinType: InsulinType;
+  diaMin: number;
   now: number;
   color: string;
   cleared: boolean;
 }) {
-  const diaMin = getDIAMinutes(insulinType);
   const W = 220, H = 48, PAD = 4;
   const STEPS = 80;
 
@@ -171,14 +170,18 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
     return () => { clearInterval(iv); window.removeEventListener("focus", tick); };
   }, []);
 
-  const diaMin = getDIAMinutes(insulinType);
+  /** User-configured DIA from localStorage mirror — read once per render
+   *  cycle alongside the correction factor. Falls back to 180 min when
+   *  no value has been saved yet (same as the historic hard-coded default). */
+  const userDiaMinutes = useMemo(() => getInsulinSettings().diaMinutes, []);
+  const diaMin = getDIAMinutes(insulinType, userDiaMinutes);
 
   /** Combined BolusDose list from both insulin_logs and meals.insulin_units.
    *  Meals whose `id` is already linked via a bolus log's `related_entry_id`
    *  are skipped to prevent double-counting. */
   const doses: BolusDose[] = useMemo(() => buildDoses(insulin, meals), [insulin, meals]);
 
-  const iob     = calcTotalIOB(doses, insulinType, now);
+  const iob     = calcTotalIOB(doses, insulinType, now, userDiaMinutes);
   const cleared = iob < 0.05;
   const color   = iobColor(iob);
 
@@ -342,7 +345,7 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
           {/* decay sparkline */}
           <IOBSparkline
             doses={doses}
-            insulinType={insulinType}
+            diaMin={diaMin}
             now={now}
             color={color}
             cleared={cleared}

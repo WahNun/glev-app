@@ -1395,7 +1395,8 @@ export default function EnginePage() {
       const recentDoses = recent
         .filter(m => m.insulin_units != null && m.insulin_units > 0 && new Date(m.created_at).getTime() > cutoff)
         .map(m => ({ units: m.insulin_units as number, administeredAt: m.created_at }));
-      const totalIOB = calcTotalIOB(recentDoses, insulinType);
+      const userDiaMinutes = getInsulinSettings().diaMinutes;
+      const totalIOB = calcTotalIOB(recentDoses, insulinType, Date.now(), userDiaMinutes);
       setIob(totalIOB);
       setIobDisplay(formatIOBDisplay(totalIOB));
     }).catch(() => { setIob(0); setIobDisplay(null); });

@@ -82,6 +82,10 @@ interface Settings {
    *  `user_settings.target_bg_mgdl` so the sync `getInsulinSettings()`
    *  caller stays in lock-step with the DB source of truth. */
   targetBg: number;
+  /** Duration of insulin action (minutes). Mirrors `user_settings.dia_minutes`.
+   *  `undefined` = user has not explicitly set a value; IOB calculations fall
+   *  back to the insulin-type default (rapid 180 / regular 300). */
+  diaMinutes?: number;
 }
 
 const DEFAULTS: Settings = {
@@ -90,6 +94,7 @@ const DEFAULTS: Settings = {
   icr: DEFAULT_INSULIN_SETTINGS.icr,
   cf: DEFAULT_INSULIN_SETTINGS.cf,
   targetBg: DEFAULT_INSULIN_SETTINGS.targetBg,
+  // diaMinutes intentionally omitted — undefined = use type-based default
 };
 
 function loadSettings(): Settings {
@@ -111,6 +116,7 @@ type SheetKey =
   | "icr"
   | "cf"
   | "targetBg"
+  | "dia"
   | "lastAppointment"
   | "libre2"
   | "nightscout"
@@ -346,7 +352,7 @@ export default function SettingsPage() {
         // see their typed value silently snap back to the fetched one.
         if (insulinTouchedRef.current) return;
         setSettings((prev) => {
-          const next = { ...prev, icr: ins.icr, cf: ins.cf, targetBg: ins.targetBg };
+          const next = { ...prev, icr: ins.icr, cf: ins.cf, targetBg: ins.targetBg, diaMinutes: ins.diaMinutes };
           saveSettings(next);
           return next;
         });
@@ -560,9 +566,15 @@ export default function SettingsPage() {
         // ICR is now NUMERIC(5,1) in the DB (Migration 20260515) — round
         // to one decimal so 8.5 survives the round-trip but 8.547 is
         // sanitised. CF + target BG remain integer columns.
-        icr:      Math.min(100, Math.max(1, Math.round(settings.icr * 10) / 10)),
-        cf:       Math.min(500, Math.max(1, Math.round(settings.cf))),
-        targetBg: Math.min(200, Math.max(60, Math.round(settings.targetBg))),
+        icr:        Math.min(100, Math.max(1, Math.round(settings.icr * 10) / 10)),
+        cf:         Math.min(500, Math.max(1, Math.round(settings.cf))),
+        targetBg:   Math.min(200, Math.max(60, Math.round(settings.targetBg))),
+        // diaMinutes is optional — pass undefined when the user has never
+        // set it so saveInsulinSettings() preserves the DB NULL and the
+        // IOB path continues to use the insulin-type fallback.
+        ...(settings.diaMinutes !== undefined
+          ? { diaMinutes: Math.min(360, Math.max(60, Math.round(settings.diaMinutes))) }
+          : {}),
       };
       await saveInsulinSettings(clamped);
       // Persist the TIR target range alongside the insulin params so
@@ -806,7 +818,7 @@ export default function SettingsPage() {
   function upd<K extends keyof Settings>(key: K, val: Settings[K]) {
     // Mark insulin fields as "user-touched" so the in-flight load
     // effect does not race in and overwrite the typed value.
-    if (key === "icr" || key === "cf" || key === "targetBg") {
+    if (key === "icr" || key === "cf" || key === "targetBg" || key === "diaMinutes") {
       insulinTouchedRef.current = true;
     }
     setSettings((prev) => ({ ...prev, [key]: val }));
@@ -852,6 +864,9 @@ export default function SettingsPage() {
   const icrSub = tSettings("subtitle_icr", { value: settings.icr });
   const cfSub = tSettings("subtitle_cf", { value: settings.cf });
   const targetBgSub = tSettings("subtitle_target_bg", { value: settings.targetBg });
+  const diaSub = settings.diaMinutes != null
+    ? tSettings("subtitle_dia", { minutes: settings.diaMinutes })
+    : tSettings("subtitle_dia_unset");
   // Row subtitle: most-recent appointment date + total count when more
   // than one is on file ("12.01.2026 · 4 saved"), or just the date for
   // a single entry, or a "not set" placeholder when the list is empty.
@@ -1223,6 +1238,33 @@ export default function SettingsPage() {
             onChange={(e) => upd("targetBg", parseInt(e.target.value) || DEFAULT_INSULIN_SETTINGS.targetBg)}
           />
           <div style={{ fontSize: 13, color: "var(--text-ghost)", marginTop: 6 }}>{tSettings("target_bg_hint")}</div>
+        </div>
+      ),
+      footer: <SaveFooter onSave={saveInsulinAction} />,
+    },
+    dia: {
+      title: tSettings("sheet_dia_title"),
+      body: (
+        <div>
+          <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5, marginBottom: 12 }}>
+            {tSettings("sheet_dia_body")}
+          </p>
+          <label style={{ fontSize: 13, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>
+            {tSettings("sheet_dia_label")}
+          </label>
+          <input
+            style={inp}
+            type="number"
+            min={60}
+            max={360}
+            step={5}
+            value={settings.diaMinutes ?? 180}
+            onChange={(e) => {
+              const v = parseInt(e.target.value);
+              if (!isNaN(v)) upd("diaMinutes", Math.min(360, Math.max(60, v)));
+            }}
+          />
+          <div style={{ fontSize: 13, color: "var(--text-ghost)", marginTop: 6 }}>{tSettings("sheet_dia_hint")}</div>
         </div>
       ),
       footer: <SaveFooter onSave={saveInsulinAction} />,
@@ -2208,6 +2250,14 @@ export default function SettingsPage() {
           subtitle={targetBgSub}
           ariaLabel={tSettings("row_open_aria", { label: tSettings("row_target_bg") })}
           onClick={() => openSheetWith("targetBg")}
+        />
+        <SettingsRow
+          iconColor={ACCENT}
+          icon={ICON.insulin}
+          label={tSettings("row_dia")}
+          subtitle={diaSub}
+          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_dia") })}
+          onClick={() => openSheetWith("dia")}
         />
         <SettingsRow
           iconColor={ACCENT}
