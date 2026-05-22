@@ -84,7 +84,7 @@ export function buildDoses(
         units: l.units,
         administeredAt: l.created_at,
         source: 'insulin',
-        label: l.insulin_name,
+        label: l.insulin_name ?? 'Manual bolus',
       });
     }
   }

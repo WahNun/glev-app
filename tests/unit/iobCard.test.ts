@@ -10,7 +10,7 @@
 //   3. Doses elapsed beyond DIA minutes contribute 0 to IOB.
 
 import { test, expect } from "@playwright/test";
-import { buildDoses, calcTotalIOB, calcSingleIOB, getDIAMinutes, formatIOBDisplay } from "@/lib/iob";
+import { buildDoses, calcTotalIOB, calcSingleIOB, getDIAMinutes, formatIOBDisplay, getActiveDosesAtTime } from "@/lib/iob";
 import type { InsulinLike, MealLike, BolusDose } from "@/lib/iob";
 
 // ── helpers ─────────────────────────────────────────────────────────────────
@@ -331,4 +331,161 @@ test("calcTotalIOB near-zero residual rounds to 0 and formatIOBDisplay clears it
   // The residual is ~0.0003, which rounds to 0.00 → cleared
   expect(iob).toBeLessThan(0.05);
   expect(formatIOBDisplay(iob)).toBeNull();
+});
+
+// ── 7. getActiveDosesAtTime — peak-to-meal link ───────────────────────────────
+//
+// The peak popover calls getActiveDosesAtTime(doses, peakTMs, diaMin) to find
+// which doses were still active at the IOB peak. These tests lock in the four
+// inclusion/exclusion invariants so a regression cannot silently show the wrong
+// meal label in the popover.
+
+test("getActiveDosesAtTime: dose administered before peak and within DIA → included", () => {
+  const diaMin = 180;
+  const peakMs = Date.now();
+  // Administered 60 minutes before the peak — still within DIA.
+  const dose: BolusDose = {
+    units: 4,
+    administeredAt: new Date(peakMs - 60 * 60_000).toISOString(),
+    label: "Pasta",
+  };
+  const active = getActiveDosesAtTime([dose], peakMs, diaMin);
+  expect(active).toHaveLength(1);
+  expect(active[0].label).toBe("Pasta");
+});
+
+test("getActiveDosesAtTime: dose fully decayed before peak (elapsed >= DIA) → excluded", () => {
+  const diaMin = 180;
+  const peakMs = Date.now();
+  // Administered 200 minutes before the peak — beyond DIA → fully cleared.
+  const dose: BolusDose = {
+    units: 4,
+    administeredAt: new Date(peakMs - 200 * 60_000).toISOString(),
+    label: "Old meal",
+  };
+  const active = getActiveDosesAtTime([dose], peakMs, diaMin);
+  expect(active).toHaveLength(0);
+});
+
+test("getActiveDosesAtTime: dose at exactly the DIA boundary → excluded", () => {
+  const diaMin = 180;
+  const peakMs = Date.now();
+  // Elapsed == diaMin → not strictly less than → excluded (same logic as calcSingleIOB).
+  const dose: BolusDose = {
+    units: 4,
+    administeredAt: new Date(peakMs - diaMin * 60_000).toISOString(),
+  };
+  const active = getActiveDosesAtTime([dose], peakMs, diaMin);
+  expect(active).toHaveLength(0);
+});
+
+test("getActiveDosesAtTime: future dose (not yet administered) → excluded", () => {
+  const diaMin = 180;
+  const peakMs = Date.now();
+  // Dose is 30 minutes in the future relative to the peak.
+  const dose: BolusDose = {
+    units: 4,
+    administeredAt: new Date(peakMs + 30 * 60_000).toISOString(),
+    label: "Pre-bolus",
+  };
+  const active = getActiveDosesAtTime([dose], peakMs, diaMin);
+  expect(active).toHaveLength(0);
+});
+
+test("getActiveDosesAtTime: mixed active and expired doses → only active returned", () => {
+  const diaMin = 180;
+  const peakMs = Date.now();
+  const activeDose: BolusDose = {
+    units: 4,
+    administeredAt: new Date(peakMs - 60 * 60_000).toISOString(),
+    label: "Lunch",
+  };
+  const expiredDose: BolusDose = {
+    units: 6,
+    administeredAt: new Date(peakMs - 200 * 60_000).toISOString(),
+    label: "Breakfast",
+  };
+  const futureDose: BolusDose = {
+    units: 2,
+    administeredAt: new Date(peakMs + 10 * 60_000).toISOString(),
+    label: "Dinner",
+  };
+  const active = getActiveDosesAtTime([activeDose, expiredDose, futureDose], peakMs, diaMin);
+  expect(active).toHaveLength(1);
+  expect(active[0].label).toBe("Lunch");
+});
+
+test("getActiveDosesAtTime: empty dose list → returns empty array", () => {
+  const active = getActiveDosesAtTime([], Date.now(), 180);
+  expect(active).toHaveLength(0);
+});
+
+// ── 8. Meal label truncation ──────────────────────────────────────────────────
+//
+// buildDoses truncates meal input_text to 28 chars + "…" when the raw text
+// exceeds 30 characters. This keeps popover labels readable.
+
+test("buildDoses: meal label with exactly 30 chars is kept as-is", () => {
+  // 30 chars — must NOT be truncated.
+  const label30 = "A".repeat(30);
+  const meals: MealLike[] = [makeMeal({ id: "m1", input_text: label30 })];
+  const doses = buildDoses([], meals);
+  expect(doses[0].label).toBe(label30);
+});
+
+test("buildDoses: meal label with 31 chars is truncated to 28 chars + '…'", () => {
+  const label31 = "B".repeat(31);
+  const meals: MealLike[] = [makeMeal({ id: "m1", input_text: label31 })];
+  const doses = buildDoses([], meals);
+  expect(doses[0].label).toBe("B".repeat(28) + "…");
+});
+
+test("buildDoses: long meal label truncation produces exactly 29 visible chars (28 + ellipsis)", () => {
+  const longLabel = "Pasta mit Tomatensoße und frischem Basilikum";
+  const meals: MealLike[] = [makeMeal({ id: "m1", input_text: longLabel })];
+  const doses = buildDoses([], meals);
+  expect(doses[0].label).toBe(longLabel.slice(0, 28) + "…");
+});
+
+test("buildDoses: meal label shorter than 30 chars is kept verbatim", () => {
+  const shortLabel = "Müsli";
+  const meals: MealLike[] = [makeMeal({ id: "m1", input_text: shortLabel })];
+  const doses = buildDoses([], meals);
+  expect(doses[0].label).toBe("Müsli");
+});
+
+test("buildDoses: meal with no input_text has undefined label", () => {
+  const meals: MealLike[] = [makeMeal({ id: "m1" })];
+  const doses = buildDoses([], meals);
+  expect(doses[0].label).toBeUndefined();
+});
+
+// ── 9. Manual bolus label fallback ───────────────────────────────────────────
+//
+// When an insulin log has no insulin_name (the user didn't specify a brand),
+// buildDoses must fall back to "Manual bolus" so the peak popover always shows
+// a readable label instead of undefined.
+
+test("buildDoses: bolus log without insulin_name falls back to 'Manual bolus'", () => {
+  const insulin: InsulinLike[] = [makeInsulin({ insulin_name: undefined })];
+  const doses = buildDoses(insulin, []);
+  expect(doses[0].label).toBe("Manual bolus");
+});
+
+test("buildDoses: bolus log with explicit insulin_name uses that name as label", () => {
+  const insulin: InsulinLike[] = [makeInsulin({ insulin_name: "Novorapid" })];
+  const doses = buildDoses(insulin, []);
+  expect(doses[0].label).toBe("Novorapid");
+});
+
+test("buildDoses: multiple bolus logs — each gets correct label", () => {
+  const insulin: InsulinLike[] = [
+    makeInsulin({ insulin_name: "Humalog", created_at: isoMinutesAgo(30) }),
+    makeInsulin({ insulin_name: undefined, created_at: isoMinutesAgo(60) }),
+  ];
+  const doses = buildDoses(insulin, []);
+  expect(doses).toHaveLength(2);
+  const labels = doses.map(d => d.label);
+  expect(labels).toContain("Humalog");
+  expect(labels).toContain("Manual bolus");
 });
