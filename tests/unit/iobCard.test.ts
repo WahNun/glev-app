@@ -460,6 +460,71 @@ test("buildDoses: meal with no input_text has undefined label", () => {
   expect(doses[0].label).toBeUndefined();
 });
 
+// ── 10. Deep-link IDs: insulinLogId + mealId (Task #507) ─────────────────────
+//
+// The IOB peak popover navigates to /entries#insulin-<id> (for bolus logs) or
+// /entries#<mealId> (for meal doses). A wrong id format or absent field would
+// produce a dead deep-link. These tests lock in the invariants so any
+// regression is caught before it reaches a user.
+
+test("buildDoses: bolus log with an id sets insulinLogId on the resulting dose", () => {
+  const insulin: InsulinLike[] = [makeInsulin({ id: "ins-uuid-123" })];
+  const doses = buildDoses(insulin, []);
+  expect(doses).toHaveLength(1);
+  expect(doses[0].insulinLogId).toBe("ins-uuid-123");
+});
+
+test("buildDoses: bolus log without an id leaves insulinLogId as undefined (backward compat)", () => {
+  const insulin: InsulinLike[] = [makeInsulin({ id: undefined })];
+  const doses = buildDoses(insulin, []);
+  expect(doses).toHaveLength(1);
+  expect(doses[0].insulinLogId).toBeUndefined();
+});
+
+test("buildDoses: meal-sourced dose sets mealId to the meal's uuid", () => {
+  const meals: MealLike[] = [makeMeal({ id: "meal-uuid-456" })];
+  const doses = buildDoses([], meals);
+  expect(doses).toHaveLength(1);
+  expect(doses[0].mealId).toBe("meal-uuid-456");
+});
+
+test("buildDoses: meal-sourced dose does NOT set insulinLogId (correct source separation)", () => {
+  const meals: MealLike[] = [makeMeal({ id: "meal-uuid-789" })];
+  const doses = buildDoses([], meals);
+  expect(doses[0].insulinLogId).toBeUndefined();
+});
+
+test("buildDoses: bolus log dose does NOT set mealId (correct source separation)", () => {
+  const insulin: InsulinLike[] = [makeInsulin({ id: "ins-uuid-abc" })];
+  const doses = buildDoses(insulin, []);
+  expect(doses[0].mealId).toBeUndefined();
+});
+
+test("buildDoses: multiple bolus logs each carry their own insulinLogId", () => {
+  const insulin: InsulinLike[] = [
+    makeInsulin({ id: "ins-1", created_at: isoMinutesAgo(30) }),
+    makeInsulin({ id: "ins-2", created_at: isoMinutesAgo(90) }),
+  ];
+  const doses = buildDoses(insulin, []);
+  expect(doses).toHaveLength(2);
+  const ids = doses.map(d => d.insulinLogId);
+  expect(ids).toContain("ins-1");
+  expect(ids).toContain("ins-2");
+});
+
+test("buildDoses: mix of bolus logs and unlinked meals — ids are assigned independently", () => {
+  const insulin: InsulinLike[] = [makeInsulin({ id: "ins-xyz", created_at: isoMinutesAgo(30) })];
+  const meals: MealLike[] = [makeMeal({ id: "meal-xyz", meal_time: isoMinutesAgo(60) })];
+  const doses = buildDoses(insulin, meals);
+  expect(doses).toHaveLength(2);
+  const insulinDose = doses.find(d => d.source === "insulin");
+  const mealDose    = doses.find(d => d.source === "meal");
+  expect(insulinDose?.insulinLogId).toBe("ins-xyz");
+  expect(insulinDose?.mealId).toBeUndefined();
+  expect(mealDose?.mealId).toBe("meal-xyz");
+  expect(mealDose?.insulinLogId).toBeUndefined();
+});
+
 // ── 9. Manual bolus label fallback ───────────────────────────────────────────
 //
 // When an insulin log has no insulin_name (the user didn't specify a brand),
