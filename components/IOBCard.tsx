@@ -6,9 +6,10 @@ import { getInsulinSettings } from "@/lib/userSettings";
 import type { InsulinLog } from "@/lib/insulin";
 import type { Meal } from "@/lib/meals";
 
-const GREEN  = "#22D3A0";
-const AMBER  = "#F59E0B";
-const ORANGE = "#FF9500";
+const GREEN        = "#22D3A0";
+const AMBER        = "#F59E0B";
+const ORANGE       = "#FF9500";
+const BASAL_INDIGO = "#6366F1";   // basal ring — visually distinct from bolus
 
 function iobColor(iob: number): string {
   if (iob < 1) return GREEN;
@@ -21,8 +22,12 @@ const CIRC   = 2 * Math.PI * RADIUS;
 const MAX_IOB = 5;
 const SZ = 96;
 
-function CircleGauge({ iob, color, cleared }: { iob: number; color: string; cleared: boolean }) {
-  const filled = Math.min(iob / MAX_IOB, 1) * CIRC;
+function CircleGauge({ iob, color, cleared, fraction }: {
+  iob: number; color: string; cleared: boolean;
+  /** When provided, overrides the iob/MAX_IOB fill calculation (0–1). */
+  fraction?: number;
+}) {
+  const filled = Math.min(fraction !== undefined ? fraction : iob / MAX_IOB, 1) * CIRC;
   return (
     <svg
       width={SZ} height={SZ} viewBox={`0 0 ${SZ} ${SZ}`} aria-hidden="true"
@@ -204,11 +209,57 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
     : null;
 
   const insulinBrandBolus = useMemo(() => getInsulinSettings().insulinBrandBolus, []);
+  const insulinBrandBasal = useMemo(() => getInsulinSettings().insulinBrandBasal, []);
   const insulinTypeLabel = insulinBrandBolus?.trim()
     ? insulinBrandBolus.trim()
     : insulinType === "rapid"
       ? t("iob_dia_rapid")
       : t("iob_dia_regular");
+
+  // ── Bolus | Basal toggle ─────────────────────────────────────────────────
+  const [view, setView] = useState<"bolus" | "basal">("bolus");
+
+  // Last basal injection from insulin_logs (type === "basal")
+  const lastBasal = useMemo(() => {
+    if (!insulin || insulin.length === 0) return null;
+    const entries = insulin
+      .filter(l => l.insulin_type === "basal" && l.units > 0)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return entries[0] ?? null;
+  }, [insulin]);
+
+  const BASAL_WINDOW_MIN = 24 * 60;
+  const basalElapsedMin = lastBasal
+    ? (now - new Date(lastBasal.created_at).getTime()) / 60_000
+    : null;
+  const basalFraction   = basalElapsedMin !== null
+    ? Math.min(basalElapsedMin / BASAL_WINDOW_MIN, 1)
+    : 0;
+  const basalOverdue    = basalElapsedMin !== null && basalElapsedMin > BASAL_WINDOW_MIN;
+  const basalColor      = basalOverdue ? ORANGE : BASAL_INDIGO;
+  const basalElapsedH   = basalElapsedMin !== null ? Math.floor(basalElapsedMin / 60) : 0;
+  const basalElapsedM   = basalElapsedMin !== null ? Math.floor(basalElapsedMin % 60)  : 0;
+  const basalNextInH    = basalElapsedMin !== null
+    ? Math.max(0, Math.floor((BASAL_WINDOW_MIN - basalElapsedMin) / 60))
+    : 0;
+
+  const chevron = (
+    <button
+      onClick={e => { e.stopPropagation(); if (view === "bolus") setExpanded(ex => !ex); }}
+      aria-label={t("iob_details_toggle_aria")}
+      aria-expanded={view === "bolus" ? expanded : false}
+      style={{
+        background: "none", border: "none", cursor: view === "bolus" ? "pointer" : "default",
+        padding: "4px 2px", flexShrink: 0,
+        color: view === "bolus" ? "var(--text-ghost)" : "transparent",
+        fontSize: 14, lineHeight: 1,
+        transition: "transform 0.3s ease",
+        transform: expanded && view === "bolus" ? "rotate(180deg)" : "rotate(0deg)",
+      }}
+    >
+      ›
+    </button>
+  );
 
   return (
     <div
@@ -216,105 +267,162 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
         background: "var(--surface)",
         border: "1px solid var(--border)",
         borderRadius: 18,
-        boxShadow: cleared ? "none" : `inset 0 0 28px ${color}09`,
+        boxShadow: view === "bolus" && !cleared ? `inset 0 0 28px ${color}09` : "none",
         overflow: "hidden",
-        cursor: "pointer",
+        cursor: view === "bolus" ? "pointer" : "default",
       }}
-      onClick={() => setExpanded(e => !e)}
-      aria-expanded={expanded}
+      onClick={() => { if (view === "bolus") setExpanded(e => !e); }}
+      aria-expanded={view === "bolus" ? expanded : undefined}
     >
       {/* ── COMPACT FRONT ── */}
-      <div
-        style={{
-          padding: "14px 16px 12px",
-          display: "flex",
-          alignItems: "center",
-          gap: 14,
-        }}
-      >
-        {/* Gauge */}
-        <div style={{ position: "relative", flexShrink: 0 }}>
-          <CircleGauge iob={iob} color={color} cleared={cleared} />
-          <div style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 1,
-          }}>
-            <div style={{
-              fontSize: 26,
-              fontWeight: 800,
-              lineHeight: 1,
-              fontFamily: "var(--font-mono)",
-              color: cleared ? "var(--text-ghost)" : color,
-              textShadow: cleared ? "none" : `0 0 18px ${color}77`,
-            }}>
-              {cleared ? "0.0" : iob.toFixed(1)}
-            </div>
-            <div style={{ fontSize: 11, color: "var(--text-dim)", fontWeight: 600 }}>IE</div>
+      <div style={{ padding: "14px 16px 12px", display: "flex", flexDirection: "column", gap: 10 }}>
+
+        {/* Toggle row — Bolus | Basal chips + chevron */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", gap: 5 }}>
+            {(["bolus", "basal"] as const).map(v => {
+              const active = view === v;
+              const chipColor = v === "bolus" ? color : basalColor;
+              return (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={e => { e.stopPropagation(); setView(v); }}
+                  style={{
+                    padding: "3px 10px", borderRadius: 99,
+                    fontSize: 11, fontWeight: 700, letterSpacing: "0.05em",
+                    border: `1px solid ${active ? chipColor + "55" : "var(--border)"}`,
+                    background: active ? `${chipColor}18` : "var(--surface-soft)",
+                    color: active ? chipColor : "var(--text-ghost)",
+                    cursor: "pointer",
+                    WebkitTapHighlightColor: "transparent",
+                    touchAction: "manipulation",
+                    transition: "background 150ms, border-color 150ms, color 150ms",
+                  }}
+                >
+                  {v === "bolus" ? t("iob_tab_bolus") : t("iob_tab_basal")}
+                </button>
+              );
+            })}
           </div>
+          {chevron}
         </div>
 
-        {/* Right side: title, chip, risk */}
-        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 5 }}>
-          <div style={{
-            fontSize: 11, color: "var(--text-dim)",
-            letterSpacing: "0.1em", fontWeight: 700,
-          }}>
-            {t("active_insulin").toUpperCase()}
-          </div>
+        {/* Gauge row — switches based on view */}
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
 
-          {/* Clearance chip */}
-          {cleared ? (
-            <span style={{
-              alignSelf: "flex-start",
-              padding: "3px 10px", borderRadius: 99, fontSize: 11, fontWeight: 700,
-              background: "var(--surface-soft)", color: "var(--text-ghost)",
-              letterSpacing: "0.04em",
-            }}>
-              {t("iob_fully_cleared")}
-            </span>
+          {view === "bolus" ? (
+            <>
+              {/* Bolus gauge */}
+              <div style={{ position: "relative", flexShrink: 0 }}>
+                <CircleGauge iob={iob} color={color} cleared={cleared} />
+                <div style={{
+                  position: "absolute", inset: 0,
+                  display: "flex", flexDirection: "column",
+                  alignItems: "center", justifyContent: "center", gap: 1,
+                }}>
+                  <div style={{
+                    fontSize: 26, fontWeight: 800, lineHeight: 1,
+                    fontFamily: "var(--font-mono)",
+                    color: cleared ? "var(--text-ghost)" : color,
+                    textShadow: cleared ? "none" : `0 0 18px ${color}77`,
+                  }}>
+                    {cleared ? "0.0" : iob.toFixed(1)}
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--text-dim)", fontWeight: 600 }}>IE</div>
+                </div>
+              </div>
+
+              {/* Bolus info */}
+              <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 5 }}>
+                <div style={{ fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.1em", fontWeight: 700 }}>
+                  {t("active_insulin").toUpperCase()}
+                </div>
+                {cleared ? (
+                  <span style={{
+                    alignSelf: "flex-start", padding: "3px 10px", borderRadius: 99,
+                    fontSize: 11, fontWeight: 700,
+                    background: "var(--surface-soft)", color: "var(--text-ghost)", letterSpacing: "0.04em",
+                  }}>
+                    {t("iob_fully_cleared")}
+                  </span>
+                ) : (
+                  <span style={{
+                    alignSelf: "flex-start", padding: "3px 10px", borderRadius: 99,
+                    fontSize: 11, fontWeight: 700,
+                    background: `${color}22`, color, letterSpacing: "0.04em",
+                  }}>
+                    {t("iob_cleared_in", { minutes: clearsInMin })}
+                  </span>
+                )}
+                {!cleared && (
+                  <div style={{ fontSize: 11, color: "var(--text-ghost)", lineHeight: 1.4 }}>
+                    {iob < 1 ? t("iob_risk_low") : iob < 3 ? t("iob_risk_moderate") : t("iob_risk_high")}
+                  </div>
+                )}
+              </div>
+            </>
           ) : (
-            <span style={{
-              alignSelf: "flex-start",
-              padding: "3px 10px", borderRadius: 99, fontSize: 11, fontWeight: 700,
-              background: `${color}22`, color, letterSpacing: "0.04em",
-            }}>
-              {t("iob_cleared_in", { minutes: clearsInMin })}
-            </span>
-          )}
+            <>
+              {/* Basal gauge — fraction = elapsed / 24h */}
+              <div style={{ position: "relative", flexShrink: 0 }}>
+                <CircleGauge
+                  iob={0} color={lastBasal ? basalColor : "var(--text-ghost)"}
+                  cleared={!lastBasal} fraction={basalFraction}
+                />
+                <div style={{
+                  position: "absolute", inset: 0,
+                  display: "flex", flexDirection: "column",
+                  alignItems: "center", justifyContent: "center", gap: 1,
+                }}>
+                  <div style={{
+                    fontSize: lastBasal ? 22 : 20, fontWeight: 800, lineHeight: 1,
+                    fontFamily: "var(--font-mono)",
+                    color: lastBasal ? basalColor : "var(--text-ghost)",
+                    textShadow: lastBasal && !basalOverdue ? `0 0 18px ${BASAL_INDIGO}77` : "none",
+                  }}>
+                    {lastBasal ? lastBasal.units.toFixed(1) : "—"}
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--text-dim)", fontWeight: 600 }}>IE</div>
+                </div>
+              </div>
 
-          {/* Risk label */}
-          {!cleared && (
-            <div style={{ fontSize: 11, color: "var(--text-ghost)", lineHeight: 1.4 }}>
-              {iob < 1 ? t("iob_risk_low") : iob < 3 ? t("iob_risk_moderate") : t("iob_risk_high")}
-            </div>
+              {/* Basal info */}
+              <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 5 }}>
+                <div style={{ fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.1em", fontWeight: 700 }}>
+                  {(insulinBrandBasal?.trim() || t("iob_tab_basal")).toUpperCase()}
+                </div>
+                {lastBasal ? (
+                  <>
+                    <span style={{
+                      alignSelf: "flex-start", padding: "3px 10px", borderRadius: 99,
+                      fontSize: 11, fontWeight: 700, letterSpacing: "0.04em",
+                      background: basalOverdue ? `${ORANGE}22` : `${BASAL_INDIGO}18`,
+                      color: basalOverdue ? ORANGE : BASAL_INDIGO,
+                    }}>
+                      {basalOverdue
+                        ? t("iob_basal_overdue")
+                        : `vor ${basalElapsedH}h ${basalElapsedM}min`}
+                    </span>
+                    {!basalOverdue && (
+                      <div style={{ fontSize: 11, color: "var(--text-ghost)", lineHeight: 1.4 }}>
+                        {t("iob_basal_next_in", { hours: basalNextInH })}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <span style={{
+                    alignSelf: "flex-start", padding: "3px 10px", borderRadius: 99,
+                    fontSize: 11, fontWeight: 700,
+                    background: "var(--surface-soft)", color: "var(--text-ghost)", letterSpacing: "0.04em",
+                  }}>
+                    {t("iob_basal_no_log")}
+                  </span>
+                )}
+              </div>
+            </>
           )}
         </div>
-
-        {/* Chevron */}
-        <button
-          onClick={e => { e.stopPropagation(); setExpanded(ex => !ex); }}
-          aria-label={t("iob_details_toggle_aria")}
-          aria-expanded={expanded}
-          style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            padding: "4px 2px",
-            flexShrink: 0,
-            color: "var(--text-ghost)",
-            fontSize: 14,
-            lineHeight: 1,
-            transition: "transform 0.3s ease",
-            transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
-          }}
-        >
-          ›
-        </button>
       </div>
 
       {/* ── COLLAPSIBLE DETAIL ── */}
