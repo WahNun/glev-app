@@ -2,6 +2,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { calcTotalIOB, calcSingleIOB, getDIAMinutes, type BolusDose, type InsulinType } from "@/lib/iob";
+import { getInsulinSettings } from "@/lib/userSettings";
 import type { InsulinLog } from "@/lib/insulin";
 import type { Meal } from "@/lib/meals";
 
@@ -136,12 +137,21 @@ interface Props {
    *  wizard path). Deduplicated against linked bolus logs to avoid
    *  double-counting when the user explicitly tagged a bolus to a meal. */
   meals?: Meal[];
+  /** Latest CGM glucose reading (mg/dL). When provided, the back side
+   *  shows a projected "Erwartet: ~X mg/dL" target alongside the
+   *  expected drop. Optional — the drop row is shown regardless. */
+  currentBg?: number;
 }
 
-export default function IOBCard({ insulin, insulinType, meals }: Props) {
+export default function IOBCard({ insulin, insulinType, meals, currentBg }: Props) {
   const t = useTranslations("dashboard");
   const [now, setNow]       = useState(() => Date.now());
   const [flipped, setFlipped] = useState(false);
+
+  /** Correction factor from localStorage mirror — same value the Engine
+   *  uses.  Read once per render cycle; never triggers a suspense/async
+   *  boundary so the card stays a pure synchronous component. */
+  const cf = useMemo(() => getInsulinSettings().cf, []);
 
   useEffect(() => {
     const tick = () => setNow(Date.now());
@@ -194,6 +204,17 @@ export default function IOBCard({ insulin, insulinType, meals }: Props) {
     if (elapsed >= diaMin) return max;
     return Math.max(max, Math.ceil(diaMin - elapsed));
   }, 0);
+
+  /** Expected glucose drop from the remaining active insulin:
+   *  IOB × CF (mg/dL per unit), rounded to the nearest integer. */
+  const expectedDrop = Math.round(iob * cf);
+
+  /** Projected glucose target = current CGM − expected drop, clamped
+   *  to a physiologically plausible floor (20 mg/dL) so the chip never
+   *  shows a nonsensical negative value. */
+  const projectedBg = currentBg != null && currentBg > 0
+    ? Math.max(20, Math.round(currentBg - expectedDrop))
+    : null;
 
   const insulinTypeLabel = insulinType === "rapid"
     ? t("iob_dia_rapid")
@@ -395,6 +416,53 @@ export default function IOBCard({ insulin, insulinType, meals }: Props) {
               <span style={{ fontSize: 12, color: "var(--text-ghost)" }}>
                 {t("iob_no_active_doses")}
               </span>
+            </div>
+          )}
+
+          {/* ── Expected BG impact (IOB × CF) ── */}
+          {!cleared && (
+            <div style={{
+              borderTop: "1px solid var(--border)",
+              paddingTop: 8,
+              display: "flex",
+              flexDirection: "column",
+              gap: 5,
+            }}>
+              <div style={{
+                fontSize: 10, color: "var(--text-ghost)",
+                letterSpacing: "0.08em", fontWeight: 700,
+                textTransform: "uppercase",
+              }}>
+                {t("iob_bg_impact_label")}
+              </div>
+              {/* Drop chip */}
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <span style={{
+                  padding: "3px 11px", borderRadius: 99, fontSize: 12, fontWeight: 700,
+                  background: `${color}22`, color,
+                  fontFamily: "var(--font-mono)",
+                }}>
+                  {t("iob_bg_impact_value", { drop: expectedDrop })}
+                </span>
+                <span style={{ fontSize: 11, color: "var(--text-ghost)" }}>
+                  {t("iob_bg_impact_formula", { iob: iob.toFixed(1), cf })}
+                </span>
+              </div>
+              {/* Projected target (only when current BG is known) */}
+              {projectedBg != null && (
+                <span style={{
+                  padding: "3px 11px", borderRadius: 99, fontSize: 12, fontWeight: 600,
+                  background: "var(--surface-soft)",
+                  color: "var(--text-muted)",
+                  alignSelf: "flex-start",
+                }}>
+                  {t("iob_projected_bg", { target: projectedBg })}
+                </span>
+              )}
+              {/* Compliance hint */}
+              <div style={{ fontSize: 10, color: "var(--text-faint)", lineHeight: 1.4 }}>
+                {t("iob_bg_hint")}
+              </div>
             </div>
           )}
 
