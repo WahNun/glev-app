@@ -108,20 +108,25 @@ export function bolusDeltaColor(delta: number | null): string {
 }
 
 /** Interim copy for the +1h evaluation block (before +2h is in). */
-export function bolusInterimMessage(log: InsulinLog): string | null {
+export function bolusInterimMessage(log: InsulinLog, locale = "de"): string | null {
   const before = numOrNull(log.cgm_glucose_at_log);
   const at1h   = numOrNull(log.glucose_after_1h);
   if (at1h == null) return null;
+  const de = locale === "de";
   if (before == null) {
-    return `Nach 1h: ${Math.round(at1h)} mg/dL. Endauswertung folgt nach 2h.`;
+    return de
+      ? `Nach 1h: ${Math.round(at1h)} mg/dL. Endauswertung folgt nach 2h.`
+      : `After 1h: ${Math.round(at1h)} mg/dL. Final evaluation follows after 2h.`;
   }
   const d = Math.round(at1h - before);
   const sign = d > 0 ? "+" : "";
-  return `Nach 1h: ${Math.round(at1h)} mg/dL (${sign}${d} vs Start). Endauswertung folgt nach 2h.`;
+  return de
+    ? `Nach 1h: ${Math.round(at1h)} mg/dL (${sign}${d} vs Start). Endauswertung folgt nach 2h.`
+    : `After 1h: ${Math.round(at1h)} mg/dL (${sign}${d} vs start). Final evaluation follows after 2h.`;
 }
 
 /** Final copy for the +2h evaluation block (once at_2h is in). */
-export function bolusFinalMessage(log: InsulinLog): string | null {
+export function bolusFinalMessage(log: InsulinLog, locale = "de"): string | null {
   const info = evaluateBolus(log);
   if (info.outcome === "PENDING") return null;
 
@@ -129,24 +134,34 @@ export function bolusFinalMessage(log: InsulinLog): string | null {
   const at2h   = numOrNull(log.glucose_after_2h);
   const delta  = before != null && at2h != null ? Math.round(at2h - before) : null;
   const at2hTxt = at2h != null ? `${Math.round(at2h)} mg/dL` : "—";
+  const de = locale === "de";
 
   switch (info.outcome) {
     case "ON_TARGET":
-      return `Im Zielbereich nach 2h (${at2hTxt}). Bolus war passend dosiert.`;
+      return de
+        ? `Im Zielbereich nach 2h (${at2hTxt}). Bolus war passend dosiert.`
+        : `On target after 2h (${at2hTxt}). Bolus was dosed well.`;
     case "UNDER_CORRECTED":
-      return `Glucose nach 2h immer noch über 180 mg/dL (${at2hTxt}) — Bolus war zu klein${
-        delta != null ? ` (${delta >= 0 ? "+" : ""}${delta} vs Start)` : ""
-      }.`;
+      return de
+        ? `Glukose nach 2h immer noch über 180 mg/dL (${at2hTxt}) — Bolus war zu klein${delta != null ? ` (${delta >= 0 ? "+" : ""}${delta} vs Start)` : ""}.`
+        : `Glucose still above 180 mg/dL after 2h (${at2hTxt}) — bolus was too small${delta != null ? ` (${delta >= 0 ? "+" : ""}${delta} vs start)` : ""}.`;
     case "OVER_CORRECTED":
+      if (de) {
+        return at2h != null && at2h < HYPO_THRESHOLD
+          ? `Hypo-Risiko: Glukose unter 70 mg/dL (${at2hTxt}) — Bolus war zu groß oder zu wenig Kohlenhydrate.`
+          : `Glukose ist stark gefallen (${at2hTxt}${delta != null ? `, ${delta} vs Start` : ""}) — Bolus war zu groß.`;
+      }
       return at2h != null && at2h < HYPO_THRESHOLD
-        ? `Hypo-Risiko: Glucose unter 70 mg/dL (${at2hTxt}) — Bolus war zu groß oder zu wenig Kohlenhydrate.`
-        : `Glucose ist stark gefallen (${at2hTxt}${
-            delta != null ? `, ${delta} vs Start` : ""
-          }) — Bolus war zu groß.`;
+        ? `Hypo risk: glucose below 70 mg/dL (${at2hTxt}) — bolus was too large or too few carbs.`
+        : `Glucose dropped sharply (${at2hTxt}${delta != null ? `, ${delta} vs start` : ""}) — bolus was too large.`;
     case "SPIKED":
-      return delta != null
-        ? `Glucose ist nach 2h um ${delta >= 0 ? "+" : ""}${delta} mg/dL gestiegen (${at2hTxt}) — Mahlzeit war größer als der Bolus abdeckt.`
-        : `Glucose ist deutlich gestiegen (${at2hTxt}) — Mahlzeit war größer als der Bolus.`;
+      return de
+        ? (delta != null
+          ? `Glukose ist nach 2h um ${delta >= 0 ? "+" : ""}${delta} mg/dL gestiegen (${at2hTxt}) — Mahlzeit war größer als der Bolus abdeckt.`
+          : `Glukose ist deutlich gestiegen (${at2hTxt}) — Mahlzeit war größer als der Bolus.`)
+        : (delta != null
+          ? `Glucose rose ${delta >= 0 ? "+" : ""}${delta} mg/dL after 2h (${at2hTxt}) — meal was larger than the bolus covers.`
+          : `Glucose rose significantly (${at2hTxt}) — meal was larger than the bolus.`);
   }
 }
 

@@ -114,46 +114,68 @@ export function deltaColor(delta: number | null): string {
  * the at-end reading lands. Reads as a neutral observation, never as
  * a recommendation.
  */
-export function interimMessage(log: ExerciseLog): string | null {
+export function interimMessage(log: ExerciseLog, locale = "de"): string | null {
   const before = numOrNull(log.cgm_glucose_at_log);
   const atEnd  = numOrNull(log.glucose_at_end);
   if (atEnd == null) return null;
+  const de = locale === "de";
   if (atEnd < HYPO_THRESHOLD) {
-    return `Glucose ended low (${Math.round(atEnd)} mg/dL). Watch the next hour closely — delayed hypos are common after exercise.`;
+    return de
+      ? `Glukose am Ende niedrig (${Math.round(atEnd)} mg/dL). Die nächste Stunde aufmerksam beobachten — verzögerte Hypos nach dem Training sind häufig.`
+      : `Glucose ended low (${Math.round(atEnd)} mg/dL). Watch the next hour closely — delayed hypos are common after exercise.`;
   }
   if (before == null) {
-    return `Workout ended at ${Math.round(atEnd)} mg/dL. No baseline glucose was captured at start.`;
+    return de
+      ? `Training endete bei ${Math.round(atEnd)} mg/dL. Kein Ausgangswert zu Trainingsbeginn erfasst.`
+      : `Workout ended at ${Math.round(atEnd)} mg/dL. No baseline glucose was captured at start.`;
   }
   const diff = atEnd - before;
   const pct  = before > 0 ? (diff / before) * 100 : 0;
-  const dirWord = diff > 0 ? "rose" : diff < 0 ? "fell" : "held";
   const absDiff = Math.abs(Math.round(diff));
   const absPct  = Math.abs(Math.round(pct));
   if (Math.abs(pct) <= 15) {
-    return `Glucose held steady — moved ${absDiff} mg/dL (${absPct}%) from start to end.`;
+    return de
+      ? `Glukose blieb stabil — Bewegung von ${absDiff} mg/dL (${absPct}%) von Start bis Ende.`
+      : `Glucose held steady — moved ${absDiff} mg/dL (${absPct}%) from start to end.`;
   }
+  if (de) {
+    const dirWordDE = diff > 0 ? "stieg um" : "fiel um";
+    return `Glukose ${dirWordDE} ${absDiff} mg/dL (${absPct}%) von Start (${Math.round(before)}) bis Ende (${Math.round(atEnd)}).`;
+  }
+  const dirWord = diff > 0 ? "rose" : diff < 0 ? "fell" : "held";
   return `Glucose ${dirWord} ${absDiff} mg/dL (${absPct}%) from start (${Math.round(before)}) to end (${Math.round(atEnd)}).`;
 }
 
 /**
  * Final 1-hour evaluation message, shown once the +1h reading lands.
  */
-export function finalMessage(log: ExerciseLog): string | null {
+export function finalMessage(log: ExerciseLog, locale = "de"): string | null {
   const atEnd   = numOrNull(log.glucose_at_end);
   const after1h = numOrNull(log.glucose_after_1h);
   if (after1h == null) return null;
+  const de = locale === "de";
   if (after1h < HYPO_THRESHOLD) {
-    return `1 h after the workout, glucose dropped to ${Math.round(after1h)} mg/dL — that's the delayed-hypo window playing out.`;
+    return de
+      ? `1 h nach dem Training fiel die Glukose auf ${Math.round(after1h)} mg/dL — das verzögerte Hypo-Fenster tritt ein.`
+      : `1 h after the workout, glucose dropped to ${Math.round(after1h)} mg/dL — that's the delayed-hypo window playing out.`;
   }
   if (atEnd == null) {
-    return `1 h after the workout, glucose was ${Math.round(after1h)} mg/dL.`;
+    return de
+      ? `1 h nach dem Training lag die Glukose bei ${Math.round(after1h)} mg/dL.`
+      : `1 h after the workout, glucose was ${Math.round(after1h)} mg/dL.`;
   }
   const diff = after1h - atEnd;
-  const dirWord = diff > 0 ? "kept rising" : diff < 0 ? "kept falling" : "held";
   const absDiff = Math.abs(Math.round(diff));
   if (Math.abs(diff) <= 15) {
-    return `Glucose stabilised in the hour after — ${Math.round(after1h)} mg/dL (Δ ${absDiff}).`;
+    return de
+      ? `Glukose stabilisierte sich in der Stunde danach — ${Math.round(after1h)} mg/dL (Δ ${absDiff}).`
+      : `Glucose stabilised in the hour after — ${Math.round(after1h)} mg/dL (Δ ${absDiff}).`;
   }
+  if (de) {
+    const dirWordDE = diff > 0 ? "stieg weiter" : "fiel weiter";
+    return `In der Stunde nach dem Training ${dirWordDE} die Glukose (${Math.round(atEnd)} → ${Math.round(after1h)} mg/dL, Δ ${absDiff}).`;
+  }
+  const dirWord = diff > 0 ? "kept rising" : diff < 0 ? "kept falling" : "held";
   return `In the hour after the workout, glucose ${dirWord} (${Math.round(atEnd)} → ${Math.round(after1h)} mg/dL, Δ ${absDiff}).`;
 }
 
@@ -161,7 +183,8 @@ export function finalMessage(log: ExerciseLog): string | null {
  * Static educational note keyed off the exercise type. Pure prose,
  * never personalised, never prescriptive.
  */
-export function patternNote(t: ExerciseType): string {
+export function patternNote(t: ExerciseType, locale = "de"): string {
+  const de = locale === "de";
   switch (t) {
     case "cardio":
     case "cycling":
@@ -173,20 +196,34 @@ export function patternNote(t: ExerciseType): string {
     case "tennis":
     case "volleyball":
     case "basketball":
-      return "Aerobic exercise typically lowers glucose, with a delayed-hypo window 30–90 min after the session.";
+      return de
+        ? "Aerobe Belastung senkt typischerweise den Glukosespiegel, mit einem verzögerten Hypo-Fenster 30–90 Minuten nach der Einheit."
+        : "Aerobic exercise typically lowers glucose, with a delayed-hypo window 30–90 min after the session.";
     case "hiit":
-      return "High-intensity intervals can push glucose UP during the workout (stress response) and then down sharply afterwards.";
+      return de
+        ? "Hochintensive Intervalle können den Glukosespiegel während des Trainings anheben (Stressreaktion) und danach stark abfallen lassen."
+        : "High-intensity intervals can push glucose UP during the workout (stress response) and then down sharply afterwards.";
     case "strength":
     case "hypertrophy":
-      return "Resistance training often nudges glucose UP transiently; values commonly settle within 1–2 h.";
+      return de
+        ? "Krafttraining hebt den Glukosespiegel vorübergehend oft leicht an; die Werte normalisieren sich meist innerhalb von 1–2 Stunden."
+        : "Resistance training often nudges glucose UP transiently; values commonly settle within 1–2 h.";
     case "yoga":
-      return "Yoga and low-intensity movement usually have a mild, stabilising effect on glucose.";
+      return de
+        ? "Yoga und sanfte Bewegung haben meist einen milden, stabilisierenden Effekt auf den Glukosespiegel."
+        : "Yoga and low-intensity movement usually have a mild, stabilising effect on glucose.";
     case "breathwork":
-      return "Breathwork sessions can shift glucose in either direction — adrenergic styles (Wim Hof, fast holotropic) often nudge it UP via stress hormones, while slow box / parasympathetic breathing tends to settle it.";
+      return de
+        ? "Atemübungen können den Glukosespiegel in beide Richtungen verschieben — adrenerge Stile (Wim Hof, schnelles holotropes Atmen) heben ihn über Stresshormone oft an, während langsames Box-Atmen / parasympathische Atmung ihn eher stabilisiert."
+        : "Breathwork sessions can shift glucose in either direction — adrenergic styles (Wim Hof, fast holotropic) often nudge it UP via stress hormones, while slow box / parasympathetic breathing tends to settle it.";
     case "hot_shower":
-      return "A hot shower causes vasodilation, which can speed up insulin absorption — watch for an unusually fast glucose drop in the next 30–60 min.";
+      return de
+        ? "Eine heiße Dusche bewirkt Vasodilatation, die die Insulinaufnahme beschleunigen kann — achte auf einen ungewöhnlich schnellen Glukoseabfall in den nächsten 30–60 Minuten."
+        : "A hot shower causes vasodilation, which can speed up insulin absorption — watch for an unusually fast glucose drop in the next 30–60 min.";
     case "cold_shower":
-      return "A cold shower triggers vasoconstriction and a brief adrenaline response, which can transiently push glucose UP.";
+      return de
+        ? "Eine kalte Dusche löst Vasokonstriktion und eine kurze Adrenalinausschüttung aus, die den Glukosespiegel vorübergehend anheben kann."
+        : "A cold shower triggers vasoconstriction and a brief adrenaline response, which can transiently push glucose UP.";
   }
 }
 
@@ -376,7 +413,28 @@ export function aggregateExerciseTypeStats(
  */
 export const PATTERN_MIN_SESSIONS = 3;
 
-export function personalPatternHeadline(stats: ExerciseTypeStats): string | null {
+/** German exercise type labels for `personalPatternHeadline`. */
+function exerciseTypeLabelDE(t: ExerciseType): string {
+  switch (t) {
+    case "hypertrophy":
+    case "strength":   return "Krafttraining";
+    case "cardio":     return "Cardio";
+    case "hiit":       return "HIIT";
+    case "yoga":       return "Yoga";
+    case "cycling":    return "Radfahren";
+    case "run":        return "Laufen";
+    case "football":   return "Fußball";
+    case "tennis":     return "Tennis";
+    case "volleyball": return "Volleyball";
+    case "basketball": return "Basketball";
+    case "swimming":   return "Schwimmen";
+    case "breathwork": return "Atemübungen";
+    case "hot_shower": return "warme Dusche";
+    case "cold_shower":return "kalte Dusche";
+  }
+}
+
+export function personalPatternHeadline(stats: ExerciseTypeStats, locale = "de"): string | null {
   if (stats.count < PATTERN_MIN_SESSIONS) return null;
   // Prefer the +1 h delta if we have it (captures the delayed-hypo
   // window), fall back to the at-end value otherwise.
@@ -387,6 +445,16 @@ export function personalPatternHeadline(stats: ExerciseTypeStats): string | null
   if (delta == null || sample < PATTERN_MIN_SESSIONS) return null;
   const abs = Math.abs(delta);
   const direction = delta < 0 ? "drop" : delta > 0 ? "raise" : "hold";
+  const de = locale === "de";
+  if (de) {
+    const typeLbl = exerciseTypeLabelDE(stats.type);
+    const sign = delta >= 0 ? "+" : "−";
+    if (direction === "hold" || abs < 5) {
+      return `Deine ${typeLbl}-Einheiten lassen die Glukose meist unverändert (Median ${sign}${abs} mg/dL über ${sample} Einheiten).`;
+    }
+    const dirDE = direction === "drop" ? "senken" : "heben";
+    return `Deine ${typeLbl}-Einheiten ${dirDE} die Glukose meist um ~${abs} mg/dL (Median über ${sample} Einheiten).`;
+  }
   if (direction === "hold" || abs < 5) {
     return `Your ${exerciseTypeLabel(stats.type).toLowerCase()} sessions usually leave glucose roughly unchanged (median ${delta >= 0 ? "+" : "−"}${abs} mg/dL across ${sample} sessions).`;
   }

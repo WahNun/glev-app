@@ -15,7 +15,7 @@ import DateTimeField, { isoToLocal, localToIso } from "@/components/log/DateTime
 import { fetchRecentMenstrualLogs, deleteMenstrualLog, updateMenstrualLog, type MenstrualLog, type FlowIntensity } from "@/lib/menstrual";
 import { fetchRecentSymptomLogs, deleteSymptomLog, updateSymptomLog, SYMPTOM_TYPES, avgSeverity, type SymptomLog, type SymptomType, type SeveritiesMap, type SeverityValue } from "@/lib/symptoms";
 import { fetchRecentInfluenceLogs, deleteInfluenceLog, updateInfluenceLog, INFLUENCE_TYPES, type InfluenceLog, type InfluenceType } from "@/lib/influences";
-import { evaluateExercise, exerciseTypeLabel, exerciseTypeLabelI18n, patternNote, interimMessage, finalMessage, deltaColor, aggregateExerciseTypeStats, personalPatternHeadline, PATTERN_MIN_SESSIONS } from "@/lib/exerciseEval";
+import { evaluateExercise, exerciseTypeLabelI18n, patternNote, interimMessage, finalMessage, deltaColor, aggregateExerciseTypeStats, personalPatternHeadline, PATTERN_MIN_SESSIONS } from "@/lib/exerciseEval";
 import {
   evaluateBolus,
   bolusInterimMessage,
@@ -2254,19 +2254,19 @@ function BolusRowCard({ log, meals, isOpen, onToggle, onDelete, deleting }: {
           </ExPanel>
 
           {/* 3) Evaluation panel ----------------------------------- */}
-          <ExPanel title="EVALUATION">
+          <ExPanel title={tx("panel_evaluation")}>
             <EvalBlock
-              heading="1H CHECK"
+              heading={tx("ex_1h_check")}
               unlocked={at1h != null}
-              body={bolusInterimMessage(log) || "Waiting for the +1h glucose reading…"}
+              body={bolusInterimMessage(log, locale) || tx("ex_waiting_1h")}
               color={evalInfo.color}
               outcomeLabel={null}
             />
             <div style={{ height:8 }}/>
             <EvalBlock
-              heading="2H OUTCOME"
+              heading={tx("ex_2h_outcome")}
               unlocked={at2h != null}
-              body={bolusFinalMessage(log) || "Waiting for the +2h glucose reading…"}
+              body={bolusFinalMessage(log, locale) || tx("ex_waiting_2h")}
               color={evalInfo.color}
               outcomeLabel={at2h != null ? evalInfo.label : null}
             />
@@ -2274,7 +2274,7 @@ function BolusRowCard({ log, meals, isOpen, onToggle, onDelete, deleting }: {
 
           {log.notes && (
             <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
-              <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>NOTES</div>
+              <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{tx("ex_notes_label")}</div>
               <div style={{ fontSize:14, color:"var(--text-strong)", lineHeight:1.5 }}>{log.notes}</div>
             </div>
           )}
@@ -2284,7 +2284,7 @@ function BolusRowCard({ log, meals, isOpen, onToggle, onDelete, deleting }: {
             textAlign:"center", letterSpacing:"0.02em", lineHeight:1.5,
             paddingTop:2,
           }}>
-            For reference only — always consult your care team.
+            {tx("ex_disclaimer")}
           </div>
         </div>
       )}
@@ -2520,7 +2520,7 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
 
           {log.notes && (
             <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
-              <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>NOTES</div>
+              <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{tx("ex_notes_label")}</div>
               <div style={{ fontSize:14, color:"var(--text-strong)", lineHeight:1.5 }}>{log.notes}</div>
             </div>
           )}
@@ -2530,7 +2530,7 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
             textAlign:"center", letterSpacing:"0.02em", lineHeight:1.5,
             paddingTop:2, paddingBottom:8,
           }}>
-            Basal is continuous — Glev does not score individual injections. For reference only.
+            {tx("basal_disclaimer")}
           </div>
         </div>
       )}
@@ -2742,28 +2742,28 @@ function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting, o
           </ExPanel>
 
           {/* 3) Evaluation panel ----------------------------------- */}
-          <ExPanel title="EVALUATION">
+          <ExPanel title={tx("panel_evaluation")}>
             <EvalBlock
-              heading="POST-WORKOUT CHECK"
+              heading={tx("ex_post_workout_check")}
               unlocked={atEnd != null}
-              body={interimMessage(log) || "Waiting for the at-end glucose reading…"}
+              body={interimMessage(log, locale) || tx("ex_waiting_at_end")}
               color={evalInfo.color}
               outcomeLabel={atEnd != null ? evalInfo.label : null}
             />
             <div style={{ height:8 }}/>
             <EvalBlock
-              heading="1H OUTCOME"
+              heading={tx("ex_1h_outcome")}
               unlocked={after1h != null}
-              body={finalMessage(log) || "Waiting for the +1h glucose reading…"}
+              body={finalMessage(log, locale) || tx("ex_waiting_1h")}
               color={evalInfo.color}
               outcomeLabel={after1h != null ? evalInfo.label : null}
             />
           </ExPanel>
 
           {/* 4) Pattern note --------------------------------------- */}
-          <ExPanel title="PATTERN NOTE">
+          <ExPanel title={tx("panel_pattern_note")}>
             <div style={{ fontSize:14, color:"var(--text-body)", lineHeight:1.55 }}>
-              {patternNote(log.exercise_type)}
+              {patternNote(log.exercise_type, locale)}
             </div>
           </ExPanel>
 
@@ -2775,7 +2775,7 @@ function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting, o
 
           {log.notes && (
             <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
-              <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>NOTES</div>
+              <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{tx("ex_notes_label")}</div>
               <div style={{ fontSize:14, color:"var(--text-strong)", lineHeight:1.5 }}>{log.notes}</div>
             </div>
           )}
@@ -2786,7 +2786,7 @@ function ExerciseRowCard({ log, allLogs, isOpen, onToggle, onDelete, deleting, o
             textAlign:"center", letterSpacing:"0.02em", lineHeight:1.5,
             paddingTop:2,
           }}>
-            For reference only — always consult your care team.
+            {tx("ex_disclaimer")}
           </div>
         </div>
       )}
@@ -3284,16 +3284,22 @@ function Detail({ label, value, color, locked, lockedHint }: { label: string; va
  * never prescriptive — matches the static `patternNote()` tone.
  */
 function PersonalPatternPanel({ log, allLogs }: { log: ExerciseLog; allLogs: ExerciseLog[] }) {
-  const stats = aggregateExerciseTypeStats(allLogs, log.exercise_type);
+  const tx     = useTranslations("entriesExpand");
+  const tIns2  = useTranslations("insights");
+  const locale = useLocale();
+  const stats  = aggregateExerciseTypeStats(allLogs, log.exercise_type);
   if (!stats || stats.count < PATTERN_MIN_SESSIONS) return null;
 
-  const headline = personalPatternHeadline(stats);
-  const typeLbl  = exerciseTypeLabel(stats.type);
+  const headline = personalPatternHeadline(stats, locale);
+  const typeLbl  = exerciseTypeLabelI18n(tIns2, stats.type);
+  const basedOn  = stats.count === 1
+    ? tx("ex_based_on_last_one", { type: typeLbl.toLowerCase() })
+    : tx("ex_based_on_last_many", { n: stats.count, type: typeLbl.toLowerCase() });
 
   return (
-    <ExPanel title="PERSONAL PATTERN">
+    <ExPanel title={tx("panel_personal_pattern")}>
       <div style={{ fontSize:13, color:"var(--text-dim)", letterSpacing:"0.06em", fontWeight:600, marginBottom:8 }}>
-        Based on your last {stats.count} {typeLbl.toLowerCase()} {stats.count === 1 ? "session" : "sessions"}
+        {basedOn}
       </div>
       {headline && (
         <div style={{ fontSize:14, color:"var(--text-body)", lineHeight:1.55, marginBottom:10 }}>
@@ -3302,12 +3308,12 @@ function PersonalPatternPanel({ log, allLogs }: { log: ExerciseLog; allLogs: Exe
       )}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:8 }}>
         <PatternStatTile
-          label="MEDIAN Δ BEFORE → AT END"
+          label={tx("ex_median_before_at_end")}
           delta={stats.medianDeltaAtEnd}
           sample={stats.atEndSampleSize}
         />
         <PatternStatTile
-          label="MEDIAN Δ BEFORE → +1H"
+          label={tx("ex_median_before_1h")}
           delta={stats.medianDelta1h}
           sample={stats.oneHourSampleSize}
         />
@@ -3324,6 +3330,7 @@ function PersonalPatternPanel({ log, allLogs }: { log: ExerciseLog; allLogs: Exe
 }
 
 function PatternStatTile({ label, delta, sample }: { label: string; delta: number | null; sample: number }) {
+  const tx = useTranslations("entriesExpand");
   const enough = delta != null && sample >= PATTERN_MIN_SESSIONS;
   const color = enough ? deltaColor(delta) : "var(--text-faint)";
   const text = !enough
@@ -3340,7 +3347,7 @@ function PatternStatTile({ label, delta, sample }: { label: string; delta: numbe
       <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{label}</div>
       <div style={{ fontSize:14, fontWeight:700, color, letterSpacing:"-0.01em", fontFamily:"var(--font-mono)" }}>{text}</div>
       <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:3 }}>
-        {enough ? `n = ${sample}` : `n = ${sample} · need ${PATTERN_MIN_SESSIONS}+`}
+        {enough ? `n = ${sample}` : tx("ex_n_need", { n: sample, min: PATTERN_MIN_SESSIONS })}
       </div>
     </div>
   );
@@ -3349,6 +3356,7 @@ function PatternStatTile({ label, delta, sample }: { label: string; delta: numbe
 function HypoShareTile({ hypoCount, classifiedCount, share }: {
   hypoCount: number; classifiedCount: number; share: number | null;
 }) {
+  const tx = useTranslations("entriesExpand");
   const enough = share != null && classifiedCount >= PATTERN_MIN_SESSIONS;
   // Pink (HYPO_RISK colour from exerciseEval) once any hypo turned up,
   // muted faint text otherwise. Pure observation — no thresholding
@@ -3368,12 +3376,12 @@ function HypoShareTile({ hypoCount, classifiedCount, share }: {
       border:`1px solid ${BORDER}`,
       borderRadius:10, padding:"10px 12px",
     }}>
-      <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>HYPO RISK SHARE</div>
+      <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{tx("ex_hypo_risk_share")}</div>
       <div style={{ fontSize:14, fontWeight:700, color, letterSpacing:"-0.01em", fontFamily:"var(--font-mono)" }}>{text}</div>
       <div style={{ fontSize:11, color:"var(--text-faint)", marginTop:3 }}>
         {enough
-          ? "of classified sessions ended in HYPO RISK"
-          : `n = ${classifiedCount} classified · need ${PATTERN_MIN_SESSIONS}+`}
+          ? tx("ex_hypo_share_text")
+          : tx("ex_n_classified_need", { n: classifiedCount, min: PATTERN_MIN_SESSIONS })}
       </div>
     </div>
   );
@@ -4176,7 +4184,7 @@ function InfluenceRowCard({ log, isOpen, onToggle, onDelete, deleting, onUpdated
           </ExPanel>
           {log.notes && (
             <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
-              <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>NOTES</div>
+              <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{tx("ex_notes_label")}</div>
               <div style={{ fontSize:14, color:"var(--text-strong)", lineHeight:1.5 }}>{log.notes}</div>
             </div>
           )}
@@ -4302,7 +4310,7 @@ function SymptomRowCard({ log, isOpen, onToggle, onDelete, deleting, onUpdated }
           </ExPanel>
           {log.notes && (
             <div style={{ background:"var(--surface-soft)", border:`1px solid ${BORDER}`, borderRadius:10, padding:"10px 12px" }}>
-              <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>NOTES</div>
+              <div style={{ fontSize:11, color:"var(--text-faint)", letterSpacing:"0.08em", fontWeight:600, marginBottom:4 }}>{tx("ex_notes_label")}</div>
               <div style={{ fontSize:14, color:"var(--text-strong)", lineHeight:1.5 }}>{log.notes}</div>
             </div>
           )}
@@ -4324,6 +4332,7 @@ function InfluenceEditor({ log, onSaved, onCancel }: {
 }) {
   const t = useTranslations("engineLog");
   const tCommon = useTranslations();
+  const tx = useTranslations("entriesExpand");
   const [type, setType]       = useState<InfluenceType>(log.influence_type);
   const [amount, setAmount]   = useState<string>(log.amount ?? "");
   const [details, setDetails] = useState<string>(log.details ?? "");
@@ -4410,7 +4419,7 @@ function InfluenceEditor({ log, onSaved, onCancel }: {
       />
       <EditorField label={t("influence_amount_label")}  value={amount}  onChange={setAmount}  placeholder={t("influence_amount_placeholder")}/>
       <EditorField label={t("influence_details_label")} value={details} onChange={setDetails} placeholder={t("influence_details_placeholder")}/>
-      <EditorField label="NOTES" value={notes} onChange={setNotes} placeholder="" multiline/>
+      <EditorField label={tx("ex_notes_label")} value={notes} onChange={setNotes} placeholder="" multiline/>
 
       {err && <div style={{ fontSize:12, color:PINK }}>{err}</div>}
 
@@ -4443,6 +4452,7 @@ function SymptomEditor({ log, onSaved, onCancel }: {
   onCancel: () => void;
 }) {
   const t = useTranslations("engineLog");
+  const tx = useTranslations("entriesExpand");
   // Per-symptom severity (Task: per-symptom severity in the edit
   // sheet). Each chip carries its own 1..5 value; toggling a chip
   // off drops its entry, toggling on (re)adds with the row's old
@@ -4625,7 +4635,7 @@ function SymptomEditor({ log, onSaved, onCancel }: {
         onChange={setOccurredLocal}
         accent={SYMPTOM_ACCENT}
       />
-      <EditorField label="NOTES" value={notes} onChange={setNotes} placeholder="" multiline/>
+      <EditorField label={tx("ex_notes_label")} value={notes} onChange={setNotes} placeholder="" multiline/>
 
       {err && <div style={{ fontSize:12, color:PINK }}>{err}</div>}
 
