@@ -35,13 +35,17 @@ export const TEXT_FAINT = "rgba(255,255,255,0.32)";
 export type Locale = "de" | "en";
 
 export function useLocaleParam(): Locale {
-  // Read once per render; on the server we default to "de" so the
-  // initial HTML matches the most common case (Lucas → DE). The
-  // canvas iframes reload with the explicit `?locale=` so the
-  // hydration mismatch is harmless and self-corrects.
-  if (typeof window === "undefined") return "de";
-  const sp = new URLSearchParams(window.location.search);
-  return sp.get("locale") === "en" ? "en" : "de";
+  // Start with "de" so SSR and the first client render agree (no
+  // hydration mismatch). After mount, read the real ?locale= param
+  // from the URL and update if needed — this causes at most one
+  // silent re-render on English canvas iframes.
+  const [locale, setLocale] = React.useState<Locale>("de");
+  React.useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const raw = sp.get("locale");
+    setLocale(raw === "en" ? "en" : "de");
+  }, []);
+  return locale;
 }
 
 // ─── Progress dots ──────────────────────────────────────────────
