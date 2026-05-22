@@ -1997,6 +1997,7 @@
     "welcome_err_auth": "Auth-Service nicht konfiguriert. Bitte Support kontaktieren.",
     "welcome_err_password_short": "Passwort muss mindestens 6 Zeichen lang sein.",
     "welcome_err_password_mismatch": "Die beiden Passwörter stimmen nicht überein.",
+    "welcome_err_already_registered": "Diese Email ist bereits registriert. Bitte logge dich auf /login mit deinem bestehenden Passwort ein.",
     "welcome_notice_check_email": "Account erstellt! Bitte bestätige deine Email-Adresse über den Link in deinem Posteingang, dann kannst du dich einloggen.",
     "welcome_invalid_default_title": "Kein gültiger Beta-Zugang gefunden.",
     "welcome_invalid_default_body": "Diese Seite ist nur nach erfolgreicher Early-Access-Anmeldung verfügbar.",

@@ -35,6 +35,8 @@ type VerifyState =
   | { kind: "valid"; email: string | null }
   | { kind: "invalid"; reason: string };
 
+type AuthState = "checking" | "needs_signup" | "signed_in";
+
 // Page-level default export wraps the inner component in Suspense.
 // Required by Next.js App Router because useSearchParams() forces the
 // route into client-side rendering at request time. Without the Suspense
@@ -149,6 +151,7 @@ function WelcomeInner() {
   const sessionId = searchParams.get("session_id");
 
   const [verify, setVerify] = useState<VerifyState>({ kind: "verifying" });
+  const [authState, setAuthState] = useState<AuthState>("checking");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm]   = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -194,6 +197,25 @@ function WelcomeInner() {
     return () => { cancelled = true; };
   }, [sessionId]);
 
+  useEffect(() => {
+    if (verify.kind !== "valid") return;
+    if (!supabase) {
+      setAuthState("needs_signup");
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      if (cancelled) return;
+      const sameEmail =
+        data?.user?.email && verify.email
+          ? data.user.email.toLowerCase() === verify.email.toLowerCase()
+          : false;
+      setAuthState(sameEmail ? "signed_in" : "needs_signup");
+    })();
+    return () => { cancelled = true; };
+  }, [verify]);
+
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -225,7 +247,11 @@ function WelcomeInner() {
     });
 
     if (authError) {
-      setError(authError.message);
+      if (/already/i.test(authError.message)) {
+        setError(t("welcome_err_already_registered"));
+      } else {
+        setError(authError.message);
+      }
       setSubmitting(false);
       return;
     }
@@ -279,6 +305,41 @@ function WelcomeInner() {
 
           {verify.kind === "valid" && (
             <>
+              {authState === "checking" && (
+                <div style={{ textAlign: "center", padding: "30px 0", color: "var(--text-muted)", fontSize: 14 }}>
+                  <div style={{ fontSize: 11, color: "var(--text-faint)", letterSpacing: "0.1em", marginBottom: 8 }}>
+                    {t("welcome_verifying")}
+                  </div>
+                  <svg width="22" height="22" viewBox="0 0 24 24" style={{ marginTop: 4 }} aria-hidden="true">
+                    <circle cx="12" cy="12" r="9" fill="none" stroke="var(--border-strong)" strokeWidth="3"/>
+                    <path d="M21 12a9 9 0 0 0-9-9" fill="none" stroke={ACCENT} strokeWidth="3" strokeLinecap="round">
+                      <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.8s" repeatCount="indefinite"/>
+                    </path>
+                  </svg>
+                </div>
+              )}
+
+              {authState === "signed_in" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 14, textAlign: "center" }}>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text)" }}>
+                    Du bist bereits angemeldet.
+                  </div>
+                  <Link
+                    href="/dashboard"
+                    style={{
+                      padding: "13px",
+                      background: `linear-gradient(135deg, ${ACCENT}, #6B8BFF)`,
+                      border: "none", borderRadius: 12,
+                      color: "white", fontSize: 14, fontWeight: 700,
+                      textAlign: "center", textDecoration: "none",
+                    }}
+                  >
+                    Zum Dashboard →
+                  </Link>
+                </div>
+              )}
+
+              {authState === "needs_signup" && (<>
               <div style={{ marginBottom: 22 }}>
                 <div style={{ fontSize: 11, color: GREEN, letterSpacing: "0.1em", fontWeight: 700, marginBottom: 6 }}>
                   {t("welcome_payment_confirmed")}
@@ -388,6 +449,7 @@ function WelcomeInner() {
                   </Link>
                 )}
               </form>
+            </>)}
             </>
           )}
         </div>

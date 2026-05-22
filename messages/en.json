@@ -1986,6 +1986,7 @@
     "welcome_err_auth": "Auth service not configured. Please contact support.",
     "welcome_err_password_short": "Password must be at least 6 characters.",
     "welcome_err_password_mismatch": "The two passwords don't match.",
+    "welcome_err_already_registered": "This email is already registered. Please log in at /login with your existing password.",
     "welcome_notice_check_email": "Account created! Please confirm your email via the link in your inbox, then you can log in.",
     "welcome_invalid_default_title": "No valid beta access found.",
     "welcome_invalid_default_body": "This page is only available after a successful beta reservation.",
