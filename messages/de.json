@@ -1280,6 +1280,8 @@
     "sheet_insulin_brand_bolus_2_title": "Zweites Bolus-Insulin",
     "insulin_brand_bolus_2_body": "Optional — für Nutzer, die zwei Schnellinsulinen verwenden (z. B. Fiasp zu Mahlzeiten, NovoRapid als Reserve).",
     "insulin_brand_bolus_2_placeholder": "z. B. Humalog, Apidra",
+    "iob_basal_history_title": "Basal-Verlauf",
+    "iob_basal_dia_info": "24h Fenster · {brand}",
     "subtitle_no_brand": "Nicht gesetzt",
     "subtitle_macros": "{carbs} g · {protein} g · {fat} g · {fiber} g",
     "subtitle_language_de": "Deutsch",

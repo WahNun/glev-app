@@ -852,6 +852,16 @@ function ReorderableClusters({
     };
     const migrated = order.map(id => LEGACY_REMAP[id] ?? id);
 
+    // Position migration: ensure "insulin" cluster (IOB card) appears before
+    // "recents" (entries card) so IOB is always above the entries list.
+    // Silently swaps when the saved order has them reversed.
+    const iIdx = migrated.indexOf("insulin");
+    const rIdx = migrated.indexOf("recents");
+    if (iIdx !== -1 && rIdx !== -1 && iIdx > rIdx) {
+      migrated.splice(iIdx, 1);
+      migrated.splice(migrated.indexOf("recents"), 0, "insulin");
+    }
+
     const byId = new Map(clusters.map(c => [c.id, c]));
     const seen = new Set<string>();
     const out: typeof clusters = [];
@@ -1387,10 +1397,10 @@ function RecentEntries({
   const r = orderedRows[idx];
 
   const arrowBase: React.CSSProperties = {
-    flexShrink: 0, width: 32, height: 32, borderRadius: "50%",
-    background: "rgba(255,255,255,0.06)",
-    border: "1px solid rgba(255,255,255,0.1)",
-    color: "#8b949e",
+    flexShrink: 0,
+    width: 20, height: 44,
+    background: "none", border: "none",
+    color: "rgba(255,255,255,0.28)",
     display: "flex", alignItems: "center", justifyContent: "center",
     cursor: "pointer", transition: "opacity 0.15s", padding: 0,
   };
@@ -1416,7 +1426,7 @@ function RecentEntries({
         </div>
       ) : (
         /* ‹ · Card · › */
-        <div style={{ display:"flex", alignItems:"center", gap:8, paddingBottom:10 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:0, paddingBottom:10, margin:"0 -4px" }}>
 
           {/* ‹ prev = older */}
           <button
@@ -1425,7 +1435,7 @@ function RecentEntries({
             aria-label="Älterer Eintrag"
             style={{ ...arrowBase, opacity: idx === 0 ? 0.25 : 1, cursor: idx === 0 ? "default" : "pointer" }}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <svg width="10" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <polyline points="15 18 9 12 15 6"/>
             </svg>
           </button>
@@ -1490,7 +1500,7 @@ function RecentEntries({
             aria-label="Neuerer Eintrag"
             style={{ ...arrowBase, opacity: idx === orderedRows.length - 1 ? 0.25 : 1, cursor: idx === orderedRows.length - 1 ? "default" : "pointer" }}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <svg width="10" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <polyline points="9 6 15 12 9 18"/>
             </svg>
           </button>

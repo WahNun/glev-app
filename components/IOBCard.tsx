@@ -162,6 +162,7 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
     if (typeof window === "undefined") return false;
     return localStorage.getItem("glev_iob_expanded") === "true";
   });
+  const [basalExpanded, setBasalExpanded] = useState(false);
   const detailRef               = useRef<HTMLDivElement>(null);
 
   const cf = useMemo(() => getInsulinSettings().cf, []);
@@ -208,8 +209,18 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
     ? Math.max(20, Math.round(currentBg - expectedDrop))
     : null;
 
-  const insulinBrandBolus = useMemo(() => getInsulinSettings().insulinBrandBolus, []);
-  const insulinBrandBasal = useMemo(() => getInsulinSettings().insulinBrandBasal, []);
+  const insulinBrandBolus  = useMemo(() => getInsulinSettings().insulinBrandBolus,  []);
+  const insulinBrandBolus2 = useMemo(() => getInsulinSettings().insulinBrandBolus2, []);
+  const insulinBrandBasal  = useMemo(() => getInsulinSettings().insulinBrandBasal,  []);
+
+  // Last 5 basal injections for the basal expanded detail panel.
+  const recentBasalLogs = useMemo(
+    () => insulin
+      .filter(i => i.insulin_type === "basal")
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 5),
+    [insulin],
+  );
   const insulinTypeLabel = insulinBrandBolus?.trim()
     ? insulinBrandBolus.trim()
     : insulinType === "rapid"
@@ -243,21 +254,29 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
     ? Math.max(0, Math.floor((BASAL_WINDOW_MIN - basalElapsedMin) / 60))
     : 0;
 
+  const isExpanded = view === "bolus" ? expanded : basalExpanded;
   const chevron = (
     <button
-      onClick={e => { e.stopPropagation(); if (view === "bolus") setExpanded(ex => !ex); }}
+      onClick={e => {
+        e.stopPropagation();
+        if (view === "bolus") setExpanded(ex => !ex);
+        else setBasalExpanded(ex => !ex);
+      }}
       aria-label={t("iob_details_toggle_aria")}
-      aria-expanded={view === "bolus" ? expanded : false}
+      aria-expanded={isExpanded}
       style={{
-        background: "none", border: "none", cursor: view === "bolus" ? "pointer" : "default",
-        padding: "4px 2px", flexShrink: 0,
-        color: view === "bolus" ? "var(--text-ghost)" : "transparent",
-        fontSize: 14, lineHeight: 1,
+        background: "none", border: "none", cursor: "pointer",
+        padding: "4px 6px", flexShrink: 0,
+        color: "var(--text-ghost)",
+        display: "flex", alignItems: "center", justifyContent: "center",
         transition: "transform 0.3s ease",
-        transform: expanded && view === "bolus" ? "rotate(180deg)" : "rotate(0deg)",
+        transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
       }}
     >
-      ›
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="6 9 12 15 18 9"/>
+      </svg>
     </button>
   );
 
@@ -269,10 +288,13 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
         borderRadius: 18,
         boxShadow: view === "bolus" && !cleared ? `inset 0 0 28px ${color}09` : "none",
         overflow: "hidden",
-        cursor: view === "bolus" ? "pointer" : "default",
+        cursor: "pointer",
       }}
-      onClick={() => { if (view === "bolus") setExpanded(e => !e); }}
-      aria-expanded={view === "bolus" ? expanded : undefined}
+      onClick={() => {
+        if (view === "bolus") setExpanded(e => !e);
+        else setBasalExpanded(e => !e);
+      }}
+      aria-expanded={isExpanded}
     >
       {/* ── COMPACT FRONT ── */}
       <div style={{ padding: "14px 16px 12px", display: "flex", flexDirection: "column", gap: 10 }}>
@@ -431,11 +453,38 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
         data-testid="iob-detail-section"
         style={{
           overflow: "hidden",
-          maxHeight: expanded ? 600 : 0,
-          opacity: expanded ? 1 : 0,
+          maxHeight: isExpanded ? 600 : 0,
+          opacity: isExpanded ? 1 : 0,
           transition: "max-height 0.4s cubic-bezier(0.4,0,0.2,1), opacity 0.3s ease",
         }}
       >
+        {view === "basal" ? (
+          /* ── Basal expanded detail ── */
+          <div style={{ borderTop: "1px solid var(--border)", padding: "14px 16px 14px", display: "flex", flexDirection: "column", gap: 9 }}>
+            <div style={{ fontSize: 11, color: BASAL_INDIGO, letterSpacing: "0.1em", fontWeight: 700 }}>
+              {t("iob_basal_history_title").toUpperCase()}
+            </div>
+            {recentBasalLogs.length > 0 ? (
+              recentBasalLogs.map((b, i) => {
+                const timeStr = new Date(b.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                const dateStr = new Date(b.created_at).toLocaleDateString([], { day: "2-digit", month: "2-digit" });
+                return (
+                  <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 8px", borderRadius: 8, background: "var(--surface-soft)", border: "1px solid var(--border)", fontSize: 12, gap: 6 }}>
+                    <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", flexShrink: 0 }}>{dateStr} {timeStr}</span>
+                    <span style={{ color: BASAL_INDIGO, fontWeight: 700, fontFamily: "var(--font-mono)", marginLeft: "auto", flexShrink: 0 }}>{b.units.toFixed(1)} IE</span>
+                  </div>
+                );
+              })
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ fontSize: 12, color: "var(--text-ghost)" }}>{t("iob_basal_no_log")}</span>
+              </div>
+            )}
+            <div style={{ fontSize: 11, color: "var(--text-faint)", textAlign: "center", borderTop: "1px solid var(--border)", paddingTop: 7 }}>
+              {t("iob_basal_dia_info", { brand: insulinBrandBasal?.trim() || t("iob_tab_basal") })}
+            </div>
+          </div>
+        ) : (
         <div
           style={{
             borderTop: "1px solid var(--border)",
@@ -567,9 +616,13 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
             fontSize: 11, color: "var(--text-faint)", textAlign: "center",
             borderTop: "1px solid var(--border)", paddingTop: 7,
           }}>
-            {t("iob_dia_info", { minutes: diaMin, type: insulinTypeLabel })}
+            {t("iob_dia_info", {
+              minutes: diaMin,
+              type: [insulinTypeLabel, insulinBrandBolus2?.trim()].filter(Boolean).join(" + "),
+            })}
           </div>
         </div>
+        )}
       </div>
     </div>
   );
