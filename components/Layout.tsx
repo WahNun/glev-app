@@ -1159,7 +1159,18 @@ function MobileTab({
   // handleClick saw pointerHandledRef === true and bailed. Dead tap.
   // Fix: only mark pointerHandled in pointerup. If pointerup never
   // fires, handleClick falls through and navigates normally.
-  const handlePointerDown = () => {
+  // 2026-05-22 round 11 (dead-tap fix — small 38px target):
+  // `setPointerCapture` routes ALL pointer events to this element even
+  // if the pointer drifts outside the button boundary between down and
+  // up. Without capture, `pointerLeave` fires as soon as the pointer
+  // moves 1px outside, resets `validRef`, and then `pointerUp` fires
+  // on a different element → dead tap. With capture, `pointerLeave`
+  // only fires AFTER the pointer is released (capture cleared on
+  // `pointerUp`/`pointerCancel`), so the gesture always completes.
+  // `touchAction: "manipulation"` (already on the button) prevents the
+  // capture from blocking native iOS scroll gestures.
+  const handlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
     validRef.current = true;
   };
 
