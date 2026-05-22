@@ -35,7 +35,16 @@
 //     "CGM Verbindung" in DE; "Notifications", "CGM Connection", "Macro Targets"
 //     in EN) also use nowrap+ellipsis. We cover the longest label per locale.
 //
-//   PART 4 — Insights screen card labels (Task #575)
+//   PART 4 — Engine step-pill labels (Task #574)
+//     The Engine screen renders three step-pill buttons at the top of the
+//     3-step wizard. Each pill carries a numeric prefix and a translated label
+//     (e.g. "1 · Food", "2 · Macros", "3 · Result" in EN). The pills sit inside
+//     a 3-column grid with small fixed-width cells and font-size 9.5 px —
+//     the same silent-clipping risk as RateTile labels. DE uses "1 · Essen",
+//     "2 · Makros", "3 · Ergebnis"; "Ergebnis" is longer than "Result" and is
+//     the most likely to overflow.
+//
+//   PART 5 — Insights screen card labels (Task #575)
 //     The Insights screen contains CardLabel texts (card headers at fontSize:9)
 //     and meal-evaluation row labels inside a fixed width:72 container. Both
 //     groups are locale-translated and at overflow risk:
@@ -47,7 +56,7 @@
 //       EN row labels:   "In range", "Spike", "Hypo risk"
 //
 // Structure:
-//   Eight `test.describe` blocks — two per part (DE + EN each) — so regressions
+//   Ten `test.describe` blocks — two per part (DE + EN each) — so regressions
 //   are pinpointed to the affected locale and element group.
 //
 // Selector strategy:
@@ -341,7 +350,96 @@ test.describe("Marketing phone Settings row labels — EN locale", () => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// PART 4 — Insights screen card labels (Task #575)
+// PART 4 — Engine step-pill labels (Task #574)
+//
+// The Engine screen shows a 3-step wizard. The step selector at the top is a
+// 3-column CSS grid where each cell contains a <button> with the label text
+// "1 · <step_name>". The grid uses `repeat(3, 1fr)` with padding 4 px and
+// font-size 9.5 px — the cells are narrow and the text has no explicit overflow
+// guard, making silent clipping a real risk when translation strings grow.
+//
+// DE: "1 · Essen" / "2 · Makros" / "3 · Ergebnis"
+// EN: "1 · Food"  / "2 · Macros" / "3 · Result"
+//
+// "Ergebnis" (8 chars + prefix) is the longest label and most likely to clip.
+// We navigate to the Engine tab via the "GLEV" BottomNav button (label text is
+// tNav("glev").toUpperCase() = "GLEV" in both locales).
+// ══════════════════════════════════════════════════════════════════════════════
+
+/** Click the Glev/Engine tab in the marketing phone bottom nav, then wait for
+ *  a known Engine-screen element to be visible before continuing. */
+async function gotoEngineScreen(phone: Locator, anchorText: string): Promise<void> {
+  // The BottomNav renders the Engine tab as a <button> whose visible text
+  // content is "GLEV" (uppercased tNav("glev")) in both DE and EN locales.
+  const glevBtn = phone.getByRole("button", { name: "GLEV", exact: true });
+  await glevBtn.click();
+  // Wait for a step-pill to confirm the Engine screen has mounted.
+  await expect(phone.getByText(anchorText, { exact: true }).first()).toBeVisible();
+}
+
+test.describe("Marketing phone Engine step-pill labels — DE locale", () => {
+  test.use({ locale: "de-DE" });
+
+  // Full pill button text as rendered by the component:
+  //   `1 · ${tEng("step_label_food")}` etc., with messages/de.json values.
+  const DE_PILL_LABELS = [
+    "1 · Essen",
+    "2 · Makros",
+    "3 · Ergebnis",
+  ] as const;
+
+  test("all three Engine step-pills are visible and not overflowing in DE", async ({
+    page,
+  }) => {
+    const phone = await gotoHomeAndFindPhone(page);
+
+    // Navigate to the Engine screen. Anchor on the first pill.
+    await gotoEngineScreen(phone, "1 · Essen");
+
+    for (const label of DE_PILL_LABELS) {
+      // Each pill is a <button> whose full text content is the label string.
+      const pillEl = phone.getByText(label, { exact: true }).first();
+      await expect(pillEl).toBeVisible();
+      await assertNoOverflow(pillEl, `Engine step-pill "${label}" (DE)`);
+
+      // Full-text round-trip — no characters swallowed by overflow clipping.
+      const rawText = (await pillEl.textContent()) ?? "";
+      expect(rawText.trim()).toBe(label);
+    }
+  });
+});
+
+test.describe("Marketing phone Engine step-pill labels — EN locale", () => {
+  test.use({ locale: "en-US" });
+
+  // Full pill button text with messages/en.json values.
+  const EN_PILL_LABELS = [
+    "1 · Food",
+    "2 · Macros",
+    "3 · Result",
+  ] as const;
+
+  test("all three Engine step-pills are visible and not overflowing in EN", async ({
+    page,
+  }) => {
+    const phone = await gotoHomeAndFindPhone(page);
+
+    // Navigate to the Engine screen. Anchor on the first pill.
+    await gotoEngineScreen(phone, "1 · Food");
+
+    for (const label of EN_PILL_LABELS) {
+      const pillEl = phone.getByText(label, { exact: true }).first();
+      await expect(pillEl).toBeVisible();
+      await assertNoOverflow(pillEl, `Engine step-pill "${label}" (EN)`);
+
+      const rawText = (await pillEl.textContent()) ?? "";
+      expect(rawText.trim()).toBe(label);
+    }
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PART 5 — Insights screen card labels (Task #575)
 //
 // The InsightsScreen renders:
 //   • CardLabel elements (fontSize:9, fontWeight:700) as card header titles
