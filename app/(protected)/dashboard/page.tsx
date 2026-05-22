@@ -61,7 +61,7 @@ import PagerIndicator from "@/components/PagerIndicator";
 // pre-refactor era ("macros", "rates", "score-trend") and appends
 // any cluster the saved list doesn't mention, so existing users
 // migrate gracefully without us having to touch their preferences.
-const DASHBOARD_CLUSTER_DEFAULT_ORDER = ["glucose", "metabolic", "control", "recents"];
+const DASHBOARD_CLUSTER_DEFAULT_ORDER = ["glucose", "metabolic", "control", "insulin", "recents"];
 
 const ACCENT="#4F6EF7", GREEN="#22D3A0", PINK="#FF2D78", ORANGE="#FF9500";
 const SURFACE="var(--surface)", BORDER="var(--border)";
@@ -683,13 +683,19 @@ export default function DashboardPage() {
       title: t("cluster_control"),
       cards: [
         { id: "control-score", node: <ControlScoreCard meals={meals}/> },
-        { id: "iob",           node: <IOBCard insulin={insulin} insulinType={insulinType} meals={meals} currentBg={latestCgmBg}/> },
-        { id: "iob-history",   node: <IOBHistoryChart insulin={insulin} insulinType={insulinType} meals={meals} /> },
         // rateCards = buildCards(...) minus the "control" entry —
         // shown as a single compact 3-up triplet (Good / Spike / Hypo)
         // so the breakdown is glanceable beneath the headline Control
         // Score without forcing the user to swipe one card at a time.
         { id: "rate-triplet", node: <RateTripletCard cards={rateCards}/> },
+      ],
+    },
+    {
+      id: "insulin",
+      title: t("cluster_insulin"),
+      cards: [
+        { id: "iob",         node: <IOBCard insulin={insulin} insulinType={insulinType} meals={meals} currentBg={latestCgmBg}/> },
+        { id: "iob-history", node: <IOBHistoryChart insulin={insulin} insulinType={insulinType} meals={meals} /> },
       ],
     },
     {
@@ -1699,7 +1705,9 @@ function NonMealLightExpand({
 //   POOR < 60) are the user-facing 3-tier mapping spec'd by product.
 // -----------------------------------------------------------------------------
 function ControlScoreCard({ meals }: { meals: Meal[] }) {
-  const [flipped, setFlipped] = useState(false);
+  const [flipped,     setFlipped]     = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+  const [showHow,     setShowHow]     = useState(false);
   const t = useTranslations("dashboard");
 
   const { score, count, delta, badge, good, spike, hypo, other } = useMemo(() => {
@@ -1731,32 +1739,53 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
     { label: t("cs_pending"), val: other, color: "var(--text-ghost)", icon: "⧗" },
   ];
 
-  const cardBase: React.CSSProperties = {
-    position: "absolute", inset: 0,
+  // Chip button used for Details + Berechnung toggles.
+  // stopPropagation prevents the chip tap from also flipping the card.
+  const toggleBtn = (label: string, open: boolean, onToggle: () => void) => (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onToggle(); }}
+      style={{
+        flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between",
+        background: open ? `${ACCENT}0f` : "var(--surface-soft)",
+        border: `1px solid ${open ? ACCENT + "44" : BORDER}`,
+        borderRadius: 8, padding: "7px 12px", cursor: "pointer",
+        color: open ? ACCENT : "var(--text-dim)",
+        fontSize: 12, fontWeight: 600,
+        transition: "background 150ms, border-color 150ms, color 150ms",
+        WebkitTapHighlightColor: "transparent",
+        touchAction: "manipulation",
+      }}
+    >
+      {label}
+      <span style={{
+        fontSize: 10, marginLeft: 4, display: "inline-block",
+        transition: "transform 200ms",
+        transform: open ? "rotate(180deg)" : "rotate(0deg)",
+      }}>▾</span>
+    </button>
+  );
+
+  // Shared chrome for both faces.
+  const faceBase: React.CSSProperties = {
     backfaceVisibility: "hidden",
     background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 16,
     boxSizing: "border-box",
   };
 
   return (
-    <div
-      onClick={() => setFlipped(f => !f)}
-      style={{ position: "relative", perspective: 1200, cursor: "pointer", minHeight: 200 }}
-    >
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          transformStyle: "preserve-3d",
-          transition: "transform 0.55s cubic-bezier(0.4,0,0.2,1)",
-          transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
-          minHeight: 200,
-        }}
-      >
-        {/* ── FRONT ── */}
+    // perspective wrapper — no fixed height; front face is the height source.
+    <div style={{ perspective: 1200, cursor: "pointer" }} onClick={() => setFlipped(f => !f)}>
+      <div style={{
+        position: "relative",
+        transformStyle: "preserve-3d",
+        transition: "transform 0.55s cubic-bezier(0.4,0,0.2,1)",
+        transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
+      }}>
+        {/* ── FRONT — position:relative so it drives the container height ── */}
         <div
           className="glev-control-front"
-          style={{ ...cardBase, padding: "18px 24px 18px" }}
+          style={{ ...faceBase, position: "relative", padding: "18px 24px 18px" }}
         >
           {/* Header — title + sublabel stack, badge right, flip hint */}
           <div className="glev-control-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
@@ -1803,12 +1832,56 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
             <div style={{ height: "100%", width: `${hasScore ? Math.max(0, Math.min(100, score as number)) : 0}%`,
                           background: `linear-gradient(90deg, ${ACCENT}, ${GREEN})`, borderRadius: 99, transition: "width 0.6s ease" }} />
           </div>
+
+          {/* Toggle chips */}
+          <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+            {toggleBtn(t("cs_details"), showDetails, () => setShowDetails(v => !v))}
+            {toggleBtn(t("cs_how"),     showHow,     () => setShowHow(v => !v))}
+          </div>
+
+          {/* Expandable — Aufschlüsselung */}
+          {showDetails && (
+            <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 9 }}>
+              {buckets.map(b => (
+                <div key={b.label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 11, color: b.color, width: 14, flexShrink: 0, textAlign: "center" }}>{b.icon}</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dim)", width: 80, flexShrink: 0 }}>{b.label}</span>
+                  <div style={{ flex: 1, height: 5, background: "var(--border-soft)", borderRadius: 99, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${pct(b.val)}%`, background: b.color,
+                                  borderRadius: 99, transition: "width 0.4s ease", opacity: b.val === 0 ? 0.25 : 1 }} />
+                  </div>
+                  <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", fontWeight: 700,
+                                 color: b.color, width: 32, textAlign: "right", flexShrink: 0 }}>
+                    {pct(b.val)}%
+                  </span>
+                  <span style={{ fontSize: 10, color: "var(--text-ghost)", width: 28, flexShrink: 0 }}>
+                    ({b.val})
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Expandable — Berechnung */}
+          {showHow && (
+            <div style={{ marginTop: 10, padding: "12px 14px", background: `${ACCENT}0a`,
+                          border: `1px solid ${ACCENT}22`, borderRadius: 10,
+                          display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ fontSize: 11, color: "var(--text-body)", lineHeight: 1.55, fontFamily: "var(--font-mono)" }}>
+                {t("control_score_formula")}
+              </div>
+              <div style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.55 }}>
+                {t("control_score_explain")}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* ── BACK ── */}
+        {/* ── BACK — position:absolute overlays the front ── */}
         <div
           style={{
-            ...cardBase,
+            ...faceBase,
+            position: "absolute", inset: 0,
             transform: "rotateY(180deg)",
             padding: "16px 20px 14px",
             display: "flex", flexDirection: "column", gap: 10,

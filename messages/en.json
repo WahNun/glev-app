@@ -1644,6 +1644,7 @@
     "cluster_score_trend": "Adapt Score & glucose trend",
     "cluster_metabolic": "Metabolic response",
     "cluster_control": "Control",
+    "cluster_insulin": "Insulin & IOB",
     "cluster_recents": "Recents",
     "active_insulin": "Active Insulin",
     "iob_cleared_in": "Clears in ~{minutes} min",
