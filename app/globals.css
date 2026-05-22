@@ -101,7 +101,7 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 
   --nav-top-safe:    var(--safe-top);
-  --nav-top-height:  28px;
+  --nav-top-height:  24px;
   --nav-top-total:   calc(var(--nav-top-safe) + var(--nav-top-height));
 
   /* Marketing chrome (Homepage `app/page.tsx`, Blog `app/blog/page.tsx`).
@@ -124,9 +124,9 @@
   --onboarding-progress-top:  calc(var(--safe-top) + 26px);
   --onboarding-footer-bottom: calc(var(--safe-bottom) + 22px);
 
-  --nav-bottom-height:  50px;
+  --nav-bottom-height:  44px;
   --nav-bottom-top-pad: 2px;
-  --nav-bottom-safe:    max(8px, var(--safe-bottom));
+  --nav-bottom-safe:    max(3px, calc(var(--safe-bottom) * 0.5));
   --nav-bottom-total:   calc(var(--nav-bottom-height) + var(--nav-bottom-top-pad) + var(--nav-bottom-safe));
 
   /* Foreground color for text/icons placed on top of a brand-accent

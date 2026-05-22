@@ -114,6 +114,14 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // opens the shared quick-add sheet (Engine + all logging entry points).
   // State lives here so the sheet works from every protected screen.
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  // CGM-source for the "● Live" header pill on /dashboard.
+  const [cgmSource, setCgmSource] = useState<string | null>(null);
+  useEffect(() => {
+    fetch("/api/cgm/source", { cache: "no-store" })
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { source: string | null } | null) => { if (d?.source) setCgmSource(d.source); })
+      .catch(() => {});
+  }, []);
   // Voice-recording bridge: while the engine is recording, the FAB's
   // tap means "stop recording" (not "open quick-add"), and a "Speak"
   // pill appears in the header as a global cue + secondary stop tap.
@@ -460,8 +468,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         // Task #382: bottom pad implemented (was documented but stayed
         // at 4 px — now correctly set to 10 px).
         height: "var(--nav-top-total)",
-        paddingTop: "calc(var(--nav-top-safe) + 4px)",
-        paddingBottom: 10,
+        paddingTop: "calc(var(--nav-top-safe) + 1px)",
+        paddingBottom: 7,
         paddingLeft:  "max(18px, env(safe-area-inset-left))",
         paddingRight: "max(18px, env(safe-area-inset-right))",
         background: SURFACE,
@@ -487,7 +495,21 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               iOS-Favicon). Wordmark folgt dem Theme via var(--text), aber
               das Logo-Quadrat soll in Light Mode NICHT mit-aufhellen,
               sonst löst es sich vom Header optisch auf. */}
-          <GlevLockup size={23} color="var(--text)" symbolBg="#0F0F14" />
+          <GlevLockup size={26} color="var(--text)" symbolBg="#0F0F14" />
+          {pathname.startsWith("/dashboard") && cgmSource && (
+            <div style={{
+              display: "inline-flex", alignItems: "center", gap: 5,
+              height: 20, padding: "0 7px", borderRadius: 99,
+              background: "#22D3A014",
+              border: "1px solid #22D3A035",
+              color: "#22D3A0",
+              fontSize: 10, fontWeight: 700, letterSpacing: "0.05em",
+              flexShrink: 0, userSelect: "none",
+            }}>
+              <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#22D3A0", boxShadow: "0 0 4px #22D3A0bb" }} aria-hidden />
+              Live
+            </div>
+          )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {/* Engine-Pille im Header wurde entfernt (User-Wunsch
@@ -551,7 +573,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
                       key={label}
                       style={{
                         fontFamily: "var(--font-mono)",
-                        fontSize: 11,
+                        fontSize: 12,
                         fontWeight: 700,
                         letterSpacing: "0.06em",
                         textTransform: "uppercase",
@@ -992,7 +1014,7 @@ function MobileGlevFab({
         // pushing the label around.
         display: "flex", flexDirection: "column",
         alignItems: "center", justifyContent: "center",
-        gap: 4, padding: "6px 2px", height: 56,
+        gap: 3, padding: "3px 2px", height: 44,
         border: "none", background: "transparent", cursor: "pointer",
         color: ACCENT,
         fontSize: 11, fontWeight: 600, letterSpacing: "0.005em",
@@ -1034,7 +1056,7 @@ function MobileGlevFab({
             // edge regardless of circle size — including the 2026-05-17
             // round-2 bump from 52 → 60 px (~+15% diameter per user
             // request "der glev button kann nochmal 15% größer werden").
-            transform: "translate(-50%, calc(-50% - 20px))",
+            transform: "translate(-50%, calc(-50% - 14px))",
             display: "inline-flex", alignItems: "center", justifyContent: "center",
             width: 60, height: 60, borderRadius: "50%",
             // Always paint a solid SURFACE base so the nav's top
@@ -1181,7 +1203,7 @@ function MobileTab({
         minWidth: 0,
         display: "flex", flexDirection: "column",
         alignItems: "center", justifyContent: "center",
-        gap: 4, padding: "6px 2px", height: 56,
+        gap: 3, padding: "3px 2px", height: 44,
         border: "none", background: "transparent", cursor: "pointer",
         color: visualActive ? ACCENT : NAV_INACTIVE,
         fontSize: 11, fontWeight: visualActive ? 600 : 500, letterSpacing: "0.005em",
@@ -1284,7 +1306,7 @@ function ScopeHeaderChip({
               onClick={() => { setMode(m.key); setAnchor(new Date()); }}
               style={{
                 fontFamily: "var(--font-mono)",
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: 700,
                 letterSpacing: "0.06em",
                 textTransform: "uppercase",

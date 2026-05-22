@@ -674,6 +674,15 @@ export default function DashboardPage() {
           .glev-control-front .glev-control-header { margin-bottom: 8px !important; }
           .glev-macros-front   { padding: 12px !important; }
         }
+        /* Extra squeeze for very small phones (iPhone 13 mini 375×812,
+           SE 375×667). At 430px the Adapt Score card is borderline
+           visible; at 375px it can fall almost completely off screen.
+           We trim cluster gap + glucose card height a bit more so the
+           control cluster's top edge lifts into comfortable view. */
+        @media (max-width: 375px) {
+          .glev-cluster-stack  { gap: 10px !important; }
+          .glev-trend-card     { height: 195px !important; }
+        }
       `}</style>
 
       {/* Desktop-only page title. The previous hero "+" button that
