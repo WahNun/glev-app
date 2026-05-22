@@ -913,12 +913,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               voice.requestStop();
               return;
             }
-            if (aiConsent) {
-              setAiSheetOpen(true);
-            } else {
-              setAiToast(true);
-              setTimeout(() => setAiToast(false), 3000);
-            }
+            router.push("/engine");
           }}
           // Long-press always opens the menu, regardless of session
           // state — that's the "secondary" affordance per 2026-05-17
