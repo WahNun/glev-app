@@ -322,20 +322,7 @@ export default function EntriesPage() {
   const [insulinType, setInsType]  = useState<InsulinType>("rapid");
   const [manualOpen, setManualOpen] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
-  // Anchor to the newest entry (last index) on first load — before any
-  // deep-link useEffect has a chance to override it.
   const _anchoredRef = useRef(false);
-  useEffect(() => {
-    if (!_anchoredRef.current && filtered.length > 0) {
-      _anchoredRef.current = true;
-      // Only set when no deep-link hash is present — the hash useEffect
-      // will set the index itself.
-      if (typeof window !== "undefined" && !window.location.hash) {
-        setCurrentIndex(filtered.length - 1);
-      }
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtered.length]);
   const filtersWrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { fetchInsulinType().then(setInsType).catch(() => {}); }, []);
@@ -770,6 +757,18 @@ export default function EntriesPage() {
     setExpanded(null);
     setEditingId(null);
   }, [filters, search, rows]);
+
+  // Anchor to the newest entry (last index) on first load only.
+  // Skipped when a deep-link hash is present — the hash useEffect handles that.
+  useEffect(() => {
+    if (!_anchoredRef.current && filtered.length > 0) {
+      _anchoredRef.current = true;
+      if (typeof window !== "undefined" && !window.location.hash) {
+        setCurrentIndex(filtered.length - 1);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered.length]);
 
   // Deep-link via URL hash: /entries#<id> auto-expands to the full view so
   // "View full entry →" from the dashboard lands the user on the right row.
