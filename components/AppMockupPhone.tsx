@@ -16,23 +16,14 @@
  * data, brand-correct styling, and a clickable bottom nav. The real
  * pages live under app/(protected)/* and are gated by auth.
  *
- * Mirrors the current build of the real app (April 2026):
- *  - 4-tab bottom nav: Dashboard · Glev · Verlauf · Einstellungen
- *    (Verlauf is a single tab with an Insights/Einträge sub-toggle,
- *     matching `app/(protected)/history/page.tsx` + the mobile chip
- *     in components/Layout.tsx).
+ * Mirrors the current build of the real app (May 2026):
+ *  - 5-tab bottom nav: Dashboard · Einträge · Glev · Insights · Einstellungen
+ *    (matches components/Layout.tsx after the Verlauf→split refactor).
  *  - Glev tab is the center button and routes to the Engine wizard
- *    (Step 1 Essen → Step 2 Makros → Step 3 Ergebnis with pill tabs
- *    at the top, matching the real /engine page after the backlog
- *    item "Engine-Step-Indikator durch /log-Pill-Tabs ersetzen").
+ *    (Step 1 Essen → Step 2 Makros → Step 3 Ergebnis).
+ *  - Adapt Score replaces Control Score on the dashboard card.
  *  - German-first copy throughout, lifted from the real
  *    `messages/de.json` namespaces.
- *
- * The Tab union still includes `entries` and `insights` so that
- * existing marketing call-sites that lock the phone to one of those
- * (FeatureLiveMockup via FeatureDeepDive) keep working — they just
- * render the underlying Verlauf sub-screen directly without the
- * sub-toggle chrome.
  */
 
 import { useState } from "react";
@@ -90,9 +81,9 @@ const BEZEL   = 12;
 function tabLabel(tab: Tab, locale: string): string {
   switch (tab) {
     case "dashboard": return pickCopy(locale, { de: "Dashboard",                en: "Dashboard"             });
-    case "entries":   return pickCopy(locale, { de: "Verlauf · Einträge",       en: "History · Entries"     });
-    case "engine":    return pickCopy(locale, { de: "Glev",                     en: "Glev"                  });
-    case "insights":  return pickCopy(locale, { de: "Verlauf · Insights",       en: "History · Insights"    });
+    case "entries":   return pickCopy(locale, { de: "Einträge",  en: "Entries"  });
+    case "engine":    return pickCopy(locale, { de: "Glev",       en: "Glev"     });
+    case "insights":  return pickCopy(locale, { de: "Insights",   en: "Insights" });
     case "settings":  return pickCopy(locale, { de: "Einstellungen",            en: "Settings"              });
   }
 }
@@ -122,11 +113,9 @@ function tabCaption(tab: Tab, locale: string): string {
   }
 }
 
-/** Bottom-nav buttons rendered to the visitor (4 buttons, like the
- *  real mobile Layout.tsx). "verlauf" is a virtual button that maps
- *  to either the insights or entries Tab depending on the in-screen
- *  Verlauf sub-toggle. */
-type NavId = "dashboard" | "glev" | "verlauf" | "settings";
+/** Bottom-nav buttons rendered to the visitor (5 buttons, matching
+ *  the real mobile Layout.tsx after the Verlauf→split refactor). */
+type NavId = "dashboard" | "entries" | "glev" | "insights" | "settings";
 
 type AppMockupPhoneProps = {
   /** Lock the phone to a single tab. Hides the bottom nav and the
@@ -292,9 +281,8 @@ function TopHeader({ onAccount }: { onAccount?: () => void }) {
 }
 
 /* ────────────────────────────────────────────────────────────────
-   Bottom nav — 4 buttons matching the real mobile Layout.tsx:
-   Dashboard · Glev (center, button-style) · Verlauf · Einstellungen.
-   The Glev button is bigger and uses the GlevLogo, like the real app.
+   Bottom nav — 5 buttons matching the real mobile Layout.tsx:
+   Dashboard · Einträge · Glev · Insights · Einstellungen.
    ──────────────────────────────────────────────────────────────── */
 function BottomNav({ tab, onTab, excludeTabs }: {
   tab: Tab;
@@ -317,16 +305,19 @@ function BottomNav({ tab, onTab, excludeTabs }: {
       render: a => <NavIconBox><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={a?ACCENT:"rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></NavIconBox>,
     },
     {
+      id: "entries",
+      label: tNav("entries").toUpperCase(),
+      activeTab: "entries",
+      isActive: tab === "entries",
+      hidden: excludeTabs.includes("entries"),
+      render: a => <NavIconBox><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={a?ACCENT:"rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></NavIconBox>,
+    },
+    {
       id: "glev",
       label: tNav("glev").toUpperCase(),
       activeTab: "engine",
       isActive: tab === "engine",
       hidden: excludeTabs.includes("engine"),
-      // Match the real Layout.tsx after the Glev-tab redesign — no
-      // gradient pill, no center-button highlight. The Glev nav item
-      // renders just the hexagon brand-mark inside a standard
-      // NavIconBox so it's visually consistent with Dashboard /
-      // Verlauf / Einstellungen. ACCENT when active, dimmed otherwise.
       render: a => (
         <NavIconBox>
           <GlevLogo size={16} color={a ? ACCENT : "rgba(255,255,255,0.4)"} bg="transparent"/>
@@ -334,12 +325,12 @@ function BottomNav({ tab, onTab, excludeTabs }: {
       ),
     },
     {
-      id: "verlauf",
-      label: tNav("history").toUpperCase(),
+      id: "insights",
+      label: tNav("insights").toUpperCase(),
       activeTab: "insights",
-      isActive: tab === "insights" || tab === "entries",
-      hidden: excludeTabs.includes("insights") && excludeTabs.includes("entries"),
-      render: a => <NavIconBox><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={a?ACCENT:"rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 4 3 9 8 9"/><line x1="12" y1="7" x2="12" y2="12"/><line x1="12" y1="12" x2="15" y2="14"/></svg></NavIconBox>,
+      isActive: tab === "insights",
+      hidden: excludeTabs.includes("insights"),
+      render: a => <NavIconBox><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={a?ACCENT:"rgba(255,255,255,0.4)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1.5.5 3 1.5 4 .76.76 1.23 1.52 1.41 2.5"/></svg></NavIconBox>,
     },
     {
       id: "settings",
@@ -415,7 +406,7 @@ function Pill({ text, color }: { text: string; color: string }) {
 }
 
 /* ════════════════════════════════════════════════════════════════
-   DASHBOARD — Glukose live, Heutige Makros, Control Score · 7T
+   DASHBOARD — Glukose live, Heutige Makros, Adapt Score · 7T
    (with Treffer-/Spike-/Hypo-Quote tiles), Aktuell.
    ════════════════════════════════════════════════════════════════ */
 function DashboardScreen({ onLogMeal }: { onLogMeal: () => void }) {
