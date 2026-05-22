@@ -789,6 +789,11 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         paddingLeft:   4,
         paddingRight:  4,
         zIndex: 100,
+        // Scroll-fade: slides down + fades out on scroll-down, mirrors header.
+        transform: headerHidden ? "translateY(100%)" : "translateY(0)",
+        opacity: headerHidden ? 0 : 1,
+        transition: "transform 220ms cubic-bezier(.4,0,.2,1), opacity 220ms ease",
+        pointerEvents: headerHidden ? "none" : undefined,
       }}>
         <MobileTab
           label={tNav("dashboard")}
