@@ -1,5 +1,21 @@
 export type InsulinType = 'rapid' | 'regular' | 'unknown';
 
+/** Minimal shape of an insulin log entry needed by buildDoses. */
+export interface InsulinLike {
+  insulin_type: string;
+  units: number;
+  created_at: string;
+  related_entry_id?: string | null;
+}
+
+/** Minimal shape of a meal entry needed by buildDoses. */
+export interface MealLike {
+  id: string;
+  insulin_units?: number | null;
+  meal_time?: string | null;
+  created_at: string;
+}
+
 export function getDIAMinutes(insulinType: InsulinType): number {
   switch (insulinType) {
     case 'rapid':   return 180;
@@ -33,6 +49,41 @@ export function calcTotalIOB(
     0
   );
   return Math.round(total * 100) / 100;
+}
+
+/**
+ * Pure function that builds the combined BolusDose list from insulin logs
+ * and meal insulin_units, deduplicating meals that are already linked via a
+ * bolus log's `related_entry_id` to prevent double-counting.
+ *
+ * Extracted from IOBCard.tsx so it can be unit-tested independently of React.
+ */
+export function buildDoses(
+  insulin: InsulinLike[],
+  meals?: MealLike[],
+): BolusDose[] {
+  const result: BolusDose[] = [];
+  const linkedMealIds = new Set(
+    insulin
+      .filter(l => l.related_entry_id)
+      .map(l => l.related_entry_id as string),
+  );
+  for (const l of insulin) {
+    if (l.insulin_type === 'bolus' && l.units > 0) {
+      result.push({ units: l.units, administeredAt: l.created_at });
+    }
+  }
+  if (meals) {
+    for (const m of meals) {
+      if ((m.insulin_units ?? 0) > 0 && !linkedMealIds.has(m.id)) {
+        result.push({
+          units: m.insulin_units!,
+          administeredAt: m.meal_time ?? m.created_at,
+        });
+      }
+    }
+  }
+  return result;
 }
 
 export function applyIOBCorrection(recommendation: number, iob: number): number {

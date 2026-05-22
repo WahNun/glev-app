@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useMemo } from "react";
 import { useTranslations } from "next-intl";
-import { calcTotalIOB, calcSingleIOB, getDIAMinutes, type BolusDose, type InsulinType } from "@/lib/iob";
+import { calcTotalIOB, calcSingleIOB, getDIAMinutes, buildDoses, type BolusDose, type InsulinType } from "@/lib/iob";
 import { getInsulinSettings } from "@/lib/userSettings";
 import type { InsulinLog } from "@/lib/insulin";
 import type { Meal } from "@/lib/meals";
@@ -165,30 +165,7 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
   /** Combined BolusDose list from both insulin_logs and meals.insulin_units.
    *  Meals whose `id` is already linked via a bolus log's `related_entry_id`
    *  are skipped to prevent double-counting. */
-  const doses: BolusDose[] = useMemo(() => {
-    const result: BolusDose[] = [];
-    const linkedMealIds = new Set(
-      insulin
-        .filter(l => l.related_entry_id)
-        .map(l => l.related_entry_id as string),
-    );
-    for (const l of insulin) {
-      if (l.insulin_type === "bolus" && l.units > 0) {
-        result.push({ units: l.units, administeredAt: l.created_at });
-      }
-    }
-    if (meals) {
-      for (const m of meals) {
-        if ((m.insulin_units ?? 0) > 0 && !linkedMealIds.has(m.id)) {
-          result.push({
-            units: m.insulin_units!,
-            administeredAt: m.meal_time ?? m.created_at,
-          });
-        }
-      }
-    }
-    return result;
-  }, [insulin, meals]);
+  const doses: BolusDose[] = useMemo(() => buildDoses(insulin, meals), [insulin, meals]);
 
   const iob     = calcTotalIOB(doses, insulinType, now);
   const cleared = iob < 0.05;
