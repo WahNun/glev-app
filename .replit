@@ -62,7 +62,7 @@ outputType = "console"
 [agent]
 stack = "PNPM_WORKSPACE"
 expertMode = true
-integrations = ["google-sheet:1.0.0", "todoist:1.0.0"]
+integrations = ["google-sheet:1.0.0", "todoist:1.0.0", "github:1.0.0"]
 
 [postMerge]
 path = "scripts/post-merge.sh"
