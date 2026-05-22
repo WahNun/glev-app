@@ -547,7 +547,7 @@ export default function DashboardPage() {
       ...exercise.map<RecentRow>(x => ({ kind: "exercise", id: x.id, ts: x.created_at, exercise: x })),
     ];
     rows.sort((a, b) => parseDbTs(b.ts) - parseDbTs(a.ts));
-    return rows.slice(0, 6);
+    return rows.slice(0, 10);
   }, [meals, insulin, exercise]);
 
   const totalEntries = meals.length + insulin.length + exercise.length;
@@ -1275,10 +1275,10 @@ function DashboardCluster({
 }
 
 /**
- * Recent Entries renders a unified feed across meal / bolus / basal /
- * exercise rows. Tapping a row toggles an inline light-expansion (same
- * UX as the Entries page). The "View full →" link inside the expansion
- * navigates to `/entries#id` for the full two-stage detail view.
+ * Recent Entries — single-entry swipe pager.
+ * Shows 1 row at a time; swipe left/right (or tap the dot-indicators)
+ * to navigate through the last N entries. Tapping the row toggles the
+ * same inline light-expansion as before.
  */
 function RecentEntries({
   rows,
@@ -1293,16 +1293,35 @@ function RecentEntries({
   onViewEntry: (id: string) => void;
   onMealUpdated?: (m: Meal) => void;
 }) {
+  const [idx, setIdx]         = useState(0);
   const [expanded, setExpanded] = useState<string | null>(null);
-  const toggle = (id: string) => setExpanded(prev => (prev === id ? null : id));
-  const t = useTranslations("dashboard");
+  const touchStartX = useRef<number | null>(null);
+  const t    = useTranslations("dashboard");
   const tIns = useTranslations("insights");
+
+  const clamp = (n: number) => Math.max(0, Math.min(rows.length - 1, n));
+
+  const go = (next: number) => {
+    setIdx(clamp(next));
+    setExpanded(null);
+  };
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    touchStartX.current = null;
+    if (Math.abs(dx) < 30) return;
+    go(dx < 0 ? idx + 1 : idx - 1);
+  };
+
+  const r = rows[idx];
 
   return (
     <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:16, padding:"16px 20px 8px" }}>
-      {/* Header — RECENT label left, See all → ACCENT-coloured button right.
-          Spec'd typography: 11px / 0.12em / rgba(255,255,255,0.45) for the
-          label, 13px ACCENT for the link. */}
+      {/* Header */}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
         <div style={{ fontSize:13, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:"var(--text-dim)" }}>
           {t("recent_label")}
@@ -1314,67 +1333,88 @@ function RecentEntries({
           {t("see_all")}
         </button>
       </div>
+
       {rows.length === 0 ? (
         <div style={{ padding:"24px 0 16px", textAlign:"center", color:"var(--text-ghost)", fontSize:14 }}>
           {t("no_entries_yet")}
         </div>
       ) : (
-        <div>
-          {rows.map(r => {
-            const isOpen = expanded === r.id;
-            return (
-              <div key={r.id}>
-                <UnifiedRecentRow row={r} locale={locale} onClick={() => toggle(r.id)} />
-                {/* Post-Meal Badge — mirrors the entries page: renders when
-                    the meal is inside a 30min/1h/90min/2h/3h window and the
-                    matching glucose_* column is still null. Always visible
-                    (not gated on isOpen) so the prompt shows on the compact
-                    row without requiring the user to expand first. */}
-                {r.kind === "meal" && r.meal && (
-                  <PendingGlucoseStrip
-                    meal={r.meal}
-                    onSaved={(patch) => onMealUpdated?.({ ...r.meal!, ...patch })}
-                  />
-                )}
-                {isOpen && (
-                  <div style={{ paddingBottom:8 }}>
-                    {r.kind === "meal" ? (
-                      <MealEntryLightExpand
-                        meal={r.meal!}
-                        locale={locale}
-                        onViewFull={() => onViewEntry(r.meal!.id)}
-                        onUpdated={onMealUpdated}
-                      />
-                    ) : r.kind === "exercise" ? (
-                      <NonMealLightExpand
-                        ts={r.ts}
-                        locale={locale}
-                        stats={[
-                          { label:t("stat_duration"),  value:`${r.exercise!.duration_minutes} min`, color:KIND_ACCENT.exercise.color },
-                          { label:t("stat_type"),      value:exerciseTypeLabelI18n(tIns, r.exercise!.exercise_type) },
-                          { label:t("stat_intensity"), value:r.exercise!.intensity || "—" },
-                          ...(r.exercise!.cgm_glucose_at_log != null ? [{ label:t("stat_cgm_at_log"), value:`${r.exercise!.cgm_glucose_at_log} mg/dL` }] : []),
-                        ]}
-                        onViewFull={() => onViewEntry(r.id)}
-                      />
-                    ) : (
-                      <NonMealLightExpand
-                        ts={r.ts}
-                        locale={locale}
-                        stats={[
-                          { label:t("stat_dose"),    value:`${r.insulin!.units} u`, color:KIND_ACCENT[r.kind].color },
-                          { label:t("stat_insulin"), value:r.insulin!.insulin_name || (r.kind === "bolus" ? t("ins_rapid") : t("ins_long")) },
-                          { label:t("stat_kind"),    value:r.kind === "bolus" ? t("ins_bolus") : t("ins_basal"), color:KIND_ACCENT[r.kind].color },
-                          ...(r.insulin!.cgm_glucose_at_log != null ? [{ label:t("stat_cgm_at_log"), value:`${r.insulin!.cgm_glucose_at_log} mg/dL` }] : []),
-                        ]}
-                        onViewFull={() => onViewEntry(r.id)}
-                      />
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+        <div
+          onTouchStart={onTouchStart}
+          onTouchEnd={onTouchEnd}
+        >
+          {/* Single current row */}
+          <UnifiedRecentRow row={r} locale={locale} onClick={() => setExpanded(prev => prev === r.id ? null : r.id)} />
+
+          {r.kind === "meal" && r.meal && (
+            <PendingGlucoseStrip
+              meal={r.meal}
+              onSaved={(patch) => onMealUpdated?.({ ...r.meal!, ...patch })}
+            />
+          )}
+
+          {expanded === r.id && (
+            <div style={{ paddingBottom:8 }}>
+              {r.kind === "meal" ? (
+                <MealEntryLightExpand
+                  meal={r.meal!}
+                  locale={locale}
+                  onViewFull={() => onViewEntry(r.meal!.id)}
+                  onUpdated={onMealUpdated}
+                />
+              ) : r.kind === "exercise" ? (
+                <NonMealLightExpand
+                  ts={r.ts}
+                  locale={locale}
+                  stats={[
+                    { label:t("stat_duration"),  value:`${r.exercise!.duration_minutes} min`, color:KIND_ACCENT.exercise.color },
+                    { label:t("stat_type"),      value:exerciseTypeLabelI18n(tIns, r.exercise!.exercise_type) },
+                    { label:t("stat_intensity"), value:r.exercise!.intensity || "—" },
+                    ...(r.exercise!.cgm_glucose_at_log != null ? [{ label:t("stat_cgm_at_log"), value:`${r.exercise!.cgm_glucose_at_log} mg/dL` }] : []),
+                  ]}
+                  onViewFull={() => onViewEntry(r.id)}
+                />
+              ) : (
+                <NonMealLightExpand
+                  ts={r.ts}
+                  locale={locale}
+                  stats={[
+                    { label:t("stat_dose"),    value:`${r.insulin!.units} u`, color:KIND_ACCENT[r.kind].color },
+                    { label:t("stat_insulin"), value:r.insulin!.insulin_name || (r.kind === "bolus" ? t("ins_rapid") : t("ins_long")) },
+                    { label:t("stat_kind"),    value:r.kind === "bolus" ? t("ins_bolus") : t("ins_basal"), color:KIND_ACCENT[r.kind].color },
+                    ...(r.insulin!.cgm_glucose_at_log != null ? [{ label:t("stat_cgm_at_log"), value:`${r.insulin!.cgm_glucose_at_log} mg/dL` }] : []),
+                  ]}
+                  onViewFull={() => onViewEntry(r.id)}
+                />
+              )}
+            </div>
+          )}
+
+          {/* Dot navigation */}
+          {rows.length > 1 && (
+            <div style={{
+              display:"flex", justifyContent:"center", alignItems:"center",
+              gap:6, paddingTop:8, paddingBottom:6,
+            }}>
+              {rows.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => go(i)}
+                  style={{
+                    width: i === idx ? 16 : 6,
+                    height: 6,
+                    borderRadius: 99,
+                    border: "none",
+                    padding: 0,
+                    cursor: "pointer",
+                    background: i === idx ? ACCENT : `${ACCENT}44`,
+                    transition: "width 0.2s ease, background 0.2s ease",
+                  }}
+                  aria-label={`Eintrag ${i + 1}`}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
