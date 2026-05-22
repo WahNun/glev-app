@@ -529,6 +529,7 @@ export default function EnginePage() {
   const [fiber, setFiber]     = useState("");
   const [desc, setDesc]       = useState("");
   const [result, setResult]   = useState<Recommendation|null>(null);
+  const [resultICRSource, setResultICRSource] = useState<'adaptive' | 'static' | null>(null);
   const [running, setRunning] = useState(false);
   const [cgmPulling, setCgmPulling] = useState(false);
   const [lastReading, setLastReading] = useState<string>("");
@@ -907,13 +908,18 @@ export default function EnginePage() {
   // Priority: 1) manual override, 2) engine result (after handleRun),
   // 3) eager ICR estimate (instant, before engine). This ensures the
   // Speichern button and the Bolus-Berechnung sheet always agree.
+  // NOTE: result.dose is only used when the engine was run with the
+  // *same* ICR source that is currently selected. If the user switches
+  // chips after a run (e.g. Adaptiv → Einstellungen), resultICRSource
+  // no longer matches selectedICR and we fall back to eagerDoses for
+  // the newly-selected source — so the CTA updates immediately.
   const activeDose = useMemo<number | null>(() => {
     const manualNum = parseFloat(manualDose);
     if (manualDose.trim() !== "" && Number.isFinite(manualNum) && manualNum >= 0) return manualNum;
-    if (result) return applyIOBCorrection(result.dose, iob);
+    if (result && resultICRSource === selectedICR) return applyIOBCorrection(result.dose, iob);
     const rawEager = selectedICR === 'adaptive' ? eagerDoses.adaptive : eagerDoses.static;
     return rawEager !== null ? applyIOBCorrection(rawEager, iob) : null;
-  }, [manualDose, result, iob, eagerDoses, selectedICR]);
+  }, [manualDose, result, resultICRSource, iob, eagerDoses, selectedICR]);
 
   const currentAdjustment = useMemo(() => {
     if (meals.length === 0) return null;
@@ -1493,6 +1499,7 @@ export default function EnginePage() {
       setTimeout(() => {
         const rec = runGlevEngine(meals, g, c, insulinLogs, exerciseLogs, effectiveICR, tEngineFn, formatNum, trend, new Date(refMs), activityCtx);
         setResult(rec);
+        setResultICRSource(selectedICR);
         setRunning(false);
       // Open the BolusExplainerSheet (replaces the old Step 3 page
       // navigation). Sheet shows dose, confidence, IOB, GPT reasoning,
@@ -1966,7 +1973,7 @@ export default function EnginePage() {
   function resetForm(opts: { keepGlucose?: boolean } = {}) {
     if (!opts.keepGlucose) setGlucose("");
     setCarbs(""); setProtein(""); setFat(""); setFiber("");
-    setDesc(""); setInsulin(""); setResult(null); setTranscript("");
+    setDesc(""); setInsulin(""); setResult(null); setResultICRSource(null); setTranscript("");
     setAiMealType(null);
     setNutritionSource(null);
     setParsedItems([]);
