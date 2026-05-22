@@ -1,34 +1,45 @@
-// Regression guard for RateTile chip-tile layout on the marketing phone.
+// Regression guard for overflow-prone small-text elements on the marketing phone.
 //
-// Why this test exists:
-//   The original text-overflow bug (Task #566) was caught visually: the
-//   three Rate Tiles (Good Rate / Spike Rate / Hypo Rate) on the marketing
-//   demo phone silently clipped their label text when the tile grid was
-//   narrower than the longest word. This spec turns that manual visual pass
-//   into an automated check.
+// Why this file exists:
+//   Task #566 caught a silent clip regression on the three RateTile chip tiles
+//   (Good Rate / Spike Rate / Hypo Rate). Task #567 added automated checks for
+//   those. Task #572 extended coverage to other small-text areas that carry the
+//   same overflow risk: MacroRing labels in the daily-macros card and row labels
+//   in the Settings screen. All of these elements use whiteSpace:nowrap +
+//   overflow:hidden + textOverflow:ellipsis — exactly the pattern that clips
+//   text silently when a container is too narrow.
 //
 // What we cover:
-//   1. All three RateTile chip tiles render visibly on the Dashboard screen
-//      in both the DE and EN marketing phone variants.
-//   2. The label div of every tile does NOT overflow its container —
-//      `scrollWidth <= offsetWidth` is the browser-level invariant broken
-//      when `overflow:hidden` + `whiteSpace:nowrap` clips inline text.
-//   3. Neither the label nor the sub-text div contains a Unicode ellipsis
-//      ("…" / "..."), confirming `textOverflow:ellipsis` is NOT actively
-//      truncating readable copy.
-//   4. The full expected text is present with no characters swallowed.
+//   PART 1 — RateTile chip tiles (original Task #567 coverage)
+//     1. All three RateTile chip tiles render visibly on the Dashboard screen
+//        in both the DE and EN marketing phone variants.
+//     2. The label div of every tile does NOT overflow its container —
+//        `scrollWidth <= offsetWidth` is the browser-level invariant broken
+//        when `overflow:hidden` + `whiteSpace:nowrap` clips inline text.
+//     3. Neither the label nor the sub-text div contains a Unicode ellipsis
+//        ("…" / "..."), confirming `textOverflow:ellipsis` is NOT actively
+//        truncating readable copy.
+//     4. The full expected text is present with no characters swallowed.
+//
+//   PART 2 — MacroRing labels (Task #572)
+//     The daily-macros card on the Dashboard renders four ring widgets:
+//     Carbs / Protein / Fat (FETT in DE) / Fiber. Each label div uses the
+//     same nowrap+ellipsis pattern. The DE label "FETT" and EN label "FAT"
+//     differ in length — both are tested so locale-specific regressions are
+//     caught.
+//
+//   PART 3 — Settings row labels (Task #572)
+//     The Settings screen row labels ("Benachrichtigungen", "Erscheinungsbild",
+//     "CGM Verbindung" in DE; "Notifications", "CGM Connection", "Macro Targets"
+//     in EN) also use nowrap+ellipsis. We cover the longest label per locale.
 //
 // Structure:
-//   Two `test.describe` blocks — one pinned to `de-DE` (the marketing
-//   default) and one to `en-US` — to ensure regressions introduced by
-//   locale-specific label length are caught in either language.
+//   Six `test.describe` blocks — two per part (DE + EN each) — so regressions
+//   are pinpointed to the affected locale and element group.
 //
 // Selector strategy:
-//   RateTile label divs are targeted by exact text content ("Good Rate",
-//   "Spike Rate", "Hypo Rate"). These strings are identical in both
-//   `messages/de.json` and `messages/en.json` so the label assertions are
-//   locale-neutral. Sub-text strings differ per locale and are tested
-//   separately in each describe block.
+//   Elements are targeted by exact visible text content. Nav buttons in the
+//   BottomNav are clicked by their uppercased label text to switch screens.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
@@ -152,6 +163,166 @@ test.describe("Marketing phone RateTile chip tiles — EN locale", () => {
       const subEl = phone.getByText(sub, { exact: true }).first();
       await expect(subEl).toBeVisible();
       await assertNoOverflow(subEl, `RateTile sub "${sub}" (EN)`);
+    }
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PART 2 — MacroRing labels
+//
+// The daily-macros card uses a 4-column grid of MacroRing widgets. Each label
+// div carries `whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"`.
+// The label texts come from messages/{de,en}.json → dashboard.macro_* keys.
+//
+// DE: "CARBS" / "PROTEIN" / "FETT" / "FIBER"
+// EN: "CARBS" / "PROTEIN" / "FAT"  / "FIBER"
+//
+// The difference ("FETT" vs "FAT") means a styling change could clip one locale
+// but not the other — hence separate describe blocks per locale.
+// ══════════════════════════════════════════════════════════════════════════════
+
+test.describe("Marketing phone MacroRing labels — DE locale", () => {
+  test.use({ locale: "de-DE" });
+
+  // Values from messages/de.json → dashboard: macro_carbs / macro_protein /
+  // macro_fat / macro_fiber. Already uppercase in the JSON; CSS text-transform
+  // has no additional effect but is still present on the element.
+  const DE_MACRO_LABELS = ["CARBS", "PROTEIN", "FETT", "FIBER"] as const;
+
+  test("all four MacroRing labels are visible and not overflowing in DE", async ({
+    page,
+  }) => {
+    const phone = await gotoHomeAndFindPhone(page);
+
+    // Dashboard is the default tab. Anchor on the first label to ensure the
+    // daily-macros card has hydrated before we run overflow checks.
+    await expect(phone.getByText("CARBS", { exact: true }).first()).toBeVisible();
+
+    for (const label of DE_MACRO_LABELS) {
+      // Each label appears exactly once in the daily-macros card.
+      const labelEl = phone.getByText(label, { exact: true }).first();
+      await expect(labelEl).toBeVisible();
+      await assertNoOverflow(labelEl, `MacroRing label "${label}" (DE)`);
+
+      // Full-text round-trip — no characters swallowed by ellipsis.
+      const rawText = (await labelEl.textContent()) ?? "";
+      expect(rawText.trim()).toBe(label);
+    }
+  });
+});
+
+test.describe("Marketing phone MacroRing labels — EN locale", () => {
+  test.use({ locale: "en-US" });
+
+  // Values from messages/en.json → dashboard: macro_carbs / macro_protein /
+  // macro_fat / macro_fiber. "FAT" differs from the DE "FETT".
+  const EN_MACRO_LABELS = ["CARBS", "PROTEIN", "FAT", "FIBER"] as const;
+
+  test("all four MacroRing labels are visible and not overflowing in EN", async ({
+    page,
+  }) => {
+    const phone = await gotoHomeAndFindPhone(page);
+
+    await expect(phone.getByText("CARBS", { exact: true }).first()).toBeVisible();
+
+    for (const label of EN_MACRO_LABELS) {
+      const labelEl = phone.getByText(label, { exact: true }).first();
+      await expect(labelEl).toBeVisible();
+      await assertNoOverflow(labelEl, `MacroRing label "${label}" (EN)`);
+
+      const rawText = (await labelEl.textContent()) ?? "";
+      expect(rawText.trim()).toBe(label);
+    }
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PART 3 — Settings screen row labels
+//
+// The Settings screen row labels are rendered in a span with
+// `whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"`.
+// We navigate there by clicking the Settings tab in the BottomNav (label text
+// "EINSTELL." in DE, "SETTINGS" in EN — uppercased from tNav("settings")).
+//
+// Longest DE labels (most likely to overflow in a narrow column):
+//   "Benachrichtigungen" (18 chars) · "Erscheinungsbild" (16 chars) ·
+//   "CGM Verbindung" (14 chars)
+//
+// Longest EN labels:
+//   "CGM Connection" (14 chars) · "Macro Targets" (13 chars) ·
+//   "Notifications" (13 chars)
+// ══════════════════════════════════════════════════════════════════════════════
+
+/** Click the Settings tab in the marketing phone bottom nav, then wait for a
+ *  known Settings-screen element to be visible before continuing. */
+async function gotoSettingsScreen(phone: Locator, navLabel: string, anchorText: string): Promise<void> {
+  // The BottomNav renders each tab as a <button> whose text content is the
+  // uppercased nav label (e.g. "EINSTELL." or "SETTINGS"). We use exact:true
+  // so the EN "SETTINGS" button doesn't also match the cog button whose
+  // aria-label is "Open settings" (partial match would hit both).
+  const settingsBtn = phone.getByRole("button", { name: navLabel, exact: true });
+  await settingsBtn.click();
+  // Wait for a Settings-screen label to confirm the tab has switched.
+  await expect(phone.getByText(anchorText, { exact: true }).first()).toBeVisible();
+}
+
+test.describe("Marketing phone Settings row labels — DE locale", () => {
+  test.use({ locale: "de-DE" });
+
+  // Subset of row labels from SettingsScreen — the longest ones are most likely
+  // to overflow. "Benachrichtigungen" is the longest at 18 chars.
+  const DE_SETTINGS_LABELS = [
+    "Benachrichtigungen",
+    "Erscheinungsbild",
+    "CGM Verbindung",
+  ] as const;
+
+  test("Settings row labels are visible and not overflowing in DE", async ({
+    page,
+  }) => {
+    const phone = await gotoHomeAndFindPhone(page);
+
+    // Navigate to Settings tab. Nav button is "EINSTELL." (uppercased).
+    await gotoSettingsScreen(phone, "EINSTELL.", "Benachrichtigungen");
+
+    for (const label of DE_SETTINGS_LABELS) {
+      // Row labels are in a <span> inside the settings list; exact match avoids
+      // picking up the page title or sub-labels.
+      const labelEl = phone.getByText(label, { exact: true }).first();
+      await expect(labelEl).toBeVisible();
+      await assertNoOverflow(labelEl, `Settings row label "${label}" (DE)`);
+
+      const rawText = (await labelEl.textContent()) ?? "";
+      expect(rawText.trim()).toBe(label);
+    }
+  });
+});
+
+test.describe("Marketing phone Settings row labels — EN locale", () => {
+  test.use({ locale: "en-US" });
+
+  // Longest EN labels. "CGM Connection" and "Macro Targets" are both 14 chars.
+  const EN_SETTINGS_LABELS = [
+    "CGM Connection",
+    "Macro Targets",
+    "Notifications",
+  ] as const;
+
+  test("Settings row labels are visible and not overflowing in EN", async ({
+    page,
+  }) => {
+    const phone = await gotoHomeAndFindPhone(page);
+
+    // Navigate to Settings tab. Nav button is "SETTINGS" (uppercased).
+    await gotoSettingsScreen(phone, "SETTINGS", "Notifications");
+
+    for (const label of EN_SETTINGS_LABELS) {
+      const labelEl = phone.getByText(label, { exact: true }).first();
+      await expect(labelEl).toBeVisible();
+      await assertNoOverflow(labelEl, `Settings row label "${label}" (EN)`);
+
+      const rawText = (await labelEl.textContent()) ?? "";
+      expect(rawText.trim()).toBe(label);
     }
   });
 });
