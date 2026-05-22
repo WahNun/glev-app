@@ -73,6 +73,14 @@ import { fetchIcrSchedule } from "@/lib/icrSchedule";
 const ACCENT = "#4F6EF7", GREEN = "#22D3A0", PINK = "#FF2D78", PURPLE = "#A78BFA";
 const BORDER = "var(--border)";
 
+const BOLUS_BRAND_PRESETS: Array<{ name: string; mfr: string; ultraRapid: boolean }> = [
+  { name: "NovoRapid", mfr: "Novo Nordisk", ultraRapid: false },
+  { name: "Fiasp",     mfr: "Novo Nordisk", ultraRapid: true  },
+  { name: "Humalog",   mfr: "Eli Lilly",    ultraRapid: false },
+  { name: "Lyumjev",   mfr: "Eli Lilly",    ultraRapid: true  },
+  { name: "Apidra",    mfr: "Sanofi",       ultraRapid: false },
+];
+
 interface Settings {
   targetMin: number;
   targetMax: number;
@@ -86,8 +94,10 @@ interface Settings {
    *  `undefined` = user has not explicitly set a value; IOB calculations fall
    *  back to the insulin-type default (rapid 180 / regular 300). */
   diaMinutes?: number;
-  /** User's bolus insulin brand (e.g. "NovoRapid"). Empty string = not set. */
+  /** User's primary bolus insulin brand (e.g. "NovoRapid"). Empty string = not set. */
   insulinBrandBolus: string;
+  /** Optional secondary bolus insulin brand. Empty string = not set. */
+  insulinBrandBolus2: string;
   /** User's basal insulin brand (e.g. "Tresiba"). Empty string = not set. */
   insulinBrandBasal: string;
 }
@@ -100,6 +110,7 @@ const DEFAULTS: Settings = {
   targetBg: DEFAULT_INSULIN_SETTINGS.targetBg,
   // diaMinutes intentionally omitted — undefined = use type-based default
   insulinBrandBolus: "",
+  insulinBrandBolus2: "",
   insulinBrandBasal: "",
 };
 
@@ -124,6 +135,7 @@ type SheetKey =
   | "targetBg"
   | "dia"
   | "insulinBrandBolus"
+  | "insulinBrandBolus2"
   | "insulinBrandBasal"
   | "lastAppointment"
   | "libre2"
@@ -363,8 +375,9 @@ export default function SettingsPage() {
           const next = {
             ...prev,
             icr: ins.icr, cf: ins.cf, targetBg: ins.targetBg, diaMinutes: ins.diaMinutes,
-            insulinBrandBolus: ins.insulinBrandBolus ?? prev.insulinBrandBolus,
-            insulinBrandBasal: ins.insulinBrandBasal ?? prev.insulinBrandBasal,
+            insulinBrandBolus:  ins.insulinBrandBolus  ?? prev.insulinBrandBolus,
+            insulinBrandBolus2: ins.insulinBrandBolus2 ?? prev.insulinBrandBolus2,
+            insulinBrandBasal:  ins.insulinBrandBasal  ?? prev.insulinBrandBasal,
           };
           saveSettings(next);
           return next;
@@ -1019,8 +1032,9 @@ export default function SettingsPage() {
         ...(settings.diaMinutes !== undefined
           ? { diaMinutes: Math.min(360, Math.max(60, Math.round(settings.diaMinutes))) }
           : {}),
-        insulinBrandBolus: settings.insulinBrandBolus.trim().slice(0, 40) || undefined,
-        insulinBrandBasal: settings.insulinBrandBasal.trim().slice(0, 40) || undefined,
+        insulinBrandBolus:  settings.insulinBrandBolus.trim().slice(0, 40)  || undefined,
+        insulinBrandBolus2: settings.insulinBrandBolus2.trim().slice(0, 40) || undefined,
+        insulinBrandBasal:  settings.insulinBrandBasal.trim().slice(0, 40)  || undefined,
       });
       const next = { ...settings };
       setSettings(next);
@@ -1315,23 +1329,108 @@ export default function SettingsPage() {
     insulinBrandBolus: {
       title: tSettings("sheet_insulin_brand_bolus_title"),
       body: (
-        <div>
-          <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5, marginBottom: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5, margin: 0 }}>
             {tSettings("insulin_brand_body")}
           </p>
-          <label style={{ fontSize: 13, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>
-            {tSettings("row_insulin_brand_bolus")}
-          </label>
-          <input
-            style={inp}
-            type="text"
-            maxLength={40}
-            placeholder={tSettings("insulin_brand_bolus_placeholder")}
-            value={settings.insulinBrandBolus}
-            onChange={(e) => upd("insulinBrandBolus", e.target.value.slice(0, 40))}
-          />
-          <div style={{ fontSize: 13, color: "var(--text-ghost)", marginTop: 6 }}>
-            {tSettings("insulin_brand_hint")}
+          {/* Preset brand cards — same visual language as the Insulintyp picker */}
+          {BOLUS_BRAND_PRESETS.map((preset) => {
+            const isSel = settings.insulinBrandBolus === preset.name;
+            return (
+              <button
+                key={preset.name}
+                type="button"
+                onClick={() => upd("insulinBrandBolus", preset.name)}
+                style={{
+                  width: "100%", padding: "12px 14px", borderRadius: 12,
+                  border: `2px solid ${isSel ? ACCENT : BORDER}`,
+                  background: isSel ? `${ACCENT}14` : "var(--surface-soft)",
+                  textAlign: "left", cursor: "pointer",
+                  display: "flex", flexDirection: "column", gap: 3,
+                  transition: "border-color 150ms ease, background 150ms ease",
+                }}
+              >
+                <div style={{ fontSize: 15, fontWeight: 700, color: isSel ? ACCENT : "var(--text-strong)" }}>
+                  {preset.name}
+                </div>
+                <div style={{ fontSize: 12, color: isSel ? ACCENT : "var(--text-faint)" }}>
+                  {preset.mfr} · {preset.ultraRapid
+                    ? tSettings("insulin_brand_preset_ultra_rapid")
+                    : tSettings("insulin_type_rapid_label")}
+                </div>
+              </button>
+            );
+          })}
+          {/* Manual override — always visible so niche brands aren't excluded */}
+          <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 10 }}>
+            <label style={{ fontSize: 13, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>
+              {tSettings("insulin_brand_or_manual")}
+            </label>
+            <input
+              style={inp}
+              type="text"
+              maxLength={40}
+              placeholder={tSettings("insulin_brand_bolus_placeholder")}
+              value={settings.insulinBrandBolus}
+              onChange={(e) => upd("insulinBrandBolus", e.target.value.slice(0, 40))}
+            />
+            <div style={{ fontSize: 13, color: "var(--text-ghost)", marginTop: 6 }}>
+              {tSettings("insulin_brand_hint")}
+            </div>
+          </div>
+        </div>
+      ),
+      footer: <SaveFooter onSave={saveInsulinBrandsAction} />,
+    },
+    insulinBrandBolus2: {
+      title: tSettings("sheet_insulin_brand_bolus_2_title"),
+      body: (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5, margin: 0 }}>
+            {tSettings("insulin_brand_bolus_2_body")}
+          </p>
+          {BOLUS_BRAND_PRESETS.map((preset) => {
+            const isSel = settings.insulinBrandBolus2 === preset.name;
+            return (
+              <button
+                key={preset.name}
+                type="button"
+                onClick={() => upd("insulinBrandBolus2", preset.name)}
+                style={{
+                  width: "100%", padding: "12px 14px", borderRadius: 12,
+                  border: `2px solid ${isSel ? ACCENT : BORDER}`,
+                  background: isSel ? `${ACCENT}14` : "var(--surface-soft)",
+                  textAlign: "left", cursor: "pointer",
+                  display: "flex", flexDirection: "column", gap: 3,
+                  transition: "border-color 150ms ease, background 150ms ease",
+                }}
+              >
+                <div style={{ fontSize: 15, fontWeight: 700, color: isSel ? ACCENT : "var(--text-strong)" }}>
+                  {preset.name}
+                </div>
+                <div style={{ fontSize: 12, color: isSel ? ACCENT : "var(--text-faint)" }}>
+                  {preset.mfr} · {preset.ultraRapid
+                    ? tSettings("insulin_brand_preset_ultra_rapid")
+                    : tSettings("insulin_type_rapid_label")}
+                </div>
+              </button>
+            );
+          })}
+          <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 10 }}>
+            <label style={{ fontSize: 13, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>
+              {tSettings("insulin_brand_or_manual")}
+            </label>
+            <input
+              style={inp}
+              type="text"
+              maxLength={40}
+              placeholder={tSettings("insulin_brand_bolus_2_placeholder")}
+              value={settings.insulinBrandBolus2}
+              onChange={(e) => upd("insulinBrandBolus2", e.target.value.slice(0, 40))}
+            />
+            <div style={{ fontSize: 13, color: "var(--text-ghost)", marginTop: 6 }}>
+              {tSettings("insulin_brand_hint")}
+            </div>
           </div>
         </div>
       ),
@@ -2377,6 +2476,14 @@ export default function SettingsPage() {
           subtitle={settings.insulinBrandBolus.trim() || tSettings("subtitle_no_brand")}
           ariaLabel={tSettings("row_open_aria", { label: tSettings("row_insulin_brand_bolus") })}
           onClick={() => openSheetWith("insulinBrandBolus")}
+        />
+        <SettingsRow
+          iconColor={ACCENT}
+          icon={ICON.insulin}
+          label={tSettings("row_insulin_brand_bolus_2")}
+          subtitle={settings.insulinBrandBolus2.trim() || tSettings("subtitle_no_brand")}
+          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_insulin_brand_bolus_2") })}
+          onClick={() => openSheetWith("insulinBrandBolus2")}
         />
         <SettingsRow
           iconColor={ACCENT}
