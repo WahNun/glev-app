@@ -921,11 +921,6 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         paddingLeft:   4,
         paddingRight:  4,
         zIndex: 100,
-        // Scroll-fade: slides down + fades out on scroll-down, mirrors header.
-        transform: headerHidden ? "translateY(100%)" : "translateY(0)",
-        opacity: headerHidden ? 0 : 1,
-        transition: "transform 220ms cubic-bezier(.4,0,.2,1), opacity 220ms ease",
-        pointerEvents: headerHidden ? "none" : undefined,
       }}>
         <MobileTab
           label={tNav("dashboard")}
@@ -1014,12 +1009,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           position: "fixed",
           bottom: "calc(var(--nav-bottom-total) - 15px)",
           left: "50%",
-          transform: headerHidden
-            ? "translateX(-50%) translateY(150%)"
-            : "translateX(-50%) translateY(0)",
-          opacity: headerHidden ? 0 : 1,
-          transition: "transform 220ms cubic-bezier(.4,0,.2,1), opacity 220ms ease",
-          pointerEvents: headerHidden ? "none" : undefined,
+          transform: "translateX(-50%)",
           width: 64,
           height: 64,
           borderRadius: "50%",
