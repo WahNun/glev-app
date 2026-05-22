@@ -9,23 +9,30 @@ const GREEN  = "#22D3A0";
 const AMBER  = "#F59E0B";
 const ORANGE = "#FF9500";
 
+const LS_KEY = "glev:iob_history_hours";
+
 function iobColor(iob: number): string {
   if (iob < 1) return GREEN;
   if (iob < 3) return AMBER;
   return ORANGE;
 }
 
+type WindowHours = 12 | 24;
+
 interface Props {
   insulin: InsulinLog[];
   insulinType: InsulinType;
   meals?: Meal[];
-  /** How many hours back to show. Default 24. */
-  hours?: number;
 }
 
-export default function IOBHistoryChart({ insulin, insulinType, meals, hours = 24 }: Props) {
+export default function IOBHistoryChart({ insulin, insulinType, meals }: Props) {
   const t = useTranslations("dashboard");
   const [now, setNow] = useState(() => Date.now());
+  const [hours, setHours] = useState<WindowHours>(() => {
+    if (typeof window === "undefined") return 24;
+    const stored = window.localStorage.getItem(LS_KEY);
+    return stored === "12" ? 12 : 24;
+  });
 
   useEffect(() => {
     const tick = () => setNow(Date.now());
@@ -33,6 +40,11 @@ export default function IOBHistoryChart({ insulin, insulinType, meals, hours = 2
     window.addEventListener("focus", tick, { passive: true });
     return () => { clearInterval(iv); window.removeEventListener("focus", tick); };
   }, []);
+
+  function pickWindow(h: WindowHours) {
+    setHours(h);
+    try { window.localStorage.setItem(LS_KEY, String(h)); } catch { /* quota */ }
+  }
 
   const doses = useMemo(() => buildDoses(insulin, meals), [insulin, meals]);
   const diaMin = getDIAMinutes(insulinType);
@@ -104,12 +116,41 @@ export default function IOBHistoryChart({ insulin, insulinType, meals, hours = 2
         }}>
           {t("iob_history_title").toUpperCase()}
         </div>
-        <span style={{
-          fontSize: 11, color: "var(--text-ghost)",
-          fontFamily: "var(--font-mono)",
+
+        {/* 12 h / 24 h pill toggle */}
+        <div style={{
+          display: "flex",
+          gap: 4,
+          background: "var(--surface-raised, rgba(255,255,255,0.06))",
+          borderRadius: 20,
+          padding: "2px 3px",
+          border: "1px solid var(--border)",
         }}>
-          {t("iob_history_window", { hours })}
-        </span>
+          {([12, 24] as WindowHours[]).map(opt => {
+            const active = hours === opt;
+            return (
+              <button
+                key={opt}
+                onClick={() => pickWindow(opt)}
+                style={{
+                  fontSize: 10,
+                  fontFamily: "var(--font-mono)",
+                  fontWeight: active ? 700 : 500,
+                  color: active ? "var(--bg, #0f0f10)" : "var(--text-ghost)",
+                  background: active ? "var(--accent, #22D3A0)" : "transparent",
+                  border: "none",
+                  borderRadius: 14,
+                  padding: "2px 8px",
+                  cursor: "pointer",
+                  lineHeight: 1.5,
+                  transition: "background 0.18s, color 0.18s",
+                }}
+              >
+                {opt}&nbsp;h
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Chart area */}
