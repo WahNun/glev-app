@@ -203,9 +203,12 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
     ? Math.max(20, Math.round(currentBg - expectedDrop))
     : null;
 
-  const insulinTypeLabel = insulinType === "rapid"
-    ? t("iob_dia_rapid")
-    : t("iob_dia_regular");
+  const insulinBrandBolus = useMemo(() => getInsulinSettings().insulinBrandBolus, []);
+  const insulinTypeLabel = insulinBrandBolus?.trim()
+    ? insulinBrandBolus.trim()
+    : insulinType === "rapid"
+      ? t("iob_dia_rapid")
+      : t("iob_dia_regular");
 
   return (
     <div

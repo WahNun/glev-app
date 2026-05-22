@@ -86,6 +86,10 @@ interface Settings {
    *  `undefined` = user has not explicitly set a value; IOB calculations fall
    *  back to the insulin-type default (rapid 180 / regular 300). */
   diaMinutes?: number;
+  /** User's bolus insulin brand (e.g. "NovoRapid"). Empty string = not set. */
+  insulinBrandBolus: string;
+  /** User's basal insulin brand (e.g. "Tresiba"). Empty string = not set. */
+  insulinBrandBasal: string;
 }
 
 const DEFAULTS: Settings = {
@@ -95,6 +99,8 @@ const DEFAULTS: Settings = {
   cf: DEFAULT_INSULIN_SETTINGS.cf,
   targetBg: DEFAULT_INSULIN_SETTINGS.targetBg,
   // diaMinutes intentionally omitted — undefined = use type-based default
+  insulinBrandBolus: "",
+  insulinBrandBasal: "",
 };
 
 function loadSettings(): Settings {
@@ -117,6 +123,8 @@ type SheetKey =
   | "cf"
   | "targetBg"
   | "dia"
+  | "insulinBrandBolus"
+  | "insulinBrandBasal"
   | "lastAppointment"
   | "libre2"
   | "nightscout"
@@ -352,7 +360,12 @@ export default function SettingsPage() {
         // see their typed value silently snap back to the fetched one.
         if (insulinTouchedRef.current) return;
         setSettings((prev) => {
-          const next = { ...prev, icr: ins.icr, cf: ins.cf, targetBg: ins.targetBg, diaMinutes: ins.diaMinutes };
+          const next = {
+            ...prev,
+            icr: ins.icr, cf: ins.cf, targetBg: ins.targetBg, diaMinutes: ins.diaMinutes,
+            insulinBrandBolus: ins.insulinBrandBolus ?? prev.insulinBrandBolus,
+            insulinBrandBasal: ins.insulinBrandBasal ?? prev.insulinBrandBasal,
+          };
           saveSettings(next);
           return next;
         });
@@ -994,6 +1007,36 @@ export default function SettingsPage() {
     }
   }, [insulinType, tSettings]);
 
+  /** Persist insulin brand names to user_settings and mirror into localStorage. */
+  const saveInsulinBrandsAction = useCallback(async (): Promise<boolean> => {
+    setSaving(true);
+    setSaveError("");
+    try {
+      await saveInsulinSettings({
+        icr:      Math.min(100, Math.max(1, Math.round(settings.icr * 10) / 10)),
+        cf:       Math.min(500, Math.max(1, Math.round(settings.cf))),
+        targetBg: Math.min(200, Math.max(60, Math.round(settings.targetBg))),
+        ...(settings.diaMinutes !== undefined
+          ? { diaMinutes: Math.min(360, Math.max(60, Math.round(settings.diaMinutes))) }
+          : {}),
+        insulinBrandBolus: settings.insulinBrandBolus.trim().slice(0, 40) || undefined,
+        insulinBrandBasal: settings.insulinBrandBasal.trim().slice(0, 40) || undefined,
+      });
+      const next = { ...settings };
+      setSettings(next);
+      saveSettings(next);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1800);
+      setDraftSnapshot(null);
+      return true;
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : tSettings("save_failed"));
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }, [settings, tSettings]);
+
   /* ── shared sheet footers ──────────────────────────────────────── */
   /** Save footer: button calls `onSave()`; sheet only dismisses on a true
    * return so an inline error keeps the user's in-progress values visible. */
@@ -1268,6 +1311,56 @@ export default function SettingsPage() {
         </div>
       ),
       footer: <SaveFooter onSave={saveInsulinAction} />,
+    },
+    insulinBrandBolus: {
+      title: tSettings("sheet_insulin_brand_bolus_title"),
+      body: (
+        <div>
+          <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5, marginBottom: 12 }}>
+            {tSettings("insulin_brand_body")}
+          </p>
+          <label style={{ fontSize: 13, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>
+            {tSettings("row_insulin_brand_bolus")}
+          </label>
+          <input
+            style={inp}
+            type="text"
+            maxLength={40}
+            placeholder={tSettings("insulin_brand_bolus_placeholder")}
+            value={settings.insulinBrandBolus}
+            onChange={(e) => upd("insulinBrandBolus", e.target.value.slice(0, 40))}
+          />
+          <div style={{ fontSize: 13, color: "var(--text-ghost)", marginTop: 6 }}>
+            {tSettings("insulin_brand_hint")}
+          </div>
+        </div>
+      ),
+      footer: <SaveFooter onSave={saveInsulinBrandsAction} />,
+    },
+    insulinBrandBasal: {
+      title: tSettings("sheet_insulin_brand_basal_title"),
+      body: (
+        <div>
+          <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5, marginBottom: 12 }}>
+            {tSettings("insulin_brand_body")}
+          </p>
+          <label style={{ fontSize: 13, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>
+            {tSettings("row_insulin_brand_basal")}
+          </label>
+          <input
+            style={inp}
+            type="text"
+            maxLength={40}
+            placeholder={tSettings("insulin_brand_basal_placeholder")}
+            value={settings.insulinBrandBasal}
+            onChange={(e) => upd("insulinBrandBasal", e.target.value.slice(0, 40))}
+          />
+          <div style={{ fontSize: 13, color: "var(--text-ghost)", marginTop: 6 }}>
+            {tSettings("insulin_brand_hint")}
+          </div>
+        </div>
+      ),
+      footer: <SaveFooter onSave={saveInsulinBrandsAction} />,
     },
     lastAppointment: {
       // List-shaped sheet (Task #93) that lets the user keep a small
@@ -2276,6 +2369,22 @@ export default function SettingsPage() {
             : tSettings("subtitle_insulin_type_regular")}
           ariaLabel={tSettings("row_open_aria", { label: tSettings("row_insulin_type") })}
           onClick={() => openSheetWith("insulinType")}
+        />
+        <SettingsRow
+          iconColor={ACCENT}
+          icon={ICON.insulin}
+          label={tSettings("row_insulin_brand_bolus")}
+          subtitle={settings.insulinBrandBolus.trim() || tSettings("subtitle_no_brand")}
+          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_insulin_brand_bolus") })}
+          onClick={() => openSheetWith("insulinBrandBolus")}
+        />
+        <SettingsRow
+          iconColor={ACCENT}
+          icon={ICON.insulin}
+          label={tSettings("row_insulin_brand_basal")}
+          subtitle={settings.insulinBrandBasal.trim() || tSettings("subtitle_no_brand")}
+          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_insulin_brand_basal") })}
+          onClick={() => openSheetWith("insulinBrandBasal")}
         />
         <SettingsRow
           iconColor={ACCENT}

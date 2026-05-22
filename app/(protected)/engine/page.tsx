@@ -9,7 +9,7 @@ import { getCurrentTrendArrow } from "@/lib/cgm/trendArrow";
 import { scheduleJobsForLog } from "@/lib/cgmJobs";
 import { TYPE_COLORS } from "@/lib/mealTypes";
 import { logDebug } from "@/lib/debug";
-import { fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
+import { insertInsulinLog, fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
 import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
 import { fetchRecentActivityClient, summariseActivityContext, type ActivityContext } from "@/lib/dailyActivity";
 import { HIGH_ACTIVITY_RATIO, HIGH_ACTIVITY_MIN_ABS, HIGH_ACTIVITY_MIN_SAMPLE } from "@/lib/engine/evaluation";
@@ -1589,6 +1589,21 @@ export default function EnginePage() {
       // Schedule CGM auto-fetches at +1h / +2h after meal time. Fire-and-forget;
       // failures (e.g. no CGM connected) are silent.
       void scheduleJobsForLog({ logId: saved.id, logType: "meal", refTimeIso: mealIso });
+      // Auto-log the bolus dose in insulin_logs so it shows up in the
+      // log history alongside the meal. Fire-and-forget — a failure here
+      // must not block the meal save confirmation.
+      if (result.dose > 0) {
+        const bolusName = getInsulinSettings().insulinBrandBolus?.trim() || "Bolus";
+        void insertInsulinLog({
+          insulin_type: "bolus",
+          insulin_name: bolusName,
+          units: result.dose,
+          cgm_glucose_at_log: gNum ?? null,
+          notes: "",
+          related_entry_id: saved.id,
+          at: mealIso,
+        }).catch(() => {});
+      }
       // Refresh meals so the next recommendation immediately benefits.
       fetchMealsForEngine().then(setMeals).catch(() => {});
       logDebug("ENGINE.WIZARD_SAVE", { id: saved.id, carbs: cNum, insulin: result.dose, glucose: gNum, mealType: cls });
@@ -1738,6 +1753,18 @@ export default function EnginePage() {
         preMealTrend: preMealTrendDirect,
       });
       void scheduleJobsForLog({ logId: saved.id, logType: "meal", refTimeIso: mealIso });
+      if (iNum > 0) {
+        const bolusName = getInsulinSettings().insulinBrandBolus?.trim() || "Bolus";
+        void insertInsulinLog({
+          insulin_type: "bolus",
+          insulin_name: bolusName,
+          units: iNum,
+          cgm_glucose_at_log: gNum ?? null,
+          notes: "",
+          related_entry_id: saved.id,
+          at: mealIso,
+        }).catch(() => {});
+      }
       fetchMealsForEngine().then(setMeals).catch(() => {});
       logDebug("ENGINE.SAVE_DIRECT_BOLUS", { id: saved.id, carbs: cNum, glucose: gNum, mealType: cls, insulinUnits: iNum });
       hapticSuccess();
@@ -1811,6 +1838,18 @@ export default function EnginePage() {
         preMealTrend: preMealTrendEager,
       });
       void scheduleJobsForLog({ logId: saved.id, logType: "meal", refTimeIso: mealIso });
+      if (dose > 0) {
+        const bolusName = getInsulinSettings().insulinBrandBolus?.trim() || "Bolus";
+        void insertInsulinLog({
+          insulin_type: "bolus",
+          insulin_name: bolusName,
+          units: dose,
+          cgm_glucose_at_log: gNum ?? null,
+          notes: "",
+          related_entry_id: saved.id,
+          at: mealIso,
+        }).catch(() => {});
+      }
       fetchMealsForEngine().then(setMeals).catch(() => {});
       logDebug("ENGINE.SAVE_EAGER_BOLUS", { id: saved.id, carbs: cNum, glucose: gNum, mealType: cls, insulinUnits: dose });
       hapticSuccess();

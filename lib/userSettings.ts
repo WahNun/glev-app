@@ -94,6 +94,14 @@ export interface InsulinSettings {
    *  Fiasp/Lyumjev ≈ 120–150 min, NovoRapid/Humalog ≈ 150–180 min,
    *  regular insulin ≈ 300 min. */
   diaMinutes?: number;
+  /** User's rapid/bolus insulin brand name (e.g. "NovoRapid", "Fiasp").
+   *  Displayed in the IOB footer and pre-fills the insulin log form.
+   *  `undefined` / empty = not set. Max 40 chars enforced by UI + DB. */
+  insulinBrandBolus?: string;
+  /** User's basal insulin brand name (e.g. "Tresiba", "Lantus").
+   *  Pre-fills the basal tab of the insulin log form.
+   *  `undefined` / empty = not set. Max 40 chars enforced by UI + DB. */
+  insulinBrandBasal?: string;
 }
 
 export const DEFAULT_INSULIN_SETTINGS: InsulinSettings = {
@@ -180,7 +188,17 @@ export function getInsulinSettings(): InsulinSettings {
         ? parsed.diaMinutes
         : undefined;
 
-    return { icr, cf, targetBg, diaMinutes };
+    // Brand strings — optional, no validation needed beyond "is a string".
+    const insulinBrandBolus =
+      typeof parsed.insulinBrandBolus === "string" && parsed.insulinBrandBolus.trim()
+        ? parsed.insulinBrandBolus.trim().slice(0, 40)
+        : undefined;
+    const insulinBrandBasal =
+      typeof parsed.insulinBrandBasal === "string" && parsed.insulinBrandBasal.trim()
+        ? parsed.insulinBrandBasal.trim().slice(0, 40)
+        : undefined;
+
+    return { icr, cf, targetBg, diaMinutes, insulinBrandBolus, insulinBrandBasal };
   } catch {
     return DEFAULT_INSULIN_SETTINGS;
   }
@@ -204,7 +222,7 @@ export async function fetchInsulinSettings(): Promise<InsulinSettings> {
 
   const { data, error } = await supabase
     .from("user_settings")
-    .select("icr_g_per_unit, cf_mgdl_per_unit, target_bg_mgdl, dia_minutes")
+    .select("icr_g_per_unit, cf_mgdl_per_unit, target_bg_mgdl, dia_minutes, insulin_brand_bolus, insulin_brand_basal")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -230,7 +248,17 @@ export async function fetchInsulinSettings(): Promise<InsulinSettings> {
       ? data.dia_minutes
       : undefined;
 
-  return { icr, cf, targetBg, diaMinutes };
+  // Brand strings — NULL in DB means "not set".
+  const insulinBrandBolus =
+    typeof data.insulin_brand_bolus === "string" && data.insulin_brand_bolus.trim()
+      ? data.insulin_brand_bolus.trim().slice(0, 40)
+      : undefined;
+  const insulinBrandBasal =
+    typeof data.insulin_brand_basal === "string" && data.insulin_brand_basal.trim()
+      ? data.insulin_brand_basal.trim().slice(0, 40)
+      : undefined;
+
+  return { icr, cf, targetBg, diaMinutes, insulinBrandBolus, insulinBrandBasal };
 }
 
 /**
@@ -264,6 +292,10 @@ export async function saveInsulinSettings(settings: InsulinSettings): Promise<vo
       ...(settings.diaMinutes !== undefined
         ? { dia_minutes: Math.min(360, Math.max(60, Math.round(settings.diaMinutes))) }
         : {}),
+      // Brand strings — write NULL when absent so the DB reflects the
+      // user's intent (no brand set) rather than keeping a stale value.
+      insulin_brand_bolus: settings.insulinBrandBolus?.trim().slice(0, 40) || null,
+      insulin_brand_basal: settings.insulinBrandBasal?.trim().slice(0, 40) || null,
     }, { onConflict: "user_id" });
 
   if (error) throw new Error(error.message);

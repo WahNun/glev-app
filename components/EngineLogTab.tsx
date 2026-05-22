@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import IosTapButton from "@/components/IosTapButton";
 import { useTranslations } from "next-intl";
 import { insertInsulinLog, fetchRecentInsulinLogs, type InsulinLog } from "@/lib/insulin";
+import { getInsulinSettings } from "@/lib/userSettings";
 import { insertExerciseLog, type ExerciseType } from "@/lib/exercise";
 import { exerciseTypeLabelI18n } from "@/lib/exerciseEval";
 import { scheduleJobsForLog } from "@/lib/cgmJobs";
@@ -233,7 +234,10 @@ function StatusBanner({ status, accent, t }: { status: Status; accent: string; t
 export function InsulinForm() {
   const t = useTranslations("engineLog");
   const [type, setType] = useState<"bolus" | "basal">("bolus");
-  const [name, setName] = useState("");
+  const [name, setName] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    return getInsulinSettings().insulinBrandBolus?.trim() ?? "";
+  });
   const [showInfluence, setShowInfluence] = useState(false);
   // Default starting positions: "5" IE bolus, "20" IE basal. Stored
   // as a string so the user can type free-form (e.g. "7,5"); parsed
@@ -248,6 +252,13 @@ export function InsulinForm() {
       // Retarget unit default if user hasn't customised it.
       if (prev === "bolus" && units === "5")  setUnits("20");
       if (prev === "basal" && units === "20") setUnits("5");
+      // Pre-fill name with the saved brand for the new tab, but only
+      // when the field is empty or still matches the previous tab's brand
+      // (i.e. the user hasn't typed a custom value).
+      const ins = getInsulinSettings();
+      const prevBrand = (prev === "bolus" ? ins.insulinBrandBolus : ins.insulinBrandBasal)?.trim() ?? "";
+      const nextBrand = (next === "bolus" ? ins.insulinBrandBolus : ins.insulinBrandBasal)?.trim() ?? "";
+      setName(n => (n === "" || n === prevBrand) ? nextBrand : n);
       return next;
     });
   }
