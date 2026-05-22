@@ -13,39 +13,64 @@ import { APP_ROUTE_REGEX_SOURCE, isAppRoute, PATHNAME_HEADER } from "@/lib/appRo
 
 const META_PIXEL_ID = "960780236789931";
 
-// Inline script that runs BEFORE React hydrates. On in-app routes it
-// reads the THEME cookie (with localStorage / OS-preference fallback)
-// and sets `<html data-theme="...">` so the first painted frame already
-// has the correct CSS variables — no flash of dark theme on a
-// light-mode reload. On marketing / public routes it ALWAYS forces
-// dark, regardless of the persisted preference, because those pages
-// hardcode dark hex values and would render white-on-white otherwise.
-// The set of in-app paths comes from `lib/appRoutes.ts`; the regex
-// source is interpolated below so the two stay in sync. Kept tiny and
-// dependency-free so it can ship inline in <head>.
-const NO_FLICKER_THEME_SCRIPT = `
-(function(){try{
-  var APP_RE=${JSON.stringify(APP_ROUTE_REGEX_SOURCE)};
-  var isApp=new RegExp(APP_RE).test(location.pathname);
-  var resolved='dark';
-  if(isApp){
-    var c=document.cookie.match(/(?:^|;\\s*)THEME=([^;]+)/);
-    var v=c?decodeURIComponent(c[1]):null;
-    if(v!=='dark'&&v!=='light'&&v!=='system'){
-      try{var ls=localStorage.getItem('glev_theme');if(ls==='dark'||ls==='light'||ls==='system')v=ls;}catch(e){}
+// Single inline bootstrap script that runs BEFORE React hydrates.
+// Merged into ONE tag deliberately: Replit's devtools proxy intercepts
+// the first <script> in <head> and replaces it with its own script.
+// Having two separate tags causes a structural DOM mismatch (the proxy
+// shifts node positions, so React finds the safe-area script at the
+// wrong index). A single merged script means there is only one target
+// for the proxy — React reconciles exactly one child and the
+// suppressHydrationWarning on it covers the proxy replacement.
+// In production (Vercel) the proxy doesn't run, so the full script
+// executes normally.
+//
+// Part 1: Theme bootstrap — reads THEME cookie / localStorage /
+// OS-preference, sets data-theme on <html> so the first painted frame
+// already has the right CSS variables (no FOUC). Marketing / public
+// routes always get dark; in-app routes honour the persisted choice.
+//
+// Part 2: Safe-area measurement — measures env(safe-area-inset-bottom)
+// via a sentinel element and writes --safe-bottom onto <html> so the
+// footer always covers the home indicator on Capacitor/WKWebView, even
+// when env() returns 0. Re-measures on resize / orientation-change.
+const BOOTSTRAP_SCRIPT = `
+(function(){
+  try{
+    var APP_RE=${JSON.stringify(APP_ROUTE_REGEX_SOURCE)};
+    var isApp=new RegExp(APP_RE).test(location.pathname);
+    var resolved='dark';
+    if(isApp){
+      var c=document.cookie.match(/(?:^|;\\s*)THEME=([^;]+)/);
+      var v=c?decodeURIComponent(c[1]):null;
+      if(v!=='dark'&&v!=='light'&&v!=='system'){
+        try{var ls=localStorage.getItem('glev_theme');if(ls==='dark'||ls==='light'||ls==='system')v=ls;}catch(e){}
+      }
+      if(!v)v='system';
+      resolved=v;
+      if(v==='system'){
+        resolved=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark';
+      }
     }
-    if(!v)v='system';
-    resolved=v;
-    if(v==='system'){
-      resolved=(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark';
-    }
+    document.documentElement.setAttribute('data-theme',resolved);
+    var m=document.querySelector('meta[name="theme-color"]');
+    if(m)m.setAttribute('content',resolved==='light'?'#FAFAFB':'#0A0A0F');
+  }catch(e){
+    document.documentElement.setAttribute('data-theme','dark');
   }
-  document.documentElement.setAttribute('data-theme',resolved);
-  var m=document.querySelector('meta[name="theme-color"]');
-  if(m)m.setAttribute('content',resolved==='light'?'#FAFAFB':'#0A0A0F');
-}catch(e){
-  document.documentElement.setAttribute('data-theme','dark');
-}})();
+  try{
+    function measureSafeArea(){
+      var s=document.createElement('div');
+      s.style.cssText='position:fixed;bottom:0;left:0;width:0;'+
+        'height:env(safe-area-inset-bottom,0px);pointer-events:none;visibility:hidden';
+      document.documentElement.appendChild(s);
+      var h=s.offsetHeight;
+      document.documentElement.removeChild(s);
+      if(h>0)document.documentElement.style.setProperty('--safe-bottom',h+'px');
+    }
+    measureSafeArea();
+    window.addEventListener('resize',measureSafeArea,{passive:true});
+  }catch(e){}
+})();
 `;
 
 const inter = Inter({
@@ -137,35 +162,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {/* Pre-hydration theme bootstrap. Runs synchronously before React
             mounts so the very first painted frame already has the right
             data-theme attribute and theme-color meta — no FOUC. */}
-        {/* suppressHydrationWarning on each <script>: Replit's devtools
-            proxy modifies these tags in the HTML before React hydrates,
-            causing attribute + innerHTML mismatches. suppressHydrationWarning
-            tells React to skip mismatch checks on this specific element.
-            No effect in production — Vercel doesn't inject anything. */}
-        <script suppressHydrationWarning dangerouslySetInnerHTML={{ __html: NO_FLICKER_THEME_SCRIPT }} />
-        {/* Safe-area sentinel: measures env(safe-area-inset-bottom) via a
-            sentinel element and writes --safe-bottom onto <html> so the
-            footer always covers the home indicator regardless of what
-            CSS env() reports in Capacitor/WKWebView. Runs synchronously
-            (no defer/async) so the variable is set before the first paint.
-            Re-measures on resize / orientation-change. */}
-        <script suppressHydrationWarning dangerouslySetInnerHTML={{ __html: `
-(function(){
-  function measure(){
-    var s=document.createElement('div');
-    s.style.cssText='position:fixed;bottom:0;left:0;width:0;'+
-      'height:env(safe-area-inset-bottom,0px);pointer-events:none;visibility:hidden';
-    document.documentElement.appendChild(s);
-    var h=s.offsetHeight;
-    document.documentElement.removeChild(s);
-    if(h>0){
-      document.documentElement.style.setProperty('--safe-bottom',h+'px');
-    }
-  }
-  measure();
-  window.addEventListener('resize',measure,{passive:true});
-})();
-        `.trim() }} />
+        {/* Single merged bootstrap script (theme + safe-area).
+            suppressHydrationWarning: Replit's devtools proxy replaces this
+            tag in dev; the prop tells React to skip the mismatch check.
+            No effect in production — Vercel doesn't intercept anything. */}
+        <script suppressHydrationWarning dangerouslySetInnerHTML={{ __html: BOOTSTRAP_SCRIPT }} />
         {/* 2026-05-17 round 6 (lever B — handshake pre-warm): every page
             in the protected zone hits the Supabase REST + Realtime
             endpoint on first paint. preconnect lets the browser pay the
