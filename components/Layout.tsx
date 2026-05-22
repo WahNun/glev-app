@@ -637,7 +637,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
                   alignItems: "center",
                   gap: 3,
                   pointerEvents: "none",
-                  width: 148,
+                  width: 168,
                 }}
               >
                 {/* Step labels row */}
@@ -647,9 +647,9 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
                       key={label}
                       style={{
                         fontFamily: "var(--font-mono)",
-                        fontSize: 12,
+                        fontSize: 10,
                         fontWeight: 700,
-                        letterSpacing: "0.06em",
+                        letterSpacing: "0.04em",
                         textTransform: "uppercase",
                         color: i === active ? ACCENT_HDR : "var(--text-faint)",
                         transition: "color 240ms ease",
@@ -1356,7 +1356,7 @@ function ScopeHeaderChip({
         alignItems: "center",
         gap: 3,
         flexShrink: 0,
-        width: 148,
+        width: 168,
       }}
     >
       {/* Labels row — identical style to Engine wizard step labels */}
@@ -1372,9 +1372,9 @@ function ScopeHeaderChip({
               onClick={() => { setMode(m.key); setAnchor(new Date()); }}
               style={{
                 fontFamily: "var(--font-mono)",
-                fontSize: 12,
+                fontSize: 10,
                 fontWeight: 700,
-                letterSpacing: "0.06em",
+                letterSpacing: "0.04em",
                 textTransform: "uppercase",
                 color: isActive ? ACCENT_HDR : "var(--text-faint)",
                 transition: "color 240ms ease",

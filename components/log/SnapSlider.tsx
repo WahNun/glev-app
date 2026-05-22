@@ -142,11 +142,15 @@ export default function SnapSlider({
   // aggressively stop propagation for every subsequent pointermove.
   const axisLockedRef = useRef(false);
 
-  const valueFromPointer = useCallback((clientX: number): number => {
+  const valueFromPointer = useCallback((pageX: number): number => {
     const el = trackRef.current;
     if (!el) return value;
     const rect = el.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    // Use page-relative coordinates to avoid a WKWebView/Capacitor bug where
+    // clientX is reported in scroll-container-space instead of viewport-space.
+    // rect.left + scrollX converts the viewport-relative rect to page-relative.
+    const scrollLeft = typeof window !== "undefined" ? (window.scrollX || window.pageXOffset || 0) : 0;
+    const ratio = Math.max(0, Math.min(1, (pageX - (rect.left + scrollLeft)) / rect.width));
     return min + ratio * (max - min);
   }, [value, min, max]);
 
@@ -158,8 +162,8 @@ export default function SnapSlider({
     if (!e.isPrimary) return;
     e.preventDefault();
     isDraggingRef.current = true;
-    startXRef.current = e.clientX;
-    startYRef.current = e.clientY;
+    startXRef.current = e.pageX;
+    startYRef.current = e.pageY;
     axisLockedRef.current = false;
     // Suppress Android pull-to-refresh at the document level while dragging.
     // overscrollBehavior on the element itself only affects overscroll within
@@ -171,7 +175,7 @@ export default function SnapSlider({
     // Capture so pointermove/pointerup fire on this element even when the
     // finger leaves it — critical for fast swipes on iOS.
     (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
-    commit(valueFromPointer(e.clientX));
+    commit(valueFromPointer(e.pageX));
   }, [valueFromPointer]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -182,8 +186,8 @@ export default function SnapSlider({
     // stopPropagation() for every move so Android OEM scroll handlers (which
     // sometimes survive preventDefault on touch) cannot claim the gesture.
     if (!axisLockedRef.current) {
-      const dx = Math.abs(e.clientX - startXRef.current);
-      const dy = Math.abs(e.clientY - startYRef.current);
+      const dx = Math.abs(e.pageX - startXRef.current);
+      const dy = Math.abs(e.pageY - startYRef.current);
       if (dx > dy) {
         axisLockedRef.current = true;
       }
@@ -191,7 +195,7 @@ export default function SnapSlider({
     if (axisLockedRef.current) {
       e.stopPropagation();
     }
-    commit(valueFromPointer(e.clientX));
+    commit(valueFromPointer(e.pageX));
   }, [valueFromPointer]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -203,7 +207,7 @@ export default function SnapSlider({
     if (typeof document !== "undefined") {
       document.body.style.overscrollBehaviorY = "";
     }
-    commit(valueFromPointer(e.clientX));
+    commit(valueFromPointer(e.pageX));
   }, [valueFromPointer]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Keyboard handler on the drag div ─────────────────────────────────
