@@ -2,11 +2,13 @@
 
 import { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 
 type Tab = "dse" | "agb";
 
 function LegalPageInner() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [tab, setTab] = useState<Tab>(() => {
     const param = searchParams.get("tab");
@@ -17,6 +19,12 @@ function LegalPageInner() {
     const param = searchParams.get("tab");
     setTab(param === "agb" ? "agb" : "dse");
   }, [searchParams]);
+
+  function switchTab(next: Tab) {
+    setTab(next);
+    router.push(next === "agb" ? "/legal?tab=agb" : "/legal");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   return (
     <div className="glev-legal">
@@ -32,7 +40,7 @@ function LegalPageInner() {
             aria-selected={tab === "dse"}
             aria-controls="panel-dse"
             id="tab-dse"
-            onClick={() => { setTab("dse"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+            onClick={() => switchTab("dse")}
           >
             Datenschutzerklärung
           </button>
@@ -42,7 +50,7 @@ function LegalPageInner() {
             aria-selected={tab === "agb"}
             aria-controls="panel-agb"
             id="tab-agb"
-            onClick={() => { setTab("agb"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+            onClick={() => switchTab("agb")}
           >
             AGB
           </button>
