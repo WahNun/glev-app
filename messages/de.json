@@ -300,6 +300,7 @@
     "saved_confirmation": "✓ Gespeichert — {units} IE geloggt",
     "toast_meal_saved": "Mahlzeit gespeichert ✓",
     "recommended_dose_label": "Berechneter Richtwert",
+    "dose_disclaimer": "Orientierungswert — kein Ersatz für ärztliche Beratung.",
     "dose_rounded_to_zero": "Empfehlung < 0,1 IE — kein Bolus nötig",
     "iob_active": "ℹ️ Noch aktiv: {iobDisplay} — Richtwert angepasst",
     "iob_covers_dose": "ℹ️ IOB deckt die Schätzung ab",

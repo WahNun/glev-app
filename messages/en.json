@@ -300,6 +300,7 @@
     "saved_confirmation": "✓ Saved — {units} u logged",
     "toast_meal_saved": "Meal saved ✓",
     "recommended_dose_label": "Reference value",
+    "dose_disclaimer": "Contextual estimate — not a substitute for medical advice.",
     "dose_rounded_to_zero": "Recommendation < 0.1 u — no bolus needed",
     "iob_active": "ℹ️ Still active: {iobDisplay} — estimate adjusted",
     "iob_covers_dose": "ℹ️ IOB covers the estimate",

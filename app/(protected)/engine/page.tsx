@@ -3221,11 +3221,14 @@ export default function EnginePage() {
                       <div style={{ fontSize: 12, color: "var(--text-faint)", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700, marginBottom: 8 }}>
                         {tEngine("recommended_dose_label")}
                       </div>
-                      <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 12 }}>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 4 }}>
                         <span style={{ fontSize: 32, fontWeight: 800, color: "var(--text)", letterSpacing: "-0.03em", lineHeight: 1 }}>
                           {formatNum(applyIOBCorrection(result.dose, iob), 1)}
                         </span>
                         <span style={{ fontSize: 14, color: "var(--text-dim)", fontWeight: 600 }}>{tEngine("units_short")}</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--text-faint)", marginBottom: 10 }}>
+                        {tEngine("dose_disclaimer")}
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, flexWrap: "wrap" }}>
                         <span style={{ color: "var(--text-muted)" }}>{tEngine("icr_label")}: {carbUnit.displayICR(adaptedICR)}</span>
