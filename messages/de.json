@@ -1655,6 +1655,7 @@
     "iob_risk_moderate": "Moderates Stacking-Risiko",
     "iob_risk_high": "Stacking-Risiko — Vorsicht",
     "iob_back_title": "Wirkprofil",
+    "iob_details_toggle_aria": "Details ein-/ausblenden",
     "iob_dose_remaining": "{units} IE aktiv",
     "iob_no_active_doses": "Keine aktiven Dosen",
     "iob_dia_info": "DIA {minutes} min · {type}",

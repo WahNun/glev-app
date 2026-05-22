@@ -1652,6 +1652,7 @@
     "iob_risk_moderate": "Moderate stacking risk",
     "iob_risk_high": "Stacking risk — caution",
     "iob_back_title": "Decay Profile",
+    "iob_details_toggle_aria": "Toggle IOB details",
     "iob_dose_remaining": "{units} u active",
     "iob_no_active_doses": "No active doses",
     "iob_dia_info": "DIA {minutes} min · {type}",
