@@ -149,40 +149,106 @@ function buildCards(meals: Meal[], t: DashT): CardData[] {
  * backs and the Outcome distribution (GREEN/ORANGE/PINK).
  */
 function RateTripletCard({ cards }: { cards: CardData[] }) {
+  const t = useTranslations("dashboard");
+  const [flipped, setFlipped] = useState(false);
+
   return (
     <div
-      className="glev-stat-card"
-      style={{
-        background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 14,
-        padding: 10, boxSizing: "border-box",
-        display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8,
-      }}
+      onClick={() => setFlipped(f => !f)}
+      style={{ position: "relative", perspective: 1200, cursor: "pointer", minHeight: 140 }}
     >
-      {cards.map(c => (
-        <div key={c.key} style={{
-          background: "var(--surface-soft)", border: `1px solid ${BORDER}`,
-          borderRadius: 12, padding: "12px 12px 10px", boxSizing: "border-box",
-          display: "flex", flexDirection: "column", gap: 6, minWidth: 0,
-        }}>
-          <div style={{
-            fontSize: 10, color: "var(--text-dim)", letterSpacing: "0.08em",
-            fontWeight: 700, textTransform: "uppercase", lineHeight: 1.2,
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          }}>{c.label}</div>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 2 }}>
-            <span style={{
-              fontSize: 30, fontWeight: 800, color: c.color,
-              letterSpacing: "-0.02em", lineHeight: 1,
-              fontFamily: "var(--font-mono)",
-            }}>{c.value}</span>
-            <span style={{ fontSize: 12, color: "var(--text-faint)" }}>{c.unit}</span>
-          </div>
-          <div style={{
-            fontSize: 11, color: "var(--text-faint)", lineHeight: 1.25,
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          }}>{c.sub}</div>
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          transformStyle: "preserve-3d",
+          transition: "transform 0.55s cubic-bezier(0.4,0,0.2,1)",
+          transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
+          minHeight: 140,
+        }}
+      >
+        {/* ── FRONT ── */}
+        <div
+          className="glev-stat-card"
+          style={{
+            background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 14,
+            padding: 10, boxSizing: "border-box",
+            display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8,
+            position: "absolute", inset: 0,
+            backfaceVisibility: "hidden",
+          }}
+        >
+          {cards.map(c => (
+            <div key={c.key} style={{
+              background: "var(--surface-soft)", border: `1px solid ${BORDER}`,
+              borderRadius: 12, padding: "12px 12px 10px", boxSizing: "border-box",
+              display: "flex", flexDirection: "column", gap: 6, minWidth: 0,
+            }}>
+              <div style={{
+                fontSize: 10, color: "var(--text-dim)", letterSpacing: "0.08em",
+                fontWeight: 700, textTransform: "uppercase", lineHeight: 1.2,
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}>{c.label}</div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 2 }}>
+                <span style={{
+                  fontSize: 30, fontWeight: 800, color: c.color,
+                  letterSpacing: "-0.02em", lineHeight: 1,
+                  fontFamily: "var(--font-mono)",
+                }}>{c.value}</span>
+                <span style={{ fontSize: 12, color: "var(--text-faint)" }}>{c.unit}</span>
+              </div>
+              <div style={{
+                fontSize: 11, color: "var(--text-faint)", lineHeight: 1.25,
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}>{c.sub}</div>
+            </div>
+          ))}
         </div>
-      ))}
+
+        {/* ── BACK ── */}
+        <div
+          style={{
+            position: "absolute", inset: 0,
+            backfaceVisibility: "hidden",
+            transform: "rotateY(180deg)",
+            background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 14,
+            padding: "14px 14px 12px", boxSizing: "border-box",
+            display: "flex", flexDirection: "column", gap: 8,
+          }}
+        >
+          {/* Back header */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{
+              fontSize: 11, color: "var(--text-dim)",
+              letterSpacing: "0.1em", fontWeight: 700,
+            }}>
+              {t("rate_triplet_back_title").toUpperCase()}
+            </div>
+            <span style={{ fontSize: 11, color: "var(--text-ghost)" }}>{t("flip_back")}</span>
+          </div>
+
+          {/* What the rates mean */}
+          <div style={{ fontSize: 12, color: "var(--text-body)", lineHeight: 1.5, flex: 1 }}>
+            {t("rate_triplet_back_body")}
+          </div>
+
+          {/* How they're calculated */}
+          <div style={{
+            fontSize: 11, color: "var(--text-dim)", lineHeight: 1.45,
+            padding: "7px 10px",
+            background: "var(--surface-soft)",
+            border: "1px solid var(--border)",
+            borderRadius: 8,
+          }}>
+            {t("rate_triplet_back_how")}
+          </div>
+
+          {/* Disclaimer — always visible */}
+          <div style={{ fontSize: 10, color: "var(--text-faint)", lineHeight: 1.4 }}>
+            {t("iob_bg_hint")}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1618,8 +1684,7 @@ function NonMealLightExpand({
 //   POOR < 60) are the user-facing 3-tier mapping spec'd by product.
 // -----------------------------------------------------------------------------
 function ControlScoreCard({ meals }: { meals: Meal[] }) {
-  const [showDetails, setShowDetails] = useState(false);
-  const [showHow,     setShowHow]     = useState(false);
+  const [flipped, setFlipped] = useState(false);
   const t = useTranslations("dashboard");
 
   const { score, count, delta, badge, good, spike, hypo, other } = useMemo(() => {
@@ -1628,7 +1693,6 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
     const prevStart = startOfDaysAgo(13).getTime();
     const cur  = computeControlScore(meals, wkStart, now);
     const prev = computeControlScore(meals, prevStart, wkStart);
-    // delta only meaningful when both windows have a real score (≥3 evaluated each)
     const delta = prev.score !== null && cur.score !== null ? cur.score - prev.score : null;
     const badge =
       cur.score === null   ? { key: "poor",   color: PINK   }
@@ -1640,11 +1704,9 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
   }, [meals]);
 
   const badgeText = t(`badge_${badge.key}`);
-  // hasEntries: any meal logged in the window (for showing breakdown + badge)
-  // hasScore:   ≥3 evaluated meals → show numeric score
   const hasEntries = count > 0;
   const hasScore   = score !== null;
-  const hasData    = hasEntries; // kept for legacy refs below
+  const hasData    = hasEntries;
 
   const pct = (n: number) => hasData ? Math.round((n / count) * 100) : 0;
   const buckets = [
@@ -1654,117 +1716,148 @@ function ControlScoreCard({ meals }: { meals: Meal[] }) {
     { label: t("cs_pending"), val: other, color: "var(--text-ghost)", icon: "⧗" },
   ];
 
-  const toggleBtn = (label: string, open: boolean, onToggle: () => void) => (
-    <button
-      type="button"
-      onClick={onToggle}
-      style={{
-        flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between",
-        background: open ? `${ACCENT}0f` : "var(--surface-soft)",
-        border: `1px solid ${open ? ACCENT + "44" : BORDER}`,
-        borderRadius: 8, padding: "7px 12px", cursor: "pointer",
-        color: open ? ACCENT : "var(--text-dim)",
-        fontSize: 12, fontWeight: 600,
-        transition: "background 150ms, border-color 150ms, color 150ms",
-        WebkitTapHighlightColor: "transparent",
-      }}
-    >
-      {label}
-      <span style={{ fontSize: 10, marginLeft: 4, display: "inline-block", transition: "transform 200ms", transform: open ? "rotate(180deg)" : "rotate(0deg)" }}>▾</span>
-    </button>
-  );
+  const cardBase: React.CSSProperties = {
+    position: "absolute", inset: 0,
+    backfaceVisibility: "hidden",
+    background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 16,
+    boxSizing: "border-box",
+  };
 
   return (
     <div
-      className="glev-control-front"
-      style={{ background: SURFACE, border: `1px solid ${BORDER}`, borderRadius: 16,
-               padding: "18px 24px 18px", boxSizing: "border-box" }}
+      onClick={() => setFlipped(f => !f)}
+      style={{ position: "relative", perspective: 1200, cursor: "pointer", minHeight: 200 }}
     >
-      {/* Header — title + sublabel stack, badge right */}
-      <div className="glev-control-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)" }}>
-            {t("adapt_score_title")}
-          </div>
-          <div style={{ fontSize: 11, color: "var(--text-faint)", letterSpacing: "0.06em", marginTop: 2 }}>
-            {t("adapt_score_sublabel")}
-          </div>
-        </div>
-        {hasEntries && (
-          <div style={{ fontSize: 11, fontWeight: 800, color: badge.color, padding: "4px 10px", borderRadius: 99,
-                        border: `1px solid ${badge.color}55`, background: `${badge.color}18`,
-                        letterSpacing: "0.1em", marginLeft: 16, flexShrink: 0, marginTop: 2 }}>
-            {badgeText}
-          </div>
-        )}
-      </div>
-
-      {/* Score row */}
-      <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-        <span style={{ fontSize: 56, fontWeight: 800, color: hasScore ? ACCENT : "var(--text-ghost)", letterSpacing: "-0.03em", fontFamily: "var(--font-mono)", lineHeight: 1 }}>
-          {hasScore ? score : "—"}
-        </span>
-        {hasScore && <span style={{ fontSize: 14, color: "var(--text-dim)", fontWeight: 500 }}>/ 100</span>}
-        <span style={{
-          marginLeft: "auto", fontSize: 12, fontWeight: 600, fontFamily: "var(--font-mono)",
-          color: delta == null ? "var(--text-dim)" : delta > 0 ? GREEN : delta < 0 ? PINK : "var(--text-dim)",
-        }}>
-          {!hasEntries
-            ? t("no_entries_7d")
-            : delta == null
-              ? t("entries_7d", { n: count })
-              : `${delta > 0 ? "+" : ""}${delta} ${t("delta_vs_last_week")}`}
-        </span>
-      </div>
-
-      {/* Progress bar — only shown when score is available */}
-      <div style={{ height: 6, marginTop: 14, background: "var(--border-soft)", borderRadius: 99, overflow: "hidden" }}>
-        <div style={{ height: "100%", width: `${hasScore ? Math.max(0, Math.min(100, score as number)) : 0}%`,
-                      background: `linear-gradient(90deg, ${ACCENT}, ${GREEN})`, borderRadius: 99, transition: "width 0.6s ease" }} />
-      </div>
-
-      {/* Toggle buttons */}
-      <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-        {toggleBtn(t("cs_details"), showDetails, () => setShowDetails(v => !v))}
-        {toggleBtn(t("cs_how"),     showHow,     () => setShowHow(v => !v))}
-      </div>
-
-      {/* ── Aufschlüsselung ── */}
-      {showDetails && (
-        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 9 }}>
-          {buckets.map(b => (
-            <div key={b.label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 11, color: b.color, width: 14, flexShrink: 0, textAlign: "center" }}>{b.icon}</span>
-              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dim)", width: 80, flexShrink: 0 }}>{b.label}</span>
-              <div style={{ flex: 1, height: 5, background: "var(--border-soft)", borderRadius: 99, overflow: "hidden" }}>
-                <div style={{ height: "100%", width: `${pct(b.val)}%`, background: b.color,
-                              borderRadius: 99, transition: "width 0.4s ease", opacity: b.val === 0 ? 0.25 : 1 }} />
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          transformStyle: "preserve-3d",
+          transition: "transform 0.55s cubic-bezier(0.4,0,0.2,1)",
+          transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
+          minHeight: 200,
+        }}
+      >
+        {/* ── FRONT ── */}
+        <div
+          className="glev-control-front"
+          style={{ ...cardBase, padding: "18px 24px 18px" }}
+        >
+          {/* Header — title + sublabel stack, badge right, flip hint */}
+          <div className="glev-control-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)" }}>
+                {t("adapt_score_title")}
               </div>
-              <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", fontWeight: 700,
-                             color: b.color, width: 32, textAlign: "right", flexShrink: 0 }}>
-                {pct(b.val)}%
-              </span>
-              <span style={{ fontSize: 10, color: "var(--text-ghost)", width: 28, flexShrink: 0 }}>
-                ({b.val})
-              </span>
+              <div style={{ fontSize: 11, color: "var(--text-faint)", letterSpacing: "0.06em", marginTop: 2 }}>
+                {t("adapt_score_sublabel")}
+              </div>
             </div>
-          ))}
-        </div>
-      )}
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 2 }}>
+              {hasEntries && (
+                <div style={{ fontSize: 11, fontWeight: 800, color: badge.color, padding: "4px 10px", borderRadius: 99,
+                              border: `1px solid ${badge.color}55`, background: `${badge.color}18`,
+                              letterSpacing: "0.1em", flexShrink: 0 }}>
+                  {badgeText}
+                </div>
+              )}
+              <span style={{ fontSize: 11, color: "var(--text-ghost)", flexShrink: 0 }}>↺</span>
+            </div>
+          </div>
 
-      {/* ── Berechnung ── */}
-      {showHow && (
-        <div style={{ marginTop: 12, padding: "12px 14px", background: `${ACCENT}0a`,
-                      border: `1px solid ${ACCENT}22`, borderRadius: 10,
-                      display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={{ fontSize: 13, color: "var(--text-body)", lineHeight: 1.55, fontFamily: "var(--font-mono)" }}>
-            {t("control_score_formula")}
+          {/* Score row */}
+          <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+            <span style={{ fontSize: 56, fontWeight: 800, color: hasScore ? ACCENT : "var(--text-ghost)", letterSpacing: "-0.03em", fontFamily: "var(--font-mono)", lineHeight: 1 }}>
+              {hasScore ? score : "—"}
+            </span>
+            {hasScore && <span style={{ fontSize: 14, color: "var(--text-dim)", fontWeight: 500 }}>/ 100</span>}
+            <span style={{
+              marginLeft: "auto", fontSize: 12, fontWeight: 600, fontFamily: "var(--font-mono)",
+              color: delta == null ? "var(--text-dim)" : delta > 0 ? GREEN : delta < 0 ? PINK : "var(--text-dim)",
+            }}>
+              {!hasEntries
+                ? t("no_entries_7d")
+                : delta == null
+                  ? t("entries_7d", { n: count })
+                  : `${delta > 0 ? "+" : ""}${delta} ${t("delta_vs_last_week")}`}
+            </span>
           </div>
-          <div style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.55 }}>
-            {t("control_score_explain")}
+
+          {/* Progress bar */}
+          <div style={{ height: 6, marginTop: 14, background: "var(--border-soft)", borderRadius: 99, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${hasScore ? Math.max(0, Math.min(100, score as number)) : 0}%`,
+                          background: `linear-gradient(90deg, ${ACCENT}, ${GREEN})`, borderRadius: 99, transition: "width 0.6s ease" }} />
           </div>
         </div>
-      )}
+
+        {/* ── BACK ── */}
+        <div
+          style={{
+            ...cardBase,
+            transform: "rotateY(180deg)",
+            padding: "16px 20px 14px",
+            display: "flex", flexDirection: "column", gap: 10,
+          }}
+        >
+          {/* Back header */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{
+              fontSize: 11, color: "var(--text-dim)",
+              letterSpacing: "0.1em", fontWeight: 700,
+            }}>
+              {t("control_score_back_title").toUpperCase()}
+            </div>
+            <span style={{ fontSize: 11, color: "var(--text-ghost)" }}>{t("flip_back")}</span>
+          </div>
+
+          {/* Brief explanation */}
+          <div style={{ fontSize: 12, color: "var(--text-body)", lineHeight: 1.5 }}>
+            {t("control_score_back_body")}
+          </div>
+
+          {/* Breakdown buckets */}
+          {hasData && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+              {buckets.map(b => (
+                <div key={b.label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 11, color: b.color, width: 14, flexShrink: 0, textAlign: "center" }}>{b.icon}</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dim)", width: 72, flexShrink: 0 }}>{b.label}</span>
+                  <div style={{ flex: 1, height: 5, background: "var(--border-soft)", borderRadius: 99, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${pct(b.val)}%`, background: b.color,
+                                  borderRadius: 99, transition: "width 0.4s ease", opacity: b.val === 0 ? 0.25 : 1 }} />
+                  </div>
+                  <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", fontWeight: 700,
+                                 color: b.color, width: 32, textAlign: "right", flexShrink: 0 }}>
+                    {pct(b.val)}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Formula + explanation */}
+          <div style={{ padding: "8px 12px", background: `${ACCENT}0a`,
+                        border: `1px solid ${ACCENT}22`, borderRadius: 8,
+                        display: "flex", flexDirection: "column", gap: 5 }}>
+            <div style={{ fontSize: 11, color: "var(--text-body)", lineHeight: 1.5,
+                          fontFamily: "var(--font-mono)" }}>
+              {t("control_score_formula")}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5 }}>
+              {t("control_score_explain")}
+            </div>
+          </div>
+
+          {/* Disclaimer — always visible */}
+          <div style={{
+            marginTop: "auto",
+            borderTop: "1px solid var(--border)", paddingTop: 8,
+            fontSize: 10, color: "var(--text-faint)", lineHeight: 1.4,
+          }}>
+            {t("iob_bg_hint")}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

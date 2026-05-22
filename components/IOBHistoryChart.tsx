@@ -30,6 +30,7 @@ export default function IOBHistoryChart({ insulin, insulinType, meals }: Props) 
   const t = useTranslations("dashboard");
   const router = useRouter();
   const [now, setNow] = useState(() => Date.now());
+  const [flipped, setFlipped] = useState(false);
   const [hours, setHours] = useState<WindowHours>(() => {
     if (typeof window === "undefined") return 24;
     const stored = window.localStorage.getItem(LS_KEY);
@@ -114,8 +115,6 @@ export default function IOBHistoryChart({ insulin, insulinType, meals }: Props) 
     timeLabels.push({ x, label, i: h });
   }
 
-  // Detect local maxima using the extracted pure function (lib/iob.ts → detectIOBPeaks).
-  // We enrich each IOBPeak with SVG coordinates for rendering.
   const peaks = useMemo(() => {
     if (!hasActivity) return [];
     return detectIOBPeaks(samples).map(pk => {
@@ -135,385 +134,478 @@ export default function IOBHistoryChart({ insulin, insulinType, meals }: Props) 
   const POPUP_ROW_H = 17;
   const POPUP_HEAD_H = 18;
 
+  const cardStyle: React.CSSProperties = {
+    background: "var(--surface)",
+    border: "1px solid var(--border)",
+    borderRadius: 18,
+    padding: "18px 18px 14px",
+    boxSizing: "border-box",
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+  };
+
   return (
     <div
+      onClick={() => setFlipped(f => !f)}
       style={{
-        background: "var(--surface)",
-        border: "1px solid var(--border)",
-        borderRadius: 18,
-        padding: "18px 18px 14px",
-        boxSizing: "border-box",
-        display: "flex",
-        flexDirection: "column",
-        gap: 10,
+        position: "relative",
+        perspective: 1200,
+        cursor: "pointer",
+        minHeight: 210,
       }}
     >
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{
-          fontSize: 11, color: "var(--text-dim)",
-          letterSpacing: "0.1em", fontWeight: 700,
-        }}>
-          {t("iob_history_title").toUpperCase()}
-        </div>
-
-        {/* 12 h / 24 h pill toggle */}
-        <div style={{
-          display: "flex",
-          gap: 4,
-          background: "var(--surface-raised, rgba(255,255,255,0.06))",
-          borderRadius: 20,
-          padding: "2px 3px",
-          border: "1px solid var(--border)",
-        }}>
-          {([12, 24] as WindowHours[]).map(opt => {
-            const active = hours === opt;
-            return (
-              <button
-                key={opt}
-                onClick={() => pickWindow(opt)}
-                style={{
-                  fontSize: 10,
-                  fontFamily: "var(--font-mono)",
-                  fontWeight: active ? 700 : 500,
-                  color: active ? "var(--bg, #0f0f10)" : "var(--text-ghost)",
-                  background: active ? "var(--accent, #22D3A0)" : "transparent",
-                  border: "none",
-                  borderRadius: 14,
-                  padding: "2px 8px",
-                  cursor: "pointer",
-                  lineHeight: 1.5,
-                  transition: "background 0.18s, color 0.18s",
-                }}
-              >
-                {opt}&nbsp;h
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Chart area */}
-      {!hasActivity ? (
-        <div style={{
-          height: H,
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          <span style={{ fontSize: 12, color: "var(--text-ghost)" }}>
-            {t("iob_history_empty")}
-          </span>
-        </div>
-      ) : (
-        <svg
-          ref={svgRef}
-          viewBox={`0 0 ${W} ${H}`}
-          width="100%"
-          height={H}
-          style={{ display: "block", overflow: "visible" }}
-          onClick={closePeakPopover}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          transformStyle: "preserve-3d",
+          transition: "transform 0.55s cubic-bezier(0.4,0,0.2,1)",
+          transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
+          minHeight: 210,
+        }}
+      >
+        {/* ── FRONT ── */}
+        <div
+          style={{
+            ...cardStyle,
+            position: "absolute",
+            inset: 0,
+            backfaceVisibility: "hidden",
+          }}
         >
-          <defs>
-            <linearGradient id={`${uid}-fill`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%"   stopColor={color} stopOpacity="0.22" />
-              <stop offset="100%" stopColor={color} stopOpacity="0.02" />
-            </linearGradient>
-          </defs>
-
-          {/* Horizontal grid — floor, mid, top */}
-          <line
-            x1={PAD_L} y1={yFloor} x2={W - PAD_R} y2={yFloor}
-            stroke="var(--border)" strokeWidth="0.6"
-          />
-          <line
-            x1={PAD_L} y1={yMidY} x2={W - PAD_R} y2={yMidY}
-            stroke="var(--border)" strokeWidth="0.5" strokeDasharray="3 4"
-          />
-          <line
-            x1={PAD_L} y1={yTop} x2={W - PAD_R} y2={yTop}
-            stroke="var(--border)" strokeWidth="0.4" strokeDasharray="2 5"
-            opacity="0.5"
-          />
-
-          {/* Y-axis labels */}
-          <text x={PAD_L - 4} y={yFloor - 1} fontSize="7" fill="var(--text-faint)" textAnchor="end">0</text>
-          <text x={PAD_L - 4} y={yMidY + 3}  fontSize="7" fill="var(--text-faint)" textAnchor="end">
-            {yMidV.toFixed(1)}
-          </text>
-          <text x={PAD_L - 4} y={yTop + 4}   fontSize="7" fill="var(--text-faint)" textAnchor="end">
-            {maxIOB.toFixed(1)}
-          </text>
-
-          {/* Area fill */}
-          <path d={areaPath} fill={`url(#${uid}-fill)`} />
-
-          {/* IOB line */}
-          <polyline
-            points={polyPts}
-            fill="none"
-            stroke={color}
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-
-          {/* Peak markers */}
-          {peaks.map((pk, idx) => {
-            const peakColor = iobColor(pk.iob);
-            const timeStr = new Date(pk.tMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-            const label = t("iob_peak_label", { time: timeStr, units: pk.iob.toFixed(1) });
-
-            const pillX = Math.max(PAD_L, Math.min(W - PAD_R - PILL_W, pk.x - PILL_W / 2));
-            const pillY = pk.y - PILL_GAP - PILL_H;
-
-            const isActive = activePeakIdx === idx;
-
-            const activeDoses = isActive
-              ? getActiveDosesAtTime(doses, pk.tMs, diaMin)
-              : [];
-            const popupH = POPUP_HEAD_H + Math.max(1, activeDoses.length) * POPUP_ROW_H + 6;
-            const popupX = Math.max(0, Math.min(W - POPUP_W, pk.x - POPUP_W / 2));
-            const rawPopupY = pillY - popupH - 4;
-            const popupY = rawPopupY < 0 ? pk.y + 10 : rawPopupY;
-
-            return (
-              <g
-                key={idx}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setActivePeakIdx(prev => prev === idx ? null : idx);
+          {/* Header */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{
+              fontSize: 11, color: "var(--text-dim)",
+              letterSpacing: "0.1em", fontWeight: 700,
+            }}>
+              {t("iob_history_title").toUpperCase()}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {/* 12 h / 24 h pill toggle */}
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  display: "flex",
+                  gap: 4,
+                  background: "var(--surface-raised, rgba(255,255,255,0.06))",
+                  borderRadius: 20,
+                  padding: "2px 3px",
+                  border: "1px solid var(--border)",
                 }}
-                style={{ cursor: "pointer" }}
-                role="button"
-                aria-label={label}
               >
-                {/* Wider invisible hit target around the pill + dot */}
-                <rect
-                  x={(pillX - 4).toFixed(1)}
-                  y={(pillY - 4).toFixed(1)}
-                  width={PILL_W + 8}
-                  height={PILL_H + pk.y - pillY + 10}
-                  fill="transparent"
-                />
-
-                {/* Vertical stem from pill to dot */}
-                <line
-                  x1={pk.x.toFixed(1)}
-                  y1={(pillY + PILL_H).toFixed(1)}
-                  x2={pk.x.toFixed(1)}
-                  y2={(pk.y - 3.5).toFixed(1)}
-                  stroke={peakColor}
-                  strokeWidth="0.8"
-                  opacity="0.5"
-                />
-                {/* Pill background */}
-                <rect
-                  x={pillX.toFixed(1)}
-                  y={pillY.toFixed(1)}
-                  width={PILL_W}
-                  height={PILL_H}
-                  rx="3"
-                  ry="3"
-                  fill={isActive ? peakColor : "var(--surface)"}
-                  stroke={peakColor}
-                  strokeWidth={isActive ? "0" : "0.8"}
-                  opacity="0.95"
-                />
-                {/* Pill label text */}
-                <text
-                  x={(pillX + PILL_W / 2).toFixed(1)}
-                  y={(pillY + PILL_H / 2 + 3).toFixed(1)}
-                  fontSize="6.5"
-                  fill={isActive ? "var(--bg, #0f0f10)" : peakColor}
-                  textAnchor="middle"
-                  fontWeight="600"
-                  fontFamily="var(--font-mono)"
-                >
-                  {label}
-                </text>
-                {/* Peak dot */}
-                <circle
-                  cx={pk.x.toFixed(1)}
-                  cy={pk.y.toFixed(1)}
-                  r="3"
-                  fill={peakColor}
-                  stroke="var(--surface)"
-                  strokeWidth="1"
-                />
-
-                {/* Dose popover — rendered as foreignObject in SVG space */}
-                {isActive && (
-                  <foreignObject
-                    x={popupX}
-                    y={popupY}
-                    width={POPUP_W}
-                    height={popupH}
-                    style={{ overflow: "visible" }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <div
+                {([12, 24] as WindowHours[]).map(opt => {
+                  const active = hours === opt;
+                  return (
+                    <button
+                      key={opt}
+                      onClick={(e) => { e.stopPropagation(); pickWindow(opt); }}
                       style={{
-                        background: "var(--surface)",
-                        border: `1px solid ${peakColor}`,
-                        borderRadius: 6,
-                        padding: "5px 8px 6px",
-                        boxShadow: "0 4px 16px rgba(0,0,0,0.35)",
-                        fontSize: 9,
+                        fontSize: 10,
                         fontFamily: "var(--font-mono)",
-                        color: "var(--text)",
-                        width: POPUP_W,
-                        boxSizing: "border-box",
+                        fontWeight: active ? 700 : 500,
+                        color: active ? "var(--bg, #0f0f10)" : "var(--text-ghost)",
+                        background: active ? "var(--accent, #22D3A0)" : "transparent",
+                        border: "none",
+                        borderRadius: 14,
+                        padding: "2px 8px",
+                        cursor: "pointer",
+                        lineHeight: 1.5,
+                        transition: "background 0.18s, color 0.18s",
                       }}
                     >
-                      {/* Popover header */}
-                      <div style={{
-                        fontSize: 8,
-                        fontWeight: 700,
-                        color: peakColor,
-                        letterSpacing: "0.06em",
-                        marginBottom: 4,
-                        textTransform: "uppercase",
-                      }}>
-                        {t("iob_peak_popover_title", { time: new Date(pk.tMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) })}
-                      </div>
+                      {opt}&nbsp;h
+                    </button>
+                  );
+                })}
+              </div>
+              <span style={{ fontSize: 11, color: "var(--text-ghost)" }}>↺</span>
+            </div>
+          </div>
 
-                      {/* Dose rows */}
-                      {activeDoses.length === 0 ? (
-                        <div style={{ color: "var(--text-ghost)", fontSize: 8 }}>
-                          {t("iob_no_active_doses")}
-                        </div>
-                      ) : (
-                        activeDoses.map((d, di) => {
-                          const doseTime = new Date(d.administeredAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-                          const sourceName = d.label
-                            || (d.source === "meal" ? t("iob_peak_popover_meal_label") : t("iob_peak_manual_bolus"));
-                          const isMeal = d.source === "meal" && !!d.mealId;
-                          const isInsulin = d.source === "insulin" && !!d.insulinLogId;
-                          const isTappable = isMeal || isInsulin;
-                          const handleClick = isMeal
-                            ? (e: React.MouseEvent) => { e.stopPropagation(); router.push(`/entries#${d.mealId}`); }
-                            : isInsulin
-                            ? (e: React.MouseEvent) => { e.stopPropagation(); router.push(`/entries#insulin-${d.insulinLogId}`); }
-                            : undefined;
-                          return (
-                            <div
-                              key={di}
-                              onClick={handleClick}
-                              role={isTappable ? "link" : undefined}
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                                gap: 6,
-                                padding: "1px 0",
-                                borderTop: di > 0 ? "0.5px solid var(--border)" : undefined,
-                                cursor: isTappable ? "pointer" : "default",
-                              }}
-                            >
-                              <span style={{
-                                color: isTappable ? "var(--text)" : "var(--text-dim)",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
-                                maxWidth: 88,
-                                fontSize: 8.5,
-                                flexShrink: 1,
-                                minWidth: 0,
-                              }}>
-                                {doseTime} · {sourceName}
-                              </span>
-                              <span style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 3,
-                                flexShrink: 0,
-                              }}>
-                                <span style={{
-                                  color: peakColor,
-                                  fontWeight: 700,
-                                  whiteSpace: "nowrap",
-                                  fontSize: 9,
-                                }}>
-                                  {t("iob_peak_dose_units", { units: d.units.toFixed(1) })}
-                                </span>
-                                {isTappable && (
-                                  <svg
-                                    width="7" height="10"
-                                    viewBox="0 0 6 10"
-                                    fill="none"
-                                    style={{ opacity: 0.45, flexShrink: 0 }}
-                                  >
-                                    <path
-                                      d="M1 1l4 4-4 4"
-                                      stroke="var(--text-dim)"
-                                      strokeWidth="1.5"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                    />
-                                  </svg>
-                                )}
-                              </span>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </foreignObject>
-                )}
-              </g>
-            );
-          })}
-
-          {/* "Now" marker — rightmost edge */}
-          <line
-            x1={W - PAD_R} y1={PAD_T}
-            x2={W - PAD_R} y2={PAD_T + chartH}
-            stroke={color} strokeWidth="1.5" strokeDasharray="3 2" opacity="0.7"
-          />
-
-          {/* Current IOB dot */}
-          <circle
-            cx={(W - PAD_R).toFixed(1)}
-            cy={pts[pts.length - 1].y.toFixed(1)}
-            r="3"
-            fill={color}
-            opacity="0.9"
-          />
-
-          {/* Time labels */}
-          {timeLabels.map((l, idx) => (
-            <text
-              key={l.i}
-              x={l.x}
-              y={H - 2}
-              fontSize="7"
-              fill="var(--text-faint)"
-              textAnchor={
-                idx === 0
-                  ? "start"
-                  : idx === timeLabels.length - 1
-                    ? "end"
-                    : "middle"
-              }
+          {/* Chart area */}
+          {!hasActivity ? (
+            <div style={{
+              height: H,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <span style={{ fontSize: 12, color: "var(--text-ghost)" }}>
+                {t("iob_history_empty")}
+              </span>
+            </div>
+          ) : (
+            <svg
+              ref={svgRef}
+              viewBox={`0 0 ${W} ${H}`}
+              width="100%"
+              height={H}
+              style={{ display: "block", overflow: "visible" }}
+              onClick={() => { closePeakPopover(); }}
             >
-              {l.label}
-            </text>
-          ))}
-        </svg>
-      )}
+              <defs>
+                <linearGradient id={`${uid}-fill`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%"   stopColor={color} stopOpacity="0.22" />
+                  <stop offset="100%" stopColor={color} stopOpacity="0.02" />
+                </linearGradient>
+              </defs>
 
-      {/* Footer row */}
-      <div style={{
-        fontSize: 10, color: "var(--text-faint)",
-        display: "flex", justifyContent: "space-between", alignItems: "center",
-      }}>
-        <span>{t("iob_history_interval", { minutes: 15 })}</span>
-        <span style={{
-          fontFamily: "var(--font-mono)",
-          color: currentIOB > 0.05 ? color : "var(--text-ghost)",
-          fontWeight: 700, fontSize: 11,
-        }}>
-          {t("iob_history_current", { units: currentIOB.toFixed(1) })}
-        </span>
+              {/* Horizontal grid — floor, mid, top */}
+              <line
+                x1={PAD_L} y1={yFloor} x2={W - PAD_R} y2={yFloor}
+                stroke="var(--border)" strokeWidth="0.6"
+              />
+              <line
+                x1={PAD_L} y1={yMidY} x2={W - PAD_R} y2={yMidY}
+                stroke="var(--border)" strokeWidth="0.5" strokeDasharray="3 4"
+              />
+              <line
+                x1={PAD_L} y1={yTop} x2={W - PAD_R} y2={yTop}
+                stroke="var(--border)" strokeWidth="0.4" strokeDasharray="2 5"
+                opacity="0.5"
+              />
+
+              {/* Y-axis labels */}
+              <text x={PAD_L - 4} y={yFloor - 1} fontSize="7" fill="var(--text-faint)" textAnchor="end">0</text>
+              <text x={PAD_L - 4} y={yMidY + 3}  fontSize="7" fill="var(--text-faint)" textAnchor="end">
+                {yMidV.toFixed(1)}
+              </text>
+              <text x={PAD_L - 4} y={yTop + 4}   fontSize="7" fill="var(--text-faint)" textAnchor="end">
+                {maxIOB.toFixed(1)}
+              </text>
+
+              {/* Area fill */}
+              <path d={areaPath} fill={`url(#${uid}-fill)`} />
+
+              {/* IOB line */}
+              <polyline
+                points={polyPts}
+                fill="none"
+                stroke={color}
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+
+              {/* Peak markers */}
+              {peaks.map((pk, idx) => {
+                const peakColor = iobColor(pk.iob);
+                const timeStr = new Date(pk.tMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                const label = t("iob_peak_label", { time: timeStr, units: pk.iob.toFixed(1) });
+
+                const pillX = Math.max(PAD_L, Math.min(W - PAD_R - PILL_W, pk.x - PILL_W / 2));
+                const pillY = pk.y - PILL_GAP - PILL_H;
+
+                const isActive = activePeakIdx === idx;
+
+                const activeDoses = isActive
+                  ? getActiveDosesAtTime(doses, pk.tMs, diaMin)
+                  : [];
+                const popupH = POPUP_HEAD_H + Math.max(1, activeDoses.length) * POPUP_ROW_H + 6;
+                const popupX = Math.max(0, Math.min(W - POPUP_W, pk.x - POPUP_W / 2));
+                const rawPopupY = pillY - popupH - 4;
+                const popupY = rawPopupY < 0 ? pk.y + 10 : rawPopupY;
+
+                return (
+                  <g
+                    key={idx}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActivePeakIdx(prev => prev === idx ? null : idx);
+                    }}
+                    style={{ cursor: "pointer" }}
+                    role="button"
+                    aria-label={label}
+                  >
+                    {/* Wider invisible hit target around the pill + dot */}
+                    <rect
+                      x={(pillX - 4).toFixed(1)}
+                      y={(pillY - 4).toFixed(1)}
+                      width={PILL_W + 8}
+                      height={PILL_H + pk.y - pillY + 10}
+                      fill="transparent"
+                    />
+
+                    {/* Vertical stem from pill to dot */}
+                    <line
+                      x1={pk.x.toFixed(1)}
+                      y1={(pillY + PILL_H).toFixed(1)}
+                      x2={pk.x.toFixed(1)}
+                      y2={(pk.y - 3.5).toFixed(1)}
+                      stroke={peakColor}
+                      strokeWidth="0.8"
+                      opacity="0.5"
+                    />
+                    {/* Pill background */}
+                    <rect
+                      x={pillX.toFixed(1)}
+                      y={pillY.toFixed(1)}
+                      width={PILL_W}
+                      height={PILL_H}
+                      rx="3"
+                      ry="3"
+                      fill={isActive ? peakColor : "var(--surface)"}
+                      stroke={peakColor}
+                      strokeWidth={isActive ? "0" : "0.8"}
+                      opacity="0.95"
+                    />
+                    {/* Pill label text */}
+                    <text
+                      x={(pillX + PILL_W / 2).toFixed(1)}
+                      y={(pillY + PILL_H / 2 + 3).toFixed(1)}
+                      fontSize="6.5"
+                      fill={isActive ? "var(--bg, #0f0f10)" : peakColor}
+                      textAnchor="middle"
+                      fontWeight="600"
+                      fontFamily="var(--font-mono)"
+                    >
+                      {label}
+                    </text>
+                    {/* Peak dot */}
+                    <circle
+                      cx={pk.x.toFixed(1)}
+                      cy={pk.y.toFixed(1)}
+                      r="3"
+                      fill={peakColor}
+                      stroke="var(--surface)"
+                      strokeWidth="1"
+                    />
+
+                    {/* Dose popover — rendered as foreignObject in SVG space */}
+                    {isActive && (
+                      <foreignObject
+                        x={popupX}
+                        y={popupY}
+                        width={POPUP_W}
+                        height={popupH}
+                        style={{ overflow: "visible" }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div
+                          style={{
+                            background: "var(--surface)",
+                            border: `1px solid ${peakColor}`,
+                            borderRadius: 6,
+                            padding: "5px 8px 6px",
+                            boxShadow: "0 4px 16px rgba(0,0,0,0.35)",
+                            fontSize: 9,
+                            fontFamily: "var(--font-mono)",
+                            color: "var(--text)",
+                            width: POPUP_W,
+                            boxSizing: "border-box",
+                          }}
+                        >
+                          {/* Popover header */}
+                          <div style={{
+                            fontSize: 8,
+                            fontWeight: 700,
+                            color: peakColor,
+                            letterSpacing: "0.06em",
+                            marginBottom: 4,
+                            textTransform: "uppercase",
+                          }}>
+                            {t("iob_peak_popover_title", { time: new Date(pk.tMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) })}
+                          </div>
+
+                          {/* Dose rows */}
+                          {activeDoses.length === 0 ? (
+                            <div style={{ color: "var(--text-ghost)", fontSize: 8 }}>
+                              {t("iob_no_active_doses")}
+                            </div>
+                          ) : (
+                            activeDoses.map((d, di) => {
+                              const doseTime = new Date(d.administeredAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                              const sourceName = d.label
+                                || (d.source === "meal" ? t("iob_peak_popover_meal_label") : t("iob_peak_manual_bolus"));
+                              const isMeal = d.source === "meal" && !!d.mealId;
+                              const isInsulin = d.source === "insulin" && !!d.insulinLogId;
+                              const isTappable = isMeal || isInsulin;
+                              const handleClick = isMeal
+                                ? (e: React.MouseEvent) => { e.stopPropagation(); router.push(`/entries#${d.mealId}`); }
+                                : isInsulin
+                                ? (e: React.MouseEvent) => { e.stopPropagation(); router.push(`/entries#insulin-${d.insulinLogId}`); }
+                                : undefined;
+                              return (
+                                <div
+                                  key={di}
+                                  onClick={handleClick}
+                                  role={isTappable ? "link" : undefined}
+                                  style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    gap: 6,
+                                    padding: "1px 0",
+                                    borderTop: di > 0 ? "0.5px solid var(--border)" : undefined,
+                                    cursor: isTappable ? "pointer" : "default",
+                                  }}
+                                >
+                                  <span style={{
+                                    color: isTappable ? "var(--text)" : "var(--text-dim)",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                    maxWidth: 88,
+                                    fontSize: 8.5,
+                                    flexShrink: 1,
+                                    minWidth: 0,
+                                  }}>
+                                    {doseTime} · {sourceName}
+                                  </span>
+                                  <span style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 3,
+                                    flexShrink: 0,
+                                  }}>
+                                    <span style={{
+                                      color: peakColor,
+                                      fontWeight: 700,
+                                      whiteSpace: "nowrap",
+                                      fontSize: 9,
+                                    }}>
+                                      {t("iob_peak_dose_units", { units: d.units.toFixed(1) })}
+                                    </span>
+                                    {isTappable && (
+                                      <svg
+                                        width="7" height="10"
+                                        viewBox="0 0 6 10"
+                                        fill="none"
+                                        style={{ opacity: 0.45, flexShrink: 0 }}
+                                      >
+                                        <path
+                                          d="M1 1l4 4-4 4"
+                                          stroke="var(--text-dim)"
+                                          strokeWidth="1.5"
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                        />
+                                      </svg>
+                                    )}
+                                  </span>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </foreignObject>
+                    )}
+                  </g>
+                );
+              })}
+
+              {/* "Now" marker — rightmost edge */}
+              <line
+                x1={W - PAD_R} y1={PAD_T}
+                x2={W - PAD_R} y2={PAD_T + chartH}
+                stroke={color} strokeWidth="1.5" strokeDasharray="3 2" opacity="0.7"
+              />
+
+              {/* Current IOB dot */}
+              <circle
+                cx={(W - PAD_R).toFixed(1)}
+                cy={pts[pts.length - 1].y.toFixed(1)}
+                r="3"
+                fill={color}
+                opacity="0.9"
+              />
+
+              {/* Time labels */}
+              {timeLabels.map((l, idx) => (
+                <text
+                  key={l.i}
+                  x={l.x}
+                  y={H - 2}
+                  fontSize="7"
+                  fill="var(--text-faint)"
+                  textAnchor={
+                    idx === 0
+                      ? "start"
+                      : idx === timeLabels.length - 1
+                        ? "end"
+                        : "middle"
+                  }
+                >
+                  {l.label}
+                </text>
+              ))}
+            </svg>
+          )}
+
+          {/* Footer row */}
+          <div style={{
+            fontSize: 10, color: "var(--text-faint)",
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+          }}>
+            <span>{t("iob_history_interval", { minutes: 15 })}</span>
+            <span style={{
+              fontFamily: "var(--font-mono)",
+              color: currentIOB > 0.05 ? color : "var(--text-ghost)",
+              fontWeight: 700, fontSize: 11,
+            }}>
+              {t("iob_history_current", { units: currentIOB.toFixed(1) })}
+            </span>
+          </div>
+        </div>
+
+        {/* ── BACK ── */}
+        <div
+          style={{
+            ...cardStyle,
+            position: "absolute",
+            inset: 0,
+            backfaceVisibility: "hidden",
+            transform: "rotateY(180deg)",
+          }}
+        >
+          {/* Back header */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{
+              fontSize: 11, color: "var(--text-dim)",
+              letterSpacing: "0.1em", fontWeight: 700,
+            }}>
+              {t("iob_history_back_title").toUpperCase()}
+            </div>
+            <span style={{ fontSize: 11, color: "var(--text-ghost)" }}>{t("flip_back")}</span>
+          </div>
+
+          {/* Explanation */}
+          <div style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+          }}>
+            <div style={{ fontSize: 13, color: "var(--text-body)", lineHeight: 1.55 }}>
+              {t("iob_history_back_body")}
+            </div>
+            <div style={{
+              padding: "10px 12px",
+              background: "var(--surface-soft)",
+              border: "1px solid var(--border)",
+              borderRadius: 10,
+            }}>
+              <div style={{
+                fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+                color: "var(--text-dim)", textTransform: "uppercase", marginBottom: 5,
+              }}>
+                {t("cs_how")}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.55 }}>
+                {t("iob_history_back_how")}
+              </div>
+            </div>
+          </div>
+
+          {/* Disclaimer — always visible */}
+          <div style={{
+            borderTop: "1px solid var(--border)",
+            paddingTop: 8,
+            fontSize: 10, color: "var(--text-faint)", lineHeight: 1.4,
+          }}>
+            {t("iob_bg_hint")}
+          </div>
+        </div>
       </div>
     </div>
   );
