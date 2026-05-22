@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { logDebug } from "./debug";
+import { insertInsulinLog } from "./insulin";
 
 export interface ParsedFood {
   name: string;
@@ -320,6 +321,31 @@ export async function saveMeal(input: SaveMealInput): Promise<Meal> {
         });
         await recordItemsToHistory(supabase!, user.id, items, { source: "history" });
       } catch { /* see contract above */ }
+    })();
+  }
+
+  // Mirror the meal bolus into insulin_logs so IOB, Engine safety hooks,
+  // and Insights ICR pairing all read from one source of truth.
+  // Fire-and-forget: a mirror failure never prevents the meal from saving.
+  // IOBCard deduplicates via related_entry_id, so no double-counting occurs.
+  if ((input.insulinUnits ?? 0) > 0) {
+    void (async () => {
+      try {
+        await insertInsulinLog({
+          insulin_type: "bolus",
+          insulin_name: "Mahlzeit-Bolus",
+          units: input.insulinUnits!,
+          cgm_glucose_at_log: input.glucoseBefore ?? null,
+          related_entry_id: data.id,
+          // Align the bolus timestamp with the actual meal time so IOB
+          // decay starts at the right moment.
+          at: (input.mealTime ?? input.createdAt) ?? undefined,
+        });
+      } catch {
+        // Mirror failure is intentionally swallowed — the meal row is
+        // already persisted and the client-side IOBCard fallback still
+        // covers legacy rows without a linked insulin_log.
+      }
     })();
   }
 

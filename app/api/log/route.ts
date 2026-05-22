@@ -57,5 +57,12 @@ export async function POST(req: NextRequest) {
     console.warn("[sheets] entry sync skipped:", e.message),
   );
 
+  // NOTE: This legacy route inserts into the `logs` table, not `meals`.
+  // IOBCard reads from `meals` only, so the meal-bolus mirror into
+  // `insulin_logs` (Task #471) does not apply here — the supabase client
+  // in this server route also has no authenticated session to satisfy
+  // insulin_logs RLS. Meal saves via saveMeal() (lib/meals.ts) do the
+  // mirror correctly.
+
   return NextResponse.json({ ok: true, entry: data }, { status: 201 });
 }
