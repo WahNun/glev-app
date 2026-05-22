@@ -3261,14 +3261,14 @@ export default function EnginePage() {
                     {iobDisplay && (
                       <div style={{ marginBottom: 10, padding: "8px 14px", background: "rgba(255,165,0,0.1)", border: "1px solid rgba(255,165,0,0.3)", borderRadius: 10, textAlign: "center" }}>
                         <span style={{ fontSize: 12, color: "rgba(255,200,80,0.85)" }}>
-                          ⚡ Noch aktiv: {iobDisplay} — Empfehlung bereits bereinigt
+                          {tEngine("iob_active", { iobDisplay })}
                         </span>
                       </div>
                     )}
                     {iob > 0 && result.dose <= iob && (
                       <div style={{ marginBottom: 10, padding: "8px 14px", background: "rgba(0,200,100,0.1)", border: "1px solid rgba(0,200,100,0.3)", borderRadius: 10, textAlign: "center" }}>
                         <span style={{ fontSize: 12, color: "rgba(80,220,140,0.9)" }}>
-                          ✓ Kein zusätzliches Insulin nötig — bestehende Wirkung reicht aus
+                          {tEngine("iob_covers_dose")}
                         </span>
                       </div>
                     )}

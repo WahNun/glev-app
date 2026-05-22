@@ -301,6 +301,8 @@
     "toast_meal_saved": "Meal saved ✓",
     "recommended_dose_label": "Reference value",
     "dose_rounded_to_zero": "Recommendation < 0.1 u — no bolus needed",
+    "iob_active": "⚡ Still active: {iobDisplay} — recommendation already adjusted",
+    "iob_covers_dose": "✓ No additional insulin needed — existing effect is sufficient",
     "units_short": "u",
     "icr_label": "ICR",
     "icr_comparison_title": "Select ICR",
