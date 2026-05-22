@@ -1652,6 +1652,7 @@
     "iob_history_empty": "Heute noch kein aktives Insulin",
     "iob_history_interval": "Abtastrate 15 min",
     "iob_history_current": "Jetzt {units} IE",
+    "iob_peak_label": "{time} · {units} IE",
     "reorder_cluster_aria": "Zum Umsortieren ziehen",
     "log_meal_cta": "+ Mahlzeit loggen",
     "flip_back": "↺ zurück",

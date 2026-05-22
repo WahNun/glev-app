@@ -93,7 +93,29 @@ export default function IOBHistoryChart({ insulin, insulinType, meals }: Props) 
     timeLabels.push({ x, label, i: h });
   }
 
+  // Detect local maxima: peak IOB must be at least 0.5 IE above the lower of its two neighbors.
+  // Cap at 3 peaks (highest values win) to avoid visual clutter.
+  const peaks = useMemo(() => {
+    if (!hasActivity) return [];
+    const found: Array<{ x: number; y: number; iob: number; tMs: number }> = [];
+    for (let i = 1; i < samples.length - 1; i++) {
+      const cur  = samples[i].iob;
+      const prev = samples[i - 1].iob;
+      const next = samples[i + 1].iob;
+      if (cur > prev && cur > next && cur - Math.min(prev, next) >= 0.5) {
+        found.push({ x: pts[i].x, y: pts[i].y, iob: cur, tMs: samples[i].tMs });
+      }
+    }
+    return found.sort((a, b) => b.iob - a.iob).slice(0, 3);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [samples, hasActivity]);
+
   const uid = `iob-hist-${Math.round(now / 60_000)}`;
+
+  // Label pill dimensions
+  const PILL_W = 46;
+  const PILL_H = 16;
+  const PILL_GAP = 5; // gap between dot and pill bottom
 
   return (
     <div
@@ -213,6 +235,66 @@ export default function IOBHistoryChart({ insulin, insulinType, meals }: Props) 
             strokeLinecap="round"
             strokeLinejoin="round"
           />
+
+          {/* Peak markers */}
+          {peaks.map((pk, idx) => {
+            const peakColor = iobColor(pk.iob);
+            const timeStr = new Date(pk.tMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+            const label = t("iob_peak_label", { time: timeStr, units: pk.iob.toFixed(1) });
+
+            // Pill top-left corner (pill centered on peak x, sitting above the dot)
+            const pillX = Math.max(PAD_L, Math.min(W - PAD_R - PILL_W, pk.x - PILL_W / 2));
+            const pillY = pk.y - PILL_GAP - PILL_H;
+
+            return (
+              <g key={idx}>
+                {/* Vertical stem from pill to dot */}
+                <line
+                  x1={pk.x.toFixed(1)}
+                  y1={(pillY + PILL_H).toFixed(1)}
+                  x2={pk.x.toFixed(1)}
+                  y2={(pk.y - 3.5).toFixed(1)}
+                  stroke={peakColor}
+                  strokeWidth="0.8"
+                  opacity="0.5"
+                />
+                {/* Pill background */}
+                <rect
+                  x={pillX.toFixed(1)}
+                  y={pillY.toFixed(1)}
+                  width={PILL_W}
+                  height={PILL_H}
+                  rx="3"
+                  ry="3"
+                  fill="var(--surface)"
+                  stroke={peakColor}
+                  strokeWidth="0.8"
+                  opacity="0.95"
+                />
+                {/* Pill label text */}
+                <text
+                  x={(pillX + PILL_W / 2).toFixed(1)}
+                  y={(pillY + PILL_H / 2 + 3).toFixed(1)}
+                  fontSize="6.5"
+                  fill={peakColor}
+                  textAnchor="middle"
+                  fontWeight="600"
+                  fontFamily="var(--font-mono)"
+                >
+                  {label}
+                </text>
+                {/* Peak dot */}
+                <circle
+                  cx={pk.x.toFixed(1)}
+                  cy={pk.y.toFixed(1)}
+                  r="3"
+                  fill={peakColor}
+                  stroke="var(--surface)"
+                  strokeWidth="1"
+                />
+              </g>
+            );
+          })}
 
           {/* "Now" marker — rightmost edge */}
           <line
