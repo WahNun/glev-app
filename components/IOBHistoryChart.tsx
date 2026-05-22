@@ -387,14 +387,18 @@ export default function IOBHistoryChart({ insulin, insulinType, meals }: Props) 
                           const sourceName = d.label
                             || (d.source === "meal" ? t("iob_peak_popover_meal_label") : t("iob_peak_manual_bolus"));
                           const isMeal = d.source === "meal" && !!d.mealId;
+                          const isInsulin = d.source === "insulin" && !!d.insulinLogId;
+                          const isTappable = isMeal || isInsulin;
+                          const handleClick = isMeal
+                            ? (e: React.MouseEvent) => { e.stopPropagation(); router.push(`/entries#${d.mealId}`); }
+                            : isInsulin
+                            ? (e: React.MouseEvent) => { e.stopPropagation(); router.push(`/entries#insulin-${d.insulinLogId}`); }
+                            : undefined;
                           return (
                             <div
                               key={di}
-                              onClick={isMeal ? (e) => {
-                                e.stopPropagation();
-                                router.push(`/entries#${d.mealId}`);
-                              } : undefined}
-                              role={isMeal ? "link" : undefined}
+                              onClick={handleClick}
+                              role={isTappable ? "link" : undefined}
                               style={{
                                 display: "flex",
                                 justifyContent: "space-between",
@@ -402,11 +406,11 @@ export default function IOBHistoryChart({ insulin, insulinType, meals }: Props) 
                                 gap: 6,
                                 padding: "1px 0",
                                 borderTop: di > 0 ? "0.5px solid var(--border)" : undefined,
-                                cursor: isMeal ? "pointer" : "default",
+                                cursor: isTappable ? "pointer" : "default",
                               }}
                             >
                               <span style={{
-                                color: isMeal ? "var(--text)" : "var(--text-dim)",
+                                color: isTappable ? "var(--text)" : "var(--text-dim)",
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
                                 whiteSpace: "nowrap",
@@ -431,7 +435,7 @@ export default function IOBHistoryChart({ insulin, insulinType, meals }: Props) 
                                 }}>
                                   {t("iob_peak_dose_units", { units: d.units.toFixed(1) })}
                                 </span>
-                                {isMeal && (
+                                {isTappable && (
                                   <svg
                                     width="7" height="10"
                                     viewBox="0 0 6 10"

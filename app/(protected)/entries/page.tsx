@@ -593,16 +593,34 @@ export default function EntriesPage() {
 
   // Deep-link via URL hash: /entries#<id> auto-expands to the full view so
   // "View full entry →" from the dashboard lands the user on the right row.
+  // Also handles /entries#insulin-<id> for insulin log rows (navigated from
+  // the IOB peak popover — Task #501).
   useEffect(() => {
-    const id = typeof window !== "undefined" ? window.location.hash.replace(/^#/, "") : "";
-    if (!id || meals.length === 0) return;
-    if (meals.some(m => m.id === id)) {
-      setExpanded(id);
+    const hash = typeof window !== "undefined" ? window.location.hash.replace(/^#/, "") : "";
+    if (!hash) return;
+
+    // Insulin log deep-link: #insulin-<uuid>
+    if (hash.startsWith("insulin-")) {
+      const insulinId = hash.slice("insulin-".length);
+      if (!insulinId || insulin.length === 0) return;
+      if (insulin.some(l => l.id === insulinId)) {
+        setExpanded(insulinId);
+        requestAnimationFrame(() => {
+          document.getElementById(`entry-insulin-${insulinId}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+      }
+      return;
+    }
+
+    // Meal deep-link: #<uuid>
+    if (meals.length === 0) return;
+    if (meals.some(m => m.id === hash)) {
+      setExpanded(hash);
       requestAnimationFrame(() => {
-        document.getElementById(`entry-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+        document.getElementById(`entry-${hash}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
     }
-  }, [meals]);
+  }, [meals, insulin]);
 
   async function handleDelete(id: string) {
     if (!confirm("Delete this entry? This cannot be undone.")) return;
@@ -1602,6 +1620,7 @@ const BASAL_ACCENT   = "#A78BFA";
 const EXERCISE_ACCENT = "#22C55E";
 
 function NonMealRow({
+  id,
   isOpen, onToggle, onDelete, deleting, onEdit, accent, badge, dateStr, timeStr,
   primaryLabel, primaryValue, primaryColor, primaryMono,
   secondaryLabel, secondaryValue, secondaryColor, secondaryMono,
@@ -1610,6 +1629,8 @@ function NonMealRow({
   expandedDetails,
   suppressActions,
 }: {
+  /** Optional DOM id — used for hash deep-link scroll targeting (e.g. id="entry-insulin-<uuid>"). */
+  id?: string;
   isOpen: boolean;
   onToggle: () => void;
   onDelete: () => void;
@@ -1656,7 +1677,7 @@ function NonMealRow({
 }) {
   const tx = useTranslations("entriesExpand");
   return (
-    <div style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, overflow:"hidden" }}>
+    <div id={id} style={{ background:SURFACE, border:`1px solid ${BORDER}`, borderRadius:14, overflow:"hidden" }}>
       {!isOpen ? (
         <div onClick={onToggle} className="glev-mec" style={{
           padding:"14px 16px", cursor:"pointer", alignItems:"start",
@@ -2143,6 +2164,7 @@ function BolusRowCard({ log, meals, isOpen, onToggle, onDelete, deleting }: {
 
   return (
     <NonMealRow
+      id={`entry-insulin-${log.id}`}
       isOpen={isOpen}
       onToggle={editing ? () => {} : onToggle}
       onDelete={onDelete}

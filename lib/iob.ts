@@ -2,6 +2,7 @@ export type InsulinType = 'rapid' | 'regular' | 'unknown';
 
 /** Minimal shape of an insulin log entry needed by buildDoses. */
 export interface InsulinLike {
+  id?: string;
   insulin_type: string;
   units: number;
   created_at: string;
@@ -37,6 +38,8 @@ export interface BolusDose {
   label?: string;
   /** For meal-sourced doses: the originating meal's UUID. Used to deep-link into /entries#<mealId>. */
   mealId?: string;
+  /** For insulin-log-sourced doses: the insulin_log UUID. Used to deep-link into /entries#insulin-<id>. */
+  insulinLogId?: string;
 }
 
 export function calcSingleIOB(dose: BolusDose, nowMs: number, diaMinutes: number): number {
@@ -85,6 +88,7 @@ export function buildDoses(
         administeredAt: l.created_at,
         source: 'insulin',
         label: l.insulin_name ?? 'Manual bolus',
+        insulinLogId: l.id,
       });
     }
   }
