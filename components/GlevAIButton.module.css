@@ -1,18 +1,17 @@
 /* ── GlevAIButton ──────────────────────────────────────────────────
-   64×64 round button that replaces the legacy Glev FAB.
-   All keyframes are scoped to this module (Next.js CSS Modules hashes
-   them automatically, so animation references inside this file work
-   without any :global wrapper).
+   64×64 round button with animated Glev logo in the center.
+   pointer-events: none on .btn so the parent <button> in Layout.tsx
+   handles all short/long-press interactions — the icon is purely visual.
    ──────────────────────────────────────────────────────────────── */
 
 @keyframes glevBreath {
-  0%, 100% { opacity: 0.72; transform: scale(1); }
-  50%       { opacity: 1;    transform: scale(1.04); }
+  0%, 100% { opacity: 0.85; transform: scale(1); }
+  50%       { opacity: 1;    transform: scale(1.05); }
 }
 
 @keyframes glevBreathFast {
   0%, 100% { opacity: 0.7;  transform: scale(0.97); }
-  50%       { opacity: 1;    transform: scale(1.04); }
+  50%       { opacity: 1;    transform: scale(1.05); }
 }
 
 @keyframes glevSweep {
@@ -46,25 +45,14 @@
   100% { transform: translateX(0)      translateY(0); opacity: 0.85; }
 }
 
-@keyframes glevIconRing {
-  0%, 100% { opacity: 0.72; transform: scale(1); }
-  50%       { opacity: 1;    transform: scale(1.06); }
+@keyframes glevIconPulse {
+  0%, 100% { opacity: 0.80; transform: scale(0.96); filter: drop-shadow(0 0 4px rgba(255,255,255,0.2)); }
+  50%       { opacity: 1;    transform: scale(1.06); filter: drop-shadow(0 0 8px rgba(255,255,255,0.55)) drop-shadow(0 0 14px rgba(79,110,247,0.6)); }
 }
 
-@keyframes glevIconRingFast {
-  0%, 100% { opacity: 0.65; transform: scale(0.96); }
-  50%       { opacity: 1;    transform: scale(1.08); }
-}
-
-@keyframes glevIconDot {
-  0%, 100% { opacity: 0.55; transform: scale(0.85); }
-  30%       { opacity: 1;    transform: scale(1.25); }
-  60%       { opacity: 0.8;  transform: scale(1.05); }
-}
-
-@keyframes glevIconDotFast {
-  0%, 100% { opacity: 0.5; transform: scale(0.8); }
-  50%       { opacity: 1;   transform: scale(1.35); }
+@keyframes glevIconPulseFast {
+  0%, 100% { opacity: 0.70; transform: scale(0.94); filter: drop-shadow(0 0 3px rgba(255,255,255,0.15)); }
+  50%       { opacity: 1;    transform: scale(1.08); filter: drop-shadow(0 0 10px rgba(255,255,255,0.6)) drop-shadow(0 0 18px rgba(79,110,247,0.7)); }
 }
 
 /* ── Container ───────────────────────────────────────────────────── */
@@ -75,10 +63,11 @@
   height: 64px;
   border-radius: 50%;
   background: linear-gradient(145deg, rgba(10, 18, 40, 0.96), rgba(4, 10, 22, 0.98));
-  border: 1px solid rgba(79, 110, 247, 0.28);
+  border: 1px solid rgba(79, 110, 247, 0.35);
   box-shadow:
-    inset 0 0 18px rgba(79, 110, 247, 0.07),
-    0 0 12px rgba(79, 110, 247, 0.08);
+    inset 0 0 18px rgba(79, 110, 247, 0.08),
+    0 0 14px rgba(79, 110, 247, 0.30),
+    0 0 28px rgba(79, 110, 247, 0.15);
   isolation: isolate;
   overflow: hidden;
   cursor: pointer;
@@ -87,10 +76,16 @@
   justify-content: center;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
   -webkit-tap-highlight-color: transparent;
+  /* Purely visual — the parent <button> in Layout.tsx handles all taps */
+  pointer-events: none;
 }
 
 .btn.listening {
-  border-color: rgba(79, 110, 247, 0.55);
+  border-color: rgba(79, 110, 247, 0.65);
+  box-shadow:
+    inset 0 0 20px rgba(79, 110, 247, 0.12),
+    0 0 20px rgba(79, 110, 247, 0.45),
+    0 0 40px rgba(79, 110, 247, 0.22);
 }
 
 /* ── Breathing ring frame ─────────────────────────────────────────── */
@@ -182,7 +177,7 @@
   animation: glevDot3 5.9s linear infinite;
 }
 
-/* ── SVG icon animations ─────────────────────────────────────────── */
+/* ── Center Glev logo — pulsing glow ─────────────────────────────── */
 
 .icon {
   position: relative;
@@ -191,24 +186,11 @@
   align-items: center;
   justify-content: center;
   pointer-events: none;
+  animation: glevIconPulse 3.8s ease-in-out infinite;
 }
 
-.iconRing {
-  transform-origin: center;
-  animation: glevIconRing 3.8s ease-in-out infinite;
-}
-
-.listening .iconRing {
-  animation: glevIconRingFast 0.9s ease-in-out infinite;
-}
-
-.iconDot {
-  transform-origin: center;
-  animation: glevIconDot 2.4s ease-in-out infinite;
-}
-
-.listening .iconDot {
-  animation: glevIconDotFast 0.9s ease-in-out infinite;
+.listening .icon {
+  animation: glevIconPulseFast 0.9s ease-in-out infinite;
 }
 
 /* ── Reduced motion ──────────────────────────────────────────────── */
@@ -219,8 +201,7 @@
   .dot1,
   .dot2,
   .dot3,
-  .iconRing,
-  .iconDot {
+  .icon {
     animation: none;
   }
 }
