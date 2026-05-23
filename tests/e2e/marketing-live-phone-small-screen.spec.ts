@@ -42,7 +42,7 @@
 
 import { expect, test } from "@playwright/test";
 
-test.describe("LivePhoneScaler — narrow Android viewport (360×780)", () => {
+test.describe("LivePhoneScaler — narrow Android viewport (360×780) [DE]", () => {
   test.use({ viewport: { width: 360, height: 780 } });
 
   test("live dashboard phone does not overflow its container on 360px viewport", async ({
@@ -110,6 +110,71 @@ test.describe("LivePhoneScaler — narrow Android viewport (360×780)", () => {
     expect(
       transformValue,
       "LivePhoneScaler inner div has transform: none " +
+        `(computed: "${transformValue}"). ` +
+        "The LivePhoneScaler must apply an inline transform: scale(${scale}) " +
+        "on its inner div. Even when scale=1, this produces a non-none computed " +
+        "transform value. 'none' means the transform has been removed — check " +
+        "the LivePhoneScaler implementation in app/page.tsx.",
+    ).not.toBe("none");
+  });
+});
+
+test.describe("LivePhoneScaler — narrow Android viewport (360×780) [EN]", () => {
+  test.use({ viewport: { width: 360, height: 780 }, locale: "en-US" });
+
+  test("live dashboard phone does not overflow its container on 360px viewport (EN locale)", async ({
+    page,
+  }) => {
+    await page.goto("/", { waitUntil: "networkidle" });
+
+    // ── 1. No horizontal page overflow ────────────────────────────────────
+    const isPageOverflowing = await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth,
+    );
+    expect(
+      isPageOverflowing,
+      "The marketing homepage (EN locale) has horizontal overflow at 360px viewport " +
+        "(document.documentElement.scrollWidth > window.innerWidth). " +
+        "The live dashboard phone may be missing its LivePhoneScaler wrapper " +
+        "in app/page.tsx — check that <LivePhoneScaler> wraps the dashboard " +
+        "AppMockupPhone in the deepdive FeatureImageRow.",
+    ).toBe(false);
+
+    // ── 2. LivePhoneScaler wrapper is present ─────────────────────────────
+    const scaler = page.locator('[data-testid="live-phone-scaler"]');
+    await expect(
+      scaler,
+      "Expected [data-testid='live-phone-scaler'] to be visible on EN locale homepage. " +
+        "This element is rendered by the LivePhoneScaler wrapper in app/page.tsx. " +
+        "If it is missing, the scaler has been removed or replaced.",
+    ).toBeVisible();
+
+    // ── 3. Outer wrapper width within viewport ────────────────────────────
+    const scalerWidth = await scaler.evaluate(
+      (el) => el.getBoundingClientRect().width,
+    );
+    expect(
+      scalerWidth,
+      `LivePhoneScaler outer div is ${scalerWidth}px wide on EN locale, which exceeds the ` +
+        "360px viewport. The wrapper must use width: min(320px, 100%) to stay " +
+        "within its containing column.",
+    ).toBeLessThanOrEqual(360);
+
+    // ── 4. Transform style is set on the inner div ────────────────────────
+    const inner = page.locator('[data-testid="live-phone-scaler-inner"]');
+    await expect(
+      inner,
+      "Expected [data-testid='live-phone-scaler-inner'] to be visible on EN locale homepage. " +
+        "This element is rendered by the inner div inside LivePhoneScaler " +
+        "in app/page.tsx.",
+    ).toBeVisible();
+
+    const transformValue = await inner.evaluate(
+      (el) => window.getComputedStyle(el).transform,
+    );
+    expect(
+      transformValue,
+      "LivePhoneScaler inner div has transform: none on EN locale " +
         `(computed: "${transformValue}"). ` +
         "The LivePhoneScaler must apply an inline transform: scale(${scale}) " +
         "on its inner div. Even when scale=1, this produces a non-none computed " +
