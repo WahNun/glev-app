@@ -2750,6 +2750,7 @@
     "filter_section_meal_kind": "Meal kind",
     "filter_section_exercise_kind": "Exercise kind",
     "filter_section_outcome": "Outcome",
+    "filter_section_date_range": "Date range",
     "entries_empty_date": "Showing {range} · no entries match."
   },
   "pricing_beta_title": "Glev Smart — Early Access",

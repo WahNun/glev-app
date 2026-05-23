@@ -2754,6 +2754,7 @@
     "filter_section_meal_kind": "Mahlzeitentyp",
     "filter_section_exercise_kind": "Trainingsart",
     "filter_section_outcome": "Ergebnis",
+    "filter_section_date_range": "Zeitraum",
     "entries_empty_date": "Zeitraum {range} · keine passenden Einträge."
   },
   "pricing_beta_title": "Glev Smart — Early Access",

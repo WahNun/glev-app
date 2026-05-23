@@ -943,6 +943,8 @@ export default function EntriesPage() {
                 to={filters.dateTo}
                 onChange={setDateRange}
                 onBoundChange={setDateBound}
+                options={dateRangeOptions}
+                title={tChips("filter_section_date_range")}
               />
               <FilterSection
                 title={tChips("filter_section_entry_type")}
@@ -3535,21 +3537,23 @@ function FilterSection<T extends string>({
 }
 
 function DateRangeSection({
-  value, from, to, onChange, onBoundChange,
+  value, from, to, onChange, onBoundChange, options, title,
 }: {
   value: DateRangeKey;
   from: string | null;
   to: string | null;
   onChange: (value: DateRangeKey) => void;
   onBoundChange: (side: "from" | "to", value: string) => void;
+  options: { value: DateRangeKey; label: string }[];
+  title: string;
 }) {
   return (
     <div>
       <div style={{ fontSize:11, color:"var(--text-dim)", letterSpacing:"0.1em", fontWeight:700, marginBottom:8, textTransform:"uppercase" }}>
-        Date range
+        {title}
       </div>
       <div role="radiogroup" aria-label="Date range" style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
-        {DATE_RANGE_OPTIONS.map(opt => {
+        {options.map(opt => {
           const active = value === opt.value;
           return (
             <button
