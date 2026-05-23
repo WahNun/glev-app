@@ -22,6 +22,10 @@
 //      in the subtitle ("{minutes} min"), proving the read path is closed.
 //   4. Input clamping: typing a value above the maximum (360) stores 360
 //      and reflects that in the subtitle.
+//   5. Keyboard navigation: ArrowRight on the focused slider div increments
+//      by one step (30 min); two presses from default (180) → 240 min.
+//      This guards the handleKeyDown path in SnapSlider.tsx which keyboard
+//      and assistive-technology users depend on.
 //
 // Relevant files:
 //   - app/(protected)/settings/page.tsx  — DIA sheet + SnapSlider wiring
@@ -138,6 +142,104 @@ async function editDiaViaSlider(page: Page, minutes: number) {
   // Sheet closing is signalled by the readout button disappearing.
   await expect(readout).toBeHidden({ timeout: 10_000 });
 }
+
+// ── Keyboard navigation ────────────────────────────────────────────────────
+// The SnapSlider drag-div has role="slider" and handles ArrowRight/ArrowLeft
+// via onKeyDown (handleKeyDown in SnapSlider.tsx).  This describe block
+// exercises that path so a regression in handleKeyDown is caught before
+// users who rely on keyboard / AT navigation are affected.
+//
+// Aria-label for the slider div mirrors the tap-to-edit readout (same
+// ariaLabel prop is forwarded to both), so we reuse DIA_SLIDER_ARIA but
+// select by role="slider" instead of role="button".
+
+test.describe("Settings → DIA slider keyboard navigation", () => {
+  let testUser: TestUser;
+
+  test.beforeAll(() => {
+    testUser = loadTestUser();
+  });
+
+  test.beforeEach(async ({ context }) => {
+    await context.clearCookies();
+    await resetDiaMinutes(testUser.userId);
+  });
+
+  test.afterAll(async () => {
+    await resetDiaMinutes(testUser.userId);
+  });
+
+  test("ArrowRight twice from default (180) produces 240 min and persists", async ({ page }) => {
+    await loginAsTestUser(page);
+
+    // Baseline: no saved DIA (NULL → component default 180 min).
+    expect(await readDiaMinutes(testUser.userId)).toBeNull();
+
+    await page.goto("/settings");
+
+    // Open the DIA sheet.
+    const diaRow = page.getByRole("button", { name: DIA_ROW_ARIA });
+    await expect(diaRow).toBeVisible({ timeout: 15_000 });
+    await diaRow.click();
+
+    // The SnapSlider drag-div has role="slider" and the same aria-label as
+    // the tap-to-edit readout button — distinguish it by role.
+    const sliderDiv = page.getByRole("slider", { name: DIA_SLIDER_ARIA });
+    await expect(sliderDiv).toBeVisible({ timeout: 10_000 });
+
+    // Focus the slider div and press ArrowRight twice.
+    // Each press increments by one step (30 min): 180 → 210 → 240.
+    await sliderDiv.focus();
+    await sliderDiv.press("ArrowRight");
+    await sliderDiv.press("ArrowRight");
+
+    // Save and wait for the sheet to close (tap-to-edit readout disappears).
+    const readout = page.getByRole("button", { name: DIA_SLIDER_ARIA });
+    await page.getByRole("button", { name: SAVE_BUTTON }).first().click();
+    await expect(readout).toBeHidden({ timeout: 10_000 });
+
+    // DB must reflect 240.
+    await expect.poll(
+      () => readDiaMinutes(testUser.userId),
+      { timeout: 10_000 },
+    ).toBe(240);
+
+    // Reload proves the full read-path is closed.
+    await page.reload();
+    await expect(page.getByText("240 min")).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("ArrowLeft from default (180) produces 150 min and persists", async ({ page }) => {
+    await loginAsTestUser(page);
+
+    expect(await readDiaMinutes(testUser.userId)).toBeNull();
+
+    await page.goto("/settings");
+
+    const diaRow = page.getByRole("button", { name: DIA_ROW_ARIA });
+    await expect(diaRow).toBeVisible({ timeout: 15_000 });
+    await diaRow.click();
+
+    const sliderDiv = page.getByRole("slider", { name: DIA_SLIDER_ARIA });
+    await expect(sliderDiv).toBeVisible({ timeout: 10_000 });
+
+    // One ArrowLeft press: 180 − 30 = 150.
+    await sliderDiv.focus();
+    await sliderDiv.press("ArrowLeft");
+
+    const readout = page.getByRole("button", { name: DIA_SLIDER_ARIA });
+    await page.getByRole("button", { name: SAVE_BUTTON }).first().click();
+    await expect(readout).toBeHidden({ timeout: 10_000 });
+
+    await expect.poll(
+      () => readDiaMinutes(testUser.userId),
+      { timeout: 10_000 },
+    ).toBe(150);
+
+    await page.reload();
+    await expect(page.getByText("150 min")).toBeVisible({ timeout: 10_000 });
+  });
+});
 
 test.describe("Settings → DIA slider round-trip", () => {
   let testUser: TestUser;
