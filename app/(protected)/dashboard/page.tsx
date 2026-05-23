@@ -710,6 +710,8 @@ export default function DashboardPage() {
       <style>{`
         html, body { overflow-x: hidden; }
         .glev-dash-head { display: flex; }
+        .glev-cluster-bar  { display: none !important; }
+        .glev-quickadd-cta { display: none !important; }
         @media (max-width: 768px) {
           .glev-dash-head { display: none !important; }
         }
@@ -882,7 +884,24 @@ function ReorderableClusters({
       // of the first legacy occurrence.
       if (c && !seen.has(id)) { out.push(c); seen.add(id); }
     }
-    for (const c of clusters) if (!seen.has(c.id)) out.push(c);
+    // New clusters not yet in the user's saved order get appended.
+    // Exception: "insulin" must always appear before "recents" — insert
+    // it right before "recents" instead of at the very end, so the IOB
+    // card is never accidentally shown below Recent Entries.
+    const newClusters = clusters.filter(c => !seen.has(c.id));
+    for (const c of newClusters) {
+      if (c.id === "insulin") {
+        const recentsIdx = out.findIndex(x => x.id === "recents");
+        if (recentsIdx !== -1) {
+          out.splice(recentsIdx, 0, c);
+        } else {
+          out.push(c);
+        }
+      } else {
+        out.push(c);
+      }
+      seen.add(c.id);
+    }
     return out;
   }, [clusters, order]);
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import RefreshingBar from "@/components/RefreshingBar";
 import { useTranslations, useLocale } from "next-intl";
 import { fetchMeals, deleteMeal, updateMeal, FETCH_MEALS_DEFAULT_SINCE_DAYS, type Meal } from "@/lib/meals";
