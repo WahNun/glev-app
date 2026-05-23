@@ -309,20 +309,26 @@ test.describe("Marketing AppMockupPhone — pixel snapshots per screen", () => {
 // `en-US` so a purely visual regression that only affects the English
 // rendering of the marketing phone is caught here.
 //
-// Why Dashboard only (for now):
-//   The task that introduced this block (#571) calls for a pixel-snapshot
-//   guard specifically for the Dashboard screen in EN, because the RateTile
-//   label widths differ between locales. The overflow spec
-//   (marketing-phone-rate-tiles.spec.ts) already checks clipping in both
-//   locales via DOM assertions; this snapshot adds the complementary
-//   pixel-level guard (wrong colour, broken layout, misaligned card) that
+// Why all five screens:
+//   The same visual regressions that can hit Dashboard (wrong colour,
+//   broken layout, clipped sparkline) can equally hit any of the other
+//   four screens in EN — especially the Engine wizard which has longer
+//   EN labels on its step pills ("1 · Eat", "2 · Macros", "3 · Result").
+//   The overflow spec (marketing-phone-rate-tiles.spec.ts) already checks
+//   clipping via DOM assertions; these snapshots add the complementary
+//   pixel-level guard (wrong colour, misaligned card, broken icon) that
 //   DOM assertions cannot catch.
 //
+// Locale differences vs DE block:
+//   • Bottom-nav labels: "HISTORY" (DE: "VERLAUF"), "SETTINGS" (DE: "EINSTELLUNGEN").
+//   • Insights anchor: "Time in range · 7d" (DE: "Trend · 7 Tage").
+//   • Entries anchor: "Tap a row to expand" (DE: "Klicke eine Zeile zum Aufklappen").
+//   • Engine anchor: "Speak" pill (DE: "Sprechen").
+//   • Settings anchor: "CGM Connection" — identical in both locales.
+//
 // Anchor strategy:
-//   `Good Rate` is identical in both `messages/de.json` and
-//   `messages/en.json` (see `good_label`), so it is a locale-neutral
-//   anchor that proves the Dashboard is hydrated without depending on a
-//   DE-only string.
+//   Each screen is anchored on a string that is only present on that
+//   screen and proves the component is fully hydrated before snapping.
 // ──────────────────────────────────────────────────────────────────────────────
 
 test.describe("Marketing AppMockupPhone — pixel snapshots per screen (EN locale)", () => {
@@ -330,14 +336,60 @@ test.describe("Marketing AppMockupPhone — pixel snapshots per screen (EN local
   // English copy for every test in this block.
   test.use({ locale: "en-US" });
 
-  test("snapshots Dashboard in EN locale", async ({ page }) => {
+  test("snapshots Dashboard / Glev Engine / History Insights / History Entries / Settings in EN locale", async ({ page }) => {
     const phone = await gotoHomeAndFindPhone(page);
 
-    // "Good Rate" is the same string in both locales — use it as the
+    // ── Dashboard ────────────────────────────────────────────────────
+    // "Good Rate" is locale-neutral (identical in messages/de.json and
+    // messages/en.json) and only present on Dashboard — use it as the
     // hydration anchor so we don't snapshot a partially-rendered frame.
     await expect(phone.getByText(/Good Rate/)).toBeVisible();
     await prepareForSnapshot(page);
     await expect(phone).toHaveScreenshot("phone-dashboard-en.png");
+
+    // ── Glev Engine — Step 1 (Eat) ────────────────────────────────────
+    // EN step pills read "1 · Eat / 2 · Macros / 3 · Result" — longer
+    // than their DE counterparts ("1 · Essen / 2 · Makros / 3 · Ergebnis")
+    // and thus the primary overflow risk called out in the task spec.
+    // Anchor on the "Speak" voice pill (same role as "Sprechen" in DE).
+    await navButton(phone, NAV.glev).click();
+    await expect(
+      phone.locator("button").filter({ hasText: /^Speak$/ }),
+    ).toBeVisible();
+    await prepareForSnapshot(page);
+    await expect(phone).toHaveScreenshot("phone-engine-en.png");
+
+    // ── Verlauf/Insights (default sub-tab) ────────────────────────────
+    // The 4th bottom-nav item's label comes from
+    // tNav("insights").toUpperCase() in BottomNav — "INSIGHTS" in both
+    // locales. The DE block uses NAV.verlauf = "VERLAUF" which is
+    // nav.history, not nav.insights; the actual button text is "INSIGHTS"
+    // in both locales, so we use that here. Anchor on the TIR card label:
+    // pickCopy → { de: "Time in Range · 7T", en: "Time in Range · 7d" }.
+    await navButton(phone, "INSIGHTS").click();
+    await expect(phone.getByText(/Time in Range · 7d/)).toBeVisible();
+    await prepareForSnapshot(page);
+    await expect(phone).toHaveScreenshot("phone-verlauf-insights-en.png");
+
+    // ── Verlauf/Entries (sub-toggle) ──────────────────────────────────
+    // Sub-toggle chip uses tHist("entries") → "Entries" in EN.
+    // expandHint in EN: pickCopy → "Click a row to expand." — use it
+    // as the anchor to prove the entries list has rendered.
+    // Use exact:true to match only the sub-toggle chip "Entries" (mixed
+    // case) and not the bottom-nav button "ENTRIES" (all-caps).
+    await phone.getByRole("button", { name: "Entries", exact: true }).click();
+    await expect(phone.getByText(/Click a row to expand/)).toBeVisible();
+    await prepareForSnapshot(page);
+    await expect(phone).toHaveScreenshot("phone-verlauf-entries-en.png");
+
+    // ── Settings ─────────────────────────────────────────────────────
+    // 5th bottom-nav item: tNav("settings").toUpperCase() → "SETTINGS"
+    // in EN (DE: "EINSTELLUNGEN"). "CGM Connection" is locale-neutral
+    // (pickCopy or tSet("cgm") — same in both locales).
+    await navButton(phone, "SETTINGS").click();
+    await expect(phone.getByText(/CGM Connection/)).toBeVisible();
+    await prepareForSnapshot(page);
+    await expect(phone).toHaveScreenshot("phone-settings-en.png");
   });
 });
 
