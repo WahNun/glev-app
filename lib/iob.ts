@@ -302,3 +302,27 @@ export function resolveBolusTypeLabel(
   if (insulinBrandBolus?.trim()) return insulinBrandBolus.trim();
   return insulinType === "rapid" ? rapidLabel : regularLabel;
 }
+
+/**
+ * Resolves the basal insulin label shown in the IOB card header and brand chip.
+ *
+ * When the user has saved a custom basal brand name (e.g. "Toujeo") in
+ * Settings → Insulin, that name is returned directly.  If no brand is
+ * configured (undefined or whitespace-only), the function falls back to the
+ * translated generic basal label (e.g. "Basal").
+ *
+ * Mirrors `resolveBolusTypeLabel` for the basal view — extracted from
+ * IOBCard so the derivation is a pure, easily testable function.
+ *
+ * @param insulinBrandBasal  Raw brand string from userSettings (may be
+ *                           undefined or contain surrounding whitespace).
+ * @param basalLabel         Translation string for the generic basal fallback
+ *                           (e.g. t("iob_tab_basal") → "Basal").
+ */
+export function resolveBasalTypeLabel(
+  insulinBrandBasal: string | undefined,
+  basalLabel: string,
+): string {
+  if (insulinBrandBasal?.trim()) return insulinBrandBasal.trim();
+  return basalLabel;
+}

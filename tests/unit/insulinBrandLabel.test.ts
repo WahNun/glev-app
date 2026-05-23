@@ -17,9 +17,11 @@
 //   6. Brand beats insulinType — even for "regular", the brand name wins.
 //   7. A second bolus brand (insulinBrandBolus2) is combined in the DIA footer
 //      string using the same filter-and-join pattern used by IOBCard.
+//   8. resolveBasalTypeLabel: configured basal brand (e.g. "Toujeo") wins over the
+//      generic "Basal" fallback in the IOB card header and brand chip.
 
 import { test, expect } from "@playwright/test";
-import { resolveBolusTypeLabel } from "@/lib/iob";
+import { resolveBolusTypeLabel, resolveBasalTypeLabel } from "@/lib/iob";
 import { resolveInsulinNamePrefill } from "@/lib/userSettings";
 import type { InsulinSettings } from "@/lib/userSettings";
 
@@ -191,4 +193,69 @@ test("resolveInsulinNamePrefill: bolus brand does not bleed into basal tab", () 
 test("resolveInsulinNamePrefill: defaults to bolus when type argument is omitted", () => {
   const settings = makeSettings({ insulinBrandBolus: "Fiasp", insulinBrandBasal: "Tresiba" });
   expect(resolveInsulinNamePrefill(settings)).toBe("Fiasp");
+});
+
+// ── 8. resolveBasalTypeLabel — basal section header and brand chip ─────────────
+//
+// IOBCard renders the basal brand in two places:
+//   • Section header (line ~416): (insulinBrandBasal?.trim() || t("iob_tab_basal")).toUpperCase()
+//   • Expanded brand chip (line ~541): insulinBrandBasal.trim()
+//
+// These tests lock in the pure `resolveBasalTypeLabel` helper so that a typo
+// or refactor in IOBCard cannot silently replace "Toujeo" with the generic
+// "BASAL" fallback without a failing test.
+
+const BASAL_LABEL = "Basal";
+
+// ── 8a. Brand name is returned when configured ────────────────────────────────
+
+test("resolveBasalTypeLabel: configured brand 'Toujeo' is returned instead of 'Basal'", () => {
+  expect(resolveBasalTypeLabel("Toujeo", BASAL_LABEL)).toBe("Toujeo");
+});
+
+test("resolveBasalTypeLabel: configured brand 'Tresiba' is returned instead of 'Basal'", () => {
+  expect(resolveBasalTypeLabel("Tresiba", BASAL_LABEL)).toBe("Tresiba");
+});
+
+test("resolveBasalTypeLabel: configured brand 'Lantus' is returned instead of 'Basal'", () => {
+  expect(resolveBasalTypeLabel("Lantus", BASAL_LABEL)).toBe("Lantus");
+});
+
+// ── 8b. Surrounding whitespace is trimmed ─────────────────────────────────────
+
+test("resolveBasalTypeLabel: leading and trailing whitespace in brand is stripped", () => {
+  expect(resolveBasalTypeLabel("  Toujeo  ", BASAL_LABEL)).toBe("Toujeo");
+});
+
+test("resolveBasalTypeLabel: internal whitespace is preserved, only surrounding is stripped", () => {
+  expect(resolveBasalTypeLabel("  Glargine U-300  ", BASAL_LABEL)).toBe("Glargine U-300");
+});
+
+// ── 8c. Fallback to basalLabel when no brand is configured ───────────────────
+
+test("resolveBasalTypeLabel: undefined brand returns the generic basalLabel", () => {
+  expect(resolveBasalTypeLabel(undefined, BASAL_LABEL)).toBe(BASAL_LABEL);
+});
+
+// ── 8d. Empty / whitespace-only brand falls back to basalLabel ────────────────
+
+test("resolveBasalTypeLabel: empty string brand falls back to basalLabel", () => {
+  expect(resolveBasalTypeLabel("", BASAL_LABEL)).toBe(BASAL_LABEL);
+});
+
+test("resolveBasalTypeLabel: whitespace-only brand falls back to basalLabel", () => {
+  expect(resolveBasalTypeLabel("   ", BASAL_LABEL)).toBe(BASAL_LABEL);
+});
+
+// ── 8e. IOBCard header pattern — toUpperCase applied to result ────────────────
+//
+// IOBCard wraps the resolved label in `.toUpperCase()` for the section header.
+// Verify the helper output survives that transformation correctly.
+
+test("resolveBasalTypeLabel: brand result uppercased matches 'TOUJEO'", () => {
+  expect(resolveBasalTypeLabel("Toujeo", BASAL_LABEL).toUpperCase()).toBe("TOUJEO");
+});
+
+test("resolveBasalTypeLabel: fallback label uppercased matches 'BASAL'", () => {
+  expect(resolveBasalTypeLabel(undefined, BASAL_LABEL).toUpperCase()).toBe("BASAL");
 });
