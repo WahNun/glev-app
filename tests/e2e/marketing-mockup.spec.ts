@@ -46,15 +46,20 @@ test.use({ locale: "de-DE" });
 const PHONE = '[data-testid="app-mockup-phone"]';
 
 /** Bottom-nav buttons render as <button> with an UPPERCASE label
- *  ("DASHBOARD", "GLEV", "VERLAUF", "EINSTELLUNGEN"). The same
+ *  ("DASHBOARD", "GLEV", "INSIGHTS", "EINSTELLUNGEN"). The same
  *  uppercase form is the accessible name, so we can target each
  *  via getByRole. Using uppercase (instead of e.g. "Einstellungen")
  *  also disambiguates from the Settings screen <h1> and the row
- *  labels inside it. */
+ *  labels inside it.
+ *
+ *  Note: the Verlauf/Insights nav button always renders "INSIGHTS"
+ *  (from tNav("insights").toUpperCase()) in both DE and EN locales.
+ *  "VERLAUF" is nav.history from the messages file but is NOT the
+ *  bottom-nav button label. */
 const NAV = {
   dashboard: "DASHBOARD",
   glev: "GLEV",
-  verlauf: "VERLAUF",
+  verlauf: "INSIGHTS",
   settings: "EINSTELLUNGEN",
 } as const;
 
@@ -207,7 +212,7 @@ test.describe("Marketing AppMockupPhone — interactive bottom nav", () => {
     ]);
 
     // ── Verlauf · Einträge (sub-toggle) ──────────────────────────────
-    await phone.getByRole("button", { name: "Einträge" }).click();
+    await phone.getByRole("button", { name: "Einträge", exact: true }).click();
     await expectAllVisible(phone, [
       /Klicke eine Zeile zum Aufklappen/,
       /Filters · 2/,
@@ -288,7 +293,7 @@ test.describe("Marketing AppMockupPhone — pixel snapshots per screen", () => {
     // The Filters · 2 chip + the meal cards are a layout-heavy area
     // where a CSS regression (e.g. wrong gap, broken collapse arrow)
     // would otherwise be invisible to the label test.
-    await phone.getByRole("button", { name: "Einträge" }).click();
+    await phone.getByRole("button", { name: "Einträge", exact: true }).click();
     await expect(phone.getByText(/Klicke eine Zeile zum Aufklappen/)).toBeVisible();
     await prepareForSnapshot(page);
     await expect(phone).toHaveScreenshot("phone-verlauf-entries.png");
