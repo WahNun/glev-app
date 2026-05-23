@@ -2498,9 +2498,9 @@ function BasalRowCard({ log, isOpen, onToggle, onDelete, deleting }: {
       primaryValue={log.insulin_name || tx("row_default_long")}
       primaryColor="var(--text-strong)"
       secondaryLabel={tx("row_dose")}
-      secondaryValue={`${log.units}u`}
+      secondaryValue={log.insulin_name ? `${log.units}u ${log.insulin_name}` : `${log.units}u`}
       secondaryColor={accent}
-      secondaryMono
+      secondaryMono={!log.insulin_name}
       expandedDetails={editing ? (
         <InsulinEntryEditor
           log={log}
