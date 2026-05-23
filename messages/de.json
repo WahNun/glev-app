@@ -314,7 +314,7 @@
     "units_short": "IE",
     "icr_label": "KH-Faktor",
     "icr_comparison_title": "ICR auswählen",
-    "icr_static_label": "Einstellungen",
+    "icr_static_label": "Fixwert",
     "icr_adaptive_label": "Adaptiv",
     "icr_calculated": "berechnet",
     "icr_select_button": "Auswählen",
@@ -433,7 +433,7 @@
     "bolus_sheet_close": "Schließen",
     "bolus_sheet_how_title": "Wie wird das berechnet?",
     "bolus_sheet_adaptive_why": "Warum dieser Adaptiv-Wert?",
-    "bolus_sheet_static_why": "Warum dieser Einstellungs-Wert?",
+    "bolus_sheet_static_why": "Warum dieser Fixwert?",
     "bolus_sheet_adaptive_detail": "{samples} Mahlzeiten · Outcomes gewichtet (GOOD 1,0 · SPIKE 0,7 · Über-/Unter-Dosis 0,3) · letzte 90 Tage",
     "bolus_sheet_static_detail": "Manuell konfigurierter KH-Faktor aus deinen Einstellungen{slot}.",
     "bolus_sheet_static_slot": " · Slot: {label}"

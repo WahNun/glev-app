@@ -2989,7 +2989,17 @@ export default function EnginePage() {
                   replacing the previous 4-element layout (2 ICR cards
                   + 2 separate dose chips). Manual override row below. */}
               {bolusEnabled && (() => {
-                const showBoth = icrSampleSize >= 3 && Math.abs(adaptedICR - staticICR) > 0.5;
+                // Show both chips only when the two ICR sources produce
+                // meaningfully different doses. Pure ICR-diff > 0.5 is
+                // necessary but not sufficient — after rounding to 1dp the
+                // user can see identical numbers (confusing). Also gate on
+                // dose diff ≥ 0.2 IE when both doses are calculable.
+                const doseDiff = (eagerDoses.adaptive != null && eagerDoses.static != null)
+                  ? Math.abs(eagerDoses.adaptive - eagerDoses.static)
+                  : null;
+                const showBoth = icrSampleSize >= 3
+                  && Math.abs(adaptedICR - staticICR) > 0.5
+                  && (doseDiff === null || doseDiff >= 0.2);
                 type ChipDef = { key: 'adaptive' | 'static'; label: string; icr: number; dose: number | null; sub?: string };
                 const chips: ChipDef[] = [];
                 // For the SELECTED chip: show activeDose (uses result.dose

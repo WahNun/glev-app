@@ -314,7 +314,7 @@
     "units_short": "u",
     "icr_label": "ICR",
     "icr_comparison_title": "Select ICR",
-    "icr_static_label": "Settings",
+    "icr_static_label": "Fixed",
     "icr_adaptive_label": "Adaptive",
     "icr_calculated": "calculated",
     "icr_select_button": "Select",
@@ -433,7 +433,7 @@
     "bolus_sheet_close": "Close",
     "bolus_sheet_how_title": "How is this calculated?",
     "bolus_sheet_adaptive_why": "Why this adaptive value?",
-    "bolus_sheet_static_why": "Why this settings value?",
+    "bolus_sheet_static_why": "Why this fixed value?",
     "bolus_sheet_adaptive_detail": "{samples} meals · outcomes weighted (GOOD 1.0 · SPIKE 0.7 · over-/under-dose 0.3) · last 90 days",
     "bolus_sheet_static_detail": "Manually configured ICR from your settings{slot}.",
     "bolus_sheet_static_slot": " · slot: {label}"
