@@ -124,7 +124,7 @@ test.describe("IOB peak popover → dose row → Entries deep-link", () => {
     await context.clearCookies();
   });
 
-  test("tapping a meal dose row opens the correct entry on the Entries page", async ({ page }) => {
+  test("tapping a meal dose row opens the correct entry on the Entries page (24h window)", async ({ page }) => {
     await loginAsTestUser(page);
 
     // ── 1. Locate the IOB history chart peak pill ──────────────────────────
@@ -186,6 +186,91 @@ test.describe("IOB peak popover → dose row → Entries deep-link", () => {
     // "IOB nav test meal" is the input_text we seeded, which the expanded view
     // renders as the entry title — matching it proves we see *our* entry, not
     // a stale hash artifact.
+    await expect(entryEl).toContainText("IOB nav test meal", { timeout: 10_000 });
+  });
+
+  test("tapping a meal dose row in the 12h window navigates to the correct Entries entry", async ({ page }) => {
+    // ── Purpose ──────────────────────────────────────────────────────────────
+    //
+    // A regression where the dose-row click handler breaks *only* when the 12h
+    // window is active (e.g. an event-propagation bug introduced by the window-
+    // switch re-render) would be invisible to the 24h test above.  This test
+    // guards the full navigation path after the user switches to the 12h view.
+    //
+    // Steps:
+    //   1. Log in and clear the stale localStorage window preference.
+    //   2. Switch to the 12h window via the toggle button.
+    //   3. Open the peak pill popover.
+    //   4. Click the meal dose row.
+    //   5. Assert URL → /entries#<mealId> and that the entry is expanded.
+
+    await loginAsTestUser(page);
+
+    // ── 1. Clear any stored window preference so state is deterministic ──────
+    //
+    // localStorage is origin-scoped and not cleared by context.clearCookies().
+    // Remove the key so the component starts at its real default (24h), giving
+    // us a clean baseline before we click "12h".
+    await page.evaluate(() => localStorage.removeItem("glev:iob_history_hours"));
+    await page.reload({ waitUntil: "networkidle" });
+
+    // ── 2. Wait for the SVG chart to show active content ─────────────────────
+    //
+    // The polyline is only rendered when `hasActivity` is true.  Our seeded
+    // meal (8 IE, 60 min ago) guarantees at least one non-zero IOB sample.
+    const polyline = page.locator("svg polyline").first();
+    await expect(polyline).toBeAttached({ timeout: 30_000 });
+    await polyline.scrollIntoViewIfNeeded();
+    await expect(polyline).toBeVisible({ timeout: 10_000 });
+
+    // ── 3. Switch to the 12h window ──────────────────────────────────────────
+    //
+    // The toggle button renders "{opt}\u00A0h" (non-breaking space), so a
+    // relaxed /12/ regex is the safest match.
+    const btn12 = page.getByRole("button", { name: /12/ }).first();
+    await expect(btn12).toBeVisible({ timeout: 10_000 });
+    await btn12.click();
+
+    // Confirm the button is now active (font-weight 700) before proceeding.
+    await expect(btn12).toHaveCSS("font-weight", "700", { timeout: 3_000 });
+
+    // ── 4. Locate the peak pill and open the popover ──────────────────────────
+    //
+    // Peak pills are SVG <g role="button"> elements — unambiguously distinct
+    // from the HTML <button> toggle elements.  The 12h window still includes
+    // our seeded meal (60 min ago), so at least one pill must be visible.
+    const peakPill = page.locator('svg g[role="button"]').first();
+    await expect(peakPill).toBeAttached({ timeout: 15_000 });
+    await expect(peakPill).toBeVisible({ timeout: 10_000 });
+    await peakPill.click();
+
+    // ── 5. Find the meal dose row in the popover ──────────────────────────────
+    //
+    // Meal-sourced rows receive role="link" (see IOBHistoryChart.tsx ~L430).
+    // Manual bolus rows are inert.  At least one link row must appear because
+    // the only active dose comes from our seeded meal.
+    const doseRow = page.getByRole("link").first();
+    await expect(doseRow).toBeVisible({ timeout: 10_000 });
+
+    // ── 6. Click the dose row — assert navigation to /entries#<mealId> ────────
+    //
+    // router.push(`/entries#${d.mealId}`) is called onClick inside the
+    // foreignObject click handler.  We wait for the URL to match both path
+    // and hash simultaneously.
+    await Promise.all([
+      page.waitForURL(url => url.pathname === "/entries" && url.hash === `#${mealId}`, {
+        timeout: 20_000,
+      }),
+      doseRow.click(),
+    ]);
+
+    // ── 7. Entries page: the target entry is expanded and visible ─────────────
+    //
+    // The hash deep-link useEffect sets the entry expanded and scrolls to
+    // `#entry-<id>`.  We assert the element is visible and shows our seeded
+    // meal's input_text as the title.
+    const entryEl = page.locator(`#entry-${mealId}`);
+    await expect(entryEl).toBeVisible({ timeout: 20_000 });
     await expect(entryEl).toContainText("IOB nav test meal", { timeout: 10_000 });
   });
 });
