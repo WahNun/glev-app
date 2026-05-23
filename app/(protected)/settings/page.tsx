@@ -69,6 +69,7 @@ import {
   type Sex,
 } from "@/lib/userProfile";
 import { fetchIcrSchedule } from "@/lib/icrSchedule";
+import SnapSlider from "@/components/log/SnapSlider";
 
 const ACCENT = "#4F6EF7", GREEN = "#22D3A0", PINK = "#FF2D78", PURPLE = "#A78BFA";
 const BORDER = "var(--border)";
@@ -1306,22 +1307,35 @@ export default function SettingsPage() {
           <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5, marginBottom: 12 }}>
             {tSettings("sheet_dia_body")}
           </p>
-          <label style={{ fontSize: 13, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>
-            {tSettings("sheet_dia_label")}
-          </label>
-          <input
-            style={inp}
-            type="number"
+          <SnapSlider
+            value={settings.diaMinutes ?? 180}
+            onChange={(v) => upd("diaMinutes", v)}
             min={60}
             max={360}
-            step={5}
-            value={settings.diaMinutes ?? 180}
-            onChange={(e) => {
-              const v = parseInt(e.target.value);
-              if (!isNaN(v)) upd("diaMinutes", Math.min(360, Math.max(60, v)));
-            }}
+            step={30}
+            unit="min"
+            accent={ACCENT}
+            ariaLabel={tSettings("sheet_dia_label")}
           />
-          <div style={{ fontSize: 13, color: "var(--text-ghost)", marginTop: 6 }}>{tSettings("sheet_dia_hint")}</div>
+          <div style={{
+            display: "flex",
+            justifyContent: "space-between",
+            marginTop: 6,
+            paddingLeft: 2,
+            paddingRight: 2,
+          }}>
+            {[60, 120, 180, 240, 300, 360].map((tick) => (
+              <span key={tick} style={{
+                fontSize: 10,
+                color: (settings.diaMinutes ?? 180) === tick ? ACCENT : "var(--text-ghost)",
+                fontWeight: (settings.diaMinutes ?? 180) === tick ? 700 : 400,
+                transition: "color 150ms ease",
+              }}>
+                {tick}
+              </span>
+            ))}
+          </div>
+          <div style={{ fontSize: 13, color: "var(--text-ghost)", marginTop: 8 }}>{tSettings("sheet_dia_hint")}</div>
         </div>
       ),
       footer: <SaveFooter onSave={saveInsulinAction} />,
