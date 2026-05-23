@@ -2251,9 +2251,9 @@ function BolusRowCard({ log, meals, isOpen, onToggle, onDelete, deleting }: {
       primaryValue={log.insulin_name || tx("row_default_rapid")}
       primaryColor="var(--text-strong)"
       secondaryLabel={tx("row_dose")}
-      secondaryValue={`${log.units}u`}
+      secondaryValue={log.insulin_name ? `${log.units}u ${log.insulin_name}` : `${log.units}u`}
       secondaryColor={accent}
-      secondaryMono
+      secondaryMono={!log.insulin_name}
       secondarySubtitle={icrSubtitle}
       expandedDetails={editing ? (
         <InsulinEntryEditor
