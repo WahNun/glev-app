@@ -460,30 +460,95 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
         }}
       >
         {view === "basal" ? (
-          /* ── Basal expanded detail ── */
-          <div style={{ borderTop: "1px solid var(--border)", padding: "14px 16px 14px", display: "flex", flexDirection: "column", gap: 9 }}>
-            <div style={{ fontSize: 11, color: BASAL_INDIGO, letterSpacing: "0.1em", fontWeight: 700 }}>
-              {t("iob_basal_history_title").toUpperCase()}
+          /* ── Basal expanded detail — coverage bar + context ── */
+          <div style={{ borderTop: "1px solid var(--border)", padding: "14px 16px 14px", display: "flex", flexDirection: "column", gap: 11 }}>
+
+            {/* Section header */}
+            <div style={{ fontSize: 11, color: basalOverdue ? ORANGE : BASAL_INDIGO, letterSpacing: "0.1em", fontWeight: 700 }}>
+              {t("iob_basal_coverage_title").toUpperCase()}
             </div>
-            {recentBasalLogs.length > 0 ? (
-              recentBasalLogs.map((b, i) => {
-                const timeStr = new Date(b.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-                const dateStr = new Date(b.created_at).toLocaleDateString([], { day: "2-digit", month: "2-digit" });
-                return (
-                  <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 8px", borderRadius: 8, background: "var(--surface-soft)", border: "1px solid var(--border)", fontSize: 12, gap: 6 }}>
-                    <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", flexShrink: 0 }}>{dateStr} {timeStr}</span>
-                    <span style={{ color: BASAL_INDIGO, fontWeight: 700, fontFamily: "var(--font-mono)", marginLeft: "auto", flexShrink: 0 }}>{b.units.toFixed(1)} IE</span>
+
+            {lastBasal ? (
+              <>
+                {/* Coverage bar: left = elapsed (dim), right = remaining (indigo) */}
+                {(() => {
+                  const elapsedPct = Math.min(100, (1 - basalFraction) * 100);
+                  return (
+                    <div style={{ position: "relative", height: 10, borderRadius: 99, background: "var(--surface-soft)", overflow: "visible" }}>
+                      {/* elapsed portion */}
+                      <div style={{
+                        position: "absolute", left: 0, top: 0, bottom: 0,
+                        width: `${elapsedPct}%`,
+                        background: basalOverdue ? `${ORANGE}40` : `${BASAL_INDIGO}28`,
+                        borderRadius: 99,
+                      }} />
+                      {/* remaining portion */}
+                      {!basalOverdue && (
+                        <div style={{
+                          position: "absolute", right: 0, top: 0, bottom: 0,
+                          width: `${100 - elapsedPct}%`,
+                          background: `${BASAL_INDIGO}70`,
+                          borderRadius: 99,
+                        }} />
+                      )}
+                      {/* current-position needle */}
+                      <div style={{
+                        position: "absolute", top: -3, bottom: -3,
+                        left: `${elapsedPct}%`,
+                        width: 3,
+                        background: basalOverdue ? ORANGE : BASAL_INDIGO,
+                        borderRadius: 2,
+                        transform: "translateX(-50%)",
+                        boxShadow: `0 0 6px ${basalOverdue ? ORANGE : BASAL_INDIGO}99`,
+                      }} />
+                    </div>
+                  );
+                })()}
+
+                {/* Time labels below bar */}
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+                  <span style={{ color: "var(--text-dim)" }}>
+                    vor {basalElapsedH}h {basalElapsedM}min
+                  </span>
+                  {basalOverdue ? (
+                    <span style={{ color: ORANGE, fontWeight: 700 }}>{t("iob_basal_overdue")}</span>
+                  ) : (
+                    <span style={{ color: BASAL_INDIGO, fontWeight: 600 }}>
+                      ~{basalNextInH}h {t("iob_basal_remaining")}
+                    </span>
+                  )}
+                </div>
+
+                {/* Last dose row + brand chip */}
+                <div style={{ borderTop: "1px solid var(--border)", paddingTop: 9, display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0 }}>
+                      {t("iob_basal_last_label")}
+                    </span>
+                    <span style={{ fontSize: 12, color: BASAL_INDIGO, fontWeight: 700, fontFamily: "var(--font-mono)", textAlign: "right" }}>
+                      {new Date(lastBasal.created_at).toLocaleDateString([], { day: "2-digit", month: "2-digit" })}{" "}
+                      {new Date(lastBasal.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}{" · "}
+                      {lastBasal.units.toFixed(1)} IE
+                    </span>
                   </div>
-                );
-              })
+                  {insulinBrandBasal?.trim() && (
+                    <div>
+                      <span style={{
+                        display: "inline-block", padding: "2px 10px", borderRadius: 99,
+                        background: `${BASAL_INDIGO}18`, color: BASAL_INDIGO,
+                        fontSize: 11, fontWeight: 600,
+                      }}>
+                        {insulinBrandBasal.trim()}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </>
             ) : (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", paddingBottom: 4 }}>
                 <span style={{ fontSize: 12, color: "var(--text-ghost)" }}>{t("iob_basal_no_log")}</span>
               </div>
             )}
-            <div style={{ fontSize: 11, color: "var(--text-faint)", textAlign: "center", borderTop: "1px solid var(--border)", paddingTop: 7 }}>
-              {t("iob_basal_dia_info", { brand: insulinBrandBasal?.trim() || t("iob_tab_basal") })}
-            </div>
           </div>
         ) : (
         <div
