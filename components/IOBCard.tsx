@@ -405,7 +405,7 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
                   alignItems: "center", justifyContent: "center", gap: 1,
                 }}>
                   <div style={{
-                    fontSize: lastBasal ? 22 : 20, fontWeight: 800, lineHeight: 1,
+                    fontSize: lastBasal ? 20 : 18, fontWeight: 800, lineHeight: 1,
                     fontFamily: "var(--font-mono)",
                     color: lastBasal ? basalColor : "var(--text-ghost)",
                     textShadow: lastBasal && !basalOverdue && !basalDecayed ? `0 0 18px ${BASAL_INDIGO}77` : "none",
@@ -415,15 +415,6 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
                       : "—"}
                   </div>
                   <div style={{ fontSize: 11, color: "var(--text-dim)", fontWeight: 600 }}>IE</div>
-                  {lastBasal && (
-                    <div style={{
-                      fontSize: 8, color: "var(--text-ghost)", fontWeight: 500,
-                      textAlign: "center", lineHeight: 1.2, marginTop: 1,
-                      maxWidth: 70,
-                    }}>
-                      {t("iob_basal_approx_note")}
-                    </div>
-                  )}
                 </div>
               </div>
 
@@ -463,6 +454,17 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
             </>
           )}
         </div>
+
+        {/* Basal disclaimer — ganz unten in der kompakten Karte */}
+        {view === "basal" && lastBasal && (
+          <div style={{
+            fontSize: 9, color: "var(--text-ghost)", lineHeight: 1.3,
+            borderTop: "1px solid var(--border)", paddingTop: 6,
+            textAlign: "center",
+          }}>
+            {t("iob_basal_approx_note")}
+          </div>
+        )}
       </div>
 
       {/* ── COLLAPSIBLE DETAIL ── */}
