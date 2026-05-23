@@ -1347,6 +1347,10 @@
     "glev_ai_label": "Glev AI",
     "glev_ai_desc_on": "Aktiv — der Chat-Assistent ist freigeschaltet.",
     "glev_ai_desc_off": "Aus — der schwebende Button zeigt beim nächsten Tap wieder das Zustimmungs-Fenster.",
+    "fab_mode_label": "Aktion beim Tippen",
+    "fab_mode_desc": "Was passiert, wenn du den schwebenden Glev-Button kurz antippst.",
+    "fab_mode_option_ai": "Glev AI öffnen",
+    "fab_mode_option_voice": "Spracheingabe starten",
     "row_founder_contact": "Direkter Draht zum Gründer",
     "subtitle_founder_contact": "Als Glev+ Mitglied hast du direkten Zugang zu Lucas."
   },

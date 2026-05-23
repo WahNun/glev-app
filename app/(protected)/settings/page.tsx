@@ -327,6 +327,29 @@ export default function SettingsPage() {
   const [aiConsentGranted, setAiConsentGranted] = useState<boolean | null>(null);
   const [aiConsentBusy, setAiConsentBusy] = useState(false);
 
+  // FAB short-tap mode — controls what the floating Glev button does
+  // when tapped briefly. "ai" (default) opens the Glev AI consent
+  // modal / chat sheet (Phase-2 behaviour from Task #651); "voice"
+  // routes to /engine?voice=1 (pre-AI behaviour). Stored in
+  // localStorage as `glev_fab_mode`; the Layout-mounted FAB handler
+  // (`runFabShortTap`) reads it at every tap so changes take effect
+  // immediately without a remount. Default "ai" preserves the
+  // current behaviour for users who don't touch this setting.
+  const [fabMode, setFabMode] = useState<"ai" | "voice">("ai");
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const stored = window.localStorage.getItem("glev_fab_mode");
+      if (stored === "voice" || stored === "ai") setFabMode(stored);
+    } catch { /* ignore */ }
+  }, []);
+  const setFabModeAndPersist = useCallback((next: "ai" | "voice") => {
+    setFabMode(next);
+    if (typeof window !== "undefined") {
+      try { window.localStorage.setItem("glev_fab_mode", next); } catch { /* ignore */ }
+    }
+  }, []);
+
   const [openSheet, setOpenSheet] = useState<SheetKey | null>(null);
   // Account-Sheet aus dem Header — geteilte Komponente, deshalb
   // separater State neben `openSheet` (das die Settings-internen
@@ -2896,6 +2919,44 @@ export default function SettingsPage() {
             }}
           >
             <div style={{ position: "absolute", top: 2, left: aiConsentGranted ? 22 : 2, width: 18, height: 18, borderRadius: 99, background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }} />
+          </div>
+        </div>
+        <div style={{ padding: "12px 14px", borderTop: `1px solid ${BORDER}`, display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <span style={{ fontSize: 14, fontWeight: 500, color: "var(--text-strong)", lineHeight: 1.25 }}>
+              {tSettings("fab_mode_label")}
+            </span>
+            <span style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.3 }}>
+              {tSettings("fab_mode_desc")}
+            </span>
+          </div>
+          <div role="radiogroup" aria-label={tSettings("fab_mode_label")} style={{ display: "flex", gap: 8, padding: 4, borderRadius: 10, background: "var(--surface-dim, rgba(255,255,255,0.04))", border: `1px solid ${BORDER}` }}>
+            {(["ai", "voice"] as const).map((opt) => {
+              const active = fabMode === opt;
+              return (
+                <button
+                  key={opt}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  onClick={() => setFabModeAndPersist(opt)}
+                  style={{
+                    flex: 1,
+                    padding: "8px 10px",
+                    borderRadius: 8,
+                    border: "none",
+                    cursor: "pointer",
+                    fontSize: 13,
+                    fontWeight: active ? 600 : 500,
+                    color: active ? "#fff" : "var(--text-strong)",
+                    background: active ? ACCENT : "transparent",
+                    transition: "background 0.15s, color 0.15s",
+                  }}
+                >
+                  {tSettings(opt === "ai" ? "fab_mode_option_ai" : "fab_mode_option_voice")}
+                </button>
+              );
+            })}
           </div>
         </div>
       </SettingsSection>

@@ -1347,6 +1347,10 @@
     "glev_ai_label": "Glev AI",
     "glev_ai_desc_on": "On — the chat assistant is unlocked.",
     "glev_ai_desc_off": "Off — the floating button re-shows the consent dialog on the next tap.",
+    "fab_mode_label": "Tap action",
+    "fab_mode_desc": "What happens when you short-tap the floating Glev button.",
+    "fab_mode_option_ai": "Open Glev AI",
+    "fab_mode_option_voice": "Start voice input",
     "row_founder_contact": "Direct line to the founder",
     "subtitle_founder_contact": "As a Glev+ member you have direct access to Lucas."
   },

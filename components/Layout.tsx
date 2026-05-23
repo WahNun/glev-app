@@ -176,12 +176,11 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       if (voice.recording) {
         voice.requestStop();
       } else {
-        // Phase 2 (Task #651): short-tap on the floating Glev AI
-        // button opens the AI flow — consent modal on first tap, chat
-        // sheet thereafter. The previous engine-voice route lives on
-        // via the long-press quick-add sheet (which still hosts the
-        // Engine entry) and via direct navigation to /engine.
-        glevAi.openFromButton();
+        // Settings → "Aktion beim Tippen" lets the user choose between
+        // the new AI flow (default) and the previous voice-recording
+        // route (/engine?voice=1). Both modes still let the long-press
+        // quick-add sheet through.
+        runFabShortTap();
       }
     }
   };
@@ -198,8 +197,26 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     if (voice.recording) {
       voice.requestStop();
     } else {
-      // Phase 2 (Task #651): see fabHandlePointerUp comment — short-
-      // tap now opens the Glev AI consent modal or chat sheet.
+      runFabShortTap();
+    }
+  };
+
+  // Dispatches the FAB short-tap based on the user's Settings pref
+  // (`glev_fab_mode`): "ai" (default) opens the Glev AI consent
+  // modal / chat sheet; "voice" routes to /engine?voice=1 — same
+  // path the long-press quick-add "Voice" entry uses, including the
+  // monotonic `vt` token that re-triggers auto-record even if the
+  // user is already on /engine.
+  const runFabShortTap = () => {
+    let mode: "ai" | "voice" = "ai";
+    if (typeof window !== "undefined") {
+      try {
+        mode = window.localStorage.getItem("glev_fab_mode") === "voice" ? "voice" : "ai";
+      } catch { /* ignore — fall back to ai */ }
+    }
+    if (mode === "voice") {
+      router.push(`/engine?voice=1&vt=${Date.now()}`);
+    } else {
       glevAi.openFromButton();
     }
   };
