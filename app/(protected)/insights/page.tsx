@@ -1424,7 +1424,17 @@ export default function InsightsPage() {
               </div>
               {/* Contextual info panel — appears when a band or the
                   marker is tapped. Tap the same target again to close. */}
-              {tirSelected != null && (() => {
+              {/* Mini hypo bar chart — same style as the hypo-events card */}
+            {hypoEnough && (() => {
+              const nowMs = Date.now();
+              const vals = Array.from({ length: 7 }, (_, i) => {
+                const s = nowMs - (6 - i) * 86400000;
+                return readings14.filter(r => r.t >= s && r.t < s + 86400000 && r.v < HYPO_THRESHOLD_MGDL).length;
+              });
+              const lbls = Array.from({ length: 7 }, (_, i) => String(new Date(nowMs - (6 - i) * 86400000).getDate()));
+              return <InsightMicroBars values={vals} labels={lbls} color={PINK} title={tInsights("micro_trend_7d")} barHeight={90} />;
+            })()}
+            {tirSelected != null && (() => {
                 const cfg =
                   tirSelected === "tbr" ? { color: PINK,        title: tInsights("tir_detail_tbr_title"),  body: tInsights("tir_detail_tbr_body",  { pct: tbrPct, hours: tbrHours, mini: hypoEvents7d.mini, clinical: hypoEvents7d.clinical, range: rangeLabel }) } :
                   tirSelected === "tir" ? { color: GREEN,       title: tInsights("tir_detail_tir_title"),  body: tInsights("tir_detail_tir_body",  { pct: tirPct, hours: tirHours, range: rangeLabel }) } :
