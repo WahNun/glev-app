@@ -79,9 +79,33 @@
 //       • Each of the four segment divs has offsetWidth > 0
 //       • The bar container does not overflow its parent (scrollWidth ≤ offsetWidth)
 //
+//   PART 7 — Engine Step 3 result-cell labels and disclaimer (Task #601)
+//     After clicking "3 · Ergebnis" / "3 · Result" pill on the Engine screen, the
+//     result view renders a 3-column breakdown grid (fontSize:7.5, padding 4–6 px)
+//     and a disclaimer footer with a bold label rendered via <strong>. Neither has
+//     an explicit overflow guard.
+//     Checks per locale (DE + EN):
+//       • Cell labels ("Carb", "Korrektur"/"Correction", "Gesamt"/"Total") are
+//         visible, scrollWidth ≤ offsetWidth, no ellipsis.
+//       • Disclaimer bold label ("Wichtig:" / "Important:") is visible and not
+//         overflowing.
+//
 // Structure:
-//   Sixteen `test.describe` blocks — two per part (DE + EN each) — so regressions
+//   Eighteen `test.describe` blocks — two per part (DE + EN each) — so regressions
 //   are pinpointed to the affected locale and element group.
+//   (PART 5 uses four describe blocks — card headers and meal-row labels tested
+//   separately per locale — and PART 5 TIR legend adds two more, giving 6 for PART 5.)
+//
+//   PART 7 — Engine Step 3 result-cell labels and disclaimer (Task #601)
+//     After navigating to the Engine screen and clicking the "3 · Ergebnis" /
+//     "3 · Result" step pill, the result view renders a 3-column breakdown grid
+//     (fontSize:7.5, no explicit overflow guard) and a disclaimer footer whose
+//     bold label uses `<strong>` (also at risk of clip in narrow containers).
+//     Covered per locale (DE + EN):
+//       DE cell labels: "Carb", "Korrektur", "Gesamt"
+//       EN cell labels: "Carb", "Correction", "Total"
+//       Disclaimer label: "Wichtig:" (DE) / "Important:" (EN)
+//     Each element: visible, scrollWidth ≤ offsetWidth, no ellipsis.
 //
 // Selector strategy:
 //   Elements are targeted by exact visible text content. Nav buttons in the
@@ -770,5 +794,169 @@ test.describe("Marketing phone TIR stacked bar segments — EN locale", () => {
     await gotoInsightsScreen(phone, "Time in Range · 7d");
 
     await assertTirBarGeometry(phone, "EN");
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PART 7 — Engine Step 3 result-cell labels and disclaimer (Task #601)
+//
+// The Engine Step 3 (Result / Ergebnis) view contains:
+//   • A 3-column breakdown grid with cell labels at fontSize:7.5 and padding:4–6 px.
+//     Each cell has `textAlign:"center"` but no explicit overflow guard — silent
+//     clipping is possible if translations grow or the container narrows.
+//   • A disclaimer footer whose bold label is rendered via <strong> at fontSize:8.5.
+//
+// Navigation:
+//   1. gotoEngineScreen() — clicks "GLEV" in the BottomNav and anchors on the
+//      first step pill.
+//   2. Click the "3 · Ergebnis" (DE) / "3 · Result" (EN) pill button.
+//   3. Anchor on the confidence badge ("HOCH" / "HIGH") to confirm Step 3 is live.
+//
+// Checked elements per locale:
+//   DE: cell labels "Carb", "Korrektur", "Gesamt"; disclaimer label "Wichtig:"
+//   EN: cell labels "Carb", "Correction", "Total"; disclaimer label "Important:"
+// ══════════════════════════════════════════════════════════════════════════════
+
+/** Navigate to Engine Step 3 inside `phone`.
+ *
+ *  The step-3 pill is disabled until the wizard has progressed to step 3
+ *  (`reachable = s.id <= step` in AppMockupPhone.tsx). We must walk through
+ *  the wizard interactively:
+ *
+ *  1. Click "GLEV" BottomNav button → Engine Step 1 mounts.
+ *  2. Click the speak/mic button (tEng("voice_btn_speak")) → a 2.6 s mock
+ *     animation runs and auto-advances to Step 2.
+ *  3. Click the "Calculate bolus →" / "Bolus berechnen →" CTA → Step 3 mounts.
+ *  4. Anchor on the confidence badge to confirm Step 3 has rendered.
+ */
+async function gotoEngineStep3(
+  phone: Locator,
+  speakBtnLabel: string,
+  calculateBolusBtnLabel: string,
+  confidenceBadgeText: string,
+): Promise<void> {
+  // Step 1 — open the Engine screen. The speak button label is a reliable
+  // anchor because it only appears on Step 1 and is visible immediately.
+  await gotoEngineScreen(phone, speakBtnLabel);
+
+  // Step 2 — tap the mic/speak button to trigger the mock voice flow.
+  //   The flow runs: idle → listening (1.5 s) → parsing (1.1 s) → idle + setStep(2).
+  //   Total auto-advance time ≈ 2.6 s. Playwright's default actionTimeout is 15 s.
+  const speakBtn = phone.getByText(speakBtnLabel, { exact: true }).first();
+  await speakBtn.click();
+
+  // Step 3 — wait for the "Calculate bolus →" button that only renders in Step 2.
+  const calculateBtn = phone.getByText(calculateBolusBtnLabel, { exact: true }).first();
+  await expect(calculateBtn).toBeVisible({ timeout: 8_000 });
+  await calculateBtn.click();
+
+  // Step 4 — wait for the confidence badge that only appears on Step 3.
+  await expect(
+    phone.getByText(confidenceBadgeText, { exact: true }).first(),
+  ).toBeVisible();
+}
+
+test.describe("Marketing phone Engine Step 3 result labels — DE locale", () => {
+  test.use({ locale: "de-DE" });
+
+  // Cell labels from AppMockupPhone.tsx EngineStepResult → cellCarb / cellCorr /
+  // cellTotal (messages/de.json values via pickCopy).
+  const DE_CELL_LABELS = ["Carb", "Korrektur", "Gesamt"] as const;
+
+  // Disclaimer bold label: tEng("disclaimer_label") → messages/de.json.
+  const DE_DISCLAIMER_LABEL = "Wichtig:";
+
+  test("Engine Step 3 cell labels are visible and not overflowing in DE", async ({
+    page,
+  }) => {
+    const phone = await gotoHomeAndFindPhone(page);
+
+    // Navigate to Step 3 via the full wizard flow:
+    //   Step 1 (speak button) → Step 2 (macros form) → Step 3 (result).
+    // Speak button: tEng("voice_btn_speak") = "Sprechen" (DE).
+    // Calculate bolus CTA: tEng("btn_calculate_bolus") = "Bolus berechnen →" (DE).
+    // Confidence badge on Step 3: pickCopy → "HOCH" (DE).
+    await gotoEngineStep3(phone, "Sprechen", "Bolus berechnen →", "HOCH");
+
+    for (const label of DE_CELL_LABELS) {
+      // Cell labels are rendered in a <div> at fontSize:7.5 inside a 1fr column.
+      const el = phone.getByText(label, { exact: true }).first();
+      await expect(el).toBeVisible();
+      await assertNoOverflow(el, `Engine Step 3 cell label "${label}" (DE)`);
+
+      // Full-text round-trip — no characters swallowed.
+      const rawText = (await el.textContent()) ?? "";
+      expect(rawText.trim()).toBe(label);
+    }
+  });
+
+  test("Engine Step 3 disclaimer label is visible and not overflowing in DE", async ({
+    page,
+  }) => {
+    const phone = await gotoHomeAndFindPhone(page);
+
+    await gotoEngineStep3(phone, "Sprechen", "Bolus berechnen →", "HOCH");
+
+    // The disclaimer bold label is rendered via <strong> inside the footer div.
+    const el = phone.getByText(DE_DISCLAIMER_LABEL, { exact: true }).first();
+    await expect(el).toBeVisible();
+    await assertNoOverflow(
+      el,
+      `Engine Step 3 disclaimer label "${DE_DISCLAIMER_LABEL}" (DE)`,
+    );
+
+    const rawText = (await el.textContent()) ?? "";
+    expect(rawText.trim()).toBe(DE_DISCLAIMER_LABEL);
+  });
+});
+
+test.describe("Marketing phone Engine Step 3 result labels — EN locale", () => {
+  test.use({ locale: "en-US" });
+
+  // Cell labels from AppMockupPhone.tsx EngineStepResult → cellCarb / cellCorr /
+  // cellTotal (messages/en.json values via pickCopy).
+  const EN_CELL_LABELS = ["Carb", "Correction", "Total"] as const;
+
+  // Disclaimer bold label: tEng("disclaimer_label") → messages/en.json.
+  const EN_DISCLAIMER_LABEL = "Important:";
+
+  test("Engine Step 3 cell labels are visible and not overflowing in EN", async ({
+    page,
+  }) => {
+    const phone = await gotoHomeAndFindPhone(page);
+
+    // Navigate to Step 3 via the full wizard flow.
+    // Speak button: tEng("voice_btn_speak") = "Speak" (EN).
+    // Calculate bolus CTA: tEng("btn_calculate_bolus") = "Calculate bolus →" (EN).
+    // Confidence badge on Step 3: pickCopy → "HIGH" (EN).
+    await gotoEngineStep3(phone, "Speak", "Calculate bolus →", "HIGH");
+
+    for (const label of EN_CELL_LABELS) {
+      const el = phone.getByText(label, { exact: true }).first();
+      await expect(el).toBeVisible();
+      await assertNoOverflow(el, `Engine Step 3 cell label "${label}" (EN)`);
+
+      const rawText = (await el.textContent()) ?? "";
+      expect(rawText.trim()).toBe(label);
+    }
+  });
+
+  test("Engine Step 3 disclaimer label is visible and not overflowing in EN", async ({
+    page,
+  }) => {
+    const phone = await gotoHomeAndFindPhone(page);
+
+    await gotoEngineStep3(phone, "Speak", "Calculate bolus →", "HIGH");
+
+    // The disclaimer bold label is rendered via <strong> inside the footer div.
+    const el = phone.getByText(EN_DISCLAIMER_LABEL, { exact: true }).first();
+    await expect(el).toBeVisible();
+    await assertNoOverflow(
+      el,
+      `Engine Step 3 disclaimer label "${EN_DISCLAIMER_LABEL}" (EN)`,
+    );
+
+    const rawText = (await el.textContent()) ?? "";
+    expect(rawText.trim()).toBe(EN_DISCLAIMER_LABEL);
   });
 });
