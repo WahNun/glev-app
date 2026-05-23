@@ -8,12 +8,12 @@
 //   in the Settings screen. All of these elements use whiteSpace:nowrap +
 //   overflow:hidden + textOverflow:ellipsis — exactly the pattern that clips
 //   text silently when a container is too narrow.
-//   Task #575 adds coverage for the Insights screen card labels, which use the
-//   same small font sizes inside fixed-width containers and are locale-translated.
-//   Task #578 adds coverage for the four TIR legend spans in the InsightsScreen
-//   Time-in-Range card. These <span> elements render at fontSize:8 inside a
-//   space-between flex row and carry the same overflow risk as the other small
-//   text elements already guarded here.
+//   Task #577 identified that the Insights screen (BottomNav "INSIGHTS" tab)
+//   also renders small-text elements — swipe-pager card titles (fontSize:9),
+//   meal-evaluation row labels (fixed width:72, fontSize:10), and TIR legend
+//   spans (fontSize:8) — inside fixed-width containers with the same silent-clip
+//   risk. Tasks #575 and #578 implemented the resulting describe blocks below
+//   (PART 5 card-label tests and PART 5 TIR-legend tests respectively).
 //
 // What we cover:
 //   PART 1 — RateTile chip tiles (original Task #567 coverage)
