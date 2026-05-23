@@ -1266,17 +1266,38 @@ export default function SettingsPage() {
       title: tSettings("correction_factor"),
       body: (
         <div>
-          <label style={{ fontSize: 13, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>{tSettings("cf_label")}</label>
-          <input
-            style={inp}
-            type="number"
-            min={1}
-            max={500}
+          <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5, marginBottom: 12 }}>
+            {tSettings("cf_label")}
+          </p>
+          <SnapSlider
+            value={settings.cf ?? 50}
+            onChange={(v) => upd("cf", v)}
+            min={10}
+            max={100}
             step={1}
-            value={settings.cf}
-            onChange={(e) => upd("cf", parseInt(e.target.value) || DEFAULT_INSULIN_SETTINGS.cf)}
+            unit="mg/dL/IE"
+            accent={ACCENT}
+            ariaLabel={tSettings("correction_factor")}
           />
-          <div style={{ fontSize: 13, color: "var(--text-ghost)", marginTop: 6 }}>{tSettings("cf_hint")}</div>
+          <div style={{
+            display: "flex",
+            justifyContent: "space-between",
+            marginTop: 6,
+            paddingLeft: 2,
+            paddingRight: 2,
+          }}>
+            {[10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((tick) => (
+              <span key={tick} style={{
+                fontSize: 10,
+                color: (settings.cf ?? 50) === tick ? ACCENT : "var(--text-ghost)",
+                fontWeight: (settings.cf ?? 50) === tick ? 700 : 400,
+                transition: "color 150ms ease",
+              }}>
+                {tick}
+              </span>
+            ))}
+          </div>
+          <div style={{ fontSize: 13, color: "var(--text-ghost)", marginTop: 8 }}>{tSettings("cf_hint")}</div>
         </div>
       ),
       footer: <SaveFooter onSave={saveInsulinAction} />,
@@ -1285,17 +1306,38 @@ export default function SettingsPage() {
       title: tSettings("row_target_bg"),
       body: (
         <div>
-          <label style={{ fontSize: 13, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>{tSettings("target_bg_label")}</label>
-          <input
-            style={inp}
-            type="number"
+          <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5, marginBottom: 12 }}>
+            {tSettings("target_bg_label")}
+          </p>
+          <SnapSlider
+            value={settings.targetBg ?? 100}
+            onChange={(v) => upd("targetBg", v)}
             min={60}
             max={200}
-            step={1}
-            value={settings.targetBg}
-            onChange={(e) => upd("targetBg", parseInt(e.target.value) || DEFAULT_INSULIN_SETTINGS.targetBg)}
+            step={5}
+            unit="mg/dL"
+            accent={ACCENT}
+            ariaLabel={tSettings("row_target_bg")}
           />
-          <div style={{ fontSize: 13, color: "var(--text-ghost)", marginTop: 6 }}>{tSettings("target_bg_hint")}</div>
+          <div style={{
+            display: "flex",
+            justifyContent: "space-between",
+            marginTop: 6,
+            paddingLeft: 2,
+            paddingRight: 2,
+          }}>
+            {[80, 100, 120, 140, 160, 180].map((tick) => (
+              <span key={tick} style={{
+                fontSize: 10,
+                color: (settings.targetBg ?? 100) === tick ? ACCENT : "var(--text-ghost)",
+                fontWeight: (settings.targetBg ?? 100) === tick ? 700 : 400,
+                transition: "color 150ms ease",
+              }}>
+                {tick}
+              </span>
+            ))}
+          </div>
+          <div style={{ fontSize: 13, color: "var(--text-ghost)", marginTop: 8 }}>{tSettings("target_bg_hint")}</div>
         </div>
       ),
       footer: <SaveFooter onSave={saveInsulinAction} />,
