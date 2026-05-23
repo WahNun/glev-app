@@ -712,6 +712,9 @@ export default function DashboardPage() {
         .glev-dash-head { display: flex; }
         .glev-cluster-bar  { display: none !important; }
         .glev-quickadd-cta { display: none !important; }
+        /* Extra scroll runway at the bottom so users can pull the last
+           card fully clear of the nav bar and read it comfortably. */
+        .glev-main { padding-bottom: calc(var(--nav-bottom-total) + 40px) !important; }
         @media (max-width: 768px) {
           .glev-dash-head { display: none !important; }
         }
