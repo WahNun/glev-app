@@ -115,3 +115,16 @@ test.describe("Rate Triplet card labels — no overflow at 768 px (tablet)", () 
     await assertNoOverflow(page, "768×1024");
   });
 });
+
+test.describe("Rate Triplet card labels — no overflow at 812×375 (landscape phone)", () => {
+  test.use({ viewport: { width: 812, height: 375 } });
+
+  test.beforeEach(async ({ context }) => {
+    await context.clearCookies();
+  });
+
+  test("all three rate labels are fully visible without clipping", async ({ page }) => {
+    await loginAsTestUser(page);
+    await assertNoOverflow(page, "812×375");
+  });
+});
