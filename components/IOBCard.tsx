@@ -197,6 +197,13 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
     return elapsed >= 0 && elapsed < diaMin;
   });
 
+  // Peak IOB = total units from all still-active doses.
+  // At the moment of injection IOB equals the full dose amount, so the
+  // fraction iob / peakIOB correctly reflects how much of the original
+  // dose is still on board (e.g. 1.5 IE remaining of 2 IE injected → 75%).
+  const peakIOB = activeDoses.reduce((sum, d) => sum + d.units, 0);
+  const bolusFraction = peakIOB > 0 ? Math.min(iob / peakIOB, 1) : 0;
+
   const clearsInMin = cleared ? 0 : activeDoses.reduce((max, d) => {
     const elapsed = (now - new Date(d.administeredAt).getTime()) / 60_000;
     if (elapsed >= diaMin) return max;
@@ -338,7 +345,7 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
             <>
               {/* Bolus gauge */}
               <div style={{ position: "relative", flexShrink: 0 }}>
-                <CircleGauge iob={iob} color={color} cleared={cleared} />
+                <CircleGauge iob={iob} color={color} cleared={cleared} fraction={bolusFraction} />
                 <div style={{
                   position: "absolute", inset: 0,
                   display: "flex", flexDirection: "column",
