@@ -1173,9 +1173,11 @@ function LivePhoneScaler({ children }: { children: React.ReactNode }) {
   return (
     <div
       ref={outerRef}
+      data-testid="live-phone-scaler"
       style={{ width: "min(320px, 100%)", height: scale * 660 }}
     >
       <div
+        data-testid="live-phone-scaler-inner"
         style={{
           width: 320,
           height: 660,
