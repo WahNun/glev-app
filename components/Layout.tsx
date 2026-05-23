@@ -401,6 +401,29 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         .glev-mobile-nav  { display: none !important; }
         .glev-mobile-fab  { display: none !important; }
         .glev-mobile-head { display: none !important; }
+        /* Sidebar tooltip — appears to the right of each icon-only nav button */
+        .glev-sidebar .nav-btn[data-label] { position: relative; }
+        .glev-sidebar .nav-btn[data-label]::after {
+          content: attr(data-label);
+          position: absolute;
+          left: calc(100% + 10px);
+          top: 50%;
+          transform: translateY(-50%);
+          background: var(--surface);
+          border: 1px solid var(--border-soft);
+          color: var(--text);
+          padding: 5px 12px;
+          border-radius: 8px;
+          font-size: 13px;
+          font-weight: 500;
+          white-space: nowrap;
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 0.12s ease;
+          z-index: 200;
+          box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+        }
+        .glev-sidebar .nav-btn[data-label]:hover::after { opacity: 1; }
         @media (max-width: 768px) {
           .glev-sidebar     { display: none !important; }
           .glev-mobile-nav  { display: flex !important; }
@@ -790,10 +813,10 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       <AccountSheet open={aboutOpen} onClose={() => setAboutOpen(false)} />
 
       <aside className="glev-sidebar" style={{
-        width: 224, flexShrink: 0, background: SURFACE,
+        width: 64, flexShrink: 0, background: SURFACE,
         borderRight: `1px solid ${BORDER}`, flexDirection: "column",
-        padding: "20px 12px", position: "sticky", top: 0, height: "100vh",
-        overflowY: "auto",
+        padding: "20px 8px", position: "sticky", top: 0, height: "100vh",
+        overflowY: "auto", alignItems: "center",
       }}>
         <div
           onClick={() => setAboutOpen(true)}
@@ -803,81 +826,61 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           aria-label="Open about Glev"
           className="nav-btn"
           style={{
-            display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6,
-            padding: "8px 10px", marginBottom: 24, marginTop: -4,
-            borderRadius: 10, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "8px", marginBottom: 24, marginTop: -4,
+            borderRadius: 10, cursor: "pointer", width: "100%",
           }}
         >
-          {/* Same logic as the mobile header — keep the icon square dark
-              in both themes so it always reads as the Glev "favicon". */}
-          <GlevLockup size={28} color="var(--text)" symbolBg="#0F0F14" />
+          <GlevLogo size={28} bg="#0F0F14" />
         </div>
 
-        <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+        <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, width: "100%" }}>
           {NAV.map(({ key, path, icon }) => {
-            // /engine has its own internal tabs that we deep-link to
-            // via ?tab= — those navigations don't change pathname so
-            // the active highlight stays correct without extra logic.
             const active = pathname.startsWith(path);
+            const label  = tNav(key);
             return (
-              <button key={path} className="nav-btn" onClick={() => router.push(path)} style={{
-                display: "flex", alignItems: "center", gap: 10, padding: "10px 12px",
-                borderRadius: 10, border: "none", cursor: "pointer",
-                background: active ? `${ACCENT}18` : "transparent",
-                color: active ? ACCENT : "var(--text-dim)",
-                fontSize: 14, fontWeight: active ? 600 : 400,
-                textAlign: "left", width: "100%",
-              }}>
+              <button
+                key={path}
+                className="nav-btn"
+                onClick={() => router.push(path)}
+                data-label={label}
+                aria-label={label}
+                title={label}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  padding: "11px 0", borderRadius: 10, border: "none", cursor: "pointer",
+                  background: active ? `${ACCENT}18` : "transparent",
+                  color: active ? ACCENT : "var(--text-dim)",
+                  width: "100%",
+                }}
+              >
                 {icon(active)}
-                {tNav(key)}
               </button>
             );
           })}
         </nav>
 
-        <div style={{ marginTop: 16, borderTop: `1px solid ${BORDER}`, paddingTop: 12 }}>
-          {signOutConfirm ? (
-            <div style={{ padding: "6px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
-              <span style={{ fontSize: 12, color: "var(--text-dim)", fontWeight: 500 }}>Sign out?</span>
-              <div style={{ display: "flex", gap: 6 }}>
-                <button
-                  aria-label="Confirm sign out"
-                  onClick={handleSignOut}
-                  style={{
-                    flex: 1, padding: "7px 0", borderRadius: 8, border: "none",
-                    cursor: "pointer", background: "#ef4444", color: "#fff",
-                    fontSize: 12, fontWeight: 600,
-                  }}
-                >
-                  Confirm
-                </button>
-                <button
-                  aria-label="Cancel sign out"
-                  onClick={() => setSignOutConfirm(false)}
-                  style={{
-                    flex: 1, padding: "7px 0", borderRadius: 8, border: "none",
-                    cursor: "pointer", background: "var(--surface-2, var(--surface))",
-                    color: "var(--text-dim)", fontSize: 12,
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              aria-label="Sign out of Glev"
-              onClick={() => setSignOutConfirm(true)}
-              style={{
-                display: "flex", alignItems: "center", gap: 8, padding: "10px 12px",
-                borderRadius: 10, border: "none", cursor: "pointer", background: "transparent",
-                color: "var(--text-ghost)", fontSize: 13, textAlign: "left", width: "100%",
-              }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-              Sign Out
-            </button>
-          )}
+        <div style={{ marginTop: 16, borderTop: `1px solid ${BORDER}`, paddingTop: 12, width: "100%" }}>
+          <button
+            aria-label={signOutConfirm ? "Confirm sign out" : "Sign out of Glev"}
+            onClick={signOutConfirm ? handleSignOut : () => setSignOutConfirm(true)}
+            onBlur={() => setSignOutConfirm(false)}
+            data-label={signOutConfirm ? "Confirm?" : "Sign Out"}
+            className="nav-btn"
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              padding: "11px 0", borderRadius: 10, border: "none", cursor: "pointer",
+              background: signOutConfirm ? "rgba(239,68,68,0.15)" : "transparent",
+              color: signOutConfirm ? "#ef4444" : "var(--text-ghost)",
+              width: "100%", transition: "background 0.15s, color 0.15s",
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+          </button>
         </div>
       </aside>
 

@@ -221,7 +221,7 @@ test.describe("Mobile Bottom Nav", () => {
     { label: /^Dashboard$/,   path: "/dashboard" },
     { label: /^Einträge$/,    path: "/entries"   },
     { label: /^Insights$/,    path: "/insights"  },
-    { label: /^Einstell\.$/, path: "/settings"  },
+    { label: /^Einstellungen$/, path: "/settings"  },
   ] as const) {
     test(`tapping "${String(label)}" navigates to ${path}`, async ({ page }) => {
       const btn = page.locator("nav.glev-mobile-nav").getByRole("button", { name: label });
@@ -276,7 +276,7 @@ test.describe("Desktop Sidebar", () => {
     { label: /^Einträge$/,    path: "/entries"   },
     { label: /^Glev$/,        path: "/engine"    },
     { label: /^Insights$/,    path: "/insights"  },
-    { label: /^Einstell\.$/, path: "/settings"  },
+    { label: /^Einstellungen$/, path: "/settings"  },
   ] as const) {
     test(`sidebar "${String(label)}" link navigates to ${path}`, async ({ page }) => {
       const btn = page.locator(".glev-sidebar").getByRole("button", { name: label });
@@ -315,16 +315,16 @@ test.describe("Desktop Sidebar", () => {
     // 1. Start on /dashboard (beforeEach already lands here after login).
     await expect(page).toHaveURL(/\/dashboard/);
 
-    // 2. Click Sign Out — confirmation row should appear.
+    // 2. First click — the icon-only button toggles to "Confirm sign out".
     const signOutBtn = page.locator(".glev-sidebar").getByRole("button", { name: /sign out of glev/i });
     await expect(signOutBtn).toBeVisible({ timeout: 15_000 });
     await signOutBtn.click();
-
+    // After first click the same button now has aria-label "Confirm sign out".
     const confirmBtn = page.locator(".glev-sidebar").getByRole("button", { name: /confirm sign out/i });
     await expect(confirmBtn).toBeVisible({ timeout: 5_000 });
 
-    // 3. Navigate to /settings via the sidebar — without confirming sign out.
-    const settingsBtn = page.locator(".glev-sidebar").getByRole("button", { name: /^Einstell\.$/ });
+    // 3. Navigate to /settings via the sidebar — without confirming.
+    const settingsBtn = page.locator(".glev-sidebar").getByRole("button", { name: /^Einstellungen$/ });
     await settingsBtn.click();
     await expect(page).toHaveURL(/\/settings/, { timeout: 15_000 });
 
@@ -333,8 +333,8 @@ test.describe("Desktop Sidebar", () => {
     await dashboardBtn.click();
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
 
-    // 5. The Sign Out button (not the confirm row) must be visible again —
-    //    proving that signOutConfirm state was reset by the re-mount.
+    // 5. The sign-out button must be back to its initial aria-label —
+    //    proving signOutConfirm state was reset by the re-mount.
     await expect(signOutBtn).toBeVisible({ timeout: 10_000 });
     await expect(confirmBtn).toBeHidden();
   });
