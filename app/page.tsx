@@ -572,7 +572,16 @@ export default function PreviewHome() {
         </h2>
         <div style={{ display: "flex", flexDirection: "column", gap: 80 }}>
           {[
-            { img: "/mockups/engine.png",   title: t("deepdive_voice_title"),    body: t("deepdive_voice_body") },
+            {
+              img: "",
+              title: t("deepdive_voice_title"),
+              body: t("deepdive_voice_body"),
+              liveNode: (
+                <div style={{ width: "min(320px, 100%)" }}>
+                  <AppMockupPhone lockTab="engine" hideTopCog />
+                </div>
+              ),
+            },
             { img: "/mockups/entries.png",  title: t("deepdive_macro_title"),    body: t("deepdive_macro_body") },
             {
               img: "",
