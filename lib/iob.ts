@@ -229,3 +229,29 @@ export function formatIOBDisplay(iob: number): string | null {
   if (iob < 0.05) return null;
   return `${iob.toFixed(1)} IE`;
 }
+
+/**
+ * Resolves the bolus insulin label shown in the IOB footer.
+ *
+ * When the user has saved a custom brand name (e.g. "Fiasp") in Settings →
+ * Insulin, that name is returned directly.  If no brand is configured, the
+ * function falls back to the translated label for the active insulin type
+ * ("Rapid" or "Regular").
+ *
+ * Extracted from IOBCard so the derivation is a pure, easily testable function.
+ *
+ * @param insulinBrandBolus  Raw brand string from userSettings (may be
+ *                           undefined or contain surrounding whitespace).
+ * @param insulinType        Active insulin type — "rapid" | "regular" | "unknown".
+ * @param rapidLabel         Translation string for rapid insulin (e.g. "Rapid").
+ * @param regularLabel       Translation string for regular insulin (e.g. "Regular").
+ */
+export function resolveBolusTypeLabel(
+  insulinBrandBolus: string | undefined,
+  insulinType: InsulinType,
+  rapidLabel: string,
+  regularLabel: string,
+): string {
+  if (insulinBrandBolus?.trim()) return insulinBrandBolus.trim();
+  return insulinType === "rapid" ? rapidLabel : regularLabel;
+}

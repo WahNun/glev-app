@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useTranslations } from "next-intl";
-import { calcTotalIOB, calcSingleIOB, getDIAMinutes, buildDoses, type BolusDose, type InsulinType } from "@/lib/iob";
+import { calcTotalIOB, calcSingleIOB, getDIAMinutes, buildDoses, resolveBolusTypeLabel, type BolusDose, type InsulinType } from "@/lib/iob";
 import { getInsulinSettings } from "@/lib/userSettings";
 import type { InsulinLog } from "@/lib/insulin";
 import type { Meal } from "@/lib/meals";
@@ -228,11 +228,12 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
       .slice(0, 5),
     [insulin],
   );
-  const insulinTypeLabel = insulinBrandBolus?.trim()
-    ? insulinBrandBolus.trim()
-    : insulinType === "rapid"
-      ? t("iob_dia_rapid")
-      : t("iob_dia_regular");
+  const insulinTypeLabel = resolveBolusTypeLabel(
+    insulinBrandBolus,
+    insulinType,
+    t("iob_dia_rapid"),
+    t("iob_dia_regular"),
+  );
 
   // ── Bolus | Basal toggle ─────────────────────────────────────────────────
   const [view, setView] = useState<"bolus" | "basal">("bolus");
