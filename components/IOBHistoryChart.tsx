@@ -579,6 +579,8 @@ export default function IOBHistoryChart({ insulin, insulinType, meals }: Props) 
             display: "flex",
             flexDirection: "column",
             gap: 10,
+            overflowY: "auto",
+            WebkitOverflowScrolling: "touch",
           }}>
             <div style={{ fontSize: 13, color: "var(--text-body)", lineHeight: 1.55 }}>
               {t("iob_history_back_body")}
