@@ -36,6 +36,7 @@ import { fetchLatestFingerstick, FS_OVERRIDE_WINDOW_MS } from "@/lib/fingerstick
 import { parseDbTs, parseDbDate, parseLluTs } from "@/lib/time";
 import { calcTotalIOB, applyIOBCorrection, iobCorrectionRoundedToZero, formatIOBDisplay, type InsulinType } from "@/lib/iob";
 import { resolveActiveDose } from "@/lib/engine/activeDose";
+import { calcEagerDose } from "@/lib/engine/eagerDose";
 import { fetchMeals } from "@/lib/meals";
 import { hapticSuccess, hapticError, hapticSelection } from "@/lib/haptics";
 import SnapSlider from "@/components/log/SnapSlider";
@@ -883,26 +884,16 @@ export default function EnginePage() {
   // otherwise it uses the engine-computed adaptive value.
   const effectiveICR = selectedICR === 'static' ? staticICR : adaptedICR;
 
-  // eagerDoses: inline KH÷ICR + correction calc for both ICR sources.
-  // Runs synchronously on every carbs/glucose/ICR change so dose chips
-  // appear instantly without waiting for the async engine call.
-  // Formula mirrors runGlevEngine's carb+correction dose path but
-  // without safety clamps or historical blending — good enough for a
-  // preview label. cf = 50, target = 110 (same defaults as engine).
+  // eagerDoses: carb÷ICR + correction calc for both ICR sources via
+  // calcEagerDose (lib/engine/eagerDose.ts). Runs synchronously on every
+  // carbs/glucose/ICR change so dose chips appear instantly without waiting
+  // for the async engine call. cf = 50, target = 110 (same defaults as engine).
   const eagerDoses = useMemo<{ adaptive: number | null; static: number | null }>(() => {
     const cGrams = carbUnit.toGrams(parseFloat(carbs) || 0);
     const gNum = parseFloat(glucose) || 0;
-    const cf = 50, target = 110;
-    const calcDose = (icr: number): number => {
-      const carbDose = icr > 0 ? cGrams / icr : 0;
-      const corrDose = gNum > target ? (gNum - target) / cf : 0;
-      return Math.round((carbDose + corrDose) * 10) / 10;
-    };
-    const hasInput = cGrams > 0 || gNum > target;
-    if (!hasInput) return { adaptive: null, static: null };
     return {
-      adaptive: adaptedICR > 0 ? calcDose(adaptedICR) : null,
-      static:   staticICR  > 0 ? calcDose(staticICR)  : null,
+      adaptive: calcEagerDose(cGrams, gNum, adaptedICR),
+      static:   calcEagerDose(cGrams, gNum, staticICR),
     };
   }, [carbs, glucose, adaptedICR, staticICR, carbUnit]);
 
