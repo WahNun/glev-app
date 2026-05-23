@@ -17,7 +17,7 @@
 //   * Compliance-Disclaimer direkt vor dem globalen Footer
 // FAQ, Nav und Footer ziehen ihre Texte aus dem `marketing`-Namespace.
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import GlevLockup from "@/components/GlevLockup";
@@ -588,9 +588,9 @@ export default function PreviewHome() {
               title: t("deepdive_cgm_title"),
               body: t("deepdive_cgm_body"),
               liveNode: (
-                <div style={{ width: "min(320px, 100%)" }}>
+                <LivePhoneScaler>
                   <AppMockupPhone lockTab="dashboard" hideTopCog />
-                </div>
+                </LivePhoneScaler>
               ),
             },
             { img: "/mockups/insights.png", title: t("deepdive_insights_title"), body: t("deepdive_insights_body") },
@@ -1144,6 +1144,46 @@ function FeatureImageRow({
         <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6, color: "var(--text-body)" }}>
           {row.body}
         </p>
+      </div>
+    </div>
+  );
+}
+
+/** Wraps the live AppMockupPhone so it shrinks gracefully on viewports
+ *  narrower than the phone's fixed 320-px frame (e.g. small Android phones
+ *  where section padding reduces available width below 320 px).
+ *  Measures the outer container and applies transform: scale() so the phone
+ *  stays within bounds without clipping or overflowing. */
+function LivePhoneScaler({ children }: { children: React.ReactNode }) {
+  const outerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+
+  useEffect(() => {
+    const el = outerRef.current;
+    if (!el) return;
+    const applyScale = (w: number) => setScale(Math.min(1, w / 320));
+    const ro = new ResizeObserver(([entry]) =>
+      applyScale(entry.contentRect.width)
+    );
+    ro.observe(el);
+    applyScale(el.getBoundingClientRect().width);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <div
+      ref={outerRef}
+      style={{ width: "min(320px, 100%)", height: scale * 660 }}
+    >
+      <div
+        style={{
+          width: 320,
+          height: 660,
+          transformOrigin: "top left",
+          transform: `scale(${scale})`,
+        }}
+      >
+        {children}
       </div>
     </div>
   );
