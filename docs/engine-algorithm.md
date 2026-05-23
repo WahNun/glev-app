@@ -237,7 +237,7 @@ When the user has configured an ICR schedule with the master toggle ON, `compute
 
 1. Time-of-day slot (`morning | afternoon | evening`) if `sampleSize ≥ 1` for that slot
 2. `global` ICR if available
-3. Hardcoded default: **15 g/u** (`DEFAULT_ICR` in `lib/engine/recommendation.ts`)
+3. Hardcoded default: **15 g/u** (`DEFAULT_ICR` in `lib/engine/constants.ts`)
 
 ### Dose formula
 
@@ -248,10 +248,10 @@ total          = carbDose + correctionDose
 recommendedUnits = round(total × 2) / 2        [rounded to 0.5u]
 ```
 
-**Defaults when user settings are unavailable** (constants in `lib/engine/recommendation.ts`):
+**Defaults when user settings are unavailable** (constants in `lib/engine/constants.ts`):
 - ICR: 15 g/u (`DEFAULT_ICR`)
 - CF (correction factor): 50 mg/dL per unit (`DEFAULT_CF`)
-- Target BG: 100 mg/dL (`DEFAULT_TARGET`)
+- Target BG: 110 mg/dL (`DEFAULT_TARGET_BG`)
 
 ### Safety gates (hard limits — never bypass)
 
@@ -401,9 +401,9 @@ The following must hold after any change to Engine code. Violations may produce 
 | SPIKE_CUTOFF_HIGH_FAT | lib/engine/evaluation.ts | 40 |
 | SPIKE_CUTOFF_HIGH_PROTEIN | lib/engine/evaluation.ts | 50 |
 | SPIKE_CUTOFF_BALANCED | lib/engine/evaluation.ts | 55 |
-| DEFAULT_ICR | lib/engine/recommendation.ts | 15 |
-| DEFAULT_CF | lib/engine/recommendation.ts | 50 |
-| DEFAULT_TARGET | lib/engine/recommendation.ts | 100 |
+| DEFAULT_ICR | lib/engine/constants.ts | 15 |
+| DEFAULT_CF | lib/engine/constants.ts | 50 |
+| DEFAULT_TARGET_BG | lib/engine/constants.ts | 110 |
 | SAFETY_BG_MIN | lib/engine/recommendation.ts | 80 |
 | MAX_DOSE_UNITS | lib/engine/recommendation.ts | 25 |
 | MIN_BUCKET_SAMPLES | lib/engine/adaptiveICR.ts | 3 |
