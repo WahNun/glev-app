@@ -1210,6 +1210,7 @@ function DashboardCluster({
         <div
           style={{
             display: "flex",
+            alignItems: "flex-start",
             willChange: "transform",
             // During an active drag: follow the finger instantly (no transition).
             // After release: ease-out to the target slide — no spring, no overshoot.

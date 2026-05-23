@@ -301,6 +301,51 @@ export default function EntriesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [locale],
   );
+  const entryTypeOptions = useMemo(
+    () => ENTRY_TYPE_OPTIONS.map(o => ({
+      value: o.value,
+      label: tChips(`entry_type_${o.value}` as Parameters<typeof tChips>[0]) ?? o.label,
+    })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [locale],
+  );
+  const exerciseKindOptions = useMemo(
+    () => EXERCISE_KIND_OPTIONS.map(o => ({
+      value: o.value,
+      label: tChips(`exercise_kind_${o.value}` as Parameters<typeof tChips>[0]) ?? o.label,
+    })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [locale],
+  );
+  const dateRangeOptions = useMemo(
+    () => DATE_RANGE_OPTIONS.map(o => ({
+      value: o.value,
+      label: tChips(`date_range_${o.value}` as Parameters<typeof tChips>[0]) ?? o.label,
+    })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [locale],
+  );
+  const tDateRangeSummary = useCallback(
+    (range: DateRangeKey, from: string | null, to: string | null): string => {
+      if (range === "today") return tChips("date_range_today");
+      if (range === "7d")    return tChips("date_range_7d");
+      if (range === "30d")   return tChips("date_range_30d");
+      if (range === "custom") {
+        const fmt = (s: string) => {
+          const d = new Date(`${s}T00:00:00`);
+          if (Number.isNaN(d.getTime())) return s;
+          return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+        };
+        if (from && to)  return `${fmt(from)} – ${fmt(to)}`;
+        if (from)        return tChips("date_range_from", { date: fmt(from) });
+        if (to)          return tChips("date_range_until", { date: fmt(to) });
+        return tChips("date_range_custom");
+      }
+      return tChips("date_range_all");
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [locale],
+  );
   const [meals, setMeals]     = useState<Meal[]>([]);
   const [insulin, setInsulin] = useState<InsulinLog[]>([]);
   const [exercise, setExercise] = useState<ExerciseLog[]>([]);
@@ -402,12 +447,12 @@ export default function EntriesPage() {
     if (filters.dateRange !== "all") {
       chips.push({
         key: "dateRange",
-        label: dateRangeSummary(filters.dateRange, filters.dateFrom, filters.dateTo),
+        label: tDateRangeSummary(filters.dateRange, filters.dateFrom, filters.dateTo),
         remove: () => setDateRange("all"),
       });
     }
     for (const v of filters.entryType) {
-      const opt = ENTRY_TYPE_OPTIONS.find(o => o.value === v);
+      const opt = entryTypeOptions.find(o => o.value === v);
       if (opt) chips.push({ key: `entryType:${v}`, label: opt.label, remove: () => toggleFilter("entryType", v) });
     }
     for (const v of filters.mealKind) {
@@ -415,7 +460,7 @@ export default function EntriesPage() {
       if (opt) chips.push({ key: `mealKind:${v}`, label: opt.label, remove: () => toggleFilter("mealKind", v) });
     }
     for (const v of filters.exerciseKind) {
-      const opt = EXERCISE_KIND_OPTIONS.find(o => o.value === v);
+      const opt = exerciseKindOptions.find(o => o.value === v);
       if (opt) chips.push({ key: `exerciseKind:${v}`, label: opt.label, remove: () => toggleFilter("exerciseKind", v) });
     }
     for (const v of filters.outcome) {
@@ -898,25 +943,25 @@ export default function EntriesPage() {
                 onBoundChange={setDateBound}
               />
               <FilterSection
-                title="Entry type"
-                options={ENTRY_TYPE_OPTIONS}
+                title={tChips("filter_section_entry_type")}
+                options={entryTypeOptions}
                 selected={filters.entryType}
                 onToggle={(v) => toggleFilter("entryType", v)}
               />
               <FilterSection
-                title="Meal kind"
+                title={tChips("filter_section_meal_kind")}
                 options={mealKindOptions}
                 selected={filters.mealKind}
                 onToggle={(v) => toggleFilter("mealKind", v)}
               />
               <FilterSection
-                title="Exercise kind"
-                options={EXERCISE_KIND_OPTIONS}
+                title={tChips("filter_section_exercise_kind")}
+                options={exerciseKindOptions}
                 selected={filters.exerciseKind}
                 onToggle={(v) => toggleFilter("exerciseKind", v)}
               />
               <FilterSection
-                title="Outcome"
+                title={tChips("filter_section_outcome")}
                 options={outcomeOptions}
                 selected={filters.outcome}
                 onToggle={(v) => toggleFilter("outcome", v)}
@@ -988,7 +1033,7 @@ export default function EntriesPage() {
               {filters.dateRange !== "all" && (
                 <div style={{ display:"flex", flexDirection:"column", gap:10, alignItems:"center" }}>
                   <div style={{ color:"var(--text-muted)", fontSize:14 }}>
-                    Showing <span style={{ color:"var(--text-strong)", fontWeight:600 }}>{dateRangeSummary(filters.dateRange, filters.dateFrom, filters.dateTo)}</span> · no entries match.
+                    {tChips("entries_empty_date", { range: tDateRangeSummary(filters.dateRange, filters.dateFrom, filters.dateTo) })}
                   </div>
                   <button
                     onClick={() => setDateRange("all")}
