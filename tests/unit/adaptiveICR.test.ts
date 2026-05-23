@@ -38,7 +38,7 @@ function mealAt(hour: number, carbs: number, insulin: number, delta = 10, id = `
 
 test("computeAdaptiveICR: empty input returns all nulls", () => {
   const r = computeAdaptiveICR([]);
-  expect(r).toEqual({ global: null, morning: null, afternoon: null, evening: null, sampleSize: 0, pairedCount: 0, pairedExplicitCount: 0, pairedTimeWindowCount: 0 });
+  expect(r).toEqual({ global: null, morning: null, afternoon: null, evening: null, sampleSize: 0, pairedCount: 0, pairedExplicitCount: 0, pairedTimeWindowCount: 0, windows: [] });
 });
 
 test("computeAdaptiveICR: skips non-final meals", () => {

@@ -150,28 +150,30 @@ test("computeControlScore: all-OVERDOSE set → score 0", () => {
   expect(r.score).toBe(0);
 });
 
-test("computeControlScore: OTHER (out-of-window) rows stay in denominator → drag the score down", () => {
+test("computeControlScore: OTHER rows are excluded from denominator, only evaluated meals count", () => {
   const meals: Meal[] = [
     ...Array.from({ length: 2 }, (_, i) => mealWithDelta(`g${i}`, 10)),       // 2 GOOD
     ...Array.from({ length: 2 }, (_, i) => mealWithDelta(`s${i}`, 80)),       // 2 SPIKE
-    mealWithDelta("o0", -50),                                                  // 1 OVERDOSE
+    mealWithDelta("o0", -50),                                                  // 1 HYPO_DURING (bgAfter=50)
     ...Array.from({ length: 5 }, (_, i) => otherMeal(`x${i}`)),                // 5 OTHER
   ];
-  // total=10, good=2, spike=2, hypo=1.
-  // goodRate=20, spikeRate=20, hypoRate=10.
-  // raw = 20*0.7 + (100-20-10)*0.3 = 14 + 21 = 35 → 35.
+  // total=10, evaluated=5 (good=2, spike=2, hypo=1).
+  // Denominator = evaluated (5), not total — OTHER rows are excluded.
+  // goodRate=2/5*100=40, spikeRate=2/5*100=40, hypoRate=1/5*100=20.
+  // raw = 40*0.7 + (100-40-20)*0.3 = 28 + 12 = 40.
   const r = computeControlScore(meals, BASE_MS - 1, BASE_MS + 7 * 24 * 3600_000, NOW);
   expect(r.count).toBe(10);
-  expect(r.score).toBe(35);
+  expect(r.score).toBe(40);
 });
 
 /* ──────────────────────────────────────────────────────────────────
    Window filter + degenerate-input behaviour.
    ────────────────────────────────────────────────────────────────── */
 
-test("computeControlScore: empty meal list → { score: 0, count: 0 }", () => {
-  expect(computeControlScore([], BASE_MS - 1, BASE_MS + 7 * 24 * 3600_000, NOW))
-    .toEqual({ score: 0, count: 0 });
+test("computeControlScore: empty meal list → { score: null, count: 0 }", () => {
+  const r = computeControlScore([], BASE_MS - 1, BASE_MS + 7 * 24 * 3600_000, NOW);
+  expect(r.score).toBeNull();
+  expect(r.count).toBe(0);
 });
 
 test("computeControlScore: meals outside [sinceMs, untilMs) are filtered out", () => {
@@ -183,8 +185,8 @@ test("computeControlScore: meals outside [sinceMs, untilMs) are filtered out", (
   const untilMs = BASE_MS + 1;
   const r = computeControlScore([inWindow, beforeWindow, afterWindow], sinceMs, untilMs, NOW);
   expect(r.count).toBe(1);
-  // Single GOOD → 100.
-  expect(r.score).toBe(100);
+  // Single GOOD → evaluated=1 < 3 threshold → score: null ("IM AUFBAU").
+  expect(r.score).toBeNull();
 });
 
 test("computeControlScore: untilMs is exclusive — exact boundary meal is excluded", () => {
@@ -192,5 +194,6 @@ test("computeControlScore: untilMs is exclusive — exact boundary meal is exclu
   const meals = [mealWithDelta("g0", 10, 0)];
   const r = computeControlScore(meals, BASE_MS - 1, BASE_MS, NOW);
   expect(r.count).toBe(0);
-  expect(r.score).toBe(0);
+  // No meals → evaluated=0 < 3 → score: null.
+  expect(r.score).toBeNull();
 });

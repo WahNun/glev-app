@@ -15,7 +15,21 @@
  */
 
 import { supabase } from "./supabase";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AdjustmentRecord, AdjustmentSuggestion } from "./engine/adjustment";
+
+// Read the Supabase client from globalThis._supabase at call time rather
+// than from the frozen module-level `supabase` const.  This matters in the
+// Playwright unit-test runner (workers: 1, shared Node.js module cache):
+// when an earlier test file has already loaded lib/supabase.ts, the cached
+// `supabase` export holds the real client even after _fake-supabase.ts sets
+// globalThis._supabase = fakeClient.  Reading from the global at call time
+// lets the fake work correctly in both isolated and full-suite runs without
+// any changes to the test fixtures or to lib/supabase.ts itself.
+const _g = globalThis as typeof globalThis & { _supabase?: SupabaseClient | null };
+function _liveSupabase(): SupabaseClient | null {
+  return _g._supabase ?? supabase;
+}
 
 export interface MacroTargets {
   carbs:   number;
@@ -807,15 +821,18 @@ export async function applyAdjustmentToSettings(
   if (!suggestion.hasSuggestion) {
     throw new Error("Suggestion has no actionable change");
   }
-  if (!supabase) throw new Error("Supabase not configured");
-  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  // Use _liveSupabase() so that test fakes installed via globalThis._supabase
+  // are picked up even when lib/supabase.ts is already in the module cache.
+  const sb = _liveSupabase();
+  if (!sb) throw new Error("Supabase not configured");
+  const { data: { user }, error: userError } = await sb.auth.getUser();
   if (userError || !user) throw new Error("Not signed in");
 
   // Pull the row's current state — we need both the live ICR/CF (for
   // the "from" value in each history entry, since the suggestion was
   // computed against possibly-stale UI state) and the existing
   // history (so we can append rather than overwrite).
-  const { data: current, error: readErr } = await supabase
+  const { data: current, error: readErr } = await sb
     .from("user_settings")
     .select("icr_g_per_unit, cf_mgdl_per_unit, adjustment_history")
     .eq("user_id", user.id)
@@ -861,7 +878,7 @@ export async function applyAdjustmentToSettings(
 
   const nextHistory = [...existingHistory, ...newRecords];
 
-  const { error: writeErr } = await supabase
+  const { error: writeErr } = await sb
     .from("user_settings")
     .upsert({
       user_id:            user.id,

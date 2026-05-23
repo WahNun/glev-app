@@ -4,6 +4,15 @@
 // time, so importing this file ahead of `@/lib/userSettings` guarantees
 // the real client never gets constructed during the test run.
 //
+// NOTE on full-suite isolation (workers: 1, shared Node.js module cache):
+// When an earlier test file (e.g. adaptiveICR.test.ts via the import chain
+// adaptiveICR → lib/icrSchedule.ts → lib/supabase.ts) has already loaded
+// lib/supabase.ts, the `supabase` const export is frozen to the real client.
+// lib/userSettings.ts's applyAdjustmentToSettings therefore reads from
+// globalThis._supabase at call time (via its internal `_liveSupabase()`
+// helper) rather than from the frozen module export, so this fake still
+// takes effect even in full-suite runs.
+//
 // The fake records the last upsert payload (visible to tests via
 // `getLastUpsert()`) and serves a mutable in-memory row that tests
 // reset in `beforeEach` (`setStoredRow(...)`).
