@@ -243,8 +243,9 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
   const basalElapsedMin = lastBasal
     ? (now - new Date(lastBasal.created_at).getTime()) / 60_000
     : null;
+  // Countdown: full ring = freshly injected, empty ring = window expired.
   const basalFraction   = basalElapsedMin !== null
-    ? Math.min(basalElapsedMin / BASAL_WINDOW_MIN, 1)
+    ? Math.max(0, 1 - basalElapsedMin / BASAL_WINDOW_MIN)
     : 0;
   const basalOverdue    = basalElapsedMin !== null && basalElapsedMin > BASAL_WINDOW_MIN;
   const basalColor      = basalOverdue ? ORANGE : BASAL_INDIGO;
