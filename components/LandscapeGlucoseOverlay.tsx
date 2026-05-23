@@ -88,14 +88,25 @@ export default function LandscapeGlucoseOverlay() {
     function check() {
       const w = window.innerWidth;
       const h = window.innerHeight;
-      setLandscape(w > h && h <= 500);
+      setLandscape(w > h && h <= 600);
     }
     check();
     window.addEventListener("resize", check);
+    // Legacy fallback — deprecated but still fires on some older browsers/webviews
     window.addEventListener("orientationchange", check);
+    // Modern API — fires reliably on Chrome 93+, Safari 16.4+, Firefox 97+.
+    // Some older WebViews expose `screen.orientation` without a full EventTarget
+    // implementation, so we guard the method itself, not just the object.
+    const screenOrientation = typeof screen !== "undefined" ? screen.orientation : null;
+    if (screenOrientation && typeof screenOrientation.addEventListener === "function") {
+      screenOrientation.addEventListener("change", check);
+    }
     return () => {
       window.removeEventListener("resize", check);
       window.removeEventListener("orientationchange", check);
+      if (screenOrientation && typeof screenOrientation.removeEventListener === "function") {
+        screenOrientation.removeEventListener("change", check);
+      }
     };
   }, []);
 
