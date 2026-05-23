@@ -14,6 +14,7 @@ import { fetchRecentExerciseLogs, type ExerciseLog } from "@/lib/exercise";
 import { fetchRecentActivityClient, summariseActivityContext, type ActivityContext } from "@/lib/dailyActivity";
 import { HIGH_ACTIVITY_RATIO, HIGH_ACTIVITY_MIN_ABS, HIGH_ACTIVITY_MIN_SAMPLE } from "@/lib/engine/evaluation";
 import { computeAdaptiveICR } from "@/lib/engine/adaptiveICR";
+import { shouldShowBothChips } from "@/lib/engine/doseChipGating";
 import { getEffectiveICR } from "@/lib/icrSchedule";
 import { detectPattern } from "@/lib/engine/patterns";
 import { suggestAdjustment, type AdaptiveSettings } from "@/lib/engine/adjustment";
@@ -2989,17 +2990,13 @@ export default function EnginePage() {
                   replacing the previous 4-element layout (2 ICR cards
                   + 2 separate dose chips). Manual override row below. */}
               {bolusEnabled && (() => {
-                // Show both chips only when the two ICR sources produce
-                // meaningfully different doses. Pure ICR-diff > 0.5 is
-                // necessary but not sufficient — after rounding to 1dp the
-                // user can see identical numbers (confusing). Also gate on
-                // dose diff ≥ 0.2 IE when both doses are calculable.
-                const doseDiff = (eagerDoses.adaptive != null && eagerDoses.static != null)
-                  ? Math.abs(eagerDoses.adaptive - eagerDoses.static)
-                  : null;
-                const showBoth = icrSampleSize >= 3
-                  && Math.abs(adaptedICR - staticICR) > 0.5
-                  && (doseDiff === null || doseDiff >= 0.2);
+                const showBoth = shouldShowBothChips({
+                  icrSampleSize,
+                  adaptedICR,
+                  staticICR,
+                  adaptiveDose: eagerDoses.adaptive,
+                  staticDose:   eagerDoses.static,
+                });
                 type ChipDef = { key: 'adaptive' | 'static'; label: string; icr: number; dose: number | null; sub?: string };
                 const chips: ChipDef[] = [];
                 // For the SELECTED chip: show activeDose (uses result.dose

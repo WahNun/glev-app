@@ -28,6 +28,10 @@ args = "test"
 task = "workflow.run"
 args = "Inbox Daemon"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "engine-unit"
+
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
@@ -58,6 +62,17 @@ args = "node scripts/inbox-daemon.mjs"
 
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow]]
+name = "engine-unit"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "PLAYWRIGHT_SKIP_WEBSERVER=1 npx playwright test tests/unit --project=chromium 2>&1"
+
+[workflows.workflow.metadata]
+isValidation = true
 
 [agent]
 stack = "PNPM_WORKSPACE"
