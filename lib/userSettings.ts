@@ -130,6 +130,25 @@ export const DEFAULT_INSULIN_SETTINGS: InsulinSettings = {
   // fallback in getDIAMinutes() (rapid 180 / regular 300).
 };
 
+/**
+ * Pure helper: resolves the default value for the insulin name input in the
+ * log form. Returns the trimmed brand string for the given insulin type, or
+ * an empty string when none is configured.
+ *
+ * Extracted as a standalone function so it can be unit-tested without a
+ * browser environment or localStorage access.
+ *
+ * @param settings  Result of `getInsulinSettings()` (or any `InsulinSettings`).
+ * @param type      Which tab is open: "bolus" (default) or "basal".
+ */
+export function resolveInsulinNamePrefill(
+  settings: InsulinSettings,
+  type: "bolus" | "basal" = "bolus",
+): string {
+  const brand = type === "bolus" ? settings.insulinBrandBolus : settings.insulinBrandBasal;
+  return brand?.trim() ?? "";
+}
+
 const SETTINGS_KEY = "glev_settings";
 
 /** Per-field warning latches so we surface a single console.warn the

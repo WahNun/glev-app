@@ -20,6 +20,8 @@
 
 import { test, expect } from "@playwright/test";
 import { resolveBolusTypeLabel } from "@/lib/iob";
+import { resolveInsulinNamePrefill } from "@/lib/userSettings";
+import type { InsulinSettings } from "@/lib/userSettings";
 
 const RAPID_LABEL   = "Rapid";
 const REGULAR_LABEL = "Regular";
@@ -129,4 +131,64 @@ test("DIA footer: empty secondary brand is filtered out, no dangling plus", () =
   const primary = resolveBolusTypeLabel("Fiasp", "rapid", RAPID_LABEL, REGULAR_LABEL);
   // "   ".trim() === "" → falsy → filtered, so no trailing " + "
   expect(buildFooterType(primary, "   ")).toBe("Fiasp");
+});
+
+// ── 7. resolveInsulinNamePrefill — Engine log form pre-fill ───────────────────
+//
+// When the user has saved a bolus brand ("Fiasp") in Settings, opening the
+// insulin log form in the Engine tab must pre-fill the name field with
+// "Fiasp" rather than leaving it empty.
+//
+// The pre-fill is computed by `resolveInsulinNamePrefill(settings, type)`,
+// a pure helper extracted from `components/EngineLogTab.tsx` so it can be
+// verified here without a browser environment or localStorage access.
+
+function makeSettings(overrides: Partial<InsulinSettings> = {}): InsulinSettings {
+  return { icr: 15, cf: 50, targetBg: 110, ...overrides };
+}
+
+test("resolveInsulinNamePrefill: bolus tab pre-fills with insulinBrandBolus 'Fiasp'", () => {
+  const settings = makeSettings({ insulinBrandBolus: "Fiasp" });
+  expect(resolveInsulinNamePrefill(settings, "bolus")).toBe("Fiasp");
+});
+
+test("resolveInsulinNamePrefill: bolus tab pre-fills with 'NovoRapid' when set", () => {
+  const settings = makeSettings({ insulinBrandBolus: "NovoRapid" });
+  expect(resolveInsulinNamePrefill(settings, "bolus")).toBe("NovoRapid");
+});
+
+test("resolveInsulinNamePrefill: leading/trailing whitespace in saved brand is trimmed", () => {
+  const settings = makeSettings({ insulinBrandBolus: "  Fiasp  " });
+  expect(resolveInsulinNamePrefill(settings, "bolus")).toBe("Fiasp");
+});
+
+test("resolveInsulinNamePrefill: bolus tab returns empty string when no brand set", () => {
+  const settings = makeSettings({ insulinBrandBolus: undefined });
+  expect(resolveInsulinNamePrefill(settings, "bolus")).toBe("");
+});
+
+test("resolveInsulinNamePrefill: whitespace-only brand returns empty string", () => {
+  const settings = makeSettings({ insulinBrandBolus: "   " });
+  expect(resolveInsulinNamePrefill(settings, "bolus")).toBe("");
+});
+
+test("resolveInsulinNamePrefill: basal tab pre-fills with insulinBrandBasal 'Tresiba'", () => {
+  const settings = makeSettings({ insulinBrandBasal: "Tresiba" });
+  expect(resolveInsulinNamePrefill(settings, "basal")).toBe("Tresiba");
+});
+
+test("resolveInsulinNamePrefill: basal tab returns empty string when no basal brand set", () => {
+  const settings = makeSettings({ insulinBrandBolus: "Fiasp", insulinBrandBasal: undefined });
+  expect(resolveInsulinNamePrefill(settings, "basal")).toBe("");
+});
+
+test("resolveInsulinNamePrefill: bolus brand does not bleed into basal tab", () => {
+  const settings = makeSettings({ insulinBrandBolus: "Fiasp", insulinBrandBasal: undefined });
+  expect(resolveInsulinNamePrefill(settings, "basal")).toBe("");
+  expect(resolveInsulinNamePrefill(settings, "bolus")).toBe("Fiasp");
+});
+
+test("resolveInsulinNamePrefill: defaults to bolus when type argument is omitted", () => {
+  const settings = makeSettings({ insulinBrandBolus: "Fiasp", insulinBrandBasal: "Tresiba" });
+  expect(resolveInsulinNamePrefill(settings)).toBe("Fiasp");
 });
