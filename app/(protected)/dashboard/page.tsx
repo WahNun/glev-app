@@ -1942,7 +1942,7 @@ function DailyMacrosCard({ meals, targets }: { meals: Meal[]; targets: MacroTarg
           {t("daily_macros")}
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-          <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:500, fontFamily:"var(--font-mono)" }}>
+          <div style={{ fontSize:13, color:"var(--text-dim)", fontWeight:500, fontFamily:"var(--font-mono)", whiteSpace:"nowrap" }}>
             {today.count} {today.count === 1 ? t("meal_singular") : t("meal_plural")}
           </div>
           <svg
