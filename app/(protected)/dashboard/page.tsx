@@ -852,14 +852,26 @@ function ReorderableClusters({
     };
     const migrated = order.map(id => LEGACY_REMAP[id] ?? id);
 
-    // Position migration: ensure "insulin" cluster (IOB card) appears before
-    // "recents" (entries card) so IOB is always above the entries list.
-    // Silently swaps when the saved order has them reversed.
-    const iIdx = migrated.indexOf("insulin");
-    const rIdx = migrated.indexOf("recents");
-    if (iIdx !== -1 && rIdx !== -1 && iIdx > rIdx) {
-      migrated.splice(iIdx, 1);
-      migrated.splice(migrated.indexOf("recents"), 0, "insulin");
+    // Position migration: enforce the canonical ordering
+    //   control (Adapt Score) → insulin (IOB) → recents (Entries)
+    // Step 1 — insulin must come before recents.
+    {
+      const iIdx = migrated.indexOf("insulin");
+      const rIdx = migrated.indexOf("recents");
+      if (iIdx !== -1 && rIdx !== -1 && iIdx > rIdx) {
+        migrated.splice(iIdx, 1);
+        migrated.splice(migrated.indexOf("recents"), 0, "insulin");
+      }
+    }
+    // Step 2 — insulin must come after control.
+    {
+      const ctrlIdx = migrated.indexOf("control");
+      const iIdx    = migrated.indexOf("insulin");
+      if (ctrlIdx !== -1 && iIdx !== -1 && ctrlIdx > iIdx) {
+        migrated.splice(iIdx, 1);
+        const newCtrl = migrated.indexOf("control");
+        migrated.splice(newCtrl + 1, 0, "insulin");
+      }
     }
 
     const byId = new Map(clusters.map(c => [c.id, c]));
