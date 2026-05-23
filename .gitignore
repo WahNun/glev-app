@@ -94,3 +94,4 @@ fastlane/README.html
 *.dSYM.zip
 *.xcarchive
 attached_assets/
+current_conflict.txt
