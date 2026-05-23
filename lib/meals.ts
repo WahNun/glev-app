@@ -94,6 +94,10 @@ export interface SaveMealInput {
   /** Live CGM trend arrow snapshot (Task #265). Pass `null` when no
    *  CGM reading is available — the save path never fails on this. */
   preMealTrend?: string | null;
+  /** Human-readable bolus name for the insulin_logs mirror (e.g. "NovoRapid").
+   *  Defaults to "Mahlzeit-Bolus" when omitted. Callers that know the user's
+   *  brand should pass it so the history shows the real name. */
+  insulinName?: string | null;
 }
 
 /**
@@ -341,7 +345,7 @@ export async function saveMeal(input: SaveMealInput, _deps?: SaveMealDeps): Prom
       try {
         await _doInsertInsulinLog({
           insulin_type: "bolus",
-          insulin_name: "Mahlzeit-Bolus",
+          insulin_name: input.insulinName?.trim() || "Mahlzeit-Bolus",
           units: input.insulinUnits!,
           cgm_glucose_at_log: input.glucoseBefore ?? null,
           related_entry_id: data.id,
