@@ -75,6 +75,29 @@ import { BASAL_WINDOW_PRESETS, DEFAULT_BASAL_WINDOW_H } from "@/lib/engine/const
 const ACCENT = "#4F6EF7", GREEN = "#22D3A0", PINK = "#FF2D78", PURPLE = "#A78BFA";
 const BORDER = "var(--border)";
 
+/** Sub-Header innerhalb einer SettingsSection — markiert eine Unter-
+ *  gruppe (z. B. „Parameter", „Bolus-Insulin") visuell mit einer
+ *  oberen Trennlinie und einer kleinen Caps-Beschriftung. Wird in der
+ *  zusammengeklappten Insulin-Sektion benutzt. */
+function SubgroupLabel({ label }: { label: string }) {
+  return (
+    <div
+      style={{
+        padding: "10px 14px 6px",
+        fontSize: 11,
+        fontWeight: 600,
+        letterSpacing: "0.08em",
+        textTransform: "uppercase",
+        color: "var(--text-faint)",
+        borderTop: `1px solid ${BORDER}`,
+        background: "transparent",
+      }}
+    >
+      {label}
+    </div>
+  );
+}
+
 const BOLUS_BRAND_PRESETS: Array<{ name: string; mfr: string; ultraRapid: boolean }> = [
   { name: "NovoRapid", mfr: "Novo Nordisk", ultraRapid: false },
   { name: "Fiasp",     mfr: "Novo Nordisk", ultraRapid: true  },
@@ -349,6 +372,15 @@ export default function SettingsPage() {
       try { window.localStorage.setItem("glev_fab_mode", next); } catch { /* ignore */ }
     }
   }, []);
+
+  // Insulin-Einstellungen — alle insulinbezogenen Rows (ICR, CF, Ziel-BG,
+  // DIA, Insulintyp, Bolus-/Basal-Marken, Basal-Wirkdauer, Engine-Verlauf)
+  // sind hinter einer „übergeordneten" Row zusammengefasst. Tap auf den
+  // Header klappt die Gruppe auf/zu; die einzelnen Rows behalten ihre
+  // bestehenden BottomSheets unverändert. Default: zugeklappt, damit die
+  // Settings-Liste insgesamt aufgeräumter wirkt. Persistiert NICHT — wir
+  // wollen Frischeintritte gezielt mit Default-Zustand begrüßen.
+  const [insulinExpanded, setInsulinExpanded] = useState(false);
 
   const [openSheet, setOpenSheet] = useState<SheetKey | null>(null);
   // Account-Sheet aus dem Header — geteilte Komponente, deshalb
@@ -2673,98 +2705,171 @@ export default function SettingsPage() {
       </SettingsSection>
 
       <SettingsSection title={tSettings("section_insulin")}>
+        {/* Übergeordnete „Insulin-Einstellungen"-Row — klappt die 9
+            insulin-bezogenen Rows auf/zu. Eigene Button-Markup statt
+            SettingsRow, damit wir den Chevron drehen + aria-expanded
+            steuern können. Optisch lehnt sich das Layout aber an
+            SettingsRow an (Icon-Tile + zwei Textzeilen + 14px Padding). */}
+        <button
+          type="button"
+          onClick={() => setInsulinExpanded((v) => !v)}
+          aria-expanded={insulinExpanded}
+          aria-label={tSettings(insulinExpanded ? "insulin_settings_collapse_aria" : "insulin_settings_expand_aria")}
+          style={{
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
+            gap: 14,
+            padding: "12px 14px",
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            textAlign: "left",
+            color: "inherit",
+          }}
+        >
+          <span
+            aria-hidden
+            style={{
+              width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+              background: `${ACCENT}18`, color: ACCENT,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >
+            {ICON.insulin}
+          </span>
+          <span style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
+            <span style={{ fontSize: 14, fontWeight: 500, color: "var(--text-strong)", lineHeight: 1.25 }}>
+              {tSettings("row_insulin_settings")}
+            </span>
+            <span style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 2, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {icrSub}{diaSub ? ` · ${diaSub}` : ""}
+            </span>
+          </span>
+          <span
+            aria-hidden
+            style={{
+              flexShrink: 0,
+              color: "var(--text-faint)",
+              transform: insulinExpanded ? "rotate(90deg)" : "rotate(0deg)",
+              transition: "transform 0.15s",
+              fontSize: 18,
+              lineHeight: 1,
+            }}
+          >
+            ›
+          </span>
+        </button>
+
+        {insulinExpanded && (
+          <>
+            <SubgroupLabel label={tSettings("group_insulin_params")} />
+            <SettingsRow
+              iconColor={ACCENT}
+              icon={ICON.insulin}
+              label={tSettings("insulin_to_carb_ratio")}
+              subtitle={icrSub}
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("insulin_to_carb_ratio") })}
+              onClick={() => openSheetWith("icr")}
+            />
+            <SettingsRow
+              iconColor={ACCENT}
+              icon={ICON.target}
+              label={tSettings("correction_factor")}
+              subtitle={cfSub}
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("correction_factor") })}
+              onClick={() => openSheetWith("cf")}
+            />
+            <SettingsRow
+              iconColor={ACCENT}
+              icon={ICON.glucose}
+              label={tSettings("row_target_bg")}
+              subtitle={targetBgSub}
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("row_target_bg") })}
+              onClick={() => openSheetWith("targetBg")}
+            />
+            <SettingsRow
+              iconColor={ACCENT}
+              icon={ICON.insulin}
+              label={tSettings("row_dia")}
+              subtitle={diaSub}
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("row_dia") })}
+              onClick={() => openSheetWith("dia")}
+            />
+
+            <SubgroupLabel label={tSettings("group_insulin_bolus")} />
+            <SettingsRow
+              iconColor={ACCENT}
+              icon={ICON.insulin}
+              label={tSettings("row_insulin_type")}
+              subtitle={insulinType === "rapid"
+                ? tSettings("subtitle_insulin_type_rapid")
+                : tSettings("subtitle_insulin_type_regular")}
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("row_insulin_type") })}
+              onClick={() => openSheetWith("insulinType")}
+            />
+            <SettingsRow
+              iconColor={ACCENT}
+              icon={ICON.insulin}
+              label={tSettings("row_insulin_brand_bolus")}
+              subtitle={settings.insulinBrandBolus.trim() || tSettings("subtitle_no_brand")}
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("row_insulin_brand_bolus") })}
+              onClick={() => openSheetWith("insulinBrandBolus")}
+            />
+            <SettingsRow
+              iconColor={ACCENT}
+              icon={ICON.insulin}
+              label={tSettings("row_insulin_brand_bolus_2")}
+              subtitle={settings.insulinBrandBolus2.trim() || tSettings("subtitle_no_brand")}
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("row_insulin_brand_bolus_2") })}
+              onClick={() => openSheetWith("insulinBrandBolus2")}
+            />
+
+            <SubgroupLabel label={tSettings("group_insulin_basal")} />
+            <SettingsRow
+              iconColor={ACCENT}
+              icon={ICON.insulin}
+              label={tSettings("row_insulin_brand_basal")}
+              subtitle={settings.insulinBrandBasal.trim() || tSettings("subtitle_no_brand")}
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("row_insulin_brand_basal") })}
+              onClick={() => openSheetWith("insulinBrandBasal")}
+            />
+            <SettingsRow
+              iconColor={ACCENT}
+              icon={ICON.insulin}
+              label={tSettings("row_basal_window")}
+              subtitle={settings.basalActionWindowH !== undefined
+                ? tSettings("subtitle_basal_window_h", { h: settings.basalActionWindowH })
+                : tSettings("subtitle_basal_window_default")}
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("row_basal_window") })}
+              onClick={() => openSheetWith("basalWindow")}
+            />
+
+            <SubgroupLabel label={tSettings("group_insulin_history")} />
+            <SettingsRow
+              iconColor={ACCENT}
+              icon={ICON.insulin}
+              label={tSettings("row_adjustment_history")}
+              subtitle={adjustmentHistorySub}
+              ariaLabel={tSettings("row_open_aria", { label: tSettings("row_adjustment_history") })}
+              onClick={() => openSheetWith("adjustmentHistory")}
+            />
+          </>
+        )}
+      </SettingsSection>
+
+      {/* Arzttermine wandern aus der Insulin-Sektion in eine eigene
+          „Termine"-Sektion — gehören thematisch nicht zu Insulin und
+          standen vorher nur historisch dort. */}
+      <SettingsSection title={tSettings("section_appointments")}>
         <SettingsRow
           first
-          iconColor={ACCENT}
-          icon={ICON.insulin}
-          label={tSettings("insulin_to_carb_ratio")}
-          subtitle={icrSub}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("insulin_to_carb_ratio") })}
-          onClick={() => openSheetWith("icr")}
-        />
-        <SettingsRow
-          iconColor={ACCENT}
-          icon={ICON.target}
-          label={tSettings("correction_factor")}
-          subtitle={cfSub}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("correction_factor") })}
-          onClick={() => openSheetWith("cf")}
-        />
-        <SettingsRow
-          iconColor={ACCENT}
-          icon={ICON.glucose}
-          label={tSettings("row_target_bg")}
-          subtitle={targetBgSub}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_target_bg") })}
-          onClick={() => openSheetWith("targetBg")}
-        />
-        <SettingsRow
-          iconColor={ACCENT}
-          icon={ICON.insulin}
-          label={tSettings("row_dia")}
-          subtitle={diaSub}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_dia") })}
-          onClick={() => openSheetWith("dia")}
-        />
-        <SettingsRow
           iconColor={ACCENT}
           icon={ICON.calendar}
           label={tSettings("appointments_title")}
           subtitle={lastAppointmentSub}
           ariaLabel={tSettings("row_open_aria", { label: tSettings("appointments_title") })}
           onClick={() => openSheetWith("lastAppointment")}
-        />
-        <SettingsRow
-          iconColor={ACCENT}
-          icon={ICON.insulin}
-          label={tSettings("row_insulin_type")}
-          subtitle={insulinType === "rapid"
-            ? tSettings("subtitle_insulin_type_rapid")
-            : tSettings("subtitle_insulin_type_regular")}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_insulin_type") })}
-          onClick={() => openSheetWith("insulinType")}
-        />
-        <SettingsRow
-          iconColor={ACCENT}
-          icon={ICON.insulin}
-          label={tSettings("row_insulin_brand_bolus")}
-          subtitle={settings.insulinBrandBolus.trim() || tSettings("subtitle_no_brand")}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_insulin_brand_bolus") })}
-          onClick={() => openSheetWith("insulinBrandBolus")}
-        />
-        <SettingsRow
-          iconColor={ACCENT}
-          icon={ICON.insulin}
-          label={tSettings("row_insulin_brand_bolus_2")}
-          subtitle={settings.insulinBrandBolus2.trim() || tSettings("subtitle_no_brand")}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_insulin_brand_bolus_2") })}
-          onClick={() => openSheetWith("insulinBrandBolus2")}
-        />
-        <SettingsRow
-          iconColor={ACCENT}
-          icon={ICON.insulin}
-          label={tSettings("row_insulin_brand_basal")}
-          subtitle={settings.insulinBrandBasal.trim() || tSettings("subtitle_no_brand")}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_insulin_brand_basal") })}
-          onClick={() => openSheetWith("insulinBrandBasal")}
-        />
-        <SettingsRow
-          iconColor={ACCENT}
-          icon={ICON.insulin}
-          label={tSettings("row_basal_window")}
-          subtitle={settings.basalActionWindowH !== undefined
-            ? tSettings("subtitle_basal_window_h", { h: settings.basalActionWindowH })
-            : tSettings("subtitle_basal_window_default")}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_basal_window") })}
-          onClick={() => openSheetWith("basalWindow")}
-        />
-        <SettingsRow
-          iconColor={ACCENT}
-          icon={ICON.insulin}
-          label={tSettings("row_adjustment_history")}
-          subtitle={adjustmentHistorySub}
-          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_adjustment_history") })}
-          onClick={() => openSheetWith("adjustmentHistory")}
         />
       </SettingsSection>
 
