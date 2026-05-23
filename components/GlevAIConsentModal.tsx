@@ -105,7 +105,7 @@ export default function GlevAIConsentModal({ open, onDismiss, onActivate }: Prop
         </p>
 
         <a
-          href="/legal/privacy"
+          href="/legal"
           target="_blank"
           rel="noopener noreferrer"
           style={{
