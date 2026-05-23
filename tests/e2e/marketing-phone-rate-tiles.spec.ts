@@ -14,6 +14,11 @@
 //   spans (fontSize:8) — inside fixed-width containers with the same silent-clip
 //   risk. Tasks #575 and #578 implemented the resulting describe blocks below
 //   (PART 5 card-label tests and PART 5 TIR-legend tests respectively).
+//   Task #579 adds coverage for the stacked progress bar in the TIR card. The
+//   bar container (height:12, borderRadius:99) holds four coloured segment divs
+//   with percentage-based widths (2% / 6% / 78% / 14%). A layout regression on
+//   the parent MockCard could collapse the bar to zero height or cause the
+//   segments to overflow without any existing guard catching it.
 //
 // What we cover:
 //   PART 1 — RateTile chip tiles (original Task #567 coverage)
@@ -63,8 +68,19 @@
 //       DE: "● Sehr tief 2%", "● Tief 6%", "● Im Ziel 78%", "● Hoch 14%"
 //       EN: "● Very low 2%",  "● Low 6%",  "● In range 78%","● High 14%"
 //
+//   PART 6 — TIR stacked bar segments (Task #579)
+//     The TIR card contains a stacked progress bar (data-testid="tir-stacked-bar")
+//     at height:12. It holds four coloured child divs with percentage-based widths:
+//       2% (very low / very low), 6% (low / low), 78% (in-range), 14% (high).
+//     A CSS regression (e.g. parent MockCard layout change) could collapse the bar
+//     to zero height or cause segments to overflow the container silently.
+//     Checks per locale (DE and EN — same bar, locale-neutral):
+//       • The bar container is visible and has offsetHeight > 0
+//       • Each of the four segment divs has offsetWidth > 0
+//       • The bar container does not overflow its parent (scrollWidth ≤ offsetWidth)
+//
 // Structure:
-//   Twelve `test.describe` blocks — two per part (DE + EN each) — so regressions
+//   Sixteen `test.describe` blocks — two per part (DE + EN each) — so regressions
 //   are pinpointed to the affected locale and element group.
 //
 // Selector strategy:
@@ -649,5 +665,110 @@ test.describe("Marketing phone Insights TIR legend spans — EN locale", () => {
       const rawText = (await el.textContent()) ?? "";
       expect(rawText.trim()).toBe(spanText);
     }
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PART 6 — TIR stacked bar segments (Task #579)
+//
+// The TIR card contains a stacked progress bar at height:12. It holds four
+// coloured child <div> elements with percentage-based inline widths:
+//   2%  — very low (PINK)
+//   6%  — low (ORANGE)
+//   78% — in-range (GREEN)
+//   14% — high (#FFD166)
+//
+// The bar container is identified by data-testid="tir-stacked-bar".
+// A layout regression (e.g. a parent MockCard flex/grid change) could collapse
+// the bar to zero height or cause the segments to overflow the container without
+// any visible indicator. These checks guard all three failure modes:
+//   1. Container visible + offsetHeight > 0
+//   2. Each segment div has offsetWidth > 0 (none collapsed)
+//   3. Bar container scrollWidth ≤ offsetWidth (no horizontal overflow)
+//
+// The bar itself is locale-neutral (same colours and widths in DE and EN), but
+// we run the check in both locales so regressions that only appear in one locale
+// context (e.g. due to a different surrounding layout) are still caught.
+// ══════════════════════════════════════════════════════════════════════════════
+
+/** Shared helper: assert TIR stacked bar geometry inside `phone`. */
+async function assertTirBarGeometry(phone: Locator, locale: string): Promise<void> {
+  const bar = phone.locator('[data-testid="tir-stacked-bar"]').first();
+
+  // 1. Container must be visible.
+  await expect(bar, `TIR bar container not visible (${locale})`).toBeVisible();
+
+  // 2. Container must have a positive rendered height.
+  const barHeight = await bar.evaluate((el) => (el as HTMLElement).offsetHeight);
+  expect(
+    barHeight,
+    `TIR bar container has offsetHeight ${barHeight} — expected > 0 (${locale}). ` +
+      `A parent layout change may have collapsed the bar.`,
+  ).toBeGreaterThan(0);
+
+  // 3. Container must not overflow its parent horizontally.
+  const barOverflows = await bar.evaluate(
+    (el) => (el as HTMLElement).scrollWidth > (el as HTMLElement).offsetWidth,
+  );
+  expect(
+    barOverflows,
+    `TIR bar container overflows its parent (scrollWidth > offsetWidth) in ${locale}. ` +
+      `Check the parent MockCard or container div for a width regression.`,
+  ).toBe(false);
+
+  // 4. All four segment divs must have a positive rendered width.
+  //    The four children are direct child divs of the bar container.
+  const segmentWidths = await bar.evaluate((el) => {
+    return Array.from(el.children).map((child) => ({
+      width: (child as HTMLElement).offsetWidth,
+      style: (child as HTMLElement).style.width,
+    }));
+  });
+
+  expect(
+    segmentWidths.length,
+    `TIR bar expected 4 segment divs, got ${segmentWidths.length} (${locale})`,
+  ).toBe(4);
+
+  const EXPECTED_WIDTHS = ["2%", "6%", "78%", "14%"] as const;
+
+  for (let i = 0; i < segmentWidths.length; i++) {
+    const { width, style } = segmentWidths[i];
+    expect(
+      width,
+      `TIR bar segment ${i + 1} (style width:${style ?? EXPECTED_WIDTHS[i]}) ` +
+        `has offsetWidth ${width} — expected > 0 (${locale}). ` +
+        `The parent bar may have collapsed or the segment flex sizing may be broken.`,
+    ).toBeGreaterThan(0);
+  }
+}
+
+test.describe("Marketing phone TIR stacked bar segments — DE locale", () => {
+  test.use({ locale: "de-DE" });
+
+  test("TIR stacked bar is visible, has height > 0, all segments have width > 0, and does not overflow in DE", async ({
+    page,
+  }) => {
+    const phone = await gotoHomeAndFindPhone(page);
+
+    // Navigate to the Insights screen — anchor on the TIR card header.
+    await gotoInsightsScreen(phone, "Time in Range · 7T");
+
+    await assertTirBarGeometry(phone, "DE");
+  });
+});
+
+test.describe("Marketing phone TIR stacked bar segments — EN locale", () => {
+  test.use({ locale: "en-US" });
+
+  test("TIR stacked bar is visible, has height > 0, all segments have width > 0, and does not overflow in EN", async ({
+    page,
+  }) => {
+    const phone = await gotoHomeAndFindPhone(page);
+
+    // Navigate to the Insights screen — anchor on the TIR card header.
+    await gotoInsightsScreen(phone, "Time in Range · 7d");
+
+    await assertTirBarGeometry(phone, "EN");
   });
 });

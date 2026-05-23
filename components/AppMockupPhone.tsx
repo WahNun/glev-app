@@ -1458,7 +1458,7 @@ function InsightsScreen() {
           <div style={{ marginLeft:"auto", fontSize:9, color:GREEN }}>+6 {deltaWk}</div>
         </div>
         {/* Stacked bar: 78 in range, 14 high, 6 low, 2 v.low */}
-        <div style={{ display:"flex", height:12, borderRadius:99, overflow:"hidden", background:"rgba(255,255,255,0.04)" }}>
+        <div data-testid="tir-stacked-bar" style={{ display:"flex", height:12, borderRadius:99, overflow:"hidden", background:"rgba(255,255,255,0.04)" }}>
           <div style={{ width:"2%",  background:PINK }}/>
           <div style={{ width:"6%",  background:ORANGE }}/>
           <div style={{ width:"78%", background:GREEN }}/>
