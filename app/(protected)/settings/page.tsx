@@ -70,6 +70,7 @@ import {
 } from "@/lib/userProfile";
 import { fetchIcrSchedule } from "@/lib/icrSchedule";
 import SnapSlider from "@/components/log/SnapSlider";
+import { BASAL_WINDOW_PRESETS, DEFAULT_BASAL_WINDOW_H } from "@/lib/engine/constants";
 
 const ACCENT = "#4F6EF7", GREEN = "#22D3A0", PINK = "#FF2D78", PURPLE = "#A78BFA";
 const BORDER = "var(--border)";
@@ -101,6 +102,10 @@ interface Settings {
   insulinBrandBolus2: string;
   /** User's basal insulin brand (e.g. "Tresiba"). Empty string = not set. */
   insulinBrandBasal: string;
+  /** User-configured basal insulin action window (hours). Mirrors
+   *  `user_settings.basal_action_window_h`. `undefined` = not set; IOBCard
+   *  falls back to DEFAULT_BASAL_WINDOW_H (24h). Valid range 12–72. */
+  basalActionWindowH?: number;
 }
 
 const DEFAULTS: Settings = {
@@ -138,6 +143,7 @@ type SheetKey =
   | "insulinBrandBolus"
   | "insulinBrandBolus2"
   | "insulinBrandBasal"
+  | "basalWindow"
   | "lastAppointment"
   | "libre2"
   | "nightscout"
@@ -379,6 +385,7 @@ export default function SettingsPage() {
             insulinBrandBolus:  ins.insulinBrandBolus  ?? prev.insulinBrandBolus,
             insulinBrandBolus2: ins.insulinBrandBolus2 ?? prev.insulinBrandBolus2,
             insulinBrandBasal:  ins.insulinBrandBasal  ?? prev.insulinBrandBasal,
+            basalActionWindowH: ins.basalActionWindowH ?? prev.basalActionWindowH,
           };
           saveSettings(next);
           return next;
@@ -1036,6 +1043,9 @@ export default function SettingsPage() {
         insulinBrandBolus:  settings.insulinBrandBolus.trim().slice(0, 40)  || undefined,
         insulinBrandBolus2: settings.insulinBrandBolus2.trim().slice(0, 40) || undefined,
         insulinBrandBasal:  settings.insulinBrandBasal.trim().slice(0, 40)  || undefined,
+        ...(settings.basalActionWindowH !== undefined
+          ? { basalActionWindowH: Math.min(72, Math.max(12, Math.round(settings.basalActionWindowH))) }
+          : {}),
       });
       const next = { ...settings };
       setSettings(next);
@@ -1512,6 +1522,64 @@ export default function SettingsPage() {
           />
           <div style={{ fontSize: 13, color: "var(--text-ghost)", marginTop: 6 }}>
             {tSettings("insulin_brand_hint")}
+          </div>
+        </div>
+      ),
+      footer: <SaveFooter onSave={saveInsulinBrandsAction} />,
+    },
+    basalWindow: {
+      title: tSettings("sheet_basal_window_title"),
+      body: (
+        <div>
+          <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5, marginBottom: 14 }}>
+            {tSettings("basal_window_body")}
+          </p>
+          <label style={{ fontSize: 12, color: "var(--text-dim)", display: "block", marginBottom: 8 }}>
+            {tSettings("basal_window_preset_label")}
+          </label>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+            {Object.entries(BASAL_WINDOW_PRESETS).map(([brand, hours]) => {
+              const isSel = settings.basalActionWindowH === hours;
+              return (
+                <button
+                  key={brand}
+                  type="button"
+                  onClick={() => upd("basalActionWindowH", hours)}
+                  style={{
+                    background: isSel ? ACCENT : "var(--surface-soft)",
+                    color: isSel ? "#fff" : "var(--text)",
+                    border: `1px solid ${isSel ? ACCENT : BORDER}`,
+                    borderRadius: 999,
+                    padding: "8px 14px",
+                    fontSize: 13,
+                    fontWeight: isSel ? 600 : 500,
+                    cursor: "pointer",
+                  }}
+                >
+                  {brand} · {hours} h
+                </button>
+              );
+            })}
+          </div>
+          <SnapSlider
+            min={12}
+            max={72}
+            step={2}
+            unit="h"
+            accent={ACCENT}
+            value={settings.basalActionWindowH ?? DEFAULT_BASAL_WINDOW_H}
+            onChange={(v) => upd("basalActionWindowH", v)}
+          />
+          <div style={{
+            display: "flex", justifyContent: "space-between",
+            fontSize: 11, color: "var(--text-ghost)", marginTop: 6, padding: "0 4px",
+          }}>
+            {[12, 24, 36, 48, 60, 72].map(tick => (
+              <span key={tick} style={{
+                color: (settings.basalActionWindowH ?? DEFAULT_BASAL_WINDOW_H) === tick ? ACCENT : "var(--text-ghost)",
+                fontWeight: (settings.basalActionWindowH ?? DEFAULT_BASAL_WINDOW_H) === tick ? 700 : 400,
+              }}>{tick}</span>
+            ))}
           </div>
         </div>
       ),
@@ -2548,6 +2616,16 @@ export default function SettingsPage() {
           subtitle={settings.insulinBrandBasal.trim() || tSettings("subtitle_no_brand")}
           ariaLabel={tSettings("row_open_aria", { label: tSettings("row_insulin_brand_basal") })}
           onClick={() => openSheetWith("insulinBrandBasal")}
+        />
+        <SettingsRow
+          iconColor={ACCENT}
+          icon={ICON.insulin}
+          label={tSettings("row_basal_window")}
+          subtitle={settings.basalActionWindowH !== undefined
+            ? tSettings("subtitle_basal_window_h", { h: settings.basalActionWindowH })
+            : tSettings("subtitle_basal_window_default")}
+          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_basal_window") })}
+          onClick={() => openSheetWith("basalWindow")}
         />
         <SettingsRow
           iconColor={ACCENT}

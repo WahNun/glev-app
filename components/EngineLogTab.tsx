@@ -231,12 +231,15 @@ function StatusBanner({ status, accent, t }: { status: Status; accent: string; t
   );
 }
 
-export function InsulinForm() {
+export function InsulinForm({ initialType = "bolus" }: { initialType?: "bolus" | "basal" } = {}) {
   const t = useTranslations("engineLog");
-  const [type, setType] = useState<"bolus" | "basal">("bolus");
+  const [type, setType] = useState<"bolus" | "basal">(initialType);
+  // Pre-fill the brand name with the saved bolus/basal brand for the
+  // initial type (#621/#622). Falls back to "" when no brand is set or
+  // during SSR. Tab switches keep the pre-fill in sync via handleTypeChange.
   const [name, setName] = useState<string>(() => {
     if (typeof window === "undefined") return "";
-    return resolveInsulinNamePrefill(getInsulinSettings(), "bolus");
+    return resolveInsulinNamePrefill(getInsulinSettings(), initialType);
   });
   const [showInfluence, setShowInfluence] = useState(false);
   // Default starting positions: "5" IE bolus, "20" IE basal. Stored

@@ -19,3 +19,26 @@ export const DEFAULT_CF = 50;
 
 /** Target blood glucose default (mg/dL) used for correction-dose math. */
 export const DEFAULT_TARGET_BG = 110;
+
+/**
+ * Basal insulin action-window presets (hours).
+ *
+ * Each entry maps a human-readable brand/type label to the typical
+ * duration of action used for the linear-decay Restwert model in
+ * IOBCard / calcBasalRemaining. Sources: SmPC / clinical consensus.
+ *
+ * Key = canonical label shown in Settings UI.
+ * Value = typical action window in hours (rounded conservatively).
+ */
+export const BASAL_WINDOW_PRESETS: Record<string, number> = {
+  "Lantus (Glargin U100)":   24,
+  "Toujeo (Glargin U300)":   36,
+  "Tresiba (Degludec)":      42,
+  "Levemir (Detemir)":       20,
+  "Basaglar (Glargin U100)": 24,
+  "Abasaglar (Glargin)":     24,
+  "Semglee (Glargin)":       24,
+};
+
+/** Default basal action window in hours (Lantus/Glargin U100 = 24 h). */
+export const DEFAULT_BASAL_WINDOW_H = 24;

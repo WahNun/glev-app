@@ -3,6 +3,7 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { calcTotalIOB, calcSingleIOB, getDIAMinutes, buildDoses, calcBasalRemaining, resolveBolusTypeLabel, calcSparklineWindow, type BolusDose, type InsulinType } from "@/lib/iob";
 import { getInsulinSettings } from "@/lib/userSettings";
+import { DEFAULT_BASAL_WINDOW_H } from "@/lib/engine/constants";
 import type { InsulinLog } from "@/lib/insulin";
 import type { Meal } from "@/lib/meals";
 
@@ -239,7 +240,13 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
     return entries[0] ?? null;
   }, [insulin]);
 
-  const BASAL_WINDOW_MIN = 24 * 60;
+  // User-configured basal action window (hours) — falls back to 24h when
+  // unset. Mirrors `user_settings.basal_action_window_h` via getInsulinSettings().
+  const basalWindowH = useMemo(
+    () => getInsulinSettings().basalActionWindowH ?? DEFAULT_BASAL_WINDOW_H,
+    [],
+  );
+  const BASAL_WINDOW_MIN = basalWindowH * 60;
   const basalElapsedMin = lastBasal
     ? (now - new Date(lastBasal.created_at).getTime()) / 60_000
     : null;

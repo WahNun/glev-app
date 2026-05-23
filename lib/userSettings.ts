@@ -121,6 +121,15 @@ export interface InsulinSettings {
    *  Pre-fills the basal tab of the insulin log form.
    *  `undefined` / empty = not set. Max 40 chars enforced by UI + DB. */
   insulinBrandBasal?: string;
+  /**
+   * Basal insulin action window in hours. Used by calcBasalRemaining
+   * to compute the linear-decay Restwert on the IOB card.
+   *
+   * Typical values: Lantus 24h, Toujeo 36h, Tresiba 42h, Levemir 20h.
+   * `undefined` = not set by user → IOBCard uses DEFAULT_BASAL_WINDOW_H (24h).
+   * Valid range: 12–72 h.
+   */
+  basalActionWindowH?: number;
 }
 
 export const DEFAULT_INSULIN_SETTINGS: InsulinSettings = {
@@ -240,7 +249,16 @@ export function getInsulinSettings(): InsulinSettings {
         ? parsed.insulinBrandBasal.trim().slice(0, 40)
         : undefined;
 
-    return { icr, cf, targetBg, diaMinutes, insulinBrandBolus, insulinBrandBolus2, insulinBrandBasal };
+    // Basal action window (12–72 h). Undefined = user hasn't set it → IOBCard falls
+    // back to DEFAULT_BASAL_WINDOW_H (24 h).
+    const basalActionWindowH =
+      isFiniteNumber(parsed.basalActionWindowH) &&
+      parsed.basalActionWindowH >= 12 &&
+      parsed.basalActionWindowH <= 72
+        ? parsed.basalActionWindowH
+        : undefined;
+
+    return { icr, cf, targetBg, diaMinutes, insulinBrandBolus, insulinBrandBolus2, insulinBrandBasal, basalActionWindowH };
   } catch {
     return DEFAULT_INSULIN_SETTINGS;
   }
@@ -264,7 +282,7 @@ export async function fetchInsulinSettings(): Promise<InsulinSettings> {
 
   const { data, error } = await supabase
     .from("user_settings")
-    .select("icr_g_per_unit, cf_mgdl_per_unit, target_bg_mgdl, dia_minutes, insulin_brand_bolus, insulin_brand_bolus_2, insulin_brand_basal")
+    .select("icr_g_per_unit, cf_mgdl_per_unit, target_bg_mgdl, dia_minutes, insulin_brand_bolus, insulin_brand_bolus_2, insulin_brand_basal, basal_action_window_h")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -304,7 +322,17 @@ export async function fetchInsulinSettings(): Promise<InsulinSettings> {
       ? data.insulin_brand_basal.trim().slice(0, 40)
       : undefined;
 
-  return { icr, cf, targetBg, diaMinutes, insulinBrandBolus, insulinBrandBolus2, insulinBrandBasal };
+  // basalActionWindowH optional — NULL in DB means "not set, fall back to
+  // DEFAULT_BASAL_WINDOW_H (24h)". Valid range 12–72h matches the DB
+  // CHECK constraint (migration 20260523_add_basal_action_window.sql).
+  const basalActionWindowH =
+    isFiniteNumber(data.basal_action_window_h) &&
+    data.basal_action_window_h >= 12 &&
+    data.basal_action_window_h <= 72
+      ? data.basal_action_window_h
+      : undefined;
+
+  return { icr, cf, targetBg, diaMinutes, insulinBrandBolus, insulinBrandBolus2, insulinBrandBasal, basalActionWindowH };
 }
 
 /**
@@ -343,6 +371,12 @@ export async function saveInsulinSettings(settings: InsulinSettings): Promise<vo
       insulin_brand_bolus:   settings.insulinBrandBolus?.trim().slice(0, 40)  || null,
       insulin_brand_bolus_2: settings.insulinBrandBolus2?.trim().slice(0, 40) || null,
       insulin_brand_basal:   settings.insulinBrandBasal?.trim().slice(0, 40)  || null,
+      // basal_action_window_h is nullable — omit from the upsert payload
+      // when undefined so the DB row keeps NULL and IOBCard falls back to
+      // DEFAULT_BASAL_WINDOW_H. When set, clamp to 12–72h (matches DB CHECK).
+      ...(settings.basalActionWindowH !== undefined
+        ? { basal_action_window_h: Math.min(72, Math.max(12, Math.round(settings.basalActionWindowH))) }
+        : {}),
     }, { onConflict: "user_id" });
 
   if (error) throw new Error(error.message);

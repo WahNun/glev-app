@@ -200,7 +200,7 @@ function runGlevEngine(
   // the shared "high activity day" threshold. Dose math is unchanged.
   activity?: ActivityContext | null,
 ): Recommendation {
-  const cf = 50, target = 110;
+  const { cf, targetBg: target } = getInsulinSettings();
   // Resolve which ICR actually grades this meal. If the schedule toggle
   // is off or no slot matches, `effectiveIcr === icr` and the formula
   // path renders identical reasoning to before. When a slot wins, the

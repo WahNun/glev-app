@@ -300,6 +300,22 @@ export async function grantBetaFreeYearAction(formData: FormData): Promise<void>
     }
   } else {
     userId = found.id;
+    // Bestehender User bekommt ebenfalls einen Magic-Link, damit er
+    // ohne manuelles Login direkt auf /dashboard landet. Best-effort:
+    // wenn generateLink scheitert, läuft die Mail mit /dashboard-CTA
+    // weiter — der User kann sich dort normal einloggen.
+    try {
+      const { data: linkData, error: linkErr } = await sb.auth.admin.generateLink({
+        type: "magiclink",
+        email,
+        options: { redirectTo: `${appUrl}/dashboard` },
+      });
+      if (!linkErr && linkData?.properties?.action_link) {
+        signupUrl = linkData.properties.action_link;
+      }
+    } catch {
+      // stiller Fail — Mail geht trotzdem raus
+    }
   }
 
   // Profil holen (Sprache + Anzeige-Name für Mail), inklusive Vorzustand
