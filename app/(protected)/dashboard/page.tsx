@@ -1034,12 +1034,20 @@ function DashboardQuickAddCTA({
 
 type ClusterCard = { id: string; node: React.ReactNode };
 
-/** Horizontal snap pager used by every dashboard cluster. Reuses the same
- *  mechanics as the Insights screen's `InsightsSwipePager` — one slide per
- *  card at 100% container width, scroll-snap mandatory, dot indicators
- *  below. Clusters with only one card hide the indicator (per spec).
- *  Active index follows the scroll position via rAF + clientWidth rounding;
- *  changing slide triggers a light selection haptic on mobile.
+/** Horizontal swipe pager used by every dashboard cluster.
+ *  Driven entirely by pointer events + CSS transform — no native scroll,
+ *  no momentum, no bounce. Landing is a clean ease-out curve.
+ *
+ *  Gesture logic:
+ *  - Direction is locked once the first movement exceeds 6px so vertical
+ *    page-scroll is never hijacked by a mostly-vertical drag.
+ *  - A swipe registers as intentional when |dx| > 25 % of container width
+ *    OR (duration < 300 ms && |dx| > 20 px) — covers both slow drags and
+ *    quick flicks.
+ *  - At the first/last slide a 0.2× rubber-band resists the over-drag so
+ *    the edge still feels "alive" without an actual bounce.
+ *  - `pointerCapture` keeps the track following the finger even when it
+ *    exits the element boundary mid-swipe.
  *
  *  An optional `footer` slot lets the caller glue a node (e.g. the
  *  dashboard quick-add CTA) directly underneath the pager + indicator,
@@ -1058,141 +1066,77 @@ function DashboardCluster({
   footer?: React.ReactNode;
 }) {
   const [active, setActive] = useState(0);
-  const scrollerRef = useRef<HTMLDivElement | null>(null);
-  const rafRef = useRef<number | null>(null);
-  // Debounced scroll-end correction. iOS Safari + Android Chrome
-  // occasionally ignore `scroll-snap-stop: always` after a soft flick
-  // or trackpad swipe, leaving the scroller resting between two
-  // slides (50/50 split). When the user stops scrolling we wait
-  // ~140ms, then if scrollLeft isn't a clean multiple of clientWidth
-  // we smoothly snap to the nearest slide ourselves. The CSS snap
-  // still does most of the work; this is a safety net.
-  const settleTimerRef = useRef<number | null>(null);
-  const programmaticScrollRef = useRef(false);
+  const [dragDelta, setDragDelta] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
 
-  // Per-card natural-height measurements. Mirrors the InsightsSwipePager
-  // pattern: each slide is observed by a ResizeObserver and the
-  // scroller's height tracks the *active* slide's height instead of
-  // letting flex stretch every slide to the tallest sibling. Without
-  // this, a short card (e.g. Good Rate ~150px) shares its row with a
-  // tall card (e.g. Recents ~400px) and the scroller container ends up
-  // 400px tall, leaving a big blank gap between the card and the dots
-  // pager below it. Adaptive height makes the dots hug the bottom edge
-  // of whichever card is currently in focus.
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const startXRef    = useRef(0);
+  const startYRef    = useRef(0);
+  const startTimeRef = useRef(0);
+  const pointerDownRef  = useRef(false);
+  const dirLockRef   = useRef<"horizontal" | "vertical" | null>(null);
+
+  // Per-card natural-height measurements — adaptive height so the dots
+  // hug the bottom of whichever card is active instead of stretching to
+  // the tallest sibling.
   const itemRefs = useRef<Array<HTMLDivElement | null>>([]);
   const [heights, setHeights] = useState<Record<number, number>>({});
 
-  const updateActive = useCallback(() => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    const w = el.clientWidth || 1;
-    const idx = Math.max(0, Math.min(cards.length - 1, Math.round(el.scrollLeft / w)));
-    setActive(prev => {
-      if (prev === idx) return prev;
-      hapticSelection();
-      return idx;
-    });
+  // ── Gesture handlers ────────────────────────────────────────────────
+  const onPointerDown = useCallback((e: React.PointerEvent) => {
+    if (cards.length <= 1) return;
+    startXRef.current    = e.clientX;
+    startYRef.current    = e.clientY;
+    startTimeRef.current = Date.now();
+    pointerDownRef.current = true;
+    dirLockRef.current   = null;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   }, [cards.length]);
 
-  // Shared helper for any programmatic scroll (settle-correction OR
-  // PagerIndicator tap). Cancels any pending settle timer, raises
-  // the guard, and refreshes the guard release on each subsequent
-  // scroll tick so slow devices / long animations don't drop the
-  // guard mid-flight (which would let the settle timer fire into
-  // an in-progress smooth scroll and start a snap fight).
-  const programmaticReleaseTimerRef = useRef<number | null>(null);
-  const scheduleProgrammaticRelease = useCallback(() => {
-    if (programmaticReleaseTimerRef.current != null) {
-      window.clearTimeout(programmaticReleaseTimerRef.current);
+  const onPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!pointerDownRef.current) return;
+    const dx = e.clientX - startXRef.current;
+    const dy = e.clientY - startYRef.current;
+
+    // Determine scroll axis once, after the first 6px of movement.
+    if (dirLockRef.current === null && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
+      dirLockRef.current = Math.abs(dx) >= Math.abs(dy) ? "horizontal" : "vertical";
     }
-    programmaticReleaseTimerRef.current = window.setTimeout(() => {
-      programmaticReleaseTimerRef.current = null;
-      programmaticScrollRef.current = false;
-    }, 220);
-  }, []);
-  const programmaticScrollTo = useCallback((left: number) => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    if (settleTimerRef.current != null) {
-      window.clearTimeout(settleTimerRef.current);
-      settleTimerRef.current = null;
+    if (dirLockRef.current !== "horizontal") return;
+
+    // Rubber-band resistance at the first and last slide.
+    let delta = dx;
+    if ((active === 0 && dx > 0) || (active === cards.length - 1 && dx < 0)) {
+      delta = dx * 0.18;
     }
-    programmaticScrollRef.current = true;
-    el.scrollTo({ left, behavior: "smooth" });
-    scheduleProgrammaticRelease();
-  }, [scheduleProgrammaticRelease]);
+    setIsDragging(true);
+    setDragDelta(delta);
+  }, [active, cards.length]);
 
-  const settleSnap = useCallback(() => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    const w = el.clientWidth;
-    if (w <= 0) return;
-    const target = Math.round(el.scrollLeft / w) * w;
-    // 1px tolerance handles sub-pixel rounding without thrashing.
-    if (Math.abs(el.scrollLeft - target) > 1) {
-      programmaticScrollTo(target);
+  const onPointerUp = useCallback((e: React.PointerEvent) => {
+    if (!pointerDownRef.current) return;
+    pointerDownRef.current = false;
+    setIsDragging(false);
+    setDragDelta(0);
+
+    if (dirLockRef.current !== "horizontal") return;
+
+    const dx = e.clientX - startXRef.current;
+    const dt = Date.now() - startTimeRef.current;
+    const w  = containerRef.current?.clientWidth ?? 375;
+
+    const intentional = Math.abs(dx) > w * 0.25 || (dt < 300 && Math.abs(dx) > 20);
+    if (intentional && dx < 0 && active < cards.length - 1) {
+      hapticSelection();
+      setActive(a => a + 1);
+    } else if (intentional && dx > 0 && active > 0) {
+      hapticSelection();
+      setActive(a => a - 1);
     }
-  }, [programmaticScrollTo]);
+    // If not intentional, dragDelta is already reset to 0 → snaps back.
+  }, [active, cards.length]);
 
-  const onScroll = useCallback(() => {
-    if (rafRef.current != null) return;
-    rafRef.current = window.requestAnimationFrame(() => {
-      rafRef.current = null;
-      updateActive();
-    });
-    // While a programmatic scroll is animating, keep refreshing the
-    // release timer so it only fires once the user/browser is truly
-    // idle — never mid-animation.
-    if (programmaticScrollRef.current) {
-      scheduleProgrammaticRelease();
-      return;
-    }
-    // Reset the settle timer on every scroll tick — once scrolling
-    // stops for 140ms we run the correction.
-    if (settleTimerRef.current != null) window.clearTimeout(settleTimerRef.current);
-    settleTimerRef.current = window.setTimeout(() => {
-      settleTimerRef.current = null;
-      settleSnap();
-    }, 140);
-  }, [updateActive, settleSnap, scheduleProgrammaticRelease]);
-
-  // Realign on width change (orientation, container resize, sidebar
-  // collapse). Without this, after a width change the scroller would
-  // still sit at the old scrollLeft and visually show a partial
-  // slide until the user scrolls again. We re-pin scrollLeft to
-  // `active * clientWidth` instantly (jump, no animation) so the
-  // user never sees the misalignment in the first place.
-  useEffect(() => {
-    const el = scrollerRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    let lastW = el.clientWidth;
-    const ro = new ResizeObserver(() => {
-      const w = el.clientWidth;
-      if (w <= 0 || w === lastW) return;
-      lastW = w;
-      const target = active * w;
-      if (Math.abs(el.scrollLeft - target) > 1) {
-        programmaticScrollRef.current = true;
-        el.scrollLeft = target;
-        scheduleProgrammaticRelease();
-      }
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [active, scheduleProgrammaticRelease]);
-
-  useEffect(() => {
-    return () => {
-      if (settleTimerRef.current != null) window.clearTimeout(settleTimerRef.current);
-      if (programmaticReleaseTimerRef.current != null) window.clearTimeout(programmaticReleaseTimerRef.current);
-    };
-  }, []);
-
-  // Measure each card's natural height. Re-measures automatically when
-  // a card's content changes (e.g. a FlipCard expands its back, which
-  // renders a hidden ghost in normal flow to drive parent height) or
-  // when underlying data refreshes. Stale entries are kept around so
-  // swiping back to an already-measured slide is jank-free.
+  // ── Height tracking ─────────────────────────────────────────────────
   useLayoutEffect(() => {
     if (typeof ResizeObserver === "undefined") return;
     const observers: ResizeObserver[] = [];
@@ -1211,9 +1155,6 @@ function DashboardCluster({
     return () => observers.forEach(o => o.disconnect());
   }, [cards.length]);
 
-  // Drop measurements for indices that no longer exist (card count
-  // shrinks). Keeps the state map from growing unbounded across
-  // renders.
   useEffect(() => {
     setHeights(prev => {
       const next: Record<number, number> = {};
@@ -1225,29 +1166,18 @@ function DashboardCluster({
     });
   }, [cards.length]);
 
-  // Scroller height = active card's measured height. Until the first
-  // measurement lands the height is `auto` so the very first paint
-  // doesn't collapse to zero (which would cause a brief flash of
-  // missing content before the observer fires). After measurement we
-  // pin the height with a short transition so swiping between cards of
-  // different heights feels smooth instead of snapping.
   const activeMeasured = heights[active];
   const scrollerHeight: React.CSSProperties["height"] =
     activeMeasured != null ? activeMeasured : "auto";
 
+  // ── Render ──────────────────────────────────────────────────────────
   return (
     <section
       aria-label={title}
       className="glev-cluster"
       style={{ display:"flex", flexDirection:"column", gap:10 }}
     >
-      {/* Cluster title is intentionally hidden from view (per user
-          request: the "Glucose / Metabolic Response / Control"
-          headings felt redundant once each cluster is a single visual
-          swipe surface). It still ships as a visually-hidden h2 so
-          screen readers and the cluster's aria-label stay informative.
-          The drag handle, when present, remains tappable on the
-          right edge of the cluster. */}
+      {/* Visually hidden cluster heading for screen readers */}
       <h2
         style={{
           position: "absolute",
@@ -1258,104 +1188,76 @@ function DashboardCluster({
       >
         {title}
       </h2>
-      {/* Drag handle moved out of its own top row and into the bottom
-          control bar (see below) — having a dedicated handle row above
-          every cluster was eating ~38px of vertical space (28px button +
-          10px section gap) and leaving the handle visually floating in
-          the empty space between clusters, which the user flagged as
-          excessive blank space on the dashboard. */}
+
+      {/* ── Clipping window ── */}
       <div
-        ref={scrollerRef}
-        onScroll={cards.length > 1 ? onScroll : undefined}
+        ref={containerRef}
+        onPointerDown={cards.length > 1 ? onPointerDown : undefined}
+        onPointerMove={cards.length > 1 ? onPointerMove : undefined}
+        onPointerUp={cards.length > 1 ? onPointerUp : undefined}
+        onPointerCancel={cards.length > 1 ? onPointerUp : undefined}
         style={{
-          display:"flex",
-          // Adaptive height — see the heights/measured logic above for
-          // the rationale. `alignItems:"flex-start"` prevents flex from
-          // stretching slides taller than the container's pinned
-          // height, which would otherwise re-introduce the blank-space
-          // problem the measurement is meant to fix.
-          alignItems:"flex-start",
+          overflow: "hidden",
           height: scrollerHeight,
           transition: "height 220ms ease",
-          overflowX: cards.length > 1 ? "auto" : "hidden",
-          overflowY:"hidden",
-          scrollSnapType: cards.length > 1 ? "x mandatory" : "none",
-          overscrollBehaviorX:"contain",
-          WebkitOverflowScrolling:"touch",
-          touchAction:"pan-x pan-y",
+          // Allow vertical page scroll; horizontal is handled manually.
+          touchAction: cards.length > 1 ? "pan-y" : "auto",
+          userSelect: "none",
+          WebkitUserSelect: "none",
         }}
       >
-        {cards.map((c, i) => (
-          <div
-            key={c.id}
-            id={`${clusterId}-slide-${i}`}
-            role="tabpanel"
-            aria-label={c.id}
-            ref={el => { itemRefs.current[i] = el; }}
-            style={{
-              // border-box guarantees the slot's outer width is
-              // exactly the scroller's clientWidth even if padding is
-              // ever introduced, so scroll-snap lands cleanly on
-              // multiples of clientWidth instead of stopping between
-              // slides. Combined with `scrollSnapAlign:"start"` (more
-              // reliable than "center" on touch with mandatory snap)
-              // this fixes the "stops halfway" issue the user saw.
-              boxSizing:"border-box",
-              flex:"0 0 100%",
-              width:"100%",
-              minWidth:0,
-              scrollSnapAlign:"start",
-              scrollSnapStop:"always",
-              // 2026-05-17 UX: give each swiped card breathing room
-              // so adjacent cards don't look glued together as the
-              // next one peeks in during a swipe. 14px each side
-              // yields ~28px visible gap between adjacent slides
-              // while the slot still snaps on multiples of the
-              // container width (border-box keeps width = 100% of
-              // the scroller). Same value used in the Insights
-              // cockpit pager below for visual consistency across
-              // the app.
-              padding: "0 14px",
-            }}
-          >
-            {c.node}
-          </div>
-        ))}
+        {/* ── Sliding track ── */}
+        <div
+          style={{
+            display: "flex",
+            willChange: "transform",
+            // During an active drag: follow the finger instantly (no transition).
+            // After release: ease-out to the target slide — no spring, no overshoot.
+            transform: `translateX(calc(${-active * 100}% + ${dragDelta}px))`,
+            transition: isDragging
+              ? "none"
+              : "transform 300ms cubic-bezier(0.25, 0.46, 0.45, 0.94)",
+          }}
+        >
+          {cards.map((c, i) => (
+            <div
+              key={c.id}
+              id={`${clusterId}-slide-${i}`}
+              role="tabpanel"
+              aria-label={c.id}
+              ref={el => { itemRefs.current[i] = el; }}
+              style={{
+                flex: "0 0 100%",
+                width: "100%",
+                boxSizing: "border-box",
+                // 14px each side → adjacent card peek during swipe,
+                // matching the Insights cockpit pager for visual consistency.
+                padding: "0 14px",
+              }}
+            >
+              {c.node}
+            </div>
+          ))}
+        </div>
       </div>
-      {/* Unified bottom control bar:
-            ┌──────────────────────────────────────────────────────┐
-            │ [spacer]      [pager indicator]      [drag handle]   │
-            └──────────────────────────────────────────────────────┘
-          The 3-column grid keeps the indicator perfectly centered
-          regardless of whether the handle is present. For single-
-          card clusters (where PagerIndicator returns null) the bar
-          shrinks to just the handle on the right. */}
+
+      {/* ── Bottom control bar: [spacer] [dots] [handle] ── */}
       <div
         className="glev-cluster-bar"
         style={{
           display: "grid",
-          // Fixed 28px side columns mirror the handle button's footprint
-          // exactly, so the middle column (and therefore the pager
-          // indicator) is geometrically and visually centered relative
-          // to the cluster — not pushed off-center by the handle's
-          // mass on the right. `justifyItems:"center"` centers the
-          // indicator inside its track even when it's narrower than
-          // the middle column.
           gridTemplateColumns: "28px 1fr 28px",
           alignItems: "center",
           justifyItems: "center",
         }}
       >
-        <div aria-hidden style={{ width: 28, height: 28 }} /> {/* mirror of handle */}
+        <div aria-hidden style={{ width: 28, height: 28 }} />
         <PagerIndicator
           total={cards.length}
           active={active}
           onSelect={(i) => {
-            const el = scrollerRef.current;
-            if (!el) return;
-            // Go through the shared programmatic helper so the settle
-            // timer can't race with the indicator-driven smooth scroll.
-            programmaticScrollTo(i * el.clientWidth);
+            hapticSelection();
+            setActive(i);
           }}
           label={title}
           controlsId={(i) => `${clusterId}-slide-${i}`}
