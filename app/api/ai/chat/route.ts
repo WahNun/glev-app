@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authedClient } from "@/app/api/insulin/_helpers";
 import { getMistralClient, mistralConfigError } from "@/lib/ai/mistralClient";
 import { GLEV_CHAT_SYSTEM_PROMPT } from "@/lib/ai/glevChatPrompt";
+import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 /**
  * POST /api/ai/chat
@@ -27,23 +28,60 @@ import { GLEV_CHAT_SYSTEM_PROMPT } from "@/lib/ai/glevChatPrompt";
  */
 
 // ── Rate limit ────────────────────────────────────────────────────────
-// Simple in-memory rolling window. Per-user, per-process. On Vercel
-// each function instance has its own Map — that's intentional: this is
-// a courtesy gate against runaway clients, not a security boundary.
+// Shared, persistent rolling window. Stored in Supabase
+// (`public.ai_rate_limit_hits`) via the service-role client so the cap
+// is enforced across all serverless function instances and survives
+// cold starts — see migration 20260523_ai_rate_limit_hits.sql.
 const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 60_000;
-const _hits = new Map<string, number[]>();
 
-function isRateLimited(userId: string): boolean {
+/**
+ * Returns `true` if the user has already hit RATE_LIMIT_MAX requests in
+ * the last RATE_LIMIT_WINDOW_MS. Otherwise records this hit and returns
+ * `false`. Fails open: if the admin client is unconfigured or the DB
+ * call errors, we let the request through rather than locking everyone
+ * out (the existing Mistral-side quota remains as a backstop).
+ */
+async function isRateLimited(userId: string): Promise<boolean> {
+  let admin;
+  try {
+    admin = getSupabaseAdmin();
+  } catch {
+    return false;
+  }
+
   const now = Date.now();
-  const cutoff = now - RATE_LIMIT_WINDOW_MS;
-  const arr = (_hits.get(userId) ?? []).filter((t) => t > cutoff);
-  if (arr.length >= RATE_LIMIT_MAX) {
-    _hits.set(userId, arr);
+  const cutoffIso = new Date(now - RATE_LIMIT_WINDOW_MS).toISOString();
+
+  const { count, error: countErr } = await admin
+    .from("ai_rate_limit_hits")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .gte("hit_at", cutoffIso);
+
+  if (countErr) {
+    return false;
+  }
+  if ((count ?? 0) >= RATE_LIMIT_MAX) {
     return true;
   }
-  arr.push(now);
-  _hits.set(userId, arr);
+
+  const { error: insertErr } = await admin
+    .from("ai_rate_limit_hits")
+    .insert({ user_id: userId, hit_at: new Date(now).toISOString() });
+  if (insertErr) {
+    return false;
+  }
+
+  // Opportunistic best-effort cleanup of stale rows for this user so
+  // the table doesn't grow without bound. Errors are ignored — a
+  // future row will retry the prune.
+  void admin
+    .from("ai_rate_limit_hits")
+    .delete()
+    .eq("user_id", userId)
+    .lt("hit_at", cutoffIso);
+
   return false;
 }
 
@@ -134,7 +172,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 3. Rate limit
-  if (isRateLimited(user.id)) {
+  if (await isRateLimited(user.id)) {
     return NextResponse.json(
       { error: "rate limit exceeded — max 20 requests per minute" },
       { status: 429 },
