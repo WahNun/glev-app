@@ -9,9 +9,10 @@ import GlevLockup from "@/components/GlevLockup";
 import GlevLogo from "@/components/GlevLogo";
 import AccountSheet from "@/components/AccountSheet";
 import DashboardQuickAddSheet from "@/components/DashboardQuickAddSheet";
-import AiHelperSheet from "@/components/AiHelperSheet";
 import GlevAIButton from "@/components/GlevAIButton";
-import { fetchAiConsent } from "@/lib/userSettings";
+import GlevAIConsentModal from "@/components/GlevAIConsentModal";
+import GlevAIChatSheet from "@/components/GlevAIChatSheet";
+import { useGlevAI } from "@/lib/useGlevAI";
 import { EngineHeaderProvider, useEngineHeader } from "@/lib/engineHeaderContext";
 import { EngineSourceHeaderProvider, useEngineSourceHeader } from "@/lib/engineSourceHeaderContext";
 import { EngineWizardStepProvider, useEngineWizardStep } from "@/lib/engineWizardStepContext";
@@ -118,13 +119,13 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // opens the shared quick-add sheet (Engine + all logging entry points).
   // State lives here so the sheet works from every protected screen.
   const [quickAddOpen, setQuickAddOpen] = useState(false);
-  const [aiSheetOpen, setAiSheetOpen] = useState(false);
-  const [aiConsent, setAiConsent] = useState(false);
-  const [aiToast, setAiToast] = useState(false);
-
-  useEffect(() => {
-    fetchAiConsent().then(setAiConsent).catch(() => {});
-  }, []);
+  // Phase 2 (Task #651): the Phase-1 placeholder state
+  // (`aiSheetOpen` / `aiConsent` / `aiToast`) + `fetchAiConsent()` are
+  // replaced by the `useGlevAI` hook, which owns consent state
+  // (sourced from `profiles.ai_consent_at`), modal/sheet open state,
+  // sessionStorage-backed conversation history, and the streaming
+  // fetch to /api/ai/chat. See DECISIONS.md D-013.
+  const glevAi = useGlevAI();
   // CGM-source for the "● Live" header pill on /dashboard.
   const [cgmSource, setCgmSource] = useState<string | null>(null);
   useEffect(() => {
@@ -175,11 +176,12 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       if (voice.recording) {
         voice.requestStop();
       } else {
-        // ?voice=1&vt=<timestamp> tells the engine page to auto-start
-        // recording. The vt token is a cache-buster so every tap is
-        // treated as a fresh trigger even when the user is already on
-        // /engine (Next.js won't re-mount the page otherwise).
-        router.push(`/engine?voice=1&vt=${Date.now()}`);
+        // Phase 2 (Task #651): short-tap on the floating Glev AI
+        // button opens the AI flow — consent modal on first tap, chat
+        // sheet thereafter. The previous engine-voice route lives on
+        // via the long-press quick-add sheet (which still hosts the
+        // Engine entry) and via direct navigation to /engine.
+        glevAi.openFromButton();
       }
     }
   };
@@ -196,7 +198,9 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
     if (voice.recording) {
       voice.requestStop();
     } else {
-      router.push(`/engine?voice=1&vt=${Date.now()}`);
+      // Phase 2 (Task #651): see fabHandlePointerUp comment — short-
+      // tap now opens the Glev AI consent modal or chat sheet.
+      glevAi.openFromButton();
     }
   };
 
@@ -1038,37 +1042,23 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           Fingerstick, Activity, Cycle, Symptoms and Influences all sit
           one tap away regardless of which screen the user is on. */}
       <DashboardQuickAddSheet open={quickAddOpen} onClose={() => setQuickAddOpen(false)} />
-      <AiHelperSheet open={aiSheetOpen} onClose={() => setAiSheetOpen(false)} />
 
-      {/* Coming-soon toast — shown when user taps FAB without ai_consent */}
-      {aiToast && (
-        <div
-          role="status"
-          aria-live="polite"
-          style={{
-            position: "fixed",
-            bottom: 90,
-            left: "50%",
-            transform: "translateX(-50%)",
-            background: "rgba(18,20,36,0.95)",
-            border: "1px solid rgba(79,110,247,0.3)",
-            color: "rgba(255,255,255,0.9)",
-            fontSize: 13,
-            fontWeight: 500,
-            padding: "10px 18px",
-            borderRadius: 20,
-            whiteSpace: "nowrap",
-            zIndex: 2000,
-            pointerEvents: "none",
-            backdropFilter: "blur(8px)",
-            WebkitBackdropFilter: "blur(8px)",
-            boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
-          }}
-        >
-          Coming soon — AI-Features in Kürze
-        </div>
-      )}
-
+      {/* Glev AI Phase 2 (Task #651): consent modal on first tap of
+          the floating AI button, streaming chat sheet thereafter. The
+          Phase-1 "Coming soon" toast + the placeholder AiHelperSheet
+          render were dropped — see DECISIONS.md D-013. */}
+      <GlevAIConsentModal
+        open={glevAi.modalOpen}
+        onDismiss={glevAi.dismissConsent}
+        onActivate={glevAi.grantConsent}
+      />
+      <GlevAIChatSheet
+        open={glevAi.sheetOpen}
+        onClose={glevAi.closeSheet}
+        messages={glevAi.messages}
+        streaming={glevAi.streaming}
+        onSend={glevAi.sendMessage}
+      />
     </div>
   );
 }
