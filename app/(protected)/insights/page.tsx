@@ -1231,11 +1231,17 @@ export default function InsightsPage() {
   // exactly (12×14 padding, 9 px uppercase labels, 36/24 hero numbers).
   // Deeper cards reuse the same compact language for visual consistency.
   // ─────────────────────────────────────────────────────────────────
+  // Uniform card height: ~57 % of a 852 px (iPhone 15 Pro) screen.
+  // Applied to all cards via FlipCard's minHeight prop — adaptive-engine
+  // is intentionally excluded so it can grow with its expanded content.
+  const CARD_MIN_H = 460;
+
   const items: SortableItem[] = [
     {
       id: "time-in-range",
       node: (
         <FlipCard
+          minHeight={CARD_MIN_H}
           accent={GREEN}
           back={
             <FlipBack
@@ -1478,7 +1484,7 @@ export default function InsightsPage() {
       // compat with persisted card-orders from earlier versions.
       id: "gmi-a1c",
       node: (
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, minHeight: CARD_MIN_H }}>
           <FlipCard
             accent={ACCENT}
             back={
@@ -1568,6 +1574,7 @@ export default function InsightsPage() {
       id: "glucose-trend",
       node: (
         <FlipCard
+          minHeight={CARD_MIN_H}
           accent={ACCENT}
           back={
             <FlipBack
@@ -1617,7 +1624,7 @@ export default function InsightsPage() {
           </div>
           {trendHasData ? (
             <>
-              <Sparkline values={trendValues} color={ACCENT}/>
+              <Sparkline values={trendValues} color={ACCENT} height={100}/>
               <div style={{ display:"flex", justifyContent:"space-between", marginTop:4, fontSize:11, color:"var(--text-faint)" }}>
                 {trendDays.map((d, i) => <span key={i}>{d.label}</span>)}
               </div>
@@ -1646,6 +1653,7 @@ export default function InsightsPage() {
             : GREEN;
         return (
           <FlipCard
+            minHeight={CARD_MIN_H}
             accent={accent}
             back={
               <ThresholdBack
@@ -1724,6 +1732,16 @@ export default function InsightsPage() {
                 </div>
               </div>
             )}
+            {/* 7-day daily hypo readings bar chart */}
+            {hypoEnough && (() => {
+              const nowMs = Date.now();
+              const vals = Array.from({ length: 7 }, (_, i) => {
+                const s = nowMs - (6 - i) * 86400000;
+                return readings14.filter(r => r.t >= s && r.t < s + 86400000 && r.v < HYPO_THRESHOLD_MGDL).length;
+              });
+              const lbls = Array.from({ length: 7 }, (_, i) => String(new Date(nowMs - (6 - i) * 86400000).getDate()));
+              return <InsightMicroBars values={vals} labels={lbls} color={accent} title={tInsights("micro_trend_7d")} barHeight={90} />;
+            })()}
           </FlipCard>
         );
       })(),
@@ -1735,6 +1753,7 @@ export default function InsightsPage() {
         const accent = hyperCount7d > 0 ? ORANGE : GREEN;
         return (
           <FlipCard
+            minHeight={CARD_MIN_H}
             accent={accent}
             back={
               <ThresholdBack
@@ -1772,6 +1791,16 @@ export default function InsightsPage() {
                 </div>
               </div>
             )}
+            {/* 7-day daily hyper readings bar chart */}
+            {hyperEnough && (() => {
+              const nowMs = Date.now();
+              const vals = Array.from({ length: 7 }, (_, i) => {
+                const s = nowMs - (6 - i) * 86400000;
+                return readings14.filter(r => r.t >= s && r.t < s + 86400000 && r.v > HYPER_THRESHOLD_MGDL).length;
+              });
+              const lbls = Array.from({ length: 7 }, (_, i) => String(new Date(nowMs - (6 - i) * 86400000).getDate()));
+              return <InsightMicroBars values={vals} labels={lbls} color={accent} title={tInsights("micro_trend_7d")} barHeight={90} />;
+            })()}
           </FlipCard>
         );
       })(),
@@ -1781,6 +1810,7 @@ export default function InsightsPage() {
       id: "glucose-variability",
       node: (
         <FlipCard
+          minHeight={CARD_MIN_H}
           accent={cvColor}
           back={
             <ThresholdBack
@@ -1832,6 +1862,19 @@ export default function InsightsPage() {
                 <span style={{ color:HIGH_YELLOW }}>{tInsights("cv_legend_medium")}</span>
                 <span style={{ color:PINK }}>{tInsights("cv_legend_unstable")}</span>
               </div>
+              {/* 14-day daily CV% bar chart */}
+              {(() => {
+                const nowMs = Date.now();
+                const cvVals = Array.from({ length: 14 }, (_, i) => {
+                  const s = nowMs - (13 - i) * 86400000;
+                  const dayVals = readings14.filter(r => r.t >= s && r.t < s + 86400000).map(r => r.v);
+                  if (dayVals.length < 3) return 0;
+                  const mean = dayVals.reduce((a, b) => a + b, 0) / dayVals.length;
+                  const variance = dayVals.reduce((acc, v) => acc + (v - mean) ** 2, 0) / dayVals.length;
+                  return +(Math.sqrt(variance) / mean * 100).toFixed(1);
+                });
+                return <InsightMicroBars values={cvVals} color={cvColor} title={tInsights("micro_trend_14d")} barHeight={80} />;
+              })()}
             </>
           )}
         </FlipCard>
@@ -1841,6 +1884,7 @@ export default function InsightsPage() {
       id: "meal-evaluation",
       node: (
         <FlipCard
+          minHeight={CARD_MIN_H}
           accent={ORANGE}
           back={
             <FlipBack
@@ -1860,22 +1904,36 @@ export default function InsightsPage() {
               {tInsights("card_meal_evaluation_empty")}
             </div>
           ) : (
-            <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:8 }}>
-              {evalRows.map(r => (
-                <div key={r.label} style={{ display:"flex", alignItems:"center", gap:8 }}>
-                  <div style={{ width:60, fontSize:12, color:r.color }}>{r.label}</div>
-                  <div style={{ flex:1, height:6, background:"var(--surface-soft)", borderRadius:99, overflow:"hidden" }}>
-                    <div style={{ height:"100%", width:`${r.pct}%`, background:r.color, borderRadius:99, transition:"width 0.3s" }}/>
+            <>
+              <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:8 }}>
+                {evalRows.map(r => (
+                  <div key={r.label} style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <div style={{ width:60, fontSize:12, color:r.color }}>{r.label}</div>
+                    <div style={{ flex:1, height:6, background:"var(--surface-soft)", borderRadius:99, overflow:"hidden" }}>
+                      <div style={{ height:"100%", width:`${r.pct}%`, background:r.color, borderRadius:99, transition:"width 0.3s" }}/>
+                    </div>
+                    <div
+                      title={`${r.pct}%`}
+                      style={{ width:24, textAlign:"right", fontSize:12, color:"var(--text)", fontFamily:"var(--font-mono)", fontWeight:600 }}
+                    >
+                      {r.count}
+                    </div>
                   </div>
-                  <div
-                    title={`${r.pct}%`}
-                    style={{ width:24, textAlign:"right", fontSize:12, color:"var(--text)", fontFamily:"var(--font-mono)", fontWeight:600 }}
-                  >
-                    {r.count}
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+              {/* 7-day daily meal hit-rate bar chart */}
+              {(() => {
+                const nowMs = Date.now();
+                const evalVals = Array.from({ length: 7 }, (_, i) => {
+                  const s = nowMs - (6 - i) * 86400000;
+                  const dayMeals = meals.filter(m => { const t = parseDbTs(m.created_at); return t >= s && t < s + 86400000; });
+                  const good = dayMeals.filter(m => m.evaluation === "GOOD").length;
+                  return dayMeals.length > 0 ? Math.round((good / dayMeals.length) * 100) : 0;
+                });
+                const evalLabels = Array.from({ length: 7 }, (_, i) => String(new Date(nowMs - (6 - i) * 86400000).getDate()));
+                return <InsightMicroBars values={evalVals} labels={evalLabels} color={GREEN} title={tInsights("micro_hit_rate_7d")} barHeight={80} />;
+              })()}
+            </>
           )}
         </FlipCard>
       ),
@@ -2390,6 +2448,7 @@ export default function InsightsPage() {
       id: "tdd",
       node: (
         <FlipCard
+          minHeight={CARD_MIN_H}
           accent={ACCENT}
           back={
             <ThresholdBack
@@ -2490,6 +2549,18 @@ export default function InsightsPage() {
                   </div>
                 </div>
               </div>
+              {/* 7-day daily total dose bar chart */}
+              {(() => {
+                const nowMs = Date.now();
+                const tddBarVals = Array.from({ length: 7 }, (_, i) => {
+                  const d = new Date(nowMs - (6 - i) * 86400000);
+                  const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+                  const b = tddByDay.get(key);
+                  return b ? +(b.bolus + b.basal).toFixed(1) : 0;
+                });
+                const tddBarLabels = Array.from({ length: 7 }, (_, i) => String(new Date(nowMs - (6 - i) * 86400000).getDate()));
+                return <InsightMicroBars values={tddBarVals} labels={tddBarLabels} color={ACCENT} title={tInsights("micro_tdd_7d")} barHeight={80} />;
+              })()}
             </>
           )}
         </FlipCard>
@@ -2499,6 +2570,7 @@ export default function InsightsPage() {
       id: "patterns",
       node: (
         <FlipCard
+          minHeight={CARD_MIN_H}
           accent={PINK}
           back={
             <FlipBack
@@ -2537,6 +2609,7 @@ export default function InsightsPage() {
       id: "workout-outcomes",
       node: (
         <FlipCard
+          minHeight={CARD_MIN_H}
           accent={ACCENT}
           back={
             <ThresholdBack
@@ -2603,6 +2676,7 @@ export default function InsightsPage() {
       id: "workout-bg-response",
       node: (
         <FlipCard
+          minHeight={CARD_MIN_H}
           accent={ACCENT}
           back={
             <ThresholdBack
@@ -2662,6 +2736,7 @@ export default function InsightsPage() {
       // it reaches SortableCardGrid.
       node: showWorkoutPatterns ? (
         <FlipCard
+          minHeight={CARD_MIN_H}
           accent={ACCENT}
           back={
             <ThresholdBack
@@ -2699,6 +2774,7 @@ export default function InsightsPage() {
       id: "meal-type",
       node: (
         <FlipCard
+          minHeight={CARD_MIN_H}
           accent={ORANGE}
           back={
             <FlipBack
@@ -2758,6 +2834,7 @@ export default function InsightsPage() {
       id: "time-of-day",
       node: (
         <FlipCard
+          minHeight={CARD_MIN_H}
           accent={GREEN}
           back={
             <FlipBack
@@ -2890,6 +2967,7 @@ export default function InsightsPage() {
         id: "cycle-symptoms",
         node: (
           <FlipCard
+            minHeight={CARD_MIN_H}
             accent={PINK}
             back={
               <FlipBack
@@ -2982,7 +3060,7 @@ export default function InsightsPage() {
     {
       id: "performance-tiles",
       node: (
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, minHeight: CARD_MIN_H }}>
           {[
             // Raw ICR moved to slot 0 (top-left) so it sits visually adjacent
             // to the Adaptive Engine hero card directly above the grid —
@@ -3039,6 +3117,7 @@ export default function InsightsPage() {
         id: "daily-steps",
         node: visible ? (
           <FlipCard
+            minHeight={CARD_MIN_H}
             accent={ACCENT}
             back={
               <FlipBack
@@ -3228,6 +3307,7 @@ export default function InsightsPage() {
         id: "active-day-outcomes",
         node: (
           <FlipCard
+            minHeight={CARD_MIN_H}
             accent={GREEN}
             back={
               <FlipBack
@@ -4498,9 +4578,50 @@ function CardLabel({ text, color }: { text: string; color?: string }) {
   );
 }
 
+/** Compact bar chart for 7–14-day trend data inside Insight cards.
+ *  Zero-value bars render as a faint stub so the time axis stays visible. */
+function InsightMicroBars({
+  values, color, labels, title, barHeight = 72,
+}: {
+  values: number[];
+  color: string;
+  labels?: string[];
+  title?: string;
+  barHeight?: number;
+}) {
+  const max = Math.max(...values, 1);
+  return (
+    <div style={{ marginTop: 16 }}>
+      {title && (
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-faint)", marginBottom: 8 }}>
+          {title}
+        </div>
+      )}
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: barHeight }}>
+        {values.map((v, i) => (
+          <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%", gap: 3 }}>
+            <div style={{
+              width: "100%",
+              height: v > 0 ? `${Math.max((v / max) * 100, 10)}%` : "5%",
+              background: v > 0 ? color : "var(--border-soft)",
+              borderRadius: "3px 3px 0 0",
+              transition: "height 0.5s ease",
+            }} />
+            {labels && (
+              <div style={{ fontSize: 8, color: "var(--text-faint)", lineHeight: 1, flexShrink: 0 }}>
+                {labels[i]}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** Sparkline — ported 1:1 from `components/AppMockupPhone.tsx`. */
-function Sparkline({ values, color }: { values: number[]; color: string }) {
-  const W = 268, H = 36;
+function Sparkline({ values, color, height = 36 }: { values: number[]; color: string; height?: number }) {
+  const W = 268, H = height;
   const min = Math.min(...values), max = Math.max(...values);
   const span = max - min || 1;
   const gradId = useId().replace(/[^a-zA-Z0-9]/g, "");
@@ -4622,12 +4743,15 @@ function InfoCornerIcon() {
 }
 
 function FlipCard({
-  children, back, accent = ACCENT, padding = "12px 14px", variant = "default",
+  children, back, accent = ACCENT, padding = "12px 14px", variant = "default", minHeight = 0,
 }: {
   children: React.ReactNode;
   back: React.ReactNode;
   accent?: string;
   padding?: string;
+  /** Minimum height for the ghost div that drives the card's natural height.
+   *  Set to CARD_MIN_H on all standard insight cards for uniform sizing. */
+  minHeight?: number;
   /** "glass" applies an Apple-style Liquid Glass surface: translucent
    *  backdrop blur, refractive 1px border, and a soft inner highlight
    *  along the top edge to fake the "wet glass" cap. Falls back to a
@@ -4714,8 +4838,9 @@ function FlipCard({
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setFlipped(f => !f); } }}
       aria-pressed={flipped}
     >
-      {/* GHOST — invisible, in normal flow, determines parent height. */}
-      <div aria-hidden style={{ visibility:"hidden", pointerEvents:"none", ...(activeFace==="back" ? backShell : frontShell) }}>
+      {/* GHOST — invisible, in normal flow, determines parent height.
+          minHeight enforces uniform card sizing across the pager. */}
+      <div aria-hidden style={{ visibility:"hidden", pointerEvents:"none", minHeight: minHeight || undefined, ...(activeFace==="back" ? backShell : frontShell) }}>
         {activeFace === "back" ? back : children}
       </div>
       {/* FLIP STAGE — absolutely overlays the ghost. */}
