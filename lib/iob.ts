@@ -326,3 +326,27 @@ export function resolveBasalTypeLabel(
   if (insulinBrandBasal?.trim()) return insulinBrandBasal.trim();
   return basalLabel;
 }
+
+/**
+ * Calculates the approximate remaining basal insulin using a simple linear
+ * decay model over the configured 24-hour action window.
+ *
+ * Formula: rest = units × max(0, 1 − elapsedMin / windowMin)
+ *
+ * This is intentionally simplified — it does not model pharmacokinetic
+ * curves per product (Lantus, Tresiba, Toujeo). It is a compliance-safe
+ * approximation and must always be displayed with a disclaimer.
+ *
+ * @param units        Originally injected dose in IE
+ * @param elapsedMin   Minutes elapsed since injection
+ * @param windowMin    Total action window in minutes (default: 24 h = 1440 min)
+ * @returns            Approximate residual in IE, or 0 if the window has passed
+ */
+export function calcBasalRemaining(
+  units: number,
+  elapsedMin: number,
+  windowMin = 1440,
+): number {
+  if (elapsedMin < 0) return units;
+  return units * Math.max(0, 1 - elapsedMin / windowMin);
+}

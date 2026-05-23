@@ -1686,6 +1686,8 @@
     "iob_basal_coverage_title": "Coverage",
     "iob_basal_remaining": "remaining",
     "iob_basal_last_label": "Last dose",
+    "iob_basal_approx_note": "~Residual · not a dosing guide",
+    "iob_basal_injected_label": "Injected",
     "iob_bg_impact_label": "Expected BG effect",
     "iob_bg_impact_value": "~{drop} mg/dL",
     "iob_bg_impact_formula": "{iob} u × CF {cf}",

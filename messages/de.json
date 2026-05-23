@@ -1689,6 +1689,8 @@
     "iob_basal_coverage_title": "Wirkdauer",
     "iob_basal_remaining": "verbleibend",
     "iob_basal_last_label": "Letzter Schuss",
+    "iob_basal_approx_note": "~Restwert · kein Dosierhinweis",
+    "iob_basal_injected_label": "Gespritzt",
     "iob_bg_impact_label": "Erwartete BG-Wirkung",
     "iob_bg_impact_value": "~{drop} mg/dL",
     "iob_bg_impact_formula": "{iob} IE × KF {cf}",

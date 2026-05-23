@@ -10,7 +10,7 @@
 //   3. Doses elapsed beyond DIA minutes contribute 0 to IOB.
 
 import { test, expect } from "@playwright/test";
-import { buildDoses, calcTotalIOB, calcSingleIOB, getDIAMinutes, formatIOBDisplay, getActiveDosesAtTime } from "@/lib/iob";
+import { buildDoses, calcTotalIOB, calcSingleIOB, getDIAMinutes, formatIOBDisplay, getActiveDosesAtTime, calcBasalRemaining } from "@/lib/iob";
 import type { InsulinLike, MealLike, BolusDose } from "@/lib/iob";
 
 // ── helpers ─────────────────────────────────────────────────────────────────
@@ -590,4 +590,72 @@ test("buildDoses: multiple bolus logs — each gets correct label", () => {
   const labels = doses.map(d => d.label);
   expect(labels).toContain("Humalog");
   expect(labels).toContain("Manual bolus");
+});
+
+// ── 11. calcBasalRemaining — linear decay over 24h window ────────────────────
+//
+// The basal ring in IOBCard shows an approximate residual dose computed via
+// a simple linear model: rest = units × max(0, 1 − elapsedMin / windowMin).
+// These tests lock in the invariants so a regression cannot silently display
+// the wrong number (or fail to show "—" for a fully-decayed dose).
+
+const BASAL_WINDOW_MIN = 24 * 60; // 1440 min
+
+test("calcBasalRemaining: 0 min elapsed → full dose", () => {
+  expect(calcBasalRemaining(12, 0, BASAL_WINDOW_MIN)).toBe(12);
+});
+
+test("calcBasalRemaining: 12h elapsed → exactly half the dose remains", () => {
+  const remaining = calcBasalRemaining(12, 720, BASAL_WINDOW_MIN);
+  expect(remaining).toBeCloseTo(6, 5);
+});
+
+test("calcBasalRemaining: 22h 29min elapsed → small residual", () => {
+  // elapsed = 22*60 + 29 = 1349 min
+  // rest = 12 × (1 − 1349/1440) = 12 × (91/1440) ≈ 0.758 IE
+  const remaining = calcBasalRemaining(12, 1349, BASAL_WINDOW_MIN);
+  expect(remaining).toBeGreaterThan(0.1);   // still above the "decayed" threshold
+  expect(remaining).toBeLessThan(1);        // but well below the full dose
+  expect(remaining).toBeCloseTo(12 * (91 / 1440), 4);
+});
+
+test("calcBasalRemaining: exactly 24h elapsed → 0 (window expired)", () => {
+  const remaining = calcBasalRemaining(12, BASAL_WINDOW_MIN, BASAL_WINDOW_MIN);
+  expect(remaining).toBe(0);
+});
+
+test("calcBasalRemaining: >24h elapsed → 0 (clamped, not negative)", () => {
+  const remaining = calcBasalRemaining(12, BASAL_WINDOW_MIN + 60, BASAL_WINDOW_MIN);
+  expect(remaining).toBe(0);
+});
+
+test("calcBasalRemaining: negative elapsed (injection in the future) → full dose", () => {
+  // elapsedMin < 0 should return the full dose (guard branch).
+  const remaining = calcBasalRemaining(12, -30, BASAL_WINDOW_MIN);
+  expect(remaining).toBe(12);
+});
+
+test("calcBasalRemaining: residual < 0.1 IE should trigger 'decayed' display rule", () => {
+  // 23h55min elapsed = 1435 min → rest = 12 × (5/1440) ≈ 0.042 IE → below 0.1 threshold
+  const remaining = calcBasalRemaining(12, 1435, BASAL_WINDOW_MIN);
+  expect(remaining).toBeLessThan(0.1);
+});
+
+test("calcBasalRemaining: residual just above 0.1 IE should still be displayed", () => {
+  // Verify boundary: find an elapsed time that keeps rest ≥ 0.1 IE for a 12u dose.
+  // rest = 12 × (1 − t/1440) = 0.1 → t = 1440 × (1 − 0.1/12) = 1440 × 0.9917 ≈ 1428 min
+  const remaining = calcBasalRemaining(12, 1427, BASAL_WINDOW_MIN);
+  expect(remaining).toBeGreaterThan(0.1);
+});
+
+test("calcBasalRemaining: custom windowMin overrides the default 1440", () => {
+  // With a 12h window (720 min), half elapsed = 360 min → rest = 10 × 0.5 = 5
+  const remaining = calcBasalRemaining(10, 360, 720);
+  expect(remaining).toBeCloseTo(5, 5);
+});
+
+test("calcBasalRemaining: scales linearly with dose (2× units → 2× residual)", () => {
+  const r6  = calcBasalRemaining(6,  720, BASAL_WINDOW_MIN);
+  const r12 = calcBasalRemaining(12, 720, BASAL_WINDOW_MIN);
+  expect(r12).toBeCloseTo(r6 * 2, 5);
 });

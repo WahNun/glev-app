@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useTranslations } from "next-intl";
-import { calcTotalIOB, calcSingleIOB, getDIAMinutes, buildDoses, resolveBolusTypeLabel, calcSparklineWindow, type BolusDose, type InsulinType } from "@/lib/iob";
+import { calcTotalIOB, calcSingleIOB, getDIAMinutes, buildDoses, calcBasalRemaining, resolveBolusTypeLabel, calcSparklineWindow, type BolusDose, type InsulinType } from "@/lib/iob";
 import { getInsulinSettings } from "@/lib/userSettings";
 import type { InsulinLog } from "@/lib/insulin";
 import type { Meal } from "@/lib/meals";
@@ -248,6 +248,12 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
     ? Math.max(0, 1 - basalElapsedMin / BASAL_WINDOW_MIN)
     : 0;
   const basalOverdue    = basalElapsedMin !== null && basalElapsedMin > BASAL_WINDOW_MIN;
+  // Approximate remaining basal units using linear decay over the 24h window.
+  const basalRemaining  = lastBasal && basalElapsedMin !== null
+    ? calcBasalRemaining(lastBasal.units, basalElapsedMin, BASAL_WINDOW_MIN)
+    : null;
+  // Treat < 0.1 IE as fully decayed — avoid displaying a confusingly tiny number.
+  const basalDecayed    = basalRemaining !== null && basalRemaining < 0.1;
   const basalColor      = basalOverdue ? ORANGE : BASAL_INDIGO;
   const basalElapsedH   = basalElapsedMin !== null ? Math.floor(basalElapsedMin / 60) : 0;
   const basalElapsedM   = basalElapsedMin !== null ? Math.floor(basalElapsedMin % 60)  : 0;
@@ -402,11 +408,22 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
                     fontSize: lastBasal ? 22 : 20, fontWeight: 800, lineHeight: 1,
                     fontFamily: "var(--font-mono)",
                     color: lastBasal ? basalColor : "var(--text-ghost)",
-                    textShadow: lastBasal && !basalOverdue ? `0 0 18px ${BASAL_INDIGO}77` : "none",
+                    textShadow: lastBasal && !basalOverdue && !basalDecayed ? `0 0 18px ${BASAL_INDIGO}77` : "none",
                   }}>
-                    {lastBasal ? lastBasal.units.toFixed(1) : "—"}
+                    {lastBasal
+                      ? (basalDecayed ? "—" : (basalRemaining ?? 0).toFixed(1))
+                      : "—"}
                   </div>
                   <div style={{ fontSize: 11, color: "var(--text-dim)", fontWeight: 600 }}>IE</div>
+                  {lastBasal && (
+                    <div style={{
+                      fontSize: 8, color: "var(--text-ghost)", fontWeight: 500,
+                      textAlign: "center", lineHeight: 1.2, marginTop: 1,
+                      maxWidth: 70,
+                    }}>
+                      {t("iob_basal_approx_note")}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -521,14 +538,22 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
 
                 {/* Last dose row + brand chip */}
                 <div style={{ borderTop: "1px solid var(--border)", paddingTop: 9, display: "flex", flexDirection: "column", gap: 6 }}>
+                  {/* Injected (original) dose — reference row */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0 }}>
+                      {t("iob_basal_injected_label")}
+                    </span>
+                    <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 600, fontFamily: "var(--font-mono)", textAlign: "right" }}>
+                      {lastBasal.units.toFixed(1)} IE
+                    </span>
+                  </div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                     <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0 }}>
                       {t("iob_basal_last_label")}
                     </span>
                     <span style={{ fontSize: 12, color: BASAL_INDIGO, fontWeight: 700, fontFamily: "var(--font-mono)", textAlign: "right" }}>
                       {new Date(lastBasal.created_at).toLocaleDateString([], { day: "2-digit", month: "2-digit" })}{" "}
-                      {new Date(lastBasal.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}{" · "}
-                      {lastBasal.units.toFixed(1)} IE
+                      {new Date(lastBasal.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </span>
                   </div>
                   {insulinBrandBasal?.trim() && (
