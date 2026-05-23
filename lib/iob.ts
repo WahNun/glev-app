@@ -206,6 +206,53 @@ export function detectIOBPeaks(samples: IOBSample[]): IOBPeak[] {
   return found.sort((a, b) => b.iob - a.iob).slice(0, 3);
 }
 
+/**
+ * Calculates the time window used by the IOB sparkline to determine which
+ * portion of the timeline to render.
+ *
+ * Only doses that still have active IOB at `nowMs` are included in the window
+ * (activeDoses). If everything has already cleared the window falls back to
+ * all doses, keeping the full decay curve visible.
+ *
+ * Extracted from `IOBSparkline` (components/IOBCard.tsx) so the logic can be
+ * unit-tested independently of React (Task #539 / #557).
+ */
+export interface SparklineWindow {
+  /** Unix-ms timestamp of the earliest dose in the window. */
+  earliestMs: number;
+  /** Unix-ms timestamp when the last dose in the window fully clears. */
+  latestClearanceMs: number;
+  /**
+   * Total duration of the window in ms. Always ≥ 1 to avoid division by zero
+   * when mapping timestamps to SVG x-coordinates.
+   */
+  totalDurationMs: number;
+  /**
+   * The subset of doses used to derive the window:
+   *   - activeDoses (doses not yet cleared at nowMs) when at least one is active.
+   *   - All doses as fallback when everything has cleared.
+   */
+  windowDoses: BolusDose[];
+}
+
+export function calcSparklineWindow(
+  doses: BolusDose[],
+  diaMin: number,
+  nowMs: number,
+): SparklineWindow {
+  const activeDoses = doses.filter(d => {
+    const elapsedMin = (nowMs - new Date(d.administeredAt).getTime()) / 60_000;
+    return elapsedMin >= 0 && elapsedMin < diaMin;
+  });
+  const windowDoses = activeDoses.length > 0 ? activeDoses : doses;
+
+  const earliestMs        = Math.min(...windowDoses.map(d => new Date(d.administeredAt).getTime()));
+  const latestClearanceMs = Math.max(...windowDoses.map(d => new Date(d.administeredAt).getTime() + diaMin * 60_000));
+  const totalDurationMs   = Math.max(latestClearanceMs - earliestMs, 1);
+
+  return { earliestMs, latestClearanceMs, totalDurationMs, windowDoses };
+}
+
 export function applyIOBCorrection(recommendation: number, iob: number): number {
   return Math.max(0, Math.round((recommendation - iob) * 10) / 10);
 }

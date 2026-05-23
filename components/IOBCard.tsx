@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useTranslations } from "next-intl";
-import { calcTotalIOB, calcSingleIOB, getDIAMinutes, buildDoses, resolveBolusTypeLabel, type BolusDose, type InsulinType } from "@/lib/iob";
+import { calcTotalIOB, calcSingleIOB, getDIAMinutes, buildDoses, resolveBolusTypeLabel, calcSparklineWindow, type BolusDose, type InsulinType } from "@/lib/iob";
 import { getInsulinSettings } from "@/lib/userSettings";
 import type { InsulinLog } from "@/lib/insulin";
 import type { Meal } from "@/lib/meals";
@@ -79,15 +79,7 @@ function IOBSparkline({
   // that a later dose becomes invisible (1–2 px wide).
   // If everything has cleared (e.g. the card is in "cleared" state), fall back
   // to all doses so the full decay curve is still visible.
-  const activeDoses = doses.filter(d => {
-    const elapsedMin = (now - new Date(d.administeredAt).getTime()) / 60_000;
-    return elapsedMin >= 0 && elapsedMin < diaMin;
-  });
-  const windowDoses = activeDoses.length > 0 ? activeDoses : doses;
-
-  const earliestMs       = Math.min(...windowDoses.map(d => new Date(d.administeredAt).getTime()));
-  const latestClearanceMs = Math.max(...windowDoses.map(d => new Date(d.administeredAt).getTime() + diaMin * 60_000));
-  const totalDurationMs  = Math.max(latestClearanceMs - earliestMs, 1);
+  const { earliestMs, totalDurationMs } = calcSparklineWindow(doses, diaMin, now);
 
   const maxIOB = doses.reduce((s, d) => s + d.units, 0);
 
