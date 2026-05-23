@@ -9,6 +9,7 @@ import { parseDbTs } from "@/lib/time";
 // `./evaluation.ts` so this file, the per-meal evaluator, and the
 // engine page's safetyNotesFromLogs all consult one definition.
 import { isHighActivityDay } from "./evaluation";
+import { DEFAULT_ICR, DEFAULT_CF, DEFAULT_TARGET_BG } from "./constants";
 
 export interface RecommendInput {
   carbs: number;
@@ -52,9 +53,7 @@ export interface RecommendOutput {
   reasoning: string;
 }
 
-export const DEFAULT_ICR    = 15;
-export const DEFAULT_CF     = 50;
-export const DEFAULT_TARGET = 100;
+export { DEFAULT_ICR, DEFAULT_CF, DEFAULT_TARGET_BG } from "./constants";
 /** BG floor: below this threshold the engine blocks all dose recommendations. */
 export const SAFETY_BG_MIN  = 80;
 /** Hard dose ceiling: calculated totals above this value are clamped. */
@@ -66,7 +65,7 @@ function safePositive(n: number | null | undefined, fallback: number): number {
 
 export function recommendDose(input: RecommendInput): RecommendOutput {
   const carbs    = Math.max(0, Number.isFinite(input.carbs) ? input.carbs : 0);
-  const targetBG = safePositive(input.targetBG, DEFAULT_TARGET);
+  const targetBG = safePositive(input.targetBG, DEFAULT_TARGET_BG);
   const cf       = safePositive(input.correctionFactor, DEFAULT_CF);
 
   let icrUsed = DEFAULT_ICR;

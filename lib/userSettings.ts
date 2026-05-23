@@ -17,6 +17,7 @@
 import { supabase } from "./supabase";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AdjustmentRecord, AdjustmentSuggestion } from "./engine/adjustment";
+import { DEFAULT_ICR, DEFAULT_CF, DEFAULT_TARGET_BG } from "./engine/constants";
 
 // Read the Supabase client from globalThis._supabase at call time rather
 // than from the frozen module-level `supabase` const.  This matters in the
@@ -123,9 +124,9 @@ export interface InsulinSettings {
 }
 
 export const DEFAULT_INSULIN_SETTINGS: InsulinSettings = {
-  icr:      15,
-  cf:       50,
-  targetBg: 110,
+  icr:      DEFAULT_ICR,
+  cf:       DEFAULT_CF,
+  targetBg: DEFAULT_TARGET_BG,
   // diaMinutes intentionally omitted — undefined triggers insulin-type
   // fallback in getDIAMinutes() (rapid 180 / regular 300).
 };

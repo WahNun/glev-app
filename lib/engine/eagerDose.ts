@@ -1,3 +1,5 @@
+import { DEFAULT_CF, DEFAULT_TARGET_BG } from "./constants";
+
 /**
  * calcEagerDose — pure function extracted from the engine page's
  * `eagerDoses` useMemo so the carb+correction formula can be
@@ -18,15 +20,15 @@
  * @param cGrams      Carbohydrate amount already converted to grams.
  * @param glucoseMgDl Current blood glucose in mg/dL.
  * @param icr         Insulin-to-Carbohydrate Ratio (g carbs per 1 U insulin).
- * @param cf          Correction Factor in mg/dL per 1 U insulin. Default 50.
- * @param target      Target blood glucose in mg/dL. Default 110.
+ * @param cf          Correction Factor in mg/dL per 1 U insulin. Default DEFAULT_CF.
+ * @param target      Target blood glucose in mg/dL. Default DEFAULT_TARGET_BG.
  */
 export function calcEagerDose(
   cGrams: number,
   glucoseMgDl: number,
   icr: number,
-  cf = 50,
-  target = 110
+  cf = DEFAULT_CF,
+  target = DEFAULT_TARGET_BG
 ): number | null {
   if (icr <= 0) return null;
 
