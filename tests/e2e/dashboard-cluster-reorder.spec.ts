@@ -1,4 +1,4 @@
-// End-to-end coverage for the dashboard cluster reorder flow (Task #320 → #323).
+// End-to-end coverage for the dashboard cluster reorder flow (Task #320 → #323 → #639).
 //
 // Why this exists:
 //   Task #320 re-introduced drag-to-reorder for the dashboard
@@ -7,7 +7,9 @@
 //   subsequently collapsed the layout from five clusters down to
 //   four (Glucose, Metabolic, Control, Recents) — Metabolic merges
 //   the old "macros" + "rates" sections and Control replaces
-//   "score-trend". This spec covers the new shape.
+//   "score-trend". Task #639 added the "Insulin & IOB" cluster
+//   between Control and Recents, making it five clusters again.
+//   This spec now covers all five.
 //   The persistence path goes:
 //     grip drag → dnd-kit arrayMove → setOrder(...) → POST
 //     /api/preferences → upsert into `user_preferences` → on next
@@ -20,7 +22,7 @@
 //
 // What this asserts (and why each piece matters):
 //   * Default order on a fresh user: Glucose → Metabolic → Control →
-//     Recents. This pins both the
+//     Insulin → Recents. This pins both the
 //     `DASHBOARD_CLUSTER_DEFAULT_ORDER` constant and the cluster
 //     declaration order — flipping either silently would land users
 //     on a different first screen and we'd never know.
@@ -91,6 +93,7 @@ const CLUSTER_LABELS: Array<{ id: string; re: RegExp }> = [
   { id: "glucose",   re: /^(Glucose|Glukose)$/ },
   { id: "metabolic", re: /^(Metabolic response|Metabolische Antwort)$/ },
   { id: "control",   re: /^(Control|Kontrolle)$/ },
+  { id: "insulin",   re: /^Insulin & IOB$/ },
   { id: "recents",   re: /^(Recents|Zuletzt)$/ },
 ];
 
@@ -200,11 +203,11 @@ test.describe("Dashboard cluster reorder", () => {
     // as the cluster headers either way; the section is rendered
     // unconditionally so this is purely a "page hydrated" gate).
     const grips = page.getByRole("button", { name: GRIP_ARIA });
-    await expect(grips).toHaveCount(4);
+    await expect(grips).toHaveCount(5);
 
     // ---- DEFAULT ORDER -----------------------------------------
     expect(await getClusterOrder(page)).toEqual([
-      "glucose", "metabolic", "control", "recents",
+      "glucose", "metabolic", "control", "insulin", "recents",
     ]);
 
     // ---- DRAG METABOLIC ABOVE GLUCOSE --------------------------
@@ -228,7 +231,7 @@ test.describe("Dashboard cluster reorder", () => {
     await expect.poll(
       () => getClusterOrder(page),
       { timeout: 10_000 },
-    ).toEqual(["metabolic", "glucose", "control", "recents"]);
+    ).toEqual(["metabolic", "glucose", "control", "insulin", "recents"]);
 
     await savePost;
 
@@ -239,10 +242,10 @@ test.describe("Dashboard cluster reorder", () => {
     // once so the check waits past that re-render rather than racing
     // it.
     await page.reload();
-    await expect(page.getByRole("button", { name: GRIP_ARIA })).toHaveCount(4);
+    await expect(page.getByRole("button", { name: GRIP_ARIA })).toHaveCount(5);
     await expect.poll(
       () => getClusterOrder(page),
       { timeout: 10_000 },
-    ).toEqual(["metabolic", "glucose", "control", "recents"]);
+    ).toEqual(["metabolic", "glucose", "control", "insulin", "recents"]);
   });
 });
