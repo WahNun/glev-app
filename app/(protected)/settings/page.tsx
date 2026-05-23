@@ -1138,24 +1138,38 @@ export default function SettingsPage() {
       title: tSettings("insulin_to_carb_ratio"),
       body: (
         <div>
-          <label style={{ fontSize: 13, color: "var(--text-dim)", display: "block", marginBottom: 6 }}>{tSettings("icr_label")}</label>
-          <input
-            style={inp}
-            type="number"
-            min={1}
-            max={100}
-            step={0.5}
-            value={settings.icr}
-            onChange={(e) => {
-              // parseFloat (not parseInt) so 8.5 survives the input.
-              // Empty/invalid → fall back to the default ICR rather than
-              // NaN, which would propagate through saveInsulinAction's
-              // clamp and land as 1 (the lower bound).
-              const parsed = parseFloat(e.target.value);
-              upd("icr", Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_INSULIN_SETTINGS.icr);
-            }}
+          <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5, marginBottom: 12 }}>
+            {tSettings("icr_label")}
+          </p>
+          <SnapSlider
+            value={settings.icr ?? 10}
+            onChange={(v) => upd("icr", v)}
+            min={2}
+            max={40}
+            step={1}
+            unit="g/IE"
+            accent={ACCENT}
+            ariaLabel={tSettings("insulin_to_carb_ratio")}
           />
-          <div style={{ fontSize: 13, color: "var(--text-ghost)", marginTop: 6 }}>{tSettings("icr_hint")}</div>
+          <div style={{
+            display: "flex",
+            justifyContent: "space-between",
+            marginTop: 6,
+            paddingLeft: 2,
+            paddingRight: 2,
+          }}>
+            {[5, 10, 15, 20, 25, 30].map((tick) => (
+              <span key={tick} style={{
+                fontSize: 10,
+                color: (settings.icr ?? 10) === tick ? ACCENT : "var(--text-ghost)",
+                fontWeight: (settings.icr ?? 10) === tick ? 700 : 400,
+                transition: "color 150ms ease",
+              }}>
+                {tick}
+              </span>
+            ))}
+          </div>
+          <div style={{ fontSize: 13, color: "var(--text-ghost)", marginTop: 8 }}>{tSettings("icr_hint")}</div>
 
           {/* Engine-Vorschlag (Lucas-Spec May 14): read-only line under
               the input that surfaces the engine-computed ICR + how many
