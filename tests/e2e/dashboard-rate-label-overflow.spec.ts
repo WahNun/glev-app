@@ -53,6 +53,43 @@ async function loginAsTestUser(page: Page) {
 // transform — the DOM text node still holds the mixed-case value.
 const RATE_LABELS = ["Good Rate", "Spike Rate", "Hypo Rate"] as const;
 
+async function assertNoOverflow(page: Page, viewport: string) {
+  await expect(page.locator(".glev-stat-card").first()).toBeVisible({
+    timeout: 20_000,
+  });
+
+  for (const labelText of RATE_LABELS) {
+    const labelDiv = page
+      .locator(".glev-stat-card")
+      .getByText(labelText, { exact: true })
+      .first();
+
+    await expect(labelDiv).toBeVisible();
+
+    // 1. No overflow: scrollWidth must not exceed offsetWidth.
+    //    When overflow:hidden + nowrap clip the text, scrollWidth > offsetWidth.
+    const isOverflowing = await labelDiv.evaluate(
+      (el) => el.scrollWidth > el.offsetWidth,
+    );
+    expect(
+      isOverflowing,
+      `"${labelText}" label overflows its container at ${viewport} — ` +
+        `check for whiteSpace:nowrap or overflow:hidden on the label div`,
+    ).toBe(false);
+
+    // 2. No ellipsis character injected via textOverflow:ellipsis or JS.
+    const text = await labelDiv.textContent() ?? "";
+    expect(
+      text.includes("…") || text.includes("..."),
+      `"${labelText}" label text contains an ellipsis ("${text}") at ${viewport} — ` +
+        `overflow truncation is active`,
+    ).toBe(false);
+
+    // 3. Full text is present (no characters swallowed).
+    expect(text.trim().toLowerCase()).toBe(labelText.toLowerCase());
+  }
+}
+
 test.describe("Rate Triplet card labels — no overflow at 375 px", () => {
   test.use({ viewport: { width: 375, height: 812 } });
 
@@ -62,44 +99,19 @@ test.describe("Rate Triplet card labels — no overflow at 375 px", () => {
 
   test("all three rate labels are fully visible without clipping", async ({ page }) => {
     await loginAsTestUser(page);
+    await assertNoOverflow(page, "375×812");
+  });
+});
 
-    // Wait for the Rate Triplet card to be mounted.  The `.glev-stat-card`
-    // class is set on the front face of the triplet (see RateTripletCard).
-    await expect(page.locator(".glev-stat-card").first()).toBeVisible({
-      timeout: 20_000,
-    });
+test.describe("Rate Triplet card labels — no overflow at 768 px (tablet)", () => {
+  test.use({ viewport: { width: 768, height: 1024 } });
 
-    for (const labelText of RATE_LABELS) {
-      // Locate the label div by its exact text content.
-      // getByText uses substring matching by default; `exact: true` pins it.
-      const labelDiv = page
-        .locator(".glev-stat-card")
-        .getByText(labelText, { exact: true })
-        .first();
+  test.beforeEach(async ({ context }) => {
+    await context.clearCookies();
+  });
 
-      await expect(labelDiv).toBeVisible();
-
-      // 1. No overflow: scrollWidth must not exceed offsetWidth.
-      //    When overflow:hidden + nowrap clip the text, scrollWidth > offsetWidth.
-      const isOverflowing = await labelDiv.evaluate(
-        (el) => el.scrollWidth > el.offsetWidth,
-      );
-      expect(
-        isOverflowing,
-        `"${labelText}" label overflows its container at 375 px — ` +
-          `check for whiteSpace:nowrap or overflow:hidden on the label div`,
-      ).toBe(false);
-
-      // 2. No ellipsis character injected via textOverflow:ellipsis or JS.
-      const text = await labelDiv.textContent() ?? "";
-      expect(
-        text.includes("…") || text.includes("..."),
-        `"${labelText}" label text contains an ellipsis ("${text}") — ` +
-          `overflow truncation is active`,
-      ).toBe(false);
-
-      // 3. Full text is present (no characters swallowed).
-      expect(text.trim().toLowerCase()).toBe(labelText.toLowerCase());
-    }
+  test("all three rate labels are fully visible without clipping", async ({ page }) => {
+    await loginAsTestUser(page);
+    await assertNoOverflow(page, "768×1024");
   });
 });
