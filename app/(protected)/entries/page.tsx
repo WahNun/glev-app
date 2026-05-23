@@ -645,6 +645,7 @@ export default function EntriesPage() {
       await deleteMeal(id);
       setMeals(ms => ms.filter(m => m.id !== id));
       setExpanded(null);
+      window.dispatchEvent(new CustomEvent("glev:meals-updated"));
     } catch (e) {
       console.error(e);
       alert("Could not delete entry.");
@@ -660,6 +661,7 @@ export default function EntriesPage() {
       await deleteInsulinLog(id);
       setInsulin(xs => xs.filter(x => x.id !== id));
       setExpanded(null);
+      window.dispatchEvent(new CustomEvent("glev:insulin-updated"));
     } catch (e) {
       console.error(e);
       alert("Could not delete entry.");
