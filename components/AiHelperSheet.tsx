@@ -35,11 +35,13 @@ export default function AiHelperSheet({
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
-  useEffect(() => {
-    if (open) {
-      setTimeout(() => inputRef.current?.focus(), 350);
-    }
-  }, [open]);
+  // Bewusst KEIN auto-focus mehr beim Öffnen: auf Mobile (iOS/Android) hat
+  // das Sheet sonst sofort das Software-Keyboard hochgefahren, was die
+  // halbe Höhe des Sheets verschluckt und die Quick-Chips/„Zur Glev Engine"-
+  // Deep-Links überdeckt hat. Tastatur kommt jetzt erst, wenn der User
+  // aktiv ins Input tippt — Verlauf, Chips und Engine-Link bleiben sichtbar.
+  // (Eslint-Hinweis: inputRef bleibt für Submit-Reset über useRef belegt.)
+  void inputRef;
 
   useEffect(() => {
     msgEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -438,6 +440,23 @@ export default function AiHelperSheet({
                 </svg>
               </button>
             )}
+          </div>
+
+          {/* Medical-Compliance-Disclaimer (Glev ist KEIN eingereichtes
+              Medizinprodukt; klinischer Charakter dieser Hinweise wird
+              im Compliance-Backlog vor MDR-Einreichung verschärft). Der
+              kleine Text sitzt direkt unter dem Input und ist immer
+              sichtbar, sobald das AI-Helper-Sheet offen ist. */}
+          <div
+            style={{
+              padding: "0 16px 12px",
+              fontSize: 11,
+              lineHeight: 1.4,
+              color: "var(--text-faint)",
+              textAlign: "center",
+            }}
+          >
+            Glev AI kann sich irren · keine medizinische Beratung
           </div>
         </div>
       </div>
