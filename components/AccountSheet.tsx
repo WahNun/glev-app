@@ -106,7 +106,12 @@ export default function AccountSheet({ open, onClose }: AccountSheetProps) {
     }
     setPwState("sending");
     try {
-      const redirectTo = typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined;
+      // /auth/confirm statt /auth/callback: die confirm-Page zeigt erst
+      // einen User-Klick-Button bevor sie den Token gegen Supabase
+      // einlöst. Damit überleben die Single-Use-Recovery-Tokens
+      // Mail-Scanner-Prefetches (Apple Mail / iCloud / Mimecast etc.),
+      // die sonst den Token "verbrennen" bevor der User selbst klickt.
+      const redirectTo = typeof window !== "undefined" ? `${window.location.origin}/auth/confirm` : undefined;
       const { error } = await supabase.auth.resetPasswordForEmail(email, redirectTo ? { redirectTo } : undefined);
       if (error) throw error;
       setPwState("ok");
