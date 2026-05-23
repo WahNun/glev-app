@@ -317,6 +317,16 @@ export default function SettingsPage() {
   // commits straight to the DB without going through SaveFooter.
   const [autoApplyBusy, setAutoApplyBusy] = useState(false);
 
+  // Glev AI consent state — mirrors `profiles.ai_consent_at` for the
+  // "Glev AI" toggle below. Initialised to null ("unknown") so the
+  // toggle stays disabled until the initial fetch lands. The Layout
+  // mounts its own `useGlevAI` hook with the modal+sheet wiring; we
+  // bridge state changes via the `glev:ai-consent-revoked` /
+  // `glev:ai-open-consent-modal` window events so both stay in sync
+  // without a full route remount.
+  const [aiConsentGranted, setAiConsentGranted] = useState<boolean | null>(null);
+  const [aiConsentBusy, setAiConsentBusy] = useState(false);
+
   const [openSheet, setOpenSheet] = useState<SheetKey | null>(null);
   // Account-Sheet aus dem Header — geteilte Komponente, deshalb
   // separater State neben `openSheet` (das die Settings-internen
@@ -416,6 +426,23 @@ export default function SettingsPage() {
     // hides the suggestion line and shows the toggle as off.
     fetchEngineIcrInfo().then(setEngineIcrInfo).catch(() => {});
     fetchInsulinType().then(setInsulinType).catch(() => {});
+    // Initial Glev AI consent fetch — `profiles.ai_consent_at` is the
+    // canonical source (see D-013). Null/missing → toggle off.
+    (async () => {
+      try {
+        if (!supabase) { setAiConsentGranted(false); return; }
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) { setAiConsentGranted(false); return; }
+        const { data } = await supabase
+          .from("profiles")
+          .select("ai_consent_at")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        setAiConsentGranted(Boolean(data?.ai_consent_at));
+      } catch {
+        setAiConsentGranted(false);
+      }
+    })();
     // Load account info (email + sign-up date + total meal count) for the
     // Account row subtitle and sheet. Each piece is best-effort: failures
     // leave the placeholder ("—") in place rather than blocking the row.
@@ -498,6 +525,73 @@ export default function SettingsPage() {
   // openSheetWith is intentionally not a dep — we only want this to
   // fire once on mount per page load, guarded by the ref.
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** Settings "Glev AI" toggle handler. Off → DELETE `/api/ai/consent`,
+   * clear sessionStorage chat history, dispatch `glev:ai-consent-revoked`
+   * so the Layout-mounted `useGlevAI` instance drops its in-memory
+   * messages + closes the sheet/modal if they're open. On → dispatch
+   * `glev:ai-open-consent-modal` so the Layout's hook re-opens the
+   * Phase-2 consent modal (same flow as the floating AI button's
+   * first tap). The actual `ai_consent_at` write happens when the
+   * user taps "Aktivieren →" inside that modal — we never grant
+   * consent silently from a toggle.
+   *
+   * `aiConsentGranted` flips optimistically; a failed DELETE rolls it
+   * back so the user sees the real state.
+   */
+  const toggleAiConsent = useCallback(async (next: boolean) => {
+    if (aiConsentBusy || aiConsentGranted === null) return;
+    if (next) {
+      // Turning ON from settings → open the consent modal so the
+      // user sees the disclaimer before consent is recorded. The
+      // optimistic flip happens inside the modal's "Activate" path.
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("glev:ai-open-consent-modal"));
+      }
+      return;
+    }
+    // Turning OFF — revoke immediately and clear the local chat.
+    setAiConsentBusy(true);
+    const prev = aiConsentGranted;
+    setAiConsentGranted(false);
+    if (typeof window !== "undefined") {
+      try { window.sessionStorage.removeItem("glev_ai_history_v1"); } catch { /* ignore */ }
+      window.dispatchEvent(new CustomEvent("glev:ai-consent-revoked"));
+    }
+    try {
+      const res = await fetch("/api/ai/consent", { method: "DELETE" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch {
+      setAiConsentGranted(prev);
+    } finally {
+      setAiConsentBusy(false);
+    }
+  }, [aiConsentGranted, aiConsentBusy]);
+
+  // Listen for consent grants happening elsewhere (e.g. the user
+  // tapping "Aktivieren →" in the modal opened from the floating
+  // AI button) so the Settings toggle stays in sync. We poll
+  // `profiles.ai_consent_at` cheaply on window focus rather than
+  // wiring a separate event from the modal — keeps the contract
+  // narrow and survives unrelated flows that touch consent.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const refresh = async () => {
+      try {
+        if (!supabase) return;
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data } = await supabase
+          .from("profiles")
+          .select("ai_consent_at")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        setAiConsentGranted(Boolean(data?.ai_consent_at));
+      } catch { /* keep previous */ }
+    };
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
   }, []);
 
   const openSheetWith = useCallback((id: SheetKey) => {
@@ -2759,6 +2853,51 @@ export default function SettingsPage() {
           ariaLabel={tSettings("row_open_aria", { label: tSettings("onboarding_replay_title") })}
           onClick={() => openSheetWith("onboarding")}
         />
+      </SettingsSection>
+
+      <SettingsSection title={tSettings("section_glev_ai")}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", gap: 12 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0, flex: 1 }}>
+            <span
+              aria-hidden
+              style={{
+                width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                background: `${ACCENT}18`, color: ACCENT,
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}
+            >
+              {ICON.sparkle}
+            </span>
+            <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+              <span style={{ fontSize: 14, fontWeight: 500, color: "var(--text-strong)", lineHeight: 1.25 }}>
+                {tSettings("glev_ai_label")}
+              </span>
+              <span style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 2, lineHeight: 1.3 }}>
+                {aiConsentGranted
+                  ? tSettings("glev_ai_desc_on")
+                  : tSettings("glev_ai_desc_off")}
+              </span>
+            </span>
+          </span>
+          <div
+            role="switch"
+            aria-checked={!!aiConsentGranted}
+            aria-disabled={aiConsentBusy || aiConsentGranted === null}
+            aria-label={tSettings("glev_ai_label")}
+            onClick={() => { void toggleAiConsent(!aiConsentGranted); }}
+            style={{
+              width: 44, height: 24, borderRadius: 99,
+              cursor: aiConsentBusy || aiConsentGranted === null ? "not-allowed" : "pointer",
+              flexShrink: 0,
+              background: aiConsentGranted ? ACCENT : "var(--border-strong)",
+              border: `1px solid ${aiConsentGranted ? ACCENT + "60" : BORDER}`,
+              position: "relative", transition: "background 0.2s",
+              opacity: aiConsentGranted === null ? 0.55 : 1,
+            }}
+          >
+            <div style={{ position: "absolute", top: 2, left: aiConsentGranted ? 22 : 2, width: 18, height: 18, borderRadius: 99, background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }} />
+          </div>
+        </div>
       </SettingsSection>
 
       <SettingsSection title={tSettings("section_appearance")}>

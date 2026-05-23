@@ -1343,6 +1343,10 @@
     "onboarding_replay_confirm": "Are you sure? You'll be taken through the introduction next.",
     "onboarding_replay_error": "Something went wrong — please try again later.",
     "section_glev_plus": "Glev+",
+    "section_glev_ai": "Glev AI",
+    "glev_ai_label": "Glev AI",
+    "glev_ai_desc_on": "On — the chat assistant is unlocked.",
+    "glev_ai_desc_off": "Off — the floating button re-shows the consent dialog on the next tap.",
     "row_founder_contact": "Direct line to the founder",
     "subtitle_founder_contact": "As a Glev+ member you have direct access to Lucas."
   },

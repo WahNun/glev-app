@@ -170,6 +170,68 @@ export function useGlevAI(opts?: { contextSnapshot?: ContextSnapshot }) {
     }
   }, []);
 
+  /** Settings "Glev AI" toggle off — DELETEs consent server-side,
+   * clears the sessionStorage chat history, drops any in-memory
+   * messages, and flips local state so the next floating-button tap
+   * re-shows the consent modal. Safe to call multiple times — the
+   * DELETE handler is idempotent.
+   *
+   * The Settings page calls this directly (when the toggle is its
+   * own hook instance) AND dispatches a window event so the Layout-
+   * mounted hook instance picks the same change up without a
+   * navigation. See the `glev:ai-consent-revoked` listener below. */
+  const revokeConsent = useCallback(async () => {
+    // Cancel any in-flight stream before we wipe the bubbles it's
+    // appending into.
+    if (abortRef.current) {
+      try { abortRef.current.abort(); } catch { /* noop */ }
+      abortRef.current = null;
+    }
+    setStreaming(false);
+    setMessages([]);
+    setSheetOpen(false);
+    setModalOpen(false);
+    setConsentGranted(false);
+    if (typeof window !== "undefined") {
+      try { window.sessionStorage.removeItem(HISTORY_KEY); } catch { /* ignore */ }
+    }
+    try {
+      await fetch("/api/ai/consent", { method: "DELETE" });
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn("[GlevAI] consent revoke failed:", e);
+    }
+  }, []);
+
+  // Cross-instance bridge: Settings page mounts its own light
+  // tracker for the toggle, and dispatches these events so the
+  // Layout-mounted hook instance (which owns the modal + sheet)
+  // stays in sync without a full route remount.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onRevoked = () => {
+      if (abortRef.current) {
+        try { abortRef.current.abort(); } catch { /* noop */ }
+        abortRef.current = null;
+      }
+      setStreaming(false);
+      setMessages([]);
+      setSheetOpen(false);
+      setModalOpen(false);
+      setConsentGranted(false);
+      try { window.sessionStorage.removeItem(HISTORY_KEY); } catch { /* ignore */ }
+    };
+    const onOpenModal = () => {
+      setModalOpen(true);
+    };
+    window.addEventListener("glev:ai-consent-revoked", onRevoked);
+    window.addEventListener("glev:ai-open-consent-modal", onOpenModal);
+    return () => {
+      window.removeEventListener("glev:ai-consent-revoked", onRevoked);
+      window.removeEventListener("glev:ai-open-consent-modal", onOpenModal);
+    };
+  }, []);
+
   const closeSheet = useCallback(() => {
     setSheetOpen(false);
     // Cancel any in-flight stream so the next open doesn't show a stuck
@@ -301,6 +363,7 @@ export function useGlevAI(opts?: { contextSnapshot?: ContextSnapshot }) {
     openFromButton,
     dismissConsent,
     grantConsent,
+    revokeConsent,
     closeSheet,
     sendMessage,
   };
