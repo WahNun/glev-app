@@ -127,7 +127,13 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // sessionStorage-backed conversation history, and the streaming
   // fetch to /api/ai/chat. See DECISIONS.md D-013.
   const screenCtx = useScreenContext();
-  const glevAi = useGlevAI({ contextSnapshot: screenCtx });
+  const glevAi = useGlevAI({
+    contextSnapshot: screenCtx,
+    onNavigate: (path) => {
+      glevAi.closeSheet?.();
+      router.push(path);
+    },
+  });
   // CGM-source for the "● Live" header pill on /dashboard.
   const [cgmSource, setCgmSource] = useState<string | null>(null);
   useEffect(() => {
@@ -220,6 +226,14 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       router.push(`/engine?voice=1&vt=${Date.now()}`);
     } else {
       glevAi.openFromButton();
+      // If consent is already granted the chat sheet opens immediately.
+      // Dispatch a delayed voice-start so the sheet can animate in before
+      // we start recording — this enables tap-to-talk from any screen.
+      if (glevAi.consentGranted) {
+        window.setTimeout(() => {
+          window.dispatchEvent(new CustomEvent("glev:voice-start"));
+        }, 350);
+      }
     }
   };
 

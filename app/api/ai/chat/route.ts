@@ -7,6 +7,7 @@ import {
   GLEV_TOOLS,
   executeGlevTool,
   isPendingActionEnvelope,
+  isNavigateEnvelope,
 } from "@/lib/ai/glevTools";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
@@ -444,6 +445,18 @@ export async function POST(req: NextRequest) {
                   summary: result.pending_action.summary,
                   note:
                     "Bestätigung erfolgt durch UI-Button. Antworte mit EINEM kurzen Satz, der natürlich zur Aktion überleitet (z. B. 'Soll ich das so speichern?'). Stelle KEINE Rückfragen nach Daten, frage NICHT erneut nach Bestätigung — der Button erscheint automatisch.",
+                }),
+              });
+            } else if (isNavigateEnvelope(result)) {
+              send(JSON.stringify({ navigate: result.navigate }));
+              messages.push({
+                role: "tool",
+                name: fn?.name ?? "",
+                toolCallId: call.id,
+                content: JSON.stringify({
+                  status: "navigating",
+                  path: result.navigate,
+                  note: "Navigation wurde ausgelöst. Bestätige dem Nutzer kurz mit einem Satz, wohin du ihn navigierst.",
                 }),
               });
             } else {

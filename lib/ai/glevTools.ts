@@ -293,6 +293,26 @@ export const GLEV_TOOLS = [
       },
     },
   },
+  {
+    type: "function" as const,
+    function: {
+      name: "navigate_to",
+      description:
+        "Navigiert den Nutzer zu einem bestimmten Screen in der App. Aufrufen, wenn der Nutzer explizit darum bittet (z. B. 'Zeig mir das Dashboard', 'Geh zu den Einstellungen', 'Öffne Insights'). Nicht proaktiv aufrufen.",
+      parameters: {
+        type: "object",
+        properties: {
+          screen: {
+            type: "string",
+            enum: ["dashboard", "entries", "engine", "insights", "settings"],
+            description:
+              "Ziel-Screen: 'dashboard' (Übersicht), 'entries' (Mahlzeiten/Einträge), 'engine' (Glev Engine KI-Empfehlungen), 'insights' (Auswertungen), 'settings' (Einstellungen).",
+          },
+        },
+        required: ["screen"],
+      },
+    },
+  },
 ];
 
 export type GlevToolName =
@@ -307,7 +327,8 @@ export type GlevToolName =
   | "log_bolus_entry"
   | "log_fingerstick"
   | "add_appointment"
-  | "add_timeline_check";
+  | "add_timeline_check"
+  | "navigate_to";
 
 /**
  * Marker shape returned by every WRITE-tool. The chat-route handler
@@ -324,6 +345,20 @@ export type PendingActionEnvelope = {
     summary: string;
   };
 };
+
+/**
+ * Marker shape returned by navigate_to. The chat-route emits a
+ * dedicated SSE frame; the client reads it and calls router.push.
+ */
+export type NavigateEnvelope = { navigate: string };
+
+export function isNavigateEnvelope(v: unknown): v is NavigateEnvelope {
+  return (
+    !!v &&
+    typeof v === "object" &&
+    typeof (v as Record<string, unknown>).navigate === "string"
+  );
+}
 
 export function isPendingActionEnvelope(v: unknown): v is PendingActionEnvelope {
   if (!v || typeof v !== "object") return false;
@@ -390,6 +425,19 @@ export async function executeGlevTool(
         return await toolAddAppointment(sb, userId, args);
       case "add_timeline_check":
         return await toolAddTimelineCheck(sb, userId, args, userTimezone);
+      case "navigate_to": {
+        const screenMap: Record<string, string> = {
+          dashboard: "/dashboard",
+          entries: "/entries",
+          engine: "/engine",
+          insights: "/insights",
+          settings: "/settings",
+        };
+        const screen = typeof args.screen === "string" ? args.screen : "";
+        const path = screenMap[screen];
+        if (!path) return { error: `unknown screen: ${screen}` };
+        return { navigate: path } satisfies NavigateEnvelope;
+      }
       default:
         return { error: `unknown tool: ${name}` };
     }

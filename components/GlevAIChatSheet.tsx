@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { GlevChatMessage, PendingAction } from "@/lib/useGlevAI";
 import { useVoxtral } from "@/hooks/useVoxtral";
+import { useTTS } from "@/hooks/useTTS";
 
 const ACCENT = "#4F6EF7";
 const SHEET_BG = "#161b22";
@@ -190,6 +191,37 @@ export default function GlevAIChatSheet({
     onError: (err) => setSttError(err),
   });
 
+  const tts = useTTS();
+
+  // TTS: auto-play last assistant message when streaming stops.
+  const prevStreamingRef = useRef(false);
+  useEffect(() => {
+    if (prevStreamingRef.current && !streaming) {
+      const last = messages[messages.length - 1];
+      if (last?.role === "assistant" && last.content) {
+        void tts.speak(last.content);
+      }
+    }
+    prevStreamingRef.current = streaming;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [streaming]);
+
+  // Global FAB voice-start: when the user taps the Glev button while
+  // the sheet is already open, we immediately start recording so they
+  // can speak without finding the in-sheet mic button.
+  useEffect(() => {
+    if (!open) return;
+    const handler = () => { void startListening(); };
+    window.addEventListener("glev:voice-start", handler);
+    return () => window.removeEventListener("glev:voice-start", handler);
+  }, [open, startListening]);
+
+  // Stop TTS when the sheet closes.
+  useEffect(() => {
+    if (!open) tts.stop();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   // Bewusst KEIN Auto-Focus beim Öffnen: das Software-Keyboard würde
   // sonst auf iOS/Android sofort die halbe Sheet-Höhe verschlucken und
   // den Disclaimer/Input-Footer überdecken. Tastatur kommt erst wenn
@@ -274,6 +306,38 @@ export default function GlevAIChatSheet({
           <span style={{ fontSize: 16, fontWeight: 700, color: "white", flex: 1 }}>
             Glev AI
           </span>
+          {/* TTS mute toggle */}
+          <button
+            type="button"
+            onClick={tts.toggleEnabled}
+            aria-label={tts.enabled ? "Stimme stumm schalten" : "Stimme einschalten"}
+            title={tts.enabled ? "Stimme stumm schalten" : "Stimme einschalten"}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              padding: 4,
+              marginRight: 6,
+              display: "flex",
+              alignItems: "center",
+              color: tts.speaking ? ACCENT : tts.enabled ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.25)",
+              transition: "color 0.15s",
+            }}
+          >
+            {tts.enabled ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+              </svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                <line x1="23" y1="9" x2="17" y2="15"/>
+                <line x1="17" y1="9" x2="23" y2="15"/>
+              </svg>
+            )}
+          </button>
           <span
             style={{
               fontSize: 10,

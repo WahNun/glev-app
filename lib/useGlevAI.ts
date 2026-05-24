@@ -119,7 +119,10 @@ function nextId(): string {
   return `glev-ai-${Date.now()}-${_idSeed}`;
 }
 
-export function useGlevAI(opts?: { contextSnapshot?: ContextSnapshot }) {
+export function useGlevAI(opts?: {
+  contextSnapshot?: ContextSnapshot;
+  onNavigate?: (path: string) => void;
+}) {
   const [consentGranted, setConsentGranted] = useState<boolean>(false);
   const [consentLoaded, setConsentLoaded] = useState<boolean>(false);
   const [modalOpen, setModalOpen] = useState<boolean>(false);
@@ -372,6 +375,7 @@ export function useGlevAI(opts?: { contextSnapshot?: ContextSnapshot }) {
               const parsed = JSON.parse(payload) as {
                 token?: string;
                 error?: string;
+                navigate?: string;
                 pending_action?: {
                   token: string;
                   kind: string;
@@ -379,6 +383,9 @@ export function useGlevAI(opts?: { contextSnapshot?: ContextSnapshot }) {
                 };
               };
               if (parsed.error) throw new Error(parsed.error);
+              if (parsed.navigate) {
+                optsRef.current?.onNavigate?.(parsed.navigate);
+              }
               if (parsed.pending_action) {
                 // WRITE-tool result: attach the confirm/cancel widget to
                 // the currently streaming assistant bubble. The bubble's
