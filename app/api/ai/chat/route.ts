@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { authedClient } from "@/app/api/insulin/_helpers";
 import { getMistralClient, mistralConfigError } from "@/lib/ai/mistralClient";
 import { GLEV_CHAT_SYSTEM_PROMPT } from "@/lib/ai/glevChatPrompt";
@@ -166,6 +167,54 @@ function contextPreamble(ctx: ContextSnapshot): string {
   ].join("\n");
 }
 
+// Hard cap auf die Anzahl Memory-Einträge, die in den System-Prompt
+// injiziert werden. Bei ~500 Zeichen pro Value + key + Bullet-Padding
+// wären 50 Einträge ≲ 28 KB — deutlich unter Mistrals 32k-Kontext, lässt
+// aber genug Spielraum für History, Tool-Calls und die eigentliche
+// Antwort. Größere Caps brauchen erst eine Embedding-/Retrieval-Schicht
+// (siehe „Out of scope" in Task #663).
+const MAX_MEMORY_ENTRIES = 50;
+
+/**
+ * Lädt die persistenten User-Memory-Einträge des aktuellen Nutzers und
+ * formatiert sie als injektionsfertigen System-Prompt-Block. Gibt
+ * `null` zurück, wenn keine Einträge existieren — der Aufrufer soll
+ * dann gar keine zusätzliche System-Message anhängen (kein leerer
+ * Header, der den Agenten verwirren könnte).
+ *
+ * Fehler (Tabelle fehlt nach Migration-Lag, RLS-Hiccup, …) werden
+ * still geschluckt: ein nicht-ladbares Memory darf den Chat nicht
+ * blockieren. Der Agent verhält sich dann genauso wie bei einem
+ * neuen User mit leerem Memory.
+ */
+async function loadUserMemoryBlock(
+  sb: SupabaseClient,
+  userId: string,
+): Promise<string | null> {
+  const { data, error } = await sb
+    .from("ai_user_memory")
+    .select("key, value, updated_at")
+    .eq("user_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(MAX_MEMORY_ENTRIES);
+
+  if (error || !Array.isArray(data) || data.length === 0) {
+    return null;
+  }
+
+  const lines = (data as Array<{ key?: unknown; value?: unknown }>)
+    .map((row) => {
+      const k = typeof row.key === "string" ? row.key.trim() : "";
+      const v = typeof row.value === "string" ? row.value.trim() : "";
+      if (!k || !v) return null;
+      return `- ${k}: ${v}`;
+    })
+    .filter((l): l is string => l !== null);
+
+  if (lines.length === 0) return null;
+  return ["Was du über diesen User weißt:", ...lines].join("\n");
+}
+
 export async function POST(req: NextRequest) {
   // 1. Auth
   const auth = await authedClient(req);
@@ -218,9 +267,16 @@ export async function POST(req: NextRequest) {
   // is awkward to reproduce inline (tool replies vs assistant tool_calls
   // vs plain user/assistant turns) and we treat the array as an opaque
   // protocol buffer that only Mistral itself needs to validate.
+  // Memory-Block (persistente User-Beobachtungen) wird nur dann als
+  // System-Message angehängt, wenn es tatsächlich Einträge gibt. Kein
+  // leerer „Was du über diesen User weißt:"-Header — das würde den
+  // Agenten ohne echten Inhalt nur verwirren.
+  const memoryBlock = await loadUserMemoryBlock(sb, user.id);
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const messages: any[] = [
     { role: "system", content: GLEV_CHAT_SYSTEM_PROMPT },
+    ...(memoryBlock ? [{ role: "system", content: memoryBlock }] : []),
     { role: "system", content: contextPreamble(contextSnapshot) },
     ...(history ?? []).map((m) => ({ role: m.role, content: m.content })),
     { role: "user", content: message },

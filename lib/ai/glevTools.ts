@@ -103,6 +103,30 @@ export const GLEV_TOOLS = [
       parameters: { type: "object", properties: {}, required: [] },
     },
   },
+  {
+    type: "function" as const,
+    function: {
+      name: "save_user_observation",
+      description:
+        "Speichert eine persönliche Beobachtung über den Nutzer dauerhaft als Key/Value, damit du sie in späteren Sessions ohne erneutes Nachfragen kennst. Nur aufrufen, wenn der Nutzer ein echtes, persönliches Muster, eine Reaktion oder eine Gewohnheit teilt (z. B. 'Bei mir wirkt Pizza erst nach 1,5 h', 'Mein Frühstück ist meistens Haferflocken mit Joghurt'). NICHT bei allgemeinen Wissensfragen, einmaligen Werten oder Small-Talk aufrufen. Key in snake_case, kurz und beschreibend (z. B. pizza_reaction, typical_breakfast, dawn_phenomenon). Beim erneuten Speichern desselben Keys wird der alte Value überschrieben.",
+      parameters: {
+        type: "object",
+        properties: {
+          key: {
+            type: "string",
+            description:
+              "Stabiler snake_case-Identifier für diese Beobachtung (max 64 Zeichen). Wähle Keys, die du auch bei zukünftigen Sessions für dasselbe Thema wiederverwenden würdest.",
+          },
+          value: {
+            type: "string",
+            description:
+              "Die Beobachtung in ein bis zwei Sätzen, formuliert wie eine Notiz an dich selbst (max 500 Zeichen).",
+          },
+        },
+        required: ["key", "value"],
+      },
+    },
+  },
 ];
 
 export type GlevToolName =
@@ -111,7 +135,8 @@ export type GlevToolName =
   | "get_meal_history"
   | "get_bolus_history"
   | "get_basal_status"
-  | "get_appointments";
+  | "get_appointments"
+  | "save_user_observation";
 
 // ── Executor ─────────────────────────────────────────────────────────
 
@@ -154,6 +179,8 @@ export async function executeGlevTool(
         return await toolGetBasalStatus(sb, userId, userTimezone);
       case "get_appointments":
         return await toolGetAppointments(sb, userId);
+      case "save_user_observation":
+        return await toolSaveUserObservation(sb, userId, args);
       default:
         return { error: `unknown tool: ${name}` };
     }
@@ -428,6 +455,57 @@ async function toolGetAppointments(
     note: (r.note as string | null) ?? null,
   }));
   return { count: appointments.length, appointments };
+}
+
+/**
+ * Upsert a personal observation about the user into `ai_user_memory`.
+ *
+ * Key/Value-Längenlimits sind bewusst eng (key ≤ 64, value ≤ 500), damit
+ * der Memory-Block beim späteren Injizieren in den System-Prompt nicht
+ * unbegrenzt wächst — der Prompt-Budget-Schutz lebt also schon hier am
+ * Eingang und nicht erst beim Load.
+ *
+ * Fehler werden als `{ ok: false, error }` zurückgegeben (kein throw),
+ * damit Mistral gracefully reagieren kann („Konnte mir das gerade nicht
+ * merken").
+ */
+async function toolSaveUserObservation(
+  sb: SupabaseClient,
+  userId: string,
+  args: Record<string, unknown>,
+): Promise<unknown> {
+  const rawKey = typeof args.key === "string" ? args.key.trim() : "";
+  const rawValue = typeof args.value === "string" ? args.value.trim() : "";
+
+  if (!rawKey) {
+    return { ok: false, error: "key is required (non-empty string)." };
+  }
+  if (!rawValue) {
+    return { ok: false, error: "value is required (non-empty string)." };
+  }
+  if (rawKey.length > 64) {
+    return { ok: false, error: "key too long (max 64 chars)." };
+  }
+  if (rawValue.length > 500) {
+    return { ok: false, error: "value too long (max 500 chars)." };
+  }
+
+  const { error } = await sb
+    .from("ai_user_memory")
+    .upsert(
+      {
+        user_id: userId,
+        key: rawKey,
+        value: rawValue,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id,key" },
+    );
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+  return { ok: true, key: rawKey };
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
