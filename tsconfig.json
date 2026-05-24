@@ -41,6 +41,7 @@
     "lib",
     "scripts",
     "clean-app",
-    ".agents"
+    ".agents",
+    "supabase"
   ]
 }
