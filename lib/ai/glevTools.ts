@@ -131,6 +131,7 @@ export async function executeGlevTool(
   rawArgs: string,
   sb: SupabaseClient,
   userId: string,
+  userTimezone: string | null,
 ): Promise<unknown> {
   let args: Record<string, unknown> = {};
   try {
@@ -146,11 +147,11 @@ export async function executeGlevTool(
       case "get_active_iob":
         return await toolGetActiveIOB(sb, userId);
       case "get_meal_history":
-        return await toolGetMealHistory(sb, args);
+        return await toolGetMealHistory(sb, args, userTimezone);
       case "get_bolus_history":
-        return await toolGetBolusHistory(sb, args);
+        return await toolGetBolusHistory(sb, args, userTimezone);
       case "get_basal_status":
-        return await toolGetBasalStatus(sb, userId);
+        return await toolGetBasalStatus(sb, userId, userTimezone);
       case "get_appointments":
         return await toolGetAppointments(sb, userId);
       default:
@@ -250,6 +251,7 @@ async function toolGetActiveIOB(
 async function toolGetMealHistory(
   sb: SupabaseClient,
   args: Record<string, unknown>,
+  userTimezone: string | null,
 ): Promise<unknown> {
   const limit = clampLimit(args.limit, 5);
   const { data, error } = await sb
@@ -261,19 +263,26 @@ async function toolGetMealHistory(
     .limit(limit);
 
   if (error) return { error: error.message, meals: [] };
-  const meals = (data ?? []).map((m) => ({
-    id: m.id as string,
-    description: resolveMealDescription(
-      m.input_text as string | null,
-      m.parsed_json as Array<{ name?: string }> | null,
-    ),
-    carbs: m.carbs_grams as number | null,
-    protein: m.protein_grams as number | null,
-    fat: m.fat_grams as number | null,
-    mealType: m.meal_type as string | null,
-    insulinUnits: m.insulin_units as number | null,
-    at: (m.meal_time as string | null) ?? (m.created_at as string),
-  }));
+  const meals = (data ?? []).map((m) => {
+    const atIso = (m.meal_time as string | null) ?? (m.created_at as string);
+    const atMs = new Date(atIso).getTime();
+    return {
+      id: m.id as string,
+      description: resolveMealDescription(
+        m.input_text as string | null,
+        m.parsed_json as Array<{ name?: string }> | null,
+      ),
+      carbs: m.carbs_grams as number | null,
+      protein: m.protein_grams as number | null,
+      fat: m.fat_grams as number | null,
+      mealType: m.meal_type as string | null,
+      insulinUnits: m.insulin_units as number | null,
+      // Lokal formatierter String — Mistral zeigt diesen direkt dem User.
+      // Meal-Einträge können mehrere Tage alt sein, daher dateTime statt
+      // nur Uhrzeit.
+      at: formatInUserTimezone(atMs, userTimezone).dateTime,
+    };
+  });
   return { count: meals.length, meals };
 }
 
@@ -313,6 +322,7 @@ function resolveMealDescription(
 async function toolGetBolusHistory(
   sb: SupabaseClient,
   args: Record<string, unknown>,
+  userTimezone: string | null,
 ): Promise<unknown> {
   const limit = clampLimit(args.limit, 5);
   const { data, error } = await sb
@@ -323,26 +333,32 @@ async function toolGetBolusHistory(
     .limit(limit);
 
   if (error) return { error: error.message, boluses: [] };
-  const boluses = (data ?? []).map((r) => ({
-    id: r.id as string,
-    units: r.units as number,
-    name: (r.insulin_name as string | null) ?? "Bolus",
-    at: r.created_at as string,
-    note: (r.notes as string | null) ?? null,
-  }));
+  const boluses = (data ?? []).map((r) => {
+    const atMs = new Date(r.created_at as string).getTime();
+    return {
+      id: r.id as string,
+      units: r.units as number,
+      name: (r.insulin_name as string | null) ?? "Bolus",
+      // Lokal formatierter String (Device-TZ); kann Tage alt sein
+      // → dateTime statt nur Uhrzeit.
+      at: formatInUserTimezone(atMs, userTimezone).dateTime,
+      note: (r.notes as string | null) ?? null,
+    };
+  });
   return { count: boluses.length, boluses };
 }
 
 async function toolGetBasalStatus(
   sb: SupabaseClient,
   userId: string,
+  userTimezone: string | null,
 ): Promise<unknown> {
   // Look back 72 h — covers the longest plausible basal interval
   // (Tresiba is once-daily, Lantus split is usually 12 h, but
   // missed doses or shift workers can stretch beyond 24 h).
   const sinceIso = new Date(Date.now() - 72 * 60 * 60_000).toISOString();
 
-  const [lastBasalRes, settingsRes, profileRes] = await Promise.all([
+  const [lastBasalRes, settingsRes] = await Promise.all([
     sb
       .from("insulin_logs")
       .select("id, units, insulin_name, created_at, notes")
@@ -357,19 +373,12 @@ async function toolGetBasalStatus(
       .select("insulin_brand_basal, basal_action_window_h")
       .eq("user_id", userId)
       .maybeSingle(),
-    sb
-      .from("profiles")
-      .select("timezone")
-      .eq("id", userId)
-      .maybeSingle(),
   ]);
 
   const configuredBrand =
     (settingsRes.data?.insulin_brand_basal as string | null) ?? null;
   const actionWindowH =
     (settingsRes.data?.basal_action_window_h as number | null) ?? null;
-  const userTimezone =
-    (profileRes.data?.timezone as string | null | undefined) ?? null;
 
   const last = lastBasalRes.data;
   if (!last) {
@@ -377,7 +386,6 @@ async function toolGetBasalStatus(
       available: false,
       configuredBrand,
       actionWindowHours: actionWindowH,
-      timezone: userTimezone ?? "UTC",
       hint: "Keine Basal-Dosis in den letzten 72 h gefunden.",
     };
   }
@@ -391,16 +399,15 @@ async function toolGetBasalStatus(
     lastDose: {
       units: last.units as number,
       name: (last.insulin_name as string | null) ?? configuredBrand ?? "Basal",
-      at: last.created_at as string,
+      // Lokal formatierte Strings (Berlin-Default) — direkt anzeigbar.
+      // Kein roher UTC-ISO mehr, kein timezone-Suffix.
+      at: formatted.dateTime,
       localTime: formatted.timeOnly,
-      localDateTime: formatted.dateTime,
-      timezone: formatted.zoneLabel,
       hoursSince: Math.round(hoursSince * 10) / 10,
       note: (last.notes as string | null) ?? null,
     },
     configuredBrand,
     actionWindowHours: actionWindowH,
-    timezone: formatted.zoneLabel,
   };
 }
 
@@ -432,23 +439,31 @@ function clampLimit(raw: unknown, fallback: number): number {
 }
 
 /**
- * Format a UTC timestamp in the user's timezone for AI consumption.
- * Returns three views so Mistral can pick the right one for the answer:
- *  - `timeOnly`  e.g. "21:02"           → for same-day phrasing
- *  - `dateTime`  e.g. "23.05. 21:02"    → for cross-day phrasing
- *  - `zoneLabel` e.g. "Europe/Berlin" or "UTC" if no profile timezone
+ * Format a UTC timestamp in the user's local timezone, ready for direct
+ * AI/user display. Returns two views so Mistral can pick the right one
+ * for the answer:
+ *  - `timeOnly`  e.g. "23:02 Uhr"           → for same-day phrasing
+ *  - `dateTime`  e.g. "23.05., 23:02 Uhr"   → for cross-day phrasing
  *
- * Fallback: if `userTimezone` is null/invalid, formats in UTC and labels
- * the zone explicitly as "UTC" so the AI never silently shows a wrong-tz
- * value as if it were local.
+ * `userTimezone` kommt vom Client (Intl.DateTimeFormat().resolvedOptions()
+ * .timeZone) bei jeder Anfrage frisch mit — single source of truth, weil
+ * Nutzer reisen und ein DB-gespeicherter Wert dann veraltet ist.
+ * Fallback `Europe/Berlin` greift nur, wenn der Client nichts schickt
+ * oder der String keine gültige IANA-TZ ist (Primärzielgruppe ist
+ * deutschsprachig, kein unerwarteter UTC-Shift im Chat).
+ * Kein `zoneLabel` mehr im Output — Mistral soll die Uhrzeit ohne
+ * Zeitzonen-Suffix zeigen (die App selbst rechnet ja auch in Lokalzeit).
  */
 function formatInUserTimezone(
   atMs: number,
   userTimezone: string | null,
-): { timeOnly: string; dateTime: string; zoneLabel: string } {
-  const tz = userTimezone && isValidTimezone(userTimezone) ? userTimezone : "UTC";
+): { timeOnly: string; dateTime: string } {
+  const tz =
+    userTimezone && isValidTimezone(userTimezone)
+      ? userTimezone
+      : "Europe/Berlin";
   const d = new Date(atMs);
-  const timeOnly = d.toLocaleTimeString("de-DE", {
+  const hhmm = d.toLocaleTimeString("de-DE", {
     timeZone: tz,
     hour: "2-digit",
     minute: "2-digit",
@@ -459,9 +474,8 @@ function formatInUserTimezone(
     month: "2-digit",
   });
   return {
-    timeOnly,
-    dateTime: `${datePart} ${timeOnly}`,
-    zoneLabel: tz,
+    timeOnly: `${hhmm} Uhr`,
+    dateTime: `${datePart}, ${hhmm} Uhr`,
   };
 }
 

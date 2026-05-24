@@ -286,6 +286,15 @@ export function useGlevAI(opts?: { contextSnapshot?: ContextSnapshot }) {
             message: trimmed,
             history: apiHistory,
             contextSnapshot: opts?.contextSnapshot ?? DUMMY_CONTEXT,
+            // Device-local IANA timezone — single source of truth for
+            // alle Zeit-Formatierungen in den AI-Tools. Wir trauen dem
+            // Profil-Feld bewusst nicht, weil Nutzer reisen und das
+            // gespeicherte Setting dann veraltet ist. Fallback auf
+            // Europe/Berlin im Server, falls Intl mal kein TZ liefert.
+            timezone:
+              (typeof Intl !== "undefined" &&
+                Intl.DateTimeFormat().resolvedOptions().timeZone) ||
+              null,
           }),
         });
         if (!res.ok || !res.body) {

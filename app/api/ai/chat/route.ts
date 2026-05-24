@@ -104,6 +104,11 @@ type ChatBody = {
   conversationId?: string;
   history?: ChatMessage[];
   contextSnapshot: ContextSnapshot;
+  // IANA-Zeitzone des Geräts (z. B. "Europe/Berlin"). Wird vom Client
+  // bei jeder Anfrage frisch aus Intl.DateTimeFormat ermittelt und
+  // unten an die Tools durchgereicht. Optional/null → Server-Default
+  // Europe/Berlin.
+  timezone?: string | null;
 };
 
 function validateBody(b: unknown): { ok: true; body: ChatBody } | { ok: false; error: string } {
@@ -144,6 +149,10 @@ function validateBody(b: unknown): { ok: true; body: ChatBody } | { ok: false; e
         iobSummary: ctx.iobSummary,
         lastMealDescription: ctx.lastMealDescription,
       },
+      timezone:
+        typeof o.timezone === "string" && o.timezone.trim().length > 0
+          ? o.timezone.trim()
+          : null,
     },
   };
 }
@@ -193,6 +202,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: v.error }, { status: 400 });
   }
   const { message, history, contextSnapshot } = v.body;
+  const timezone: string | null = v.body.timezone ?? null;
 
   // 5. Mistral client
   let client;
@@ -275,6 +285,7 @@ export async function POST(req: NextRequest) {
               rawArgs,
               sb,
               user.id,
+              timezone,
             );
             messages.push({
               role: "tool",
