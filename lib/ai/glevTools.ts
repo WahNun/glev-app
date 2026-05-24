@@ -223,6 +223,40 @@ export const GLEV_TOOLS = [
   {
     type: "function" as const,
     function: {
+      name: "add_timeline_check",
+      description:
+        "Schlägt das Anlegen eines Post-Bolus-Checkpunkts für eine Mahlzeit vor (meal_timeline_checks). WICHTIG: schreibt NICHT direkt — Bestätigung per UI-Button. Nur aufrufen, wenn der Nutzer explizit einen Erinnerungszeitpunkt für eine bestimmte Mahlzeit plant ('erinner mich in 90 Minuten', 'setz Post-Check für die Pasta auf 14:30'). Die meal_id MUSS aus einem vorherigen get_meal_history-Ergebnis stammen — niemals raten oder erfinden. planned_at als ISO-8601-Datetime (z. B. '2026-05-24T14:30:00') — relative Angaben ('in 90 Minuten') auf die absolute Zeit umrechnen, heutiges Datum + Uhrzeit stehen im Kontext-Preamble.",
+      parameters: {
+        type: "object",
+        properties: {
+          meal_id: {
+            type: "string",
+            description:
+              "UUID der Mahlzeit, für die der Check geplant wird. Muss aus get_meal_history stammen — niemals raten.",
+          },
+          meal_label: {
+            type: "string",
+            description:
+              "Kurze Beschreibung der Mahlzeit für die Bestätigungs-Zusammenfassung (z. B. 'Pasta Bolognese'). Max 80 Zeichen.",
+          },
+          check_type: {
+            type: "string",
+            description:
+              "Art des Checks: 'pre' für Prä-Bolus, 'post_1' für erster Post-Bolus-Check, 'post_2' für zweiten usw. Format: 'pre' oder 'post_N' (N = positive Ganzzahl).",
+          },
+          planned_at: {
+            type: "string",
+            description:
+              "Geplanter Checkzeitpunkt als ISO-8601-Datetime (z. B. '2026-05-24T14:30:00'). Relative Angaben immer in absoluten Zeitpunkt umrechnen.",
+          },
+        },
+        required: ["meal_id", "check_type", "planned_at"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "save_user_observation",
       description:
         "Speichert eine persönliche Beobachtung über den Nutzer dauerhaft als Key/Value, damit du sie in späteren Sessions ohne erneutes Nachfragen kennst. Nur aufrufen, wenn der Nutzer ein echtes, persönliches Muster, eine Reaktion oder eine Gewohnheit teilt (z. B. 'Bei mir wirkt Pizza erst nach 1,5 h', 'Mein Frühstück ist meistens Haferflocken mit Joghurt'). NICHT bei allgemeinen Wissensfragen, einmaligen Werten oder Small-Talk aufrufen. Key in snake_case, kurz und beschreibend (z. B. pizza_reaction, typical_breakfast, dawn_phenomenon). Beim erneuten Speichern desselben Keys wird der alte Value überschrieben.",
@@ -257,7 +291,8 @@ export type GlevToolName =
   | "log_meal_entry"
   | "log_bolus_entry"
   | "log_fingerstick"
-  | "add_appointment";
+  | "add_appointment"
+  | "add_timeline_check";
 
 /**
  * Marker shape returned by every WRITE-tool. The chat-route handler
@@ -338,6 +373,8 @@ export async function executeGlevTool(
         return await toolLogFingerstick(sb, userId, args);
       case "add_appointment":
         return await toolAddAppointment(sb, userId, args);
+      case "add_timeline_check":
+        return await toolAddTimelineCheck(sb, userId, args, userTimezone);
       default:
         return { error: `unknown tool: ${name}` };
     }
@@ -800,6 +837,56 @@ async function toolLogFingerstick(
   const summary = `Fingerstick: ${Math.round(value)} mg/dL${notes ? ` (${notes})` : ""}`;
 
   return await createPendingAction(sb, userId, "log_fingerstick", params, summary);
+}
+
+async function toolAddTimelineCheck(
+  sb: SupabaseClient,
+  userId: string,
+  args: Record<string, unknown>,
+  userTimezone: string | null,
+): Promise<unknown> {
+  const mealId = typeof args.meal_id === "string" ? args.meal_id.trim() : "";
+  if (!mealId) return { error: "meal_id fehlt — muss aus get_meal_history stammen" };
+
+  const checkType = typeof args.check_type === "string" ? args.check_type.trim() : "";
+  if (!/^(pre|post_\d+)$/.test(checkType)) {
+    return { error: "check_type ungültig — erwartet 'pre' oder 'post_N' (z. B. 'post_1')" };
+  }
+
+  const plannedAtRaw = typeof args.planned_at === "string" ? args.planned_at.trim() : "";
+  if (!plannedAtRaw) return { error: "planned_at fehlt (ISO-Datetime erwartet)" };
+  const plannedMs = new Date(plannedAtRaw).getTime();
+  if (!Number.isFinite(plannedMs)) {
+    return { error: "planned_at ist kein gültiger Zeitpunkt (ISO-Datetime erwartet)" };
+  }
+
+  const mealLabel =
+    typeof args.meal_label === "string" && args.meal_label.trim()
+      ? args.meal_label.trim().slice(0, 80)
+      : "Mahlzeit";
+
+  // Verify the meal actually belongs to this user (RLS on SELECT confirms ownership).
+  const { data: mealRow, error: mealErr } = await sb
+    .from("meals")
+    .select("id")
+    .eq("id", mealId)
+    .maybeSingle();
+  if (mealErr || !mealRow) {
+    return { error: "Mahlzeit nicht gefunden — meal_id muss aus get_meal_history stammen" };
+  }
+
+  const formatted = formatInUserTimezone(plannedMs, userTimezone);
+  const typeLabel = checkType === "pre" ? "Prä-Check" : `Post-Check (${checkType.replace("_", " ")})`;
+  const summary = `${typeLabel} für „${mealLabel}" um ${formatted.timeOnly} anlegen`;
+
+  const params = {
+    meal_id: mealId,
+    meal_label: mealLabel,
+    check_type: checkType,
+    planned_at: new Date(plannedMs).toISOString(),
+  };
+
+  return await createPendingAction(sb, userId, "add_timeline_check", params, summary);
 }
 
 async function toolAddAppointment(

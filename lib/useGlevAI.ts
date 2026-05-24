@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { scheduleCheckReminder } from "@/lib/mealCheckReminders";
 
 /**
  * useGlevAI — owns everything the Glev AI button + consent modal +
@@ -494,6 +495,26 @@ export function useGlevAI(opts?: { contextSnapshot?: ContextSnapshot }) {
             : m,
         ),
       );
+      // For add_timeline_check: arm a local OS reminder. Best-effort —
+      // a failed schedule must never block the confirmation success state.
+      const sr = body?.scheduleReminder;
+      if (
+        body?.kind === "add_timeline_check" &&
+        sr &&
+        typeof sr.mealId === "string" &&
+        typeof sr.checkType === "string" &&
+        typeof sr.plannedAt === "string" &&
+        typeof sr.title === "string" &&
+        typeof sr.body === "string"
+      ) {
+        scheduleCheckReminder({
+          mealId: sr.mealId,
+          checkType: sr.checkType,
+          plannedAt: sr.plannedAt,
+          title: sr.title,
+          body: sr.body,
+        }).catch(() => {});
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Speichern fehlgeschlagen";
       setMessages((prev) =>

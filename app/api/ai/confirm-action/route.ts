@@ -150,6 +150,8 @@ async function executeConfirmedAction(
       return await execLogFingerstick(sb, userId, params);
     case "add_appointment":
       return await execAddAppointment(sb, userId, params);
+    case "add_timeline_check":
+      return await execAddTimelineCheck(sb, userId, params);
     default:
       throw new Error(`unknown action kind: ${kind}`);
   }
@@ -288,4 +290,104 @@ async function execAddAppointment(
     .single();
   if (error) throw new Error(error.message);
   return { insertedId: data?.id as string | undefined };
+}
+
+type TimelineCheckResult = {
+  insertedId?: string;
+  scheduleReminder?: {
+    mealId: string;
+    checkType: string;
+    plannedAt: string;
+    title: string;
+    body: string;
+  };
+};
+
+async function execAddTimelineCheck(
+  sb: SupabaseClient,
+  userId: string,
+  p: Record<string, unknown>,
+): Promise<TimelineCheckResult> {
+  const mealId = typeof p.meal_id === "string" ? p.meal_id.trim() : "";
+  const checkType = typeof p.check_type === "string" ? p.check_type.trim() : "";
+  const plannedAt = typeof p.planned_at === "string" ? p.planned_at.trim() : "";
+  const mealLabel =
+    typeof p.meal_label === "string" && p.meal_label.trim()
+      ? p.meal_label.trim()
+      : "Mahlzeit";
+
+  if (!mealId) throw new Error("meal_id fehlt");
+  if (!/^(pre|post_\d+)$/.test(checkType)) {
+    throw new Error("check_type ungültig — erwartet 'pre' oder 'post_N'");
+  }
+  const plannedMs = new Date(plannedAt).getTime();
+  if (!Number.isFinite(plannedMs)) {
+    throw new Error("planned_at ist kein gültiger Zeitpunkt");
+  }
+
+  const nowIso = new Date().toISOString();
+
+  // Upsert: select-then-update-or-insert (no DB-level unique constraint).
+  const { data: existingRows, error: selErr } = await sb
+    .from("meal_timeline_checks")
+    .select("id")
+    .eq("meal_id", mealId)
+    .eq("check_type", checkType)
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (selErr) throw new Error(selErr.message);
+
+  const existing =
+    existingRows && existingRows.length > 0
+      ? (existingRows[0] as { id: string })
+      : null;
+
+  let insertedId: string | undefined;
+
+  if (existing) {
+    const { data, error } = await sb
+      .from("meal_timeline_checks")
+      .update({ planned_at: plannedAt, confirmed_at: nowIso })
+      .eq("id", existing.id)
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    insertedId = (data as { id: string } | null)?.id;
+  } else {
+    const { data, error } = await sb
+      .from("meal_timeline_checks")
+      .insert({
+        user_id: userId,
+        meal_id: mealId,
+        check_type: checkType,
+        planned_at: plannedAt,
+        confirmed_at: nowIso,
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    insertedId = (data as { id: string } | null)?.id;
+  }
+
+  // Build the reminder payload so the client can schedule a local OS notification.
+  // scheduleCheckReminder is client-side only (Capacitor / Notification API);
+  // the server returns this data and the client calls the function after confirming.
+  const typeLabel =
+    checkType === "pre" ? "Prä-Bolus-Check" : "Post-Bolus-Check";
+  const timeStr = new Date(plannedAt).toLocaleTimeString("de-DE", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  return {
+    insertedId,
+    scheduleReminder: {
+      mealId,
+      checkType,
+      plannedAt,
+      title: `Glev: ${typeLabel}`,
+      body: `BZ-Check für „${mealLabel}" — ${timeStr} Uhr`,
+    },
+  };
 }
