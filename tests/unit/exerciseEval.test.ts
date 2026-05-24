@@ -268,7 +268,7 @@ test("personalPatternHeadline() prefers the +1h median over the at-end median wh
   const stats = aggregateExerciseTypeStats(logs, "run")!;
   expect(stats.medianDeltaAtEnd).toBe(-20);
   expect(stats.medianDelta1h).toBe(-50);
-  const headline = personalPatternHeadline(stats);
+  const headline = personalPatternHeadline(stats, "en");
   expect(headline).not.toBeNull();
   // Picks the +1h delta value, not the at-end one.
   expect(headline).toContain("~50");
@@ -284,7 +284,7 @@ test("personalPatternHeadline() uses the 'roughly unchanged' copy when the media
   ];
   const stats = aggregateExerciseTypeStats(logs, "yoga")!;
   expect(stats.medianDelta1h).toBe(1);
-  const headline = personalPatternHeadline(stats);
+  const headline = personalPatternHeadline(stats, "en");
   expect(headline).not.toBeNull();
   expect(headline).toMatch(/roughly unchanged/i);
 });
@@ -298,7 +298,7 @@ test("personalPatternHeadline() falls back to the at-end median when no +1h read
   const stats = aggregateExerciseTypeStats(logs, "hiit")!;
   expect(stats.medianDelta1h).toBeNull();
   expect(stats.medianDeltaAtEnd).toBe(45);
-  const headline = personalPatternHeadline(stats);
+  const headline = personalPatternHeadline(stats, "en");
   expect(headline).not.toBeNull();
   expect(headline).toContain("~45");
   expect(headline).toContain("raise");
