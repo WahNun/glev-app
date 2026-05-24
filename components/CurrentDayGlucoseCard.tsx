@@ -696,7 +696,7 @@ function RollingChart({ readings, showMealNodes }: { readings: ChartPoint[]; sho
             .filter((l) => l.insulin_type === "bolus" && l.related_entry_id)
             .map((l) => l.related_entry_id as string),
         );
-        const cutoff = now - winSpan;
+        const cutoff = Date.now() - winSpan;
         const withBolus = meals.filter((m) => {
           const anchor = m.meal_time ?? m.created_at;
           if (!anchor) return false;
@@ -722,10 +722,11 @@ function RollingChart({ readings, showMealNodes }: { readings: ChartPoint[]; sho
       }
     })();
     return () => { cancelled = true; };
-    // winSpan / now change every minute via the parent's auto-refresh loop;
+    // winSpan changes when the chart window is recalculated;
     // reloadTick is bumped after a confirm-write so the dashed→solid flip
-    // is visible without a full page reload.
-  }, [showMealNodes, winSpan, now, reloadTick]);
+    // is visible without a full page reload. `now` intentionally omitted:
+    // Date.now() changes every ms and would cause an infinite render loop.
+  }, [showMealNodes, winSpan, reloadTick]);
 
   // Compute cluster placements (centerX, centerY with Y stagger for
   // overlapping meals). Y is interpolated to the nearest CGM point so
