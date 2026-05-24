@@ -48,6 +48,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useCardOrder } from "@/lib/cardOrder";
 import PagerIndicator from "@/components/PagerIndicator";
+import { useEngineHeader } from "@/lib/engineHeaderContext";
 
 // Four-cluster cockpit layout (replaces the earlier 5-cluster "widget
 // wall"). Order is intentionally staged: Glucose is the primary
@@ -535,6 +536,7 @@ export default function DashboardPage() {
   const dateLocale = localeToBcp47(useLocale());
   const t = useTranslations("dashboard");
   const tQuick = useTranslations("quickAdd");
+  const engineHdr = useEngineHeader();
   const [meals, setMeals]     = useState<Meal[]>([]);
   const [insulin, setInsulin] = useState<InsulinLog[]>([]);
   const [exercise, setExercise] = useState<ExerciseLog[]>([]);
@@ -666,7 +668,7 @@ export default function DashboardPage() {
       id: "glucose",
       title: t("cluster_glucose"),
       cards: [
-        { id: "today-glucose", node: <CurrentDayGlucoseCard/> },
+        { id: "today-glucose", node: <CurrentDayGlucoseCard showMealNodes={engineHdr.visible} /> },
         { id: "glucose-trend", node: <TrendChart meals={meals}/> },
       ],
     },

@@ -100,7 +100,7 @@ const CARD_STYLE_TAG = `
   }
 `;
 
-export default function CurrentDayGlucoseCard() {
+export default function CurrentDayGlucoseCard({ showMealNodes = false }: { showMealNodes?: boolean }) {
   const [s, setS] = useState<State>({ kind: "loading" });
   const [flipped, setFlipped] = useState(false);
 
@@ -270,6 +270,7 @@ export default function CurrentDayGlucoseCard() {
             state={s}
             onCgmRefresh={onCgmRefresh}
             flippable={s.kind === "ok"}
+            showMealNodes={showMealNodes}
           />
         </div>
 
@@ -313,11 +314,12 @@ export default function CurrentDayGlucoseCard() {
      │ −2h          −1h                  now        │
      └──────────────────────────────────────────────┘ */
 function HeroFront({
-  state, onCgmRefresh, flippable,
+  state, onCgmRefresh, flippable, showMealNodes,
 }: {
   state: State;
   onCgmRefresh: (r: CgmFetchResult) => void;
   flippable: boolean;
+  showMealNodes: boolean;
 }) {
   const ok  = state.kind === "ok";
   const cgm = ok ? state.cgm : [];
@@ -457,7 +459,7 @@ function HeroFront({
 
       {/* Chart fills remaining card height */}
       {ok && chartPoints.length > 0 ? (
-        <RollingChart readings={chartPoints} />
+        <RollingChart readings={chartPoints} showMealNodes={showMealNodes} />
       ) : (
         <div style={{ flex: 1 }} />
       )}
@@ -505,7 +507,7 @@ function computeDelta15m(
    -4h / now). Touch-revealed grid uses 2-hour vertical intervals for
    fine time orientation. Line + last-point color tracks
    `glucoseLineColor(last.v)`. */
-function RollingChart({ readings }: { readings: ChartPoint[] }) {
+function RollingChart({ readings, showMealNodes }: { readings: ChartPoint[]; showMealNodes: boolean }) {
   const t = useTranslations("insights");
   // User-saved TIR band drives the green "in-range" shaded rectangle
   // overlay and the Y-axis hint at top/bottom of the band so the chart
@@ -653,6 +655,11 @@ function RollingChart({ readings }: { readings: ChartPoint[] }) {
   const [checksByMeal, setChecksByMeal] = useState<ChecksByMeal>(new Map());
   const [reloadTick, setReloadTick] = useState(0);
   useEffect(() => {
+    if (!showMealNodes) {
+      setBolusMeals([]);
+      setChecksByMeal(new Map());
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -695,7 +702,7 @@ function RollingChart({ readings }: { readings: ChartPoint[] }) {
     // winSpan / now change every minute via the parent's auto-refresh loop;
     // reloadTick is bumped after a confirm-write so the dashed→solid flip
     // is visible without a full page reload.
-  }, [winSpan, now, reloadTick]);
+  }, [showMealNodes, winSpan, now, reloadTick]);
 
   // Compute cluster placements (centerX, centerY with Y stagger for
   // overlapping meals). Y is interpolated to the nearest CGM point so
