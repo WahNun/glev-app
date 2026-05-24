@@ -575,7 +575,10 @@ function RollingChart({ readings, showMealNodes }: { readings: ChartPoint[]; sho
   // right edge. This way, if the most recent reading is 7h old the
   // chart shows ~8h and the trace is visible; if data is fresh the
   // chart stays at the tighter 4h zoom.
-  const now = Date.now();
+  // Stable `now`: only recomputed when `readings` changes (new CGM data),
+  // NOT on every render. Putting Date.now() inline would make every useMemo
+  // and useEffect that depends on `now` re-run on every render → infinite loop.
+  const now = useMemo(() => Date.now(), [readings]);
   const MIN_WIN = 4  * 60 * 60 * 1000;
   // MAX 14h (was 12h). Gives the chart breathing room when the newest
   // CGM point sits right at the 12h boundary — at MAX=12h that point
