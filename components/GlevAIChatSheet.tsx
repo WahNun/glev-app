@@ -39,13 +39,11 @@ export default function GlevAIChatSheet({
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
 
-  // Auto-focus on open + scroll to bottom whenever a new message arrives.
-  useEffect(() => {
-    if (open) {
-      const t = window.setTimeout(() => inputRef.current?.focus(), 320);
-      return () => window.clearTimeout(t);
-    }
-  }, [open]);
+  // Bewusst KEIN Auto-Focus beim Öffnen: das Software-Keyboard würde
+  // sonst auf iOS/Android sofort die halbe Sheet-Höhe verschlucken und
+  // den Disclaimer/Input-Footer überdecken. Tastatur kommt erst wenn
+  // der User aktiv ins Input-Feld tippt. Siehe Fix Log 2026-05-24
+  // (Glev AI: Tastatur nicht beim Öffnen des AI-Chats automatisch).
 
   useEffect(() => {
     const el = scrollerRef.current;
