@@ -59,7 +59,7 @@ async function loadPlugin(): Promise<PushModule | null> {
 
 const TOKEN_STORAGE_KEY = "glev_push_token";
 
-function persistToken(token: string): void {
+function persistToken(token: string, platform: "ios" | "android"): void {
   try {
     if (isBrowser()) {
       window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
@@ -70,6 +70,50 @@ function persistToken(token: string): void {
   } catch {
     /* localStorage may be unavailable (private mode) — non-fatal. */
   }
+
+  // Persist to the server so the hypo-check Edge Function can send
+  // background pushes even when the app is closed. Fire-and-forget —
+  // a failed write is non-fatal; the next registration event will retry.
+  void saveTokenToServer(token, platform);
+}
+
+/**
+ * Sends the device push token to `PATCH /api/profile/push-token` so the
+ * server-side hypo-check Edge Function can reach the device even when the
+ * app is closed or backgrounded.
+ *
+ * Silently no-ops on web (where `platform` detection falls back to
+ * "android" but the call will simply receive a 400 from the server if
+ * no auth session is present — non-fatal).
+ */
+async function saveTokenToServer(
+  token: string,
+  platform: "ios" | "android",
+): Promise<void> {
+  if (!isBrowser()) return;
+  try {
+    await fetch("/api/profile/push-token", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, platform }),
+      credentials: "include",
+    });
+  } catch {
+    /* Network failure — non-fatal. Token is still in localStorage. */
+  }
+}
+
+/**
+ * Detects the current Capacitor platform ("ios" or "android").
+ * Returns "android" as a safe fallback on web.
+ */
+function detectPlatform(): "ios" | "android" {
+  if (!isBrowser()) return "android";
+  const w = window as unknown as {
+    Capacitor?: { getPlatform?: () => string };
+  };
+  const p = w.Capacitor?.getPlatform?.()?.toLowerCase();
+  return p === "ios" ? "ios" : "android";
 }
 
 /**
@@ -100,8 +144,9 @@ export async function initPushNotifications(): Promise<void> {
     // Listeners must be attached BEFORE register() so the very first
     // `registration` event (delivered synchronously on some Android
     // OEMs) is not lost.
+    const platform = detectPlatform();
     await PushNotifications.addListener("registration", (token) => {
-      if (token?.value) persistToken(token.value);
+      if (token?.value) persistToken(token.value, platform);
     });
 
     await PushNotifications.addListener("registrationError", () => {

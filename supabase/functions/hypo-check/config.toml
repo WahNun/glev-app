@@ -1,0 +1,14 @@
+[functions.hypo-check]
+# Run every 5 minutes — matches the local LowGlucoseAlarmTicker polling interval.
+# Cron syntax: minute hour day-of-month month day-of-week
+schedule = "*/5 * * * *"
+
+# Required secrets (set via Supabase Dashboard → Edge Functions → Secrets):
+#   FIREBASE_SERVER_KEY  — FCM server key for Android push
+#   APNS_KEY_P8          — APNs .p8 private key content (full PEM string)
+#   APNS_KEY_ID          — 10-char APNs key ID
+#   APNS_TEAM_ID         — 10-char Apple Team ID
+#   APNS_BUNDLE_ID       — iOS bundle ID (default: "app.glev.app")
+#
+# SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are injected automatically
+# by the Supabase runtime.
