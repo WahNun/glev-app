@@ -88,6 +88,15 @@ export const GLEV_TOOLS = [
   {
     type: "function" as const,
     function: {
+      name: "get_basal_status",
+      description:
+        "Aktueller Basal-Insulin-Status: letzte Basal-Dosis (IE, Marken-Name, Zeitpunkt, Stunden seither) sowie das in den Einstellungen hinterlegte Basal-Präparat. Nutze dies für Fragen wie 'wie hoch ist mein basal insulin', 'welches basal nehme ich' oder 'wann habe ich zuletzt basal gespritzt'. Anders als Bolus-IOB hat Basal ein langes, flaches Wirkprofil (Tresiba ~42 h, Lantus ~24 h) — nenne keine IOB-Zahl, sondern beschreibe die letzte Dosis.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "get_appointments",
       description:
         "Alle gespeicherten Arzttermine des Nutzers (neueste zuerst). Liefert leere Liste wenn nichts gespeichert ist.",
@@ -101,6 +110,7 @@ export type GlevToolName =
   | "get_active_iob"
   | "get_meal_history"
   | "get_bolus_history"
+  | "get_basal_status"
   | "get_appointments";
 
 // ── Executor ─────────────────────────────────────────────────────────
@@ -139,6 +149,8 @@ export async function executeGlevTool(
         return await toolGetMealHistory(sb, args);
       case "get_bolus_history":
         return await toolGetBolusHistory(sb, args);
+      case "get_basal_status":
+        return await toolGetBasalStatus(sb, userId);
       case "get_appointments":
         return await toolGetAppointments(sb, userId);
       default:
@@ -283,6 +295,64 @@ async function toolGetBolusHistory(
     note: (r.notes as string | null) ?? null,
   }));
   return { count: boluses.length, boluses };
+}
+
+async function toolGetBasalStatus(
+  sb: SupabaseClient,
+  userId: string,
+): Promise<unknown> {
+  // Look back 72 h — covers the longest plausible basal interval
+  // (Tresiba is once-daily, Lantus split is usually 12 h, but
+  // missed doses or shift workers can stretch beyond 24 h).
+  const sinceIso = new Date(Date.now() - 72 * 60 * 60_000).toISOString();
+
+  const [lastBasalRes, settingsRes] = await Promise.all([
+    sb
+      .from("insulin_logs")
+      .select("id, units, insulin_name, created_at, notes")
+      .eq("user_id", userId)
+      .eq("insulin_type", "basal")
+      .gte("created_at", sinceIso)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    sb
+      .from("user_settings")
+      .select("insulin_brand_basal, basal_action_window_h")
+      .eq("user_id", userId)
+      .maybeSingle(),
+  ]);
+
+  const configuredBrand =
+    (settingsRes.data?.insulin_brand_basal as string | null) ?? null;
+  const actionWindowH =
+    (settingsRes.data?.basal_action_window_h as number | null) ?? null;
+
+  const last = lastBasalRes.data;
+  if (!last) {
+    return {
+      available: false,
+      configuredBrand,
+      actionWindowHours: actionWindowH,
+      hint: "Keine Basal-Dosis in den letzten 72 h gefunden.",
+    };
+  }
+
+  const atMs = new Date(last.created_at as string).getTime();
+  const hoursSince = (Date.now() - atMs) / (60 * 60_000);
+
+  return {
+    available: true,
+    lastDose: {
+      units: last.units as number,
+      name: (last.insulin_name as string | null) ?? configuredBrand ?? "Basal",
+      at: last.created_at as string,
+      hoursSince: Math.round(hoursSince * 10) / 10,
+      note: (last.notes as string | null) ?? null,
+    },
+    configuredBrand,
+    actionWindowHours: actionWindowH,
+  };
 }
 
 async function toolGetAppointments(
