@@ -2,7 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { authedClient } from "@/app/api/insulin/_helpers";
 import { getMistralClient, mistralConfigError } from "@/lib/ai/mistralClient";
 import { GLEV_CHAT_SYSTEM_PROMPT } from "@/lib/ai/glevChatPrompt";
+import { GLEV_TOOLS, executeGlevTool } from "@/lib/ai/glevTools";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+
+// Maximum number of sequential tool-call rounds before we stop calling
+// Mistral with `tools` and force a streamed final answer. Two is enough
+// for any realistic chain ("get glucose + IOB + last meal") while
+// keeping a hard ceiling against accidental tool-loop runaways.
+const MAX_TOOL_ROUNDS = 2;
 
 /**
  * POST /api/ai/chat
@@ -197,19 +204,88 @@ export async function POST(req: NextRequest) {
   }
 
   // Compose messages: system + context preamble + last-10 history + new turn.
-  const messages = [
-    { role: "system" as const, content: GLEV_CHAT_SYSTEM_PROMPT },
-    { role: "system" as const, content: contextPreamble(contextSnapshot) },
+  // Typed loosely as `any[]` because the Mistral SDK's message-union type
+  // is awkward to reproduce inline (tool replies vs assistant tool_calls
+  // vs plain user/assistant turns) and we treat the array as an opaque
+  // protocol buffer that only Mistral itself needs to validate.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const messages: any[] = [
+    { role: "system", content: GLEV_CHAT_SYSTEM_PROMPT },
+    { role: "system", content: contextPreamble(contextSnapshot) },
     ...(history ?? []).map((m) => ({ role: m.role, content: m.content })),
-    { role: "user" as const, content: message },
+    { role: "user", content: message },
   ];
 
-  // 6. Stream
+  // 6. Tool-call loop + final stream.
+  //
+  // Mistral's tool-calling protocol is two-phase: first a non-streaming
+  // `chat.complete` with `tools` lets the model emit `tool_calls`; we
+  // execute them server-side, append the results as `role: "tool"`
+  // messages, and re-call. Once the model returns text-only (no more
+  // tool_calls) — or we hit MAX_TOOL_ROUNDS — we switch to
+  // `chat.stream` for the final, user-visible answer.
+  //
+  // This keeps the streaming UX intact (tokens still arrive live) while
+  // adding the read-only tool layer (Phase 3 / Task 1). Write-tools
+  // come in Task 2 behind a UI-confirmation gate.
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
       const send = (line: string) => controller.enqueue(encoder.encode(`data: ${line}\n\n`));
       try {
+        // ── Phase 1: resolve any tool calls ─────────────────────────
+        for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+          const completion = await client.chat.complete({
+            model: "mistral-small-latest",
+            maxTokens: 300,
+            temperature: 0.4,
+            messages,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            tools: GLEV_TOOLS as any,
+            toolChoice: "auto",
+          });
+
+          const choice = completion?.choices?.[0];
+          const toolCalls = choice?.message?.toolCalls ?? [];
+          if (!toolCalls.length) {
+            // No tool requested → no more rounds needed. We fall
+            // through to the streaming call below, which will produce
+            // the same answer (Mistral is deterministic enough at
+            // temp 0.4 + identical messages) but stream it.
+            break;
+          }
+
+          // Append the assistant turn that requested the tool calls,
+          // then run each tool and append its result. The SDK requires
+          // the assistant message to be present before the tool reply.
+          messages.push({
+            role: "assistant",
+            content: choice?.message?.content ?? "",
+            toolCalls,
+          });
+
+          for (const call of toolCalls) {
+            const fn = call.function;
+            const rawArgs =
+              typeof fn?.arguments === "string"
+                ? fn.arguments
+                : JSON.stringify(fn?.arguments ?? {});
+            const result = await executeGlevTool(
+              fn?.name ?? "",
+              rawArgs,
+              sb,
+              user.id,
+            );
+            messages.push({
+              role: "tool",
+              name: fn?.name ?? "",
+              toolCallId: call.id,
+              content: JSON.stringify(result),
+            });
+          }
+        }
+
+        // ── Phase 2: stream the final answer ────────────────────────
         const result = await client.chat.stream({
           model: "mistral-small-latest",
           maxTokens: 300,
