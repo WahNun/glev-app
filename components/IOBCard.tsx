@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useTranslations } from "next-intl";
-import { calcTotalIOB, calcSingleIOB, getDIAMinutes, buildDoses, calcBasalRemaining, resolveBolusTypeLabel, resolveBasalTypeLabel, calcSparklineWindow, type BolusDose, type InsulinType } from "@/lib/iob";
+import { calcTotalIOB, calcSingleIOB, getDIAMinutes, buildDoses, calcBasalRemaining, resolveBolusTypeLabel, resolveBasalTypeLabel, type BolusDose, type InsulinType } from "@/lib/iob";
 import { getInsulinSettings } from "@/lib/userSettings";
 import { DEFAULT_BASAL_WINDOW_H } from "@/lib/engine/constants";
 import type { InsulinLog } from "@/lib/insulin";
@@ -55,84 +55,6 @@ function CircleGauge({ iob, color, cleared, fraction }: {
   );
 }
 
-/** Parabolic decay sparkline covering all active doses combined.
- *  Gray = elapsed portion, coloured = remaining, dashed line = now. */
-function IOBSparkline({
-  doses, diaMin, now, color, cleared,
-}: {
-  doses: BolusDose[];
-  diaMin: number;
-  now: number;
-  color: string;
-  cleared: boolean;
-}) {
-  const W = 220, H = 48, PAD = 4;
-  const STEPS = 80;
-
-  if (doses.length === 0) {
-    return (
-      <div style={{ height: H, background: "var(--surface-soft)", borderRadius: 8, opacity: 0.5 }} />
-    );
-  }
-
-  // Only include doses that haven't fully cleared yet at `now`.
-  // This prevents an early-morning dose from stretching the X-axis so far
-  // that a later dose becomes invisible (1–2 px wide).
-  // If everything has cleared (e.g. the card is in "cleared" state), fall back
-  // to all doses so the full decay curve is still visible.
-  const { earliestMs, totalDurationMs } = calcSparklineWindow(doses, diaMin, now);
-
-  const maxIOB = doses.reduce((s, d) => s + d.units, 0);
-
-  const rawPts = Array.from({ length: STEPS + 1 }, (_, i) => {
-    const tMs     = earliestMs + (i / STEPS) * totalDurationMs;
-    const iobAtT  = doses.reduce((s, d) => s + calcSingleIOB(d, tMs, diaMin), 0);
-    const ratio   = maxIOB > 0 ? Math.max(0, Math.min(1, iobAtT / maxIOB)) : 0;
-    const x       = (i / STEPS) * W;
-    const y       = PAD + (1 - ratio) * (H - PAD * 2);
-    return { x, y };
-  });
-
-  const pts   = rawPts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
-  const nowX  = Math.max(0, Math.min(W, ((now - earliestMs) / totalDurationMs) * W));
-  const uid   = `iob-card-${Math.round(earliestMs / 1000)}`;
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: "block", overflow: "visible" }}>
-      <defs>
-        <clipPath id={`${uid}-future`}>
-          <rect x={nowX} y="0" width={W - nowX} height={H} />
-        </clipPath>
-      </defs>
-      <polyline
-        points={pts}
-        fill="none"
-        stroke="var(--text-ghost)"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        opacity="0.35"
-      />
-      {!cleared && (
-        <polyline
-          points={pts}
-          fill="none"
-          stroke={color}
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          clipPath={`url(#${uid}-future)`}
-        />
-      )}
-      {!cleared && (
-        <line
-          x1={nowX} y1={PAD - 2} x2={nowX} y2={H - PAD + 2}
-          stroke={color} strokeWidth="1.5" strokeDasharray="3 2" opacity="0.8"
-        />
-      )}
-    </svg>
-  );
-}
 
 interface Props {
   insulin: InsulinLog[];
@@ -589,32 +511,75 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
             padding: "14px 16px 14px",
             display: "flex",
             flexDirection: "column",
-            gap: 9,
+            gap: 11,
           }}
         >
-          {/* detail header */}
+          {/* Section header */}
           <div style={{
             fontSize: 11,
             color: cleared ? "var(--text-dim)" : color,
             letterSpacing: "0.1em", fontWeight: 700,
           }}>
-            {t("iob_back_title").toUpperCase()}
+            {t("iob_basal_coverage_title").toUpperCase()}
           </div>
 
-          {/* decay sparkline */}
-          <IOBSparkline
-            doses={doses}
-            diaMin={diaMin}
-            now={now}
-            color={color}
-            cleared={cleared}
-          />
+          {/* Coverage bar — same layout as basal */}
+          {!cleared && clearsInMin > 0 ? (() => {
+            const bolusElapsedMin = diaMin - clearsInMin;
+            const elapsedPct = Math.min(100, Math.max(0, (bolusElapsedMin / diaMin) * 100));
+            const elapsedH = Math.floor(bolusElapsedMin / 60);
+            const elapsedM = bolusElapsedMin % 60;
+            const clearsInH = Math.floor(clearsInMin / 60);
+            const clearsInMRem = clearsInMin % 60;
+            return (
+              <>
+                <div style={{ position: "relative", height: 10, borderRadius: 99, background: "var(--surface-soft)", overflow: "visible" }}>
+                  {/* elapsed portion */}
+                  <div style={{
+                    position: "absolute", left: 0, top: 0, bottom: 0,
+                    width: `${elapsedPct}%`,
+                    background: `${color}28`,
+                    borderRadius: 99,
+                  }} />
+                  {/* remaining portion */}
+                  <div style={{
+                    position: "absolute", right: 0, top: 0, bottom: 0,
+                    width: `${100 - elapsedPct}%`,
+                    background: `${color}70`,
+                    borderRadius: 99,
+                  }} />
+                  {/* current-position needle */}
+                  <div style={{
+                    position: "absolute", top: -3, bottom: -3,
+                    left: `${elapsedPct}%`,
+                    width: 3,
+                    background: color,
+                    borderRadius: 2,
+                    transform: "translateX(-50%)",
+                    boxShadow: `0 0 6px ${color}99`,
+                  }} />
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+                  <span style={{ color: "var(--text-dim)" }}>
+                    vor {elapsedH}h {elapsedM}min
+                  </span>
+                  <span style={{ color, fontWeight: 600 }}>
+                    ~{clearsInH > 0 ? `${clearsInH}h ${clearsInMRem}min` : `${clearsInMin}min`} {t("iob_basal_remaining")}
+                  </span>
+                </div>
+              </>
+            );
+          })() : (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <span style={{ fontSize: 12, color: "var(--text-ghost)" }}>
+                {t("iob_no_active_doses")}
+              </span>
+            </div>
+          )}
 
-          {/* active dose list */}
-          {activeDoses.length > 0 ? (
-            <div style={{
-              display: "flex", flexDirection: "column", gap: 5,
-            }}>
+          {/* Active dose list */}
+          {activeDoses.length > 0 && (
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: 9, display: "flex", flexDirection: "column", gap: 5 }}>
               {activeDoses
                 .slice()
                 .sort((a, b) =>
@@ -657,62 +622,7 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
                   );
                 })}
             </div>
-          ) : (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <span style={{ fontSize: 12, color: "var(--text-ghost)" }}>
-                {t("iob_no_active_doses")}
-              </span>
-            </div>
           )}
-
-          {/* Bolus Wirkdauer bar — shown when at least one dose is still active */}
-          {!cleared && clearsInMin > 0 && (() => {
-            const bolusElapsedMin = diaMin - clearsInMin;
-            const elapsedPct = Math.min(100, Math.max(0, (bolusElapsedMin / diaMin) * 100));
-            const elapsedH = Math.floor(bolusElapsedMin / 60);
-            const elapsedM = bolusElapsedMin % 60;
-            return (
-              <div style={{ borderTop: "1px solid var(--border)", padding: "14px 16px 14px", display: "flex", flexDirection: "column", gap: 11 }}>
-                <div style={{ fontSize: 11, color, letterSpacing: "0.1em", fontWeight: 700 }}>
-                  {t("iob_basal_coverage_title").toUpperCase()}
-                </div>
-                <div style={{ position: "relative", height: 10, borderRadius: 99, background: "var(--surface-soft)", overflow: "visible" }}>
-                  {/* elapsed portion */}
-                  <div style={{
-                    position: "absolute", left: 0, top: 0, bottom: 0,
-                    width: `${elapsedPct}%`,
-                    background: `${color}28`,
-                    borderRadius: 99,
-                  }} />
-                  {/* remaining portion */}
-                  <div style={{
-                    position: "absolute", right: 0, top: 0, bottom: 0,
-                    width: `${100 - elapsedPct}%`,
-                    background: `${color}70`,
-                    borderRadius: 99,
-                  }} />
-                  {/* current-position needle */}
-                  <div style={{
-                    position: "absolute", top: -3, bottom: -3,
-                    left: `${elapsedPct}%`,
-                    width: 3,
-                    background: color,
-                    borderRadius: 2,
-                    transform: "translateX(-50%)",
-                    boxShadow: `0 0 6px ${color}99`,
-                  }} />
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
-                  <span style={{ color: "var(--text-dim)" }}>
-                    vor {elapsedH}h {elapsedM}min
-                  </span>
-                  <span style={{ color, fontWeight: 600 }}>
-                    ~{clearsInMin}min {t("iob_basal_remaining")}
-                  </span>
-                </div>
-              </div>
-            );
-          })()}
 
           {/* Expected BG impact */}
           {!cleared && (
