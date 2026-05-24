@@ -2831,5 +2831,16 @@
   "pricing_klinik_toast": "Neue Features als Erster erleben",
   "pricing_klinik_email_placeholder": "Deine E-Mail-Adresse",
   "pricing_klinik_subtext": "Dieser Preis verschwindet am 1. Juli. Für immer. Lifetime Lock: €29 dauerhaft.",
-  "pricing_beta_badge": "Lifetime Lock"
+  "pricing_beta_badge": "Lifetime Lock",
+  "meal_timeline": {
+    "pre_label": "Pre-Check",
+    "post_label": "Post-Check",
+    "confirm_title": "{kind} um {time} setzen?",
+    "confirm_subtitle": "Glev erinnert dich kurz vorher mit eigenem Ton. Du bestätigst die Messung dann selbst.",
+    "confirm_button": "Speichern",
+    "cancel_button": "Abbrechen",
+    "offset_minutes_before": "{n} min vorher",
+    "offset_minutes_after": "{n} min nachher",
+    "add_post_arm_title": "Weiteren Post-Check hinzufügen"
+  }
 }

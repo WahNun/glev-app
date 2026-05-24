@@ -2825,5 +2825,16 @@
   "pricing_klinik_cta": "Secure Glev+",
   "pricing_klinik_subtext": "This price disappears July 1. Forever. Lifetime Lock: €29 forever.",
   "pricing_beta_badge": "Lifetime Lock",
-  "pricing_beta_subtext": "This price stays forever."
+  "pricing_beta_subtext": "This price stays forever.",
+  "meal_timeline": {
+    "pre_label": "Pre-check",
+    "post_label": "Post-check",
+    "confirm_title": "Set {kind} for {time}?",
+    "confirm_subtitle": "Glev will remind you with its own sound. You confirm the reading yourself.",
+    "confirm_button": "Save",
+    "cancel_button": "Cancel",
+    "offset_minutes_before": "{n} min before",
+    "offset_minutes_after": "{n} min after",
+    "add_post_arm_title": "Add another post-check"
+  }
 }

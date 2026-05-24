@@ -25,6 +25,22 @@ import {
   type FingerstickReading,
 } from "@/lib/fingerstick";
 import { getTargetRange, fetchTargetRange, DEFAULT_TARGET_RANGE, type TargetRange } from "@/lib/userSettings";
+import { fetchMeals, type Meal } from "@/lib/meals";
+import { fetchRecentInsulinLogs } from "@/lib/insulin";
+import {
+  listChecksForMeals,
+  upsertCheck,
+  type ChecksByMeal,
+} from "@/lib/mealTimelineChecks";
+import { scheduleCheckReminder } from "@/lib/mealCheckReminders";
+import MealNodeCluster, {
+  CLUSTER_OVERLAP_PX,
+  CLUSTER_STAGGER_Y_PX,
+  DEFAULT_PRE_OFFSET_MIN,
+  DEFAULT_POST_OFFSET_MIN,
+  kindOf,
+  type ArmState,
+} from "@/components/MealNodeCluster";
 
 const ACCENT = "#4F6EF7";
 const GREEN = "#22D3A0";
@@ -626,6 +642,182 @@ function RollingChart({ readings }: { readings: ChartPoint[] }) {
 
   const { active, handlers } = useCrosshair(crosshairPoints);
 
+  /* ────────────────────────────────────────────────────────────────
+     Meal-Node-Cluster overlay (Task #673)
+     Loads bolus-tagged meals in the visible 12h window + any existing
+     `meal_timeline_checks` rows, and overlays one MealNodeCluster per
+     meal on top of the glucose path. Failures are non-fatal — a CGM
+     chart that loses its cluster overlay must still render the trace.
+     ──────────────────────────────────────────────────────────────── */
+  const [bolusMeals, setBolusMeals] = useState<Meal[]>([]);
+  const [checksByMeal, setChecksByMeal] = useState<ChecksByMeal>(new Map());
+  const [reloadTick, setReloadTick] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [meals, logs] = await Promise.all([
+          fetchMeals({ sinceDays: 1, limit: 50 }).catch(() => [] as Meal[]),
+          fetchRecentInsulinLogs(1).catch(() => []),
+        ]);
+        if (cancelled) return;
+        const linkedMealIds = new Set(
+          logs
+            .filter((l) => l.insulin_type === "bolus" && l.related_entry_id)
+            .map((l) => l.related_entry_id as string),
+        );
+        const cutoff = now - winSpan;
+        const withBolus = meals.filter((m) => {
+          const anchor = m.meal_time ?? m.created_at;
+          if (!anchor) return false;
+          const t = new Date(anchor).getTime();
+          if (!Number.isFinite(t) || t < cutoff || t > now) return false;
+          return linkedMealIds.has(m.id)
+            || (m.insulin_units != null && m.insulin_units > 0);
+        });
+        setBolusMeals(withBolus);
+        if (withBolus.length > 0) {
+          const map = await listChecksForMeals(withBolus.map((m) => m.id)).catch(
+            () => new Map() as ChecksByMeal,
+          );
+          if (!cancelled) setChecksByMeal(map);
+        } else {
+          setChecksByMeal(new Map());
+        }
+      } catch {
+        if (!cancelled) {
+          setBolusMeals([]);
+          setChecksByMeal(new Map());
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+    // winSpan / now change every minute via the parent's auto-refresh loop;
+    // reloadTick is bumped after a confirm-write so the dashed→solid flip
+    // is visible without a full page reload.
+  }, [winSpan, now, reloadTick]);
+
+  // Compute cluster placements (centerX, centerY with Y stagger for
+  // overlapping meals). Y is interpolated to the nearest CGM point so
+  // the center node sits on the curve rather than floating above it.
+  const clusters = useMemo(() => {
+    if (W <= 0 || H <= 0 || bolusMeals.length === 0) return [] as Array<{
+      meal: Meal; centerX: number; centerY: number; mealAtMs: number;
+    }>;
+    const sorted = [...bolusMeals].sort((a, b) => {
+      const ta = new Date(a.meal_time ?? a.created_at).getTime();
+      const tb = new Date(b.meal_time ?? b.created_at).getTime();
+      return ta - tb;
+    });
+    const placed: Array<{ meal: Meal; centerX: number; centerY: number; mealAtMs: number }> = [];
+    for (const meal of sorted) {
+      const mealAtMs = new Date(meal.meal_time ?? meal.created_at).getTime();
+      if (!Number.isFinite(mealAtMs)) continue;
+      const cx = toX(mealAtMs);
+      // Pick closest CGM point for centerY; fall back to mid-chart.
+      let cy: number = padT + (H - padT - padB) / 2;
+      if (visibleCgm.length > 0) {
+        let best = visibleCgm[0];
+        let bestDist = Math.abs(best.t - mealAtMs);
+        for (const r of visibleCgm) {
+          const d = Math.abs(r.t - mealAtMs);
+          if (d < bestDist) { bestDist = d; best = r; }
+        }
+        cy = toY(best.v);
+      }
+      // Y stagger when too close to an already-placed cluster.
+      let staggerSteps = 0;
+      for (const p of placed) {
+        if (Math.abs(p.centerX - cx) < CLUSTER_OVERLAP_PX) staggerSteps++;
+      }
+      cy -= staggerSteps * CLUSTER_STAGGER_Y_PX;
+      // Clamp into chart area so the cluster never escapes.
+      cy = Math.max(padT + 14, Math.min(H - padB - 14, cy));
+      placed.push({ meal, centerX: cx, centerY: cy, mealAtMs });
+    }
+    return placed;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bolusMeals, W, H, winStart, now]);
+
+  // Build the initial arm-state list for each meal (pre + post_*).
+  // Defaults are inserted whenever the corresponding `meal_timeline_checks`
+  // row is missing — marked `persisted: false` so the cluster renders
+  // them with a dashed outline (= "muss noch bestätigt werden").
+  function initialArmsFor(meal: Meal): ArmState[] {
+    const mealAtMs = new Date(meal.meal_time ?? meal.created_at).getTime();
+    const rows = checksByMeal.get(meal.id) ?? {};
+    const out: ArmState[] = [];
+    const offsetForRow = (iso: string | null): number | null => {
+      if (!iso) return null;
+      const ms = new Date(iso).getTime();
+      if (!Number.isFinite(ms)) return null;
+      return Math.round((ms - mealAtMs) / 60_000);
+    };
+    // pre
+    const preRow = rows["pre"];
+    const preOffset = preRow ? offsetForRow(preRow.planned_at) : null;
+    out.push({
+      checkType: "pre",
+      offsetMin: preOffset ?? DEFAULT_PRE_OFFSET_MIN,
+      persisted: preOffset !== null,
+      rowId: preRow?.id,
+    });
+    // post_n (collect all present, default to post_1 if none)
+    const postKeys = Object.keys(rows).filter((k) => k.startsWith("post_"));
+    if (postKeys.length === 0) {
+      out.push({
+        checkType: "post_1",
+        offsetMin: DEFAULT_POST_OFFSET_MIN,
+        persisted: false,
+      });
+    } else {
+      postKeys.sort((a, b) =>
+        parseInt(a.slice(5), 10) - parseInt(b.slice(5), 10),
+      );
+      for (const k of postKeys) {
+        const r = rows[k];
+        const off = offsetForRow(r.planned_at);
+        out.push({
+          checkType: k,
+          offsetMin: off ?? DEFAULT_POST_OFFSET_MIN,
+          persisted: off !== null,
+          rowId: r.id,
+        });
+      }
+    }
+    return out;
+  }
+
+  // Pixel↔time scale for the cluster math (positive). Falls back to a
+  // sane number when the chart hasn't measured yet, since the cluster
+  // doesn't render in that case anyway.
+  const chartPxWidth = Math.max(1, W - padL - padR);
+  const msPerPx = (now - winStart) / chartPxWidth;
+
+  async function handleConfirmCheck(
+    meal: Meal,
+    checkType: string,
+    plannedAtMs: number,
+  ): Promise<{ rowId?: string }> {
+    const plannedAt = new Date(plannedAtMs).toISOString();
+    const row = await upsertCheck({ mealId: meal.id, checkType, plannedAt });
+    // Fire-and-forget reminder schedule. Failures are swallowed inside
+    // scheduleCheckReminder — must never block the write path.
+    scheduleCheckReminder({
+      mealId: meal.id,
+      checkType,
+      plannedAt,
+      title: kindOf(checkType) === "pre"
+        ? "Pre-Check"
+        : "Post-Bolus-Check",
+      body: new Date(plannedAtMs).toLocaleTimeString(undefined, {
+        hour: "2-digit", minute: "2-digit",
+      }),
+    }).catch(() => { /* ignore */ });
+    setReloadTick((n) => n + 1);
+    return { rowId: row.id };
+  }
+
   return (
     <div
       ref={containerRef}
@@ -709,6 +901,35 @@ function RollingChart({ readings }: { readings: ChartPoint[] }) {
             left={padL}
             right={W - padR}
           />
+        </svg>
+      )}
+      {/* Meal-Node-Cluster overlay (Task #673). Separate <svg> so the
+          base chart can keep pointerEvents:none while the cluster's
+          interactive knobs/+button opt back in. */}
+      {W > 0 && H > 0 && clusters.length > 0 && (
+        <svg
+          width={W}
+          height={H}
+          viewBox={`0 0 ${W} ${H}`}
+          style={{ display: "block", position: "absolute", inset: 0, pointerEvents: "none" }}
+          data-testid="meal-node-cluster-layer"
+        >
+          {clusters.map((c) => (
+            <MealNodeCluster
+              key={c.meal.id}
+              mealId={c.meal.id}
+              mealAtMs={c.mealAtMs}
+              centerX={c.centerX}
+              centerY={c.centerY}
+              msPerPx={msPerPx}
+              leftBoundPx={padL}
+              rightBoundPx={W - padR}
+              initialArms={initialArmsFor(c.meal)}
+              onConfirm={(checkType, plannedAtMs) =>
+                handleConfirmCheck(c.meal, checkType, plannedAtMs)
+              }
+            />
+          ))}
         </svg>
       )}
       <CrosshairTooltip active={active} containerWidth={W} containerHeight={H} />
