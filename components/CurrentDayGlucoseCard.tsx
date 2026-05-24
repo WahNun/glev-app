@@ -543,6 +543,7 @@ function RollingChart({ readings, showMealNodes }: { readings: ChartPoint[]; sho
     // The resize event is synchronous with the orientation change, so it acts
     // as an early trigger that keeps node X-positions correct immediately.
     function onWindowResize() {
+      if (!el) return;
       const r = el.getBoundingClientRect();
       if (r.width > 0 && r.height > 0) {
         setSize({ w: Math.round(r.width), h: Math.round(r.height) });
