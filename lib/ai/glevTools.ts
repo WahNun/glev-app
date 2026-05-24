@@ -255,7 +255,7 @@ async function toolGetMealHistory(
   const { data, error } = await sb
     .from("meals")
     .select(
-      "id, input_text, carbs_grams, protein_grams, fat_grams, meal_type, meal_time, created_at, insulin_units",
+      "id, input_text, parsed_json, carbs_grams, protein_grams, fat_grams, meal_type, meal_time, created_at, insulin_units",
     )
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -263,7 +263,10 @@ async function toolGetMealHistory(
   if (error) return { error: error.message, meals: [] };
   const meals = (data ?? []).map((m) => ({
     id: m.id as string,
-    description: shorten(m.input_text as string | null, 80),
+    description: resolveMealDescription(
+      m.input_text as string | null,
+      m.parsed_json as Array<{ name?: string }> | null,
+    ),
     carbs: m.carbs_grams as number | null,
     protein: m.protein_grams as number | null,
     fat: m.fat_grams as number | null,
@@ -272,6 +275,39 @@ async function toolGetMealHistory(
     at: (m.meal_time as string | null) ?? (m.created_at as string),
   }));
   return { count: meals.length, meals };
+}
+
+/**
+ * Resolve a human-readable meal description for the AI.
+ *
+ * Priority order:
+ *  1. `input_text` (the raw user input, e.g. "Pasta mit Tomatensoße")
+ *     — most natural phrasing, capped at 160 chars.
+ *  2. Fallback: join the first 4 food names from `parsed_json` (e.g.
+ *     image-only entries or voice-entries that bypass input_text) into
+ *     "Pasta, Tomatensoße, Parmesan, Basilikum".
+ *  3. `null` only if both sources are empty — never invent a label.
+ *
+ * The 160-char cap is comfortably above the typical "Pasta mit
+ * Tomatensoße" phrasing but still short enough that 5–20 meals fit in
+ * Mistral's context budget without truncating the rest of the payload.
+ */
+function resolveMealDescription(
+  inputText: string | null,
+  parsedJson: Array<{ name?: string }> | null,
+): string | null {
+  const fromInput = shorten(inputText, 160);
+  if (fromInput) return fromInput;
+
+  if (Array.isArray(parsedJson) && parsedJson.length > 0) {
+    const names = parsedJson
+      .map((f) => (typeof f?.name === "string" ? f.name.trim() : ""))
+      .filter((n) => n.length > 0)
+      .slice(0, 4);
+    if (names.length > 0) return shorten(names.join(", "), 160);
+  }
+
+  return null;
 }
 
 async function toolGetBolusHistory(
