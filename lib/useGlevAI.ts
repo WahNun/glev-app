@@ -19,11 +19,40 @@ import { supabase } from "@/lib/supabase";
  * calls. It opens the consent modal on first tap (when consent has
  * not been granted) and goes straight to the chat sheet thereafter.
  */
+/**
+ * State machine for an inline confirm/cancel widget attached to an
+ * assistant bubble (Phase 3 Task 2). Set when the server emits a
+ * `pending_action` SSE frame after a WRITE-tool call.
+ *
+ *   pending    → user has not tapped yet; show Bestätigen + Abbrechen.
+ *   confirming → POST /api/ai/confirm-action in flight; buttons disabled.
+ *   confirmed  → server accepted (200 ok), inline „✓ Gespeichert".
+ *   cancelled  → user tapped Abbrechen; inline „Abgebrochen".
+ *   error      → server returned !ok / 4xx / 5xx; inline error string.
+ */
+export type PendingActionState =
+  | "pending"
+  | "confirming"
+  | "confirmed"
+  | "cancelled"
+  | "error";
+
+export type PendingAction = {
+  token: string;
+  kind: string;
+  summary: string;
+  state: PendingActionState;
+  error?: string;
+};
+
 export type GlevChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
   isStreaming?: boolean;
+  /** Confirm/cancel widget under the bubble, only set on assistant
+   *  bubbles that came back from a WRITE-tool call. */
+  pendingAction?: PendingAction;
 };
 
 export type ContextSnapshot = {
@@ -320,8 +349,38 @@ export function useGlevAI(opts?: { contextSnapshot?: ContextSnapshot }) {
             const payload = line.slice("data:".length).trim();
             if (!payload || payload === "[DONE]") continue;
             try {
-              const parsed = JSON.parse(payload) as { token?: string; error?: string };
+              const parsed = JSON.parse(payload) as {
+                token?: string;
+                error?: string;
+                pending_action?: {
+                  token: string;
+                  kind: string;
+                  summary: string;
+                };
+              };
               if (parsed.error) throw new Error(parsed.error);
+              if (parsed.pending_action) {
+                // WRITE-tool result: attach the confirm/cancel widget to
+                // the currently streaming assistant bubble. The bubble's
+                // own text continues to stream in parallel (Mistral
+                // writes a short „Soll ich das so speichern?"-Satz).
+                const pa = parsed.pending_action;
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantId
+                      ? {
+                          ...m,
+                          pendingAction: {
+                            token: pa.token,
+                            kind: pa.kind,
+                            summary: pa.summary,
+                            state: "pending",
+                          },
+                        }
+                      : m,
+                  ),
+                );
+              }
               if (parsed.token) {
                 setMessages((prev) =>
                   prev.map((m) =>
@@ -362,6 +421,92 @@ export function useGlevAI(opts?: { contextSnapshot?: ContextSnapshot }) {
     [messages, streaming, opts?.contextSnapshot],
   );
 
+  /**
+   * Confirm a pending WRITE-action by posting its token to
+   * /api/ai/confirm-action. Idempotent on the server (used_at guard);
+   * we also short-circuit locally if the widget is no longer "pending".
+   */
+  const confirmAction = useCallback(async (messageId: string) => {
+    let token: string | null = null;
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id !== messageId || !m.pendingAction) return m;
+        if (m.pendingAction.state !== "pending") return m;
+        token = m.pendingAction.token;
+        return {
+          ...m,
+          pendingAction: { ...m.pendingAction, state: "confirming" },
+        };
+      }),
+    );
+    if (!token) return;
+
+    try {
+      const res = await fetch("/api/ai/confirm-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || body?.ok === false) {
+        const msg =
+          (body && typeof body.error === "string" && body.error) ||
+          `HTTP ${res.status}`;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId && m.pendingAction
+              ? {
+                  ...m,
+                  pendingAction: { ...m.pendingAction, state: "error", error: msg },
+                }
+              : m,
+          ),
+        );
+        return;
+      }
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId && m.pendingAction
+            ? {
+                ...m,
+                pendingAction: { ...m.pendingAction, state: "confirmed" },
+              }
+            : m,
+        ),
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Speichern fehlgeschlagen";
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId && m.pendingAction
+            ? {
+                ...m,
+                pendingAction: { ...m.pendingAction, state: "error", error: msg },
+              }
+            : m,
+        ),
+      );
+    }
+  }, []);
+
+  /**
+   * Cancel a pending WRITE-action locally. Leaves the row to expire on
+   * its own (TTL 5 min) — no server roundtrip needed because the
+   * confirm endpoint won't be called.
+   */
+  const cancelAction = useCallback((messageId: string) => {
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id !== messageId || !m.pendingAction) return m;
+        if (m.pendingAction.state !== "pending") return m;
+        return {
+          ...m,
+          pendingAction: { ...m.pendingAction, state: "cancelled" },
+        };
+      }),
+    );
+  }, []);
+
   return {
     consentGranted,
     consentLoaded,
@@ -375,6 +520,8 @@ export function useGlevAI(opts?: { contextSnapshot?: ContextSnapshot }) {
     revokeConsent,
     closeSheet,
     sendMessage,
+    confirmAction,
+    cancelAction,
   };
 }
 

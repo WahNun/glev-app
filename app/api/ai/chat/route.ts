@@ -3,7 +3,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { authedClient } from "@/app/api/insulin/_helpers";
 import { getMistralClient, mistralConfigError } from "@/lib/ai/mistralClient";
 import { GLEV_CHAT_SYSTEM_PROMPT } from "@/lib/ai/glevChatPrompt";
-import { GLEV_TOOLS, executeGlevTool } from "@/lib/ai/glevTools";
+import {
+  GLEV_TOOLS,
+  executeGlevTool,
+  isPendingActionEnvelope,
+} from "@/lib/ai/glevTools";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 // Maximum number of sequential tool-call rounds before we stop calling
@@ -169,14 +173,37 @@ type ContextScopes = { glucose: boolean; iob: boolean; history: boolean };
  * (we don't ship redacted placeholders to avoid confusing the model
  * with explicit absence claims).
  */
-function contextPreamble(ctx: ContextSnapshot, scopes: ContextScopes): string {
+function contextPreamble(
+  ctx: ContextSnapshot,
+  scopes: ContextScopes,
+  todayLocalDate: string,
+): string {
   const lines: string[] = [
+    `Heute ist ${todayLocalDate} (Datum in der lokalen Zeitzone des Nutzers; für add_appointment relative Angaben wie „nächste Woche" auf das absolute Datum umrechnen).`,
     "Kontext-Snapshot des Nutzers (kann veraltet oder Platzhalter sein — wenn unklar, vorsichtig formulieren):",
   ];
   if (scopes.glucose) lines.push(`- Glukose: ${ctx.glucoseSummary}`);
   if (scopes.iob)     lines.push(`- IOB:     ${ctx.iobSummary}`);
   lines.push(`- Letzte Mahlzeit: ${ctx.lastMealDescription}`);
   return lines.join("\n");
+}
+
+/**
+ * Computes today's date in YYYY-MM-DD form for the user's timezone.
+ * `en-CA` is the canonical locale that produces ISO calendar dates.
+ */
+function todayInTimezone(timezone: string | null): string {
+  const tz = timezone ?? "Europe/Berlin";
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
 }
 
 // Hard cap auf die Anzahl Memory-Einträge, die in den System-Prompt
@@ -298,7 +325,14 @@ export async function POST(req: NextRequest) {
   const messages: any[] = [
     { role: "system", content: GLEV_CHAT_SYSTEM_PROMPT },
     ...(memoryBlock ? [{ role: "system", content: memoryBlock }] : []),
-    { role: "system", content: contextPreamble(contextSnapshot, scopes) },
+    {
+      role: "system",
+      content: contextPreamble(
+        contextSnapshot,
+        scopes,
+        todayInTimezone(timezone),
+      ),
+    },
     ...(history ?? []).map((m) => ({ role: m.role, content: m.content })),
     { role: "user", content: message },
   ];
@@ -351,6 +385,17 @@ export async function POST(req: NextRequest) {
             toolCalls,
           });
 
+          // Hard cap: maximal EINE pending WRITE-Aktion pro Assistant-
+          // Turn. Würde das Modell zwei Mal in einer Runde z. B.
+          // log_meal_entry + log_bolus_entry rufen, würde die UI nur
+          // die letzte pending_action sehen (eine PendingAction pro
+          // Bubble in `useGlevAI`). Statt das clientseitig zu lösen
+          // brechen wir hier server-seitig ab: erste WRITE wird normal
+          // bearbeitet, jede weitere WRITE-Tool-Call der gleichen Runde
+          // wird Mistral als „rejected: only one write per turn" zurück-
+          // gegeben — damit kann das Modell entweder im Text drauf
+          // hinweisen oder im nächsten Turn nachziehen.
+          let pendingEmittedThisRound = false;
           for (const call of toolCalls) {
             const fn = call.function;
             const rawArgs =
@@ -364,12 +409,48 @@ export async function POST(req: NextRequest) {
               user.id,
               timezone,
             );
-            messages.push({
-              role: "tool",
-              name: fn?.name ?? "",
-              toolCallId: call.id,
-              content: JSON.stringify(result),
-            });
+
+            // WRITE-tools return a `pending_action` envelope instead of
+            // doing the insert. Forward the envelope to the UI on a
+            // dedicated SSE frame, and give Mistral a short "awaiting
+            // user confirmation" stub so it doesn't try to confirm
+            // itself or chain more writes in the same round.
+            if (isPendingActionEnvelope(result)) {
+              if (pendingEmittedThisRound) {
+                messages.push({
+                  role: "tool",
+                  name: fn?.name ?? "",
+                  toolCallId: call.id,
+                  content: JSON.stringify({
+                    status: "rejected",
+                    reason:
+                      "only_one_write_action_per_turn — bereits eine andere Speicher-Aktion in dieser Runde vorgeschlagen. Wenn das hier auch nötig ist, schlage es im nächsten Turn separat vor.",
+                  }),
+                });
+                continue;
+              }
+              pendingEmittedThisRound = true;
+              send(JSON.stringify({ pending_action: result.pending_action }));
+              messages.push({
+                role: "tool",
+                name: fn?.name ?? "",
+                toolCallId: call.id,
+                content: JSON.stringify({
+                  status: "awaiting_user_confirmation",
+                  kind: result.pending_action.kind,
+                  summary: result.pending_action.summary,
+                  note:
+                    "Bestätigung erfolgt durch UI-Button. Antworte mit EINEM kurzen Satz, der natürlich zur Aktion überleitet (z. B. 'Soll ich das so speichern?'). Stelle KEINE Rückfragen nach Daten, frage NICHT erneut nach Bestätigung — der Button erscheint automatisch.",
+                }),
+              });
+            } else {
+              messages.push({
+                role: "tool",
+                name: fn?.name ?? "",
+                toolCallId: call.id,
+                content: JSON.stringify(result),
+              });
+            }
           }
         }
 

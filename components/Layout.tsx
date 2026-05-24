@@ -1075,6 +1075,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         messages={glevAi.messages}
         streaming={glevAi.streaming}
         onSend={glevAi.sendMessage}
+        onConfirmAction={glevAi.confirmAction}
+        onCancelAction={glevAi.cancelAction}
       />
     </div>
   );

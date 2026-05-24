@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { GlevChatMessage } from "@/lib/useGlevAI";
+import type { GlevChatMessage, PendingAction } from "@/lib/useGlevAI";
 
 const ACCENT = "#4F6EF7";
 const SHEET_BG = "#161b22";
@@ -13,10 +13,149 @@ interface Props {
   messages: GlevChatMessage[];
   streaming: boolean;
   onSend: (text: string) => void;
+  onConfirmAction?: (messageId: string) => void;
+  onCancelAction?: (messageId: string) => void;
 }
 
 const DISCLAIMER =
   "Glev ist kein Medizinprodukt. Alle Informationen sind Orientierungspunkte.";
+
+/**
+ * Inline confirm/cancel widget attached to an assistant bubble that
+ * came back from a WRITE-tool call. Rendered as a soft card directly
+ * under the bubble (left-aligned, since assistant bubbles are
+ * left-aligned). The five visual states match `PendingActionState` in
+ * `lib/useGlevAI.ts`:
+ *
+ *   pending     → summary + Bestätigen + Abbrechen
+ *   confirming  → buttons disabled, "Speichert …"
+ *   confirmed   → green check + "Gespeichert"
+ *   cancelled   → muted "Abgebrochen"
+ *   error       → red error string + Erneut-versuchen
+ */
+function PendingActionWidget({
+  pa,
+  onConfirm,
+  onCancel,
+}: {
+  pa: PendingAction;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const baseCard: React.CSSProperties = {
+    maxWidth: "82%",
+    padding: "10px 12px",
+    borderRadius: 12,
+    background: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    fontSize: 13,
+    lineHeight: 1.45,
+    color: "rgba(255,255,255,0.92)",
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  };
+
+  const summary = (
+    <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}>
+      {pa.summary}
+    </div>
+  );
+
+  if (pa.state === "confirmed") {
+    return (
+      <div style={{ ...baseCard, borderColor: "rgba(80,200,120,0.4)" }}>
+        {summary}
+        <div style={{ color: "#7ee0a0", fontWeight: 600, fontSize: 13 }}>
+          ✓ Gespeichert
+        </div>
+      </div>
+    );
+  }
+  if (pa.state === "cancelled") {
+    return (
+      <div style={{ ...baseCard, opacity: 0.6 }}>
+        {summary}
+        <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 13 }}>
+          Abgebrochen
+        </div>
+      </div>
+    );
+  }
+  if (pa.state === "error") {
+    return (
+      <div style={{ ...baseCard, borderColor: "rgba(255,120,120,0.45)" }}>
+        {summary}
+        <div style={{ color: "#ff8888", fontSize: 13 }}>
+          Speichern fehlgeschlagen: {pa.error ?? "unbekannter Fehler"}
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            type="button"
+            onClick={onConfirm}
+            style={{
+              flex: 1,
+              padding: "8px 10px",
+              borderRadius: 8,
+              border: "1px solid rgba(255,255,255,0.15)",
+              background: "rgba(255,255,255,0.06)",
+              color: "white",
+              fontSize: 13,
+              cursor: "pointer",
+            }}
+          >
+            Nochmal versuchen
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const busy = pa.state === "confirming";
+  return (
+    <div style={baseCard}>
+      {summary}
+      <div style={{ display: "flex", gap: 8 }}>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={busy}
+          style={{
+            flex: 1,
+            padding: "9px 10px",
+            borderRadius: 8,
+            border: "1px solid rgba(255,255,255,0.15)",
+            background: "rgba(255,255,255,0.04)",
+            color: "rgba(255,255,255,0.8)",
+            fontSize: 13,
+            cursor: busy ? "default" : "pointer",
+            opacity: busy ? 0.5 : 1,
+          }}
+        >
+          Abbrechen
+        </button>
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={busy}
+          style={{
+            flex: 1,
+            padding: "9px 10px",
+            borderRadius: 8,
+            border: "none",
+            background: busy ? "rgba(79,110,247,0.4)" : ACCENT,
+            color: "white",
+            fontWeight: 600,
+            fontSize: 13,
+            cursor: busy ? "default" : "pointer",
+          }}
+        >
+          {busy ? "Speichert …" : "Bestätigen"}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 /**
  * Bottom-sheet UI hosting the Glev AI conversation. Token-by-token
@@ -34,6 +173,8 @@ export default function GlevAIChatSheet({
   messages,
   streaming,
   onSend,
+  onConfirmAction,
+  onCancelAction,
 }: Props) {
   const [input, setInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -189,7 +330,9 @@ export default function GlevAIChatSheet({
               key={m.id}
               style={{
                 display: "flex",
-                justifyContent: m.role === "user" ? "flex-end" : "flex-start",
+                flexDirection: "column",
+                alignItems: m.role === "user" ? "flex-end" : "flex-start",
+                gap: 6,
               }}
             >
               <div
@@ -230,6 +373,15 @@ export default function GlevAIChatSheet({
                   />
                 )}
               </div>
+
+              {/* Pending-action widget (WRITE-tool confirmation gate, Task 2) */}
+              {m.pendingAction && (
+                <PendingActionWidget
+                  pa={m.pendingAction}
+                  onConfirm={() => onConfirmAction?.(m.id)}
+                  onCancel={() => onCancelAction?.(m.id)}
+                />
+              )}
             </div>
           ))}
         </div>
