@@ -1231,10 +1231,18 @@ export default function InsightsPage() {
   // exactly (12×14 padding, 9 px uppercase labels, 36/24 hero numbers).
   // Deeper cards reuse the same compact language for visual consistency.
   // ─────────────────────────────────────────────────────────────────
-  // Uniform card height: ~57 % of a 852 px (iPhone 15 Pro) screen.
-  // Applied to all cards via FlipCard's minHeight prop — adaptive-engine
-  // is intentionally excluded so it can grow with its expanded content.
-  const CARD_MIN_H = 460;
+  // Uniform card height: viewport-relative so the hero pager hugs the
+  // available space on small phones (iPhone 13 mini / SE) instead of
+  // pushing the context box under the bottom nav. On iPhone 15 Pro
+  // (~852 dvh) and larger this resolves to the previous 460 px floor,
+  // so mockups + desktop stay visually unchanged. On a 13 mini
+  // (~812 dvh, less usable area after safe-area + nav) it shrinks to
+  // ~432 px and below — leaving room for the "Was bedeutet das?" box
+  // and bottom nav. Adaptive-engine card is intentionally excluded
+  // (no minHeight prop) so it can grow with its expanded content.
+  // CSS clamp() also serves as the SSR fallback — it resolves to
+  // 460px when dvh isn't measurable, matching the legacy value.
+  const CARD_MIN_H: string = "clamp(280px, calc(100dvh - 380px), 460px)";
 
   const items: SortableItem[] = [
     {
@@ -4760,8 +4768,10 @@ function FlipCard({
   accent?: string;
   padding?: string;
   /** Minimum height for the ghost div that drives the card's natural height.
-   *  Set to CARD_MIN_H on all standard insight cards for uniform sizing. */
-  minHeight?: number;
+   *  Set to CARD_MIN_H on all standard insight cards for uniform sizing.
+   *  Accepts a number (px) or a CSS string (e.g. clamp/calc with 100dvh)
+   *  so the hero pager can scale viewport-relative on small phones. */
+  minHeight?: number | string;
   /** "glass" applies an Apple-style Liquid Glass surface: translucent
    *  backdrop blur, refractive 1px border, and a soft inner highlight
    *  along the top edge to fake the "wet glass" cap. Falls back to a
