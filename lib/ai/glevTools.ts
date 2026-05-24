@@ -61,13 +61,28 @@ export const GLEV_TOOLS = [
     function: {
       name: "get_meal_history",
       description:
-        "Letzte Mahlzeiten mit Kohlenhydraten, Mahlzeittyp und Zeitstempel. Default Limit 5, max 20.",
+        "Letzte Mahlzeiten mit Kohlenhydraten, Mahlzeittyp und Zeitstempel. Default Limit 5, max 20. Bei Gewohnheits- oder Musterfragen (z. B. 'was frühstücke ich häufig', 'was esse ich meistens abends') immer limit: 20 setzen und bei tageszeit-spezifischen Fragen hour_from/hour_to nutzen.",
       parameters: {
         type: "object",
         properties: {
           limit: {
             type: "number",
-            description: "Anzahl der zurückgegebenen Mahlzeiten (1-20, default 5).",
+            description:
+              "Anzahl der zurückgegebenen Mahlzeiten (1-20, default 5). Für Muster- und Gewohnheitsfragen immer 20 verwenden.",
+          },
+          hour_from: {
+            type: "integer",
+            minimum: 0,
+            maximum: 23,
+            description:
+              "Optionaler Filter: nur Mahlzeiten ab dieser Stunde (Lokalzeit, 0-23). Frühstück ≈ 5, Mittagessen ≈ 11, Abendessen ≈ 17.",
+          },
+          hour_to: {
+            type: "integer",
+            minimum: 0,
+            maximum: 23,
+            description:
+              "Optionaler Filter: nur Mahlzeiten bis zu dieser Stunde einschließlich (Lokalzeit, 0-23). Frühstück ≈ 11, Mittagessen ≈ 15, Abendessen ≈ 22.",
           },
         },
         required: [],
@@ -475,16 +490,54 @@ async function toolGetMealHistory(
   userTimezone: string | null,
 ): Promise<unknown> {
   const limit = clampLimit(args.limit, 5);
+  const hourFrom =
+    typeof args.hour_from === "number" ? Math.floor(args.hour_from) : null;
+  const hourTo =
+    typeof args.hour_to === "number" ? Math.floor(args.hour_to) : null;
+
+  // Fetch a larger set when an hour filter is active so we have enough
+  // rows to filter down to `limit` entries. Cap at 200 to avoid blowing
+  // the context budget.
+  const fetchLimit =
+    hourFrom !== null || hourTo !== null ? Math.min(limit * 10, 200) : limit;
+
   const { data, error } = await sb
     .from("meals")
     .select(
       "id, input_text, parsed_json, carbs_grams, protein_grams, fat_grams, meal_type, meal_time, created_at, insulin_units",
     )
     .order("created_at", { ascending: false })
-    .limit(limit);
+    .limit(fetchLimit);
 
   if (error) return { error: error.message, meals: [] };
-  const meals = (data ?? []).map((m) => {
+
+  const tz =
+    userTimezone && isValidTimezone(userTimezone)
+      ? userTimezone
+      : "Europe/Berlin";
+
+  let rows = (data ?? []) as Array<Record<string, unknown>>;
+
+  // Apply hour-of-day filter in local time when hour_from / hour_to are set.
+  if (hourFrom !== null || hourTo !== null) {
+    rows = rows.filter((m) => {
+      const atIso = (m.meal_time as string | null) ?? (m.created_at as string);
+      const localHour = new Date(atIso).toLocaleString("en-US", {
+        timeZone: tz,
+        hour: "numeric",
+        hour12: false,
+      });
+      const h = parseInt(localHour, 10);
+      if (hourFrom !== null && h < hourFrom) return false;
+      if (hourTo !== null && h > hourTo) return false;
+      return true;
+    });
+  }
+
+  // Respect the original limit after filtering.
+  rows = rows.slice(0, limit);
+
+  const meals = rows.map((m) => {
     const atIso = (m.meal_time as string | null) ?? (m.created_at as string);
     const atMs = new Date(atIso).getTime();
     return {
