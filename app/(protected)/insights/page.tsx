@@ -1233,16 +1233,16 @@ export default function InsightsPage() {
   // ─────────────────────────────────────────────────────────────────
   // Uniform card height: viewport-relative so the hero pager hugs the
   // available space on small phones (iPhone 13 mini / SE) instead of
-  // pushing the context box under the bottom nav. On iPhone 15 Pro
-  // (~852 dvh) and larger this resolves to the previous 460 px floor,
-  // so mockups + desktop stay visually unchanged. On a 13 mini
-  // (~812 dvh, less usable area after safe-area + nav) it shrinks to
-  // ~432 px and below — leaving room for the "Was bedeutet das?" box
-  // and bottom nav. Adaptive-engine card is intentionally excluded
-  // (no minHeight prop) so it can grow with its expanded content.
-  // CSS clamp() also serves as the SSR fallback — it resolves to
-  // 460px when dvh isn't measurable, matching the legacy value.
-  const CARD_MIN_H: string = "clamp(280px, calc(100dvh - 380px), 460px)";
+  // pushing the context box under the bottom nav. The upper cap
+  // matches the Adaptive-Engine card's natural collapsed size — the
+  // engine card is now the visual reference, so every other insight
+  // card uses the same floor and the grid reads as one consistent
+  // height instead of the old half-empty 460 px shells. Cards with
+  // more content (expanded windows, advisory suggestion block, etc.)
+  // still grow naturally past this floor.
+  // CSS clamp() also serves as the SSR fallback — it resolves to the
+  // upper bound (360 px) when dvh isn't measurable.
+  const CARD_MIN_H: string = "clamp(280px, calc(100dvh - 380px), 360px)";
 
   const items: SortableItem[] = [
     {
@@ -1498,94 +1498,87 @@ export default function InsightsPage() {
       ),
     },
     {
-      // Two side-by-side stat cards. ID kept as "gmi-a1c" for backwards
-      // compat with persisted card-orders from earlier versions.
+      // Combined Avg-BG + GMI card. Previously rendered as two narrow
+      // side-by-side FlipCards which left huge blank space below each
+      // value once we shrank CARD_MIN_H. Lucas asked for them in one
+      // chip stacked underneath each other — same data, one shared
+      // header row, sparkline spanning the full width.
+      // ID kept as "gmi-a1c" for backwards compat with persisted
+      // card-orders from earlier versions.
       id: "gmi-a1c",
       node: (
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, minHeight: CARD_MIN_H }}>
-          <FlipCard
-            accent={ACCENT}
-            back={
-              <FlipBack
-                title={tInsights("avg_bg_back_title")}
-                accent={ACCENT}
-                paragraphs={[
-                  tInsights("avg_bg_back_p1", { range: rangeLabel }),
-                  tInsights("avg_bg_back_p2", { prev: prevRangeLabel }),
-                  tInsights("avg_bg_back_p3", { n: last7Bg.length, range: rangeLabel }),
-                ]}
-              />
-            }
-          >
-            <CardLabel text={tInsights("card_avg_bg_title")}/>
-            {last7Avg == null ? (
-              <div style={{ fontSize:24, fontWeight:800, color:"var(--text-ghost)", fontFamily:"var(--font-mono)", marginTop:4 }}>—</div>
-            ) : (
-              <>
-                <div style={{ display:"flex", alignItems:"baseline", gap:4, marginTop:4 }}>
-                  <div style={{ fontSize:24, fontWeight:800, color:"var(--text)", fontFamily:"var(--font-mono)", lineHeight:1 }}>
+        <FlipCard
+          accent={ACCENT}
+          back={
+            <FlipBack
+              title={tInsights("avg_bg_back_title")}
+              accent={ACCENT}
+              paragraphs={[
+                tInsights("avg_bg_back_p1", { range: rangeLabel }),
+                tInsights("gmi_back_p1"),
+                last7Avg != null
+                  ? tInsights("gmi_back_p3_with_avg", { avg: Math.round(last7Avg), n: last7Bg.length, range: rangeLabel })
+                  : tInsights("gmi_back_p3_no_avg", { range: rangeLabel }),
+              ]}
+            />
+          }
+        >
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            {/* Row 1 — Ø Glukose */}
+            <div>
+              <CardLabel text={tInsights("card_avg_bg_title")}/>
+              {last7Avg == null ? (
+                <div style={{ fontSize:28, fontWeight:800, color:"var(--text-ghost)", fontFamily:"var(--font-mono)", marginTop:4 }}>—</div>
+              ) : (
+                <div style={{ display:"flex", alignItems:"baseline", gap:6, marginTop:4, flexWrap:"wrap" }}>
+                  <div style={{ fontSize:28, fontWeight:800, color:"var(--text)", fontFamily:"var(--font-mono)", lineHeight:1, letterSpacing:"-0.03em" }}>
                     {Math.round(last7Avg)}
                   </div>
-                  <div style={{ fontSize:11, color:"var(--text-dim)" }}>mg/dL</div>
+                  <div style={{ fontSize:12, color:"var(--text-dim)" }}>mg/dL</div>
+                  {bgDelta != null && (
+                    <div style={{ marginLeft:"auto", fontSize:11, color: bgDelta < 0 ? GREEN : bgDelta > 0 ? ORANGE : "var(--text-dim)", fontWeight:600 }}>
+                      {bgDelta > 0 ? "+" : bgDelta < 0 ? "−" : ""}{Math.abs(bgDelta)} {tInsights("delta_vs_prev", { prev: prevRangeLabel })}
+                    </div>
+                  )}
                 </div>
-                {bgDelta != null && (
-                  <div style={{ fontSize:11, color: bgDelta < 0 ? GREEN : bgDelta > 0 ? ORANGE : "var(--text-dim)", marginTop:2, fontWeight:600 }}>
-                    {bgDelta > 0 ? "+" : bgDelta < 0 ? "−" : ""}{Math.abs(bgDelta)} {tInsights("delta_vs_prev", { prev: prevRangeLabel })}
-                  </div>
-                )}
-                {/* Cockpit density pass (Task #329): the AVG BG mini
-                    card used to read as a single number floating in
-                    space. A small 7-day sparkline (reuses the existing
-                    `trendValues` series the Glucose Trend card derives
-                    from the same `last7Bg` source — no extra data
-                    fetch) gives the user instant context for whether
-                    the average is trending up or down. Capped at 8
-                    samples so the line stays legible inside the narrow
-                    mini-card. */}
-                {trendHasData && trendValues.length >= 2 && (
-                  <div style={{ marginTop:6, opacity:0.85 }}>
-                    <Sparkline values={trendValues.slice(-8)} color={ACCENT}/>
-                  </div>
-                )}
-              </>
-            )}
-          </FlipCard>
-          <FlipCard
-            accent={ACCENT}
-            back={
-              <FlipBack
-                title={tInsights("gmi_back_title")}
-                accent={ACCENT}
-                paragraphs={[
-                  tInsights("gmi_back_p1"),
-                  tInsights("gmi_back_p2"),
-                  last7Avg != null
-                    ? tInsights("gmi_back_p3_with_avg", { avg: Math.round(last7Avg), n: last7Bg.length, range: rangeLabel })
-                    : tInsights("gmi_back_p3_no_avg", { range: rangeLabel }),
-                ]}
-              />
-            }
-          >
-            <CardLabel text={tInsights("card_gmi_title")}/>
-            {gmi == null ? (
-              <div style={{ fontSize:24, fontWeight:800, color:"var(--text-ghost)", fontFamily:"var(--font-mono)", marginTop:4 }}>—</div>
-            ) : (
-              <>
-                <div style={{ display:"flex", alignItems:"baseline", gap:4, marginTop:4 }}>
-                  <div style={{ fontSize:24, fontWeight:800, color:"var(--text)", fontFamily:"var(--font-mono)", lineHeight:1 }}>
+              )}
+            </div>
+
+            {/* Divider so the two metrics read as distinct rows
+                inside one shared chip. */}
+            <div style={{ height:1, background:"var(--border-soft)", opacity:0.6 }}/>
+
+            {/* Row 2 — GMI / geschätzter HbA1c */}
+            <div>
+              <CardLabel text={tInsights("card_gmi_title")}/>
+              {gmi == null ? (
+                <div style={{ fontSize:28, fontWeight:800, color:"var(--text-ghost)", fontFamily:"var(--font-mono)", marginTop:4 }}>—</div>
+              ) : (
+                <div style={{ display:"flex", alignItems:"baseline", gap:6, marginTop:4, flexWrap:"wrap" }}>
+                  <div style={{ fontSize:28, fontWeight:800, color:"var(--text)", fontFamily:"var(--font-mono)", lineHeight:1, letterSpacing:"-0.03em" }}>
                     {gmi.toFixed(1)}
                   </div>
-                  <div style={{ fontSize:11, color:"var(--text-dim)" }}>%</div>
+                  <div style={{ fontSize:12, color:"var(--text-dim)" }}>%</div>
+                  {gmiDelta != null && (
+                    <div style={{ marginLeft:"auto", fontSize:11, color: gmiDelta < 0 ? GREEN : gmiDelta > 0 ? ORANGE : "var(--text-dim)", fontWeight:600 }}>
+                      {gmiDelta > 0 ? "+" : gmiDelta < 0 ? "−" : ""}{Math.abs(gmiDelta).toFixed(1)} {tInsights("delta_vs_prev", { prev: prevRangeLabel })}
+                    </div>
+                  )}
                 </div>
-                {gmiDelta != null && (
-                  <div style={{ fontSize:11, color: gmiDelta < 0 ? GREEN : gmiDelta > 0 ? ORANGE : "var(--text-dim)", marginTop:2, fontWeight:600 }}>
-                    {gmiDelta > 0 ? "+" : gmiDelta < 0 ? "−" : ""}{Math.abs(gmiDelta).toFixed(1)} {tInsights("delta_vs_prev", { prev: prevRangeLabel })}
-                  </div>
-                )}
-              </>
+              )}
+            </div>
+
+            {/* Shared 7-day sparkline — full card width now that both
+                metrics live in the same chip. Reuses the same series
+                the Glucose Trend card derives from `last7Bg` (no extra
+                fetch). Hidden until we have at least 2 days of data. */}
+            {trendHasData && trendValues.length >= 2 && (
+              <div style={{ opacity:0.85 }}>
+                <Sparkline values={trendValues.slice(-8)} color={ACCENT}/>
+              </div>
             )}
-          </FlipCard>
-        </div>
+          </div>
+        </FlipCard>
       ),
     },
     {
