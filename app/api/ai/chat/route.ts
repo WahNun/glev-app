@@ -158,13 +158,25 @@ function validateBody(b: unknown): { ok: true; body: ChatBody } | { ok: false; e
   };
 }
 
-function contextPreamble(ctx: ContextSnapshot): string {
-  return [
+type ContextScopes = { glucose: boolean; iob: boolean; history: boolean };
+
+/**
+ * Builds the system preamble that ships the user's live snapshot to
+ * Mistral. Each line is gated by the matching granular consent scope
+ * (Task #664). `lastMealDescription` is always included as long as the
+ * master consent is set — it is the floor of the AI feature and not
+ * separately toggleable. Lines that are gated off are omitted entirely
+ * (we don't ship redacted placeholders to avoid confusing the model
+ * with explicit absence claims).
+ */
+function contextPreamble(ctx: ContextSnapshot, scopes: ContextScopes): string {
+  const lines: string[] = [
     "Kontext-Snapshot des Nutzers (kann veraltet oder Platzhalter sein — wenn unklar, vorsichtig formulieren):",
-    `- Glukose: ${ctx.glucoseSummary}`,
-    `- IOB:     ${ctx.iobSummary}`,
-    `- Letzte Mahlzeit: ${ctx.lastMealDescription}`,
-  ].join("\n");
+  ];
+  if (scopes.glucose) lines.push(`- Glukose: ${ctx.glucoseSummary}`);
+  if (scopes.iob)     lines.push(`- IOB:     ${ctx.iobSummary}`);
+  lines.push(`- Letzte Mahlzeit: ${ctx.lastMealDescription}`);
+  return lines.join("\n");
 }
 
 // Hard cap auf die Anzahl Memory-Einträge, die in den System-Prompt
@@ -223,10 +235,14 @@ export async function POST(req: NextRequest) {
   }
   const { user, sb } = auth;
 
-  // 2. Consent
+  // 2. Consent — master flag + granular sub-scopes (Task #664). The
+  // sub-scope timestamps gate which fields end up in the contextPreamble
+  // below; a missing (null) timestamp means "do not pass this data type
+  // to the model". `lastMealDescription` has no toggle — it is the
+  // sockel of the master consent (see DECISIONS.md D-016).
   const { data: profile, error: profErr } = await sb
     .from("profiles")
-    .select("ai_consent_at")
+    .select("ai_consent_at, ai_consent_glucose_at, ai_consent_iob_at, ai_consent_history_at")
     .eq("user_id", user.id)
     .maybeSingle();
   if (profErr) {
@@ -235,6 +251,11 @@ export async function POST(req: NextRequest) {
   if (!profile?.ai_consent_at) {
     return NextResponse.json({ error: "ai consent required" }, { status: 403 });
   }
+  const scopes: ContextScopes = {
+    glucose: Boolean(profile?.ai_consent_glucose_at),
+    iob:     Boolean(profile?.ai_consent_iob_at),
+    history: Boolean(profile?.ai_consent_history_at),
+  };
 
   // 3. Rate limit
   if (await isRateLimited(user.id)) {
@@ -277,7 +298,7 @@ export async function POST(req: NextRequest) {
   const messages: any[] = [
     { role: "system", content: GLEV_CHAT_SYSTEM_PROMPT },
     ...(memoryBlock ? [{ role: "system", content: memoryBlock }] : []),
-    { role: "system", content: contextPreamble(contextSnapshot) },
+    { role: "system", content: contextPreamble(contextSnapshot, scopes) },
     ...(history ?? []).map((m) => ({ role: m.role, content: m.content })),
     { role: "user", content: message },
   ];

@@ -1362,7 +1362,22 @@
     "fab_mode_option_ai": "Glev AI öffnen",
     "fab_mode_option_voice": "Spracheingabe starten",
     "row_founder_contact": "Direkter Draht zum Gründer",
-    "subtitle_founder_contact": "Als Glev+ Mitglied hast du direkten Zugang zu Lucas."
+    "subtitle_founder_contact": "Als Glev+ Mitglied hast du direkten Zugang zu Lucas.",
+    "section_glev_intelligence": "Glev Intelligence",
+    "glev_intel_intro": "Steuere genau, welche Daten der Glev-Chat-Assistent als Kontext lesen darf. Änderungen wirken sofort beim nächsten Tipp.",
+    "glev_intel_row_meal_title": "Mahlzeit-Beschreibungen",
+    "glev_intel_row_meal_desc": "Immer aktiv — die zuletzt protokollierte Mahlzeit ist der Sockel jeder Antwort und kann nicht einzeln deaktiviert werden.",
+    "glev_intel_row_glucose_title": "Glukose-Werte",
+    "glev_intel_row_glucose_desc": "Aktueller CGM-Wert und kurzer Trend dürfen in den Kontext-Snapshot fließen.",
+    "glev_intel_row_iob_title": "Aktives Insulin (IOB)",
+    "glev_intel_row_iob_desc": "Aktuell aktive Bolusmenge darf in den Kontext-Snapshot fließen.",
+    "glev_intel_row_history_title": "7-Tage-Verlauf",
+    "glev_intel_row_history_desc": "Längerfristiger Verlauf (Mahlzeiten, Glukose, Insulin) als zusätzlicher Kontext — kommt mit Phase 5.",
+    "glev_intel_badge_phase5": "Phase 5",
+    "glev_intel_revoke_all": "Alle AI-Zugriffe widerrufen",
+    "glev_intel_revoke_busy": "Widerrufe…",
+    "glev_intel_revoke_hint": "Setzt Glev AI komplett zurück: Master-Zustimmung, alle Sub-Berechtigungen und der lokale Chat-Verlauf werden gelöscht.",
+    "glev_intel_revoke_confirm": "Wirklich alle Glev-AI-Zugriffe widerrufen? Die Master-Zustimmung und alle Datenfreigaben werden zurückgesetzt, der Chat-Verlauf gelöscht."
   },
   "cgmSettings": {
     "appleHealth": {

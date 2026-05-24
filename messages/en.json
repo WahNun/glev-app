@@ -1362,7 +1362,22 @@
     "fab_mode_option_ai": "Open Glev AI",
     "fab_mode_option_voice": "Start voice input",
     "row_founder_contact": "Direct line to the founder",
-    "subtitle_founder_contact": "As a Glev+ member you have direct access to Lucas."
+    "subtitle_founder_contact": "As a Glev+ member you have direct access to Lucas.",
+    "section_glev_intelligence": "Glev Intelligence",
+    "glev_intel_intro": "Control exactly which data the Glev chat assistant may read as context. Changes take effect on the next tap.",
+    "glev_intel_row_meal_title": "Meal descriptions",
+    "glev_intel_row_meal_desc": "Always on — the most recent logged meal is the floor of every reply and can't be toggled off separately.",
+    "glev_intel_row_glucose_title": "Glucose readings",
+    "glev_intel_row_glucose_desc": "Allow the current CGM value and short trend to flow into the context snapshot.",
+    "glev_intel_row_iob_title": "Active insulin (IOB)",
+    "glev_intel_row_iob_desc": "Allow the currently active bolus amount to flow into the context snapshot.",
+    "glev_intel_row_history_title": "7-day history",
+    "glev_intel_row_history_desc": "Longer-term history (meals, glucose, insulin) as extra context — coming in Phase 5.",
+    "glev_intel_badge_phase5": "Phase 5",
+    "glev_intel_revoke_all": "Revoke all AI access",
+    "glev_intel_revoke_busy": "Revoking…",
+    "glev_intel_revoke_hint": "Resets Glev AI completely: master consent, all sub-permissions, and the local chat history are cleared.",
+    "glev_intel_revoke_confirm": "Really revoke all Glev AI access? Master consent and all data grants will be reset, and the chat history will be cleared."
   },
   "cgmSettings": {
     "appleHealth": {

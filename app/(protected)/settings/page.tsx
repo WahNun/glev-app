@@ -350,6 +350,17 @@ export default function SettingsPage() {
   const [aiConsentGranted, setAiConsentGranted] = useState<boolean | null>(null);
   const [aiConsentBusy, setAiConsentBusy] = useState(false);
 
+  // Granular AI consent scopes (Task #664 / D-016). Each flag mirrors
+  // a `profiles.ai_consent_{glucose,iob,history}_at` TIMESTAMPTZ:
+  // true ↔ column has a value, false ↔ NULL. `null` means "not yet
+  // loaded" so the row renders the toggle in a disabled state until
+  // the initial fetch lands. `history` is reserved for Phase 5 and
+  // ships disabled in the UI.
+  const [aiScopeGlucose, setAiScopeGlucose] = useState<boolean | null>(null);
+  const [aiScopeIob, setAiScopeIob] = useState<boolean | null>(null);
+  const [aiScopeHistory, setAiScopeHistory] = useState<boolean | null>(null);
+  const [aiScopeBusy, setAiScopeBusy] = useState<"glucose" | "iob" | "history" | "revoke" | null>(null);
+
   // FAB short-tap mode — controls what the floating Glev button does
   // when tapped briefly. "ai" (default) opens the Glev AI consent
   // modal / chat sheet (Phase-2 behaviour from Task #651); "voice"
@@ -490,12 +501,18 @@ export default function SettingsPage() {
         if (!user) { setAiConsentGranted(false); return; }
         const { data } = await supabase
           .from("profiles")
-          .select("ai_consent_at")
+          .select("ai_consent_at, ai_consent_glucose_at, ai_consent_iob_at, ai_consent_history_at")
           .eq("user_id", user.id)
           .maybeSingle();
         setAiConsentGranted(Boolean(data?.ai_consent_at));
+        setAiScopeGlucose(Boolean(data?.ai_consent_glucose_at));
+        setAiScopeIob(Boolean(data?.ai_consent_iob_at));
+        setAiScopeHistory(Boolean(data?.ai_consent_history_at));
       } catch {
         setAiConsentGranted(false);
+        setAiScopeGlucose(false);
+        setAiScopeIob(false);
+        setAiScopeHistory(false);
       }
     })();
     // Load account info (email + sign-up date + total meal count) for the
@@ -606,10 +623,17 @@ export default function SettingsPage() {
       }
       return;
     }
-    // Turning OFF — revoke immediately and clear the local chat.
+    // Turning OFF — revoke immediately and clear the local chat. The
+    // server DELETE nulls the master consent AND all sub-scopes so we
+    // mirror that locally to keep the Glev Intelligence rows in sync
+    // without a refetch.
     setAiConsentBusy(true);
     const prev = aiConsentGranted;
+    const prevScopes = { glucose: aiScopeGlucose, iob: aiScopeIob, history: aiScopeHistory };
     setAiConsentGranted(false);
+    setAiScopeGlucose(false);
+    setAiScopeIob(false);
+    setAiScopeHistory(false);
     if (typeof window !== "undefined") {
       try { window.sessionStorage.removeItem("glev_ai_history_v1"); } catch { /* ignore */ }
       window.dispatchEvent(new CustomEvent("glev:ai-consent-revoked"));
@@ -619,10 +643,88 @@ export default function SettingsPage() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
     } catch {
       setAiConsentGranted(prev);
+      setAiScopeGlucose(prevScopes.glucose);
+      setAiScopeIob(prevScopes.iob);
+      setAiScopeHistory(prevScopes.history);
     } finally {
       setAiConsentBusy(false);
     }
-  }, [aiConsentGranted, aiConsentBusy]);
+  }, [aiConsentGranted, aiConsentBusy, aiScopeGlucose, aiScopeIob, aiScopeHistory]);
+
+  /**
+   * Per-scope toggle handler for the Glev Intelligence section
+   * (Task #664). Optimistically flips the local flag, then PATCHes
+   * `/api/ai/consent` with `{ scope, granted }`. On failure rolls
+   * the local flag back. Refuses to run if master consent isn't
+   * granted (the route would 409) — the rows are visually disabled
+   * in that case anyway.
+   */
+  const toggleAiScope = useCallback(async (scope: "glucose" | "iob" | "history", next: boolean) => {
+    if (aiScopeBusy) return;
+    if (!aiConsentGranted) return;
+    const setter =
+      scope === "glucose" ? setAiScopeGlucose :
+      scope === "iob"     ? setAiScopeIob     :
+                            setAiScopeHistory;
+    const prev =
+      scope === "glucose" ? aiScopeGlucose :
+      scope === "iob"     ? aiScopeIob     :
+                            aiScopeHistory;
+    setAiScopeBusy(scope);
+    setter(next);
+    try {
+      const res = await fetch("/api/ai/consent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scope, granted: next }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch {
+      setter(prev);
+    } finally {
+      setAiScopeBusy(null);
+    }
+  }, [aiConsentGranted, aiScopeBusy, aiScopeGlucose, aiScopeIob, aiScopeHistory]);
+
+  /**
+   * Destructive "Revoke all AI access" button. Same effect as the
+   * master toggle going OFF, but exposed prominently inside the Glev
+   * Intelligence section so users who want to nuke their AI data
+   * grants have an obvious one-tap path. Asks for confirm first.
+   */
+  const revokeAllAiAccess = useCallback(async () => {
+    if (aiScopeBusy || aiConsentBusy) return;
+    if (typeof window !== "undefined") {
+      const msg = tSettings("glev_intel_revoke_confirm");
+      if (!window.confirm(msg)) return;
+    }
+    setAiScopeBusy("revoke");
+    const prev = {
+      master: aiConsentGranted,
+      glucose: aiScopeGlucose,
+      iob: aiScopeIob,
+      history: aiScopeHistory,
+    };
+    setAiConsentGranted(false);
+    setAiScopeGlucose(false);
+    setAiScopeIob(false);
+    setAiScopeHistory(false);
+    if (typeof window !== "undefined") {
+      try { window.sessionStorage.removeItem("glev_ai_history_v1"); } catch { /* ignore */ }
+      window.dispatchEvent(new CustomEvent("glev:ai-consent-revoked"));
+    }
+    try {
+      const res = await fetch("/api/ai/consent", { method: "DELETE" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch {
+      setAiConsentGranted(prev.master);
+      setAiScopeGlucose(prev.glucose);
+      setAiScopeIob(prev.iob);
+      setAiScopeHistory(prev.history);
+    } finally {
+      setAiScopeBusy(null);
+    }
+  }, [aiConsentBusy, aiScopeBusy, aiConsentGranted, aiScopeGlucose, aiScopeIob, aiScopeHistory, tSettings]);
 
   // Listen for consent grants happening elsewhere (e.g. the user
   // tapping "Aktivieren →" in the modal opened from the floating
@@ -639,10 +741,13 @@ export default function SettingsPage() {
         if (!user) return;
         const { data } = await supabase
           .from("profiles")
-          .select("ai_consent_at")
+          .select("ai_consent_at, ai_consent_glucose_at, ai_consent_iob_at, ai_consent_history_at")
           .eq("user_id", user.id)
           .maybeSingle();
         setAiConsentGranted(Boolean(data?.ai_consent_at));
+        setAiScopeGlucose(Boolean(data?.ai_consent_glucose_at));
+        setAiScopeIob(Boolean(data?.ai_consent_iob_at));
+        setAiScopeHistory(Boolean(data?.ai_consent_history_at));
       } catch { /* keep previous */ }
     };
     window.addEventListener("focus", refresh);
@@ -2856,6 +2961,137 @@ export default function SettingsPage() {
             />
           </>
         )}
+      </SettingsSection>
+
+      {/* Glev Intelligence — granulare AI-Zugriffsrechte (Task #664).
+          Sitzt bewusst direkt nach der Insulin-Sektion, weil hier die
+          Daten konfiguriert werden, die der Glev-Chat-Assistent als
+          Kontext lesen darf. Vier Zeilen: Mahlzeit-Beschreibungen
+          (immer an, optisch deaktiviert als „Sockel"), Glukose, IOB,
+          Verlauf (Phase 5, deaktiviert mit Badge). Darunter ein
+          destruktiver „Alle Zugriffe widerrufen"-Button mit
+          Confirm-Dialog — entspricht effektiv dem Master-Toggle „off",
+          ist aber prominenter platziert. */}
+      <SettingsSection title={tSettings("section_glev_intelligence")}>
+        <div style={{ padding: "12px 14px 4px", fontSize: 13, color: "var(--text-dim)", lineHeight: 1.4 }}>
+          {tSettings("glev_intel_intro")}
+        </div>
+
+        {([
+          { key: "meal" as const, granted: true, locked: true, badge: null,
+            title: tSettings("glev_intel_row_meal_title"),
+            desc: tSettings("glev_intel_row_meal_desc") },
+          { key: "glucose" as const, granted: !!aiScopeGlucose, locked: false, badge: null,
+            title: tSettings("glev_intel_row_glucose_title"),
+            desc: tSettings("glev_intel_row_glucose_desc") },
+          { key: "iob" as const, granted: !!aiScopeIob, locked: false, badge: null,
+            title: tSettings("glev_intel_row_iob_title"),
+            desc: tSettings("glev_intel_row_iob_desc") },
+          { key: "history" as const, granted: !!aiScopeHistory, locked: true,
+            badge: tSettings("glev_intel_badge_phase5"),
+            title: tSettings("glev_intel_row_history_title"),
+            desc: tSettings("glev_intel_row_history_desc") },
+        ]).map((row) => {
+          const masterOff = !aiConsentGranted;
+          const interactive = !row.locked && !masterOff;
+          const busy = aiScopeBusy === row.key;
+          const disabled = !interactive || busy || aiConsentGranted === null;
+          return (
+            <div
+              key={row.key}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "12px 14px",
+                gap: 12,
+                borderTop: `1px solid ${BORDER}`,
+                opacity: masterOff && !row.locked ? 0.55 : 1,
+              }}
+            >
+              <span style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 14, fontWeight: 500, color: "var(--text-strong)", lineHeight: 1.25 }}>
+                    {row.title}
+                  </span>
+                  {row.badge && (
+                    <span style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      padding: "2px 6px",
+                      borderRadius: 6,
+                      background: "var(--surface-dim, rgba(255,255,255,0.06))",
+                      color: "var(--text-dim)",
+                      border: `1px solid ${BORDER}`,
+                      textTransform: "uppercase",
+                      letterSpacing: 0.4,
+                    }}>
+                      {row.badge}
+                    </span>
+                  )}
+                </span>
+                <span style={{ fontSize: 13, color: "var(--text-dim)", marginTop: 2, lineHeight: 1.35 }}>
+                  {row.desc}
+                </span>
+              </span>
+              <div
+                role="switch"
+                aria-checked={row.granted}
+                aria-disabled={disabled}
+                aria-label={row.title}
+                onClick={() => {
+                  if (disabled) return;
+                  if (row.key === "meal") return;
+                  void toggleAiScope(row.key, !row.granted);
+                }}
+                style={{
+                  width: 44, height: 24, borderRadius: 99,
+                  cursor: disabled ? "not-allowed" : "pointer",
+                  flexShrink: 0,
+                  background: row.granted ? ACCENT : "var(--border-strong)",
+                  border: `1px solid ${row.granted ? ACCENT + "60" : BORDER}`,
+                  position: "relative", transition: "background 0.2s",
+                  opacity: disabled ? 0.55 : 1,
+                }}
+              >
+                <div style={{
+                  position: "absolute", top: 2,
+                  left: row.granted ? 22 : 2,
+                  width: 18, height: 18, borderRadius: 99,
+                  background: "#fff", transition: "left 0.2s",
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.4)",
+                }} />
+              </div>
+            </div>
+          );
+        })}
+
+        <div style={{ padding: "12px 14px 14px", borderTop: `1px solid ${BORDER}` }}>
+          <button
+            type="button"
+            onClick={() => { void revokeAllAiAccess(); }}
+            disabled={!aiConsentGranted || aiScopeBusy === "revoke"}
+            style={{
+              width: "100%",
+              padding: "10px 12px",
+              borderRadius: 10,
+              border: "1px solid rgba(239,68,68,0.45)",
+              background: "rgba(239,68,68,0.10)",
+              color: "rgb(239,68,68)",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: !aiConsentGranted || aiScopeBusy === "revoke" ? "not-allowed" : "pointer",
+              opacity: !aiConsentGranted ? 0.55 : 1,
+            }}
+          >
+            {aiScopeBusy === "revoke"
+              ? tSettings("glev_intel_revoke_busy")
+              : tSettings("glev_intel_revoke_all")}
+          </button>
+          <p style={{ marginTop: 8, fontSize: 12, color: "var(--text-dim)", lineHeight: 1.4 }}>
+            {tSettings("glev_intel_revoke_hint")}
+          </p>
+        </div>
       </SettingsSection>
 
       {/* Arzttermine wandern aus der Insulin-Sektion in eine eigene
