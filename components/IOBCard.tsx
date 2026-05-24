@@ -404,7 +404,7 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
               <div style={{ position: "relative", flexShrink: 0 }}>
                 <CircleGauge
                   iob={0} color={lastBasal ? basalColor : "var(--text-ghost)"}
-                  cleared={!lastBasal} fraction={basalFraction}
+                  cleared={!lastBasal} fraction={1}
                 />
                 <div style={{
                   position: "absolute", inset: 0,
@@ -664,6 +664,55 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
               </span>
             </div>
           )}
+
+          {/* Bolus Wirkdauer bar — shown when at least one dose is still active */}
+          {!cleared && clearsInMin > 0 && (() => {
+            const bolusElapsedMin = diaMin - clearsInMin;
+            const elapsedPct = Math.min(100, Math.max(0, (bolusElapsedMin / diaMin) * 100));
+            const elapsedH = Math.floor(bolusElapsedMin / 60);
+            const elapsedM = bolusElapsedMin % 60;
+            return (
+              <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10, display: "flex", flexDirection: "column", gap: 7 }}>
+                <div style={{ fontSize: 11, color, letterSpacing: "0.1em", fontWeight: 700 }}>
+                  {t("iob_basal_coverage_title").toUpperCase()}
+                </div>
+                <div style={{ position: "relative", height: 10, borderRadius: 99, background: "var(--surface-soft)", overflow: "visible" }}>
+                  {/* elapsed portion */}
+                  <div style={{
+                    position: "absolute", left: 0, top: 0, bottom: 0,
+                    width: `${elapsedPct}%`,
+                    background: `${color}28`,
+                    borderRadius: 99,
+                  }} />
+                  {/* remaining portion */}
+                  <div style={{
+                    position: "absolute", right: 0, top: 0, bottom: 0,
+                    width: `${100 - elapsedPct}%`,
+                    background: `${color}70`,
+                    borderRadius: 99,
+                  }} />
+                  {/* current-position needle */}
+                  <div style={{
+                    position: "absolute", top: -3, bottom: -3,
+                    left: `${elapsedPct}%`,
+                    width: 3,
+                    background: color,
+                    borderRadius: 2,
+                    transform: "translateX(-50%)",
+                    boxShadow: `0 0 6px ${color}99`,
+                  }} />
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+                  <span style={{ color: "var(--text-dim)" }}>
+                    vor {elapsedH}h {elapsedM}min
+                  </span>
+                  <span style={{ color, fontWeight: 600 }}>
+                    ~{clearsInMin}min {t("iob_basal_remaining")}
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Expected BG impact */}
           {!cleared && (
