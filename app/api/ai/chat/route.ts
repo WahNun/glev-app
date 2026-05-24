@@ -3,7 +3,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { authedClient } from "@/app/api/insulin/_helpers";
 import { getMistralClient, mistralConfigError } from "@/lib/ai/mistralClient";
 import { GLEV_CHAT_SYSTEM_PROMPT } from "@/lib/ai/glevChatPrompt";
-import { GLEV_TOOLS, executeGlevTool } from "@/lib/ai/glevTools";
+import {
+  GLEV_TOOLS,
+  executeGlevTool,
+  isPendingActionEnvelope,
+} from "@/lib/ai/glevTools";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 // Maximum number of sequential tool-call rounds before we stop calling
@@ -169,14 +173,37 @@ type ContextScopes = { glucose: boolean; iob: boolean; history: boolean };
  * (we don't ship redacted placeholders to avoid confusing the model
  * with explicit absence claims).
  */
-function contextPreamble(ctx: ContextSnapshot, scopes: ContextScopes): string {
+function contextPreamble(
+  ctx: ContextSnapshot,
+  scopes: ContextScopes,
+  todayLocalDate: string,
+): string {
   const lines: string[] = [
+    `Heute ist ${todayLocalDate} (Datum in der lokalen Zeitzone des Nutzers; für add_appointment relative Angaben wie „nächste Woche" auf das absolute Datum umrechnen).`,
     "Kontext-Snapshot des Nutzers (kann veraltet oder Platzhalter sein — wenn unklar, vorsichtig formulieren):",
   ];
   if (scopes.glucose) lines.push(`- Glukose: ${ctx.glucoseSummary}`);
   if (scopes.iob)     lines.push(`- IOB:     ${ctx.iobSummary}`);
   lines.push(`- Letzte Mahlzeit: ${ctx.lastMealDescription}`);
   return lines.join("\n");
+}
+
+/**
+ * Computes today's date in YYYY-MM-DD form for the user's timezone.
+ * `en-CA` is the canonical locale that produces ISO calendar dates.
+ */
+function todayInTimezone(timezone: string | null): string {
+  const tz = timezone ?? "Europe/Berlin";
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
 }
 
 // Hard cap auf die Anzahl Memory-Einträge, die in den System-Prompt
@@ -298,7 +325,14 @@ export async function POST(req: NextRequest) {
   const messages: any[] = [
     { role: "system", content: GLEV_CHAT_SYSTEM_PROMPT },
     ...(memoryBlock ? [{ role: "system", content: memoryBlock }] : []),
-    { role: "system", content: contextPreamble(contextSnapshot, scopes) },
+    {
+      role: "system",
+      content: contextPreamble(
+        contextSnapshot,
+        scopes,
+        todayInTimezone(timezone),
+      ),
+    },
     ...(history ?? []).map((m) => ({ role: m.role, content: m.content })),
     { role: "user", content: message },
   ];

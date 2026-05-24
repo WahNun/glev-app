@@ -12,11 +12,18 @@
  * branch in `executeGlevTool`. The two stay in sync via the
  * `GlevToolName` union.
  *
- * Write-tools (log_meal_entry, log_bolus_entry, add_timeline_check,
- * create_appointment) are intentionally *not* in this file — they
- * land in Task 2 behind a structured UI-confirmation gate. Mixing
- * read+write here would invite accidental wiring before the gate is
- * built.
+ * Write-tools (log_meal_entry, log_bolus_entry, log_fingerstick,
+ * add_appointment, Phase 3 Task 2) führen den eigentlichen Insert NICHT
+ * direkt aus. Stattdessen legt der Executor eine ai_pending_actions-
+ * Zeile mit den vorgeschlagenen Parametern an und gibt
+ * `{ pending_action: { token, kind, summary } }` zurück. Der Chat-Route-
+ * Handler erkennt das Pattern, schickt das Pending-Action-Objekt per
+ * separatem SSE-Frame an die UI, und der Nutzer bestätigt manuell per
+ * Button. Erst /api/ai/confirm-action {token} führt den Write aus.
+ *
+ * Compliance-Prinzip (DECISIONS.md D-003 + D-017): Glev darf nie selbst
+ * Dosen vorschlagen oder „autonom" loggen. Jeder Write braucht einen
+ * expliziten User-Tap.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getHistory } from "@/lib/cgm";
@@ -106,6 +113,116 @@ export const GLEV_TOOLS = [
   {
     type: "function" as const,
     function: {
+      name: "log_meal_entry",
+      description:
+        "Schlägt das Speichern einer Mahlzeit vor (Mahlzeiten-Log). WICHTIG: schreibt NICHT direkt — die UI zeigt dem Nutzer einen Bestätigen-Button, erst dann landet die Zeile in der DB. Nur aufrufen, wenn der Nutzer ausdrücklich eine konkrete Mahlzeit mit konkreten Werten loggen möchte (z. B. 'Trag mir 60g Pasta Bolognese ein', 'Speicher: Apfel, 20g KH'). Niemals aufrufen, wenn der Nutzer nur eine Mahlzeit beschreibt, eine Frage stellt oder die Werte unklar sind — dann lieber nachfragen.",
+      parameters: {
+        type: "object",
+        properties: {
+          input_text: {
+            type: "string",
+            description:
+              "Kurzer beschreibender Text der Mahlzeit, max 200 Zeichen (z. B. 'Apfel mit Erdnussbutter').",
+          },
+          carbs_grams: {
+            type: "number",
+            description: "Kohlenhydrate in Gramm (0-500). Pflichtfeld.",
+          },
+          protein_grams: {
+            type: "number",
+            description: "Optional: Eiweiß in Gramm.",
+          },
+          fat_grams: {
+            type: "number",
+            description: "Optional: Fett in Gramm.",
+          },
+          meal_type: {
+            type: "string",
+            enum: ["FAST_CARBS", "HIGH_PROTEIN", "HIGH_FAT", "BALANCED"],
+            description: "Optional: Mahlzeit-Kategorie. Default BALANCED.",
+          },
+        },
+        required: ["input_text", "carbs_grams"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "log_bolus_entry",
+      description:
+        "Schlägt das Speichern einer Bolus-Insulin-Dosis vor (insulin_logs). WICHTIG: schreibt NICHT direkt — Bestätigung erfolgt per UI-Button. Nur aufrufen, wenn der Nutzer explizit eine bereits gespritzte Dosis dokumentieren will ('Log 5 IE Bolus', 'Trag bitte 4 Einheiten Novorapid ein'). Niemals selbst eine Dosis vorschlagen oder berechnen — die IE-Zahl muss vom Nutzer kommen.",
+      parameters: {
+        type: "object",
+        properties: {
+          units: {
+            type: "number",
+            description: "Anzahl IE (0-100). Pflichtfeld.",
+          },
+          insulin_name: {
+            type: "string",
+            description:
+              "Optional: Marken-/Insulin-Name (z. B. 'NovoRapid', 'Fiasp'). Default 'Bolus'.",
+          },
+          notes: {
+            type: "string",
+            description: "Optional: kurze Notiz.",
+          },
+        },
+        required: ["units"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "log_fingerstick",
+      description:
+        "Schlägt das Speichern einer manuell gemessenen Blutzucker-Messung vor (fingerstick_readings). WICHTIG: schreibt NICHT direkt — Bestätigung per UI. Nur aufrufen, wenn der Nutzer explizit einen gemessenen Wert dokumentieren will ('Trag 145 ein', 'Hab gerade 7.2 mmol gemessen, speicher das'). Bei mmol/L vorher in mg/dL umrechnen (mmol × 18).",
+      parameters: {
+        type: "object",
+        properties: {
+          value_mg_dl: {
+            type: "number",
+            description:
+              "Blutzuckerwert in mg/dL (20-600). Pflichtfeld. Bei mmol/L vorher × 18 rechnen.",
+          },
+          notes: {
+            type: "string",
+            description: "Optional: kurze Notiz.",
+          },
+        },
+        required: ["value_mg_dl"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "add_appointment",
+      description:
+        "Schlägt das Speichern eines Arzttermins vor (appointments). WICHTIG: schreibt NICHT direkt — Bestätigung per UI. Das Datum kommt als YYYY-MM-DD (kein Zeitpunkt). Relative Angaben ('nächsten Dienstag') auf das absolute Datum umrechnen — heutiges Datum steht im Kontext-Preamble.",
+      parameters: {
+        type: "object",
+        properties: {
+          date: {
+            type: "string",
+            description:
+              "Datum als YYYY-MM-DD (z. B. '2026-06-15'). Pflichtfeld.",
+          },
+          note: {
+            type: "string",
+            description:
+              "Optional: kurzes Label (z. B. 'Endo Q2', 'Diabetologe Müller').",
+          },
+        },
+        required: ["date"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "save_user_observation",
       description:
         "Speichert eine persönliche Beobachtung über den Nutzer dauerhaft als Key/Value, damit du sie in späteren Sessions ohne erneutes Nachfragen kennst. Nur aufrufen, wenn der Nutzer ein echtes, persönliches Muster, eine Reaktion oder eine Gewohnheit teilt (z. B. 'Bei mir wirkt Pizza erst nach 1,5 h', 'Mein Frühstück ist meistens Haferflocken mit Joghurt'). NICHT bei allgemeinen Wissensfragen, einmaligen Werten oder Small-Talk aufrufen. Key in snake_case, kurz und beschreibend (z. B. pizza_reaction, typical_breakfast, dawn_phenomenon). Beim erneuten Speichern desselben Keys wird der alte Value überschrieben.",
@@ -136,7 +253,39 @@ export type GlevToolName =
   | "get_bolus_history"
   | "get_basal_status"
   | "get_appointments"
-  | "save_user_observation";
+  | "save_user_observation"
+  | "log_meal_entry"
+  | "log_bolus_entry"
+  | "log_fingerstick"
+  | "add_appointment";
+
+/**
+ * Marker shape returned by every WRITE-tool. The chat-route handler
+ * sniffs for this and (a) emits the pending-action payload to the UI
+ * via a separate SSE frame, (b) reduces the tool reply that goes back
+ * to Mistral to a short "awaiting user confirmation" stub so the model
+ * doesn't try to confirm itself or call more write tools in the same
+ * round.
+ */
+export type PendingActionEnvelope = {
+  pending_action: {
+    token: string;
+    kind: GlevToolName;
+    summary: string;
+  };
+};
+
+export function isPendingActionEnvelope(v: unknown): v is PendingActionEnvelope {
+  if (!v || typeof v !== "object") return false;
+  const pa = (v as { pending_action?: unknown }).pending_action;
+  if (!pa || typeof pa !== "object") return false;
+  const o = pa as Record<string, unknown>;
+  return (
+    typeof o.token === "string" &&
+    typeof o.kind === "string" &&
+    typeof o.summary === "string"
+  );
+}
 
 // ── Executor ─────────────────────────────────────────────────────────
 
@@ -181,6 +330,14 @@ export async function executeGlevTool(
         return await toolGetAppointments(sb, userId);
       case "save_user_observation":
         return await toolSaveUserObservation(sb, userId, args);
+      case "log_meal_entry":
+        return await toolLogMealEntry(sb, userId, args);
+      case "log_bolus_entry":
+        return await toolLogBolusEntry(sb, userId, args);
+      case "log_fingerstick":
+        return await toolLogFingerstick(sb, userId, args);
+      case "add_appointment":
+        return await toolAddAppointment(sb, userId, args);
       default:
         return { error: `unknown tool: ${name}` };
     }
@@ -506,6 +663,163 @@ async function toolSaveUserObservation(
     return { ok: false, error: error.message };
   }
   return { ok: true, key: rawKey };
+}
+
+// ── WRITE-tools (UI-confirmation gate, Phase 3 Task 2) ──────────────
+//
+// Jede WRITE-Funktion validiert die vom Modell vorgeschlagenen Args,
+// baut eine kompakte deutsche `summary` für die UI-Bubble, legt eine
+// ai_pending_actions-Zeile an und gibt den Token zurück. Der eigentliche
+// Insert in meals/insulin_logs/fingerstick_readings/appointments
+// passiert erst in /api/ai/confirm-action nach manuellem User-Tap.
+//
+// Validierungs-Fehler geben `{ error: "…" }` zurück (kein throw), damit
+// Mistral gracefully eine Klärung formulieren kann statt der Request
+// hart fehlzuschlagen.
+
+const PENDING_TTL_MS = 5 * 60_000;
+
+async function createPendingAction(
+  sb: SupabaseClient,
+  userId: string,
+  kind: GlevToolName,
+  params: Record<string, unknown>,
+  summary: string,
+): Promise<PendingActionEnvelope | { error: string }> {
+  const expiresAt = new Date(Date.now() + PENDING_TTL_MS).toISOString();
+  const { data, error } = await sb
+    .from("ai_pending_actions")
+    .insert({
+      user_id: userId,
+      kind,
+      params,
+      summary,
+      expires_at: expiresAt,
+    })
+    .select("token")
+    .single();
+  if (error || !data?.token) {
+    return { error: error?.message ?? "Konnte Aktion nicht vorbereiten." };
+  }
+  return {
+    pending_action: {
+      token: data.token as string,
+      kind,
+      summary,
+    },
+  };
+}
+
+async function toolLogMealEntry(
+  sb: SupabaseClient,
+  userId: string,
+  args: Record<string, unknown>,
+): Promise<unknown> {
+  const inputText =
+    typeof args.input_text === "string" ? args.input_text.trim().slice(0, 200) : "";
+  const carbs = Number(args.carbs_grams);
+  if (!inputText) return { error: "input_text fehlt" };
+  if (!Number.isFinite(carbs) || carbs < 0 || carbs > 500) {
+    return { error: "carbs_grams ungültig (0-500 erwartet)" };
+  }
+  const protein =
+    Number.isFinite(Number(args.protein_grams)) && args.protein_grams !== undefined
+      ? Number(args.protein_grams)
+      : null;
+  const fat =
+    Number.isFinite(Number(args.fat_grams)) && args.fat_grams !== undefined
+      ? Number(args.fat_grams)
+      : null;
+  const allowedTypes = ["FAST_CARBS", "HIGH_PROTEIN", "HIGH_FAT", "BALANCED"];
+  const mealType =
+    typeof args.meal_type === "string" && allowedTypes.includes(args.meal_type)
+      ? args.meal_type
+      : "BALANCED";
+
+  const params = {
+    input_text: inputText,
+    carbs_grams: carbs,
+    protein_grams: protein,
+    fat_grams: fat,
+    meal_type: mealType,
+  };
+  const macroBits: string[] = [`${carbs}g KH`];
+  if (protein !== null) macroBits.push(`${protein}g Eiweiß`);
+  if (fat !== null) macroBits.push(`${fat}g Fett`);
+  const summary = `Mahlzeit: ${inputText} (${macroBits.join(", ")})`;
+
+  return await createPendingAction(sb, userId, "log_meal_entry", params, summary);
+}
+
+async function toolLogBolusEntry(
+  sb: SupabaseClient,
+  userId: string,
+  args: Record<string, unknown>,
+): Promise<unknown> {
+  const units = Number(args.units);
+  if (!Number.isFinite(units) || units <= 0 || units > 100) {
+    return { error: "units ungültig (0-100 IE erwartet)" };
+  }
+  const insulinName =
+    typeof args.insulin_name === "string" && args.insulin_name.trim()
+      ? args.insulin_name.trim().slice(0, 60)
+      : "Bolus";
+  const notes =
+    typeof args.notes === "string" && args.notes.trim()
+      ? args.notes.trim().slice(0, 200)
+      : null;
+
+  const params = {
+    units,
+    insulin_name: insulinName,
+    notes,
+  };
+  const summary = `Bolus: ${units} IE ${insulinName}${notes ? ` (${notes})` : ""}`;
+
+  return await createPendingAction(sb, userId, "log_bolus_entry", params, summary);
+}
+
+async function toolLogFingerstick(
+  sb: SupabaseClient,
+  userId: string,
+  args: Record<string, unknown>,
+): Promise<unknown> {
+  const value = Number(args.value_mg_dl);
+  if (!Number.isFinite(value) || value < 20 || value > 600) {
+    return { error: "value_mg_dl ungültig (20-600 mg/dL erwartet)" };
+  }
+  const notes =
+    typeof args.notes === "string" && args.notes.trim()
+      ? args.notes.trim().slice(0, 200)
+      : null;
+
+  const params = {
+    value_mg_dl: Math.round(value),
+    notes,
+  };
+  const summary = `Fingerstick: ${Math.round(value)} mg/dL${notes ? ` (${notes})` : ""}`;
+
+  return await createPendingAction(sb, userId, "log_fingerstick", params, summary);
+}
+
+async function toolAddAppointment(
+  sb: SupabaseClient,
+  userId: string,
+  args: Record<string, unknown>,
+): Promise<unknown> {
+  const date = typeof args.date === "string" ? args.date.trim() : "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return { error: "date ungültig (YYYY-MM-DD erwartet)" };
+  }
+  const note =
+    typeof args.note === "string" && args.note.trim()
+      ? args.note.trim().slice(0, 120)
+      : null;
+
+  const params = { date, note };
+  const summary = `Termin: ${date}${note ? ` — ${note}` : ""}`;
+
+  return await createPendingAction(sb, userId, "add_appointment", params, summary);
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
