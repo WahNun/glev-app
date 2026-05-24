@@ -13,6 +13,9 @@
  *  - Sound: `glev_low_alarm.wav` — distinct filename from meal-check
  *    sounds (`glev_pre_check.wav` / `glev_post_check.wav`) so users
  *    immediately distinguish urgency by ear alone.
+ *  - Snooze: users can snooze for 15 minutes via a notification action
+ *    button. After MAX_SNOOZES consecutive snoozes the alarm stops
+ *    until the app is opened again (counter resets on module reload).
  *
  * Pattern mirrors `lib/mealCheckReminders.ts`.
  */
@@ -22,12 +25,23 @@ export const LOW_ALARM_COOLDOWN_MS = 15 * 60 * 1000;
 export const LOW_ALARM_NOTIFICATION_ID = 8_000_001;
 export const DEFAULT_LOW_ALARM_THRESHOLD = 70;
 
+/** Maximum number of consecutive snoozes before the alarm stops. */
+export const MAX_SNOOZES = 3;
+
 const ALARM_COOLDOWN_KEY  = "glev_low_alarm_last_fired";
 const ALARM_SETTINGS_KEY  = "glev_low_alarm";
+
+/** Notification action category ID used on iOS and Android. */
+export const HYPO_ALARM_ACTION_TYPE_ID = "HYPO_ALARM";
+/** Action ID for the Snooze button inside the alarm notification. */
+export const SNOOZE_ACTION_ID = "SNOOZE_15";
 
 type LocalNotificationsModule = typeof import("@capacitor/local-notifications");
 let modCache: LocalNotificationsModule | null | undefined;
 let isNativeCache: boolean | undefined;
+
+/** In-memory snooze counter. Resets automatically on the next app launch. */
+let snoozeCount = 0;
 
 function isBrowser(): boolean {
   return typeof window !== "undefined" && typeof navigator !== "undefined";
@@ -105,14 +119,65 @@ function markAlarmFired(): void {
 }
 
 /**
- * Snooze the alarm for `minutes` minutes by backdating the last-fired
- * timestamp so the cooldown window only expires after the snooze.
+ * Returns the current snooze count. Exposed for testing and telemetry.
+ */
+export function getSnoozeCount(): number {
+  return snoozeCount;
+}
+
+/**
+ * Returns true while at least one snooze has been used since the last
+ * reset. Used by the ticker to switch to the snooze-recurrence
+ * notification body.
+ */
+export function isInSnoozeRecurrence(): boolean {
+  return snoozeCount > 0;
+}
+
+/**
+ * Resets the snooze counter. Called automatically on module reload (app start).
+ * Exposed for unit tests so they can reset state between runs.
+ */
+export function resetSnoozeCount(): void {
+  snoozeCount = 0;
+}
+
+/**
+ * Snooze the alarm for `minutes` minutes.
+ *
+ * - Increments the in-memory snooze counter.
+ * - If the counter has already reached MAX_SNOOZES, returns without
+ *   scheduling a new alarm — the user must open the app to reset.
+ * - On native: backdates the last-fired timestamp so the cooldown
+ *   window expires after exactly `minutes` minutes, allowing the next
+ *   `checkAndFireIfLow` tick to fire at the right time.
  */
 export function snoozeLowAlarm(minutes: number): void {
+  if (snoozeCount >= MAX_SNOOZES) return;
+  snoozeCount++;
   if (!isBrowser()) return;
   const backdated = Date.now() - LOW_ALARM_COOLDOWN_MS + minutes * 60 * 1000;
   try { window.localStorage.setItem(ALARM_COOLDOWN_KEY, String(backdated)); }
   catch { /* ignore */ }
+}
+
+/**
+ * Registers the HYPO_ALARM notification action category so iOS and
+ * Android know about the Snooze button. Must be called once at app
+ * start (SSR-safe — no-ops on web/SSR). The `snoozeTitle` string
+ * comes from the caller's i18n context.
+ */
+export async function registerAlarmActionTypes(snoozeTitle: string): Promise<void> {
+  const mod = await loadModule();
+  if (!mod) return;
+  try {
+    await mod.LocalNotifications.registerActionTypes({
+      types: [{
+        id: HYPO_ALARM_ACTION_TYPE_ID,
+        actions: [{ id: SNOOZE_ACTION_ID, title: snoozeTitle }],
+      }],
+    });
+  } catch { /* ignore */ }
 }
 
 export interface FireLowAlarmInput {
@@ -126,7 +191,8 @@ export interface FireLowAlarmInput {
  * fired within the window.
  *
  * On native Capacitor: uses `@capacitor/local-notifications` with the
- * `glev_low_alarm.wav` sound. A fixed notification ID ensures a rapid
+ * `glev_low_alarm.wav` sound and the HYPO_ALARM action category
+ * (shows the Snooze button). A fixed notification ID ensures a rapid
  * re-trigger replaces rather than stacks the pending alert.
  * On web (tab open): fires a plain `Notification` API call.
  * On SSR / no window: no-op.
@@ -135,6 +201,9 @@ export interface FireLowAlarmInput {
  */
 export async function fireLowGlucoseAlarm(input: FireLowAlarmInput): Promise<boolean> {
   if (!isBrowser()) return false;
+  // After MAX_SNOOZES consecutive snoozes, suppress all further alarms
+  // until the user opens the app (snoozeCount is reset in that path).
+  if (snoozeCount >= MAX_SNOOZES) return false;
   if (!isAlarmCooledDown()) return false;
 
   const mod = await loadModule();
@@ -155,6 +224,7 @@ export async function fireLowGlucoseAlarm(input: FireLowAlarmInput): Promise<boo
           body: input.body,
           schedule: { at: new Date(Date.now() + 500) },
           sound: LOW_ALARM_SOUND,
+          actionTypeId: HYPO_ALARM_ACTION_TYPE_ID,
           extra: { kind: "low_glucose_alarm" },
         }],
       });

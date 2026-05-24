@@ -2846,6 +2846,8 @@
   },
   "low_alarm": {
     "notification_title": "Low-glucose alert",
-    "notification_body": "BG {value} mg/dL — below your threshold of {threshold} mg/dL. Please act now."
+    "notification_body": "BG {value} mg/dL — below your threshold of {threshold} mg/dL. Please act now.",
+    "snooze_action_title": "Snooze 15 min",
+    "snooze_notification_body": "BG check (snooze) — still {value} mg/dL · threshold: {threshold} mg/dL"
   }
 }

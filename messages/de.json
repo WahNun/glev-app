@@ -2852,6 +2852,8 @@
   },
   "low_alarm": {
     "notification_title": "Hypo-Alarm",
-    "notification_body": "BZ {value} mg/dL — unter deinem Grenzwert von {threshold} mg/dL. Bitte reagiere jetzt."
+    "notification_body": "BZ {value} mg/dL — unter deinem Grenzwert von {threshold} mg/dL. Bitte reagiere jetzt.",
+    "snooze_action_title": "Snooze 15 Min",
+    "snooze_notification_body": "BZ-Check (Snooze) — noch {value} mg/dL · Schwelle: {threshold} mg/dL"
   }
 }
