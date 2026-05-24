@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from "react";
 
 /**
  * Bridges the engine wizard's `stepIndex` (0 = Essen, 1 = Makros,
@@ -22,8 +22,10 @@ const EngineWizardStepContext = createContext<EngineWizardStepState | null>(null
 export function EngineWizardStepProvider({ children }: { children: ReactNode }) {
   const [step, setStepState] = useState<number | null>(null);
   const setStep = useCallback((s: number | null) => setStepState(s), []);
+  // Memoize to prevent Layout (both parent and consumer) from looping.
+  const value = useMemo(() => ({ step, setStep }), [step, setStep]);
   return (
-    <EngineWizardStepContext.Provider value={{ step, setStep }}>
+    <EngineWizardStepContext.Provider value={value}>
       {children}
     </EngineWizardStepContext.Provider>
   );

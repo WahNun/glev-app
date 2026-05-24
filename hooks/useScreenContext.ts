@@ -150,7 +150,14 @@ export function useScreenContext(): ScreenContext {
     const screen = pathToScreen(pathname);
 
     if (screen !== "dashboard" || !supabase) {
-      setContext({ screen });
+      // Bail out if screen didn't change to avoid triggering a re-render
+      // that would cascade through the Layout → Context → Layout loop
+      // (Layout is both parent and consumer of all context providers).
+      setContext(prev =>
+        prev.screen === screen && !prev.glucoseSummary && !prev.iobSummary && !prev.lastMealSummary
+          ? prev
+          : { screen },
+      );
       return;
     }
 

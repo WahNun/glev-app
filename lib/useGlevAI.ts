@@ -126,6 +126,13 @@ export function useGlevAI(opts?: { contextSnapshot?: ContextSnapshot }) {
   const [messages, setMessages] = useState<GlevChatMessage[]>([]);
   const [streaming, setStreaming] = useState<boolean>(false);
   const abortRef = useRef<AbortController | null>(null);
+  // Keep a ref to the latest opts so sendMessage always reads the current
+  // contextSnapshot without needing opts?.contextSnapshot in its dep array.
+  // Including an inline object in useCallback deps would recreate sendMessage
+  // on every render (opts = { contextSnapshot: screenCtx } is a new object
+  // each time Layout renders), which propagates unnecessary re-renders.
+  const optsRef = useRef(opts);
+  useEffect(() => { optsRef.current = opts; });
 
   // Load consent + sessionStorage history once on mount.
   useEffect(() => {
@@ -319,12 +326,12 @@ export function useGlevAI(opts?: { contextSnapshot?: ContextSnapshot }) {
             message: trimmed,
             history: apiHistory,
             contextSnapshot: {
-              screen:              opts?.contextSnapshot?.screen,
-              glucoseSummary:      opts?.contextSnapshot?.glucoseSummary      ?? NEUTRAL,
-              iobSummary:          opts?.contextSnapshot?.iobSummary          ?? NEUTRAL,
+              screen:              optsRef.current?.contextSnapshot?.screen,
+              glucoseSummary:      optsRef.current?.contextSnapshot?.glucoseSummary      ?? NEUTRAL,
+              iobSummary:          optsRef.current?.contextSnapshot?.iobSummary          ?? NEUTRAL,
               lastMealDescription:
-                opts?.contextSnapshot?.lastMealSummary ??
-                opts?.contextSnapshot?.lastMealDescription ??
+                optsRef.current?.contextSnapshot?.lastMealSummary ??
+                optsRef.current?.contextSnapshot?.lastMealDescription ??
                 NEUTRAL,
             },
             // Device-local IANA timezone — single source of truth for
@@ -430,7 +437,8 @@ export function useGlevAI(opts?: { contextSnapshot?: ContextSnapshot }) {
         );
       }
     },
-    [messages, streaming, opts?.contextSnapshot],
+    // opts?.contextSnapshot is read via optsRef.current inside the fn — no dep needed.
+    [messages, streaming],
   );
 
   /**

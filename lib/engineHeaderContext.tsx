@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from "react";
 
 /**
  * Bridges the engine page's tab-strip state into the global mobile
@@ -28,11 +28,19 @@ export function EngineHeaderProvider({ children }: { children: ReactNode }) {
   const [tabsExpanded, setTabsExpanded] = useState(false);
   const toggleTabs = useCallback(() => setTabsExpanded(v => !v), []);
 
+  // Memoize so the context object reference stays stable when primitives
+  // haven't changed. Without this, Layout (which is both parent AND
+  // consumer of this context) would re-render on every render of this
+  // provider, triggering an infinite Layout → Provider → Layout loop.
+  const value = useMemo(
+    () => ({ visible, activeLabel, tabsExpanded, setVisible, setActiveLabel, toggleTabs, setTabsExpanded }),
+    // setVisible / setActiveLabel / setTabsExpanded are stable useState setters;
+    // toggleTabs is useCallback-stable — only the primitive fields matter.
+    [visible, activeLabel, tabsExpanded, toggleTabs],
+  );
+
   return (
-    <EngineHeaderContext.Provider value={{
-      visible, activeLabel, tabsExpanded,
-      setVisible, setActiveLabel, toggleTabs, setTabsExpanded,
-    }}>
+    <EngineHeaderContext.Provider value={value}>
       {children}
     </EngineHeaderContext.Provider>
   );

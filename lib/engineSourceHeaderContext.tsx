@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from "react";
 
 /**
  * Bridges the engine page's `nutritionSource` state into the global
@@ -31,9 +31,11 @@ const EngineSourceHeaderContext = createContext<EngineSourceHeaderState | null>(
 export function EngineSourceHeaderProvider({ children }: { children: ReactNode }) {
   const [source, setSourceState] = useState<NutritionSource | null>(null);
   const setSource = useCallback((s: NutritionSource | null) => setSourceState(s), []);
+  // Memoize to prevent Layout (both parent and consumer) from looping.
+  const value = useMemo(() => ({ source, setSource }), [source, setSource]);
 
   return (
-    <EngineSourceHeaderContext.Provider value={{ source, setSource }}>
+    <EngineSourceHeaderContext.Provider value={value}>
       {children}
     </EngineSourceHeaderContext.Provider>
   );

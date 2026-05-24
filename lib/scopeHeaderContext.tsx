@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useState, useMemo, type ReactNode } from "react";
 import { startOfDay, userTimezone } from "@/lib/utils/datetime";
 
 /**
@@ -95,8 +95,15 @@ export function ScopeHeaderProvider({ children }: { children: ReactNode }) {
   const [mode, setMode]       = useState<ScopeMode>("week");
   const [anchor, setAnchor]   = useState<Date>(() => new Date());
 
+  // Memoize to prevent Layout (both parent and consumer) from looping.
+  // setVisible / setMode / setAnchor are stable useState setters.
+  const value = useMemo(
+    () => ({ visible, mode, anchor, setVisible, setMode, setAnchor }),
+    [visible, mode, anchor],
+  );
+
   return (
-    <ScopeHeaderContext.Provider value={{ visible, mode, anchor, setVisible, setMode, setAnchor }}>
+    <ScopeHeaderContext.Provider value={value}>
       {children}
     </ScopeHeaderContext.Provider>
   );
