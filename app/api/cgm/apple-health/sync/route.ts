@@ -41,6 +41,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticate, errResponse } from "../../_helpers";
 import { adminClient } from "@/lib/cgm/supabase";
 import { getSyncStatus } from "@/lib/cgm/appleHealth";
+import { fillNearbyChecks } from "@/lib/mealTimelineChecks";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -179,6 +180,16 @@ export async function POST(req: NextRequest) {
 
     const inserted = Array.isArray(data) ? data.length : 0;
     skipped += rows.length - inserted;
+
+    // Fire-and-forget: for each successfully processed row, try to fill
+    // any open meal_timeline_check whose planned_at is within ±15 minutes.
+    // Errors are swallowed so a failed fill can never break the sync response.
+    for (const r of rows) {
+      fillNearbyChecks(sb, user.id, r.value_mg_dl, new Date(r.timestamp)).catch(
+        () => {},
+      );
+    }
+
     return NextResponse.json({ inserted, skipped });
   } catch (e) {
     return errResponse(e);

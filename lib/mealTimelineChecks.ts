@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 
 /**
@@ -75,6 +76,60 @@ export interface UpsertCheckInput {
  * Returns the persisted row so callers can refresh their local state
  * with the server-side id + created_at.
  */
+/**
+ * After a new glucose reading is saved (fingerstick or CGM), find the
+ * single nearest open `meal_timeline_check` within a ±15-minute window
+ * around `measuredAt` and backfill `bg_at_check` + `confirmed_at`.
+ *
+ * Fire-and-forget pattern: callers must NOT await this in the critical
+ * path. A failed fill must never block the save that triggers it.
+ *
+ * Rules enforced here (DB-level RLS adds a second layer for user-scoped
+ * clients; service-role callers rely on the explicit `user_id` filter):
+ *   - Only rows belonging to `userId` are touched.
+ *   - Only rows where `bg_at_check IS NULL` qualify.
+ *   - `planned_at` must lie within ±15 minutes of `measuredAt`.
+ *   - If multiple open checks qualify, only the one with `planned_at`
+ *     closest to `measuredAt` is updated.
+ *   - The UPDATE includes an extra `.is("bg_at_check", null)` guard so a
+ *     concurrent write that beats us turns the update into a safe no-op.
+ */
+export async function fillNearbyChecks(
+  sb: SupabaseClient,
+  userId: string,
+  valueMgDl: number,
+  measuredAt: Date,
+): Promise<void> {
+  const WINDOW_MS  = 15 * 60 * 1000;
+  const windowStart = new Date(measuredAt.getTime() - WINDOW_MS).toISOString();
+  const windowEnd   = new Date(measuredAt.getTime() + WINDOW_MS).toISOString();
+
+  const { data: rows, error: selErr } = await sb
+    .from("meal_timeline_checks")
+    .select("id,planned_at")
+    .eq("user_id", userId)
+    .is("bg_at_check", null)
+    .gte("planned_at", windowStart)
+    .lte("planned_at", windowEnd);
+
+  if (selErr || !rows || rows.length === 0) return;
+
+  const measured = measuredAt.getTime();
+  const nearest = (rows as Array<{ id: string; planned_at: string }>).reduce(
+    (best, row) => {
+      const distRow  = Math.abs(new Date(row.planned_at).getTime() - measured);
+      const distBest = Math.abs(new Date(best.planned_at).getTime() - measured);
+      return distRow < distBest ? row : best;
+    },
+  );
+
+  await sb
+    .from("meal_timeline_checks")
+    .update({ bg_at_check: valueMgDl, confirmed_at: new Date().toISOString() })
+    .eq("id", nearest.id)
+    .is("bg_at_check", null);
+}
+
 export async function upsertCheck(input: UpsertCheckInput): Promise<MealTimelineCheck> {
   if (!supabase) throw new Error("Supabase is not configured");
   const { data: { user }, error: authErr } = await supabase.auth.getUser();

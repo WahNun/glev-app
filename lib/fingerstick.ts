@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { fillNearbyChecks } from "./mealTimelineChecks";
 
 /**
  * Manual fingerstick (capillary blood) glucose readings.
@@ -58,7 +59,21 @@ export async function insertFingerstick(input: FingerstickInput): Promise<Finger
     .single();
 
   if (error) throw error;
-  return data as FingerstickReading;
+  const reading = data as FingerstickReading;
+
+  // Fire-and-forget: fill any open timeline check whose planned_at falls
+  // within ±15 minutes of this reading. Errors must not surface to the
+  // caller — a failed fill should never block a fingerstick save.
+  if (supabase) {
+    fillNearbyChecks(
+      supabase,
+      user.id,
+      reading.value_mg_dl,
+      new Date(reading.measured_at),
+    ).catch(() => {});
+  }
+
+  return reading;
 }
 
 /**
