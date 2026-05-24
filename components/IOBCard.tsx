@@ -672,7 +672,7 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
             const elapsedH = Math.floor(bolusElapsedMin / 60);
             const elapsedM = bolusElapsedMin % 60;
             return (
-              <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10, display: "flex", flexDirection: "column", gap: 7 }}>
+              <div style={{ borderTop: "1px solid var(--border)", padding: "14px 16px 14px", display: "flex", flexDirection: "column", gap: 11 }}>
                 <div style={{ fontSize: 11, color, letterSpacing: "0.1em", fontWeight: 700 }}>
                   {t("iob_basal_coverage_title").toUpperCase()}
                 </div>
