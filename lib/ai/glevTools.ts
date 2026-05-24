@@ -306,7 +306,7 @@ async function toolGetBasalStatus(
   // missed doses or shift workers can stretch beyond 24 h).
   const sinceIso = new Date(Date.now() - 72 * 60 * 60_000).toISOString();
 
-  const [lastBasalRes, settingsRes] = await Promise.all([
+  const [lastBasalRes, settingsRes, profileRes] = await Promise.all([
     sb
       .from("insulin_logs")
       .select("id, units, insulin_name, created_at, notes")
@@ -321,12 +321,19 @@ async function toolGetBasalStatus(
       .select("insulin_brand_basal, basal_action_window_h")
       .eq("user_id", userId)
       .maybeSingle(),
+    sb
+      .from("profiles")
+      .select("timezone")
+      .eq("id", userId)
+      .maybeSingle(),
   ]);
 
   const configuredBrand =
     (settingsRes.data?.insulin_brand_basal as string | null) ?? null;
   const actionWindowH =
     (settingsRes.data?.basal_action_window_h as number | null) ?? null;
+  const userTimezone =
+    (profileRes.data?.timezone as string | null | undefined) ?? null;
 
   const last = lastBasalRes.data;
   if (!last) {
@@ -334,12 +341,14 @@ async function toolGetBasalStatus(
       available: false,
       configuredBrand,
       actionWindowHours: actionWindowH,
+      timezone: userTimezone ?? "UTC",
       hint: "Keine Basal-Dosis in den letzten 72 h gefunden.",
     };
   }
 
   const atMs = new Date(last.created_at as string).getTime();
   const hoursSince = (Date.now() - atMs) / (60 * 60_000);
+  const formatted = formatInUserTimezone(atMs, userTimezone);
 
   return {
     available: true,
@@ -347,11 +356,15 @@ async function toolGetBasalStatus(
       units: last.units as number,
       name: (last.insulin_name as string | null) ?? configuredBrand ?? "Basal",
       at: last.created_at as string,
+      localTime: formatted.timeOnly,
+      localDateTime: formatted.dateTime,
+      timezone: formatted.zoneLabel,
       hoursSince: Math.round(hoursSince * 10) / 10,
       note: (last.notes as string | null) ?? null,
     },
     configuredBrand,
     actionWindowHours: actionWindowH,
+    timezone: formatted.zoneLabel,
   };
 }
 
@@ -380,6 +393,49 @@ function clampLimit(raw: unknown, fallback: number): number {
   const n = typeof raw === "number" ? raw : Number(raw);
   if (!Number.isFinite(n)) return fallback;
   return Math.max(1, Math.min(20, Math.round(n)));
+}
+
+/**
+ * Format a UTC timestamp in the user's timezone for AI consumption.
+ * Returns three views so Mistral can pick the right one for the answer:
+ *  - `timeOnly`  e.g. "21:02"           → for same-day phrasing
+ *  - `dateTime`  e.g. "23.05. 21:02"    → for cross-day phrasing
+ *  - `zoneLabel` e.g. "Europe/Berlin" or "UTC" if no profile timezone
+ *
+ * Fallback: if `userTimezone` is null/invalid, formats in UTC and labels
+ * the zone explicitly as "UTC" so the AI never silently shows a wrong-tz
+ * value as if it were local.
+ */
+function formatInUserTimezone(
+  atMs: number,
+  userTimezone: string | null,
+): { timeOnly: string; dateTime: string; zoneLabel: string } {
+  const tz = userTimezone && isValidTimezone(userTimezone) ? userTimezone : "UTC";
+  const d = new Date(atMs);
+  const timeOnly = d.toLocaleTimeString("de-DE", {
+    timeZone: tz,
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const datePart = d.toLocaleDateString("de-DE", {
+    timeZone: tz,
+    day: "2-digit",
+    month: "2-digit",
+  });
+  return {
+    timeOnly,
+    dateTime: `${datePart} ${timeOnly}`,
+    zoneLabel: tz,
+  };
+}
+
+function isValidTimezone(tz: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function shorten(s: string | null, max: number): string | null {
