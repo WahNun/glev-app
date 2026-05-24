@@ -29,7 +29,7 @@ export default function CgmAutoFillProvider() {
       if (reconcilingRef.current) return;
       reconcilingRef.current = true;
       try {
-        const meals = await fetchMeals();
+        const meals = await fetchMeals({ limit: Infinity });
         if (cancelled) return;
         const r = await reconcilePendingMealsCgm(meals);
         if (r.filled > 0 && typeof window !== "undefined") {

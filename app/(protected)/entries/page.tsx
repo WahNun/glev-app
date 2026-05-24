@@ -569,7 +569,7 @@ export default function EntriesPage() {
         // Initial fetch covers the last 90 days — fast enough to
         // unblock the list. Older rows are pulled in background below.
         const [m, ins, ex, cy, sy, inf] = await Promise.all([
-          fetchMeals({ sinceDays: 90 }),
+          fetchMeals({ sinceDays: 90, limit: Infinity }),
           fetchRecentInsulinLogs(60).catch(() => []),
           fetchRecentExerciseLogs(60).catch(() => []),
           fetchRecentMenstrualLogs(120).catch(() => [] as MenstrualLog[]),
@@ -603,7 +603,7 @@ export default function EntriesPage() {
         // Background: pull older meals (90–FETCH_MEALS_DEFAULT_SINCE_DAYS
         // days) so historical filters & counts are complete.
         if (!cancelled && FETCH_MEALS_DEFAULT_SINCE_DAYS > 90) {
-          fetchMeals({ sinceDays: FETCH_MEALS_DEFAULT_SINCE_DAYS }).then(all => {
+          fetchMeals({ sinceDays: FETCH_MEALS_DEFAULT_SINCE_DAYS, limit: Infinity }).then(all => {
             if (!cancelled && all.length > m.length) {
               setMeals(all);
             }

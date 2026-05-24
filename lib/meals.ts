@@ -612,6 +612,14 @@ export const FETCH_MEALS_DEFAULT_SINCE_DAYS = 365;
  */
 export const FETCH_MEALS_ENGINE_SINCE_DAYS = 90;
 
+/**
+ * Default row cap for `fetchMeals`. Set so a forgetful caller never
+ * triggers an unbounded `SELECT` over the user's entire history.
+ * Surfaces that genuinely need every row in the time window must opt
+ * out explicitly by passing `limit: Infinity` (or `0`).
+ */
+export const FETCH_MEALS_DEFAULT_LIMIT = 50;
+
 export interface FetchMealsOptions {
   /**
    * Maximum age (in days) of meals to return. Hard-capped at the
@@ -622,10 +630,13 @@ export interface FetchMealsOptions {
    */
   sinceDays?: number;
   /**
-   * Hard cap on number of rows. Used by the entries screen to render
-   * the most-recent 5 meals on first paint while the full history
-   * loads in the background (2026-05-18 perceived-performance fix).
-   * Omit for the full window.
+   * Hard cap on number of rows. Defaults to
+   * {@link FETCH_MEALS_DEFAULT_LIMIT} (50) so an unbounded `SELECT`
+   * never reaches the wire for callers that forget to pass one.
+   * Pass `Infinity` (or `0`) to explicitly opt out of any cap — used
+   * by surfaces that need the full window (dashboard history,
+   * entries-page full load, engine sliding window, insights, exports,
+   * CGM auto-fill reconciliation).
    */
   limit?: number;
   /**
@@ -638,6 +649,7 @@ export interface FetchMealsOptions {
 
 export async function fetchMeals(opts: FetchMealsOptions = {}): Promise<Meal[]> {
   const sinceDays = opts.sinceDays ?? FETCH_MEALS_DEFAULT_SINCE_DAYS;
+  const limit = opts.limit ?? FETCH_MEALS_DEFAULT_LIMIT;
   const client = opts.client ?? supabase;
   if (!client) throw new Error("Supabase is not configured");
 
@@ -652,10 +664,12 @@ export async function fetchMeals(opts: FetchMealsOptions = {}): Promise<Meal[]> 
     cutoffIso ? q.gte("created_at", cutoffIso) : q;
 
   // Row cap applied AFTER cutoff + ordering so we always get the
-  // newest N within the window, not a random first-N. Skipped when
-  // opts.limit is undefined / non-positive.
+  // newest N within the window, not a random first-N. `Infinity`
+  // and `0` are the documented opt-out values for callers that need
+  // the full window (any non-finite or non-positive value skips the
+  // cap).
   const applyLimit = <T extends { limit: (n: number) => T }>(q: T): T =>
-    opts.limit && opts.limit > 0 ? q.limit(opts.limit) : q;
+    Number.isFinite(limit) && limit > 0 ? q.limit(limit) : q;
 
   let { data, error } = await applyLimit(applyCutoff(
     client
@@ -719,7 +733,10 @@ export async function fetchMeals(opts: FetchMealsOptions = {}): Promise<Meal[]> 
 export function fetchMealsForEngine(
   opts: Omit<FetchMealsOptions, "sinceDays"> = {},
 ): Promise<Meal[]> {
-  return fetchMeals({ ...opts, sinceDays: FETCH_MEALS_ENGINE_SINCE_DAYS });
+  // Engine pipelines (adaptive ICR, pattern detector, time-of-day
+  // buckets) depend on the full 90-day window, so opt out of the
+  // default 50-row cap unless the caller explicitly overrides it.
+  return fetchMeals({ limit: Infinity, ...opts, sinceDays: FETCH_MEALS_ENGINE_SINCE_DAYS });
 }
 
 // Splits a meal description like "95g döner bread, 120g veal döner meat" into

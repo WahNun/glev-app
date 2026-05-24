@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useTranslations } from "next-intl";
-import { calcTotalIOB, calcSingleIOB, getDIAMinutes, buildDoses, calcBasalRemaining, resolveBolusTypeLabel, calcSparklineWindow, type BolusDose, type InsulinType } from "@/lib/iob";
+import { calcTotalIOB, calcSingleIOB, getDIAMinutes, buildDoses, calcBasalRemaining, resolveBolusTypeLabel, resolveBasalTypeLabel, calcSparklineWindow, type BolusDose, type InsulinType } from "@/lib/iob";
 import { getInsulinSettings } from "@/lib/userSettings";
 import { DEFAULT_BASAL_WINDOW_H } from "@/lib/engine/constants";
 import type { InsulinLog } from "@/lib/insulin";
@@ -428,7 +428,7 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
               {/* Basal info */}
               <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 5 }}>
                 <div style={{ fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.1em", fontWeight: 700 }}>
-                  {(insulinBrandBasal?.trim() || t("iob_tab_basal")).toUpperCase()}
+                  {resolveBasalTypeLabel(insulinBrandBasal, t("iob_tab_basal")).toUpperCase()}
                 </div>
                 {lastBasal ? (
                   <>
@@ -565,17 +565,15 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
                       {new Date(lastBasal.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </span>
                   </div>
-                  {insulinBrandBasal?.trim() && (
-                    <div>
-                      <span style={{
-                        display: "inline-block", padding: "2px 10px", borderRadius: 99,
-                        background: `${BASAL_INDIGO}18`, color: BASAL_INDIGO,
-                        fontSize: 11, fontWeight: 600,
-                      }}>
-                        {insulinBrandBasal.trim()}
-                      </span>
-                    </div>
-                  )}
+                  <div>
+                    <span style={{
+                      display: "inline-block", padding: "2px 10px", borderRadius: 99,
+                      background: `${BASAL_INDIGO}18`, color: BASAL_INDIGO,
+                      fontSize: 11, fontWeight: 600,
+                    }}>
+                      {resolveBasalTypeLabel(insulinBrandBasal, t("iob_tab_basal"))}
+                    </span>
+                  </div>
                 </div>
               </>
             ) : (

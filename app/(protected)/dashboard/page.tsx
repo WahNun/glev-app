@@ -577,7 +577,7 @@ export default function DashboardPage() {
     "dashboard:meals+insulin60+exercise60",
     async () => {
       const [m, ins, ex] = await Promise.all([
-        fetchMeals(),
+        fetchMeals({ limit: Infinity }),
         fetchRecentInsulinLogs(60).catch(() => [] as InsulinLog[]),
         fetchRecentExerciseLogs(60).catch(() => [] as ExerciseLog[]),
       ]);

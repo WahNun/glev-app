@@ -28,6 +28,7 @@ import {
   fetchMeals,
   fetchMealsForEngine,
   FETCH_MEALS_DEFAULT_SINCE_DAYS,
+  FETCH_MEALS_DEFAULT_LIMIT,
   FETCH_MEALS_ENGINE_SINCE_DAYS,
   type FetchMealsOptions,
 } from "@/lib/meals";
@@ -44,12 +45,15 @@ interface GteCall { column: string; value: string; }
 
 function makeStubClient(rows: unknown[]) {
   const gteCalls: GteCall[] = [];
+  const limitCalls: number[] = [];
   let lastSelect = "";
 
   // Each call to `.from("meals")` resets the row pipeline, so the
   // builder rebuilds itself per-call. We retain the same `gteCalls`
   // accumulator across the lifetime of the client so the test can
-  // inspect the entire chain history.
+  // inspect the entire chain history. The builder is thenable so
+  // `await applyLimit(...)` resolves to the canned result regardless
+  // of whether `.limit()` is the final call in the chain.
   const builder = {
     select(cols: string) {
       lastSelect = cols;
@@ -59,10 +63,15 @@ function makeStubClient(rows: unknown[]) {
       gteCalls.push({ column, value });
       return builder;
     },
-    // `.order()` is the terminator that `fetchMeals` awaits — return
-    // the canned result here so the awaited promise resolves cleanly.
-    async order(_col: string, _opts: { ascending: boolean }) {
-      return { data: rows, error: null };
+    order(_col: string, _opts: { ascending: boolean }) {
+      return builder;
+    },
+    limit(n: number) {
+      limitCalls.push(n);
+      return builder;
+    },
+    then(resolve: (v: { data: unknown[]; error: null }) => void) {
+      resolve({ data: rows, error: null });
     },
   };
 
@@ -73,6 +82,7 @@ function makeStubClient(rows: unknown[]) {
   return {
     client: client as unknown as NonNullable<FetchMealsOptions["client"]>,
     gteCalls,
+    limitCalls,
     lastSelect: () => lastSelect,
   };
 }
@@ -151,17 +161,23 @@ test("fetchMeals returns the rows the client emits, untouched", async () => {
 // ──────────────────────────────────────────────────────────────────
 function makeFilteringStubClient(rows: Array<{ id: string; created_at: string }>) {
   let cutoff: number | null = null;
+  let cap: number | null = null;
   const builder = {
     select() { return builder; },
     gte(_col: string, value: string) { cutoff = Date.parse(value); return builder; },
-    async order(_col: string, _opts: { ascending: boolean }) {
-      const filtered = cutoff == null
+    order(_col: string, _opts: { ascending: boolean }) { return builder; },
+    limit(n: number) { cap = n; return builder; },
+    then(resolve: (v: { data: Array<{ id: string; created_at: string }>; error: null }) => void) {
+      let filtered = cutoff == null
         ? rows
         : rows.filter(r => Date.parse(r.created_at) >= (cutoff as number));
       // Mirror the production sort (newest first) so order assertions
       // line up with what real PostgREST would emit.
-      filtered.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
-      return { data: filtered, error: null };
+      filtered = filtered.slice().sort(
+        (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
+      );
+      if (cap != null && cap > 0) filtered = filtered.slice(0, cap);
+      resolve({ data: filtered, error: null });
     },
   };
   const client = { from(_t: string) { return builder; } };
@@ -197,6 +213,44 @@ test("fetchMeals default excludes meals older than 365 days but keeps the rest",
   const client = makeFilteringStubClient(seeded);
   const result = await fetchMeals({ client });
   expect(result.map(r => r.id)).toEqual(["d10", "d100", "d364"]);
+});
+
+test("fetchMeals defaults to a 50-row cap when no limit is passed", async () => {
+  // Forgetful callers must never trigger an unbounded SELECT.
+  const stub = makeStubClient([]);
+  await fetchMeals({ client: stub.client });
+  expect(FETCH_MEALS_DEFAULT_LIMIT).toBe(50);
+  expect(stub.limitCalls).toEqual([50]);
+});
+
+test("fetchMeals honours an explicit limit override", async () => {
+  const stub = makeStubClient([]);
+  await fetchMeals({ limit: 5, client: stub.client });
+  expect(stub.limitCalls).toEqual([5]);
+});
+
+test("fetchMeals skips the row cap when limit is Infinity", async () => {
+  // Documented opt-out used by dashboard / entries / insights /
+  // exports / CGM-autofill / engine pipelines that need every row in
+  // the time window.
+  const stub = makeStubClient([]);
+  await fetchMeals({ limit: Infinity, client: stub.client });
+  expect(stub.limitCalls).toEqual([]);
+});
+
+test("fetchMeals skips the row cap when limit is 0", async () => {
+  const stub = makeStubClient([]);
+  await fetchMeals({ limit: 0, client: stub.client });
+  expect(stub.limitCalls).toEqual([]);
+});
+
+test("fetchMealsForEngine opts out of the default 50-row cap", async () => {
+  // Engine pipelines (adaptive ICR, pattern detector, time-of-day
+  // buckets) consume the full 90-day window — a 50-row cap would
+  // silently truncate power-users' history and distort the averages.
+  const stub = makeStubClient([]);
+  await fetchMealsForEngine({ client: stub.client });
+  expect(stub.limitCalls).toEqual([]);
 });
 
 test("fetchMeals skips the gte filter when sinceDays is Infinity", async () => {

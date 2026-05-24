@@ -749,7 +749,7 @@ export default function SettingsPage() {
         // ICR is now NUMERIC(5,1) in the DB (Migration 20260515) — round
         // to one decimal so 8.5 survives the round-trip but 8.547 is
         // sanitised. CF + target BG remain integer columns.
-        icr:        Math.min(100, Math.max(1, Math.round(settings.icr * 10) / 10)),
+        icr:        Math.min(30, Math.max(5, Math.round(settings.icr * 10) / 10)),
         cf:         Math.min(500, Math.max(1, Math.round(settings.cf))),
         targetBg:   Math.min(200, Math.max(60, Math.round(settings.targetBg))),
         // diaMinutes is optional — pass undefined when the user has never
@@ -1183,7 +1183,7 @@ export default function SettingsPage() {
     setSaveError("");
     try {
       await saveInsulinSettings({
-        icr:      Math.min(100, Math.max(1, Math.round(settings.icr * 10) / 10)),
+        icr:      Math.min(30, Math.max(5, Math.round(settings.icr * 10) / 10)),
         cf:       Math.min(500, Math.max(1, Math.round(settings.cf))),
         targetBg: Math.min(200, Math.max(60, Math.round(settings.targetBg))),
         ...(settings.diaMinutes !== undefined
@@ -1293,8 +1293,8 @@ export default function SettingsPage() {
           <SnapSlider
             value={settings.icr ?? 10}
             onChange={(v) => upd("icr", v)}
-            min={2}
-            max={40}
+            min={5}
+            max={30}
             step={1}
             unit="g/IE"
             accent={ACCENT}

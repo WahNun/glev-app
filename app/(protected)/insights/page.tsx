@@ -434,7 +434,7 @@ export default function InsightsPage() {
     async () => {
       const fingerstickFromIso = startOfDaysAgo(insightsFetchDays - 1).toISOString();
       const [m, il, fs] = await Promise.all([
-        fetchMeals({ sinceDays: insightsFetchDays }).catch(() => [] as Meal[]),
+        fetchMeals({ sinceDays: insightsFetchDays, limit: Infinity }).catch(() => [] as Meal[]),
         fetchRecentInsulinLogs(insightsFetchDays).catch(() => [] as InsulinLog[]),
         fetchFingersticks(fingerstickFromIso).catch(() => [] as FingerstickReading[]),
       ]);

@@ -1386,7 +1386,7 @@ export default function EnginePage() {
 
   // IOB: fetch recent meals (last 5h) and calculate active insulin.
   useEffect(() => {
-    fetchMeals({ sinceDays: 1 }).then(recent => {
+    fetchMeals({ sinceDays: 1, limit: Infinity }).then(recent => {
       const cutoff = Date.now() - 5 * 60 * 60 * 1000;
       const recentDoses = recent
         .filter(m => m.insulin_units != null && m.insulin_units > 0 && new Date(m.created_at).getTime() > cutoff)
