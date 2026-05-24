@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { GlevChatMessage, PendingAction } from "@/lib/useGlevAI";
+import { useVoxtral } from "@/hooks/useVoxtral";
 
 const ACCENT = "#4F6EF7";
 const SHEET_BG = "#161b22";
@@ -177,8 +178,17 @@ export default function GlevAIChatSheet({
   onCancelAction,
 }: Props) {
   const [input, setInput] = useState("");
+  const [sttError, setSttError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
+
+  const { isListening, startListening, stopListening } = useVoxtral({
+    onTranscript: (text) => {
+      setInput((prev) => (prev ? `${prev} ${text}` : text));
+      setSttError(null);
+    },
+    onError: (err) => setSttError(err),
+  });
 
   // Bewusst KEIN Auto-Focus beim Öffnen: das Software-Keyboard würde
   // sonst auf iOS/Android sofort die halbe Sheet-Höhe verschlucken und
@@ -207,6 +217,10 @@ export default function GlevAIChatSheet({
         @keyframes glevAiFadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes glevAiSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
         @keyframes glevAiCaret { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
+        @keyframes glevBtnGlowFast {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(79,110,247,0.7); transform: scale(1); }
+          50% { box-shadow: 0 0 0 8px rgba(79,110,247,0); transform: scale(1.08); }
+        }
       `}</style>
 
       {/* Backdrop */}
@@ -398,6 +412,49 @@ export default function GlevAIChatSheet({
             borderTop: "1px solid rgba(255,255,255,0.06)",
           }}
         >
+          {/* Mic button — hold to talk */}
+          <button
+            type="button"
+            aria-label={isListening ? "Aufnahme stoppen" : "Spracheingabe starten"}
+            aria-pressed={isListening}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              void startListening();
+            }}
+            onPointerUp={() => stopListening()}
+            onPointerLeave={() => { if (isListening) stopListening(); }}
+            style={{
+              flexShrink: 0,
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              border: "none",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: isListening ? ACCENT : "#21262d",
+              animation: isListening ? "glevBtnGlowFast 0.7s ease-in-out infinite" : "none",
+              touchAction: "none",
+            }}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="white"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="9" y="2" width="6" height="11" rx="3" />
+              <path d="M5 10a7 7 0 0 0 14 0" />
+              <line x1="12" y1="19" x2="12" y2="22" />
+              <line x1="8" y1="22" x2="16" y2="22" />
+            </svg>
+          </button>
+
           <input
             ref={inputRef}
             type="text"
@@ -409,11 +466,11 @@ export default function GlevAIChatSheet({
                 submit();
               }
             }}
-            placeholder="Frag Glev …"
+            placeholder={isListening ? "Spreche …" : "Frag Glev …"}
             disabled={streaming}
             style={{
               flex: 1,
-              border: "1px solid rgba(255,255,255,0.1)",
+              border: `1px solid ${isListening ? `${ACCENT}66` : "rgba(255,255,255,0.1)"}`,
               borderRadius: 20,
               padding: "10px 14px",
               background: "rgba(255,255,255,0.04)",
@@ -421,6 +478,7 @@ export default function GlevAIChatSheet({
               fontSize: 14,
               outline: "none",
               opacity: streaming ? 0.7 : 1,
+              transition: "border-color 0.2s",
             }}
           />
           <button
@@ -446,6 +504,22 @@ export default function GlevAIChatSheet({
             </svg>
           </button>
         </div>
+
+        {/* STT error toast — shown briefly when transcription fails */}
+        {sttError && (
+          <div
+            style={{
+              flexShrink: 0,
+              padding: "4px 16px 6px",
+              background: SHEET_BG,
+              fontSize: 11,
+              color: "#ff8888",
+              textAlign: "center",
+            }}
+          >
+            {sttError}
+          </div>
+        )}
 
         {/* Disclaimer footer — below input row, always visible */}
         <div

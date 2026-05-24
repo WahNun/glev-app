@@ -53,4 +53,15 @@
       permission granted automatically at install time.
     -->
     <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!--
+      RECORD_AUDIO enables microphone access for the hold-to-talk voice
+      input in GlevAIChatSheet (useVoxtral hook). Capacitor bridges
+      navigator.mediaDevices.getUserMedia to the native mic; Android
+      requires this permission to be declared here AND granted at runtime
+      (the browser/WebView triggers the native permission dialog the first
+      time getUserMedia is called — no separate @capacitor/microphone
+      plugin needed).
+    -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 </manifest>
