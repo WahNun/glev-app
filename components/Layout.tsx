@@ -13,6 +13,7 @@ import GlevAIButton from "@/components/GlevAIButton";
 import GlevAIConsentModal from "@/components/GlevAIConsentModal";
 import GlevAIChatSheet from "@/components/GlevAIChatSheet";
 import { useGlevAI } from "@/lib/useGlevAI";
+import { useScreenContext } from "@/hooks/useScreenContext";
 import { EngineHeaderProvider, useEngineHeader } from "@/lib/engineHeaderContext";
 import { EngineSourceHeaderProvider, useEngineSourceHeader } from "@/lib/engineSourceHeaderContext";
 import { EngineWizardStepProvider, useEngineWizardStep } from "@/lib/engineWizardStepContext";
@@ -125,7 +126,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // (sourced from `profiles.ai_consent_at`), modal/sheet open state,
   // sessionStorage-backed conversation history, and the streaming
   // fetch to /api/ai/chat. See DECISIONS.md D-013.
-  const glevAi = useGlevAI();
+  const screenCtx = useScreenContext();
+  const glevAi = useGlevAI({ contextSnapshot: screenCtx });
   // CGM-source for the "● Live" header pill on /dashboard.
   const [cgmSource, setCgmSource] = useState<string | null>(null);
   useEffect(() => {

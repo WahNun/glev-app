@@ -100,6 +100,7 @@ async function isRateLimited(userId: string): Promise<boolean> {
 // ── Body shape ────────────────────────────────────────────────────────
 type ChatMessage = { role: "user" | "assistant"; content: string };
 type ContextSnapshot = {
+  screen?: string;
   glucoseSummary: string;
   iobSummary: string;
   lastMealDescription: string;
@@ -150,6 +151,7 @@ function validateBody(b: unknown): { ok: true; body: ChatBody } | { ok: false; e
       conversationId: typeof o.conversationId === "string" ? o.conversationId : undefined,
       history,
       contextSnapshot: {
+        screen: typeof ctx.screen === "string" ? ctx.screen : undefined,
         glucoseSummary: ctx.glucoseSummary,
         iobSummary: ctx.iobSummary,
         lastMealDescription: ctx.lastMealDescription,
@@ -182,6 +184,7 @@ function contextPreamble(
     `Heute ist ${todayLocalDate} (Datum in der lokalen Zeitzone des Nutzers; für add_appointment relative Angaben wie „nächste Woche" auf das absolute Datum umrechnen).`,
     "Kontext-Snapshot des Nutzers (kann veraltet oder Platzhalter sein — wenn unklar, vorsichtig formulieren):",
   ];
+  if (ctx.screen) lines.push(`- Screen: ${ctx.screen}`);
   if (scopes.glucose) lines.push(`- Glukose: ${ctx.glucoseSummary}`);
   if (scopes.iob)     lines.push(`- IOB:     ${ctx.iobSummary}`);
   lines.push(`- Letzte Mahlzeit: ${ctx.lastMealDescription}`);

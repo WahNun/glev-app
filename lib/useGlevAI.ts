@@ -56,22 +56,26 @@ export type GlevChatMessage = {
 };
 
 export type ContextSnapshot = {
-  glucoseSummary: string;
-  iobSummary: string;
-  lastMealDescription: string;
+  /** Active screen name — forwarded to the API so the preamble can
+   *  note which view the user has open. Optional; non-dashboard
+   *  screens send no live data. */
+  screen?: string;
+  /** Current glucose reading + trend (consent-gated). */
+  glucoseSummary?: string;
+  /** Active insulin-on-board summary (consent-gated). */
+  iobSummary?: string;
+  /** Last meal description + carbs + time ago (always included when
+   *  AI consent is granted — no separate toggle per D-016). */
+  lastMealDescription?: string;
+  /** Alias for lastMealDescription produced by useScreenContext. Takes
+   *  priority over lastMealDescription in sendMessage. */
+  lastMealSummary?: string;
 };
 
 const HISTORY_KEY = "glev_ai_history_v1";
 const MAX_HISTORY = 10;
 
-// Dummy contextSnapshot fallbacks — Phase 2 ships these until a
-// follow-up wires real CGM / IOB / last-meal data into the hook. The
-// exact strings are spec-prescribed.
-const DUMMY_CONTEXT: ContextSnapshot = {
-  glucoseSummary: "Letzter Wert vor 12 Min: 142 mg/dL (stabil)",
-  iobSummary: "≈ 1.4 IE aus dem letzten Bolus (vor 35 Min)",
-  lastMealDescription: "Letzte Mahlzeit vor 1 h 10 Min — 45g Kohlenhydrate",
-};
+const NEUTRAL = "Keine Daten verfügbar";
 
 function safeReadHistory(): GlevChatMessage[] {
   if (typeof window === "undefined") return [];
@@ -314,7 +318,15 @@ export function useGlevAI(opts?: { contextSnapshot?: ContextSnapshot }) {
           body: JSON.stringify({
             message: trimmed,
             history: apiHistory,
-            contextSnapshot: opts?.contextSnapshot ?? DUMMY_CONTEXT,
+            contextSnapshot: {
+              screen:              opts?.contextSnapshot?.screen,
+              glucoseSummary:      opts?.contextSnapshot?.glucoseSummary      ?? NEUTRAL,
+              iobSummary:          opts?.contextSnapshot?.iobSummary          ?? NEUTRAL,
+              lastMealDescription:
+                opts?.contextSnapshot?.lastMealSummary ??
+                opts?.contextSnapshot?.lastMealDescription ??
+                NEUTRAL,
+            },
             // Device-local IANA timezone — single source of truth for
             // alle Zeit-Formatierungen in den AI-Tools. Wir trauen dem
             // Profil-Feld bewusst nicht, weil Nutzer reisen und das
@@ -526,7 +538,7 @@ export function useGlevAI(opts?: { contextSnapshot?: ContextSnapshot }) {
 }
 
 export const __test__ = {
-  DUMMY_CONTEXT,
+  NEUTRAL,
   HISTORY_KEY,
   MAX_HISTORY,
 };
