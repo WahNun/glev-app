@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
     const t1 = Date.now();
 
     const result = await mistral.audio.transcriptions.complete({
-      model: "voxtral-mini",
+      model: "voxtral-mini-latest",
       file: file as Blob,
     });
 
