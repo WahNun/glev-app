@@ -62,6 +62,18 @@ function makeCookieStorage() {
 
 const g = globalThis as typeof globalThis & { _supabase?: SupabaseClient | null };
 
+// `/auth/confirm` manually processes `?code=` / `?token_hash=` via a
+// user-initiated button click (see app/auth/confirm/page.tsx for the
+// mail-scanner rationale). If supabase-js auto-detects and processes
+// the URL on client init, the session is created before the user clicks
+// — which both burns the recovery token early and triggers SIGNED_IN
+// side-effects that can leak the user past the password-set form into
+// the dashboard. Disable URL detection on that page; keep the default
+// (true) everywhere else so OAuth / magic-link flows aren't affected.
+const isConfirmPage =
+  typeof window !== "undefined" &&
+  window.location?.pathname === "/auth/confirm";
+
 if (!g._supabase) {
   g._supabase = url && key
     ? createClient(url, key, {
@@ -69,6 +81,7 @@ if (!g._supabase) {
           persistSession: true,
           autoRefreshToken: true,
           storage: makeCookieStorage(),
+          detectSessionInUrl: !isConfirmPage,
         },
       })
     : null;

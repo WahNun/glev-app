@@ -109,6 +109,18 @@ export function middleware(req: NextRequest) {
     requestHeaders.set(COUNTRY_HEADER, country);
   }
 
+  // Auth-link landing pages MUST render even when a session already
+  // exists. /auth/confirm hosts the recovery / invite password-set form
+  // — a fresh session is created mid-flow (after verifyOtp succeeds),
+  // and any redirect from here would skip the password form entirely
+  // and burn the recovery token without the user ever setting a new
+  // password. /auth/callback is the server-side PKCE exchange endpoint
+  // and must run to completion. Whitelist both early, before any
+  // authed→dashboard redirects below can fire.
+  if (pathname === "/auth/confirm" || pathname === "/auth/callback") {
+    return NextResponse.next({ request: { headers: requestHeaders } });
+  }
+
   // `/` is the public marketing homepage — let it render for everyone.
   if (PROTECTED.some(p => pathname === p || pathname.startsWith(p + "/")) && !isAuthed) {
     const res = NextResponse.redirect(new URL("/login", req.url));
