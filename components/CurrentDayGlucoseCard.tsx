@@ -523,15 +523,37 @@ function RollingChart({ readings, showMealNodes }: { readings: ChartPoint[]; sho
 
   useEffect(() => {
     const el = containerRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([entry]) => {
-      const r = entry.contentRect;
+    if (!el) return;
+
+    // ResizeObserver — primary path. Fires for any layout change including
+    // device rotation and window resize, without relying on a window event.
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(([entry]) => {
+        const r = entry.contentRect;
+        if (r.width > 0 && r.height > 0) {
+          setSize({ w: Math.round(r.width), h: Math.round(r.height) });
+        }
+      });
+      ro.observe(el);
+    }
+
+    // window.resize fallback — covers older Capacitor WKWebViews (iOS < 13.4)
+    // where ResizeObserver may fire with a one-frame delay after rotation.
+    // The resize event is synchronous with the orientation change, so it acts
+    // as an early trigger that keeps node X-positions correct immediately.
+    function onWindowResize() {
+      const r = el.getBoundingClientRect();
       if (r.width > 0 && r.height > 0) {
         setSize({ w: Math.round(r.width), h: Math.round(r.height) });
       }
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
+    }
+    window.addEventListener("resize", onWindowResize);
+
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", onWindowResize);
+    };
   }, []);
 
   const W = size.w;

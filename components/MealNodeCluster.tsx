@@ -285,7 +285,15 @@ export default function MealNodeCluster(props: MealNodeClusterProps) {
                 stroke={ACCENT}
                 strokeWidth={a.persisted ? 1.5 : 2}
                 strokeDasharray={a.persisted ? undefined : "3 2"}
-                style={{ cursor: "ew-resize", pointerEvents: "auto", touchAction: "none" }}
+                style={{
+                  cursor: "ew-resize",
+                  pointerEvents: "auto",
+                  touchAction: "none",
+                  // Smooth transition when positions recalculate after rotation
+                  // or window resize. Disabled while dragging so the knob
+                  // tracks the finger without lag.
+                  transition: isDragging ? "none" : "cx 0.2s ease",
+                }}
                 onPointerDown={(e) => handlePointerDown(e, a)}
                 onPointerMove={handlePointerMove}
                 onPointerUp={(e) => handlePointerUp(e, a)}
