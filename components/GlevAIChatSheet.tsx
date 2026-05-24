@@ -236,22 +236,6 @@ export default function GlevAIChatSheet({
           ))}
         </div>
 
-        {/* Disclaimer footer (fixed, always visible) */}
-        <div
-          style={{
-            flexShrink: 0,
-            padding: "8px 18px",
-            background: SHEET_BG,
-            borderTop: "1px solid rgba(255,255,255,0.06)",
-            fontSize: 11,
-            lineHeight: 1.4,
-            color: "rgba(255,255,255,0.5)",
-            textAlign: "center",
-          }}
-        >
-          {DISCLAIMER}
-        </div>
-
         {/* Input row */}
         <div
           style={{
@@ -259,7 +243,7 @@ export default function GlevAIChatSheet({
             display: "flex",
             alignItems: "center",
             gap: 8,
-            padding: "10px 16px calc(16px + env(safe-area-inset-bottom, 0px))",
+            padding: "10px 16px 8px",
             background: SHEET_BG,
             borderTop: "1px solid rgba(255,255,255,0.06)",
           }}
@@ -311,6 +295,21 @@ export default function GlevAIChatSheet({
               <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
             </svg>
           </button>
+        </div>
+
+        {/* Disclaimer footer — below input row, always visible */}
+        <div
+          style={{
+            flexShrink: 0,
+            padding: "0 18px calc(10px + env(safe-area-inset-bottom, 0px))",
+            background: SHEET_BG,
+            fontSize: 11,
+            lineHeight: 1.4,
+            color: "rgba(255,255,255,0.5)",
+            textAlign: "center",
+          }}
+        >
+          {DISCLAIMER}
         </div>
       </div>
     </>
