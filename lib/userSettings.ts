@@ -978,3 +978,57 @@ export async function fetchAiConsent(): Promise<boolean> {
   if (error || !data) return false;
   return Boolean(data.ai_consent);
 }
+
+/* ── Low-glucose alarm settings ─────────────────────────────────── */
+
+export interface LowAlarmSettingsDb {
+  enabled: boolean;
+  thresholdMgdl: number;
+}
+
+const DEFAULT_LOW_ALARM_DB: LowAlarmSettingsDb = { enabled: true, thresholdMgdl: 70 };
+
+/**
+ * Async DB-backed read of the user's low-glucose alarm settings.
+ * Falls back to defaults when the row is absent, the user is signed
+ * out, or Supabase is unreachable.
+ */
+export async function fetchLowAlarmSettingsFromDb(): Promise<LowAlarmSettingsDb> {
+  if (!supabase) return DEFAULT_LOW_ALARM_DB;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return DEFAULT_LOW_ALARM_DB;
+  const { data, error } = await supabase
+    .from("user_settings")
+    .select("low_alarm_enabled, low_alarm_threshold_mgdl")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (error || !data) return DEFAULT_LOW_ALARM_DB;
+  return {
+    enabled: typeof data.low_alarm_enabled === "boolean" ? data.low_alarm_enabled : DEFAULT_LOW_ALARM_DB.enabled,
+    thresholdMgdl:
+      typeof data.low_alarm_threshold_mgdl === "number" &&
+      data.low_alarm_threshold_mgdl >= 40 &&
+      data.low_alarm_threshold_mgdl <= 90
+        ? data.low_alarm_threshold_mgdl
+        : DEFAULT_LOW_ALARM_DB.thresholdMgdl,
+  };
+}
+
+/**
+ * Upsert the low-glucose alarm settings into user_settings.
+ * Throws on auth or DB error so the Settings UI can surface a
+ * save-failed state.
+ */
+export async function saveLowAlarmSettingsToDb(settings: LowAlarmSettingsDb): Promise<void> {
+  if (!supabase) throw new Error("Supabase not configured");
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) throw new Error("Not signed in");
+  const { error } = await supabase
+    .from("user_settings")
+    .upsert({
+      user_id: user.id,
+      low_alarm_enabled: settings.enabled,
+      low_alarm_threshold_mgdl: Math.min(90, Math.max(40, Math.round(settings.thresholdMgdl))),
+    }, { onConflict: "user_id" });
+  if (error) throw new Error(error.message);
+}

@@ -24,7 +24,14 @@ import {
   type EngineIcrInfo,
   fetchInsulinType,
   saveInsulinType,
+  fetchLowAlarmSettingsFromDb,
+  saveLowAlarmSettingsToDb,
+  type LowAlarmSettingsDb,
 } from "@/lib/userSettings";
+import {
+  getLowAlarmSettings,
+  persistLowAlarmSettingsLocally,
+} from "@/lib/lowGlucoseAlarm";
 import type { InsulinType } from "@/lib/iob";
 import type { AdjustmentRecord } from "@/lib/engine/adjustment";
 import type { EffectivePlan } from "@/lib/admin/effectivePlan";
@@ -185,7 +192,8 @@ type SheetKey =
   | "adjustmentHistory"
   | "cycleLogging"
   | "aboutMe"
-  | "insulinType";
+  | "insulinType"
+  | "lowAlarm";
 
 /** Lightweight CGM status hook — fetches /api/cgm/status once on mount.
  * Silent on error (treats as disconnected). The full CgmSettingsCard owns
@@ -277,6 +285,8 @@ export default function SettingsPage() {
   // ships the prefs surface; Phase 2 (web push + cron sender) will start
   // honouring `criticalAlerts` and `quietStart/End`.
   const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>(DEFAULT_NOTIFICATION_PREFS);
+  const [lowAlarmEnabled, setLowAlarmEnabled] = useState(true);
+  const [lowAlarmThreshold, setLowAlarmThreshold] = useState(70);
   // List of doctor appointments (Task #93). The most recent entry by
   // date drives the Export panel's "Seit letztem Arzttermin" preset
   // chip the same way the legacy single-date setting did; older
@@ -419,6 +429,11 @@ export default function SettingsPage() {
     if (!supabase) return;
     fetchMacroTargets().then(setMacroTargets).catch(() => {});
     fetchNotificationPrefs().then(setNotifPrefs).catch(() => {});
+    fetchLowAlarmSettingsFromDb().then((s) => {
+      setLowAlarmEnabled(s.enabled);
+      setLowAlarmThreshold(s.thresholdMgdl);
+      persistLowAlarmSettingsLocally(s);
+    }).catch(() => {});
     fetchCycleLoggingEnabled().then(setCycleLoggingEnabled).catch(() => {});
     fetchUserProfile().then(setUserProfile).catch(() => {});
     fetchIcrSchedule()
@@ -930,6 +945,28 @@ export default function SettingsPage() {
     }
   }, [settings, tSettings]);
 
+  const saveLowAlarmAction = useCallback(async (): Promise<boolean> => {
+    setSaving(true);
+    setSaveError("");
+    try {
+      const clamped: LowAlarmSettingsDb = {
+        enabled: lowAlarmEnabled,
+        thresholdMgdl: Math.min(90, Math.max(40, Math.round(lowAlarmThreshold))),
+      };
+      await saveLowAlarmSettingsToDb(clamped);
+      persistLowAlarmSettingsLocally(clamped);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1800);
+      setDraftSnapshot(null);
+      return true;
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : tSettings("save_failed"));
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }, [lowAlarmEnabled, lowAlarmThreshold, tSettings]);
+
   /** Persist macro targets — DB-backed (user_settings table) so this can fail. */
   const saveMacrosAction = useCallback(async (): Promise<boolean> => {
     setSaving(true);
@@ -1363,6 +1400,67 @@ export default function SettingsPage() {
 
   /* ── sheet content blocks ──────────────────────────────────────── */
   const sheetContent: Record<SheetKey, { title: string; body: ReactNode; footer?: ReactNode }> = {
+    lowAlarm: {
+      title: tSettings("sheet_low_alarm_title"),
+      body: (
+        <div>
+          <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5, marginBottom: 16, margin: "0 0 16px" }}>
+            {tSettings("low_alarm_hint")}
+          </p>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, padding: "10px 0" }}>
+            <span style={{ fontSize: 14, color: "var(--text-strong)", fontWeight: 500 }}>
+              {tSettings("low_alarm_enabled_label")}
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={lowAlarmEnabled}
+              onClick={() => setLowAlarmEnabled((v) => !v)}
+              style={{
+                width: 44, height: 26, borderRadius: 13, border: "none", cursor: "pointer",
+                background: lowAlarmEnabled ? ACCENT : "var(--surface-raised)",
+                position: "relative", transition: "background 0.2s", flexShrink: 0,
+              }}
+            >
+              <span style={{
+                position: "absolute", top: 3, width: 20, height: 20, borderRadius: "50%",
+                background: "white",
+                left: lowAlarmEnabled ? 21 : 3,
+                transition: "left 0.2s",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+              }} />
+            </button>
+          </div>
+          {lowAlarmEnabled && (
+            <>
+              <p style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 8 }}>
+                {tSettings("low_alarm_threshold_label")}
+              </p>
+              <SnapSlider
+                value={lowAlarmThreshold}
+                onChange={(v) => setLowAlarmThreshold(v)}
+                min={40}
+                max={90}
+                step={1}
+                unit="mg/dL"
+                accent={ACCENT}
+                ariaLabel={tSettings("low_alarm_threshold_label")}
+              />
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, paddingLeft: 2, paddingRight: 2 }}>
+                {[40, 50, 60, 70, 80, 90].map((tick) => (
+                  <span key={tick} style={{
+                    fontSize: 10,
+                    color: lowAlarmThreshold === tick ? ACCENT : "var(--text-ghost)",
+                    fontWeight: lowAlarmThreshold === tick ? 700 : 400,
+                  }}>{tick}</span>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      ),
+      footer: <SaveFooter onSave={saveLowAlarmAction} />,
+    },
     targetRange: {
       title: tSettings("row_target_range"),
       body: (
@@ -2798,6 +2896,26 @@ export default function SettingsPage() {
           subtitle={targetRangeSub}
           ariaLabel={tSettings("row_open_aria", { label: tSettings("row_target_range") })}
           onClick={() => openSheetWith("targetRange")}
+        />
+        <SettingsRow
+          iconColor={GREEN}
+          icon={
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 8h1a4 4 0 0 1 0 8h-1" />
+              <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z" />
+              <line x1="6" y1="1" x2="6" y2="4" />
+              <line x1="10" y1="1" x2="10" y2="4" />
+              <line x1="14" y1="1" x2="14" y2="4" />
+            </svg>
+          }
+          label={tSettings("row_low_alarm")}
+          subtitle={
+            lowAlarmEnabled
+              ? tSettings("subtitle_low_alarm_on", { threshold: lowAlarmThreshold })
+              : tSettings("subtitle_low_alarm_off")
+          }
+          ariaLabel={tSettings("row_open_aria", { label: tSettings("row_low_alarm") })}
+          onClick={() => openSheetWith("lowAlarm")}
         />
         <SettingsRow
           iconColor={GREEN}

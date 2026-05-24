@@ -4,6 +4,7 @@ import { createServerClient } from "@supabase/ssr";
 import Layout from "@/components/Layout";
 import CgmAutoFillProvider from "@/components/CgmAutoFillProvider";
 import CgmJobsTicker from "@/components/CgmJobsTicker";
+import LowGlucoseAlarmTicker from "@/components/LowGlucoseAlarmTicker";
 import LanguageSync from "@/components/LanguageSync";
 import SWRProvider from "@/components/SWRProvider";
 
@@ -35,6 +36,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         <LanguageSync />
         <CgmAutoFillProvider />
         <CgmJobsTicker />
+        <LowGlucoseAlarmTicker />
         {children}
       </Layout>
     </SWRProvider>

@@ -1246,6 +1246,13 @@
     "section_data": "Data",
     "section_integrations": "Integrations",
     "row_target_range": "Target range",
+    "row_low_alarm": "Low-glucose alarm",
+    "sheet_low_alarm_title": "Low-glucose alarm",
+    "low_alarm_enabled_label": "Enable alarm",
+    "low_alarm_threshold_label": "Alarm threshold (mg/dL)",
+    "low_alarm_hint": "Glev fires an alarm as soon as your CGM reading drops below this threshold. The alarm repeats at most once every 15 minutes.",
+    "subtitle_low_alarm_on": "On · below {threshold} mg/dL",
+    "subtitle_low_alarm_off": "Off",
     "row_libre2": "FreeStyle Libre 2 / 3",
     "row_nightscout": "Nightscout",
     "row_historical_reload": "Re-evaluate historical data",
@@ -2836,5 +2843,9 @@
     "offset_minutes_before": "{n} min before",
     "offset_minutes_after": "{n} min after",
     "add_post_arm_title": "Add another post-check"
+  },
+  "low_alarm": {
+    "notification_title": "Low-glucose alert",
+    "notification_body": "BG {value} mg/dL — below your threshold of {threshold} mg/dL. Please act now."
   }
 }

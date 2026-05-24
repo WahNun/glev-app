@@ -1246,6 +1246,13 @@
     "section_data": "Daten",
     "section_integrations": "Integrationen",
     "row_target_range": "Zielbereich",
+    "row_low_alarm": "Hypo-Alarm",
+    "sheet_low_alarm_title": "Hypo-Alarm",
+    "low_alarm_enabled_label": "Alarm aktivieren",
+    "low_alarm_threshold_label": "Auslöseschwelle (mg/dL)",
+    "low_alarm_hint": "Glev löst einen Alarm aus, sobald dein CGM-Wert unter diesen Grenzwert fällt. Der Alarm wiederholt sich frühestens alle 15 Minuten.",
+    "subtitle_low_alarm_on": "An · unter {threshold} mg/dL",
+    "subtitle_low_alarm_off": "Aus",
     "row_libre2": "FreeStyle Libre 2 / 3",
     "row_nightscout": "Nightscout",
     "row_historical_reload": "Historische Daten neu auswerten",
@@ -2842,5 +2849,9 @@
     "offset_minutes_before": "{n} min vorher",
     "offset_minutes_after": "{n} min nachher",
     "add_post_arm_title": "Weiteren Post-Check hinzufügen"
+  },
+  "low_alarm": {
+    "notification_title": "Hypo-Alarm",
+    "notification_body": "BZ {value} mg/dL — unter deinem Grenzwert von {threshold} mg/dL. Bitte reagiere jetzt."
   }
 }
