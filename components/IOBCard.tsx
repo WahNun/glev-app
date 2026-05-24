@@ -418,7 +418,7 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
                     textShadow: lastBasal && !basalOverdue && !basalDecayed ? `0 0 18px ${BASAL_INDIGO}77` : "none",
                   }}>
                     {lastBasal
-                      ? (basalDecayed ? "—" : (basalRemaining ?? 0).toFixed(1))
+                      ? lastBasal.units.toFixed(1)
                       : "—"}
                   </div>
                   <div style={{ fontSize: 11, color: "var(--text-dim)", fontWeight: 600 }}>IE</div>
