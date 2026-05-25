@@ -27,16 +27,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "text too long (max 1000 chars)" }, { status: 400 });
   }
 
-  // Build request body. voice_id is optional — if not configured the model
-  // uses its own default voice. Set MISTRAL_TTS_VOICE_ID in env to pin a
-  // specific saved voice (e.g. a German voice created via the Voices API).
+  // Build request body.
+  // Preset voices embedded in the Voxtral-4B model: de_female / de_male for
+  // German, plus en/fr/es/it/pt/nl/ar/hi variants. Default to de_female so
+  // the assistant sounds natural and human in German.
+  // Override via MISTRAL_TTS_VOICE_ID env var if you want a custom cloned voice.
+  const voiceId = process.env.MISTRAL_TTS_VOICE_ID ?? "de_female";
   const body: Record<string, unknown> = {
     model: TTS_MODEL,
     input: text,
     response_format: "mp3",
+    voice_id: voiceId,
   };
-  const voiceId = process.env.MISTRAL_TTS_VOICE_ID;
-  if (voiceId) body.voice_id = voiceId;
 
   const upstream = await fetch("https://api.mistral.ai/v1/audio/speech", {
     method: "POST",
