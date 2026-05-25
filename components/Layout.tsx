@@ -147,6 +147,17 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // pill appears in the header as a global cue + secondary stop tap.
   const voice = useVoiceRecording();
 
+  // TTS speaking state — driven by glev:tts-speaking CustomEvents from
+  // GlevAIChatSheet so the FAB can show a green glow while AI speaks.
+  const [ttsSpeaking, setTtsSpeaking] = useState(false);
+  useEffect(() => {
+    function onTtsSpeaking(e: Event) {
+      setTtsSpeaking((e as CustomEvent<{ active: boolean }>).detail.active);
+    }
+    window.addEventListener("glev:tts-speaking", onTtsSpeaking);
+    return () => window.removeEventListener("glev:tts-speaking", onTtsSpeaking);
+  }, []);
+
   // ── FAB independent hit-area refs ──────────────────────────────────
   // iOS WKWebView clips pointer hit-testing to the layout bounds of a
   // position:fixed parent. The 64px Glev bubble protrudes ~19 px above
@@ -995,6 +1006,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           label={tNav("glev")}
           active={quickAddOpen || voice.recording}
           recording={voice.recording}
+          speaking={ttsSpeaking}
         />
         <MobileTab
           label={tNav("insights")}
@@ -1113,11 +1125,12 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
  * See "FAB independent hit-area" comment block there.
  */
 function MobileGlevFab({
-  label, active, recording = false,
+  label, active, recording = false, speaking = false,
 }: {
   label: string;
   active: boolean;
   recording?: boolean;
+  speaking?: boolean;
 }) {
   return (
     <div
@@ -1158,7 +1171,7 @@ function MobileGlevFab({
             pointerEvents: "none",
           }}
         >
-          <GlevAIButton onPress={() => {}} isListening={recording} />
+          <GlevAIButton onPress={() => {}} isListening={recording} isSpeaking={speaking} />
         </span>
       </span>
       <span

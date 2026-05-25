@@ -236,6 +236,13 @@ export default function GlevAIChatSheet({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // Broadcast TTS speaking state so the FAB can glow green.
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent("glev:tts-speaking", { detail: { active: tts.speaking } }),
+    );
+  }, [tts.speaking]);
+
   // Bewusst KEIN Auto-Focus beim Öffnen: das Software-Keyboard würde
   // sonst auf iOS/Android sofort die halbe Sheet-Höhe verschlucken und
   // den Disclaimer/Input-Footer überdecken. Tastatur kommt erst wenn
@@ -267,6 +274,7 @@ export default function GlevAIChatSheet({
           0%, 100% { box-shadow: 0 0 0 0 rgba(79,110,247,0.7); transform: scale(1); }
           50% { box-shadow: 0 0 0 8px rgba(79,110,247,0); transform: scale(1.08); }
         }
+        @keyframes glevStatusPulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
       `}</style>
 
       {/* Backdrop */}
@@ -352,21 +360,56 @@ export default function GlevAIChatSheet({
               </svg>
             )}
           </button>
-          <span
-            style={{
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              padding: "2px 8px",
-              borderRadius: 99,
-              background: "rgba(79,110,247,0.15)",
-              color: ACCENT,
-              border: `1px solid ${ACCENT}55`,
-              marginRight: 12,
-            }}
-          >
-            BETA
-          </span>
+          {/* Dynamic status badge */}
+          {(() => {
+            const isSpeaking = tts.speaking;
+            const isAnalyzing = streaming;
+            const dotColor = isSpeaking ? "#50C878" : isAnalyzing ? ACCENT : "#50C878";
+            const label = isSpeaking ? "Spricht …" : isAnalyzing ? "Analysiert …" : "BEREIT";
+            const bgColor = isSpeaking
+              ? "rgba(80,200,120,0.12)"
+              : isAnalyzing
+              ? "rgba(79,110,247,0.12)"
+              : "rgba(80,200,120,0.10)";
+            const borderColor = isSpeaking
+              ? "rgba(80,200,120,0.35)"
+              : isAnalyzing
+              ? `${ACCENT}44`
+              : "rgba(80,200,120,0.28)";
+            return (
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: "0.07em",
+                  padding: "3px 8px 3px 6px",
+                  borderRadius: 99,
+                  background: bgColor,
+                  color: dotColor,
+                  border: `1px solid ${borderColor}`,
+                  marginRight: 12,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                }}
+              >
+                <span
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    background: dotColor,
+                    flexShrink: 0,
+                    animation: (isSpeaking || isAnalyzing)
+                      ? "glevStatusPulse 0.9s ease-in-out infinite"
+                      : "none",
+                    display: "inline-block",
+                  }}
+                />
+                {label}
+              </span>
+            );
+          })()}
           <button
             type="button"
             onClick={onClose}

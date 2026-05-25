@@ -48,6 +48,23 @@
   50%       { opacity: 1;    transform: scale(1.08); filter: drop-shadow(0 0 10px rgba(255,255,255,0.6)) drop-shadow(0 0 18px rgba(79,110,247,0.7)); }
 }
 
+@keyframes glevIconPulseSpeaking {
+  0%, 100% { opacity: 0.72; transform: scale(0.95); filter: drop-shadow(0 0 3px rgba(255,255,255,0.15)); }
+  50%       { opacity: 1;    transform: scale(1.06); filter: drop-shadow(0 0 10px rgba(255,255,255,0.5)) drop-shadow(0 0 18px rgba(80,200,120,0.7)); }
+}
+
+@keyframes glevBreathSpeaking {
+  0%, 100% { opacity: 0.65;  transform: scale(0.97); }
+  50%       { opacity: 1;    transform: scale(1.04); }
+}
+
+@keyframes glevSweepSpeaking {
+  0%   { transform: translateX(-120%) skewX(-12deg); opacity: 0; }
+  20%  { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { transform: translateX(300%)  skewX(-12deg); opacity: 0; }
+}
+
 /* ── Container ───────────────────────────────────────────────────── */
 
 .btn {
@@ -76,6 +93,15 @@
     inset 0 0 20px rgba(79, 110, 247, 0.14),
     0 0 20px rgba(79, 110, 247, 0.50),
     0 0 42px rgba(79, 110, 247, 0.26);
+}
+
+/* Green glow — when AI is speaking (TTS playing) */
+.btn.speaking {
+  border-color: rgba(80, 200, 120, 0.70);
+  box-shadow:
+    inset 0 0 20px rgba(80, 200, 120, 0.12),
+    0 0 20px rgba(80, 200, 120, 0.48),
+    0 0 42px rgba(80, 200, 120, 0.24);
 }
 
 /* ── Breathing ring frame ─────────────────────────────────────────── */
@@ -112,6 +138,16 @@
   background: rgba(79, 110, 247, 0.80);
 }
 
+.speaking .frame {
+  animation: glevBreathSpeaking 1.2s ease-in-out infinite;
+}
+
+.speaking .frame::before,
+.speaking .frame::after {
+  opacity: 1;
+  background: rgba(80, 200, 120, 0.80);
+}
+
 /* ── Sweep shimmer ───────────────────────────────────────────────── */
 
 .sweep {
@@ -135,6 +171,18 @@
 .listening .sweep {
   opacity: 1;
   animation: glevSweep 2.4s ease-in-out infinite;
+}
+
+.speaking .sweep {
+  opacity: 1;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(80, 200, 120, 0.12) 35%,
+    rgba(160, 240, 180, 0.22) 60%,
+    transparent 100%
+  );
+  animation: glevSweepSpeaking 3.2s ease-in-out infinite;
 }
 
 /* ── Orbital dots ────────────────────────────────────────────────── */
@@ -170,6 +218,18 @@
 .listening .dot2 { animation: glevDot2 6.2s linear infinite; }
 .listening .dot3 { animation: glevDot3 5.9s linear infinite; }
 
+.speaking .dot {
+  opacity: 1;
+  background: rgba(80, 200, 120, 0.95);
+  box-shadow:
+    0 0 6px rgba(80, 200, 120, 0.9),
+    0 0 12px rgba(80, 200, 120, 0.4);
+}
+
+.speaking .dot1 { animation: glevDot1 7.0s linear infinite; }
+.speaking .dot2 { animation: glevDot2 7.8s linear infinite; }
+.speaking .dot3 { animation: glevDot3 7.4s linear infinite; }
+
 /* ── Center Glev logo ────────────────────────────────────────────── */
 
 .icon {
@@ -186,6 +246,10 @@
   animation: glevIconPulseFast 0.9s ease-in-out infinite;
 }
 
+.speaking .icon {
+  animation: glevIconPulseSpeaking 1.2s ease-in-out infinite;
+}
+
 /* ── Reduced motion ──────────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
@@ -198,3 +262,4 @@
     animation: none !important;
   }
 }
+
