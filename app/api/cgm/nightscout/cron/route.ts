@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminClient } from "@/lib/cgm/supabase";
 import { decrypt } from "@/lib/cgm/crypto";
+import { fillNearbyChecks } from "@/lib/mealTimelineChecks";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -101,6 +102,11 @@ export async function GET(req: NextRequest) {
         results.failed++;
       } else {
         results.success++;
+        // Fire-and-forget: try to fill open meal_timeline_checks within
+        // ±15 min of each newly stored reading. Same pattern as Apple Health sync.
+        for (const row of rows) {
+          fillNearbyChecks(admin, profile.user_id, row.value_mgdl, new Date(row.recorded_at)).catch(() => {});
+        }
       }
     } catch (e) {
       console.error("[nightscout/cron] error for", profile.user_id, (e as Error).message);

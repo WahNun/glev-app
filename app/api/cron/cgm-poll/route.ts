@@ -34,6 +34,7 @@ import * as llu from "@/lib/cgm/llu";
 import * as nightscout from "@/lib/cgm/nightscout";
 import type { Reading } from "@/lib/cgm/llu";
 import { parseLluTs } from "@/lib/time";
+import { fillNearbyChecks } from "@/lib/mealTimelineChecks";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -100,11 +101,17 @@ async function pollOne(
     }
     if (rows.length === 0) return { ok: true, inserted: 0, source };
 
-    const { error } = await adminClient()
+    const admin = adminClient();
+    const { error } = await admin
       .from("cgm_samples")
       .upsert(rows, { onConflict: "user_id,timestamp", ignoreDuplicates: true });
     if (error) {
       return { ok: false, source, error: error.message };
+    }
+    // Fire-and-forget: try to fill open meal_timeline_checks within
+    // ±15 min of each newly stored reading. Same pattern as Apple Health sync.
+    for (const row of rows) {
+      fillNearbyChecks(admin, userId, row.value_mgdl, new Date(row.timestamp)).catch(() => {});
     }
     return { ok: true, inserted: rows.length, source };
   } catch (e) {
