@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   // language codes like "de_female". Set MISTRAL_TTS_VOICE_ID in Vercel env to
   // the exact name you picked in Mistral Studio. If unset, Mistral uses its
   // default voice.
-  const voiceId = process.env.MISTRAL_TTS_VOICE_ID;
+  const voiceId = process.env.MISTRAL_TTS_VOICE_ID ?? "Jane";
 
   // Voxtral TTS is LLM-based and responds to speaking-style instructions
   // prepended to the input — same technique used in Mistral Studio.
