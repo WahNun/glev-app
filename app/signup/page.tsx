@@ -29,12 +29,16 @@ import {
 type Step = "signup" | "profile" | "success";
 
 const SENSOR_OPTIONS = [
-  { value: "libre2", label: "FreeStyle Libre 2" },
-  { value: "libre3", label: "FreeStyle Libre 3" },
-  { value: "dexcom", label: "Dexcom" },
-  { value: "medtronic", label: "Medtronic" },
-  { value: "other", label: "Anderer Sensor" },
-  { value: "none", label: "Kein Sensor" },
+  { value: "dexcom_g7",    label: "Dexcom G7" },
+  { value: "dexcom_g6",    label: "Dexcom G6" },
+  { value: "dexcom_one",   label: "Dexcom ONE / ONE+" },
+  { value: "libre3",       label: "FreeStyle Libre 3" },
+  { value: "libre2",       label: "FreeStyle Libre 2" },
+  { value: "libre1",       label: "FreeStyle Libre 1" },
+  { value: "medtronic",    label: "Medtronic Guardian" },
+  { value: "eversense",    label: "Eversense E3" },
+  { value: "other",        label: "Anderer Sensor" },
+  { value: "none",         label: "Kein Sensor" },
 ];
 
 export default function SignupPage() {
@@ -53,6 +57,7 @@ export default function SignupPage() {
   const [usesCgm, setUsesCgm] = useState<"ja" | "nein" | null>(null);
   const [sensorType, setSensorType] = useState("");
   const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
 
   const [step, setStep] = useState<Step>("signup");
   const [hover, setHover] = useState(false);
@@ -119,6 +124,10 @@ export default function SignupPage() {
   // ── Step 2: Save profile data ───────────────────────────────────────
   async function handleProfileSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!phone.trim()) {
+      setProfileError("Bitte gib deine Telefonnummer ein.");
+      return;
+    }
     setProfileLoading(true);
 
     try {
@@ -199,14 +208,20 @@ export default function SignupPage() {
 
           <form onSubmit={handleProfileSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {/* Phone */}
-            <input
-              type="tel"
-              placeholder="Telefonnummer (optional)"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              autoComplete="tel"
-              style={inputStyle}
-            />
+            <div>
+              <input
+                type="tel"
+                placeholder="Telefonnummer"
+                value={phone}
+                required
+                onChange={(e) => { setPhone(e.target.value); setProfileError(null); }}
+                autoComplete="tel"
+                style={{ ...inputStyle, borderColor: profileError ? "rgba(255,80,80,0.6)" : undefined }}
+              />
+              {profileError && (
+                <p style={{ margin: "4px 0 0", fontSize: 12, color: "#ff8888" }}>{profileError}</p>
+              )}
+            </div>
 
             {/* Date of birth */}
             <div>
