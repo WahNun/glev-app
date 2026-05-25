@@ -10,6 +10,10 @@ import {
   betaFreeYearWelcomeSubject,
 } from "@/lib/emails/beta-free-year-welcome";
 import {
+  trialStartedHtml,
+  trialStartedSubject,
+} from "@/lib/emails/trial-started";
+import {
   day7InsightsEmail,
   day14FeedbackEmail,
   day30TrustpilotEmail,
@@ -149,6 +153,20 @@ function buildTemplates(
         : "Admin schaltet 1 Jahr Pro via /admin/users frei — neuer User, kriegt Login-Link auf /welcome/beta",
       subject: betaFreeYearWelcomeSubject(name, locale, "pro"),
       html: betaFreeYearWelcomeHtml(name, appUrl, bfyExpiresAt, locale, bfySignupUrl, "pro"),
+    },
+    {
+      key: "trial-started",
+      label: isEn ? "Free Trial — Started (Day 0)" : "Free Trial — Gestartet (Tag 0)",
+      whenSent: isEn
+        ? "Immediately after card-free signup via /signup → POST /api/auth/free-trial"
+        : "Sofort nach kreditkartenfreiem Signup via /signup → POST /api/auth/free-trial",
+      subject: trialStartedSubject(name, locale),
+      html: trialStartedHtml(
+        name,
+        new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        appUrl,
+        locale,
+      ),
     },
     {
       key: "drip-day7",

@@ -53,10 +53,19 @@ export async function POST(req: NextRequest) {
 
   try {
     const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+    const userEmail = user.email ?? "";
+    const userName = (user.user_metadata?.full_name as string | undefined)
+      ?? (user.user_metadata?.name as string | undefined)
+      ?? userEmail;
     await fetch(`${appUrl}/api/email/trial-reminder`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: user.id, trial_end_at: trialEndAt }),
+      body: JSON.stringify({
+        user_id: user.id,
+        email: userEmail,
+        name: userName,
+        trial_end_at: trialEndAt,
+      }),
     });
   } catch {
   }
