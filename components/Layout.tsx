@@ -977,7 +977,9 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         paddingBottom: "var(--nav-bottom-safe)",
         paddingLeft:   4,
         paddingRight:  4,
-        zIndex: 100,
+        // z-index 1102 — above the chat sheet (1101) and its backdrop (1100)
+        // so the Glev button is never clipped when the sheet is open.
+        zIndex: 1102,
       }}>
         <MobileTab
           label={tNav("dashboard")}
@@ -1052,7 +1054,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           Positioning: bottom = nav-total - 15px places the lower edge of
           the 64px circle at ~28px from the screen bottom (non-notched),
           matching exactly where the visual bubble lives in MobileGlevFab.
-          zIndex 101 > nav (100) so it captures all taps on the bubble.
+          zIndex 1103 > nav (1102) so it captures all taps on the bubble.
           ─────────────────────────────────────────────────────────────── */}
       <button
         ref={fabHitRef}
@@ -1082,7 +1084,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           padding: 0,
           margin: 0,
           cursor: "pointer",
-          zIndex: 101,
+          zIndex: 1103,
           WebkitTapHighlightColor: "transparent",
           touchAction: "manipulation",
           outline: "none",
