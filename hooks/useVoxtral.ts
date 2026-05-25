@@ -54,10 +54,15 @@ export async function transcribeWithFallback(
   onPartialTranscript?: (text: string) => void,
   onError?: (err: string) => void,
 ): Promise<void> {
+  // Derive correct extension from actual mimeType so Mistral can decode it.
+  // iOS records audio/mp4 — sending it as "recording.webm" causes a 400.
+  const ext = mimeType.includes("mp4") ? "m4a" : "webm";
+  const filename = `recording.${ext}`;
+
   // ── Attempt 1: SSE streaming ────────────────────────────────────────────
   try {
     const form = new FormData();
-    form.append("audio", blob, "recording.webm");
+    form.append("audio", blob, filename);
 
     const res = await fetch(STT_STREAM_ROUTE, { method: "POST", body: form });
 
@@ -106,7 +111,7 @@ export async function transcribeWithFallback(
   // ── Attempt 2: REST POST fallback ───────────────────────────────────────
   try {
     const form = new FormData();
-    form.append("audio", blob, "recording.webm");
+    form.append("audio", blob, filename);
 
     const res = await fetch(STT_REST_ROUTE, { method: "POST", body: form });
     if (!res.ok) {
@@ -116,7 +121,11 @@ export async function transcribeWithFallback(
     const { text } = (await res.json()) as { text: string };
     if (text?.trim()) onTranscript(text.trim());
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Transkription fehlgeschlagen";
+    const raw = e instanceof Error ? e.message : "";
+    // Show a clean user-facing message instead of raw API error JSON.
+    const msg = raw.toLowerCase().includes("decoded") || raw.includes("400") || raw.includes("3310")
+      ? "Aufnahme konnte nicht verarbeitet werden. Bitte nochmal versuchen."
+      : raw || "Transkription fehlgeschlagen";
     onError?.(msg);
   }
 }
@@ -137,12 +146,15 @@ export function useVoxtral({ onTranscript, onPartialTranscript, onError }: UseVo
       streamRef.current = mediaStream;
       chunksRef.current = [];
 
-      // Prefer webm/opus; fall back to whatever the browser supports
+      // Prefer webm/opus (Chrome/Android); fall back to mp4 (iOS Safari /
+      // WKWebView which only supports AAC-in-MP4). Empty string = browser default.
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
         ? "audio/webm;codecs=opus"
         : MediaRecorder.isTypeSupported("audio/webm")
           ? "audio/webm"
-          : "";
+          : MediaRecorder.isTypeSupported("audio/mp4")
+            ? "audio/mp4"
+            : "";
       mimeTypeRef.current = mimeType;
 
       const recorder = new MediaRecorder(mediaStream, mimeType ? { mimeType } : {});
