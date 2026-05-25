@@ -326,7 +326,7 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
               <div style={{ position: "relative", flexShrink: 0 }}>
                 <CircleGauge
                   iob={0} color={lastBasal ? basalColor : "var(--text-ghost)"}
-                  cleared={!lastBasal} fraction={1}
+                  cleared={!lastBasal} fraction={basalFraction}
                 />
                 <div style={{
                   position: "absolute", inset: 0,
