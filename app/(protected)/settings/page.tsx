@@ -394,6 +394,27 @@ export default function SettingsPage() {
     }
   }, []);
 
+  const [ttsAutoRead, setTtsAutoRead] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const v = window.localStorage.getItem("glev_tts_auto");
+      setTtsAutoRead(v !== null && v !== "0");
+    } catch { /* ignore */ }
+  }, []);
+  const toggleTtsAutoRead = useCallback(() => {
+    setTtsAutoRead((prev) => {
+      const next = !prev;
+      try { window.localStorage.setItem("glev_tts_auto", next ? "1" : "0"); } catch { /* ignore */ }
+      // Notify the mounted useTTS instance in Layout so it picks up the change
+      // immediately without a remount.
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("glev:tts-auto-changed", { detail: next }));
+      }
+      return next;
+    });
+  }, []);
+
   // Insulin-Einstellungen — alle insulinbezogenen Rows (ICR, CF, Ziel-BG,
   // DIA, Insulintyp, Bolus-/Basal-Marken, Basal-Wirkdauer, Engine-Verlauf)
   // sind hinter einer „übergeordneten" Row zusammengefasst. Tap auf den
@@ -3416,6 +3437,33 @@ export default function SettingsPage() {
                 </button>
               );
             })}
+          </div>
+        </div>
+        {/* TTS auto-read toggle */}
+        <div style={{ padding: "12px 14px", borderTop: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <span style={{ fontSize: 14, fontWeight: 500, color: "var(--text-strong)", lineHeight: 1.25 }}>
+              {tSettings("tts_auto_label")}
+            </span>
+            <span style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.3 }}>
+              {tSettings("tts_auto_desc")}
+            </span>
+          </span>
+          <div
+            role="switch"
+            aria-checked={ttsAutoRead}
+            aria-label={tSettings("tts_auto_label")}
+            onClick={toggleTtsAutoRead}
+            style={{
+              width: 44, height: 24, borderRadius: 99,
+              cursor: "pointer",
+              flexShrink: 0,
+              background: ttsAutoRead ? ACCENT : "var(--border-strong)",
+              border: `1px solid ${ttsAutoRead ? ACCENT + "60" : BORDER}`,
+              position: "relative", transition: "background 0.2s",
+            }}
+          >
+            <div style={{ position: "absolute", top: 2, left: ttsAutoRead ? 22 : 2, width: 18, height: 18, borderRadius: 99, background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }} />
           </div>
         </div>
       </SettingsSection>

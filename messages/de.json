@@ -1370,6 +1370,8 @@
     "fab_mode_desc": "Was passiert, wenn du den schwebenden Glev-Button kurz antippst.",
     "fab_mode_option_ai": "Glev AI öffnen",
     "fab_mode_option_voice": "Spracheingabe starten",
+    "tts_auto_label": "Antworten vorlesen",
+    "tts_auto_desc": "Glev AI liest jede Antwort automatisch vor, sobald sie fertig ist.",
     "row_founder_contact": "Direkter Draht zum Gründer",
     "subtitle_founder_contact": "Als Glev+ Mitglied hast du direkten Zugang zu Lucas.",
     "section_glev_intelligence": "Glev Intelligence",

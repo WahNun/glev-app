@@ -216,10 +216,11 @@ export default function GlevAIChatSheet({
 
   const tts = useTTS();
 
-  // TTS: auto-play last assistant message when streaming stops.
+  // TTS: auto-play last assistant message when streaming stops — only when
+  // the user has opted into auto-read (off by default).
   const prevStreamingRef = useRef(false);
   useEffect(() => {
-    if (prevStreamingRef.current && !streaming) {
+    if (prevStreamingRef.current && !streaming && tts.autoRead) {
       const last = messages[messages.length - 1];
       if (last?.role === "assistant" && last.content) {
         void tts.speak(last.content);
@@ -474,6 +475,35 @@ export default function GlevAIChatSheet({
                   />
                 )}
               </div>
+
+              {/* Per-bubble speaker icon — only for finished assistant messages */}
+              {m.role === "assistant" && !m.isStreaming && m.content && (
+                <button
+                  type="button"
+                  aria-label="Vorlesen"
+                  onClick={() => { void tts.speak(m.content); }}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: "2px 4px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 3,
+                    color: "rgba(255,255,255,0.35)",
+                    fontSize: 11,
+                    lineHeight: 1,
+                    transition: "color 0.15s",
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.7)"; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.35)"; }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                  </svg>
+                </button>
+              )}
 
               {/* Pending-action widget (WRITE-tool confirmation gate, Task 2) */}
               {m.pendingAction && (
