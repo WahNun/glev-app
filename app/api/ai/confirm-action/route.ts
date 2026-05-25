@@ -56,6 +56,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "token is required" }, { status: 400 });
   }
 
+  return handleConfirmPost(sb, user.id, token);
+}
+
+/**
+ * Core confirm-action logic, extracted for unit-testability (no Next.js request
+ * plumbing required). Mirrors the same pattern as `handleInsulinPost` in
+ * `app/api/insulin/route.ts`.
+ *
+ * Called by the `POST` handler above after auth + token extraction.
+ * Also imported directly by integration tests that mock the Supabase client.
+ */
+export async function handleConfirmPost(
+  sb: SupabaseClient,
+  userId: string,
+  token: string,
+): Promise<NextResponse> {
   const { data: pa, error: paErr } = await sb
     .from("ai_pending_actions")
     .select("token,user_id,kind,params,summary,expires_at,used_at")
@@ -69,7 +85,7 @@ export async function POST(req: NextRequest) {
     );
   }
   const row = pa as PendingActionRow;
-  if (row.user_id !== user.id) {
+  if (row.user_id !== userId) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   if (row.used_at) {
@@ -113,7 +129,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = await executeConfirmedAction(sb, user.id, row.kind, row.params);
+    const result = await executeConfirmedAction(sb, userId, row.kind, row.params);
     return NextResponse.json({ ok: true, kind: row.kind, ...result });
   } catch (e) {
     // Insert failed (constraint violation, schema lag, transient DB
