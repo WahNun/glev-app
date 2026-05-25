@@ -637,6 +637,36 @@ export default function EnginePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // glev:meal-prefill event — fallback for when the engine page is already mounted
+  // and router.push("/engine") doesn't cause a full remount (cached route).
+  useEffect(() => {
+    function handleMealPrefill() {
+      if (typeof window === "undefined") return;
+      try {
+        const raw = sessionStorage.getItem("glev_pending_meal");
+        if (!raw) return;
+        sessionStorage.removeItem("glev_pending_meal");
+        const mp = JSON.parse(raw) as {
+          input_text?: string; carbs?: number;
+          protein?: number | null; fat?: number | null; fiber?: number | null;
+        };
+        if (typeof mp.input_text === "string" && mp.input_text) setDesc(mp.input_text);
+        if (typeof mp.carbs === "number" && Number.isFinite(mp.carbs))
+          setCarbs(String(Math.round(carbUnit.fromGrams(mp.carbs) * 10) / 10));
+        if (typeof mp.protein === "number" && Number.isFinite(mp.protein))
+          setProtein(String(Math.round(mp.protein * 10) / 10));
+        if (typeof mp.fat === "number" && Number.isFinite(mp.fat))
+          setFat(String(Math.round(mp.fat * 10) / 10));
+        if (typeof mp.fiber === "number" && Number.isFinite(mp.fiber))
+          setFiber(String(Math.round(mp.fiber * 10) / 10));
+        setTab("log");
+      } catch { /* ignore */ }
+    }
+    window.addEventListener("glev:meal-prefill", handleMealPrefill);
+    return () => window.removeEventListener("glev:meal-prefill", handleMealPrefill);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Voice assistant: glev:set-macro CustomEvent → update macro form fields live.
   // Fired by useGlevAI when the AI calls the set_macro tool (Phase 2 voice).
   // Carbs respect the user's unit preference via carbUnit.fromGrams(); protein

@@ -408,9 +408,10 @@ export function useGlevAI(opts?: {
                 optsRef.current?.onNavigate?.(parsed.navigate);
               }
               if (parsed.meal_prep && typeof window !== "undefined") {
-                // Store macros in sessionStorage so the engine page can
-                // read them on mount (navigation is async — CustomEvents
-                // would fire before the page is ready).
+                // Store macros in sessionStorage (sync, before navigation)
+                // so the engine page reads them on mount.
+                // Also dispatch glev:meal-prefill as a fallback for when
+                // the engine page is already mounted (e.g. user is on /engine).
                 try {
                   sessionStorage.setItem(
                     "glev_pending_meal",
@@ -418,6 +419,10 @@ export function useGlevAI(opts?: {
                   );
                 } catch { /* sessionStorage may be unavailable */ }
                 optsRef.current?.onNavigate?.("/engine");
+                // Delayed event so the engine page gets it after mount/route-settle.
+                window.setTimeout(() => {
+                  window.dispatchEvent(new CustomEvent("glev:meal-prefill"));
+                }, 400);
               }
               // Phase 2: set_macro — dispatched as a CustomEvent so the
               // active engine-macros screen can update its local state
@@ -466,18 +471,24 @@ export function useGlevAI(opts?: {
           }
         }
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "Anfrage fehlgeschlagen";
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantId
-              ? {
-                  ...m,
-                  content: m.content || `Da ist etwas schiefgelaufen: ${msg}`,
-                  isStreaming: false,
-                }
-              : m,
-          ),
-        );
+        // AbortError = stream was cancelled by navigation (closeSheet) or
+        // user action — this is intentional and must never show as an error.
+        if (e instanceof Error && e.name === "AbortError") {
+          // Silent — the navigation/close already handled the UX.
+        } else {
+          const msg = e instanceof Error ? e.message : "Anfrage fehlgeschlagen";
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId
+                ? {
+                    ...m,
+                    content: m.content || `Da ist etwas schiefgelaufen: ${msg}`,
+                    isStreaming: false,
+                  }
+                : m,
+            ),
+          );
+        }
       } finally {
         setStreaming(false);
         abortRef.current = null;
