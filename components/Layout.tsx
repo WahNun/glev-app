@@ -227,6 +227,12 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // monotonic `vt` token that re-triggers auto-record even if the
   // user is already on /engine.
   const runFabShortTap = () => {
+    // If the chat sheet is already open, the FAB starts a new voice take
+    // regardless of the glev_fab_mode preference.
+    if (glevAi.sheetOpen) {
+      window.dispatchEvent(new CustomEvent("glev:voice-start"));
+      return;
+    }
     let mode: "ai" | "voice" = "ai";
     if (typeof window !== "undefined") {
       try {
@@ -1106,6 +1112,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         onSend={glevAi.sendMessage}
         onConfirmAction={glevAi.confirmAction}
         onCancelAction={glevAi.cancelAction}
+        onClearChat={glevAi.clearMessages}
       />
 
       {/* ── Floating Glev button — appears above the chat sheet ──────────
@@ -1141,27 +1148,12 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
               isSpeaking={ttsSpeaking}
             />
           </div>
-          {/* Hit area for the floating button */}
-          <button
-            type="button"
-            aria-label="Glev AI schließen"
-            onClick={glevAi.closeSheet}
-            style={{
-              position: "fixed",
-              top: "calc(15dvh - 32px)",
-              left: "50%",
-              transform: "translateX(-50%)",
-              width: 64,
-              height: 64,
-              borderRadius: "50%",
-              border: "none",
-              background: "rgba(0,0,0,0.001)",
-              cursor: "pointer",
-              zIndex: 1103,
-              WebkitTapHighlightColor: "transparent",
-              touchAction: "manipulation",
-              outline: "none",
-            }}
+          {/* Hit area for the floating button:
+              short press → new voice take
+              long press  → quick-add menu (same as nav FAB) */}
+          <GlevFloatingHitArea
+            onShortPress={() => window.dispatchEvent(new CustomEvent("glev:voice-start"))}
+            onLongPress={() => setQuickAddOpen(true)}
           />
         </>
       )}
@@ -1183,6 +1175,54 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
  * fabHitRef button in the parent Layout component.
  * See "FAB independent hit-area" comment block there.
  */
+/** Hit area for the floating Glev button above the chat sheet.
+ *  Short press → new voice take. Long press (500 ms) → quick-add menu.
+ */
+function GlevFloatingHitArea({
+  onShortPress,
+  onLongPress,
+}: { onShortPress: () => void; onLongPress: () => void }) {
+  const timerRef = useRef<number | null>(null);
+  const longFiredRef = useRef(false);
+
+  const clear = () => {
+    if (timerRef.current !== null) { window.clearTimeout(timerRef.current); timerRef.current = null; }
+  };
+
+  return (
+    <button
+      type="button"
+      aria-label="Sprachaufnahme starten"
+      onPointerDown={() => {
+        longFiredRef.current = false;
+        clear();
+        timerRef.current = window.setTimeout(() => {
+          longFiredRef.current = true;
+          onLongPress();
+        }, 500);
+      }}
+      onPointerUp={() => { clear(); if (!longFiredRef.current) onShortPress(); }}
+      onPointerCancel={() => { clear(); longFiredRef.current = false; }}
+      style={{
+        position: "fixed",
+        top: "calc(15dvh - 32px)",
+        left: "50%",
+        transform: "translateX(-50%)",
+        width: 64,
+        height: 64,
+        borderRadius: "50%",
+        border: "none",
+        background: "rgba(0,0,0,0.001)",
+        cursor: "pointer",
+        zIndex: 1103,
+        WebkitTapHighlightColor: "transparent",
+        touchAction: "manipulation",
+        outline: "none",
+      }}
+    />
+  );
+}
+
 function MobileGlevFab({
   label, active, recording = false, speaking = false, sheetOpen = false,
 }: {

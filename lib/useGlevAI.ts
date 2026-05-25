@@ -276,6 +276,19 @@ export function useGlevAI(opts?: {
     };
   }, []);
 
+  /** Clear the chat history — wipes sessionStorage + in-memory messages. */
+  const clearMessages = useCallback(() => {
+    if (abortRef.current) {
+      try { abortRef.current.abort(); } catch { /* noop */ }
+      abortRef.current = null;
+    }
+    setStreaming(false);
+    setMessages([]);
+    if (typeof window !== "undefined") {
+      try { window.sessionStorage.removeItem(HISTORY_KEY); } catch { /* ignore */ }
+    }
+  }, []);
+
   const closeSheet = useCallback(() => {
     setSheetOpen(false);
     // Cancel any in-flight stream so the next open doesn't show a stuck
@@ -597,6 +610,7 @@ export function useGlevAI(opts?: {
     grantConsent,
     revokeConsent,
     closeSheet,
+    clearMessages,
     sendMessage,
     confirmAction,
     cancelAction,

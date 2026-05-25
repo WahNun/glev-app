@@ -17,6 +17,7 @@ interface Props {
   onSend: (text: string) => void;
   onConfirmAction?: (messageId: string) => void;
   onCancelAction?: (messageId: string) => void;
+  onClearChat?: () => void;
 }
 
 const DISCLAIMER =
@@ -177,6 +178,7 @@ export default function GlevAIChatSheet({
   onSend,
   onConfirmAction,
   onCancelAction,
+  onClearChat,
 }: Props) {
   const [input, setInput] = useState("");
   const [sttError, setSttError] = useState<string | null>(null);
@@ -235,6 +237,29 @@ export default function GlevAIChatSheet({
     if (!open) tts.stop();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // Tap-anywhere-to-stop for the chat mic.
+  // Same pattern as voiceRecordingContext: 250ms grace so the tap that
+  // started recording doesn't immediately cancel it. Skips the mic button
+  // itself (data-glev-mic) and the FAB (data-glev-fab) so their own
+  // handlers stay in charge.
+  useEffect(() => {
+    if (!isListening) return;
+    let armed = false;
+    const timer = window.setTimeout(() => { armed = true; }, 250);
+    const onDown = (e: PointerEvent) => {
+      if (!armed) return;
+      const target = e.target as Element | null;
+      if (!target || typeof target.closest !== "function") return;
+      if (target.closest("[data-glev-mic]") || target.closest('[data-glev-fab="true"]')) return;
+      stopListening();
+    };
+    document.addEventListener("pointerdown", onDown, true);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("pointerdown", onDown, true);
+    };
+  }, [isListening, stopListening]);
 
   // Broadcast TTS speaking state so the FAB can glow green.
   useEffect(() => {
@@ -328,6 +353,35 @@ export default function GlevAIChatSheet({
           <span style={{ fontSize: 16, fontWeight: 700, color: "white", flex: 1 }}>
             Glev AI
           </span>
+          {/* Reset / clear chat button */}
+          {onClearChat && (
+            <button
+              type="button"
+              onClick={onClearChat}
+              aria-label="Chat zurücksetzen"
+              title="Chat zurücksetzen"
+              disabled={messages.length === 0 && !streaming}
+              style={{
+                background: "none",
+                border: "none",
+                cursor: messages.length === 0 && !streaming ? "default" : "pointer",
+                padding: 4,
+                marginRight: 2,
+                display: "flex",
+                alignItems: "center",
+                color: messages.length === 0 && !streaming
+                  ? "rgba(255,255,255,0.15)"
+                  : "rgba(255,255,255,0.5)",
+                transition: "color 0.15s",
+              }}
+            >
+              {/* Clockwise rotate arrow (reset icon) */}
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="1 4 1 10 7 10"/>
+                <path d="M3.51 15a9 9 0 1 0 .49-4.5"/>
+              </svg>
+            </button>
+          )}
           {/* TTS mute toggle */}
           <button
             type="button"
@@ -536,6 +590,7 @@ export default function GlevAIChatSheet({
           {/* Mic button — hold to talk */}
           <button
             type="button"
+            data-glev-mic="true"
             aria-label={isListening ? "Aufnahme stoppen" : "Spracheingabe starten"}
             aria-pressed={isListening}
             onPointerDown={(e) => {

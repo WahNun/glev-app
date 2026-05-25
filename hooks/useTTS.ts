@@ -14,71 +14,75 @@ function readTTSPref(): boolean {
   }
 }
 
+/** Pick the best German voice from available voices. */
+function pickGermanVoice(): SpeechSynthesisVoice | null {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return null;
+  const voices = window.speechSynthesis.getVoices();
+  // Prefer local (not network) German voices first
+  return (
+    voices.find((v) => v.lang.startsWith("de") && !v.localService === false) ??
+    voices.find((v) => v.lang.startsWith("de")) ??
+    null
+  );
+}
+
 export function useTTS() {
   const [speaking, setSpeaking] = useState(false);
   const [enabled, setEnabled] = useState(true);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   useEffect(() => {
     setEnabled(readTTSPref());
   }, []);
 
+  // Pre-load voices (Chrome loads them async)
+  useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    window.speechSynthesis.getVoices();
+    const onVoicesChanged = () => window.speechSynthesis.getVoices();
+    window.speechSynthesis.addEventListener("voiceschanged", onVoicesChanged);
+    return () => window.speechSynthesis.removeEventListener("voiceschanged", onVoicesChanged);
+  }, []);
+
   const stop = useCallback(() => {
-    if (abortRef.current) {
-      try { abortRef.current.abort(); } catch { /* noop */ }
-      abortRef.current = null;
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
     }
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.src = "";
-      audioRef.current = null;
-    }
+    utteranceRef.current = null;
     setSpeaking(false);
   }, []);
 
   const speak = useCallback(
     async (text: string) => {
-      if (!enabled) return;
-      if (!text.trim()) return;
+      if (!enabled || !text.trim()) return;
       stop();
 
-      const ac = new AbortController();
-      abortRef.current = ac;
-      setSpeaking(true);
+      if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
 
-      try {
-        const res = await fetch("/api/tts/mistral", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: ac.signal,
-          body: JSON.stringify({ text }),
-        });
-        if (!res.ok || ac.signal.aborted) {
-          setSpeaking(false);
-          return;
-        }
-        const blob = await res.blob();
-        if (ac.signal.aborted) {
-          setSpeaking(false);
-          return;
-        }
-        const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-        audioRef.current = audio;
-        audio.onended = () => {
-          setSpeaking(false);
-          URL.revokeObjectURL(url);
-        };
-        audio.onerror = () => {
-          setSpeaking(false);
-          URL.revokeObjectURL(url);
-        };
-        await audio.play();
-      } catch (e) {
-        if (e instanceof Error && e.name === "AbortError") return;
+      // Chrome quirk: cancel() needs a tick before speak()
+      await new Promise((r) => setTimeout(r, 50));
+
+      const u = new SpeechSynthesisUtterance(text.trim());
+      u.lang = "de-DE";
+      u.rate = 1.05;
+      u.pitch = 1.0;
+
+      const voice = pickGermanVoice();
+      if (voice) u.voice = voice;
+
+      u.onstart = () => setSpeaking(true);
+      u.onend = () => {
         setSpeaking(false);
-      }
+        utteranceRef.current = null;
+      };
+      u.onerror = () => {
+        setSpeaking(false);
+        utteranceRef.current = null;
+      };
+
+      utteranceRef.current = u;
+      setSpeaking(true);
+      window.speechSynthesis.speak(u);
     },
     [enabled, stop],
   );
@@ -89,9 +93,9 @@ export function useTTS() {
       try {
         window.localStorage.setItem(TTS_PREF_KEY, next ? "1" : "0");
       } catch { /* ignore */ }
+      if (!next) stop();
       return next;
     });
-    stop();
   }, [stop]);
 
   useEffect(() => {
