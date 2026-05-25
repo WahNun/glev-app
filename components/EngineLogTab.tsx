@@ -1096,7 +1096,7 @@ export function ExerciseForm() {
   );
 }
 
-export default function EngineLogTab() {
+export default function EngineLogTab({ initialType }: { initialType?: "bolus" | "basal" } = {}) {
   const t = useTranslations("engineLog");
   return (
     <div>
@@ -1109,7 +1109,7 @@ export default function EngineLogTab() {
         className="glev-log-grid"
         style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20 }}
       >
-        <InsulinForm />
+        <InsulinForm initialType={initialType} />
         <ExerciseForm />
       </div>
 

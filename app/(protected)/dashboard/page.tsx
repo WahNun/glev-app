@@ -696,7 +696,7 @@ export default function DashboardPage() {
       id: "insulin",
       title: t("cluster_insulin"),
       cards: [
-        { id: "iob",         node: <IOBCard insulin={insulin} insulinType={insulinType} meals={meals} currentBg={latestCgmBg}/> },
+        { id: "iob",         node: <IOBCard insulin={insulin} insulinType={insulinType} meals={meals} currentBg={latestCgmBg} onLogBasal={() => router.push("/engine?tab=log&startType=basal")} /> },
         { id: "iob-history", node: <IOBHistoryChart insulin={insulin} insulinType={insulinType} meals={meals} /> },
       ],
     },

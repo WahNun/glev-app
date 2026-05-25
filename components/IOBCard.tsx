@@ -68,9 +68,12 @@ interface Props {
    *  shows a projected "Erwartet: ~X mg/dL" target alongside the
    *  expected drop. Optional — the drop row is shown regardless. */
   currentBg?: number;
+  /** Called when the user taps the "Log Basal" quick-action button on the
+   *  basal view. The parent is responsible for opening the log form. */
+  onLogBasal?: () => void;
 }
 
-export default function IOBCard({ insulin, insulinType, meals, currentBg }: Props) {
+export default function IOBCard({ insulin, insulinType, meals, currentBg, onLogBasal }: Props) {
   const t = useTranslations("dashboard");
   const [now, setNow]           = useState(() => Date.now());
   const [expanded, setExpanded] = useState(() => {
@@ -369,15 +372,53 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
                         {t("iob_basal_next_in", { hours: basalNextInH })}
                       </div>
                     )}
+                    {onLogBasal && (
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); onLogBasal(); }}
+                        style={{
+                          alignSelf: "flex-start", padding: "3px 10px", borderRadius: 99,
+                          fontSize: 11, fontWeight: 700, letterSpacing: "0.04em",
+                          border: `1px solid ${BASAL_INDIGO}44`,
+                          background: `${BASAL_INDIGO}10`,
+                          color: BASAL_INDIGO,
+                          cursor: "pointer",
+                          WebkitTapHighlightColor: "transparent",
+                          touchAction: "manipulation",
+                        }}
+                      >
+                        + {t("iob_log_basal_btn")}
+                      </button>
+                    )}
                   </>
                 ) : (
-                  <span style={{
-                    alignSelf: "flex-start", padding: "3px 10px", borderRadius: 99,
-                    fontSize: 11, fontWeight: 700,
-                    background: "var(--surface-soft)", color: "var(--text-ghost)", letterSpacing: "0.04em",
-                  }}>
-                    {t("iob_basal_no_log")}
-                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <span style={{
+                      padding: "3px 10px", borderRadius: 99,
+                      fontSize: 11, fontWeight: 700,
+                      background: "var(--surface-soft)", color: "var(--text-ghost)", letterSpacing: "0.04em",
+                    }}>
+                      {t("iob_basal_no_log")}
+                    </span>
+                    {onLogBasal && (
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); onLogBasal(); }}
+                        style={{
+                          padding: "3px 12px", borderRadius: 99,
+                          fontSize: 11, fontWeight: 700, letterSpacing: "0.04em",
+                          border: `1px solid ${BASAL_INDIGO}55`,
+                          background: `${BASAL_INDIGO}18`,
+                          color: BASAL_INDIGO,
+                          cursor: "pointer",
+                          WebkitTapHighlightColor: "transparent",
+                          touchAction: "manipulation",
+                        }}
+                      >
+                        + {t("iob_log_basal_btn")}
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             </>

@@ -3467,7 +3467,7 @@ export default function EnginePage() {
             // fire, making SnapSlider drags completely unresponsive.
           }}
         >
-          {tab === "log"         && <EngineLogTab />}
+          {tab === "log"         && <EngineLogTab initialType={(searchParams?.get("startType") === "basal" || searchParams?.get("startType") === "bolus") ? (searchParams.get("startType") as "bolus" | "basal") : undefined} />}
           {tab === "bolus"       && <InsulinForm />}
           {tab === "exercise"    && <ExerciseForm />}
           {tab === "fingerstick" && <FingerstickLogCard />}

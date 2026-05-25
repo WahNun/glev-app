@@ -1732,6 +1732,7 @@
     "iob_tab_bolus": "Bolus",
     "iob_tab_basal": "Basal",
     "iob_basal_no_log": "Kein Basal-Log",
+    "iob_log_basal_btn": "Basal loggen",
     "iob_basal_overdue": "Injektion überfällig",
     "iob_basal_next_in": "Nächste in ~{hours}h",
     "iob_basal_coverage_title": "Wirkdauer",
