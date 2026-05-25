@@ -860,6 +860,43 @@ export default function EnginePage() {
     return r?.trend;
   }, [trendSamples, mealTime]);
 
+  // Historical glucose auto-fill: when the user changes mealTime to a past
+  // time (more than 5 min ago), look up the closest CGM sample in trendSamples
+  // and auto-populate the glucose field — so logging a past meal starts with
+  // the actual historical BZ value, not whatever the current CGM shows.
+  //
+  // Rules:
+  //  - Only fills when glucose is currently empty (never overwrites user input).
+  //  - Past = mealTime is > 5 min before now (avoids jitter on "now" changes).
+  //  - Closest sample within ±15 min of the target time wins.
+  //  - Falls back silently if no sample is close enough.
+  useEffect(() => {
+    if (!mealTime) return;
+    const mealMs = Date.parse(mealTime);
+    if (!Number.isFinite(mealMs)) return;
+    const nowMs = Date.now();
+    const PAST_THRESHOLD_MS = 5 * 60_000;       // 5 min
+    const MAX_SAMPLE_DELTA_MS = 15 * 60_000;    // ±15 min tolerance
+
+    if (nowMs - mealMs < PAST_THRESHOLD_MS) return; // "now" or future — skip
+
+    if (trendSamples.length === 0) return; // no CGM data yet
+
+    // Find the sample closest to mealMs within ±15 min.
+    let best: { value: number; delta: number } | null = null;
+    for (const s of trendSamples) {
+      const ts = new Date(s.timestamp).getTime();
+      const delta = Math.abs(ts - mealMs);
+      if (delta <= MAX_SAMPLE_DELTA_MS) {
+        if (!best || delta < best.delta) best = { value: s.value, delta };
+      }
+    }
+    if (!best) return; // nothing close enough
+
+    // Only auto-fill when glucose field is currently empty — respect manual input.
+    setGlucose((prev) => (prev === "" ? String(best!.value) : prev));
+  }, [mealTime, trendSamples]);
+
   // Hydrate the dismissed-suggestion cooldown map from localStorage. Each
   // entry is `{ [patternSignature]: epochMs of dismissal }` and we cull
   // anything older than the 14-day window on read so the dictionary

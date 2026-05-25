@@ -152,6 +152,8 @@ async function executeConfirmedAction(
       return await execAddAppointment(sb, userId, params);
     case "add_timeline_check":
       return await execAddTimelineCheck(sb, userId, params);
+    case "update_setting":
+      return await execUpdateSetting(sb, userId, params);
     default:
       throw new Error(`unknown action kind: ${kind}`);
   }
@@ -302,6 +304,48 @@ type TimelineCheckResult = {
     body: string;
   };
 };
+
+async function execUpdateSetting(
+  sb: SupabaseClient,
+  userId: string,
+  p: Record<string, unknown>,
+): Promise<{ updatedSetting?: string }> {
+  const setting = typeof p.setting === "string" ? p.setting.trim() : "";
+  const rawValue = typeof p.value === "string" ? p.value.trim() : "";
+
+  if (!setting || !rawValue) {
+    throw new Error("setting und value sind Pflichtfelder");
+  }
+
+  // Map the tool's logical setting name to the user_settings column name.
+  const columnMap: Record<string, string> = {
+    icr:                "icr",
+    target_low_mg_dl:   "target_low",
+    target_high_mg_dl:  "target_high",
+    correction_factor:  "correction_factor",
+    carb_unit:          "carb_unit",
+    dia_minutes:        "dia_minutes",
+  };
+  const column = columnMap[setting];
+  if (!column) throw new Error(`Unbekannte Einstellung: ${setting}`);
+
+  // Parse numeric settings; carb_unit stays as string.
+  const value: unknown = setting === "carb_unit"
+    ? rawValue
+    : parseFloat(rawValue);
+
+  if (setting !== "carb_unit" && !Number.isFinite(value as number)) {
+    throw new Error(`Ungültiger Wert für ${setting}: ${rawValue}`);
+  }
+
+  const { error } = await sb
+    .from("user_settings")
+    .update({ [column]: value, updated_at: new Date().toISOString() })
+    .eq("user_id", userId);
+
+  if (error) throw new Error(error.message);
+  return { updatedSetting: setting };
+}
 
 async function execAddTimelineCheck(
   sb: SupabaseClient,
