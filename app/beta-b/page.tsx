@@ -17,10 +17,6 @@ import {
   TEXT_FAINT,
 } from "@/components/landing/tokens";
 
-/**
- * /preview-beta — copy & layout preview of /beta.
- * Stripe wiring untouched: posts to /api/checkout/beta with locale.
- */
 function PreviewBetaCTA({ block = true }: { block?: boolean }) {
   const t = useTranslations("previewBeta");
   const locale = useLocale();
@@ -115,12 +111,12 @@ const SECTION_WRAP_NARROW: React.CSSProperties = {
   boxSizing: "border-box",
 };
 
-function PreviewBetaContent() {
+function BetaBContent() {
   const t = useTranslations("previewBeta");
 
   useEffect(() => {
     if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
-      (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("trackCustom", "ViewBetaPagePreview");
+      (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("trackCustom", "ViewBetaBPage");
     }
   }, []);
 
@@ -202,6 +198,28 @@ function PreviewBetaContent() {
               style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}
             >
               <PreviewBetaCTA />
+              <Link
+                href="/signup"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "transparent",
+                  color: TEXT_DIM,
+                  border: `1px solid ${BORDER}`,
+                  borderRadius: 12,
+                  padding: "14px 32px",
+                  fontSize: 15,
+                  fontWeight: 600,
+                  textDecoration: "none",
+                  textAlign: "center",
+                  boxSizing: "border-box",
+                  width: "100%",
+                  transition: "background 120ms, border-color 120ms",
+                }}
+              >
+                7 Tage kostenlos testen
+              </Link>
             </div>
 
             <div
@@ -227,7 +245,7 @@ function PreviewBetaContent() {
         </div>
       </section>
 
-      {/* 1b. CGM COMPATIBILITY — direkt nach Hero, hilft Early-Filter */}
+      {/* 1b. CGM COMPATIBILITY */}
       <section style={{ ...SECTION_WRAP_NARROW, padding: "8px 20px 0" }}>
         <CGMCompatibility variant="compact" />
       </section>
@@ -257,7 +275,7 @@ function PreviewBetaContent() {
         </div>
       </section>
 
-      {/* 3. FLOW — 3 Schritte */}
+      {/* 3. FLOW */}
       <section style={SECTION_WRAP_NARROW}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 14 }}>
           {[1, 2, 3].map((n) => (
@@ -304,7 +322,7 @@ function PreviewBetaContent() {
         </div>
       </section>
 
-      {/* 4. PRICING block */}
+      {/* 4. PRICING */}
       <section
         style={{
           width: "100%",
@@ -348,6 +366,28 @@ function PreviewBetaContent() {
           </ul>
           <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
             <PreviewBetaCTA />
+            <Link
+              href="/signup"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "transparent",
+                color: TEXT_DIM,
+                border: `1px solid ${BORDER}`,
+                borderRadius: 12,
+                padding: "14px 32px",
+                fontSize: 15,
+                fontWeight: 600,
+                textDecoration: "none",
+                textAlign: "center",
+                boxSizing: "border-box",
+                width: "100%",
+                transition: "background 120ms, border-color 120ms",
+              }}
+            >
+              7 Tage kostenlos testen
+            </Link>
           </div>
           <div style={{ fontSize: 13, color: MINT, textAlign: "center", marginTop: 4 }}>
             {t("pricing_microcopy")}
@@ -355,7 +395,7 @@ function PreviewBetaContent() {
         </div>
       </section>
 
-      {/* 5. FAQ — alle 10 */}
+      {/* 5. FAQ */}
       <section style={SECTION_WRAP_NARROW}>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
@@ -379,22 +419,10 @@ function PreviewBetaContent() {
         </div>
       </section>
 
-      {/* 6. MINI-FOUNDER (subtil) */}
+      {/* 6. MINI-FOUNDER */}
       <section style={SECTION_WRAP_NARROW}>
-        <div
-          style={{
-            padding: "16px 4px",
-            textAlign: "center",
-          }}
-        >
-          <p
-            style={{
-              fontSize: 13,
-              lineHeight: 1.55,
-              color: TEXT_DIM,
-              margin: "0 0 4px",
-            }}
-          >
+        <div style={{ padding: "16px 4px", textAlign: "center" }}>
+          <p style={{ fontSize: 13, lineHeight: 1.55, color: TEXT_DIM, margin: "0 0 4px" }}>
             {t("mini_founder")}
           </p>
           <div style={{ fontSize: 12, color: TEXT_FAINT }}>
@@ -413,15 +441,7 @@ function PreviewBetaContent() {
           boxSizing: "border-box",
         }}
       >
-        <p
-          style={{
-            fontSize: 11,
-            lineHeight: 1.55,
-            color: TEXT_FAINT,
-            textAlign: "center",
-            margin: 0,
-          }}
-        >
+        <p style={{ fontSize: 11, lineHeight: 1.55, color: TEXT_FAINT, textAlign: "center", margin: 0 }}>
           {t("compliance_footer")}
         </p>
       </section>
@@ -442,10 +462,10 @@ function PreviewBetaContent() {
   );
 }
 
-export default function PreviewBetaPage() {
+export default function BetaBPage() {
   return (
     <Suspense fallback={null}>
-      <PreviewBetaContent />
+      <BetaBContent />
     </Suspense>
   );
 }
