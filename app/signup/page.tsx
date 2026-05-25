@@ -17,7 +17,6 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import Lockup from "@/components/landing/Lockup";
 import {
   ACCENT,
   ACCENT_HOVER,
@@ -152,7 +151,7 @@ export default function SignupPage() {
       }}
     >
       <div style={{ marginBottom: 32 }}>
-        <Lockup width={120} />
+        <img src="/glev-lockup.png" alt="glev" style={{ height: 44, width: "auto" }} />
       </div>
 
       <div
