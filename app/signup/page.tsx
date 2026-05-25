@@ -4,10 +4,9 @@
  * /signup — Public free-trial signup page (no credit card required).
  *
  * Flow:
- *   1. User enters email + password
- *   2. supabase.auth.signUp() creates the account
- *   3. POST /api/auth/free-trial sets trial_end_at = NOW() + 7 days
- *   4. Redirect to /onboarding
+ *   1. User enters name + email + password  → supabase.auth.signUp()
+ *   2. Profile data form (phone, DOB, CGM)  → saved via auth.updateUser()
+ *   3. "Check your email" confirmation screen
  *
  * This page is intentionally NOT behind the auth gate.
  * Paid users who land here (wrong link) are redirected to /dashboard.
@@ -27,14 +26,35 @@ import {
   TEXT_FAINT,
 } from "@/components/landing/tokens";
 
+type Step = "signup" | "profile" | "success";
+
+const SENSOR_OPTIONS = [
+  { value: "libre2", label: "FreeStyle Libre 2" },
+  { value: "libre3", label: "FreeStyle Libre 3" },
+  { value: "dexcom", label: "Dexcom" },
+  { value: "medtronic", label: "Medtronic" },
+  { value: "other", label: "Anderer Sensor" },
+  { value: "none", label: "Kein Sensor" },
+];
+
 export default function SignupPage() {
   const router = useRouter();
+
+  // Step 1 — account
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+
+  // Step 2 — profile data
+  const [phone, setPhone] = useState("");
+  const [dob, setDob] = useState("");
+  const [usesCgm, setUsesCgm] = useState<"ja" | "nein" | null>(null);
+  const [sensorType, setSensorType] = useState("");
+  const [profileLoading, setProfileLoading] = useState(false);
+
+  const [step, setStep] = useState<Step>("signup");
   const [hover, setHover] = useState(false);
 
   // Redirect already-signed-in users
@@ -52,6 +72,7 @@ export default function SignupPage() {
     }
   }, []);
 
+  // ── Step 1: Create account ──────────────────────────────────────────
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!supabase) return;
@@ -59,7 +80,6 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      // 1. Create Supabase auth account
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
@@ -72,66 +92,66 @@ export default function SignupPage() {
       if (signUpError) throw signUpError;
       if (!data.user) throw new Error("Signup fehlgeschlagen – bitte erneut versuchen.");
 
-      // 2. Set trial_end_at via API
+      // Set trial_end_at
       const session = data.session;
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (session?.access_token) {
         headers["Authorization"] = `Bearer ${session.access_token}`;
       }
-
       await fetch("/api/auth/free-trial", { method: "POST", headers }).catch((e) =>
         console.warn("[signup] trial API call failed:", e)
       );
 
-      // 3. Pixel Lead event
+      // Pixel Lead event
       if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
         (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("track", "Lead");
       }
 
-      // 4. If email confirmation required, show success state
-      if (!session) {
-        setSuccess(true);
-        setLoading(false);
-        return;
-      }
-
-      // 5. Session available → go to onboarding
-      router.push("/onboarding");
+      // → Step 2 (profile data) regardless of whether email confirm is needed
+      setStep("profile");
+      setLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unbekannter Fehler");
       setLoading(false);
     }
   }
 
-  if (success) {
+  // ── Step 2: Save profile data ───────────────────────────────────────
+  async function handleProfileSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setProfileLoading(true);
+
+    try {
+      if (supabase) {
+        // Save extra fields into auth user metadata — no DB migration needed.
+        // Can be promoted to a proper profiles column later via migration.
+        await supabase.auth.updateUser({
+          data: {
+            phone: phone || null,
+            date_of_birth: dob || null,
+            uses_cgm: usesCgm === "ja",
+            sensor_type: usesCgm === "ja" ? (sensorType || null) : null,
+          },
+        }).catch((e) => console.warn("[signup] profile update failed:", e));
+      }
+    } finally {
+      setStep("success");
+      setProfileLoading(false);
+    }
+  }
+
+  // ── Success screen ──────────────────────────────────────────────────
+  if (step === "success") {
     return (
-      <main
-        style={{
-          minHeight: "100vh",
-          background: BG,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "24px 16px",
-        }}
-      >
-        <div
-          style={{
-            background: SURFACE,
-            border: `1px solid ${BORDER}`,
-            borderRadius: 20,
-            padding: "40px 32px",
-            maxWidth: 420,
-            width: "100%",
-            textAlign: "center",
-          }}
-        >
+      <main style={centerStyle}>
+        <div style={cardStyle}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>✉️</div>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: "#fff", margin: "0 0 12px" }}>
             Bestätige deine E-Mail
           </h1>
           <p style={{ fontSize: 15, color: TEXT_DIM, lineHeight: 1.6, margin: 0 }}>
-            Wir haben eine Bestätigungsmail an <strong style={{ color: "#fff" }}>{email}</strong> gesendet.
+            Wir haben eine Bestätigungsmail an{" "}
+            <strong style={{ color: "#fff" }}>{email}</strong> gesendet.
             Klick auf den Link um dein Konto zu aktivieren.
           </p>
         </div>
@@ -139,32 +159,198 @@ export default function SignupPage() {
     );
   }
 
+  // ── Step 2: Profile data form ───────────────────────────────────────
+  if (step === "profile") {
+    return (
+      <main style={centerStyle}>
+        <div style={{ marginBottom: 32 }}>
+          <img src="/glev-lockup.png" alt="glev" style={{ height: 44, width: "auto" }} />
+        </div>
+
+        <div style={{ ...cardStyle, textAlign: "left" }}>
+          {/* Progress indicator */}
+          <div style={{ display: "flex", gap: 6, marginBottom: 28 }}>
+            {[0, 1].map((i) => (
+              <div
+                key={i}
+                style={{
+                  flex: 1,
+                  height: 3,
+                  borderRadius: 99,
+                  background: i === 0
+                    ? ACCENT
+                    : "rgba(255,255,255,0.12)",
+                }}
+              />
+            ))}
+          </div>
+
+          <div style={{ marginBottom: 24 }}>
+            <p style={{ fontSize: 12, fontWeight: 600, color: ACCENT, textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 6px" }}>
+              Schritt 2 von 2
+            </p>
+            <h1 style={{ fontSize: 20, fontWeight: 700, color: "#fff", margin: "0 0 4px", letterSpacing: "-0.02em" }}>
+              Noch ein paar Angaben
+            </h1>
+            <p style={{ fontSize: 14, color: TEXT_DIM, margin: 0 }}>
+              Damit wir Glev besser auf dich abstimmen können.
+            </p>
+          </div>
+
+          <form onSubmit={handleProfileSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {/* Phone */}
+            <input
+              type="tel"
+              placeholder="Telefonnummer (optional)"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              autoComplete="tel"
+              style={inputStyle}
+            />
+
+            {/* Date of birth */}
+            <div>
+              <label style={{ fontSize: 12, color: TEXT_DIM, fontWeight: 500, display: "block", marginBottom: 6 }}>
+                Geburtsdatum
+              </label>
+              <input
+                type="date"
+                value={dob}
+                onChange={(e) => setDob(e.target.value)}
+                max={new Date().toISOString().slice(0, 10)}
+                style={{ ...inputStyle, colorScheme: "dark" }}
+              />
+            </div>
+
+            {/* CGM yes/no */}
+            <div>
+              <label style={{ fontSize: 12, color: TEXT_DIM, fontWeight: 500, display: "block", marginBottom: 8 }}>
+                Nutzt du einen CGM-Sensor?
+              </label>
+              <div style={{ display: "flex", gap: 8 }}>
+                {(["ja", "nein"] as const).map((val) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => {
+                      setUsesCgm(val);
+                      if (val === "nein") setSensorType("none");
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: "12px 0",
+                      borderRadius: 10,
+                      border: `1px solid ${usesCgm === val ? ACCENT : "rgba(255,255,255,0.1)"}`,
+                      background: usesCgm === val ? "rgba(79,110,247,0.15)" : "rgba(255,255,255,0.04)",
+                      color: usesCgm === val ? "#fff" : TEXT_DIM,
+                      fontSize: 14,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                      textTransform: "capitalize",
+                      transition: "all 120ms ease",
+                    }}
+                  >
+                    {val === "ja" ? "Ja" : "Nein"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Sensor type — only when CGM = ja */}
+            {usesCgm === "ja" && (
+              <div>
+                <label style={{ fontSize: 12, color: TEXT_DIM, fontWeight: 500, display: "block", marginBottom: 6 }}>
+                  Welchen Sensor nutzt du?
+                </label>
+                <select
+                  value={sensorType}
+                  onChange={(e) => setSensorType(e.target.value)}
+                  style={{
+                    ...inputStyle,
+                    appearance: "none",
+                    WebkitAppearance: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  <option value="" disabled>Sensor auswählen…</option>
+                  {SENSOR_OPTIONS.filter((o) => o.value !== "none").map((o) => (
+                    <option key={o.value} value={o.value} style={{ background: "#1a1f2e" }}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={profileLoading}
+              onMouseEnter={() => setHover(true)}
+              onMouseLeave={() => setHover(false)}
+              style={{
+                background: profileLoading ? "rgba(79,110,247,0.6)" : hover ? ACCENT_HOVER : ACCENT,
+                color: "#fff",
+                border: "none",
+                borderRadius: 12,
+                padding: "16px 24px",
+                fontSize: 16,
+                fontWeight: 600,
+                cursor: profileLoading ? "default" : "pointer",
+                fontFamily: "inherit",
+                marginTop: 4,
+                transition: "background 120ms ease",
+              }}
+            >
+              {profileLoading ? "Wird gespeichert…" : "Weiter →"}
+            </button>
+
+            {/* Skip link */}
+            <button
+              type="button"
+              onClick={() => setStep("success")}
+              style={{
+                background: "none",
+                border: "none",
+                color: TEXT_DIM,
+                fontSize: 13,
+                cursor: "pointer",
+                fontFamily: "inherit",
+                textAlign: "center",
+                padding: "4px 0",
+              }}
+            >
+              Überspringen
+            </button>
+          </form>
+        </div>
+      </main>
+    );
+  }
+
+  // ── Step 1: Account creation ────────────────────────────────────────
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: BG,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "24px 16px",
-      }}
-    >
+    <main style={centerStyle}>
       <div style={{ marginBottom: 32 }}>
         <img src="/glev-lockup.png" alt="glev" style={{ height: 44, width: "auto" }} />
       </div>
 
-      <div
-        style={{
-          background: SURFACE,
-          border: `1px solid ${BORDER}`,
-          borderRadius: 20,
-          padding: "36px 32px",
-          maxWidth: 420,
-          width: "100%",
-        }}
-      >
+      <div style={cardStyle}>
+        {/* Progress indicator */}
+        <div style={{ display: "flex", gap: 6, marginBottom: 28 }}>
+          {[0, 1].map((i) => (
+            <div
+              key={i}
+              style={{
+                flex: 1,
+                height: 3,
+                borderRadius: 99,
+                background: i === 0 ? ACCENT : "rgba(255,255,255,0.12)",
+              }}
+            />
+          ))}
+        </div>
+
         {/* Header */}
         <div style={{ marginBottom: 28, textAlign: "center" }}>
           <div
@@ -294,6 +480,25 @@ export default function SignupPage() {
     </main>
   );
 }
+
+const centerStyle: React.CSSProperties = {
+  minHeight: "100vh",
+  background: BG,
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "24px 16px",
+};
+
+const cardStyle: React.CSSProperties = {
+  background: SURFACE,
+  border: `1px solid ${BORDER}`,
+  borderRadius: 20,
+  padding: "36px 32px",
+  maxWidth: 420,
+  width: "100%",
+};
 
 const inputStyle: React.CSSProperties = {
   background: "rgba(255,255,255,0.05)",
