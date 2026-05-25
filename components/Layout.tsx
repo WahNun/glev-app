@@ -1007,6 +1007,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           active={quickAddOpen || voice.recording}
           recording={voice.recording}
           speaking={ttsSpeaking}
+          sheetOpen={glevAi.sheetOpen}
         />
         <MobileTab
           label={tNav("insights")}
@@ -1106,6 +1107,64 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         onConfirmAction={glevAi.confirmAction}
         onCancelAction={glevAi.cancelAction}
       />
+
+      {/* ── Floating Glev button — appears above the chat sheet ──────────
+          When the AI chat sheet is open the FAB is hidden inside the nav
+          (too far down) so we render a second copy pinned to the sheet's
+          top edge. Tapping it closes the sheet. z-index 1102 sits above
+          the sheet (1101) and the backdrop (1100).
+          ─────────────────────────────────────────────────────────────── */}
+      {glevAi.sheetOpen && (
+        <>
+          {/* Visual button — purely decorative, no pointer events */}
+          <div
+            aria-hidden="true"
+            style={{
+              position: "fixed",
+              top: "calc(15dvh - 32px)",
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 1102,
+              pointerEvents: "none",
+              animation: "glevFloatPop 0.28s cubic-bezier(0.34,1.56,0.64,1) both",
+            }}
+          >
+            <style>{`
+              @keyframes glevFloatPop {
+                from { transform: translateX(-50%) scale(0.7); opacity: 0; }
+                to   { transform: translateX(-50%) scale(1);   opacity: 1; }
+              }
+            `}</style>
+            <GlevAIButton
+              onPress={() => {}}
+              isListening={voice.recording}
+              isSpeaking={ttsSpeaking}
+            />
+          </div>
+          {/* Hit area for the floating button */}
+          <button
+            type="button"
+            aria-label="Glev AI schließen"
+            onClick={glevAi.closeSheet}
+            style={{
+              position: "fixed",
+              top: "calc(15dvh - 32px)",
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: 64,
+              height: 64,
+              borderRadius: "50%",
+              border: "none",
+              background: "rgba(0,0,0,0.001)",
+              cursor: "pointer",
+              zIndex: 1103,
+              WebkitTapHighlightColor: "transparent",
+              touchAction: "manipulation",
+              outline: "none",
+            }}
+          />
+        </>
+      )}
     </div>
   );
 }
@@ -1125,12 +1184,13 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
  * See "FAB independent hit-area" comment block there.
  */
 function MobileGlevFab({
-  label, active, recording = false, speaking = false,
+  label, active, recording = false, speaking = false, sheetOpen = false,
 }: {
   label: string;
   active: boolean;
   recording?: boolean;
   speaking?: boolean;
+  sheetOpen?: boolean;
 }) {
   return (
     <div
@@ -1153,7 +1213,10 @@ function MobileGlevFab({
           bubble. The GlevAIButton (64×64) is absolutely positioned and
           lifted so its centre lands on the nav top edge (½ above, ½
           below). pointer-events: none so the outer <button> handles
-          all short/long-press interactions. */}
+          all short/long-press interactions.
+          When the chat sheet is open, the GlevAIButton floats above the
+          sheet instead (rendered separately in Layout), so we hide it
+          here to avoid double rendering. */}
       <span
         aria-hidden="true"
         style={{
@@ -1162,6 +1225,31 @@ function MobileGlevFab({
           width: 22, height: 22,
         }}
       >
+        {/* Upward chevron arrow — prompts user to open the AI chat.
+            Visible only when sheet is closed. Pulses gently. */}
+        {!sheetOpen && (
+          <span
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "50%",
+              transform: "translate(-50%, calc(-50% - 53px))",
+              pointerEvents: "none",
+              animation: "glevArrowBob 1.8s ease-in-out infinite",
+              opacity: 0.75,
+            }}
+          >
+            <style>{`
+              @keyframes glevArrowBob {
+                0%, 100% { transform: translate(-50%, calc(-50% - 53px)); opacity: 0.55; }
+                50%       { transform: translate(-50%, calc(-50% - 57px)); opacity: 0.9; }
+              }
+            `}</style>
+            <svg width="16" height="10" viewBox="0 0 16 10" fill="none">
+              <path d="M2 8 L8 2 L14 8" stroke="rgba(79,110,247,0.85)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </span>
+        )}
         <span
           style={{
             position: "absolute",
@@ -1169,6 +1257,9 @@ function MobileGlevFab({
             top: "50%",
             transform: "translate(-50%, calc(-50% - 17px))",
             pointerEvents: "none",
+            // Fade out the nav button when the floating button takes over
+            opacity: sheetOpen ? 0 : 1,
+            transition: "opacity 0.2s ease",
           }}
         >
           <GlevAIButton onPress={() => {}} isListening={recording} isSpeaking={speaking} />
