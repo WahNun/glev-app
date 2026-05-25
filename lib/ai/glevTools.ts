@@ -296,6 +296,29 @@ export const GLEV_TOOLS = [
   {
     type: "function" as const,
     function: {
+      name: "set_macro",
+      description:
+        "Korrigiert einen einzelnen Makronährstoff-Wert auf dem aktiven Mahlzeit-Eingabe-Screen (Engine Step 2 — Macros bearbeiten). Nur aufrufen, wenn der Nutzer explizit einen Wert korrigiert ('80g Fett nicht 60', 'Kohlenhydrate auf 45'). Der Screen muss bereits offen sein; sonst navigate_to('engine') zuerst. Das Schreiben in die DB erfolgt weiterhin durch den Nutzer über den bestehenden Speichern-Button — dieses Tool ändert nur den lokalen Formularwert.",
+      parameters: {
+        type: "object",
+        properties: {
+          field: {
+            type: "string",
+            enum: ["carbs", "protein", "fat", "calories"],
+            description: "Das Makro-Feld das gesetzt werden soll.",
+          },
+          value: {
+            type: "number",
+            description: "Neuer Wert in Gramm (für carbs/protein/fat) oder kcal (für calories). Muss ≥ 0 sein.",
+          },
+        },
+        required: ["field", "value"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "navigate_to",
       description:
         "Navigiert den Nutzer zu einem bestimmten Screen in der App. Aufrufen, wenn der Nutzer explizit darum bittet (z. B. 'Zeig mir das Dashboard', 'Geh zu den Einstellungen', 'Öffne Insights'). Nicht proaktiv aufrufen.",
@@ -328,6 +351,7 @@ export type GlevToolName =
   | "log_fingerstick"
   | "add_appointment"
   | "add_timeline_check"
+  | "set_macro"
   | "navigate_to";
 
 /**
@@ -358,6 +382,22 @@ export function isNavigateEnvelope(v: unknown): v is NavigateEnvelope {
     typeof v === "object" &&
     typeof (v as Record<string, unknown>).navigate === "string"
   );
+}
+
+/**
+ * Marker shape returned by set_macro (Phase 2 voice assistant).
+ * The chat-route emits a dedicated SSE frame; useGlevAI dispatches it
+ * as CustomEvent("glev:set-macro") so the active engine-macros screen
+ * can update its local form state without a full re-mount.
+ */
+export type SetMacroEnvelope = { set_macro: { field: string; value: number } };
+
+export function isSetMacroEnvelope(v: unknown): v is SetMacroEnvelope {
+  if (!v || typeof v !== "object") return false;
+  const sm = (v as { set_macro?: unknown }).set_macro;
+  if (!sm || typeof sm !== "object") return false;
+  const o = sm as Record<string, unknown>;
+  return typeof o.field === "string" && typeof o.value === "number";
 }
 
 export function isPendingActionEnvelope(v: unknown): v is PendingActionEnvelope {
@@ -425,6 +465,21 @@ export async function executeGlevTool(
         return await toolAddAppointment(sb, userId, args);
       case "add_timeline_check":
         return await toolAddTimelineCheck(sb, userId, args, userTimezone);
+      case "set_macro": {
+        // Server just validates + returns the envelope — the actual state
+        // update happens client-side via the glev:set-macro CustomEvent
+        // dispatched by useGlevAI when it reads this SSE frame.
+        const allowed = ["carbs", "protein", "fat", "calories"];
+        const field = typeof args.field === "string" ? args.field : "";
+        if (!allowed.includes(field)) {
+          return { error: `Unbekanntes Feld: ${field}. Erlaubt: carbs, protein, fat, calories.` };
+        }
+        const value = Number(args.value);
+        if (!Number.isFinite(value) || value < 0) {
+          return { error: "value muss eine nicht-negative Zahl sein." };
+        }
+        return { set_macro: { field, value: Math.round(value * 10) / 10 } } satisfies SetMacroEnvelope;
+      }
       case "navigate_to": {
         const screenMap: Record<string, string> = {
           dashboard: "/dashboard",

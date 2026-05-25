@@ -376,6 +376,7 @@ export function useGlevAI(opts?: {
                 token?: string;
                 error?: string;
                 navigate?: string;
+                set_macro?: { field: string; value: number };
                 pending_action?: {
                   token: string;
                   kind: string;
@@ -385,6 +386,16 @@ export function useGlevAI(opts?: {
               if (parsed.error) throw new Error(parsed.error);
               if (parsed.navigate) {
                 optsRef.current?.onNavigate?.(parsed.navigate);
+              }
+              // Phase 2: set_macro — dispatched as a CustomEvent so the
+              // active engine-macros screen can update its local state
+              // without needing a direct React ref. The tool server-side
+              // emits { set_macro: { field, value } }; here we forward it
+              // to whichever component is listening on the window.
+              if (parsed.set_macro && typeof window !== "undefined") {
+                window.dispatchEvent(
+                  new CustomEvent("glev:set-macro", { detail: parsed.set_macro }),
+                );
               }
               if (parsed.pending_action) {
                 // WRITE-tool result: attach the confirm/cancel widget to

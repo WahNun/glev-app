@@ -183,10 +183,24 @@ export default function GlevAIChatSheet({
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
 
+  // Auto-send ref so we can access latest onSend + input without
+  // capturing a stale closure inside useVoxtral.
+  const onSendRef = useRef(onSend);
+  onSendRef.current = onSend;
+  const inputRef2 = useRef(input);
+  inputRef2.current = input;
+
   const { isListening, startListening, stopListening } = useVoxtral({
     onTranscript: (text) => {
-      setInput((prev) => (prev ? `${prev} ${text}` : text));
       setSttError(null);
+      if (!text.trim()) return;
+      // Voice → auto-send immediately (Siri-Modus).
+      // If the user had partial typed text, prepend it so nothing is lost.
+      const combined = inputRef2.current
+        ? `${inputRef2.current} ${text}`.trim()
+        : text.trim();
+      setInput("");
+      onSendRef.current(combined);
     },
     onError: (err) => setSttError(err),
   });
