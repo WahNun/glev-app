@@ -6,10 +6,15 @@ import GlevLogo from "./GlevLogo";
 interface GlevAIButtonProps {
   onPress: () => void;
   isListening?: boolean;
+  isSpeaking?: boolean;
 }
 
-export default function GlevAIButton({ onPress, isListening = false }: GlevAIButtonProps) {
-  const containerClass = [styles.btn, isListening ? styles.listening : ""].join(" ").trim();
+export default function GlevAIButton({ onPress, isListening = false, isSpeaking = false }: GlevAIButtonProps) {
+  const containerClass = [
+    styles.btn,
+    isListening ? styles.listening : "",
+    !isListening && isSpeaking ? styles.speaking : "",
+  ].join(" ").trim();
 
   return (
     <div

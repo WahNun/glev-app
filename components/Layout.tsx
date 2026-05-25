@@ -147,6 +147,17 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // pill appears in the header as a global cue + secondary stop tap.
   const voice = useVoiceRecording();
 
+  // TTS speaking state — driven by glev:tts-speaking CustomEvents from
+  // GlevAIChatSheet so the FAB can show a green glow while AI speaks.
+  const [ttsSpeaking, setTtsSpeaking] = useState(false);
+  useEffect(() => {
+    function onTtsSpeaking(e: Event) {
+      setTtsSpeaking((e as CustomEvent<{ active: boolean }>).detail.active);
+    }
+    window.addEventListener("glev:tts-speaking", onTtsSpeaking);
+    return () => window.removeEventListener("glev:tts-speaking", onTtsSpeaking);
+  }, []);
+
   // ── FAB independent hit-area refs ──────────────────────────────────
   // iOS WKWebView clips pointer hit-testing to the layout bounds of a
   // position:fixed parent. The 64px Glev bubble protrudes ~19 px above
@@ -216,6 +227,12 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // monotonic `vt` token that re-triggers auto-record even if the
   // user is already on /engine.
   const runFabShortTap = () => {
+    // If the chat sheet is already open, the FAB starts a new voice take
+    // regardless of the glev_fab_mode preference.
+    if (glevAi.sheetOpen) {
+      window.dispatchEvent(new CustomEvent("glev:voice-start"));
+      return;
+    }
     let mode: "ai" | "voice" = "ai";
     if (typeof window !== "undefined") {
       try {
@@ -995,6 +1012,8 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           label={tNav("glev")}
           active={quickAddOpen || voice.recording}
           recording={voice.recording}
+          speaking={ttsSpeaking}
+          sheetOpen={glevAi.sheetOpen}
         />
         <MobileTab
           label={tNav("insights")}
@@ -1093,7 +1112,51 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
         onSend={glevAi.sendMessage}
         onConfirmAction={glevAi.confirmAction}
         onCancelAction={glevAi.cancelAction}
+        onClearChat={glevAi.clearMessages}
       />
+
+      {/* ── Floating Glev button — appears above the chat sheet ──────────
+          When the AI chat sheet is open the FAB is hidden inside the nav
+          (too far down) so we render a second copy pinned to the sheet's
+          top edge. Tapping it closes the sheet. z-index 1102 sits above
+          the sheet (1101) and the backdrop (1100).
+          ─────────────────────────────────────────────────────────────── */}
+      {glevAi.sheetOpen && (
+        <>
+          {/* Visual button — purely decorative, no pointer events */}
+          <div
+            aria-hidden="true"
+            style={{
+              position: "fixed",
+              top: "calc(15dvh - 32px)",
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 1102,
+              pointerEvents: "none",
+              animation: "glevFloatPop 0.28s cubic-bezier(0.34,1.56,0.64,1) both",
+            }}
+          >
+            <style>{`
+              @keyframes glevFloatPop {
+                from { transform: translateX(-50%) scale(0.7); opacity: 0; }
+                to   { transform: translateX(-50%) scale(1);   opacity: 1; }
+              }
+            `}</style>
+            <GlevAIButton
+              onPress={() => {}}
+              isListening={voice.recording}
+              isSpeaking={ttsSpeaking}
+            />
+          </div>
+          {/* Hit area for the floating button:
+              short press → new voice take
+              long press  → quick-add menu (same as nav FAB) */}
+          <GlevFloatingHitArea
+            onShortPress={() => window.dispatchEvent(new CustomEvent("glev:voice-start"))}
+            onLongPress={() => setQuickAddOpen(true)}
+          />
+        </>
+      )}
     </div>
   );
 }
@@ -1112,12 +1175,62 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
  * fabHitRef button in the parent Layout component.
  * See "FAB independent hit-area" comment block there.
  */
+/** Hit area for the floating Glev button above the chat sheet.
+ *  Short press → new voice take. Long press (500 ms) → quick-add menu.
+ */
+function GlevFloatingHitArea({
+  onShortPress,
+  onLongPress,
+}: { onShortPress: () => void; onLongPress: () => void }) {
+  const timerRef = useRef<number | null>(null);
+  const longFiredRef = useRef(false);
+
+  const clear = () => {
+    if (timerRef.current !== null) { window.clearTimeout(timerRef.current); timerRef.current = null; }
+  };
+
+  return (
+    <button
+      type="button"
+      aria-label="Sprachaufnahme starten"
+      onPointerDown={() => {
+        longFiredRef.current = false;
+        clear();
+        timerRef.current = window.setTimeout(() => {
+          longFiredRef.current = true;
+          onLongPress();
+        }, 500);
+      }}
+      onPointerUp={() => { clear(); if (!longFiredRef.current) onShortPress(); }}
+      onPointerCancel={() => { clear(); longFiredRef.current = false; }}
+      style={{
+        position: "fixed",
+        top: "calc(15dvh - 32px)",
+        left: "50%",
+        transform: "translateX(-50%)",
+        width: 64,
+        height: 64,
+        borderRadius: "50%",
+        border: "none",
+        background: "rgba(0,0,0,0.001)",
+        cursor: "pointer",
+        zIndex: 1103,
+        WebkitTapHighlightColor: "transparent",
+        touchAction: "manipulation",
+        outline: "none",
+      }}
+    />
+  );
+}
+
 function MobileGlevFab({
-  label, active, recording = false,
+  label, active, recording = false, speaking = false, sheetOpen = false,
 }: {
   label: string;
   active: boolean;
   recording?: boolean;
+  speaking?: boolean;
+  sheetOpen?: boolean;
 }) {
   return (
     <div
@@ -1140,7 +1253,10 @@ function MobileGlevFab({
           bubble. The GlevAIButton (64×64) is absolutely positioned and
           lifted so its centre lands on the nav top edge (½ above, ½
           below). pointer-events: none so the outer <button> handles
-          all short/long-press interactions. */}
+          all short/long-press interactions.
+          When the chat sheet is open, the GlevAIButton floats above the
+          sheet instead (rendered separately in Layout), so we hide it
+          here to avoid double rendering. */}
       <span
         aria-hidden="true"
         style={{
@@ -1149,6 +1265,31 @@ function MobileGlevFab({
           width: 22, height: 22,
         }}
       >
+        {/* Upward chevron arrow — prompts user to open the AI chat.
+            Visible only when sheet is closed. Pulses gently. */}
+        {!sheetOpen && (
+          <span
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "50%",
+              transform: "translate(-50%, calc(-50% - 53px))",
+              pointerEvents: "none",
+              animation: "glevArrowBob 1.8s ease-in-out infinite",
+              opacity: 0.75,
+            }}
+          >
+            <style>{`
+              @keyframes glevArrowBob {
+                0%, 100% { transform: translate(-50%, calc(-50% - 53px)); opacity: 0.55; }
+                50%       { transform: translate(-50%, calc(-50% - 57px)); opacity: 0.9; }
+              }
+            `}</style>
+            <svg width="16" height="10" viewBox="0 0 16 10" fill="none">
+              <path d="M2 8 L8 2 L14 8" stroke="rgba(79,110,247,0.85)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </span>
+        )}
         <span
           style={{
             position: "absolute",
@@ -1156,9 +1297,12 @@ function MobileGlevFab({
             top: "50%",
             transform: "translate(-50%, calc(-50% - 17px))",
             pointerEvents: "none",
+            // Fade out the nav button when the floating button takes over
+            opacity: sheetOpen ? 0 : 1,
+            transition: "opacity 0.2s ease",
           }}
         >
-          <GlevAIButton onPress={() => {}} isListening={recording} />
+          <GlevAIButton onPress={() => {}} isListening={recording} isSpeaking={speaking} />
         </span>
       </span>
       <span

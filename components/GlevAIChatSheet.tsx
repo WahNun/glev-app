@@ -5,7 +5,7 @@ import type { GlevChatMessage, PendingAction } from "@/lib/useGlevAI";
 import { useVoxtral } from "@/hooks/useVoxtral";
 import { useTTS } from "@/hooks/useTTS";
 
-const ACCENT = "#4F6EF7";
+const ACCENT = "#8b5cf6";
 const SHEET_BG = "#161b22";
 const PAGE_BG = "#0f1117";
 
@@ -17,6 +17,7 @@ interface Props {
   onSend: (text: string) => void;
   onConfirmAction?: (messageId: string) => void;
   onCancelAction?: (messageId: string) => void;
+  onClearChat?: () => void;
 }
 
 const DISCLAIMER =
@@ -177,6 +178,7 @@ export default function GlevAIChatSheet({
   onSend,
   onConfirmAction,
   onCancelAction,
+  onClearChat,
 }: Props) {
   const [input, setInput] = useState("");
   const [sttError, setSttError] = useState<string | null>(null);
@@ -246,6 +248,36 @@ export default function GlevAIChatSheet({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // Tap-anywhere-to-stop for the chat mic.
+  // Same pattern as voiceRecordingContext: 250ms grace so the tap that
+  // started recording doesn't immediately cancel it. Skips the mic button
+  // itself (data-glev-mic) and the FAB (data-glev-fab) so their own
+  // handlers stay in charge.
+  useEffect(() => {
+    if (!isListening) return;
+    let armed = false;
+    const timer = window.setTimeout(() => { armed = true; }, 250);
+    const onDown = (e: PointerEvent) => {
+      if (!armed) return;
+      const target = e.target as Element | null;
+      if (!target || typeof target.closest !== "function") return;
+      if (target.closest("[data-glev-mic]") || target.closest('[data-glev-fab="true"]')) return;
+      stopListening();
+    };
+    document.addEventListener("pointerdown", onDown, true);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("pointerdown", onDown, true);
+    };
+  }, [isListening, stopListening]);
+
+  // Broadcast TTS speaking state so the FAB can glow green.
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent("glev:tts-speaking", { detail: { active: tts.speaking } }),
+    );
+  }, [tts.speaking]);
+
   // Bewusst KEIN Auto-Focus beim Öffnen: das Software-Keyboard würde
   // sonst auf iOS/Android sofort die halbe Sheet-Höhe verschlucken und
   // den Disclaimer/Input-Footer überdecken. Tastatur kommt erst wenn
@@ -277,6 +309,7 @@ export default function GlevAIChatSheet({
           0%, 100% { box-shadow: 0 0 0 0 rgba(79,110,247,0.7); transform: scale(1); }
           50% { box-shadow: 0 0 0 8px rgba(79,110,247,0); transform: scale(1.08); }
         }
+        @keyframes glevStatusPulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
       `}</style>
 
       {/* Backdrop */}
@@ -330,6 +363,35 @@ export default function GlevAIChatSheet({
           <span style={{ fontSize: 16, fontWeight: 700, color: "white", flex: 1 }}>
             Glev AI
           </span>
+          {/* Reset / clear chat button */}
+          {onClearChat && (
+            <button
+              type="button"
+              onClick={onClearChat}
+              aria-label="Chat zurücksetzen"
+              title="Chat zurücksetzen"
+              disabled={messages.length === 0 && !streaming}
+              style={{
+                background: "none",
+                border: "none",
+                cursor: messages.length === 0 && !streaming ? "default" : "pointer",
+                padding: 4,
+                marginRight: 2,
+                display: "flex",
+                alignItems: "center",
+                color: messages.length === 0 && !streaming
+                  ? "rgba(255,255,255,0.15)"
+                  : "rgba(255,255,255,0.5)",
+                transition: "color 0.15s",
+              }}
+            >
+              {/* Clockwise rotate arrow (reset icon) */}
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="1 4 1 10 7 10"/>
+                <path d="M3.51 15a9 9 0 1 0 .49-4.5"/>
+              </svg>
+            </button>
+          )}
           {/* TTS mute toggle */}
           <button
             type="button"
@@ -362,21 +424,56 @@ export default function GlevAIChatSheet({
               </svg>
             )}
           </button>
-          <span
-            style={{
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              padding: "2px 8px",
-              borderRadius: 99,
-              background: "rgba(79,110,247,0.15)",
-              color: ACCENT,
-              border: `1px solid ${ACCENT}55`,
-              marginRight: 12,
-            }}
-          >
-            BETA
-          </span>
+          {/* Dynamic status badge */}
+          {(() => {
+            const isSpeaking = tts.speaking;
+            const isAnalyzing = streaming;
+            const dotColor = isSpeaking ? "#50C878" : isAnalyzing ? ACCENT : "#50C878";
+            const label = isSpeaking ? "Spricht …" : isAnalyzing ? "Analysiert …" : "BEREIT";
+            const bgColor = isSpeaking
+              ? "rgba(80,200,120,0.12)"
+              : isAnalyzing
+              ? "rgba(139,92,246,0.12)"
+              : "rgba(80,200,120,0.10)";
+            const borderColor = isSpeaking
+              ? "rgba(80,200,120,0.35)"
+              : isAnalyzing
+              ? `${ACCENT}44`
+              : "rgba(80,200,120,0.28)";
+            return (
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: "0.07em",
+                  padding: "3px 8px 3px 6px",
+                  borderRadius: 99,
+                  background: bgColor,
+                  color: dotColor,
+                  border: `1px solid ${borderColor}`,
+                  marginRight: 12,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                }}
+              >
+                <span
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    background: dotColor,
+                    flexShrink: 0,
+                    animation: (isSpeaking || isAnalyzing)
+                      ? "glevStatusPulse 0.9s ease-in-out infinite"
+                      : "none",
+                    display: "inline-block",
+                  }}
+                />
+                {label}
+              </span>
+            );
+          })()}
           <button
             type="button"
             onClick={onClose}
@@ -532,6 +629,7 @@ export default function GlevAIChatSheet({
           {/* Mic button — hold to talk */}
           <button
             type="button"
+            data-glev-mic="true"
             aria-label={isListening ? "Aufnahme stoppen" : "Spracheingabe starten"}
             aria-pressed={isListening}
             onPointerDown={(e) => {

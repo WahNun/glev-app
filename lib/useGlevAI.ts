@@ -276,6 +276,19 @@ export function useGlevAI(opts?: {
     };
   }, []);
 
+  /** Clear the chat history — wipes sessionStorage + in-memory messages. */
+  const clearMessages = useCallback(() => {
+    if (abortRef.current) {
+      try { abortRef.current.abort(); } catch { /* noop */ }
+      abortRef.current = null;
+    }
+    setStreaming(false);
+    setMessages([]);
+    if (typeof window !== "undefined") {
+      try { window.sessionStorage.removeItem(HISTORY_KEY); } catch { /* ignore */ }
+    }
+  }, []);
+
   const closeSheet = useCallback(() => {
     setSheetOpen(false);
     // Cancel any in-flight stream so the next open doesn't show a stuck
@@ -382,10 +395,29 @@ export function useGlevAI(opts?: {
                   kind: string;
                   summary: string;
                 };
+                meal_prep?: {
+                  input_text: string;
+                  carbs: number;
+                  protein: number | null;
+                  fat: number | null;
+                  fiber: number | null;
+                };
               };
               if (parsed.error) throw new Error(parsed.error);
               if (parsed.navigate) {
                 optsRef.current?.onNavigate?.(parsed.navigate);
+              }
+              if (parsed.meal_prep && typeof window !== "undefined") {
+                // Store macros in sessionStorage so the engine page can
+                // read them on mount (navigation is async — CustomEvents
+                // would fire before the page is ready).
+                try {
+                  sessionStorage.setItem(
+                    "glev_pending_meal",
+                    JSON.stringify(parsed.meal_prep),
+                  );
+                } catch { /* sessionStorage may be unavailable */ }
+                optsRef.current?.onNavigate?.("/engine");
               }
               // Phase 2: set_macro — dispatched as a CustomEvent so the
               // active engine-macros screen can update its local state
@@ -578,6 +610,7 @@ export function useGlevAI(opts?: {
     grantConsent,
     revokeConsent,
     closeSheet,
+    clearMessages,
     sendMessage,
     confirmAction,
     cancelAction,

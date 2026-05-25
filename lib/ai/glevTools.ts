@@ -153,7 +153,7 @@ export const GLEV_TOOLS = [
     function: {
       name: "log_meal_entry",
       description:
-        "Schlägt das Speichern einer Mahlzeit vor (Mahlzeiten-Log). WICHTIG: schreibt NICHT direkt — die UI zeigt dem Nutzer einen Bestätigen-Button, erst dann landet die Zeile in der DB. Nur aufrufen, wenn der Nutzer ausdrücklich eine konkrete Mahlzeit mit konkreten Werten loggen möchte (z. B. 'Trag mir 60g Pasta Bolognese ein', 'Speicher: Apfel, 20g KH'). Niemals aufrufen, wenn der Nutzer nur eine Mahlzeit beschreibt, eine Frage stellt oder die Werte unklar sind — dann lieber nachfragen.",
+        "Öffnet den Mahlzeit-Eingabe-Screen und füllt die Makros vor. WICHTIG: speichert NICHT direkt — der Nutzer sieht die vorausgefüllten Werte im Engine-Screen und bestätigt per Klick oder Sprachbefehl ('Speichern'). Aufrufen, wenn der Nutzer eine Mahlzeit beschreibt oder loggen möchte (z. B. 'Ich esse ein Croissant', 'Trag 60g Pasta ein'). Bei unklaren Werten schätze die Makros nach bestem Wissen — der Nutzer kann sie anschließend korrigieren. Niemals aufrufen bei reinen Fragen oder wenn der Nutzer gerade schon auf dem Engine-Screen ist und nur einzelne Werte korrigiert (dann set_macro nutzen).",
       parameters: {
         type: "object",
         properties: {
@@ -342,6 +342,51 @@ export const GLEV_TOOLS = [
   {
     type: "function" as const,
     function: {
+      name: "get_glucose_history",
+      description:
+        "Historische Glukosewerte für einen Zeitraum als Aggregat (Durchschnitt, Min, Max, Time-in-Range). Nutze für Fragen wie 'wie war mein BZ heute Morgen', 'was war mein Durchschnitt gestern', 'wie oft war ich heute zu hoch/zu niedrig'. Für den aktuellen Wert lieber get_glucose_status nutzen — das ist schneller.",
+      parameters: {
+        type: "object",
+        properties: {
+          period: {
+            type: "string",
+            enum: ["last_hour", "last_3h", "last_6h", "today", "yesterday", "last_7_days"],
+            description:
+              "'last_hour' / 'last_3h' / 'last_6h' für kurze Rückblicke; 'today' für den heutigen Tag ab Mitternacht; 'yesterday' für gestern; 'last_7_days' für den 7-Tage-Durchschnitt.",
+          },
+        },
+        required: ["period"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "update_setting",
+      description:
+        "Ändert eine App-Einstellung per Sprachbefehl (ICR, Zielbereich, Korrekturfaktor, Kohlenhydrat-Einheit). WICHTIG: schreibt NICHT direkt — Nutzer bestätigt per UI-Button. Nur aufrufen, wenn der Nutzer explizit eine Einstellung ändern möchte ('stell ICR auf 1:10', 'Zielbereich 80 bis 140', 'Korrekturfaktor 2'). Bei reinen Abfragen ('was ist mein ICR?') stattdessen die Kontext-Daten aus dem System-Prompt nutzen.",
+      parameters: {
+        type: "object",
+        properties: {
+          setting: {
+            type: "string",
+            enum: ["icr", "target_low_mg_dl", "target_high_mg_dl", "correction_factor", "carb_unit", "dia_minutes"],
+            description:
+              "'icr' = Insulin-Kohlenhydrat-Verhältnis (z. B. 10 für 1:10); 'target_low_mg_dl' / 'target_high_mg_dl' = Zielbereich Untere/Obere Grenze in mg/dL; 'correction_factor' = Korrekturfaktor (IE pro X mg/dL); 'carb_unit' = Einheit 'g' | 'BE' | 'KE'; 'dia_minutes' = Insulinwirkdauer in Minuten.",
+          },
+          value: {
+            type: "string",
+            description:
+              "Neuer Wert als String. Für numerische Einstellungen die Zahl als String ('10', '80', '2.5'). Für carb_unit: 'g', 'BE' oder 'KE'. Einheit weglassen — nur den Zahlwert oder den Enum-Wert.",
+          },
+        },
+        required: ["setting", "value"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "navigate_to",
       description:
         "Navigiert den Nutzer zu einem bestimmten Screen in der App. Aufrufen, wenn der Nutzer explizit darum bittet (z. B. 'Zeig mir das Dashboard', 'Geh zu den Einstellungen', 'Öffne Insights'). Nicht proaktiv aufrufen.",
@@ -363,6 +408,7 @@ export const GLEV_TOOLS = [
 
 export type GlevToolName =
   | "get_glucose_status"
+  | "get_glucose_history"
   | "get_active_iob"
   | "get_meal_history"
   | "get_bolus_history"
@@ -376,6 +422,7 @@ export type GlevToolName =
   | "add_appointment"
   | "add_timeline_check"
   | "set_macro"
+  | "update_setting"
   | "navigate_to";
 
 /**
@@ -424,6 +471,44 @@ export function isSetMacroEnvelope(v: unknown): v is SetMacroEnvelope {
   return typeof o.field === "string" && typeof o.value === "number";
 }
 
+/**
+ * Marker shape returned by update_setting (Phase 3 voice assistant).
+ * The chat-route emits this as a pending_action SSE frame (same flow as
+ * write-tools). After user confirmation via /api/ai/confirm-action, the
+ * server patches user_settings with the new value.
+ *
+ * Note: update_setting goes through the pending_action flow (not a direct
+ * CustomEvent like set_macro) because it persists to the DB and the
+ * compliance principle requires an explicit user tap for every write.
+ */
+export type UpdateSettingEnvelope = {
+  update_setting: { setting: string; value: string };
+};
+
+/**
+ * Returned by log_meal_entry instead of a pending_action.
+ * The chat-route sends this as a { meal_prep: {...} } SSE frame.
+ * useGlevAI stores the macros in sessionStorage then navigates to /engine,
+ * where the engine page reads and pre-fills the form on mount.
+ */
+export type MealPrepEnvelope = {
+  meal_prep: {
+    input_text: string;
+    carbs: number;
+    protein: number | null;
+    fat: number | null;
+    fiber: number | null;
+  };
+};
+
+export function isMealPrepEnvelope(v: unknown): v is MealPrepEnvelope {
+  if (!v || typeof v !== "object") return false;
+  const mp = (v as { meal_prep?: unknown }).meal_prep;
+  if (!mp || typeof mp !== "object") return false;
+  const o = mp as Record<string, unknown>;
+  return typeof o.input_text === "string" && typeof o.carbs === "number";
+}
+
 export function isPendingActionEnvelope(v: unknown): v is PendingActionEnvelope {
   if (!v || typeof v !== "object") return false;
   const pa = (v as { pending_action?: unknown }).pending_action;
@@ -467,6 +552,8 @@ export async function executeGlevTool(
     switch (name as GlevToolName) {
       case "get_glucose_status":
         return await toolGetGlucoseStatus(userId);
+      case "get_glucose_history":
+        return await toolGetGlucoseHistory(userId, args, userTimezone);
       case "get_active_iob":
         return await toolGetActiveIOB(sb, userId);
       case "get_meal_history":
@@ -491,6 +578,8 @@ export async function executeGlevTool(
         return await toolAddAppointment(sb, userId, args);
       case "add_timeline_check":
         return await toolAddTimelineCheck(sb, userId, args, userTimezone);
+      case "update_setting":
+        return await toolUpdateSetting(sb, userId, args);
       case "set_macro": {
         // Server just validates + returns the envelope — the actual state
         // update happens client-side via the glev:set-macro CustomEvent
@@ -1006,8 +1095,8 @@ async function createPendingAction(
 }
 
 async function toolLogMealEntry(
-  sb: SupabaseClient,
-  userId: string,
+  _sb: SupabaseClient,
+  _userId: string,
   args: Record<string, unknown>,
 ): Promise<unknown> {
   const inputText =
@@ -1025,25 +1114,18 @@ async function toolLogMealEntry(
     Number.isFinite(Number(args.fat_grams)) && args.fat_grams !== undefined
       ? Number(args.fat_grams)
       : null;
-  const allowedTypes = ["FAST_CARBS", "HIGH_PROTEIN", "HIGH_FAT", "BALANCED"];
-  const mealType =
-    typeof args.meal_type === "string" && allowedTypes.includes(args.meal_type)
-      ? args.meal_type
-      : "BALANCED";
+  const fiber =
+    Number.isFinite(Number(args.fiber_grams)) && args.fiber_grams !== undefined
+      ? Number(args.fiber_grams)
+      : null;
 
-  const params = {
-    input_text: inputText,
-    carbs_grams: carbs,
-    protein_grams: protein,
-    fat_grams: fat,
-    meal_type: mealType,
-  };
-  const macroBits: string[] = [`${carbs}g KH`];
-  if (protein !== null) macroBits.push(`${protein}g Eiweiß`);
-  if (fat !== null) macroBits.push(`${fat}g Fett`);
-  const summary = `Mahlzeit: ${inputText} (${macroBits.join(", ")})`;
-
-  return await createPendingAction(sb, userId, "log_meal_entry", params, summary);
+  // No pending_action needed — just pre-fill the Engine screen and let
+  // the user confirm there (via tap or voice "Speichern"). This keeps the
+  // save gesture in the user's hand while still removing the friction of
+  // manual macro entry.
+  return {
+    meal_prep: { input_text: inputText, carbs, protein, fat, fiber },
+  } satisfies MealPrepEnvelope;
 }
 
 async function toolLogBolusEntry(
@@ -1176,6 +1258,170 @@ async function toolAddAppointment(
   const summary = `Termin: ${date}${note ? ` — ${note}` : ""}`;
 
   return await createPendingAction(sb, userId, "add_appointment", params, summary);
+}
+
+// ── Phase 3 tools ────────────────────────────────────────────────────
+
+/**
+ * Historical CGM aggregates for a given time window.
+ *
+ * Uses the same getHistory() call as get_glucose_status so we re-use the
+ * adapter (LLU / Nightscout / Apple Health) and its cache. The returned
+ * `history` array covers the last ~24 h in most adapters, so periods
+ * longer than that (last_7_days) will show what's available rather than
+ * a full week. Mistral should phrase the answer accordingly.
+ */
+async function toolGetGlucoseHistory(
+  userId: string,
+  args: Record<string, unknown>,
+  userTimezone: string | null,
+): Promise<unknown> {
+  const period = typeof args.period === "string" ? args.period : "today";
+
+  const out = await getHistory(userId).catch(() => null);
+  if (!out?.history?.length) {
+    return {
+      available: false,
+      period,
+      hint: "Keine CGM-Daten verfügbar (CGM nicht verbunden oder Cache leer).",
+    };
+  }
+
+  const tz =
+    userTimezone && isValidTimezone(userTimezone)
+      ? userTimezone
+      : "Europe/Berlin";
+
+  const now = Date.now();
+
+  /** Returns local midnight (ms) for the given date in the user's tz. */
+  function localMidnight(offsetDays = 0): number {
+    const d = new Date(now);
+    const dateStr = d.toLocaleDateString("en-CA", { timeZone: tz }); // "YYYY-MM-DD"
+    const base = new Date(`${dateStr}T00:00:00`).getTime();
+    return Number.isFinite(base) ? base + offsetDays * 86_400_000 : now;
+  }
+
+  const start: number = (() => {
+    switch (period) {
+      case "last_hour":   return now - 3_600_000;
+      case "last_3h":     return now - 3 * 3_600_000;
+      case "last_6h":     return now - 6 * 3_600_000;
+      case "last_7_days": return now - 7 * 86_400_000;
+      case "yesterday":   return localMidnight(-1);
+      default:            return localMidnight(0); // "today"
+    }
+  })();
+
+  const end: number = period === "yesterday" ? localMidnight(0) : now;
+
+  // Filter by time window; skip readings with null timestamp or null value.
+  const samples = out.history.filter((r) => {
+    if (!r.timestamp || r.value == null) return false;
+    const ts = new Date(r.timestamp).getTime();
+    return ts >= start && ts <= end;
+  });
+
+  if (!samples.length) {
+    return {
+      available: false,
+      period,
+      hint: "Keine CGM-Messungen im gewählten Zeitraum gefunden (Sensor-Ausfall oder zu langer Zeitraum).",
+    };
+  }
+
+  // Safe to cast: null values were filtered out above.
+  const values = samples.map((r) => r.value as number);
+  const avg    = Math.round(values.reduce((a, b) => a + b, 0) / values.length);
+  const min    = Math.min(...values);
+  const max    = Math.max(...values);
+
+  // Time-in-range: 70-180 mg/dL (ADA standard range)
+  const inRange  = values.filter((v) => v >= 70 && v <= 180).length;
+  const tooLow   = values.filter((v) => v < 70).length;
+  const tooHigh  = values.filter((v) => v > 180).length;
+  const tirPct   = Math.round((inRange / values.length) * 100);
+
+  return {
+    available: true,
+    period,
+    sampleCount: samples.length,
+    avgMgDl: avg,
+    minMgDl: min,
+    maxMgDl: max,
+    timeInRangePct: tirPct,
+    tooLowPct:  Math.round((tooLow  / values.length) * 100),
+    tooHighPct: Math.round((tooHigh / values.length) * 100),
+    unit: out.history[0]?.unit ?? "mg/dL",
+    note: "Time-in-Range basiert auf ADA-Standard 70–180 mg/dL.",
+  };
+}
+
+/**
+ * update_setting — validates the requested change, then creates a
+ * pending_action row for user confirmation. The confirmed action is
+ * executed by /api/ai/confirm-action (case "update_setting") which
+ * PATCHes user_settings.
+ *
+ * Allowed settings + value formats:
+ *   icr              → positive number (e.g. "10" = 1:10)
+ *   target_low_mg_dl → 40-200 mg/dL
+ *   target_high_mg_dl→ 40-400 mg/dL
+ *   correction_factor→ positive number
+ *   carb_unit        → "g" | "BE" | "KE"
+ *   dia_minutes      → 120-480 minutes
+ */
+async function toolUpdateSetting(
+  sb: SupabaseClient,
+  userId: string,
+  args: Record<string, unknown>,
+): Promise<unknown> {
+  const allowedSettings = [
+    "icr", "target_low_mg_dl", "target_high_mg_dl",
+    "correction_factor", "carb_unit", "dia_minutes",
+  ];
+  const setting = typeof args.setting === "string" ? args.setting : "";
+  if (!allowedSettings.includes(setting)) {
+    return { error: `Unbekannte Einstellung: ${setting}.` };
+  }
+  const rawValue = typeof args.value === "string" ? args.value.trim() : "";
+  if (!rawValue) {
+    return { error: "value darf nicht leer sein." };
+  }
+
+  // Validate per-setting.
+  if (setting === "carb_unit") {
+    if (!["g", "BE", "KE"].includes(rawValue)) {
+      return { error: "carb_unit muss 'g', 'BE' oder 'KE' sein." };
+    }
+  } else {
+    const n = parseFloat(rawValue);
+    if (!Number.isFinite(n) || n <= 0) {
+      return { error: `${setting}: Wert muss eine positive Zahl sein.` };
+    }
+    if (setting === "target_low_mg_dl"  && (n < 40 || n > 200)) return { error: "Untere Grenze muss zwischen 40 und 200 mg/dL liegen." };
+    if (setting === "target_high_mg_dl" && (n < 40 || n > 400)) return { error: "Obere Grenze muss zwischen 40 und 400 mg/dL liegen." };
+    if (setting === "dia_minutes"       && (n < 120 || n > 480)) return { error: "Insulinwirkdauer muss zwischen 120 und 480 Minuten liegen." };
+  }
+
+  // Human-readable summary for the confirmation bubble.
+  const labelMap: Record<string, string> = {
+    icr:                `ICR auf 1:${rawValue}`,
+    target_low_mg_dl:   `Untere Zielgrenze auf ${rawValue} mg/dL`,
+    target_high_mg_dl:  `Obere Zielgrenze auf ${rawValue} mg/dL`,
+    correction_factor:  `Korrekturfaktor auf ${rawValue}`,
+    carb_unit:          `Kohlenhydrat-Einheit auf ${rawValue}`,
+    dia_minutes:        `Insulinwirkdauer auf ${rawValue} Minuten`,
+  };
+  const summary = `Einstellung ändern: ${labelMap[setting] ?? setting}`;
+
+  return await createPendingAction(
+    sb,
+    userId,
+    "update_setting" as GlevToolName,
+    { setting, value: rawValue },
+    summary,
+  );
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────

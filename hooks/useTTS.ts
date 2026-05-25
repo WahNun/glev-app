@@ -20,27 +20,22 @@ function readPref(key: string, defaultValue: boolean): boolean {
   }
 }
 
-function writePref(key: string, value: boolean) {
-  try {
-    window.localStorage.setItem(key, value ? "1" : "0");
-  } catch { /* ignore */ }
-}
-
-/** Resolve a BCP-47 language tag for speechSynthesis from the current locale cookie.
- *  Falls back to "de-DE" (Glev's primary language). */
-function resolveVoiceLang(): string {
-  if (typeof document === "undefined") return "de-DE";
-  const match = document.cookie.match(/(?:^|;\s*)NEXT_LOCALE=([^;]+)/);
-  const locale = match?.[1];
-  return locale === "en" ? "en-US" : "de-DE";
+/** Pick the best German voice from available voices. */
+function pickGermanVoice(): SpeechSynthesisVoice | null {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return null;
+  const voices = window.speechSynthesis.getVoices();
+  // Prefer local (not network) German voices first
+  return (
+    voices.find((v) => v.lang.startsWith("de") && !v.localService === false) ??
+    voices.find((v) => v.lang.startsWith("de")) ??
+    null
+  );
 }
 
 export function useTTS() {
   const [speaking, setSpeaking] = useState(false);
   // `enabled` = master unmute (default: on)
   const [enabled, setEnabled] = useState(true);
-  // `autoRead` = auto-play after each AI reply (default: OFF — explicit opt-in)
-  const [autoRead, setAutoRead] = useState(false);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   useEffect(() => {
@@ -58,9 +53,17 @@ export function useTTS() {
     return () => window.removeEventListener(TTS_AUTO_EVENT, handler);
   }, []);
 
+  // Pre-load voices (Chrome loads them async)
+  useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    window.speechSynthesis.getVoices();
+    const onVoicesChanged = () => window.speechSynthesis.getVoices();
+    window.speechSynthesis.addEventListener("voiceschanged", onVoicesChanged);
+    return () => window.speechSynthesis.removeEventListener("voiceschanged", onVoicesChanged);
+  }, []);
+
   const stop = useCallback(() => {
-    if (typeof window === "undefined") return;
-    if (window.speechSynthesis) {
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
     }
     utteranceRef.current = null;
@@ -68,32 +71,36 @@ export function useTTS() {
   }, []);
 
   const speak = useCallback(
-    (text: string) => {
-      if (typeof window === "undefined") return;
-      if (!enabled) return;
-      const trimmed = text.trim();
-      if (!trimmed) return;
-
+    async (text: string) => {
+      if (!enabled || !text.trim()) return;
       stop();
 
-      if (!window.speechSynthesis) return;
+      if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
 
-      const utterance = new SpeechSynthesisUtterance(trimmed);
-      utterance.lang = resolveVoiceLang();
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-      utterance.onstart = () => setSpeaking(true);
-      utterance.onend = () => {
-        utteranceRef.current = null;
+      // Chrome quirk: cancel() needs a tick before speak()
+      await new Promise((r) => setTimeout(r, 50));
+
+      const u = new SpeechSynthesisUtterance(text.trim());
+      u.lang = "de-DE";
+      u.rate = 1.05;
+      u.pitch = 1.0;
+
+      const voice = pickGermanVoice();
+      if (voice) u.voice = voice;
+
+      u.onstart = () => setSpeaking(true);
+      u.onend = () => {
         setSpeaking(false);
-      };
-      utterance.onerror = () => {
         utteranceRef.current = null;
-        setSpeaking(false);
       };
-      utteranceRef.current = utterance;
-      window.speechSynthesis.speak(utterance);
+      u.onerror = () => {
+        setSpeaking(false);
+        utteranceRef.current = null;
+      };
+
+      utteranceRef.current = u;
       setSpeaking(true);
+      window.speechSynthesis.speak(u);
     },
     [enabled, stop],
   );
@@ -101,10 +108,12 @@ export function useTTS() {
   const toggleEnabled = useCallback(() => {
     setEnabled((prev) => {
       const next = !prev;
-      writePref(TTS_MUTE_KEY, next);
+      try {
+        window.localStorage.setItem(TTS_PREF_KEY, next ? "1" : "0");
+      } catch { /* ignore */ }
+      if (!next) stop();
       return next;
     });
-    stop();
   }, [stop]);
 
   const toggleAutoRead = useCallback(() => {
