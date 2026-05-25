@@ -1,0 +1,131 @@
+GLEV — ÜBERGABE-BLOCK (Session: Free-Trial-Flow, 2026-05-25)
+==============================================================
+
+PROJECT_GOAL
+------------
+Glev — T1D insulin decision-support (Next.js 15, Supabase, Vercel @ glev.app, Capacitor iOS/Android).
+
+PROGRESS (Asana Task #1214277574885599 — "Standard-Tier €9/Monat mit 7-Tage-Trial bauen")
+-------------------------------------------------------------------------------------------
+
+[OK] DB-Migration supabase/migrations/20260524_add_trial_end_at.sql
+     - trial_end_at TIMESTAMPTZ auf profiles (nullable)
+     - Manuell via Supabase SQL Editor applied
+     - In schema_migrations eingetragen (SHA256: 2cbfce80f3a25c04916744f6be7e0cefd01439b34d1eab1c915b1a916648fc2f)
+
+[OK] app/api/auth/free-trial/route.ts
+     - POST, Bearer-Auth
+     - Service-Role-Upsert: profiles.trial_end_at = NOW() + 7d
+     - Fire-and-forget an /api/email/trial-reminder (mit email + name + trial_end_at)
+
+[OK] app/api/email/trial-reminder/route.ts
+     - Rendert trialStartedHtml() (smoke-testbar via Log)
+     - Resend-Block auskommentiert — wartet auf RESEND_API_KEY in Vercel
+     - Zum Aktivieren: die 10 auskommentierten Zeilen einkommentieren
+
+[OK] lib/emails/trial-started.ts
+     - Vollständiges HTML-Template DE + EN
+     - Inhalt: Begrüßung, blauer Trial-End-Datum-Badge, Feature-Liste, CTA "Glev öffnen →"
+     - Compliance-konform: keine Dosis-Hinweise, kein Lock-in-Framing
+
+[OK] app/admin/emails/page.tsx
+     - Neuer Tab "Free Trial — Gestartet (Tag 0)" in buildTemplates()
+     - Sichtbar unter /admin/emails?t=trial-started
+     - Variierbar mit ?name= und ?lang=en
+
+[OK] app/signup/page.tsx
+     - Öffentliche Signup-Seite, kreditkartenfrei
+     - Flow: E-Mail + Passwort → supabase.auth.signUp() → POST /api/auth/free-trial → /onboarding
+
+[OK] app/beta/page.tsx
+     - Sekundärer CTA "7 Tage kostenlos testen" → /signup in Hero + Pricing ergänzt
+     - Bestehender Stripe-Flow (PreviewBetaCTA) bleibt erhalten
+
+[OK] app/pro-trial/page.tsx (neu)
+     - Meta-Ad-Landing-Page: vollständige Kopie von /pro
+     - FreeTrialCTA-Button unter jedem Kauf-CTA
+
+[OK] components/TrialExpiredModal.tsx (neu)
+     - Nicht-dismissbares Paywall-Modal
+     - Prüft: profiles.trial_end_at < NOW() + GET /api/me/plan === "free"
+     - Zeigt: "Jetzt Pro werden →"-Link + Logout-Button
+     - NULL trial_end_at = kein Modal (reguläre Free/Paid-User unberührt)
+
+[OK] app/(protected)/layout.tsx
+     - <TrialExpiredModal /> nach <LowGlucoseAlarmTicker /> eingehängt
+
+[OK] scripts/apply-migration.mjs
+     - Aus Git wiederhergestellt (vorheriger Agent hatte es mit "hier" überschrieben)
+     - SHA256-Fix: INSERT in schema_migrations befüllt jetzt sha256-Spalte
+       (Produktions-Tabelle hat sha256 TEXT NOT NULL — fehlte vorher → NOT NULL-Fehler)
+     - import { createHash } from 'node:crypto' ergänzt
+     - sha256Of(sql) = createHash('sha256').update(sql).digest('hex')
+
+[OK] DECISIONS.md
+     - D-023: Free-Trial-Flow-Architektur dokumentiert
+     - Fix-Log-Eintrag für Task #1214277574885599
+
+
+OPEN TODOS (nicht in diesem Task-Scope)
+----------------------------------------
+1. RESEND_API_KEY in Vercel setzen
+   → Resend-Block in app/api/email/trial-reminder/route.ts einkommentieren (3 Zeilen)
+   → Template ist fertig, kein weiterer Code nötig
+
+2. Stripe-Checkout direkt aus TrialExpiredModal verknüpfen
+   → Aktuell: Link nach /pro (User muss nochmal klicken)
+   → Ziel: POST /api/checkout/session direkt aus Modal → Stripe-hosted Page
+
+3. Trial-Reminder-E-Mail (Tag 6 vor Ablauf)
+   → Cron (GitHub Actions oder Supabase Edge Function)
+   → Query: profiles WHERE trial_end_at BETWEEN now()+24h AND now()+48h
+   → Template: trial-started.ts als Basis, Betreff anpassen
+
+
+IMPORTANT FILES
+---------------
+app/signup/page.tsx                     Free-Trial-Signup (public, kein Stripe)
+app/beta/page.tsx                       Meta-Ad-Landing mit sekundärem Trial-CTA
+app/pro-trial/page.tsx                  Meta-Ad-Landing-Page (neu)
+components/TrialExpiredModal.tsx        Paywall-Modal
+app/(protected)/layout.tsx              TrialExpiredModal + LowGlucoseAlarmTicker
+lib/emails/trial-started.ts            E-Mail-Template DE + EN
+app/admin/emails/page.tsx               Admin-Preview inkl. trial-started
+app/api/auth/free-trial/route.ts       Setzt trial_end_at
+app/api/email/trial-reminder/route.ts  Rendert HTML, Resend noch auskommentiert
+supabase/migrations/20260524_add_trial_end_at.sql  — applied in Produktion
+scripts/apply-migration.mjs            Wiederhergestellt + SHA256-Fix
+DECISIONS.md                           D-023 dokumentiert den gesamten Trial-Flow
+
+
+ARCHITECTURE NOTES
+------------------
+- Zwei Signup-Pfade existieren jetzt parallel:
+    (A) Payment-First: Stripe Checkout → Webhook → signUp (Beta, Pro)
+    (B) Free-Trial:    signUp direkt → /api/auth/free-trial (kein Stripe)
+
+- trial_end_at Semantik:
+    NULL       = kein Trial (reguläre Free/Paid-User) — kein Modal
+    != NULL    = Trial-User
+    < NOW()    = abgelaufen — Modal erscheint wenn plan === "free"
+
+- Paywall client-seitig (Modal in layout.tsx), KEIN Middleware-Block
+  Grund: Middleware kann keinen Admin-Client-Query machen; SSR-Block würde
+  Flash-of-Gate für Paid-User erzeugen. Siehe D-023.
+
+- Kein eigener "trial"-Plan-Typ in computeEffectivePlan.
+  trial_end_at + plan === "free" reicht für alle Prüfungen.
+
+- apply-migration.mjs: schema_migrations in Produktion hat sha256 TEXT NOT NULL.
+  Script befüllt es jetzt via crypto.createHash('sha256').update(sql).digest('hex').
+  Für manuelle SQL-Editor-Anwendung immer SHA256 mitangeben:
+    INSERT INTO schema_migrations (filename, sha256) VALUES ('...', '...') ON CONFLICT DO NOTHING;
+
+
+DEPLOYMENT REMINDER
+-------------------
+- Änderungen in Replit = nur Dev. Produktion: git push origin main → GitHub → Vercel auto-deploy.
+- Supabase-Migrationen laufen via GitHub Actions (.github/workflows/apply-migration.yml)
+  ODER manuell via Supabase SQL Editor (siehe oben).
+- RESEND_API_KEY muss in Vercel Project Settings → Environment Variables gesetzt werden.
+  Nach Setzen: Vercel Redeploy nötig (env vars werden zur Build-Zeit eingefroren).
