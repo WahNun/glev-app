@@ -128,6 +128,29 @@ export const GLEV_TOOLS = [
   {
     type: "function" as const,
     function: {
+      name: "get_check_history",
+      description:
+        "Letzte Post-Bolus-Checks aus meal_timeline_checks, die bereits einen gemessenen BZ-Wert (bg_at_check) haben. Nutze dies für Fragen wie 'wie war mein BZ nach dem Frühstück', 'zeig meine letzten Post-Bolus-Ergebnisse' oder 'wie gut treffe ich meinen Zielbereich nach dem Essen'. Liefert zu jedem Check: Mahlzeitbeschreibung, Check-Typ (pre/post_1/…), geplanten Zeitpunkt und gemessenen BZ-Wert. Default Limit 10, max 20.",
+      parameters: {
+        type: "object",
+        properties: {
+          limit: {
+            type: "number",
+            description: "Anzahl der zurückgegebenen Checks (1-20, default 10).",
+          },
+          check_type: {
+            type: "string",
+            description:
+              "Optional: Filter auf bestimmten Check-Typ ('pre', 'post_1', 'post_2', …). Ohne Filter werden alle Typen zurückgegeben.",
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
       name: "log_meal_entry",
       description:
         "Schlägt das Speichern einer Mahlzeit vor (Mahlzeiten-Log). WICHTIG: schreibt NICHT direkt — die UI zeigt dem Nutzer einen Bestätigen-Button, erst dann landet die Zeile in der DB. Nur aufrufen, wenn der Nutzer ausdrücklich eine konkrete Mahlzeit mit konkreten Werten loggen möchte (z. B. 'Trag mir 60g Pasta Bolognese ein', 'Speicher: Apfel, 20g KH'). Niemals aufrufen, wenn der Nutzer nur eine Mahlzeit beschreibt, eine Frage stellt oder die Werte unklar sind — dann lieber nachfragen.",
@@ -345,6 +368,7 @@ export type GlevToolName =
   | "get_bolus_history"
   | "get_basal_status"
   | "get_appointments"
+  | "get_check_history"
   | "save_user_observation"
   | "log_meal_entry"
   | "log_bolus_entry"
@@ -453,6 +477,8 @@ export async function executeGlevTool(
         return await toolGetBasalStatus(sb, userId, userTimezone);
       case "get_appointments":
         return await toolGetAppointments(sb, userId);
+      case "get_check_history":
+        return await toolGetCheckHistory(sb, userId, args, userTimezone);
       case "save_user_observation":
         return await toolSaveUserObservation(sb, userId, args);
       case "log_meal_entry":
@@ -805,6 +831,82 @@ async function toolGetAppointments(
     note: (r.note as string | null) ?? null,
   }));
   return { count: appointments.length, appointments };
+}
+
+/**
+ * Fetch completed post-bolus checks (rows where bg_at_check IS NOT NULL)
+ * joined with their parent meal for context. Returns a compact list the
+ * AI can use to answer questions about post-meal glucose outcomes.
+ */
+async function toolGetCheckHistory(
+  sb: SupabaseClient,
+  userId: string,
+  args: Record<string, unknown>,
+  userTimezone: string | null,
+): Promise<unknown> {
+  const limit = clampLimit(args.limit ?? 10, 10);
+  const checkTypeFilter =
+    typeof args.check_type === "string" && args.check_type.trim()
+      ? args.check_type.trim()
+      : null;
+
+  let query = sb
+    .from("meal_timeline_checks")
+    .select(
+      "id, meal_id, check_type, planned_at, confirmed_at, bg_at_check, created_at",
+    )
+    .eq("user_id", userId)
+    .not("bg_at_check", "is", null)
+    .order("planned_at", { ascending: false })
+    .limit(limit);
+
+  if (checkTypeFilter) {
+    query = query.eq("check_type", checkTypeFilter);
+  }
+
+  const { data: checks, error: checksErr } = await query;
+  if (checksErr) return { error: checksErr.message, checks: [] };
+  if (!checks || checks.length === 0) return { count: 0, checks: [] };
+
+  // Fetch meal descriptions for the check rows in one batch query.
+  const mealIds = [...new Set((checks as Array<{ meal_id: string }>).map((c) => c.meal_id))];
+  const { data: meals } = await sb
+    .from("meals")
+    .select("id, input_text, parsed_json")
+    .in("id", mealIds);
+
+  const mealMap = new Map<string, { input_text: string | null; parsed_json: unknown }>();
+  for (const m of (meals ?? []) as Array<{ id: string; input_text: string | null; parsed_json: unknown }>) {
+    mealMap.set(m.id, m);
+  }
+
+  type CheckRaw = {
+    id: string;
+    meal_id: string;
+    check_type: string;
+    planned_at: string | null;
+    confirmed_at: string | null;
+    bg_at_check: number | null;
+  };
+
+  const result = (checks as CheckRaw[]).map((c) => {
+    const meal = mealMap.get(c.meal_id);
+    const description = meal
+      ? resolveMealDescription(
+          meal.input_text as string | null,
+          meal.parsed_json as Array<{ name?: string }> | null,
+        )
+      : null;
+    const plannedMs = c.planned_at ? new Date(c.planned_at).getTime() : null;
+    return {
+      checkType: c.check_type,
+      mealDescription: description,
+      plannedAt: plannedMs ? formatInUserTimezone(plannedMs, userTimezone).dateTime : null,
+      bgMgDl: c.bg_at_check,
+    };
+  });
+
+  return { count: result.length, checks: result };
 }
 
 /**

@@ -147,10 +147,85 @@ export async function scheduleCheckReminder(input: ScheduleReminderInput): Promi
     const delay = fireAt - Date.now();
     if (delay > 0x7fffffff) return false; // setTimeout max
     window.setTimeout(() => {
-      try { new Notification(input.title, { body: input.body, tag: `glev-check-${id}` }); } catch { /* ignore */ }
+      try {
+        const n = new Notification(input.title, {
+          body: input.body,
+          tag: `glev-check-${id}`,
+        });
+        // Dispatch the BZ-capture event when the user clicks the web
+        // notification so MealCheckReminderProvider can show the input
+        // sheet. On many browsers onclick fires even when the tab is
+        // in the background; the event itself is harmless if the tab
+        // is not visible (the sheet will open when the user returns).
+        n.onclick = () => {
+          dispatchCheckReminderEvent(input.mealId, input.checkType, input.body);
+          n.close();
+        };
+      } catch { /* ignore */ }
     }, delay);
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Dispatch the `glev:meal-check-reminder` CustomEvent that
+ * MealCheckReminderProvider listens for to show the BZ input sheet.
+ *
+ * Exported so the native-notification tap path in
+ * MealCheckReminderProvider can call it directly (the actual
+ * LocalNotifications listener lives there because it needs to be
+ * mounted as a React component to manage modal state).
+ */
+export function dispatchCheckReminderEvent(
+  mealId: string,
+  checkType: string,
+  label?: string,
+): void {
+  if (!isBrowser()) return;
+  window.dispatchEvent(
+    new CustomEvent("glev:meal-check-reminder", {
+      detail: { mealId, checkType, label },
+    }),
+  );
+}
+
+/**
+ * Attaches a one-time `localNotificationActionPerformed` listener for
+ * Capacitor LocalNotifications. When the user taps a scheduled
+ * meal-timeline-check notification, this dispatches the
+ * `glev:meal-check-reminder` CustomEvent so MealCheckReminderProvider
+ * can open the BZ input sheet.
+ *
+ * Call this once from MealCheckReminderProvider on mount. Returns a
+ * cleanup function that removes the listener. No-ops on web / SSR.
+ *
+ * We attach the listener here rather than inside scheduleCheckReminder
+ * because the listener needs to persist across the full app lifetime,
+ * not just while a reminder is being scheduled.
+ */
+export async function initCheckReminderListener(): Promise<() => void> {
+  const mod = await loadModule();
+  if (!mod) return () => {};
+  try {
+    const { LocalNotifications } = mod;
+    const handle = await LocalNotifications.addListener(
+      "localNotificationActionPerformed",
+      (action) => {
+        const extra = action.notification?.extra as
+          | { kind?: string; mealId?: string; checkType?: string }
+          | undefined;
+        if (extra?.kind !== "meal_timeline_check") return;
+        const { mealId, checkType } = extra;
+        if (!mealId || !checkType) return;
+        dispatchCheckReminderEvent(mealId, checkType, action.notification?.body);
+      },
+    );
+    return () => {
+      try { handle.remove(); } catch { /* ignore */ }
+    };
+  } catch {
+    return () => {};
   }
 }
