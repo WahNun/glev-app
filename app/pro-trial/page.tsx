@@ -176,7 +176,7 @@ function PreviewProContent() {
               gap: 20,
             }}
           >
-            <img src="/glev-lockup.png" alt="glev" style={{ height: 48, width: "auto" }} />
+            <img src="/glev-lockup.png" alt="glev" style={{ height: 72, width: "auto" }} />
             <h1
               style={{
                 fontSize: "clamp(32px, 6.4vw, 64px)",
