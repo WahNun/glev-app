@@ -885,6 +885,7 @@ export default function EnginePage() {
     // Find the sample closest to mealMs within ±15 min.
     let best: { value: number; delta: number } | null = null;
     for (const s of trendSamples) {
+      if (!s.timestamp) continue;
       const ts = new Date(s.timestamp).getTime();
       const delta = Math.abs(ts - mealMs);
       if (delta <= MAX_SAMPLE_DELTA_MS) {
