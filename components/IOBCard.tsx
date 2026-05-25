@@ -327,11 +327,14 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg, onLogB
             </>
           ) : (
             <>
-              {/* Basal gauge — fraction = elapsed / 24h */}
+              {/* Basal gauge — always full ring (fraction={1}).
+                  basalFraction is used only in the expanded coverage bar below.
+                  The ring itself must never shrink — it is a presence indicator,
+                  not a depletion meter. See Task #712 + regression guard #717. */}
               <div style={{ position: "relative", flexShrink: 0 }}>
                 <CircleGauge
                   iob={0} color={lastBasal ? basalColor : "var(--text-ghost)"}
-                  cleared={!lastBasal} fraction={basalFraction}
+                  cleared={!lastBasal} fraction={1}
                 />
                 <div style={{
                   position: "absolute", inset: 0,
@@ -576,7 +579,7 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg, onLogB
             const clearsInMRem = clearsInMin % 60;
             return (
               <>
-                <div style={{ position: "relative", height: 10, borderRadius: 99, background: "var(--surface-soft)", overflow: "visible" }}>
+                <div data-testid="iob-wirkdauer-bar" style={{ position: "relative", height: 10, borderRadius: 99, background: "var(--surface-soft)", overflow: "visible" }}>
                   {/* elapsed portion */}
                   <div style={{
                     position: "absolute", left: 0, top: 0, bottom: 0,
@@ -613,7 +616,7 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg, onLogB
               </>
             );
           })() : (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div data-testid="iob-wirkdauer-cleared" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
               <span style={{ fontSize: 12, color: "var(--text-ghost)" }}>
                 {t("iob_no_active_doses")}
               </span>
