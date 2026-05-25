@@ -42,8 +42,19 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
+      // If coming from free-trial signup, set trial_end_at now that we have a session.
+      if (next === "/onboarding" && sessionData.session?.access_token) {
+        try {
+          await fetch(`${origin}/api/auth/free-trial`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
+          });
+        } catch {
+          // Non-fatal — user still gets to onboarding, trial can be set retroactively.
+        }
+      }
       return NextResponse.redirect(`${origin}${next}`);
     }
     // eslint-disable-next-line no-console
