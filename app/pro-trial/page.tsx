@@ -2,11 +2,12 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import Image from "next/image";
+import Link from "next/link";
 import AppMockupPhone from "@/components/AppMockupPhone";
 import LandingFooter from "@/components/landing/Footer";
 import Lockup from "@/components/landing/Lockup";
 import CGMCompatibility from "@/components/landing/CGMCompatibility";
-import Link from "next/link";
 import {
   ACCENT,
   ACCENT_HOVER,
@@ -19,11 +20,13 @@ import {
 } from "@/components/landing/tokens";
 
 /**
- * /preview-beta — copy & layout preview of /beta.
- * Stripe wiring untouched: posts to /api/checkout/beta with locale.
+ * /pro-trial — Pro-Verkaufsseite mit kostenlosem Test-CTA.
+ * Basis: /pro — gleiche Inhalte und Layout. Einzige Änderung:
+ * Unter jedem primären Kauf-CTA erscheint ein zweiter Button
+ * "7 Tage kostenlos testen" → /signup (kein Stripe, kein Kreditkartenpflichtfeld).
  */
-function PreviewBetaCTA({ block = true }: { block?: boolean }) {
-  const t = useTranslations("previewBeta");
+function ProCTA({ block = true }: { block?: boolean }) {
+  const t = useTranslations("previewPro");
   const locale = useLocale();
   const [hover, setHover] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -39,15 +42,13 @@ function PreviewBetaCTA({ block = true }: { block?: boolean }) {
     }
 
     try {
-      const res = await fetch("/api/checkout/beta", {
+      const res = await fetch("/api/checkout/pro", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ locale }),
       });
       const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
-      if (!res.ok || !data.url) {
-        throw new Error(data.error || `HTTP ${res.status}`);
-      }
+      if (!res.ok || !data.url) throw new Error(data.error || `HTTP ${res.status}`);
       window.location.href = data.url;
     } catch (err) {
       setLoading(false);
@@ -108,6 +109,39 @@ function PreviewBetaCTA({ block = true }: { block?: boolean }) {
   );
 }
 
+function FreeTrialCTA() {
+  return (
+    <Link
+      href="/signup"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "transparent",
+        color: TEXT_DIM,
+        border: `1px solid ${BORDER}`,
+        borderRadius: 12,
+        padding: "14px 32px",
+        fontSize: 15,
+        fontWeight: 600,
+        textDecoration: "none",
+        minHeight: 48,
+        width: "100%",
+        boxSizing: "border-box",
+        transition: "background 120ms, border-color 120ms",
+      }}
+      onMouseEnter={e => {
+        (e.currentTarget as HTMLAnchorElement).style.background = "rgba(255,255,255,0.06)";
+      }}
+      onMouseLeave={e => {
+        (e.currentTarget as HTMLAnchorElement).style.background = "transparent";
+      }}
+    >
+      7 Tage kostenlos testen
+    </Link>
+  );
+}
+
 const SECTION_WRAP_NARROW: React.CSSProperties = {
   width: "100%",
   maxWidth: 760,
@@ -116,12 +150,12 @@ const SECTION_WRAP_NARROW: React.CSSProperties = {
   boxSizing: "border-box",
 };
 
-function PreviewBetaContent() {
-  const t = useTranslations("previewBeta");
+function ProTrialContent() {
+  const t = useTranslations("previewPro");
 
   useEffect(() => {
     if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
-      (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("trackCustom", "ViewBetaPagePreview");
+      (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("trackCustom", "ViewProTrialPage");
     }
   }, []);
 
@@ -202,29 +236,8 @@ function PreviewBetaContent() {
               className="glev-hero-form"
               style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}
             >
-              <PreviewBetaCTA />
-              <Link
-                href="/signup"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  background: "transparent",
-                  color: TEXT_DIM,
-                  border: `1px solid ${BORDER}`,
-                  borderRadius: 12,
-                  padding: "14px 32px",
-                  fontSize: 15,
-                  fontWeight: 600,
-                  textDecoration: "none",
-                  textAlign: "center",
-                  boxSizing: "border-box",
-                  width: "100%",
-                  transition: "background 120ms, border-color 120ms",
-                }}
-              >
-                7 Tage kostenlos testen
-              </Link>
+              <ProCTA />
+              <FreeTrialCTA />
             </div>
 
             <div
@@ -250,12 +263,65 @@ function PreviewBetaContent() {
         </div>
       </section>
 
-      {/* 1b. CGM COMPATIBILITY — direkt nach Hero, hilft Early-Filter */}
-      <section style={{ ...SECTION_WRAP_NARROW, padding: "8px 20px 0" }}>
-        <CGMCompatibility variant="compact" />
+      {/* 2. FOUNDER */}
+      <section style={SECTION_WRAP_NARROW}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            textAlign: "center",
+            gap: 16,
+          }}
+        >
+          <div
+            style={{
+              width: 96,
+              height: 96,
+              borderRadius: "50%",
+              background: ACCENT,
+              overflow: "hidden",
+              position: "relative",
+              boxShadow: "0 8px 24px rgba(79,110,247,0.35)",
+            }}
+          >
+            <Image
+              src="/founder.png"
+              alt="Lucas, Founder von Glev"
+              fill
+              sizes="96px"
+              priority
+              style={{
+                objectFit: "cover",
+                objectPosition: "50% 18%",
+                transform: "scale(1.6)",
+                transformOrigin: "50% 18%",
+              }}
+            />
+          </div>
+          <p
+            style={{
+              fontSize: 16,
+              lineHeight: 1.55,
+              color: "rgba(255,255,255,0.9)",
+              margin: 0,
+              maxWidth: 540,
+            }}
+          >
+            {t("founder_quote")}
+          </p>
+          <div style={{ fontSize: 14, fontWeight: 500, color: MINT }}>
+            {t("founder_attribution")}
+          </div>
+        </div>
       </section>
 
-      {/* 2. POSITIONING */}
+      {/* 2b. CGM COMPATIBILITY */}
+      <section style={{ ...SECTION_WRAP_NARROW, padding: "8px 20px 0" }}>
+        <CGMCompatibility />
+      </section>
+
+      {/* 3. POSITIONING */}
       <section style={SECTION_WRAP_NARROW}>
         <div
           style={{
@@ -280,7 +346,7 @@ function PreviewBetaContent() {
         </div>
       </section>
 
-      {/* 3. FLOW — 3 Schritte */}
+      {/* 4. FLOW — 3 Schritte */}
       <section style={SECTION_WRAP_NARROW}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 14 }}>
           {[1, 2, 3].map((n) => (
@@ -327,7 +393,7 @@ function PreviewBetaContent() {
         </div>
       </section>
 
-      {/* 4. PRICING block */}
+      {/* 5. PRICING block */}
       <section
         style={{
           width: "100%",
@@ -370,29 +436,8 @@ function PreviewBetaContent() {
             ))}
           </ul>
           <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
-            <PreviewBetaCTA />
-            <Link
-              href="/signup"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                background: "transparent",
-                color: TEXT_DIM,
-                border: `1px solid ${BORDER}`,
-                borderRadius: 12,
-                padding: "14px 32px",
-                fontSize: 15,
-                fontWeight: 600,
-                textDecoration: "none",
-                textAlign: "center",
-                boxSizing: "border-box",
-                width: "100%",
-                transition: "background 120ms, border-color 120ms",
-              }}
-            >
-              7 Tage kostenlos testen
-            </Link>
+            <ProCTA />
+            <FreeTrialCTA />
           </div>
           <div style={{ fontSize: 13, color: MINT, textAlign: "center", marginTop: 4 }}>
             {t("pricing_microcopy")}
@@ -400,10 +445,10 @@ function PreviewBetaContent() {
         </div>
       </section>
 
-      {/* 5. FAQ — alle 10 */}
+      {/* 6. FAQ */}
       <section style={SECTION_WRAP_NARROW}>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+          {[1, 2, 3, 4].map((n) => (
             <div
               key={n}
               style={{
@@ -424,27 +469,48 @@ function PreviewBetaContent() {
         </div>
       </section>
 
-      {/* 6. MINI-FOUNDER (subtil) */}
+      {/* 7. TIER TABLE */}
       <section style={SECTION_WRAP_NARROW}>
-        <div
+        <h2
           style={{
-            padding: "16px 4px",
+            fontSize: 18,
+            fontWeight: 600,
+            color: "#fff",
+            margin: "0 0 14px",
+            letterSpacing: "-0.01em",
             textAlign: "center",
           }}
         >
-          <p
-            style={{
-              fontSize: 13,
-              lineHeight: 1.55,
-              color: TEXT_DIM,
-              margin: "0 0 4px",
-            }}
-          >
-            {t("mini_founder")}
-          </p>
-          <div style={{ fontSize: 12, color: TEXT_FAINT }}>
-            {t("mini_founder_attr")}
-          </div>
+          {t("tier_compact_headline")}
+        </h2>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {(
+            [
+              { label: t("tier_compact_beta_label"), tagline: t("tier_compact_beta_tagline") },
+              { label: t("tier_compact_pro_label"), tagline: t("tier_compact_pro_tagline") },
+              { label: t("tier_compact_plus_label"), tagline: t("tier_compact_plus_tagline") },
+            ] as const
+          ).map((row) => (
+            <div
+              key={row.label}
+              style={{
+                background: SURFACE,
+                border: `1px solid ${BORDER}`,
+                borderRadius: 12,
+                padding: "14px 16px",
+                display: "flex",
+                alignItems: "center",
+                gap: 14,
+              }}
+            >
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", minWidth: 60 }}>
+                {row.label}
+              </div>
+              <div style={{ fontSize: 14, color: TEXT_DIM, lineHeight: 1.45 }}>
+                {row.tagline}
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -487,10 +553,10 @@ function PreviewBetaContent() {
   );
 }
 
-export default function PreviewBetaPage() {
+export default function ProTrialPage() {
   return (
     <Suspense fallback={null}>
-      <PreviewBetaContent />
+      <ProTrialContent />
     </Suspense>
   );
 }

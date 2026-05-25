@@ -5,6 +5,7 @@ import Layout from "@/components/Layout";
 import CgmAutoFillProvider from "@/components/CgmAutoFillProvider";
 import CgmJobsTicker from "@/components/CgmJobsTicker";
 import LowGlucoseAlarmTicker from "@/components/LowGlucoseAlarmTicker";
+import TrialExpiredModal from "@/components/TrialExpiredModal";
 import LanguageSync from "@/components/LanguageSync";
 import SWRProvider from "@/components/SWRProvider";
 
@@ -37,6 +38,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         <CgmAutoFillProvider />
         <CgmJobsTicker />
         <LowGlucoseAlarmTicker />
+        <TrialExpiredModal />
         {children}
       </Layout>
     </SWRProvider>
