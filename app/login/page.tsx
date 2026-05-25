@@ -141,12 +141,12 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div>
-              <div style={{ fontSize: 10, color: "var(--text-faint)", marginBottom: 6, letterSpacing: "0.08em" }}>EMAIL</div>
+              <div style={{ fontSize: 10, color: "var(--text-faint)", marginBottom: 6, letterSpacing: "0.08em" }}>E-MAIL</div>
               <input
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="you@example.com"
+                placeholder="deine@email.de"
                 required
                 disabled={loading}
                 style={inp}
@@ -155,7 +155,7 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <div style={{ fontSize: 10, color: "var(--text-faint)", marginBottom: 6, letterSpacing: "0.08em" }}>PASSWORD</div>
+              <div style={{ fontSize: 10, color: "var(--text-faint)", marginBottom: 6, letterSpacing: "0.08em" }}>PASSWORT</div>
               <input
                 type="password"
                 value={password}
@@ -196,7 +196,7 @@ export default function LoginPage() {
               cursor: loading ? "default" : "pointer",
               transition: "all 0.15s", marginTop: 4,
             }}>
-              {loading ? "Signing in…" : "Sign In"}
+              {loading ? "Anmelden…" : "Anmelden"}
             </button>
           </form>
 
@@ -234,7 +234,7 @@ export default function LoginPage() {
                   type="email"
                   value={resetEmail}
                   onChange={e => setResetEmail(e.target.value)}
-                  placeholder="you@example.com"
+                  placeholder="deine@email.de"
                   required
                   autoFocus
                   disabled={resetLoading || !!resetNotice}
