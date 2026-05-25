@@ -5,7 +5,6 @@ import { useLocale, useTranslations } from "next-intl";
 import Image from "next/image";
 import AppMockupPhone from "@/components/AppMockupPhone";
 import LandingFooter from "@/components/landing/Footer";
-import Lockup from "@/components/landing/Lockup";
 import CGMCompatibility from "@/components/landing/CGMCompatibility";
 import {
   ACCENT,
@@ -177,7 +176,7 @@ function PreviewProContent() {
               gap: 20,
             }}
           >
-            <Lockup width={200} />
+            <img src="/glev-lockup.png" alt="glev" style={{ height: 48, width: "auto" }} />
             <h1
               style={{
                 fontSize: "clamp(32px, 6.4vw, 64px)",
