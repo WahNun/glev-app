@@ -82,6 +82,16 @@ const KNOB_R = 6;      // 12px diameter
 const PLUS_R = 8;      // 16px diameter
 const PLUS_DY = 22;    // vertical offset of "+" below center
 
+/** Color for a glucose badge based on clinical range thresholds.
+ *  < 70 mg/dL  → red   (hypoglycemia)
+ *  70–180 mg/dL → green (in range)
+ *  > 180 mg/dL → amber (hyperglycemia) */
+function bgCheckColor(mgdl: number): string {
+  if (mgdl < 70) return "#EF4444";
+  if (mgdl > 180) return "#F59E0B";
+  return "#22C55E";
+}
+
 export interface ArmState {
   /** stable key (matches check_type, e.g. "pre", "post_1") */
   checkType: string;
@@ -94,6 +104,11 @@ export interface ArmState {
   /** existing row id if persisted (used by upsertCheck for the
    *  select-then-update path — informational only at the UI level). */
   rowId?: string;
+  /** Glucose value recorded at this check (mg/dL), or null if not yet
+   *  filled. Set automatically by fillNearbyChecks when a fingerstick or
+   *  CGM reading falls within ±15 min of the planned check. Visualization
+   *  only — no write paths in this component. */
+  bgAtCheck: number | null;
 }
 
 export interface MealNodeClusterProps {
@@ -237,7 +252,7 @@ export default function MealNodeCluster(props: MealNodeClusterProps) {
     for (const a of arms) existingMap[a.checkType] = true;
     const newType = nextPostCheckType(existingMap);
     const newOffset = defaultOffsetForNewPost(posts.map((p) => ({ offsetMin: p.offsetMin })));
-    setArms((cur) => [...cur, { checkType: newType, offsetMin: newOffset, persisted: false }]);
+    setArms((cur) => [...cur, { checkType: newType, offsetMin: newOffset, persisted: false, bgAtCheck: null }]);
     hapticSelection();
   }
 
@@ -277,8 +292,32 @@ export default function MealNodeCluster(props: MealNodeClusterProps) {
           const label = isPre
             ? t("offset_minutes_before", { n: labelMin })
             : t("offset_minutes_after", { n: labelMin });
+          const hasBg = a.bgAtCheck !== null && a.bgAtCheck !== undefined;
+          const bgColor = hasBg ? bgCheckColor(a.bgAtCheck!) : null;
+          // Title tooltip: include bg value when available
+          const titleText = hasBg
+            ? `${label} · ${a.bgAtCheck} mg/dL`
+            : label;
           return (
             <g key={`knob-${a.checkType}`}>
+              {/* bg_at_check value badge — always visible when filled */}
+              {hasBg && !isDragging && (
+                <g style={{ pointerEvents: "none" }}>
+                  <rect
+                    x={x - 18} y={cy - KNOB_R - 20}
+                    width={36} height={14} rx={4}
+                    fill={bgColor!} opacity={0.92}
+                  />
+                  <text
+                    x={x} y={cy - KNOB_R - 10}
+                    fontSize={9} fontWeight={700}
+                    textAnchor="middle" fill="white"
+                  >
+                    {a.bgAtCheck}
+                  </text>
+                  <title>{t("bg_at_check_badge_title", { value: a.bgAtCheck! })}</title>
+                </g>
+              )}
               <circle
                 cx={x} cy={cy} r={KNOB_R}
                 fill={a.persisted ? ACCENT : "transparent"}
@@ -301,9 +340,29 @@ export default function MealNodeCluster(props: MealNodeClusterProps) {
                 data-testid={`meal-node-arm-${props.mealId}-${a.checkType}`}
                 data-persisted={a.persisted ? "true" : "false"}
                 data-offset-min={off}
+                data-bg-at-check={a.bgAtCheck ?? undefined}
               >
-                <title>{label}</title>
+                <title>{titleText}</title>
               </circle>
+              {/* Sensor indicator dot — shown when bg_at_check was auto-filled.
+                  Positioned at the top-right corner of the knob to signal
+                  "this value came from a sensor/fingerstick reading". */}
+              {hasBg && (
+                <g style={{ pointerEvents: "none" }}>
+                  <circle
+                    cx={x + KNOB_R - 1} cy={cy - KNOB_R + 1}
+                    r={4}
+                    fill={bgColor!}
+                    stroke="white" strokeWidth={1.2}
+                  />
+                  <circle
+                    cx={x + KNOB_R - 1} cy={cy - KNOB_R + 1}
+                    r={1.4}
+                    fill="white"
+                  />
+                  <title>{t("bg_sensor_auto_fill_title")}</title>
+                </g>
+              )}
               {isDragging && (
                 <g style={{ pointerEvents: "none" }}>
                   <rect

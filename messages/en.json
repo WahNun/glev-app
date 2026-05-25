@@ -2849,7 +2849,9 @@
     "cancel_button": "Cancel",
     "offset_minutes_before": "{n} min before",
     "offset_minutes_after": "{n} min after",
-    "add_post_arm_title": "Add another post-check"
+    "add_post_arm_title": "Add another post-check",
+    "bg_at_check_badge_title": "{value} mg/dL recorded at this check",
+    "bg_sensor_auto_fill_title": "Auto-filled from fingerstick or CGM reading"
   },
   "low_alarm": {
     "notification_title": "Low-glucose alert",

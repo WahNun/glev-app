@@ -795,6 +795,7 @@ function RollingChart({ readings, showMealNodes }: { readings: ChartPoint[]; sho
       offsetMin: preOffset ?? DEFAULT_PRE_OFFSET_MIN,
       persisted: preOffset !== null,
       rowId: preRow?.id,
+      bgAtCheck: preRow?.bg_at_check ?? null,
     });
     // post_n (collect all present, default to post_1 if none)
     const postKeys = Object.keys(rows).filter((k) => k.startsWith("post_"));
@@ -803,6 +804,7 @@ function RollingChart({ readings, showMealNodes }: { readings: ChartPoint[]; sho
         checkType: "post_1",
         offsetMin: DEFAULT_POST_OFFSET_MIN,
         persisted: false,
+        bgAtCheck: null,
       });
     } else {
       postKeys.sort((a, b) =>
@@ -816,6 +818,7 @@ function RollingChart({ readings, showMealNodes }: { readings: ChartPoint[]; sho
           offsetMin: off ?? DEFAULT_POST_OFFSET_MIN,
           persisted: off !== null,
           rowId: r.id,
+          bgAtCheck: r.bg_at_check ?? null,
         });
       }
     }

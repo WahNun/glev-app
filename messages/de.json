@@ -2855,7 +2855,9 @@
     "cancel_button": "Abbrechen",
     "offset_minutes_before": "{n} min vorher",
     "offset_minutes_after": "{n} min nachher",
-    "add_post_arm_title": "Weiteren Post-Check hinzufügen"
+    "add_post_arm_title": "Weiteren Post-Check hinzufügen",
+    "bg_at_check_badge_title": "{value} mg/dL bei diesem Check gemessen",
+    "bg_sensor_auto_fill_title": "Automatisch aus Fingertest oder CGM-Wert befüllt"
   },
   "low_alarm": {
     "notification_title": "Hypo-Alarm",
