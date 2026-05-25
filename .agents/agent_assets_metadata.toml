@@ -132,3 +132,9 @@ id = "8w4FIWhjXRcNJMtLeyOhx"
 uri = "file://logs/replit/uebergabe_trial_flow.txt"
 type = "text"
 title = "Übergabe — Free-Trial-Flow (2026-05-25)"
+
+[[outputs]]
+id = "5JajeB6VYGkyCbs590NrJ"
+uri = "file://public/glev-lockup.png"
+type = "image"
+title = "glev-lockup.png → in public/ ablegen"
