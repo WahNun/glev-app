@@ -1014,6 +1014,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           recording={voice.recording}
           speaking={ttsSpeaking}
           sheetOpen={glevAi.sheetOpen}
+          hasConversation={glevAi.messages.length > 0 && !glevAi.sheetOpen}
         />
         <MobileTab
           label={tNav("insights")}
@@ -1130,13 +1131,15 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
  */
 
 function MobileGlevFab({
-  label, active, recording = false, speaking = false, sheetOpen = false,
+  label, active, recording = false, speaking = false, sheetOpen = false, hasConversation = false,
 }: {
   label: string;
   active: boolean;
   recording?: boolean;
   speaking?: boolean;
   sheetOpen?: boolean;
+  /** True when the chat was navigated away from but still has messages — shows a pulsing dot. */
+  hasConversation?: boolean;
 }) {
   return (
     <div
@@ -1203,11 +1206,32 @@ function MobileGlevFab({
             top: "50%",
             transform: "translate(-50%, calc(-50% - 17px))",
             pointerEvents: "none",
-            // Button stays fully visible — no floating override anymore.
             opacity: 1,
           }}
         >
           <GlevAIButton onPress={() => {}} isListening={recording} isSpeaking={speaking} />
+          {/* Pulsing orange dot — indicates an active conversation was navigated away from */}
+          {hasConversation && !sheetOpen && (
+            <span
+              style={{
+                position: "absolute",
+                top: 6, right: 6,
+                width: 10, height: 10,
+                borderRadius: "50%",
+                background: "#FF9500",
+                border: "2px solid var(--bg, #0f1117)",
+                animation: "glevConvPulse 1.6s ease-in-out infinite",
+                pointerEvents: "none",
+              }}
+            >
+              <style>{`
+                @keyframes glevConvPulse {
+                  0%, 100% { transform: scale(1); opacity: 1; }
+                  50%       { transform: scale(1.35); opacity: 0.7; }
+                }
+              `}</style>
+            </span>
+          )}
         </span>
       </span>
       <span

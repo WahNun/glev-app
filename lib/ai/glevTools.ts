@@ -395,9 +395,9 @@ export const GLEV_TOOLS = [
         properties: {
           screen: {
             type: "string",
-            enum: ["dashboard", "entries", "engine", "insights", "settings"],
+            enum: ["dashboard", "entries", "engine", "engine_bolus", "insights", "settings"],
             description:
-              "Ziel-Screen: 'dashboard' (Übersicht), 'entries' (Mahlzeiten/Einträge), 'engine' (Glev Engine KI-Empfehlungen), 'insights' (Auswertungen), 'settings' (Einstellungen).",
+              "Ziel-Screen: 'dashboard' (Übersicht), 'entries' (Mahlzeiten/Einträge), 'engine' (Glev Engine — Makros prüfen / KI-Empfehlungen), 'engine_bolus' (Bolus-Insulin eintragen — öffnet das Insulin-Formular direkt), 'insights' (Auswertungen), 'settings' (Einstellungen).",
           },
         },
         required: ["screen"],
@@ -600,6 +600,7 @@ export async function executeGlevTool(
           dashboard: "/dashboard",
           entries: "/entries",
           engine: "/engine",
+          engine_bolus: "/engine?tab=bolus",
           insights: "/insights",
           settings: "/settings",
         };
