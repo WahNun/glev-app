@@ -20,13 +20,19 @@ function readPref(key: string, defaultValue: boolean): boolean {
   }
 }
 
+function writePref(key: string, value: boolean): void {
+  try {
+    window.localStorage.setItem(key, value ? "1" : "0");
+  } catch { /* ignore */ }
+}
+
 /** Pick the best German voice from available voices. */
 function pickGermanVoice(): SpeechSynthesisVoice | null {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return null;
   const voices = window.speechSynthesis.getVoices();
   // Prefer local (not network) German voices first
   return (
-    voices.find((v) => v.lang.startsWith("de") && !v.localService === false) ??
+    voices.find((v) => v.lang.startsWith("de") && v.localService) ??
     voices.find((v) => v.lang.startsWith("de")) ??
     null
   );
@@ -36,6 +42,8 @@ export function useTTS() {
   const [speaking, setSpeaking] = useState(false);
   // `enabled` = master unmute (default: on)
   const [enabled, setEnabled] = useState(true);
+  // `autoRead` = automatically speak AI responses (default: off)
+  const [autoRead, setAutoRead] = useState(false);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   useEffect(() => {
@@ -108,9 +116,7 @@ export function useTTS() {
   const toggleEnabled = useCallback(() => {
     setEnabled((prev) => {
       const next = !prev;
-      try {
-        window.localStorage.setItem(TTS_PREF_KEY, next ? "1" : "0");
-      } catch { /* ignore */ }
+      writePref(TTS_MUTE_KEY, next);
       if (!next) stop();
       return next;
     });
