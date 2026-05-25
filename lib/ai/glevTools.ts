@@ -1175,46 +1175,30 @@ async function toolGetGlucoseHistory(
 
   const now = Date.now();
 
-  // Compute the window start in ms.
-  function windowStart(): number {
+  /** Returns local midnight (ms) for the given date in the user's tz. */
+  function localMidnight(offsetDays = 0): number {
+    const d = new Date(now);
+    const dateStr = d.toLocaleDateString("en-CA", { timeZone: tz }); // "YYYY-MM-DD"
+    const base = new Date(`${dateStr}T00:00:00`).getTime();
+    return Number.isFinite(base) ? base + offsetDays * 86_400_000 : now;
+  }
+
+  const start: number = (() => {
     switch (period) {
-      case "last_hour":    return now - 60 * 60_000;
-      case "last_3h":      return now - 3 * 60 * 60_000;
-      case "last_6h":      return now - 6 * 60 * 60_000;
-      case "yesterday": {
-        // Midnight of yesterday in the user's timezone.
-        const d = new Date(now);
-        const localMidnightToday = new Date(
-          d.toLocaleDateString("en-CA", { timeZone: tz }) + "T00:00:00",
-        ).getTime();
-        return localMidnightToday - 24 * 60 * 60_000;
-      }
-      case "last_7_days":  return now - 7 * 24 * 60 * 60_000;
-      case "today":
-      default: {
-        // Midnight of today in the user's timezone.
-        const d = new Date(now);
-        return new Date(
-          d.toLocaleDateString("en-CA", { timeZone: tz }) + "T00:00:00",
-        ).getTime();
-      }
+      case "last_hour":   return now - 3_600_000;
+      case "last_3h":     return now - 3 * 3_600_000;
+      case "last_6h":     return now - 6 * 3_600_000;
+      case "last_7_days": return now - 7 * 86_400_000;
+      case "yesterday":   return localMidnight(-1);
+      default:            return localMidnight(0); // "today"
     }
-  }
+  })();
 
-  function windowEnd(): number {
-    if (period === "yesterday") {
-      const d = new Date(now);
-      return new Date(
-        d.toLocaleDateString("en-CA", { timeZone: tz }) + "T00:00:00",
-      ).getTime();
-    }
-    return now;
-  }
+  const end: number = period === "yesterday" ? localMidnight(0) : now;
 
-  const start = windowStart();
-  const end   = windowEnd();
-
+  // Filter by time window; skip readings with null timestamp or null value.
   const samples = out.history.filter((r) => {
+    if (!r.timestamp || r.value == null) return false;
     const ts = new Date(r.timestamp).getTime();
     return ts >= start && ts <= end;
   });
@@ -1227,7 +1211,8 @@ async function toolGetGlucoseHistory(
     };
   }
 
-  const values = samples.map((r) => r.value);
+  // Safe to cast: null values were filtered out above.
+  const values = samples.map((r) => r.value as number);
   const avg    = Math.round(values.reduce((a, b) => a + b, 0) / values.length);
   const min    = Math.min(...values);
   const max    = Math.max(...values);
