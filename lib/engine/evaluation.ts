@@ -15,7 +15,7 @@ export const HIGH_ACTIVITY_RATIO = 1.3;
 export const HIGH_ACTIVITY_MIN_ABS = 8000;
 export const HIGH_ACTIVITY_MIN_SAMPLE = 3;
 
-export type Outcome = "GOOD" | "UNDERDOSE" | "OVERDOSE" | "SPIKE" | "SPIKE_STRONG" | "HYPO_DURING" | "CHECK_CONTEXT";
+export type Outcome = "GOOD" | "UNDERDOSE" | "OVERDOSE" | "SLIGHTLY_OVER" | "SLIGHTLY_UNDER" | "SPIKE" | "SPIKE_STRONG" | "HYPO_DURING" | "CHECK_CONTEXT";
 
 /**
  * Speed-based spike detection (Task #251 / Diagnose Case C).
@@ -501,14 +501,24 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
   if (bgBefore && bgBefore > settings.targetBg) expected += (bgBefore - settings.targetBg) / settings.cf;
   const ratio = insulin / Math.max(expected, 0.1);
 
+  // Three-tier ICR-ratio evaluation (clinically calibrated — ADA/EASD):
+  //   ±15%  → GOOD           (0.85–1.15) tight control
+  //   ±15–40% → SLIGHTLY_*   (0.70–0.85 / 1.15–1.40) minor deviation, advisory only
+  //   >40%  → OVERDOSE / UNDERDOSE (< 0.70 / > 1.40) clearly off
   let outcome: Outcome;
   let primary: AdjustmentMessage;
-  if (ratio > 1.35) {
+  if (ratio > 1.40) {
     outcome = "OVERDOSE";
     primary = { key: "engine_eval_icr_overdose", params: { pct: Math.round((ratio - 1) * 100) } };
-  } else if (ratio < 0.65) {
+  } else if (ratio > 1.15) {
+    outcome = "SLIGHTLY_OVER";
+    primary = { key: "engine_eval_icr_slightly_over", params: { pct: Math.round((ratio - 1) * 100) } };
+  } else if (ratio < 0.70) {
     outcome = "UNDERDOSE";
     primary = { key: "engine_eval_icr_underdose", params: { pct: Math.round((1 - ratio) * 100) } };
+  } else if (ratio < 0.85) {
+    outcome = "SLIGHTLY_UNDER";
+    primary = { key: "engine_eval_icr_slightly_under", params: { pct: Math.round((1 - ratio) * 100) } };
   } else {
     outcome = "GOOD";
     primary = { key: "engine_eval_icr_good" };
@@ -519,8 +529,11 @@ export function evaluateEntry(input: EvaluateEntryInput): EvaluateEntryResult {
     ...contextMessages(input.recentInsulinLogs, input.recentExerciseLogs, input.activityContext),
     ...trendMessages(input.preTrend),
   ];
-  const icrPrimary = outcome === "GOOD" ? "Dose within ICR-expected range."
-    : outcome === "OVERDOSE" ? "ICR-ratio overdose." : "ICR-ratio underdose.";
+  const icrPrimary =
+    outcome === "GOOD"          ? "Dose within ICR-expected range (±15%)." :
+    outcome === "SLIGHTLY_OVER" ? "ICR-ratio slightly high." :
+    outcome === "SLIGHTLY_UNDER"? "ICR-ratio slightly low." :
+    outcome === "OVERDOSE"      ? "ICR-ratio overdose." : "ICR-ratio underdose.";
   const reasoning = `${icrPrimary} ${speedReasoning(input.speed1, input.speed2)} ${contextReasoning(input.recentInsulinLogs, input.recentExerciseLogs)}`.trim();
   return { outcome, messages, confidence: "low", delta: null, netCarbs, reasoning };
 }

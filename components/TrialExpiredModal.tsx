@@ -1,153 +1,177 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+/**
+ * TrialExpiredModal
+ *
+ * Non-dismissable paywall shown when:
+ *   - profiles.trial_end_at is not null AND in the past
+ *   - AND GET /api/me/plan returns "free"
+ *
+ * NULL trial_end_at = regular free/paid user → modal never shows.
+ * Paid users (beta/pro/plus) → modal never shows even if trial_end_at is set.
+ *
+ * Mounted in app/(protected)/layout.tsx after LowGlucoseAlarmTicker.
+ */
 
-const ACCENT = "#4F6EF7";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 
 export default function TrialExpiredModal() {
   const [expired, setExpired] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let cancelled = false;
-
     async function check() {
-      if (!supabase) return;
+      try {
+        if (!supabase) return;
 
-      const { data: userRes } = await supabase.auth.getUser();
-      const user = userRes?.user;
-      if (!user || cancelled) return;
+        // 1. Get current user
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("trial_end_at")
-        .eq("user_id", user.id)
-        .maybeSingle();
+        // 2. Fetch trial_end_at from profiles
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("trial_end_at")
+          .eq("user_id", user.id)
+          .single();
 
-      if (!profile?.trial_end_at || cancelled) return;
+        // No trial = not a trial user, never show modal
+        if (!profile?.trial_end_at) return;
 
-      const trialExpired = new Date(profile.trial_end_at).getTime() < Date.now();
-      if (!trialExpired) return;
+        const trialEnd = new Date(profile.trial_end_at);
+        if (trialEnd > new Date()) return; // still within trial
 
-      const res = await fetch("/api/me/plan", { cache: "no-store" }).catch(() => null);
-      if (!res || cancelled) return;
-      const { plan } = await res.json().catch(() => ({ plan: "free" })) as { plan: string };
+        // 3. Confirm plan is still "free" (not paid after trial)
+        const res = await fetch("/api/me/plan");
+        if (!res.ok) return;
+        const { plan } = (await res.json()) as { plan?: string };
 
-      if (plan === "free") {
-        setExpired(true);
+        if (plan === "free") {
+          setExpired(true);
+        }
+      } catch (e) {
+        console.warn("[TrialExpiredModal] check failed silently:", e);
+      } finally {
+        setLoading(false);
       }
     }
 
     check();
-    return () => { cancelled = true; };
   }, []);
 
-  if (!expired) return null;
-
-  async function handleLogout() {
-    if (!supabase) return;
-    await supabase.auth.signOut();
-    window.location.href = "/";
-  }
+  if (loading || !expired) return null;
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Testphase abgelaufen"
       style={{
         position: "fixed",
         inset: 0,
         zIndex: 9999,
-        background: "rgba(0,0,0,0.75)",
-        backdropFilter: "blur(6px)",
-        WebkitBackdropFilter: "blur(6px)",
+        background: "rgba(10,10,15,0.92)",
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        padding: 24,
+        padding: "24px 16px",
       }}
-      aria-modal="true"
-      role="dialog"
-      aria-labelledby="trial-expired-title"
     >
       <div
         style={{
-          width: "100%",
-          maxWidth: 400,
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
+          background: "#12121A",
+          border: "1px solid rgba(255,255,255,0.1)",
           borderRadius: 20,
-          padding: "32px 28px",
+          padding: "36px 32px",
+          maxWidth: 400,
+          width: "100%",
+          textAlign: "center",
           display: "flex",
           flexDirection: "column",
+          alignItems: "center",
           gap: 16,
-          boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
         }}
       >
+        {/* Icon */}
         <div
           style={{
-            width: 48,
-            height: 48,
-            borderRadius: 14,
-            background: `${ACCENT}18`,
+            width: 56,
+            height: 56,
+            borderRadius: "50%",
+            background: "rgba(79,110,247,0.12)",
+            border: "1px solid rgba(79,110,247,0.3)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             fontSize: 24,
           }}
-          aria-hidden
         >
-          ⏱
+          ⏰
         </div>
 
-        <div>
-          <h2
-            id="trial-expired-title"
-            style={{
-              fontSize: 20,
-              fontWeight: 700,
-              color: "var(--text)",
-              margin: "0 0 8px",
-              letterSpacing: "-0.02em",
-            }}
-          >
-            Deine Testphase ist abgelaufen
-          </h2>
-          <p style={{ fontSize: 14, color: "var(--text-dim)", margin: 0, lineHeight: 1.55 }}>
-            Deine 7-tägige Testphase ist beendet. Werde jetzt Pro-Mitglied und behalte
-            vollen Zugriff auf alle Funktionen.
-          </p>
-        </div>
+        <h2
+          style={{
+            fontSize: 22,
+            fontWeight: 700,
+            color: "#fff",
+            margin: 0,
+            lineHeight: 1.2,
+            letterSpacing: "-0.02em",
+          }}
+        >
+          Deine Testphase ist abgelaufen
+        </h2>
 
-        <Link
+        <p
+          style={{
+            fontSize: 15,
+            color: "rgba(255,255,255,0.6)",
+            margin: 0,
+            lineHeight: 1.6,
+          }}
+        >
+          Um Glev weiter zu nutzen, wähle ein Abo.
+          Deine Daten bleiben vollständig erhalten.
+        </p>
+
+        {/* Primary CTA */}
+        <a
           href="/pro"
           style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: ACCENT,
+            display: "block",
+            width: "100%",
+            background: "#4F6EF7",
             color: "#fff",
-            borderRadius: 12,
-            padding: "14px 20px",
-            fontSize: 15,
-            fontWeight: 700,
             textDecoration: "none",
-            boxShadow: `0 6px 18px ${ACCENT}40`,
+            borderRadius: 12,
+            padding: "16px 24px",
+            fontSize: 16,
+            fontWeight: 600,
             textAlign: "center",
+            boxSizing: "border-box",
+            marginTop: 4,
           }}
         >
           Jetzt Pro werden →
-        </Link>
+        </a>
 
+        {/* Logout */}
         <button
-          onClick={handleLogout}
+          type="button"
+          onClick={async () => {
+            if (supabase) await supabase.auth.signOut();
+            window.location.href = "/login";
+          }}
           style={{
-            background: "transparent",
-            border: "1px solid var(--border)",
-            borderRadius: 10,
-            padding: "11px 20px",
-            fontSize: 14,
-            color: "var(--text-dim)",
+            background: "none",
+            border: "none",
+            color: "rgba(255,255,255,0.35)",
+            fontSize: 13,
             cursor: "pointer",
+            padding: "4px 8px",
             fontFamily: "inherit",
           }}
         >

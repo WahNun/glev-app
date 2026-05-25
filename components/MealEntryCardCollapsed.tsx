@@ -8,6 +8,7 @@ import { renderEngineMessage, renderEngineMessages } from "@/lib/engineMessages"
 import { parseDbDate } from "@/lib/time";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
 import { useTimeFormat } from "@/hooks/useTimeFormat";
+import { useGlucoseUnit } from "@/hooks/useGlucoseUnit";
 import { useTranslations, useLocale } from "next-intl";
 
 const ACCENT = "#4F6EF7";
@@ -26,6 +27,7 @@ export default function MealEntryCardCollapsed({
   // Carb-unit display follows the user's profile preference (g/BE/KE).
   // The DB column stays in grams; only the rendered value swaps.
   const carbUnit = useCarbUnit();
+  const glucose = useGlucoseUnit();
   const tEngine = useTranslations("engine");
   const tx = useTranslations("entriesExpand");
   const tChips = useTranslations("chips");
@@ -43,6 +45,26 @@ export default function MealEntryCardCollapsed({
   const catColor = meal.meal_type ? TYPE_COLORS[meal.meal_type] || "var(--text-dim)" : null;
   const catLabel = meal.meal_type ? chipLabels.typeLabel(meal.meal_type) : null;
   const catShort = meal.meal_type ? TYPE_SHORT[meal.meal_type] || meal.meal_type.slice(0, 2) : null;
+
+  // Post-meal BG badge: best available post-meal reading (2h preferred).
+  // Falls back through all stored variants so older rows without the new
+  // glucose_* columns still show a value when bg_2h/bg_1h is present.
+  const postBgMgdl: number | null =
+    meal.bg_2h ?? meal.glucose_2h ?? meal.bg_1h ?? meal.glucose_1h ?? null;
+  const postBgLabel: "2h" | "1h" | null =
+    (meal.bg_2h != null || meal.glucose_2h != null) ? "2h" :
+    (meal.bg_1h != null || meal.glucose_1h != null) ? "1h" : null;
+
+  // Color-code by post-meal BG value (mg/dL internally):
+  //   <70   = hypo  → purple
+  //   70–180 = in-range → green
+  //   180–250 = slightly high → amber
+  //   >250  = high → red
+  const postBgColor: string | null = postBgMgdl == null ? null :
+    postBgMgdl < 70  ? "#7C3AED" :
+    postBgMgdl <= 180 ? "#22D3A0" :
+    postBgMgdl <= 250 ? "#F59E0B" :
+    "#EF4444";
 
   // 3-state chip: pending=gray / provisional=purple / final=outcome color.
   // Replaces direct getEvalColor(meal.evaluation) so the list never shows a
@@ -139,28 +161,60 @@ export default function MealEntryCardCollapsed({
         </div>
       </div>
 
-      {/* Col 5: Outcome chip (hidden on tiny screens). Drives off lifecycle
-          state — pending shows neutral grey, provisional shows muted purple,
-          only final entries display the colored outcome label. */}
+      {/* Col 5: Outcome chip + Post-Meal BG badge (hidden on tiny screens).
+          Chip drives off lifecycle state — pending=grey, provisional=purple,
+          final=outcome color. Badge shows the actual post-meal BG value with
+          in-range / slightly-high / high color coding when data is present. */}
       {showEval && (
-        <span
+        <div
           className="glev-mec-eval"
-          title={renderEngineMessages(tEngine, chip.body)}
-          style={{
-            padding: "5px 10px",
-            borderRadius: 99,
-            fontSize: 12,
-            fontWeight: 700,
-            background: `${chip.color}18`,
-            color: chip.color,
-            border: `1px solid ${chip.color}30`,
-            whiteSpace: "nowrap",
-            letterSpacing: "0.05em",
-            textTransform: "uppercase",
-          }}
+          style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5 }}
         >
-          {chip.finalOutcome ? chipLabels.evalLabel(chip.finalOutcome) : renderEngineMessage(tEngine, chip.label)}
-        </span>
+          <span
+            title={renderEngineMessages(tEngine, chip.body)}
+            style={{
+              padding: "5px 10px",
+              borderRadius: 99,
+              fontSize: 12,
+              fontWeight: 700,
+              background: `${chip.color}18`,
+              color: chip.color,
+              border: `1px solid ${chip.color}30`,
+              whiteSpace: "nowrap",
+              letterSpacing: "0.05em",
+              textTransform: "uppercase",
+            }}
+          >
+            {chip.finalOutcome ? chipLabels.evalLabel(chip.finalOutcome) : renderEngineMessage(tEngine, chip.label)}
+          </span>
+
+          {/* Post-Meal BG badge — only when data is present */}
+          {postBgMgdl != null && postBgColor != null && (
+            <span
+              title={`Post-Meal BG (${postBgLabel})`}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                padding: "2px 8px",
+                borderRadius: 99,
+                fontSize: 11,
+                fontWeight: 700,
+                background: `${postBgColor}15`,
+                color: postBgColor,
+                border: `1px solid ${postBgColor}30`,
+                whiteSpace: "nowrap",
+                fontFamily: "var(--font-mono)",
+                letterSpacing: "0.02em",
+              }}
+            >
+              <span style={{ fontSize: 9, fontWeight: 600, opacity: 0.7, letterSpacing: "0.06em" }}>
+                {postBgLabel}
+              </span>
+              {glucose.displayCompact(postBgMgdl)}
+            </span>
+          )}
+        </div>
       )}
     </div>
   );

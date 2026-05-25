@@ -1,212 +1,309 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+/**
+ * /signup — Public free-trial signup page (no credit card required).
+ *
+ * Flow:
+ *   1. User enters email + password
+ *   2. supabase.auth.signUp() creates the account
+ *   3. POST /api/auth/free-trial sets trial_end_at = NOW() + 7 days
+ *   4. Redirect to /onboarding
+ *
+ * This page is intentionally NOT behind the auth gate.
+ * Paid users who land here (wrong link) are redirected to /dashboard.
+ */
+
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import GlevLockup from "@/components/GlevLockup";
-
-const ACCENT = "#4F6EF7";
-const GREEN  = "#22D3A0";
-
-const inp: React.CSSProperties = {
-  background: "var(--input-bg)",
-  border: "1px solid var(--border-strong)",
-  borderRadius: 10,
-  padding: "11px 14px",
-  color: "var(--text)",
-  fontSize: 14,
-  width: "100%",
-  boxSizing: "border-box",
-  outline: "none",
-  fontFamily: "inherit",
-};
+import Lockup from "@/components/landing/Lockup";
+import {
+  ACCENT,
+  ACCENT_HOVER,
+  BG,
+  BORDER,
+  SURFACE,
+  TEXT_DIM,
+  TEXT_FAINT,
+} from "@/components/landing/tokens";
 
 export default function SignupPage() {
   const router = useRouter();
-  const [email, setEmail]       = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const [hover, setHover] = useState(false);
 
-  async function handleSignup(e: React.FormEvent) {
-    e.preventDefault();
-    if (!supabase) { setError("Auth-Service nicht konfiguriert."); return; }
-    setLoading(true);
-    setError(null);
+  // Redirect already-signed-in users
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) router.replace("/dashboard");
+    });
+  }, [router]);
 
-    const { data, error: signUpErr } = await supabase.auth.signUp({ email, password });
-
-    if (signUpErr || !data.session) {
-      setLoading(false);
-      setError(signUpErr?.message ?? "Registrierung fehlgeschlagen.");
-      return;
+  // Pixel: ViewContent on mount
+  useEffect(() => {
+    if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
+      (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("trackCustom", "ViewFreeTrialSignup");
     }
+  }, []);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!supabase) return;
+    setError(null);
+    setLoading(true);
 
     try {
-      await fetch("/api/auth/free-trial", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${data.session.access_token}` },
+      // 1. Create Supabase auth account
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: name },
+        },
       });
-    } catch {
-    }
 
-    router.push("/onboarding");
+      if (signUpError) throw signUpError;
+      if (!data.user) throw new Error("Signup fehlgeschlagen – bitte erneut versuchen.");
+
+      // 2. Set trial_end_at via API
+      const session = data.session;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (session?.access_token) {
+        headers["Authorization"] = `Bearer ${session.access_token}`;
+      }
+
+      await fetch("/api/auth/free-trial", { method: "POST", headers }).catch((e) =>
+        console.warn("[signup] trial API call failed:", e)
+      );
+
+      // 3. Pixel Lead event
+      if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
+        (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("track", "Lead");
+      }
+
+      // 4. If email confirmation required, show success state
+      if (!session) {
+        setSuccess(true);
+        setLoading(false);
+        return;
+      }
+
+      // 5. Session available → go to onboarding
+      router.push("/onboarding");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unbekannter Fehler");
+      setLoading(false);
+    }
+  }
+
+  if (success) {
+    return (
+      <main
+        style={{
+          minHeight: "100vh",
+          background: BG,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "24px 16px",
+        }}
+      >
+        <div
+          style={{
+            background: SURFACE,
+            border: `1px solid ${BORDER}`,
+            borderRadius: 20,
+            padding: "40px 32px",
+            maxWidth: 420,
+            width: "100%",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: 48, marginBottom: 16 }}>✉️</div>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: "#fff", margin: "0 0 12px" }}>
+            Bestätige deine E-Mail
+          </h1>
+          <p style={{ fontSize: 15, color: TEXT_DIM, lineHeight: 1.6, margin: 0 }}>
+            Wir haben eine Bestätigungsmail an <strong style={{ color: "#fff" }}>{email}</strong> gesendet.
+            Klick auf den Link um dein Konto zu aktivieren.
+          </p>
+        </div>
+      </main>
+    );
   }
 
   return (
     <main
       style={{
-        minHeight: "100dvh",
+        minHeight: "100vh",
+        background: BG,
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        background: "var(--bg)",
-        padding: "24px",
-        fontFamily: "var(--font-inter), Inter, system-ui, sans-serif",
+        padding: "24px 16px",
       }}
     >
-      <div style={{ width: "100%", maxWidth: 400 }}>
-        <div style={{ marginBottom: 32, textAlign: "center" }}>
-          <Link href="/" style={{ display: "inline-block", textDecoration: "none", color: "inherit" }}>
-            <GlevLockup size={28} />
-          </Link>
-        </div>
+      <div style={{ marginBottom: 32 }}>
+        <Lockup width={120} />
+      </div>
 
-        <div
-          style={{
-            background: "var(--surface)",
-            border: "1px solid var(--border)",
-            borderRadius: 16,
-            padding: "28px 24px",
-          }}
-        >
+      <div
+        style={{
+          background: SURFACE,
+          border: `1px solid ${BORDER}`,
+          borderRadius: 20,
+          padding: "36px 32px",
+          maxWidth: 420,
+          width: "100%",
+        }}
+      >
+        {/* Header */}
+        <div style={{ marginBottom: 28, textAlign: "center" }}>
           <div
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "5px 11px",
-              borderRadius: 999,
-              background: `${GREEN}14`,
-              border: `1px solid ${GREEN}30`,
-              color: GREEN,
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: "0.08em",
+              display: "inline-block",
+              background: "rgba(79,110,247,0.12)",
+              border: "1px solid rgba(79,110,247,0.3)",
+              borderRadius: 8,
+              padding: "4px 12px",
+              fontSize: 12,
+              fontWeight: 600,
+              color: "#4F6EF7",
               textTransform: "uppercase",
-              marginBottom: 20,
+              letterSpacing: "0.08em",
+              marginBottom: 12,
             }}
           >
-            <span style={{ width: 6, height: 6, borderRadius: 99, background: GREEN }} />
             7 Tage kostenlos
           </div>
-
           <h1
             style={{
-              fontSize: 22,
+              fontSize: 24,
               fontWeight: 700,
+              color: "#fff",
+              margin: "0 0 8px",
               letterSpacing: "-0.02em",
-              color: "var(--text)",
-              margin: "0 0 6px",
             }}
           >
             Konto erstellen
           </h1>
-          <p style={{ fontSize: 14, color: "var(--text-dim)", margin: "0 0 24px", lineHeight: 1.5 }}>
-            Keine Kreditkarte nötig — 7 Tage vollen Zugriff, danach Free-Tier.
-          </p>
-
-          <form onSubmit={handleSignup} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div>
-              <label
-                htmlFor="email"
-                style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dim)", display: "block", marginBottom: 6 }}
-              >
-                E-Mail-Adresse
-              </label>
-              <input
-                id="email"
-                type="email"
-                required
-                autoComplete="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="deine@email.de"
-                style={inp}
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="password"
-                style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dim)", display: "block", marginBottom: 6 }}
-              >
-                Passwort
-              </label>
-              <input
-                id="password"
-                type="password"
-                required
-                minLength={8}
-                autoComplete="new-password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="Mindestens 8 Zeichen"
-                style={inp}
-              />
-            </div>
-
-            {error && (
-              <div
-                role="alert"
-                style={{
-                  padding: "10px 12px",
-                  background: "rgba(255,45,120,0.08)",
-                  border: "1px solid rgba(255,45,120,0.3)",
-                  borderRadius: 8,
-                  color: "#FF7AA8",
-                  fontSize: 13,
-                }}
-              >
-                {error}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              style={{
-                marginTop: 4,
-                background: loading ? `${ACCENT}99` : ACCENT,
-                color: "#fff",
-                border: "none",
-                borderRadius: 10,
-                padding: "13px 20px",
-                fontSize: 15,
-                fontWeight: 700,
-                cursor: loading ? "default" : "pointer",
-                fontFamily: "inherit",
-                transition: "background 120ms",
-              }}
-            >
-              {loading ? "Einen Moment…" : "Kostenlos starten"}
-            </button>
-          </form>
-
-          <p style={{ marginTop: 20, fontSize: 13, color: "var(--text-dim)", textAlign: "center" }}>
-            Bereits ein Konto?{" "}
-            <Link href="/login" style={{ color: ACCENT, fontWeight: 600, textDecoration: "none" }}>
-              Anmelden
-            </Link>
+          <p style={{ fontSize: 14, color: TEXT_DIM, margin: 0 }}>
+            Keine Kreditkarte erforderlich.
           </p>
         </div>
 
-        <p style={{ marginTop: 20, fontSize: 11, color: "var(--text-faint)", textAlign: "center", lineHeight: 1.5 }}>
-          Kein Medizinprodukt. Alle Empfehlungen sind Gesprächsgrundlage für dein Diabetologen-Team.
-        </p>
+        {/* Form */}
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <input
+            type="text"
+            placeholder="Vorname"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            style={inputStyle}
+          />
+          <input
+            type="email"
+            placeholder="E-Mail-Adresse"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="email"
+            style={inputStyle}
+          />
+          <input
+            type="password"
+            placeholder="Passwort (min. 8 Zeichen)"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            minLength={8}
+            autoComplete="new-password"
+            style={inputStyle}
+          />
+
+          {error && (
+            <div
+              role="alert"
+              style={{
+                padding: "10px 14px",
+                background: "rgba(255,45,120,0.08)",
+                border: "1px solid rgba(255,45,120,0.25)",
+                borderRadius: 8,
+                color: "#FF7AA8",
+                fontSize: 13,
+                lineHeight: 1.4,
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            onMouseEnter={() => setHover(true)}
+            onMouseLeave={() => setHover(false)}
+            style={{
+              background: loading ? "rgba(79,110,247,0.6)" : hover ? ACCENT_HOVER : ACCENT,
+              color: "#fff",
+              border: "none",
+              borderRadius: 12,
+              padding: "16px 24px",
+              fontSize: 16,
+              fontWeight: 600,
+              cursor: loading ? "default" : "pointer",
+              fontFamily: "inherit",
+              marginTop: 4,
+              transition: "background 120ms ease",
+            }}
+          >
+            {loading ? "Wird erstellt…" : "7 Tage kostenlos starten"}
+          </button>
+        </form>
+
+        {/* Footer links */}
+        <div style={{ marginTop: 20, textAlign: "center" }}>
+          <p style={{ fontSize: 13, color: TEXT_DIM, margin: "0 0 8px" }}>
+            Bereits ein Konto?{" "}
+            <Link href="/login" style={{ color: ACCENT, textDecoration: "none" }}>
+              Anmelden
+            </Link>
+          </p>
+          <p style={{ fontSize: 12, color: TEXT_FAINT ?? "rgba(255,255,255,0.3)", margin: 0, lineHeight: 1.5 }}>
+            Mit der Registrierung akzeptierst du unsere{" "}
+            <Link href="/legal/agb" style={{ color: "rgba(255,255,255,0.4)", textDecoration: "underline" }}>
+              AGB
+            </Link>{" "}
+            und{" "}
+            <Link href="/datenschutz" style={{ color: "rgba(255,255,255,0.4)", textDecoration: "underline" }}>
+              Datenschutzerklärung
+            </Link>
+            .
+          </p>
+        </div>
       </div>
     </main>
   );
 }
+
+const inputStyle: React.CSSProperties = {
+  background: "rgba(255,255,255,0.05)",
+  border: "1px solid rgba(255,255,255,0.1)",
+  borderRadius: 10,
+  padding: "14px 16px",
+  fontSize: 15,
+  color: "#fff",
+  outline: "none",
+  fontFamily: "inherit",
+  width: "100%",
+  boxSizing: "border-box",
+};

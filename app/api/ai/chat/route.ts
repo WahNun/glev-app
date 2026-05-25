@@ -8,6 +8,7 @@ import {
   executeGlevTool,
   isPendingActionEnvelope,
   isNavigateEnvelope,
+  isSetMacroEnvelope,
 } from "@/lib/ai/glevTools";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
@@ -457,6 +458,21 @@ export async function POST(req: NextRequest) {
                   status: "navigating",
                   path: result.navigate,
                   note: "Navigation wurde ausgelöst. Bestätige dem Nutzer kurz mit einem Satz, wohin du ihn navigierst.",
+                }),
+              });
+            } else if (isSetMacroEnvelope(result)) {
+              // Phase 2: dispatch the set_macro event to the client so
+              // the engine-macros screen can update its local form state.
+              send(JSON.stringify({ set_macro: result.set_macro }));
+              messages.push({
+                role: "tool",
+                name: fn?.name ?? "",
+                toolCallId: call.id,
+                content: JSON.stringify({
+                  status: "macro_updated",
+                  field: result.set_macro.field,
+                  value: result.set_macro.value,
+                  note: "Feld wurde aktualisiert. Bestätige dem Nutzer mit einem kurzen Satz, was du geändert hast.",
                 }),
               });
             } else {

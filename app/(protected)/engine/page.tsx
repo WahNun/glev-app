@@ -600,6 +600,26 @@ export default function EnginePage() {
     wizardStepHdr.setStep(stepIndex);
     return () => { wizardStepHdr.setStep(null); };
   }, [stepIndex, wizardStepHdr.setStep]);
+
+  // Voice assistant: glev:set-macro CustomEvent → update macro form fields live.
+  // Fired by useGlevAI when the AI calls the set_macro tool (Phase 2 voice).
+  // Carbs respect the user's unit preference via carbUnit.fromGrams(); protein
+  // and fat are always grams so they round to 1 decimal directly.
+  useEffect(() => {
+    function handleSetMacro(e: Event) {
+      const { field, value } = (e as CustomEvent<{ field: string; value: number }>).detail;
+      if (field === "carbs")   setCarbs(String(Math.round(carbUnit.fromGrams(value) * 10) / 10));
+      if (field === "protein") setProtein(String(Math.round(value * 10) / 10));
+      if (field === "fat")     setFat(String(Math.round(value * 10) / 10));
+      if (field === "fiber")   setFiber(String(Math.round(value * 10) / 10));
+    }
+    window.addEventListener("glev:set-macro", handleSetMacro);
+    return () => window.removeEventListener("glev:set-macro", handleSetMacro);
+  // carbUnit is stable (memo inside the hook) so it won't retrigger on every render.
+  // setXxx setters from useState are also stable — safe to omit from the dep array.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carbUnit]);
+
   // FIX C: Tab strip is collapsed by default to give Step 1's voice/text
   // input the full vertical real estate. The chevron control itself now
   // lives in the global mobile app header (see Layout.tsx); this page

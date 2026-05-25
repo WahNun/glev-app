@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { fetchCgmHistory } from "@/lib/cgm/clientCache";
@@ -140,30 +140,38 @@ async function getIOBSummary(
  *
  * SSR-safe: all network calls run inside a useEffect.
  */
+/** Refresh interval in ms — 3 minutes, paused when tab is hidden. */
+const REFRESH_INTERVAL_MS = 3 * 60 * 1000;
+
 export function useScreenContext(): ScreenContext {
   const pathname = usePathname();
   const [context, setContext] = useState<ScreenContext>({
     screen: pathToScreen(pathname),
   });
+  // Stable ref so the interval callback always sees the latest pathname
+  // without needing to be recreated on every navigation.
+  const pathnameRef = useRef(pathname);
+  pathnameRef.current = pathname;
 
   useEffect(() => {
-    const screen = pathToScreen(pathname);
-
-    if (screen !== "dashboard" || !supabase) {
-      // Bail out if screen didn't change to avoid triggering a re-render
-      // that would cascade through the Layout → Context → Layout loop
-      // (Layout is both parent and consumer of all context providers).
-      setContext(prev =>
-        prev.screen === screen && !prev.glucoseSummary && !prev.iobSummary && !prev.lastMealSummary
-          ? prev
-          : { screen },
-      );
-      return;
-    }
+    if (!supabase) return;
 
     let cancelled = false;
 
-    (async () => {
+    async function refresh() {
+      if (cancelled || !supabase) return;
+
+      // Skip fetch when tab is hidden — saves API calls on background tabs.
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+
+      const screen = pathToScreen(pathnameRef.current);
+
+      // Settings screen never needs AI context — skip all network calls.
+      if (screen === "settings" || screen === "unknown") {
+        setContext({ screen });
+        return;
+      }
+
       try {
         const { data: { user } } = await supabase!.auth.getUser();
         if (!user || cancelled) return;
@@ -179,10 +187,20 @@ export function useScreenContext(): ScreenContext {
         const glucoseConsented = Boolean((profile as Record<string, unknown> | null)?.ai_consent_glucose_at);
         const iobConsented     = Boolean((profile as Record<string, unknown> | null)?.ai_consent_iob_at);
 
+        // Screen-aware data fetching — only load what's relevant per screen.
+        // dashboard : glucose + IOB + last meal (full context)
+        // engine    : IOB only (bolus decisions need active insulin context)
+        // entries   : last meal only (browsing meal history)
+        // insights  : no sensitive data — just screen name for AI routing
+        // settings  : no data needed at all
+        const wantsGlucose = glucoseConsented && screen === "dashboard";
+        const wantsIOB     = iobConsented && (screen === "dashboard" || screen === "engine");
+        const wantsMeal    = screen === "dashboard" || screen === "entries";
+
         const [glucoseSummary, lastMealSummary, iobSummary] = await Promise.all([
-          glucoseConsented ? getGlucoseSummary() : Promise.resolve(null),
-          getLastMealSummary(supabase!, user.id),
-          iobConsented ? getIOBSummary(supabase!, user.id) : Promise.resolve(null),
+          wantsGlucose ? getGlucoseSummary()                   : Promise.resolve(null),
+          wantsMeal    ? getLastMealSummary(supabase!, user.id) : Promise.resolve(null),
+          wantsIOB     ? getIOBSummary(supabase!, user.id)      : Promise.resolve(null),
         ]);
 
         if (cancelled) return;
@@ -196,12 +214,27 @@ export function useScreenContext(): ScreenContext {
       } catch {
         if (!cancelled) setContext({ screen });
       }
-    })();
+    }
+
+    // Immediate fetch on mount / navigation change.
+    refresh();
+
+    // Auto-refresh every 3 minutes, paused when hidden.
+    const timer = setInterval(refresh, REFRESH_INTERVAL_MS);
+
+    // Also refresh when the user switches back to the tab.
+    function onVisibilityChange() {
+      if (document.visibilityState === "visible") refresh();
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
       cancelled = true;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  // pathname is the only external dependency; re-run on every navigation
+  // Re-run when pathname changes (new screen = fresh fetch immediately).
+  // pathnameRef keeps the interval callback current without recreating it.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 

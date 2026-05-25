@@ -3,7 +3,6 @@
 import { Suspense, useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import Image from "next/image";
-import Link from "next/link";
 import AppMockupPhone from "@/components/AppMockupPhone";
 import LandingFooter from "@/components/landing/Footer";
 import Lockup from "@/components/landing/Lockup";
@@ -20,12 +19,10 @@ import {
 } from "@/components/landing/tokens";
 
 /**
- * /pro-trial — Pro-Verkaufsseite mit kostenlosem Test-CTA.
- * Basis: /pro — gleiche Inhalte und Layout. Einzige Änderung:
- * Unter jedem primären Kauf-CTA erscheint ein zweiter Button
- * "7 Tage kostenlos testen" → /signup (kein Stripe, kein Kreditkartenpflichtfeld).
+ * /preview-pro — copy & layout preview of /pro.
+ * Stripe wiring untouched: posts to /api/checkout/pro with locale.
  */
-function ProCTA({ block = true }: { block?: boolean }) {
+function PreviewProCTA({ block = true }: { block?: boolean }) {
   const t = useTranslations("previewPro");
   const locale = useLocale();
   const [hover, setHover] = useState(false);
@@ -48,7 +45,9 @@ function ProCTA({ block = true }: { block?: boolean }) {
         body: JSON.stringify({ locale }),
       });
       const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
-      if (!res.ok || !data.url) throw new Error(data.error || `HTTP ${res.status}`);
+      if (!res.ok || !data.url) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
       window.location.href = data.url;
     } catch (err) {
       setLoading(false);
@@ -109,39 +108,6 @@ function ProCTA({ block = true }: { block?: boolean }) {
   );
 }
 
-function FreeTrialCTA() {
-  return (
-    <Link
-      href="/signup"
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "transparent",
-        color: TEXT_DIM,
-        border: `1px solid ${BORDER}`,
-        borderRadius: 12,
-        padding: "14px 32px",
-        fontSize: 15,
-        fontWeight: 600,
-        textDecoration: "none",
-        minHeight: 48,
-        width: "100%",
-        boxSizing: "border-box",
-        transition: "background 120ms, border-color 120ms",
-      }}
-      onMouseEnter={e => {
-        (e.currentTarget as HTMLAnchorElement).style.background = "rgba(255,255,255,0.06)";
-      }}
-      onMouseLeave={e => {
-        (e.currentTarget as HTMLAnchorElement).style.background = "transparent";
-      }}
-    >
-      7 Tage kostenlos testen
-    </Link>
-  );
-}
-
 const SECTION_WRAP_NARROW: React.CSSProperties = {
   width: "100%",
   maxWidth: 760,
@@ -150,7 +116,7 @@ const SECTION_WRAP_NARROW: React.CSSProperties = {
   boxSizing: "border-box",
 };
 
-function ProTrialContent() {
+function PreviewProContent() {
   const t = useTranslations("previewPro");
 
   useEffect(() => {
@@ -234,10 +200,45 @@ function ProTrialContent() {
 
             <div
               className="glev-hero-form"
-              style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}
+              style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}
             >
-              <ProCTA />
-              <FreeTrialCTA />
+              <PreviewProCTA />
+              {/* Free trial CTA — secondary, equal visual weight */}
+              <a
+                href="/signup"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "transparent",
+                  color: "#fff",
+                  textDecoration: "none",
+                  border: "1px solid rgba(255,255,255,0.18)",
+                  borderRadius: 12,
+                  padding: "16px 32px",
+                  fontSize: 16,
+                  fontWeight: 600,
+                  minHeight: 56,
+                  boxSizing: "border-box",
+                  width: "100%",
+                  transition: "border-color 120ms ease, background 120ms ease",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLAnchorElement).style.background = "rgba(255,255,255,0.05)";
+                  (e.currentTarget as HTMLAnchorElement).style.borderColor = "rgba(255,255,255,0.35)";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLAnchorElement).style.background = "transparent";
+                  (e.currentTarget as HTMLAnchorElement).style.borderColor = "rgba(255,255,255,0.18)";
+                }}
+                onClick={() => {
+                  if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
+                    (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("trackCustom", "ClickFreeTrialCTA");
+                  }
+                }}
+              >
+                7 Tage kostenlos testen
+              </a>
             </div>
 
             <div
@@ -263,7 +264,7 @@ function ProTrialContent() {
         </div>
       </section>
 
-      {/* 2. FOUNDER */}
+      {/* 2. FOUNDER (direkt unter Hero) */}
       <section style={SECTION_WRAP_NARROW}>
         <div
           style={{
@@ -316,7 +317,7 @@ function ProTrialContent() {
         </div>
       </section>
 
-      {/* 2b. CGM COMPATIBILITY */}
+      {/* 2b. CGM COMPATIBILITY — Trust + Qualifikation vor Pricing */}
       <section style={{ ...SECTION_WRAP_NARROW, padding: "8px 20px 0" }}>
         <CGMCompatibility />
       </section>
@@ -435,9 +436,34 @@ function ProTrialContent() {
               </li>
             ))}
           </ul>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
-            <ProCTA />
-            <FreeTrialCTA />
+          <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 10 }}>
+            <PreviewProCTA />
+            <a
+              href="/signup"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "transparent",
+                color: "#fff",
+                textDecoration: "none",
+                border: "1px solid rgba(255,255,255,0.18)",
+                borderRadius: 12,
+                padding: "14px 24px",
+                fontSize: 15,
+                fontWeight: 600,
+                minHeight: 50,
+                boxSizing: "border-box",
+                width: "100%",
+              }}
+              onClick={() => {
+                if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
+                  (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("trackCustom", "ClickFreeTrialCTA");
+                }
+              }}
+            >
+              7 Tage kostenlos testen
+            </a>
           </div>
           <div style={{ fontSize: 13, color: MINT, textAlign: "center", marginTop: 4 }}>
             {t("pricing_microcopy")}
@@ -469,7 +495,7 @@ function ProTrialContent() {
         </div>
       </section>
 
-      {/* 7. TIER TABLE */}
+      {/* 7. TIER TABLE (compact, 3 rows) */}
       <section style={SECTION_WRAP_NARROW}>
         <h2
           style={{
@@ -503,7 +529,14 @@ function ProTrialContent() {
                 gap: 14,
               }}
             >
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", minWidth: 60 }}>
+              <div
+                style={{
+                  fontSize: 14,
+                  fontWeight: 700,
+                  color: "#fff",
+                  minWidth: 60,
+                }}
+              >
                 {row.label}
               </div>
               <div style={{ fontSize: 14, color: TEXT_DIM, lineHeight: 1.45 }}>
@@ -553,10 +586,10 @@ function ProTrialContent() {
   );
 }
 
-export default function ProTrialPage() {
+export default function PreviewProPage() {
   return (
     <Suspense fallback={null}>
-      <ProTrialContent />
+      <PreviewProContent />
     </Suspense>
   );
 }

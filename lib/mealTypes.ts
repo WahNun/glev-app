@@ -67,6 +67,9 @@ export const EVAL_COLORS: Record<string, string> = {
   SPIKE_STRONG: "#FF6A00",
   OVERDOSE: "#FF2D78",
   UNDERDOSE: PALETTE.ORANGE,
+  // Three-tier intermediate outcomes — amber for advisory, not alarming.
+  SLIGHTLY_OVER:  "#F59E0B",
+  SLIGHTLY_UNDER: "#F59E0B",
   // Task #187: hypos detected anywhere inside the 3h post-meal window
   // share the same magenta as OVERDOSE — both are "post-meal low" from
   // the user's perspective and we want them to read identically on the
@@ -83,6 +86,8 @@ export const EVAL_LABELS: Record<string, string> = {
   SPIKE_STRONG: "Strong Spike",
   OVERDOSE: "Over Dose",
   UNDERDOSE: "Under Dose",
+  SLIGHTLY_OVER:  "Slightly High",
+  SLIGHTLY_UNDER: "Slightly Low",
   HYPO_DURING: "Hypo im Verlauf",
   CHECK_CONTEXT: "Review",
 };
@@ -91,6 +96,8 @@ export const EVAL_EXPLAIN: Record<string, string> = {
   GOOD: "Insulin matched carbohydrate load effectively.",
   HIGH: "Insulin exceeded glucose requirements → glucose dropped significantly.",
   OVERDOSE: "Insulin exceeded glucose requirements → glucose dropped significantly.",
+  SLIGHTLY_OVER:  "Dose slightly above ICR expectation — monitor for mild low.",
+  SLIGHTLY_UNDER: "Dose slightly below ICR expectation — monitor for mild high.",
   LOW: "Insulin insufficient → glucose increased after meal.",
   UNDERDOSE: "Insulin insufficient → glucose increased after meal.",
   SPIKE: "Rapid glucose increase detected post meal.",
