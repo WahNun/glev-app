@@ -42,3 +42,16 @@ export const BASAL_WINDOW_PRESETS: Record<string, number> = {
 
 /** Default basal action window in hours (Lantus/Glargin U100 = 24 h). */
 export const DEFAULT_BASAL_WINDOW_H = 24;
+
+/**
+ * Fraction of the basal action window during which the dose is at full
+ * effectiveness (ring stays at 1.0 / full).  After this point the ring
+ * begins its visible decay towards empty.
+ *
+ * Long-acting insulins (Lantus/Glargin, Tresiba/Degludec, Toujeo) have a
+ * relatively flat absorption plateau covering roughly the first 60 % of
+ * their labelled action window.  The tail decline covers the remaining 40 %.
+ * Source: SmPC / ATTD consensus — used as a UX approximation only;
+ * not a substitute for clinical guidance.
+ */
+export const BASAL_PK_PEAK_FRACTION = 0.60;

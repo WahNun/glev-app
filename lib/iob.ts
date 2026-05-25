@@ -350,3 +350,36 @@ export function calcBasalRemaining(
   if (elapsedMin < 0) return units;
   return units * Math.max(0, 1 - elapsedMin / windowMin);
 }
+
+/**
+ * Computes the basal ring fill fraction (0–1) using a two-phase
+ * pharmacokinetic model:
+ *
+ *  • Plateau phase  (0 … windowMin × peakFraction):
+ *    The ring stays at 1.0.  Long-acting insulins are fully effective during
+ *    this window — showing decay here would mislead users into thinking their
+ *    coverage is already diminishing.
+ *
+ *  • Tail phase  (windowMin × peakFraction … windowMin):
+ *    Linear decay from 1.0 → 0.  This is the period where the dose actually
+ *    starts wearing off and the ring visually empties.
+ *
+ * @param elapsedMin   Minutes since injection (negative = future dose → 1.0)
+ * @param windowMin    Total action window in minutes
+ * @param peakFraction Fraction of windowMin that constitutes the plateau
+ *                     (0–1, e.g. 0.60 = ring stays full for the first 60 %)
+ * @returns            Ring fill fraction in [0, 1]
+ */
+export function calcBasalFraction(
+  elapsedMin: number,
+  windowMin: number,
+  peakFraction: number,
+): number {
+  if (elapsedMin <= 0) return 1;
+  if (elapsedMin >= windowMin) return 0;
+  const peakEndMin = windowMin * peakFraction;
+  if (elapsedMin <= peakEndMin) return 1;
+  const tailElapsed  = elapsedMin - peakEndMin;
+  const tailDuration = windowMin - peakEndMin;
+  return Math.max(0, 1 - tailElapsed / tailDuration);
+}
