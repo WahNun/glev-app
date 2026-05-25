@@ -586,38 +586,61 @@ export default function IOBCard({ insulin, insulinType, meals, currentBg }: Prop
                   new Date(b.administeredAt).getTime() - new Date(a.administeredAt).getTime()
                 )
                 .map((d, i) => {
-                  const singleIOB  = calcSingleIOB(d, now, diaMin);
-                  const timeStr    = new Date(d.administeredAt).toLocaleTimeString([], {
+                  const singleIOB    = calcSingleIOB(d, now, diaMin);
+                  const timeStr      = new Date(d.administeredAt).toLocaleTimeString([], {
                     hour: "2-digit", minute: "2-digit",
                   });
+                  const doseElapsedMin = Math.max(0, (now - new Date(d.administeredAt).getTime()) / 60_000);
+                  const doseElapsedPct = Math.min(100, (doseElapsedMin / diaMin) * 100);
+                  const doseCleared    = doseElapsedMin >= diaMin;
                   return (
                     <div
                       key={i}
                       style={{
-                        display: "flex", alignItems: "center",
-                        justifyContent: "space-between",
-                        padding: "5px 8px", borderRadius: 8,
+                        display: "flex", flexDirection: "column",
+                        padding: "6px 8px 7px", borderRadius: 8,
                         background: "var(--surface-soft)",
                         border: "1px solid var(--border)",
-                        fontSize: 12, gap: 6,
+                        fontSize: 12, gap: 5,
                       }}
                     >
-                      <span style={{
-                        color: "var(--text-dim)",
-                        fontFamily: "var(--font-mono)", flexShrink: 0,
-                      }}>
-                        {timeStr}
-                      </span>
-                      <span style={{ color: "var(--text-muted)", flexShrink: 0 }}>
-                        {d.units.toFixed(1)} IE
-                      </span>
-                      <span style={{
-                        color, fontWeight: 700,
-                        fontFamily: "var(--font-mono)",
-                        marginLeft: "auto", flexShrink: 0,
-                      }}>
-                        {t("iob_dose_remaining", { units: singleIOB.toFixed(1) })}
-                      </span>
+                      {/* text row */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{
+                          color: "var(--text-dim)",
+                          fontFamily: "var(--font-mono)", flexShrink: 0,
+                        }}>
+                          {timeStr}
+                        </span>
+                        <span style={{ color: "var(--text-muted)", flexShrink: 0 }}>
+                          {d.units.toFixed(1)} IE
+                        </span>
+                        <span style={{
+                          color: doseCleared ? "var(--text-ghost)" : color,
+                          fontWeight: 700,
+                          fontFamily: "var(--font-mono)",
+                          marginLeft: "auto", flexShrink: 0,
+                        }}>
+                          {t("iob_dose_remaining", { units: singleIOB.toFixed(1) })}
+                        </span>
+                      </div>
+                      {/* per-dose Wirkdauer bar */}
+                      <div style={{ position: "relative", height: 4, borderRadius: 99, background: "var(--border)", overflow: "hidden" }}>
+                        <div style={{
+                          position: "absolute", left: 0, top: 0, bottom: 0,
+                          width: `${doseElapsedPct}%`,
+                          background: doseCleared ? "var(--text-ghost)" : `${color}50`,
+                          borderRadius: 99,
+                        }} />
+                        {!doseCleared && (
+                          <div style={{
+                            position: "absolute", right: 0, top: 0, bottom: 0,
+                            width: `${100 - doseElapsedPct}%`,
+                            background: `${color}cc`,
+                            borderRadius: 99,
+                          }} />
+                        )}
+                      </div>
                     </div>
                   );
                 })}
