@@ -1,13 +1,64 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { supabase } from "@/lib/supabase";
 
 /**
  * Landing page when the email-confirmation link can't be exchanged for a
  * session (expired link, missing code, Supabase URL config not set, etc).
- * Kept intentionally minimal — same dark colourway as the rest of the app.
+ *
+ * Also handles the Supabase implicit-flow case where the token arrives as
+ * #access_token=… in the hash instead of ?code= (PKCE). In that case
+ * detectSessionInUrl has already created the session — we just need to
+ * detect it and redirect to /onboarding instead of showing an error.
  */
 export default function AuthErrorPage() {
+  const router = useRouter();
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    if (!supabase) { setChecking(false); return; }
+
+    // Give Supabase JS a moment to process the hash (#access_token=…)
+    // via detectSessionInUrl before we check for an active session.
+    const timer = setTimeout(async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        // Session exists — user confirmed their email via implicit flow.
+        // Set trial_end_at (non-fatal if it fails) then go to onboarding.
+        try {
+          await fetch("/api/auth/free-trial", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          });
+        } catch {
+          // non-fatal
+        }
+        router.replace("/onboarding");
+      } else {
+        setChecking(false);
+      }
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [router]);
+
+  if (checking) {
+    return (
+      <main
+        style={{
+          minHeight: "100vh",
+          background: "#09090B",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      />
+    );
+  }
+
   return (
     <main
       style={{
