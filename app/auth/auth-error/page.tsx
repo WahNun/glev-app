@@ -20,11 +20,12 @@ export default function AuthErrorPage() {
 
   useEffect(() => {
     if (!supabase) { setChecking(false); return; }
+    const sb = supabase; // capture non-null ref — TS can't narrow across async closure
 
     // Give Supabase JS a moment to process the hash (#access_token=…)
     // via detectSessionInUrl before we check for an active session.
     const timer = setTimeout(async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await sb.auth.getSession();
       if (session) {
         // Session exists — user confirmed their email via implicit flow.
         // Set trial_end_at (non-fatal if it fails) then go to onboarding.
