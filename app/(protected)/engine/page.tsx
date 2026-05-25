@@ -601,6 +601,42 @@ export default function EnginePage() {
     return () => { wizardStepHdr.setStep(null); };
   }, [stepIndex, wizardStepHdr.setStep]);
 
+  // AI meal-prep: on mount, check sessionStorage for pre-filled macros from
+  // the voice assistant (log_meal_entry tool navigates here with macros stored
+  // in sessionStorage so the CustomEvents don't race with the page mounting).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = sessionStorage.getItem("glev_pending_meal");
+      if (!raw) return;
+      sessionStorage.removeItem("glev_pending_meal");
+      const mp = JSON.parse(raw) as {
+        input_text?: string;
+        carbs?: number;
+        protein?: number | null;
+        fat?: number | null;
+        fiber?: number | null;
+      };
+      if (typeof mp.input_text === "string" && mp.input_text) setDesc(mp.input_text);
+      if (typeof mp.carbs === "number" && Number.isFinite(mp.carbs)) {
+        setCarbs(String(Math.round(carbUnit.fromGrams(mp.carbs) * 10) / 10));
+      }
+      if (typeof mp.protein === "number" && Number.isFinite(mp.protein)) {
+        setProtein(String(Math.round(mp.protein * 10) / 10));
+      }
+      if (typeof mp.fat === "number" && Number.isFinite(mp.fat)) {
+        setFat(String(Math.round(mp.fat * 10) / 10));
+      }
+      if (typeof mp.fiber === "number" && Number.isFinite(mp.fiber)) {
+        setFiber(String(Math.round(mp.fiber * 10) / 10));
+      }
+      // Switch to the log tab so the macro form is immediately visible.
+      setTab("log");
+    } catch { /* malformed JSON — ignore */ }
+  // carbUnit is stable; run once on mount.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Voice assistant: glev:set-macro CustomEvent → update macro form fields live.
   // Fired by useGlevAI when the AI calls the set_macro tool (Phase 2 voice).
   // Carbs respect the user's unit preference via carbUnit.fromGrams(); protein

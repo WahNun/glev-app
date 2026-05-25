@@ -9,6 +9,7 @@ import {
   isPendingActionEnvelope,
   isNavigateEnvelope,
   isSetMacroEnvelope,
+  isMealPrepEnvelope,
 } from "@/lib/ai/glevTools";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
@@ -473,6 +474,27 @@ export async function POST(req: NextRequest) {
                   field: result.set_macro.field,
                   value: result.set_macro.value,
                   note: "Feld wurde aktualisiert. Bestätige dem Nutzer mit einem kurzen Satz, was du geändert hast.",
+                }),
+              });
+            } else if (isMealPrepEnvelope(result)) {
+              // Meal-prep flow: pre-fill engine form and navigate there.
+              // The client stores macros in sessionStorage then navigates,
+              // so the engine page can read them on mount even though the
+              // navigation is async and the CustomEvents would fire too early.
+              send(JSON.stringify({ meal_prep: result.meal_prep }));
+              const mp = result.meal_prep;
+              const macroBits = [`${mp.carbs}g KH`];
+              if (mp.protein != null) macroBits.push(`${mp.protein}g Eiweiß`);
+              if (mp.fat != null) macroBits.push(`${mp.fat}g Fett`);
+              messages.push({
+                role: "tool",
+                name: fn?.name ?? "",
+                toolCallId: call.id,
+                content: JSON.stringify({
+                  status: "meal_prep_sent",
+                  input_text: mp.input_text,
+                  macros: macroBits.join(", "),
+                  note: "Der Engine-Screen öffnet sich mit vorausgefüllten Makros. Sag dem Nutzer kurz, welche Werte du eingetragen hast, und dass er sie noch anpassen oder per Sprache bestätigen kann ('Speichern' sagen).",
                 }),
               });
             } else {

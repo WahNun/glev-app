@@ -5,7 +5,7 @@ import type { GlevChatMessage, PendingAction } from "@/lib/useGlevAI";
 import { useVoxtral } from "@/hooks/useVoxtral";
 import { useTTS } from "@/hooks/useTTS";
 
-const ACCENT = "#4F6EF7";
+const ACCENT = "#8b5cf6";
 const SHEET_BG = "#161b22";
 const PAGE_BG = "#0f1117";
 
@@ -369,7 +369,7 @@ export default function GlevAIChatSheet({
             const bgColor = isSpeaking
               ? "rgba(80,200,120,0.12)"
               : isAnalyzing
-              ? "rgba(79,110,247,0.12)"
+              ? "rgba(139,92,246,0.12)"
               : "rgba(80,200,120,0.10)";
             const borderColor = isSpeaking
               ? "rgba(80,200,120,0.35)"

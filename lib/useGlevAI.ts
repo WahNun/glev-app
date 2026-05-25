@@ -382,10 +382,29 @@ export function useGlevAI(opts?: {
                   kind: string;
                   summary: string;
                 };
+                meal_prep?: {
+                  input_text: string;
+                  carbs: number;
+                  protein: number | null;
+                  fat: number | null;
+                  fiber: number | null;
+                };
               };
               if (parsed.error) throw new Error(parsed.error);
               if (parsed.navigate) {
                 optsRef.current?.onNavigate?.(parsed.navigate);
+              }
+              if (parsed.meal_prep && typeof window !== "undefined") {
+                // Store macros in sessionStorage so the engine page can
+                // read them on mount (navigation is async — CustomEvents
+                // would fire before the page is ready).
+                try {
+                  sessionStorage.setItem(
+                    "glev_pending_meal",
+                    JSON.stringify(parsed.meal_prep),
+                  );
+                } catch { /* sessionStorage may be unavailable */ }
+                optsRef.current?.onNavigate?.("/engine");
               }
               // Phase 2: set_macro — dispatched as a CustomEvent so the
               // active engine-macros screen can update its local state

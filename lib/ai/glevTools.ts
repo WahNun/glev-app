@@ -130,7 +130,7 @@ export const GLEV_TOOLS = [
     function: {
       name: "log_meal_entry",
       description:
-        "Schlägt das Speichern einer Mahlzeit vor (Mahlzeiten-Log). WICHTIG: schreibt NICHT direkt — die UI zeigt dem Nutzer einen Bestätigen-Button, erst dann landet die Zeile in der DB. Nur aufrufen, wenn der Nutzer ausdrücklich eine konkrete Mahlzeit mit konkreten Werten loggen möchte (z. B. 'Trag mir 60g Pasta Bolognese ein', 'Speicher: Apfel, 20g KH'). Niemals aufrufen, wenn der Nutzer nur eine Mahlzeit beschreibt, eine Frage stellt oder die Werte unklar sind — dann lieber nachfragen.",
+        "Öffnet den Mahlzeit-Eingabe-Screen und füllt die Makros vor. WICHTIG: speichert NICHT direkt — der Nutzer sieht die vorausgefüllten Werte im Engine-Screen und bestätigt per Klick oder Sprachbefehl ('Speichern'). Aufrufen, wenn der Nutzer eine Mahlzeit beschreibt oder loggen möchte (z. B. 'Ich esse ein Croissant', 'Trag 60g Pasta ein'). Bei unklaren Werten schätze die Makros nach bestem Wissen — der Nutzer kann sie anschließend korrigieren. Niemals aufrufen bei reinen Fragen oder wenn der Nutzer gerade schon auf dem Engine-Screen ist und nur einzelne Werte korrigiert (dann set_macro nutzen).",
       parameters: {
         type: "object",
         properties: {
@@ -460,6 +460,30 @@ export function isSetMacroEnvelope(v: unknown): v is SetMacroEnvelope {
 export type UpdateSettingEnvelope = {
   update_setting: { setting: string; value: string };
 };
+
+/**
+ * Returned by log_meal_entry instead of a pending_action.
+ * The chat-route sends this as a { meal_prep: {...} } SSE frame.
+ * useGlevAI stores the macros in sessionStorage then navigates to /engine,
+ * where the engine page reads and pre-fills the form on mount.
+ */
+export type MealPrepEnvelope = {
+  meal_prep: {
+    input_text: string;
+    carbs: number;
+    protein: number | null;
+    fat: number | null;
+    fiber: number | null;
+  };
+};
+
+export function isMealPrepEnvelope(v: unknown): v is MealPrepEnvelope {
+  if (!v || typeof v !== "object") return false;
+  const mp = (v as { meal_prep?: unknown }).meal_prep;
+  if (!mp || typeof mp !== "object") return false;
+  const o = mp as Record<string, unknown>;
+  return typeof o.input_text === "string" && typeof o.carbs === "number";
+}
 
 export function isPendingActionEnvelope(v: unknown): v is PendingActionEnvelope {
   if (!v || typeof v !== "object") return false;
@@ -969,8 +993,8 @@ async function createPendingAction(
 }
 
 async function toolLogMealEntry(
-  sb: SupabaseClient,
-  userId: string,
+  _sb: SupabaseClient,
+  _userId: string,
   args: Record<string, unknown>,
 ): Promise<unknown> {
   const inputText =
@@ -988,25 +1012,18 @@ async function toolLogMealEntry(
     Number.isFinite(Number(args.fat_grams)) && args.fat_grams !== undefined
       ? Number(args.fat_grams)
       : null;
-  const allowedTypes = ["FAST_CARBS", "HIGH_PROTEIN", "HIGH_FAT", "BALANCED"];
-  const mealType =
-    typeof args.meal_type === "string" && allowedTypes.includes(args.meal_type)
-      ? args.meal_type
-      : "BALANCED";
+  const fiber =
+    Number.isFinite(Number(args.fiber_grams)) && args.fiber_grams !== undefined
+      ? Number(args.fiber_grams)
+      : null;
 
-  const params = {
-    input_text: inputText,
-    carbs_grams: carbs,
-    protein_grams: protein,
-    fat_grams: fat,
-    meal_type: mealType,
-  };
-  const macroBits: string[] = [`${carbs}g KH`];
-  if (protein !== null) macroBits.push(`${protein}g Eiweiß`);
-  if (fat !== null) macroBits.push(`${fat}g Fett`);
-  const summary = `Mahlzeit: ${inputText} (${macroBits.join(", ")})`;
-
-  return await createPendingAction(sb, userId, "log_meal_entry", params, summary);
+  // No pending_action needed — just pre-fill the Engine screen and let
+  // the user confirm there (via tap or voice "Speichern"). This keeps the
+  // save gesture in the user's hand while still removing the friction of
+  // manual macro entry.
+  return {
+    meal_prep: { input_text: inputText, carbs, protein, fat, fiber },
+  } satisfies MealPrepEnvelope;
 }
 
 async function toolLogBolusEntry(
