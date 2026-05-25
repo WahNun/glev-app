@@ -2,17 +2,22 @@
 
 > **Zweck:** Diese Datei ermöglicht einen reibungslosen Einstieg in den neuen Workflow (Claude mit lokalem Repo-Zugriff) ohne Rückfragen. Sie dokumentiert den aktuellen Build-Stand, alle offenen Tasks, die Repo-Struktur, alle Environment-Variablen und die empfohlene Reihenfolge für den ersten Arbeitstag.
 >
-> **Stand:** 2026-05-25 — Branch `main` auf `a861427`
+> **Stand:** 2026-05-24 — Branch `main` auf `f8f8fef`
 
 ---
 
 ## 1 · Build-Stand & Git-Log
 
 **Branch:** `main`  
-**Letzter produktiver Commit (vor Checkpoint):** `a861427` — "Update transcription model to latest version for improved accuracy"  
+**Letzter Commit:** `f8f8fef` — "Update basal insulin display to show remaining active duration"  
 **Letzte Deployment-relevante Commits (30):**
 
 ```
+f8f8fef  fix(iob): Basal-Ring zeigt verbleibende Wirkdauer (basalFraction statt immer voll)
+2a4787e  docs: update HANDOFF.md — Phase 5, missing migration, git log, test:e2e fix
+4bf9084  fix(iob): Bolus expanded — Coverage-Balken wie Basal, IOBSparkline entfernt
+e962f39  fix(iob): Bolus Wirkdauer expanded — padding/gap identisch mit Basal
+dc759f0  feat(voice): Phase 5 — TTS auto-play, FAB tap-to-talk, navigate_to AI tool
 a861427  Update transcription model to latest version for improved accuracy
 41194c0  Fix infinite loop in glucose chart display
 02a63d6  test(e2e): add hold-to-talk mic button guard (Task #714)
@@ -35,14 +40,9 @@ e4fd613  fix: React infinite loop "Maximum update depth exceeded" on Engine Step
 0d91ca1  feat(#692): auto-fill bg_at_check after fingerstick / CGM entry
 5615571  feat(#687): Meal-Nodes auf der CGM-Kurve nur anzeigen wenn Engine aktiv ist
 200c347  test(insights): guard hero-card sizing regression on small phones (Task #676)
-109810d  Add a comprehensive list of open tasks and plans
 72f4c04  feat(#677): low-glucose alarm with local notification + settings UI
 bee416f  feat(ai-chat): Screen-Kontext für Glev AI Chat – useScreenContext-Hook (Task #679)
-fa2212b  Saved progress at the end of the loop
 a99bddc  fix(insights): cards on adaptive-engine height + combine GMI/Avg-BG into one chip (Task #675)
-ae24141  Task #673 — Draggable Meal-Node-Cluster on 12h CGM curve + local BZ-check reminders
-e9b50a4  fix(insights): scale hero cards to viewport on small iPhones (mini/SE)
-5c97f58  ops: fix report — task 673
 ```
 
 **Deploy-Flow:** `git push origin main` → GitHub `WahNun/glev-app` → Vercel auto-deploys `https://glev.app`  
@@ -50,9 +50,9 @@ e9b50a4  fix(insights): scale hero cards to viewport on small iPhones (mini/SE)
 
 ---
 
-## 2 · Glev AI — Alle 4 Phasen (live auf glev.app)
+## 2 · Glev AI — Alle 5 Phasen (live auf glev.app)
 
-Alle vier Phasen sind produktiv auf `https://glev.app`. Letzter relevanter Commit der Phase-4-Landung: `a9a08f5`.
+Alle fünf Phasen sind produktiv auf `https://glev.app`. Phase-4-Commit: `a9a08f5`, Phase-5-Commit: `dc759f0`.
 
 ### Phase 1 — Consent-Gate + Dummy-Context (`user_settings`)
 - Spalte `user_settings.ai_consent` (boolean, DEFAULT false) steuert, ob der FAB das AI-Sheet öffnet oder einen "Coming soon"-Toast zeigt.
@@ -85,7 +85,7 @@ Alle vier Phasen sind produktiv auf `https://glev.app`. Letzter relevanter Commi
 
 ### Phase 5 — Voice-First UX: TTS Auto-Play, FAB-Tap-to-Talk, `navigate_to`-Tool
 **Commit:** `dc759f0` — "Add voice features for AI chat and navigation"  
-**Status:** In `main-repl/main`, noch nicht auf `origin/main` — wird beim nächsten Push deployt.
+**Status:** Live auf `https://glev.app` seit `dc759f0`.
 
 **Text-to-Speech (TTS):**
 - Route: `POST /api/tts/mistral` — nimmt `{ text, voice? }`, ruft Mistral `v1/audio/speech` mit Modell `voxtral-mini-tts-latest` + Stimme `en_paul_neutral` auf, gibt `audio/mpeg` zurück. Auth-Gate: 401 ohne User, 503 ohne `MISTRAL_API_KEY`, max 1000 Zeichen.
@@ -145,6 +145,8 @@ Alle vier Phasen sind produktiv auf `https://glev.app`. Letzter relevanter Commi
 | Feature | Dateien |
 |---------|---------|
 | IOB-Karte (Basal-Ring + Bolus-Wirkdauer-Balken + kompakt/expandiert) | `components/IOBCard.tsx`, `lib/iob.ts` |
+| Basal-Ring zeigt verbleibende Wirkdauer (`basalFraction`, nicht immer voll) | `components/IOBCard.tsx` L332 |
+| Bolus expanded: Coverage-Balken statt IOBSparkline (identisch zu Basal) | `components/IOBCard.tsx` |
 | `dia_minutes`-Einstellung (User kann DIA konfigurieren) | `lib/userSettings.ts`, `supabase/migrations/20260522_add_dia_minutes.sql` |
 | `basal_action_window`-Einstellung | `supabase/migrations/20260523_add_basal_action_window.sql` |
 | IOB-History-Chart (12h/24h) | `components/IOBHistoryChart.tsx` |
@@ -161,9 +163,9 @@ Alle vier Phasen sind produktiv auf `https://glev.app`. Letzter relevanter Commi
 | Pending-Actions (WRITE-Confirmation-Gate) | `supabase/migrations/20260524_ai_pending_actions.sql`, `app/api/ai/confirm-action/route.ts` |
 | Granulare Consent-Scopes | `supabase/migrations/20260524_ai_consent_scopes.sql` |
 | Hold-to-Talk Voxtral STT (Phase 4) | `hooks/useVoxtral.ts`, `app/api/transcribe/mistral/route.ts` |
-| TTS Auto-Play / Speaker-Toggle (**Phase 5 — noch nicht auf glev.app, nur in `main-repl/main`**) | `hooks/useTTS.ts`, `app/api/tts/mistral/route.ts` |
-| FAB-Tap-to-Talk (**Phase 5 — noch nicht deployed**) | `components/Layout.tsx` (`runFabShortTap`), `components/GlevAIChatSheet.tsx` (`glev:voice-start`-Listener) |
-| `navigate_to`-AI-Tool (**Phase 5 — noch nicht deployed**) | `lib/ai/glevTools.ts`, `app/api/ai/chat/route.ts`, `lib/useGlevAI.ts` |
+| TTS Auto-Play / Speaker-Toggle (Phase 5) | `hooks/useTTS.ts`, `app/api/tts/mistral/route.ts` |
+| FAB-Tap-to-Talk (Phase 5) | `components/Layout.tsx` (`runFabShortTap`), `components/GlevAIChatSheet.tsx` (`glev:voice-start`-Listener) |
+| `navigate_to`-AI-Tool (Phase 5) | `lib/ai/glevTools.ts`, `app/api/ai/chat/route.ts`, `lib/useGlevAI.ts` |
 
 ### Daten & Logging
 | Feature | Dateien |
