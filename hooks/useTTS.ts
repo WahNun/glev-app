@@ -45,6 +45,9 @@ export function useTTS() {
   // `autoRead` = automatically speak AI responses (default: off)
   const [autoRead, setAutoRead] = useState(false);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  // For Mistral TTS audio element
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioBlobUrl = useRef<string | null>(null);
 
   useEffect(() => {
     setEnabled(readPref(TTS_MUTE_KEY, true));
@@ -70,7 +73,23 @@ export function useTTS() {
     return () => window.speechSynthesis.removeEventListener("voiceschanged", onVoicesChanged);
   }, []);
 
+  /** Revoke any blob URL we created to free memory. */
+  function revokeBlob() {
+    if (audioBlobUrl.current) {
+      URL.revokeObjectURL(audioBlobUrl.current);
+      audioBlobUrl.current = null;
+    }
+  }
+
   const stop = useCallback(() => {
+    // Stop Mistral HTML audio if playing
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
+      audioRef.current = null;
+    }
+    revokeBlob();
+    // Stop Web Speech fallback
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
     }
@@ -78,15 +97,10 @@ export function useTTS() {
     setSpeaking(false);
   }, []);
 
-  const speak = useCallback(
-    async (text: string) => {
-      if (!enabled || !text.trim()) return;
-      stop();
-
+  /** Web Speech API fallback — used when Mistral TTS is unavailable. */
+  const speakWebSpeech = useCallback(
+    (text: string) => {
       if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-
-      // Chrome quirk: cancel() needs a tick before speak()
-      await new Promise((r) => setTimeout(r, 50));
 
       const u = new SpeechSynthesisUtterance(text.trim());
       u.lang = "de-DE";
@@ -97,20 +111,70 @@ export function useTTS() {
       if (voice) u.voice = voice;
 
       u.onstart = () => setSpeaking(true);
-      u.onend = () => {
-        setSpeaking(false);
-        utteranceRef.current = null;
-      };
-      u.onerror = () => {
-        setSpeaking(false);
-        utteranceRef.current = null;
-      };
+      u.onend = () => { setSpeaking(false); utteranceRef.current = null; };
+      u.onerror = () => { setSpeaking(false); utteranceRef.current = null; };
 
       utteranceRef.current = u;
       setSpeaking(true);
       window.speechSynthesis.speak(u);
     },
-    [enabled, stop],
+    [],
+  );
+
+  const speak = useCallback(
+    async (text: string) => {
+      if (!enabled || !text.trim()) return;
+      stop();
+
+      const clean = text.trim();
+
+      // ── Mistral Voxtral TTS (primary) ────────────────────────────────────
+      // Calls our server-side proxy /api/tts/mistral which holds the API key.
+      // Falls back to Web Speech API on any error so voice always works.
+      try {
+        const res = await fetch("/api/tts/mistral", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: clean }),
+          signal: AbortSignal.timeout(12_000),
+        });
+
+        if (res.ok) {
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          audioBlobUrl.current = url;
+
+          const audio = new Audio(url);
+          audioRef.current = audio;
+
+          audio.onplay = () => setSpeaking(true);
+          audio.onended = () => {
+            setSpeaking(false);
+            audioRef.current = null;
+            revokeBlob();
+          };
+          audio.onerror = () => {
+            setSpeaking(false);
+            audioRef.current = null;
+            revokeBlob();
+            // If audio playback fails, fall back to Web Speech
+            speakWebSpeech(clean);
+          };
+
+          setSpeaking(true);
+          await audio.play();
+          return; // success — skip Web Speech below
+        }
+      } catch {
+        // Network error, timeout, or server unavailable → fall through to Web Speech
+      }
+
+      // ── Web Speech API (fallback) ─────────────────────────────────────────
+      // Chrome quirk: cancel() needs a tick before speak()
+      await new Promise((r) => setTimeout(r, 50));
+      speakWebSpeech(clean);
+    },
+    [enabled, stop, speakWebSpeech],
   );
 
   const toggleEnabled = useCallback(() => {

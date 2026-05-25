@@ -630,8 +630,11 @@ export default function EnginePage() {
       if (typeof mp.fiber === "number" && Number.isFinite(mp.fiber)) {
         setFiber(String(Math.round(mp.fiber * 10) / 10));
       }
-      // Switch to the log tab so the macro form is immediately visible.
-      setTab("log");
+      // Stay on the engine tab and advance to step 1 (macros review) so the
+      // macro cards are immediately visible on both mobile and desktop.
+      // Switching to "log" would get downgraded to "bolus" on mobile (line ~1130).
+      setTab("engine");
+      setStepIndex(1);
     } catch { /* malformed JSON — ignore */ }
   // carbUnit is stable; run once on mount.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -659,7 +662,9 @@ export default function EnginePage() {
           setFat(String(Math.round(mp.fat * 10) / 10));
         if (typeof mp.fiber === "number" && Number.isFinite(mp.fiber))
           setFiber(String(Math.round(mp.fiber * 10) / 10));
-        setTab("log");
+        // Same as mount handler — engine tab + step 1 (macros), not "log".
+        setTab("engine");
+        setStepIndex(1);
       } catch { /* ignore */ }
     }
     window.addEventListener("glev:meal-prefill", handleMealPrefill);

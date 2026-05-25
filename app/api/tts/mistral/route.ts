@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authedClient } from "@/app/api/insulin/_helpers";
 
-const TTS_VOICE = "en_paul_neutral";
-const TTS_MODEL = "voxtral-mini-tts-latest";
+// Correct model name per Mistral docs (as of March 2026).
+const TTS_MODEL = "voxtral-mini-tts-2603";
 
 export async function POST(req: NextRequest) {
   const auth = await authedClient(req);
@@ -27,10 +27,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "text too long (max 1000 chars)" }, { status: 400 });
   }
 
-  const voice =
-    raw && typeof raw === "object" && typeof (raw as Record<string, unknown>).voice === "string"
-      ? (raw as { voice: string }).voice
-      : TTS_VOICE;
+  // Build request body. voice_id is optional — if not configured the model
+  // uses its own default voice. Set MISTRAL_TTS_VOICE_ID in env to pin a
+  // specific saved voice (e.g. a German voice created via the Voices API).
+  const body: Record<string, unknown> = {
+    model: TTS_MODEL,
+    input: text,
+    response_format: "mp3",
+  };
+  const voiceId = process.env.MISTRAL_TTS_VOICE_ID;
+  if (voiceId) body.voice_id = voiceId;
 
   const upstream = await fetch("https://api.mistral.ai/v1/audio/speech", {
     method: "POST",
@@ -38,7 +44,7 @@ export async function POST(req: NextRequest) {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ model: TTS_MODEL, input: text, voice }),
+    body: JSON.stringify(body),
   });
 
   if (!upstream.ok) {
@@ -49,8 +55,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const audioBuffer = await upstream.arrayBuffer();
-  return new NextResponse(audioBuffer, {
+  // The API returns JSON: { audio_data: "<base64-encoded mp3>" }
+  const json = await upstream.json().catch(() => null);
+  const audioBase64 = json?.audio_data as string | undefined;
+  if (!audioBase64) {
+    return NextResponse.json({ error: "no audio_data in Mistral response" }, { status: 502 });
+  }
+
+  const audioBytes = Buffer.from(audioBase64, "base64");
+  return new NextResponse(audioBytes, {
     status: 200,
     headers: {
       "Content-Type": "audio/mpeg",
