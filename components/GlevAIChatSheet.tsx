@@ -318,7 +318,10 @@ export default function GlevAIChatSheet({
         role="presentation"
         style={{
           position: "fixed",
-          inset: 0,
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: "var(--nav-bottom-total)",
           background: "rgba(0,0,0,0.5)",
           backdropFilter: "blur(2px)",
           WebkitBackdropFilter: "blur(2px)",
@@ -334,10 +337,10 @@ export default function GlevAIChatSheet({
         aria-label="Glev AI Chat"
         style={{
           position: "fixed",
-          bottom: 0,
+          bottom: "var(--nav-bottom-total)",
           left: 0,
           right: 0,
-          height: "85dvh",
+          height: "calc(85dvh - var(--nav-bottom-total))",
           background: SHEET_BG,
           color: "white",
           borderRadius: "20px 20px 0 0",
@@ -524,7 +527,7 @@ export default function GlevAIChatSheet({
             </div>
           )}
 
-          {messages.map((m) => (
+          {messages.filter((m) => m.role === "user" || m.content || m.isStreaming).map((m) => (
             <div
               key={m.id}
               style={{
