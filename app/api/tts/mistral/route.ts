@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authedClient } from "@/app/api/insulin/_helpers";
 
-// Correct model name per Mistral docs (as of March 2026).
-const TTS_MODEL = "voxtral-mini-tts-2603";
+// Voxtral TTS model — matches what Mistral Studio uses.
+// Override via MISTRAL_TTS_MODEL env var if Mistral ships a newer model.
+const TTS_MODEL = process.env.MISTRAL_TTS_MODEL ?? "voxtral-mini-tts-2603";
 
 export async function POST(req: NextRequest) {
   const auth = await authedClient(req);
@@ -27,17 +28,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "text too long (max 1000 chars)" }, { status: 400 });
   }
 
-  // Build request body.
-  // Preset voices embedded in the Voxtral-4B model: de_female / de_male for
-  // German, plus en/fr/es/it/pt/nl/ar/hi variants. Default to de_female so
-  // the assistant sounds natural and human in German.
-  // Override via MISTRAL_TTS_VOICE_ID env var if you want a custom cloned voice.
-  const voiceId = process.env.MISTRAL_TTS_VOICE_ID ?? "de_female";
+  // Voxtral TTS voices are named personas (e.g. "Oliver", "Amara") — not
+  // language codes like "de_female". Set MISTRAL_TTS_VOICE_ID in Vercel env to
+  // the exact name you picked in Mistral Studio. If unset, Mistral uses its
+  // default voice.
+  const voiceId = process.env.MISTRAL_TTS_VOICE_ID;
+
+  // Voxtral TTS is LLM-based and responds to speaking-style instructions
+  // prepended to the input — same technique used in Mistral Studio.
+  // This makes output warmer and more conversational rather than flat/robotic.
+  const styledInput = `Sprich warm, ruhig und natürlich — wie ein vertrauter Assistent beim Gespräch unter vier Augen. Keine übertriebene Betonung, keine Pausen zwischen Wörtern, fließend und menschlich.\n\n${text}`;
+
   const body: Record<string, unknown> = {
     model: TTS_MODEL,
-    input: text,
+    input: styledInput,
     response_format: "mp3",
-    voice_id: voiceId,
+    ...(voiceId ? { voice_id: voiceId } : {}),
   };
 
   const upstream = await fetch("https://api.mistral.ai/v1/audio/speech", {
