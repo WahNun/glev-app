@@ -180,6 +180,7 @@ export default function GlevAIChatSheet({
 }: Props) {
   const [input, setInput] = useState("");
   const [sttError, setSttError] = useState<string | null>(null);
+  const [sttPartial, setSttPartial] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
 
@@ -193,6 +194,7 @@ export default function GlevAIChatSheet({
   const { isListening, startListening, stopListening } = useVoxtral({
     onTranscript: (text) => {
       setSttError(null);
+      setSttPartial(null);
       if (!text.trim()) return;
       // Voice → auto-send immediately (Siri-Modus).
       // If the user had partial typed text, prepend it so nothing is lost.
@@ -202,7 +204,14 @@ export default function GlevAIChatSheet({
       setInput("");
       onSendRef.current(combined);
     },
-    onError: (err) => setSttError(err),
+    onPartialTranscript: (text) => {
+      setSttError(null);
+      setSttPartial(text);
+    },
+    onError: (err) => {
+      setSttPartial(null);
+      setSttError(err);
+    },
   });
 
   const tts = useTTS();
@@ -582,6 +591,24 @@ export default function GlevAIChatSheet({
             </svg>
           </button>
         </div>
+
+        {/* STT partial transcript — greyed-out live preview while speaking */}
+        {isListening && sttPartial && (
+          <div
+            style={{
+              flexShrink: 0,
+              padding: "2px 16px 4px",
+              fontSize: 12,
+              color: "rgba(255,255,255,0.35)",
+              fontStyle: "italic",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {sttPartial}
+          </div>
+        )}
 
         {/* STT error toast — shown briefly when transcription fails */}
         {sttError && (
