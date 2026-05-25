@@ -140,7 +140,7 @@ async function executeConfirmedAction(
   userId: string,
   kind: string,
   params: Record<string, unknown>,
-): Promise<{ insertedId?: string }> {
+): Promise<{ insertedId?: string; updatedSetting?: string }> {
   switch (kind) {
     case "log_meal_entry":
       return await execLogMealEntry(sb, userId, params);
