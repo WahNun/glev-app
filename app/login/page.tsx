@@ -1,10 +1,64 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import GlevLockup from "@/components/GlevLockup";
+
+const T = {
+  de: {
+    email: "E-MAIL",
+    password: "PASSWORT",
+    placeholder_email: "deine@email.de",
+    submit: "Anmelden",
+    submitting: "Anmelden …",
+    forgot: "Passwort vergessen?",
+    reset_intro: "Gib deine Email ein — wir schicken dir einen Link zum Setzen eines neuen Passworts.",
+    reset_cancel: "Abbrechen",
+    reset_send: "Reset-Email anfordern",
+    reset_sending: "Sende …",
+    reset_sent: "Gesendet ✓",
+    reset_notice: "Falls ein Account mit dieser Email existiert, ist gleich eine Reset-Mail unterwegs. Schau in dein Postfach (auch Spam).",
+    reset_invalid: "Bitte gib eine gültige Email-Adresse ein.",
+    reset_no_url: "App-URL nicht konfiguriert. Bitte Support kontaktieren.",
+    no_auth: "Auth-Service nicht konfiguriert.",
+    no_session: "Anmeldung erfolgreich, aber keine Session zurückgegeben. Bitte erneut versuchen.",
+    no_account: "Noch kein Konto?",
+    register: "Jetzt registrieren",
+    back: "← Zurück zur Startseite",
+    members: "MEMBERS ONLY · PRIVATE BETA",
+  },
+  en: {
+    email: "EMAIL",
+    password: "PASSWORD",
+    placeholder_email: "you@example.com",
+    submit: "Sign In",
+    submitting: "Signing in…",
+    forgot: "Forgot password?",
+    reset_intro: "Enter your email — we'll send you a link to set a new password.",
+    reset_cancel: "Cancel",
+    reset_send: "Send reset email",
+    reset_sending: "Sending…",
+    reset_sent: "Sent ✓",
+    reset_notice: "If an account with that email exists, a reset email is on its way. Check your inbox (and spam).",
+    reset_invalid: "Please enter a valid email address.",
+    reset_no_url: "App URL not configured. Please contact support.",
+    no_auth: "Auth service is not configured. Please contact support.",
+    no_session: "Sign-in succeeded but no session was returned. Please try again.",
+    no_account: "No account yet?",
+    register: "Sign up",
+    back: "← Back to homepage",
+    members: "MEMBERS ONLY · PRIVATE BETA",
+  },
+};
+
+function getLocale(): "de" | "en" {
+  if (typeof document === "undefined") return "de";
+  const match = document.cookie.match(/(?:^|;\s*)NEXT_LOCALE=([^;]+)/);
+  const val = match?.[1];
+  return val === "en" ? "en" : "de";
+}
 
 const ACCENT   = "#4F6EF7";
 const GREEN    = "#22D3A0";
@@ -30,10 +84,15 @@ const inp: React.CSSProperties = {
 
 export default function LoginPage() {
   const router = useRouter();
+  const [locale, setLocale] = useState<"de" | "en">("de");
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState<string | null>(null);
+
+  useEffect(() => { setLocale(getLocale()); }, []);
+
+  const t = T[locale];
 
   // Passwort-vergessen-Flow (Inline-Mini-Form, nicht modal — bleibt im
   // gleichen Visual-Container wie der Login). Eigener Email-State, weil
@@ -51,13 +110,13 @@ export default function LoginPage() {
     setResetNotice(null);
 
     if (!supabase) {
-      setResetError("Auth-Service nicht konfiguriert.");
+      setResetError(t.no_auth);
       return;
     }
 
     const target = resetEmail.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(target)) {
-      setResetError("Bitte gib eine gültige Email-Adresse ein.");
+      setResetError(t.reset_invalid);
       return;
     }
 
@@ -67,7 +126,7 @@ export default function LoginPage() {
     // (glev.app) automatisch korrekt routen.
     const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
     if (!appUrl) {
-      setResetError("App-URL nicht konfiguriert. Bitte Support kontaktieren.");
+      setResetError(t.reset_no_url);
       return;
     }
 
@@ -85,9 +144,7 @@ export default function LoginPage() {
 
     // Aus Sicherheitsgründen IMMER die gleiche Bestätigung — nie verraten
     // ob die Email-Adresse in unserer DB existiert (User-Enumeration).
-    setResetNotice(
-      "Falls ein Account mit dieser Email existiert, ist gleich eine Reset-Mail unterwegs. Schau in dein Postfach (auch Spam).",
-    );
+    setResetNotice(t.reset_notice);
     setResetEmail("");
   }
 
@@ -96,7 +153,7 @@ export default function LoginPage() {
     setError(null);
 
     if (!supabase) {
-      setError("Auth service is not configured. Please contact support.");
+      setError(t.no_auth);
       return;
     }
 
@@ -117,7 +174,7 @@ export default function LoginPage() {
       router.refresh();
       router.replace("/dashboard");
     } else {
-      setError("Sign-in succeeded but no session was returned. Please try again.");
+      setError(t.no_session);
       setLoading(false);
     }
   }
@@ -141,12 +198,12 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div>
-              <div style={{ fontSize: 10, color: "var(--text-faint)", marginBottom: 6, letterSpacing: "0.08em" }}>E-MAIL</div>
+              <div style={{ fontSize: 10, color: "var(--text-faint)", marginBottom: 6, letterSpacing: "0.08em" }}>{t.email}</div>
               <input
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="deine@email.de"
+                placeholder={t.placeholder_email}
                 required
                 disabled={loading}
                 style={inp}
@@ -155,7 +212,7 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <div style={{ fontSize: 10, color: "var(--text-faint)", marginBottom: 6, letterSpacing: "0.08em" }}>PASSWORT</div>
+              <div style={{ fontSize: 10, color: "var(--text-faint)", marginBottom: 6, letterSpacing: "0.08em" }}>{t.password}</div>
               <input
                 type="password"
                 value={password}
@@ -196,7 +253,7 @@ export default function LoginPage() {
               cursor: loading ? "default" : "pointer",
               transition: "all 0.15s", marginTop: 4,
             }}>
-              {loading ? "Anmelden…" : "Anmelden"}
+              {loading ? t.submitting : t.submit}
             </button>
           </form>
 
@@ -222,19 +279,19 @@ export default function LoginPage() {
                   width: "100%", textAlign: "center",
                 }}
               >
-                Passwort vergessen?
+                {t.forgot}
               </button>
             ) : (
               <form onSubmit={handleResetRequest} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <div style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5 }}>
-                  Gib deine Email ein — wir schicken dir einen Link zum Setzen eines neuen Passworts.
+                  {t.reset_intro}
                 </div>
 
                 <input
                   type="email"
                   value={resetEmail}
                   onChange={e => setResetEmail(e.target.value)}
-                  placeholder="deine@email.de"
+                  placeholder={t.placeholder_email}
                   required
                   autoFocus
                   disabled={resetLoading || !!resetNotice}
@@ -290,7 +347,7 @@ export default function LoginPage() {
                       fontFamily: "inherit",
                     }}
                   >
-                    Abbrechen
+                    {t.reset_cancel}
                   </button>
                   <button
                     type="submit"
@@ -310,7 +367,7 @@ export default function LoginPage() {
                       fontFamily: "inherit",
                     }}
                   >
-                    {resetLoading ? "Sende …" : resetNotice ? "Gesendet ✓" : "Reset-Email anfordern"}
+                    {resetLoading ? t.reset_sending : resetNotice ? t.reset_sent : t.reset_send}
                   </button>
                 </div>
               </form>
@@ -320,12 +377,12 @@ export default function LoginPage() {
         </div>
 
         <div style={{ textAlign: "center", marginTop: 18, fontSize: 13, color: "var(--text-muted)" }}>
-          Noch kein Konto?{" "}
+          {t.no_account}{" "}
           <Link
             href="/#pricing"
             style={{ color: "#4F6EF7", textDecoration: "none", fontWeight: 600 }}
           >
-            Jetzt registrieren
+            {t.register}
           </Link>
         </div>
 
@@ -334,12 +391,12 @@ export default function LoginPage() {
             href="/"
             style={{ color: "var(--text-muted)", textDecoration: "none", fontWeight: 500 }}
           >
-            ← Zurück zur Startseite
+            {t.back}
           </Link>
         </div>
 
         <div style={{ textAlign: "center", marginTop: 14, fontSize: 10, color: "var(--text-ghost)", letterSpacing: "0.06em" }}>
-          MEMBERS ONLY · PRIVATE BETA
+          {t.members}
         </div>
       </div>
     </main>
