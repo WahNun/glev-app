@@ -64,7 +64,7 @@ function LegalPageInner() {
         role="tabpanel"
         aria-labelledby="tab-dse"
       >
-        <div className="meta-strip">Stand: April 2026 &nbsp;·&nbsp; DSGVO-konform</div>
+        <div className="meta-strip">Stand: Mai 2026 &nbsp;·&nbsp; DSGVO-konform</div>
         <div className="container">
           <div className="intro-box">
             Der Schutz deiner persönlichen Daten – insbesondere deiner Gesundheitsdaten – ist uns ein zentrales Anliegen. Diese Datenschutzerklärung informiert dich darüber, welche Daten wir erheben, wie wir sie verarbeiten und welche Rechte du hast.
@@ -89,7 +89,7 @@ function LegalPageInner() {
             <p>Beim Anlegen eines Glev-Kontos erheben wir deine <strong>E-Mail-Adresse</strong> und ein Passwort (verschlüsselt gespeichert). Diese Daten sind zur Bereitstellung des Dienstes und Kontoverwaltung notwendig.</p>
 
             <h3>2.2 Gesundheits- und Nutzungsdaten</h3>
-            <p>Im Rahmen der App-Nutzung erfasst Glev folgende Daten, die du aktiv eingibst oder über eine CGM-Verknüpfung überträgst:</p>
+            <p>Im Rahmen der App-Nutzung erfasst Glev folgende Daten, die du aktiv eingibst oder über eine CGM-Verknüpfung überträgst. Bei Nutzung der KI-gestützten Funktionen (Sprachassistent, Mahlzeiten-Parsing, Chat) werden diese Daten zur Verarbeitung an Mistral AI übermittelt – ausschließlich zur Erbringung der jeweiligen Funktion und ohne dauerhafte Speicherung durch Mistral:</p>
             <ul>
               <li><strong>Glukosewerte</strong> (manuell eingetragen oder per CGM-Anbindung)</li>
               <li><strong>Mahlzeiten</strong> (Makronährstoffe: Kohlenhydrate, Protein, Fett, Kalorien)</li>
@@ -131,12 +131,14 @@ function LegalPageInner() {
                 <tr><td><strong>Supabase, Inc.</strong></td><td>Datenbank, Authentifizierung</td><td>EU (Irland)</td><td><span className="badge">EU-Region</span></td></tr>
                 <tr><td><strong>Vercel, Inc.</strong></td><td>Hosting, Deployment (Next.js)</td><td>Primär EU, ggf. USA</td><td><span className="badge warning">USA möglich</span></td></tr>
                 <tr><td><strong>Stripe, Inc.</strong></td><td>Zahlungsabwicklung</td><td>USA / EU</td><td><span className="badge warning">USA möglich</span></td></tr>
+                <tr><td><strong>Mistral AI SAS</strong></td><td>KI-Sprachmodell (Sprachassistent, Mahlzeiten-Parsing, Chat, Text-to-Speech)</td><td>EU (Frankreich)</td><td><span className="badge">EU-Region</span></td></tr>
               </tbody>
             </table>
             <p>Wir haben für Supabase bewusst die <strong>EU-Region Irland</strong> gewählt, damit alle Gesundheits- und Kontodaten innerhalb der Europäischen Union gespeichert und verarbeitet werden. Es findet <strong>keine Spiegelung in Drittländer</strong> statt – die Datenbank-Replikation bleibt vollständig innerhalb der EU.</p>
+            <p><strong>Mistral AI SAS</strong> ist ein französisches Unternehmen mit Sitz in Paris. Die Verarbeitung durch Mistral erfolgt ausschließlich innerhalb der EU. Mistral verarbeitet Eingabedaten (Sprache, Text) ausschließlich zur Erbringung der angefragten Funktion; eine dauerhafte Speicherung oder Verwendung zu Trainingszwecken ohne gesonderte Einwilligung findet nicht statt. Grundlage ist ein Auftragsverarbeitungsvertrag (AVV) nach Art. 28 DSGVO.</p>
             <div className="highlight-box">
               <strong>Hinweis zu Drittlandtransfers (USA)</strong>
-              Vercel und Stripe können Daten in die USA übermitteln. Beide sind im Rahmen des <strong>EU-U.S. Data Privacy Framework</strong> zertifiziert und setzen <strong>Standardvertragsklauseln (SCC)</strong> gemäß Art. 46 Abs. 2 lit. c DSGVO ein.
+              Vercel und Stripe können Daten in die USA übermitteln. Beide sind im Rahmen des <strong>EU-U.S. Data Privacy Framework</strong> zertifiziert und setzen <strong>Standardvertragsklauseln (SCC)</strong> gemäß Art. 46 Abs. 2 lit. c DSGVO ein. Mistral AI ist ein EU-Anbieter – kein Drittlandtransfer.
             </div>
             <p>Eine Weitergabe an Dritte außerhalb der genannten Auftragsverarbeiter findet <strong>nicht</strong> statt. Keine Datenweitergabe zu Werbezwecken.</p>
           </section>
@@ -203,7 +205,7 @@ function LegalPageInner() {
 
           <section id="dse-11">
             <h2><span className="num">11</span> Änderungen</h2>
-            <p>Wir behalten uns vor, diese Datenschutzerklärung bei Bedarf anzupassen. Bei wesentlichen Änderungen werden registrierte Nutzer per E-Mail informiert. <strong>Stand: April 2026.</strong></p>
+            <p>Wir behalten uns vor, diese Datenschutzerklärung bei Bedarf anzupassen. Bei wesentlichen Änderungen werden registrierte Nutzer per E-Mail informiert. <strong>Stand: Mai 2026.</strong></p>
           </section>
         </div>
       </div>
@@ -215,7 +217,7 @@ function LegalPageInner() {
         role="tabpanel"
         aria-labelledby="tab-agb"
       >
-        <div className="meta-strip">Stand: April 2026 &nbsp;·&nbsp; Gültig für glev.app</div>
+        <div className="meta-strip">Stand: Mai 2026 &nbsp;·&nbsp; Gültig für glev.app</div>
         <div className="container">
           <div className="intro-box">
             Diese Allgemeinen Geschäftsbedingungen (AGB) gelten für die Nutzung der Glev App und alle damit verbundenen Dienste. Bitte lies sie sorgfältig, bevor du ein Konto erstellst oder ein Abonnement abschließt.
@@ -244,8 +246,9 @@ function LegalPageInner() {
               <li>Symptom- und Wohlbefindenstagebuch</li>
               <li>Auswertungen und Verlaufsgrafiken</li>
               <li>Optionale CGM-Integration</li>
+              <li><strong>KI-gestützte Funktionen</strong>: Sprachassistent, automatisches Mahlzeiten-Parsing per Sprach- oder Texteingabe sowie KI-Chat – angetrieben durch Mistral AI (EU-Anbieter, Frankreich). Die KI-Verarbeitung erfolgt ausschließlich zur Erbringung der jeweiligen Funktion; eine Nutzung der Daten zu anderen Zwecken findet nicht statt.</li>
             </ul>
-            <p>Der Anbieter behält sich vor, den Leistungsumfang im Laufe der Zeit zu erweitern oder anzupassen. Wesentliche Einschränkungen bestehender Kernfunktionen werden den Nutzern vorab mitgeteilt.</p>
+            <p>Der Anbieter behält sich vor, den Leistungsumfang im Laufe der Zeit zu erweitern oder anzupassen – einschließlich des eingesetzten KI-Anbieters, sofern der Datenschutzstandard gleichwertig oder besser ist. Wesentliche Einschränkungen bestehender Kernfunktionen werden den Nutzern vorab mitgeteilt.</p>
           </section>
 
           <section id="agb-3">
@@ -381,7 +384,7 @@ function LegalPageInner() {
           <section id="agb-10">
             <h2><span className="num">10</span> Änderungen der AGB</h2>
             <p>Der Anbieter behält sich vor, diese AGB anzupassen. Änderungen werden registrierten Nutzern mindestens <strong>30 Tage vor Inkrafttreten</strong> per E-Mail mitgeteilt. Widersprichst du den geänderten AGB nicht innerhalb dieser Frist, gelten sie als akzeptiert. Auf dieses Widerspruchsrecht wird in der Änderungsmitteilung ausdrücklich hingewiesen.</p>
-            <p><strong>Stand dieser AGB: April 2026</strong></p>
+            <p><strong>Stand dieser AGB: Mai 2026</strong></p>
           </section>
 
           <section id="agb-11">
