@@ -2632,13 +2632,10 @@ export default function EnginePage() {
                 ? "calc(100svh - 180px - var(--nav-top-safe))"
                 : undefined,
             }}>
-              {/* Start/stop control. Always shown on desktop. On mobile shown
-                  only when the AI Voice feature flag is OFF — in that case
-                  the chatPanelNode below is hidden and this pill is the
-                  user's only way to record. When the flag is ON the AI chat
-                  panel (mounted below) owns the full mobile screen and the
-                  FAB acts as the global stop control. */}
-              {(!isMobile || !aiVoiceEnabled) && (
+              {/* Start/stop control for desktop. On mobile the EngineChatPanel
+                  (chatPanelNode below) owns the voice/text input, so this
+                  pill is desktop-only. */}
+              {!isMobile && (
                 <button
                   type="button"
                   onClick={() => recording ? stopRecording() : startRecording()}
@@ -2685,8 +2682,10 @@ export default function EnginePage() {
                   chatPanelNode lives in the sticky right sidebar (rendered
                   next to this wizard column) so the chat stays visible
                   while the user moves through Steps 2 and 3 — see the
-                  outer 2-column grid below. */}
-              {isMobile && aiVoiceEnabled && chatPanelNode}
+                  outer 2-column grid below.
+                  EngineChatPanel is the food-parsing chat (core feature) —
+                  always rendered on mobile regardless of ai_voice flag. */}
+              {isMobile && chatPanelNode}
               {(() => {
                 const anyMacro =
                   (Number(carbs)   || 0) > 0 ||
