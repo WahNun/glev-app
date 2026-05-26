@@ -1388,7 +1388,11 @@
     "glev_intel_revoke_all": "Alle AI-Zugriffe widerrufen",
     "glev_intel_revoke_busy": "Widerrufe…",
     "glev_intel_revoke_hint": "Setzt Glev AI komplett zurück: Master-Zustimmung, alle Sub-Berechtigungen und der lokale Chat-Verlauf werden gelöscht.",
-    "glev_intel_revoke_confirm": "Wirklich alle Glev-AI-Zugriffe widerrufen? Die Master-Zustimmung und alle Datenfreigaben werden zurückgesetzt, der Chat-Verlauf gelöscht."
+    "glev_intel_revoke_confirm": "Wirklich alle Glev-AI-Zugriffe widerrufen? Die Master-Zustimmung und alle Datenfreigaben werden zurückgesetzt, der Chat-Verlauf gelöscht.",
+    "ai_page_title": "Glev AI",
+    "ai_page_subtitle": "Datenzugriff, Sprache und Verhalten deines KI-Assistenten.",
+    "ai_settings_row_subtitle": "Datenzugriff & Verhalten",
+    "ai_settings_back": "Einstellungen"
   },
   "cgmSettings": {
     "appleHealth": {

@@ -1388,7 +1388,11 @@
     "glev_intel_revoke_all": "Revoke all AI access",
     "glev_intel_revoke_busy": "Revoking…",
     "glev_intel_revoke_hint": "Resets Glev AI completely: master consent, all sub-permissions, and the local chat history are cleared.",
-    "glev_intel_revoke_confirm": "Really revoke all Glev AI access? Master consent and all data grants will be reset, and the chat history will be cleared."
+    "glev_intel_revoke_confirm": "Really revoke all Glev AI access? Master consent and all data grants will be reset, and the chat history will be cleared.",
+    "ai_page_title": "Glev AI",
+    "ai_page_subtitle": "Data access, voice, and chat assistant behaviour.",
+    "ai_settings_row_subtitle": "Data access & behaviour",
+    "ai_settings_back": "Settings"
   },
   "cgmSettings": {
     "appleHealth": {
