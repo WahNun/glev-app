@@ -30,6 +30,7 @@ import EngineChatPanel, { type SeedMessage } from "@/components/EngineChatPanel"
 import { useEngineHeader } from "@/lib/engineHeaderContext";
 import { useEngineSourceHeader } from "@/lib/engineSourceHeaderContext";
 import { useVoiceRecording } from "@/lib/voiceRecordingContext";
+import { useFeatureFlag } from "@/lib/featureFlags";
 import { fetchLatestCgm } from "@/components/CgmFetchButton";
 import { classifyPreReferenceTrend, type TrendClass, type TrendSample } from "@/lib/engine/trend";
 import { fetchLatestFingerstick, FS_OVERRIDE_WINDOW_MS } from "@/lib/fingerstick";
@@ -487,6 +488,7 @@ export default function EnginePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
   const [isMobile, setIsMobile] = useState(false);
+  const aiVoiceEnabled = useFeatureFlag("ai_voice");
   const [meals, setMeals]     = useState<Meal[]>([]);
   const [adaptedICR, setAdaptedICR] = useState(15);
   const [selectedICR, setSelectedICR] = useState<'static' | 'adaptive'>('adaptive');
@@ -2686,7 +2688,7 @@ export default function EnginePage() {
                   next to this wizard column) so the chat stays visible
                   while the user moves through Steps 2 and 3 — see the
                   outer 2-column grid below. */}
-              {isMobile && chatPanelNode}
+              {isMobile && aiVoiceEnabled && chatPanelNode}
               {(() => {
                 const anyMacro =
                   (Number(carbs)   || 0) > 0 ||
@@ -3540,7 +3542,7 @@ export default function EnginePage() {
               internal message scroller works as expected and the input row
               never disappears below the fold. minHeight 480 protects the
               experience on shorter viewports (e.g. landscape laptops). */}
-          {!isMobile && (
+          {!isMobile && aiVoiceEnabled && (
             <aside
               style={{
                 position: "sticky",
