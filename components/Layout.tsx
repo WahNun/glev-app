@@ -1189,8 +1189,8 @@ function MobileGlevFab({
         }}
       >
         {/* Upward chevron arrow — prompts user to open the AI chat.
-            Visible only when sheet is closed. Pulses gently. */}
-        {!sheetOpen && (
+            Visible only when sheet is closed AND ai_voice flag is on. */}
+        {!sheetOpen && aiVoiceEnabled && (
           <span
             style={{
               position: "absolute",
