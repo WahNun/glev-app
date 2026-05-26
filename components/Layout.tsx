@@ -13,6 +13,7 @@ import GlevAIButton from "@/components/GlevAIButton";
 import GlevAIConsentModal from "@/components/GlevAIConsentModal";
 import GlevAIChatSheet from "@/components/GlevAIChatSheet";
 import { useGlevAI } from "@/lib/useGlevAI";
+import { useFeatureFlag } from "@/lib/featureFlags";
 import { useScreenContext } from "@/hooks/useScreenContext";
 import { EngineHeaderProvider, useEngineHeader } from "@/lib/engineHeaderContext";
 import { EngineSourceHeaderProvider, useEngineSourceHeader } from "@/lib/engineSourceHeaderContext";
@@ -126,6 +127,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // (sourced from `profiles.ai_consent_at`), modal/sheet open state,
   // sessionStorage-backed conversation history, and the streaming
   // fetch to /api/ai/chat. See DECISIONS.md D-013.
+  const aiVoiceEnabled = useFeatureFlag("ai_voice");
   const screenCtx = useScreenContext();
   const glevAi = useGlevAI({
     contextSnapshot: screenCtx,
@@ -227,6 +229,11 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
   // monotonic `vt` token that re-triggers auto-record even if the
   // user is already on /engine.
   const runFabShortTap = () => {
+    // If AI is not enabled, always fall through to quick-add sheet.
+    if (!aiVoiceEnabled) {
+      setQuickAddOpen(true);
+      return;
+    }
     // If the chat sheet is already open, the FAB starts a new voice take
     // regardless of the glev_fab_mode preference.
     if (glevAi.sheetOpen) {
@@ -1014,9 +1021,9 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           label={tNav("glev")}
           active={quickAddOpen || voice.recording}
           recording={voice.recording}
-          speaking={ttsSpeaking}
-          sheetOpen={glevAi.sheetOpen}
-          hasConversation={glevAi.messages.length > 0 && !glevAi.sheetOpen}
+          speaking={aiVoiceEnabled ? ttsSpeaking : false}
+          sheetOpen={aiVoiceEnabled ? glevAi.sheetOpen : false}
+          hasConversation={aiVoiceEnabled ? glevAi.messages.length > 0 && !glevAi.sheetOpen : false}
         />
         <MobileTab
           label={tNav("insights")}
@@ -1101,22 +1108,27 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
       {/* Glev AI Phase 2 (Task #651): consent modal on first tap of
           the floating AI button, streaming chat sheet thereafter. The
           Phase-1 "Coming soon" toast + the placeholder AiHelperSheet
-          render were dropped — see DECISIONS.md D-013. */}
-      <GlevAIConsentModal
-        open={glevAi.modalOpen}
-        onDismiss={glevAi.dismissConsent}
-        onActivate={glevAi.grantConsent}
-      />
-      <GlevAIChatSheet
-        open={glevAi.sheetOpen}
-        onClose={glevAi.closeSheet}
-        messages={glevAi.messages}
-        streaming={glevAi.streaming}
-        onSend={glevAi.sendMessage}
-        onConfirmAction={glevAi.confirmAction}
-        onCancelAction={glevAi.cancelAction}
-        onClearChat={glevAi.clearMessages}
-      />
+          render were dropped — see DECISIONS.md D-013.
+          Both are gated behind the ai_voice feature flag. */}
+      {aiVoiceEnabled && (
+        <>
+          <GlevAIConsentModal
+            open={glevAi.modalOpen}
+            onDismiss={glevAi.dismissConsent}
+            onActivate={glevAi.grantConsent}
+          />
+          <GlevAIChatSheet
+            open={glevAi.sheetOpen}
+            onClose={glevAi.closeSheet}
+            messages={glevAi.messages}
+            streaming={glevAi.streaming}
+            onSend={glevAi.sendMessage}
+            onConfirmAction={glevAi.confirmAction}
+            onCancelAction={glevAi.cancelAction}
+            onClearChat={glevAi.clearMessages}
+          />
+        </>
+      )}
 
       {/* Floating Glev button removed — Glev stays in the footer nav only. */}
     </div>

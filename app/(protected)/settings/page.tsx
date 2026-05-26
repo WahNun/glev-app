@@ -78,6 +78,7 @@ import {
 import { fetchIcrSchedule } from "@/lib/icrSchedule";
 import SnapSlider from "@/components/log/SnapSlider";
 import { BASAL_WINDOW_PRESETS, DEFAULT_BASAL_WINDOW_H } from "@/lib/engine/constants";
+import { useFeatureFlag } from "@/lib/featureFlags";
 
 const ACCENT = "#4F6EF7", GREEN = "#22D3A0", PINK = "#FF2D78", PURPLE = "#A78BFA";
 const BORDER = "var(--border)";
@@ -230,6 +231,7 @@ export default function SettingsPage() {
   const tCommon = useTranslations("common");
   const tFoodHistory = useTranslations("foodHistory");
   const router = useRouter();
+  const aiVoiceEnabled = useFeatureFlag("ai_voice");
   const [settings, setSettings] = useState<Settings>(DEFAULTS);
   // Tracks whether the user has manually touched any insulin field
   // (icr / cf / targetBg) before the async `fetchInsulinSettings` round
@@ -3111,7 +3113,7 @@ export default function SettingsPage() {
           destruktiver „Alle Zugriffe widerrufen"-Button mit
           Confirm-Dialog — entspricht effektiv dem Master-Toggle „off",
           ist aber prominenter platziert. */}
-      <SettingsSection title={tSettings("section_glev_intelligence")}>
+      {aiVoiceEnabled && <SettingsSection title={tSettings("section_glev_intelligence")}>
         <div style={{ padding: "12px 14px 4px", fontSize: 13, color: "var(--text-dim)", lineHeight: 1.4 }}>
           {tSettings("glev_intel_intro")}
         </div>
@@ -3231,7 +3233,7 @@ export default function SettingsPage() {
             {tSettings("glev_intel_revoke_hint")}
           </p>
         </div>
-      </SettingsSection>
+      </SettingsSection>}
 
       {/* Arzttermine wandern aus der Insulin-Sektion in eine eigene
           „Termine"-Sektion — gehören thematisch nicht zu Insulin und
@@ -3358,7 +3360,7 @@ export default function SettingsPage() {
         />
       </SettingsSection>
 
-      <SettingsSection title={tSettings("section_glev_ai")}>
+      {aiVoiceEnabled && <SettingsSection title={tSettings("section_glev_ai")}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", gap: 12 }}>
           <span style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0, flex: 1 }}>
             <span
@@ -3466,7 +3468,7 @@ export default function SettingsPage() {
             <div style={{ position: "absolute", top: 2, left: ttsAutoRead ? 22 : 2, width: 18, height: 18, borderRadius: 99, background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.4)" }} />
           </div>
         </div>
-      </SettingsSection>
+      </SettingsSection>}
 
       <SettingsSection title={tSettings("section_appearance")}>
         <SettingsRow
