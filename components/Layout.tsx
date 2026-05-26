@@ -1024,6 +1024,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
           speaking={aiVoiceEnabled ? ttsSpeaking : false}
           sheetOpen={aiVoiceEnabled ? glevAi.sheetOpen : false}
           hasConversation={aiVoiceEnabled ? glevAi.messages.length > 0 && !glevAi.sheetOpen : false}
+          showArrow={aiVoiceEnabled}
         />
         <MobileTab
           label={tNav("insights")}
@@ -1145,7 +1146,7 @@ function LayoutInner({ children }: { children: React.ReactNode }) {
  */
 
 function MobileGlevFab({
-  label, active, recording = false, speaking = false, sheetOpen = false, hasConversation = false,
+  label, active, recording = false, speaking = false, sheetOpen = false, hasConversation = false, showArrow = false,
 }: {
   label: string;
   active: boolean;
@@ -1154,6 +1155,8 @@ function MobileGlevFab({
   sheetOpen?: boolean;
   /** True when the chat was navigated away from but still has messages — shows a pulsing dot. */
   hasConversation?: boolean;
+  /** Show the upward chevron arrow (only when AI chat is available for this user). */
+  showArrow?: boolean;
 }) {
   return (
     <div
@@ -1189,8 +1192,8 @@ function MobileGlevFab({
         }}
       >
         {/* Upward chevron arrow — prompts user to open the AI chat.
-            Visible only when sheet is closed AND ai_voice flag is on. */}
-        {!sheetOpen && aiVoiceEnabled && (
+            Visible only when sheet is closed AND showArrow prop is true. */}
+        {!sheetOpen && showArrow && (
           <span
             style={{
               position: "absolute",
