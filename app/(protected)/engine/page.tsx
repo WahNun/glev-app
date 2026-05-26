@@ -2632,15 +2632,13 @@ export default function EnginePage() {
                 ? "calc(100svh - 180px - var(--nav-top-safe))"
                 : undefined,
             }}>
-              {/* Desktop fallback start/stop control. Mobile users always
-                  reach the engine via the bottom-nav Glev FAB → quick-add
-                  → Voice path (which deep-links with ?voice=1 and auto-
-                  records), and use the same FAB to stop. Desktop has no
-                  bottom nav, so without this inline pill a user landing
-                  on /engine via sidebar/deep-link would have no
-                  discoverable way to record. Hidden on mobile so the
-                  AI chat panel can own the full screen there. */}
-              {!isMobile && (
+              {/* Start/stop control. Always shown on desktop. On mobile shown
+                  only when the AI Voice feature flag is OFF — in that case
+                  the chatPanelNode below is hidden and this pill is the
+                  user's only way to record. When the flag is ON the AI chat
+                  panel (mounted below) owns the full mobile screen and the
+                  FAB acts as the global stop control. */}
+              {(!isMobile || !aiVoiceEnabled) && (
                 <button
                   type="button"
                   onClick={() => recording ? stopRecording() : startRecording()}
