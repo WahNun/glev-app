@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authedClient } from "@/app/api/insulin/_helpers";
 
-const TTS_VOICE = "en_paul_neutral";
-const TTS_MODEL = "voxtral-mini-tts-latest";
+// Voxtral TTS model — matches what Mistral Studio uses.
+// Override via MISTRAL_TTS_MODEL env var if Mistral ships a newer model.
+const TTS_MODEL = process.env.MISTRAL_TTS_MODEL ?? "voxtral-mini-tts-2603";
 
 export async function POST(req: NextRequest) {
   const auth = await authedClient(req);
@@ -27,10 +28,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "text too long (max 1000 chars)" }, { status: 400 });
   }
 
-  const voice =
-    raw && typeof raw === "object" && typeof (raw as Record<string, unknown>).voice === "string"
-      ? (raw as { voice: string }).voice
-      : TTS_VOICE;
+  // Voxtral TTS voices are named personas (e.g. "Oliver", "Amara") — not
+  // language codes like "de_female". Set MISTRAL_TTS_VOICE_ID in Vercel env to
+  // the exact name you picked in Mistral Studio. If unset, Mistral uses its
+  // default voice.
+  const voiceId = process.env.MISTRAL_TTS_VOICE_ID ?? "Jane";
+
+  // Voxtral TTS is LLM-based and responds to speaking-style instructions
+  // prepended to the input — same technique used in Mistral Studio.
+  // This makes output warmer and more conversational rather than flat/robotic.
+  const styledInput = `Sprich warm, ruhig und natürlich — wie ein vertrauter Assistent beim Gespräch unter vier Augen. Keine übertriebene Betonung, keine Pausen zwischen Wörtern, fließend und menschlich.\n\n${text}`;
+
+  const body: Record<string, unknown> = {
+    model: TTS_MODEL,
+    input: styledInput,
+    response_format: "mp3",
+    ...(voiceId ? { voice_id: voiceId } : {}),
+  };
 
   const upstream = await fetch("https://api.mistral.ai/v1/audio/speech", {
     method: "POST",
@@ -38,7 +52,7 @@ export async function POST(req: NextRequest) {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ model: TTS_MODEL, input: text, voice }),
+    body: JSON.stringify(body),
   });
 
   if (!upstream.ok) {
@@ -49,8 +63,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const audioBuffer = await upstream.arrayBuffer();
-  return new NextResponse(audioBuffer, {
+  // The API returns JSON: { audio_data: "<base64-encoded mp3>" }
+  const json = await upstream.json().catch(() => null);
+  const audioBase64 = json?.audio_data as string | undefined;
+  if (!audioBase64) {
+    return NextResponse.json({ error: "no audio_data in Mistral response" }, { status: 502 });
+  }
+
+  const audioBytes = Buffer.from(audioBase64, "base64");
+  return new NextResponse(audioBytes, {
     status: 200,
     headers: {
       "Content-Type": "audio/mpeg",

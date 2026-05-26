@@ -630,10 +630,45 @@ export default function EnginePage() {
       if (typeof mp.fiber === "number" && Number.isFinite(mp.fiber)) {
         setFiber(String(Math.round(mp.fiber * 10) / 10));
       }
-      // Switch to the log tab so the macro form is immediately visible.
-      setTab("log");
+      // Stay on the engine tab and advance to step 1 (macros review) so the
+      // macro cards are immediately visible on both mobile and desktop.
+      // Switching to "log" would get downgraded to "bolus" on mobile (line ~1130).
+      setTab("engine");
+      setStepIndex(1);
     } catch { /* malformed JSON — ignore */ }
   // carbUnit is stable; run once on mount.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // glev:meal-prefill event — fallback for when the engine page is already mounted
+  // and router.push("/engine") doesn't cause a full remount (cached route).
+  useEffect(() => {
+    function handleMealPrefill() {
+      if (typeof window === "undefined") return;
+      try {
+        const raw = sessionStorage.getItem("glev_pending_meal");
+        if (!raw) return;
+        sessionStorage.removeItem("glev_pending_meal");
+        const mp = JSON.parse(raw) as {
+          input_text?: string; carbs?: number;
+          protein?: number | null; fat?: number | null; fiber?: number | null;
+        };
+        if (typeof mp.input_text === "string" && mp.input_text) setDesc(mp.input_text);
+        if (typeof mp.carbs === "number" && Number.isFinite(mp.carbs))
+          setCarbs(String(Math.round(carbUnit.fromGrams(mp.carbs) * 10) / 10));
+        if (typeof mp.protein === "number" && Number.isFinite(mp.protein))
+          setProtein(String(Math.round(mp.protein * 10) / 10));
+        if (typeof mp.fat === "number" && Number.isFinite(mp.fat))
+          setFat(String(Math.round(mp.fat * 10) / 10));
+        if (typeof mp.fiber === "number" && Number.isFinite(mp.fiber))
+          setFiber(String(Math.round(mp.fiber * 10) / 10));
+        // Same as mount handler — engine tab + step 1 (macros), not "log".
+        setTab("engine");
+        setStepIndex(1);
+      } catch { /* ignore */ }
+    }
+    window.addEventListener("glev:meal-prefill", handleMealPrefill);
+    return () => window.removeEventListener("glev:meal-prefill", handleMealPrefill);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

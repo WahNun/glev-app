@@ -218,11 +218,11 @@ export default function GlevAIChatSheet({
 
   const tts = useTTS();
 
-  // TTS: auto-play last assistant message when streaming stops — only when
-  // the user has opted into auto-read (off by default).
+  // TTS: auto-play last assistant message when streaming stops.
+  // Controlled by the speaker toggle (tts.enabled). Always on unless muted.
   const prevStreamingRef = useRef(false);
   useEffect(() => {
-    if (prevStreamingRef.current && !streaming && tts.autoRead) {
+    if (prevStreamingRef.current && !streaming && tts.enabled) {
       const last = messages[messages.length - 1];
       if (last?.role === "assistant" && last.content) {
         void tts.speak(last.content);
@@ -318,7 +318,10 @@ export default function GlevAIChatSheet({
         role="presentation"
         style={{
           position: "fixed",
-          inset: 0,
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: "var(--nav-bottom-total)",
           background: "rgba(0,0,0,0.5)",
           backdropFilter: "blur(2px)",
           WebkitBackdropFilter: "blur(2px)",
@@ -334,10 +337,10 @@ export default function GlevAIChatSheet({
         aria-label="Glev AI Chat"
         style={{
           position: "fixed",
-          bottom: 0,
+          bottom: "var(--nav-bottom-total)",
           left: 0,
           right: 0,
-          height: "85dvh",
+          height: "calc(85dvh - var(--nav-bottom-total))",
           background: SHEET_BG,
           color: "white",
           borderRadius: "20px 20px 0 0",
@@ -555,7 +558,7 @@ export default function GlevAIChatSheet({
                   wordBreak: "break-word",
                 }}
               >
-                {m.content || (m.isStreaming ? "·" : "")}
+                {m.content || (m.isStreaming ? "·" : (m.role === "assistant" ? "···" : ""))}
                 {m.isStreaming && m.content.length > 0 && (
                   <span
                     aria-hidden="true"

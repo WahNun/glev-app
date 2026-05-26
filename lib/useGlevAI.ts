@@ -130,6 +130,11 @@ export function useGlevAI(opts?: {
   const [messages, setMessages] = useState<GlevChatMessage[]>([]);
   const [streaming, setStreaming] = useState<boolean>(false);
   const abortRef = useRef<AbortController | null>(null);
+  // When a meal_prep frame arrives mid-stream we store the navigation
+  // target here and execute it AFTER the stream finishes so the AI's
+  // text response ("Ich habe X Gramm KH eingetragen…") has a chance to
+  // arrive before the stream is aborted by closeSheet.
+  const pendingNavigateRef = useRef<string | null>(null);
   // Keep a ref to the latest opts so sendMessage always reads the current
   // contextSnapshot without needing opts?.contextSnapshot in its dep array.
   // Including an inline object in useCallback deps would recreate sendMessage
@@ -408,16 +413,18 @@ export function useGlevAI(opts?: {
                 optsRef.current?.onNavigate?.(parsed.navigate);
               }
               if (parsed.meal_prep && typeof window !== "undefined") {
-                // Store macros in sessionStorage so the engine page can
-                // read them on mount (navigation is async — CustomEvents
-                // would fire before the page is ready).
+                // Store macros in sessionStorage NOW (sync) so they are
+                // available whenever the navigation fires.
                 try {
                   sessionStorage.setItem(
                     "glev_pending_meal",
                     JSON.stringify(parsed.meal_prep),
                   );
                 } catch { /* sessionStorage may be unavailable */ }
-                optsRef.current?.onNavigate?.("/engine");
+                // Queue the navigation for AFTER the stream ends so the
+                // AI's text response can arrive first. Executing onNavigate
+                // here would call closeSheet → abort, leaving an empty bubble.
+                pendingNavigateRef.current = "/engine";
               }
               // Phase 2: set_macro — dispatched as a CustomEvent so the
               // active engine-macros screen can update its local state
@@ -466,18 +473,24 @@ export function useGlevAI(opts?: {
           }
         }
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "Anfrage fehlgeschlagen";
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantId
-              ? {
-                  ...m,
-                  content: m.content || `Da ist etwas schiefgelaufen: ${msg}`,
-                  isStreaming: false,
-                }
-              : m,
-          ),
-        );
+        // AbortError = stream was cancelled by navigation (closeSheet) or
+        // user action — this is intentional and must never show as an error.
+        if (e instanceof Error && e.name === "AbortError") {
+          // Silent — the navigation/close already handled the UX.
+        } else {
+          const msg = e instanceof Error ? e.message : "Anfrage fehlgeschlagen";
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId
+                ? {
+                    ...m,
+                    content: m.content || `Da ist etwas schiefgelaufen: ${msg}`,
+                    isStreaming: false,
+                  }
+                : m,
+            ),
+          );
+        }
       } finally {
         setStreaming(false);
         abortRef.current = null;
@@ -486,6 +499,17 @@ export function useGlevAI(opts?: {
             m.id === assistantId ? { ...m, isStreaming: false } : m,
           ),
         );
+        // Execute any deferred navigation (meal_prep) now that the stream
+        // is done and the AI's text response is visible in the bubble.
+        if (pendingNavigateRef.current) {
+          const path = pendingNavigateRef.current;
+          pendingNavigateRef.current = null;
+          // Short delay so the final token render commits before navigation.
+          window.setTimeout(() => {
+            window.dispatchEvent(new CustomEvent("glev:meal-prefill"));
+            optsRef.current?.onNavigate?.(path);
+          }, 300);
+        }
       }
     },
     // opts?.contextSnapshot is read via optsRef.current inside the fn — no dep needed.
