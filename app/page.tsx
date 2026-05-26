@@ -163,7 +163,6 @@ export default function PreviewHome() {
             <GlevLockup size={28} />
           </Link>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <LocaleSwitcher ariaLabel={t("nav_aria_locale")} />
             <Link
               href="/blog"
               style={{
