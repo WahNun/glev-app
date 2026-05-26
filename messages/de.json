@@ -2015,7 +2015,8 @@
     "lc_updates_after_2h": "Aktualisiert nach der 2-Stunden-Messung."
   },
   "marketing": {
-    "nav_signin": "Anmelden",
+    "nav_signin": "Einloggen",
+    "nav_register": "Jetzt registrieren",
     "nav_blog": "Blog",
     "nav_aria_home": "Glev Startseite",
     "nav_aria_locale": "Sprache wählen",

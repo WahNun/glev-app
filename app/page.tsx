@@ -177,6 +177,20 @@ export default function PreviewHome() {
               {t("nav_blog")}
             </Link>
             <Link
+              href="/#pricing"
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: "white",
+                textDecoration: "none",
+                padding: "9px 16px",
+                borderRadius: 999,
+                background: `linear-gradient(135deg, #4F6EF7, #6B8BFF)`,
+              }}
+            >
+              {t("nav_register")}
+            </Link>
+            <Link
               href="/login"
               style={{
                 fontSize: 13,

@@ -2012,7 +2012,8 @@
     "lc_updates_after_2h": "Updates after 2-hour reading."
   },
   "marketing": {
-    "nav_signin": "Sign in",
+    "nav_signin": "Log in",
+    "nav_register": "Sign up",
     "nav_blog": "Blog",
     "nav_aria_home": "Glev home",
     "nav_aria_locale": "Choose language",
