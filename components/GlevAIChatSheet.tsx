@@ -219,10 +219,10 @@ export default function GlevAIChatSheet({
   const tts = useTTS();
 
   // TTS: auto-play last assistant message when streaming stops.
-  // Controlled by the speaker toggle (tts.enabled). Always on unless muted.
+  // Controlled by tts.autoRead (user preference set in the chat header).
   const prevStreamingRef = useRef(false);
   useEffect(() => {
-    if (prevStreamingRef.current && !streaming && tts.enabled) {
+    if (prevStreamingRef.current && !streaming && tts.enabled && tts.autoRead) {
       const last = messages[messages.length - 1];
       if (last?.role === "assistant" && last.content) {
         void tts.speak(last.content);
@@ -395,12 +395,12 @@ export default function GlevAIChatSheet({
               </svg>
             </button>
           )}
-          {/* TTS mute toggle */}
+          {/* TTS auto-read toggle — controls whether AI responses are spoken automatically */}
           <button
             type="button"
-            onClick={tts.toggleEnabled}
-            aria-label={tts.enabled ? "Stimme stumm schalten" : "Stimme einschalten"}
-            title={tts.enabled ? "Stimme stumm schalten" : "Stimme einschalten"}
+            onClick={tts.toggleAutoRead}
+            aria-label={tts.autoRead ? "Sprachausgabe aus" : "Sprachausgabe ein"}
+            title={tts.autoRead ? "Sprachausgabe aus" : "Sprachausgabe ein"}
             style={{
               background: "none",
               border: "none",
@@ -409,11 +409,11 @@ export default function GlevAIChatSheet({
               marginRight: 6,
               display: "flex",
               alignItems: "center",
-              color: tts.speaking ? ACCENT : tts.enabled ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.25)",
+              color: tts.speaking ? ACCENT : tts.autoRead ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.25)",
               transition: "color 0.15s",
             }}
           >
-            {tts.enabled ? (
+            {tts.autoRead ? (
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
                 <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
