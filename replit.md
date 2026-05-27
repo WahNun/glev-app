@@ -56,6 +56,22 @@ Glev ist aktuell **kein eingereichtes Medizinprodukt**. Primärzielgruppe: erwac
 - **Production logs:** Vercel Dashboard → Project → Logs (real-time) OR Deployments → individual deploy → Functions tab → per-route logs.
 - **Production database queries:** prod data lives in Supabase (not the Replit-attached Postgres which is dev-only with stale test rows). Use the Supabase Dashboard SQL Editor for live queries.
 
+## iOS release pipeline (push-button TestFlight)
+
+Native iOS builds are automated via **fastlane** (`fastlane/Fastfile`) and triggered from GitHub Actions (`.github/workflows/ios-release.yml`) — either by clicking "Run workflow" in the GitHub UI or by pushing a tag like `ios-v1.2.3`.
+
+**Code signing:** handled by `fastlane match`. The Distribution certificate and App Store provisioning profile live in a private `glev-certificates` git repo, encrypted with `MATCH_PASSWORD`. On every CI run, match fetches and installs them before the archive step. Required GitHub Actions secrets:
+
+| Secret | Description |
+| --- | --- |
+| `MATCH_GIT_URL` | SSH or HTTPS URL of the private certificates repo (e.g. `git@github.com:<org>/glev-certificates.git`) |
+| `MATCH_PASSWORD` | Passphrase used to encrypt/decrypt certs in that repo |
+| `MATCH_GIT_PRIVATE_KEY` | *(SSH only)* Deploy key private key for `glev-certificates`. Omit when using an HTTPS deploy-token URL. |
+
+On a developer Mac **without** `MATCH_GIT_URL` set, the match step is skipped and Xcode automatic signing is used. On a Mac **with** `MATCH_GIT_URL` (or on CI), match runs `readonly: true` and the build uses `CODE_SIGN_STYLE=Manual`.
+
+See `fastlane/README.md` → "Code signing" for the full one-time setup, cert rotation, and new-team-member instructions.
+
 ## System Architecture
 
 **Frontend:**

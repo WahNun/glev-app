@@ -77,14 +77,82 @@ provided workflow wires them up automatically.
 
 ## Code signing
 
-The Xcode project is configured for **automatic signing**
-(`CODE_SIGN_STYLE = Automatic`). On a developer Mac that's already signed
-into the Apple Developer team in Xcode, `fastlane ios beta` works out of the
-box.
+Code signing is handled by **[fastlane match](https://docs.fastlane.tools/actions/match/)**.
+Match stores the Distribution certificate and App Store provisioning profile in a
+private git repo, encrypted with a shared passphrase. Any developer or CI runner
+can fetch them in seconds without manual Xcode interactions.
 
-For a fresh CI macOS runner you'll want to switch to
-[`fastlane match`](https://docs.fastlane.tools/actions/match/) so certs and
-provisioning profiles get fetched from a private repo deterministically. That
-setup is intentionally **not** baked into this Fastfile because it requires a
-team-specific git URL and passphrase — add it when you wire the GitHub Action
-to a real Apple Developer team.
+### One-time setup (run once by a team member with Apple Developer admin access)
+
+1. **Create a private `glev-certificates` repository** on GitHub (or GitLab,
+   Bitbucket, etc.). This repo will hold the encrypted certs and profiles.
+
+2. **Initialise match** — run from the repo root on a Mac enrolled in the Apple
+   Developer team:
+
+   ```bash
+   export MATCH_GIT_URL=git@github.com:<org>/glev-certificates.git
+   export MATCH_PASSWORD=<choose-a-strong-passphrase>
+   export FASTLANE_TEAM_ID=XXXXXXXXXX
+   bundle exec fastlane match init        # writes Matchfile (already committed)
+   bundle exec fastlane match appstore    # generates + uploads cert + profile
+   ```
+
+   Save `MATCH_PASSWORD` somewhere safe (1Password, etc.) — it cannot be
+   recovered from the repo.
+
+3. **Add GitHub Actions secrets** (repo settings → Secrets and variables →
+   Actions):
+
+   | Secret | Value |
+   | --- | --- |
+   | `MATCH_GIT_URL` | SSH or HTTPS URL of `glev-certificates` |
+   | `MATCH_PASSWORD` | The passphrase chosen above |
+   | `MATCH_GIT_PRIVATE_KEY` | **(SSH only)** The private key half of a deploy key added to `glev-certificates`. Leave empty if you use an HTTPS URL with a deploy token embedded in `MATCH_GIT_URL` instead: `https://<token>@github.com/<org>/glev-certificates.git` |
+
+   The four existing App Store Connect secrets
+   (`APP_STORE_CONNECT_API_KEY_ID`, `APP_STORE_CONNECT_API_ISSUER_ID`,
+   `APP_STORE_CONNECT_API_KEY_BASE64`, `FASTLANE_TEAM_ID`) are also still
+   required.
+
+### How it works in the `beta` lane
+
+The `beta` lane calls `match(type: "appstore", readonly: is_ci)` before
+`build_app` whenever `MATCH_GIT_URL` is set:
+
+- **On CI (GitHub Actions):** `is_ci` is `true` → match runs in read-only mode,
+  installs the cert and profile, then `build_app` is called with
+  `CODE_SIGN_STYLE=Manual`.
+- **On a developer Mac with `MATCH_GIT_URL` set:** `is_ci` is `false` → match
+  can also *write* (e.g. rotate an expiring cert). Same result otherwise.
+- **On a developer Mac without `MATCH_GIT_URL`:** the match step is skipped
+  entirely and Xcode automatic signing is used as before. This is the
+  zero-config path for contributors who don't need to publish to TestFlight.
+
+### Renewing or rotating certificates
+
+When a Distribution certificate is about to expire (< 30 days), run this on a
+Mac with Apple Developer admin access:
+
+```bash
+export MATCH_GIT_URL=git@github.com:<org>/glev-certificates.git
+export MATCH_PASSWORD=<passphrase>
+export FASTLANE_TEAM_ID=XXXXXXXXXX
+bundle exec fastlane match appstore --force   # revoke old, generate new, push
+```
+
+CI runners will automatically pick up the rotated cert on their next run.
+
+### Adding a new team member's Mac
+
+Each developer who needs to build locally just needs:
+
+```bash
+export MATCH_GIT_URL=git@github.com:<org>/glev-certificates.git
+export MATCH_PASSWORD=<passphrase>    # share via 1Password
+export FASTLANE_TEAM_ID=XXXXXXXXXX
+bundle exec fastlane match appstore   # fetches + installs cert + profile
+```
+
+Their Xcode project can then stay on automatic signing; match takes over when
+`MATCH_GIT_URL` is present.

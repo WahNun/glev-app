@@ -1,0 +1,35 @@
+# Matchfile — fastlane match configuration for Glev iOS code signing.
+#
+# match fetches the Distribution certificate + App Store provisioning profile
+# from a private git repo (encrypted with MATCH_PASSWORD), installs them into
+# the macOS keychain, and sets CODE_SIGN_IDENTITY / PROVISIONING_PROFILE_SPECIFIER
+# for the build step.
+#
+# Required env vars (set once in your shell or export them in ~/.fastlane/.env;
+# on GitHub Actions they live as repository secrets):
+#
+#   MATCH_GIT_URL      — SSH or HTTPS URL of the private certificates repo
+#                        e.g. git@github.com:<org>/glev-certificates.git
+#   MATCH_PASSWORD     — passphrase used by `fastlane match init` to encrypt /
+#                        decrypt the certs and profiles in that repo
+#
+# Optional:
+#   FASTLANE_TEAM_ID   — Apple Developer team id (10 chars) — also read by Appfile
+#   APP_IDENTIFIER     — bundle id override (default: com.glev.app)
+#
+# One-time setup (run once on a Mac with Apple Developer access):
+#   MATCH_GIT_URL=git@github.com:<org>/glev-certificates.git \
+#   MATCH_PASSWORD=<passphrase> \
+#   bundle exec fastlane match init
+#
+#   # Then populate the repo:
+#   bundle exec fastlane match appstore
+#
+# After that, CI runners (and any dev Mac) can fetch certs read-only:
+#   bundle exec fastlane match appstore --readonly
+
+git_url(ENV["MATCH_GIT_URL"])
+storage_mode("git")
+type("appstore")
+app_identifier(ENV.fetch("APP_IDENTIFIER", "com.glev.app"))
+team_id(ENV["FASTLANE_TEAM_ID"]) if ENV["FASTLANE_TEAM_ID"]

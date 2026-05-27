@@ -19,6 +19,16 @@
 #                                        (or use APP_STORE_CONNECT_API_KEY_PATH
 #                                        to point at the .p8 file directly)
 #
+# Code signing (fastlane match):
+#   MATCH_GIT_URL      — SSH or HTTPS URL of the private certificates repo
+#   MATCH_PASSWORD     — passphrase to decrypt certs/profiles from that repo
+#
+# When MATCH_GIT_URL is set the beta lane runs `match appstore` (readonly on CI)
+# before archiving, installs the Distribution cert + App Store profile, and
+# builds with CODE_SIGN_STYLE=Manual.
+# When MATCH_GIT_URL is NOT set (developer Mac with Xcode automatic signing),
+# the match step is skipped and Xcode manages signing automatically.
+#
 # Optional:
 #   APP_IDENTIFIER, FASTLANE_APPLE_ID, FASTLANE_TEAM_ID, FASTLANE_ITC_TEAM_ID
 #   GYM_EXPORT_METHOD (defaults to "app-store")
@@ -133,7 +143,22 @@ platform :ios do
     # Run this from REPO_ROOT so the local @capacitor/cli is found.
     Dir.chdir(REPO_ROOT) { sh("npx", "cap", "sync", "ios") }
 
-    build_app(
+    # Code signing via fastlane match.
+    # When MATCH_GIT_URL is set (always on CI, optionally on dev Macs) match
+    # fetches the Distribution cert + App Store provisioning profile from the
+    # private certificates repo, installs them into the keychain, and we build
+    # with CODE_SIGN_STYLE=Manual so Xcode doesn't try to regenerate them.
+    # When MATCH_GIT_URL is absent (developer Mac with automatic signing), this
+    # block is skipped entirely and Xcode manages signing as before.
+    use_match = ENV["MATCH_GIT_URL"].to_s.strip != ""
+    if use_match
+      match(
+        type: "appstore",
+        readonly: is_ci,
+      )
+    end
+
+    build_params = {
       project: XCODEPROJ,
       scheme: SCHEME,
       configuration: "Release",
@@ -142,7 +167,11 @@ platform :ios do
       clean: true,
       include_symbols: true,
       include_bitcode: false,
-    )
+    }
+    # Manual signing is required when match has installed the cert/profile.
+    build_params[:xcargs] = "CODE_SIGN_STYLE=Manual" if use_match
+
+    build_app(**build_params)
 
     upload_to_testflight(
       api_key: api_key,

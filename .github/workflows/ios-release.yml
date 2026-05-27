@@ -5,14 +5,22 @@ name: iOS release
 #   - or push a tag matching `ios-v*` to ship automatically.
 #
 # Prereqs (one-time, GitHub repo settings → Secrets and variables → Actions):
-#   APP_STORE_CONNECT_API_KEY_ID         — 10-char key id from App Store Connect
-#   APP_STORE_CONNECT_API_ISSUER_ID      — issuer UUID
-#   APP_STORE_CONNECT_API_KEY_BASE64     — base64 of the AuthKey_<id>.p8 file
-#   FASTLANE_TEAM_ID                     — Apple Developer team id (10 chars)
 #
-# Code signing: assumes the macOS runner can fetch a signing cert + profile.
-# For repeatable CI, add `fastlane match` (see fastlane/README.md) and the
-# matching MATCH_PASSWORD / MATCH_GIT_URL secrets.
+#   App Store Connect API auth:
+#     APP_STORE_CONNECT_API_KEY_ID         — 10-char key id from App Store Connect
+#     APP_STORE_CONNECT_API_ISSUER_ID      — issuer UUID
+#     APP_STORE_CONNECT_API_KEY_BASE64     — base64 of the AuthKey_<id>.p8 file
+#     FASTLANE_TEAM_ID                     — Apple Developer team id (10 chars)
+#
+#   fastlane match (code signing):
+#     MATCH_GIT_URL        — SSH or HTTPS URL of the private certificates repo
+#                            e.g. git@github.com:<org>/glev-certificates.git
+#     MATCH_PASSWORD       — passphrase to decrypt certs/profiles in that repo
+#     MATCH_GIT_PRIVATE_KEY — (optional) SSH private key for the certificates repo
+#                             if MATCH_GIT_URL is an SSH URL. Leave empty when
+#                             using an HTTPS URL with a deploy token instead.
+#
+# See fastlane/README.md for one-time setup instructions.
 
 on:
   workflow_dispatch:
@@ -58,6 +66,8 @@ jobs:
       APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
       APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
       FASTLANE_TEAM_ID: ${{ secrets.FASTLANE_TEAM_ID }}
+      MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+      MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
       FASTLANE_SKIP_UPDATE_CHECK: "1"
       FASTLANE_HIDE_CHANGELOG: "1"
       LC_ALL: en_US.UTF-8
@@ -81,6 +91,16 @@ jobs:
         with:
           ruby-version: "3.2"
           bundler-cache: true
+
+      - name: Set up SSH key for match certificates repo
+        # Only runs when MATCH_GIT_PRIVATE_KEY is set (SSH-based MATCH_GIT_URL).
+        # Skip this step if you use an HTTPS URL with a deploy token instead —
+        # in that case embed credentials directly in MATCH_GIT_URL:
+        #   https://<token>@github.com/<org>/glev-certificates.git
+        if: ${{ secrets.MATCH_GIT_PRIVATE_KEY != '' }}
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.MATCH_GIT_PRIVATE_KEY }}
 
       - name: Install Node deps (for @capacitor/cli + cap sync)
         run: npm ci --no-audit --no-fund
