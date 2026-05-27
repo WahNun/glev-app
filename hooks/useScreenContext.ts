@@ -44,9 +44,9 @@ async function getGlucoseSummary(): Promise<string | null> {
 /** Refresh interval in ms — 3 minutes, paused when tab is hidden. */
 const REFRESH_INTERVAL_MS = 3 * 60 * 1000;
 
-export function useScreenContext() {
+export function useScreenContext(): ScreenContext {
   const pathname = usePathname();
-  const [context, setContext] = useState({
+  const [context, setContext] = useState<ScreenContext>({
     screen: pathToScreen(pathname),
   });
   // Stable ref so the interval callback always sees the latest pathname

@@ -70,6 +70,25 @@ export function resolveWants(
   };
 }
 
+/**
+ * Pure helper: assembles a ScreenContext from the individual fetched
+ * values (null → undefined). Exported for unit tests — they can call
+ * this without React to verify the consent-null → undefined shape.
+ */
+export function buildScreenContext(
+  screen: GlevScreen,
+  glucoseSummary: string | null,
+  iobSummary: string | null,
+  lastMealSummary: string | null,
+): ScreenContext {
+  return {
+    screen,
+    glucoseSummary:  glucoseSummary  ?? undefined,
+    iobSummary:      iobSummary      ?? undefined,
+    lastMealSummary: lastMealSummary ?? undefined,
+  };
+}
+
 export interface InsulinLogRow {
   id?: string;
   insulin_type: string;

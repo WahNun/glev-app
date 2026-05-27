@@ -347,15 +347,7 @@ export function useGlevAI(opts?: {
           body: JSON.stringify({
             message: trimmed,
             history: apiHistory,
-            contextSnapshot: {
-              screen:              optsRef.current?.contextSnapshot?.screen,
-              glucoseSummary:      optsRef.current?.contextSnapshot?.glucoseSummary      ?? NEUTRAL,
-              iobSummary:          optsRef.current?.contextSnapshot?.iobSummary          ?? NEUTRAL,
-              lastMealDescription:
-                optsRef.current?.contextSnapshot?.lastMealSummary ??
-                optsRef.current?.contextSnapshot?.lastMealDescription ??
-                NEUTRAL,
-            },
+            contextSnapshot: buildContextPayload(optsRef.current?.contextSnapshot),
             // Device-local IANA timezone — single source of truth for
             // alle Zeit-Formatierungen in den AI-Tools. Wir trauen dem
             // Profil-Feld bewusst nicht, weil Nutzer reisen und das
@@ -638,6 +630,32 @@ export function useGlevAI(opts?: {
     sendMessage,
     confirmAction,
     cancelAction,
+  };
+}
+
+/**
+ * Pure helper: builds the contextSnapshot object that goes into the
+ * /api/ai/chat request body. Exported for unit tests — they can call
+ * this directly without mocking fetch or React hooks.
+ *
+ * Any field that is undefined/missing is filled with NEUTRAL so the
+ * server never receives an empty string and the AI always has a
+ * human-readable fallback.
+ */
+export function buildContextPayload(snapshot?: ContextSnapshot): {
+  screen: string | undefined;
+  glucoseSummary: string;
+  iobSummary: string;
+  lastMealDescription: string;
+} {
+  return {
+    screen:              snapshot?.screen,
+    glucoseSummary:      snapshot?.glucoseSummary      ?? NEUTRAL,
+    iobSummary:          snapshot?.iobSummary          ?? NEUTRAL,
+    lastMealDescription:
+      snapshot?.lastMealSummary ??
+      snapshot?.lastMealDescription ??
+      NEUTRAL,
   };
 }
 

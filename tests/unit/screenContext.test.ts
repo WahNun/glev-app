@@ -18,9 +18,18 @@
 //        (i.e. dose fully decayed).
 //      - Returns a formatted string when a recent bolus is active.
 //
-//   4. NEUTRAL constant from useGlevAI.__test__:
-//      - Verifies the sentinel "Keine Daten verfügbar" that the AI
-//        request body falls back to when context fields are missing.
+//   4. buildContextPayload() — request body construction (lib/useGlevAI):
+//      - Tests the pure helper that fills every contextSnapshot field
+//        with NEUTRAL when the field is undefined/missing.
+//      - Verifies glucoseSummary, iobSummary, and lastMealDescription
+//        all receive the sentinel without requiring mocked fetch or
+//        React hooks.
+//
+//   5. buildScreenContext() — context output shape:
+//      - Verifies that a null glucose (returned when wantsGlucose=false)
+//        produces glucoseSummary: undefined in the ScreenContext object.
+//      - This closes the loop on the consent-null → glucoseSummary
+//        absent requirement.
 //
 // All tests import only from lib/ — no React, no next/navigation, no
 // browser dependency.
@@ -30,9 +39,10 @@ import {
   pathToScreen,
   resolveWants,
   getIOBSummary,
+  buildScreenContext,
   type InsulinLogRow,
 } from "@/lib/screenContext";
-import { __test__ as glevAITest } from "@/lib/useGlevAI";
+import { buildContextPayload, __test__ as glevAITest } from "@/lib/useGlevAI";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Fake Supabase builder factory
@@ -252,24 +262,98 @@ test("getIOBSummary: returns 'Kein aktiver IOB' for a fully decayed dose (> DIA)
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. NEUTRAL fallback constant from useGlevAI
+// 4. buildContextPayload() — /api/ai/chat request body construction
+//    (lib/useGlevAI.ts — the same function used inside sendMessage())
 // ─────────────────────────────────────────────────────────────────────────────
 
-test("NEUTRAL fallback is 'Keine Daten verfügbar'", () => {
+test("NEUTRAL constant is 'Keine Daten verfügbar'", () => {
   expect(glevAITest.NEUTRAL).toBe("Keine Daten verfügbar");
 });
 
-test("NEUTRAL fallback is used when context fields are absent (glucoseSummary undefined)", () => {
-  // Simulate the AI request body building: missing field → NEUTRAL
-  const contextSnapshot = { screen: "dashboard" as const };
-  const glucoseSummary = (contextSnapshot as Record<string, unknown>).glucoseSummary as string | undefined;
-  const resolved = glucoseSummary ?? glevAITest.NEUTRAL;
-  expect(resolved).toBe("Keine Daten verfügbar");
+test("buildContextPayload: glucoseSummary falls back to NEUTRAL when undefined", () => {
+  // No glucoseSummary in snapshot → AI request body must receive NEUTRAL
+  const payload = buildContextPayload({ screen: "dashboard" });
+  expect(payload.glucoseSummary).toBe(glevAITest.NEUTRAL);
 });
 
-test("NEUTRAL fallback is used when iobSummary is undefined", () => {
-  const contextSnapshot = { screen: "dashboard" as const };
-  const iobSummary = (contextSnapshot as Record<string, unknown>).iobSummary as string | undefined;
-  const resolved = iobSummary ?? glevAITest.NEUTRAL;
-  expect(resolved).toBe("Keine Daten verfügbar");
+test("buildContextPayload: iobSummary falls back to NEUTRAL when undefined", () => {
+  const payload = buildContextPayload({ screen: "engine" });
+  expect(payload.iobSummary).toBe(glevAITest.NEUTRAL);
+});
+
+test("buildContextPayload: lastMealDescription falls back to NEUTRAL when undefined", () => {
+  const payload = buildContextPayload({ screen: "dashboard" });
+  expect(payload.lastMealDescription).toBe(glevAITest.NEUTRAL);
+});
+
+test("buildContextPayload: lastMealDescription prefers lastMealSummary over lastMealDescription alias", () => {
+  const payload = buildContextPayload({
+    screen: "dashboard",
+    lastMealSummary: "Pasta 60g KH",
+    lastMealDescription: "stale alias",
+  });
+  expect(payload.lastMealDescription).toBe("Pasta 60g KH");
+});
+
+test("buildContextPayload: present values are passed through unchanged", () => {
+  const payload = buildContextPayload({
+    screen: "dashboard",
+    glucoseSummary: "142 mg/dL ↗, vor 4 min",
+    iobSummary: "≈ 3.2 IE aktiv",
+    lastMealSummary: "Pasta 60g KH",
+  });
+  expect(payload.screen).toBe("dashboard");
+  expect(payload.glucoseSummary).toBe("142 mg/dL ↗, vor 4 min");
+  expect(payload.iobSummary).toBe("≈ 3.2 IE aktiv");
+  expect(payload.lastMealDescription).toBe("Pasta 60g KH");
+});
+
+test("buildContextPayload: no snapshot at all → all three fields are NEUTRAL", () => {
+  const payload = buildContextPayload(undefined);
+  expect(payload.glucoseSummary).toBe(glevAITest.NEUTRAL);
+  expect(payload.iobSummary).toBe(glevAITest.NEUTRAL);
+  expect(payload.lastMealDescription).toBe(glevAITest.NEUTRAL);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 5. buildScreenContext() — consent-null → glucoseSummary: undefined
+//    Verifies the full pipeline: resolveWants() returns wantsGlucose=false
+//    → glucose fetch skipped → null passed to buildScreenContext()
+//    → glucoseSummary absent from the returned ScreenContext object.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test("buildScreenContext: null glucoseSummary → glucoseSummary is undefined in output", () => {
+  // Simulate consent-null path: resolveWants returns wantsGlucose=false,
+  // so getGlucoseSummary() is never called and the glucose value is null.
+  const { wantsGlucose } = resolveWants("dashboard", {
+    ai_consent_glucose_at: null,
+    ai_consent_iob_at: null,
+  });
+  expect(wantsGlucose).toBe(false); // guard: consent gating fires
+
+  const ctx = buildScreenContext(
+    "dashboard",
+    wantsGlucose ? "142 mg/dL" : null, // null because consent is absent
+    null,
+    null,
+  );
+  expect(ctx.glucoseSummary).toBeUndefined();
+});
+
+test("buildScreenContext: null iobSummary → iobSummary is undefined in output", () => {
+  const ctx = buildScreenContext("engine", null, null, null);
+  expect(ctx.iobSummary).toBeUndefined();
+});
+
+test("buildScreenContext: real values are preserved in output ScreenContext", () => {
+  const ctx = buildScreenContext(
+    "dashboard",
+    "142 mg/dL ↗, vor 4 min",
+    "≈ 3.2 IE aktiv",
+    "Pasta 60g KH, vor 35 min",
+  );
+  expect(ctx.screen).toBe("dashboard");
+  expect(ctx.glucoseSummary).toBe("142 mg/dL ↗, vor 4 min");
+  expect(ctx.iobSummary).toBe("≈ 3.2 IE aktiv");
+  expect(ctx.lastMealSummary).toBe("Pasta 60g KH, vor 35 min");
 });
