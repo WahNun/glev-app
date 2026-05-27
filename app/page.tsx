@@ -1360,6 +1360,19 @@ function PlusCard() {
         ))}
       </ul>
 
+      <p
+        style={{
+          margin: 0,
+          fontSize: 13,
+          color: "var(--text-muted)",
+          fontFamily: "var(--font-mono), JetBrains Mono, monospace",
+          letterSpacing: "-0.005em",
+          lineHeight: 1.55,
+        }}
+      >
+        {t("pricing_klinik_subtext")}
+      </p>
+
       <form
         onSubmit={onSubmit}
         style={{
