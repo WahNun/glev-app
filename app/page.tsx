@@ -95,6 +95,10 @@ export default function PreviewHome() {
         @media (max-width: 720px) {
           .glev-pricing-grid { grid-template-columns: 1fr; }
         }
+        /* Spacer in Smart + Plus cards so their CTA row aligns with
+           the Pro card's button + "7 Tage kostenlos testen" row on desktop. */
+        .glev-cta-spacer { display: block; height: 21px; }
+        @media (max-width: 720px) { .glev-cta-spacer { display: none; } }
         .glev-feat-row {
           display: grid;
           grid-template-columns: 1.2fr 1fr;
@@ -804,6 +808,7 @@ export default function PreviewHome() {
                 <polyline points="13 6 19 12 13 18" />
               </svg>
             </Link>
+            <div aria-hidden className="glev-cta-spacer" />
           </div>
 
           {/* Karte 2 — Pro · Founder-Tier (hervorgehoben) */}
@@ -1384,6 +1389,7 @@ function PlusCard() {
         >
           {loading ? "…" : t("pricing_klinik_cta")}
         </button>
+        <div aria-hidden className="glev-cta-spacer" />
         {error && (
           <div
             role="alert"
