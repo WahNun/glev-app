@@ -137,6 +137,178 @@ test("evaluateExercise: had_hypo_window=false leaves the legacy rules in charge"
   expect(evaluateExercise(log).outcome).toBe("STABLE");
 });
 
+// ── evaluateExercise() — core outcome branches ───────────────────────
+
+test("evaluateExercise: PENDING when at-end reading is missing and no dense-curve flag", () => {
+  // Until the at-end slot is filled the badge must stay PENDING,
+  // regardless of the +1h reading — a lone +1h hypo without at-end
+  // is degenerate and must NOT flip the badge.
+  const log = makeExerciseLog({
+    id: "p1", exercise_type: "run",
+    cgm_glucose_at_log: 130, glucose_at_end: null, glucose_after_1h: null,
+  });
+  const result = evaluateExercise(log);
+  expect(result.outcome).toBe("PENDING");
+  expect(result.label).toBe("PENDING");
+});
+
+test("evaluateExercise: PENDING even when +1h is below hypo threshold — at-end precedence rule", () => {
+  // A lone +1h < 70 without an at-end reading must stay PENDING,
+  // not flip to HYPO_RISK. The dense-curve flag (had_hypo_window)
+  // is the only legitimate way to surface a hypo before at-end lands.
+  const log = makeExerciseLog({
+    id: "p2", exercise_type: "cardio",
+    cgm_glucose_at_log: 130, glucose_at_end: null, glucose_after_1h: 55,
+  });
+  expect(evaluateExercise(log).outcome).toBe("PENDING");
+});
+
+test("evaluateExercise: HYPO_RISK when at-end reading is below 70 mg/dL", () => {
+  const log = makeExerciseLog({
+    id: "h1", exercise_type: "run",
+    cgm_glucose_at_log: 120, glucose_at_end: 65,
+  });
+  const result = evaluateExercise(log);
+  expect(result.outcome).toBe("HYPO_RISK");
+  expect(result.label).toBe("HYPO RISK");
+});
+
+test("evaluateExercise: HYPO_RISK when +1h reading is below 70 mg/dL (at-end is safe)", () => {
+  // The +1h hypo path kicks in only once at-end already exists and
+  // is itself above the threshold.
+  const log = makeExerciseLog({
+    id: "h2", exercise_type: "cardio",
+    cgm_glucose_at_log: 130, glucose_at_end: 95, glucose_after_1h: 62,
+  });
+  expect(evaluateExercise(log).outcome).toBe("HYPO_RISK");
+});
+
+test("evaluateExercise: at-end exactly 70 mg/dL is NOT a hypo (boundary — threshold is strictly <70)", () => {
+  const log = makeExerciseLog({
+    id: "h3", exercise_type: "yoga",
+    cgm_glucose_at_log: 100, glucose_at_end: 70,
+  });
+  // delta = (70 - 100) / 100 = -0.30, which hits the DROPPED boundary.
+  expect(evaluateExercise(log).outcome).toBe("DROPPED");
+});
+
+test("evaluateExercise: DROPPED when glucose falls ≥ 30 % from baseline", () => {
+  // 140 → 98 = −42 mg/dL = exactly −30 % → DROPPED.
+  const log = makeExerciseLog({
+    id: "d1", exercise_type: "run",
+    cgm_glucose_at_log: 140, glucose_at_end: 98,
+  });
+  expect(evaluateExercise(log).outcome).toBe("DROPPED");
+});
+
+test("evaluateExercise: DROPPED at exact −30 % boundary (delta = −0.30)", () => {
+  // before=100, atEnd=70 → delta = -0.30 exactly.
+  const log = makeExerciseLog({
+    id: "d2", exercise_type: "strength",
+    cgm_glucose_at_log: 100, glucose_at_end: 70,
+  });
+  expect(evaluateExercise(log).outcome).toBe("DROPPED");
+});
+
+test("evaluateExercise: STABLE when drop is just under 30 % (delta = −0.299…)", () => {
+  // before=100, atEnd=70.1 → delta ≈ -0.299 → should be STABLE, not DROPPED.
+  const log = makeExerciseLog({
+    id: "d3", exercise_type: "cardio",
+    cgm_glucose_at_log: 100, glucose_at_end: 70.1,
+  });
+  expect(evaluateExercise(log).outcome).toBe("STABLE");
+});
+
+test("evaluateExercise: SPIKED when glucose rises ≥ 20 % from baseline", () => {
+  // 100 → 120 = +20 % exactly → SPIKED.
+  const log = makeExerciseLog({
+    id: "s1", exercise_type: "hiit",
+    cgm_glucose_at_log: 100, glucose_at_end: 120,
+  });
+  expect(evaluateExercise(log).outcome).toBe("SPIKED");
+});
+
+test("evaluateExercise: SPIKED at exact +20 % boundary (delta = +0.20)", () => {
+  // before=150, atEnd=180 → delta = +0.20 exactly.
+  const log = makeExerciseLog({
+    id: "s2", exercise_type: "strength",
+    cgm_glucose_at_log: 150, glucose_at_end: 180,
+  });
+  expect(evaluateExercise(log).outcome).toBe("SPIKED");
+});
+
+test("evaluateExercise: STABLE when rise is just under 20 % (delta = +0.199…)", () => {
+  // before=100, atEnd=119.9 → delta < +0.20 → STABLE, not SPIKED.
+  const log = makeExerciseLog({
+    id: "s3", exercise_type: "hiit",
+    cgm_glucose_at_log: 100, glucose_at_end: 119.9,
+  });
+  expect(evaluateExercise(log).outcome).toBe("STABLE");
+});
+
+test("evaluateExercise: STABLE when glucose change is well within thresholds", () => {
+  const log = makeExerciseLog({
+    id: "st1", exercise_type: "yoga",
+    cgm_glucose_at_log: 120, glucose_at_end: 125,
+  });
+  const result = evaluateExercise(log);
+  expect(result.outcome).toBe("STABLE");
+  expect(result.label).toBe("STABLE");
+});
+
+test("evaluateExercise: STABLE when baseline is missing but at-end is in range", () => {
+  // No cgm_glucose_at_log → can't compute a delta. atEnd is in range
+  // and above the hypo threshold — outcome must be STABLE, not PENDING.
+  const log = makeExerciseLog({
+    id: "st2", exercise_type: "run",
+    cgm_glucose_at_log: null, glucose_at_end: 105,
+  });
+  expect(evaluateExercise(log).outcome).toBe("STABLE");
+});
+
+test("evaluateExercise: result includes correct label and color for each outcome", () => {
+  const cases: Array<{ log: ReturnType<typeof makeExerciseLog>; outcome: string; labelFragment: string }> = [
+    {
+      log: makeExerciseLog({ id: "l1", exercise_type: "run", cgm_glucose_at_log: null, glucose_at_end: null }),
+      outcome: "PENDING",
+      labelFragment: "PENDING",
+    },
+    {
+      log: makeExerciseLog({ id: "l2", exercise_type: "run", cgm_glucose_at_log: 100, glucose_at_end: 60 }),
+      outcome: "HYPO_RISK",
+      labelFragment: "HYPO RISK",
+    },
+    {
+      log: makeExerciseLog({ id: "l3", exercise_type: "run", cgm_glucose_at_log: 100, glucose_at_end: 65 }),
+      outcome: "DROPPED",
+      labelFragment: "DROPPED",
+    },
+    {
+      log: makeExerciseLog({ id: "l4", exercise_type: "run", cgm_glucose_at_log: 100, glucose_at_end: 125 }),
+      outcome: "SPIKED",
+      labelFragment: "SPIKED",
+    },
+    {
+      log: makeExerciseLog({ id: "l5", exercise_type: "run", cgm_glucose_at_log: 100, glucose_at_end: 105 }),
+      outcome: "STABLE",
+      labelFragment: "STABLE",
+    },
+  ];
+
+  // Wait — l3 (65 mg/dL) will be HYPO_RISK not DROPPED. Adjust: need
+  // a reading that is ≥70 but drops 30%+ from before=100 → use 70 (exact).
+  // Already covered by dedicated boundary tests above. Here we test label
+  // consistency on a clear DROPPED case: before=200, atEnd=139 = −30.5%.
+  cases[2].log = makeExerciseLog({ id: "l3", exercise_type: "run", cgm_glucose_at_log: 200, glucose_at_end: 139 });
+
+  for (const { log, outcome, labelFragment } of cases) {
+    const result = evaluateExercise(log);
+    expect(result.outcome).toBe(outcome);
+    expect(result.label).toContain(labelFragment);
+    expect(result.color).toBeTruthy();
+  }
+});
+
 // ── aggregateExerciseTypeStats() ────────────────────────────────────
 
 test("aggregateExerciseTypeStats() returns null when no rows of the type exist", () => {

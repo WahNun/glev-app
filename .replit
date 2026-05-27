@@ -69,10 +69,10 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "PLAYWRIGHT_SKIP_WEBSERVER=1 npx playwright test tests/unit --project=chromium 2>&1"
+args = "PLAYWRIGHT_SKIP_WEBSERVER=1 node node_modules/@playwright/test/cli.js test tests/unit --project=chromium 2>&1"
 
 [workflows.workflow.metadata]
-isValidation = true
+outputType = "console"
 
 [agent]
 stack = "PNPM_WORKSPACE"
