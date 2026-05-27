@@ -113,78 +113,25 @@ function extractFullNameFromSession(session) {
 /**
  * Find the Checkout Session that originated a pro subscription.
  *
- * As of `20260501_add_pro_subscriptions_stripe_session_id.sql` the Pro
- * webhook stamps `stripe_session_id` directly, so most rows can be resolved
- * with a single `sessions.retrieve(id)` call (no `sessions.list` roundtrip).
- * Older rows from before that migration land in the API-search fallbacks
- * below, just like before.
+ * The two `sessions.list({ subscription })` / `sessions.list({ customer })`
+ * fallbacks that used to live here were removed in task #159. They existed
+ * only for historic Pro rows that lacked `stripe_session_id`. Now that
+ * `scripts/backfill-pro-stripe-session-ids.mjs` has populated that column on
+ * every such row, those branches are dead code. Every recoverable row now goes
+ * through the fast `sessions.retrieve` path below.
  */
 async function findProCheckoutSession(row) {
-  // Fast path: column populated by the live webhook. One API call, exact match.
-  if (row.stripe_session_id) {
-    try {
-      return await stripe.checkout.sessions.retrieve(row.stripe_session_id);
-    } catch (err) {
-      warn(
-        `pro_subscriptions[${row.id}] — sessions.retrieve(${row.stripe_session_id}) failed: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
-      // Fall through to the search-based fallbacks below.
-    }
+  if (!row.stripe_session_id) return null;
+  try {
+    return await stripe.checkout.sessions.retrieve(row.stripe_session_id);
+  } catch (err) {
+    warn(
+      `pro_subscriptions[${row.id}] — sessions.retrieve(${row.stripe_session_id}) failed: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+    return null;
   }
-
-  // Prefer subscription id — every pro row that completed checkout has one,
-  // and `sessions.list({ subscription })` returns the exact session that
-  // created it. Limit 1 because a subscription is created by exactly one
-  // checkout session.
-  if (row.stripe_subscription_id) {
-    try {
-      const list = await stripe.checkout.sessions.list({
-        subscription: row.stripe_subscription_id,
-        limit: 1,
-      });
-      if (list.data[0]) {
-        // Re-retrieve with custom_fields expanded — `list` does not
-        // include them by default.
-        return await stripe.checkout.sessions.retrieve(list.data[0].id);
-      }
-    } catch (err) {
-      warn(
-        `pro_subscriptions[${row.id}] — sessions.list({ subscription }) failed: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
-    }
-  }
-
-  // Fallback: lookup by customer. May return multiple sessions if the
-  // customer ever re-checked out — pick the most recent that has a name.
-  if (row.stripe_customer_id) {
-    try {
-      const list = await stripe.checkout.sessions.list({
-        customer: row.stripe_customer_id,
-        limit: 10,
-      });
-      for (const s of list.data) {
-        const full = await stripe.checkout.sessions.retrieve(s.id);
-        if (extractFullNameFromSession(full)) return full;
-      }
-      // Even without a name, return the newest so the caller can record
-      // a "skipped: no name on session" without retrying forever.
-      if (list.data[0]) {
-        return await stripe.checkout.sessions.retrieve(list.data[0].id);
-      }
-    } catch (err) {
-      warn(
-        `pro_subscriptions[${row.id}] — sessions.list({ customer }) failed: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
-    }
-  }
-
-  return null;
 }
 
 async function fetchBetaSession(sessionId, rowId) {
@@ -331,21 +278,20 @@ async function main() {
     resolveSession: (row) => fetchBetaSession(row.stripe_session_id, row.id),
   });
 
-  // pro_subscriptions: prefer the new stripe_session_id column when set
-  // (one Stripe API call, exact match); fall back to stripe_subscription_id
-  // / stripe_customer_id for historic rows from before the column existed.
+  // pro_subscriptions: every row now carries stripe_session_id (backfilled by
+  // scripts/backfill-pro-stripe-session-ids.mjs), so a single
+  // sessions.retrieve() call is sufficient. Rows without a session id are
+  // unrecoverable and reported as such.
   const proRows = await fetchAllNullNameRows(
     "pro_subscriptions",
-    "id, email, full_name, stripe_session_id, stripe_subscription_id, stripe_customer_id",
+    "id, email, full_name, stripe_session_id",
   );
 
-  const proWithStripe = proRows.filter(
-    (r) => r.stripe_session_id || r.stripe_subscription_id || r.stripe_customer_id,
-  );
+  const proWithStripe = proRows.filter((r) => !!r.stripe_session_id);
   const proWithoutStripe = proRows.length - proWithStripe.length;
   info(
     `pro_subscriptions: ${proRows.length} rows with full_name IS NULL ` +
-      `(${proWithStripe.length} have a Stripe subscription/customer id, ` +
+      `(${proWithStripe.length} have stripe_session_id, ` +
       `${proWithoutStripe} unrecoverable)`,
   );
 
