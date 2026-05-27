@@ -372,6 +372,9 @@ function ValidCard({
     const { data, error: authError } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
+      },
     });
     if (authError) {
       // "User already registered" → friendlier message + login pointer.

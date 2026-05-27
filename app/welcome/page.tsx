@@ -244,6 +244,9 @@ function WelcomeInner() {
     const { data, error: authError } = await supabase.auth.signUp({
       email: verify.email,
       password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
+      },
     });
 
     if (authError) {
