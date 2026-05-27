@@ -1236,63 +1236,108 @@ export default function ExportPanel() {
             : t("pdf_btn_idle");
         return (
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <UpgradeGate feature="csv_export">
-            <button
-              onClick={exportAll}
-              disabled={bulkDisabled}
-              title={bulkTitle}
-              aria-disabled={bulkDisabled}
-              style={{
+            {canAccess("csv_export") ? (
+              <button
+                onClick={exportAll}
+                disabled={bulkDisabled}
+                title={bulkTitle}
+                aria-disabled={bulkDisabled}
+                style={{
+                  flex: "1 1 200px",
+                  padding: "14px", borderRadius: 12,
+                  border: `1px solid ${BORDER}`,
+                  background: "var(--surface-soft)",
+                  color: busy === "all" || isEmptyRange ? "var(--text-dim)" : "var(--text-strong)",
+                  fontSize: 14, fontWeight: 600,
+                  cursor: bulkDisabled ? "not-allowed" : "pointer",
+                  opacity: bulkDim ? 0.55 : (busy !== null && busy !== "all" ? 0.5 : 1),
+                }}
+              >
+                {allLabel}
+              </button>
+            ) : (
+              <div style={{
                 flex: "1 1 200px",
                 padding: "14px", borderRadius: 12,
                 border: `1px solid ${BORDER}`,
                 background: "var(--surface-soft)",
-                color: busy === "all" || isEmptyRange ? "var(--text-dim)" : "var(--text-strong)",
-                fontSize: 14, fontWeight: 600,
-                cursor: bulkDisabled ? "not-allowed" : "pointer",
-                opacity: bulkDim ? 0.55 : (busy !== null && busy !== "all" ? 0.5 : 1),
-              }}
-            >
-              {allLabel}
-            </button>
-            </UpgradeGate>
-            <UpgradeGate feature="pdf_report">
-            <button
-              onClick={exportPdf}
-              disabled={bulkDisabled}
-              title={bulkTitle}
-              aria-disabled={bulkDisabled}
-              style={{
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                opacity: 0.6,
+              }}>
+                <span style={{ fontSize: 14 }}>🔒</span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text-dim)" }}>
+                  {t("all_btn_idle")}
+                </span>
+                <span style={{
+                  padding: "2px 7px", borderRadius: 20,
+                  background: `${ACCENT}18`, color: ACCENT,
+                  fontSize: 11, fontWeight: 700, letterSpacing: "0.04em",
+                  textTransform: "uppercase" as const,
+                }}>
+                  Glev+
+                </span>
+              </div>
+            )}
+            {canAccess("pdf_report") ? (
+              <button
+                onClick={exportPdf}
+                disabled={bulkDisabled}
+                title={bulkTitle}
+                aria-disabled={bulkDisabled}
+                style={{
+                  flex: "1 1 200px",
+                  padding: "14px", borderRadius: 12,
+                  border: isEmptyRange ? `1px solid ${BORDER}` : "none",
+                  background: busy === "pdf"
+                    ? `${ACCENT}40`
+                    : isEmptyRange
+                      ? "var(--surface-soft)"
+                      : `linear-gradient(135deg, ${ACCENT}, #3B5BE0)`,
+                  color: isEmptyRange ? "var(--text-dim)" : "var(--text)",
+                  fontSize: 14, fontWeight: 700,
+                  cursor: bulkDisabled ? "not-allowed" : "pointer",
+                  boxShadow: busy === null && !isEmptyRange ? `0 4px 18px ${ACCENT}30` : "none",
+                  opacity: bulkDim ? 0.55 : (busy !== null && busy !== "pdf" ? 0.5 : 1),
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="9" y1="13" x2="15" y2="13"/>
+                  <line x1="9" y1="17" x2="13" y2="17"/>
+                </svg>
+                {pdfLabel}
+              </button>
+            ) : (
+              <div style={{
                 flex: "1 1 200px",
                 padding: "14px", borderRadius: 12,
-                // When the range is empty, drop the gradient + accent
-                // border-less look so the PDF button visually reads as
-                // inactive (matches the "Alles als CSV" disabled state).
-                // Without this the bright blue gradient would still
-                // scream "press me" even though the click is a no-op.
-                border: isEmptyRange ? `1px solid ${BORDER}` : "none",
-                background: busy === "pdf"
-                  ? `${ACCENT}40`
-                  : isEmptyRange
-                    ? "var(--surface-soft)"
-                    : `linear-gradient(135deg, ${ACCENT}, #3B5BE0)`,
-                color: isEmptyRange ? "var(--text-dim)" : "var(--text)",
-                fontSize: 14, fontWeight: 700,
-                cursor: bulkDisabled ? "not-allowed" : "pointer",
-                boxShadow: busy === null && !isEmptyRange ? `0 4px 18px ${ACCENT}30` : "none",
-                opacity: bulkDim ? 0.55 : (busy !== null && busy !== "pdf" ? 0.5 : 1),
+                border: "none",
+                background: `linear-gradient(135deg, ${ACCENT}30, #3B5BE030)`,
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                <polyline points="14 2 14 8 20 8"/>
-                <line x1="9" y1="13" x2="15" y2="13"/>
-                <line x1="9" y1="17" x2="13" y2="17"/>
-              </svg>
-              {pdfLabel}
-            </button>
-            </UpgradeGate>
+                opacity: 0.7,
+              }}>
+                <span style={{ fontSize: 14 }}>🔒</span>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.6 }}>
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="9" y1="13" x2="15" y2="13"/>
+                  <line x1="9" y1="17" x2="13" y2="17"/>
+                </svg>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-dim)" }}>
+                  {t("pdf_btn_idle")}
+                </span>
+                <span style={{
+                  padding: "2px 7px", borderRadius: 20,
+                  background: `${ACCENT}18`, color: ACCENT,
+                  fontSize: 11, fontWeight: 700, letterSpacing: "0.04em",
+                  textTransform: "uppercase" as const,
+                }}>
+                  Glev+
+                </span>
+              </div>
+            )}
           </div>
         );
       })()}
