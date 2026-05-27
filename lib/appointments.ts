@@ -3,6 +3,11 @@
  * Postgres table — one row per doctor visit per user — keyed on
  * auth.uid()::text the same way the rest of the per-user tables are.
  *
+ * Task #114 extends each row with:
+ *   • `tags`  — categorical labels from a fixed app vocabulary
+ *   • `a1c`   — optional HbA1c % value recorded at the visit
+ *   • `egfr`  — optional eGFR value recorded at the visit
+ *
  * Every read gracefully falls back to an empty array / `null` when
  * Supabase is unavailable, the user is signed out, or RLS denies the
  * query, so callers never have to handle missing-data states. Writes
@@ -26,8 +31,42 @@ export interface Appointment {
   appointmentAt: string;
   /** Optional free-text label ("Endo Q1", "Diabetologe", …). */
   note: string | null;
+  /** Categorical tags chosen from APPOINTMENT_TAGS vocabulary. */
+  tags: string[];
+  /** Optional HbA1c value recorded at this visit (%). */
+  a1c: number | null;
+  /** Optional eGFR value recorded at this visit (mL/min/1.73 m²). */
+  egfr: number | null;
   /** ISO timestamp the row was last touched — useful for cache busting. */
   updatedAt: string;
+}
+
+/**
+ * Fixed vocabulary for appointment tags. Order determines display
+ * order in the tag picker. Colors are applied by `tagColor()` below.
+ */
+export const APPOINTMENT_TAGS = [
+  "Endo",
+  "GP",
+  "Lab",
+  "Ophthalmology",
+  "Nephrology",
+  "Other",
+] as const;
+
+export type AppointmentTag = (typeof APPOINTMENT_TAGS)[number];
+
+/** Per-tag accent color. Falls back to a neutral gray for unknown tags. */
+export function tagColor(tag: string): string {
+  switch (tag) {
+    case "Endo":         return "#4F6EF7";
+    case "GP":           return "#22D3A0";
+    case "Lab":          return "#FF9500";
+    case "Ophthalmology":return "#A855F7";
+    case "Nephrology":   return "#EC4899";
+    case "Other":        return "#6B7280";
+    default:             return "#6B7280";
+  }
 }
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -47,10 +86,28 @@ function parseRow(row: Record<string, unknown> | null | undefined): Appointment 
     ? row.note
     : null;
   const updatedAt = typeof row.updated_at === "string" ? row.updated_at : "";
+
+  // tags: Postgres text[] comes through PostgREST as a JS array or null.
+  const rawTags = row.tags;
+  const tags: string[] = Array.isArray(rawTags)
+    ? rawTags.filter((t): t is string => typeof t === "string")
+    : [];
+
+  const a1c = typeof row.a1c === "number" ? row.a1c
+    : typeof row.a1c === "string" && row.a1c !== "" ? parseFloat(row.a1c)
+    : null;
+
+  const egfr = typeof row.egfr === "number" ? row.egfr
+    : typeof row.egfr === "string" && row.egfr !== "" ? parseFloat(row.egfr)
+    : null;
+
   return {
     id: row.id,
     appointmentAt: row.appointment_at,
     note,
+    tags,
+    a1c: a1c !== null && !isNaN(a1c) ? a1c : null,
+    egfr: egfr !== null && !isNaN(egfr) ? egfr : null,
     updatedAt,
   };
 }
@@ -68,7 +125,7 @@ export async function fetchAppointments(): Promise<Appointment[]> {
 
   const { data, error } = await supabase
     .from("appointments")
-    .select("id, appointment_at, note, updated_at")
+    .select("id, appointment_at, note, tags, a1c, egfr, updated_at")
     .eq("user_id", user.id)
     .order("appointment_at", { ascending: false });
 
@@ -104,13 +161,17 @@ export async function fetchLatestAppointmentDate(): Promise<string | null> {
 /**
  * Insert a new appointment for the signed-in user. The `note` arg is
  * trimmed and an empty string is normalized to `null` so the column
- * stays clean (downstream UI treats "" and null identically). Returns
- * the inserted row so the caller can drop it into local state without
- * a follow-up fetch.
+ * stays clean. `tags` is stored as-is (already an array); `a1c` and
+ * `egfr` are stored as-is (already numeric or null). Returns the
+ * inserted row so the caller can drop it into local state without a
+ * follow-up fetch.
  */
 export async function addAppointment(
   appointmentAt: string,
   note: string | null = null,
+  tags: string[] = [],
+  a1c: number | null = null,
+  egfr: number | null = null,
 ): Promise<Appointment> {
   if (!supabase) throw new Error("Supabase not configured");
   if (!isValidIsoDate(appointmentAt)) {
@@ -129,8 +190,11 @@ export async function addAppointment(
       user_id: user.id,
       appointment_at: appointmentAt,
       note: cleanNote,
+      tags,
+      a1c,
+      egfr,
     })
-    .select("id, appointment_at, note, updated_at")
+    .select("id, appointment_at, note, tags, a1c, egfr, updated_at")
     .single();
 
   if (error || !data) throw new Error(error?.message ?? "Insert failed");
@@ -140,17 +204,19 @@ export async function addAppointment(
 }
 
 /**
- * Update an existing appointment's date and/or note. Both fields are
- * required (full replace) so the caller can't accidentally null out a
- * note by omitting it from a partial update; pass the existing values
- * back through if a single field is being changed. RLS scopes the
- * update to the signed-in user — a foreign id silently affects zero
- * rows rather than throwing, which is the safest behaviour.
+ * Update an existing appointment's fields (full replace). All args
+ * are required so the caller can't accidentally null out a field by
+ * omitting it from a partial update; pass the existing values back
+ * through if a single field is being changed. RLS scopes the update
+ * to the signed-in user — a foreign id silently affects zero rows.
  */
 export async function updateAppointment(
   id: string,
   appointmentAt: string,
   note: string | null,
+  tags: string[] = [],
+  a1c: number | null = null,
+  egfr: number | null = null,
 ): Promise<void> {
   if (!supabase) throw new Error("Supabase not configured");
   if (!isValidIsoDate(appointmentAt)) {
@@ -168,6 +234,9 @@ export async function updateAppointment(
     .update({
       appointment_at: appointmentAt,
       note: cleanNote,
+      tags,
+      a1c,
+      egfr,
     })
     .eq("id", id)
     .eq("user_id", user.id);

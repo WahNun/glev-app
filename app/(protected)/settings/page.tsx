@@ -40,6 +40,8 @@ import {
   addAppointment,
   updateAppointment,
   deleteAppointment,
+  APPOINTMENT_TAGS,
+  tagColor,
   type Appointment,
 } from "@/lib/appointments";
 import { localeToBcp47 } from "@/lib/time";
@@ -302,7 +304,7 @@ export default function SettingsPage() {
   // is in edit mode, absence means it's in read mode. Stored alongside
   // `appointments` rather than inside each row so cancelling an edit
   // doesn't have to mutate the list and risk re-ordering.
-  const [apptEdits, setApptEdits] = useState<Record<string, { date: string; note: string }>>({});
+  const [apptEdits, setApptEdits] = useState<Record<string, { date: string; note: string; tags: string[]; a1c: string; egfr: string }>>({});
   // Draft state for the "add new appointment" form at the top of the
   // sheet. Defaults to today so the common "I just got back from a
   // visit" flow is one click; the user can pick another date if they
@@ -311,6 +313,9 @@ export default function SettingsPage() {
     new Date().toISOString().slice(0, 10),
   );
   const [newApptNote, setNewApptNote] = useState<string>("");
+  const [newApptTags, setNewApptTags] = useState<string[]>([]);
+  const [newApptA1c, setNewApptA1c] = useState<string>("");
+  const [newApptEgfr, setNewApptEgfr] = useState<string>("");
   // Distinguish in-flight save from idle. Only enables a single
   // pending op at a time (add OR edit OR delete) — multiple
   // concurrent writes against the same row would race the optimistic
@@ -576,6 +581,9 @@ export default function SettingsPage() {
     setApptEdits({});
     setNewApptDate(new Date().toISOString().slice(0, 10));
     setNewApptNote("");
+    setNewApptTags([]);
+    setNewApptA1c("");
+    setNewApptEgfr("");
     setApptBusy(null);
     setSaveError("");
     // Seed About-me drafts from the canonical profile so the sheet
@@ -782,7 +790,15 @@ export default function SettingsPage() {
     setApptBusy("__add__");
     setSaveError("");
     try {
-      const inserted = await addAppointment(newApptDate, newApptNote);
+      const parsedA1c = newApptA1c !== "" ? parseFloat(newApptA1c) : null;
+      const parsedEgfr = newApptEgfr !== "" ? parseFloat(newApptEgfr) : null;
+      const inserted = await addAppointment(
+        newApptDate,
+        newApptNote,
+        newApptTags,
+        parsedA1c !== null && !isNaN(parsedA1c) ? parsedA1c : null,
+        parsedEgfr !== null && !isNaN(parsedEgfr) ? parsedEgfr : null,
+      );
       setAppointments((prev) =>
         [inserted, ...prev].sort(
           (a, b) => b.appointmentAt.localeCompare(a.appointmentAt),
@@ -791,12 +807,15 @@ export default function SettingsPage() {
       // Reset the form so a quick "log another" flow stays fluid.
       setNewApptDate(new Date().toISOString().slice(0, 10));
       setNewApptNote("");
+      setNewApptTags([]);
+      setNewApptA1c("");
+      setNewApptEgfr("");
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : tSettings("save_failed"));
     } finally {
       setApptBusy(null);
     }
-  }, [newApptDate, newApptNote, tSettings]);
+  }, [newApptDate, newApptNote, newApptTags, newApptA1c, newApptEgfr, tSettings]);
 
   /** Commit an inline-edit draft for an existing appointment. Local
    *  state is updated only after the DB write succeeds so a failed
@@ -814,7 +833,16 @@ export default function SettingsPage() {
       setApptBusy(id);
       setSaveError("");
       try {
-        await updateAppointment(id, draft.date, draft.note);
+        const parsedA1c = draft.a1c !== "" ? parseFloat(draft.a1c) : null;
+        const parsedEgfr = draft.egfr !== "" ? parseFloat(draft.egfr) : null;
+        await updateAppointment(
+          id,
+          draft.date,
+          draft.note,
+          draft.tags,
+          parsedA1c !== null && !isNaN(parsedA1c) ? parsedA1c : null,
+          parsedEgfr !== null && !isNaN(parsedEgfr) ? parsedEgfr : null,
+        );
         setAppointments((prev) =>
           prev
             .map((a) =>
@@ -823,6 +851,9 @@ export default function SettingsPage() {
                     ...a,
                     appointmentAt: draft.date,
                     note: draft.note.trim() === "" ? null : draft.note.trim(),
+                    tags: draft.tags,
+                    a1c: parsedA1c !== null && !isNaN(parsedA1c) ? parsedA1c : null,
+                    egfr: parsedEgfr !== null && !isNaN(parsedEgfr) ? parsedEgfr : null,
                   }
                 : a,
             )
@@ -1747,10 +1778,7 @@ export default function SettingsPage() {
             {tSettings("appointments_hint")}
           </div>
 
-          {/* Add form — sits at the top so adding a fresh entry is the
-              default action when the sheet opens. Date pre-fills to
-              today; note is optional and freeform so the user can
-              tag visits ("Endo Q1") for the dropdown later. */}
+          {/* Add form — date, note, tags, and optional lab values. */}
           <div style={{
             display: "flex", flexDirection: "column", gap: 10,
             padding: "12px 14px", borderRadius: 12,
@@ -1780,6 +1808,77 @@ export default function SettingsPage() {
                 maxLength={200}
               />
             </div>
+            {/* Tag picker */}
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-faint)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                {tSettings("appointments_tags_label")}
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {APPOINTMENT_TAGS.map((tag) => {
+                  const selected = newApptTags.includes(tag);
+                  const color = tagColor(tag);
+                  const tagKey = `appointments_tag_${tag.toLowerCase()}` as Parameters<typeof tSettings>[0];
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      disabled={apptBusy !== null}
+                      onClick={() =>
+                        setNewApptTags((prev) =>
+                          prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
+                        )
+                      }
+                      style={{
+                        padding: "4px 10px", borderRadius: 999, fontSize: 12, fontWeight: 600,
+                        border: `1px solid ${selected ? color : BORDER}`,
+                        background: selected ? `${color}20` : "transparent",
+                        color: selected ? color : "var(--text-dim)",
+                        cursor: apptBusy !== null ? "not-allowed" : "pointer",
+                        transition: "all 0.15s",
+                      }}
+                    >
+                      {tSettings(tagKey)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            {/* Optional lab values */}
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-faint)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                {tSettings("appointments_lab_values_title")}
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3, flex: "1 1 100px" }}>
+                  <label style={{ fontSize: 11, color: "var(--text-faint)", fontWeight: 600 }}>
+                    {tSettings("appointments_a1c_label")}
+                  </label>
+                  <input
+                    style={{ ...inp }}
+                    type="number"
+                    min="2" max="20" step="0.1"
+                    value={newApptA1c}
+                    placeholder={tSettings("appointments_a1c_placeholder")}
+                    onChange={(e) => setNewApptA1c(e.target.value)}
+                    disabled={apptBusy !== null}
+                  />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3, flex: "1 1 100px" }}>
+                  <label style={{ fontSize: 11, color: "var(--text-faint)", fontWeight: 600 }}>
+                    {tSettings("appointments_egfr_label")}
+                  </label>
+                  <input
+                    style={{ ...inp }}
+                    type="number"
+                    min="0" max="200" step="1"
+                    value={newApptEgfr}
+                    placeholder={tSettings("appointments_egfr_placeholder")}
+                    onChange={(e) => setNewApptEgfr(e.target.value)}
+                    disabled={apptBusy !== null}
+                  />
+                </div>
+              </div>
+            </div>
             <button
               type="button"
               onClick={addAppointmentAction}
@@ -1799,9 +1898,7 @@ export default function SettingsPage() {
             </button>
           </div>
 
-          {/* List of saved appointments. Empty state explains the
-              feature so the user knows what to do when there's
-              nothing to show yet. */}
+          {/* List of saved appointments. */}
           {appointments.length === 0 ? (
             <div style={{
               padding: "16px 14px", borderRadius: 12,
@@ -1863,6 +1960,93 @@ export default function SettingsPage() {
                             maxLength={200}
                           />
                         </div>
+                        {/* Edit: tag picker */}
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-faint)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                            {tSettings("appointments_tags_label")}
+                          </div>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                            {APPOINTMENT_TAGS.map((tag) => {
+                              const selected = editing.tags.includes(tag);
+                              const color = tagColor(tag);
+                              const tagKey = `appointments_tag_${tag.toLowerCase()}` as Parameters<typeof tSettings>[0];
+                              return (
+                                <button
+                                  key={tag}
+                                  type="button"
+                                  disabled={rowBusy}
+                                  onClick={() =>
+                                    setApptEdits((prev) => ({
+                                      ...prev,
+                                      [appt.id]: {
+                                        ...editing,
+                                        tags: editing.tags.includes(tag)
+                                          ? editing.tags.filter((t) => t !== tag)
+                                          : [...editing.tags, tag],
+                                      },
+                                    }))
+                                  }
+                                  style={{
+                                    padding: "4px 10px", borderRadius: 999, fontSize: 12, fontWeight: 600,
+                                    border: `1px solid ${selected ? color : BORDER}`,
+                                    background: selected ? `${color}20` : "transparent",
+                                    color: selected ? color : "var(--text-dim)",
+                                    cursor: rowBusy ? "not-allowed" : "pointer",
+                                    transition: "all 0.15s",
+                                  }}
+                                >
+                                  {tSettings(tagKey)}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        {/* Edit: lab values */}
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-faint)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                            {tSettings("appointments_lab_values_title")}
+                          </div>
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 3, flex: "1 1 100px" }}>
+                              <label style={{ fontSize: 11, color: "var(--text-faint)", fontWeight: 600 }}>
+                                {tSettings("appointments_a1c_label")}
+                              </label>
+                              <input
+                                style={{ ...inp }}
+                                type="number"
+                                min="2" max="20" step="0.1"
+                                value={editing.a1c}
+                                placeholder={tSettings("appointments_a1c_placeholder")}
+                                onChange={(e) =>
+                                  setApptEdits((prev) => ({
+                                    ...prev,
+                                    [appt.id]: { ...editing, a1c: e.target.value },
+                                  }))
+                                }
+                                disabled={rowBusy}
+                              />
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 3, flex: "1 1 100px" }}>
+                              <label style={{ fontSize: 11, color: "var(--text-faint)", fontWeight: 600 }}>
+                                {tSettings("appointments_egfr_label")}
+                              </label>
+                              <input
+                                style={{ ...inp }}
+                                type="number"
+                                min="0" max="200" step="1"
+                                value={editing.egfr}
+                                placeholder={tSettings("appointments_egfr_placeholder")}
+                                onChange={(e) =>
+                                  setApptEdits((prev) => ({
+                                    ...prev,
+                                    [appt.id]: { ...editing, egfr: e.target.value },
+                                  }))
+                                }
+                                disabled={rowBusy}
+                              />
+                            </div>
+                          </div>
+                        </div>
                         <div style={{ display: "flex", gap: 8 }}>
                           <button
                             type="button"
@@ -1904,12 +2088,27 @@ export default function SettingsPage() {
                         </div>
                       </>
                     ) : (
-                      <div style={{
-                        display: "flex", alignItems: "center", gap: 12,
-                      }}>
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)" }}>
-                            {formatted}
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-strong)" }}>
+                              {formatted}
+                            </div>
+                            {/* Tag badges */}
+                            {appt.tags.length > 0 && appt.tags.map((tag) => (
+                              <span
+                                key={tag}
+                                style={{
+                                  padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 700,
+                                  background: `${tagColor(tag)}20`,
+                                  color: tagColor(tag),
+                                  border: `1px solid ${tagColor(tag)}40`,
+                                  letterSpacing: "0.02em",
+                                }}
+                              >
+                                {tag}
+                              </span>
+                            ))}
                           </div>
                           {appt.note && (
                             <div style={{
@@ -1920,51 +2119,73 @@ export default function SettingsPage() {
                               {appt.note}
                             </div>
                           )}
+                          {/* Lab values row */}
+                          {(appt.a1c !== null || appt.egfr !== null) && (
+                            <div style={{
+                              display: "flex", gap: 10, marginTop: 4, flexWrap: "wrap",
+                            }}>
+                              {appt.a1c !== null && (
+                                <span style={{ fontSize: 12, color: "var(--text-dim)", fontWeight: 500 }}>
+                                  HbA1c <strong style={{ color: "var(--text-strong)" }}>{appt.a1c}%</strong>
+                                </span>
+                              )}
+                              {appt.egfr !== null && (
+                                <span style={{ fontSize: 12, color: "var(--text-dim)", fontWeight: 500 }}>
+                                  eGFR <strong style={{ color: "var(--text-strong)" }}>{appt.egfr}</strong>
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setApptEdits((prev) => ({
-                              ...prev,
-                              [appt.id]: {
-                                date: appt.appointmentAt,
-                                note: appt.note ?? "",
-                              },
-                            }))
-                          }
-                          disabled={apptBusy !== null}
-                          aria-label={tSettings("appointments_edit")}
-                          style={{
-                            padding: "6px 12px", borderRadius: 8,
-                            border: `1px solid ${BORDER}`,
-                            background: "var(--surface-soft)",
-                            color: "var(--text-body)",
-                            fontSize: 13, fontWeight: 600,
-                            cursor: apptBusy !== null ? "not-allowed" : "pointer",
-                            opacity: apptBusy !== null ? 0.5 : 1,
-                          }}
-                        >
-                          {tSettings("appointments_edit")}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => deleteAppointmentAction(appt.id)}
-                          disabled={apptBusy !== null}
-                          aria-label={tSettings("appointments_delete")}
-                          style={{
-                            padding: "6px 12px", borderRadius: 8,
-                            border: `1px solid ${PINK}40`,
-                            background: `${PINK}10`,
-                            color: PINK,
-                            fontSize: 13, fontWeight: 600,
-                            cursor: apptBusy !== null ? "not-allowed" : "pointer",
-                            opacity: apptBusy !== null ? 0.5 : 1,
-                          }}
-                        >
-                          {rowBusy
-                            ? tSettings("save_button_busy")
-                            : tSettings("appointments_delete")}
-                        </button>
+                        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setApptEdits((prev) => ({
+                                ...prev,
+                                [appt.id]: {
+                                  date: appt.appointmentAt,
+                                  note: appt.note ?? "",
+                                  tags: appt.tags,
+                                  a1c: appt.a1c !== null ? String(appt.a1c) : "",
+                                  egfr: appt.egfr !== null ? String(appt.egfr) : "",
+                                },
+                              }))
+                            }
+                            disabled={apptBusy !== null}
+                            aria-label={tSettings("appointments_edit")}
+                            style={{
+                              padding: "6px 12px", borderRadius: 8,
+                              border: `1px solid ${BORDER}`,
+                              background: "var(--surface-soft)",
+                              color: "var(--text-body)",
+                              fontSize: 13, fontWeight: 600,
+                              cursor: apptBusy !== null ? "not-allowed" : "pointer",
+                              opacity: apptBusy !== null ? 0.5 : 1,
+                            }}
+                          >
+                            {tSettings("appointments_edit")}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteAppointmentAction(appt.id)}
+                            disabled={apptBusy !== null}
+                            aria-label={tSettings("appointments_delete")}
+                            style={{
+                              padding: "6px 12px", borderRadius: 8,
+                              border: `1px solid ${PINK}40`,
+                              background: `${PINK}10`,
+                              color: PINK,
+                              fontSize: 13, fontWeight: 600,
+                              cursor: apptBusy !== null ? "not-allowed" : "pointer",
+                              opacity: apptBusy !== null ? 0.5 : 1,
+                            }}
+                          >
+                            {rowBusy
+                              ? tSettings("save_button_busy")
+                              : tSettings("appointments_delete")}
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>

@@ -23,7 +23,7 @@ import {
   type RangeCounts,
 } from "@/lib/export";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
-import { fetchAppointments, type Appointment } from "@/lib/appointments";
+import { fetchAppointments, tagColor, APPOINTMENT_TAGS, type Appointment } from "@/lib/appointments";
 import { getTargetRange, fetchTargetRange, type TargetRange } from "@/lib/userSettings";
 import { localeToBcp47 } from "@/lib/time";
 
@@ -354,6 +354,8 @@ export default function ExportPanel() {
   // latest visit". Opened via the small "..." trigger next to the
   // chip; click-outside / Escape close it.
   const [appointmentMenuOpen, setAppointmentMenuOpen] = useState<boolean>(false);
+  // Active tag filter in the appointment picker. `null` = show all.
+  const [appointmentFilterTag, setAppointmentFilterTag] = useState<string | null>(null);
   // Tracks whether the async fetchAppointments() call has resolved
   // yet. We can't use `appointments.length === 0` for that — empty is
   // also the legitimate "no appointments saved" value, and conflating
@@ -486,6 +488,16 @@ export default function ExportPanel() {
       setRangePreset("all");
     }
   }, [rangePreset, lastAppointment, lastAppointmentLoaded]);
+
+  // Derived values for the appointment picker dropdown.
+  // Hoisted here (above the JSX return) so the picker can use simple
+  // conditional rendering instead of an IIFE with lexical bindings.
+  const pickerUsedTags = Array.from(
+    new Set(appointments.flatMap((a) => a.tags)),
+  ).filter((tag) => APPOINTMENT_TAGS.includes(tag as typeof APPOINTMENT_TAGS[number]));
+  const pickerFilteredAppts = appointmentFilterTag
+    ? appointments.filter((a) => a.tags.includes(appointmentFilterTag))
+    : appointments;
 
   // Read the user's ICR + CF directly from the user_settings row
   // instead of going through fetchInsulinSettings() — that helper
@@ -942,8 +954,8 @@ export default function ExportPanel() {
                         top: "calc(100% + 6px)",
                         right: 0,
                         zIndex: 11,
-                        minWidth: 240,
-                        maxHeight: 280,
+                        minWidth: 260,
+                        maxHeight: 340,
                         overflowY: "auto",
                         background: SURFACE,
                         border: `1px solid ${BORDER}`,
@@ -960,7 +972,57 @@ export default function ExportPanel() {
                       }}>
                         {t("appointments_picker_label")}
                       </div>
-                      {appointments.map((appt, idx) => {
+                      {/* Tag filter row — only shown when at least one
+                          appointment has a tag, so plain-note users see
+                          the same compact list as before. */}
+                      {pickerUsedTags.length > 0 && (
+                        <div style={{
+                          display: "flex", flexWrap: "wrap", gap: 4,
+                          padding: "4px 6px 6px",
+                          borderBottom: `1px solid ${BORDER}`,
+                          marginBottom: 2,
+                        }}>
+                          <button
+                            type="button"
+                            onClick={() => setAppointmentFilterTag(null)}
+                            style={{
+                              padding: "3px 8px", borderRadius: 999, fontSize: 11, fontWeight: 600,
+                              border: `1px solid ${appointmentFilterTag === null ? ACCENT : BORDER}`,
+                              background: appointmentFilterTag === null ? `${ACCENT}20` : "transparent",
+                              color: appointmentFilterTag === null ? ACCENT : "var(--text-dim)",
+                              cursor: "pointer",
+                            }}
+                          >
+                            {t("appointments_filter_all")}
+                          </button>
+                          {pickerUsedTags.map((tag) => {
+                            const active = appointmentFilterTag === tag;
+                            const color = tagColor(tag);
+                            return (
+                              <button
+                                key={tag}
+                                type="button"
+                                onClick={() =>
+                                  setAppointmentFilterTag((prev) => (prev === tag ? null : tag))
+                                }
+                                style={{
+                                  padding: "3px 8px", borderRadius: 999, fontSize: 11, fontWeight: 600,
+                                  border: `1px solid ${active ? color : BORDER}`,
+                                  background: active ? `${color}20` : "transparent",
+                                  color: active ? color : "var(--text-dim)",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {tag}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {pickerFilteredAppts.map((appt) => {
+                        // For "select latest" check we always use the
+                        // real index in the full `appointments` array.
+                        const realIdx = appointments.indexOf(appt);
                         const isActive = (pickedAppointmentId ?? appointments[0]?.id) === appt.id;
                         const apptFormatted = new Date(`${appt.appointmentAt}T00:00:00`).toLocaleDateString(
                           bcp47,
@@ -973,18 +1035,13 @@ export default function ExportPanel() {
                             role="option"
                             aria-selected={isActive}
                             onClick={() => {
-                              // Selecting the latest entry is identical
-                              // to clearing the override — keep the
-                              // pickedId null so a future "add newer
-                              // appointment" automatically slides into
-                              // the chip. Anything else gets pinned by id.
-                              setPickedAppointmentId(idx === 0 ? null : appt.id);
+                              setPickedAppointmentId(realIdx === 0 ? null : appt.id);
                               setRangePreset("lastAppointment");
                               setAppointmentMenuOpen(false);
                             }}
                             style={{
                               display: "flex", flexDirection: "column",
-                              alignItems: "flex-start", gap: 2,
+                              alignItems: "flex-start", gap: 3,
                               padding: "8px 10px", borderRadius: 8, border: "none",
                               background: isActive ? `${ACCENT}15` : "transparent",
                               color: isActive ? ACCENT : "var(--text-strong)",
@@ -993,7 +1050,28 @@ export default function ExportPanel() {
                               textAlign: "left",
                             }}
                           >
-                            <span>{apptFormatted}</span>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                              <span>{apptFormatted}</span>
+                              {appt.tags.map((tag) => (
+                                <span
+                                  key={tag}
+                                  style={{
+                                    padding: "1px 6px", borderRadius: 999, fontSize: 10, fontWeight: 700,
+                                    background: `${tagColor(tag)}20`,
+                                    color: tagColor(tag),
+                                    border: `1px solid ${tagColor(tag)}40`,
+                                  }}
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                            {(appt.a1c !== null || appt.egfr !== null) && (
+                              <div style={{ display: "flex", gap: 8, fontSize: 11, fontWeight: 500, color: isActive ? ACCENT : "var(--text-dim)", opacity: 0.9 }}>
+                                {appt.a1c !== null && <span>HbA1c {appt.a1c}%</span>}
+                                {appt.egfr !== null && <span>eGFR {appt.egfr}</span>}
+                              </div>
+                            )}
                             {appt.note && (
                               <span style={{
                                 fontSize: 13, fontWeight: 500,
