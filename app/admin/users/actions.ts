@@ -634,7 +634,7 @@ export async function setGiftLabelAction(formData: FormData): Promise<void> {
     adminToken,
   });
 
-  revalidateUserPaths(userId);
+  redirect(`/admin/users/${userId}?gift_ok=${encodeURIComponent(label)}`);
 }
 
 /**

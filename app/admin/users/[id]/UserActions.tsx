@@ -61,8 +61,6 @@ export default function UserActions({
   // Versehen ausgelöst werden — gleiche UX wie der Drip-Send-Confirm.
   const [simpleConfirm, setSimpleConfirm] = useState<"magic" | "reset" | null>(null);
   const [pendingSimple, setPendingSimple] = useState<"magic" | "reset" | null>(null);
-  const [giftPending, setGiftPending] = useState(false);
-  const [giftOk, setGiftOk] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   function runSimpleAction(): void {
@@ -135,25 +133,7 @@ export default function UserActions({
           <p style={{ margin: "0 0 10px", fontSize: 12, color: "#666" }}>
             Nur zur Kennzeichnung — der eigentliche Plan muss oben via &quot;Manuellen Plan setzen&quot; vergeben werden.
           </p>
-          <form
-            style={row}
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (giftPending) return;
-              const fd = new FormData(e.currentTarget);
-              const chosen = String(fd.get("label") ?? "");
-              setGiftOk(null);
-              setGiftPending(true);
-              startTransition(async () => {
-                try {
-                  await setGiftLabelAction(fd);
-                  setGiftOk(chosen);
-                } finally {
-                  setGiftPending(false);
-                }
-              });
-            }}
-          >
+          <form action={setGiftLabelAction} style={row}>
             <input type="hidden" name="userId" value={userId} />
             <select name="label" defaultValue={currentGiftLabel ?? "Lifetime Access"} style={input}>
               <option value="Lifetime Access">Lifetime Access</option>
@@ -166,15 +146,10 @@ export default function UserActions({
               <option value="Investor">Investor</option>
               <option value="Team">Team</option>
             </select>
-            <button type="submit" style={btnPrimary} disabled={giftPending}>
-              {giftPending ? "Speichern…" : "Label setzen"}
+            <button type="submit" style={btnPrimary}>
+              Label setzen
             </button>
           </form>
-          {giftOk ? (
-            <p style={{ margin: "6px 0 0", fontSize: 12, color: "#166534" }}>
-              ✓ Label gesetzt: <strong>🎁 {giftOk}</strong>
-            </p>
-          ) : null}
           {currentGiftLabel ? (
             <div style={{ ...row, marginTop: 8, alignItems: "center" }}>
               <span

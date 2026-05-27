@@ -11,10 +11,14 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminUserDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
+  const giftOk = Array.isArray(sp.gift_ok) ? sp.gift_ok[0] : sp.gift_ok;
   const authed = await isAdminAuthed();
   if (!authed) {
     return (
@@ -145,6 +149,11 @@ export default async function AdminUserDetailPage({
         E-Mail: <code>{authUser.email ?? "—"}</code> · ID: <code>{id}</code>
       </p>
 
+      {giftOk ? (
+        <div style={{ background: "#f0fdf4", border: "1px solid #86efac", color: "#166534", padding: "10px 14px", borderRadius: 8, fontSize: 14, marginBottom: 20 }}>
+          ✓ Gift-Label gesetzt: <strong>🎁 {decodeURIComponent(giftOk)}</strong>
+        </div>
+      ) : null}
 
       {/* Block 1 — Stammdaten */}
       <Section title="Stammdaten">
