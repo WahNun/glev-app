@@ -119,7 +119,7 @@ export async function grantPlanByEmailAction(formData: FormData): Promise<void> 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     redirect("/admin/users?grant_err=email");
   }
-  if (!["free", "beta", "pro"].includes(plan)) {
+  if (!["free", "beta", "pro", "plus"].includes(plan)) {
     redirect("/admin/users?grant_err=plan");
   }
 
@@ -209,8 +209,9 @@ export async function grantBetaFreeYearAction(formData: FormData): Promise<void>
   // dann von „Pro" statt „Beta"; Drip-Sequenz wird für Pro übersprungen
   // weil sie Beta-Onboarding-spezifisch ist).
   const planRaw = String(formData.get("plan") ?? "beta").trim().toLowerCase();
-  const plan: "beta" | "pro" = planRaw === "pro" ? "pro" : "beta";
-  const planTitle = plan === "pro" ? "Pro" : "Beta";
+  const plan: "beta" | "pro" | "plus" =
+    planRaw === "pro" ? "pro" : planRaw === "plus" ? "plus" : "beta";
+  const planTitle = plan === "pro" ? "Pro" : plan === "plus" ? "Plus" : "Smart";
   const note =
     String(formData.get("note") ?? "").trim() ||
     `${planTitle}-Free-Year-Programm`;

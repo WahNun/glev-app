@@ -91,7 +91,7 @@ export default function UserActions({
           <input type="hidden" name="userId" value={userId} />
           <span style={lbl}>Manuellen Plan setzen:</span>
           <select name="plan" defaultValue={currentManualPlan ?? "pro"} style={input}>
-            <option value="free">Free (entzieht Zugang)</option>
+            <option value="free">⛔ Free — Zugang entziehen</option>
             <option value="beta">Smart S (Beta)</option>
             <option value="pro">Pro M</option>
             <option value="plus">Plus L</option>

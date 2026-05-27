@@ -28,10 +28,10 @@ import type { EmailLocale } from "@/lib/emails/beta-welcome";
 // Diabetologen-/Friends-&-Family-Pro-Pfad gesetzt — selbe Mail-Optik,
 // nur das Wort tauscht sich aus, damit nicht ein Pro-User „Beta"
 // liest.
-export type FreeYearPlanLabel = "beta" | "pro";
+export type FreeYearPlanLabel = "beta" | "pro" | "plus";
 
 function planLabel(plan: FreeYearPlanLabel): string {
-  return plan === "pro" ? "Pro" : "Beta";
+  return plan === "pro" ? "Pro" : plan === "plus" ? "Plus" : "Smart";
 }
 
 export function betaFreeYearWelcomeHtml(

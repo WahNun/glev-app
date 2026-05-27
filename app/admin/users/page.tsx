@@ -418,11 +418,12 @@ export default async function AdminUsersPage({
           <select
             name="plan"
             defaultValue="beta"
-            style={{ ...inputStyle, flex: "0 0 110px" }}
+            style={{ ...inputStyle, flex: "0 0 160px" }}
           >
-            <option value="beta">Beta</option>
-            <option value="pro">Pro</option>
-            <option value="free">Free (entziehen)</option>
+            <option value="beta">S — Smart (9 €/Mo)</option>
+            <option value="pro">M — Pro (14,90 €/Mo)</option>
+            <option value="plus">L — Plus (29 €/Mo)</option>
+            <option value="free">⛔ Free — Zugang entziehen</option>
           </select>
           <input
             type="text"
@@ -479,11 +480,12 @@ export default async function AdminUsersPage({
           <select
             name="plan"
             defaultValue="beta"
-            style={{ ...inputStyle, flex: "0 0 160px", minWidth: 140 }}
+            style={{ ...inputStyle, flex: "0 0 200px", minWidth: 160 }}
             title="Plan-Auswahl"
           >
-            <option value="beta">Beta (1 Jahr)</option>
-            <option value="pro">Pro (1 Jahr, z.B. Diabetolog:innen)</option>
+            <option value="beta">S — Smart (1 Jahr, Friends &amp; Family)</option>
+            <option value="pro">M — Pro (1 Jahr, z.B. Diabetolog:innen)</option>
+            <option value="plus">L — Plus (1 Jahr)</option>
           </select>
           <input
             type="text"
