@@ -724,26 +724,6 @@ export default function PreviewHome() {
               position: "relative",
             }}
           >
-            <div
-              aria-label={t("pricing_beta_badge")}
-              style={{
-                position: "absolute",
-                top: -12,
-                left: 24,
-                background: "var(--surface-soft, #232329)",
-                color: "var(--text-muted)",
-                fontSize: 11,
-                fontWeight: 700,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                padding: "4px 10px",
-                borderRadius: 999,
-                border: `1px solid ${BORDER}`,
-              }}
-            >
-              {t("pricing_beta_badge")}
-            </div>
-
             <div>
               <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--text)" }}>
                 {t("pricing_beta_title")}
@@ -783,22 +763,22 @@ export default function PreviewHome() {
 
             <Link
               href="/beta"
-              className="glev-cta-ghost"
+              className="glev-cta-primary"
               style={{
                 marginTop: "auto",
                 padding: "13px 22px",
                 borderRadius: 12,
-                background: "transparent",
-                color: "var(--text)",
+                background: ACCENT,
+                color: "#fff",
                 fontSize: 14,
-                fontWeight: 600,
+                fontWeight: 700,
                 letterSpacing: "-0.005em",
                 textDecoration: "none",
-                border: `1px solid ${ACCENT}`,
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 8,
+                boxShadow: `0 6px 18px ${ACCENT}40`,
               }}
             >
               {t("pricing_beta_cta")}
@@ -907,6 +887,20 @@ export default function PreviewHome() {
                 <line x1="5" y1="12" x2="19" y2="12" />
                 <polyline points="13 6 19 12 13 18" />
               </svg>
+            </Link>
+            <Link
+              href="/pro-trial"
+              style={{
+                fontSize: 13,
+                color: "var(--text-muted)",
+                textDecoration: "none",
+                textAlign: "center",
+                borderBottom: "1px solid var(--border)",
+                paddingBottom: 1,
+                alignSelf: "center",
+              }}
+            >
+              {t("pricing_pro_trial")}
             </Link>
           </div>
 
