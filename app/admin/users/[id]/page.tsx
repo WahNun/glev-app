@@ -18,7 +18,9 @@ export default async function AdminUserDetailPage({
 }) {
   const { id } = await params;
   const sp = await searchParams;
-  const giftOk = Array.isArray(sp.gift_ok) ? sp.gift_ok[0] : sp.gift_ok;
+  const giftOk  = Array.isArray(sp.gift_ok)  ? sp.gift_ok[0]  : sp.gift_ok;
+  const planOk  = Array.isArray(sp.plan_ok)  ? sp.plan_ok[0]  : sp.plan_ok;
+  const errParam = Array.isArray(sp.err) ? sp.err[0] : sp.err;
   const authed = await isAdminAuthed();
   if (!authed) {
     return (
@@ -149,9 +151,23 @@ export default async function AdminUserDetailPage({
         E-Mail: <code>{authUser.email ?? "—"}</code> · ID: <code>{id}</code>
       </p>
 
+      {errParam === "migration" ? (
+        <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", color: "#991b1b", padding: "12px 14px", borderRadius: 8, fontSize: 13, marginBottom: 20 }}>
+          <strong>⚠️ Migration fehlt in Supabase.</strong> Die Spalte <code>gift_label</code> existiert noch nicht in der Datenbank.
+          Bitte im <a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer" style={{ color: "#991b1b" }}>Supabase Dashboard → SQL Editor</a> ausführen:
+          <pre style={{ margin: "8px 0 0", background: "#fee2e2", padding: "8px 10px", borderRadius: 6, fontSize: 12, overflowX: "auto" }}>
+            {`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS gift_label text;`}
+          </pre>
+        </div>
+      ) : null}
       {giftOk ? (
         <div style={{ background: "#f0fdf4", border: "1px solid #86efac", color: "#166534", padding: "10px 14px", borderRadius: 8, fontSize: 14, marginBottom: 20 }}>
           ✓ Gift-Label gesetzt: <strong>🎁 {decodeURIComponent(giftOk)}</strong>
+        </div>
+      ) : null}
+      {planOk ? (
+        <div style={{ background: "#f0fdf4", border: "1px solid #86efac", color: "#166534", padding: "10px 14px", borderRadius: 8, fontSize: 14, marginBottom: 20 }}>
+          ✓ Plan gesetzt{planOk !== "1" ? `: ${decodeURIComponent(planOk)}` : ""} — Gift-Label wurde automatisch ergänzt.
         </div>
       ) : null}
 

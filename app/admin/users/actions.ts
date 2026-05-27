@@ -356,6 +356,7 @@ export async function grantBetaFreeYearAction(formData: FormData): Promise<void>
     manual_plan_expires_at: expiresAt,
     manual_plan_note: note,
     manual_plan_set_at: new Date().toISOString(),
+    gift_label: "1 Jahr kostenlos",
   };
   if (fullNameFromForm) {
     planPatch.display_name = fullNameFromForm;
@@ -479,14 +480,23 @@ export async function setManualPlanAction(formData: FormData): Promise<void> {
     .eq("user_id", userId)
     .maybeSingle();
 
+  // Auto-Gift-Label: 1 Jahr + beta oder pro → "1 Jahr kostenlos" automatisch setzen
+  const autoGiftLabel =
+    durationDays === 365 && (plan === "beta" || plan === "pro")
+      ? "1 Jahr kostenlos"
+      : null;
+
+  const patch: Record<string, unknown> = {
+    manual_plan_override: plan,
+    manual_plan_note: note,
+    manual_plan_set_at: now.toISOString(),
+    manual_plan_expires_at: expiresAt,
+  };
+  if (autoGiftLabel) patch.gift_label = autoGiftLabel;
+
   const { error } = await sb
     .from("profiles")
-    .update({
-      manual_plan_override: plan,
-      manual_plan_note: note,
-      manual_plan_set_at: now.toISOString(),
-      manual_plan_expires_at: expiresAt,
-    })
+    .update(patch)
     .eq("user_id", userId);
 
   if (error) {
@@ -500,11 +510,14 @@ export async function setManualPlanAction(formData: FormData): Promise<void> {
     action: "set_manual_plan",
     targetUserId: userId,
     before,
-    after: { manual_plan_override: plan, manual_plan_note: note },
-    note: `${(before as { manual_plan_override?: string } | null)?.manual_plan_override ?? "—"} → ${plan}`,
+    after: { manual_plan_override: plan, manual_plan_note: note, gift_label: autoGiftLabel ?? undefined },
+    note: `${(before as { manual_plan_override?: string } | null)?.manual_plan_override ?? "—"} → ${plan}${autoGiftLabel ? ` (Gift-Label: ${autoGiftLabel})` : ""}`,
     adminToken,
   });
 
+  if (autoGiftLabel) {
+    redirect(`/admin/users/${userId}?plan_ok=${encodeURIComponent(`${plan} — ${autoGiftLabel}`)}`);
+  }
   revalidateUserPaths(userId);
 }
 
