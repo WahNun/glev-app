@@ -44,6 +44,7 @@ import type { InsulinLog } from "@/lib/insulin";
 import type { ExerciseLog } from "@/lib/exercise";
 import type { FingerstickReading } from "@/lib/fingerstick";
 import { formatCarbs, formatICR, gToUnit, type CarbUnit } from "@/lib/carbUnits";
+import { EVAL_COLORS, EVAL_LABELS } from "@/lib/mealTypes";
 
 /* ──────────────────────────────────────────────────────────────────
    Brand tokens (mirror app brandbook). React-PDF needs hex/rgb only.
@@ -1094,28 +1095,32 @@ export function GlevReport({ email, meals, insulin, exercise, fingersticks, carb
         ) : (
           <View style={styles.table}>
             <View style={styles.th}>
-              <Text style={[styles.thCell, { width: "16%" }]}>Datum/Zeit</Text>
-              <Text style={[styles.thCell, { width: "10%" }]}>Typ</Text>
-              <Text style={[styles.thCell, { width: "30%" }]}>Beschreibung</Text>
-              <Text style={[styles.thCell, { width: "9%", textAlign: "right" }]}>KH ({carbLabel})</Text>
-              <Text style={[styles.thCell, { width: "9%", textAlign: "right" }]}>Insulin (U)</Text>
-              <Text style={[styles.thCell, { width: "13%", textAlign: "right" }]}>Glucose vor</Text>
-              <Text style={[styles.thCell, { width: "13%", textAlign: "right" }]}>+2h</Text>
+              <Text style={[styles.thCell, { width: "15%" }]}>Datum/Zeit</Text>
+              <Text style={[styles.thCell, { width: "9%" }]}>Typ</Text>
+              <Text style={[styles.thCell, { width: "23%" }]}>Beschreibung</Text>
+              <Text style={[styles.thCell, { width: "8%", textAlign: "right" }]}>KH ({carbLabel})</Text>
+              <Text style={[styles.thCell, { width: "8%", textAlign: "right" }]}>Insulin (U)</Text>
+              <Text style={[styles.thCell, { width: "12%", textAlign: "right" }]}>Glucose vor</Text>
+              <Text style={[styles.thCell, { width: "12%", textAlign: "right" }]}>+2h</Text>
+              <Text style={[styles.thCell, { width: "13%" }]}>Outcome</Text>
             </View>
             {showMeals.map((m, i) => (
               <View key={m.id} style={[styles.tr, ...(i % 2 === 1 ? [styles.trAlt] : [])]} wrap={false}>
-                <Text style={[styles.tdMuted, { width: "16%" }]}>{fmtDateTime(m.meal_time || m.created_at)}</Text>
-                <Text style={[styles.td, { width: "10%" }]}>{m.meal_type ?? "—"}</Text>
-                <Text style={[styles.td, { width: "30%" }]} hyphenationCallback={(w) => [w]}>
+                <Text style={[styles.tdMuted, { width: "15%" }]}>{fmtDateTime(m.meal_time || m.created_at)}</Text>
+                <Text style={[styles.td, { width: "9%" }]}>{m.meal_type ?? "—"}</Text>
+                <Text style={[styles.td, { width: "23%" }]} hyphenationCallback={(w) => [w]}>
                   {(m.input_text || "").slice(0, 80)}
                 </Text>
-                <Text style={[styles.td, { width: "9%", textAlign: "right" }]}>{fmtCarbsValue(m.carbs_grams)}</Text>
-                <Text style={[styles.td, { width: "9%", textAlign: "right" }]}>{fmtNum(m.insulin_units, 1)}</Text>
-                <Text style={[styles.td, { width: "13%", textAlign: "right", color: colorForGlucose(m.glucose_before, targetRange) }]}>
+                <Text style={[styles.td, { width: "8%", textAlign: "right" }]}>{fmtCarbsValue(m.carbs_grams)}</Text>
+                <Text style={[styles.td, { width: "8%", textAlign: "right" }]}>{fmtNum(m.insulin_units, 1)}</Text>
+                <Text style={[styles.td, { width: "12%", textAlign: "right", color: colorForGlucose(m.glucose_before, targetRange) }]}>
                   {fmtNum(m.glucose_before, 0)}
                 </Text>
-                <Text style={[styles.td, { width: "13%", textAlign: "right", color: colorForGlucose(m.bg_2h, targetRange) }]}>
+                <Text style={[styles.td, { width: "12%", textAlign: "right", color: colorForGlucose(m.bg_2h, targetRange) }]}>
                   {fmtNum(m.bg_2h, 0)}
+                </Text>
+                <Text style={[styles.td, { width: "13%", color: m.evaluation ? (EVAL_COLORS[m.evaluation] ?? INK) : MUTED, fontFamily: m.evaluation ? "Helvetica-Bold" : "Helvetica" }]}>
+                  {m.evaluation ? (EVAL_LABELS[m.evaluation] ?? m.evaluation) : "—"}
                 </Text>
               </View>
             ))}

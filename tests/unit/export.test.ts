@@ -160,6 +160,50 @@ function headerCells(csv: string): string[] {
    csv-escaping of commas/quotes/newlines inside a single string.
    ────────────────────────────────────────────────────────────────── */
 
+/* ──────────────────────────────────────────────────────────────────
+   0. SPIKE_STRONG in CSV export — outcome value round-trips correctly
+   ──────────────────────────────────────────────────────────────────
+   The `evaluation` column in mealsToCSV is a raw string passthrough:
+   whatever string value is stored in the DB is emitted verbatim. This
+   test pins that SPIKE_STRONG is NOT silently coerced, normalised, or
+   dropped by the exporter — the doctor/researcher receiving the CSV
+   can filter on the exact DB value without guessing.
+   ────────────────────────────────────────────────────────────────── */
+
+test.describe("mealsToCSV — SPIKE_STRONG evaluation value is preserved in export", () => {
+  test("SPIKE_STRONG in evaluation column appears verbatim in the CSV row", () => {
+    const meals: Meal[] = [
+      makeMeal({
+        id: "m_spike",
+        created_at: "2026-04-30T08:00:00Z",
+        evaluation: "SPIKE_STRONG",
+      }),
+    ];
+    const csv = mealsToCSV(meals);
+    const rows = csv.split("\r\n");
+    expect(rows.length).toBe(2); // header + 1 data row
+    // The evaluation column header must be present.
+    expect(rows[0].split(",")).toContain("evaluation");
+    // The data row must contain "SPIKE_STRONG" exactly.
+    const evalIdx = rows[0].split(",").indexOf("evaluation");
+    expect(evalIdx, "evaluation column must exist").toBeGreaterThanOrEqual(0);
+    const evalCell = rows[1].split(",")[evalIdx];
+    expect(evalCell).toBe("SPIKE_STRONG");
+  });
+
+  test("SPIKE (not strong) also round-trips correctly — distinguishable from SPIKE_STRONG", () => {
+    // Verifies the two spike variants are NOT conflated in the export.
+    // A bug that normalises SPIKE_STRONG → SPIKE would make the CSV
+    // useless for severity analysis.
+    const csvStrong = mealsToCSV([makeMeal({ id: "m1", evaluation: "SPIKE_STRONG" })]);
+    const csvWeak   = mealsToCSV([makeMeal({ id: "m2", evaluation: "SPIKE" })]);
+    const headers = csvStrong.split("\r\n")[0].split(",");
+    const evalIdx = headers.indexOf("evaluation");
+    expect(csvStrong.split("\r\n")[1].split(",")[evalIdx]).toBe("SPIKE_STRONG");
+    expect(csvWeak.split("\r\n")[1].split(",")[evalIdx]).toBe("SPIKE");
+  });
+});
+
 test.describe("`*ToCSV` default output is byte-for-byte stable", () => {
   test("mealsToCSV (no unit arg) emits the legacy gram-only layout", () => {
     const meals: Meal[] = [

@@ -735,14 +735,17 @@ function EntriesScreen() {
   const tDash = useTranslations("dashboard");
   const tIns  = useTranslations("engineLog");
 
-  type EvalKind = "GUT" | "SPIKE" | "HYPO";
-  const evalColor: Record<EvalKind, string> = { GUT: GREEN, SPIKE: ORANGE, HYPO: PINK };
+  type EvalKind = "GUT" | "SPIKE" | "SPIKE_STRONG" | "HYPO";
+  // Task #259: SPIKE_STRONG gets its own amber (#FF6A00) so the
+  // marketing mockup reflects the same severity signal as the live app.
+  const evalColor: Record<EvalKind, string> = { GUT: GREEN, SPIKE: ORANGE, SPIKE_STRONG: "#FF6A00", HYPO: PINK };
   // Always-uppercase outcome glyph — language-agnostic at marketing
   // surface like the real Pill component, but still flips DE→EN.
   const evalLabel: Record<EvalKind, string> = {
-    GUT:   tDash("outcome_good").toUpperCase(),
-    SPIKE: tDash("outcome_spike").toUpperCase(),
-    HYPO:  pickCopy(locale, { de: "HYPO", en: "HYPO" }),
+    GUT:          tDash("outcome_good").toUpperCase(),
+    SPIKE:        tDash("outcome_spike").toUpperCase(),
+    SPIKE_STRONG: pickCopy(locale, { de: "STARKER SPIKE", en: "STRONG SPIKE" }),
+    HYPO:         pickCopy(locale, { de: "HYPO", en: "HYPO" }),
   };
 
   const meals: Array<{

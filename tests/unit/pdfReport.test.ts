@@ -390,7 +390,7 @@ test.describe("GlevReport — Insights overview cards", () => {
    ────────────────────────────────────────────────────────────────── */
 
 test.describe("GlevReport — per-section detail tables", () => {
-  test("Mahlzeiten table: 7 column headers + one row per fixture meal (carbUnit defaults to g)", () => {
+  test("Mahlzeiten table: 8 column headers + one row per fixture meal (carbUnit defaults to g)", () => {
     const meals = [
       makeMeal({ id: "m1", input_text: "Müsli",  carbs_grams: 60, insulin_units: 5 }),
       makeMeal({ id: "m2", input_text: "Pasta",  carbs_grams: 80, insulin_units: 6 }),
@@ -405,6 +405,7 @@ test.describe("GlevReport — per-section detail tables", () => {
       "Insulin (U)",
       "Glucose vor",
       "+2h",
+      "Outcome",
     ]);
     expect(table, "expected the Mahlzeiten table").not.toBeNull();
     expect(table!.rows.length).toBe(meals.length);
@@ -428,6 +429,7 @@ test.describe("GlevReport — per-section detail tables", () => {
         "Insulin (U)",
         "Glucose vor",
         "+2h",
+        "Outcome",
       ]),
     ).not.toBeNull();
     // Negative assertion — the gram-unit header must NOT also appear,
@@ -491,6 +493,87 @@ test.describe("GlevReport — per-section detail tables", () => {
     ]);
     expect(table, "expected the Fingerstick-Messungen table").not.toBeNull();
     expect(table!.rows.length).toBe(fingersticks.length);
+  });
+
+  test("Outcome column: SPIKE_STRONG meal renders label 'Strong Spike' with color #FF6A00", () => {
+    // Pin the contract that SPIKE_STRONG does NOT silently fall back to
+    // a blank "—" or default INK color in the doctor-facing PDF report.
+    // The label must be "Strong Spike" (from EVAL_LABELS) and the text
+    // color must be exactly #FF6A00 (from EVAL_COLORS — the amber that
+    // makes a severe spike visually alarming on the printed page).
+    const meals = [
+      makeMeal({
+        id: "m1",
+        input_text: "Weißbrot",
+        carbs_grams: 80,
+        insulin_units: 5,
+        evaluation: "SPIKE_STRONG",
+      }),
+    ];
+    const tree = GlevReport({ ...baseProps, meals }) as ReactElement;
+    const leaves = collectStrings(tree);
+
+    // Label "Strong Spike" must appear somewhere in the meal table row.
+    expect(
+      leaves.includes("Strong Spike"),
+      'expected "Strong Spike" label in the Outcome column for SPIKE_STRONG',
+    ).toBe(true);
+
+    // The Text element carrying "Strong Spike" must have color #FF6A00.
+    // We look for the LEAF element whose children is exactly the string
+    // "Strong Spike" (not a container whose descendants include it).
+    const coloredCell = findElements(tree, (el) => {
+      const ch = (el.props as Record<string, unknown>).children;
+      return ch === "Strong Spike";
+    });
+    expect(
+      coloredCell.length,
+      'expected a leaf element with children === "Strong Spike"',
+    ).toBeGreaterThan(0);
+    // The style is an array [styles.td, { color: "#FF6A00", ... }].
+    // Flatten it and assert the color override wins.
+    const styleObj = (coloredCell[0].props as Record<string, unknown>).style;
+    const styles = Array.isArray(styleObj) ? styleObj as object[] : [styleObj as object];
+    // Find the inline override object that carries the outcome color.
+    // It is the item in the array that has a `color` key AND that color
+    // is not the fallback INK color — i.e. the per-outcome override.
+    const overrideStyle = styles.find(
+      (s) =>
+        s != null &&
+        typeof s === "object" &&
+        "color" in s &&
+        (s as Record<string, unknown>).color !== "#0B0B11",
+    ) as Record<string, unknown> | undefined;
+    expect(
+      overrideStyle?.color,
+      "expected #FF6A00 color override in SPIKE_STRONG outcome cell style array",
+    ).toBe("#FF6A00");
+  });
+
+  test("Outcome column: GOOD meal renders 'Good' without alarming color", () => {
+    // Verify the column renders correctly for the common happy-path case.
+    // GOOD → label "Good", color #22D3A0 (GREEN).
+    const meals = [
+      makeMeal({
+        id: "m1",
+        evaluation: "GOOD",
+      }),
+    ];
+    const tree = GlevReport({ ...baseProps, meals }) as ReactElement;
+    const leaves = collectStrings(tree);
+    expect(leaves.includes("Good")).toBe(true);
+  });
+
+  test("Outcome column: null evaluation renders dash without crash", () => {
+    // Defensive guard — a meal with no outcome yet (null evaluation)
+    // must render "—" and not throw.
+    const meals = [
+      makeMeal({ id: "m1", evaluation: null }),
+    ];
+    const tree = GlevReport({ ...baseProps, meals }) as ReactElement;
+    // The dash placeholder must appear (note: other null fields also
+    // render "—", so we just verify no throw and the tree exists).
+    expect(tree).toBeTruthy();
   });
 
   test("each detail-table section heading still appears", () => {

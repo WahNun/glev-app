@@ -29,6 +29,7 @@
     "telegram:ask": "node scripts/ask-telegram.mjs",
     "check:engine-doc": "node scripts/check-engine-doc-thresholds.mjs",
     "backfill:evaluations": "npx tsx scripts/backfillMealEvaluations.ts",
+    "check:outcome-coverage": "node scripts/check-outcome-coverage.mjs",
     "gh:setup-branch-protection": "node scripts/setup-branch-protection.mjs"
   },
   "dependencies": {
