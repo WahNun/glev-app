@@ -1446,7 +1446,10 @@
       "permission_revoked": "Apple Health access missing — please enable in iOS Settings",
       "freshness_fresh": "less than 5 min ago",
       "freshness_stale": "{n} min ago",
-      "freshness_old": "more than 15 min ago"
+      "freshness_old": "more than 15 min ago",
+      "source_toggle_label": "Use Apple Health as BG source",
+      "open_ios_settings": "Open iOS Settings",
+      "status_connected_with_value_mmol": "✓ Connected — last value: {value} mmol/L"
     },
     "status": {
       "title": "CGM connection",
@@ -2646,6 +2649,7 @@
       "method_nightscout_title": "Nightscout",
       "method_dexcom_apple_health_body": "Uses your Dexcom iOS app. Grant Health permission once in the Glev iOS app.",
       "method_dexcom_nightscout_body": "Via the Dexcom Share bridge into your Nightscout instance. For power users with their own setup.",
+      "method_libre_librelinkup_title": "LibreLinkUp",
       "method_libre_librelinkup_body": "Direct connection with your LibreLinkUp follower account. Just email + password.",
       "method_libre_apple_health_body": "If your Libre app syncs to Apple Health (iOS).",
       "method_libre_nightscout_body": "Via LibreLink uploader into your Nightscout instance.",
