@@ -23,6 +23,7 @@ import {
   kindOf,
   nextPostCheckType,
   defaultOffsetForNewPost,
+  bgCheckColor,
 } from "../../components/MealNodeCluster";
 
 test.describe("kindOf", () => {
@@ -145,5 +146,43 @@ test.describe("defaults match the product spec from Task #673", () => {
   test("post band is [+1, +180]", () => {
     expect(POST_MIN_OFFSET_MIN).toBe(1);
     expect(POST_MAX_OFFSET_MIN).toBe(180);
+  });
+});
+
+// ── bgCheckColor — Task #734 ─────────────────────────────────────────────────
+// Pins the clinical color thresholds used to colour the glucose badge
+// and sensor indicator dot on each meal-node-cluster knob. A silent
+// threshold change (e.g. hypo boundary drifting from 70 to 80) would
+// render the wrong badge colour without failing any visual test.
+
+test.describe("bgCheckColor", () => {
+  test("hypoglycemia (< 70 mg/dL) → red (#EF4444)", () => {
+    expect(bgCheckColor(69)).toBe("#EF4444");
+    expect(bgCheckColor(54)).toBe("#EF4444");  // Level-2 hypo threshold
+    expect(bgCheckColor(40)).toBe("#EF4444");
+    expect(bgCheckColor(0)).toBe("#EF4444");
+  });
+
+  test("boundary: exactly 70 mg/dL → green (in range, not hypo)", () => {
+    expect(bgCheckColor(70)).toBe("#22C55E");
+  });
+
+  test("in-range values (70–180 mg/dL) → green (#22C55E)", () => {
+    expect(bgCheckColor(70)).toBe("#22C55E");
+    expect(bgCheckColor(100)).toBe("#22C55E");
+    expect(bgCheckColor(112)).toBe("#22C55E");  // the spec's example seed value
+    expect(bgCheckColor(140)).toBe("#22C55E");
+    expect(bgCheckColor(180)).toBe("#22C55E");
+  });
+
+  test("boundary: exactly 180 mg/dL → green (in range, not hyper)", () => {
+    expect(bgCheckColor(180)).toBe("#22C55E");
+  });
+
+  test("hyperglycemia (> 180 mg/dL) → amber (#F59E0B)", () => {
+    expect(bgCheckColor(181)).toBe("#F59E0B");
+    expect(bgCheckColor(200)).toBe("#F59E0B");
+    expect(bgCheckColor(250)).toBe("#F59E0B");
+    expect(bgCheckColor(400)).toBe("#F59E0B");
   });
 });

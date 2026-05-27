@@ -85,8 +85,10 @@ const PLUS_DY = 22;    // vertical offset of "+" below center
 /** Color for a glucose badge based on clinical range thresholds.
  *  < 70 mg/dL  → red   (hypoglycemia)
  *  70–180 mg/dL → green (in range)
- *  > 180 mg/dL → amber (hyperglycemia) */
-function bgCheckColor(mgdl: number): string {
+ *  > 180 mg/dL → amber (hyperglycemia)
+ *
+ * Exported for unit tests (`tests/unit/mealNodeMath.test.ts`). */
+export function bgCheckColor(mgdl: number): string {
   if (mgdl < 70) return "#EF4444";
   if (mgdl > 180) return "#F59E0B";
   return "#22C55E";
