@@ -1512,6 +1512,7 @@ export default function InsightsPage() {
       // card-orders from earlier versions.
       id: "gmi-a1c",
       node: (
+        <UpgradeGate feature="hba1c_gmi">
         <FlipCard
           accent={ACCENT}
           back={
@@ -1584,11 +1585,13 @@ export default function InsightsPage() {
             )}
           </div>
         </FlipCard>
+        </UpgradeGate>
       ),
     },
     {
       id: "glucose-trend",
       node: (
+        <UpgradeGate feature="trends_variability">
         <FlipCard
           minHeight={CARD_MIN_H}
           accent={ACCENT}
@@ -1654,6 +1657,7 @@ export default function InsightsPage() {
             </div>
           )}
         </FlipCard>
+        </UpgradeGate>
       ),
     },
     // ── Hypo events counter (7d, BG < 70 mg/dL) ──
@@ -1668,6 +1672,7 @@ export default function InsightsPage() {
             ? ORANGE
             : GREEN;
         return (
+          <UpgradeGate feature="tir_analysis">
           <FlipCard
             minHeight={CARD_MIN_H}
             accent={accent}
@@ -1759,6 +1764,7 @@ export default function InsightsPage() {
               return <InsightMicroBars values={vals} labels={lbls} color={accent} title={tInsights("micro_trend_7d")} barHeight={90} />;
             })()}
           </FlipCard>
+          </UpgradeGate>
         );
       })(),
     },
@@ -1768,6 +1774,7 @@ export default function InsightsPage() {
       node: (() => {
         const accent = hyperCount7d > 0 ? ORANGE : GREEN;
         return (
+          <UpgradeGate feature="tir_analysis">
           <FlipCard
             minHeight={CARD_MIN_H}
             accent={accent}
@@ -1818,6 +1825,7 @@ export default function InsightsPage() {
               return <InsightMicroBars values={vals} labels={lbls} color={accent} title={tInsights("micro_trend_7d")} barHeight={90} />;
             })()}
           </FlipCard>
+          </UpgradeGate>
         );
       })(),
     },
@@ -1825,6 +1833,7 @@ export default function InsightsPage() {
     {
       id: "glucose-variability",
       node: (
+        <UpgradeGate feature="trends_variability">
         <FlipCard
           minHeight={CARD_MIN_H}
           accent={cvColor}
@@ -1894,11 +1903,13 @@ export default function InsightsPage() {
             </>
           )}
         </FlipCard>
+        </UpgradeGate>
       ),
     },
     {
       id: "meal-evaluation",
       node: (
+        <UpgradeGate feature="meal_bz_rating">
         <FlipCard
           minHeight={CARD_MIN_H}
           accent={ORANGE}
@@ -1952,12 +1963,14 @@ export default function InsightsPage() {
             </>
           )}
         </FlipCard>
+        </UpgradeGate>
       ),
     },
     // ──── Deeper analysis cards (below the hero block) ────
     {
       id: "adaptive-engine",
       node: (
+        <UpgradeGate feature="adaptive_icr">
         <FlipCard
           accent={ACCENT}
           back={
@@ -2457,6 +2470,7 @@ export default function InsightsPage() {
             );
           })()}
         </FlipCard>
+        </UpgradeGate>
       ),
     },
     // ── Total Daily Dose · 7d (sum of insulin units per day) ──
@@ -2585,6 +2599,7 @@ export default function InsightsPage() {
     {
       id: "patterns",
       node: (
+        <UpgradeGate feature="bz_pattern_recognition">
         <FlipCard
           minHeight={CARD_MIN_H}
           accent={PINK}
@@ -2618,6 +2633,7 @@ export default function InsightsPage() {
             ))}
           </div>
         </FlipCard>
+        </UpgradeGate>
       ),
     },
     // ── Workout Outcome Distribution · 30d ──
@@ -2789,6 +2805,7 @@ export default function InsightsPage() {
     {
       id: "meal-type",
       node: (
+        <UpgradeGate feature="meal_type_breakdown">
         <FlipCard
           minHeight={CARD_MIN_H}
           accent={ORANGE}
@@ -2844,6 +2861,7 @@ export default function InsightsPage() {
             })}
           </div>
         </FlipCard>
+        </UpgradeGate>
       ),
     },
     {

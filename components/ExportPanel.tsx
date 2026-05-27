@@ -1236,6 +1236,7 @@ export default function ExportPanel() {
             : t("pdf_btn_idle");
         return (
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <UpgradeGate feature="csv_export">
             <button
               onClick={exportAll}
               disabled={bulkDisabled}
@@ -1254,6 +1255,7 @@ export default function ExportPanel() {
             >
               {allLabel}
             </button>
+            </UpgradeGate>
             <UpgradeGate feature="pdf_report">
             <button
               onClick={exportPdf}
