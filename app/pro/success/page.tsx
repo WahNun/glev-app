@@ -429,8 +429,9 @@ function ValidCard({
       </h1>
 
       <p style={{ fontSize: 17, lineHeight: 1.55, color: TEXT_DIM, margin: 0 }}>
-        Schön dass du dabei bist. Deine Karte ist hinterlegt, abgebucht wird erst am{" "}
-        {TRIAL_END_DISPLAY} — bis dahin nichts.
+        Schön dass du dabei bist. Du kannst die Web-App{" "}
+        <strong style={{ color: "#fff" }}>ab sofort</strong> nutzen. Deine Karte ist
+        hinterlegt, abgebucht wird erst am {TRIAL_END_DISPLAY} — bis dahin nichts.
       </p>
 
       {email && (
@@ -568,7 +569,8 @@ function ValidCard({
         </div>
         <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 6 }}>
           <li>Bestätigung von Stripe per Email (Mitgliedschaft angelegt, keine Abbuchung).</li>
-          <li>App-Zugang am {TRIAL_END_DISPLAY} — wir melden uns zwei Wochen vorher.</li>
+          <li><strong style={{ color: "#fff" }}>Web-App jetzt verfügbar</strong> — logge dich ein und leg los.</li>
+          <li>iOS &amp; Android App im App Store ab {TRIAL_END_DISPLAY} — wir melden uns zwei Wochen vorher.</li>
           <li>Erste monatliche Abbuchung am {TRIAL_END_DISPLAY} ({firstChargeAmount} für {tierName}).</li>
           <li>Kündigung jederzeit vor Launch — einfach an hello@glev.app schreiben.</li>
         </ul>
