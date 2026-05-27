@@ -300,8 +300,7 @@ export default function AiSettingsPage() {
             title: t("glev_intel_row_glucose_title"), desc: t("glev_intel_row_glucose_desc") },
           { key: "iob" as const,     granted: !!aiScopeIob,    locked: false, badge: null,
             title: t("glev_intel_row_iob_title"),     desc: t("glev_intel_row_iob_desc") },
-          { key: "history" as const, granted: !!aiScopeHistory, locked: true,
-            badge: t("glev_intel_badge_phase5"),
+          { key: "history" as const, granted: !!aiScopeHistory, locked: false, badge: null,
             title: t("glev_intel_row_history_title"), desc: t("glev_intel_row_history_desc") },
         ]).map((row) => {
           const masterOff = !aiConsentGranted;

@@ -958,15 +958,17 @@ async function toolGetCheckHistory(
   if (checksErr) return { error: checksErr.message, checks: [] };
   if (!checks || checks.length === 0) return { count: 0, checks: [] };
 
-  // Fetch meal descriptions for the check rows in one batch query.
+  // Fetch meal descriptions AND meal_type for the check rows in one batch query.
+  // meal_type is used to build per-type aggregates (avg/min/max BG) so the AI
+  // can answer "how do I usually land after pasta (FAST_CARBS)?"
   const mealIds = [...new Set((checks as Array<{ meal_id: string }>).map((c) => c.meal_id))];
   const { data: meals } = await sb
     .from("meals")
-    .select("id, input_text, parsed_json")
+    .select("id, input_text, parsed_json, meal_type")
     .in("id", mealIds);
 
-  const mealMap = new Map<string, { input_text: string | null; parsed_json: unknown }>();
-  for (const m of (meals ?? []) as Array<{ id: string; input_text: string | null; parsed_json: unknown }>) {
+  const mealMap = new Map<string, { input_text: string | null; parsed_json: unknown; meal_type: string | null }>();
+  for (const m of (meals ?? []) as Array<{ id: string; input_text: string | null; parsed_json: unknown; meal_type: string | null }>) {
     mealMap.set(m.id, m);
   }
 
@@ -991,12 +993,37 @@ async function toolGetCheckHistory(
     return {
       checkType: c.check_type,
       mealDescription: description,
+      mealType: meal?.meal_type ?? null,
       plannedAt: plannedMs ? formatInUserTimezone(plannedMs, userTimezone).dateTime : null,
       bgMgDl: c.bg_at_check,
     };
   });
 
-  return { count: result.length, checks: result };
+  // Aggregate avg/min/max BG per meal type so the AI can surface patterns like
+  // "your FAST_CARBS checks average 198 mg/dL vs 148 mg/dL for HIGH_PROTEIN".
+  const typeAgg = new Map<string, { sum: number; min: number; max: number; count: number }>();
+  for (const r of result) {
+    if (r.bgMgDl == null || !r.mealType) continue;
+    const bg = r.bgMgDl;
+    const prev = typeAgg.get(r.mealType);
+    if (prev) {
+      prev.sum += bg;
+      prev.min = Math.min(prev.min, bg);
+      prev.max = Math.max(prev.max, bg);
+      prev.count += 1;
+    } else {
+      typeAgg.set(r.mealType, { sum: bg, min: bg, max: bg, count: 1 });
+    }
+  }
+  const byMealType = [...typeAgg.entries()].map(([type, agg]) => ({
+    type,
+    count: agg.count,
+    avgBgMgDl: Math.round(agg.sum / agg.count),
+    minBgMgDl: agg.min,
+    maxBgMgDl: agg.max,
+  })).sort((a, b) => b.avgBgMgDl - a.avgBgMgDl);
+
+  return { count: result.length, checks: result, byMealType };
 }
 
 /**

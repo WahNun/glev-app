@@ -1074,7 +1074,22 @@
     "swipe_dyn_workouts": "{n} Workouts protokolliert",
     "swipe_dyn_daily_steps": "{steps} Schritte heute",
     "swipe_dyn_active_day_outcomes": "Aus {days} Tagen Schritt-Historie",
-    "swipe_dyn_cycle": "{symptoms} Symptom-Einträge · {cycle} Zyklus-Einträge"
+    "swipe_dyn_cycle": "{symptoms} Symptom-Einträge · {cycle} Zyklus-Einträge",
+    "card_post_bolus_trend_title": "Post-Bolus BZ · Typ-Trend",
+    "post_bolus_trend_sub": "Ø mg/dL nach Mahlzeittyp",
+    "post_bolus_trend_back_title": "Post-Bolus BZ nach Mahlzeittyp",
+    "post_bolus_trend_back_p1": "Zeigt den durchschnittlichen Blutzucker-Messwert nach dem Bolus, gruppiert nach Mahlzeittyp (Fast Carbs, High Protein, High Fat, Balanced). Datenquelle: deine bestätigten Post-Bolus-Checks aus dem Dashboard-Cluster.",
+    "post_bolus_trend_back_p2": "Ein regelmäßig hoher Wert nach einem bestimmten Mahlzeittyp kann auf Timing- oder Dosierungsfragen hinweisen — ein guter Gesprächspunkt für dein Diabetologen-Team. Dies ist keine Dosis-Empfehlung.",
+    "post_bolus_trend_back_p3": "Pro Typ werden Ø, Min und Max aus allen vorliegenden Post-Checks berechnet. Weniger als 3 Checks werden blasser dargestellt.",
+    "post_bolus_trend_no_consent": "Aktiviere „7-Tage-Verlauf\" in den KI-Einstellungen, um diese Auswertung zu sehen.",
+    "post_bolus_trend_no_consent_cta": "Zu den KI-Einstellungen",
+    "post_bolus_trend_no_data": "Noch keine Post-Bolus-Checks mit gemessenen BZ-Werten vorhanden.",
+    "post_bolus_trend_avg": "Ø {avg}",
+    "post_bolus_trend_n": "{n, plural, one {# Check} other {# Checks}}",
+    "post_bolus_trend_range": "{min}–{max} mg/dL",
+    "swipe_ctx_post-bolus-trend_title": "Post-Bolus BZ nach Mahlzeittyp",
+    "swipe_ctx_post-bolus-trend_body": "Zeigt, wie deine BZ-Werte nach verschiedenen Mahlzeittypen tendenziell landen. Wenn ein Typ regelmäßig deutlich höher oder tiefer als andere abschneidet, ist das ein guter Gesprächspunkt für dein Diabetologen-Team. Kein Dosierungsratschlag.",
+    "swipe_dyn_post_bolus_trend": "{n, plural, one {# Post-Check} other {# Post-Checks}} mit BZ-Wert"
   },
   "settings": {
     "title": "Einstellungen",

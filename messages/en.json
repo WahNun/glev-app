@@ -1074,7 +1074,22 @@
     "swipe_dyn_workouts": "{n} workouts logged",
     "swipe_dyn_daily_steps": "{steps} steps today",
     "swipe_dyn_active_day_outcomes": "From {days} days of step history",
-    "swipe_dyn_cycle": "{symptoms} symptom entries · {cycle} cycle entries"
+    "swipe_dyn_cycle": "{symptoms} symptom entries · {cycle} cycle entries",
+    "card_post_bolus_trend_title": "Post-Bolus BG · Type Trend",
+    "post_bolus_trend_sub": "avg mg/dL by meal type",
+    "post_bolus_trend_back_title": "Post-Bolus BG by Meal Type",
+    "post_bolus_trend_back_p1": "Shows the average blood glucose reading after the bolus, grouped by meal type (Fast Carbs, High Protein, High Fat, Balanced). Source: your confirmed post-bolus checks from the dashboard cluster.",
+    "post_bolus_trend_back_p2": "A consistently high reading after a specific meal type may point to timing or dosing questions — a useful data point to raise with your diabetes team. This is not a dosing recommendation.",
+    "post_bolus_trend_back_p3": "Per-type avg, min and max are computed from all available post-checks. Fewer than 3 checks are shown with reduced opacity.",
+    "post_bolus_trend_no_consent": "Enable \"7-day history\" in AI settings to see this analysis.",
+    "post_bolus_trend_no_consent_cta": "Open AI settings",
+    "post_bolus_trend_no_data": "No post-bolus checks with recorded BG values yet.",
+    "post_bolus_trend_avg": "avg {avg}",
+    "post_bolus_trend_n": "{n, plural, one {# check} other {# checks}}",
+    "post_bolus_trend_range": "{min}–{max} mg/dL",
+    "swipe_ctx_post-bolus-trend_title": "Post-Bolus BG by Meal Type",
+    "swipe_ctx_post-bolus-trend_body": "Shows how your BG readings tend to land after different meal types. If one type consistently runs higher or lower than others, it's a useful data point to discuss with your diabetes team — not a dosing recommendation.",
+    "swipe_dyn_post_bolus_trend": "{n, plural, one {# post-check} other {# post-checks}} with BG value"
   },
   "settings": {
     "title": "Settings",

@@ -57,6 +57,8 @@ import {
 } from "@/lib/dailyActivity";
 import { useCarbUnit } from "@/hooks/useCarbUnit";
 import { fetchCgmSamples, type ContinuousReading } from "@/lib/cgmSamplesClient";
+import { fetchPostBolusChecksRaw, type PostBolusCheckRaw } from "@/lib/mealTimelineChecks";
+import { supabase } from "@/lib/supabase";
 
 /** Default top-to-bottom order. Hero block (time-in-range, gmi-a1c,
  *  glucose-trend, meal-evaluation) mirrors the homepage `InsightsScreen()`
@@ -69,6 +71,7 @@ const INSIGHTS_DEFAULT_ORDER = [
   "hyper-events",
   "glucose-variability",
   "meal-evaluation",
+  "post-bolus-trend",
   "adaptive-engine",
   "tdd",
   "patterns",
@@ -270,6 +273,8 @@ export default function InsightsPage() {
   const [fingersticks, setFingersticks] = useState<FingerstickReading[]>([]);
   const [menstrualLogs, setMenstrualLogs] = useState<MenstrualLog[]>([]);
   const [symptomLogs, setSymptomLogs]     = useState<SymptomLog[]>([]);
+  const [postBolusChecks, setPostBolusChecks] = useState<PostBolusCheckRaw[]>([]);
+  const [aiConsentHistory, setAiConsentHistory] = useState<boolean | null>(null);
   const [loading, setLoading]           = useState(true);
   // Relink-panel open state lives HERE (not inside RelinkSourceLine) because
   // the FlipCard around the engine card renders its `children` twice — once
@@ -368,6 +373,26 @@ export default function InsightsPage() {
     fetchUserProfile().then((p) => setSex(p.sex)).catch(() => {});
   }, []);
 
+  // Fetch ai_consent_history_at to gate the Post-Bolus Trend card.
+  // When null the card shows a CTA to enable in AI settings.
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!supabase) { setAiConsentHistory(false); return; }
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) { setAiConsentHistory(false); return; }
+        const { data } = await supabase
+          .from("profiles")
+          .select("ai_consent_history_at")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        setAiConsentHistory(Boolean(data?.ai_consent_history_at));
+      } catch {
+        setAiConsentHistory(false);
+      }
+    })();
+  }, []);
+
   // History scope state — sourced from the global ScopeHeaderContext
   // so the chip in the mobile header (rendered by components/Layout.tsx
   // when `visible=true`) stays in sync with this page. Default state is
@@ -449,7 +474,7 @@ export default function InsightsPage() {
   const { data: secondarySWR } = useSWR(
     `insights:secondary:scope:${scopeMode}:days:${insightsFetchDays}`,
     async () => {
-      const [em, ilEngine, ex, ml, sl, act] = await Promise.all([
+      const [em, ilEngine, ex, ml, sl, act, pbc] = await Promise.all([
         fetchMealsForEngine().catch(() => [] as Meal[]),
         fetchRecentInsulinLogs(90).catch(() => [] as InsulinLog[]),
         fetchRecentExerciseLogs(insightsFetchDays).catch(() => [] as ExerciseLog[]),
@@ -459,8 +484,10 @@ export default function InsightsPage() {
         // (the helper swallows fetch errors) so a missing route or
         // empty table just hides the card.
         fetchRecentActivityClient(14),
+        // Task #737: post-bolus BG checks for the "Post-Bolus Trend" card.
+        fetchPostBolusChecksRaw().catch(() => [] as PostBolusCheckRaw[]),
       ]);
-      return { engineMeals: em, engineBoluses: ilEngine, exerciseLogs: ex, menstrualLogs: ml, symptomLogs: sl, activity: act };
+      return { engineMeals: em, engineBoluses: ilEngine, exerciseLogs: ex, menstrualLogs: ml, symptomLogs: sl, activity: act, postBolusChecks: pbc };
     },
   );
 
@@ -480,6 +507,7 @@ export default function InsightsPage() {
     if (secondarySWR.activity) setActivity(secondarySWR.activity);
     setMenstrualLogs(secondarySWR.menstrualLogs);
     setSymptomLogs(secondarySWR.symptomLogs);
+    setPostBolusChecks(secondarySWR.postBolusChecks ?? []);
   }, [secondarySWR]);
 
   // Revalidate when other parts of the app log new entries.
@@ -1981,6 +2009,160 @@ export default function InsightsPage() {
         </FlipCard>
         </UpgradeGate>
       ),
+    },
+    // ──── Post-Bolus BG Trend card (Task #737) ────
+    // Shows avg/min/max post-bolus BG per meal type (FAST_CARBS /
+    // HIGH_PROTEIN / HIGH_FAT / BALANCED) from meal_timeline_checks.
+    // Gated behind ai_consent_history_at so only users who have enabled
+    // the "7-day history" AI scope can see their aggregated check data.
+    {
+      id: "post-bolus-trend",
+      node: (() => {
+        // Build per-meal-type aggregates inline from the loaded checks.
+        // We join with the `meals` state array (already in scope) to
+        // resolve meal_type — no extra query needed.
+        const mealIndex = new Map<string, string | null>();
+        for (const m of meals) mealIndex.set(m.id, m.meal_type ?? null);
+
+        const typeAgg = new Map<string, { sum: number; min: number; max: number; count: number }>();
+        for (const c of postBolusChecks) {
+          const mt = mealIndex.get(c.meal_id);
+          if (!mt) continue;
+          const v = c.bg_at_check;
+          const prev = typeAgg.get(mt);
+          if (prev) {
+            prev.sum += v; prev.min = Math.min(prev.min, v); prev.max = Math.max(prev.max, v); prev.count++;
+          } else {
+            typeAgg.set(mt, { sum: v, min: v, max: v, count: 1 });
+          }
+        }
+
+        const TYPE_ORDER = ["FAST_CARBS", "HIGH_PROTEIN", "HIGH_FAT", "BALANCED"] as const;
+        const rows = TYPE_ORDER
+          .filter(t => typeAgg.has(t))
+          .map(t => {
+            const agg = typeAgg.get(t)!;
+            const avg = Math.round(agg.sum / agg.count);
+            const color = avg > tirHigh + 50 ? PINK : avg > tirHigh ? ORANGE : avg < tirLow ? ACCENT : GREEN;
+            return { type: t, avg, min: agg.min, max: agg.max, count: agg.count, color };
+          });
+
+        const totalChecks = postBolusChecks.length;
+        const MIN_RELIABLE = 3;
+
+        // Determine overall bar scale: 0 → max across all rows for visual alignment
+        const allAvgs = rows.map(r => r.max);
+        const barMax = allAvgs.length > 0 ? Math.max(...allAvgs, tirHigh + 60) : 300;
+
+        const TYPE_LABEL: Record<string, string> = {
+          FAST_CARBS:   locale === "de" ? "Fast Carbs"  : "Fast Carbs",
+          HIGH_PROTEIN: locale === "de" ? "High Protein": "High Protein",
+          HIGH_FAT:     locale === "de" ? "High Fat"    : "High Fat",
+          BALANCED:     locale === "de" ? "Balanced"    : "Balanced",
+        };
+
+        return (
+          <FlipCard
+            minHeight={CARD_MIN_H}
+            accent={ACCENT}
+            back={
+              <FlipBack
+                title={tInsights("post_bolus_trend_back_title")}
+                accent={ACCENT}
+                paragraphs={[
+                  tInsights("post_bolus_trend_back_p1"),
+                  tInsights("post_bolus_trend_back_p2"),
+                  tInsights("post_bolus_trend_back_p3"),
+                ]}
+              />
+            }
+          >
+            <CardLabel text={tInsights("card_post_bolus_trend_title")} />
+            <div style={{ fontSize:11, color:"var(--text-dim)", marginBottom:12 }}>
+              {tInsights("post_bolus_trend_sub")}
+            </div>
+
+            {/* Consent gate */}
+            {aiConsentHistory === false ? (
+              <div style={{ display:"flex", flexDirection:"column", gap:12, padding:"12px 0" }}>
+                <div style={{ fontSize:13, color:"var(--text-dim)", lineHeight:1.5 }}>
+                  {tInsights("post_bolus_trend_no_consent")}
+                </div>
+                <a
+                  href="/settings/ai"
+                  style={{ fontSize:13, color:ACCENT, fontWeight:600, textDecoration:"none" }}
+                >
+                  {tInsights("post_bolus_trend_no_consent_cta")} →
+                </a>
+              </div>
+            ) : rows.length === 0 ? (
+              <div style={{ padding:"18px 0", textAlign:"center", color:"var(--text-faint)", fontSize:13 }}>
+                {tInsights("post_bolus_trend_no_data")}
+              </div>
+            ) : (
+              <div style={{ display:"flex", flexDirection:"column", gap:14, marginTop:4 }}>
+                {/* Target zone guide line */}
+                <div style={{ position:"relative", height:1, background:`${tirHigh <= barMax ? ORANGE : "transparent"}10`, marginBottom:-8 }} />
+                {rows.map(r => {
+                  const reliable = r.count >= MIN_RELIABLE;
+                  const barPct = Math.min(r.avg / barMax * 100, 100);
+                  const minPct = Math.min(r.min / barMax * 100, 100);
+                  const maxPct = Math.min(r.max / barMax * 100, 100);
+                  const tirHighPct = Math.min(tirHigh / barMax * 100, 100);
+                  const tirLowPct  = Math.min(tirLow  / barMax * 100, 100);
+                  return (
+                    <div key={r.type} style={{ opacity: reliable ? 1 : 0.5 }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
+                        <span style={{ fontSize:12, fontWeight:600, color:r.color, minWidth:88 }}>
+                          {TYPE_LABEL[r.type]}
+                        </span>
+                        <span style={{ fontSize:12, fontWeight:700, color:r.color, fontFamily:"var(--font-mono)" }}>
+                          {tInsights("post_bolus_trend_avg", { avg: r.avg })}
+                        </span>
+                        <span style={{ fontSize:11, color:"var(--text-dim)", fontFamily:"var(--font-mono)", marginLeft:8 }}>
+                          {tInsights("post_bolus_trend_n", { n: r.count })}
+                        </span>
+                      </div>
+                      {/* Horizontal range bar: shows min–max spread with avg marker */}
+                      <div style={{ position:"relative", height:10, borderRadius:99, background:"var(--surface-soft)", overflow:"visible" }}>
+                        {/* Target zone overlay */}
+                        <div style={{
+                          position:"absolute", top:0, bottom:0,
+                          left:`${tirLowPct}%`, width:`${Math.max(0, tirHighPct - tirLowPct)}%`,
+                          background:`${GREEN}22`, borderRadius:0,
+                        }} />
+                        {/* Min-max range band */}
+                        <div style={{
+                          position:"absolute", top:2, bottom:2,
+                          left:`${minPct}%`, width:`${Math.max(2, maxPct - minPct)}%`,
+                          background:r.color, opacity:0.35, borderRadius:99,
+                        }} />
+                        {/* Avg marker */}
+                        <div style={{
+                          position:"absolute", top:-1, bottom:-1, width:3,
+                          left:`${barPct}%`, transform:"translateX(-1px)",
+                          background:r.color, borderRadius:2,
+                        }} />
+                      </div>
+                      <div style={{ fontSize:10, color:"var(--text-faint)", marginTop:3, fontFamily:"var(--font-mono)" }}>
+                        {tInsights("post_bolus_trend_range", { min: r.min, max: r.max })}
+                      </div>
+                    </div>
+                  );
+                })}
+                {/* Target zone legend */}
+                <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:4 }}>
+                  <div style={{ width:14, height:8, borderRadius:3, background:`${GREEN}55` }} />
+                  <span style={{ fontSize:11, color:"var(--text-faint)" }}>
+                    {tirLow}–{tirHigh} mg/dL
+                    {" · "}{tInsights("post_bolus_trend_n", { n: totalChecks })}
+                  </span>
+                </div>
+              </div>
+            )}
+          </FlipCard>
+        );
+      })(),
     },
     // ──── Deeper analysis cards (below the hero block) ────
     {
@@ -3590,6 +3772,11 @@ export default function InsightsPage() {
           if (symptomLogs.length > 0 || menstrualLogs.length > 0) {
             dyn["cycle-symptoms"] = tInsights("swipe_dyn_cycle", {
               symptoms: symptomLogs.length, cycle: menstrualLogs.length,
+            });
+          }
+          if (postBolusChecks.length > 0) {
+            dyn["post-bolus-trend"] = tInsights("swipe_dyn_post_bolus_trend", {
+              n: postBolusChecks.length,
             });
           }
           return dyn;

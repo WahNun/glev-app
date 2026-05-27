@@ -130,6 +130,31 @@ export async function fillNearbyChecks(
     .is("bg_at_check", null);
 }
 
+export interface PostBolusCheckRaw {
+  meal_id: string;
+  bg_at_check: number;
+}
+
+/**
+ * Fetch all post-bolus checks that have a recorded BG value.
+ * Only includes rows where check_type starts with "post_" (pre-checks are
+ * excluded because they measure a different clinical moment).
+ *
+ * Used by the Insights page "Post-Bolus BZ Trend" card to aggregate
+ * average/min/max BG per meal type. The caller joins with the already-
+ * loaded meals array to resolve meal_type without an extra query.
+ */
+export async function fetchPostBolusChecksRaw(): Promise<PostBolusCheckRaw[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("meal_timeline_checks")
+    .select("meal_id, bg_at_check")
+    .not("bg_at_check", "is", null)
+    .like("check_type", "post_%");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as PostBolusCheckRaw[];
+}
+
 export async function upsertCheck(input: UpsertCheckInput): Promise<MealTimelineCheck> {
   if (!supabase) throw new Error("Supabase is not configured");
   const { data: { user }, error: authErr } = await supabase.auth.getUser();
