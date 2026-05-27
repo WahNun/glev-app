@@ -400,7 +400,9 @@ test("update without message field → 200 ok, Supabase not called", async () =>
   expect(lastSupabasePayload).toBeNull();
 });
 
-test("reply without task-id in parent text → 200 ok, Supabase not called", async () => {
+test("reply without task-id in parent text → 200 ok, saved to inbox", async () => {
+  // The webhook now falls back to task_id = "inbox" when no explicit task-id
+  // is found in the parent message text, so it DOES write to Supabase.
   lastSupabasePayload = null;
 
   await withEnv(
@@ -425,10 +427,13 @@ test("reply without task-id in parent text → 200 ok, Supabase not called", asy
     },
   );
 
-  expect(lastSupabasePayload).toBeNull();
+  expect(lastSupabasePayload).not.toBeNull();
+  expect(lastSupabasePayload!.task_id).toBe("inbox");
+  expect(lastSupabasePayload!.direction).toBe("inbound");
 });
 
-test("plain message (no reply_to_message) → 200 ok, Supabase not called", async () => {
+test("plain message (no reply_to_message) → 200 ok, saved to inbox", async () => {
+  // Same inbox-fallback behaviour for messages with no reply context.
   lastSupabasePayload = null;
 
   await withEnv(
@@ -450,7 +455,9 @@ test("plain message (no reply_to_message) → 200 ok, Supabase not called", asyn
     },
   );
 
-  expect(lastSupabasePayload).toBeNull();
+  expect(lastSupabasePayload).not.toBeNull();
+  expect(lastSupabasePayload!.task_id).toBe("inbox");
+  expect(lastSupabasePayload!.direction).toBe("inbound");
 });
 
 // ─── Tests: shouldResolveInbound — real module via subprocess ─────────────────

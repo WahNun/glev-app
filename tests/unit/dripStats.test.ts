@@ -32,6 +32,8 @@ test("aggregator returns one row per drip type, in canonical order", () => {
     "day7_insights",
     "day14_feedback",
     "day30_trustpilot",
+    "trial_day6_reminder",
+    "trial_expired",
   ]);
   for (const s of stats) {
     expect(s.total).toEqual({ sent: 0, unsubscribed: 0 });

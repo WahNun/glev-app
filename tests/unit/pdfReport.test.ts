@@ -285,17 +285,22 @@ function findTrendArrow(
  * collects to those three leaves IS the KPI tile.
  */
 function findKpiPercent(tree: ReactNode, label: string): string | null {
+  // KPI tiles render as [label, percentValue, "%"].  The label may arrive
+  // as multiple text leaves when a JSX template literal interpolates a
+  // variable (e.g. `Time below {targetRange.low}` → ["Time below ", "70"]).
+  // We therefore join all leaves *except the last two* to reconstruct the
+  // full label string and accept any tile with ≥ 3 leaves whose suffix is
+  // [..., percentValue, "%"].
   const matches = findElements(tree, (el) => {
     const leaves = collectStrings(el.props?.children ?? null);
-    return (
-      leaves.length === 3 &&
-      leaves[0] === label &&
-      leaves[2] === "%"
-    );
+    if (leaves.length < 3) return false;
+    if (leaves[leaves.length - 1] !== "%") return false;
+    const labelPart = leaves.slice(0, -2).join("");
+    return labelPart === label;
   });
   if (matches.length === 0) return null;
   const leaves = collectStrings(matches[0].props?.children ?? null);
-  return leaves[1];
+  return leaves[leaves.length - 2];
 }
 
 /* ──────────────────────────────────────────────────────────────────

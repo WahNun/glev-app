@@ -33,19 +33,28 @@ const DAY_MS = 24 * HOUR_MS;
 
 /** Build n meals each producing the same delta (and therefore outcome),
  *  spaced one hour apart ending at NOW so every meal sits comfortably
- *  inside the 30-day window. */
-function meals(n: number, delta: number, idPrefix = "m"): Meal[] {
+ *  inside the 30-day window.
+ *
+ *  `glucoseBefore` defaults to 100 for GOOD/SPIKE/UNDERDOSE fixtures.
+ *  For OVERDOSE fixtures pass a higher value (e.g. 140) so bg_after =
+ *  glucoseBefore + delta stays ≥ 70 and avoids the HYPO_DURING guard
+ *  (Task #249 added a sparse-hypo check: bg_after < 70 → HYPO_DURING,
+ *  which detectPattern does not bucket as "overdose"). */
+function meals(n: number, delta: number, idPrefix = "m", glucoseBefore = 100): Meal[] {
   return Array.from({ length: n }, (_, i) =>
     makeFinalMeal(`${idPrefix}-${i}`, delta, {
       meal_time: new Date(NOW.getTime() - (i + 1) * HOUR_MS).toISOString(),
+      glucose_before: glucoseBefore,
     }),
   );
 }
 
-/** Build a single meal at a specific age (in days before NOW). */
-function mealAtDaysAgo(id: string, delta: number, daysAgo: number): Meal {
+/** Build a single meal at a specific age (in days before NOW).
+ *  `glucoseBefore` follows the same convention as `meals()` above. */
+function mealAtDaysAgo(id: string, delta: number, daysAgo: number, glucoseBefore = 100): Meal {
   return makeFinalMeal(id, delta, {
     meal_time: new Date(NOW.getTime() - daysAgo * DAY_MS).toISOString(),
+    glucose_before: glucoseBefore,
   });
 }
 
@@ -81,7 +90,7 @@ test("detectPattern: 5+ GOOD meals → balanced (boundary at n=5)", () => {
 test("detectPattern: >50% OVERDOSE → overdosing", () => {
   // 6 OVERDOSE + 4 GOOD = 60% → overdosing.
   const list = [
-    ...meals(6, -50, "over"), // delta < -30 → OVERDOSE
+    ...meals(6, -50, "over", 140), // delta < -30 → OVERDOSE; glucoseBefore=140 keeps bg_after=90 above hypo threshold
     ...meals(4, 10, "good"),
   ];
   const r = detectPattern(list, NOW);
@@ -175,7 +184,7 @@ test("detectPattern: meals older than 30 days are excluded from the window", () 
   // leaving only 4 in the window → insufficient_data.
   const list = [
     ...Array.from({ length: 4 }, (_, i) => mealAtDaysAgo(`fresh-${i}`, 10, 1)),
-    ...Array.from({ length: 10 }, (_, i) => mealAtDaysAgo(`old-${i}`, -50, 180)),
+    ...Array.from({ length: 10 }, (_, i) => mealAtDaysAgo(`old-${i}`, -50, 180, 140)),
   ];
   const r = detectPattern(list, NOW);
   expect(r.type).toBe("insufficient_data");
@@ -212,7 +221,7 @@ test("detectPattern: a recent OVERDOSE burst out-votes an older GOOD burst", () 
   // Raw rate: 50% / 50% — would NOT trip the strict `> 50%` overdose rule.
   // Weighted: ~64.8% overdose → trips the rule.
   const list = [
-    ...Array.from({ length: 5 }, (_, i) => mealAtDaysAgo(`recent-${i}`, -50, 1)),
+    ...Array.from({ length: 5 }, (_, i) => mealAtDaysAgo(`recent-${i}`, -50, 1, 140)),
     ...Array.from({ length: 5 }, (_, i) => mealAtDaysAgo(`older-${i}`, 10, 28)),
   ];
   const r = detectPattern(list, NOW);
@@ -226,7 +235,7 @@ test("detectPattern: an older OVERDOSE burst is dampened by recent GOOD meals", 
   // day old. Raw 50/50 again, but the weighted overdose share now sits
   // around ~35% — well below the threshold → balanced wins.
   const list = [
-    ...Array.from({ length: 5 }, (_, i) => mealAtDaysAgo(`old-${i}`, -50, 28)),
+    ...Array.from({ length: 5 }, (_, i) => mealAtDaysAgo(`old-${i}`, -50, 28, 140)),
     ...Array.from({ length: 5 }, (_, i) => mealAtDaysAgo(`new-${i}`, 10, 1)),
   ];
   const r = detectPattern(list, NOW);
