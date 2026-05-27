@@ -138,3 +138,9 @@ id = "5JajeB6VYGkyCbs590NrJ"
 uri = "file://public/glev-lockup.png"
 type = "image"
 title = "glev-lockup.png → in public/ ablegen"
+
+[[outputs]]
+id = "kdpLIYHzlQ2InWCBnoDnO"
+uri = "file://public/feature-gating.csv"
+type = "table"
+title = "Glev Feature-Gating Übersicht"

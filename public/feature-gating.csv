@@ -1,0 +1,39 @@
+Tier,Mindest-Plan,Preis,Feature-Key,Beschreibung,Im UI gegated?,Datei
+all,Alle,—,meal_log_voice,Mahlzeit per Sprache loggen,Nein (kein Gate),—
+all,Alle,—,meal_log_manual,Mahlzeit manuell loggen,Nein (kein Gate),—
+all,Alle,—,insulin_log,Insulin loggen,Nein (kein Gate),—
+all,Alle,—,fingerstick_bz,Fingerstich BZ loggen,Nein (kein Gate),—
+all,Alle,—,activity_log,Sport/Bewegung loggen,Nein (kein Gate),—
+all,Alle,—,symptoms_log,Symptome loggen,Nein (kein Gate),—
+all,Alle,—,cycle_tracking,Zyklus tracken,Nein (kein Gate),—
+all,Alle,—,dashboard_basic,Dashboard Grundansicht,Nein (kein Gate),—
+all,Alle,—,food_memory,Mahlzeiten-Gedächtnis / History,Nein (kein Gate),—
+all,Alle,—,history_60d,60 Tage Historie,Nein (kein Gate),—
+smart,Glev Smart,€9/Mo,cgm_sync,CGM-Verbindung (LibreLink etc.),Nein (bewusst frei für alle),—
+smart,Glev Smart,€9/Mo,apple_health_sync,Apple Health Sync,Nein (nie verdrahtet),—
+smart,Glev Smart,€9/Mo,cgm_autofill,BZ-Autofill aus CGM,Nein (nie verdrahtet),—
+smart,Glev Smart,€9/Mo,hypo_warning,Hypo-Push-Alarm,Nein (nie verdrahtet),—
+pro,Glev Pro,€14.90/Mo,hba1c_gmi,GMI / Ø-Blutzucker Insights-Karte,Ja,insights/page.tsx
+pro,Glev Pro,€14.90/Mo,tir_analysis,Time-in-Range + Hypo/Hyper-Events,Ja,insights/page.tsx
+pro,Glev Pro,€14.90/Mo,trends_variability,Glukose-Trend + CV% Variabilität,Ja,insights/page.tsx
+pro,Glev Pro,€14.90/Mo,meal_type_breakdown,Mahlzeiten-Typen Insights-Karte,Ja,insights/page.tsx
+pro,Glev Pro,€14.90/Mo,meal_bz_rating,Mahlzeiten-Bewertung Insights-Karte,Ja,insights/page.tsx
+pro,Glev Pro,€14.90/Mo,engine_bolus_suggestion,Engine Step 2 Bolus-Empfehlung,Ja,engine/page.tsx
+pro,Glev Pro,€14.90/Mo,adaptive_icr,Adaptiver ICR Insights-Karte,Ja,insights/page.tsx
+pro,Glev Pro,€14.90/Mo,bz_pattern_recognition,Muster-Erkennung Insights-Karte,Ja,insights/page.tsx
+pro,Glev Pro,€14.90/Mo,control_score,Control Score,Nein (nie verdrahtet),—
+pro,Glev Pro,€14.90/Mo,settings_tips,Einstellungs-Tipps,Nein (nie verdrahtet),—
+pro,Glev Pro,€14.90/Mo,auto_apply_icr,ICR automatisch anwenden,Nein (nie verdrahtet),—
+pro,Glev Pro,€14.90/Mo,icr_by_daytime,ICR nach Tageszeit,Nein (nie verdrahtet),—
+pro,Glev Pro,€14.90/Mo,custom_target_range,Eigener Zielbereich,Nein (nie verdrahtet),—
+pro,Glev Pro,€14.90/Mo,google_sheets_import,Google Sheets Import,Nein (nie verdrahtet),—
+pro,Glev Pro,€14.90/Mo,history_90d,90 Tage Historie,Nein (nie verdrahtet),—
+pro,Glev Pro,€14.90/Mo,founder_direct_line,Direkter Kontakt zum Founder,Nein (nie verdrahtet),—
+plus,Glev+,€29/Mo,pdf_report,PDF-Arztbericht exportieren,Ja,ExportPanel.tsx
+plus,Glev+,€29/Mo,csv_export,CSV exportieren,Ja,ExportPanel.tsx
+plus,Glev+,€29/Mo,caregiver_view,Caregiver-Zugang,Nein (nie verdrahtet),—
+plus,Glev+,€29/Mo,push_alarm_contacts,Push-Alarm an Kontakte,Nein (nie verdrahtet),—
+plus,Glev+,€29/Mo,doctor_appointment_tracker,Arzttermin-Tracker,Nein (nie verdrahtet),—
+plus,Glev+,€29/Mo,since_last_appointment,Seit letztem Termin,Nein (nie verdrahtet),—
+plus,Glev+,€29/Mo,unlimited_history,Unbegrenzte Historie,Nein (nie verdrahtet),—
+plus,Glev+,€29/Mo,early_feature_access,Early Access neuer Features,Nein (nie verdrahtet),—
