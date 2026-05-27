@@ -45,6 +45,7 @@ import {
 import { localeToBcp47 } from "@/lib/time";
 import ImportPanel from "@/components/ImportPanel";
 import ExportPanel from "@/components/ExportPanel";
+import PlanSimulator from "@/components/PlanSimulator";
 import CgmSettingsCard from "@/components/CgmSettingsCard";
 import NightscoutSettingsCard from "@/components/NightscoutSettingsCard";
 import BottomSheet from "@/components/BottomSheet";
@@ -3095,8 +3096,13 @@ export default function SettingsPage() {
         />
       </SettingsSection>
 
+      {/* Plan-Simulator — nur für Admin-Account sichtbar (NEXT_PUBLIC_ADMIN_EMAIL) */}
+      <div style={{ marginTop: 32, marginBottom: 8 }}>
+        <PlanSimulator />
+      </div>
+
       <p style={{
-        marginTop: 36, marginBottom: 8,
+        marginTop: 16, marginBottom: 8,
         marginLeft: "auto", marginRight: "auto",
         maxWidth: 560, fontSize: 13, lineHeight: 1.55,
         color: "var(--text-faint)", textAlign: "center",

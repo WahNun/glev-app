@@ -25,6 +25,7 @@
 import { useEffect, useRef, useState } from "react";
 import { canAccess as canAccessFn } from "@/lib/planFeatures";
 import type { EffectivePlan } from "@/lib/admin/effectivePlan";
+import { getPlanOverride } from "@/lib/planOverride";
 
 type PlanApiResponse = {
   plan: EffectivePlan;
@@ -103,13 +104,18 @@ export function usePlan(): UsePlanResult {
 }
 
 function makeResult(data: PlanApiResponse, loading: boolean): UsePlanResult {
+  // Admin Plan-Override (localStorage): nur client-seitig, kein Server-Effekt.
+  const override = getPlanOverride();
+  const effectivePlan = override ?? data.plan;
+  const effectiveTrialActive = override !== null ? false : data.trial_active;
+
   return {
-    plan: data.plan,
-    trialActive: data.trial_active,
+    plan: effectivePlan,
+    trialActive: effectiveTrialActive,
     trialEndsAt: data.trial_ends_at,
     loading,
     canAccess: (feature: string) =>
-      canAccessFn(feature, data.plan, data.trial_active),
+      canAccessFn(feature, effectivePlan, effectiveTrialActive),
   };
 }
 
