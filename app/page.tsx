@@ -171,7 +171,7 @@ export default function PreviewHome() {
                 color: "var(--text)",
                 textDecoration: "none",
               }}
-              className="glev-link"
+              className="glev-link glev-nav-blog"
             >
               {t("nav_blog")}
             </Link>
@@ -1101,6 +1101,12 @@ export default function PreviewHome() {
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <Link
+            href="/blog"
+            style={{ color: "var(--text-faint)", textDecoration: "none", fontSize: 12 }}
+          >
+            {t("nav_blog")}
+          </Link>
           <LocaleSwitcher size="xs" ariaLabel={t("nav_aria_locale")} />
           <div style={{ maxWidth: 560, lineHeight: 1.5 }}>
             {t("footer_disclaimer")}

@@ -307,6 +307,12 @@ textarea,
   .glev-wiggle { animation: none; }
 }
 
+/* Blog-Link im Header nur auf Desktop zeigen — auf Mobile läuft er
+   in den Footer, damit die Nav nicht überfüllt wirkt. */
+@media (max-width: 639px) {
+  .glev-nav-blog { display: none; }
+}
+
 /* Apple-Wallet-style "card just loaded" sweep. A single bright streak
    travels left→right across an element exactly once. Used by the TIR
    bars in /insights so the segments feel materialised by light rather
