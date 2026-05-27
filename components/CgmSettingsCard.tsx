@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { useGlucoseUnit, mgdlToMmol } from "@/hooks/useGlucoseUnit";
+import { usePlan } from "@/hooks/usePlan";
+import UpgradeGate from "@/components/UpgradeGate";
 
 const ACCENT = "#4F6EF7";
 const GREEN = "#22D3A0";
@@ -88,6 +90,7 @@ const label: React.CSSProperties = {
 };
 
 export default function CgmSettingsCard() {
+  const { canAccess, loading: planLoading } = usePlan();
   const tAh = useTranslations("cgmSettings.appleHealth");
   const { unit: glucoseUnit } = useGlucoseUnit();
   const t = useTranslations("cgmSettings");
@@ -839,6 +842,10 @@ export default function CgmSettingsCard() {
   }
 
   const connected = status?.connected === true;
+
+  if (!planLoading && !canAccess("cgm_sync")) {
+    return <UpgradeGate feature="cgm_sync" />;
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>

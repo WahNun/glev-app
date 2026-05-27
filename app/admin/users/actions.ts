@@ -461,8 +461,16 @@ export async function setManualPlanAction(formData: FormData): Promise<void> {
   const plan = String(formData.get("plan") ?? "");
   const note = String(formData.get("note") ?? "").trim() || null;
 
+  const durationDays = parseInt(String(formData.get("durationDays") ?? "0"), 10);
+
   if (!userId) throw new Error("userId fehlt");
-  if (!["free", "beta", "pro"].includes(plan)) throw new Error("ungültiger plan");
+  if (!["free", "beta", "pro", "plus"].includes(plan)) throw new Error("ungültiger plan");
+
+  const now = new Date();
+  const expiresAt =
+    durationDays > 0
+      ? new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000).toISOString()
+      : null;
 
   const sb = getSupabaseAdmin();
   const { data: before } = await sb
@@ -476,7 +484,8 @@ export async function setManualPlanAction(formData: FormData): Promise<void> {
     .update({
       manual_plan_override: plan,
       manual_plan_note: note,
-      manual_plan_set_at: new Date().toISOString(),
+      manual_plan_set_at: now.toISOString(),
+      manual_plan_expires_at: expiresAt,
     })
     .eq("user_id", userId);
 

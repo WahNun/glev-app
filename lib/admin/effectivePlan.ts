@@ -30,6 +30,7 @@ export function computeEffectivePlan(p: PlanInputs): EffectivePlan {
   const overrideExpired =
     Number.isFinite(expiresAt) && expiresAt < Date.now();
   if (!overrideExpired) {
+    if (o === "plus") return "plus";
     if (o === "pro") return "pro";
     if (o === "beta") return "beta";
     if (o === "free") return "free";

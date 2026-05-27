@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useId, useCallback } from "react";
+import { usePlan } from "@/hooks/usePlan";
+import UpgradeGate from "@/components/UpgradeGate";
 import useSWR, { mutate as swrMutate } from "swr";
 import RefreshingBar from "@/components/RefreshingBar";
 import { useLocale, useTranslations } from "next-intl";
@@ -236,6 +238,7 @@ export default function InsightsPage() {
   // Carb-unit selector — feeds the per-type "avg carbs" line and the
   // "Avg insulin" tile sublabel. All aggregates are computed in grams
   // upstream; only the rendered string switches to BE/KE/g.
+  const { canAccess } = usePlan();
   const carbUnit = useCarbUnit();
   const tInsights = useTranslations("insights");
   const tChips = useTranslations("chips");
@@ -1248,6 +1251,7 @@ export default function InsightsPage() {
     {
       id: "time-in-range",
       node: (
+        <UpgradeGate feature="tir_analysis">
         <FlipCard
           minHeight={CARD_MIN_H}
           accent={GREEN}
@@ -1495,6 +1499,7 @@ export default function InsightsPage() {
             </>
           )}
         </FlipCard>
+        </UpgradeGate>
       ),
     },
     {

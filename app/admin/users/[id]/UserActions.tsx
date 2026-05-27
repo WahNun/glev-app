@@ -91,16 +91,25 @@ export default function UserActions({
           <input type="hidden" name="userId" value={userId} />
           <span style={lbl}>Manuellen Plan setzen:</span>
           <select name="plan" defaultValue={currentManualPlan ?? "pro"} style={input}>
-            <option value="free">Free (entzieht Pro/Beta)</option>
-            <option value="beta">Beta</option>
-            <option value="pro">Pro</option>
+            <option value="free">Free (entzieht Zugang)</option>
+            <option value="beta">Smart S (Beta)</option>
+            <option value="pro">Pro M</option>
+            <option value="plus">Plus L</option>
+          </select>
+          <select name="durationDays" defaultValue="7" style={input}>
+            <option value="0">∞ Kein Ablauf</option>
+            <option value="7">7 Tage</option>
+            <option value="14">14 Tage</option>
+            <option value="30">30 Tage</option>
+            <option value="90">3 Monate</option>
+            <option value="365">1 Jahr</option>
           </select>
           <input
             name="note"
             type="text"
             placeholder={'Notiz (z.B. „Schwester, Lifetime Free")'}
             defaultValue={currentManualPlanNote ?? ""}
-            style={{ ...input, flex: 1, minWidth: 240 }}
+            style={{ ...input, flex: 1, minWidth: 200 }}
           />
           <button type="submit" style={btnPrimary}>
             Plan setzen

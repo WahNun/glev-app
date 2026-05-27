@@ -42,6 +42,8 @@ import { fetchMeals } from "@/lib/meals";
 import { hapticSuccess, hapticError, hapticSelection } from "@/lib/haptics";
 import SnapSlider from "@/components/log/SnapSlider";
 import ReviewMacrosCards from "@/components/ReviewMacrosCards";
+import { usePlan } from "@/hooks/usePlan";
+import UpgradeGate from "@/components/UpgradeGate";
 
 // datetime-local needs "YYYY-MM-DDTHH:mm" in the *local* timezone (the input
 // strips the offset). Using toISOString() would silently shift the value to
@@ -429,6 +431,7 @@ export default function EnginePage() {
   // searchParams (not just []) so re-picking an item while already
   // on /engine still switches tabs — Next.js does NOT remount the
   // page when only the query string changes.
+  const { canAccess } = usePlan();
   const searchParams = useSearchParams();
   useEffect(() => {
     if (!searchParams) return;
@@ -2773,6 +2776,9 @@ export default function EnginePage() {
             </div>
           )}
           {stepIndex === 1 && wizardSavedDose === null && (
+            !canAccess("engine_bolus_suggestion") ? (
+              <UpgradeGate feature="engine_bolus_suggestion" />
+            ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={{ ...card, padding: 18, position: "relative" }}>
               {/* Back chevron — top-left of the card per user request
@@ -3298,6 +3304,7 @@ export default function EnginePage() {
                 )}
               </div>
           </div>
+            )
           )}
 
           {/* BolusExplainerSheet — fixed bottom-sheet replacing Step 3.
