@@ -3,7 +3,7 @@
  * subscriptions.
  *
  * Pro now grants free immediate access until 1. Juli 2026 — that day the
- * regular €24.90/$24.90 monthly subscription kicks in via the card on
+ * regular €14.90/$14.90 monthly subscription kicks in via the card on
  * file. The copy reflects that "use it now for free, billing starts on X"
  * framing, in either German or English depending on `locale`.
  */
@@ -75,7 +75,7 @@ function proWelcomeHtmlDe(
 
               <p style="margin:0 0 24px;font-size:15px;line-height:1.7;color:#374151;">
                 Ab dem <strong>${trialEndDisplay}</strong> startet dann deine
-                reguläre Mitgliedschaft für <strong>24,90&nbsp;€/Monat</strong>,
+                reguläre Mitgliedschaft für <strong>14,90&nbsp;€/Monat</strong>,
                 automatisch über die hinterlegte Karte. Bis dahin: keine
                 Abbuchung, keine Reminder.
               </p>
@@ -181,7 +181,7 @@ function proWelcomeHtmlEn(
 
               <p style="margin:0 0 24px;font-size:15px;line-height:1.7;color:#374151;">
                 On <strong>${trialEndDisplay}</strong> your regular membership
-                kicks in at <strong>$24.90/month</strong>, billed automatically
+                kicks in at <strong>$14.90/month</strong>, billed automatically
                 to the card on file. Until then: no charges, no reminders.
               </p>
 

@@ -25,13 +25,13 @@ const STRIPE_TRIAL_MIN_LEAD_MS = 48 * 60 * 60 * 1000 + 60 * 60 * 1000;
  * POST /api/checkout/pro
  *
  * Schlanker Pro-Checkout-Endpoint analog zu /api/checkout/beta.
- * Erstellt eine Stripe-Subscription-Session für den Pro-Price (€24,90 bzw.
- * $24.90 / Monat) mit fixem Trial-End am Launch-Tag (1. Juli 2026):
+ * Erstellt eine Stripe-Subscription-Session für den Pro-Price (€14,90 bzw.
+ * $14.90 / Monat) mit fixem Trial-End am Launch-Tag (1. Juli 2026):
  * Karte wird heute hinterlegt, erste Buchung am Launch-Tag.
  *
  * Currency wird per Locale aus dem Request-Body gewählt:
- *   `locale: "en"` → USD-Charge ($24.90/Monat) via STRIPE_PRICE_PRO_USD_ID
- *   `locale: "de"` (Default + Fallback) → EUR-Charge (€24,90/Monat) via
+ *   `locale: "en"` → USD-Charge ($14.90/Monat) via STRIPE_PRICE_PRO_USD_ID
+ *   `locale: "de"` (Default + Fallback) → EUR-Charge (€14,90/Monat) via
  *     STRIPE_PRICE_PRO_EUR_ID, mit backward-compat Fallback auf den alten
  *     Namen STRIPE_PRO_PRICE_ID damit Production weiterläuft.
  *
