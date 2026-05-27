@@ -56,9 +56,9 @@ export async function POST(req: NextRequest) {
       payment_method_collection: "always",
       subscription_data: {
         ...(trialIsViable ? { trial_end: PLUS_TRIAL_END } : {}),
-        metadata: { feature: "plus_subscription" },
+        metadata: { feature: "plus_subscription", plan_name: "Glev+", plan_id: "glev-plus-monthly" },
       },
-      metadata: { feature: "plus_subscription" },
+      metadata: { feature: "plus_subscription", plan_name: "Glev+", plan_id: "glev-plus-monthly" },
       success_url: `${appUrl}/pro/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/pro/cancelled`,
       locale,

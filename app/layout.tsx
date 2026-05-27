@@ -11,6 +11,7 @@ import MealCheckReminderProvider from "@/components/MealCheckReminderProvider";
 import LandscapeGlucoseOverlay from "@/components/LandscapeGlucoseOverlay";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { APP_ROUTE_REGEX_SOURCE, isAppRoute, PATHNAME_HEADER } from "@/lib/appRoutes";
+import CookieBanner from "@/components/CookieBanner";
 
 const META_PIXEL_ID = "960780236789931";
 
@@ -237,6 +238,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <MealCheckReminderProvider />
             <LandscapeGlucoseOverlay />
             {children}
+            <CookieBanner />
           </ThemeProvider>
         </NextIntlClientProvider>
       </body>

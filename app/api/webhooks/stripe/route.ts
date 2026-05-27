@@ -9,6 +9,7 @@ import { extractFullNameFromSession } from '@/lib/stripeCheckout';
 import { createClient } from '@supabase/supabase-js';
 import { enqueueEmail } from '@/lib/emails/outbox';
 import { scheduleDripEmails } from '@/lib/emails/drip-scheduler';
+import { sendCapiEvent } from '@/lib/fb-capi-server';
 
 // Lazy admin client — constructing it at module load is fine (no
 // network), but the env vars may be missing in certain build contexts.
@@ -352,6 +353,42 @@ export async function POST(req: NextRequest) {
         sessionId,
         err,
       });
+    }
+
+    // CAPI Purchase — fire-and-forget. Kein Stripe-Retry bei Meta-Fehlern.
+    // event_id = sessionId dedupliziert gegen Browser-Pixel falls vorhanden.
+    {
+      const capiCountry =
+        typeof session.customer_details?.address?.country === 'string'
+          ? session.customer_details.address.country.toLowerCase()
+          : 'de';
+      const capiValue =
+        typeof session.amount_total === 'number' ? session.amount_total / 100 : 9.9;
+      const capiSub =
+        typeof session.subscription === 'string' ? session.subscription : undefined;
+      sendCapiEvent(
+        {
+          email,
+          externalId:     email,
+          subscriptionId: capiSub,
+          country:        capiCountry,
+        },
+        {
+          eventName:      'Purchase',
+          eventId:        `purchase_${sessionId}`,
+          eventSourceUrl: `${appUrl}/beta/success`,
+          actionSource:   'website',
+          value:          capiValue,
+          currency:       'EUR',
+          contentName:    'Glev Smart',
+          contentIds:     ['glev-smart-monthly'],
+          contentType:    'product',
+          orderId:        sessionId,
+        },
+      ).catch((e) =>
+        // eslint-disable-next-line no-console
+        console.warn('[webhook] CAPI Purchase failed (non-fatal):', e),
+      );
     }
   }
 

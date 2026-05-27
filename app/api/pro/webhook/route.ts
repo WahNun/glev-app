@@ -6,6 +6,7 @@ import { extractFullNameFromSession } from "@/lib/stripeCheckout";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { enqueueEmail } from "@/lib/emails/outbox";
 import { scheduleDripEmails } from "@/lib/emails/drip-scheduler";
+import { sendCapiEvent } from "@/lib/fb-capi-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -466,6 +467,45 @@ export async function POST(req: NextRequest) {
           // is also visible.
           // eslint-disable-next-line no-console
           console.warn("[pro/webhook] no email on completed session — skipping welcome mail", session.id);
+        }
+
+        // CAPI Purchase — fire-and-forget. Blockiert nie den Webhook-Return,
+        // da Meta-Fehler kein Stripe-Retry-Grund sind. event_id = session.id
+        // stellt sicher dass Browser-Pixel (falls vorhanden) dedupliziert wird.
+        if (email) {
+          const planName = session.metadata?.plan_name || (isPlus ? "Glev+" : "Glev Pro");
+          const planId   = session.metadata?.plan_id   || (isPlus ? "glev-plus-monthly" : "glev-pro-monthly");
+          const value    =
+            typeof session.amount_total === "number"
+              ? session.amount_total / 100
+              : isPlus ? 29 : 14.9;
+          const currency: "EUR" | "USD" =
+            typeof session.currency === "string" && session.currency.toUpperCase() === "USD"
+              ? "USD"
+              : "EUR";
+          sendCapiEvent(
+            {
+              email,
+              externalId: email,
+              subscriptionId: subscriptionId ?? undefined,
+              country: sessionCountry?.toLowerCase() ?? "de",
+            },
+            {
+              eventName:      "Purchase",
+              eventId:        `purchase_${session.id}`,
+              eventSourceUrl: `${resolveAppUrl(req)}/pro/success`,
+              actionSource:   "website",
+              value,
+              currency,
+              contentName:    planName,
+              contentIds:     [planId],
+              contentType:    "product",
+              orderId:        session.id,
+            },
+          ).catch((e) =>
+            // eslint-disable-next-line no-console
+            console.warn("[pro/webhook] CAPI Purchase failed (non-fatal):", e),
+          );
         }
 
         return NextResponse.json({ received: true });

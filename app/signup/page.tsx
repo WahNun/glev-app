@@ -16,6 +16,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { trackEvent } from "@/lib/fb-capi-client";
 import {
   ACCENT,
   ACCENT_HOVER,
@@ -119,10 +120,26 @@ export default function SignupPage() {
         if (trialData?.trial_end_at) setTrialEndAt(trialData.trial_end_at);
       }
 
-      // Pixel Lead event
+      // Pixel Lead event (Browser) — CAPI parallel via trackEvent
       if (typeof window !== "undefined" && (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq) {
         (window as unknown as { fbq: (...args: unknown[]) => void }).fbq("track", "Lead");
       }
+      // Server CAPI Lead — fire-and-forget, blockiert nicht den Step-Wechsel
+      const nameParts = name.trim().split(/\s+/);
+      trackEvent(
+        {
+          email,
+          firstName: nameParts[0],
+          lastName: nameParts.slice(1).join(" ") || undefined,
+          country: "de",
+        },
+        {
+          eventName: "Lead",
+          contentName: "Glev Pro Trial",
+          contentIds: ["glev-pro-monthly"],
+          contentType: "product",
+        },
+      ).catch(() => {/* fire-and-forget */});
 
       // → Step 2 (profile data) regardless of whether email confirm is needed
       setStep("profile");
@@ -154,6 +171,28 @@ export default function SignupPage() {
             sensor_type: usesCgm === "ja" ? (sensorType || null) : null,
           },
         }).catch((e) => console.warn("[signup] profile update failed:", e));
+      }
+
+      // CAPI StartTrial — phone + name jetzt bekannt (Step 2 vollständig)
+      {
+        const nameParts = name.trim().split(/\s+/);
+        trackEvent(
+          {
+            email,
+            phone: phone || undefined,
+            firstName: nameParts[0],
+            lastName: nameParts.slice(1).join(" ") || undefined,
+            country: "de",
+          },
+          {
+            eventName: "StartTrial",
+            value: 14.9,
+            currency: "EUR",
+            contentName: "Glev Pro Trial",
+            contentIds: ["glev-pro-monthly"],
+            contentType: "product",
+          },
+        ).catch(() => {/* fire-and-forget */});
       }
 
       // Fire-and-forget CRM notification — all form data + meta fields

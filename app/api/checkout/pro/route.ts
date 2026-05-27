@@ -94,12 +94,12 @@ export async function POST(req: NextRequest) {
         ...(trialIsViable ? { trial_end: PRO_TRIAL_END } : {}),
         // Stamp the subscription so the webhook + downstream tooling can
         // tell apart Pro from Beta even without looking at the price id.
-        metadata: { feature: "pro_subscription" },
+        metadata: { feature: "pro_subscription", plan_name: "Glev Pro", plan_id: "glev-pro-monthly" },
       },
       // Top-level metadata mirrors subscription_data.metadata so the
       // session itself (used by /api/verify-payment) carries the feature
       // tag — that's how /pro/success refuses Beta sessions and vice-versa.
-      metadata: { feature: "pro_subscription" },
+      metadata: { feature: "pro_subscription", plan_name: "Glev Pro", plan_id: "glev-pro-monthly" },
       success_url: `${appUrl}/pro/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/pro/cancelled`,
       // Stripe-Hosted-Checkout-UI in passender Sprache anzeigen.
