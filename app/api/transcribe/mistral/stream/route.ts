@@ -12,15 +12,13 @@ export const runtime = "nodejs";
  *
  * Transport: Server-Sent Events (text/event-stream).
  * Each event is a JSON object with one of:
- *   { type: "partial", text: string }  — intermediate result (when streaming API is GA)
- *   { type: "final",   text: string }  — complete transcript
+ *   { type: "partial", text: string }  — intermediate result, emitted per text delta
+ *   { type: "final",   text: string }  — complete transcript (transcription.done)
  *   { type: "error",   error: string } — transcription failure
  *
- * Current state: Voxtral streaming WebSocket is not yet GA (see D-021).
- * The batch API is wrapped in SSE format so the client already uses the
- * streaming path. When Mistral ships the stable streaming API, replace the
- * `mistral.audio.transcriptions.complete` call below with the streaming
- * variant and emit "partial" events as chunks arrive — no client changes needed.
+ * Uses mistral.audio.transcriptions.stream() (GA as of SDK v2.2.1).
+ * Partial events accumulate deltas so the client always sees the full
+ * in-progress text, not just the incremental piece.
  *
  * Auth: requires a valid Supabase session (same gate as all protected routes).
  */
@@ -90,20 +88,30 @@ export async function POST(req: NextRequest) {
       try {
         const t1 = Date.now();
 
-        // TODO: Replace with mistral.audio.transcriptions.stream() when Voxtral
-        // streaming WebSocket is GA. Emit "partial" events for each chunk and
-        // "final" for the completed transcript. No client changes needed.
-        const result = await mistral.audio.transcriptions.complete({
+        const eventStream = await mistral.audio.transcriptions.stream({
           model: "voxtral-mini-latest",
           file: file as Blob,
         });
 
-        const text = (result as unknown as { text?: string }).text ?? "";
+        let accumulated = "";
 
-        // eslint-disable-next-line no-console
-        console.log("[STT stream] done in", Date.now() - t1, "ms · total:", Date.now() - t0, "ms");
+        for await (const chunk of eventStream) {
+          const { data } = chunk;
 
-        sendEvent({ type: "final", text });
+          if (data.type === "transcription.text.delta") {
+            accumulated += data.text;
+            sendEvent({ type: "partial", text: accumulated });
+          } else if (data.type === "transcription.done") {
+            const finalText = data.text ?? accumulated;
+            // eslint-disable-next-line no-console
+            console.log("[STT stream] done in", Date.now() - t1, "ms · total:", Date.now() - t0, "ms");
+            sendEvent({ type: "final", text: finalText });
+          }
+        }
+
+        if (!accumulated) {
+          sendEvent({ type: "final", text: "" });
+        }
       } catch (e) {
         const error = e instanceof Error ? e.message : "Transcription failed";
         // eslint-disable-next-line no-console
