@@ -156,7 +156,7 @@ export default async function AdminUsersPage({
       ? sb
           .from("profiles")
           .select(
-            "user_id, subscription_status, manual_plan_override, manual_plan_expires_at, manual_plan_note, deleted_at, created_by_admin",
+            "user_id, subscription_status, manual_plan_override, manual_plan_expires_at, manual_plan_note, gift_label, deleted_at, created_by_admin",
           )
           .in("user_id", userIds)
       : Promise.resolve({ data: [], error: null }),
@@ -195,6 +195,7 @@ export default async function AdminUsersPage({
     manual_plan_override: string | null;
     manual_plan_expires_at: string | null;
     manual_plan_note: string | null;
+    gift_label: string | null;
     deleted_at: string | null;
     created_by_admin: boolean | null;
   };
@@ -268,6 +269,7 @@ export default async function AdminUsersPage({
       // zurück (das war vorher auch das Verhalten).
       manual_plan_override: opt?.manual_plan_override ?? null,
       manual_plan_note: opt?.manual_plan_note ?? null,
+      gift_label: opt?.gift_label ?? null,
       deleted_at: opt?.deleted_at ?? null,
       created_by_admin: opt?.created_by_admin ?? false,
       cgm: cgmKind,

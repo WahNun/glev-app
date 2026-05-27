@@ -128,6 +128,21 @@ export default async function AdminUserDetailPage({
           </span>
         ) : null}
         {profile?.created_by_admin ? <span style={badgeInfo}>Admin-angelegt</span> : null}
+        {profile?.gift_label ? (
+          <span
+            style={{
+              background: "#fef9c3",
+              color: "#92400e",
+              border: "1px solid #fde68a",
+              padding: "3px 10px",
+              borderRadius: 999,
+              fontWeight: 600,
+              fontSize: 13,
+            }}
+          >
+            🎁 {profile.gift_label as string}
+          </span>
+        ) : null}
       </div>
 
       <p style={{ color: "#666", fontSize: 14, margin: "0 0 24px" }}>
@@ -262,6 +277,7 @@ export default async function AdminUserDetailPage({
         currentRole={(profile?.role as string) ?? "user"}
         currentManualPlan={(profile?.manual_plan_override as string | null) ?? null}
         currentManualPlanNote={(profile?.manual_plan_note as string | null) ?? null}
+        currentGiftLabel={(profile?.gift_label as string | null) ?? null}
         currentLanguage={(profile?.language as string | null) ?? null}
         emailConfirmed={!!authUser.email_confirmed_at}
         cgmConnected={!!cgm || !!profile?.cgm_connected || !!profile?.nightscout_url}

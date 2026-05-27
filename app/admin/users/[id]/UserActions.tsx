@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 import {
   setManualPlanAction,
   clearManualPlanAction,
+  setGiftLabelAction,
+  clearGiftLabelAction,
   setLanguageAction,
   confirmEmailAction,
   disconnectCgmAction,
@@ -33,6 +35,7 @@ export default function UserActions({
   currentRole,
   currentManualPlan,
   currentManualPlanNote,
+  currentGiftLabel,
   currentLanguage,
   emailConfirmed,
   cgmConnected,
@@ -44,6 +47,7 @@ export default function UserActions({
   currentRole: string;
   currentManualPlan: string | null;
   currentManualPlanNote: string | null;
+  currentGiftLabel: string | null;
   currentLanguage: string | null;
   emailConfirmed: boolean;
   cgmConnected: boolean;
@@ -111,6 +115,56 @@ export default function UserActions({
             </button>
           </form>
         ) : null}
+
+        {/* Gift-Label — rein informativ, kein Einfluss auf computeEffectivePlan */}
+        <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid #eee" }}>
+          <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600 }}>
+            🎁 Geschenkter Zugang
+          </p>
+          <p style={{ margin: "0 0 10px", fontSize: 12, color: "#666" }}>
+            Nur zur Kennzeichnung — der eigentliche Plan muss oben via &quot;Manuellen Plan setzen&quot; vergeben werden.
+          </p>
+          <form action={setGiftLabelAction} style={row}>
+            <input type="hidden" name="userId" value={userId} />
+            <select name="label" defaultValue={currentGiftLabel ?? "Lifetime Access"} style={input}>
+              <option value="Lifetime Access">Lifetime Access</option>
+              <option value="1 Jahr kostenlos">1 Jahr kostenlos</option>
+              <option value="6 Monate kostenlos">6 Monate kostenlos</option>
+              <option value="3 Monate kostenlos">3 Monate kostenlos</option>
+              <option value="Freundes-Zugang">Freundes-Zugang</option>
+              <option value="Influencer">Influencer</option>
+              <option value="Tester">Tester</option>
+              <option value="Investor">Investor</option>
+              <option value="Team">Team</option>
+            </select>
+            <button type="submit" style={btnPrimary}>
+              Label setzen
+            </button>
+          </form>
+          {currentGiftLabel ? (
+            <div style={{ ...row, marginTop: 8, alignItems: "center" }}>
+              <span
+                style={{
+                  background: "#fef9c3",
+                  color: "#92400e",
+                  border: "1px solid #fde68a",
+                  borderRadius: 6,
+                  padding: "4px 10px",
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+              >
+                🎁 {currentGiftLabel}
+              </span>
+              <form action={clearGiftLabelAction} style={{ margin: 0 }}>
+                <input type="hidden" name="userId" value={userId} />
+                <button type="submit" style={{ ...btnSecondary, fontSize: 12, padding: "4px 10px" }}>
+                  Label entfernen
+                </button>
+              </form>
+            </div>
+          ) : null}
+        </div>
 
         <form action={setLanguageAction} style={{ ...row, marginTop: 16 }}>
           <input type="hidden" name="userId" value={userId} />

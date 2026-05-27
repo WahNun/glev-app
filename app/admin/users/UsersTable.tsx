@@ -18,6 +18,8 @@ export type UserRow = {
   plan: EffectivePlan;
   manual_plan_override: string | null;
   manual_plan_note: string | null;
+  /** Informatives Label für geschenkten Zugang (z.B. "Lifetime Access"). null = kein Geschenk-Label gesetzt. */
+  gift_label: string | null;
   deleted_at: string | null;
   created_by_admin: boolean;
   cgm: "none" | "llu" | "nightscout" | "applehealth" | "junction";
@@ -40,6 +42,7 @@ type Filter =
   | "pro"
   | "pro_trial"
   | "manual"
+  | "gifted"
   | "deleted"
   | "admin";
 
@@ -50,6 +53,7 @@ const FILTERS: ReadonlyArray<{ key: Filter; label: string }> = [
   { key: "pro", label: "Pro" },
   { key: "pro_trial", label: "Pro-Trial" },
   { key: "manual", label: "Manuell" },
+  { key: "gifted", label: "🎁 Geschenkt" },
   { key: "deleted", label: "Gelöscht" },
   { key: "admin", label: "Admins" },
 ];
@@ -144,6 +148,7 @@ export default function UsersTable({
       if (filter === "pro" && r.plan !== "pro") return false;
       if (filter === "pro_trial" && !isTrialActive(r)) return false;
       if (filter === "manual" && !r.manual_plan_override) return false;
+      if (filter === "gifted" && !r.gift_label) return false;
       if (filter === "deleted" && !r.deleted_at) return false;
       if (filter === "admin" && r.role !== "admin") return false;
       // Currency/Land: "" = alle, "__none__" = nur Zeilen ohne Wert
@@ -168,6 +173,7 @@ export default function UsersTable({
           r.pro_status ?? "",
           r.beta_status ?? "",
           r.manual_plan_note ?? "",
+          r.gift_label ?? "",
         ]
           .join(" ")
           .toLowerCase();
@@ -281,6 +287,7 @@ export default function UsersTable({
               if (r.deleted_at) flags.push("Gelöscht");
               if (r.banned_until) flags.push("Gebannt");
               if (r.manual_plan_override) flags.push("Manuell");
+              if (r.gift_label) flags.push(`🎁 ${r.gift_label}`);
               if (r.created_by_admin) flags.push("Admin-angelegt");
               if (r.role === "admin") flags.push("Admin-Rolle");
               if (!r.email_confirmed_at) flags.push("E-Mail unbestätigt");

@@ -586,6 +586,87 @@ export async function clearManualPlanAction(formData: FormData): Promise<void> {
 }
 
 /**
+ * Setzt ein informatives Gift-Label auf einem User-Profil.
+ * Das Label ist rein deskriptiv — das eigentliche Plan-Grant muss
+ * separat via setManualPlanAction gesetzt werden.
+ */
+export async function setGiftLabelAction(formData: FormData): Promise<void> {
+  const adminToken = await requireAdminToken();
+  const userId = String(formData.get("userId") ?? "");
+  const label = String(formData.get("label") ?? "").trim();
+  if (!userId) throw new Error("userId fehlt");
+  if (!label) throw new Error("label darf nicht leer sein");
+
+  const sb = getSupabaseAdmin();
+  const { data: before } = await sb
+    .from("profiles")
+    .select("user_id, gift_label")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const { error } = await sb
+    .from("profiles")
+    .update({ gift_label: label })
+    .eq("user_id", userId);
+
+  if (error) {
+    if (isSchemaMissingError(error)) {
+      redirect(`/admin/users/${userId}?err=migration`);
+    }
+    throw new Error("supabase: " + error.message);
+  }
+
+  await writeAuditLog({
+    action: "set_gift_label",
+    targetUserId: userId,
+    before,
+    after: { gift_label: label },
+    note: `${(before as { gift_label?: string | null } | null)?.gift_label ?? "—"} → ${label}`,
+    adminToken,
+  });
+
+  revalidateUserPaths(userId);
+}
+
+/**
+ * Entfernt das Gift-Label von einem User-Profil.
+ */
+export async function clearGiftLabelAction(formData: FormData): Promise<void> {
+  const adminToken = await requireAdminToken();
+  const userId = String(formData.get("userId") ?? "");
+  if (!userId) throw new Error("userId fehlt");
+
+  const sb = getSupabaseAdmin();
+  const { data: before } = await sb
+    .from("profiles")
+    .select("user_id, gift_label")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const { error } = await sb
+    .from("profiles")
+    .update({ gift_label: null })
+    .eq("user_id", userId);
+
+  if (error) {
+    if (isSchemaMissingError(error)) {
+      redirect(`/admin/users/${userId}?err=migration`);
+    }
+    throw new Error("supabase: " + error.message);
+  }
+
+  await writeAuditLog({
+    action: "clear_gift_label",
+    targetUserId: userId,
+    before,
+    after: { gift_label: null },
+    adminToken,
+  });
+
+  revalidateUserPaths(userId);
+}
+
+/**
  * E-Mail manuell als bestätigt markieren. Nützlich, wenn jemand seinen
  * Bestätigungslink verloren hat und wir ihn ohne Mail-Roundtrip
  * freischalten wollen.
