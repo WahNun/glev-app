@@ -1,3 +1,6 @@
+"use client";
+
+import { useState, useEffect } from "react";
 import type { BetaRow, ProRow } from "./BuyersTables";
 import DuplicateActions from "./DuplicateActions";
 
@@ -6,17 +9,12 @@ import DuplicateActions from "./DuplicateActions";
  * Käufer:innen nach E-Mail (case-insensitive) und zeigt jede Gruppe
  * mit ≥2 Einträgen oben auf /admin/buyers an.
  *
- * Use-Case: User registriert sich aus Versehen mehrfach (z.B. Browser-
- * Doppel-Klick, Beta + Pro parallel, mehrere Geräte). Stripe legt jedes
- * Mal einen separaten Customer an. Diese Sektion macht das sichtbar
- * und bietet pro Eintrag direkt die Aktionen Kündigen / Customer
- * löschen / Refund / Trial verlängern.
- *
- * Pro Gruppe gibt's außerdem einen "Klärungs-Mail"-Button (mailto:),
- * der eine vorausgefüllte zweisprachige Mail im Mail-Programm öffnet
- * — der Operator schickt sie an die Kund:in, kriegt eine Antwort und
- * klickt dann die richtige Aktion.
+ * "Schließen"-Button: entfernt die Gruppe aus der prominenten Übersicht
+ * (als "geklärt" markiert). Gespeichert in localStorage — bleibt über
+ * Seiten-Reloads erhalten. "Alle anzeigen"-Link blendet alle wieder ein.
  */
+
+const STORAGE_KEY = "glev_admin_dismissed_dups";
 
 type Entry = {
   source: "beta" | "pro";
@@ -100,6 +98,33 @@ export default function DuplicateSignups({
   beta: BetaRow[];
   pro: ProRow[];
 }) {
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) setDismissed(new Set(JSON.parse(raw) as string[]));
+    } catch {
+      // ignore parse errors
+    }
+    setMounted(true);
+  }, []);
+
+  function dismiss(email: string) {
+    setDismissed((prev) => {
+      const next = new Set(prev);
+      next.add(email);
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...next])); } catch { /* noop */ }
+      return next;
+    });
+  }
+
+  function resetDismissed() {
+    setDismissed(new Set());
+    try { localStorage.removeItem(STORAGE_KEY); } catch { /* noop */ }
+  }
+
   const all: Entry[] = [
     ...beta.map<Entry>((b) => ({
       source: "beta",
@@ -136,7 +161,7 @@ export default function DuplicateSignups({
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k)!.push(e);
   }
-  const dups = Array.from(groups.entries())
+  const allDups = Array.from(groups.entries())
     .filter(([, es]) => es.length >= 2)
     .map(([email, es]) => ({
       email,
@@ -148,7 +173,13 @@ export default function DuplicateSignups({
     }))
     .sort((a, b) => b.entries.length - a.entries.length);
 
-  if (dups.length === 0) {
+  const visibleDups = mounted
+    ? allDups.filter((g) => !dismissed.has(g.email))
+    : allDups;
+
+  const hiddenCount = allDups.length - visibleDups.length;
+
+  if (allDups.length === 0) {
     return (
       <section style={section}>
         <h2 style={h2}>Mehrfach-Registrierungen</h2>
@@ -159,21 +190,42 @@ export default function DuplicateSignups({
     );
   }
 
-  const totalDupRows = dups.reduce((s, g) => s + g.entries.length, 0);
+  if (visibleDups.length === 0) {
+    return (
+      <section style={{ ...section, borderColor: "#bbf7d0" }}>
+        <h2 style={h2}>Mehrfach-Registrierungen</h2>
+        <p style={muted}>
+          Alle {allDups.length} Fälle als geklärt markiert.{" "}
+          <button type="button" onClick={resetDismissed} style={btnReset}>
+            Alle wieder anzeigen
+          </button>
+        </p>
+      </section>
+    );
+  }
+
+  const totalDupRows = visibleDups.reduce((s, g) => s + g.entries.length, 0);
 
   return (
     <section style={section}>
-      <h2 style={h2}>
-        Mehrfach-Registrierungen — {dups.length} E-Mail
-        {dups.length === 1 ? "" : "s"} mit insgesamt {totalDupRows} Einträgen
-      </h2>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
+        <h2 style={{ ...h2, margin: 0 }}>
+          Mehrfach-Registrierungen — {visibleDups.length} E-Mail
+          {visibleDups.length === 1 ? "" : "s"} mit insgesamt {totalDupRows} Einträgen
+        </h2>
+        {hiddenCount > 0 && (
+          <button type="button" onClick={resetDismissed} style={btnReset}>
+            + {hiddenCount} geklärt — alle anzeigen
+          </button>
+        )}
+      </div>
       <p style={muted}>
         Pro Gruppe öffnet „Klär-Mail" eine vorausgefüllte zweisprachige
         E-Mail in deinem Mail-Programm. Die Stripe-Buttons schreiben sofort
         live in Stripe — kurzer Confirm-Klick, kein E-Mail-Tippen.
       </p>
 
-      {dups.map((g) => {
+      {visibleDups.map((g) => {
         const fullName = g.entries.find((e) => e.full_name)?.full_name ?? null;
         const betaCount = g.entries.filter((e) => e.source === "beta").length;
         const proCount = g.entries.filter((e) => e.source === "pro").length;
@@ -196,13 +248,23 @@ export default function DuplicateSignups({
                     : ""}
                 </div>
               </div>
-              <a
-                href={buildClarifyMailto(g.entries)}
-                style={btnPrimary}
-                title="Vorausgefüllte Mail an die Kund:in öffnen"
-              >
-                ✉ Klär-Mail
-              </a>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+                <a
+                  href={buildClarifyMailto(g.entries)}
+                  style={btnPrimary}
+                  title="Vorausgefüllte Mail an die Kund:in öffnen"
+                >
+                  ✉ Klär-Mail
+                </a>
+                <button
+                  type="button"
+                  onClick={() => dismiss(g.email)}
+                  style={btnClose}
+                  title="Als geklärt markieren und aus dieser Übersicht entfernen"
+                >
+                  ✓ Schließen
+                </button>
+              </div>
             </div>
 
             <div style={{ overflowX: "auto", marginTop: 10 }}>
@@ -314,6 +376,28 @@ const btnPrimary: React.CSSProperties = {
   fontWeight: 600,
   textDecoration: "none",
   whiteSpace: "nowrap",
+};
+const btnClose: React.CSSProperties = {
+  padding: "8px 14px",
+  background: "#f0fdf4",
+  color: "#166534",
+  border: "1px solid #86efac",
+  borderRadius: 6,
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+  fontFamily: "inherit",
+};
+const btnReset: React.CSSProperties = {
+  background: "transparent",
+  border: "none",
+  color: "#3b4cdc",
+  fontSize: 13,
+  cursor: "pointer",
+  padding: 0,
+  textDecoration: "underline",
+  fontFamily: "inherit",
 };
 const table: React.CSSProperties = { width: "100%", borderCollapse: "collapse", fontSize: 13 };
 const th: React.CSSProperties = {
