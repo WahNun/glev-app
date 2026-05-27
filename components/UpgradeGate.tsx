@@ -38,7 +38,8 @@ export default function UpgradeGate({
         </div>
       )}
 
-      <div
+      <Link
+        href="/pro"
         style={{
           position: children ? "absolute" : "relative",
           inset: children ? 0 : undefined,
@@ -50,6 +51,8 @@ export default function UpgradeGate({
           padding: children ? 0 : "36px 24px",
           minHeight: children ? undefined : 200,
           textAlign: "center",
+          textDecoration: "none",
+          cursor: "pointer",
         }}
       >
         <div
@@ -97,8 +100,7 @@ export default function UpgradeGate({
             verfügbar
           </p>
 
-          <Link
-            href="/pro"
+          <div
             style={{
               display: "inline-block",
               padding: "10px 22px",
@@ -113,9 +115,9 @@ export default function UpgradeGate({
             }}
           >
             Upgraden →
-          </Link>
+          </div>
         </div>
-      </div>
+      </Link>
     </div>
   );
 }
