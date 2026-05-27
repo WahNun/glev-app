@@ -2776,7 +2776,6 @@ export default function EnginePage() {
             </div>
           )}
           {stepIndex === 1 && wizardSavedDose === null && (
-            <UpgradeGate feature="engine_bolus_suggestion">
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={{ ...card, padding: 18, position: "relative" }}>
               {/* Back chevron — top-left of the card per user request
@@ -3081,6 +3080,7 @@ export default function EnginePage() {
             </div>
 
             {/* ── Bolus-berechnen Toggle ─────────────────────────── */}
+            <UpgradeGate feature="engine_bolus_suggestion">
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: bolusEnabled ? 12 : 0, padding: "2px 0" }}>
                 <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", letterSpacing: "-0.01em" }}>
                   {tEngine("bolus_toggle_label")}
@@ -3231,6 +3231,7 @@ export default function EnginePage() {
                   </div>
                 );
               })()}
+            </UpgradeGate>
 
               {/* ── Action row ─────────────────────────────────────────
                   bolusEnabled=false → single "ohne Bolus" button.
@@ -3302,7 +3303,6 @@ export default function EnginePage() {
                 )}
               </div>
           </div>
-            </UpgradeGate>
           )}
 
           {/* BolusExplainerSheet — fixed bottom-sheet replacing Step 3.
