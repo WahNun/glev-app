@@ -36,7 +36,7 @@ export default function DuplicateActions({
   const [trialDays, setTrialDays] = useState("7");
 
   function call(
-    action: (fd: FormData) => Promise<void>,
+    action: (fd: FormData) => Promise<{ ok: boolean; error?: string }>,
     fields: Record<string, string>,
     confirmMsg: string,
   ): void {
@@ -44,10 +44,9 @@ export default function DuplicateActions({
     const fd = new FormData();
     for (const [k, v] of Object.entries(fields)) fd.append(k, v);
     startTransition(async () => {
-      try {
-        await action(fd);
-      } catch (e) {
-        alert("Fehler: " + (e instanceof Error ? e.message : String(e)));
+      const result = await action(fd);
+      if (!result.ok) {
+        alert("Fehler: " + (result.error ?? "Unbekannter Fehler"));
       }
     });
   }

@@ -72,17 +72,15 @@ export default function CancelButton({
     }
     setError(null);
     startTransition(async () => {
-      try {
-        const fd = new FormData();
-        fd.set("subscriptionId", subscriptionId);
-        fd.set("email", email);
-        fd.set("mode", mode);
-        await cancelStripeSubAction(fd);
-        setArmed(false);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-        setArmed(false);
+      const fd = new FormData();
+      fd.set("subscriptionId", subscriptionId);
+      fd.set("email", email);
+      fd.set("mode", mode);
+      const result = await cancelStripeSubAction(fd);
+      if (!result.ok) {
+        setError(result.error ?? "Unbekannter Fehler");
       }
+      setArmed(false);
     });
   }
 
