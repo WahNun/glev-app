@@ -2861,7 +2861,14 @@
     "offset_minutes_after": "{n} min after",
     "add_post_arm_title": "Add another post-check",
     "bg_at_check_badge_title": "{value} mg/dL recorded at this check",
-    "bg_sensor_auto_fill_title": "Auto-filled from fingerstick or CGM reading"
+    "bg_sensor_auto_fill_title": "Auto-filled from fingerstick or CGM reading",
+    "bg_tooltip_measured_at": "Measured at {time}",
+    "bg_tooltip_range_low": "Low (< 70 mg/dL)",
+    "bg_tooltip_range_in_range": "In range",
+    "bg_tooltip_range_high": "High (> 180 mg/dL)",
+    "bg_tooltip_source_cgm": "CGM",
+    "bg_tooltip_source_fingerstick": "Fingerstick",
+    "bg_tooltip_source_unknown": "—"
   },
   "low_alarm": {
     "notification_title": "Low-glucose alert",

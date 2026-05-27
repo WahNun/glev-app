@@ -2867,7 +2867,14 @@
     "offset_minutes_after": "{n} min nachher",
     "add_post_arm_title": "Weiteren Post-Check hinzufügen",
     "bg_at_check_badge_title": "{value} mg/dL bei diesem Check gemessen",
-    "bg_sensor_auto_fill_title": "Automatisch aus Fingertest oder CGM-Wert befüllt"
+    "bg_sensor_auto_fill_title": "Automatisch aus Fingertest oder CGM-Wert befüllt",
+    "bg_tooltip_measured_at": "Gemessen um {time}",
+    "bg_tooltip_range_low": "Hypo (< 70 mg/dL)",
+    "bg_tooltip_range_in_range": "Im Zielbereich",
+    "bg_tooltip_range_high": "Erhöht (> 180 mg/dL)",
+    "bg_tooltip_source_cgm": "CGM",
+    "bg_tooltip_source_fingerstick": "Fingertest",
+    "bg_tooltip_source_unknown": "—"
   },
   "low_alarm": {
     "notification_title": "Hypo-Alarm",

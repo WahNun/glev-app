@@ -111,6 +111,13 @@ export interface ArmState {
    *  CGM reading falls within ±15 min of the planned check. Visualization
    *  only — no write paths in this component. */
   bgAtCheck: number | null;
+  /** ISO timestamp of when bg_at_check was recorded (mirrors
+   *  confirmed_at from meal_timeline_checks). Used by the tap-to-reveal
+   *  tooltip to show the measurement time. Null when not filled. */
+  confirmedAt: string | null;
+  /** Data source that produced bg_at_check. Optional — not yet stored in
+   *  the DB; callers that know the source may pass it here. */
+  bgSource?: "cgm" | "fingerstick" | null;
 }
 
 export interface MealNodeClusterProps {
@@ -149,11 +156,18 @@ interface ConfirmState {
   newOffsetMin: number;
 }
 
+interface TooltipState {
+  arm: ArmState;
+  /** Knob pixel position on the chart's X axis (used to anchor the sheet). */
+  knobX: number;
+}
+
 export default function MealNodeCluster(props: MealNodeClusterProps) {
   const t = useTranslations("meal_timeline");
   const [arms, setArms] = useState<ArmState[]>(props.initialArms);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
+  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
   const [saving, setSaving] = useState(false);
   // Track the SVG element so pointer coords from setPointerCapture
   // come from the same coordinate system as `centerX`.
@@ -213,8 +227,12 @@ export default function MealNodeCluster(props: MealNodeClusterProps) {
     const finalOffset = drag.currentOffsetMin;
     setDrag(null);
     if (finalOffset === arm.offsetMin) {
-      // No-op drag (e.g. user just tapped) — don't bother the user
-      // with a confirm dialog.
+      // Short tap (no drag delta). If the knob has a filled bg value,
+      // open the context tooltip instead of doing nothing.
+      if (arm.bgAtCheck !== null && arm.bgAtCheck !== undefined) {
+        hapticLight();
+        setTooltip({ arm, knobX: knobX(arm.offsetMin) });
+      }
       return;
     }
     hapticLight();
@@ -254,7 +272,7 @@ export default function MealNodeCluster(props: MealNodeClusterProps) {
     for (const a of arms) existingMap[a.checkType] = true;
     const newType = nextPostCheckType(existingMap);
     const newOffset = defaultOffsetForNewPost(posts.map((p) => ({ offsetMin: p.offsetMin })));
-    setArms((cur) => [...cur, { checkType: newType, offsetMin: newOffset, persisted: false, bgAtCheck: null }]);
+    setArms((cur) => [...cur, { checkType: newType, offsetMin: newOffset, persisted: false, bgAtCheck: null, confirmedAt: null }]);
     hapticSelection();
   }
 
@@ -409,7 +427,163 @@ export default function MealNodeCluster(props: MealNodeClusterProps) {
           onCancel={onConfirmCancel}
         />
       )}
+      {tooltip && (
+        <BgContextTooltip
+          arm={tooltip.arm}
+          onDismiss={() => setTooltip(null)}
+        />
+      )}
     </>
+  );
+}
+
+/** Clinical range label and color for a glucose reading. */
+function bgRangeInfo(mgdl: number): { label: string; color: string } {
+  if (mgdl < 70) return { label: "low", color: "#EF4444" };
+  if (mgdl > 180) return { label: "high", color: "#F59E0B" };
+  return { label: "in_range", color: "#22C55E" };
+}
+
+/**
+ * Tap-to-reveal bottom sheet showing the glucose context for a filled
+ * checkpoint knob. Dismisses on backdrop tap or after 3 seconds.
+ * Visualization only — no write paths.
+ */
+function BgContextTooltip({
+  arm,
+  onDismiss,
+}: {
+  arm: ArmState;
+  onDismiss: () => void;
+}) {
+  const t = useTranslations("meal_timeline");
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
+  // Auto-dismiss after 3 seconds.
+  useEffect(() => {
+    const id = setTimeout(onDismiss, 3000);
+    return () => clearTimeout(id);
+  }, [onDismiss]);
+
+  if (!mounted || typeof document === "undefined") return null;
+  if (arm.bgAtCheck === null || arm.bgAtCheck === undefined) return null;
+
+  const value = arm.bgAtCheck;
+  const range = bgRangeInfo(value);
+
+  const timeStr = arm.confirmedAt
+    ? new Date(arm.confirmedAt).toLocaleTimeString(undefined, {
+        hour: "2-digit", minute: "2-digit",
+      })
+    : null;
+
+  const sourceKey: string =
+    arm.bgSource === "cgm"
+      ? "bg_tooltip_source_cgm"
+      : arm.bgSource === "fingerstick"
+        ? "bg_tooltip_source_fingerstick"
+        : "bg_tooltip_source_unknown";
+
+  return createPortal(
+    (
+      <div
+        style={{
+          position: "fixed", inset: 0,
+          background: "rgba(0,0,0,0.25)",
+          display: "flex", alignItems: "flex-end", justifyContent: "center",
+          zIndex: 1000,
+        }}
+        onClick={(e) => { e.stopPropagation(); onDismiss(); }}
+        data-testid="bg-context-tooltip-overlay"
+      >
+        <div
+          style={{
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            borderRadius: "16px 16px 0 0",
+            padding: "20px 20px 28px",
+            width: "100%",
+            maxWidth: 420,
+            boxShadow: "0 -4px 24px rgba(0,0,0,0.18)",
+          }}
+          onClick={(e) => e.stopPropagation()}
+          data-testid="bg-context-tooltip-sheet"
+        >
+          {/* Value + range badge row */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+            <span
+              style={{
+                fontSize: 28, fontWeight: 800,
+                color: range.color,
+                lineHeight: 1,
+              }}
+              data-testid="bg-context-value"
+            >
+              {value}
+            </span>
+            <span
+              style={{
+                fontSize: 13, fontWeight: 600,
+                color: "var(--text-dim)",
+                alignSelf: "flex-end",
+                marginBottom: 2,
+              }}
+            >
+              mg/dL
+            </span>
+            <span
+              style={{
+                marginLeft: "auto",
+                padding: "3px 10px",
+                borderRadius: 20,
+                background: range.color + "22",
+                color: range.color,
+                fontSize: 12, fontWeight: 700,
+                border: `1px solid ${range.color}44`,
+              }}
+              data-testid="bg-context-range-label"
+            >
+              {t(`bg_tooltip_range_${range.label}` as Parameters<typeof t>[0])}
+            </span>
+          </div>
+
+          {/* Time row */}
+          {timeStr && (
+            <div
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                fontSize: 13, color: "var(--text-dim)",
+                marginBottom: 6,
+              }}
+              data-testid="bg-context-time"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+              {t("bg_tooltip_measured_at", { time: timeStr })}
+            </div>
+          )}
+
+          {/* Source row */}
+          <div
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              fontSize: 13, color: "var(--text-dim)",
+            }}
+            data-testid="bg-context-source"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M20.188 10.934c.2.646.312 1.329.312 2.066 0 4.418-3.582 8-8 8s-8-3.582-8-8 3.582-8 8-8c1.83 0 3.52.617 4.865 1.645" />
+            </svg>
+            {t(sourceKey as Parameters<typeof t>[0])}
+          </div>
+        </div>
+      </div>
+    ),
+    document.body,
   );
 }
 
